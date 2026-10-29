@@ -1,0 +1,125 @@
+/*
+ * Documents & numbering (B-W0-28, SCR-014) LAYOUT: the company picker in the toolbar, the pattern chips, the Fiscal
+ * check rows, the new-series builder and its live preview. Controls are the design system's; semantic tokens only.
+ */
+.fw-adm-docs-company {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 320px;
+}
+
+.fw-adm-docs-keys {
+  margin-left: auto;
+}
+
+.fw-adm-docs-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-2);
+}
+
+.fw-adm-docs-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-adm-docs-fiscal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-adm-docs-proof {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(240px, 2fr) auto;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-16);
+  padding-block: var(--nds-space-8);
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-adm-docs-proof:first-child {
+  border-top: 0;
+}
+
+.fw-adm-docs-proof-words {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-adm-docs-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-link);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-adm-docs-builder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  margin: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-adm-docs-builder > legend {
+  padding-inline: var(--nds-space-4);
+}
+
+.fw-adm-docs-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-adm-docs-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-adm-docs-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-adm-docs-consequences {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+@media (max-width: 760px) {
+  .fw-adm-docs-proof {
+    grid-template-columns: 1fr;
+  }
+
+  .fw-adm-docs-keys {
+    display: none;
+  }
+}
+
+.fw-adm-docs-banner {
+  padding: var(--nds-space-12) var(--nds-space-12) 0;
+}

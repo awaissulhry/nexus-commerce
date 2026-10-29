@@ -14,9 +14,9 @@ import { adminHref } from '../shared/model'
  *   roles     GET /auth/roles             no ready-made role is out of date; no custom copy misses what its template gained
  *   tablets   GET /auth/floor/devices     a tablet is enrolled (active); one waiting for its tablet is "Waiting"
  *   printers  GET /print/printers         a printer is active
- *   sdi       —                           not checked yet: the SDI connection is read by Connections (B-W0-28)
+ *   sdi       GET /integrations/accounts  every active company has a live, active SDI connection (B-W0-28)
  *   privacy   GET /privacy/overview       every company's privacy duties are done
- *   stock     —                           not checked yet: the opening-stock import comes with the warehouse steps
+ *   stock     GET /imports                an opening-stock import was applied (importer inventory.opening, B-W1-35)
  */
 
 /** One read for the checklist: still checking, done, failed (a message key), or not the person's to read. */
@@ -32,9 +32,14 @@ export interface OverviewFacts {
   devices: Read<ReadonlyArray<{ status: string }>>
   printers: Read<ReadonlyArray<{ status: string }>>
   privacy: Read<ReadonlyArray<{ company: { id: string }; duties: ReadonlyArray<{ done: boolean }> }>>
+  accounts: Read<ReadonlyArray<{ provider: string; companyId: string | null; mode: string; status: string }>>
+  imports: Read<ReadonlyArray<{ importerKey: string; status: string }>>
 }
 
 export type ReadName = Exclude<keyof OverviewFacts, 'me'>
+
+/** The opening-stock importer's key (factory-domain inventory/opening, B-W1-35). */
+export const OPENING_STOCK = 'inventory.opening'
 
 /** The right each read needs (the container reads only what the person holds). */
 export const READ_RIGHTS: Readonly<Record<ReadName, string>> = {
@@ -46,6 +51,8 @@ export const READ_RIGHTS: Readonly<Record<ReadName, string>> = {
   devices: 'devices.view',
   printers: 'print.view',
   privacy: 'privacy.view',
+  accounts: 'integrations.view',
+  imports: 'imports.view',
 }
 
 export const STEP_IDS = ['legal', 'sites', 'mail', 'numbering', 'people', 'roles', 'tablets', 'printers', 'sdi', 'privacy', 'stock'] as const
@@ -61,9 +68,9 @@ export const STEP_READ: Readonly<Record<StepId, ReadName | null>> = {
   roles: 'roles',
   tablets: 'devices',
   printers: 'printers',
-  sdi: null,
+  sdi: 'accounts',
   privacy: 'privacy',
-  stock: null,
+  stock: 'imports',
 }
 
 const MINUTES: Readonly<Record<StepId, number>> = { legal: 5, sites: 10, mail: 15, numbering: 5, people: 5, roles: 10, tablets: 5, printers: 5, sdi: 15, privacy: 30, stock: 30 }
@@ -134,9 +141,11 @@ export function setupSteps(facts: OverviewFacts, prefix: string, built: Readonly
   else {
     const live = identities.value.filter((identity) => identity.status !== 'DISABLED')
     const ready = live.filter((identity) => identity.ready)
-    if (ready.length > 0) steps.push(step('mail', { state: 'done', detail: { key: 'overview.detail.mail.done', params: { domain: ready[0]!.domain } }, href: href('/email') }))
-    else if (live.length > 0) steps.push(step('mail', { state: 'waiting', detail: { key: 'overview.detail.mail.waiting', params: { domain: live[0]!.domain } }, href: href('/email') }))
-    else steps.push(step('mail', { state: 'needs', detail: { key: href('/email') ? 'overview.detail.mail.none' : 'overview.detail.mail.noneLater' }, href: href('/email') }))
+    // The mail domain lives on Connections & API (design 02 admin.connections: no separate mail page).
+    const mail = href('/connections#mail', '/connections')
+    if (ready.length > 0) steps.push(step('mail', { state: 'done', detail: { key: 'overview.detail.mail.done', params: { domain: ready[0]!.domain } }, href: mail }))
+    else if (live.length > 0) steps.push(step('mail', { state: 'waiting', detail: { key: 'overview.detail.mail.waiting', params: { domain: live[0]!.domain } }, href: mail }))
+    else steps.push(step('mail', { state: 'needs', detail: { key: mail ? 'overview.detail.mail.none' : 'overview.detail.mail.noneLater' }, href: mail }))
   }
 
   // Number series start values.
@@ -146,8 +155,14 @@ export function setupSteps(facts: OverviewFacts, prefix: string, built: Readonly
     const active = companies.value.filter((company) => company.status === 'ACTIVE')
     const missing = active.filter((company) => !series.value.some((row) => row.companyId === company.id && row.kind === 'INVOICE' && row.status === 'ACTIVE'))
     if (missing.length > 0)
-      steps.push(step('numbering', { state: 'needs', detail: { key: href('/numbering') ? 'overview.detail.numbering.needs' : 'overview.detail.numbering.needsLater', params: { name: missing[0]!.legalName } }, href: href('/numbering') }))
-    else steps.push(step('numbering', { state: 'done', detail: { key: 'overview.detail.numbering.done', params: { count: series.value.length } }, href: href('/numbering') }))
+      steps.push(
+        step('numbering', {
+          state: 'needs',
+          detail: { key: href('/documents') ? 'overview.detail.numbering.needs' : 'overview.detail.numbering.needsLater', params: { name: missing[0]!.legalName } },
+          href: href(`/documents?company=${missing[0]!.id}&new=series`, '/documents'),
+        }),
+      )
+    else steps.push(step('numbering', { state: 'done', detail: { key: 'overview.detail.numbering.done', params: { count: series.value.length } }, href: href('/documents') }))
   } else steps.push(step('numbering', pending('numbering', companies)!))
 
   // People invited.
@@ -191,8 +206,23 @@ export function setupSteps(facts: OverviewFacts, prefix: string, built: Readonly
     else steps.push(step('printers', { state: 'needs', detail: { key: 'overview.detail.printers.none' }, href: href('/devices?mode=printers&new=printer', '/devices') }))
   }
 
-  // SDI connection: no API reads the connections' modes yet (Connections, B-W0-28).
-  steps.push(step('sdi', { state: 'unknown', detail: { key: 'overview.detail.sdi.unknown' }, href: href('/connections') }))
+  // SDI connection: each active company's own SDI account (the intermediary), active and live.
+  const accounts = facts.accounts
+  if (accounts.state !== 'ok') steps.push(step('sdi', pending('sdi', accounts)!))
+  else if (companies.state !== 'ok') steps.push(step('sdi', pending('sdi', companies)!))
+  else {
+    const active = companies.value.filter((company) => company.status === 'ACTIVE')
+    const sdiOf = (companyId: string) => accounts.value.filter((account) => account.provider === 'SDI' && account.companyId === companyId && account.status !== 'DISABLED')
+    const none = active.find((company) => sdiOf(company.id).length === 0)
+    const paused = active.find((company) => sdiOf(company.id).every((account) => account.status === 'PAUSED'))
+    const test = active.find((company) => !sdiOf(company.id).some((account) => account.status === 'ACTIVE' && account.mode === 'LIVE'))
+    const connections = href('/connections')
+    if (active.length === 0) steps.push(step('sdi', { state: 'blocked', detail: { key: 'overview.detail.sdi.blocked' } }))
+    else if (none) steps.push(step('sdi', { state: 'needs', detail: { key: 'overview.detail.sdi.none', params: { name: none.legalName } }, href: connections }))
+    else if (paused) steps.push(step('sdi', { state: 'needs', detail: { key: 'overview.detail.sdi.paused', params: { name: paused.legalName } }, href: connections }))
+    else if (test) steps.push(step('sdi', { state: 'waiting', detail: { key: 'overview.detail.sdi.test', params: { name: test.legalName } }, href: connections }))
+    else steps.push(step('sdi', { state: 'done', detail: { key: 'overview.detail.sdi.done', params: { count: active.length } }, href: connections }))
+  }
 
   // Privacy register and worker notice.
   const privacy = facts.privacy
@@ -203,8 +233,18 @@ export function setupSteps(facts: OverviewFacts, prefix: string, built: Readonly
     else steps.push(step('privacy', { state: 'needs', detail: { key: href('/privacy') ? 'overview.detail.privacy.needs' : 'overview.detail.privacy.needsLater', params: { count: open } }, href: href('/privacy') }))
   }
 
-  // Opening stock: no opening-stock importer exists yet (the warehouse steps add it).
-  steps.push(step('stock', { state: 'unknown', detail: { key: 'overview.detail.stock.unknown' } }))
+  // Opening stock: an applied import of the opening-stock importer (B-W1-35), read from the import jobs.
+  const imports = facts.imports
+  if (imports.state !== 'ok') steps.push(step('stock', pending('stock', imports)!))
+  else {
+    const opening = imports.value.filter((job) => job.importerKey === OPENING_STOCK)
+    const applied = opening.filter((job) => job.status === 'APPLIED')
+    const underWay = opening.filter((job) => ['UPLOADED', 'PLANNED', 'APPLYING'].includes(job.status))
+    const page = href(`/import?importer=${OPENING_STOCK}`, '/import')
+    if (applied.length > 0) steps.push(step('stock', { state: 'done', detail: { key: 'overview.detail.stock.done', params: { count: applied.length } }, href: href('/import') }))
+    else if (underWay.length > 0) steps.push(step('stock', { state: 'waiting', detail: { key: 'overview.detail.stock.waiting', params: { count: underWay.length } }, href: href('/import') }))
+    else steps.push(step('stock', { state: 'needs', detail: { key: 'overview.detail.stock.none' }, href: page }))
+  }
   return steps
 }
 

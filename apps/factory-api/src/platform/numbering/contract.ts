@@ -81,3 +81,48 @@ export const advanceContract = defineContract({
   }),
   response: one,
 })
+
+/**
+ * `GET /numbering/series/:seriesId/allocations` (B-W0-28, design 02 admin.documents "Fiscal check" and the
+ * "allocations" pop-up; PLT-123, DPR 633/72 art. 21): the numbers this series issued, newest first (at most `limit`),
+ * and the proof over ALL of them: how many, the first and the last, and every range between the first and the last that
+ * Nexus did not issue (a series moved past numbers used elsewhere, or a gap). Who issued each: the person's name, or
+ * null for the system and the floor (worker names never appear in office lists: Owner answer W1).
+ */
+export const allocationView = output({
+  value: z.number().int(),
+  formatted: z.string(),
+  documentDate: z.string(),
+  recordType: z.string(),
+  recordId: id(),
+  allocatedAt: instant(),
+  allocatedByName: z.string().nullable(),
+})
+export type AllocationView = z.infer<typeof allocationView>
+
+export const allocationSummary = output({
+  count: z.number().int(),
+  first: z.number().int().nullable(),
+  last: z.number().int().nullable(),
+  firstFormatted: z.string().nullable(),
+  lastFormatted: z.string().nullable(),
+  lastDocumentDate: z.string().nullable(),
+  /** Ranges between the first and the last number this series did not issue (at most 20, lowest first). */
+  skipped: z.array(output({ from: z.number().int(), to: z.number().int() })),
+  /** More than 20 ranges were found (only the first 20 are listed). */
+  moreSkipped: z.boolean(),
+})
+export type AllocationSummary = z.infer<typeof allocationSummary>
+
+export const allocationsContract = defineContract({
+  params: seriesParams,
+  querystring: input({ limit: z.coerce.number().int().min(1).max(200).default(50) }),
+  response: { 200: output({ series: seriesView, summary: allocationSummary, allocations: z.array(allocationView) }) },
+})
+
+/** `POST /numbering/series/:seriesId/close`: the series issues no more numbers; what it issued stays. */
+export const closeSeriesContract = defineContract({
+  params: seriesParams,
+  body: input({ version: version(), reason: z.string().trim().min(3).max(500).optional() }),
+  response: one,
+})

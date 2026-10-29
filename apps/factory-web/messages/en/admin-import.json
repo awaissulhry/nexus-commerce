@@ -1,0 +1,226 @@
+{
+  "imp": {
+    "title": "Import & export",
+    "intro": "Load your data from a sheet. Choose what you want to load, check what would change, then apply only what you saw: nothing is written before you apply.",
+    "new": "Import a sheet",
+    "everyCompany": "Every company",
+    "what": {
+      "title": "What do you want to load?",
+      "noneTitle": "No import is open to you",
+      "noneBody": "Each import also needs the right to change what it loads (materials, customers and suppliers, locations, stock). Ask an administrator.",
+      "lastUnknown": "Last import: —",
+      "last": "Last import: {when} · {state}",
+      "never": "Not imported yet",
+      "start": "Import",
+      "later": "Styles, price lists and workers get their imports with their own areas; the guided first load (customers → suppliers → materials → opening stock, with totals that must match) and the downloadable templates for every import come later."
+    },
+    "template": {
+      "xlsx": "Template (Excel)",
+      "csv": "Template (CSV)"
+    },
+    "recent": {
+      "title": "Recent imports",
+      "emptyTitle": "No imports yet",
+      "emptyBody": "Every sheet you check or apply is listed here, with what it changed.",
+      "applyAgain": "Apply again",
+      "rowsApplied": "{applied} written · {skipped} skipped · {refused} refused",
+      "rowsPlanned": "{create} new · {update} changed · {unchanged} unchanged · {refused} refused"
+    },
+    "col": {
+      "importer": "What",
+      "file": "File",
+      "company": "Company",
+      "state": "State",
+      "rows": "Rows",
+      "who": "Who",
+      "when": "When",
+      "row": "Row",
+      "key": "Reference",
+      "column": "Column",
+      "reason": "Why (from the check)",
+      "what": "Change",
+      "values": "Values"
+    },
+    "state": {
+      "reading": "Checking",
+      "planned": "Checked, not applied",
+      "planFailed": "Not readable",
+      "applying": "Applying",
+      "applyFailed": "Apply stopped",
+      "applied": "Applied",
+      "cancelled": "Cancelled"
+    },
+    "held": {
+      "noRunRight": "You need the rights to run imports and to upload files.",
+      "noImporter": "No import is open to you.",
+      "notPlanned": "The check is not finished.",
+      "noApplyRight": "Applying needs the right to apply imports: ask someone who holds it.",
+      "nothing": "Nothing to apply: every row is unchanged or refused.",
+      "busy": "Working…",
+      "fixFirst_one": "Fix 1 field first.",
+      "fixFirst_other": "Fix {count} fields first."
+    },
+    "wizard": {
+      "title": "Import a sheet",
+      "titleOf": "Import {name}",
+      "subtitle": "Nothing is written until you apply.",
+      "cancelImport": "Cancel import",
+      "start": "Upload and check",
+      "uploading": "Uploading…",
+      "later": "Decide later",
+      "apply_one": "Apply 1 row",
+      "apply_other": "Apply {count} rows",
+      "applyAgain_one": "Apply the last row",
+      "applyAgain_other": "Apply the {count} rows left",
+      "restart": "Upload a corrected sheet",
+      "leave": "Close (it goes on)"
+    },
+    "step": {
+      "upload": "Upload",
+      "check": "Check",
+      "apply": "Apply",
+      "result": "Result"
+    },
+    "reading": {
+      "label": "Reading the sheet",
+      "detail": "Checking every row of {file} against what is there now.",
+      "note": "You can close this window: the check goes on, and the import waits under Recent imports."
+    },
+    "applying": {
+      "label_one": "Writing 1 row",
+      "label_other": "Writing {count} rows",
+      "detail": "{done} of {total} rows",
+      "note": "You can close this window: the import goes on. A row changed since the check is skipped, never overwritten."
+    },
+    "applyFailed": {
+      "title": "The apply stopped",
+      "body": "{written} rows were written before it stopped and stay written; {left} are left. Apply again to go on from where it stopped."
+    },
+    "saidLead": "What the import said:",
+    "cancelled": {
+      "title": "This import was cancelled",
+      "someWritten_one": "1 row was written before it was cancelled and stays written; nothing more will be.",
+      "someWritten_other": "{count} rows were written before it was cancelled and stay written; nothing more will be.",
+      "nothing": "Nothing was written."
+    },
+    "cancel": {
+      "title": "Cancel this import?",
+      "keep": "Keep it",
+      "go": "Cancel import",
+      "body": "The planned changes are dropped and nothing more is written. To load this sheet later, upload it again.",
+      "kept_one": "The 1 row already written stays.",
+      "kept_other": "The {count} rows already written stay."
+    },
+    "upload": {
+      "intro": "Choose what the sheet holds and for which company, then the file. The next step shows what would change.",
+      "template": "Start from the template:",
+      "openingReports": "A sheet that names chromium VI test reports needs those PDFs uploaded first; uploading them comes with the stock page. Without reports, lots that need the test wait in quarantine.",
+      "remove": "Remove",
+      "safe": "Checking writes nothing. Rows that are wrong are refused with their reason; the others wait for you to apply them."
+    },
+    "field": {
+      "importer": "What the sheet holds",
+      "importerPick": "Choose…",
+      "company": "Company",
+      "companyHint": "The records are written for this company.",
+      "companyPick": "Choose a company…",
+      "numbers": "How the sheet writes numbers",
+      "file": "The sheet",
+      "fileHint": "A .csv or .xlsx file, up to 10 MB and 10,000 rows. The first row holds the column names.",
+      "dropHint": ".csv or .xlsx · up to 10 MB",
+      "sheet": "Worksheet",
+      "sheetHint": "Leave it empty to read the first worksheet of the file."
+    },
+    "numbers": {
+      "it": "Italian",
+      "en": "English",
+      "sample": "One thousand two hundred and thirty-four and a half: {sample}"
+    },
+    "count": {
+      "create": "New",
+      "createHint": "rows that add a record",
+      "update": "Changed",
+      "updateHint": "rows that change a record",
+      "unchanged": "Unchanged",
+      "unchangedHint": "already as the sheet says",
+      "error": "Refused",
+      "errorHint": "not written, with the reason"
+    },
+    "checked": {
+      "nothingYet": "This is the check: nothing has been written yet. Apply writes the new and changed rows; refused rows are never written.",
+      "again": "The check of this sheet, as it was before the apply stopped.",
+      "columns": "Columns read",
+      "columnsRead_one": "1 column read from {sheet}:",
+      "columnsRead_other": "{count} columns read from {sheet}:",
+      "ignored_one": "1 column was not read:",
+      "ignored_other": "{count} columns were not read:",
+      "refused": "Refused rows",
+      "refusedCount_one": "1 row refused",
+      "refusedCount_other": "{count} rows refused",
+      "refusedHint": "Fix them in the sheet and import it again; the rows already loaded come back as unchanged.",
+      "moreRefused_one": "1 more refused row is in the download.",
+      "moreRefused_other": "{count} more refused rows are in the download.",
+      "changes": "What would change",
+      "changesCount_one": "1 row would be written",
+      "changesCount_other": "{count} rows would be written",
+      "moreChanges_one": "1 more row would be written (not shown).",
+      "moreChanges_other": "{count} more rows would be written (not shown).",
+      "allSame": "Everything in the sheet is already in Nexus: there is nothing to apply."
+    },
+    "download": {
+      "refused": "Download the refused rows (CSV)"
+    },
+    "action": {
+      "CREATE": "New",
+      "UPDATE": "Changed"
+    },
+    "planFailed": {
+      "title": "The sheet could not be checked as it is",
+      "body": "Nothing was written. Correct the sheet and upload it again.",
+      "money": "These columns hold money values you may not see: {columns}. Remove them, or ask someone who sees them to import the sheet.",
+      "said": "What the check found"
+    },
+    "result": {
+      "title_one": "1 row written",
+      "title_other": "{count} rows written",
+      "applied": "Written",
+      "skipped": "Skipped",
+      "skippedHint": "changed since the check, not overwritten",
+      "refused": "Refused at the check",
+      "refusedHint": "Fix the refused rows in the sheet and import it again.",
+      "skippedRows": "Skipped rows",
+      "rowN": "Row {row}",
+      "changedSince": "Changed since the check."
+    },
+    "problem": {
+      "importer": "Choose what the sheet holds.",
+      "company": "Choose the company.",
+      "noFile": "Choose the sheet to upload.",
+      "fileType": "Only .csv and .xlsx files are read: save the sheet as one of them.",
+      "fileSize": "The file is larger than 10 MB: split it into smaller sheets.",
+      "fileEmpty": "The file is empty.",
+      "store": "The sheet could not be sent to the file store. Try again."
+    },
+    "notice": {
+      "cancelled": "The import of {file} was cancelled."
+    },
+    "importer": {
+      "product_materials": {
+        "name": "Materials",
+        "fills": "Leathers, fabrics, trims and protectors with their units, colours, chromium VI settings and standard cost."
+      },
+      "parties_parties": {
+        "name": "Customers and suppliers",
+        "fills": "Customers, brands, suppliers, subcontractors and carriers with their tax identity, registered office and a contact."
+      },
+      "inventory_locations": {
+        "name": "Locations",
+        "fills": "A site's warehouses, zones and bins, the goods-in dock, the quarantine shelf and line-side racks; parents first."
+      },
+      "inventory_opening": {
+        "name": "Opening stock",
+        "fills": "The stock on hand before Nexus: lots, hides one by one with their areas, linings, trims and protectors, with their existing chromium VI reports. Lots that need the quality step wait in quarantine."
+      }
+    }
+  }
+}

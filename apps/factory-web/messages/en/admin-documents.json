@@ -1,0 +1,257 @@
+{
+  "docs": {
+    "intro": "Every document number the factory gives, per company: the next one as it will print, and proof that invoices and DDTs never skip or repeat a number.",
+    "new": "New series",
+    "keys": {
+      "new": "Key: c",
+      "hint": "1 · 2 switch list · c new series"
+    },
+    "preview": "Preview a document",
+    "views": {
+      "label": "Which list",
+      "numbers": "Numbers",
+      "documents": "Documents"
+    },
+    "company": {
+      "label": "Company",
+      "all": "All companies"
+    },
+    "later": "E-mail and label templates, branding and the documents a record must have come in later steps.",
+    "pattern": {
+      "aria": "Pattern {pattern}",
+      "year4": "year (2026)",
+      "year2": "year (26)",
+      "yearOf": "year ({year})",
+      "counter_one": "number",
+      "counter_other": "number, {count} digits",
+      "issue": {
+        "empty": "Build or type a pattern.",
+        "tooLong": "A pattern has at most 40 characters.",
+        "badToken": "Use only {N}, {N:5}, {YYYY} or {YY} between braces.",
+        "noNumber": "The pattern needs the place of the number: {N}.",
+        "twoNumbers": "The number may appear only once.",
+        "digits": "The number has 1 to 12 digits.",
+        "badText": "Fixed text may hold letters, digits and - / . _ only.",
+        "yearNeedsYearly": "The year fits only a series that starts again every year.",
+        "fiscalTooLong": "An invoice or DDT number has at most 20 characters: shorten the pattern."
+      }
+    },
+    "code": "Series {code}",
+    "fiscal": {
+      "tag": "Fiscal",
+      "title": "Fiscal check",
+      "intro": "Invoices, deposit invoices, credit notes and DDTs must never skip or reuse a number (DPR 633/72 art. 21). Each line is read from the numbers actually issued.",
+      "noSeries": "No active fiscal series for this company yet.",
+      "state": {
+        "success": "No gaps",
+        "warning": "Check",
+        "neutral": "Nothing issued",
+        "danger": "Not read"
+      },
+      "none": "No number issued yet.",
+      "checking": "Reading the numbers issued…",
+      "failed": "The numbers could not be read.",
+      "noGaps_one": "{first} issued, no gaps.",
+      "noGaps_other": "{count} numbers issued, {first} to {last}, no gaps.",
+      "skipped": "{count} issued, {first} to {last}; not issued by Nexus: {ranges}.",
+      "numbers": "Numbers issued"
+    },
+    "empty": {
+      "title": "No number series yet",
+      "body": "Number series are created with the company. If one is missing, add it with New series."
+    },
+    "table": {
+      "label": "Number series"
+    },
+    "col": {
+      "document": "Document",
+      "next": "Next number",
+      "pattern": "Pattern",
+      "restarts": "Starts again",
+      "started": "Started at",
+      "lastIssued": "Last issued",
+      "state": "State"
+    },
+    "next": {
+      "closed": "Closed: no more numbers"
+    },
+    "reset": {
+      "YEARLY": "Every year",
+      "NEVER": "Never"
+    },
+    "never": "Not yet",
+    "status": {
+      "ACTIVE": "Active",
+      "CLOSED": "Closed"
+    },
+    "layouts": {
+      "noRightTitle": "Document previews are not yours to open",
+      "noRight": "You need the right to preview the company's document layouts. Ask an administrator.",
+      "noCompanyTitle": "No active company",
+      "noCompany": "Add a company first: its documents carry its legal data.",
+      "with": "With the data of {name}: each preview opens as a PDF in a new tab, marked as a sample.",
+      "label": "Document layouts",
+      "notReady_one": "{name} cannot print documents yet: 1 legal fact is missing (registered office, VAT number, codice fiscale, REA office and number).",
+      "notReady_other": "{name} cannot print documents yet: {count} legal facts are missing (registered office, VAT number, codice fiscale, REA office and number).",
+      "fixLegal": "Complete the legal data",
+      "heldLegal": "Complete the company's legal data first",
+      "col": {
+        "document": "Document",
+        "layout": "Layout",
+        "preview": "Preview"
+      },
+      "fixed": "Fixed layout: editing it comes later.",
+      "previewIn": {
+        "it": "Italiano",
+        "en": "English"
+      },
+      "newTab": "(opens in a new tab)"
+    },
+    "type": {
+      "QUOTE": "Quote",
+      "PURCHASE_ORDER": "Purchase order",
+      "DDT": "DDT (transport document)",
+      "INVOICE_COPY": "Invoice (courtesy copy)",
+      "PACKING_LIST": "Packing list"
+    },
+    "newDialog": {
+      "title": "New number series",
+      "subtitle": "Build the number from chips; the first number shows as it will print.",
+      "create": "Create series",
+      "first": "First number:",
+      "useChips": "Build it from chips",
+      "typeIt": "Type the pattern instead",
+      "fiscal": "A fiscal series never skips or reuses a number, and numbers go out in date order. Its start and pattern are fixed once the first number is issued."
+    },
+    "field": {
+      "company": "Company",
+      "kind": "Document",
+      "code": "Series code",
+      "codeHint": "MAIN for the usual series; another code (B, EXPORT) for a second series of the same document.",
+      "reset": "Starts again",
+      "year": "First year",
+      "yearHint": "The year of its first numbers.",
+      "start": "First number",
+      "startHint": "1, or where a paper booklet or the old program stopped, plus one.",
+      "pattern": "How the number prints",
+      "typed": "Pattern",
+      "typedHint": "Fixed text and {N} (the number), {N:5} (5 digits), {YYYY} or {YY} (the year).",
+      "prefix": "Prefix",
+      "separator": "Separator",
+      "yearToken": "Year",
+      "digits": "Digits of the number"
+    },
+    "separator": {
+      "none": "None"
+    },
+    "yearToken": {
+      "YYYY": "2026 (four digits)",
+      "YY": "26 (two digits)",
+      "none": "No year"
+    },
+    "form": {
+      "required": "Choose one.",
+      "code": "Use 1 to 16 capital letters, digits or hyphens.",
+      "year": "A year such as 2026.",
+      "digits": "1 to 12.",
+      "start": "A whole number from 1."
+    },
+    "held": {
+      "manage": "Needs the right: Manage number series",
+      "noCompany": "Add an active company first"
+    },
+    "seriesDialog": {
+      "missing": "Series not found",
+      "title": "Number series: {kind} {period}",
+      "changed": "Last changed",
+      "fiscal": "Fiscal: never skips or reuses a number",
+      "fiscalBody": "Numbers go out in date order and a fiscal number has at most 20 characters. The database refuses any change to a number already issued.",
+      "notFiscal": "Not fiscal: the same gap-free rule applies, without the date order.",
+      "fixed_one": "1 number issued: its start and pattern are fixed.",
+      "fixed_other": "{count} numbers issued: its start and pattern are fixed."
+    },
+    "start": {
+      "title": "First number",
+      "body": "Nothing was issued from this series yet, so its first number can still change once.",
+      "save": "Save first number",
+      "same": "Type another first number"
+    },
+    "advance": {
+      "title": "After a restore: move past a number",
+      "body": "If numbers after {next} were already used elsewhere (the SDI receipts, the DDT archive), the series continues after the last of them. It never moves back.",
+      "past": "Last number used elsewhere",
+      "pastHint": "The series continues with the next one.",
+      "date": "Its document date",
+      "dateHint": "Keeps the date order of fiscal numbers.",
+      "reason": "Why (kept in the audit log)",
+      "go": "Move past this number",
+      "heldValue": "Type a number from {next}",
+      "heldReason": "Say why, in a few words"
+    },
+    "close": {
+      "open": "Close series…",
+      "title": "Close series {name}?",
+      "go": "Close series",
+      "noMore": "No more numbers come from it.",
+      "stay": "The numbers it issued stay, with their documents.",
+      "final": "A closed series is not opened again: new documents need another active series.",
+      "alone": "This company has no other active {kind} series: new documents of this kind will be refused until you add one."
+    },
+    "numbers": {
+      "title": "Numbers issued: {kind} {period}",
+      "emptyTitle": "No number issued yet",
+      "empty": "The first document of this kind will take the first number.",
+      "label": "Numbers issued, newest first",
+      "col": {
+        "number": "Number",
+        "date": "Document date",
+        "record": "Record",
+        "who": "Issued by",
+        "when": "When"
+      },
+      "system": "The system",
+      "noun": "series",
+      "skippedTitle": "Not issued by Nexus: {ranges}",
+      "skippedBody": "These numbers lie between the first and the last and were never issued here: the series was moved past numbers used elsewhere, or numbers are missing. The audit log says which.",
+      "shown": "The last {shown} of {count} numbers."
+    },
+    "done": {
+      "created": "Series created. Its first number is {number}.",
+      "start": "First number set to {value}.",
+      "advanced": "The series continues with {number}.",
+      "closed": "Series {code} closed: it issues no more numbers."
+    },
+    "problem": {
+      "conflict": "Someone changed this series meanwhile. The list was read again: check it and try once more.",
+      "invalid": "The server refused it: check the pattern, the year and the first number."
+    },
+    "kind": {
+      "QUOTE": "Quote",
+      "SALES_ORDER": "Sales order",
+      "PURCHASE_ORDER": "Purchase order",
+      "GOODS_RECEIPT": "Goods receipt",
+      "WORK_ORDER": "Work order",
+      "SHIPMENT": "Shipment",
+      "DDT": "DDT",
+      "INVOICE": "Invoice",
+      "DEPOSIT_INVOICE": "Deposit invoice",
+      "CREDIT_NOTE": "Credit note",
+      "RETURN": "Return",
+      "LOT": "Lot",
+      "BATCH": "Batch",
+      "PPE_REGISTER": "PPE register entry"
+    },
+    "record": {
+      "Invoice": "Invoice",
+      "Ddt": "DDT",
+      "Quote": "Quote",
+      "SalesOrder": "Sales order",
+      "PurchaseOrder": "Purchase order",
+      "WorkOrder": "Work order",
+      "Shipment": "Shipment",
+      "Lot": "Lot",
+      "PpeRegisterEntry": "PPE register entry",
+      "Receipt": "Goods receipt"
+    }
+  }
+}

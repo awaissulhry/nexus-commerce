@@ -23,7 +23,8 @@ describe('the first page a person may open (shell/office/office-entry.ts)', () =
     expect(firstOfficePage(owner, { areaId: 'admin' })).toBe('/admin')
     // Without companies.view All settings is not theirs: Admin opens their first other built Admin page.
     expect(firstOfficePage(officeNavFor(permissionCheck(['users.view'])), { areaId: 'admin' })).toBe('/admin/users')
-    expect(firstOfficePage(officeNavFor(permissionCheck(['audit.read'])))).toBe(PROFILE_PAGE)
+    // B-W0-28 built the Audit log: a person who only reads it lands there.
+    expect(firstOfficePage(officeNavFor(permissionCheck(['audit.read'])))).toBe('/admin/audit')
     expect(firstOfficePage(officeNavFor(permissionCheck([])))).toBe(PROFILE_PAGE)
   })
 

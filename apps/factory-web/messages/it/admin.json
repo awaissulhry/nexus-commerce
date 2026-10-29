@@ -299,7 +299,12 @@
         "none": "Ancora nessuna stampante: finché non ne aggiungi una, le etichette si stampano dal browser in PDF."
       },
       "sdi": {
-        "unknown": "Non ancora controllato: il collegamento SDI viene letto da Collegamenti (il prossimo passo)."
+        "blocked": "Bloccato da: dati legali della società (aggiungi prima una società).",
+        "none": "{name} non ha ancora un collegamento SDI: le sue fatture non possono raggiungere il sistema fiscale.",
+        "paused": "Il collegamento SDI di {name} è sospeso: le fatture aspettano finché non viene riattivato.",
+        "test": "SDI è collegato in modalità di prova per {name}: le fatture non raggiungono ancora il sistema fiscale.",
+        "done_one": "La società attiva invia davvero le sue fatture allo SDI.",
+        "done_other": "Tutte le {count} società attive inviano davvero le loro fatture allo SDI."
       },
       "privacy": {
         "done": "Tutti gli adempimenti privacy sono fatti.",
@@ -309,7 +314,11 @@
         "needsLater_other": "Restano aperti {count} adempimenti privacy. La loro pagina arriva con Privacy e informative."
       },
       "stock": {
-        "unknown": "Non ancora controllato: l'importazione delle giacenze iniziali arriva con i passi del magazzino."
+        "none": "Nessuna giacenza iniziale caricata: importala da un foglio.",
+        "waiting_one": "1 importazione delle giacenze iniziali aspetta di essere controllata o applicata.",
+        "waiting_other": "{count} importazioni delle giacenze iniziali aspettano di essere controllate o applicate.",
+        "done_one": "Giacenza iniziale caricata (1 importazione applicata).",
+        "done_other": "Giacenza iniziale caricata ({count} importazioni applicate)."
       }
     }
   },
@@ -340,7 +349,9 @@
     "workers_credentials": "Emettere badge e azzerare PIN",
     "email_send": "Inviare posta",
     "numbering_view": "Vedere le numerazioni",
-    "privacy_view": "Vedere gli adempimenti privacy"
+    "privacy_view": "Vedere gli adempimenti privacy",
+    "integrations_view": "Vedere i servizi esterni",
+    "imports_view": "Vedere le importazioni"
   },
   "org": {
     "intro": "Le società del gruppo con i loro dati fiscali e di fatturazione elettronica, e i loro reparti produttivi, magazzini e uffici. Apri uno stabilimento per costruirne linee e postazioni.",
@@ -1328,6 +1339,7 @@
     "documents": "Documenti",
     "print": "Stampa",
     "email": "E-mail",
+    "integrations": "Connessioni",
     "compliance": "Conformità",
     "product": "Prodotti",
     "inventory": "Magazzino",
@@ -1392,6 +1404,8 @@
     "email_send": "Inviare posta dalla conversazione di un record",
     "email_manage": "Gestire domini e identità di invio",
     "email_triage": "Smistare la posta ricevuta",
+    "integrations_view": "Vedere i servizi esterni e le loro chiamate",
+    "integrations_manage": "Sospendere e riattivare i servizi esterni",
     "compliance_certificates_view": "Vedere i certificati di esame UE del tipo",
     "compliance_certificates_manage": "Registrare, sospendere e ritirare certificati",
     "compliance_declarations_manage": "Caricare dichiarazioni di conformità e note informative",

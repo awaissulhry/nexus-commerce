@@ -1,0 +1,257 @@
+{
+  "docs": {
+    "intro": "Ogni numero di documento che la fabbrica assegna, per società: il prossimo come verrà stampato, e la prova che fatture e DDT non saltano né ripetono mai un numero.",
+    "new": "Nuova serie",
+    "keys": {
+      "new": "Tasto: c",
+      "hint": "1 · 2 cambiano elenco · c nuova serie"
+    },
+    "preview": "Anteprima di un documento",
+    "views": {
+      "label": "Quale elenco",
+      "numbers": "Numerazioni",
+      "documents": "Documenti"
+    },
+    "company": {
+      "label": "Società",
+      "all": "Tutte le società"
+    },
+    "later": "Modelli di e-mail ed etichette, marchio e documenti obbligatori per i record arrivano nei prossimi passi.",
+    "pattern": {
+      "aria": "Schema {pattern}",
+      "year4": "anno (2026)",
+      "year2": "anno (26)",
+      "yearOf": "anno ({year})",
+      "counter_one": "numero",
+      "counter_other": "numero, {count} cifre",
+      "issue": {
+        "empty": "Componi o scrivi uno schema.",
+        "tooLong": "Uno schema ha al massimo 40 caratteri.",
+        "badToken": "Tra parentesi graffe usa solo {N}, {N:5}, {YYYY} o {YY}.",
+        "noNumber": "Lo schema deve indicare dove va il numero: {N}.",
+        "twoNumbers": "Il numero può comparire una volta sola.",
+        "digits": "Il numero ha da 1 a 12 cifre.",
+        "badText": "Il testo fisso può contenere solo lettere, cifre e - / . _",
+        "yearNeedsYearly": "L'anno va solo in una serie che riparte ogni anno.",
+        "fiscalTooLong": "Un numero di fattura o DDT ha al massimo 20 caratteri: accorcia lo schema."
+      }
+    },
+    "code": "Serie {code}",
+    "fiscal": {
+      "tag": "Fiscale",
+      "title": "Controllo fiscale",
+      "intro": "Fatture, fatture d'acconto, note di credito e DDT non devono mai saltare né riusare un numero (DPR 633/72 art. 21). Ogni riga è letta dai numeri davvero emessi.",
+      "noSeries": "Nessuna serie fiscale attiva per questa società.",
+      "state": {
+        "success": "Nessun buco",
+        "warning": "Da verificare",
+        "neutral": "Nulla emesso",
+        "danger": "Non letto"
+      },
+      "none": "Nessun numero ancora emesso.",
+      "checking": "Lettura dei numeri emessi…",
+      "failed": "Non è stato possibile leggere i numeri.",
+      "noGaps_one": "Emesso {first}, nessun buco.",
+      "noGaps_other": "{count} numeri emessi, da {first} a {last}, nessun buco.",
+      "skipped": "{count} emessi, da {first} a {last}; non emessi da Nexus: {ranges}.",
+      "numbers": "Numeri emessi"
+    },
+    "empty": {
+      "title": "Nessuna serie di numerazione",
+      "body": "Le serie nascono con la società. Se ne manca una, aggiungila con Nuova serie."
+    },
+    "table": {
+      "label": "Serie di numerazione"
+    },
+    "col": {
+      "document": "Documento",
+      "next": "Prossimo numero",
+      "pattern": "Schema",
+      "restarts": "Riparte",
+      "started": "Parte da",
+      "lastIssued": "Ultima emissione",
+      "state": "Stato"
+    },
+    "next": {
+      "closed": "Chiusa: niente più numeri"
+    },
+    "reset": {
+      "YEARLY": "Ogni anno",
+      "NEVER": "Mai"
+    },
+    "never": "Non ancora",
+    "status": {
+      "ACTIVE": "Attiva",
+      "CLOSED": "Chiusa"
+    },
+    "layouts": {
+      "noRightTitle": "Le anteprime dei documenti non sono tue",
+      "noRight": "Serve il permesso di vedere l'anteprima dei documenti della società. Chiedi a un amministratore.",
+      "noCompanyTitle": "Nessuna società attiva",
+      "noCompany": "Aggiungi prima una società: i suoi documenti riportano i suoi dati legali.",
+      "with": "Con i dati di {name}: ogni anteprima si apre come PDF in una nuova scheda, marcata come esempio.",
+      "label": "Modelli dei documenti",
+      "notReady_one": "{name} non può ancora stampare documenti: manca 1 dato legale (sede legale, partita IVA, codice fiscale, ufficio e numero REA).",
+      "notReady_other": "{name} non può ancora stampare documenti: mancano {count} dati legali (sede legale, partita IVA, codice fiscale, ufficio e numero REA).",
+      "fixLegal": "Completa i dati legali",
+      "heldLegal": "Completa prima i dati legali della società",
+      "col": {
+        "document": "Documento",
+        "layout": "Modello",
+        "preview": "Anteprima"
+      },
+      "fixed": "Modello fisso: la modifica arriva più avanti.",
+      "previewIn": {
+        "it": "Italiano",
+        "en": "English"
+      },
+      "newTab": "(si apre in una nuova scheda)"
+    },
+    "type": {
+      "QUOTE": "Preventivo",
+      "PURCHASE_ORDER": "Ordine fornitore",
+      "DDT": "DDT (documento di trasporto)",
+      "INVOICE_COPY": "Fattura (copia di cortesia)",
+      "PACKING_LIST": "Distinta colli"
+    },
+    "newDialog": {
+      "title": "Nuova serie di numerazione",
+      "subtitle": "Componi il numero con i blocchi; il primo numero appare come verrà stampato.",
+      "create": "Crea serie",
+      "first": "Primo numero:",
+      "useChips": "Componi con i blocchi",
+      "typeIt": "Scrivi lo schema a mano",
+      "fiscal": "Una serie fiscale non salta né riusa mai un numero, e i numeri escono in ordine di data. Inizio e schema restano fissi dopo il primo numero."
+    },
+    "field": {
+      "company": "Società",
+      "kind": "Documento",
+      "code": "Codice serie",
+      "codeHint": "MAIN per la serie normale; un altro codice (B, EXPORT) per una seconda serie dello stesso documento.",
+      "reset": "Riparte",
+      "year": "Primo anno",
+      "yearHint": "L'anno dei suoi primi numeri.",
+      "start": "Primo numero",
+      "startHint": "1, oppure dove si sono fermati il blocchetto o il vecchio programma, più uno.",
+      "pattern": "Come si stampa il numero",
+      "typed": "Schema",
+      "typedHint": "Testo fisso e {N} (il numero), {N:5} (5 cifre), {YYYY} o {YY} (l'anno).",
+      "prefix": "Prefisso",
+      "separator": "Separatore",
+      "yearToken": "Anno",
+      "digits": "Cifre del numero"
+    },
+    "separator": {
+      "none": "Nessuno"
+    },
+    "yearToken": {
+      "YYYY": "2026 (quattro cifre)",
+      "YY": "26 (due cifre)",
+      "none": "Senza anno"
+    },
+    "form": {
+      "required": "Scegline uno.",
+      "code": "Usa da 1 a 16 lettere maiuscole, cifre o trattini.",
+      "year": "Un anno come 2026.",
+      "digits": "Da 1 a 12.",
+      "start": "Un numero intero da 1."
+    },
+    "held": {
+      "manage": "Serve il permesso: Gestire le serie di numerazione",
+      "noCompany": "Aggiungi prima una società attiva"
+    },
+    "seriesDialog": {
+      "missing": "Serie non trovata",
+      "title": "Serie di numerazione: {kind} {period}",
+      "changed": "Ultima modifica",
+      "fiscal": "Fiscale: non salta né riusa mai un numero",
+      "fiscalBody": "I numeri escono in ordine di data e un numero fiscale ha al massimo 20 caratteri. Il database rifiuta ogni modifica a un numero già emesso.",
+      "notFiscal": "Non fiscale: vale la stessa regola senza buchi, senza l'ordine di data.",
+      "fixed_one": "1 numero emesso: inizio e schema sono fissi.",
+      "fixed_other": "{count} numeri emessi: inizio e schema sono fissi."
+    },
+    "start": {
+      "title": "Primo numero",
+      "body": "Da questa serie non è ancora uscito nulla, quindi il primo numero si può ancora cambiare.",
+      "save": "Salva primo numero",
+      "same": "Scrivi un altro primo numero"
+    },
+    "advance": {
+      "title": "Dopo un ripristino: salta oltre un numero",
+      "body": "Se dei numeri dopo {next} sono già stati usati altrove (ricevute SDI, archivio DDT), la serie riprende dopo l'ultimo. Non torna mai indietro.",
+      "past": "Ultimo numero usato altrove",
+      "pastHint": "La serie riprende dal successivo.",
+      "date": "Data del suo documento",
+      "dateHint": "Mantiene l'ordine di data dei numeri fiscali.",
+      "reason": "Perché (resta nel registro attività)",
+      "go": "Salta oltre questo numero",
+      "heldValue": "Scrivi un numero da {next}",
+      "heldReason": "Spiega il motivo in poche parole"
+    },
+    "close": {
+      "open": "Chiudi serie…",
+      "title": "Chiudere la serie {name}?",
+      "go": "Chiudi serie",
+      "noMore": "Non uscirà più alcun numero.",
+      "stay": "I numeri già emessi restano, con i loro documenti.",
+      "final": "Una serie chiusa non si riapre: i nuovi documenti hanno bisogno di un'altra serie attiva.",
+      "alone": "Questa società non ha un'altra serie {kind} attiva: i nuovi documenti di questo tipo saranno rifiutati finché non ne aggiungi una."
+    },
+    "numbers": {
+      "title": "Numeri emessi: {kind} {period}",
+      "emptyTitle": "Nessun numero emesso",
+      "empty": "Il primo documento di questo tipo prenderà il primo numero.",
+      "label": "Numeri emessi, dal più recente",
+      "col": {
+        "number": "Numero",
+        "date": "Data documento",
+        "record": "Record",
+        "who": "Emesso da",
+        "when": "Quando"
+      },
+      "system": "Il sistema",
+      "noun": "serie",
+      "skippedTitle": "Non emessi da Nexus: {ranges}",
+      "skippedBody": "Questi numeri stanno tra il primo e l'ultimo e non sono mai stati emessi qui: la serie è stata spostata oltre numeri usati altrove, oppure mancano numeri. Il registro attività dice quale dei due.",
+      "shown": "Gli ultimi {shown} di {count} numeri."
+    },
+    "done": {
+      "created": "Serie creata. Il primo numero è {number}.",
+      "start": "Primo numero impostato a {value}.",
+      "advanced": "La serie riprende da {number}.",
+      "closed": "Serie {code} chiusa: non emette più numeri."
+    },
+    "problem": {
+      "conflict": "Qualcuno ha cambiato questa serie nel frattempo. L'elenco è stato riletto: controlla e riprova.",
+      "invalid": "Il server l'ha rifiutata: controlla schema, anno e primo numero."
+    },
+    "kind": {
+      "QUOTE": "Preventivo",
+      "SALES_ORDER": "Ordine cliente",
+      "PURCHASE_ORDER": "Ordine fornitore",
+      "GOODS_RECEIPT": "Ricevimento merce",
+      "WORK_ORDER": "Ordine di produzione",
+      "SHIPMENT": "Spedizione",
+      "DDT": "DDT",
+      "INVOICE": "Fattura",
+      "DEPOSIT_INVOICE": "Fattura d'acconto",
+      "CREDIT_NOTE": "Nota di credito",
+      "RETURN": "Reso",
+      "LOT": "Lotto",
+      "BATCH": "Partita",
+      "PPE_REGISTER": "Registro DPI"
+    },
+    "record": {
+      "Invoice": "Fattura",
+      "Ddt": "DDT",
+      "Quote": "Preventivo",
+      "SalesOrder": "Ordine cliente",
+      "PurchaseOrder": "Ordine fornitore",
+      "WorkOrder": "Ordine di produzione",
+      "Shipment": "Spedizione",
+      "Lot": "Lotto",
+      "PpeRegisterEntry": "Voce del registro DPI",
+      "Receipt": "Ricevimento merce"
+    }
+  }
+}

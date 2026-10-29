@@ -214,6 +214,22 @@ export const EMAIL_MANAGE = 'email.manage' satisfies Permission
 export const EMAIL_TRIAGE = 'email.triage' satisfies Permission
 
 /**
+ * The outside services the factory rents (apps/factory-api platform/admin/connections; design 02 admin.connections,
+ * SCR-087; PLT-139, PLT-195, PLT-197): each IntegrationAccount (SES, R2, SDI, Sendcloud, VIES) with its mode, state,
+ * calls and received webhooks. integrations.view reads them (never a secret: secrets are sealed and write-only);
+ * integrations.manage pauses an account (the kill switch: the gateway refuses its calls) and resumes it, each after a
+ * confirm. Checked with can() against the account's company; a tenant-wide account (SES, R2, VIES: every company's
+ * mail, files, VAT checks) needs a grant over every active company. Not step-up: nothing it does widens what anyone
+ * can see or do, and the account's secrets stay sealed (connecting and replacing secrets come later).
+ */
+export const INTEGRATIONS_DEFINITIONS = definePermissions('integrations', {
+  view: { risk: 'read', description: "See the outside services the factory uses (mail, files, SDI, carriers, VAT checks): what each is for, its mode, whether it works, its calls and received messages; never a secret." },
+  manage: { risk: 'write', description: 'Pause a service so no call reaches it, and resume it.' },
+})
+export const INTEGRATIONS_VIEW = 'integrations.view' satisfies Permission
+export const INTEGRATIONS_MANAGE = 'integrations.manage' satisfies Permission
+
+/**
  * Compliance: the EU type-examination certificate register (apps/factory-api modules/compliance/certificates; QHS-103,
  * QHS-051, PRD-288; Reg. (EU) 2016/425). Checked with can() against the certificate's company and holder party. The
  * constants live in factory-domain/src/compliance/certificates/permissions.ts. Not step-up: a certificate is typed from
@@ -286,6 +302,7 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   DOCUMENTS_DEFINITIONS,
   PRINT_DEFINITIONS,
   EMAIL_DEFINITIONS,
+  INTEGRATIONS_DEFINITIONS,
   COMPLIANCE_DEFINITIONS,
   PRODUCT_MATERIALS_DEFINITIONS,
   PRODUCT_STYLES_DEFINITIONS,

@@ -1,0 +1,226 @@
+{
+  "imp": {
+    "title": "Importa ed esporta",
+    "intro": "Carica i tuoi dati da un foglio. Scegli cosa caricare, controlla cosa cambierebbe, poi applica solo ciò che hai visto: nulla viene scritto prima di applicare.",
+    "new": "Importa un foglio",
+    "everyCompany": "Tutte le società",
+    "what": {
+      "title": "Cosa vuoi caricare?",
+      "noneTitle": "Nessuna importazione è disponibile per te",
+      "noneBody": "Ogni importazione richiede anche il permesso di modificare ciò che carica (materiali, clienti e fornitori, ubicazioni, giacenze). Chiedi a un amministratore.",
+      "lastUnknown": "Ultima importazione: —",
+      "last": "Ultima importazione: {when} · {state}",
+      "never": "Mai importato",
+      "start": "Importa",
+      "later": "Modelli, listini e addetti avranno le loro importazioni con le rispettive aree; il primo caricamento guidato (clienti → fornitori → materiali → giacenze iniziali, con totali che devono tornare) e i modelli da scaricare per ogni importazione arriveranno più avanti."
+    },
+    "template": {
+      "xlsx": "Modello (Excel)",
+      "csv": "Modello (CSV)"
+    },
+    "recent": {
+      "title": "Importazioni recenti",
+      "emptyTitle": "Ancora nessuna importazione",
+      "emptyBody": "Ogni foglio che controlli o applichi compare qui, con ciò che ha cambiato.",
+      "applyAgain": "Applica di nuovo",
+      "rowsApplied": "{applied} scritte · {skipped} saltate · {refused} rifiutate",
+      "rowsPlanned": "{create} nuove · {update} modificate · {unchanged} invariate · {refused} rifiutate"
+    },
+    "col": {
+      "importer": "Cosa",
+      "file": "File",
+      "company": "Società",
+      "state": "Stato",
+      "rows": "Righe",
+      "who": "Chi",
+      "when": "Quando",
+      "row": "Riga",
+      "key": "Riferimento",
+      "column": "Colonna",
+      "reason": "Perché (dal controllo)",
+      "what": "Modifica",
+      "values": "Valori"
+    },
+    "state": {
+      "reading": "In controllo",
+      "planned": "Controllata, non applicata",
+      "planFailed": "Non leggibile",
+      "applying": "In applicazione",
+      "applyFailed": "Applicazione interrotta",
+      "applied": "Applicata",
+      "cancelled": "Annullata"
+    },
+    "held": {
+      "noRunRight": "Servono i permessi per avviare importazioni e caricare file.",
+      "noImporter": "Nessuna importazione è disponibile per te.",
+      "notPlanned": "Il controllo non è terminato.",
+      "noApplyRight": "Per applicare serve il permesso di applicare le importazioni: chiedi a chi lo ha.",
+      "nothing": "Niente da applicare: ogni riga è invariata o rifiutata.",
+      "busy": "In corso…",
+      "fixFirst_one": "Correggi prima 1 campo.",
+      "fixFirst_other": "Correggi prima {count} campi."
+    },
+    "wizard": {
+      "title": "Importa un foglio",
+      "titleOf": "Importa {name}",
+      "subtitle": "Nulla viene scritto finché non applichi.",
+      "cancelImport": "Annulla importazione",
+      "start": "Carica e controlla",
+      "uploading": "Caricamento…",
+      "later": "Decidi dopo",
+      "apply_one": "Applica 1 riga",
+      "apply_other": "Applica {count} righe",
+      "applyAgain_one": "Applica l'ultima riga",
+      "applyAgain_other": "Applica le {count} righe rimaste",
+      "restart": "Carica un foglio corretto",
+      "leave": "Chiudi (prosegue)"
+    },
+    "step": {
+      "upload": "Carica",
+      "check": "Controlla",
+      "apply": "Applica",
+      "result": "Risultato"
+    },
+    "reading": {
+      "label": "Lettura del foglio",
+      "detail": "Ogni riga di {file} viene confrontata con ciò che esiste ora.",
+      "note": "Puoi chiudere questa finestra: il controllo prosegue e l'importazione ti aspetta in Importazioni recenti."
+    },
+    "applying": {
+      "label_one": "Scrittura di 1 riga",
+      "label_other": "Scrittura di {count} righe",
+      "detail": "{done} di {total} righe",
+      "note": "Puoi chiudere questa finestra: l'importazione prosegue. Una riga cambiata dopo il controllo viene saltata, mai sovrascritta."
+    },
+    "applyFailed": {
+      "title": "L'applicazione si è interrotta",
+      "body": "{written} righe sono state scritte prima dell'interruzione e restano; ne mancano {left}. Applica di nuovo per riprendere da dove si è fermata."
+    },
+    "saidLead": "Cosa ha risposto l'importazione:",
+    "cancelled": {
+      "title": "Questa importazione è stata annullata",
+      "someWritten_one": "1 riga era già stata scritta prima dell'annullamento e resta; nient'altro verrà scritto.",
+      "someWritten_other": "{count} righe erano già state scritte prima dell'annullamento e restano; nient'altro verrà scritto.",
+      "nothing": "Nulla è stato scritto."
+    },
+    "cancel": {
+      "title": "Annullare questa importazione?",
+      "keep": "Mantieni",
+      "go": "Annulla importazione",
+      "body": "Le modifiche previste vengono scartate e non viene scritto altro. Per caricare il foglio più tardi, caricalo di nuovo.",
+      "kept_one": "L'unica riga già scritta resta.",
+      "kept_other": "Le {count} righe già scritte restano."
+    },
+    "upload": {
+      "intro": "Scegli cosa contiene il foglio e per quale società, poi il file. Il passo successivo mostra cosa cambierebbe.",
+      "template": "Parti dal modello:",
+      "openingReports": "Un foglio che cita rapporti di prova sul cromo VI richiede prima il caricamento di quei PDF; il caricamento arriverà con la pagina delle giacenze. Senza rapporti, i lotti che richiedono la prova restano in quarantena.",
+      "remove": "Rimuovi",
+      "safe": "Il controllo non scrive nulla. Le righe errate vengono rifiutate con il motivo; le altre aspettano che tu le applichi."
+    },
+    "field": {
+      "importer": "Cosa contiene il foglio",
+      "importerPick": "Scegli…",
+      "company": "Società",
+      "companyHint": "I dati vengono scritti per questa società.",
+      "companyPick": "Scegli una società…",
+      "numbers": "Come il foglio scrive i numeri",
+      "file": "Il foglio",
+      "fileHint": "Un file .csv o .xlsx, fino a 10 MB e 10.000 righe. La prima riga contiene i nomi delle colonne.",
+      "dropHint": ".csv o .xlsx · fino a 10 MB",
+      "sheet": "Foglio di lavoro",
+      "sheetHint": "Lascia vuoto per leggere il primo foglio di lavoro del file."
+    },
+    "numbers": {
+      "it": "Italiano",
+      "en": "Inglese",
+      "sample": "Milleduecentotrentaquattro e cinquanta: {sample}"
+    },
+    "count": {
+      "create": "Nuove",
+      "createHint": "righe che aggiungono un dato",
+      "update": "Modificate",
+      "updateHint": "righe che modificano un dato",
+      "unchanged": "Invariate",
+      "unchangedHint": "già come dice il foglio",
+      "error": "Rifiutate",
+      "errorHint": "non scritte, con il motivo"
+    },
+    "checked": {
+      "nothingYet": "Questo è il controllo: non è stato scritto ancora nulla. Applica scrive le righe nuove e modificate; le righe rifiutate non vengono mai scritte.",
+      "again": "Il controllo di questo foglio, com'era prima che l'applicazione si interrompesse.",
+      "columns": "Colonne lette",
+      "columnsRead_one": "1 colonna letta da {sheet}:",
+      "columnsRead_other": "{count} colonne lette da {sheet}:",
+      "ignored_one": "1 colonna non è stata letta:",
+      "ignored_other": "{count} colonne non sono state lette:",
+      "refused": "Righe rifiutate",
+      "refusedCount_one": "1 riga rifiutata",
+      "refusedCount_other": "{count} righe rifiutate",
+      "refusedHint": "Correggile nel foglio e importalo di nuovo; le righe già caricate risulteranno invariate.",
+      "moreRefused_one": "1 altra riga rifiutata è nel file da scaricare.",
+      "moreRefused_other": "Altre {count} righe rifiutate sono nel file da scaricare.",
+      "changes": "Cosa cambierebbe",
+      "changesCount_one": "1 riga verrebbe scritta",
+      "changesCount_other": "{count} righe verrebbero scritte",
+      "moreChanges_one": "1 altra riga verrebbe scritta (non mostrata).",
+      "moreChanges_other": "Altre {count} righe verrebbero scritte (non mostrate).",
+      "allSame": "Tutto il contenuto del foglio è già in Nexus: non c’è nulla da applicare."
+    },
+    "download": {
+      "refused": "Scarica le righe rifiutate (CSV)"
+    },
+    "action": {
+      "CREATE": "Nuova",
+      "UPDATE": "Modificata"
+    },
+    "planFailed": {
+      "title": "Il foglio non può essere controllato così com’è",
+      "body": "Nulla è stato scritto. Correggi il foglio e caricalo di nuovo.",
+      "money": "Queste colonne contengono importi che non puoi vedere: {columns}. Toglile, oppure chiedi a chi li vede di importare il foglio.",
+      "said": "Cosa ha trovato il controllo"
+    },
+    "result": {
+      "title_one": "1 riga scritta",
+      "title_other": "{count} righe scritte",
+      "applied": "Scritte",
+      "skipped": "Saltate",
+      "skippedHint": "cambiate dopo il controllo, non sovrascritte",
+      "refused": "Rifiutate al controllo",
+      "refusedHint": "Correggi le righe rifiutate nel foglio e importalo di nuovo.",
+      "skippedRows": "Righe saltate",
+      "rowN": "Riga {row}",
+      "changedSince": "Cambiata dopo il controllo."
+    },
+    "problem": {
+      "importer": "Scegli cosa contiene il foglio.",
+      "company": "Scegli la società.",
+      "noFile": "Scegli il foglio da caricare.",
+      "fileType": "Si leggono solo file .csv e .xlsx: salva il foglio in uno di questi formati.",
+      "fileSize": "Il file supera 10 MB: dividilo in fogli più piccoli.",
+      "fileEmpty": "Il file è vuoto.",
+      "store": "Non è stato possibile inviare il foglio all’archivio dei file. Riprova."
+    },
+    "notice": {
+      "cancelled": "L'importazione di {file} è stata annullata."
+    },
+    "importer": {
+      "product_materials": {
+        "name": "Materiali",
+        "fills": "Pelli, tessuti, accessori e protezioni con unità, colori, impostazioni sul cromo VI e costo standard."
+      },
+      "parties_parties": {
+        "name": "Clienti e fornitori",
+        "fills": "Clienti, marchi, fornitori, terzisti e corrieri con dati fiscali, sede legale e un contatto."
+      },
+      "inventory_locations": {
+        "name": "Ubicazioni",
+        "fills": "Magazzini, zone e scaffali di uno stabilimento, il punto di ricevimento, lo scaffale di quarantena e le scaffalature a bordo linea; prima i contenitori."
+      },
+      "inventory_opening": {
+        "name": "Giacenze iniziali",
+        "fills": "Le giacenze presenti prima di Nexus: lotti, pelli una per una con le loro superfici, fodere, accessori e protezioni, con i rapporti sul cromo VI già esistenti. I lotti che richiedono il controllo qualità restano in quarantena."
+      }
+    }
+  }
+}

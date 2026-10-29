@@ -17,12 +17,12 @@
       "users": "Users",
       "roles": "Roles & permissions",
       "platform": "Platform",
-      "numbering": "Numbering",
-      "email": "Email & addresses",
+      "documents": "Documents & numbering",
       "languages": "Languages & formats",
-      "imports": "Import",
       "audit": "Audit log",
-      "connections": "Connections"
+      "connections": "Connections & API",
+      "data": "Data",
+      "import": "Import & export"
     }
   },
   "topbar": {

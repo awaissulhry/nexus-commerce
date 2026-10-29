@@ -1,0 +1,56 @@
+/*
+ * Languages & formats (B-W0-28, SCR-016) LAYOUT: a readable column of cards, the language rows and the two format
+ * samples side by side (one column on a phone). Controls are the design system's; semantic tokens only.
+ */
+.fw-adm-langs {
+  max-width: 920px;
+}
+
+.fw-adm-langs-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-adm-langs-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-adm-langs-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  padding-block: var(--nds-space-6);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-adm-langs-row:first-child {
+  border-top: 0;
+}
+
+.fw-adm-langs-formats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-24);
+}
+
+.fw-adm-langs-format {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-adm-langs-link {
+  color: var(--nds-text-link);
+}
+
+.fw-adm-langs-site {
+  padding-left: var(--nds-space-16);
+  color: var(--nds-text-link);
+}

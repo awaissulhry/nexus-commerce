@@ -1,0 +1,412 @@
+{
+  "conn": {
+    "title": "Connessioni e API",
+    "intro": "Ogni servizio esterno che la fabbrica usa: a cosa serve, se funziona e se è reale o di prova. I segreti sono sigillati e non si vedono mai.",
+    "everyCompany": "Tutte le società",
+    "notConnected": "Non collegato",
+    "notConnectedHint": "Nessuno l’ha ancora collegato.",
+    "connect": {
+      "row": "Come collegarlo",
+      "open": "Collega un servizio",
+      "title": "Collega un servizio",
+      "subtitle": "Cosa fa ogni servizio per la fabbrica e quali sono collegati.",
+      "heldTitle": "Collegare un servizio da questa pagina arriverà più avanti",
+      "heldBody": "Oggi è il supporto Nexus a collegare un servizio per te: salva le chiavi sigillate sul server, prima in modalità di prova. Una volta collegato, il servizio compare nell’elenco, dove puoi seguirlo, sospenderlo e riattivarlo.",
+      "listLabel": "Servizi che la fabbrica può usare",
+      "connected_one": "1 collegato",
+      "connected_other": "{count} collegati",
+      "later": "Più avanti",
+      "held": "Non ancora disponibile: chiedi al supporto Nexus di collegare questo servizio.",
+      "go": "Continua"
+    },
+    "provider": {
+      "SES": {
+        "name": "Invio e-mail (Amazon SES)",
+        "for": "Offerte, ordini d’acquisto e notifiche partono dal tuo dominio; le risposte tornano al loro record.",
+        "how": "Uno per tutte le società: il dominio di posta qui sotto dice da quali indirizzi invia."
+      },
+      "R2": {
+        "name": "Archivio file (Cloudflare R2)",
+        "for": "Conserva i file di ogni record: PDF, foto, certificati, fogli importati.",
+        "how": "Uno per tutte le società."
+      },
+      "SDI": {
+        "name": "Fatture elettroniche (SDI)",
+        "for": "Invia le fatture al Sistema di Interscambio e riporta le sue ricevute.",
+        "how": "Uno per società: ogni società emette le proprie fatture."
+      },
+      "SENDCLOUD": {
+        "name": "Etichette corriere (Sendcloud)",
+        "for": "Acquista le etichette di spedizione e segue i colli fino alla consegna.",
+        "how": "Uno per società: le etichette le paga la società che spedisce."
+      },
+      "VIES": {
+        "name": "Controllo partita IVA (VIES)",
+        "for": "Controlla le partite IVA UE di clienti e fornitori presso la Commissione europea.",
+        "how": "Uno per tutte le società."
+      }
+    },
+    "laterService": {
+      "payroll": "Esportazione paghe",
+      "edi": "EDI con i clienti",
+      "ai": "Fornitore di IA"
+    },
+    "mode": {
+      "LIVE": "Reale",
+      "SANDBOX": "Prova",
+      "FAKE": "Simulato"
+    },
+    "modeHint": {
+      "LIVE": "Le chiamate arrivano al servizio reale.",
+      "SANDBOX": "Le chiamate arrivano al sistema di prova del servizio: niente è reale.",
+      "FAKE": "Risponde Nexus al posto del servizio: niente esce dalla fabbrica."
+    },
+    "modeBanner": {
+      "SANDBOX": "Modalità di prova: risponde il sistema di prova del servizio. Niente di ciò che passa di qui è reale.",
+      "FAKE": "Modalità simulata: risponde Nexus al posto del servizio. Niente di ciò che passa di qui esce dalla fabbrica."
+    },
+    "state": {
+      "working": "Funziona · ultimo esito positivo {at}",
+      "failing": "In errore da {at}",
+      "notCalled": "Mai chiamato",
+      "paused": "Sospeso",
+      "disabled": "Non più usato"
+    },
+    "lastErrorSaid": "Ultimo errore, come l’ha detto il servizio:",
+    "callCount_one": "1 chiamata in 24 h",
+    "callCount_other": "{count} chiamate in 24 h",
+    "callsFailed_one": "1 non riuscita",
+    "callsFailed_other": "{count} non riuscite",
+    "waiting_one": "1 messaggio in attesa",
+    "waiting_other": "{count} messaggi in attesa",
+    "open": "Apri",
+    "tab": {
+      "overview": "Panoramica",
+      "settings": "Impostazioni e segreti",
+      "calls": "Chiamate",
+      "inbound": "Ricevuti",
+      "activity": "Attività"
+    },
+    "pause": {
+      "action": "Sospendi",
+      "title": "Sospendere {name}?",
+      "go": "Sospendi il servizio",
+      "body": "Da ora nessuna chiamata arriva a {service}: ciò che ne ha bisogno aspetta o viene rifiutato a parole (una fattura resta da inviare, un’etichetta non viene acquistata).",
+      "undo": "Puoi riattivarlo quando vuoi; non si perde nulla."
+    },
+    "resume": {
+      "action": "Riattiva",
+      "title": "Riattivare {name}?",
+      "go": "Riattiva il servizio",
+      "body": "Da ora le chiamate arrivano di nuovo a {service}, nella modalità in cui si trova.",
+      "undo": "Puoi sospenderlo di nuovo quando vuoi."
+    },
+    "right": {
+      "manage": "Sospendere e riattivare i servizi esterni"
+    },
+    "testMode": {
+      "title_one": "Modalità di prova: 1 servizio non raggiunge nessuno",
+      "title_other": "Modalità di prova: {count} servizi non raggiungono nessuno",
+      "body": "Fatture, etichette e posta inviate tramite {services} sono prove: non arrivano mai a un cliente, a un corriere o al fisco."
+    },
+    "tile": {
+      "working": "Funzionano",
+      "failing": "In errore",
+      "test": "In prova",
+      "paused": "Sospesi",
+      "waiting": "Messaggi in attesa"
+    },
+    "tileHint": {
+      "working": "L’ultima chiamata è andata a buon fine.",
+      "failing": "L’ultima chiamata non è riuscita.",
+      "test": "Simulati o di prova: non raggiungono nessuno.",
+      "paused": "Nessuna chiamata li raggiunge.",
+      "waiting": "Messaggi ricevuti da loro, non ancora gestiti."
+    },
+    "search": "Cerca servizi",
+    "filtered": "Mostra: {tile}",
+    "empty": {
+      "title": "Nessun servizio è ancora collegato",
+      "body": "Collega prima la posta: tutto ciò che esce dalla fabbrica ne ha bisogno."
+    },
+    "tableLabel": "Servizi esterni",
+    "col": {
+      "service": "Servizio",
+      "for": "A cosa serve",
+      "company": "Società",
+      "mode": "Modalità",
+      "state": "Stato",
+      "calls": "Chiamate 24 h",
+      "region": "Regione"
+    },
+    "later": "La coda degli errori, il registro delle consegne e le chiavi API per altri sistemi arrivano nei prossimi passi.",
+    "residency": {
+      "title": "Dove stanno i tuoi dati",
+      "intro": "Solo ciò che dicono le impostazioni di ogni collegamento: Nexus non indovina mai una regione.",
+      "none": "Nessun servizio è ancora collegato.",
+      "account": "Collegamento",
+      "unknown": "Non indicata",
+      "later": "L’elenco dei sub-responsabili e delle loro regioni, in PDF, arriverà più avanti."
+    },
+    "reasonShort": "Scrivi almeno 3 caratteri, oppure lascialo vuoto.",
+    "done": {
+      "paused": "{name} è sospeso: nessuna chiamata lo raggiunge.",
+      "resumed": "{name} è di nuovo attivo."
+    },
+    "test": {
+      "action": "Prova il collegamento",
+      "title": "Prova il collegamento",
+      "body": "Una chiamata innocua al servizio, con la risposta a parole.",
+      "held": "Non ancora disponibile: l’adattatore del servizio non ha ancora una chiamata di prova innocua (ping)."
+    },
+    "pausedBanner": "Sospeso: nessuna chiamata raggiunge questo servizio finché qualcuno non lo riattiva.",
+    "disabledBanner": "Non più usato: conservato per la sua cronologia.",
+    "overview": {
+      "title": "Funziona, e cosa fa?",
+      "lastOk": "Ultima chiamata riuscita",
+      "never": "Mai finora",
+      "lastError": "Ultimo errore",
+      "noError": "Nessuno",
+      "noFailures": "Nessuna non riuscita",
+      "waiting": "Ricevuti, non ancora gestiti",
+      "noneWaiting": "Niente in attesa"
+    },
+    "limits": {
+      "title": "Come Nexus protegge il servizio",
+      "intro": "Ogni chiamata passa da un unico gateway che rispetta questi limiti.",
+      "rate": "Ritmo",
+      "rateValue": "Fino a {perMinute} chiamate al minuto, {burst} insieme",
+      "timeout": "Attesa massima di una risposta",
+      "seconds": "{seconds} s",
+      "circuit": "Dopo errori consecutivi",
+      "circuitValue": "Sospeso per {seconds} s dopo {failures} errori consecutivi, poi decide una chiamata di prova"
+    },
+    "readOnly": "Puoi vedere questo collegamento; per sospenderlo serve il permesso di gestire i servizi esterni.",
+    "settings": {
+      "title": "Impostazioni",
+      "intro": "Ciò che non è segreto, come è stato impostato. Modificarlo da qui arriverà più avanti.",
+      "label": "Nome",
+      "code": "Codice",
+      "created": "Collegato il",
+      "changed": "Ultima modifica",
+      "none": "Nessun’altra impostazione.",
+      "inboundPath": "Dove questo servizio invia i suoi messaggi (per la sua configurazione):",
+      "later": "Modificare le impostazioni e la modalità (passare al reale) arriverà più avanti; il passaggio al reale chiederà di digitare il codice della società."
+    },
+    "setting": {
+      "region": "Regione",
+      "configurationSet": "Configuration set",
+      "awsAccountId": "Account AWS",
+      "inboundBucket": "Bucket della posta ricevuta"
+    },
+    "secrets": {
+      "title": "Segreti",
+      "intro": "Le chiavi si scrivono una volta e restano sigillate sul server: nessuno può rileggerle, nemmeno qui.",
+      "credentials": "Chiavi di accesso",
+      "webhook": "Chiave di firma dei messaggi ricevuti"
+    },
+    "secret": {
+      "saved": "Salvata il {date} · sigillata, mai mostrata",
+      "rotated": "Salvata il {saved}, sigillata di nuovo il {rotated} · mai mostrata",
+      "savedNoDate": "Salvata · sigillata, mai mostrata",
+      "notSaved": "Non salvata: le modalità simulata e di prova non ne hanno bisogno",
+      "replace": "Sostituisci",
+      "replaceHeld": "Non ancora disponibile: sostituire una chiave da questa pagina arriverà più avanti (oggi la sostituisce il supporto Nexus)."
+    },
+    "reason": {
+      "account_paused": "Rifiutata: il servizio era sospeso.",
+      "account_disabled": "Rifiutata: il servizio non è più usato.",
+      "circuit_open": "Rifiutata: sospeso per un po’ dopo errori consecutivi.",
+      "rate_limited": "Rifiutata: troppe chiamate insieme.",
+      "gateway_unavailable": "Rifiutata: il gateway non ha potuto controllare i suoi limiti.",
+      "fake_in_production": "Rifiutata: un servizio simulato non si chiama mai in produzione.",
+      "timeout": "Nessuna risposta in tempo.",
+      "provider_error": "Il servizio ha risposto con un errore.",
+      "network_error": "Il servizio non era raggiungibile."
+    },
+    "calls": {
+      "filter": "Quali chiamate",
+      "all": "Tutte",
+      "failedOnly": "Solo non riuscite",
+      "noFailures": "Nessuna chiamata non riuscita",
+      "empty": "Ancora nessuna chiamata",
+      "emptyBody": "Ogni chiamata che Nexus fa a questo servizio compare qui, qualunque sia l’esito.",
+      "tableLabel": "Chiamate a questo servizio, dalla più recente",
+      "count_one": "1 chiamata mostrata",
+      "count_other": "{count} chiamate mostrate",
+      "ms": "{ms} ms",
+      "privacy": "Ciò che è stato inviato e ricevuto non si vede qui: può contenere dati personali.",
+      "col": {
+        "time": "Ora",
+        "operation": "Operazione",
+        "state": "Esito",
+        "http": "HTTP",
+        "duration": "Durata",
+        "tries": "Tentativi",
+        "summary": "Perché"
+      }
+    },
+    "callState": {
+      "SUCCEEDED": "Riuscita",
+      "FAILED": "Non riuscita",
+      "TIMED_OUT": "Senza risposta",
+      "REFUSED": "Non inviata"
+    },
+    "showOlder": "Mostra i precedenti",
+    "inbound": {
+      "filter": "Quali messaggi",
+      "none": "Questo servizio non invia messaggi a Nexus.",
+      "empty": "Niente di ricevuto",
+      "emptyBody": "I messaggi che questo servizio invia (ricevute, notizie di consegna) compaiono qui all’arrivo, controllati e gestiti una sola volta.",
+      "tableLabel": "Messaggi ricevuti da questo servizio, dal più recente",
+      "count_one": "1 messaggio mostrato",
+      "count_other": "{count} messaggi mostrati",
+      "verified": "Firma verificata",
+      "notVerified": "Firma rifiutata",
+      "privacy": "Il contenuto di un messaggio non si vede qui. Rielaborare un messaggio non riuscito arriverà più avanti.",
+      "col": {
+        "event": "Tipo",
+        "verified": "Firma",
+        "processed": "Gestito",
+        "error": "Problema"
+      }
+    },
+    "inboundState": {
+      "RECEIVED": "In attesa",
+      "PROCESSED": "Gestito",
+      "FAILED": "Non riuscito",
+      "REJECTED": "Respinto"
+    }
+  },
+  "mail": {
+    "title": "Il tuo dominio di posta",
+    "intro": "Invia e ricevi posta dal tuo dominio. Aggiungi questi record dove è registrato il dominio; Nexus li controlla con il servizio di posta.",
+    "add": {
+      "open": "Aggiungi un dominio di invio",
+      "title": "Aggiungi un dominio di invio",
+      "subtitle": "Il servizio di posta fornisce tre record da aggiungere presso il registrar; la posta parte dal dominio quando vengono trovati.",
+      "go": "Aggiungi il dominio",
+      "pickCompany": "Scegli una società",
+      "pickAccount": "Scegli il servizio di posta",
+      "accountHint": "Il collegamento che invia la posta di questo dominio.",
+      "domainHint": "Un dominio di tua proprietà, o una sua parte come mail.example.com.",
+      "fromWillBe": "La posta partirà da {address}.",
+      "localHint": "Di solito noreply.",
+      "stepUp": "Aggiungere un dominio cambia da chi sembra arrivare la tua posta: chiede un codice nuovo dall’app di autenticazione."
+    },
+    "right": {
+      "manage": "Gestire gli indirizzi di invio delle società"
+    },
+    "held": {
+      "noSes": "Nessun servizio di posta è ancora collegato: collega prima la posta.",
+      "noCompany": "Serve vedere le società per scegliere di chi è il dominio."
+    },
+    "failedTitle": "Impossibile caricare i domini di posta",
+    "empty": {
+      "title": "Ancora nessun dominio di invio",
+      "body": "Collega prima la posta: tutto ciò che esce dalla fabbrica ne ha bisogno."
+    },
+    "rule": {
+      "title": "Come le risposte trovano il loro record",
+      "reply": "Ogni ordine, richiesta d’offerta e ordine d’acquisto riceve un indirizzo di risposta nascosto sul tuo dominio di risposta; la risposta arriva nella conversazione di quel record.",
+      "checks": "Una mail entra in una conversazione solo se supera SPF, DKIM e DMARC e il mittente è conosciuto; altrimenti aspetta in Posta da smistare.",
+      "toSort": "Apri Posta da smistare",
+      "capture": "Un indirizzo di raccolta (inoltra o metti in copia qualsiasi mail) arriverà più avanti."
+    },
+    "kind": {
+      "CONVERSATION": "Conversazioni",
+      "NOTIFICATION": "Notifiche"
+    },
+    "kindHint": {
+      "CONVERSATION": "Offerte, ordini e risposte, inviate da una persona.",
+      "NOTIFICATION": "Link di accesso e messaggi automatici."
+    },
+    "state": {
+      "ready": "Pronto a inviare",
+      "waiting": "In attesa dei record",
+      "failed": "Non verificato",
+      "disabled": "Disattivato"
+    },
+    "default": "Predefinito",
+    "banner": {
+      "waiting": "Il servizio di posta non ha ancora trovato i record. Aggiungili presso il registrar; una modifica può richiedere fino a 72 ore.",
+      "failed": "Il servizio di posta non ha potuto verificare questo dominio: controlla ogni record qui sotto, correggilo presso il registrar, poi controlla di nuovo.",
+      "disabled": "Questo indirizzo di invio è disattivato: non parte nessuna mail da qui."
+    },
+    "field": {
+      "from": "Invia da",
+      "policy": "Come la riga Da nomina il mittente",
+      "reply": "Le risposte tornano a",
+      "replyHint": "Ogni record ha qui il proprio indirizzo nascosto.",
+      "checked": "Ultimo controllo",
+      "company": "Società",
+      "account": "Servizio di posta",
+      "domain": "Dominio",
+      "localPart": "Indirizzo prima della @",
+      "kind": "Cosa invia"
+    },
+    "policy": {
+      "COMPANY": "Solo il nome della società",
+      "PERSON_VIA_COMPANY": "La persona, tramite la società",
+      "PERSON_ADDRESS": "La persona, dal proprio indirizzo"
+    },
+    "policyHint": {
+      "COMPANY": "“Demo Srl”",
+      "PERSON_VIA_COMPANY": "“Anna Demo via Demo Srl”",
+      "PERSON_ADDRESS": "“Anna Demo”, dal suo indirizzo sul dominio"
+    },
+    "notCheckedYet": "Non ancora controllato",
+    "records": {
+      "label": "Record per {domain}",
+      "type": "Tipo",
+      "name": "Nome",
+      "value": "Valore",
+      "state": "Stato",
+      "nameOf": "Nome del record {purpose}",
+      "valueOf": "Valore del record {purpose}",
+      "noValue": "Non ancora fornito da Nexus: chiedi a chi gestisce il tuo dominio.",
+      "later": "Nexus controlla i tre record DKIM con il servizio di posta. SPF, DMARC e l’MX delle risposte non sono ancora controllati da Nexus."
+    },
+    "purpose": {
+      "dkim": "DKIM (firma)",
+      "spf": "SPF (chi può inviare)",
+      "dmarc": "DMARC (criterio)",
+      "mx": "MX (risposte)"
+    },
+    "record": {
+      "found": "Trovato",
+      "waiting": "Non ancora trovato",
+      "failed": "Errato o mancante",
+      "retrying": "Nuovo controllo in corso",
+      "notChecked": "Non ancora controllato da Nexus"
+    },
+    "copyAll": "Copia tutti i record",
+    "checking": "Controllo in corso…",
+    "check": "Controlla ora",
+    "copy": "Copia",
+    "copied": "Copiato",
+    "copiedSr": "Copiato: {what}",
+    "copyFailed": "Copia non riuscita: seleziona il testo e copialo a mano.",
+    "form": {
+      "required": "Compila questo campo.",
+      "noAccount": "Scegli il servizio di posta.",
+      "domain": "Serve un dominio come mail.example.com.",
+      "localPart": "Usa lettere, cifre, punti e trattini, come noreply."
+    },
+    "noRight": "Il dominio di posta è visibile a chi può inviare posta.",
+    "stepUp": {
+      "add": "Aggiungere un dominio di invio richiede un codice nuovo dall’app di autenticazione.",
+      "check": "Controllare un dominio di invio richiede un codice nuovo dall’app di autenticazione."
+    },
+    "done": {
+      "added": "{domain} è aggiunto: aggiungi i suoi record presso il registrar, poi controllalo.",
+      "addedNotChecked": "{domain} è aggiunto, ma il servizio di posta non ha risposto: controllalo di nuovo tra poco.",
+      "checked": {
+        "ready": "{domain} è verificato: la posta può partire da qui.",
+        "waiting": "{domain}: i record non sono ancora stati trovati. Controlla di nuovo più tardi.",
+        "failed": "{domain} non è stato verificato: correggi i record, poi controlla di nuovo.",
+        "disabled": "{domain} è disattivato."
+      }
+    }
+  }
+}

@@ -19,7 +19,7 @@ import { NUMBERING_MANAGE, NUMBERING_VIEW } from '@nexus/factory-domain/numberin
 import { command, type CommandCaller, type CommandTx } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { ApiError } from '../../core/errors'
-import type { SeriesView } from './contract'
+import type { AllocationSummary, AllocationView, SeriesView } from './contract'
 
 /**
  * The admin side of the series (feature PLT-122, PLAN §2.8 and §4.9): list them, create one (starting at a given
@@ -242,6 +242,102 @@ export async function advanceSeries(caller: CommandCaller, seriesId: string, inp
         select: SELECT,
       })
       audit({ recordType: 'NumberSeries', recordId: seriesId, companyId: before.companyId, before: audited(before), after: audited(after), reason: input.reason })
+      return viewOf(after)
+    },
+  )
+  return result
+}
+
+/** Ranges of values in [first, last] missing from the sorted list (at most `cap`). */
+export function skippedRanges(sorted: readonly number[], cap = 20): { ranges: Array<{ from: number; to: number }>; more: boolean } {
+  const ranges: Array<{ from: number; to: number }> = []
+  let more = false
+  for (let index = 1; index < sorted.length; index += 1) {
+    const previous = sorted[index - 1]!
+    const value = sorted[index]!
+    if (value > previous + 1) {
+      if (ranges.length === cap) {
+        more = true
+        break
+      }
+      ranges.push({ from: previous + 1, to: value - 1 })
+    }
+  }
+  return { ranges, more }
+}
+
+/** The most numbers one proof reads (a fiscal series issues a few thousand a year). */
+const PROOF_LIMIT = 200_000
+
+/**
+ * The numbers a series issued (GET /numbering/series/:id/allocations, numbering.view over its company): the newest
+ * `limit` with who issued them, and the gap proof over all of them (skippedRanges).
+ */
+export async function seriesAllocations(client: FactoryClient, actor: Actor, seriesId: string, limit: number): Promise<{ series: SeriesView; summary: AllocationSummary; allocations: AllocationView[] }> {
+  const row = await client.numberSeries.findUnique({ where: { id: seriesId }, select: SELECT })
+  if (!row || !can(actor, NUMBERING_VIEW, { companyId: row.companyId })) throw new NotFoundError('Number series not found.')
+  const [values, newest] = await Promise.all([
+    client.numberAllocation.findMany({ where: { seriesId }, select: { value: true }, orderBy: { value: 'asc' }, take: PROOF_LIMIT }),
+    client.numberAllocation.findMany({
+      where: { seriesId },
+      select: { value: true, formatted: true, documentDate: true, recordType: true, recordId: true, allocatedAt: true, allocatedById: true },
+      orderBy: { value: 'desc' },
+      take: limit,
+    }),
+  ])
+  const sorted = values.map((item) => item.value)
+  const { ranges, more } = skippedRanges(sorted)
+  const people = await client.user.findMany({ where: { id: { in: [...new Set(newest.map((item) => item.allocatedById))] } }, select: { id: true, displayName: true } })
+  const nameOf = new Map(people.map((person) => [person.id, person.displayName]))
+  const year = yearOfScope(row.scopeKey)
+  const first = sorted[0] ?? null
+  const last = sorted.length > 0 ? sorted[sorted.length - 1]! : null
+  return {
+    series: viewOf(row),
+    summary: {
+      count: sorted.length,
+      first,
+      last,
+      firstFormatted: first === null ? null : formatNumber(row.pattern, { value: first, year }),
+      lastFormatted: last === null ? null : formatNumber(row.pattern, { value: last, year }),
+      lastDocumentDate: dateText(row.lastIssuedDate),
+      skipped: ranges,
+      moreSkipped: more,
+    },
+    allocations: newest.map((item) => ({
+      value: item.value,
+      formatted: item.formatted,
+      documentDate: dateText(item.documentDate)!,
+      recordType: item.recordType,
+      recordId: item.recordId,
+      allocatedAt: toUtcIso(item.allocatedAt),
+      allocatedByName: nameOf.get(item.allocatedById) ?? null,
+    })),
+  }
+}
+
+/**
+ * numbering.closeSeries: the series issues no more numbers (allocateNumber refuses a closed one); the numbers it issued
+ * stay. Refused when it is closed already. A new series of the same kind must exist for new documents (the admin page
+ * says so before the click).
+ */
+export async function closeSeries(caller: CommandCaller, seriesId: string, input: { version: number; reason?: string | undefined }, idempotencyKey?: string): Promise<SeriesView> {
+  mayManage(caller, await companyOf(caller, seriesId))
+  const { result } = await command(
+    caller,
+    { name: 'numbering.closeSeries', idempotencyKey, input, record: { type: 'NumberSeries', id: seriesId, expectedVersion: input.version } },
+    async ({ tx, audit }) => {
+      const before = await loadRow(tx, seriesId)
+      if (before.status === 'CLOSED') throw new ConflictError(`The ${kindLabel(before.kind)} series ${before.code} is closed already.`)
+      const after = await tx.numberSeries.update({ where: { id: seriesId }, data: { status: 'CLOSED' }, select: SELECT })
+      audit({
+        recordType: 'NumberSeries',
+        recordId: seriesId,
+        companyId: before.companyId,
+        before: { ...audited(before), status: before.status },
+        after: { ...audited(after), status: after.status },
+        ...(input.reason ? { reason: input.reason } : {}),
+      })
       return viewOf(after)
     },
   )

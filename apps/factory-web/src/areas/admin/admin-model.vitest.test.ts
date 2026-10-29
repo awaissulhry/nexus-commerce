@@ -259,6 +259,8 @@ describe('SCR-165 the set-up checklist reads facts, never ticks', () => {
     devices: ok([]),
     printers: ok([]),
     privacy: { state: 'no-right', need: 'privacy.view' },
+    accounts: ok([{ provider: 'SDI', companyId: COMPANIES[0]!.id, mode: 'FAKE', status: 'ACTIVE' }]),
+    imports: ok([]),
   }
   it('every step in order, with its state and a link only to a page that exists', () => {
     const steps = setupSteps(facts, PREFIX, OFFICE_PAGES)
@@ -271,17 +273,33 @@ describe('SCR-165 the set-up checklist reads facts, never ticks', () => {
       ['roles', 'needs'],
       ['tablets', 'needs'],
       ['printers', 'needs'],
-      ['sdi', 'unknown'],
+      ['sdi', 'needs'],
       ['privacy', 'unknown'],
-      ['stock', 'unknown'],
+      ['stock', 'needs'],
     ])
     const byId = Object.fromEntries(steps.map((step) => [step.id, step]))
     expect(byId.legal!.href).toBe(`${PREFIX}/admin/companies/${COMPANIES[1]!.id}?tab=legal`)
     expect(byId.tablets!.href).toBe(`${PREFIX}/admin/devices?enrol=1`)
-    // Mail, numbering and privacy pages come with B-W0-28: no "Do it" link to a page that does not exist.
-    expect(byId.mail!.href).toBeUndefined()
-    expect(byId.mail!.detail.key).toBe('overview.detail.mail.noneLater')
+    // B-W0-28: the mail domain on Connections & API, the series on Documents & numbering, opening stock on Import.
+    expect(byId.mail!.href).toBe(`${PREFIX}/admin/connections#mail`)
+    expect(byId.mail!.detail.key).toBe('overview.detail.mail.none')
+    expect(byId.numbering!.href).toBe(`${PREFIX}/admin/documents?company=${COMPANIES[0]!.id}&new=series`)
+    expect(byId.sdi!.detail).toEqual({ key: 'overview.detail.sdi.none', params: { name: COMPANIES[1]!.legalName } })
+    expect(byId.stock!.href).toBe(`${PREFIX}/admin/import?importer=inventory.opening`)
     expect(byId.privacy!.detail).toEqual({ key: 'overview.detail.noRight', need: 'right.privacy_view' })
+  })
+
+  it('SDI is done only when every active company sends for real; opening stock when an import was applied (B-W0-28)', () => {
+    const one = { ...facts, companies: ok([COMPANIES[0]!]) }
+    const stateOf = (over: Partial<OverviewFacts>, id: string) => setupSteps({ ...one, ...over }, PREFIX, OFFICE_PAGES).find((step) => step.id === id)!
+    const sdi = (mode: string, status: string) => ok([{ provider: 'SDI', companyId: COMPANIES[0]!.id, mode, status }])
+    expect(stateOf({ accounts: sdi('FAKE', 'ACTIVE') }, 'sdi')).toMatchObject({ state: 'waiting', detail: { key: 'overview.detail.sdi.test' } })
+    expect(stateOf({ accounts: sdi('LIVE', 'PAUSED') }, 'sdi')).toMatchObject({ state: 'needs', detail: { key: 'overview.detail.sdi.paused' } })
+    expect(stateOf({ accounts: sdi('LIVE', 'ACTIVE') }, 'sdi')).toMatchObject({ state: 'done', detail: { key: 'overview.detail.sdi.done', params: { count: 1 } }, href: `${PREFIX}/admin/connections` })
+    expect(stateOf({ accounts: { state: 'no-right', need: 'integrations.view' } }, 'sdi')).toMatchObject({ state: 'unknown', detail: { need: 'right.integrations_view' } })
+    expect(stateOf({ imports: ok([{ importerKey: 'inventory.opening', status: 'PLANNED' }]) }, 'stock')).toMatchObject({ state: 'waiting', detail: { params: { count: 1 } } })
+    expect(stateOf({ imports: ok([{ importerKey: 'inventory.opening', status: 'APPLIED' }, { importerKey: 'inventory.locations', status: 'APPLIED' }]) }, 'stock')).toMatchObject({ state: 'done', detail: { params: { count: 1 } } })
+    expect(stateOf({ imports: ok([{ importerKey: 'inventory.locations', status: 'APPLIED' }]) }, 'stock').state).toBe('needs')
   })
 
   it('done, waiting and failed are facts too', () => {
