@@ -502,6 +502,54 @@ export async function storeGeneratedFile(runtime: FilesRuntime, caller: CommandC
   return result
 }
 
+/** Where a copy of a file goes: another record, maybe another kind, with its own sharing and retention. */
+export interface FileCopyTarget {
+  readonly companyId: string | null
+  readonly recordType: string
+  readonly recordId: string
+  /** Default: the source's kind (a fiscal archive copy for a party is a DOCUMENT). */
+  readonly kind?: FileKind | undefined
+  /** Default: the source's name. */
+  readonly originalName?: string | undefined
+  readonly visibility?: readonly FileAudience[] | undefined
+  readonly floorSiteId?: string | null | undefined
+  readonly partyId?: string | null | undefined
+  readonly retainUntil?: Date | null | undefined
+}
+
+/**
+ * The first half of copying a stored file onto another record, OUTSIDE any transaction, like putGeneratedFile (B-W1-49:
+ * a style's signed DoC, OFFICE only because it serves every customer, copied onto a shipment and shared with that
+ * shipment's party; the copy is the evidence of what travelled). The source must be AVAILABLE; its bytes are read from
+ * the store (files.read), checked against its SHA-256 and put under a new key (files.put) with the target's rules
+ * (kind, sharing, retention). recordGeneratedFile then records the copy inside the caller's command. The caller is an
+ * office session or a tenant's system context and has checked its own permission for both records: no files.*
+ * permission is asked, as for generated files.
+ */
+export async function prepareFileCopy(runtime: FilesRuntime, caller: CommandCaller, sourceFileId: string, target: FileCopyTarget): Promise<PreparedGeneratedFile & { readonly sourceFileId: string }> {
+  const context = contextOf(caller)
+  if (context.audience !== 'office' && context.audience !== 'system') throw new ForbiddenError()
+  const source = await readOffice(caller, sourceFileId)
+  if (source.status !== 'AVAILABLE') throw new InvalidStateError(`This file is ${source.status}; only an available file is copied.`)
+  const body = await storeCall(() => runtime.storage.read(caller, source.storeAccountId, source.storageKey, source.sizeBytes))
+  if (!body) throw new ConflictError('The file is missing from the file store; nothing was copied.')
+  if (createHash('sha256').update(body).digest('hex') !== source.sha256) throw new ConflictError('The stored file does not match its SHA-256; nothing was copied.')
+  const prepared = await putGeneratedFile(runtime, caller, {
+    companyId: target.companyId,
+    recordType: target.recordType,
+    recordId: target.recordId,
+    kind: target.kind ?? source.kind,
+    originalName: target.originalName ?? source.originalName,
+    contentType: source.contentType,
+    body,
+    visibility: target.visibility,
+    floorSiteId: target.floorSiteId,
+    partyId: target.partyId,
+    retainUntil: target.retainUntil,
+  })
+  return { ...prepared, sourceFileId: source.id }
+}
+
 /** Why a stored object is not the file that was announced, or null when it is. */
 function mismatchOf(file: OfficeRow, object: StoredObject): QuarantineReason | null {
   if (object.sizeBytes !== file.sizeBytes) return 'size_mismatch'

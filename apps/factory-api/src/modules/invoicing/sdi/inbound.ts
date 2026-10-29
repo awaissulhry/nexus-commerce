@@ -2,6 +2,7 @@ import type { IntegrationMode } from '@nexus/factory-domain/ports/provider'
 import type { SdiMessage } from '@nexus/factory-domain/ports/sdi'
 import type { CommandTools } from '../../../core/command'
 import type { InboundProcessor, InboundReceipt } from '../../../platform/inbound/providers'
+import { settleNoted } from '../from-shipment/settlement'
 import { applyMessages } from './record'
 import { processSdi, type SdiRuntime } from './runtime'
 
@@ -44,6 +45,8 @@ export function sdiInboundProcessor(runtime: () => SdiRuntime = processSdi): Inb
       for (const [sendId, list] of [...bySend].sort(([a], [b]) => a.localeCompare(b))) {
         await applyMessages(tools, sendId, list, { inboundWebhookId: receipt.id })
       }
+      // B-W1-51: the orders an outcome may have settled, once every invoice row is held.
+      await settleNoted(tools)
     },
   }
 }

@@ -4,7 +4,7 @@ import { LABEL_FIELDS, LABEL_KINDS, LABEL_LANGUAGES } from '@nexus/factory-domai
 import { MAX_LABEL_COPIES, MAX_LABEL_MM, MIN_LABEL_HEIGHT_MM, MIN_LABEL_WIDTH_MM } from '@nexus/factory-domain/labels/zpl'
 import { PRINT_RELAY_KINDS } from '../../adapters/print-relay/port'
 import { RECORD_TYPE } from '../files/rules'
-import { PAYLOAD_KINDS, PRINT_JOB_STATUSES, PRINTER_CODE, PRINTER_KINDS, PRINTER_STATUSES } from './rules'
+import { MODULE_LABEL_KINDS, PAYLOAD_KINDS, PRINT_JOB_STATUSES, PRINTER_CODE, PRINTER_KINDS, PRINTER_STATUSES } from './rules'
 
 /**
  * The print routes' contracts (plan A1 §3.9; GAP-007). A floor device's view of a printer leaves out where the relay
@@ -38,7 +38,7 @@ export const printJobView = output({
   recordType: z.string(),
   recordId: id(),
   payloadKind: z.enum(PAYLOAD_KINDS),
-  labelKind: z.enum(LABEL_KINDS).nullable(),
+  labelKind: z.enum([...LABEL_KINDS, ...MODULE_LABEL_KINDS]).nullable(),
   scanId: z.string().nullable(),
   fileId: id().nullable(),
   copies: z.number().int(),

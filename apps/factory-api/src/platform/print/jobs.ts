@@ -16,7 +16,7 @@ import { attachmentDisposition, DOWNLOAD_URL_SECONDS } from '../files/rules'
 import type { FilesRuntime } from '../files/service'
 import type { PrintJobView } from './contract'
 import { contextOf, readPrinter, type PrinterRow } from './printers'
-import { isFinalRelayError, MAX_PRINT_ATTEMPTS, printJobMachine, relayMessage, type PayloadKind } from './rules'
+import { isFinalRelayError, MAX_PRINT_ATTEMPTS, printJobMachine, relayMessage, type ModuleLabelKind, type PayloadKind } from './rules'
 import type { PrintRelays } from './service'
 
 /**
@@ -195,6 +195,36 @@ export async function queueLabel(caller: CommandCaller, input: QueueLabel, idemp
     input,
     idempotencyKey,
   )
+}
+
+/**
+ * A label a module lays out itself (the PPE garment label, B-W1-19/44): the module checks its own permission and
+ * record, gives the kind and the id printed on it (the batch number, the serial, or SAMPLE for a test label) and makes
+ * the ZPL for the printer's stock; the printer, the copies and print.labels are checked here as for any label.
+ */
+export interface QueueModuleLabel {
+  readonly printerId: string
+  readonly recordType: string
+  readonly recordId: string
+  readonly copies: number
+  readonly labelKind: ModuleLabelKind
+  readonly scanId: string
+  readonly zplFor: (stock: { readonly dpi: number; readonly widthMm: number; readonly heightMm: number }) => string
+}
+
+export async function queueModuleLabel(caller: CommandCaller, input: QueueModuleLabel, idempotencyKey?: string): Promise<PrintJobView> {
+  const context = contextOf(caller)
+  const printer = await printerFor(caller, input.printerId, PRINT_LABELS)
+  if (printer.kind !== 'LABEL_ZPL' || printer.dpi === null || printer.labelWidthMm === null || printer.labelHeightMm === null) {
+    throw new ValidationError('This printer prints PDFs.', [{ path: 'body/printerId', message: 'Pick a label printer, or print the label as a PDF.' }])
+  }
+  if (!Number.isSafeInteger(input.copies) || input.copies < 1 || input.copies > MAX_LABEL_COPIES) {
+    throw new ValidationError('The copies are not valid.', [{ path: 'body/copies', message: `Expected 1 to ${MAX_LABEL_COPIES}.` }])
+  }
+  if (context.audience === 'platform') throw new ForbiddenError()
+  const zpl = input.zplFor({ dpi: printer.dpi, widthMm: printer.labelWidthMm, heightMm: printer.labelHeightMm })
+  const { zplFor: _zplFor, ...asked } = input
+  return queue(caller, { printer, recordType: input.recordType, recordId: input.recordId, payloadKind: 'ZPL', copies: input.copies, labelKind: input.labelKind, scanId: input.scanId, zpl }, asked, idempotencyKey)
 }
 
 /** print.queue of a document: a PDF file of the printer's company that the caller may see, for an A4 printer. */

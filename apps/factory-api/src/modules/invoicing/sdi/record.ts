@@ -7,6 +7,7 @@ import { decidedOutcome, invoicePath, invoiceStatusFromSends, isOutcome, outcome
 import { messageKeyOf, type SdiMessage } from '@nexus/factory-domain/ports/sdi'
 import type { CommandTools } from '../../../core/command'
 import type { SendResult } from './runtime'
+import { noteOrders, ordersOfInvoices, settleNoted } from '../from-shipment/settlement'
 import { lockInvoice, readSend, readSends, type SendRow } from './store'
 
 /**
@@ -37,6 +38,9 @@ export async function syncInvoice(tools: Tools, invoiceId: string): Promise<{ fr
   for (const step of path) {
     await tools.tx.invoice.update({ where: { id: invoiceId }, data: { status: step, version: { increment: 1 } }, select: { id: true } })
   }
+  // B-W1-51: an outcome at the customer's side may settle the invoice's orders: noted here, announced at the end of the
+  // command (settleNoted: the poll's and the webhook's), after every invoice row it locks.
+  if (path.length > 0 && (target === 'DELIVERED' || target === 'NOT_DELIVERABLE')) noteOrders(tools, await ordersOfInvoices(tools.tx, [invoiceId]))
   if (path.length > 0) {
     tools.audit({ action: 'invoices.sdiStatus', recordType: 'Invoice', recordId: invoiceId, companyId: invoice.companyId, before: { status: invoice.status }, after: { status: target, ...(path.length > 1 ? { via: path.slice(0, -1) } : {}) } })
   }
@@ -91,6 +95,7 @@ export async function recordSendResult(tools: Tools, submissionId: string, resul
   const sendStatus: SdiSendStatus = result.ok ? 'SENT' : 'FAILED'
   tools.audit({ action: 'invoices.sdiSendResult', recordType: 'SdiSubmission', recordId: send.id, companyId, before: { status: 'SENDING' }, after: result.ok ? { status: sendStatus, providerFileName: result.receipt.providerFileName } : { status: sendStatus, failureReason: result.failureReason } })
   const invoiceStatus = await afterSendMove(tools, send, sendStatus)
+  await settleNoted(tools)
   return { sendStatus, invoiceStatus }
 }
 

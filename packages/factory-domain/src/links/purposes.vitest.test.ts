@@ -70,6 +70,12 @@ describe('the purposes', () => {
     expect(ROLE_TEMPLATES.find((template) => template.key === 'read_only')?.permissions).not.toContain(LINKS_MANAGE)
   })
 
+  it('let only DOCUMENT_VIEW read files (its record\'s, shared with its party\'s links): a stored file or a shipment', () => {
+    expect(linkPermissions('DOCUMENT_VIEW')).toEqual(['files.read', 'links.open', 'money.price'])
+    expect(PURPOSE_RULES.DOCUMENT_VIEW.recordTypes).toEqual(['StoredFile', 'Shipment'])
+    for (const purpose of LINK_PURPOSES.filter((name) => name !== 'DOCUMENT_VIEW')) expect(linkPermissions(purpose), purpose).not.toContain('files.read')
+  })
+
   it('count the answers of the answer purposes and every open of the view purposes', () => {
     expect(PURPOSE_RULES.QUOTE_ACCEPT.actions.open?.counts).toBe(false)
     expect(PURPOSE_RULES.PO_CONFIRM.actions.confirm?.counts).toBe(true)

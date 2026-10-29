@@ -93,6 +93,10 @@ export const invoiceView = output({
   internalNote: z.string().nullable(),
   /** What payments pay on it (TD01, TD24). */
   paidAmount: money.price(z.number().int()),
+  /** B-W1-51: the gross of its issued credit notes; what it still asks (gross less credits less paid); a refund due. */
+  creditedAmount: money.price(z.number().int()),
+  openAmount: money.price(z.number().int()),
+  refundDueAmount: money.price(z.number().int()),
   lines: z.array(lineView),
   createdAt: instant(),
   updatedAt: instant(),

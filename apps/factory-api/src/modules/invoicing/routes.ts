@@ -20,6 +20,12 @@ import { makeFilesRoute } from './invoice-files'
 import { getInvoice, listInvoices } from './invoices'
 import { issueChecks, issueInvoice } from './issue'
 import { manifest } from './manifest'
+import { createCreditNote } from './credit-note/credit-note'
+import { creditNoteContract, fromDdtsContract, removeDeductionContract, settlementContract, shippedNotInvoicedContract } from './from-shipment/contract'
+import { removeDeduction } from './from-shipment/deductions'
+import { createFromDdts } from './from-shipment/draft'
+import { shippedNotInvoiced } from './from-shipment/queue'
+import { getSettlement } from './from-shipment/settlement'
 import { correctSdiContract, getSdiContract, sendSdiContract } from './sdi/contract'
 import { correctInvoice } from './sdi/correct'
 import { processSdi } from './sdi/runtime'
@@ -31,7 +37,9 @@ import { getSdiStatus } from './sdi/view'
  * TD01/TD24, a TD02 from a deposit request), their text and lines, the checks before issue, the issue (step-up: number,
  * XML and PDF), and "make the files" for an issued invoice whose files are pending; its SDI status, the send to SDI and
  * the correction of a rejected invoice (B-W1-50, handlers in ./sdi: the autoloader reads this folder's routes file only).
- * Invoices from DDTs, credit notes and deductions are B-W1-51 (they reuse this core).
+ * Invoices of shipped goods (B-W1-51, handlers in ./from-shipment): the shipped-not-invoiced list, a TD01/TD24 draft
+ * from DDTs with the deposits deducted, removing a deduction, the order's settlement; a credit note draft (./credit-note).
+ * They are issued and sent through the routes above.
  */
 export default defineRoutes('invoicing', manifest, async (app) => {
   app.get('/invoicing/invoices', { schema: listInvoicesContract }, async (request) => listInvoices(request, request.query))
@@ -65,4 +73,14 @@ export default defineRoutes('invoicing', manifest, async (app) => {
   app.put('/invoicing/invoices/:invoiceId/sdi/correction', { schema: correctSdiContract }, async (request) =>
     correctInvoice(request, request.params.invoiceId, request.body, idempotencyKeyFrom(request), () => requireStepUp(officeAuthOf(app), request)),
   )
+
+  app.get('/invoicing/shipped-not-invoiced', { schema: shippedNotInvoicedContract }, async (request) => shippedNotInvoiced(request, request.query))
+
+  app.post('/invoicing/invoices/from-ddts', { schema: fromDdtsContract }, async (request, reply) => reply.code(201).send(await createFromDdts(request, request.body, idempotencyKeyFrom(request))))
+
+  app.delete('/invoicing/invoices/:invoiceId/deductions/:lineId', { schema: removeDeductionContract }, async (request) => removeDeduction(request, request.params.invoiceId, request.params.lineId, request.query, idempotencyKeyFrom(request)))
+
+  app.post('/invoicing/invoices/:invoiceId/credit-note', { schema: creditNoteContract }, async (request, reply) => reply.code(201).send(await createCreditNote(request, request.params.invoiceId, request.body, idempotencyKeyFrom(request))))
+
+  app.get('/invoicing/orders/:orderId/settlement', { schema: settlementContract }, async (request) => getSettlement(request, request.params.orderId))
 })
