@@ -114,7 +114,8 @@ export function createCatalogue(definitions: readonly EventDefinition[]): EventC
  * The platform's own events come first (integration: the inbound webhook ledger; files: confirmed uploads; links: a
  * one-off link's use; threads: messages and mentions on records;
  * imports: the import jobs; print: print jobs; email: mail out and its delivery; email-in: mail received); the W1
- * modules bring theirs (compliance: certificate expiry; product: the material library; inventory: stock moves; parties: customers and suppliers).
+ * modules bring theirs (compliance: certificate expiry; product: the material library; inventory: stock moves; parties: customers and suppliers;
+ * production: floor rules and work orders).
  */
 export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...invoicing, ...payments, ...costing, ...production] as const satisfies readonly EventDefinition[]
 
