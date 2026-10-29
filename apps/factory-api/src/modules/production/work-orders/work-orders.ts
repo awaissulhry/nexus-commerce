@@ -42,7 +42,7 @@ import {
   type Reader,
   type RevisionRow,
 } from './store'
-import { workOrderView, type WorkOrderView } from './views'
+import { progressTotalsOf, workOrderView, type WorkOrderView } from './views'
 
 /**
  * The office's work orders (B-W1-38; MES-001, MES-002, MES-007, MES-305; A2 SCR-069, SCR-070): the list, the record,
@@ -77,25 +77,45 @@ export interface ListQuery {
   readonly salesOrderId?: string | undefined
   readonly siteId?: string | undefined
   readonly late?: boolean | undefined
+  /** Not finished yet: DRAFT, RELEASED or IN_PROGRESS (the list's default view). */
+  readonly open?: boolean | undefined
+  /** Part of the number, the batch number, or the style's code or name (any case). */
+  readonly q?: string | undefined
   readonly cursor?: string | undefined
   readonly limit: number
+}
+
+/** The list's filters as one where (the list and its counts read the same rows). */
+function listWhere(context: ReturnType<typeof officeContextOf>, query: Omit<ListQuery, 'cursor' | 'limit'>, today: BusinessDate): Prisma.WorkOrderWhereInput {
+  const q = query.q?.trim()
+  return {
+    AND: [
+      scopeWhere(actorOf(context), WORKORDERS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput,
+      query.status ? { status: query.status } : {},
+      query.open ? { status: { in: [...OPEN_STATUSES] } } : {},
+      query.styleId ? { styleId: query.styleId } : {},
+      query.siteId ? { siteId: query.siteId } : {},
+      query.salesOrderId ? { sizes: { some: { salesOrderLine: { orderId: query.salesOrderId } } } } : {},
+      query.late ? { status: { in: [...OPEN_STATUSES] }, dueDate: { lt: asDay(today) } } : {},
+      q
+        ? {
+            OR: [
+              { number: { contains: q, mode: 'insensitive' } },
+              { batchNumber: { contains: q, mode: 'insensitive' } },
+              { style: { code: { contains: q, mode: 'insensitive' } } },
+              { style: { name: { contains: q, mode: 'insensitive' } } },
+            ],
+          }
+        : {},
+    ],
+  }
 }
 
 /** The work orders the caller may see (its companies and sites), newest first, with SCR-069's filters (MES-305). */
 export async function listWorkOrders(caller: CommandCaller, query: ListQuery) {
   const context = officeContextOf(caller)
   const today = todayNow()
-  const where: Prisma.WorkOrderWhereInput = {
-    AND: [
-      scopeWhere(actorOf(context), WORKORDERS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput,
-      query.status ? { status: query.status } : {},
-      query.styleId ? { styleId: query.styleId } : {},
-      query.siteId ? { siteId: query.siteId } : {},
-      query.salesOrderId ? { sizes: { some: { salesOrderLine: { orderId: query.salesOrderId } } } } : {},
-      query.late ? { status: { in: [...OPEN_STATUSES] }, dueDate: { lt: asDay(today) } } : {},
-      query.cursor ? { id: { lt: query.cursor } } : {},
-    ],
-  }
+  const where: Prisma.WorkOrderWhereInput = { AND: [listWhere(context, query, today), query.cursor ? { id: { lt: query.cursor } } : {}] }
   const rows = await caller.withClient((client) =>
     client.workOrder.findMany({
       where,
@@ -122,6 +142,12 @@ export async function listWorkOrders(caller: CommandCaller, query: ListQuery) {
     }),
   )
   const page = rows.slice(0, query.limit)
+  // Progress per row (SCR-069): the record's own counts, summed (null for a draft).
+  const progress = await caller.withClient(async (client) => {
+    const totals = new Map<string, Awaited<ReturnType<typeof progressTotalsOf>>>()
+    for (const row of page) totals.set(row.id, await progressTotalsOf(client, { id: row.id, siteId: row.siteId, styleId: row.style.id, status: row.status }))
+    return totals
+  })
   return {
     workOrders: page.map((row) => {
       const orders = new Map(row.sizes.map((cell) => [cell.salesOrderLine.order.id, cell.salesOrderLine.order]))
@@ -144,7 +170,7 @@ export async function listWorkOrders(caller: CommandCaller, query: ListQuery) {
         orders: [...orders.values()].map((order) => ({ id: order.id, number: order.number, partyName: order.party.tradeName ?? order.party.legalName })),
         cells: row.sizes.length,
         pieces: row.sizes.reduce((sum, cell) => sum + cell.quantity, 0),
-        progress: null,
+        progress: progress.get(row.id) ?? null,
         dueDate,
         daysLate: daysLate(row.status, dueDate, today),
         priority: row.priority,
@@ -154,6 +180,22 @@ export async function listWorkOrders(caller: CommandCaller, query: ListQuery) {
     }),
     nextCursor: rows.length > query.limit ? page[page.length - 1]!.id : null,
   }
+}
+
+/**
+ * How many work orders the caller may see per state, for the list's tiles (SCR-069 "Work order tiles"; the floor's
+ * tiles, SCR-073): draft, released not started, in progress, completed, and late (open past its due date). The same
+ * scope as the list (its companies and sites; one site when asked).
+ */
+export async function countWorkOrders(caller: CommandCaller, query: { readonly siteId?: string | undefined }) {
+  const context = officeContextOf(caller)
+  const today = todayNow()
+  return caller.withClient(async (client) => {
+    const byStatus = await client.workOrder.groupBy({ by: ['status'], where: listWhere(context, { siteId: query.siteId }, today), _count: { _all: true } })
+    const of = (status: WorkOrderStatus) => byStatus.find((row) => row.status === status)?._count._all ?? 0
+    const late = await client.workOrder.count({ where: listWhere(context, { siteId: query.siteId, late: true }, today) })
+    return { counts: { draft: of('DRAFT'), released: of('RELEASED'), inProgress: of('IN_PROGRESS'), completed: of('COMPLETED'), open: of('DRAFT') + of('RELEASED') + of('IN_PROGRESS'), late } }
+  })
 }
 
 /** The open lines of a sales order a new work order can be made from (design 02 "New work order"), and its next number. */

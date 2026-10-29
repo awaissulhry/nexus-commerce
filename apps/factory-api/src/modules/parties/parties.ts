@@ -17,6 +17,7 @@ import { afterCodeCursor, decodeCodeCursor, encodeCodeCursor } from './cursor'
 import {
   ADDRESS_COLUMNS,
   assertMayWrite,
+  CONTACT_COLUMNS,
   assertWritable,
   contextOf,
   dateText,
@@ -34,6 +35,7 @@ import {
   today,
   VIES_COLUMNS,
   viesFactsOf,
+  warningsOf,
   withDefaults,
   type PartyRowData,
 } from './store'
@@ -52,7 +54,12 @@ const codeConflict = (code: string) => new ConflictError(`The party code ${code}
 
 // ---- reads -------------------------------------------------------------------------------------------------------------
 
-/** The parties the caller may see, by code, one page at a time (SCR-032 with role=CUSTOMER,BRAND; SCR-056 with the supplier roles). */
+/**
+ * The parties the caller may see, by code, one page at a time (SCR-032 with role=CUSTOMER,BRAND; SCR-056 with the
+ * supplier roles). Each row says what the record still lacks (`attention`, `invoiceBlocked`). With `attention` the
+ * filter needs every candidate's facts (its warnings are worked out here, not stored): the candidates are read whole,
+ * filtered, then paged by (code, id) in that order; `count` counts the filtered rows.
+ */
 export async function listParties(caller: CommandCaller, query: ListPartiesQuery): Promise<{ parties: PartyRow[]; nextCursor: string | null; count: number }> {
   const context = contextOf(caller)
   const search = query.q?.trim()
@@ -78,6 +85,20 @@ export async function listParties(caller: CommandCaller, query: ListPartiesQuery
     query.companyId ? { OR: [{ companyId: query.companyId }, { companyId: null }] } : {},
   ]
   const cursor = decodeCodeCursor(query.cursor)
+  const now = serverClock.now()
+
+  if (query.attention) {
+    const wanted = query.attention
+    const candidates = await caller.withClient((client) => client.party.findMany({ where: { AND: filters }, select: PARTY_COLUMNS }))
+    const rows = (await rowsOf(caller, candidates, now))
+      .filter((row) => (wanted === 'VIES' ? row.attention.includes('VIES_NOT_PROVEN') : row.invoiceBlocked))
+      .sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    const after = cursor ? rows.filter((row) => row.code > cursor.code || (row.code === cursor.code && row.id > cursor.id)) : rows
+    const page = after.slice(0, query.limit)
+    const last = page.at(-1)
+    return { parties: page, nextCursor: after.length > query.limit && last ? encodeCodeCursor(last) : null, count: rows.length }
+  }
+
   const [rows, count] = await caller.withClient((client) =>
     Promise.all([
       client.party.findMany({ where: { AND: [...filters, afterCodeCursor(cursor)] }, select: PARTY_COLUMNS, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: query.limit + 1 }),
@@ -85,25 +106,34 @@ export async function listParties(caller: CommandCaller, query: ListPartiesQuery
     ]),
   )
   const page = rows.slice(0, query.limit)
-  const ids = page.map((row) => row.id)
-  const now = serverClock.now()
-  const { identities, addresses, checks } = await caller.withClient(async (client) => {
-    const identities = await client.partyTaxIdentity.findMany({ where: { partyId: { in: ids } }, select: TAX_COLUMNS })
-    const addresses = await client.partyAddress.findMany({ where: { partyId: { in: ids }, status: 'ACTIVE' }, select: ADDRESS_COLUMNS })
-    const current = currentIdentities(identities, dayOf(now))
-    const checks = await client.viesCheck.findMany({ where: { taxIdentityId: { in: [...current.values()].map((row) => row.id) } }, select: VIES_COLUMNS })
-    return { identities: current, addresses, checks }
-  })
   const last = page.at(-1)
-  return {
-    parties: page.map((row) => {
-      const current = identities.get(row.id) ?? null
-      const standing = viesStanding(current ? taxFieldsOf(current) : null, checks.filter((check) => check.taxIdentityId === current?.id).map(viesFactsOf), now)
-      return partyRowOf(row, current, standing, addresses.filter((address) => address.partyId === row.id))
-    }),
-    nextCursor: rows.length > query.limit && last ? encodeCodeCursor(last) : null,
-    count,
+  return { parties: await rowsOf(caller, page, now), nextCursor: rows.length > query.limit && last ? encodeCodeCursor(last) : null, count }
+}
+
+/** The list rows of these parties: the identity in force, its VIES standing, the city and what each still lacks. */
+async function rowsOf(caller: CommandCaller, parties: readonly PartyRowData[], now: Date): Promise<PartyRow[]> {
+  const ids = parties.map((row) => row.id)
+  const { identities, addresses, contacts, checks } = await caller.withClient(async (client) => {
+    // One query after the other on one connection (see readRecord).
+    const identities = currentIdentities(await client.partyTaxIdentity.findMany({ where: { partyId: { in: ids } }, select: TAX_COLUMNS }), dayOf(now))
+    const addresses = await client.partyAddress.findMany({ where: { partyId: { in: ids }, status: 'ACTIVE' }, select: ADDRESS_COLUMNS })
+    const contacts = await client.partyContact.findMany({ where: { partyId: { in: ids }, status: 'ACTIVE' }, select: CONTACT_COLUMNS })
+    const checks = await client.viesCheck.findMany({ where: { taxIdentityId: { in: [...identities.values()].map((row) => row.id) } }, select: VIES_COLUMNS })
+    return { identities, addresses, contacts, checks }
+  })
+  const byParty = <Row extends { readonly partyId: string }>(rows: readonly Row[]) => {
+    const map = new Map<string, Row[]>()
+    for (const row of rows) map.set(row.partyId, [...(map.get(row.partyId) ?? []), row])
+    return map
   }
+  const addressesOf = byParty(addresses)
+  const contactsOf = byParty(contacts)
+  return parties.map((row) => {
+    const current = identities.get(row.id) ?? null
+    const standing = viesStanding(current ? taxFieldsOf(current) : null, checks.filter((check) => check.taxIdentityId === current?.id).map(viesFactsOf), now)
+    const own = addressesOf.get(row.id) ?? []
+    return partyRowOf(row, current, standing, own, warningsOf(row, current, standing, own, contactsOf.get(row.id) ?? []))
+  })
 }
 
 function currentIdentities<Row extends { readonly partyId: string; readonly validFrom: Date }>(rows: readonly Row[], day: string): Map<string, Row> {

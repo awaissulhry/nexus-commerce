@@ -1,0 +1,29 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/insights.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office only: apps/factory-api modules/insights writes them through command(), for the person acting on a row of Today (the API asks actingPermission first: the record's view and act permissions over its company, site and party), and keeps each person to their own layout. Floor and portal/link sessions read and write nothing here. AttentionAction is changed (assigned, resolved, acknowledged), never deleted; AttentionActionLog is append-only (`@append-only`; the …_insights_attention_actions_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login); a TodayLayout is saved again, never deleted. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "AttentionAction": {
+      "about": "What people did about a row of Today: the office records an assignment, a resolution with its note and an acknowledgement (each with the row's condition) and reads them to show Today.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "AttentionActionLog": {
+      "about": "The history of Today's actions: the office adds one row per thing done and reads a person's own rows ('Handled today'). Never changed or removed.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "TodayLayout": {
+      "about": "One person's arrangement of Today: the office saves and reads the signed-in person's own.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

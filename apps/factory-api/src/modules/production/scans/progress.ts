@@ -1,11 +1,15 @@
 import type { Prisma } from '@nexus/factory-db'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { businessDate } from '@nexus/factory-domain/core/time'
+import { daysLate } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { wipOf, type Wip } from '@nexus/factory-domain/production/scans/wip'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
+import { serverClock } from '../../../core/time'
 import { officeOf, scanWorkOrder } from './access'
 import { readCorrectionRequests } from './corrections-store'
+import { dayOrNull } from '../work-orders/store'
 import { readCells, readLines, readOperations, readStations, readWorkOrderBundles, readWorkOrderScans, SCAN_HEADER, type Reader, type ScanHeader } from './store'
 
 /**
@@ -70,22 +74,53 @@ export async function workOrderWip(caller: CommandCaller, workOrderId: string) {
   })
 }
 
-/** Every open work order of the caller's sites with its operations' WIP (SCR-073 "Work in progress"; no cells, no person). */
+/**
+ * Every open work order of the caller's sites with its operations' WIP (SCR-073 "Floor now"; no cells, no person, no
+ * station): what it is (style, site, due date and days late, pieces and finished garments) and, per operation, the pieces
+ * arrived, waiting, good, scrap and rework, its bundles, and the good per line (F2: output per line only).
+ */
 export async function siteWip(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly limit: number }) {
   const context = officeOf(caller)
+  const today = businessDate(serverClock.now())
   return caller.withClient(async (db) => {
     const workOrders = await db.workOrder.findMany({
       where: { AND: [scopeWhere(actorOf(context), WORKORDERS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput, { status: { in: [...OPEN] } }, query.siteId ? { siteId: query.siteId } : {}] },
-      select: SCAN_HEADER,
+      select: { ...SCAN_HEADER, dueDate: true, priority: true, site: { select: { code: true } }, style: { select: { code: true, name: true } }, sizes: { select: { quantity: true } } },
       orderBy: [{ dueDate: 'asc' }, { number: 'asc' }],
       take: query.limit,
     })
+    const lines = new Map<string, Map<string, { id: string; code: string; name: string }>>()
     const rows = []
     for (const workOrder of workOrders) {
       const wip = await wipFor(db, workOrder)
+      if (!lines.has(workOrder.siteId)) lines.set(workOrder.siteId, await readLines(db, workOrder.siteId))
+      const siteLines = lines.get(workOrder.siteId)!
+      const dueDate = dayOrNull(workOrder.dueDate)
+      const finished = wip.cells.some((cell) => cell.finished !== null) ? wip.cells.reduce((sum, cell) => sum + (cell.finished ?? 0), 0) : null
       rows.push({
         workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status, siteId: workOrder.siteId },
-        operations: wip.operations.map((row) => ({ operationId: row.operationId, seq: row.seq, code: row.code, name: row.name, scanRequired: row.scanRequired, final: row.final, arrived: row.arrived, waiting: row.waiting, good: row.good, scrap: row.scrap, rework: row.rework, bundles: { ...row.bundles }, lines: row.lines.map((line) => ({ ...line })) })),
+        siteCode: workOrder.site.code,
+        style: { code: workOrder.style.code, name: workOrder.style.name },
+        dueDate,
+        daysLate: daysLate(workOrder.status, dueDate, today),
+        priority: workOrder.priority,
+        pieces: workOrder.sizes.reduce((sum, cell) => sum + cell.quantity, 0),
+        finished,
+        operations: wip.operations.map((row) => ({
+          operationId: row.operationId,
+          seq: row.seq,
+          code: row.code,
+          name: row.name,
+          scanRequired: row.scanRequired,
+          final: row.final,
+          arrived: row.arrived,
+          waiting: row.waiting,
+          good: row.good,
+          scrap: row.scrap,
+          rework: row.rework,
+          bundles: { ...row.bundles },
+          lines: row.lines.map((line) => ({ ...line, code: siteLines.get(line.lineId)?.code ?? '', name: siteLines.get(line.lineId)?.name ?? '' })),
+        })),
         allFinished: wip.allFinished,
       })
     }

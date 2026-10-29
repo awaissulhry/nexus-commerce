@@ -144,6 +144,8 @@ export const listStylesQuery = input({
   brandPartyId: id().optional(),
   sizeScaleId: id().optional(),
   mtmAllowed: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+  /** true: a DRAFT revision is waiting for its release (SCR-040 "Waiting for release"); false: none is. */
+  draftRevision: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
   /** Exactly this company's styles and the tenant-wide ones. */
   companyId: id().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -156,6 +158,20 @@ export type ListStylesQuery = z.output<typeof listStylesQuery>
 const ref = output({ id: id(), code: z.string(), name: z.string() })
 
 export const colourRef = output({ id: id(), code: z.string(), name: z.string(), hex: z.string().nullable() })
+
+/** The colour library's filters (a colourway's main colour, SCR-041): a search over code and name. */
+export const listColoursQuery = input({
+  q: z.string().trim().max(100).optional(),
+  status: z.enum([...MASTER_STATUSES, 'ALL']).default('ACTIVE'),
+  /** Exactly this company's colours and the tenant-wide ones. */
+  companyId: id().optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+})
+export type ListColoursQuery = z.output<typeof listColoursQuery>
+
+/** A colour of the library, as a colourway picks it. */
+export const colourRow = colourRef.extend({ companyId: id().nullable(), status: z.enum(MASTER_STATUSES) })
+export type ColourRow = z.infer<typeof colourRow>
 
 export const colourwayView = output({
   id: id(),
@@ -247,6 +263,9 @@ const summary = {
   skuCount: z.number().int(),
   /** RELEASED: it has a current revision; DRAFT: one is being prepared; NONE. */
   revisionState: z.enum(['RELEASED', 'DRAFT', 'NONE']),
+  /** The number of its RELEASED revision and of its open DRAFT one ("Rev 3 released · Rev 4 draft"); null: none. */
+  releasedRevision: z.number().int().nullable(),
+  draftRevision: z.number().int().nullable(),
   /** What the list's completeness column shows. */
   completeness: output({ colourways: z.boolean(), sizeRange: z.boolean(), baseSize: z.boolean(), skus: z.boolean(), releasedRevision: z.boolean() }),
 }

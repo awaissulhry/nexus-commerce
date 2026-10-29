@@ -1,0 +1,485 @@
+/*
+ * Quotes (SCR-034 list, SCR-035 record) LAYOUT: the record's band and tabs, the body with the optional thread beside it,
+ * the style blocks and the summary rail, the list's toolbar and table. The controls are the design system's; this file
+ * places them with semantic tokens only (no colours of its own but the DS's).
+ */
+.fw-q,
+.fw-ql {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-q-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-q-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-q-title {
+  overflow-wrap: anywhere;
+}
+
+.fw-q-title-party {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-2);
+}
+
+.fw-q-meta,
+.fw-q-actions,
+.fw-q-tags,
+.fw-q-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-q-actions {
+  gap: var(--nds-space-8);
+}
+
+.fw-q-keys {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: var(--nds-space-4);
+}
+
+.fw-q-save {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-height: 1em;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-q-save.is-failed {
+  color: var(--nds-danger-text);
+}
+
+.fw-q-tablabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-q-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--nds-warning);
+}
+
+.fw-q-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-q-body.has-dock {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+}
+
+@media (max-width: 1279px) {
+  .fw-q-body.has-dock {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-q-dock {
+    display: none;
+  }
+}
+
+.fw-q-main,
+.fw-q-stack,
+.fw-q-rail,
+.fw-q-dialog,
+.fw-q-chosen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-q-rail {
+  position: sticky;
+  top: var(--nds-space-16);
+}
+
+.fw-q-h2,
+.fw-q-h3 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-q-h2 {
+  font-size: var(--nds-font-size-md, var(--nds-font-size-sm));
+}
+
+.fw-q-h3 {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-q-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-q-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-q-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-12);
+}
+
+.fw-q-composer,
+.fw-q-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-q-choices,
+.fw-q-colours,
+.fw-q-radios {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-q-colours {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-q-legend {
+  margin-bottom: var(--nds-space-6);
+  padding: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-2);
+}
+
+.fw-q-chosen-head,
+.fw-q-block-head,
+.fw-q-docs-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-q-block-title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-q-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--nds-border);
+}
+
+/* The grid scrolls sideways in its own DS box. A "not offered" cell's visually hidden words are positioned against
+   the nearest positioned ancestor, which is outside that box: past the box's edge they widened the page by up to
+   31 px on a phone (DS gap). This box is their containing block and clips them; it adds no scrollbar of its own. */
+.fw-q-gridbox {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.fw-q-price {
+  width: 120px;
+  max-width: 100%;
+}
+
+.fw-q-cell {
+  overflow-wrap: anywhere;
+}
+
+.fw-q-table {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.fw-q-meter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-left: 4px solid var(--nds-border);
+  background: var(--nds-surface-sunken);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-q-meter.tone-success {
+  border-left-color: var(--nds-success);
+}
+
+.fw-q-meter.tone-warning {
+  border-left-color: var(--nds-warning);
+}
+
+.fw-q-meter.tone-danger {
+  border-left-color: var(--nds-danger);
+}
+
+.fw-q-meter-label {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+
+.fw-q-meter-value {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-q-rail-approval {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-q-issues,
+.fw-q-rules,
+.fw-q-rounds,
+.fw-q-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-q-list {
+  list-style: disc;
+  padding-left: var(--nds-space-20);
+}
+
+.fw-q-rule {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+}
+
+.fw-q-ico {
+  flex: none;
+  margin-top: 2px;
+  color: var(--nds-text-2);
+}
+
+.fw-q-ico.is-warning {
+  color: var(--nds-warning);
+}
+
+.fw-q-ico.is-passes {
+  color: var(--nds-success);
+}
+
+.fw-q-round {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding-bottom: var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-q-round:last-child {
+  border-bottom: 0;
+}
+
+.fw-q-round-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-q-round-line {
+  margin: 0;
+}
+
+.fw-q-quote {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.fw-q-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--nds-space-14);
+}
+
+.fw-q-cards > * {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10, var(--nds-space-8));
+  min-width: 0;
+}
+
+.fw-q-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-q-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+}
+
+/* The Terms tab fills the page (Owner 2026-10-29: no empty space on the right): its cards in two columns on a wide
+   screen, one below 1280 px. The save bar sits after the grid (sticky in the tab). Fields inside a card keep their grid. */
+.fw-q-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--nds-space-14);
+}
+
+@media (min-width: 1280px) {
+  .fw-q-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.fw-q-form > * {
+  min-width: 0;
+}
+
+.fw-q-form .nds-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+/* The list (SCR-034). */
+.fw-ql-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-ql-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-ql-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ql-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-ql-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-ql a.fw-ql-link {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-semibold);
+  text-decoration: none;
+}
+
+.fw-ql a.fw-ql-link:hover {
+  text-decoration: underline;
+}
+
+.fw-q-tablefoot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-8) var(--nds-space-16);
+  color: var(--nds-text-2);
+}
+
+p.fw-q-tablefoot {
+  padding: 0;
+  margin: 0;
+}
+
+.fw-ql-count {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ql-row-sub {
+  display: block;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+}
+
+@media (max-width: 720px) {
+  .fw-q-keys,
+  .fw-q-hide-phone {
+    display: none;
+  }
+
+  .fw-q-rail {
+    position: static;
+  }
+}
+

@@ -119,6 +119,10 @@ export const listContract = defineContract({
     siteId: id().optional(),
     /** Open work orders past their due date (MES-305). */
     late: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+    /** Not finished yet: DRAFT, RELEASED or IN_PROGRESS (the list's default view). */
+    open: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+    /** Part of the number, the batch number, or the style's code or name (any case). */
+    q: z.string().trim().min(1).max(60).optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
@@ -143,8 +147,11 @@ export const listContract = defineContract({
           orders: z.array(output({ id: id(), number: z.string(), partyName: z.string() })),
           cells: z.number().int(),
           pieces: z.number().int(),
-          /** Cut / sewn / finished come with B-W1-40 and B-W1-42: null until then. */
-          progress: z.null(),
+          /**
+           * The cells' cut, bundled, sewn and finished garments summed (the record's own counts); null for a draft. A step
+           * no cell counts (no part cut from hides, a routing that sews nowhere) is null, never a made-up 0.
+           */
+          progress: output({ cut: z.number().int().nullable(), bundled: z.number().int().nullable(), sewn: z.number().int().nullable(), finished: z.number().int().nullable() }).nullable(),
           dueDate: businessDate().nullable(),
           daysLate: z.number().int().nullable(),
           priority: z.number().int(),
@@ -153,6 +160,16 @@ export const listContract = defineContract({
         }),
       ),
       nextCursor: id().nullable(),
+    }),
+  },
+})
+
+export const countsContract = defineContract({
+  querystring: input({ siteId: id().optional() }),
+  response: {
+    200: output({
+      /** Work orders the caller may see per state; `open` = draft + released + in progress; `late` = open past the due date. */
+      counts: output({ draft: z.number().int(), released: z.number().int(), inProgress: z.number().int(), completed: z.number().int(), open: z.number().int(), late: z.number().int() }),
     }),
   },
 })

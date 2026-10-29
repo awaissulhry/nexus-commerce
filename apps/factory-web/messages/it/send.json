@@ -1,0 +1,75 @@
+{
+  "to": {
+    "label": "A",
+    "noEmail": "nessun indirizzo email",
+    "none": "Nessun contatto scelto"
+  },
+  "language": "Lingua",
+  "languageName": {
+    "it": "Italiano",
+    "en": "Inglese"
+  },
+  "how": {
+    "label": "Come",
+    "acceptLink": "Email con il PDF e un link monouso per rispondere online",
+    "acceptLinkUntil": "Email con il PDF e un link monouso per rispondere online, aperto fino al {date}",
+    "pdfOnly": "Email con il PDF allegato"
+  },
+  "cc": {
+    "label": "Copia a",
+    "hint": "Altri indirizzi, separati da virgole (ricevono la mail, non un proprio link).",
+    "placeholder": "nome@esempio.it",
+    "invalid": "Non è un indirizzo email: {list}"
+  },
+  "subject": "Oggetto",
+  "message": {
+    "label": "Messaggio",
+    "hint": "Le tue parole sopra il testo standard; vuoto: solo il testo standard."
+  },
+  "recipientCan": "Cosa può fare il destinatario",
+  "checks": {
+    "title": "Verifiche prima dell'invio",
+    "loading": "Verifica in corso…",
+    "state": {
+      "blocks": "Blocca l'invio",
+      "warning": "Da verificare",
+      "passes": "Superata"
+    }
+  },
+  "retry": "Riprova",
+  "send": "Invia",
+  "sending": "Invio…",
+  "cancel": "Chiudi",
+  "close": "Fatto",
+  "held": {
+    "loading": "Le verifiche sono ancora in corso.",
+    "busy": "Invio in corso…",
+    "noRight": "Il tuo ruolo non può inviare documenti.",
+    "noEmail": "Il destinatario non ha un indirizzo email.",
+    "cc": "Prima correggi gli indirizzi in copia: {list}",
+    "sent": "Già inviato."
+  },
+  "preview": {
+    "title": "Il documento come parte",
+    "newTab": "Apri in una nuova scheda",
+    "loading": "Creazione del PDF…",
+    "sentNote": "È la versione bloccata alle {time}."
+  },
+  "result": {
+    "sentTitle": "Inviato",
+    "sentBody": "Inviato a {to} alle {time}.",
+    "failedTitle": "La mail non è partita",
+    "failedBody": "Il documento è bloccato e archiviato, ma la mail a {to} non è partita. Invia un nuovo link.",
+    "at": "Quando",
+    "linkUntil": "Link aperto fino al",
+    "delivery": "Mail",
+    "state": {
+      "sent": "Inviata",
+      "failed": "Non riuscita",
+      "retry": "Verrà ritentata",
+      "settled": "Fatto"
+    },
+    "linkNote": "Il link è solo nella mail del destinatario: qui nessuno ne vede l'indirizzo.",
+    "newLink": "Invia un nuovo link"
+  }
+}

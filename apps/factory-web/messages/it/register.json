@@ -1,0 +1,467 @@
+{
+  "intro": "Il registro previsto dalla legge per reclami, non conformità e richiami dei DPI che immettiamo sul mercato (Reg. (UE) 2016/425 art. 8). Le voci non si cancellano mai: una correzione è una nota.",
+  "keeper": {
+    "title": "Chi tiene il registro",
+    "body": "Per i modelli a marchio del cliente il fabbricante legale è il marchio, che tiene il proprio registro; qui teniamo le stesse voci e le condividiamo con il marchio."
+  },
+  "noAccess": {
+    "title": "Il registro DPI non è per il tuo ruolo",
+    "body": "Per vedere il registro serve il permesso compliance.register.view. Lo concede il titolare o un amministratore in Amministrazione › Ruoli."
+  },
+  "tile": {
+    "open": "Voci aperte",
+    "openHint": "Non ancora chiuse",
+    "risk": "Possibile rischio – aperte",
+    "riskHint": "Aperte con rischio: sì (va informata l'autorità)",
+    "assessing": "Rischio in valutazione",
+    "assessingHint": "Aperte, nessuno ha ancora deciso il rischio",
+    "uninformed": "Distributori non ancora informati",
+    "uninformedHint": "Voci aperte non ancora segnate come informate",
+    "closed": "Chiuse",
+    "closedHint": "Chiuse con un motivo",
+    "atLeast": "almeno {count}",
+    "unknown": "Non è stato possibile contare"
+  },
+  "view": {
+    "all": "Tutte le voci",
+    "open": "Voci aperte",
+    "risk": "Possibile rischio – aperte",
+    "assessing": "Rischio in valutazione",
+    "uninformed": "Distributori non ancora informati",
+    "closed": "Chiuse"
+  },
+  "kind": {
+    "COMPLAINT": "Reclamo",
+    "NON_CONFORMITY": "Non conformità",
+    "RECALL": "Richiamo"
+  },
+  "kindHint": {
+    "COMPLAINT": "Un cliente o un distributore ha segnalato un problema.",
+    "NON_CONFORMITY": "Abbiamo trovato capi non conformi.",
+    "RECALL": "I capi vengono richiamati dal mercato."
+  },
+  "risk": {
+    "NO": "Nessun rischio",
+    "ASSESSING": "In valutazione",
+    "YES": "Possibile rischio"
+  },
+  "riskHint": {
+    "NO": "Il DPI non presenta un rischio per chi lo indossa.",
+    "ASSESSING": "Nessuno ha ancora deciso se il DPI può presentare un rischio.",
+    "YES": "Il DPI può presentare un rischio: va informata l'autorità di vigilanza del mercato (art. 8(8))."
+  },
+  "status": {
+    "OPEN": "Aperta",
+    "CLOSED": "Chiusa"
+  },
+  "source": {
+    "none": "Aggiunta a mano",
+    "QualityReleaseReversal": "Un rilascio annullato",
+    "QualityRelease": "Un rilascio",
+    "Inspection": "Un'ispezione",
+    "Shipment": "Una spedizione",
+    "LabResult": "Un risultato di laboratorio (Cr VI)"
+  },
+  "list": {
+    "table": "Voci del registro DPI",
+    "count_one": "{count} voce",
+    "count_other": "{count} voci",
+    "search": "Cerca riferimento o descrizione",
+    "reportedOn": "Segnalata il {date}",
+    "noGarments": "Nessun lotto o matricola indicati",
+    "concern": {
+      "batch": "Numeri di lotto",
+      "serial": "Matricole"
+    },
+    "andMore_one": "{codes} e {count} altro",
+    "andMore_other": "{codes} e altri {count}",
+    "notYet": "Non ancora",
+    "col": {
+      "entry": "Voce",
+      "kind": "Tipo",
+      "style": "Modello",
+      "concern": "Lotto o matricole",
+      "reporter": "Segnalata da",
+      "risk": "Possibile rischio",
+      "source": "Origine",
+      "status": "Stato",
+      "informed": "Distributori informati",
+      "authority": "Autorità informata",
+      "actions": "Azioni"
+    },
+    "rowsHeading": "Viste salvate",
+    "rows": "Righe: {view}",
+    "filters": "Filtri",
+    "filtersCount": "Filtri ({count})",
+    "activeFilters": "Filtri attivi",
+    "removeFilter": "Togli il filtro {name}",
+    "clearAll": "Togli i filtri",
+    "exportView": "Questa vista (CSV)",
+    "exportNothing": "Niente da esportare in questa vista",
+    "exportViewHint": "Le {count} righe mostrate, in un foglio di calcolo",
+    "more": "Altre azioni sul registro",
+    "bulkExport_one": "Esporta {count} (CSV)",
+    "bulkExport_other": "Esporta {count} (CSV)",
+    "failedTitle": "Non è stato possibile leggere il registro",
+    "noMatch": "Nessuna voce corrisponde a questi filtri",
+    "empty": {
+      "title": "Il registro è vuoto",
+      "body": "Le voci arrivano da reclami, non conformità, rilasci annullati e risultati di laboratorio non conformi – oppure da Nuova voce."
+    },
+    "showMore": "Mostra altre {count}",
+    "atMax": "Al massimo {max} mostrate"
+  },
+  "held": {
+    "manage": "Il tuo ruolo può vedere il registro; per modificarlo serve compliance.register.manage.",
+    "closed": "Una voce chiusa non cambia mai: aggiungi invece una nota nella discussione.",
+    "actionDone": "L'azione correttiva risulta già fatta: aggiungi una nota invece di riscriverla.",
+    "informed": "I distributori risultano già informati.",
+    "notified": "L'autorità risulta già informata.",
+    "viewSetsRisk": "Questa vista sceglie già il rischio",
+    "atMax": "La lista mostra al massimo {max} voci: restringi i filtri o cerca.",
+    "noSubject": "Questa voce non indica lotti o matricole da tracciare."
+  },
+  "row": {
+    "menu": "Azioni per {reference}",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "copy": "Copia il riferimento"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "new": "Nuova voce"
+  },
+  "new": {
+    "action": "Nuova voce",
+    "title": "Nuova voce del registro",
+    "subtitle": "Cosa è successo, a quali capi, e se il DPI può presentare un rischio.",
+    "add": "Aggiungi al registro",
+    "adding": "Aggiunta in corso…",
+    "problemsTitle": "Prima di poterla aggiungere",
+    "company": "Società",
+    "chooseCompany": "Scegli la società",
+    "kind": "Tipo di evento",
+    "style": "Modello",
+    "styleHint": "Il modello dei capi interessati.",
+    "styleNoRight": "Il tuo ruolo non può elencare i modelli (product.styles.view): chiedi a chi può di aggiungere la voce.",
+    "chooseStyle": "Scegli un modello",
+    "styleUnavailable": "Nessun modello da scegliere",
+    "reportedOn": "Segnalata il",
+    "reportedOnHint": "Vuoto: adesso.",
+    "clearDate": "Togli la data",
+    "batches": "Numeri di lotto",
+    "batchesHint": "Come stampati sulle etichette dei capi. Invio ne aggiunge uno.",
+    "batchesPlaceholder": "Aggiungi un numero di lotto",
+    "serials": "Matricole",
+    "serialsHint": "Per un modello con una matricola per capo. Invio ne aggiunge una.",
+    "serialsPlaceholder": "Aggiungi una matricola",
+    "trace": "Dove sono questi capi?",
+    "traceHint": "Trova gli ordini di produzione, le spedizioni partite con i loro DDT e i clienti, prima di aggiungere la voce.",
+    "tracing": "Ricerca in corso…",
+    "traceNeeds": "Prima scegli un modello e aggiungi un numero di lotto o una matricola.",
+    "traceFailed": "Non è stato possibile tracciare i capi",
+    "traceRefused": "Un lotto, una matricola o il modello sono stati rifiutati così come sono: controllali.",
+    "description": "Cosa è successo",
+    "descriptionHint": "In parole semplici: cosa è stato trovato o segnalato, e come lo abbiamo saputo.",
+    "reporter": "Segnalata da",
+    "reporterHint": "Il cliente o il distributore che lo ha segnalato, se c’è.",
+    "reporterNoRight": "Il tuo ruolo non può elencare i clienti (parties.view): chi segnala può essere aggiunto dopo da chi può.",
+    "noReporter": "Nessuno (trovato da noi)",
+    "risk": "Il DPI può presentare un rischio?",
+    "actionTaken": "Azione già presa",
+    "actionTakenHint": "Facoltativo. L'azione correttiva si segna come fatta più tardi, sulla voce.",
+    "reference": "La voce prende il riferimento dalla numerazione del registro DPI della società quando viene aggiunta.",
+    "problem": {
+      "company": "Scegli la società.",
+      "style": "Scegli il modello dei capi.",
+      "description": "Scrivi cosa è successo.",
+      "recallNeedsGarments": "Un richiamo indica cosa richiama: aggiungi un numero di lotto o una matricola.",
+      "tooManyBatches": "Al massimo 50 numeri di lotto in una voce.",
+      "tooManySerials": "Al massimo 500 matricole in una voce.",
+      "noSeries": "Questa società non ha ancora una numerazione del registro DPI: si imposta in Amministrazione › Documenti e numerazioni.",
+      "refused": "La voce è stata rifiutata così com’è: controlla modello, lotti e matricole."
+    }
+  },
+  "csv": {
+    "file": "registro-dpi-{day}.csv",
+    "reference": "Riferimento",
+    "reportedAt": "Segnalata il",
+    "kind": "Tipo",
+    "style": "Modello",
+    "styleName": "Nome modello",
+    "batchNumbers": "Numeri di lotto",
+    "serials": "Matricole",
+    "reporter": "Segnalata da",
+    "risk": "Possibile rischio",
+    "source": "Origine",
+    "status": "Stato",
+    "distributorsInformedAt": "Distributori informati il",
+    "authorityNotifiedAt": "Autorità informata il",
+    "authorityReference": "Riferimento dell'autorità",
+    "closedAt": "Chiusa il"
+  },
+  "done": {
+    "exported_one": "{count} voce esportata.",
+    "exported_other": "{count} voci esportate.",
+    "copied": "{reference} copiato.",
+    "created": "Aggiunta al registro.",
+    "saved": "{reference}: l'evento è salvato.",
+    "assessed": "{reference}: la valutazione del rischio è salvata.",
+    "actionSaved": "{reference}: l'azione correttiva è salvata (non ancora fatta).",
+    "actionDone": "{reference}: l'azione correttiva è segnata come fatta.",
+    "informed": "{reference}: i distributori sono segnati come informati.",
+    "notified": "{reference}: l'autorità è segnata come informata.",
+    "closed": "{reference} è chiusa."
+  },
+  "trace": {
+    "countsLabel": "Dove sono i capi",
+    "workOrders": "Ordini di produzione",
+    "concerned": "Interessati",
+    "released": "Rilasciati",
+    "packed": "Imballati",
+    "shipped": "Spediti",
+    "returned": "Resi",
+    "customers": "Clienti",
+    "shippedGoods": "Alcuni capi sono partiti: vanno informati i distributori che li hanno ricevuti (art. 8(4)).",
+    "noShippedGoods": "Nessuno di questi capi è uscito dalla fabbrica.",
+    "problemsTitle_one": "{count} elemento non tracciabile",
+    "problemsTitle_other": "{count} elementi non tracciabili",
+    "workOrdersTable": "Ordini di produzione interessati",
+    "cellsTable": "Capi per colore e taglia",
+    "shipmentsTable": "Spedizioni",
+    "customersTable": "Clienti che li hanno ricevuti",
+    "lotsTable": "Lotti di materiale",
+    "col": {
+      "workOrder": "Ordine di produzione",
+      "batch": "Lotto",
+      "reach": "Portata",
+      "via": "Trovato tramite",
+      "status": "Stato",
+      "cell": "Colore · taglia",
+      "shipment": "Spedizione",
+      "customer": "Cliente",
+      "ddt": "DDT",
+      "left": "Partita",
+      "garments": "Capi",
+      "shipments": "Spedizioni",
+      "lot": "Lotto",
+      "workOrders": "Ordini di produzione"
+    },
+    "reach": {
+      "WHOLE": "Tutti i capi",
+      "PART": "Alcuni capi"
+    },
+    "via": {
+      "BATCH": "lotto",
+      "SERIAL": "matricola",
+      "LOT": "lotto di materiale",
+      "WORK_ORDER": "ordine di produzione",
+      "SHIPMENT": "spedizione"
+    },
+    "leftOn": "Partita il {date}",
+    "leftYes": "Partita",
+    "notLeft": "Non partita"
+  },
+  "record": {
+    "back": "Registro DPI",
+    "reportedBy": "segnalata da {name}",
+    "more": "Altre azioni sulla voce",
+    "evidence": "Catena delle prove",
+    "evidenceBatch": "Catena delle prove del lotto {code}",
+    "evidenceSerial": "Catena delle prove della matricola {code}",
+    "changed": "Qualcuno ha modificato questa voce alle {time}.",
+    "reload": "Ricarica",
+    "reloadFailed": "Non è stato possibile rileggere la voce: mostra l'ultima copia. Riprova tra poco.",
+    "closed": "Chiusa il {date}",
+    "closedBody": "Una voce chiusa non cambia mai: una correzione è una nota nella sua discussione.",
+    "addNote": "Aggiungi una nota",
+    "sourceRelease": "Rilascio {label}, annullato",
+    "sourceLot": "Un risultato di laboratorio del lotto di materiale (Cr VI)"
+  },
+  "tab": {
+    "event": "Evento",
+    "affected": "Capi interessati",
+    "actions": "Azioni",
+    "activity": "Attività"
+  },
+  "action": {
+    "edit": "Modifica l'evento",
+    "risk": "Valuta il rischio",
+    "action": "Registra azione correttiva",
+    "distributors": "Distributori informati",
+    "authority": "Autorità informata",
+    "close": "Chiudi la voce"
+  },
+  "affected": {
+    "title": "Capi interessati",
+    "sub": "Dove si trova ora ogni capo di questi lotti e matricole: prodotto, rilasciato, imballato, spedito (con DDT e cliente) o reso.",
+    "none": "Nessun ordine di produzione corrisponde a quanto indicato nella voce."
+  },
+  "event": {
+    "title": "Cosa è successo",
+    "sub": "Come segnalato o trovato, e da dove viene.",
+    "kind": "Tipo",
+    "reportedAt": "Segnalata",
+    "reporter": "Segnalata da",
+    "noReporter": "Trovata da noi",
+    "style": "Modello",
+    "batches": "Numeri di lotto",
+    "serials": "Matricole",
+    "source": "Origine",
+    "added": "Aggiunta al registro"
+  },
+  "assess": {
+    "title": "Valutazione del rischio",
+    "sub": "Se il DPI può presentare un rischio, e cosa ha trovato l'indagine.",
+    "risk": "Possibile rischio",
+    "investigation": "Indagine",
+    "noInvestigation": "Ancora niente di scritto"
+  },
+  "corrective": {
+    "title": "Azione correttiva",
+    "sub": "Cosa è stato fatto per rendere conforme il DPI (art. 8(8)).",
+    "text": "Azione",
+    "none": "Non ancora decisa",
+    "done": "Fatta il",
+    "notDone": "Non ancora fatta"
+  },
+  "duties": {
+    "title": "Cosa chiede la legge",
+    "sub": "Ogni obbligo di questa voce, se vale ora e se è assolto."
+  },
+  "duty": {
+    "RISK_ASSESSMENT": {
+      "name": "Rischio valutato",
+      "OK": "Qualcuno ha deciso se il DPI può presentare un rischio",
+      "OPEN": "Nessuno ha ancora deciso se il DPI può presentare un rischio",
+      "NOT_NEEDED": "Non serve",
+      "fix": "Valuta il rischio: sì o no."
+    },
+    "CORRECTIVE_ACTION": {
+      "name": "Azione correttiva",
+      "OK": "L'azione correttiva è registrata e fatta",
+      "OPEN": "L'azione correttiva non risulta fatta",
+      "NOT_NEEDED": "Non serve",
+      "fix": "Registra l'azione correttiva (o perché non serve) e segnala come fatta."
+    },
+    "DISTRIBUTORS": {
+      "name": "Distributori informati",
+      "OK": "I distributori che hanno ricevuto i capi risultano informati",
+      "OPEN": "Alcuni capi sono partiti: i distributori che li hanno ricevuti non risultano informati",
+      "NOT_NEEDED": "Nessun capo è partito: nessuno da informare",
+      "fix": "Informali, poi registra come e quando."
+    },
+    "AUTHORITY": {
+      "name": "Autorità informata",
+      "OK": "L'autorità di vigilanza risulta informata, con il suo riferimento",
+      "OPEN": "Il DPI può presentare un rischio: l'autorità non risulta informata",
+      "NOT_NEEDED": "Solo se il DPI può presentare un rischio",
+      "fix": "Informa l'autorità, poi registra la data e il suo riferimento."
+    }
+  },
+  "toClose": {
+    "title": "Chiusura della voce",
+    "ready": "Ogni obbligo è assolto: la voce si può chiudere con un motivo.",
+    "closedAt": "Chiusa",
+    "reason": "Motivo"
+  },
+  "distributors": {
+    "title": "Distributori",
+    "sub": "Chi ha ricevuto capi di questi lotti (art. 8(4)).",
+    "informed": "Segnati come informati",
+    "needed": "Da informare",
+    "neededYes_one": "{count} cliente ha ricevuto capi",
+    "neededYes_other": "{count} clienti hanno ricevuto capi",
+    "neededNo": "Nessuno: nessun capo è partito",
+    "where": "I clienti sono nella scheda Capi interessati; scrivi loro dalla discussione."
+  },
+  "authority": {
+    "title": "Autorità di vigilanza del mercato",
+    "sub": "Quando il DPI può presentare un rischio (art. 8(8)).",
+    "notified": "Segnata come informata",
+    "reference": "Il loro riferimento",
+    "needed": "Necessario",
+    "neededYes": "Sì: il DPI può presentare un rischio",
+    "neededAssessing": "Non noto finché il rischio non è valutato",
+    "neededNo": "No: nessun rischio"
+  },
+  "dialog": {
+    "saving": "Salvataggio…",
+    "conflict": "Qualcuno ha modificato questa voce nel frattempo: è stata riletta. Controlla e conferma di nuovo.",
+    "refused": {
+      "edit": "Non è stato possibile salvare l'evento",
+      "risk": "Non è stato possibile salvare la valutazione del rischio",
+      "action": "Non è stato possibile salvare l'azione correttiva",
+      "distributors": "Non è stato possibile registrare l'informazione ai distributori",
+      "authority": "Non è stato possibile registrare la comunicazione all'autorità",
+      "close": "La voce non si può ancora chiudere"
+    },
+    "edit": {
+      "title": "Modifica l'evento",
+      "sub": "Cosa è successo e chi lo ha segnalato. Lotti, matricole e modello restano come segnalati.",
+      "confirm": "Salva l'evento"
+    },
+    "risk": {
+      "title": "Valuta il rischio",
+      "sub": "Decidi se il DPI può presentare un rischio per chi lo indossa, e scrivi cosa ha trovato l'indagine.",
+      "confirm": "Salva la valutazione",
+      "yesWarning": "Con un rischio, l'autorità di vigilanza va informata subito, e la voce si chiude solo con il suo riferimento.",
+      "investigation": "Indagine",
+      "investigationHint": "Cosa è stato controllato e cosa è emerso."
+    },
+    "action": {
+      "title": "Azione correttiva",
+      "sub": "Cosa si fa per rendere conforme il DPI, ritirarlo o richiamarlo – oppure perché non serve nulla.",
+      "confirm": "Salva l'azione",
+      "confirmDone": "Segna come fatta",
+      "needsText": "Scrivi prima l'azione correttiva.",
+      "needsDay": "Scegli il giorno.",
+      "text": "Azione correttiva",
+      "textHint": "Una volta segnata come fatta non cambia più; i fatti successivi vanno in una nota.",
+      "done": "L'azione è fatta",
+      "doneOn": "Fatta il",
+      "doneOnHint": "Non nel futuro, non prima del giorno della segnalazione.",
+      "law": "Reg. (UE) 2016/425 art. 8(8): il fabbricante prende subito l'azione correttiva necessaria."
+    },
+    "inform": {
+      "title": "Distributori informati",
+      "sub": "Registra quando e come sono stati informati i distributori che hanno ricevuto i capi.",
+      "confirm": "Segna come informati",
+      "recordsOnly": "Questo registra che li hai informati; non invia nulla. Scrivi loro dalla discussione della voce o con i tuoi mezzi.",
+      "who_one": "{count} cliente ha ricevuto questi capi:",
+      "who_other": "{count} clienti hanno ricevuto questi capi:",
+      "garments_one": "{count} capo",
+      "garments_other": "{count} capi",
+      "ddt": "DDT {numbers}",
+      "nobody": "La tracciatura non trova clienti che abbiano ricevuto questi capi.",
+      "day": "Informati il",
+      "note": "Come e chi",
+      "noteHint": "Conservato come nota nella discussione della voce.",
+      "needsNote": "Scrivi come e chi hai informato."
+    },
+    "notify": {
+      "title": "Autorità informata",
+      "sub": "Registra la comunicazione all'autorità di vigilanza del mercato e il suo riferimento.",
+      "confirm": "Registra la comunicazione",
+      "recordsOnly": "Questo registra la comunicazione che hai inviato (per esempio tramite Safety Gate o ICSMS); non invia nulla.",
+      "day": "Informata il",
+      "reference": "Riferimento dell'autorità",
+      "referenceHint": "Il loro numero della comunicazione (o il numero Safety Gate / ICSMS).",
+      "note": "Quale autorità, e cosa è stato inviato",
+      "noteHint": "Conservato come nota nella discussione della voce.",
+      "needsReference": "Scrivi il riferimento dell'autorità.",
+      "needsNote": "Scrivi quale autorità e cosa è stato inviato."
+    },
+    "close": {
+      "title": "Chiudi {reference}",
+      "sub": "Scrivi perché la voce viene chiusa. Il registro la conserva, invariata, per sempre.",
+      "confirm": "Chiudi la voce",
+      "stillOpen_one": "{count} cosa ne impedisce ancora la chiusura:",
+      "stillOpen_other": "{count} cose ne impediscono ancora la chiusura:",
+      "reason": "Motivo",
+      "reasonHint": "Per esempio: azione fatta, nessun altro reclamo, l'autorità ha risposto.",
+      "final": "Una voce chiusa non cambia mai: i fatti successivi vanno in una nota.",
+      "needsReason": "Scrivi perché la voce viene chiusa."
+    }
+  }
+}

@@ -16,6 +16,8 @@ describe('model ownership', () => {
     expect(problems(loadOwnership())).toEqual([])
     const inputs = policyInputs(loadSchema(), loadOwnership())
     expect(inputs.model.tables.map((table) => table.table).sort()).toEqual([
+      'AttentionAction',
+      'AttentionActionLog',
       'AuditLog',
       'Badge',
       'BomLine',
@@ -142,6 +144,7 @@ describe('model ownership', () => {
       'Suppression',
       'Tenant',
       'Thread',
+      'TodayLayout',
       'TrackingEvent',
       'User',
       'Variant',

@@ -1,0 +1,808 @@
+{
+  "common": {
+    "retry": "Try again",
+    "dismiss": "Dismiss",
+    "cancel": "Cancel",
+    "close": "Close",
+    "done": "Done",
+    "save": "Save",
+    "discard": "Discard",
+    "loading": "Loading…"
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline: reload to see the latest"
+  },
+  "status": {
+    "DRAFT": "Draft",
+    "RELEASED": "Released",
+    "IN_PROGRESS": "In progress",
+    "COMPLETED": "Completed",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled"
+  },
+  "list": {
+    "tableLabel": "Work orders",
+    "search": "Search number, batch or style",
+    "viewLabel": "Rows",
+    "new": "New work order",
+    "keyNew": "New work order",
+    "keysTitle": "Keys of this list",
+    "updated": "Updated {time}",
+    "notYet": "Not read yet",
+    "count_one": "{count} work order",
+    "count_other": "{count} work orders",
+    "countMore_one": "{count} work order shown, more to load",
+    "countMore_other": "{count} work orders shown, more to load",
+    "more": "Show 50 more",
+    "batch": "Batch {batch}",
+    "noBatch": "No batch yet",
+    "rev": "Rev {revision}",
+    "daysLate_one": "{count} day late",
+    "daysLate_other": "{count} days late",
+    "progressLabel": "Finished garments of {number}",
+    "rowMenu": "More for {number}",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "failed": "Couldn't load the work orders",
+    "noMatch": {
+      "title": "No work orders match",
+      "body": "Change the search or the rows shown."
+    },
+    "clearFilters": "Show every work order",
+    "empty": {
+      "title": "No work orders yet",
+      "body": "A work order is made from the open lines of a confirmed sales order.",
+      "bodyView": "Work orders appear here once the planner makes them."
+    },
+    "viewing": "Showing: {view}"
+  },
+  "view": {
+    "open": "Open (not finished)",
+    "late": "Late",
+    "DRAFT": "Drafts to release",
+    "RELEASED": "Released, not started",
+    "IN_PROGRESS": "In progress",
+    "COMPLETED": "Completed",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled",
+    "all": "All"
+  },
+  "tile": {
+    "draft": "Drafts to release",
+    "released": "Released, not started",
+    "inProgress": "In progress",
+    "late": "Late"
+  },
+  "col": {
+    "number": "Work order",
+    "status": "Status",
+    "style": "Style",
+    "colourways": "Colourways",
+    "customer": "Customer",
+    "pieces": "Pieces",
+    "progress": "Progress",
+    "due": "Due",
+    "priority": "Priority",
+    "site": "Site",
+    "more": "More"
+  },
+  "progress": {
+    "notFrozen": "Not released yet",
+    "none": "{total} to make, nothing cut yet",
+    "cut": "Cut {done} of {total}",
+    "bundled": "In bundles {done} of {total}",
+    "sewn": "Sewn {done} of {total}",
+    "finished": "Finished {done} of {total}"
+  },
+  "bulk": {
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)",
+    "release_one": "Release {count}",
+    "release_other": "Release {count}",
+    "releaseHeld_one": "{count} selected is not a draft: only drafts are released",
+    "releaseHeld_other": "{count} selected are not drafts: only drafts are released",
+    "releaseTitle_one": "Release {count} work order",
+    "releaseTitle_other": "Release {count} work orders",
+    "releaseBody": "Each work order is checked again as it is released: the spec is frozen and a batch number given. One the check holds stays a draft, with what holds it.",
+    "releaseRun_one": "Release {count}",
+    "releaseRun_other": "Release {count}",
+    "releaseDone": "{released} of {count} released.",
+    "released": "Released · batch {batch}",
+    "held": "Still a draft: {checks}"
+  },
+  "csv": {
+    "number": "Work order",
+    "batch": "Batch",
+    "status": "Status",
+    "style": "Style",
+    "styleName": "Style name",
+    "colourways": "Colourways",
+    "customer": "Customer",
+    "orders": "Sales orders",
+    "pieces": "Pieces",
+    "cut": "Cut",
+    "bundled": "In bundles",
+    "sewn": "Sewn",
+    "finished": "Finished",
+    "due": "Due date",
+    "daysLate": "Days late",
+    "priority": "Priority",
+    "site": "Site"
+  },
+  "held": {
+    "noManage": "You can view work orders, not change them (workorders.manage)",
+    "noRelease": "Releasing needs the right to release (workorders.release)",
+    "checking": "Checking…",
+    "checksOpen_one": "{count} check holds the release: see Overview",
+    "checksOpen_other": "{count} checks hold the release: see Overview",
+    "notFinished_one": "{count} garment is not finished yet",
+    "notFinished_other": "{count} garments are not finished yet",
+    "busy": "Working on it…",
+    "finished": "A closed or cancelled work order keeps its details",
+    "nothingChanged": "Nothing changed yet"
+  },
+  "new": {
+    "title": "New work order",
+    "number": "It will get number {number}",
+    "order": "Sales order",
+    "orderHint": "Confirmed orders not shipped yet, by number or customer reference.",
+    "orderSearch": "Number or customer reference",
+    "noOrderFound": "No confirmed order matches.",
+    "noOrders": "Finding a sales order needs orders.view: ask an administrator.",
+    "ref": "Ref. {ref}",
+    "units_one": "{count} piece",
+    "units_other": "{count} pieces",
+    "loadingLines": "Reading the open lines…",
+    "style": "Style (a work order makes one)",
+    "openPieces_one": "{count} piece still open",
+    "openPieces_other": "{count} pieces still open",
+    "nothingOpen": "Every line of this order is already on work orders.",
+    "lines": "Order lines",
+    "line": "Line {seq} · {style} {colourway}",
+    "sizeOpen": "{size} ×{open}",
+    "mtmLater": "Made-to-measure: comes in a later step",
+    "lineFull": "Nothing open: already on work orders",
+    "sizes": "Pieces per colourway and size",
+    "over": "At most {open}: the rest is on other work orders",
+    "due": "Due date",
+    "dueHint": "Empty: the earliest promise of the lines.",
+    "dueClear": "Clear the date",
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "create": "Create draft",
+    "held": {
+      "order": "Choose a sales order first",
+      "lines": "Pick at least one order line",
+      "over": "A size asks more than is open on its line",
+      "pieces": "Give at least one piece"
+    }
+  },
+  "record": {
+    "back": "Work orders",
+    "backToList": "Back to the work orders",
+    "title": "Work order",
+    "loading": "Reading the work order…",
+    "state": {
+      "not_found": {
+        "title": "This work order does not exist",
+        "body": "It may be in another company, or the link is wrong."
+      },
+      "forbidden": {
+        "title": "You may not see this work order",
+        "body": "Work orders need workorders.view for their company and site: ask an administrator."
+      },
+      "error": {
+        "title": "Couldn't load the work order"
+      }
+    },
+    "tabsLabel": "Work order",
+    "more": "More actions",
+    "dock": "Thread",
+    "dockHint": "Notes and files beside every tab (⌘J)",
+    "dockLabel": "Thread and files",
+    "noPanels": "The thread opens with the work order.",
+    "batch": "Batch {batch}",
+    "revFrozen": "Rev {revision} · frozen",
+    "revDraft": "Rev {revision} · not frozen yet",
+    "due": "Due {date}",
+    "dueLate_one": "Due {date} · {count} day late",
+    "dueLate_other": "Due {date} · {count} days late",
+    "changed": "Someone changed this work order at {time}",
+    "reload": "Reload",
+    "cancelled": "Cancelled: {reason}",
+    "closed": "Closed: nothing changes any more but its note.",
+    "readOnly": "You can view this work order, not change it."
+  },
+  "tab": {
+    "overview": "Overview & release",
+    "materials": "Materials",
+    "cutting": "Cutting",
+    "bundles": "Bundles",
+    "operations": "Operations & WIP",
+    "quality": "Quality",
+    "activity": "Activity",
+    "problems_one": "{count} check holds the release",
+    "problems_other": "{count} checks hold the release"
+  },
+  "step": {
+    "release": "Release",
+    "releaseOpen_one": "Release · {count} check open",
+    "releaseOpen_other": "Release · {count} checks open",
+    "start": "Start",
+    "complete": "Complete",
+    "close": "Close"
+  },
+  "action": {
+    "cancel": "Cancel work order…",
+    "copyNumber": "Copy number"
+  },
+  "part": {
+    "loading": "Reading {part}…",
+    "failed": "Couldn't load {part}",
+    "notReleased": {
+      "title": "Not released yet",
+      "body": "{what} once the work order is released."
+    }
+  },
+  "overview": {
+    "check": "Release check",
+    "ready": "Ready to release",
+    "open_one": "{count} check open",
+    "open_other": "{count} checks open",
+    "overrideHint": "Only material is short: the planner may release with a reason (the floor then waits for the stock).",
+    "notFrozen": "Not frozen yet: the release freezes the revision, the operations and the planned materials.",
+    "frozen": "Frozen spec",
+    "frozenAt": "Frozen {when}",
+    "revision": "Style revision",
+    "revisionValue": "Rev {revision}",
+    "noRevision": "No revision chosen",
+    "batch": "Batch number",
+    "batchHint": "Given at the release; it never changes.",
+    "operations": "Routing",
+    "operationsValue_one": "{count} operation · {minutes} min a garment",
+    "operationsValue_other": "{count} operations · {minutes} min a garment",
+    "materials": "Materials",
+    "materialsValue_one": "{count} material planned",
+    "materialsValue_other": "{count} materials planned",
+    "label": "Garment label",
+    "minutesAll": "Standard minutes, every piece",
+    "minutes": "{minutes} min",
+    "override": "Released with material short: {reason}",
+    "frozenHint": "A different spec is a new work order (a change request comes later).",
+    "facts": "Work order facts",
+    "edit": "Edit",
+    "style": "Style",
+    "kind": "Kind",
+    "site": "Site",
+    "customers": "Customers",
+    "due": "Due date",
+    "dueHint": "Empty: no due date.",
+    "priority": "Priority",
+    "priorityHint": "A whole number from -1000 to 1000; higher comes first.",
+    "priorityBad": "A whole number from -1000 to 1000",
+    "released": "Released",
+    "started": "Started",
+    "completed": "Completed",
+    "closedAt": "Closed"
+  },
+  "kindOf": {
+    "SIZE_GRID": "Size run",
+    "MADE_TO_MEASURE": "Made to measure"
+  },
+  "check": {
+    "name": {
+      "REVISION": "Style revision",
+      "LABEL_TEMPLATE": "Garment label",
+      "CERTIFICATE": "Certificate",
+      "WORK_CENTRES": "Work centres",
+      "BOM": "Bill of materials",
+      "CELLS": "Sizes",
+      "DEPOSIT": "Deposit",
+      "MATERIAL": "Material",
+      "BATCH_NUMBER": "Batch number",
+      "other": "other checks"
+    },
+    "REVISION": {
+      "OK": "Rev {revision} is released; the release freezes it.",
+      "none": "No released revision of the style is chosen.",
+      "notReleased": "Rev {revision} is not released: a work order is released only with a released revision."
+    },
+    "LABEL_TEMPLATE": {
+      "OK": "Garment label {label} is active.",
+      "none": "The revision names no garment label: set one in Products › Labels.",
+      "notActive": "Garment label {label} is not active: the release needs it active."
+    },
+    "CERTIFICATE": {
+      "OK": "A valid certificate covers every colourway and size today.",
+      "NOT_REQUIRED": "No certificate is needed for this style.",
+      "BLOCKED": "No valid certificate covers every size today (Reg. (EU) 2016/425)."
+    },
+    "WORK_CENTRES": {
+      "OK": "Every operation has an active work centre at {site}.",
+      "BLOCKED": "Site {site} lacks a work centre for some operations.",
+      "noSteps": "The routing has no operation the floor could scan (no released revision with a routing)."
+    },
+    "noRevision": "Follows the style revision: choose a released one first.",
+    "BOM": {
+      "OK": "The BOM covers every size and colourway.",
+      "BLOCKED": "The BOM does not cover every size and colourway: a new revision is needed."
+    },
+    "CELLS": {
+      "OK": "{cells} size cells to make.",
+      "BLOCKED": "Some sizes are not in the style any more."
+    },
+    "DEPOSIT": {
+      "OK": "Every order's deposit is paid or waived.",
+      "NOT_REQUIRED": "No order needs a deposit.",
+      "BLOCKED": "An order waits for its deposit: production starts when it is paid or waived."
+    },
+    "MATERIAL": {
+      "OK": "Usable stock at the site covers every material.",
+      "BLOCKED": "Material is short at the site: wait for stock, or release with the planner’s reason.",
+      "OVERRIDDEN": "Material short, released by the planner’s reason."
+    },
+    "BATCH_NUMBER": {
+      "OK": "A batch number is given at the release and never changes.",
+      "BLOCKED": "The company has no batch number series: an administrator sets one up in Admin › Numbering."
+    }
+  },
+  "problem": {
+    "certificate": "{cell}: no valid certificate covers it today",
+    "bom": "{cell}: the BOM does not cover it",
+    "size": "{cell}: the size is not in the style any more",
+    "deposit": "{order} waits for its deposit",
+    "material": {
+      "short": "{material}: {short} {uom} short ({needed} needed, {available} available)",
+      "held": "On hand but not usable: {quantity} {uom} — {reason}",
+      "unknown": "A material is short"
+    },
+    "workCentre": "No active {kind} work centre at {site}",
+    "other": "Another problem holds it"
+  },
+  "reason": {
+    "CR_VI_PENDING": "waits for its Cr VI result",
+    "CR_VI_FAILED": "failed its Cr VI test",
+    "QUALITY_HOLD": "on quality hold",
+    "BLOCKED": "blocked",
+    "REJECTED": "rejected"
+  },
+  "kind": {
+    "CUTTING": "cutting",
+    "SEWING": "sewing",
+    "ASSEMBLY": "assembly",
+    "FINISHING": "finishing",
+    "INSPECTION": "inspection",
+    "PACKING": "packing",
+    "SUBCONTRACT": "subcontract"
+  },
+  "size": {
+    "title": "Size run",
+    "layer": "Show",
+    "layers": {
+      "quantity": "Quantity",
+      "cut": "Cut",
+      "bundled": "In bundles",
+      "sewn": "Sewn",
+      "finished": "Finished",
+      "balance": "Still to finish"
+    },
+    "ofTotal": "{done} of {total}",
+    "notCounted": "Not counted",
+    "uncounted": "Nothing counted for this yet: the floor reports it as the work goes on.",
+    "edit": "Edit sizes",
+    "save": "Save sizes",
+    "editHint": "At most what is still open on each order line; 0 takes a size off.",
+    "draftHint": "A draft: its sizes change until it is released.",
+    "frozenHint": "Frozen at release. Counts come from the floor: cut from the cutting log, in bundles from the bundles, sewn and finished from the scans.",
+    "copy": {
+      "caption": "Pieces by colourway and size",
+      "colour": "Colourway",
+      "total": "Total",
+      "cellName": "{colour}, size {size}",
+      "notOffered": "not on this work order",
+      "empty": "No sizes yet.",
+      "totals": "{colour}: {rowTotal}. Size {size}: {columnTotal}. Total: {grand}.",
+      "notWhole": "{cell}: whole pieces only, 0 to {max}.",
+      "cutToMax": "{cell}: at most {max} pieces in one cell.",
+      "pasted": "Pasted {applied}; skipped {skipped}.",
+      "issues": "To check in this grid"
+    }
+  },
+  "materials": {
+    "planned": "Planned materials",
+    "frozen": "Frozen at release, waste included",
+    "wouldFreeze": "What the release would freeze now, waste included",
+    "none": "The BOM plans no material.",
+    "col": {
+      "material": "Material",
+      "colour": "Colour",
+      "planned": "Planned",
+      "issued": "Issued (net)",
+      "balance": "Still to issue",
+      "lotHide": "Lot · hide",
+      "held": "At the work order",
+      "cut": "Cut",
+      "returnable": "May go back"
+    },
+    "pick": "the pick list",
+    "noPick": "The pick list (stock per lot and hide) needs inventory.issue.",
+    "pickAfterRelease": "The pick list opens once the work order is released: the floor issues by scan.",
+    "covered": "Issued",
+    "toIssue": "{quantity} {uom} to issue",
+    "usable_one": "Usable at the site: {quantity} {uom} in {count} lot or hide",
+    "usable_other": "Usable at the site: {quantity} {uom} in {count} lots or hides",
+    "held_one": "Lot {lot}: {quantity} {uom}, {count} hide",
+    "held_other": "Lot {lot}: {quantity} {uom}, {count} hides",
+    "atWorkOrder": "At the work order",
+    "nothingIssued": "Nothing issued to it yet."
+  },
+  "cutting": {
+    "what": "The cutting log per hide starts",
+    "plan": "Cut against plan",
+    "planHint": "A garment counts as cut when every part cut from hides is cut.",
+    "readyToBundle": "Ready to bundle",
+    "partPieces": "{part} {pieces}",
+    "hides": "Hides",
+    "noHides": "No hide issued yet.",
+    "hideOf": "Lot {lot} · issued {issued}",
+    "area": {
+      "cut": "cut",
+      "waste": "waste",
+      "returned": "returned",
+      "left": "left"
+    },
+    "log": "Cut log",
+    "count_one": "{count} entry",
+    "count_other": "{count} entries",
+    "empty": "Not cut yet.",
+    "logHint": "Append-only: a correction adds a mirror entry, the original stays.",
+    "col": {
+      "when": "When",
+      "hide": "Hide",
+      "cells": "Sizes",
+      "cell": "Colourway · size",
+      "quantity": "To make",
+      "cut": "Cut",
+      "toCut": "To cut",
+      "parts": "Pieces per part",
+      "pieces": "Pieces",
+      "area": "Area used",
+      "remnant": "Remnant",
+      "by": "Cut by",
+      "state": "Entry"
+    },
+    "state": {
+      "live": "Stands",
+      "closing": "Closes the hide",
+      "reversed": "Reversed",
+      "reversal": "Correction"
+    },
+    "office": "Office",
+    "lot": "Lot {lot}",
+    "rowMenu": "More for the cut of {hide}",
+    "details": "Details",
+    "correct": "Correct entry…",
+    "hold": {
+      "usedUp": "The hide is used up: only its closing cut can be corrected",
+      "notOpen": "The work order is not in production",
+      "noRight": "Correcting a cut needs production.cut.correct",
+      "reversal": "A correction is not corrected again",
+      "reversed": "Already reversed"
+    },
+    "entryTitle": "Cut of hide {hide}",
+    "closingHint": "The last cut of a used-up hide: correcting it opens the hide again.",
+    "reversedAt": "Reversed {when}",
+    "pattern": "Pattern area of the sets {area}",
+    "station": "Station",
+    "correctionOf": "This entry corrects the cut of {when}; the reason is in the history.",
+    "noWorker": "Not recorded at this site"
+  },
+  "hideState": {
+    "FULL": "Whole",
+    "PARTLY_CUT": "Partly cut",
+    "REMNANT": "Remnant",
+    "CONSUMED": "Used up",
+    "SCRAPPED": "Scrapped"
+  },
+  "correct": {
+    "title": "Correct the cut of {hide}",
+    "body": "A mirror entry takes back {pieces} pieces and {area} of area; the original entry stays in the log.",
+    "closing": "This is the closing cut of a used-up hide: correcting it opens the hide again.",
+    "bundles": "A cut that bundles were made from is corrected only after those bundles are voided.",
+    "reason": "Why",
+    "reasonHint": "3 to 500 characters; kept with the entry.",
+    "reasonShort": "Say why in at least 3 characters",
+    "go": "Correct entry"
+  },
+  "bundles": {
+    "what": "Bundles are made at the cutting table",
+    "cells": "Cut and bundled",
+    "cellsHint": "Whole garments; a part bundle counts its pieces apart.",
+    "col": {
+      "bundled": "In bundles",
+      "toBundle": "To bundle",
+      "code": "Bundle",
+      "where": "Where it is",
+      "last": "Last scan",
+      "hides": "Hides",
+      "ticket": "Ticket",
+      "when": "When",
+      "operation": "Operation",
+      "kind": "Scan",
+      "good": "Good",
+      "scrap": "Scrap",
+      "rework": "Rework",
+      "station": "Station",
+      "newCode": "New code",
+      "oldCode": "Replaced",
+      "reason": "Why"
+    },
+    "list": "Bundles",
+    "count_one": "{count} bundle",
+    "count_other": "{count} bundles",
+    "empty": "No bundles yet: they are made at the cutting table.",
+    "emptyFilter": "No bundle waits at this operation.",
+    "filterLabel": "Where the bundles are",
+    "filterAll": "Every bundle",
+    "filterClear": "Show every bundle",
+    "waitingAt": "Waiting at {seq} {code}",
+    "done": "Done at every operation",
+    "noScan": "Not scanned yet",
+    "replaced_one": "{count} earlier ticket",
+    "replaced_other": "{count} earlier tickets",
+    "firstTicket": "First ticket",
+    "part": "Part: {part}",
+    "whole": "Whole garments",
+    "status": {
+      "ACTIVE": "Active",
+      "VOID": "Void"
+    },
+    "job": {
+      "QUEUED": "Queued",
+      "SENT": "Sent to printer",
+      "PRINTED": "Printed",
+      "FAILED": "Print failed",
+      "none": "PDF only"
+    },
+    "reprints_one": "{count} reprint",
+    "reprints_other": "{count} reprints",
+    "rowMenu": "More for bundle {code}",
+    "details": "Details",
+    "reprintOne": "Reprint ticket…",
+    "reprintMany_one": "Reprint {count} ticket",
+    "reprintMany_other": "Reprint {count} tickets",
+    "hold": {
+      "void": "A void bundle has no ticket to reprint",
+      "notOpen": "The work order is not in production"
+    },
+    "noRight": "Reprinting a ticket needs production.bundles.",
+    "detailTitle": "Bundle {code}",
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "previous": "Previous",
+    "next": "Next",
+    "first": "This is the first bundle",
+    "last": "This is the last bundle",
+    "made": "Made",
+    "oldCodes": "Earlier codes",
+    "scans": "Scans per operation",
+    "voided": "Taken back",
+    "scanKind": {
+      "REPORT": "Report",
+      "UNDO": "Undo",
+      "CORRECTION": "Correction"
+    },
+    "reprintsTitle": "Tickets printed again",
+    "postedBy": {
+      "FLOOR": "Floor",
+      "OFFICE": "Office"
+    }
+  },
+  "reprint": {
+    "title_one": "Reprint {count} ticket",
+    "title_other": "Reprint {count} tickets",
+    "body": "Each bundle gets a new code; scanning the old ticket then says it was replaced. The reason stays with the bundle.",
+    "why": "Why",
+    "reason": {
+      "lost": "Ticket lost",
+      "damaged": "Ticket damaged",
+      "unreadable": "Code unreadable",
+      "other": "Another reason"
+    },
+    "otherLabel": "The reason",
+    "reasonShort": "Say why in 3 to 200 characters",
+    "printer": "Label printer",
+    "noPrinter": "This site has no active label printer: tickets are reprinted at the floor tablet.",
+    "choosePrinter": "Choose a label printer",
+    "noPrintRight": "Printing labels needs print.labels",
+    "go_one": "Reprint {count}",
+    "go_other": "Reprint {count}",
+    "done": "Reprinted: new code {code}"
+  },
+  "ops": {
+    "planned": "Operations the release would freeze",
+    "perGarment": "{minutes} standard min a garment",
+    "none": "The routing has no operation.",
+    "col": {
+      "seq": "Seq",
+      "operation": "Operation",
+      "centre": "Work centre",
+      "minutes": "Std min",
+      "scan": "Scan",
+      "arrived": "Arrived",
+      "waiting": "Waiting",
+      "good": "Good",
+      "scrap": "Scrap",
+      "rework": "Rework",
+      "bundles": "Bundles",
+      "progress": "Good of all",
+      "line": "Line",
+      "finished": "Finished"
+    },
+    "scanned": "Scanned",
+    "notScanned": "Not scanned",
+    "plannedHint": "Each routing step at a work centre of the site; frozen at the release.",
+    "readyToComplete": "Every garment is finished: complete the work order.",
+    "title": "Operations and work in progress",
+    "viewLabel": "Count by",
+    "byOperation": "Per operation",
+    "bySize": "Good per size",
+    "final": "Final",
+    "sewn": "Sewn here",
+    "bundleCounts": "{done} done · {waiting} waiting · {notReached} not yet",
+    "progressLabel": "Good garments at {operation}",
+    "hint": "From the floor’s scans of active bundles; never per person or per station.",
+    "lines": "Finished per line",
+    "noLines": "No finished garments reported on a line yet.",
+    "linesHint": "Output per line only (the line of the reporting station).",
+    "corrections": "Corrections waiting",
+    "noCorrections": "None.",
+    "correctionsWaiting_one": "{count} correction request waits for a decision.",
+    "correctionsWaiting_other": "{count} correction requests wait for a decision.",
+    "toToday": "Open Today",
+    "correctionsHint": "The original scan stays; an approved correction adds a row."
+  },
+  "quality": {
+    "what": "Final inspections start",
+    "noRight": "Inspections and releases need quality.inspections.view.",
+    "inspections": "Final inspections",
+    "none": "Not inspected yet.",
+    "number": "Inspection {n}",
+    "overridden": "Result overridden",
+    "status": {
+      "OPEN": "Open",
+      "PASSED": "Passed",
+      "FAILED": "Failed",
+      "CANCELLED": "Cancelled"
+    },
+    "col": {
+      "inspection": "Inspection",
+      "status": "Result",
+      "lot": "Lot size",
+      "released": "Released",
+      "decided": "Decided",
+      "size": "Colourway · size",
+      "pieces": "Pieces",
+      "labels": "Labels printed",
+      "releasable": "May be released"
+    },
+    "sizes": "Released per size",
+    "hint": "Released garments may be shipped. Inspecting and releasing are done in Quality and at the inspection bench."
+  },
+  "release": {
+    "title": "Release {number}",
+    "body": "The spec is frozen at Rev {revision}; a batch number is given and never changes; the floor can start.",
+    "reachCells_one": "{count} size cell, {pieces} pieces",
+    "reachCells_other": "{count} size cells, {pieces} pieces",
+    "reachOps_one": "{count} operation frozen",
+    "reachOps_other": "{count} operations frozen",
+    "reachMaterials_one": "{count} planned material frozen",
+    "reachMaterials_other": "{count} planned materials frozen",
+    "reversal": "Taking it back: cancel it with a reason; a different spec is a new work order.",
+    "short": "Material is short at the site.",
+    "override": "Release with the material short (planner’s override)",
+    "overrideNeeded": "Material is short: tick the override and say why",
+    "reason": "Why",
+    "reasonHint": "3 to 500 characters; kept with the release.",
+    "reasonShort": "Say why in 3 to 500 characters",
+    "go": "Release",
+    "refused_one": "The release check holds it: {count} check changed since the page read it. See Overview.",
+    "refused_other": "The release check holds it: {count} checks changed since the page read it. See Overview."
+  },
+  "move": {
+    "start": {
+      "title": "Start {number}",
+      "body": "Marks the work order in progress now. The floor’s first cut, issue or scan starts it by itself: start it by hand only when work began without one."
+    },
+    "complete": {
+      "title": "Complete {number}",
+      "body": "Every garment is finished at the final operation. Completing ends the floor’s scans on it; inspection, labels and release go on."
+    },
+    "close": {
+      "title": "Close {number}",
+      "body": "A closed work order is final: only its note changes after."
+    }
+  },
+  "cancel": {
+    "title": "Cancel {number}",
+    "bodyDraft": "The draft stops; its pieces go back to the order lines.",
+    "bodyStarted": "The work order stops; its pieces go back to the order lines. What was issued or cut stays with it until it is returned by hand.",
+    "reason": "Why",
+    "reasonNeeded": "Say why",
+    "keep": "Keep it",
+    "go": "Cancel work order"
+  },
+  "notice": {
+    "released": "Released · batch {batch}",
+    "start": "Started.",
+    "complete": "Completed.",
+    "close": "Closed.",
+    "cancelled": "Cancelled.",
+    "saved": "Saved.",
+    "sizesSaved": "Sizes saved.",
+    "corrected": "Corrected: a mirror entry is in the log."
+  },
+  "error": {
+    "read": "Nexus Factory didn't answer as expected: try again.",
+    "offline": "No connection to Nexus Factory: try again in a moment.",
+    "forbidden": "You may not do this here: ask an administrator for the right.",
+    "changed": "Someone changed this work order meanwhile: it was read again, look and try again.",
+    "conflict": "It changed meanwhile: it was read again, look and try again.",
+    "gone": "It is not there any more.",
+    "invalid": "Nexus Factory refused it as it is: check the values.",
+    "printer": "The printer refused it: choose another label printer.",
+    "write": "It didn't go through: try again."
+  },
+  "refusal": {
+    "other": "The rules of the floor refuse it now.",
+    "cut": {
+      "WORK_ORDER_NOT_OPEN": "The work order is not in production any more.",
+      "HIDE_USED_UP": "The hide is used up: only its closing cut can be corrected.",
+      "NOT_A_CUT": "A correction is not corrected again.",
+      "REVERSED_ALREADY": "This entry was already reversed.",
+      "IN_BUNDLE": "Bundles were made from this cut: void them first, then correct it."
+    },
+    "bundle": {
+      "WORK_ORDER_NOT_OPEN": "The work order is not in production any more.",
+      "VOIDED": "The bundle is void.",
+      "SCANNED": "The bundle was scanned already.",
+      "REPLACED": "That ticket was replaced already.",
+      "FLOOR_NOT_READY": "The floor of this site is not ready yet (privacy notice, floor rules)."
+    }
+  },
+  "floor": {
+    "privacy": "Totals per work order, operation and line only (Statuto dei Lavoratori art. 4).",
+    "tile": {
+      "inProgress": "Work orders in progress",
+      "released": "Released, not started",
+      "late": "Late work orders",
+      "waiting": "Pieces waiting",
+      "waitingHint": "between operations",
+      "scrap": "Scrap",
+      "scrapHint": "on open work orders"
+    },
+    "wip": "Work in progress per operation",
+    "wipHint": "Pieces waiting · done at each operation; an operation opens its bundles.",
+    "failed": "Couldn't load the floor",
+    "empty": {
+      "title": "Nothing on the floor right now",
+      "body": "A released work order shows here once the floor starts on it.",
+      "action": "Drafts to release"
+    },
+    "due": "Due {date}",
+    "noDue": "No due date",
+    "finishedLabel": "Finished garments of {number}",
+    "finished": "Finished {done} of {total}",
+    "notCounted": "Finished: not counted yet",
+    "opsOf": "Operations of {number}",
+    "opFigures": "{waiting} waiting · {good} done",
+    "opScrap_one": "{count} scrap",
+    "opScrap_other": "{count} scrap",
+    "mostWaiting": "Most waiting",
+    "opLink": "{seq} {code}: {waiting} waiting, {good} done — open the bundles waiting here",
+    "late": "Late work orders",
+    "noLate": "No late work orders."
+  }
+}

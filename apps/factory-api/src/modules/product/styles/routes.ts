@@ -11,6 +11,7 @@ import {
   generateSkusContract,
   getScaleContract,
   getStyleContract,
+  listColoursContract,
   listRevisionsContract,
   listScalesContract,
   listStylesContract,
@@ -23,6 +24,7 @@ import {
   updateSkuContract,
   updateStyleContract,
 } from './contract'
+import { listColours } from './colours'
 import { manifest } from './manifest'
 import { createRevision, listRevisions } from './revisions'
 import { addSizes, createScale, getScale, listScales, moveScale, reorderSizes, updateScale, updateSize } from './scales'
@@ -80,6 +82,8 @@ export default defineRoutes('product.styles', manifest, async (app) => {
   app.post('/product/styles/:styleId/revisions', { schema: createRevisionContract }, async (request, reply) =>
     reply.code(201).send({ revision: await createRevision(request, request.params.styleId, request.body, idempotencyKeyFrom(request)) }),
   )
+
+  app.get('/product/colours', { schema: listColoursContract }, async (request) => listColours(request, request.query))
 
   app.get('/product/size-scales', { schema: listScalesContract }, async (request) => listScales(request, request.query))
 

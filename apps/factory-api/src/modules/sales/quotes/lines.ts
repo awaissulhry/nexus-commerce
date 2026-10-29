@@ -20,6 +20,12 @@ import type { QuoteDetail } from './views'
  */
 
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
+
+/**
+ * A line's description when none is typed: style code and name, then the colourway. Plain ASCII separators: the order
+ * and the invoice copy it, and FatturaPA takes Latin-1 only (an em dash was refused by the golden flow, #897).
+ */
+export const defaultLineDescription = (style: { readonly code: string; readonly name: string }, colourway: { readonly name: string }): string => `${style.code} ${style.name} - ${colourway.name}`
 const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tools.context.audience === 'office' ? tools.context.actorId : null)
 
 /** Made-to-measure is deferred (Owner Q9): a 409 that says so. */
@@ -117,7 +123,7 @@ export async function addLine(caller: CommandCaller, quoteId: string, body: AddL
     const priced = price as Exclude<typeof price, Issue[]>
     const id = newId()
     const seq = Math.max(0, ...lines.map((line) => line.seq)) + 10
-    const description = blankToNull(body.description) ?? `${target.style.code} ${target.style.name} — ${target.colourway.name}`
+    const description = blankToNull(body.description) ?? defaultLineDescription(target.style, target.colourway)
     const actorId = actorIdOf(tools)
     await tx.quoteLine.create({
       data: {
@@ -176,7 +182,7 @@ export async function editLine(caller: CommandCaller, quoteId: string, lineId: s
     const gridKey = (rows: readonly SizeRow[]) => JSON.stringify([...rows].sort((a, b) => (a.size < b.size ? -1 : a.size > b.size ? 1 : 0)))
     const sameGrid = gridKey(grid) === gridKey(line.sizes)
     const recost = target.colourway.id !== line.colourwayId || target.revisionId !== line.styleRevisionId || !sameGrid
-    const description = body.description === undefined ? line.description : (blankToNull(body.description) ?? `${target.style.code} ${target.style.name} — ${target.colourway.name}`)
+    const description = body.description === undefined ? line.description : (blankToNull(body.description) ?? defaultLineDescription(target.style, target.colourway))
     const note = body.note === undefined ? line.note : blankToNull(body.note)
     await tx.quoteLine.update({
       where: { id: line.id },

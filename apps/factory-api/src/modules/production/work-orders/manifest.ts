@@ -8,6 +8,7 @@ import { defineManifest } from '../../../core/manifest'
  */
 export const manifest = defineManifest({
   'GET /production/work-orders': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
+  'GET /production/work-orders/counts': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'GET /production/work-orders/open-lines': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'GET /production/work-orders/:workOrderId': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'GET /production/work-orders/:workOrderId/release-check': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },

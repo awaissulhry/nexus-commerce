@@ -28,6 +28,7 @@ export const privacyDuty: Source = async ({ caller, viewer }) => {
       ...privacyDutyWords({ company: entry.company.name, duties }),
       due: null,
       since: since.get(entry.company.id) ?? viewer.now,
+      condition: duties,
     }
   })
   return { kind: 'PRIVACY_DUTY', candidates, complete: true }

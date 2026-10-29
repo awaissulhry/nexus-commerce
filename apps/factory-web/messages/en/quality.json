@@ -1,0 +1,983 @@
+{
+  "common": {
+    "updated": "Updated {time}",
+    "notYet": "Not read yet",
+    "dismiss": "Dismiss",
+    "retry": "Try again",
+    "loading": "Loading…",
+    "failedTitle": "This could not be read",
+    "cancel": "Cancel",
+    "close": "Close",
+    "unknown": "Not known",
+    "you": "you",
+    "bench": "at the bench",
+    "office": "in the office",
+    "more": "More",
+    "copied": "Copied",
+    "fixFirst": "Fix these first",
+    "working": "Working…",
+    "back": "Back"
+  },
+  "live": {
+    "connecting": "Connecting",
+    "live": "Live",
+    "offline": "Offline – the page shows its last copy"
+  },
+  "problem": {
+    "signedOut": "Your session ended. Sign in again.",
+    "forbidden": "Your role does not allow this.",
+    "stepUp": "This needs a fresh code from your authenticator app.",
+    "notFound": "It is not there any more, or it belongs to another company.",
+    "conflict": "Someone changed it in the meantime. It has been read again.",
+    "invalid": "It was refused as it is: check the fields.",
+    "rateLimited": "Too many tries. Wait a minute.",
+    "contract": "The answer was not what this page expects. Reload the page.",
+    "unavailable": "The factory service did not answer. Try again in a moment.",
+    "internal": "Something went wrong on our side. Try again."
+  },
+  "record": {
+    "dock": "Thread",
+    "dockHint": "Keep the thread beside the record (⌘J)",
+    "dockLabel": "Thread",
+    "tabsLabel": "Sections of the record",
+    "loading": "Reading the record…",
+    "notFoundTitle": "Not found",
+    "notFoundBody": "This record does not exist, or it belongs to a company you do not work in.",
+    "forbiddenTitle": "Not for your role",
+    "failedTitle": "The record could not be read",
+    "back": "Inspections",
+    "title": "Final inspection {label}",
+    "batch": "batch {batch}",
+    "overridden": "Overridden result",
+    "sign": "Sign result…",
+    "releaseToShip": "Release to ship",
+    "more": "More actions",
+    "evidence": "Evidence trail (new tab)",
+    "cancel": "Cancel the inspection…",
+    "stale": "The inspection changed at {time}.",
+    "reload": "Reload",
+    "locked": "Signed {where} on {date}: the results are locked.",
+    "cancelledBanner": "This inspection is cancelled: it releases nothing.",
+    "tab": {
+      "checks": "Checks & results",
+      "decision": "Decision & signature"
+    }
+  },
+  "check": {
+    "OK": "Done",
+    "OPEN": "Open",
+    "NOT_NEEDED": "Not needed",
+    "UNKNOWN": "Unknown",
+    "NOT_YET": "Not yet"
+  },
+  "stepUp": {
+    "title": "Confirm with your authenticator app",
+    "confirm": "Confirm",
+    "problem": {
+      "wrong": "That code was not accepted. Type the newest code.",
+      "locked": "Too many wrong codes. Wait a few minutes.",
+      "unavailable": "The code could not be checked. Try again."
+    },
+    "sentence": {
+      "sign": "Signing the result is an e-signature: confirm it with a fresh code.",
+      "release": "Releasing garments is an e-signature: confirm it with a fresh code.",
+      "loosenRule": "Loosening a quality rule needs a fresh code."
+    },
+    "cancelled": "Nothing was done: the code was not given."
+  },
+  "who": {
+    "you": "You",
+    "bench": "At the bench",
+    "office": "In the office"
+  },
+  "status": {
+    "OPEN": "Open",
+    "PASSED": "Passed",
+    "PASSED_OVERRIDE": "Passed (override)",
+    "FAILED": "Failed",
+    "CANCELLED": "Cancelled",
+    "REVERSED": "Passed · release taken back"
+  },
+  "hold": {
+    "failed": "On hold: rework, inspect again",
+    "reversed_one": "On hold: {count} taken back",
+    "reversed_other": "On hold: {count} taken back"
+  },
+  "lotStatus": {
+    "QUARANTINE": "In quarantine",
+    "RELEASED": "Released",
+    "REJECTED": "Rejected",
+    "BLOCKED": "Blocked"
+  },
+  "crVi": {
+    "NOT_REQUIRED": "Cr VI not required",
+    "PENDING": "Cr VI waiting",
+    "PASS": "Cr VI pass",
+    "FAIL": "Cr VI fail"
+  },
+  "certificateStatus": {
+    "DRAFT": "Draft",
+    "VALID": "Valid today",
+    "SUSPENDED": "Suspended today",
+    "WITHDRAWN": "Withdrawn today",
+    "EXPIRED": "Expired today"
+  },
+  "serialStatus": {
+    "MADE": "Made",
+    "RELEASED": "Released",
+    "SHIPPED": "Shipped",
+    "VOID": "Scrapped"
+  },
+  "shipmentStatus": {
+    "DRAFT": "Draft",
+    "PACKED": "Packed",
+    "SHIPPED": "Shipped",
+    "DELIVERED": "Delivered",
+    "RETURNED": "Returned by the carrier",
+    "CANCELLED": "Cancelled"
+  },
+  "revisionStatus": {
+    "DRAFT": "draft",
+    "RELEASED": "released",
+    "OBSOLETE": "replaced by a newer one"
+  },
+  "templateStatus": {
+    "DRAFT": "Draft",
+    "ACTIVE": "Active",
+    "RETIRED": "Retired"
+  },
+  "documentKind": {
+    "DECLARATION_OF_CONFORMITY": "EU Declaration of Conformity",
+    "USER_INFORMATION": "User information leaflet"
+  },
+  "documentStatus": {
+    "DRAFT": "Draft",
+    "ISSUED": "Issued",
+    "SUPERSEDED": "Superseded",
+    "WITHDRAWN": "Withdrawn"
+  },
+  "lotDocumentKind": {
+    "PPE_CERTIFICATE": "PPE certificate",
+    "CR_VI_STATEMENT": "Cr VI statement",
+    "LWG_CERTIFICATE": "LWG certificate",
+    "FABRIC_TEST": "Fabric test report",
+    "OTHER": "Other document"
+  },
+  "ppeCategory": {
+    "NOT_PPE": "Not PPE",
+    "CATEGORY_I": "PPE category I",
+    "CATEGORY_II": "PPE category II",
+    "CATEGORY_III": "PPE category III"
+  },
+  "tracking": {
+    "BATCH": "Batch number",
+    "SERIAL": "One serial per garment"
+  },
+  "registerKind": {
+    "COMPLAINT": "Complaint",
+    "NON_CONFORMITY": "Non-conformity",
+    "RECALL": "Recall"
+  },
+  "registerStatus": {
+    "OPEN": "open",
+    "CLOSED": "closed"
+  },
+  "registerRisk": {
+    "NO": "no risk",
+    "ASSESSING": "risk being assessed",
+    "YES": "may present a risk"
+  },
+  "woStatus": {
+    "DRAFT": "Draft · {site}",
+    "RELEASED": "Released · {site}",
+    "IN_PROGRESS": "In progress · {site}",
+    "COMPLETED": "Completed · {site}",
+    "CLOSED": "Closed · {site}",
+    "CANCELLED": "Cancelled · {site}"
+  },
+  "reason": {
+    "WRONG_RESULT": "Wrong result recorded",
+    "DEFECT_FOUND_LATER": "Defect found later",
+    "CERTIFICATE_PROBLEM": "Certificate problem",
+    "CUSTOMER_COMPLAINT": "Customer complaint",
+    "RECALL": "Recall",
+    "none": "No reason kind (older record)"
+  },
+  "secondPerson": {
+    "OVERRIDE": "The inspection overrode its computed result: a second person releases.",
+    "CUSTOMER": "This customer's garments always need a second person (quality rules).",
+    "ALWAYS": "The company's rule asks a second person for every final release."
+  },
+  "secondPersonShort": {
+    "OVERRIDE": "Second person: override",
+    "CUSTOMER": "Second person: listed customer",
+    "ALWAYS": "Second person: always"
+  },
+  "gate": {
+    "WORK_ORDER": "Work order",
+    "INSPECTION": "Inspection",
+    "QUANTITY": "Quantity",
+    "SERIALS": "Serials",
+    "LABELS": "Garment labels",
+    "CERTIFICATE": "Certificate",
+    "DOCUMENTS": "DoC and user information",
+    "LOTS": "Material lots",
+    "MAKER": "Who made them",
+    "SECOND_PERSON": "Second person"
+  },
+  "held": {
+    "noRecord": "Your role does not record inspections (quality.inspections.record).",
+    "noWorkOrders": "Picking a work order needs workorders.view.",
+    "decided": "The result is signed: it no longer changes (a correction is an amendment, later).",
+    "cancelled": "The inspection is cancelled.",
+    "notYours": "Only the inspector who opened it records and signs it.",
+    "maker": "You made some of these garments: another inspector signs.",
+    "unanswered": "Answer every check first (pass, fail or not applicable).",
+    "noRelease": "Your role does not release garments (quality.garments.release).",
+    "nothingToRelease": "Nothing of this cell is left to release from this inspection.",
+    "gateOpen_one": "{count} check is open: {check}.",
+    "gateOpen_other": "{count} checks are open, first: {check}.",
+    "noReverse": "Your role does not take garments back (quality.garments.reverse).",
+    "nothingToReverse": "Nothing of this release can be taken back now: what is left is on a shipment.",
+    "noSettings": "Only the owner changes the quality rules (quality.settings.manage).",
+    "noParties": "Adding customers needs parties.view.",
+    "noLots": "Lots need quality.lots.view.",
+    "noBatch": "The work order has no batch number yet."
+  },
+  "list": {
+    "intro": "Final inspections of finished garments, their release by someone who made none of them, the releases taken back and what is on hold.",
+    "new": "New inspection",
+    "rules": "Quality rules",
+    "rulesMenu": "Quality rules: who releases",
+    "more": "More list actions",
+    "ruleTitle": "Release rule in force: {rule}",
+    "ruleCustomers_one": "{count} listed customer always needs a second person.",
+    "ruleCustomers_other": "{count} listed customers always need a second person.",
+    "ruleNoCustomers": "No customer is listed for a second person.",
+    "ruleFailed": "The release rule could not be read",
+    "rowsHeading": "Show",
+    "rows": "Rows: {view}",
+    "activeFilters": "Filters in use",
+    "removeFilter": "Remove filter {name}",
+    "count_one": "{count} row",
+    "count_other": "{count} rows",
+    "countAtLeast": "At least {count} rows",
+    "countReading": "Reading…",
+    "showMore": "Show more",
+    "maxReached": "The list shows at most {max} rows: narrow it with a view.",
+    "showAll": "Show every inspection",
+    "bulkExport": "Export {count} (CSV)",
+    "opened": "Opened {date}",
+    "lotOf": "Lot {lot} · sample {sample}",
+    "released": "{released} of {lot} released",
+    "takenBack_one": "{count} taken back",
+    "takenBack_other": "{count} taken back",
+    "toRelease_one": "{count} waiting for release",
+    "toRelease_other": "{count} waiting for release",
+    "backOf": "{back} of {released} taken back",
+    "holdCount_one": "{count} on hold",
+    "holdCount_other": "{count} on hold",
+    "holdCleared": "Hold cleared: a new inspection passed",
+    "alone": "Released alone",
+    "receivedOn": "Received {date}",
+    "openingStock": "Opening stock",
+    "table": {
+      "inspections": "Inspections",
+      "releases": "Releases taken back",
+      "lots": "Lots on hold"
+    },
+    "failed": {
+      "inspections": "The inspections could not be read",
+      "releases": "The releases could not be read",
+      "lots": "The lots could not be read"
+    },
+    "empty": {
+      "title": "No inspection yet",
+      "body": "A final inspection judges a work order's finished garments; the bench opens one, or the office with New inspection."
+    },
+    "none": {
+      "open": "No inspection is open.",
+      "waiting": "Nothing passed is waiting for its release.",
+      "onHold": "No garment is on hold through an inspection.",
+      "reversed": "No release was taken back.",
+      "lots": "No lot is on hold.",
+      "all": "Nothing here."
+    },
+    "noAccess": {
+      "title": "Inspections are not open to your role",
+      "body": "They need quality.inspections.view; the owner or an administrator grants it in Admin › Roles."
+    }
+  },
+  "view": {
+    "all": "Every inspection",
+    "open": "Open",
+    "waiting": "Waiting for release",
+    "onHold": "On hold",
+    "reversed": "Releases taken back",
+    "lots": "Lots on hold"
+  },
+  "tile": {
+    "open": "Open",
+    "openHint": "Inspections not signed yet",
+    "waiting": "Waiting for release",
+    "waitingHint": "Passed, garments still to release",
+    "onHold": "On hold",
+    "onHoldHint": "Failed, or garments taken back",
+    "reversed": "Releases taken back",
+    "reversedHint": "With garments on hold or cleared",
+    "lots": "Lots on hold",
+    "lotsHint": "In quarantine or blocked",
+    "unknown": "Could not count",
+    "atLeast": "{count}+"
+  },
+  "col": {
+    "inspection": "Inspection",
+    "workOrder": "Work order",
+    "status": "Status",
+    "lot": "Lot · sample",
+    "released": "Released",
+    "inspector": "Inspector",
+    "decided": "Signed",
+    "actions": "Actions",
+    "release": "Release",
+    "takenBack": "Taken back",
+    "onHold": "On hold",
+    "releasedBy": "Released by",
+    "secondPerson": "Second person",
+    "lotCode": "Lot",
+    "material": "Material",
+    "lotStatus": "Lot status",
+    "crVi": "Chromium VI",
+    "why": "Why it is held"
+  },
+  "row": {
+    "menu": "Actions for {name}",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "release": "Release to ship…",
+    "openInspection": "Open the inspection",
+    "copyNumber": "Copy the number"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "new": "New inspection",
+    "sign": "s — sign the result (when it can be signed)",
+    "save": "⌘↵ — confirm the dialog",
+    "tabs": "Tab — move through the sections"
+  },
+  "csv": {
+    "inspection": "Inspection",
+    "workOrder": "Work order",
+    "status": "Status",
+    "lot": "Lot",
+    "sample": "Sample",
+    "released": "Released",
+    "reversed": "Taken back",
+    "toRelease": "To release",
+    "onHold": "On hold",
+    "decidedAt": "Signed at",
+    "yes": "Yes",
+    "no": "No",
+    "release": "Release",
+    "garments": "Garments",
+    "takenBack": "Taken back",
+    "releasedBy": "Released by",
+    "releasedAt": "Released at",
+    "material": "Material",
+    "lotStatus": "Lot status",
+    "crVi": "Chromium VI",
+    "why": "Why it is held"
+  },
+  "new": {
+    "title": "New final inspection",
+    "subtitle": "A lot of the work order's finished garments, inspected on a sample.",
+    "workOrder": "Work order",
+    "workOrderHint": "Released, in progress or completed: its finished garments are inspected.",
+    "workOrderPick": "Choose a work order",
+    "workOrderSearch": "Find by number or style",
+    "noWorkOrder": "No work order to inspect",
+    "workOrdersFailed": "The work orders could not be read",
+    "finished_one": "{style}: {count} finished garment of {pieces} (good at the final operation).",
+    "finished_other": "{style}: {count} finished garments of {pieces} (good at the final operation).",
+    "finishedUnknown": "{style}: the finished garments are not counted yet (no scanned final operation).",
+    "lotSize": "Lot (garments)",
+    "lotSizeHint": "At most the finished garments.",
+    "sampleSize": "Sample (garments)",
+    "sampleSizeHint": "At most the lot; the whole lot is a 100 % inspection.",
+    "level": "Inspection level",
+    "levelHint": "As your sampling table names it (\"II\", \"S-3\").",
+    "aqlMajor": "AQL major (%)",
+    "aqlMinor": "AQL minor (%)",
+    "aqlHint": "A percentage, up to three decimals.",
+    "acceptMajor": "Accept up to (major)",
+    "acceptMinor": "Accept up to (minor)",
+    "acceptHint": "Garments with a defect the sample still accepts.",
+    "tablesLater": "Type the acceptance numbers from your sampling table; the ISO 2859-1 tables are worked out here in a later step.",
+    "note": "Note",
+    "numberWords": "It takes the next number of the company's inspection series when it is created.",
+    "create": "Create inspection",
+    "keyHint": "creates",
+    "problem": {
+      "workOrder": "Choose a work order.",
+      "nothingFinished": "No garment of this work order is finished yet.",
+      "lotSize": "The lot is a whole number of garments from 1.",
+      "lotOverFinished": "The lot is at most the finished garments.",
+      "sampleSize": "The sample is a whole number of garments from 1.",
+      "sampleOverLot": "The sample is at most the lot.",
+      "accept": "The acceptance numbers are whole numbers from 0.",
+      "aql": "An AQL is a percentage with at most three decimals (\"2.5\").",
+      "level": "Name the inspection level.",
+      "refused": "The inspection was not opened: the work order or its numbering does not allow it now."
+    }
+  },
+  "rules": {
+    "title": "Quality rules: who releases",
+    "subtitle": "Final release of garments at {company}",
+    "failed": "The rule could not be read",
+    "inForce": "In force now: {rule}",
+    "source": {
+      "COMPANY": "Set for this company.",
+      "TENANT": "Set for every company.",
+      "DEFAULT": "The default: nobody changed it."
+    },
+    "rule": {
+      "WHEN_REQUIRED": "An inspector who made none of the garments releases alone",
+      "ALWAYS": "Every final release needs a second person"
+    },
+    "fourEyes": "Four eyes on the final release",
+    "follow": "Same as for every company",
+    "followHint": "This company follows the rule set for every company (or the default).",
+    "whenRequiredHint": "A second person only for overrides and the customers listed below.",
+    "alwaysHint": "After the inspector's signature, another qualified person releases.",
+    "customers": "Customers that always need a second person",
+    "customersHint": "Their garments are released by someone other than the inspector who signed.",
+    "noCustomers": "No customer is listed.",
+    "everyCompany": "listed for every company",
+    "remove": "Take {name} off the list",
+    "find": "Add a customer or brand",
+    "findPlaceholder": "Name, code or VAT number",
+    "noMatch": "No customer or brand found.",
+    "add": "Add {name}",
+    "reversalTitle": "Taking a release back",
+    "reversalFixed": "One qualified person with a written reason, never slowed by a second person or a code: a reversal only protects.",
+    "reason": "Why you loosen the rule",
+    "reasonHint": "Kept with the change; then a fresh code from your authenticator app confirms it.",
+    "tightens": "A stricter rule asks for no reason and no code.",
+    "save": "Save the rule",
+    "saveLoosen": "Loosen the rule…",
+    "saved": "The release rule is saved.",
+    "savedLoosened": "The release rule is loosened; the change is on record with your reason.",
+    "problem": {
+      "nothing": "Nothing changed yet.",
+      "reason": "Say why you loosen the rule (at least 3 characters)."
+    }
+  },
+  "release": {
+    "number": "Release {number}",
+    "unnumbered": "{workOrder} · release",
+    "title": "Release {cell} to ship",
+    "titleNone": "Release to ship",
+    "subtitle": "{releasable} can be released now · {released} of {pieces} released",
+    "gateTitle": "The gate, check by check",
+    "gateIntro": "Every check must be done; the sentences are the system's facts.",
+    "whoTitle": "Who may release",
+    "alone": "You made none of these garments and no second person is asked: you may release alone.",
+    "secondPerson": "A second person releases, not the inspector who signed:",
+    "serials": "Serials to release",
+    "noSerials": "No serial is ready (made, labelled and not packed).",
+    "quantity": "Garments to release",
+    "quantityHint_one": "At most {count}.",
+    "quantityHint_other": "At most {count}.",
+    "note": "Note",
+    "codeWords": "Releasing is a signature: it asks for a fresh code from your authenticator app.",
+    "confirm_one": "Release {count} garment",
+    "confirm_other": "Release {count} garments",
+    "heldChecks_one": "{count} check open: {check}",
+    "heldChecks_other": "{count} checks open, first: {check}",
+    "refused": "The release was refused",
+    "done_one": "Released {count} garment ({number}): packing allowed.",
+    "done_other": "Released {count} garments ({number}): packing allowed.",
+    "problem": {
+      "quantity": "Say how many garments (a whole number from 1).",
+      "tooMany": "That is more than this cell can release from this inspection.",
+      "serials": "Tick one serial per garment.",
+      "gate": "The gate refused it: every open check is below.",
+      "maker": "You made some of these garments: another inspector releases them."
+    }
+  },
+  "releaseDetail": {
+    "title": "Release",
+    "subtitle_one": "{count} garment of {workOrder} · {date}",
+    "subtitle_other": "{count} garments of {workOrder} · {date}",
+    "released": "Released",
+    "partReversed_one": "{count} taken back",
+    "partReversed_other": "{count} taken back",
+    "holdTag_one": "{count} on hold",
+    "holdTag_other": "{count} on hold",
+    "reverse": "Take back…",
+    "tabsLabel": "Sections of the release",
+    "noun": "release",
+    "tab": {
+      "release": "Release",
+      "gate": "Gate at release",
+      "reversal": "Taken back"
+    },
+    "garments": "Garments",
+    "takenBack": "Taken back",
+    "onHold": "On hold",
+    "workOrder": "Work order",
+    "inspection": "Inspection",
+    "openInspection": "Open the inspection",
+    "releasedBy": "Released by",
+    "method": "Signed with",
+    "methodPin": "PIN at the bench",
+    "methodCode": "Authenticator code in the office",
+    "at": "At",
+    "secondPerson": "Second person",
+    "alone": "The inspector, who made none of the garments, released it alone.",
+    "serials": "Serials",
+    "serial": "Serial",
+    "serialStatus": "Now",
+    "packed": "Packed",
+    "signature": "Signature",
+    "signatureWords": "Signature fingerprint (SHA-256):",
+    "gateIntro": "The certificates the release rested on, and how each stands today.",
+    "noCertificate": "No certificate was named",
+    "noCertificateBody": "The style is not PPE, or the release is older than the gate snapshot.",
+    "certificates": "Certificates",
+    "certificate": "Certificate",
+    "standard": "Standard and class",
+    "validTo": "Valid to",
+    "today": "Today",
+    "notReversed": "Not taken back",
+    "notReversedBody": "Every garment of this release is still released.",
+    "reversals": "Garments taken back",
+    "when": "When",
+    "why": "Why",
+    "by": "By",
+    "holdNow": "Hold",
+    "stillHeld": "On hold until a new inspection passes",
+    "heldCleared": "Cleared: a new inspection passed",
+    "register": "PPE register",
+    "noRegister": "No register entry: nothing of it had left, or the style is not PPE.",
+    "nowTitle": "Taking back more now would do this"
+  },
+  "reverse": {
+    "title": "Take released garments back",
+    "subtitle": "From release {release}",
+    "impactTitle": "What it does, before you confirm",
+    "impact": {
+      "house_one": "{count} garment still here → put on hold until a new inspection passes",
+      "house_other": "{count} garments still here → put on hold until a new inspection passes",
+      "onShipment_one": "{count} on a shipment not yet gone → take it off the shipment first",
+      "onShipment_other": "{count} on a shipment not yet gone → take them off the shipment first",
+      "shipped_one": "{count} shipped → cannot be pulled back here: a PPE register entry follows it",
+      "shipped_other": "{count} shipped → cannot be pulled back here: a PPE register entry follows them"
+    },
+    "onePerson": "One qualified person with a reason is enough: a reversal only protects. The four-eyes rule applies to the next release.",
+    "quantity": "Garments to take back",
+    "quantityHint_one": "At most {count} now.",
+    "quantityHint_other": "At most {count} now.",
+    "serials": "Serials to take back",
+    "noSerials": "No serial of this release can be taken back now.",
+    "serialsTo": "Where the garments go",
+    "toMade": "Back to rework",
+    "toMadeHint": "They are reworked and inspected again.",
+    "toVoid": "Scrapped",
+    "toVoidHint": "Their serials are voided for good.",
+    "serialsWent": {
+      "MADE": "Serials back to rework",
+      "VOID": "Serials scrapped",
+      "RELEASED": "Serials released",
+      "SHIPPED": "Serials shipped"
+    },
+    "reasonCode": "Kind of reason",
+    "reasonPick": "Choose the kind",
+    "reason": "What happened",
+    "reasonHint": "At least 3 characters; it stays on the release and the register entry.",
+    "stays": "The release stays on record as taken back. A new release needs a new inspection.",
+    "confirm_one": "Take back {count} garment",
+    "confirm_other": "Take back {count} garments",
+    "refused": "The reversal was refused",
+    "done_one": "{count} garment taken back and put on hold.",
+    "done_other": "{count} garments taken back and put on hold.",
+    "registerOpened": "PPE register entry {reference} follows them — open it",
+    "registerNone": "No PPE register entry was opened (not PPE, or the register could not number it: open one by hand).",
+    "problem": {
+      "quantity": "Say how many garments to take back.",
+      "tooMany": "That is more than can be taken back now.",
+      "serialsTo": "Say where the serials go: rework or scrapped.",
+      "reasonCode": "Choose the kind of reason.",
+      "reason": "Say what happened (at least 3 characters).",
+      "refused": "Something changed since it was read: the reversal was refused."
+    }
+  },
+  "whereSigned": {
+    "you": "by you",
+    "bench": "at the bench",
+    "office": "in the office"
+  },
+  "plan": {
+    "heading": "Sampling plan",
+    "sub": "As the inspector states it (ISO 2859-1 tables later).",
+    "edit": "Edit the plan…",
+    "title": "Sampling plan",
+    "save": "Save the plan",
+    "saved": "The plan is saved.",
+    "lot": "Lot",
+    "sample": "Sample",
+    "hundred": "{count} (100 %)",
+    "level": "Level",
+    "aqlMajor": "Major",
+    "aqlMinor": "Minor",
+    "aqlAccept": "AQL {aql} · accept {accept}",
+    "problem": {
+      "refused": "The plan was refused: the lot or the sample does not fit the finished garments."
+    }
+  },
+  "checklist": {
+    "heading": "Checklist",
+    "counts": "{answered} of {total} answered · {failed} not ok",
+    "pass": "OK",
+    "fail": "Not OK",
+    "na": "N/A",
+    "answer": {
+      "pass": "OK",
+      "fail": "Not OK",
+      "na": "Not applicable",
+      "unset": "Not answered"
+    },
+    "answerFor": "Answer for {check}",
+    "noteFor": "What is wrong with {check}",
+    "notePlaceholder": "Say what is wrong",
+    "needNote": "A check that is not OK says what is wrong: type it and it saves.",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "failed": "Not saved yet",
+    "group": {
+      "LABELS": "Labels",
+      "GARMENT": "Garment",
+      "ARMOUR": "Armour",
+      "PACKAGING": "Packaging & documents"
+    },
+    "item": {
+      "EN17092_CLASS_LABEL": "EN 17092 class label matches the certificate class",
+      "SIZE_LABEL": "Size label",
+      "CE_MARK": "CE marking",
+      "CARE_LABEL": "Care label",
+      "FIBRE_COMPOSITION": "Fibre composition (Reg. 1007/2011 art. 12)",
+      "ANIMAL_ORIGIN_PHRASE": "'Contains non-textile parts of animal origin'",
+      "ZIPS": "Zips",
+      "REFLECTIVES": "Reflectives",
+      "ARMOUR_FITTED": "Armour fitted, right size, EN 1621 marked",
+      "HANGTAGS": "Hangtags",
+      "USER_INFORMATION": "User information in the market's languages",
+      "PACKAGING": "Packaging"
+    }
+  },
+  "defects": {
+    "heading": "Defects found in the sample",
+    "counts": "Critical {critical} · major {major} · minor {minor}",
+    "edit": "Edit the defects…",
+    "none": "No defect recorded.",
+    "title": "Defects found",
+    "subtitle": "One line per class and code; garments of the sample of {sample}.",
+    "add": "Add a line",
+    "save": "Save the defects",
+    "saved": "The defects are saved; the result is worked out again.",
+    "line": "Line {n}",
+    "remove": "Remove line {n}",
+    "classLabel": "Class",
+    "code": "Code",
+    "codeHint": "Capitals, digits and dashes (\"STITCH-SKIP\").",
+    "quantity": "Garments",
+    "cell": "Colour and size",
+    "anyCell": "Not one cell",
+    "note": "Note",
+    "critical": "Critical",
+    "major": "Major",
+    "minor": "Minor",
+    "class": {
+      "CRITICAL": "Critical",
+      "MAJOR": "Major",
+      "MINOR": "Minor"
+    },
+    "problem": {
+      "code": "A defect code is 2 to 40 capitals, digits or dashes.",
+      "quantity": "A defect is found on at least one garment.",
+      "overSample": "At most the sample.",
+      "twice": "One line per class and code.",
+      "refused": "The defects were refused as they are."
+    }
+  },
+  "result": {
+    "heading": "Result now",
+    "computed": {
+      "PASS": "The rules say: pass",
+      "FAIL": "The rules say: fail"
+    },
+    "decided": {
+      "PASSED": "Signed: passed",
+      "FAILED": "Signed: failed",
+      "OPEN": "Open",
+      "CANCELLED": "Cancelled"
+    },
+    "short": {
+      "PASS": "Pass",
+      "FAIL": "Fail"
+    },
+    "incomplete_one": "Not complete: {count} check to answer",
+    "incomplete_other": "Not complete: {count} checks to answer",
+    "incompleteFail_one": "Already a fail · {count} check to answer",
+    "incompleteFail_other": "Already a fail · {count} checks to answer",
+    "passWords": "No critical defect, majors and minors within the acceptance numbers, every check OK.",
+    "reason": {
+      "critical_one": "{count} garment with a critical defect: a critical defect is never accepted.",
+      "critical_other": "{count} garments with a critical defect: a critical defect is never accepted.",
+      "checks_one": "{count} check not OK.",
+      "checks_other": "{count} checks not OK.",
+      "major": "{count} with a major defect; the plan accepts {accept}.",
+      "minor": "{count} with a minor defect; the plan accepts {accept}."
+    },
+    "makerNo": "From the floor's records, you made none of these garments.",
+    "makerYes": "You made some of these garments: another inspector signs and releases them.",
+    "statementNeeded": "This site records stations, not people: signing states that you made none of these garments.",
+    "certificateOk_one": "Certificate gate: covered today.",
+    "certificateOk_other": "Certificate gate: every cell covered today.",
+    "certificateOpen_one": "Certificate gate: {count} cell not covered today.",
+    "certificateOpen_other": "Certificate gate: {count} cells not covered today."
+  },
+  "sign": {
+    "title": "Sign the result of {label}",
+    "decision": "Your decision",
+    "result": {
+      "PASS": "Pass",
+      "FAIL": "Fail"
+    },
+    "asComputed": "As the rules compute it.",
+    "override": "Against the computed result: an override with your written reason; its release then needs a second person.",
+    "overrideReason": "Why you decide against the computed result",
+    "overrideHint": "At least 3 characters; it stays with the signature (QHS-013).",
+    "statement": "I made none of these garments.",
+    "note": "Note",
+    "ofAccept": "{count} (accept {accept})",
+    "locked": "A signed result is not edited; a correction will be an amendment with a second signature.",
+    "codeWords": "Signing asks for a fresh code from your authenticator app.",
+    "confirm": {
+      "PASS": "Sign: pass",
+      "FAIL": "Sign: fail"
+    },
+    "keyHint": "signs",
+    "refused": "The signature was refused",
+    "donePass": "Signed: passed. The garments can now be released.",
+    "doneFail": "Signed: failed. The garments are on hold until reworked and inspected again.",
+    "problem": {
+      "passOverHard": "A pass is never signed over a critical defect or a check not OK.",
+      "reason": "Say why you decide against the computed result (at least 3 characters).",
+      "statement": "Tick that you made none of these garments.",
+      "maker": "You made some of these garments: another inspector signs.",
+      "refused": "The signature was refused as it is: the lines below say why."
+    }
+  },
+  "decision": {
+    "result": "Result",
+    "notSigned": "Not signed yet.",
+    "decided": "Decision",
+    "computed": "Computed by the rules",
+    "override": "Override reason",
+    "noOverride": "None: as computed",
+    "signedAt": "Signed",
+    "signature": "Signature",
+    "who": "Who signs",
+    "step1Waiting": "The result: waiting for the inspector's signature.",
+    "step1Done": "The result: signed {where} with the {method} on {date}.",
+    "step1None": "The result: not signed.",
+    "pin": "PIN at the bench",
+    "code": "authenticator code",
+    "step2Alone": "The release: an inspector who made none of the garments may release alone.",
+    "step2Second": "The release: by a second person, not the inspector who signed.",
+    "ruleNow": "Rule in force: {rule}.",
+    "release": "Release to ship",
+    "releaseSub": "Per colour and size: the gate in words, then the release (only released garments can be packed).",
+    "finalFailed": "The release state could not be read",
+    "releaseAfterSign": "Garments are released once the result is signed as passed.",
+    "failedNoRelease": "A failed inspection releases nothing: rework, then inspect again.",
+    "notNewest": "Releases come from the newest passed inspection of the work order:",
+    "cell": "Colour and size",
+    "pieces": "Pieces",
+    "released": "Released",
+    "releasable": "Can release",
+    "gate": "Gate",
+    "gateReady": "Ready to release",
+    "gateDone": "All released",
+    "gateOpen_one": "{count} check open",
+    "gateOpen_other": "{count} checks open",
+    "releaseCell": "Release…",
+    "seeGate": "See the gate…",
+    "nothingLeft": "Nothing left",
+    "releases": "Releases of this inspection",
+    "releasesSub": "A release opens in its detail, where it can be taken back.",
+    "noReleases": "Nothing released from this inspection yet.",
+    "garments": "Garments",
+    "at": "When",
+    "openRelease": "Open"
+  },
+  "cancel": {
+    "title": "Cancel the inspection",
+    "body": "A cancelled inspection releases nothing and stays on record with its reason.",
+    "reason": "Why",
+    "reasonNeeded": "Say why (at least 3 characters).",
+    "confirm": "Cancel the inspection",
+    "done": "The inspection is cancelled."
+  },
+  "evidence": {
+    "title": "Evidence trail",
+    "subjectBatch": "Batch {batch}",
+    "subjectSerial": "Garment {serial}",
+    "print": "Print",
+    "noMoney": "Read only. Costs, prices and wages never appear here. The PDF pack and the link for authorities come later.",
+    "loading": "Reading the evidence…",
+    "failed": "The evidence could not be read",
+    "notFound": {
+      "title": "Nothing found",
+      "body": "No garment or batch {subject} in the companies and customers you work for."
+    },
+    "noAccess": {
+      "title": "The evidence trail is not open to your role",
+      "body": "It needs quality.inspections.view; the owner or an administrator grants it in Admin › Roles."
+    },
+    "badAddress": {
+      "title": "This address names no garment or batch",
+      "body": "Open the evidence trail from an inspection, a release or a register entry."
+    },
+    "verdictAll": "Everything required is present ({present} of {required})",
+    "verdictGaps_one": "{count} gap: {present} of {required} present",
+    "verdictGaps_other": "{count} gaps: {present} of {required} present",
+    "workOrder": "work order {number}",
+    "batch": "batch {batch}",
+    "serial": "serial {serial} ({status})",
+    "chain": "The chain of proof",
+    "chainSub": "In order, each link with what is true now.",
+    "style": "Style",
+    "ppe": "PPE",
+    "tracking": "Traced by",
+    "revision": "Revision",
+    "revisionWords": "Revision {revision}, {status}",
+    "releasedAt": "Released on",
+    "noStyle": "The style is not readable for you.",
+    "certificateToday": "The gate as it stands on {date}, per colour and size",
+    "noCertificateWords": "No cell to check.",
+    "noDocuments": "No DoC or user information is on file for this revision.",
+    "docKind": "Document",
+    "language": "Language",
+    "docStatus": "Status",
+    "fingerprint": "Fingerprint",
+    "template": "Label template",
+    "templateStatus": "Template status",
+    "languages": "Languages",
+    "printed": "Labels printed",
+    "noTemplate": "The work order names no label template.",
+    "noLots": "No material lot is traced to this work order.",
+    "lot": "Lot",
+    "material": "Material",
+    "lotStatus": "Lot status",
+    "crVi": "Chromium VI",
+    "result": "Newest result",
+    "supplierDocs": "Supplier documents",
+    "resultValue": "{value} mg/kg (limit {limit}) · {lab} · {date}",
+    "resultBelow": "Below the detection limit (limit {limit}) · {lab} · {date}",
+    "productionSub": "{cuts} cut entries · {bundles} bundles",
+    "noScans": "No operation is scanned yet.",
+    "operation": "Operation",
+    "good": "Good",
+    "scrap": "Scrap",
+    "rework": "Rework",
+    "noPeople": "Counted per operation, never per person.",
+    "noInspections": "No final inspection yet.",
+    "sample": "Sample",
+    "found": "Found",
+    "sampleOf": "{sample} of {lot} · level {level}",
+    "foundWords": "Critical {critical} · major {major} · minor {minor}",
+    "noReleases": "Nothing released yet.",
+    "noShipments": "Nothing shipped yet.",
+    "shipment": "Shipment",
+    "shipmentStatus": "Status",
+    "ddt": "DDT",
+    "shippedAt": "Shipped",
+    "noRegister": "No PPE register entry concerns these garments.",
+    "foot": "This page is a read of the records as they are now; print it to keep a copy.",
+    "name": {
+      "style": "Style and revision",
+      "certificate": "Certificate",
+      "documents": "DoC and user information",
+      "label": "Garment label",
+      "materials": "Materials",
+      "production": "Production",
+      "inspection": "Final inspection",
+      "release": "Release",
+      "shipment": "Shipment",
+      "register": "PPE register"
+    },
+    "link": {
+      "style": {
+        "released": "Revision {revision}, released: the frozen spec.",
+        "draft": "Revision {revision} is still a draft.",
+        "none": "The revision is not known."
+      },
+      "certificate": {
+        "notYet": "No release names a certificate yet; the gate today is listed below.",
+        "valid_one": "{count} certificate named by the releases, valid today.",
+        "valid_other": "{count} certificates named by the releases, valid today.",
+        "notValid_one": "{count} certificate named by a release is not valid today.",
+        "notValid_other": "{count} certificates named by the releases are not valid today."
+      },
+      "documents": {
+        "present_one": "{count} document issued (DoC and user information).",
+        "present_other": "{count} documents issued (DoC and user information).",
+        "missingBoth": "No issued DoC and no user information.",
+        "missingDoc": "No issued EU Declaration of Conformity.",
+        "missingLeaflet": "No issued user information leaflet."
+      },
+      "label": {
+        "noTemplate": "No label template is named.",
+        "notPrinted": "Template {code} r{revision}: no label printed yet.",
+        "printed": "Template {code} r{revision}: {count} labels printed."
+      },
+      "materials": {
+        "none": "No lot is traced.",
+        "released_one": "{count} lot released, chromium VI in order.",
+        "released_other": "{count} lots released, chromium VI in order.",
+        "onHold_one": "{count} lot on hold or without a Cr VI pass.",
+        "onHold_other": "{count} lots on hold or without a Cr VI pass."
+      },
+      "production": {
+        "noScans": "{workOrder}: no operation scanned yet.",
+        "made": "{workOrder}: {count} good scans recorded."
+      },
+      "inspection": {
+        "passed_one": "{count} final inspection passed.",
+        "passed_other": "{count} final inspections passed.",
+        "notPassed": "No final inspection has passed.",
+        "none": "No final inspection yet."
+      },
+      "release": {
+        "none": "Nothing released.",
+        "released_one": "{count} garment released.",
+        "released_other": "{count} garments released.",
+        "withReversals": "{count} released, {back} taken back."
+      },
+      "shipment": {
+        "shipped_one": "{count} shipment left.",
+        "shipped_other": "{count} shipments left.",
+        "notYet": "Not shipped yet."
+      },
+      "register": {
+        "none": "No complaint, non-conformity or recall.",
+        "open_one": "{count} register entry is open.",
+        "open_other": "{count} register entries are open.",
+        "closed_one": "{count} register entry, closed.",
+        "closed_other": "{count} register entries, all closed."
+      }
+    }
+  }
+}

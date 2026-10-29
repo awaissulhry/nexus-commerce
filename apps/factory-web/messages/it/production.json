@@ -1,0 +1,808 @@
+{
+  "common": {
+    "retry": "Riprova",
+    "dismiss": "Chiudi",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "done": "Fatto",
+    "save": "Salva",
+    "discard": "Scarta",
+    "loading": "Caricamento…"
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In diretta",
+    "offline": "Non in linea: ricarica per vedere gli ultimi dati"
+  },
+  "status": {
+    "DRAFT": "Bozza",
+    "RELEASED": "Rilasciato",
+    "IN_PROGRESS": "In lavorazione",
+    "COMPLETED": "Completato",
+    "CLOSED": "Chiuso",
+    "CANCELLED": "Annullato"
+  },
+  "list": {
+    "tableLabel": "Ordini di produzione",
+    "search": "Cerca numero, lotto o modello",
+    "viewLabel": "Righe",
+    "new": "Nuovo ordine di produzione",
+    "keyNew": "Nuovo ordine di produzione",
+    "keysTitle": "Tasti di questo elenco",
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "count_one": "{count} ordine",
+    "count_other": "{count} ordini",
+    "countMore_one": "{count} ordine mostrato, altri da caricare",
+    "countMore_other": "{count} ordini mostrati, altri da caricare",
+    "more": "Mostra altri 50",
+    "batch": "Lotto {batch}",
+    "noBatch": "Senza lotto",
+    "rev": "Rev {revision}",
+    "daysLate_one": "{count} giorno di ritardo",
+    "daysLate_other": "{count} giorni di ritardo",
+    "progressLabel": "Capi finiti di {number}",
+    "rowMenu": "Altro per {number}",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "failed": "Impossibile caricare gli ordini di produzione",
+    "noMatch": {
+      "title": "Nessun ordine corrisponde",
+      "body": "Cambia la ricerca o le righe mostrate."
+    },
+    "clearFilters": "Mostra tutti gli ordini",
+    "empty": {
+      "title": "Ancora nessun ordine di produzione",
+      "body": "Un ordine di produzione nasce dalle righe aperte di un ordine di vendita confermato.",
+      "bodyView": "Gli ordini compaiono qui quando il pianificatore li crea."
+    },
+    "viewing": "Righe mostrate: {view}"
+  },
+  "view": {
+    "open": "Aperti (non finiti)",
+    "late": "In ritardo",
+    "DRAFT": "Bozze da rilasciare",
+    "RELEASED": "Rilasciati, non iniziati",
+    "IN_PROGRESS": "In lavorazione",
+    "COMPLETED": "Completati",
+    "CLOSED": "Chiusi",
+    "CANCELLED": "Annullati",
+    "all": "Tutti"
+  },
+  "tile": {
+    "draft": "Bozze da rilasciare",
+    "released": "Rilasciati, non iniziati",
+    "inProgress": "In lavorazione",
+    "late": "In ritardo"
+  },
+  "col": {
+    "number": "Ordine",
+    "status": "Stato",
+    "style": "Modello",
+    "colourways": "Varianti colore",
+    "customer": "Cliente",
+    "pieces": "Pezzi",
+    "progress": "Avanzamento",
+    "due": "Consegna",
+    "priority": "Priorità",
+    "site": "Sede",
+    "more": "Altro"
+  },
+  "progress": {
+    "notFrozen": "Non ancora rilasciato",
+    "none": "{total} da fare, ancora niente tagliato",
+    "cut": "Tagliati {done} di {total}",
+    "bundled": "In fasci {done} di {total}",
+    "sewn": "Cuciti {done} di {total}",
+    "finished": "Finiti {done} di {total}"
+  },
+  "bulk": {
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)",
+    "release_one": "Rilascia {count}",
+    "release_other": "Rilascia {count}",
+    "releaseHeld_one": "{count} selezionato non è una bozza: si rilasciano solo le bozze",
+    "releaseHeld_other": "{count} selezionati non sono bozze: si rilasciano solo le bozze",
+    "releaseTitle_one": "Rilascia {count} ordine",
+    "releaseTitle_other": "Rilascia {count} ordini",
+    "releaseBody": "Ogni ordine viene ricontrollato al rilascio: la specifica viene congelata e riceve un numero di lotto. Quello che il controllo trattiene resta in bozza, con il motivo.",
+    "releaseRun_one": "Rilascia {count}",
+    "releaseRun_other": "Rilascia {count}",
+    "releaseDone": "{released} di {count} rilasciati.",
+    "released": "Rilasciato · lotto {batch}",
+    "held": "Ancora in bozza: {checks}"
+  },
+  "csv": {
+    "number": "Ordine",
+    "batch": "Lotto",
+    "status": "Stato",
+    "style": "Modello",
+    "styleName": "Nome modello",
+    "colourways": "Varianti colore",
+    "customer": "Cliente",
+    "orders": "Ordini di vendita",
+    "pieces": "Pezzi",
+    "cut": "Tagliati",
+    "bundled": "In fasci",
+    "sewn": "Cuciti",
+    "finished": "Finiti",
+    "due": "Data di consegna",
+    "daysLate": "Giorni di ritardo",
+    "priority": "Priorità",
+    "site": "Sede"
+  },
+  "held": {
+    "noManage": "Puoi vedere gli ordini, non modificarli (workorders.manage)",
+    "noRelease": "Per rilasciare serve il permesso di rilascio (workorders.release)",
+    "checking": "Controllo in corso…",
+    "checksOpen_one": "{count} controllo blocca il rilascio: vedi Riepilogo",
+    "checksOpen_other": "{count} controlli bloccano il rilascio: vedi Riepilogo",
+    "notFinished_one": "{count} capo non è ancora finito",
+    "notFinished_other": "{count} capi non sono ancora finiti",
+    "busy": "In corso…",
+    "finished": "Un ordine chiuso o annullato non si modifica",
+    "nothingChanged": "Ancora nessuna modifica"
+  },
+  "new": {
+    "title": "Nuovo ordine di produzione",
+    "number": "Riceverà il numero {number}",
+    "order": "Ordine di vendita",
+    "orderHint": "Ordini confermati non ancora spediti, per numero o riferimento cliente.",
+    "orderSearch": "Numero o riferimento cliente",
+    "noOrderFound": "Nessun ordine confermato corrisponde.",
+    "noOrders": "Per cercare un ordine di vendita serve orders.view: chiedi a un amministratore.",
+    "ref": "Rif. {ref}",
+    "units_one": "{count} pezzo",
+    "units_other": "{count} pezzi",
+    "loadingLines": "Lettura delle righe aperte…",
+    "style": "Modello (un ordine ne produce uno)",
+    "openPieces_one": "{count} pezzo ancora aperto",
+    "openPieces_other": "{count} pezzi ancora aperti",
+    "nothingOpen": "Ogni riga di questo ordine è già su ordini di produzione.",
+    "lines": "Righe d'ordine",
+    "line": "Riga {seq} · {style} {colourway}",
+    "sizeOpen": "{size} ×{open}",
+    "mtmLater": "Su misura: arriva in un passo successivo",
+    "lineFull": "Niente di aperto: già su ordini di produzione",
+    "sizes": "Pezzi per variante e taglia",
+    "over": "Al massimo {open}: il resto è su altri ordini",
+    "due": "Data di consegna",
+    "dueHint": "Vuota: la prima data promessa delle righe.",
+    "dueClear": "Cancella la data",
+    "pieces_one": "{count} pezzo",
+    "pieces_other": "{count} pezzi",
+    "create": "Crea bozza",
+    "held": {
+      "order": "Scegli prima un ordine di vendita",
+      "lines": "Scegli almeno una riga d'ordine",
+      "over": "Una taglia chiede più di quanto è aperto sulla riga",
+      "pieces": "Indica almeno un pezzo"
+    }
+  },
+  "record": {
+    "back": "Ordini di produzione",
+    "backToList": "Torna agli ordini",
+    "title": "Ordine di produzione",
+    "loading": "Lettura dell'ordine…",
+    "state": {
+      "not_found": {
+        "title": "Questo ordine non esiste",
+        "body": "Potrebbe essere di un'altra azienda, oppure il link è errato."
+      },
+      "forbidden": {
+        "title": "Non puoi vedere questo ordine",
+        "body": "Gli ordini richiedono workorders.view per la loro azienda e sede: chiedi a un amministratore."
+      },
+      "error": {
+        "title": "Impossibile caricare l'ordine"
+      }
+    },
+    "tabsLabel": "Ordine di produzione",
+    "more": "Altre azioni",
+    "dock": "Conversazione",
+    "dockHint": "Note e file accanto a ogni scheda (⌘J)",
+    "dockLabel": "Conversazione e file",
+    "noPanels": "La conversazione si apre con l'ordine.",
+    "batch": "Lotto {batch}",
+    "revFrozen": "Rev {revision} · congelata",
+    "revDraft": "Rev {revision} · non ancora congelata",
+    "due": "Consegna {date}",
+    "dueLate_one": "Consegna {date} · {count} giorno di ritardo",
+    "dueLate_other": "Consegna {date} · {count} giorni di ritardo",
+    "changed": "Qualcuno ha modificato quest'ordine alle {time}",
+    "reload": "Ricarica",
+    "cancelled": "Annullato: {reason}",
+    "closed": "Chiuso: non cambia più nulla tranne la nota.",
+    "readOnly": "Puoi vedere quest'ordine, non modificarlo."
+  },
+  "tab": {
+    "overview": "Riepilogo e rilascio",
+    "materials": "Materiali",
+    "cutting": "Taglio",
+    "bundles": "Fasci",
+    "operations": "Fasi e WIP",
+    "quality": "Qualità",
+    "activity": "Attività",
+    "problems_one": "{count} controllo blocca il rilascio",
+    "problems_other": "{count} controlli bloccano il rilascio"
+  },
+  "step": {
+    "release": "Rilascia",
+    "releaseOpen_one": "Rilascia · {count} controllo aperto",
+    "releaseOpen_other": "Rilascia · {count} controlli aperti",
+    "start": "Avvia",
+    "complete": "Completa",
+    "close": "Chiudi ordine"
+  },
+  "action": {
+    "cancel": "Annulla ordine…",
+    "copyNumber": "Copia numero"
+  },
+  "part": {
+    "loading": "Lettura: {part}…",
+    "failed": "Impossibile caricare: {part}",
+    "notReleased": {
+      "title": "Non ancora rilasciato",
+      "body": "{what} dopo il rilascio dell'ordine."
+    }
+  },
+  "overview": {
+    "check": "Controllo di rilascio",
+    "ready": "Pronto da rilasciare",
+    "open_one": "{count} controllo aperto",
+    "open_other": "{count} controlli aperti",
+    "overrideHint": "Manca solo materiale: il pianificatore può rilasciare con un motivo (il reparto poi attende la merce).",
+    "notFrozen": "Non ancora congelato: il rilascio congela la revisione, le fasi e i materiali pianificati.",
+    "frozen": "Specifica congelata",
+    "frozenAt": "Congelata il {when}",
+    "revision": "Revisione del modello",
+    "revisionValue": "Rev {revision}",
+    "noRevision": "Nessuna revisione scelta",
+    "batch": "Numero di lotto",
+    "batchHint": "Assegnato al rilascio; non cambia mai.",
+    "operations": "Ciclo",
+    "operationsValue_one": "{count} fase · {minutes} min a capo",
+    "operationsValue_other": "{count} fasi · {minutes} min a capo",
+    "materials": "Materiali",
+    "materialsValue_one": "{count} materiale pianificato",
+    "materialsValue_other": "{count} materiali pianificati",
+    "label": "Etichetta del capo",
+    "minutesAll": "Minuti standard, tutti i pezzi",
+    "minutes": "{minutes} min",
+    "override": "Rilasciato con materiale mancante: {reason}",
+    "frozenHint": "Una specifica diversa è un nuovo ordine (la richiesta di modifica arriverà più avanti).",
+    "facts": "Dati dell'ordine",
+    "edit": "Modifica",
+    "style": "Modello",
+    "kind": "Tipo",
+    "site": "Sede",
+    "customers": "Clienti",
+    "due": "Data di consegna",
+    "dueHint": "Vuota: nessuna data di consegna.",
+    "priority": "Priorità",
+    "priorityHint": "Un numero intero da -1000 a 1000; il più alto viene prima.",
+    "priorityBad": "Un numero intero da -1000 a 1000",
+    "released": "Rilasciato",
+    "started": "Iniziato",
+    "completed": "Completato",
+    "closedAt": "Chiuso"
+  },
+  "kindOf": {
+    "SIZE_GRID": "Griglia taglie",
+    "MADE_TO_MEASURE": "Su misura"
+  },
+  "check": {
+    "name": {
+      "REVISION": "Revisione del modello",
+      "LABEL_TEMPLATE": "Etichetta del capo",
+      "CERTIFICATE": "Certificato",
+      "WORK_CENTRES": "Centri di lavoro",
+      "BOM": "Distinta base",
+      "CELLS": "Taglie",
+      "DEPOSIT": "Acconto",
+      "MATERIAL": "Materiale",
+      "BATCH_NUMBER": "Numero di lotto",
+      "other": "altri controlli"
+    },
+    "REVISION": {
+      "OK": "La Rev {revision} è rilasciata; il rilascio la congela.",
+      "none": "Nessuna revisione rilasciata del modello è scelta.",
+      "notReleased": "La Rev {revision} non è rilasciata: un ordine si rilascia solo con una revisione rilasciata."
+    },
+    "LABEL_TEMPLATE": {
+      "OK": "L'etichetta {label} è attiva.",
+      "none": "La revisione non indica un'etichetta del capo: impostala in Prodotti › Etichette.",
+      "notActive": "L'etichetta {label} non è attiva: il rilascio la richiede attiva."
+    },
+    "CERTIFICATE": {
+      "OK": "Un certificato valido copre oggi ogni variante e taglia.",
+      "NOT_REQUIRED": "Per questo modello non serve un certificato.",
+      "BLOCKED": "Nessun certificato valido copre oggi ogni taglia (Reg. (UE) 2016/425)."
+    },
+    "WORK_CENTRES": {
+      "OK": "Ogni fase ha un centro di lavoro attivo a {site}.",
+      "BLOCKED": "Alla sede {site} manca un centro di lavoro per alcune fasi.",
+      "noSteps": "Il ciclo non ha fasi che il reparto possa scansionare (nessuna revisione rilasciata con un ciclo)."
+    },
+    "noRevision": "Dipende dalla revisione del modello: scegline prima una rilasciata.",
+    "BOM": {
+      "OK": "La distinta copre ogni taglia e variante.",
+      "BLOCKED": "La distinta non copre ogni taglia e variante: serve una nuova revisione."
+    },
+    "CELLS": {
+      "OK": "{cells} celle taglia da produrre.",
+      "BLOCKED": "Alcune taglie non sono più nel modello."
+    },
+    "DEPOSIT": {
+      "OK": "L'acconto di ogni ordine è pagato o condonato.",
+      "NOT_REQUIRED": "Nessun ordine richiede un acconto.",
+      "BLOCKED": "Un ordine attende l'acconto: la produzione parte quando è pagato o condonato."
+    },
+    "MATERIAL": {
+      "OK": "Le scorte utilizzabili della sede coprono ogni materiale.",
+      "BLOCKED": "Materiale mancante in sede: attendi la merce, o rilascia con il motivo del pianificatore.",
+      "OVERRIDDEN": "Materiale mancante, rilasciato con il motivo del pianificatore."
+    },
+    "BATCH_NUMBER": {
+      "OK": "Il numero di lotto viene assegnato al rilascio e non cambia mai.",
+      "BLOCKED": "L'azienda non ha una serie per i lotti: un amministratore la imposta in Admin › Numerazione."
+    }
+  },
+  "problem": {
+    "certificate": "{cell}: nessun certificato valido la copre oggi",
+    "bom": "{cell}: la distinta non la copre",
+    "size": "{cell}: la taglia non è più nel modello",
+    "deposit": "{order} attende l'acconto",
+    "material": {
+      "short": "{material}: mancano {short} {uom} (servono {needed}, disponibili {available})",
+      "held": "In giacenza ma non utilizzabili: {quantity} {uom} — {reason}",
+      "unknown": "Manca un materiale"
+    },
+    "workCentre": "Nessun centro di lavoro {kind} attivo a {site}",
+    "other": "Un altro problema lo trattiene"
+  },
+  "reason": {
+    "CR_VI_PENDING": "attende il risultato Cr VI",
+    "CR_VI_FAILED": "non ha superato il test Cr VI",
+    "QUALITY_HOLD": "in blocco qualità",
+    "BLOCKED": "bloccato",
+    "REJECTED": "respinto"
+  },
+  "kind": {
+    "CUTTING": "taglio",
+    "SEWING": "cucito",
+    "ASSEMBLY": "assemblaggio",
+    "FINISHING": "finissaggio",
+    "INSPECTION": "controllo",
+    "PACKING": "imballo",
+    "SUBCONTRACT": "conto terzi"
+  },
+  "size": {
+    "title": "Griglia taglie",
+    "layer": "Mostra",
+    "layers": {
+      "quantity": "Quantità",
+      "cut": "Tagliati",
+      "bundled": "In fasci",
+      "sewn": "Cuciti",
+      "finished": "Finiti",
+      "balance": "Da finire"
+    },
+    "ofTotal": "{done} di {total}",
+    "notCounted": "Non conteggiato",
+    "uncounted": "Ancora nulla di conteggiato: il reparto lo segnala man mano.",
+    "edit": "Modifica taglie",
+    "save": "Salva taglie",
+    "editHint": "Al massimo quanto è ancora aperto su ogni riga; 0 toglie una taglia.",
+    "draftHint": "Una bozza: le taglie cambiano fino al rilascio.",
+    "frozenHint": "Congelata al rilascio. I conteggi arrivano dal reparto: tagliati dal registro di taglio, in fasci dai fasci, cuciti e finiti dalle scansioni.",
+    "copy": {
+      "caption": "Pezzi per variante e taglia",
+      "colour": "Variante",
+      "total": "Totale",
+      "cellName": "{colour}, taglia {size}",
+      "notOffered": "non in quest'ordine",
+      "empty": "Ancora nessuna taglia.",
+      "totals": "{colour}: {rowTotal}. Taglia {size}: {columnTotal}. Totale: {grand}.",
+      "notWhole": "{cell}: solo pezzi interi, da 0 a {max}.",
+      "cutToMax": "{cell}: al massimo {max} pezzi in una cella.",
+      "pasted": "Incollati {applied}; saltati {skipped}.",
+      "issues": "Da controllare in questa griglia"
+    }
+  },
+  "materials": {
+    "planned": "Materiali pianificati",
+    "frozen": "Congelati al rilascio, scarto incluso",
+    "wouldFreeze": "Cosa congelerebbe ora il rilascio, scarto incluso",
+    "none": "La distinta non pianifica materiali.",
+    "col": {
+      "material": "Materiale",
+      "colour": "Colore",
+      "planned": "Pianificato",
+      "issued": "Prelevato (netto)",
+      "balance": "Da prelevare",
+      "lotHide": "Lotto · pelle",
+      "held": "All'ordine",
+      "cut": "Tagliato",
+      "returnable": "Restituibile"
+    },
+    "pick": "la lista di prelievo",
+    "noPick": "La lista di prelievo (scorte per lotto e pelle) richiede inventory.issue.",
+    "pickAfterRelease": "La lista di prelievo si apre dopo il rilascio: il reparto preleva con la scansione.",
+    "covered": "Prelevato",
+    "toIssue": "{quantity} {uom} da prelevare",
+    "usable_one": "Utilizzabile in sede: {quantity} {uom} in {count} lotto o pelle",
+    "usable_other": "Utilizzabile in sede: {quantity} {uom} in {count} lotti o pelli",
+    "held_one": "Lotto {lot}: {quantity} {uom}, {count} pelle",
+    "held_other": "Lotto {lot}: {quantity} {uom}, {count} pelli",
+    "atWorkOrder": "All'ordine",
+    "nothingIssued": "Ancora nulla prelevato."
+  },
+  "cutting": {
+    "what": "Il registro di taglio per pelle inizia",
+    "plan": "Taglio rispetto al piano",
+    "planHint": "Un capo conta come tagliato quando ogni parte da pelle è tagliata.",
+    "readyToBundle": "Pronto per i fasci",
+    "partPieces": "{part} {pieces}",
+    "hides": "Pelli",
+    "noHides": "Ancora nessuna pelle prelevata.",
+    "hideOf": "Lotto {lot} · prelevato {issued}",
+    "area": {
+      "cut": "tagliato",
+      "waste": "scarto",
+      "returned": "reso",
+      "left": "rimasto"
+    },
+    "log": "Registro di taglio",
+    "count_one": "{count} voce",
+    "count_other": "{count} voci",
+    "empty": "Non ancora tagliato.",
+    "logHint": "Solo aggiunte: una correzione aggiunge una voce speculare, l’originale resta.",
+    "col": {
+      "when": "Quando",
+      "hide": "Pelle",
+      "cells": "Taglie",
+      "cell": "Variante · taglia",
+      "quantity": "Da fare",
+      "cut": "Tagliati",
+      "toCut": "Da tagliare",
+      "parts": "Pezzi per parte",
+      "pieces": "Pezzi",
+      "area": "Area usata",
+      "remnant": "Ritaglio",
+      "by": "Tagliato da",
+      "state": "Voce"
+    },
+    "state": {
+      "live": "Valida",
+      "closing": "Chiude la pelle",
+      "reversed": "Stornata",
+      "reversal": "Correzione"
+    },
+    "office": "Ufficio",
+    "lot": "Lotto {lot}",
+    "rowMenu": "Altro per il taglio di {hide}",
+    "details": "Dettagli",
+    "correct": "Correggi voce…",
+    "hold": {
+      "usedUp": "La pelle è esaurita: si corregge solo il taglio di chiusura",
+      "notOpen": "L'ordine non è in produzione",
+      "noRight": "Per correggere un taglio serve production.cut.correct",
+      "reversal": "Una correzione non si corregge di nuovo",
+      "reversed": "Già stornata"
+    },
+    "entryTitle": "Taglio della pelle {hide}",
+    "closingHint": "L'ultimo taglio di una pelle esaurita: correggerlo riapre la pelle.",
+    "reversedAt": "Stornata il {when}",
+    "pattern": "Area del modello dei set {area}",
+    "station": "Postazione",
+    "correctionOf": "Questa voce corregge il taglio del {when}; il motivo è nella cronologia.",
+    "noWorker": "Non registrato in questa sede"
+  },
+  "hideState": {
+    "FULL": "Intera",
+    "PARTLY_CUT": "Tagliata in parte",
+    "REMNANT": "Ritaglio",
+    "CONSUMED": "Esaurita",
+    "SCRAPPED": "Scartata"
+  },
+  "correct": {
+    "title": "Correggi il taglio di {hide}",
+    "body": "Una voce speculare annulla {pieces} pezzi e {area} di area; la voce originale resta nel registro.",
+    "closing": "È il taglio di chiusura di una pelle esaurita: correggerlo riapre la pelle.",
+    "bundles": "Un taglio da cui sono nati dei fasci si corregge solo dopo aver annullato quei fasci.",
+    "reason": "Motivo",
+    "reasonHint": "Da 3 a 500 caratteri; resta con la voce.",
+    "reasonShort": "Indica il motivo in almeno 3 caratteri",
+    "go": "Correggi voce"
+  },
+  "bundles": {
+    "what": "I fasci si creano al tavolo di taglio",
+    "cells": "Tagliati e in fasci",
+    "cellsHint": "Capi interi; un fascio di parti conta i suoi pezzi a parte.",
+    "col": {
+      "bundled": "In fasci",
+      "toBundle": "Da affasciare",
+      "code": "Fascio",
+      "where": "Dove si trova",
+      "last": "Ultima scansione",
+      "hides": "Pelli",
+      "ticket": "Cartellino",
+      "when": "Quando",
+      "operation": "Fase",
+      "kind": "Scansione",
+      "good": "Buoni",
+      "scrap": "Scarti",
+      "rework": "Rilavorazioni",
+      "station": "Postazione",
+      "newCode": "Nuovo codice",
+      "oldCode": "Sostituito",
+      "reason": "Motivo"
+    },
+    "list": "Fasci",
+    "count_one": "{count} fascio",
+    "count_other": "{count} fasci",
+    "empty": "Ancora nessun fascio: si creano al tavolo di taglio.",
+    "emptyFilter": "Nessun fascio attende a questa fase.",
+    "filterLabel": "Dove sono i fasci",
+    "filterAll": "Tutti i fasci",
+    "filterClear": "Mostra tutti i fasci",
+    "waitingAt": "In attesa a {seq} {code}",
+    "done": "Fatto in ogni fase",
+    "noScan": "Non ancora scansionato",
+    "replaced_one": "{count} cartellino precedente",
+    "replaced_other": "{count} cartellini precedenti",
+    "firstTicket": "Primo cartellino",
+    "part": "Parte: {part}",
+    "whole": "Capi interi",
+    "status": {
+      "ACTIVE": "Attivo",
+      "VOID": "Annullato"
+    },
+    "job": {
+      "QUEUED": "In coda",
+      "SENT": "Inviato alla stampante",
+      "PRINTED": "Stampato",
+      "FAILED": "Stampa non riuscita",
+      "none": "Solo PDF"
+    },
+    "reprints_one": "{count} ristampa",
+    "reprints_other": "{count} ristampe",
+    "rowMenu": "Altro per il fascio {code}",
+    "details": "Dettagli",
+    "reprintOne": "Ristampa cartellino…",
+    "reprintMany_one": "Ristampa {count} cartellino",
+    "reprintMany_other": "Ristampa {count} cartellini",
+    "hold": {
+      "void": "Un fascio annullato non ha cartellino da ristampare",
+      "notOpen": "L'ordine non è in produzione"
+    },
+    "noRight": "Per ristampare un cartellino serve production.bundles.",
+    "detailTitle": "Fascio {code}",
+    "pieces_one": "{count} pezzo",
+    "pieces_other": "{count} pezzi",
+    "previous": "Precedente",
+    "next": "Successivo",
+    "first": "È il primo fascio",
+    "last": "È l'ultimo fascio",
+    "made": "Creato",
+    "oldCodes": "Codici precedenti",
+    "scans": "Scansioni per fase",
+    "voided": "Annullata",
+    "scanKind": {
+      "REPORT": "Segnalazione",
+      "UNDO": "Annullamento",
+      "CORRECTION": "Correzione"
+    },
+    "reprintsTitle": "Cartellini ristampati",
+    "postedBy": {
+      "FLOOR": "Reparto",
+      "OFFICE": "Ufficio"
+    }
+  },
+  "reprint": {
+    "title_one": "Ristampa {count} cartellino",
+    "title_other": "Ristampa {count} cartellini",
+    "body": "Ogni fascio riceve un nuovo codice; scansionare il vecchio cartellino dirà che è stato sostituito. Il motivo resta con il fascio.",
+    "why": "Motivo",
+    "reason": {
+      "lost": "Cartellino perso",
+      "damaged": "Cartellino rovinato",
+      "unreadable": "Codice illeggibile",
+      "other": "Un altro motivo"
+    },
+    "otherLabel": "Il motivo",
+    "reasonShort": "Indica il motivo in 3–200 caratteri",
+    "printer": "Stampante etichette",
+    "noPrinter": "Questa sede non ha una stampante etichette attiva: i cartellini si ristampano dal tablet di reparto.",
+    "choosePrinter": "Scegli una stampante etichette",
+    "noPrintRight": "Per stampare etichette serve print.labels",
+    "go_one": "Ristampa {count}",
+    "go_other": "Ristampa {count}",
+    "done": "Ristampato: nuovo codice {code}"
+  },
+  "ops": {
+    "planned": "Fasi che il rilascio congelerebbe",
+    "perGarment": "{minutes} min standard a capo",
+    "none": "Il ciclo non ha fasi.",
+    "col": {
+      "seq": "Seq",
+      "operation": "Fase",
+      "centre": "Centro di lavoro",
+      "minutes": "Min std",
+      "scan": "Scansione",
+      "arrived": "Arrivati",
+      "waiting": "In attesa",
+      "good": "Buoni",
+      "scrap": "Scarti",
+      "rework": "Rilavorazioni",
+      "bundles": "Fasci",
+      "progress": "Buoni sul totale",
+      "line": "Linea",
+      "finished": "Finiti"
+    },
+    "scanned": "Scansionata",
+    "notScanned": "Non scansionata",
+    "plannedHint": "Ogni passo del ciclo su un centro di lavoro della sede; congelato al rilascio.",
+    "readyToComplete": "Ogni capo è finito: completa l'ordine.",
+    "title": "Fasi e lavoro in corso",
+    "viewLabel": "Conta per",
+    "byOperation": "Per fase",
+    "bySize": "Buoni per taglia",
+    "final": "Finale",
+    "sewn": "Cucito qui",
+    "bundleCounts": "{done} fatti · {waiting} in attesa · {notReached} non ancora",
+    "progressLabel": "Capi buoni a {operation}",
+    "hint": "Dalle scansioni del reparto sui fasci attivi; mai per persona o postazione.",
+    "lines": "Finiti per linea",
+    "noLines": "Ancora nessun capo finito segnalato su una linea.",
+    "linesHint": "Solo la produzione per linea (la linea della postazione che segnala).",
+    "corrections": "Correzioni in attesa",
+    "noCorrections": "Nessuna.",
+    "correctionsWaiting_one": "{count} richiesta di correzione attende una decisione.",
+    "correctionsWaiting_other": "{count} richieste di correzione attendono una decisione.",
+    "toToday": "Apri Oggi",
+    "correctionsHint": "La scansione originale resta; una correzione approvata aggiunge una riga."
+  },
+  "quality": {
+    "what": "I controlli finali iniziano",
+    "noRight": "Controlli e rilasci richiedono quality.inspections.view.",
+    "inspections": "Controlli finali",
+    "none": "Non ancora controllato.",
+    "number": "Controllo {n}",
+    "overridden": "Esito modificato",
+    "status": {
+      "OPEN": "Aperto",
+      "PASSED": "Superato",
+      "FAILED": "Non superato",
+      "CANCELLED": "Annullato"
+    },
+    "col": {
+      "inspection": "Controllo",
+      "status": "Esito",
+      "lot": "Dimensione lotto",
+      "released": "Rilasciati",
+      "decided": "Deciso",
+      "size": "Variante · taglia",
+      "pieces": "Pezzi",
+      "labels": "Etichette stampate",
+      "releasable": "Rilasciabili"
+    },
+    "sizes": "Rilasciati per taglia",
+    "hint": "I capi rilasciati si possono spedire. Controllo e rilascio si fanno in Qualità e al banco di controllo."
+  },
+  "release": {
+    "title": "Rilascia {number}",
+    "body": "La specifica viene congelata alla Rev {revision}; viene assegnato un numero di lotto che non cambia mai; il reparto può iniziare.",
+    "reachCells_one": "{count} cella taglia, {pieces} pezzi",
+    "reachCells_other": "{count} celle taglia, {pieces} pezzi",
+    "reachOps_one": "{count} fase congelata",
+    "reachOps_other": "{count} fasi congelate",
+    "reachMaterials_one": "{count} materiale pianificato congelato",
+    "reachMaterials_other": "{count} materiali pianificati congelati",
+    "reversal": "Per tornare indietro: annullalo con un motivo; una specifica diversa è un nuovo ordine.",
+    "short": "Manca materiale in sede.",
+    "override": "Rilascia con il materiale mancante (deroga del pianificatore)",
+    "overrideNeeded": "Manca materiale: spunta la deroga e indica il motivo",
+    "reason": "Motivo",
+    "reasonHint": "Da 3 a 500 caratteri; resta con il rilascio.",
+    "reasonShort": "Indica il motivo in 3–500 caratteri",
+    "go": "Rilascia",
+    "refused_one": "Il controllo lo trattiene: {count} controllo è cambiato da quando la pagina lo ha letto. Vedi Riepilogo.",
+    "refused_other": "Il controllo lo trattiene: {count} controlli sono cambiati da quando la pagina li ha letti. Vedi Riepilogo."
+  },
+  "move": {
+    "start": {
+      "title": "Avvia {number}",
+      "body": "Segna l'ordine in lavorazione da ora. Il primo taglio, prelievo o scansione del reparto lo avvia da solo: avvialo a mano solo se il lavoro è iniziato senza."
+    },
+    "complete": {
+      "title": "Completa {number}",
+      "body": "Ogni capo è finito all'ultima fase. Completare chiude le scansioni del reparto; controllo, etichette e rilascio proseguono."
+    },
+    "close": {
+      "title": "Chiudi {number}",
+      "body": "Un ordine chiuso è definitivo: dopo cambia solo la nota."
+    }
+  },
+  "cancel": {
+    "title": "Annulla {number}",
+    "bodyDraft": "La bozza si ferma; i suoi pezzi tornano alle righe d’ordine.",
+    "bodyStarted": "L'ordine si ferma; i suoi pezzi tornano alle righe d'ordine. Quanto prelevato o tagliato resta all'ordine finché non viene reso a mano.",
+    "reason": "Motivo",
+    "reasonNeeded": "Indica il motivo",
+    "keep": "Mantieni",
+    "go": "Annulla ordine"
+  },
+  "notice": {
+    "released": "Rilasciato · lotto {batch}",
+    "start": "Avviato.",
+    "complete": "Completato.",
+    "close": "Chiuso.",
+    "cancelled": "Annullato.",
+    "saved": "Salvato.",
+    "sizesSaved": "Taglie salvate.",
+    "corrected": "Corretto: una voce speculare è nel registro."
+  },
+  "error": {
+    "read": "Nexus Factory non ha risposto come previsto: riprova.",
+    "offline": "Nessuna connessione a Nexus Factory: riprova tra poco.",
+    "forbidden": "Non puoi farlo qui: chiedi il permesso a un amministratore.",
+    "changed": "Qualcuno ha modificato l'ordine nel frattempo: è stato riletto, controlla e riprova.",
+    "conflict": "È cambiato nel frattempo: è stato riletto, controlla e riprova.",
+    "gone": "Non esiste più.",
+    "invalid": "Nexus Factory lo ha rifiutato così: controlla i valori.",
+    "printer": "La stampante lo ha rifiutato: scegli un’altra stampante etichette.",
+    "write": "Non è andato a buon fine: riprova."
+  },
+  "refusal": {
+    "other": "Le regole del reparto ora lo rifiutano.",
+    "cut": {
+      "WORK_ORDER_NOT_OPEN": "L'ordine non è più in produzione.",
+      "HIDE_USED_UP": "La pelle è esaurita: si corregge solo il taglio di chiusura.",
+      "NOT_A_CUT": "Una correzione non si corregge di nuovo.",
+      "REVERSED_ALREADY": "Questa voce è già stata stornata.",
+      "IN_BUNDLE": "Da questo taglio sono nati dei fasci: annullali prima, poi correggilo."
+    },
+    "bundle": {
+      "WORK_ORDER_NOT_OPEN": "L'ordine non è più in produzione.",
+      "VOIDED": "Il fascio è annullato.",
+      "SCANNED": "Il fascio è già stato scansionato.",
+      "REPLACED": "Quel cartellino è già stato sostituito.",
+      "FLOOR_NOT_READY": "Il reparto di questa sede non è ancora pronto (informativa, regole di reparto)."
+    }
+  },
+  "floor": {
+    "privacy": "Solo totali per ordine, fase e linea (Statuto dei Lavoratori art. 4).",
+    "tile": {
+      "inProgress": "Ordini in lavorazione",
+      "released": "Rilasciati, non iniziati",
+      "late": "Ordini in ritardo",
+      "waiting": "Pezzi in attesa",
+      "waitingHint": "tra le fasi",
+      "scrap": "Scarti",
+      "scrapHint": "sugli ordini aperti"
+    },
+    "wip": "Lavoro in corso per fase",
+    "wipHint": "Pezzi in attesa · fatti a ogni fase; una fase apre i suoi fasci.",
+    "failed": "Impossibile caricare il reparto",
+    "empty": {
+      "title": "Niente in reparto in questo momento",
+      "body": "Un ordine rilasciato compare qui quando il reparto inizia a lavorarlo.",
+      "action": "Bozze da rilasciare"
+    },
+    "due": "Consegna {date}",
+    "noDue": "Nessuna data di consegna",
+    "finishedLabel": "Capi finiti di {number}",
+    "finished": "Finiti {done} di {total}",
+    "notCounted": "Finiti: non ancora conteggiati",
+    "opsOf": "Fasi di {number}",
+    "opFigures": "{waiting} in attesa · {good} fatti",
+    "opScrap_one": "{count} scarto",
+    "opScrap_other": "{count} scarti",
+    "mostWaiting": "Più in attesa",
+    "opLink": "{seq} {code}: {waiting} in attesa, {good} fatti — apri i fasci in attesa qui",
+    "late": "Ordini in ritardo",
+    "noLate": "Nessun ordine in ritardo."
+  }
+}

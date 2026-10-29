@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { WORK_CENTRE_KINDS } from '@nexus/factory-domain/product/routing/operations'
 import { DEFECT_KINDS, REASON_CODE } from '@nexus/factory-domain/production/scans/reasons'
 import { CLIENT_SCAN_ID, MAX_BATCH_ITEMS, SCAN_REFUSALS } from '@nexus/factory-domain/production/scans/rules'
@@ -333,7 +333,28 @@ export const siteWipContract = defineContract({
       workOrders: z.array(
         output({
           workOrder: output({ id: id(), number: z.string(), status, siteId: id() }),
-          operations: z.array(output({ operationId: id(), seq: z.number().int(), code: z.string(), name: z.string(), scanRequired: z.boolean(), final: z.boolean(), ...flow, bundles: bundleCounts, lines: z.array(output({ lineId: id(), good: z.number().int() })) })),
+          siteCode: z.string(),
+          style: output({ code: z.string(), name: z.string() }),
+          dueDate: businessDate().nullable(),
+          /** Whole days past the due date (0 on time; null without a due date). */
+          daysLate: z.number().int().nullable(),
+          priority: z.number().int(),
+          /** The garments it makes, and those good at its final operation (null when no cell counts them). */
+          pieces: z.number().int(),
+          finished: z.number().int().nullable(),
+          operations: z.array(
+            output({
+              operationId: id(),
+              seq: z.number().int(),
+              code: z.string(),
+              name: z.string(),
+              scanRequired: z.boolean(),
+              final: z.boolean(),
+              ...flow,
+              bundles: bundleCounts,
+              lines: z.array(output({ lineId: id(), code: z.string(), name: z.string(), good: z.number().int() })),
+            }),
+          ),
           allFinished: z.boolean(),
         }),
       ),

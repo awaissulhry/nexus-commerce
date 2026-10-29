@@ -1,0 +1,122 @@
+/* Admin › Audit log (SCR-018): layout only, semantic tokens (apps/factory-web CLAUDE.md). */
+.fw-adm-audit-toolbar {
+  flex-wrap: wrap;
+}
+
+.fw-adm-audit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+
+.fw-adm-audit-filter {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fw-adm-audit-filter-label {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+
+.fw-adm-audit-story {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  padding: var(--nds-space-12) var(--nds-space-16) var(--nds-space-16);
+}
+
+.fw-adm-audit-day,
+.fw-adm-audit-heading {
+  margin: 0 0 var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+.fw-adm-audit-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-adm-audit-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-adm-audit-sentence {
+  line-height: 1.45;
+}
+
+.fw-adm-audit-record {
+  color: var(--nds-text-2);
+}
+
+.fw-adm-audit-meta,
+.fw-adm-audit-device {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+
+.fw-adm-audit-change {
+  overflow-wrap: anywhere;
+}
+
+.fw-adm-audit-value {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.fw-adm-audit-older {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+}
+
+.fw-adm-audit-entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-20);
+}
+
+.fw-adm-audit-timehelp {
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+.fw-adm-audit-popover {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  max-width: 320px;
+  padding: var(--nds-space-12);
+}
+
+.fw-adm-audit-popover p {
+  margin: 0;
+}
+
+.fw-adm-audit-countline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  padding-right: var(--nds-space-12);
+}
+
+.fw-adm-audit-countline .fw-adm-count {
+  padding-bottom: 0;
+}

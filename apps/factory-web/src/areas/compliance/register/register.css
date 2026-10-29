@@ -1,0 +1,114 @@
+/*
+ * PPE register (SCR-113) LAYOUT only: the trace's stack, the problems note, the keys list, the New entry dialog's
+ * columns. The rest is the shared quality layout (areas/quality/_shared/quality.css, fw-q-*) and the design system's
+ * controls; semantic --nds-* tokens only.
+ */
+.fw-reg-trace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-reg-problems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-warning-border);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-warning-soft);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-reg-problems-title {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-reg-keymap {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--nds-space-6) var(--nds-space-12);
+  margin: 0;
+}
+
+.fw-reg-keymap dt {
+  display: inline-flex;
+  gap: var(--nds-space-2);
+}
+
+.fw-reg-keymap dd {
+  margin: 0;
+}
+
+.fw-reg-kinds {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-8);
+}
+
+@media (min-width: 640px) {
+  .fw-reg-kinds {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.fw-reg-risks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.fw-reg-risks > * {
+  flex: 1 1 160px;
+}
+
+.fw-reg-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--nds-text-strong);
+}
+
+.fw-reg-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-10) var(--nds-space-20);
+  margin: 0;
+}
+
+@media (min-width: 900px) {
+  .fw-reg-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1600px) {
+  .fw-reg-fields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.fw-reg-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-reg-field dt {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-reg-field dd {
+  margin: 0;
+  color: var(--nds-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.fw-reg-field.wide {
+  grid-column: 1 / -1;
+}

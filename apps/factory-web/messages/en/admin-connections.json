@@ -1,0 +1,460 @@
+{
+  "conn": {
+    "title": "Connections & API",
+    "intro": "Every outside service the factory uses: what it is for, whether it works, and whether it is real or a test. Secrets are sealed and never shown.",
+    "everyCompany": "Every company",
+    "notConnected": "Not connected",
+    "notConnectedHint": "Nobody connected it yet.",
+    "connect": {
+      "row": "How to connect",
+      "open": "Connect a service",
+      "title": "Connect a service",
+      "subtitle": "What each service does for the factory, and which ones are connected.",
+      "heldTitle": "Connecting a service from this page comes later",
+      "heldBody": "Today Nexus support connects a service for you: it stores the keys sealed on the server, in test mode first. Once connected, the service appears in the list, where you can follow it, pause it and resume it.",
+      "listLabel": "Services the factory can use",
+      "connected_one": "1 connected",
+      "connected_other": "{count} connected",
+      "later": "Later",
+      "held": "Not available yet: ask Nexus support to connect this service.",
+      "go": "Continue"
+    },
+    "provider": {
+      "SES": {
+        "name": "Sending e-mail (Amazon SES)",
+        "for": "Quotes, purchase orders and notifications leave from your own domain; replies come back to their record.",
+        "how": "One for every company: the mail domain below says which addresses it sends from."
+      },
+      "R2": {
+        "name": "File storage (Cloudflare R2)",
+        "for": "Keeps the files of every record: PDFs, photos, certificates, imported sheets.",
+        "how": "One for every company."
+      },
+      "SDI": {
+        "name": "E-invoices (SDI)",
+        "for": "Sends invoices to the Italian tax system (Sistema di Interscambio) and brings back its receipts.",
+        "how": "One per company: each company issues its own invoices."
+      },
+      "SENDCLOUD": {
+        "name": "Carrier labels (Sendcloud)",
+        "for": "Buys shipping labels and follows parcels until they are delivered.",
+        "how": "One per company: labels are paid by the company that ships."
+      },
+      "VIES": {
+        "name": "VAT check (VIES)",
+        "for": "Checks EU customers’ and suppliers’ VAT numbers with the European Commission.",
+        "how": "One for every company."
+      }
+    },
+    "laterService": {
+      "payroll": "Payroll export",
+      "edi": "EDI with customers",
+      "ai": "AI provider"
+    },
+    "mode": {
+      "LIVE": "Live",
+      "SANDBOX": "Test",
+      "FAKE": "Fake"
+    },
+    "modeHint": {
+      "LIVE": "Calls reach the real service.",
+      "SANDBOX": "Calls reach the service’s test system: nothing is real.",
+      "FAKE": "Nexus answers in place of the service: nothing leaves the factory."
+    },
+    "modeBanner": {
+      "SANDBOX": "Test mode: this service’s test system answers. Nothing done through it is real.",
+      "FAKE": "Fake mode: Nexus answers in place of this service. Nothing done through it leaves the factory."
+    },
+    "state": {
+      "working": "Working · last OK {at}",
+      "failing": "Failing since {at}",
+      "notCalled": "Not called yet",
+      "paused": "Paused",
+      "disabled": "No longer used"
+    },
+    "lastErrorSaid": "Last error, as the service said it:",
+    "callCount_one": "1 call in 24 h",
+    "callCount_other": "{count} calls in 24 h",
+    "callsFailed_one": "1 failed",
+    "callsFailed_other": "{count} failed",
+    "waiting_one": "1 message waiting",
+    "waiting_other": "{count} messages waiting",
+    "open": "Open",
+    "tab": {
+      "overview": "Overview",
+      "settings": "Settings & secrets",
+      "calls": "Calls",
+      "inbound": "Received",
+      "activity": "Activity"
+    },
+    "pause": {
+      "action": "Pause",
+      "title": "Pause {name}?",
+      "go": "Pause the service",
+      "body": "From now on no call reaches {service}: what needs it waits or is refused in words (an invoice stays unsent, a label is not bought).",
+      "undo": "You can resume it at any time; nothing is lost."
+    },
+    "resume": {
+      "action": "Resume",
+      "title": "Resume {name}?",
+      "go": "Resume the service",
+      "body": "Calls reach {service} again from now on, in the mode it is in.",
+      "undo": "You can pause it again at any time."
+    },
+    "right": {
+      "manage": "Pause and resume outside services"
+    },
+    "testMode": {
+      "title_one": "Test mode: 1 service does not reach anyone",
+      "title_other": "Test mode: {count} services do not reach anyone",
+      "body": "Invoices, labels and mail sent through {services} are tests: they never reach a customer, a carrier or the tax system."
+    },
+    "tile": {
+      "working": "Working",
+      "failing": "Failing",
+      "test": "Test mode",
+      "paused": "Paused",
+      "waiting": "Messages waiting"
+    },
+    "tileHint": {
+      "working": "Their last call went through.",
+      "failing": "Their last call failed.",
+      "test": "Fake or test: they reach nobody.",
+      "paused": "No call reaches them.",
+      "waiting": "Messages they sent, not handled yet."
+    },
+    "search": "Search services",
+    "filtered": "Showing: {tile}",
+    "empty": {
+      "title": "No service is connected yet",
+      "body": "Connect e-mail first: everything that leaves the factory needs it."
+    },
+    "tableLabel": "Outside services",
+    "count_one": "{count} service",
+    "count_other": "{count} services",
+    "col": {
+      "service": "Service",
+      "for": "What it is for",
+      "company": "Company",
+      "mode": "Mode",
+      "state": "State",
+      "calls": "Calls 24 h",
+      "region": "Region"
+    },
+    "later": "The error queue, the delivery log and API keys for other systems come in later steps.",
+    "residency": {
+      "title": "Where your data lives",
+      "intro": "Only what each connection’s own settings say: Nexus never guesses a region.",
+      "none": "No service is connected yet.",
+      "account": "Connection",
+      "unknown": "Not stated",
+      "later": "The list of sub-processors and their regions, as a PDF, comes later."
+    },
+    "reasonShort": "Write at least 3 characters, or leave it empty.",
+    "done": {
+      "paused": "{name} is paused: no call reaches it.",
+      "resumed": "{name} is working again."
+    },
+    "test": {
+      "action": "Test connection",
+      "title": "Test the connection",
+      "body": "One harmless call to the service, with the answer in words.",
+      "held": "Not available yet: the service’s adapter has no harmless test call (ping) yet."
+    },
+    "pausedBanner": "Paused: no call reaches this service until someone resumes it.",
+    "disabledBanner": "No longer used: kept for its history.",
+    "overview": {
+      "title": "Is it working, and what does it do?",
+      "lastOk": "Last call that went through",
+      "never": "Never yet",
+      "lastError": "Last failure",
+      "noError": "None",
+      "noFailures": "None failed",
+      "waiting": "Received, not handled yet",
+      "noneWaiting": "Nothing waiting"
+    },
+    "limits": {
+      "title": "How Nexus protects the service",
+      "intro": "Every call goes through one gateway that keeps to these limits.",
+      "rate": "Pace",
+      "rateValue": "Up to {perMinute} calls a minute, {burst} at once",
+      "timeout": "Longest wait for an answer",
+      "seconds": "{seconds} s",
+      "circuit": "After failures in a row",
+      "circuitValue": "Paused for {seconds} s after {failures} failures in a row, then one trial call decides"
+    },
+    "readOnly": "You can see this connection; pausing it needs the right to manage outside services.",
+    "settings": {
+      "title": "Settings",
+      "intro": "What is not secret, as it was set up. Changing it from here comes later.",
+      "label": "Name",
+      "code": "Code",
+      "created": "Connected on",
+      "changed": "Last changed",
+      "none": "No other settings.",
+      "inboundPath": "Where this service posts its messages (for its own set-up):",
+      "later": "Changing the settings and the mode (going live) comes later; going live will ask for the company code typed."
+    },
+    "setting": {
+      "region": "Region",
+      "configurationSet": "Configuration set",
+      "awsAccountId": "AWS account",
+      "inboundBucket": "Bucket for received mail"
+    },
+    "secrets": {
+      "title": "Secrets",
+      "intro": "Keys are written once and sealed on the server: nobody can read them back, not even here.",
+      "credentials": "Access keys",
+      "webhook": "Signature key for received messages"
+    },
+    "secret": {
+      "saved": "Saved on {date} · sealed, never shown",
+      "rotated": "Saved on {saved}, sealed again on {rotated} · never shown",
+      "savedNoDate": "Saved · sealed, never shown",
+      "notSaved": "Not saved: the fake and test modes need none",
+      "replace": "Replace",
+      "replaceHeld": "Not available yet: replacing a key from this page comes later (Nexus support replaces it today)."
+    },
+    "reason": {
+      "account_paused": "Refused: the service was paused.",
+      "account_disabled": "Refused: the service is no longer used.",
+      "circuit_open": "Refused: paused for a while after failures in a row.",
+      "rate_limited": "Refused: too many calls at once.",
+      "gateway_unavailable": "Refused: the gateway could not check its limits.",
+      "fake_in_production": "Refused: a fake service is never called in production.",
+      "timeout": "No answer in time.",
+      "provider_error": "The service answered with an error.",
+      "network_error": "The service could not be reached."
+    },
+    "calls": {
+      "filter": "Which calls",
+      "all": "All",
+      "failedOnly": "Failed only",
+      "noFailures": "No call failed",
+      "empty": "No call yet",
+      "emptyBody": "Every call Nexus makes to this service appears here, whatever happened.",
+      "tableLabel": "Calls to this service, newest first",
+      "count_one": "1 call shown",
+      "count_other": "{count} calls shown",
+      "ms": "{ms} ms",
+      "privacy": "What was sent and received is not shown here: it can hold personal data.",
+      "col": {
+        "time": "Time",
+        "operation": "Operation",
+        "state": "Result",
+        "http": "HTTP",
+        "duration": "Duration",
+        "tries": "Tries",
+        "summary": "Why"
+      }
+    },
+    "callState": {
+      "SUCCEEDED": "Went through",
+      "FAILED": "Failed",
+      "TIMED_OUT": "No answer",
+      "REFUSED": "Not sent"
+    },
+    "showOlder": "Show older",
+    "inbound": {
+      "filter": "Which messages",
+      "none": "This service sends no messages to Nexus.",
+      "empty": "Nothing received",
+      "emptyBody": "Messages this service sends (receipts, delivery news) appear here once they arrive, checked and handled once.",
+      "tableLabel": "Messages received from this service, newest first",
+      "count_one": "1 message shown",
+      "count_other": "{count} messages shown",
+      "verified": "Signature checked",
+      "notVerified": "Signature refused",
+      "privacy": "The content of a message is not shown here. Sending a failed one again comes later.",
+      "col": {
+        "event": "Kind",
+        "verified": "Signature",
+        "processed": "Handled",
+        "error": "Problem"
+      }
+    },
+    "inboundState": {
+      "RECEIVED": "Waiting",
+      "PROCESSED": "Handled",
+      "FAILED": "Failed",
+      "REJECTED": "Rejected"
+    },
+    "keys": {
+      "connect": "Connect a service"
+    },
+    "bulk": {
+      "pause_one": "Pause {count}",
+      "pause_other": "Pause {count}",
+      "resume_one": "Resume {count}",
+      "resume_other": "Resume {count}",
+      "noneToPause": "None of the selected services is running: nothing to pause.",
+      "noneToResume": "None of the selected services is paused: nothing to resume.",
+      "pauseTitle_one": "Pause {count} service?",
+      "pauseTitle_other": "Pause {count} services?",
+      "resumeTitle_one": "Resume {count} service?",
+      "resumeTitle_other": "Resume {count} services?",
+      "pauseGo_one": "Pause {count} service",
+      "pauseGo_other": "Pause {count} services",
+      "resumeGo_one": "Resume {count} service",
+      "resumeGo_other": "Resume {count} services",
+      "pauseBody": "From now on no call reaches these services: what needs them waits or is refused in words (an invoice stays unsent, a label is not bought).",
+      "resumeBody": "Calls reach these services again from now on, each in the mode it is in.",
+      "pauseUndo": "You can resume them at any time; nothing is lost.",
+      "resumeUndo": "You can pause them again at any time.",
+      "listLabel": "Services",
+      "reasonHint": "Kept in the history of each service.",
+      "left": {
+        "notConnected_one": "1 selected service is not connected: nothing to switch, left out.",
+        "notConnected_other": "{count} selected services are not connected: nothing to switch, left out.",
+        "paused_one": "1 selected service is paused already: left out.",
+        "paused_other": "{count} selected services are paused already: left out.",
+        "running_one": "1 selected service is running: left out.",
+        "running_other": "{count} selected services are running: left out."
+      },
+      "pausedDone_one": "1 service paused: no call reaches it.",
+      "pausedDone_other": "{count} services paused: no call reaches them.",
+      "pausedPartial_one": "{count} of {total} services paused. Not paused:",
+      "pausedPartial_other": "{count} of {total} services paused. Not paused:",
+      "pausedFailed_one": "The service was not paused:",
+      "pausedFailed_other": "None of the {count} services was paused:",
+      "resumedDone_one": "1 service is working again.",
+      "resumedDone_other": "{count} services are working again.",
+      "resumedPartial_one": "{count} of {total} services resumed. Not resumed:",
+      "resumedPartial_other": "{count} of {total} services resumed. Not resumed:",
+      "resumedFailed_one": "The service was not resumed:",
+      "resumedFailed_other": "None of the {count} services was resumed:",
+      "noSelect": "Not connected: there is nothing to pause or resume"
+    }
+  },
+  "mail": {
+    "title": "Your mail domain",
+    "intro": "Send and receive mail from your own domain. Add these records where your domain is registered; Nexus checks them with the mail service.",
+    "add": {
+      "open": "Add a sending domain",
+      "title": "Add a sending domain",
+      "subtitle": "The mail service gives three records to add at your registrar; mail leaves from the domain once they are found.",
+      "go": "Add the domain",
+      "pickCompany": "Choose a company",
+      "pickAccount": "Choose the mail service",
+      "accountHint": "The connection that sends this domain’s mail.",
+      "domainHint": "A domain you own, or a part of it such as mail.example.com.",
+      "fromWillBe": "Mail will leave from {address}.",
+      "localHint": "Usually noreply.",
+      "stepUp": "Adding a domain changes who your mail appears to come from: it asks for a fresh code from your authenticator app."
+    },
+    "right": {
+      "manage": "Manage the companies’ sending addresses"
+    },
+    "held": {
+      "noSes": "No mail service is connected yet: connect e-mail first.",
+      "noCompany": "Seeing the companies is needed to choose whose domain it is."
+    },
+    "failedTitle": "Couldn’t load the mail domains",
+    "empty": {
+      "title": "No sending domain yet",
+      "body": "Connect e-mail first: everything that leaves the factory needs it."
+    },
+    "rule": {
+      "title": "How replies find their record",
+      "reply": "Each order, request for quote and purchase order gets a hidden reply address on your reply domain; a reply lands in that record’s thread.",
+      "checks": "A mail joins a thread only when it passes SPF, DKIM and DMARC and the sender is known; otherwise it waits in Mail to sort.",
+      "toSort": "Open Mail to sort",
+      "capture": "A capture address (forward or copy any mail to it) comes later."
+    },
+    "kind": {
+      "CONVERSATION": "Conversations",
+      "NOTIFICATION": "Notifications"
+    },
+    "kindHint": {
+      "CONVERSATION": "Quotes, orders and replies, sent by a person.",
+      "NOTIFICATION": "Sign-in links and automatic messages."
+    },
+    "state": {
+      "ready": "Ready to send",
+      "waiting": "Waiting for the records",
+      "failed": "Not verified",
+      "disabled": "Switched off"
+    },
+    "default": "Default",
+    "banner": {
+      "waiting": "The mail service has not found the records yet. Add them at your registrar; a change can take up to 72 hours to show.",
+      "failed": "The mail service could not verify this domain: check each record below, fix it at your registrar, then check again.",
+      "disabled": "This sending address is switched off: no mail leaves from it."
+    },
+    "field": {
+      "from": "Sends from",
+      "policy": "How the From line names the sender",
+      "reply": "Replies come back to",
+      "replyHint": "Each record gets its own hidden address here.",
+      "checked": "Last checked",
+      "company": "Company",
+      "account": "Mail service",
+      "domain": "Domain",
+      "localPart": "Address before the @",
+      "kind": "What it sends"
+    },
+    "policy": {
+      "COMPANY": "The company’s name only",
+      "PERSON_VIA_COMPANY": "The person, via the company",
+      "PERSON_ADDRESS": "The person, from their own address"
+    },
+    "policyHint": {
+      "COMPANY": "“Demo Srl”",
+      "PERSON_VIA_COMPANY": "“Anna Demo via Demo Srl”",
+      "PERSON_ADDRESS": "“Anna Demo”, from her address on the domain"
+    },
+    "notCheckedYet": "Not checked yet",
+    "records": {
+      "label": "Records for {domain}",
+      "type": "Type",
+      "name": "Name",
+      "value": "Value",
+      "state": "State",
+      "nameOf": "Name of the {purpose} record",
+      "valueOf": "Value of the {purpose} record",
+      "noValue": "Not given by Nexus yet: ask whoever keeps your domain.",
+      "later": "Nexus checks the three DKIM records with the mail service. SPF, DMARC and the reply MX are not checked by Nexus yet."
+    },
+    "purpose": {
+      "dkim": "DKIM (signature)",
+      "spf": "SPF (who may send)",
+      "dmarc": "DMARC (policy)",
+      "mx": "MX (replies)"
+    },
+    "record": {
+      "found": "Found",
+      "waiting": "Not found yet",
+      "failed": "Wrong or missing",
+      "retrying": "Checking again",
+      "notChecked": "Not checked by Nexus yet"
+    },
+    "copyAll": "Copy all records",
+    "checking": "Checking…",
+    "check": "Check now",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copiedSr": "Copied: {what}",
+    "copyFailed": "Could not copy: select the text and copy it by hand.",
+    "form": {
+      "required": "Fill this in.",
+      "noAccount": "Choose the mail service.",
+      "domain": "Expected a domain such as mail.example.com.",
+      "localPart": "Use letters, digits, dots and hyphens, such as noreply."
+    },
+    "noRight": "The mail domain is shown to people who may send mail.",
+    "stepUp": {
+      "add": "Adding a sending domain needs a fresh code from your authenticator app.",
+      "check": "Checking a sending domain needs a fresh code from your authenticator app."
+    },
+    "done": {
+      "added": "{domain} is added: add its records at your registrar, then check it.",
+      "addedNotChecked": "{domain} is added, but the mail service did not answer: check it again in a moment.",
+      "checked": {
+        "ready": "{domain} is verified: mail can leave from it.",
+        "waiting": "{domain}: the records are not found yet. Check again later.",
+        "failed": "{domain} could not be verified: fix the records, then check again.",
+        "disabled": "{domain} is switched off."
+      }
+    }
+  }
+}
