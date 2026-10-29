@@ -12,6 +12,8 @@ import {
   SalesOrderStatus,
   ScanKind,
   ScanSubject,
+  StockMoveReason,
+  StockValuationMethod,
   StyleRevisionStatus,
   StyleStatus,
   Uom,
@@ -24,9 +26,9 @@ import { seed as seedFloorAuth } from './floor-auth'
 import { seed as seedInventory, type InventorySeed } from './inventory'
 
 /**
- * The production seed, per tenant of seed/_core.ts: the golden flow's stages 10-work-order, 11b-cut and 12-scans on
- * plant A1, written as the app does: the office's rows in the tenant's office scope, the floor's in A1's floor scope
- * with the operator signed in on the cutting tablet (seed/floor-auth.ts).
+ * The production seed, per tenant of seed/_core.ts: the golden flow's stages 10-work-order, 11a-issue, 11b-cut and
+ * 12-scans on plant A1, written as the app does: the office's rows in the tenant's office scope, the floor's in A1's
+ * floor scope with the operator signed in on the cutting tablet (seed/floor-auth.ts).
  *
  *   floor rules  A1 names workers (an agreement on record); B1 records the station only (Q16 (b)).
  *   style        SEED-JKT-02, a second made-up jacket made only for production: colourways BLK and RED, sizes 50-54,
@@ -37,7 +39,9 @@ import { seed as seedInventory, type InventorySeed } from './inventory'
  *   order        SEED-SO-0002 for the brand P1, typed by the office: BLK 1/2/1 and RED 1/1/1 of sizes 50/52/54.
  *   WO-0001      2 colours x 3 sizes, released with the revision, its label template and batch SEED-BT-0001, its four
  *                operations at A1's work centres and its 18 planned materials (BOM line x cell); IN_PROGRESS after the
- *                first cut. Its id is the made-up work order the inventory seed issued hide SEED-HIDE-0001 to.
+ *                first cut.
+ *   issue        hide SEED-HIDE-0001 (the inventory seed's), whole, issued to the released WO-0001 and valued at the
+ *                lot's cost (a move to a work order needs it RELEASED or IN_PROGRESS: …_inventory_issue_work_order_guards).
  *   WO-0002      a DRAFT work order of one cell (BLK 52), with its operations and planned materials.
  *   floor        the operator's acknowledgement of the information notice (version 2026-10); one cut of the issued hide
  *                (20 ft² for sleeves of BLK 50 and 52, so the hide stays PARTLY_CUT); two bundles of sleeves from it;
@@ -63,6 +67,7 @@ const T = {
   planned: new Date('2026-11-15T08:00:00.000Z'),
   woReleased: new Date('2026-11-15T10:00:00.000Z'),
   acknowledged: new Date('2026-11-16T06:00:00.000Z'),
+  issued: new Date('2026-11-16T07:30:00.000Z'),
   cut: new Date('2026-11-16T09:00:00.000Z'),
   bundled: new Date('2026-11-16T10:00:00.000Z'),
   scanned: new Date('2026-11-17T08:00:00.000Z'),
@@ -98,6 +103,8 @@ export interface ProductionSeed {
   readonly operationIds: { readonly cut: string; readonly sew: string; readonly qc: string; readonly pack: string }
   /** WO-0002: draft. */
   readonly draftWorkOrderId: string
+  /** Hide SEED-HIDE-0001, whole, issued to WO-0001 (stage 11a-issue). */
+  readonly issueMoveId: string
   readonly cutLogId: string
   readonly bundleIds: readonly [string, string]
   /** The undone report, its undo, the standing report. */
@@ -424,6 +431,56 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
     }),
   )
 
+  // --- 11a-issue: the first hide, whole, issued to the released WO-0001 and valued at the lot's cost (once) ----------------
+  // (Here, not in the inventory seed: a stock move to a work order names a RELEASED or IN_PROGRESS one of its site.)
+  const issue = { move: id('inventory:move:issue:H1'), value: id('inventory:value:issue:H1') }
+  await db.withScope({ audience: 'office', tenantId, actorId }, (client) =>
+    client.$transaction(async (tx) => {
+      if (await tx.stockMove.findUnique({ where: { id: issue.move }, select: { id: true } })) return
+      await tx.stockMove.create({
+        data: {
+          id: issue.move,
+          companyId: companyA,
+          siteId: siteA,
+          reason: StockMoveReason.ISSUE,
+          itemId: item.leather,
+          itemColourId: itemColour.BLK,
+          lotId: inventory.leatherLotId,
+          hideId: inventory.hideIds[0],
+          fromLocationId: inventory.locations.bin,
+          quantity: '53.2000',
+          uom: Uom.FT2,
+          baseQuantity: '53.2000',
+          workOrderId,
+          reference: 'SEED-WO-0001',
+          idempotencyKey: 'seed-issue-H1',
+          occurredAt: T.issued,
+          createdAt: T.issued,
+          createdById: actorId,
+        },
+        select: { id: true },
+      })
+      await tx.stockValuation.create({
+        data: {
+          id: issue.value,
+          companyId: companyA,
+          siteId: siteA,
+          moveId: issue.move,
+          itemId: item.leather,
+          lotId: inventory.leatherLotId,
+          quantity: '-53.2000',
+          unitCost: '4.200000',
+          valueAmount: -22_344,
+          method: StockValuationMethod.LOT_COST,
+          idempotencyKey: `move:${issue.move}`,
+          createdAt: T.issued,
+          createdById: actorId,
+        },
+        select: { id: true },
+      })
+    }),
+  )
+
   // --- the floor: the notice, the cut, the bundles, the scans -----------------------------------------------------------
   const ackId = id('production:ack:A1:operator:2026-10')
   const cutLogId = id('production:cut:H1:1')
@@ -537,6 +594,7 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
     cellIds,
     operationIds,
     draftWorkOrderId,
+    issueMoveId: issue.move,
     cutLogId,
     bundleIds,
     scanIds,
