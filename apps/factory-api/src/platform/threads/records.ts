@@ -29,6 +29,13 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const site = await client.site.findUnique({ where: { id }, select: { companyId: true } })
     return site ? { companyId: site.companyId, siteId: id, partyId: null } : null
   },
+  // modules/parties (SCR-033, SCR-057 Activity and Documents; B-W1-07): the party's company (none: tenant-wide) and the
+  // party itself, so its shared messages reach its own contacts only; a known contact's mail without a thread joins it
+  // (platform/email-in/match.ts PARTY_RECORD).
+  Party: async (client, id) => {
+    const party = await client.party.findUnique({ where: { id }, select: { companyId: true } })
+    return party ? { companyId: party.companyId, siteId: null, partyId: id } : null
+  },
   // platform/auth (SCR-011, SCR-012, SCR-013; B-W0-27): an office person and a role are tenant-wide; a floor device and a
   // floor worker sit on their site. Admin records take internal notes only (no party).
   User: async (client, id) => ((await client.user.findUnique({ where: { id }, select: { id: true } })) ? { companyId: null, siteId: null, partyId: null } : null),

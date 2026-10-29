@@ -8,6 +8,16 @@
       "today": "Oggi",
       "mailToSort": "Posta da smistare"
     },
+    "sales": {
+      "area": "Vendite",
+      "main": "Principali",
+      "customers": "Clienti"
+    },
+    "purchasing": {
+      "area": "Acquisti",
+      "main": "Principali",
+      "suppliers": "Fornitori"
+    },
     "admin": {
       "area": "Amministrazione",
       "overview": "Tutte le impostazioni",

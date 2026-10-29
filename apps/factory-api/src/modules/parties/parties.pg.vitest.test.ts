@@ -547,6 +547,32 @@ describe('the tenant and company walls', () => {
     expect(first.count).toBe(second.count)
     expect((await call('viewer', 'GET', '/parties?role=FRIEND')).statusCode).toBe(400)
   })
+
+  it('says on each row what the record lacks, and lists only the parties that need a VIES proof or block an invoice (SCR-032 tiles)', async () => {
+    const bare = await create('sales', { code: 'CLI-BARE', legalName: 'Cliente Senza Dati S.r.l.', roles: ['CUSTOMER'] })
+    const all = (await call('viewer', 'GET', '/parties?role=CUSTOMER,BRAND&limit=200')).json()
+    const row = (code: string) => all.parties.find((entry: Json) => entry.code === code)
+    expect(row('CLI-001')).toMatchObject({ attention: [], invoiceBlocked: false })
+    expect(row('DE-NO')).toMatchObject({ attention: ['VIES_NOT_PROVEN'], invoiceBlocked: false })
+    expect(row('CLI-BARE')).toMatchObject({ attention: expect.arrayContaining(['NO_TAX_IDENTITY', 'NO_REGISTERED_ADDRESS']), invoiceBlocked: true })
+    // The record says the same as its row.
+    expect((await read('viewer', bare.id)).attention).toEqual(row('CLI-BARE').attention)
+
+    const vies = (await call('viewer', 'GET', '/parties?role=CUSTOMER,BRAND&attention=VIES')).json()
+    expect(vies.parties.map((entry: Json) => entry.code)).toEqual(all.parties.filter((entry: Json) => entry.attention.includes('VIES_NOT_PROVEN')).map((entry: Json) => entry.code))
+    expect(vies.parties.map((entry: Json) => entry.code)).toEqual(expect.arrayContaining(['DE-DOWN', 'DE-NO']))
+    expect(vies.count).toBe(vies.parties.length)
+    const invoice = (await call('viewer', 'GET', '/parties?role=CUSTOMER,BRAND&attention=INVOICE')).json()
+    expect(invoice.parties.every((entry: Json) => entry.invoiceBlocked)).toBe(true)
+    expect(invoice.parties.map((entry: Json) => entry.code)).toContain('CLI-BARE')
+    expect(invoice.parties.map((entry: Json) => entry.code)).not.toContain('CLI-001')
+    // Paged by code like the plain list; the count is the filtered total on every page.
+    const first = (await call('viewer', 'GET', '/parties?role=CUSTOMER,BRAND&attention=VIES&limit=1')).json()
+    const second = (await call('viewer', 'GET', `/parties?role=CUSTOMER,BRAND&attention=VIES&limit=1&cursor=${first.nextCursor}`)).json()
+    expect([first.parties[0].code, second.parties[0].code]).toEqual(vies.parties.slice(0, 2).map((entry: Json) => entry.code))
+    expect([first.count, second.count]).toEqual([vies.count, vies.count])
+    expect((await call('viewer', 'GET', '/parties?attention=EVERYTHING')).statusCode).toBe(400)
+  })
 })
 
 describe('the customers and suppliers import (SCM-289, PLT-176)', () => {

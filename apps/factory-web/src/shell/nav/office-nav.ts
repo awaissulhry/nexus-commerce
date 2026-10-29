@@ -101,6 +101,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/home/today/print',
   '/home/mail-to-sort',
   '/records/[type]/[id]',
+  '/sales/customers',
+  '/sales/customers/[partyId]',
+  '/purchasing/suppliers',
+  '/purchasing/suppliers/[partyId]',
   // B-W0-27 Admin: All settings, Companies & sites, Devices & printers, Users, Roles & permissions, and their records.
   '/admin',
   '/admin/companies',
