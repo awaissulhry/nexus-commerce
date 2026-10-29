@@ -223,6 +223,7 @@ export {
   PlanningTrigger,
   PpeCategory,
   PpeRegisterKind,
+  PpeRegisterRisk,
   PpeRegisterStatus,
   PrinterKind,
   PrinterStatus,

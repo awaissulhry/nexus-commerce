@@ -303,9 +303,10 @@ export async function createEntry(caller: CommandCaller, input: CreateInput, ide
     await checkPeople(client, partyId, ownerId)
   })
   const { result } = await registerCommand(caller, { name: 'compliance.register.create', idempotencyKey, input }, async (tools) => {
-    const reference = await nextReference(tools, input.companyId, entry.reportedAt)
+    const id = newId()
+    const reference = await nextReference(tools, input.companyId, entry.reportedAt, id)
     const record = await insertEntry(tools, {
-      id: newId(),
+      id,
       companyId: input.companyId,
       reference,
       ...entry,

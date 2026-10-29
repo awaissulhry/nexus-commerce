@@ -31,7 +31,8 @@ export type RegisterRisk = (typeof REGISTER_RISKS)[number]
 /**
  * Where an entry came from, when another record opened it: a release reversal whose garments had already left
  * (B-W1-45, "shipped ones go to the PPE register"), a final inspection, a shipment. A person's own entry has none.
- * The complaint (SAL-416) and the NCR (W2a) join with their modules.
+ * The complaint (SAL-416) and the NCR (W2a) join with their modules. The …_quality_ppe_register_guards trigger lists the
+ * same types.
  */
 export const REGISTER_SOURCE_TYPES = ['QualityReleaseReversal', 'QualityRelease', 'Inspection', 'Shipment'] as const
 export type RegisterSourceType = (typeof REGISTER_SOURCE_TYPES)[number]
@@ -275,16 +276,4 @@ export function dutiesOf(entry: Pick<RegisterEntryState, 'risk' | 'actionTaken' 
     { code: 'DISTRIBUTORS', done: entry.distributorsInformedAt !== null, required: shippedGoods, law: REGISTER_LAW.distributors },
     { code: 'AUTHORITY', done: entry.authorityNotifiedAt !== null && !blank(entry.authorityReference), required: entry.risk === 'YES', law: REGISTER_LAW.authority },
   ]
-}
-
-/** The register's own reference while it has no number series (interim): `REG-<year>-<4 digits>`. */
-export const REFERENCE_PREFIX = 'REG'
-export function formatReference(year: string, value: number): string {
-  return `${REFERENCE_PREFIX}-${year}-${String(value).padStart(4, '0')}`
-}
-
-/** The number of a reference of that year (`REG-2026-0007` → 7), or null for another form. */
-export function referenceNumber(reference: string, year: string): number | null {
-  const match = new RegExp(`^${REFERENCE_PREFIX}-${year}-(\\d{4,9})$`).exec(reference)
-  return match ? Number.parseInt(match[1]!, 10) : null
 }

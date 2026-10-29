@@ -23,6 +23,7 @@ export const NUMBER_KINDS = [
   'RETURN',
   'LOT',
   'BATCH',
+  'PPE_REGISTER',
 ] as const
 export type NumberKind = (typeof NUMBER_KINDS)[number]
 
@@ -41,9 +42,11 @@ export function isFiscalKind(kind: NumberKind): boolean {
   return FISCAL_KINDS.includes(kind)
 }
 
-/** The kind in words, for messages: `invoice`, `DDT`, `purchase order`. */
+/** The kind in words, for messages: `invoice`, `DDT`, `purchase order`, `PPE register`. */
 export function kindLabel(kind: NumberKind): string {
-  return kind === 'DDT' ? 'DDT' : kind.toLowerCase().replace(/_/g, ' ')
+  if (kind === 'DDT') return 'DDT'
+  if (kind === 'PPE_REGISTER') return 'PPE register'
+  return kind.toLowerCase().replace(/_/g, ' ')
 }
 
 /** When the counter starts again: every calendar year, or never. */
@@ -116,6 +119,7 @@ const DEFAULT_PREFIX: Readonly<Record<NumberKind, string>> = {
   RETURN: 'RMA',
   LOT: 'LOT',
   BATCH: 'BT',
+  PPE_REGISTER: 'REG',
 }
 
 /** The pattern a new series gets when the admin types none: `FT-{YYYY}-{N:5}` (yearly) or `LOT-{N:6}` (never resets). */

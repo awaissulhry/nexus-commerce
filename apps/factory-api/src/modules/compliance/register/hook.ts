@@ -5,7 +5,7 @@ import { uniqueIds } from '@nexus/factory-domain/threads/rules'
 import type { CommandTools } from '../../../core/command'
 import { ApiError } from '../../../core/errors'
 import { opened } from './register'
-import { insertEntry, nextReference } from './store'
+import { insertEntry, nextReference, readEntryBySource } from './store'
 import { traceOf } from './trace'
 
 /**
@@ -14,8 +14,9 @@ import { traceOf } from './trace'
  * audit row (action compliance.register.openFrom) and the event compliance.register_entry_opened. No permission is
  * checked here: the calling step checked its own (as platform/threads' ensureThread). Office and system callers only.
  *
- * The work orders' style is the entry's (they must share one); their batch numbers join the entry's. Each call opens a
- * new entry: the caller calls it once per source record (one reversal → one entry). Called from nowhere yet.
+ * The work orders' style is the entry's (they must share one); their batch numbers join the entry's. One entry per
+ * source record (the partial unique index on the source): a second call for the same source answers the entry it opened
+ * (`opened: false`) and writes nothing. Called from nowhere yet.
  */
 
 export interface RegisterOpening {
@@ -45,6 +46,8 @@ export interface RegisterOpening {
 export interface OpenedEntry {
   readonly entryId: string
   readonly reference: string
+  /** False when the source had opened its entry already. */
+  readonly opened: boolean
   /** Garments it concerns have left for customers (the distributors must be informed). */
   readonly shippedGoods: boolean
 }
@@ -53,6 +56,11 @@ export async function openRegisterEntryFor(tools: CommandTools, opening: Registe
   const { tx, context, now } = tools
   if (context.audience !== 'office' && context.audience !== 'system') {
     throw new ApiError('internal_error', `The PPE register is kept by office and system commands, not the ${context.audience} audience.`)
+  }
+  const existing = await readEntryBySource(tx, opening.source.type, opening.source.id)
+  if (existing) {
+    const trace = await traceOf(tx, existing.companyId, existing)
+    return { entryId: existing.id, reference: existing.reference, opened: false, shippedGoods: trace.shippedGoods }
   }
   const workOrderIds = uniqueIds(opening.workOrderIds)
   const workOrders = workOrderIds.length ? await tx.workOrder.findMany({ where: { id: { in: workOrderIds }, companyId: opening.companyId }, select: { id: true, styleId: true, batchNumber: true } }) : []
@@ -77,11 +85,12 @@ export async function openRegisterEntryFor(tools: CommandTools, opening: Registe
   }
   const problems = entryProblems(entry, now)
   if (problems.length > 0) throw new ValidationError('The register entry is not valid.', problems)
-  const reference = await nextReference(tools, opening.companyId, entry.reportedAt)
+  const id = newId()
+  const reference = await nextReference(tools, opening.companyId, entry.reportedAt, id)
   const record = await insertEntry(
     tools,
     {
-      id: newId(),
+      id,
       companyId: opening.companyId,
       reference,
       ...entry,
@@ -95,5 +104,5 @@ export async function openRegisterEntryFor(tools: CommandTools, opening: Registe
   )
   const trace = await traceOf(tx, record.companyId, record)
   opened(tools, record, trace.shippedGoods)
-  return { entryId: record.id, reference, shippedGoods: trace.shippedGoods }
+  return { entryId: record.id, reference, opened: true, shippedGoods: trace.shippedGoods }
 }

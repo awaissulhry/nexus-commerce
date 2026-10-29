@@ -152,7 +152,9 @@ describe('the PPE register (QHS-118; Reg. (EU) 2016/425 art. 8(4))', () => {
     expect(created.duties.find((duty: Json) => duty.code === 'DISTRIBUTORS')).toMatchObject({ required: true, done: false })
     expect(created.toClose.map((problem: Json) => problem.code)).toEqual(['RISK_NOT_ASSESSED', 'NO_CORRECTIVE_ACTION', 'DISTRIBUTORS_NOT_INFORMED'])
 
-    expect(await auditOf(created.id)).toMatchObject([{ action: 'compliance.register.create', audience: 'OFFICE', after: { reference: created.reference, status: 'OPEN', extra: { risk: 'ASSESSING' } } }])
+    expect(await auditOf(created.id)).toMatchObject([{ action: 'compliance.register.create', audience: 'OFFICE', after: { reference: created.reference, status: 'OPEN', risk: 'ASSESSING', batchNumbers: ['SEED-BT-0001'] } }])
+    // The reference is the company's PPE_REGISTER series' number (allocateNumber: its NumberAllocation row).
+    expect(await admin('SELECT kind::text AS kind, formatted FROM "NumberAllocation" WHERE "recordType" = $1 AND "recordId" = $2', ['PpeRegisterEntry', created.id])).toEqual([{ kind: 'PPE_REGISTER', formatted: created.reference }])
     expect(await eventsOf('compliance.register_entry_opened', created.id)).toEqual([
       { type: 'compliance.register_entry_opened', companyId: A.companyA, payload: { entryId: created.id, reference: created.reference, kind: 'NON_CONFORMITY', styleId: jkt02, risk: 'ASSESSING', sourceType: null, sourceId: null, shippedGoods: true } },
     ])
@@ -216,6 +218,8 @@ describe('the PPE register (QHS-118; Reg. (EU) 2016/425 art. 8(4))', () => {
 
     const distributors = await refused('quality', 'POST', url(entry.id, '/close'), { version: entry.version, reason: 'Fixed.' }, 409)
     expect(problemCodes(distributors)).toEqual(['DISTRIBUTORS_NOT_INFORMED'])
+    // The database holds the same duty for every login: garments it concerns left on SEED-SH-0001.
+    await expect(admin(`UPDATE "PpeRegisterEntry" SET status = 'CLOSED', "closedAt" = now(), "closedById" = $2, "closeReason" = 'x' WHERE id = $1`, [entry.id, quality])).rejects.toThrow(/left for customers: it closes once the distributors were informed/)
 
     entry = (await ok('quality', 'POST', url(entry.id, '/distributors-informed'), { version: entry.version, note: 'P1 told by e-mail and phone; no garment to return.' })).entry
     expect(entry.distributorsInformedAt).toBe(new Date(current).toISOString())
@@ -260,6 +264,7 @@ describe('the PPE register (QHS-118; Reg. (EU) 2016/425 art. 8(4))', () => {
     const noNotice = await refused('quality', 'POST', url(entry.id, '/close'), { version: entry.version, reason: 'Recalled.' }, 409)
     expect(problemCodes(noNotice)).toEqual(['AUTHORITY_NOT_NOTIFIED'])
     expect(noNotice.message).toContain('art. 8(8)')
+    await expect(admin(`UPDATE "PpeRegisterEntry" SET status = 'CLOSED', "closedAt" = now(), "closedById" = $2, "closeReason" = 'x' WHERE id = $1`, [entry.id, quality])).rejects.toThrow(/may present a risk: it closes once the authorities were told/)
 
     const early = await refused('quality', 'POST', url(entry.id, '/authority-notified'), { version: entry.version, notifiedAt: '2026-11-01T09:00:00.000Z', reference: 'MSA-TEST-1', note: 'Sent the notice.' }, 400)
     expect(early.issues).toEqual([{ path: 'body/notifiedAt', message: expect.stringContaining('before the entry was reported') }])
@@ -297,12 +302,46 @@ describe('the PPE register (QHS-118; Reg. (EU) 2016/425 art. 8(4))', () => {
         source: { type: 'QualityReleaseReversal', id: seedA.quality.reversalId },
       }),
     { ...COMMAND_SETTINGS, clock })
-    expect(result).toMatchObject({ reference: `REG-${YEAR}-0004`, shippedGoods: true })
+    expect(result).toMatchObject({ reference: `REG-${YEAR}-0004`, opened: true, shippedGoods: true })
     const entry = (await ok('quality', 'GET', url(result.entryId))).entry
     expect(entry).toMatchObject({ kind: 'NON_CONFORMITY', styleId: jkt02, batchNumbers: ['SEED-BT-0001'], workOrderIds: [seedA.quality.production.workOrderId], source: { type: 'QualityReleaseReversal', id: seedA.quality.reversalId }, createdAt: expect.any(String) })
     expect(entry.trace.workOrders[0].via).toEqual(['BATCH', 'WORK_ORDER'])
     expect(await auditOf(result.entryId)).toMatchObject([{ action: 'compliance.register.openFrom', audience: 'SYSTEM' }])
     expect(await eventsOf('compliance.register_entry_opened', result.entryId)).toMatchObject([{ payload: { sourceType: 'QualityReleaseReversal', shippedGoods: true } }])
+    // One entry per source record: a repeat answers the same entry and writes nothing (the partial unique index holds it).
+    const again = await runCommand(caller, { name: 'quality.reverseRelease', input: { test: 'hook again' } }, (tools) =>
+      openRegisterEntryFor(tools, { companyId: A.companyA, workOrderIds: [seedA.quality.production.workOrderId], description: 'Again.', source: { type: 'QualityReleaseReversal', id: seedA.quality.reversalId } }).then((opened) => {
+        tools.audit({ recordType: 'QualityReleaseReversal', recordId: seedA.quality.reversalId, after: { test: true } })
+        return opened
+      }),
+    { ...COMMAND_SETTINGS, clock })
+    expect(again.result).toEqual({ entryId: result.entryId, reference: result.reference, opened: false, shippedGoods: true })
+    expect(await auditOf(result.entryId)).toHaveLength(1)
+    await expect(
+      admin(
+        `INSERT INTO "PpeRegisterEntry" (id, "tenantId", "companyId", reference, kind, "styleId", "reportedAt", description, "sourceType", "sourceId") VALUES ($1, $2, $3, 'TEST-DUP', 'NON_CONFORMITY', $4, now(), 'x', 'QualityReleaseReversal', $5)`,
+        [newId(), A.tenant, A.companyA, jkt02, seedA.quality.reversalId],
+      ),
+    ).rejects.toThrow(/PpeRegisterEntry_tenantId_sourceType_sourceId_key/)
+  })
+
+  it('holds the lists and the source in the database: rows of the company (work orders of the style), source both or neither', async () => {
+    const entry = entries.complaint!
+    const set = (column: string, value: unknown) => admin(`UPDATE "PpeRegisterEntry" SET "${column}" = $2 WHERE id = $1`, [entry.id, value])
+    await expect(set('workOrderIds', [seedA.quality.serialWorkOrderId])).rejects.toThrow(/names a work order that is not of its company and style/)
+    await expect(set('lotIds', [newId()])).rejects.toThrow(/names a material lot that is not of its company/)
+    await expect(set('shipmentIds', [newId()])).rejects.toThrow(/names a shipment that is not of its company/)
+    await expect(set('sourceType', 'QualityReleaseReversal')).rejects.toThrow(/names its source as a known record type and an id, or not at all/)
+    await expect(set('authorityReference', 'MSA-X')).rejects.toThrow(/authority reference without the date/)
+    await expect(set('actionCompletedAt', new Date())).rejects.toThrow(/corrective action done without the action/)
+    // Valid lists pass (the leather lot of the company, the style's work order, the company's shipment).
+    await set('lotIds', [seedA.quality.production.inventory.leatherLotId])
+    await set('lotIds', [])
+    // No PPE_REGISTER series open for the year: recording is refused in words, and nothing is written.
+    await admin(`UPDATE "NumberSeries" SET status = 'CLOSED' WHERE "tenantId" = $1 AND kind = 'PPE_REGISTER'`, [B.tenant])
+    const closed = await refused('otherTenant', 'POST', '/compliance/register', { companyId: B.companyA, kind: 'COMPLAINT', styleId: idOf(ns.b, 'production:style:JKT-02'), description: 'x' }, 404)
+    expect(closed.message).toBe('This company has no active PPE register series; an admin sets it up under numbering.')
+    expect(await admin(`SELECT id FROM "PpeRegisterEntry" WHERE "tenantId" = $1 AND reference LIKE 'REG-%'`, [B.tenant])).toEqual([])
   })
 
   it('keeps the walls: viewers only read, other companies, parties and tenants see nothing, the floor and the portal are refused', async () => {

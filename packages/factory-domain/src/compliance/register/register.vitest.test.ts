@@ -8,8 +8,6 @@ import {
   dutyDateProblems,
   editProblems,
   entryProblems,
-  formatReference,
-  referenceNumber,
   registerEntryMachine,
   type CloseFacts,
 } from './rules'
@@ -94,13 +92,6 @@ describe('writing an entry', () => {
     expect(dutyDateProblems(at('2026-11-21T07:00:00.000Z'), reported, NOW, 'body/at')).toEqual([])
     expect(dutyDateProblems(at('2026-11-20T10:00:00.000Z'), reported, NOW, 'body/at')).toEqual([{ path: 'body/at', message: 'This is before the entry was reported (2026-11-21).' }])
     expect(dutyDateProblems(at('2026-12-01T10:00:00.000Z'), reported, NOW, 'body/at')).toEqual([{ path: 'body/at', message: 'This date is in the future.' }])
-  })
-
-  it('formats and reads the interim reference', () => {
-    expect(formatReference('2026', 7)).toBe('REG-2026-0007')
-    expect(referenceNumber('REG-2026-0007', '2026')).toBe(7)
-    expect(referenceNumber('REG-2025-0007', '2026')).toBeNull()
-    expect(referenceNumber('SEED-REG-2026-001', '2026')).toBeNull()
   })
 })
 
