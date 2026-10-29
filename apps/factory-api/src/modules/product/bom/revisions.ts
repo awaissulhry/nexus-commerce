@@ -1,18 +1,17 @@
-import { ConflictError, DomainError, InvalidStateError } from '@nexus/factory-domain/core/errors'
+import { ConflictError, InvalidStateError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { BomDiffView, BomView, CompareQuery, CopyRevisionBody, ObsoleteBody, ReleaseBody } from '@nexus/factory-domain/product/bom/contracts'
 import { copyLines } from '@nexus/factory-domain/product/bom/copy'
 import { diffBoms } from '@nexus/factory-domain/product/bom/diff'
 import { PRODUCT_BOM_MANAGE, PRODUCT_BOM_RELEASE } from '@nexus/factory-domain/product/bom/permissions'
-import { bomIssues, obsoleteRefusal, releaseRefusal, type BomLineData } from '@nexus/factory-domain/product/bom/rules'
-import { routingIssues } from '@nexus/factory-domain/product/routing/rules'
+import { obsoleteRefusal, releaseRefusal, type BomLineData } from '@nexus/factory-domain/product/bom/rules'
 import { newRevisionRefusal, nextRevisionNumber, styleRevisionMachine } from '@nexus/factory-domain/product/styles/revisions'
 import { styleMachine } from '@nexus/factory-domain/product/styles/rules'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, type CommandCaller } from '../../../core/command'
-import { readOperations, readSteps } from '../routing/store'
+import { readOperations, readSteps } from '../routing/read'
 import {
   assertMayWrite,
   bomStyleOf,
@@ -28,6 +27,8 @@ import {
   readMaterials,
   readRevisionFor,
   readStyleFor,
+  releaseBlocked,
+  releaseCheck,
 } from './store'
 
 /**
@@ -35,8 +36,8 @@ import {
  * the next DRAFT, two revisions compared, a draft released, and a revision made obsolete. Each write locks the style row
  * first and then compares and sets the revision's version.
  *
- * Release: the draft's BOM has no blocker (./store bomViewOf `issues`) and neither has its routing (factory-domain
- * product/routing `routingIssues`: at least one step, minutes above 0, a scanned step), because a work order is released
+ * Release: ./store `releaseCheck` (the same check the BOM view's `issues` and `releasable` show) finds no blocker in the
+ * draft's BOM nor in its routing (at least one step, minutes above 0, a scanned step), because a work order is released
  * with one operation per routing step and the floor reports at the scanned ones: a released revision without a routing
  * would be a dead end. Every blocker of both is refused at once (409); warnings pass. The style's RELEASED revision
  * becomes OBSOLETE first, then this one RELEASED (the partial unique index allows one RELEASED revision per style,
@@ -187,23 +188,18 @@ export async function releaseRevision(caller: CommandCaller, styleId: string, re
     await lockMaterials(tx, lines.map((line) => line.itemId))
     const { materials } = await readMaterials(tx, lines.map((line) => line.itemId))
     const current = await tx.style.findUniqueOrThrow({ where: { id: styleId }, select: { sizes: true, baseSize: true } })
-    const { blockers } = bomIssues(lines, bomStyleOf(current, await readColourways(tx, styleId)), materials, {
-      plannedHideYieldPct: row.plannedHideYieldPct === null ? null : decimalText(row.plannedHideYieldPct.toString()),
-    })
     // The routing as it is now (its steps change only under the style row this command holds).
     const steps = await readSteps(tx, revisionId)
-    const routing = routingIssues(steps, await readOperations(tx, steps.map((step) => step.operationId))).blockers
-    if (blockers.length > 0 || routing.length > 0) {
-      const issues = [
-        ...blockers.map((issue) => ({
-          path: issue.lineId === null ? `bom/${issue.code}` : `lines/${issue.lineId}${issue.size === null ? '' : `/sizes/${issue.size}`}${issue.colourwayId === null ? '' : `/colours/${issue.colourwayId}`}`,
-          message: issue.message,
-        })),
-        ...routing.map((issue) => ({ path: issue.stepId === null ? `routing/${issue.code}` : `routing/steps/${issue.stepId}`, message: issue.message })),
-      ]
-      const what = blockers.length === 0 ? 'The routing is' : routing.length === 0 ? 'The BOM is' : 'The BOM and the routing are'
-      throw new DomainError('invalid_state', `${what} not ready to release: ${issues.length} problem(s) to fix first.`, issues)
-    }
+    // The same check the BOM view shows (./store releaseCheck): the view never says releasable for a refused release.
+    const { blockers } = releaseCheck({
+      lines,
+      style: bomStyleOf(current, await readColourways(tx, styleId)),
+      materials,
+      plannedHideYieldPct: row.plannedHideYieldPct === null ? null : decimalText(row.plannedHideYieldPct.toString()),
+      steps,
+      operations: await readOperations(tx, steps.map((step) => step.operationId)),
+    })
+    if (blockers.length > 0) throw releaseBlocked(blockers)
 
     const previous = await tx.styleRevision.findFirst({ where: { styleId, status: 'RELEASED' }, select: { id: true, revision: true, version: true } })
     if (previous) {

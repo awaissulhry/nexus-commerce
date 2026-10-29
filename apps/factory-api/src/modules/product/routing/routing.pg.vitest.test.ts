@@ -289,9 +289,11 @@ describe('a routing built through the API: cut, sew, finish, inspect (PRD-109, P
 })
 
 describe('the release gate: a revision is released only with a routing a work order can be made from', () => {
-  const release = async (expected: number): Promise<Json> => {
+  /** Releases revision 1; the BOM view said beforehand what the release does (one check for both). */
+  const release = async (expected: number, issues: Json[] = []): Promise<Json> => {
     const bom = (await ok('engineer', 'GET', `${revisionUrl(jacket, revision1)}/bom`)).bom
-    expect(bom).toMatchObject({ issues: [], releasable: true })
+    expect(bom.issues).toEqual(issues)
+    expect(bom.releasable).toBe(issues.length === 0)
     const response = await call('engineer', 'POST', `${revisionUrl(jacket, revision1)}/release`, { version: bom.revision.version })
     expect(response.statusCode, response.body).toBe(expected)
     return response.json()
@@ -303,7 +305,8 @@ describe('the release gate: a revision is released only with a routing a work or
     let routing = await getRouting(jacket, revision1)
     for (const step of routing.steps) routing = await patchStep(step.id, { scanRequired: false })
     expect(routing).toMatchObject({ finalStepId: null, issues: [{ code: 'NO_SCAN_POINT', stepId: null }], minutes: { scanPoints: 0 } })
-    expect((await release(409)).error).toMatchObject({
+    const noScan = 'No step is scanned: the floor could not report a garment. Mark at least the final operation as scanned.'
+    expect((await release(409, [{ code: 'NO_SCAN_POINT', lineId: null, size: null, colourwayId: null, stepId: null, message: noScan }])).error).toMatchObject({
       code: 'invalid_state',
       message: 'The routing is not ready to release: 1 problem(s) to fix first.',
       issues: [{ path: 'routing/NO_SCAN_POINT', message: 'No step is scanned: the floor could not report a garment. Mark at least the final operation as scanned.' }],
@@ -316,7 +319,8 @@ describe('the release gate: a revision is released only with a routing a work or
     const pack = seedStep('SEED-PACK')
     await admin('UPDATE "RoutingOperation" SET "standardMinutes" = 0 WHERE id = $1', [pack])
     expect((await getRouting(jacket, revision1)).issues).toEqual([{ code: 'MINUTES_NOT_POSITIVE', stepId: pack, message: 'Step 40 (SEED-PACK): its standard minutes are above 0.' }])
-    expect((await release(409)).error).toMatchObject({
+    const notPositive = 'Step 40 (SEED-PACK): its standard minutes are above 0.'
+    expect((await release(409, [{ code: 'MINUTES_NOT_POSITIVE', lineId: null, size: null, colourwayId: null, stepId: pack, message: notPositive }])).error).toMatchObject({
       code: 'invalid_state',
       message: 'The routing is not ready to release: 1 problem(s) to fix first.',
       issues: [{ path: `routing/steps/${pack}`, message: 'Step 40 (SEED-PACK): its standard minutes are above 0.' }],
