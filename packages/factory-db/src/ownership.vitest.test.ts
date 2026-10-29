@@ -103,6 +103,7 @@ describe('model ownership', () => {
       'SalesOrder',
       'SalesOrderLine',
       'SalesOrderLineSize',
+      'SalesSettings',
       'SdiNotification',
       'SdiSubmission',
       'SecretValue',

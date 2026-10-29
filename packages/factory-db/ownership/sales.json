@@ -97,6 +97,14 @@
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
         "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
       }
+    },
+    "SalesSettings": {
+      "about": "The office keeps the sales settings of each company and the tenant-wide ones: the margin floor, the discount limit, the default validity and deposit of a quote; the quotes read them. Rows are changed, never deleted (the …_sales_settings_guards triggers). The floor and the portal read none of it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
     }
   }
 }
