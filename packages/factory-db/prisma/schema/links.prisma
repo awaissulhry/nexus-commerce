@@ -50,8 +50,9 @@ model OneOffLink {
   evidence LinkEvidence[]
   // sales.prisma: the quote acceptances made through it.
   quoteAcceptances QuoteAcceptance[]
-  // supply.prisma: the purchase orders confirmed through it (PO_CONFIRM).
-  purchaseOrderConfirmations PurchaseOrder[]
+  // supply.prisma: the purchase orders confirmed through it (PO_CONFIRM), and those it proposed changes to.
+  purchaseOrderConfirmations PurchaseOrder[] @relation("PurchaseOrderConfirmLink")
+  purchaseOrderProposals     PurchaseOrder[] @relation("PurchaseOrderProposalLink")
 
   // The target of the evidence rows' reference: an evidence row names its link's party.
   @@unique([tenantId, partyId, id])

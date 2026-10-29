@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { ValidationError } from '../../core/errors'
 import { answerProblem, answerSummary, declineText, lineAnswerText, outcomeOf, planAnswer, type AskedLine, type ConfirmInput } from './answer'
 import { buyerNote, doneMessage } from './notes'
+import { receivingProblem } from '../../inventory/receipts/rules'
+import { OPEN_PURCHASE_STATUSES } from '../../planning/netting'
+import { cancelProblem, newLinkProblem } from '../orders'
+import { acceptedConfirmationOf, decisionProblem, proposalAcceptedMail, proposalColumnsOf, proposedLineOf } from './proposal'
 import { renewalRefusal, type RenewFacts } from './renew'
 
 const TODAY = '2026-11-02'
@@ -176,5 +180,62 @@ describe('ask for a new link: only an expired link of an order that still waits,
     expect(renewalRefusal({ ...base, contact: { email: 'orders@example.com', status: 'ARCHIVED' } })).toBe('ADDRESS_NOT_ON_FILE')
     expect(renewalRefusal({ ...base, contact: null })).toBe('ADDRESS_NOT_ON_FILE')
     expect(renewalRefusal({ ...base, askedRecently: true })).toBe('ASKED_RECENTLY')
+  })
+})
+
+describe('the proposal as the order keeps it, and what accepting it makes (P2: the buyer decides)', () => {
+  const plan = planAnswer(
+    LINES,
+    {
+      mode: 'BY_LINE',
+      lines: [
+        { lineId: L10, answer: 'SPLIT', deliveries: [{ quantity: '600', date: '2026-11-20' }, { quantity: '600', date: '2026-11-27' }], reason: 'Two dye lots' },
+        { lineId: L20, answer: 'AS_ASKED' },
+        { lineId: L30, answer: 'CANNOT_DELIVER', reason: 'Discontinued' },
+      ],
+    },
+    TODAY,
+  )
+
+  it('stores each line: first delivery, second delivery of a split, the reason; as asked = the asked values; cannot = 0', () => {
+    expect(plan.lines.map(proposalColumnsOf)).toEqual([
+      { proposedQuantity: '600.0000', proposedDate: '2026-11-20', proposedSplitQuantity: '600.0000', proposedSplitDate: '2026-11-27', proposalReason: 'Two dye lots' },
+      { proposedQuantity: '5.0000', proposedDate: '2026-11-25', proposedSplitQuantity: null, proposedSplitDate: null, proposalReason: null },
+      { proposedQuantity: '0.0000', proposedDate: null, proposedSplitQuantity: null, proposedSplitDate: null, proposalReason: 'Discontinued' },
+    ])
+  })
+
+  it('reads the columns back as the same answer, and accepting makes the whole quantity by the later date', () => {
+    const stored = plan.lines.map((line, index) => ({ id: line.lineId, seq: line.seq, quantity: LINES[index]!.quantity, uom: LINES[index]!.uom, needDate: LINES[index]!.needDate, ...proposalColumnsOf(line) }))
+    const read = stored.map(proposedLineOf)
+    expect(read.map((line) => line && { kind: line.kind, quantity: line.quantity, date: line.date, changes: line.changes, deliveries: line.deliveries })).toEqual(
+      plan.lines.map((line) => ({ kind: line.kind, quantity: line.quantity, date: line.date, changes: line.changes, deliveries: line.deliveries })),
+    )
+    expect(read.map((line) => acceptedConfirmationOf(line!))).toEqual([
+      { confirmedQuantity: '1200.0000', confirmedDate: '2026-11-27' },
+      { confirmedQuantity: '5.0000', confirmedDate: '2026-11-25' },
+      { confirmedQuantity: '0.0000', confirmedDate: null },
+    ])
+    expect(proposedLineOf({ ...stored[0]!, proposedQuantity: null })).toBeNull()
+  })
+
+  it('only an order with changes proposed waits for the decision; the supplier hears of an acceptance', () => {
+    expect(decisionProblem('CHANGES_PROPOSED')).toBeNull()
+    expect(decisionProblem('SENT')).toMatch(/has not proposed changes/)
+    expect(decisionProblem('CONFIRMED')).toBe('The order has no proposal waiting for a decision.')
+    expect(proposalAcceptedMail({ language: 'it', number: 'PO-2026-0001', recipientName: 'Ufficio ordini', message: ' A presto ' })).toEqual({
+      subject: 'Ordine di acquisto PO-2026-0001: modifiche accettate',
+      body: "Gentile Ufficio ordini,\n\nabbiamo accettato le modifiche che ci ha proposto: l'ordine PO-2026-0001 è confermato come da sua proposta. Grazie.\n\nA presto",
+    })
+    expect(proposalAcceptedMail({ language: 'en', number: 'PO-1', recipientName: null }).body).toBe('Dear supplier,\n\nwe accepted the changes you proposed: purchase order PO-1 is confirmed as you proposed it. Thank you.')
+  })
+})
+
+describe('an order whose supplier proposed changes waits for the buyer everywhere', () => {
+  it('no cancel, no new link, no receipt until the buyer accepts or refuses; the plan still counts it on order', () => {
+    expect(cancelProblem('CHANGES_PROPOSED')).toMatch(/accept or refuse the supplier's changes first/)
+    expect(newLinkProblem('CHANGES_PROPOSED')).toMatch(/accept or refuse the supplier's changes first/)
+    expect(receivingProblem('CHANGES_PROPOSED')).toBe("The supplier proposed changes to this order: accept or refuse the supplier's changes first, then receive the goods.")
+    expect(OPEN_PURCHASE_STATUSES).toContain('CHANGES_PROPOSED')
   })
 })

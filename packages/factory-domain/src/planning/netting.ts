@@ -33,8 +33,11 @@ const ZERO = decimalOf('0')
 const q = (value: Decimal): string => value.toFixed(QUANTITY_SCALE)
 const min = (a: Decimal, b: Decimal): Decimal => (a.lt(b) ? a : b)
 
-/** The purchase order states whose open lines still bring goods: a DRAFT one too (ordered, not sent yet). */
-export const OPEN_PURCHASE_STATUSES = ['DRAFT', 'SENT', 'CONFIRMED', 'PARTLY_RECEIVED'] as const
+/**
+ * The purchase order states whose open lines still bring goods: a DRAFT one too (ordered, not sent yet), and one whose
+ * supplier proposed changes (B-W1-31: still on order at the quantity and need date asked until the buyer accepts them).
+ */
+export const OPEN_PURCHASE_STATUSES = ['DRAFT', 'SENT', 'CHANGES_PROPOSED', 'CONFIRMED', 'PARTLY_RECEIVED'] as const
 export type OpenPurchaseStatus = (typeof OPEN_PURCHASE_STATUSES)[number]
 
 /** What a purchase order line still brings, in the base unit: the confirmed quantity (else the ordered one) less what posted receipts brought. */

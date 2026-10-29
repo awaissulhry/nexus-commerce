@@ -1,5 +1,6 @@
 import { purchaseOrderDocumentNumber } from '@nexus/factory-domain/purchasing/document'
-import { answerSummary } from '@nexus/factory-domain/purchasing/confirm/answer'
+import { answerSummary, countsOf, lineAnswerText } from '@nexus/factory-domain/purchasing/confirm/answer'
+import { proposedLineOf } from '@nexus/factory-domain/purchasing/confirm/proposal'
 import { buyerNote, type BuyerNoteFacts } from '@nexus/factory-domain/purchasing/confirm/notes'
 import { events as purchasingEvents } from '@nexus/factory-domain/purchasing/events'
 import { cleanBody } from '@nexus/factory-domain/threads/rules'
@@ -7,6 +8,7 @@ import { command, type CommandCaller, type CommandTools } from '../../../core/co
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
 import { ensureThread, mentionProblems, writeMessage } from '../../../platform/threads/threads'
 import { readLines, readOrder, type Reader } from '../store'
+import { PROPOSAL_ORDER_COLUMNS, proposalLinesOf } from './decide'
 
 /**
  * The worker's handler that tells the buyer (B-W1-31; design plan-buy-pay "the answer lands on the PO at once"): a link
@@ -15,6 +17,8 @@ import { readLines, readOrder, type Reader } from '../store'
  *
  *   purchase_order.confirmed (through the link)   who confirmed, their reference, "all 3 lines as asked", their note
  *   purchase_order.declined                       the reasons in words, and what to do next
+ *   purchase_order.changes_proposed               the summary, every changed line in words (asked → proposed, the
+ *                                                 reason), their note, and that the buyer accepts or refuses them
  *
  * The note is made from what the order keeps (its answer is set once), in ONE command keyed by the event, so a repeated
  * job answers from its receipt and writes nothing twice.
@@ -33,6 +37,23 @@ async function noteFacts(db: Reader, type: string, orderId: string, linkId: stri
     if (!order.confirmedAt) return null
     const lines = (await readLines(db, order.id)).length
     return { documentNumber, outcome: 'CONFIRMED', byName: order.confirmedByName, supplierRef: order.supplierRef, note: order.confirmNote, summary: answerSummary({ lines, asAsked: lines, laterDate: 0, earlierDate: 0, otherQuantity: 0, split: 0, cannotDeliver: 0 }) }
+  }
+  if (type === 'purchase_order.changes_proposed') {
+    const proposal = await db.purchaseOrder.findUnique({ where: { id: orderId }, select: PROPOSAL_ORDER_COLUMNS })
+    if (!proposal?.proposedAt) return null
+    const lines = (await proposalLinesOf(db, orderId)).flatMap((line) => {
+      const proposed = proposedLineOf(line)
+      return proposed ? [proposed] : []
+    })
+    return {
+      documentNumber,
+      outcome: 'PROPOSED',
+      byName: proposal.proposedByName,
+      supplierRef: proposal.proposalSupplierRef,
+      note: proposal.proposalNote,
+      summary: answerSummary(countsOf(lines)),
+      lines: lines.filter((line) => line.kind !== 'AS_ASKED').map(lineAnswerText),
+    }
   }
   if (type === 'purchase_order.declined') {
     if (!order.declinedAt) return null
@@ -63,7 +84,7 @@ export async function tellBuyer(caller: CommandCaller, event: { readonly eventId
 export function tellBuyerHandler(): EventHandler {
   return defineHandler({
     name: TELL_BUYER_HANDLER,
-    events: ['purchase_order.confirmed', 'purchase_order.declined'],
+    events: ['purchase_order.confirmed', 'purchase_order.declined', 'purchase_order.changes_proposed'],
     async handle(event, tools) {
       await tellBuyer(tools.caller, event)
     },

@@ -29,6 +29,8 @@ export const manifest = defineManifest({
   'GET /purchasing/orders/:purchaseOrderId/supplier-view': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
   // B-W1-31: the supplier's answer on the order, and its confirm link.
   'GET /purchasing/orders/:purchaseOrderId/answer': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/proposal/accept': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/proposal/refuse': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
   'GET /link/purchase-order': { audiences: ['link'], permission: 'links.open', scope: 'record' },
   'POST /link/purchase-order/confirm': { audiences: ['link'], permission: 'links.confirm', scope: 'record' },
   'POST /link/purchase-order/decline': { audiences: ['link'], permission: 'links.decline', scope: 'record' },

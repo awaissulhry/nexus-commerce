@@ -4,7 +4,8 @@ import { defineRoutes } from '../../core/manifest'
 import { AUTH_RATE_LIMITS, officeAuthOf } from '../../platform/auth/sessions/office-auth'
 import { processEmail } from '../../platform/email-out/service'
 import { confirmByLink, declineByLink } from './confirm/answer'
-import { confirmLinkOrderContract, declineLinkOrderContract, openLinkOrderContract, orderAnswerContract, renewLinkOrderContract } from './confirm/contract'
+import { acceptProposalContract, confirmLinkOrderContract, declineLinkOrderContract, openLinkOrderContract, orderAnswerContract, refuseProposalContract, renewLinkOrderContract } from './confirm/contract'
+import { acceptProposal, refuseProposal } from './confirm/decide'
 import { orderAnswer } from './confirm/office'
 import { linkView } from './confirm/read'
 import { linkTokenOf, renewConfirmLink } from './confirm/renew'
@@ -39,8 +40,9 @@ import { previewSupplierView } from './supplier-view'
  * the order's thread), a new link, the cancellation, the documents and sends, and the office's preview of what the
  * supplier sees (no price). Receipts against the order are B-W1-32's.
  *
- * B-W1-31, the supplier's answer (./confirm): office GET …/answer (where the answer stands, asked against confirmed per
- * line, the link evidence); the PO_CONFIRM link: GET /link/purchase-order (the order, price-free), POST
+ * B-W1-31, the supplier's answer (./confirm): office GET …/answer (where the answer stands, asked against proposed and
+ * confirmed per line, the link evidence), POST …/proposal/accept | refuse (the buyer decides on the supplier's changes,
+ * purchasing.send); the PO_CONFIRM link: GET /link/purchase-order (the order, price-free), POST
  * /link/purchase-order/confirm (all as asked, or line by line) | decline, and the public POST /link/purchase-order/renew
  * ("ask for a new link": one answer whatever the token; a new link only to the address on file). Link routes are rate
  * limited like every link route.
@@ -77,6 +79,10 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.get('/purchasing/orders/:purchaseOrderId/supplier-view', { schema: supplierViewContract }, async (request) => previewSupplierView(request, request.params.purchaseOrderId))
 
   app.get('/purchasing/orders/:purchaseOrderId/answer', { schema: orderAnswerContract }, async (request) => orderAnswer(request, request.params.purchaseOrderId))
+
+  app.post('/purchasing/orders/:purchaseOrderId/proposal/accept', { schema: acceptProposalContract }, async (request) => acceptProposal(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/orders/:purchaseOrderId/proposal/refuse', { schema: refuseProposalContract }, async (request) => refuseProposal(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
 
   const linkUse = app.officeAuth?.rateLimits.linkUse ?? AUTH_RATE_LIMITS.linkUse
   const limited = { rateLimit: { max: linkUse.max, timeWindow: linkUse.timeWindowMs } }

@@ -285,7 +285,7 @@ export function answerSummary(counts: AnswerCounts): string {
   return parts.join(' · ')
 }
 
-function countsOf(lines: readonly AnsweredLine[]): AnswerCounts {
+export function countsOf(lines: readonly AnsweredLine[]): AnswerCounts {
   const has = (line: AnsweredLine, change: LineChange): boolean => line.changes.includes(change)
   return {
     lines: lines.length,

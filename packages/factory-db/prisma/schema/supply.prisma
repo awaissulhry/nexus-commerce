@@ -6,8 +6,9 @@
 //
 // A purchase order: DRAFT → SENT → CONFIRMED → PARTLY_RECEIVED → RECEIVED → CLOSED, or CANCELLED (PO approval,
 // SCM-078, is W2b; new states are additive). The supplier answers the PO_CONFIRM link (factory-domain links/purposes):
-// confirm (SENT → CONFIRMED) or decline (SENT → DECLINED; the office changes the order and sends it again, or cancels
-// it). A SENT or DECLINED order goes back to DRAFT to be changed (its revision goes up by one); goods may arrive before
+// confirm (SENT → CONFIRMED), decline (SENT → DECLINED; the office changes the order and sends it again, or cancels
+// it), or answer with changes (SENT → CHANGES_PROPOSED, B-W1-31; Owner question P2, answer A: the buyer decides: accepted →
+// CONFIRMED with the proposal as the confirmation, refused → SENT again). A SENT or DECLINED order goes back to DRAFT to be changed (its revision goes up by one); goods may arrive before
 // the supplier confirmed (SENT → PARTLY_RECEIVED | RECEIVED); a reversed receipt moves it back. The lines change only
 // while the order is DRAFT; the supplier's confirmation (the order's and each line's) is set once and never changed
 // (the …_supply_guards triggers, for every login).
@@ -25,9 +26,9 @@
 // Who sees what (ownership/supply.json): the office reads and writes; the floor of the delivery site reads its
 // purchase orders and lines without any price (to receive against them); a portal or link session reads only its OWN
 // party's orders and lines, never a price, cost or internal column (the PO_CONFIRM link shows quantities and dates, PLAN
-// §1.4), and writes only the confirmation (the triggers allow nothing else); planning is the office's. Nobody deletes
-// an order (it is cancelled) or a planning row (a run is superseded); the office deletes only the lines of a DRAFT
-// order.
+// §1.4), and writes only the confirmation or its proposal of changes (the triggers allow nothing else); planning is
+// the office's. Nobody deletes an order (it is cancelled) or a planning row (a run is superseded); the office deletes
+// only the lines of a DRAFT order.
 //
 // Every child row carries its parent's partyId and siteId in its reference, so it can never belong to another party or
 // site than its order. Uniqueness made only of references (one requirement per item and colour of a run) is the
@@ -84,6 +85,21 @@ model PurchaseOrder {
   /// The supplier's decline: written in the move SENT → DECLINED.
   declinedAt      DateTime?                    @db.Timestamptz(3)
   declineReason   String?
+  /// The supplier's latest proposal (SENT → CHANGES_PROPOSED through its PO_CONFIRM link): when, through which link, the
+  /// name it typed (optional), its reference and note. Kept after the buyer's decision; a new proposal replaces it.
+  proposedAt           DateTime?                 @db.Timestamptz(3)
+  proposalLinkId       String?                   @db.Uuid
+  proposedByName       String?
+  proposalSupplierRef  String?
+  proposalNote         String?
+  /// The buyer's decision on it: ACCEPTED (CHANGES_PROPOSED → CONFIRMED: the proposal becomes the confirmation) or
+  /// REFUSED (back to SENT: the office sends a new link or cancels); who and when. Cleared by a new proposal.
+  proposalDecision     PurchaseProposalDecision?
+  proposalDecidedAt    DateTime?                 @db.Timestamptz(3)
+  proposalDecidedById  String?                   @db.Uuid
+  /// Why the buyer decided so, for the office only: the partner role can neither read nor write it.
+  /// @internal
+  proposalDecisionNote String?
   closedAt        DateTime?                    @db.Timestamptz(3)
   cancelledAt     DateTime?                    @db.Timestamptz(3)
   cancelReason    String?
@@ -96,7 +112,8 @@ model PurchaseOrder {
   party         Party               @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
   contact       PartyContact?       @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
-  confirmLink   OneOffLink?         @relation(fields: [tenantId, partyId, confirmLinkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  confirmLink   OneOffLink?         @relation("PurchaseOrderConfirmLink", fields: [tenantId, partyId, confirmLinkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  proposalLink  OneOffLink?         @relation("PurchaseOrderProposalLink", fields: [tenantId, partyId, proposalLinkId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   lines         PurchaseOrderLine[]
   // inventory.prisma: the goods received against it.
   goodsReceipts GoodsReceipt[]
@@ -115,11 +132,22 @@ enum PurchaseOrderStatus {
   CONFIRMED
   /// The supplier declined it through its link: the office changes it (back to DRAFT) or cancels it.
   DECLINED
+  /// The supplier answered its link with changes (other quantities or dates, a split, a line it cannot deliver): the
+  /// buyer accepts them (CONFIRMED) or refuses them (back to SENT).
+  CHANGES_PROPOSED
   PARTLY_RECEIVED
   RECEIVED
   /// Done: everything received, or the rest given up (short-closed).
   CLOSED
   CANCELLED
+}
+
+/// The buyer's decision on a supplier's proposed changes (B-W1-31).
+enum PurchaseProposalDecision {
+  /// The proposal became the confirmation: CHANGES_PROPOSED → CONFIRMED.
+  ACCEPTED
+  /// Not accepted: back to SENT; the office sends a new link or cancels the order.
+  REFUSED
 }
 
 /// How the supplier's confirmation reached us.
@@ -182,6 +210,15 @@ model PurchaseOrderLine {
   /// confirmed quantity of 0 says the supplier cannot deliver the line.
   confirmedQuantity   Decimal?  @db.Decimal(18, 4)
   confirmedDate       DateTime? @db.Date
+  /// The supplier's proposal for the line (B-W1-31; with the order's, while the order is SENT): the quantity in `uom`
+  /// and the date of its (first) delivery, a second delivery for a split, and why it differs. As asked: the asked
+  /// quantity and need date, no reason; it cannot deliver: 0 and no date. Accepted, it becomes the confirmation (the
+  /// whole quantity by the later date); kept after the decision; a new proposal replaces it.
+  proposedQuantity      Decimal?  @db.Decimal(18, 4)
+  proposedDate          DateTime? @db.Date
+  proposedSplitQuantity Decimal?  @db.Decimal(18, 4)
+  proposedSplitDate     DateTime? @db.Date
+  proposalReason        String?
   version             Int       @default(1)
   createdAt           DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime  @default(now()) @updatedAt @db.Timestamptz(3)

@@ -326,11 +326,131 @@ describe('decline (the whole order, or every line it cannot deliver)', () => {
   })
 })
 
+describe('changes per line are a proposal: the buyer accepts or refuses it (SCM-086; P2, answer A)', () => {
+  let proposed: { order: Json; token: string; linkId: string }
+
+  it('other quantities and dates and a split wait for the buyer: CHANGES_PROPOSED, the proposal on each line, nothing confirmed', async () => {
+    proposed = await sent()
+    const { order, token, linkId } = proposed
+    const lines = (await page(token)).lines as Json[]
+    const answered = await viaLink(token, 'POST', '/link/purchase-order/confirm', {
+      version: order.version,
+      mode: 'BY_LINE',
+      typedName: 'Mario Rossi',
+      supplierRef: 'OC-5000',
+      note: 'Possiamo anticipare la prima parte.',
+      lines: [
+        { lineId: lines[0]!.id, answer: 'SPLIT', deliveries: [{ quantity: '55', date: addDays(today(), 40) }, { quantity: '50', date: addDays(today(), 32) }], reason: 'Due bagni di tintura' },
+        { lineId: lines[1]!.id, answer: 'OTHER', quantity: '12', date: addDays(today(), 38), reason: 'Solo 12 a magazzino' },
+      ],
+    })
+    expect(answered.statusCode, answered.body).toBe(200)
+    const buyerName = (await one<{ displayName: string }>('SELECT "displayName" FROM "User" WHERE id = $1', [buyerId])).displayName
+    expect(answered.json()).toMatchObject({ outcome: 'PROPOSED', summary: '2 later dates · 1 other quantity · 1 split', done: `Thank you: your changes are with ${buyerName}, who accepts or refuses them. You will hear back by e-mail.`, order: { status: 'CHANGES_PROPOSED', confirmedAt: null } })
+    expect(priceTraces(answered.json())).toEqual([])
+    expect(await one('SELECT status, "proposalLinkId", "proposedByName", "proposalSupplierRef", "proposalNote", "proposedAt" IS NOT NULL AS at, "proposalDecision", "confirmedAt" FROM "PurchaseOrder" WHERE id = $1', [order.id])).toEqual({
+      status: 'CHANGES_PROPOSED',
+      proposalLinkId: linkId,
+      proposedByName: 'Mario Rossi',
+      proposalSupplierRef: 'OC-5000',
+      proposalNote: 'Possiamo anticipare la prima parte.',
+      at: true,
+      proposalDecision: null,
+      confirmedAt: null,
+    })
+    // Nothing is confirmed: the plan keeps the need dates and a receipt the ordered quantities until the buyer accepts.
+    expect(await admin('SELECT seq, "confirmedQuantity", "confirmedDate", "proposedQuantity"::text AS q, "proposedDate"::text AS d, "proposedSplitQuantity"::text AS q2, "proposedSplitDate"::text AS d2, "proposalReason" AS reason FROM "PurchaseOrderLine" WHERE "purchaseOrderId" = $1 ORDER BY seq', [order.id])).toEqual([
+      { seq: 10, confirmedQuantity: null, confirmedDate: null, q: '50.0000', d: addDays(today(), 32), q2: '55.0000', d2: addDays(today(), 40), reason: 'Due bagni di tintura' },
+      { seq: 20, confirmedQuantity: null, confirmedDate: null, q: '12.0000', d: addDays(today(), 38), q2: null, d2: null, reason: 'Solo 12 a magazzino' },
+    ])
+    expect(await one('SELECT action, uses FROM "LinkEvidence" e JOIN "OneOffLink" l ON l.id = e."linkId" WHERE l.id = $1', [linkId])).toEqual({ action: 'CONFIRMED', uses: 1 })
+    expect(await eventsOf(order.id)).toEqual(expect.arrayContaining(['purchase_order.changes_proposed']))
+    expect(await eventsOf(order.id)).not.toContain('purchase_order.confirmed')
+
+    const event = await one<{ id: string; type: string; payload: unknown }>(`SELECT id, type, payload FROM "OutboxEvent" WHERE subject = $1 AND type = 'purchase_order.changes_proposed'`, [order.id])
+    await tellBuyer(system(), { eventId: event.id, type: event.type, payload: event.payload })
+    const note = await one<{ bodyText: string }>(`SELECT m."bodyText" FROM "Message" m JOIN "Thread" t ON t.id = m."threadId" WHERE t."recordId" = $1 AND m.direction = 'INTERNAL_NOTE'`, [order.id])
+    expect(note.bodyText).toBe(
+      [
+        `The supplier proposed changes to ${order.number} through its link by Mario Rossi (their reference OC-5000): 2 later dates · 1 other quantity · 1 split.`,
+        `Line 10: in two deliveries, 50 ft² by ${addDays(today(), 32)} and 55 ft² by ${addDays(today(), 40)} (asked 105 ft² by ${addDays(today(), 30)}). Reason: Due bagni di tintura`,
+        `Line 20: 12 PCS by ${addDays(today(), 38)} (asked 24 PCS by ${addDays(today(), 35)}). Reason: Solo 12 a magazzino`,
+        'Their note: Possiamo anticipare la prima parte.',
+        'Accept or refuse them on the order: until then nothing is confirmed and the plan keeps the dates asked.',
+      ].join('\n'),
+    )
+    expect(await as('GET', `${orderUrl(order.id)}/answer`)).toMatchObject({
+      answer: 'CHANGES_PROPOSED',
+      words: 'The supplier proposed changes: accept or refuse them.',
+      confirmation: null,
+      proposal: { linkId, byName: 'Mario Rossi', supplierRef: 'OC-5000', summary: '2 later dates · 1 other quantity · 1 split', decision: null },
+      lines: [
+        { seq: 10, proposed: { kind: 'SPLIT', quantity: '105.0000', date: addDays(today(), 40), changes: ['SPLIT', 'LATER'] }, confirmed: null },
+        { seq: 20, proposed: { kind: 'OTHER', quantity: '12.0000', date: addDays(today(), 38), changes: ['LATER', 'LESS'] }, confirmed: null },
+      ],
+    })
+  })
+
+  it('while the buyer decides: no cancel, no new link, no receipt (accept or refuse the changes first)', async () => {
+    const current = (await as('GET', orderUrl(proposed.order.id))).order
+    expect((await as('POST', `${orderUrl(current.id)}/cancel`, { version: current.version, reason: 'No' }, 409)).error.message).toMatch(/accept or refuse the supplier's changes first/)
+    expect((await as('POST', `${orderUrl(current.id)}/send-link`, { version: current.version }, 409, { 'idempotency-key': key('link') })).error.message).toMatch(/accept or refuse the supplier's changes first/)
+    // The trigger holds it too: CHANGES_PROPOSED leaves only by the buyer's decision.
+    await expect(admin(`UPDATE "PurchaseOrder" SET status = 'CONFIRMED', "confirmedAt" = now(), "confirmedVia" = 'OFFICE' WHERE id = $1`, [current.id])).rejects.toThrow(/leaves CHANGES_PROPOSED only by the buyer's decision/)
+    await expect(admin(`UPDATE "PurchaseOrder" SET status = 'CANCELLED', "cancelledAt" = now(), "cancelReason" = 'x' WHERE id = $1`, [current.id])).rejects.toThrow(/cannot move from CHANGES_PROPOSED to CANCELLED/)
+  })
+
+  it('the buyer accepts: CONFIRMED with the proposal as the confirmation (a split: the whole quantity by the later date); the supplier is told', async () => {
+    const { order, linkId } = proposed
+    const current = (await as('GET', orderUrl(order.id))).order
+    expect((await wall('viewer', 'POST', `${orderUrl(order.id)}/proposal/accept`, { version: current.version })).statusCode).toBe(403)
+    expect((await as('POST', `${orderUrl(order.id)}/proposal/accept`, { version: current.version - 1 }, 409)).error.message).toMatch(/changed since it was read/)
+    const accepted = await as('POST', `${orderUrl(order.id)}/proposal/accept`, { version: current.version, message: 'A presto.' })
+    expect(accepted).toMatchObject({ supplierTold: true, order: { status: 'CONFIRMED', confirmedVia: 'LINK', confirmedByName: 'Mario Rossi', supplierRef: 'OC-5000', confirmNote: 'Possiamo anticipare la prima parte.' } })
+    expect(await admin('SELECT seq, "confirmedQuantity"::text AS q, "confirmedDate"::text AS d FROM "PurchaseOrderLine" WHERE "purchaseOrderId" = $1 ORDER BY seq', [order.id])).toEqual([
+      { seq: 10, q: '105.0000', d: addDays(today(), 40) },
+      { seq: 20, q: '12.0000', d: addDays(today(), 38) },
+    ])
+    expect(await one('SELECT "confirmLinkId", "proposalDecision", "proposalDecidedById", "proposalDecidedAt" IS NOT NULL AS at FROM "PurchaseOrder" WHERE id = $1', [order.id])).toEqual({ confirmLinkId: linkId, proposalDecision: 'ACCEPTED', proposalDecidedById: buyerId, at: true })
+    const mail = await one<{ subject: string; to: string[]; bodyText: string }>(`SELECT o.subject, o.to, m."bodyText" FROM "EmailOutbound" o JOIN "Message" m ON m.id = o."messageId" WHERE o."recordId" = $1 AND o.subject LIKE '%modifiche accettate'`, [order.id])
+    expect(mail).toMatchObject({ subject: `Ordine di acquisto ${order.number}: modifiche accettate`, to: [ORDERS_P2] })
+    expect(mail.bodyText).toContain('A presto.')
+    const event = await one<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE subject = $1 AND type = 'purchase_order.confirmed'`, [order.id])
+    expect(event.payload).toMatchObject({ channel: 'LINK', linkId, proposalAccepted: true })
+    expect(await as('GET', `${orderUrl(order.id)}/answer`)).toMatchObject({ answer: 'CONFIRMED', proposal: { decision: 'ACCEPTED' }, lines: [{ confirmed: { quantity: '105.0000' }, changes: ['LATER'] }, { confirmed: { quantity: '12.0000' }, changes: ['LATER', 'LESS'] }] })
+    const after = (await as('GET', orderUrl(order.id))).order
+    expect((await as('POST', `${orderUrl(order.id)}/proposal/accept`, { version: after.version }, 409)).error.message).toBe('The order has no proposal waiting for a decision.')
+  })
+
+  it('the buyer refuses: back to SENT, nothing confirmed; a new link lets the supplier answer again, and its new proposal clears the old decision', async () => {
+    const { order, token } = await sent()
+    const lines = (await page(token)).lines as Json[]
+    const answer = await viaLink(token, 'POST', '/link/purchase-order/confirm', { version: order.version, mode: 'BY_LINE', lines: [{ lineId: lines[0]!.id, answer: 'CANNOT_DELIVER', reason: 'Colore fuori produzione' }, { lineId: lines[1]!.id, answer: 'AS_ASKED' }] })
+    expect(answer.json()).toMatchObject({ outcome: 'PROPOSED', summary: '1 line as asked · 1 line it cannot deliver' })
+    let current = (await as('GET', orderUrl(order.id))).order
+    const refused = await as('POST', `${orderUrl(order.id)}/proposal/refuse`, { version: current.version, note: 'Serve tutta la pelle nera' })
+    expect(refused).toMatchObject({ order: { status: 'SENT' }, next: expect.stringMatching(/^Nothing is confirmed/) })
+    expect(await one('SELECT status, "proposalDecision", "proposalDecisionNote", "proposalDecidedById" FROM "PurchaseOrder" WHERE id = $1', [order.id])).toEqual({ status: 'SENT', proposalDecision: 'REFUSED', proposalDecisionNote: 'Serve tutta la pelle nera', proposalDecidedById: buyerId })
+    expect(await count('SELECT count(*)::int AS n FROM "PurchaseOrderLine" WHERE "purchaseOrderId" = $1 AND "confirmedQuantity" IS NOT NULL', [order.id])).toBe(0)
+    expect(await eventsOf(order.id)).toEqual(expect.arrayContaining(['purchase_order.proposal_refused']))
+
+    current = refused.order
+    const again = await as('POST', `${orderUrl(order.id)}/send-link`, { version: current.version, message: 'Ci serve tutta la quantità: può riconsiderare?' }, 200, { 'idempotency-key': key('link') })
+    const fresh = tokenOf(again.link.emailId)
+    const view = await page(fresh)
+    expect(view.canAnswer).toBe(true)
+    const second = await viaLink(fresh, 'POST', '/link/purchase-order/confirm', { version: view.order.version, mode: 'BY_LINE', lines: [{ lineId: lines[0]!.id, answer: 'OTHER', date: addDays(today(), 45), reason: 'Riordino dalla conceria' }, { lineId: lines[1]!.id, answer: 'AS_ASKED' }] })
+    expect(second.statusCode, second.body).toBe(200)
+    expect(await one('SELECT status, "proposalDecision", "proposalDecidedAt", "proposalDecidedById", "proposalDecisionNote" FROM "PurchaseOrder" WHERE id = $1', [order.id])).toEqual({ status: 'CHANGES_PROPOSED', proposalDecision: null, proposalDecidedAt: null, proposalDecidedById: null, proposalDecisionNote: null })
+    expect(await one('SELECT "proposedQuantity"::text AS q, "proposedDate"::text AS d, "proposalReason" AS reason FROM "PurchaseOrderLine" WHERE id = $1', [lines[0]!.id])).toEqual({ q: '105.0000', d: addDays(today(), 45), reason: 'Riordino dalla conceria' })
+  })
+})
+
 describe('refusals, races and walls', () => {
   it('an incomplete answer is refused with every problem at once, and uses nothing', async () => {
     const { order, token, linkId } = await sent()
     const lines = (await page(token)).lines as Json[]
-    const refused = await viaLink(token, 'POST', '/link/purchase-order/confirm', { version: order.version, mode: 'BY_LINE', lines: [{ lineId: lines[0].id, answer: 'OTHER', reason: 'r' }] })
+    const refused = await viaLink(token, 'POST', '/link/purchase-order/confirm', { version: order.version, mode: 'BY_LINE', lines: [{ lineId: lines[0]!.id, answer: 'OTHER', reason: 'r' }] })
     expect(refused.statusCode).toBe(400)
     expect(refused.json().error.issues).toEqual([
       { path: 'body/lines/0', message: 'Give the other quantity, the other date, or both.' },

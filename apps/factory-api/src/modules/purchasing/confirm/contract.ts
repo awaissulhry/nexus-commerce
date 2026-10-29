@@ -4,7 +4,7 @@ import { LINK_STATES } from '@nexus/factory-domain/links/purposes'
 import { ANSWER_MODES, ANSWER_OUTCOMES, DECLINE_REASONS, LINE_ANSWERS, LINE_CHANGES } from '@nexus/factory-domain/purchasing/confirm/answer'
 import { MAX_LINES, MAX_TEXT, PURCHASE_ORDER_STATUSES } from '@nexus/factory-domain/purchasing/orders'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
-import { supplierViewContract } from '../contract'
+import { getOrderContract, supplierViewContract } from '../contract'
 
 /**
  * The confirm link's contracts (B-W1-31; design links.po, SCR-100) and the office's view of the supplier's answer. The
@@ -85,6 +85,18 @@ export const orderAnswerContract = defineContract({
       words: z.string(),
       confirmation: output({ at: instant(), via: z.enum(['LINK', 'OFFICE']), linkId: id().nullable(), byName: z.string().nullable(), supplierRef: z.string().nullable(), note: z.string().nullable() }).nullable(),
       decline: output({ at: instant(), reason: z.string().nullable() }).nullable(),
+      proposal: output({
+        at: instant(),
+        linkId: id().nullable(),
+        byName: z.string().nullable(),
+        supplierRef: z.string().nullable(),
+        note: z.string().nullable(),
+        summary: z.string(),
+        decision: z.enum(['ACCEPTED', 'REFUSED']).nullable(),
+        decidedAt: instant().nullable(),
+        decidedById: id().nullable(),
+        decisionNote: z.string().nullable(),
+      }).nullable(),
       lines: z.array(
         output({
           id: id(),
@@ -92,6 +104,7 @@ export const orderAnswerContract = defineContract({
           item: output({ code: z.string(), name: z.string() }),
           colour: z.string().nullable(),
           asked: output({ quantity: z.string(), uom: z.enum(UOMS), needDate: z.string() }),
+          proposed: output({ kind: z.enum(LINE_ANSWERS), quantity: z.string(), date: z.string().nullable(), deliveries: z.array(delivery), reason: z.string().nullable(), changes: z.array(z.enum(LINE_CHANGES)) }).nullable(),
           confirmed: delivery.nullable(),
           changes: z.array(z.enum(LINE_CHANGES)),
         }),
@@ -100,4 +113,18 @@ export const orderAnswerContract = defineContract({
       links: z.array(output({ id: id(), email: z.string().nullable(), state: z.enum(LINK_STATES), expiresAt: instant(), uses: z.number().int(), maxUses: z.number().int(), lastUsedAt: instant().nullable(), revokedAt: instant().nullable(), createdAt: instant() })),
     }),
   },
+})
+
+const decided = getOrderContract.response[200].shape.order
+
+export const acceptProposalContract = defineContract({
+  params: input({ purchaseOrderId: id() }),
+  body: input({ version, message: text(2 * MAX_TEXT.message).nullable().optional() }),
+  response: { 200: output({ order: decided, supplierTold: z.boolean() }) },
+})
+
+export const refuseProposalContract = defineContract({
+  params: input({ purchaseOrderId: id() }),
+  body: input({ version, note: text(2 * MAX_TEXT.reason).nullable().optional() }),
+  response: { 200: output({ order: decided, next: z.string() }) },
 })
