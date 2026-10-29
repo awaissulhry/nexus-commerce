@@ -122,6 +122,9 @@ model Company {
   depositRequests      DepositRequest[]
   // quality.prisma: its PPE register.
   ppeRegisterEntries   PpeRegisterEntry[]
+  // money.prisma: its invoices and the payments it received.
+  invoices             Invoice[]
+  payments             Payment[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.
