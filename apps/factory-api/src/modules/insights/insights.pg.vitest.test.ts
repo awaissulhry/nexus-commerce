@@ -12,6 +12,7 @@ import { resendDeadline } from '@nexus/factory-domain/invoicing/sdi/deadline'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../packages/factory-db/seed/_core'
 import { seed as seedCompliance } from '../../../../../packages/factory-db/seed/compliance'
+import { seed as seedEmailIn } from '../../../../../packages/factory-db/seed/email-in'
 import { seed as seedMoney } from '../../../../../packages/factory-db/seed/money'
 import { seed as seedPrivacy } from '../../../../../packages/factory-db/seed/privacy'
 import { seedUuid } from '../../../../../packages/factory-db/src/seeding'
@@ -71,6 +72,7 @@ const office = (actorId: string, grants: Grant[]): (() => SessionContext) => () 
 const SESSIONS: Record<string, () => SessionContext> = {
   owner: office(PEOPLE.owner, [fromTemplate('owner')]),
   ownerA: office(PEOPLE.ownerA, [fromTemplate('owner', [companyA])]),
+  ownerB: office(newId(), [fromTemplate('owner', [companyB])]),
   buyer: office(PEOPLE.buyer, [fromTemplate('buyer')]),
   /** The buyer with the buyer's permissions but without the cost grain (a custom role): the same rows, never a purchase price. */
   buyerNoCost: office(PEOPLE.buyer, [{ ...fromTemplate('buyer'), permissions: templateOf('buyer')!.permissions }]),
@@ -182,6 +184,7 @@ beforeAll(async () => {
   await seedCompliance({ db: h.database, namespace: NS })
   await seedPrivacy({ db: h.database, namespace: NS })
   await seedMoney({ db: h.database, namespace: NS })
+  await seedEmailIn({ db: h.database, namespace: NS })
 
   const idByNumber = async (table: string, column: string, value: string) => (await one<{ id: string }>(`SELECT id FROM "${table}" WHERE "tenantId" = $1 AND "${column}" = $2`, [T, value])).id
   ids.lateOrder = await idByNumber('SalesOrder', 'number', 'SEED-SO-0001')
@@ -235,7 +238,7 @@ describe('the owner: everything that waits, from every area and company, ranked'
   it('each seeded state is one row of its kind, with why it is mine and what waits on it', async () => {
     const answer = await today('owner')
     expect(kindsOf(answer)).toEqual(
-      expect.arrayContaining(['INVOICE_SDI', 'INVOICE_TO_ISSUE', 'LOT_HOLD', 'ORDER_PROMISE', 'PO_NOT_CONFIRMED', 'PRIVACY_DUTY', 'QUOTE_APPROVAL', 'REGISTER_DUTY', 'SCAN_CORRECTION', 'SCAN_REFUSAL', 'STYLE_COMPLIANCE', 'WORK_ORDER_HELD']),
+      expect.arrayContaining(['INVOICE_SDI', 'INVOICE_TO_ISSUE', 'LOT_HOLD', 'ORDER_PROMISE', 'PO_NOT_CONFIRMED', 'PRIVACY_DUTY', 'QUOTE_APPROVAL', 'REGISTER_DUTY', 'SCAN_CORRECTION', 'SCAN_REFUSAL', 'STYLE_COMPLIANCE', 'WORK_ORDER_HELD', 'MAIL_TO_SORT']),
     )
     expect(itemOf(answer, ids.lateOrder)).toMatchObject({
       kind: 'ORDER_PROMISE',
@@ -289,7 +292,7 @@ describe('the owner: everything that waits, from every area and company, ranked'
   it('the tiles count the rows: their sum is the total, and pressing one shows exactly its count', async () => {
     const answer = await today('owner')
     const tiles = answer.counts.tiles as Json[]
-    expect(tiles.map((tile) => tile.kind)).toHaveLength(13)
+    expect(tiles.map((tile) => tile.kind)).toHaveLength(14)
     expect(tiles.reduce((sum, tile) => sum + tile.count, 0)).toBe(answer.counts.total)
     expect(answer.counts.total).toBe(answer.total)
     expect(answer.counts.total).toBe(answer.items.length)
@@ -319,10 +322,11 @@ describe('the owner: everything that waits, from every area and company, ranked'
 describe('each role gets what it acts on, and nothing it cannot', () => {
   it('the buyer: its unconfirmed purchase order with its value; no quote approval, no lot it cannot release', async () => {
     const answer = await today('buyer')
-    expect(kindsOf(answer)).toEqual(['PO_NOT_CONFIRMED'])
+    expect(kindsOf(answer)).toEqual(['MAIL_TO_SORT', 'PO_NOT_CONFIRMED'])
     expect(answer.counts.tiles.map((tile: Json) => [tile.kind, tile.count])).toEqual([
       ['PO_PROPOSAL', 0],
       ['PO_NOT_CONFIRMED', 1],
+      ['MAIL_TO_SORT', 3],
     ])
     expect(itemOf(answer, ids.po)).toMatchObject({ why: 'You send purchase orders to this supplier.', figures: { currency: 'EUR' } })
     expect(itemOf(answer, ids.po)!.figures.purchaseAmount).toEqual(expect.any(Number))
@@ -351,14 +355,32 @@ describe('each role gets what it acts on, and nothing it cannot', () => {
 
   it('sales: its customers’ late and at-risk orders with their value, never a cost; no release, no invoice, no approval it asked', async () => {
     const answer = await today('sales')
-    expect(kindsOf(answer)).toEqual(['ORDER_PROMISE'])
+    expect(kindsOf(answer)).toEqual(['MAIL_TO_SORT', 'ORDER_PROMISE'])
     expect(itemOf(answer, ids.lateOrder)).toMatchObject({ state: 'LATE', figures: { currency: 'EUR', netAmount: expect.any(Number) } })
     expect(itemOf(answer, ids.riskOrder)).toMatchObject({ state: 'AT_RISK', severity: 'MEDIUM', group: 'THIS_WEEK', due: { days: 2, word: 'SOON' } })
     const text = JSON.stringify(answer)
     expect(text).not.toContain('purchaseAmount')
     expect(text).not.toContain('marginAmount')
     expect(itemOf(answer, ids.quote)).toBeUndefined()
-    expect(answer.counts.tiles.map((tile: Json) => tile.kind)).toEqual(['ORDER_PROMISE'])
+    expect(answer.counts.tiles.map((tile: Json) => tile.kind)).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT'])
+  })
+
+  it('mail to sort: the email-in list of whoever sorts the company’s mail (triage, held, unreadable), opened in its own review', async () => {
+    const mails = await admin<{ id: string; status: string }>(`SELECT id, status::text AS status FROM "InboundEmail" WHERE "tenantId" = $1 AND status IN ('TRIAGE', 'HELD', 'FAILED') ORDER BY id`, [T])
+    expect(mails.map((mail) => mail.status).sort()).toEqual(['FAILED', 'HELD', 'TRIAGE'])
+    const answer = await today('sales')
+    const rows = (answer.items as Json[]).filter((item) => item.kind === 'MAIL_TO_SORT')
+    expect(rows.map((row) => row.record.id).sort()).toEqual(mails.map((mail) => mail.id).sort())
+    for (const row of rows) {
+      expect(row).toMatchObject({ category: 'TASK', decide: 'REVIEW', record: { type: 'InboundEmail' }, why: "You sort this company's received mail.", figures: null, due: null })
+      expect(row.severity).toBe(row.state === 'FAILED' ? 'LOW' : 'MEDIUM')
+    }
+    expect(rows.find((row) => row.state === 'TRIAGE')!.sentence).toMatch(/reached no record: sort it\.$/)
+    expect(rows.find((row) => row.state === 'HELD')!.sentence).toMatch(/is held: its sender's address failed the DMARC check\.$/)
+    expect(answer.live.events).toContain('email.inbound_sorted')
+    // The inspector does not sort mail; the owner limited to company B does not sort company A's.
+    expect(kindsOf(await today('inspector'))).not.toContain('MAIL_TO_SORT')
+    expect((await today('ownerB')).items.filter((item: Json) => item.kind === 'MAIL_TO_SORT')).toEqual([])
   })
 
   it('finance approves the quote the sales person asked (another person, with the margin grain)', async () => {

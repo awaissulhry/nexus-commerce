@@ -1,4 +1,5 @@
 import { heldGrains, type Grain } from '../auth/grains/grains'
+import { EMAIL_TRIAGE } from '../auth/permissions/catalogue'
 import { REGISTER_MANAGE, REGISTER_VIEW } from '../compliance/register/permissions'
 import { CERTIFICATES_MANAGE, CERTIFICATES_VIEW } from '../compliance/certificates/permissions'
 import { LABELS_MANAGE } from '../compliance/labels/permissions'
@@ -53,6 +54,7 @@ export const ATTENTION_KINDS = [
   'REGISTER_DUTY',
   'PRIVACY_DUTY',
   'STYLE_COMPLIANCE',
+  'MAIL_TO_SORT',
 ] as const
 export type AttentionKind = (typeof ATTENTION_KINDS)[number]
 
@@ -238,6 +240,18 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
       'sales_order.created',
       'sales_order.status_changed',
     ],
+  }),
+  // Mail no record took, held or unreadable (platform/email-in "Mail to sort", SCR-019). The mail has no assignee in W1:
+  // it is the person's when they sort the mail of its company (email.triage; a mail of no company: every company).
+  MAIL_TO_SORT: rule({
+    kind: 'MAIL_TO_SORT',
+    category: 'TASK',
+    label: 'Mail to sort',
+    view: EMAIL_TRIAGE,
+    act: [EMAIL_TRIAGE],
+    why: { [EMAIL_TRIAGE]: "You sort this company's received mail." },
+    decide: 'REVIEW',
+    live: ['email.inbound_sorted'],
   }),
 })
 

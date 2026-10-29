@@ -25,9 +25,9 @@ import {
   type Viewer,
 } from './attention'
 import { FLOW_LENSES, LENS_RULES, lensesFor, orderStageOf, stagesOf, invoiceStageOf } from './flow'
-import { complianceActs, deadlineSeverity, heldWorkOrderSeverity, hoursUnconfirmed, openDuties, orderPromiseState, privacySeverity, registerSeverity } from './states'
+import { complianceActs, deadlineSeverity, heldWorkOrderSeverity, hoursUnconfirmed, mailSeverity, openDuties, orderPromiseState, privacySeverity, registerSeverity } from './states'
 import { WAITING_RULES, waitingFor, type WaitingCandidate } from './waiting'
-import { styleComplianceWords, workOrderHeldWords } from './words'
+import { mailToSortWords, styleComplianceWords, workOrderHeldWords } from './words'
 
 const TENANT = '01900000-0000-7000-8000-000000000001'
 const A = '01900000-0000-7000-8000-00000000000a'
@@ -104,10 +104,10 @@ describe('who a row is for (whyMine: the right to act, four eyes, the grain, the
 
   it('the sources a role reads and the tiles it gets', () => {
     expect(tileKindsFor(roleActor('owner'))).toEqual([...ATTENTION_KINDS])
-    expect(tileKindsFor(roleActor('buyer'))).toEqual(['PO_PROPOSAL', 'PO_NOT_CONFIRMED'])
+    expect(tileKindsFor(roleActor('buyer'))).toEqual(['PO_PROPOSAL', 'PO_NOT_CONFIRMED', 'MAIL_TO_SORT'])
     expect(sourcesFor(roleActor('buyer'))).toContain('LOT_HOLD') // seen, never acted on
     expect(tileKindsFor(roleActor('quality_inspector'))).toEqual(['LOT_HOLD', 'REGISTER_DUTY', 'STYLE_COMPLIANCE'])
-    expect(tileKindsFor(roleActor('sales'))).toEqual(['ORDER_PROMISE'])
+    expect(tileKindsFor(roleActor('sales'))).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT'])
     expect(tileKindsFor(roleActor('finance'))).toEqual(['INVOICE_SDI', 'QUOTE_APPROVAL', 'INVOICE_TO_ISSUE'])
     expect(tileKindsFor(roleActor('read_only'))).toEqual([])
   })
@@ -236,6 +236,19 @@ describe('the states that put a record on Today', () => {
     expect(privacySeverity(['dpia', 'register'])).toBe('HIGH')
     expect(privacySeverity(['publicNotice'])).toBe('MEDIUM')
     expect(complianceActs(['USER_INFORMATION', 'DECLARATION_OF_CONFORMITY', 'CERTIFICATE'], KIND_RULES.STYLE_COMPLIANCE.act)).toEqual(['compliance.declarations.manage', 'compliance.certificates.manage'])
+  })
+
+  it('mail to sort: whoever sorts the company’s mail (a mail of no company: every company), never another company’s', () => {
+    const mail = candidate('MAIL_TO_SORT', { scope: { companyId: A, siteId: null, partyId: null } })
+    expect(whyMine(viewerOf(roleActor('sales')), mail)).toBe("You sort this company's received mail.")
+    expect(whyMine(viewerOf(roleActor('sales', [B])), mail)).toBeNull()
+    expect(whyMine(viewerOf(roleActor('sales', [B])), candidate('MAIL_TO_SORT', { scope: { companyId: null, siteId: null, partyId: null } }))).not.toBeNull()
+    expect(whyMine(viewerOf(roleActor('quality_inspector')), mail)).toBeNull()
+    expect([mailSeverity('TRIAGE'), mailSeverity('HELD'), mailSeverity('FAILED')]).toEqual(['MEDIUM', 'MEDIUM', 'LOW'])
+    expect(mailToSortWords({ sender: 'Anna Demo', subject: 'Order 200 jackets', state: 'HELD', heldReason: 'DMARC_FAIL' }).sentence).toBe(
+      '"Order 200 jackets" from Anna Demo is held: its sender\'s address failed the DMARC check.',
+    )
+    expect(mailToSortWords({ sender: 'a@example.com', subject: null, state: 'TRIAGE', heldReason: null }).sentence).toBe('Mail from a@example.com reached no record: sort it.')
   })
 
   it('words name what is held and what waits', () => {

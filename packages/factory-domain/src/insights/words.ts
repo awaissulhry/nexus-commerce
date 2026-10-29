@@ -185,6 +185,31 @@ export function styleComplianceWords(facts: { readonly style: string; readonly c
   }
 }
 
+export type MailAttentionState = 'TRIAGE' | 'HELD' | 'FAILED'
+
+const HELD_WORDS: Readonly<Record<string, string>> = Object.freeze({
+  DMARC_FAIL: "its sender's address failed the DMARC check",
+  SPAM: 'it looks like spam',
+  UNKNOWN_SENDER: 'its sender is not a contact of the record',
+  THREAD_CLOSED: 'the thread it answers is closed',
+})
+
+/** `sender`: the name, else the address; `subject` null: no subject. */
+export function mailToSortWords(facts: { readonly sender: string; readonly subject: string | null; readonly state: MailAttentionState; readonly heldReason: string | null }): RowWords {
+  const what = facts.subject ? `"${facts.subject}" from ${facts.sender}` : `Mail from ${facts.sender}`
+  switch (facts.state) {
+    case 'TRIAGE':
+      return { sentence: `${what} reached no record: sort it.`, blocks: 'Its sender waits: nobody sees it on a record until it is sorted.' }
+    case 'HELD':
+      return {
+        sentence: `${what} is held${facts.heldReason && HELD_WORDS[facts.heldReason] ? `: ${HELD_WORDS[facts.heldReason]}` : ''}.`,
+        blocks: 'It reaches no thread until a person releases it or throws it away.',
+      }
+    case 'FAILED':
+      return { sentence: `${what} could not be read.`, blocks: 'Throw it away, or ask the sender to send it again.' }
+  }
+}
+
 // ---- waiting on others --------------------------------------------------------------------------------------------------
 
 export function approvalRequestWords(facts: { readonly number: string; readonly customer: string; readonly reasons: readonly string[] }): string {

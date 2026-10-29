@@ -2,6 +2,7 @@ import type { AttentionKind } from '@nexus/factory-domain/insights/attention'
 import type { Source } from './common'
 import { registerDuty, styleHold } from './compliance'
 import { invoiceSdi, invoiceToIssue } from './invoicing'
+import { mailToSort } from './mail'
 import { privacyDuty } from './privacy'
 import { scanCorrection, scanRefusal, workOrderHeld } from './production'
 import { poNotConfirmed, poProposal } from './purchasing'
@@ -23,4 +24,5 @@ export const SOURCES: Readonly<Record<AttentionKind, Source>> = Object.freeze({
   REGISTER_DUTY: registerDuty,
   PRIVACY_DUTY: privacyDuty,
   STYLE_COMPLIANCE: styleHold,
+  MAIL_TO_SORT: mailToSort,
 })
