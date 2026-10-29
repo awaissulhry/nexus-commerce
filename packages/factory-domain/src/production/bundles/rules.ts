@@ -18,8 +18,9 @@ import type { WorkOrderKind, WorkOrderStatus } from '../work-orders/machine'
  *                whole garments still to bundle = min over its parts (pieces − in part bundles of it) − in whole bundles
  *                pieces of part p still to bundle = pieces of p − in part bundles of p − in whole bundles
  *              A VOID bundle takes nothing: its pieces are back in "cut, not in bundles".
- *   split      the garments to bundle in bundles of the target size (the request's, else DEFAULT_BUNDLE_SIZE): as many
- *              full bundles as fit, and the last one takes the rest (12 by 5 → 5 + 5 + 2). The request may give the
+ *   split      the garments to bundle in bundles of the target size (the request's, else the site's standard bundle
+ *              size, ProductionSettings.standardBundleSize, else DEFAULT_BUNDLE_SIZE): as many full bundles as fit, and
+ *              the last one takes the rest (12 by 5 → 5 + 5 + 2). The request may give the
  *              quantities itself (the screen's "tap a bundle's quantity to change it"); they never add up to more than
  *              is still to bundle. A made-to-measure work order is single-piece (MES-068): one garment per bundle.
  *   code       a ticket's code is a BUNDLE scannable id of the tenant (numbering/scan-id, `BN-7K-00003R-M`): the
@@ -32,10 +33,24 @@ import type { WorkOrderKind, WorkOrderStatus } from '../work-orders/machine'
  *              (B-W1-36's privacy gate, B-W1-37's floor rules), refused in the gate's own words.
  */
 
-/** A bundle carries its garments of one cell for this many garments when the request names no size (MES-065: 10-20). */
+/**
+ * A bundle carries this many garments of one cell when neither the request nor the site's floor rules name a size
+ * (MES-065: 10-20); the schema's default of ProductionSettings.standardBundleSize.
+ */
 export const DEFAULT_BUNDLE_SIZE = 10
-/** The largest bundle (and target size) a request may name. */
+/** The largest bundle (and target size) a request, or a site's standard bundle size, may name (the database's limit too). */
 export const MAX_BUNDLE_SIZE = 500
+
+/** The site's standard bundle size: its floor rules' (a site without a row: DEFAULT_BUNDLE_SIZE). */
+export function standardBundleSizeOf(rules: { readonly standardBundleSize: number } | null | undefined): number {
+  return rules?.standardBundleSize ?? DEFAULT_BUNDLE_SIZE
+}
+
+/** The target size a proposal uses: one garment for a made-to-measure unit; else the asked size, else the site's standard. */
+export function targetBundleSize(kind: WorkOrderKind, asked: number | undefined, standard: number): number {
+  if (kind === 'MADE_TO_MEASURE') return 1
+  return Math.min(MAX_BUNDLE_SIZE, asked ?? standard)
+}
 /** The most bundles one request makes (and so the most tickets it prints). */
 export const MAX_BUNDLES_PER_MAKE = 100
 
@@ -147,6 +162,8 @@ export interface PlanFacts {
   readonly asks: readonly BundleAsk[] | null
   /** The request's target size. */
   readonly bundleSize?: number | undefined
+  /** The site's standard bundle size (standardBundleSizeOf), when the request names none; absent: DEFAULT_BUNDLE_SIZE. */
+  readonly standardSize?: number | undefined
 }
 
 export interface PlannedBundle {
@@ -206,7 +223,7 @@ export function planBundles(facts: PlanFacts): BundlePlan {
       counts = `${piecesOf(known.pieces, part)} cut, ${known.bundled} in bundles`
     }
     if (available <= 0) return refuse('NOTHING_TO_BUNDLE', `${cell.label}: nothing cut is waiting for bundles (${counts}).`)
-    const size = ask.bundleSize ?? facts.bundleSize ?? (singlePiece ? 1 : DEFAULT_BUNDLE_SIZE)
+    const size = ask.bundleSize ?? facts.bundleSize ?? (singlePiece ? 1 : (facts.standardSize ?? DEFAULT_BUNDLE_SIZE))
     if (singlePiece && (size !== 1 || (ask.quantities ?? []).some((value) => value !== 1))) {
       return refuse('SINGLE_PIECE', `Work order ${workOrder.number} is made to measure: each bundle is the one garment (single-piece mode).`)
     }

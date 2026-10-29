@@ -68,6 +68,10 @@ const FLOOR: Permission[] = ['floor.work', 'production.cut', 'production.bundles
 const floor = (siteId: string, deviceId: string, actorId: string, companyId: string): SessionContext => ({ audience: 'floor', tenantId: A.tenant, actorId, siteId, deviceId, grants: [grant(FLOOR, [companyId], [siteId])] })
 const OFFICE_BUNDLES: Permission[] = ['workorders.view', 'production.bundles', 'production.cut.correct', 'print.view', 'print.labels']
 const SESSIONS: Record<string, SessionContext> = {
+  /** Keeps the sites' floor rules (the standard bundle size). */
+  settings: office(A.tenant, [grant(['production.settings.view', 'production.settings.manage'])]),
+  /** Keeps the printers and the stations' label printers (MES-184). */
+  printAdmin: office(A.tenant, [grant(['print.view', 'print.manage'])]),
   planner: office(A.tenant, [grant(['workorders.view', 'workorders.manage', 'workorders.release'])]),
   /** The production manager: reads a work order's bundles, reprints and voids them, corrects cuts. */
   manager: office(A.tenant, [grant(OFFICE_BUNDLES)]),
@@ -84,7 +88,7 @@ const SESSIONS: Record<string, SessionContext> = {
 }
 
 type Json = Record<string, any>
-type Method = 'GET' | 'POST'
+type Method = 'GET' | 'POST' | 'PUT'
 const admin = async <T = Json>(sql: string, values: unknown[] = []): Promise<T[]> => (await db.admin.query(sql, values)).rows as T[]
 const run = randomBytes(4).toString('hex')
 let keys = 0
@@ -213,7 +217,7 @@ async function cutAll(workOrder: Json, hideKey: string): Promise<Json> {
   return response.json().cut
 }
 
-type Orders = 'main' | 'race' | 'pair' | 'part' | 'gate' | 'station'
+type Orders = 'main' | 'race' | 'pair' | 'part' | 'gate' | 'station' | 'size' | 'event' | 'printer'
 const WO = {} as Record<Orders, Json>
 const CUT = {} as Record<Orders, Json>
 /** The Idempotency-Key of the first make of WO.main (replayed again after a reprint). */
@@ -249,7 +253,7 @@ beforeAll(async () => {
     })
     await tx.certificateCoverage.create({ data: { id: newId(), certificateId, styleId: A.style, sizes: ['50', '52'] }, select: { id: true } })
   })
-  await addHides(8)
+  await addHides(9)
   await admin(`INSERT INTO "Device" (id, "tenantId", "companyId", "siteId", "stationId", name, kind, status, "enrolledAt") VALUES ($1, $2, $3, $4, $5, 'Second cutting tablet', 'TABLET', 'ACTIVE', now())`, [A.tablet2, A.tenant, A.companyA, A.siteA1, A.station])
   await admin(
     `INSERT INTO "Printer" (id, "tenantId", "companyId", "siteId", code, name, kind, relay, "relayTarget", dpi, "labelWidthMm", "labelHeightMm") VALUES ($1, $2, $3, $4, 'LBL-BN', 'Made-up ticket printer', 'LABEL_ZPL', 'FAKE', 'test-ticket-printer:9100', 203, 100, 100)`,
@@ -260,7 +264,7 @@ beforeAll(async () => {
     { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
-  const line = await salesOrder({ '50': 80, '52': 6 })
+  const line = await salesOrder({ '50': 120, '52': 6 })
   const plan: [Orders, Record<string, number>, string][] = [
     ['main', { '50': 12 }, 'H01'],
     ['race', { '50': 12 }, 'H02'],
@@ -268,6 +272,9 @@ beforeAll(async () => {
     ['part', { '50': 12 }, 'H04'],
     ['gate', { '50': 12 }, 'H05'],
     ['station', { '50': 12 }, 'H06'],
+    ['size', { '50': 12 }, 'H07'],
+    ['event', { '50': 12 }, 'H08'],
+    ['printer', { '50': 12 }, 'H09'],
   ]
   for (const [name, sizes, hide] of plan) {
     WO[name] = await releasedWorkOrder(line, sizes)
@@ -614,5 +621,137 @@ describe("the office's bundles of a work order; the walls hold", () => {
     // A floor write needs its Idempotency-Key.
     expect((await call('floor', 'POST', makeUrl(WO.gate.id), {})).statusCode).toBe(400)
     expect(await activeSum(WO.gate.id)).toBe(0)
+  })
+})
+
+// ---- production leftovers: the standard bundle size, the floor queue's event, the reprint's reason, the station printer --
+
+describe("the site's standard bundle size (MES-065; production settings): proposed and made when the floor names none", () => {
+  it("bundles by the site's size, an asked one still wins, and the work order record counts the garments bundled", async () => {
+    const before = await ok('settings', 'GET', `/production/settings/${A.siteA1}`)
+    expect(before.rules.standardBundleSize).toBe(10)
+    const changed = await ok('settings', 'POST', `/production/settings/${A.siteA1}/bundle-size`, { standardBundleSize: 4, version: before.rules.version })
+    expect(changed).toMatchObject({ changed: true, change: null, rules: { standardBundleSize: 4, scanSubject: 'WORKER', version: before.rules.version + 1 } })
+    try {
+      expect((await ok('floor', 'GET', '/production/floor-rules')).standardBundleSize).toBe(4)
+      const view = await ok('floor', 'GET', `/production/bundles/work-orders/${WO.size.id}`)
+      expect(view).toMatchObject({ bundleSize: 4, standardBundleSize: 4, cells: [expect.objectContaining({ toBundle: 12, proposal: [4, 4, 4] })] })
+      expect((await ok('floor', 'GET', `/production/bundles/work-orders/${WO.size.id}?bundleSize=5`)).cells[0].proposal).toEqual([5, 5, 2])
+      const made = await ok('floor', 'POST', makeUrl(WO.size.id), {}, 201, freshKey())
+      expect(made.bundles.map((bundle: Json) => bundle.quantity)).toEqual([4, 4, 4])
+      // The work order record's progress: cut, bundled (ACTIVE whole-garment bundles), sewn and finished per cell.
+      const { workOrder } = await ok('planner', 'GET', `/production/work-orders/${WO.size.id}`)
+      expect(workOrder.cells.map((cell: Json) => cell.progress)).toEqual([{ cut: 12, bundled: 12, sewn: 0, finished: 0 }])
+      await ok('floor', 'POST', `/production/bundles/${made.bundles[2].id}/void`, { reason: 'Made by mistake' }, 201, freshKey())
+      expect((await ok('planner', 'GET', `/production/work-orders/${WO.size.id}`)).workOrder.cells[0].progress).toEqual({ cut: 12, bundled: 8, sewn: 0, finished: 0 })
+    } finally {
+      await ok('settings', 'POST', `/production/settings/${A.siteA1}/bundle-size`, { standardBundleSize: 10 })
+    }
+  })
+})
+
+describe("an event of the floor queue makes one bundle, once (Bundle.clientEventId; A1 §3.8)", () => {
+  it('a resend under another key answers the bundle it made; the same id for another bundle is a conflict; one event, one bundle', async () => {
+    const event = `ce-${run}-bundle-1`
+    const body = { cells: [{ workOrderSizeId: cellOf(WO.event), quantities: [5] }], clientEventId: event }
+    const first = await ok('floor', 'POST', makeUrl(WO.event.id), body, 201, freshKey())
+    expect(first.bundles).toEqual([expect.objectContaining({ quantity: 5, clientEventId: event, status: 'ACTIVE' })])
+    expect(first.tickets[0].job).toMatchObject({ status: 'QUEUED', scanId: first.bundles[0].code })
+    const again = await ok('floor', 'POST', makeUrl(WO.event.id), body, 200, freshKey())
+    expect(again).toMatchObject({ replayed: true, bundles: [{ id: first.bundles[0].id, code: first.bundles[0].code }], cells: [expect.objectContaining({ cut: 12, bundled: 5, toBundle: 7 })] })
+    expect(again.tickets[0].job.id).toBe(first.tickets[0].job.id)
+    expect(await counts(`SELECT count(*)::int AS n FROM "Bundle" WHERE "clientEventId" = $1`, [event])).toBe(1)
+    expect(await counts(`SELECT count(*)::int AS n FROM "PrintJob" WHERE "recordType" = 'Bundle' AND "recordId" = $1`, [first.bundles[0].id])).toBe(1)
+    // The same id for another bundle (a part bundle of the cell, a bundle of another work order): refused.
+    expect((await call('floor', 'POST', makeUrl(WO.event.id), { cells: [{ workOrderSizeId: cellOf(WO.event), part: 'Outer shell', quantities: [5] }], clientEventId: event }, freshKey())).statusCode).toBe(409)
+    expect((await call('floor', 'POST', makeUrl(WO.main.id), { clientEventId: event }, freshKey())).statusCode).toBe(409)
+    // One event makes one bundle: two are a 400 in words, and nothing is made.
+    const two = await refused('floor', 'POST', makeUrl(WO.event.id), { cells: [{ workOrderSizeId: cellOf(WO.event), quantities: [2, 2] }], clientEventId: `ce-${run}-bundle-2` }, 400)
+    expect(two.issues).toEqual([{ path: 'body/clientEventId', message: expect.stringContaining('Send one event per bundle') }])
+    expect(await activeSum(WO.event.id)).toBe(5)
+  })
+
+  it('records one bundle when the same event arrives twice at once under two keys', async () => {
+    const event = `ce-${run}-bundle-3`
+    const body = { cells: [{ workOrderSizeId: cellOf(WO.event), quantities: [3] }], clientEventId: event }
+    const answers = await Promise.all([make(WO.event.id, body, 'floor'), make(WO.event.id, body, 'tablet2')])
+    expect(answers.map((response) => response.statusCode).sort(), answers.map((response) => response.body).join('\n')).toEqual([200, 201])
+    expect(new Set(answers.map((response) => response.json().bundles[0].id)).size).toBe(1)
+    expect(await counts(`SELECT count(*)::int AS n FROM "Bundle" WHERE "clientEventId" = $1`, [event])).toBe(1)
+    expect(await activeSum(WO.event.id)).toBe(8)
+  })
+})
+
+describe('a reprint says why (BundleReprint; MES-073): a real row with the reason, and the database holds it', () => {
+  it('keeps each reprint with its codes, reason, printer and device; the office list shows them (never who); a new code without one is refused', async () => {
+    const bundle = (await ok('floor', 'GET', `/production/bundles/work-orders/${WO.event.id}`)).bundles.find((row: Json) => row.status === 'ACTIVE' && row.quantity === 5)
+    const reprinted = await ok('floor', 'POST', `/production/bundles/${bundle.id}/reprint`, { reason: '  Unreadable after the press  ' }, 201, freshKey())
+    expect(await admin(`SELECT code, "replacedCode", reason, "printerId", "deviceId", "createdById", "companyId", "workOrderId" FROM "BundleReprint" WHERE "bundleId" = $1`, [bundle.id])).toEqual([
+      { code: reprinted.bundle.code, replacedCode: bundle.code, reason: 'Unreadable after the press', printerId: A.printer, deviceId: A.deviceA1, createdById: A.operatorA1, companyId: A.companyA, workOrderId: WO.event.id },
+    ])
+    const office = await ok('manager', 'POST', `/production/bundles/${bundle.id}/reprint`, { reason: 'Lost on the trolley', printerId: null }, 201)
+    const list = await ok('viewer', 'GET', `/production/bundles/work-orders/${WO.event.id}/bundles`)
+    expect(list.bundles.find((row: Json) => row.id === bundle.id).reprints).toEqual([
+      { code: reprinted.bundle.code, replacedCode: bundle.code, reason: 'Unreadable after the press', printerId: A.printer, postedBy: 'FLOOR', at: expect.any(String) },
+      { code: office.bundle.code, replacedCode: reprinted.bundle.code, reason: 'Lost on the trolley', printerId: null, postedBy: 'OFFICE', at: expect.any(String) },
+    ])
+    expect(keysOf(list).filter((name) => /worker|createdBy/i.test(name))).toEqual([])
+    // A reprint names who reprinted: a worker who has not acknowledged the notice reprints nothing (Statuto art. 4 c.3).
+    expect((await refused('floorLead', 'POST', `/production/bundles/${bundle.id}/reprint`, { reason: 'Lost' }, 409)).message).toMatch(/acknowledge the information notice first/)
+    // The database, for every login: a new code without its reprint row (the reason) is refused.
+    await expect(admin(`UPDATE "Bundle" SET code = 'T-NEW-CODE', "replacedCodes" = "replacedCodes" || code WHERE id = $1`, [bundle.id])).rejects.toThrow(/says why: its BundleReprint row/)
+    expect(await counts(`SELECT count(*)::int AS n FROM "BundleReprint" WHERE "bundleId" = $1`, [bundle.id])).toBe(2)
+  })
+})
+
+describe("the station label printer (MES-184): a station names its printer; its tablets' tickets print there", () => {
+  it('pairs a station with a label printer of its site (print.manage, audited); tickets and reprints go there when the floor names none', async () => {
+    const second = newId()
+    const a4 = newId()
+    await admin(
+      `INSERT INTO "Printer" (id, "tenantId", "companyId", "siteId", code, name, kind, relay, "relayTarget", dpi, "labelWidthMm", "labelHeightMm") VALUES ($1, $2, $3, $4, 'LBL-CUT', 'Made-up cutting table printer', 'LABEL_ZPL', 'FAKE', 'test-cut-printer:9100', 203, 100, 100)`,
+      [second, A.tenant, A.companyA, A.siteA1],
+    )
+    await admin(`INSERT INTO "Printer" (id, "tenantId", "companyId", "siteId", code, name, kind, relay, "relayTarget") VALUES ($1, $2, $3, $4, 'A4-T', 'Made-up office printer', 'A4_PDF', 'FAKE', 'test-a4')`, [a4, A.tenant, A.companyA, A.siteA1])
+    const cells = { cells: [{ workOrderSizeId: cellOf(WO.printer), quantities: [4] }] }
+    try {
+      // Two label printers and no pairing: the tablet names one.
+      expect((await call('floor', 'POST', makeUrl(WO.printer.id), cells, freshKey())).statusCode).toBe(400)
+      const station = (await ok('printAdmin', 'GET', `/print/stations?siteId=${A.siteA1}`)).stations.find((row: Json) => row.id === A.station)
+      expect(station).toMatchObject({ code: 'CUT-01', siteId: A.siteA1, labelPrinterId: null })
+      const url = `/print/stations/${A.station}/label-printer`
+      // Only a label printer of the station's site that is in use; only print.manage pairs.
+      expect((await call('printAdmin', 'PUT', url, { printerId: a4, version: station.version })).statusCode).toBe(400)
+      expect((await call('manager', 'PUT', url, { printerId: second, version: station.version })).statusCode).toBe(403)
+      expect((await call('floor', 'PUT', url, { printerId: second, version: station.version })).statusCode).toBe(403)
+      const paired = await ok('printAdmin', 'PUT', url, { printerId: second, version: station.version })
+      expect(paired).toMatchObject({ changed: true, station: { id: A.station, labelPrinterId: second, version: station.version + 1 } })
+      expect(await admin(`SELECT before, after FROM "AuditLog" WHERE action = 'print.setStationPrinter' AND "recordId" = $1`, [A.station])).toEqual([{ before: { labelPrinterId: null }, after: { labelPrinterId: second } }])
+      expect((await ok('printAdmin', 'PUT', url, { printerId: second, version: paired.station.version })).changed).toBe(false)
+      // The tablet at the station reads its site's stations, sees the pairing, and its tickets print there.
+      expect((await ok('floor', 'GET', '/print/stations')).stations.every((row: Json) => row.siteId === A.siteA1)).toBe(true)
+      expect(await ok('floor', 'GET', `/production/bundles/work-orders/${WO.printer.id}`)).toMatchObject({ stationPrinterId: second, defaultPrinterId: second })
+      const made = await ok('floor', 'POST', makeUrl(WO.printer.id), cells, 201, freshKey())
+      expect(made.tickets.map((ticket: Json) => ticket.job?.printerId)).toEqual([second])
+      const reprinted = await ok('floor', 'POST', `/production/bundles/${made.bundles[0].id}/reprint`, { reason: 'Damaged' }, 201, freshKey())
+      expect(reprinted.ticket.job.printerId).toBe(second)
+      expect(await admin(`SELECT "printerId" FROM "BundleReprint" WHERE "bundleId" = $1`, [made.bundles[0].id])).toEqual([{ printerId: second }])
+      // The office has no station: with two label printers it names one.
+      expect((await call('manager', 'POST', `/production/bundles/${made.bundles[0].id}/reprint`, { reason: 'Lost' }, freshKey())).statusCode).toBe(400)
+      // A paused station printer is said in words; nothing is made.
+      await admin(`UPDATE "Printer" SET status = 'PAUSED' WHERE id = $1`, [second])
+      expect((await refused('floor', 'POST', makeUrl(WO.printer.id), cells, 409)).message).toMatch(/^Printer LBL-CUT is paused/)
+      expect(await activeSum(WO.printer.id)).toBe(4)
+      await admin(`UPDATE "Printer" SET status = 'ACTIVE' WHERE id = $1`, [second])
+      // The database holds the pairing for every login: never a PDF printer, never an archived one.
+      await expect(admin(`UPDATE "Station" SET "labelPrinterId" = $2 WHERE id = $1`, [A.station, a4])).rejects.toThrow(/prints its tickets on a label printer that is in use/)
+      // Unpaired again: the station's tablets name a printer (two at the site).
+      const unpaired = await ok('printAdmin', 'PUT', url, { printerId: null, version: paired.station.version })
+      expect(unpaired).toMatchObject({ changed: true, station: { labelPrinterId: null } })
+      expect((await call('floor', 'POST', makeUrl(WO.printer.id), cells, freshKey())).statusCode).toBe(400)
+    } finally {
+      await admin(`UPDATE "Station" SET "labelPrinterId" = NULL WHERE id = $1`, [A.station])
+      await admin(`UPDATE "Printer" SET status = 'ARCHIVED' WHERE id = ANY($1::uuid[])`, [[second, a4]])
+    }
   })
 })

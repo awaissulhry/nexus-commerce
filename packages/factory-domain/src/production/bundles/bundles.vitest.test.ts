@@ -12,6 +12,8 @@ import {
   reprintRefusal,
   scannedBundleRefusal,
   splitBundles,
+  standardBundleSizeOf,
+  targetBundleSize,
   voidRefusal,
   type CellCut,
   type PlanCell,
@@ -77,6 +79,21 @@ describe('a request to make bundles', () => {
     expect(planBundles(facts({ asks: [{ cellId: 'c50', quantities: [6, 6] }] }))).toMatchObject({ ok: true, bundles: [{ quantity: 6 }, { quantity: 6 }] })
     expect(planBundles(facts({ asks: [{ cellId: 'c50', part: 'Collar', quantity: 13, bundleSize: 13 }] }))).toMatchObject({ ok: true, bundles: [{ cellId: 'c50', part: 'Collar', quantity: 13 }] })
     expect(planBundles(facts({ asks: [{ cellId: 'c50', quantity: 7, bundleSize: 4 }] }))).toMatchObject({ ok: true, bundles: [{ quantity: 4 }, { quantity: 3 }] })
+  })
+
+  it("takes the site's standard bundle size when the request names none (MES-065), never over an asked one", () => {
+    // The site bundles by 4: 12 → 4 + 4 + 4; a size in the request (or the ask) wins; no row: 10.
+    expect(planBundles(facts({ standardSize: 4 }))).toMatchObject({ ok: true, bundles: [{ quantity: 4 }, { quantity: 4 }, { quantity: 4 }] })
+    expect(planBundles(facts({ standardSize: 4, bundleSize: 6 }))).toMatchObject({ ok: true, bundles: [{ quantity: 6 }, { quantity: 6 }] })
+    expect(planBundles(facts({ standardSize: 4, asks: [{ cellId: 'c50', bundleSize: 12 }] }))).toMatchObject({ ok: true, bundles: [{ quantity: 12 }] })
+    expect(standardBundleSizeOf({ standardBundleSize: 4 })).toBe(4)
+    expect(standardBundleSizeOf(null)).toBe(DEFAULT_BUNDLE_SIZE)
+    // The proposal's size: asked, else the site's; a made-to-measure unit is one garment whatever the site says.
+    expect(targetBundleSize('SIZE_GRID', undefined, 4)).toBe(4)
+    expect(targetBundleSize('SIZE_GRID', 7, 4)).toBe(7)
+    expect(targetBundleSize('MADE_TO_MEASURE', undefined, 4)).toBe(1)
+    const unit: CellCut = { cellId: 'u', quantity: 1, cut: 1, parts: [{ part: 'Outer shell', pieces: 1, planned: true }] }
+    expect(planBundles(facts({ workOrder: { ...workOrder, kind: 'MADE_TO_MEASURE' }, cells: [cell(unit, 'BLK MTM')], standardSize: 4 }))).toMatchObject({ ok: true, bundles: [{ quantity: 1 }] })
   })
 
   it('never bundles more than was cut and not yet bundled, in words', () => {

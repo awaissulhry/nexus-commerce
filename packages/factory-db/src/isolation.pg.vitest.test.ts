@@ -171,6 +171,7 @@ it('covers every classified table and every runtime role', () => {
     'BomLineColour',
     'BomLineSize',
     'Bundle',
+    'BundleReprint',
     'Certificate',
     'CertificateCoverage',
     'Colour',
