@@ -7,6 +7,7 @@ import {
   accountProblems,
   buyFieldProblems,
   buyStateProblems,
+  carrierNameFor,
   cutOffOf,
   externalReferenceOf,
   labelFileName,
@@ -90,6 +91,16 @@ describe('buying labels (LOG-025, LOG-032; Owner Q20)', () => {
     expect(labelFormatsFor('A4_PDF')).toEqual(['PDF'])
     expect(labelFormatsFor('LABEL_ZPL')).toEqual(['PDF', 'ZPL'])
     expect(labelFileName('SH 0002', 1, 'FK/12', 'ZPL')).toBe('label-SH-0002-1-FK-12.zpl')
+  })
+
+  it("names the shipment's carrier from its code, only when a carrier carries the goods", () => {
+    expect(carrierNameFor('CARRIER', 'brt')).toBe('BRT')
+    expect(carrierNameFor('CARRIER', ' Poste_Italiane ')).toBe('Poste Italiane')
+    expect(carrierNameFor('CARRIER', 'seed-express')).toBe('Seed Express')
+    expect(carrierNameFor('CARRIER', null)).toBeNull()
+    expect(carrierNameFor('CARRIER', ' ')).toBeNull()
+    expect(carrierNameFor('SENDER', 'brt')).toBeNull()
+    expect(carrierNameFor('RECIPIENT', 'gls')).toBeNull()
   })
 
   it('says a partial buy plainly', () => {

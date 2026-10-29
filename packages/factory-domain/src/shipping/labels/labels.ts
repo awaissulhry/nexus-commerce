@@ -72,6 +72,43 @@ const filled = (value: unknown): value is string => typeof value === 'string' &&
 const record = (value: unknown): Record<string, unknown> => (value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {})
 const text = (value: unknown): string | null => (filled(value) ? value.trim() : null)
 
+/**
+ * The carriers' names as a DDT names them (the shipment's carrierName: the DDT's default carrier, DPR 472/1996), by
+ * the carrier code Sendcloud uses. An unknown code is named after itself ("seed-express" → "Seed Express"); the DDT
+ * request may still name the carrier in full (address, VAT number).
+ */
+export const CARRIER_NAMES: Readonly<Record<string, string>> = Object.freeze({
+  brt: 'BRT',
+  gls: 'GLS',
+  gls_it: 'GLS',
+  poste_italiane: 'Poste Italiane',
+  poste: 'Poste Italiane',
+  sda: 'SDA',
+  dhl: 'DHL',
+  dhl_express: 'DHL Express',
+  ups: 'UPS',
+  fedex: 'FedEx',
+  tnt: 'TNT',
+  dpd: 'DPD',
+  inpost: 'InPost',
+  postnl: 'PostNL',
+  colissimo: 'Colissimo',
+  chronopost: 'Chronopost',
+  correos: 'Correos',
+})
+
+/** The name of the carrier a shipment travels with: only when a carrier carries it and one is chosen; else null. */
+export function carrierNameFor(transportBy: TransportBy, carrierCode: string | null | undefined): string | null {
+  const code = carrierCode?.trim().toLowerCase()
+  if (transportBy !== 'CARRIER' || !code) return null
+  if (Object.hasOwn(CARRIER_NAMES, code)) return CARRIER_NAMES[code]!
+  return code
+    .split(/[_.-]+/)
+    .filter((word) => word !== '')
+    .map((word) => word[0]!.toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
 /** A parcel has a carrier label. */
 export const isLabelled = (parcel: Pick<LabelParcel, 'trackingNumber' | 'providerId'>): boolean => parcel.trackingNumber !== null || parcel.providerId !== null
 

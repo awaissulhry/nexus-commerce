@@ -231,6 +231,8 @@ describe('a packed shipment with its DDT (the floor packs; LOG-039)', () => {
 
     const sb = (await ok('warehouse', 'POST', '/shipping/shipments', { salesOrderId: seedA.quality.production.salesOrderId, lines: [{ workOrderSizeId: seedA.quality.production.cellIds['BLK-52'], quantity: 1 }] }, 201)).shipment
     S.sb = sb.id
+    // The site's default carrier gives the shipment its carrier's name (the DDT's default carrier).
+    expect(sb).toMatchObject({ transportBy: 'CARRIER', carrierCode: 'seed-express', carrierName: 'Seed Express' })
     S.sbParcel = (await ok('warehouse', 'POST', `/shipping/packing/${sb.id}/parcels`, { grossWeightKg: '2.5' }, 201)).parcelId
     await ok('warehouse', 'PUT', `/shipping/packing/${sb.id}/lines/${sb.lines[0].id}/parcel`, { parcelId: S.sbParcel })
     expect((await ok('warehouse', 'POST', `/shipping/packing/${sb.id}/pack`, {})).shipment.status).toBe('PACKED')
@@ -245,8 +247,29 @@ describe('a packed shipment with its DDT (the floor packs; LOG-039)', () => {
 
   it('issues the DDTs, the goods still PACKED (they leave later)', async () => {
     expect((await ok('warehouse', 'POST', `/shipping/shipments/${sh2()}/ddt`, {}, 201)).shipment.status).toBe('PACKED')
-    // SB was planned without a carrier name (the shipment form sets only the code): the DDT names it.
-    expect((await ok('warehouse', 'POST', `/shipping/shipments/${S.sb}/ddt`, { carrier: { name: 'Seed Express' } }, 201)).shipment.status).toBe('PACKED')
+    // SB names no carrier in its DDT request: the shipment's carrier name is the DDT's.
+    const ddt = await ok('warehouse', 'POST', `/shipping/shipments/${S.sb}/ddt`, {}, 201)
+    expect(ddt.shipment.status).toBe('PACKED')
+    expect(ddt.ddt.carrier).toMatchObject({ name: 'Seed Express' })
+  })
+
+  it('names the carrier when it is chosen or changed, and none when no carrier carries the goods', async () => {
+    const draft = (await ok('warehouse', 'POST', '/shipping/shipments', { salesOrderId: seedA.quality.production.salesOrderId, siteId: A.siteA1, carrierCode: 'brt' }, 201)).shipment
+    expect(draft).toMatchObject({ carrierCode: 'brt', carrierName: 'BRT' })
+    expect((await ok('warehouse', 'PATCH', `/shipping/shipments/${draft.id}`, { carrierCode: 'gls' })).shipment).toMatchObject({ carrierCode: 'gls', carrierName: 'GLS' })
+    expect((await ok('warehouse', 'PATCH', `/shipping/shipments/${draft.id}`, { transportBy: 'SENDER' })).shipment).toMatchObject({ transportBy: 'SENDER', carrierName: null })
+    expect((await ok('warehouse', 'PATCH', `/shipping/shipments/${draft.id}`, { transportBy: 'CARRIER', carrierCode: 'poste_italiane' })).shipment).toMatchObject({ carrierName: 'Poste Italiane' })
+    expect((await ok('warehouse', 'PATCH', `/shipping/shipments/${draft.id}`, { internalNote: 'Call first' })).shipment).toMatchObject({ carrierName: 'Poste Italiane' })
+    expect((await ok('warehouse', 'PATCH', `/shipping/shipments/${draft.id}`, { carrierCode: null })).shipment).toMatchObject({ carrierCode: null, carrierName: null })
+    const audit = await admin(`SELECT before->>'carrierName' AS before, after->>'carrierName' AS after FROM "AuditLog" WHERE "recordType" = 'Shipment' AND "recordId" = $1 AND action = 'shipping.update' ORDER BY "at", id`, [draft.id])
+    expect(audit.map((row) => [row.before, row.after])).toEqual([
+      ['BRT', 'GLS'],
+      ['GLS', null],
+      [null, 'Poste Italiane'],
+      ['Poste Italiane', 'Poste Italiane'],
+      ['Poste Italiane', null],
+    ])
+    await ok('warehouse', 'POST', `/shipping/shipments/${draft.id}/cancel`, { reason: 'Test shipment' })
   })
 })
 
