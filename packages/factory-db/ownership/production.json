@@ -73,6 +73,15 @@
         "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
       }
     },
+    "BundleReprint": {
+      "about": "The reprint log of bundle tickets (MES-073): every ticket printed again with a new code, the code it replaced, the reason, the printer and the device. The site's floor writes its reprints and reads its site's log; the office reads every site's and reprints. Append-only: nobody changes or removes an entry.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    },
     "OperationScan": {
       "about": "The site's floor reports bundles at operations and undoes its last scan; a team leader on the floor or the office records a correction of an older one. Both read the site's scans (WIP). Nobody changes or removes a scan.",
       "kind": "tenant",
