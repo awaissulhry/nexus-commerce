@@ -43,10 +43,12 @@
 // row per company or tenant-wide). A result's verdict is computed against the lot's limit, never typed (the
 // …_quality_lab_guards trigger checks it again); a later FAIL is a new row that supersedes the PASS.
 //
-// Who sees what (ownership/quality.json): the office reads and writes (releases and their reversals are the office's);
-// the floor reads its OWN site's inspections, defects, releases, reversals and serials, records inspections and their
-// defects (a floor inspector, signed in) and the serials of the final operation; portal and link sessions read nothing here (the Declaration of Conformity reaches a customer
-// through a link, B-W1-49). No table here has a cost, price, margin or wages column.
+// Who sees what (ownership/quality.json): the office reads and writes (reversals are the office's); the floor reads its
+// OWN site's inspections, defects, releases, reversals and serials, records inspections and their defects and decides
+// them (a floor inspector, signed in), releases the garments of a PASSED inspection with the inspector's PIN (B-W1-45;
+// design floor.final) and gives the serials of the final operation; portal and link sessions read nothing here (the
+// Declaration of Conformity reaches a customer through a link, B-W1-49). No table here has a cost, price, margin or
+// wages column.
 
 /// How the garments of a style are traced on their labels (Q31; PPE Regulation 2016/425 art. 8(5): batch or serial).
 enum GarmentTracking {
@@ -97,6 +99,13 @@ model Inspection {
   /// e-signature, QHS-058): set exactly then.
   decidedAt         DateTime?        @db.Timestamptz(3)
   signatureSha256   String?
+  /// The result the rules give (QHS-013: any critical defect, the acceptance numbers, a checklist item not ok): written
+  /// by the database when the inspection is decided, never by the API; null while OPEN or CANCELLED.
+  computedResult    InspectionResult?
+  /// The inspector's written reason when the decision is not the computed result (QHS-013 override): exactly then. A
+  /// PASS over a computed FAIL is allowed only when the FAIL comes from the major and minor acceptance numbers (never a
+  /// critical defect, never a checklist item not ok), and its releases need a second person (Owner answer Q1 (a)).
+  overrideReason    String?
   note              String?
   version           Int              @default(1)
   createdAt         DateTime         @default(now()) @db.Timestamptz(3)
@@ -123,6 +132,12 @@ enum InspectionStatus {
   FAILED
   /// Abandoned before a decision (started by mistake).
   CANCELLED
+}
+
+/// The result the inspection rules give (QHS-013).
+enum InspectionResult {
+  PASS
+  FAIL
 }
 
 /// The defects found in an inspection's sample (QHS-050): per class and defect code, the garments of the sample that
@@ -166,11 +181,18 @@ enum DefectClass {
 }
 
 /// A quality release (QHS-058; A1 §2.4 F QualityRelease): garments of one cell of a work order released to be packed and
-/// shipped, from one PASSED inspection of the work order, signed by an office user who made none of them, with the
-/// certificates that cover the cell on the day (the certificate gate). Never changed or removed (the triggers, for
-/// every login); taken back only by a QualityReleaseReversal. The cell's releases less their reversals never pass its
-/// pieces; an inspection's releases (reversed or not) never pass its lot. A serial-tracked style's release names its
-/// serials (GarmentSerial.releaseId).
+/// shipped, from one PASSED inspection of the work order, signed by an inspector who made none of them (an office user,
+/// or a floor inspector of the site with their PIN, B-W1-45), with the certificates that cover the cell on the day (the
+/// certificate gate). Never changed or removed (the triggers, for every login); taken back only by a
+/// QualityReleaseReversal. The cell's releases less their reversals never pass its pieces; an inspection's releases
+/// (reversed or not) never pass its lot. A serial-tracked style's release names its serials (GarmentSerial.releaseId).
+///
+/// Four eyes (Owner answer Q1 (a); QHS-058, QHS-300): the inspection's decision is the first signature, the release the
+/// second. An inspector who made none of the garments releases alone. A second person is needed when the inspection
+/// overrode its computed result, when the cell's customer is on the company's list, or when the company's rule asks it
+/// for every release (QualitySettings): the database writes why (`secondPersonReasons`), and the releaser is then the
+/// second person: not the inspector who signed the result (nor a worker linked to that office user, or the reverse), and
+/// a maker of none of the garments.
 /// @append-only
 model QualityRelease {
   id              String   @id @db.Uuid
@@ -187,11 +209,15 @@ model QualityRelease {
   /// A PPE style: the certificates that cover the style, colourway and size on the release day (VALID then); at least
   /// one. Empty for a style that is not PPE.
   certificateIds  String[] @default([]) @db.Uuid
-  /// The office user who signed the release (never a maker of the garments), when, and the SHA-256 (hex) of what they
-  /// signed.
-  releasedById    String   @db.Uuid
+  /// Who signed the release (never a maker of the garments): an office user, or a floor inspector of the site (signed
+  /// in, with their PIN); exactly one. When, and the SHA-256 (hex) of what they signed.
+  releasedById       String?  @db.Uuid
+  releasedByWorkerId String?  @db.Uuid
   releasedAt      DateTime @db.Timestamptz(3)
   signatureSha256 String
+  /// Why this release needed a second person (Owner answer Q1 (a)): written by the database from the inspection and the
+  /// company's rules (QualitySettings), never by the API; empty: the inspector released alone.
+  secondPersonReasons ReleaseSecondPersonReason[] @default([])
   note            String?
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
   createdById     String?  @db.Uuid
@@ -199,6 +225,8 @@ model QualityRelease {
   site          Site                     @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   workOrderSize WorkOrderSize            @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
   inspection    Inspection               @relation(fields: [tenantId, siteId, workOrderId, inspectionId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  releasedByWorker Worker?               @relation(fields: [tenantId, siteId, releasedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   serials       GarmentSerial[]
   reversals     QualityReleaseReversal[]
 
@@ -206,6 +234,16 @@ model QualityRelease {
   @@unique([tenantId, siteId, workOrderSizeId, id])
   @@index([tenantId, workOrderId])
   @@index([tenantId, inspectionId])
+}
+
+/// Why a release needed a second person (Owner answer Q1 (a)).
+enum ReleaseSecondPersonReason {
+  /// The inspection's decision overrode its computed result (QHS-013).
+  OVERRIDE
+  /// The cell's customer is on the company's list of customers whose garments always need a second person.
+  CUSTOMER
+  /// The company's rule asks a second person for every final release (Q1 (b)).
+  ALWAYS
 }
 
 /// The reversal of (part of) a quality release before the garments ship (Reg. 2016/425 art. 8(8): corrective action; a
@@ -229,6 +267,11 @@ model QualityReleaseReversal {
   /// A serial-tracked style: the serials taken back (GarmentSerial ids of the release), as many as the quantity; empty
   /// for a batch-tracked style.
   serialIds       String[] @default([]) @db.Uuid
+  /// Where the named serials went: MADE (rework, then a new inspection and release) or VOID (scrapped); exactly when
+  /// serials are named.
+  serialsTo       GarmentSerialStatus?
+  /// Why, as a kind (required on every new reversal) and in words.
+  reasonCode      ReleaseReversalReason?
   reason          String
   /// The office user who signed the reversal, and when.
   reversedById    String   @db.Uuid
@@ -243,6 +286,17 @@ model QualityReleaseReversal {
   @@index([tenantId, releaseId])
   // The cell's net released garments (only released garments ship).
   @@index([tenantId, workOrderSizeId])
+}
+
+/// Why garments of a release were taken back (the design's reversal reasons; Reg. 2016/425 art. 8(8)).
+enum ReleaseReversalReason {
+  /// The inspection's result was recorded wrong.
+  WRONG_RESULT
+  DEFECT_FOUND_LATER
+  /// A certificate was suspended, withdrawn or found not to cover the garments.
+  CERTIFICATE_PROBLEM
+  CUSTOMER_COMPLAINT
+  RECALL
 }
 
 /// One garment's serial (Q31 (b), PRD-025, MES-076; A1 §2.4 E Serial): given at the final operation (B-W1-44) to a
@@ -408,6 +462,13 @@ model QualitySettings {
   /// null: the tenant-wide settings.
   companyId        String?          @db.Uuid
   crViEvidenceRule CrViEvidenceRule @default(SUPPLIER_REPORT_ACCEPTED)
+  /// Four eyes on the final release (Owner answer Q1, B-W1-45): WHEN_REQUIRED (Q1 (a), the default: an inspector who
+  /// made none of the garments releases alone; a second person for overrides and listed customers) or ALWAYS (Q1 (b)).
+  /// null: not set on this row (a company row follows the tenant-wide one; no row: the default).
+  releaseFourEyes  ReleaseFourEyesRule?
+  /// Customers (parties of the tenant with the CUSTOMER role) whose garments always need a second person at release;
+  /// a company's list adds to the tenant-wide one.
+  secondPersonPartyIds String[]     @default([]) @db.Uuid
   version          Int              @default(1)
   createdAt        DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
@@ -416,6 +477,15 @@ model QualitySettings {
   company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, companyId])
+}
+
+/// Who releases finished garments (Owner answer Q1).
+enum ReleaseFourEyesRule {
+  /// (a) An inspector who made none of the garments releases alone; a second person only for overrides and listed
+  /// customers.
+  WHEN_REQUIRED
+  /// (b) Every final release needs a second person after the inspector's signature.
+  ALWAYS
 }
 
 /// What counts as chromium VI evidence (Q14).

@@ -441,6 +441,7 @@
     "INTEG": {
       "about": "golden flow, navigation, home, go-live",
       "paths": [
+        "apps/factory-api/src/golden-flow/**",
         "apps/factory-api/src/modules/insights/**",
         "apps/factory-web/src/areas/*/nav.ts",
         "apps/factory-web/src/areas/home/needs-attention/**",

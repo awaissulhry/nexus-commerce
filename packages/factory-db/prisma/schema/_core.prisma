@@ -204,8 +204,9 @@ model Site {
   // quality.prisma: the lab results and supplier documents of its lots.
   labResults              LabResult[]
   lotDocuments            LotDocument[]
-  // production.prisma: its garment label prints (B-W1-44).
+  // production.prisma: its garment label prints (B-W1-44) and bundle ticket reprints.
   garmentLabelPrints      GarmentLabelPrint[]
+  bundleReprints          BundleReprint[]
   // shipping.prisma: its shipping settings, the shipments that leave it and their DDTs.
   shippingSettings   ShippingSettings[]
   shipments          Shipment[]
@@ -292,6 +293,9 @@ model Station {
   /// Short code, unique on the site; printed on the station's label.
   code         String
   name         String
+  /// The label printer of the station (MES-184; print.prisma): a LABEL_ZPL printer of the same site where its devices'
+  /// bundle tickets print when they name no printer. Empty: the site's own label printer, if it has only one.
+  labelPrinterId String?    @db.Uuid
   status       MasterStatus @default(ACTIVE)
   version      Int          @default(1)
   createdAt    DateTime     @default(now()) @db.Timestamptz(3)
@@ -302,6 +306,8 @@ model Station {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   line       Line?      @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   workCentre WorkCentre @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId, siteId.
+  labelPrinter Printer? @relation(fields: [tenantId, companyId, siteId, labelPrinterId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // floor-auth.prisma: the devices enrolled at this station.
   devices    Device[]
   // production.prisma: the cut logs and scans that name the station (a site that records stations, not workers).

@@ -15,6 +15,7 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addRole, addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
+import { standardBundleSizeFor } from './bundle-size'
 import { floorRecordSubjectFor, scanSubjectFor } from './subject'
 
 /**
@@ -367,9 +368,9 @@ describe('the walls', () => {
 describe('the floor reads its own site\'s subject, never the legal basis', () => {
   it('a signed-in worker reads the device site\'s scan subject and whether they acknowledged the notice', async () => {
     const a1 = await ok('floorA1', '/production/floor-rules')
-    expect(a1).toEqual({ siteId: A.siteA1, scanSubject: 'STATION', workerAcknowledged: true })
-    expect(await ok('floorA1Lead', '/production/floor-rules')).toEqual({ siteId: A.siteA1, scanSubject: 'STATION', workerAcknowledged: false })
-    expect(await ok('floorB1', '/production/floor-rules')).toEqual({ siteId: A.siteB1, scanSubject: 'WORKER', workerAcknowledged: false })
+    expect(a1).toEqual({ siteId: A.siteA1, scanSubject: 'STATION', workerAcknowledged: true, standardBundleSize: 10 })
+    expect(await ok('floorA1Lead', '/production/floor-rules')).toEqual({ siteId: A.siteA1, scanSubject: 'STATION', workerAcknowledged: false, standardBundleSize: 10 })
+    expect(await ok('floorB1', '/production/floor-rules')).toEqual({ siteId: A.siteB1, scanSubject: 'WORKER', workerAcknowledged: false, standardBundleSize: 10 })
     for (const body of [a1, await ok('floorB1', '/production/floor-rules')]) {
       expect(JSON.stringify(body)).not.toMatch(/RSU|INL|UNION_AGREEMENT|INL_AUTHORISATION|NOT_REQUIRED|reference|basis|recorded/i)
     }
@@ -409,5 +410,42 @@ describe('the database hides the legal basis from the floor role (B-W1-37; owner
   it("the subject guard still reads the site's rules when the floor role fires it", async () => {
     await expect(scanAt('qc', { workerId: A.operator, stationId: A.qcStation }, A.operator, 0)).rejects.toThrow(/records the station, not the worker/)
     expect((await scanAt('qc', { workerId: null, stationId: A.qcStation }, A.operator, 0)).id).toEqual(expect.any(String))
+  })
+})
+
+describe('the standard bundle size (MES-065): the office sets it per site, audited; the floor reads it; the database holds its range', () => {
+  it('changes it at the version read (one audit row, before and after, no monitoring event); the same size again changes nothing', async () => {
+    const before = (await manager.browser.get(`/production/settings/${A.siteA1}`)).body
+    expect(before.rules).toMatchObject({ standardBundleSize: 10, scanSubject: 'STATION' })
+    const url = `/production/settings/${A.siteA1}/bundle-size`
+    const answer = await manager.browser.post(url, { standardBundleSize: 12, version: before.rules.version })
+    expect(answer.status, JSON.stringify(answer.body)).toBe(200)
+    expect(answer.body).toMatchObject({ changed: true, change: null, rules: { standardBundleSize: 12, scanSubject: 'STATION', version: before.rules.version + 1 } })
+    expect(answer.body.words).toEqual([
+      'From now on bundles at this site hold 12 garments when the cutter names no other size; a made-to-measure unit stays one garment per bundle. Bundles already made keep theirs.',
+    ])
+    const rows = await auditRows(A.siteA1)
+    expect(rows.at(-1)).toMatchObject({ action: 'production.changeBundleSize', reason: null, actorId: manager.userId, before: { standardBundleSize: 10 }, after: { standardBundleSize: 12 } })
+    expect((await events(A.siteA1)).map((row) => row.payload.change)).toEqual(['NARROWED'])
+    const same = await manager.browser.post(url, { standardBundleSize: 12 })
+    expect(same.body).toMatchObject({ changed: false, rules: { standardBundleSize: 12, version: before.rules.version + 1 } })
+    expect(await auditRows(A.siteA1)).toHaveLength(rows.length)
+    expect((await manager.browser.post(url, { standardBundleSize: 8, version: before.rules.version })).status).toBe(409)
+    // The floor reads it (its one column of the row: never the basis).
+    expect(await ok('floorA1', '/production/floor-rules')).toEqual({ siteId: A.siteA1, scanSubject: 'STATION', workerAcknowledged: true, standardBundleSize: 12 })
+    expect(await h.database.withScope({ audience: 'floor', tenantId: A.tenant, actorId: A.operator, siteId: A.siteA1 }, (client) => standardBundleSizeFor(client, A.siteA1))).toBe(12)
+  })
+
+  it('refuses a size out of 1 to 500 (400, and the database for every login), a viewer (403) and another company (404)', async () => {
+    const url = `/production/settings/${A.siteA1}/bundle-size`
+    expect((await manager.browser.post(url, { standardBundleSize: 0 })).status).toBe(400)
+    expect((await manager.browser.post(url, { standardBundleSize: 501 })).status).toBe(400)
+    await expect(admin('UPDATE "ProductionSettings" SET "standardBundleSize" = 501 WHERE id = $1', [A.siteA1])).rejects.toThrow(/bundle by 1 to 500 garments, not 501/)
+    await expect(admin('UPDATE "ProductionSettings" SET "standardBundleSize" = 0 WHERE id = $1', [A.siteA1])).rejects.toThrow(/bundle by 1 to 500 garments/)
+    expect((await supervisor.post(url, { standardBundleSize: 9 })).status).toBe(403)
+    expect(await status('companyB', 'POST', url, { standardBundleSize: 9 })).toBe(404)
+    expect(await status('floorWithOffice', 'POST', url, { standardBundleSize: 9 })).toBe(403)
+    expect((await rulesRow(A.siteA1))).toMatchObject({ scanSubject: 'STATION' })
+    expect((await admin('SELECT "standardBundleSize" FROM "ProductionSettings" WHERE id = $1', [A.siteA1]))[0]).toEqual({ standardBundleSize: 12 })
   })
 })

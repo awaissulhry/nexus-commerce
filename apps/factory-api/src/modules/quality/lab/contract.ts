@@ -137,6 +137,19 @@ export const getLotContract = defineContract({
   response: { 200: output({ lot: lotView, rule: ruleView, results: z.array(listedResult), documents: z.array(listedDocument), checklist: checklistView }) },
 })
 
+export const listLotsContract = defineContract({
+  querystring: input({
+    companyId: id().optional(),
+    siteId: id().optional(),
+    status: lotStatus.optional(),
+    /** Lots on hold (QUARANTINE or BLOCKED; Owner answer Q3 (a)). */
+    onHold: z.enum(['true', 'false']).optional(),
+    q: z.string().trim().max(60).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+  }),
+  response: { 200: output({ lots: z.array(lotView) }) },
+})
+
 export const releaseCheckContract = defineContract({
   params: lotParams,
   response: { 200: output({ lot: output({ id: id(), code: z.string(), qualityStatus: lotStatus, version: z.number().int() }), checklist: checklistView }) },

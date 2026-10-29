@@ -21,6 +21,7 @@ describe('model ownership', () => {
       'BomLineColour',
       'BomLineSize',
       'Bundle',
+      'BundleReprint',
       'Certificate',
       'CertificateCoverage',
       'Colour',
