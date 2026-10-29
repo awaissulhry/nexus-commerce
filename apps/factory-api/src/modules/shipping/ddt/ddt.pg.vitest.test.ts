@@ -28,6 +28,7 @@ import { createGateway } from '../../../platform/gateway/gateway'
 import { testRedis, type TestRedis } from '../../../platform/outbox/testing'
 import { createSecretsService } from '../../../platform/secrets/envelope'
 import { localKeyProvider } from '../../../platform/secrets/local'
+import { fileTravelDocuments, TRAVEL_DOCUMENT_PERMISSIONS } from '../documents/testing/compliance'
 
 /**
  * The DDT (B-W1-47; LOG-054; DPR 472/1996; PLAN §4.7 stage 14-ship and its end check "DDT numbers have no gap") on the
@@ -66,6 +67,8 @@ const SESSIONS: Record<string, SessionContext> = {
   companyB: office(A.tenant, [grant(SHIPPING, [A.companyB])]),
   otherTenant: office(B.tenant, [grant(SHIPPING)]),
   partner: { audience: 'partner', tenantId: A.tenant, actorId: newId(), partyId: A.brand, grants: [grant(SHIPPING)] },
+  // Puts each shipped PPE style's DoC and leaflet on file (B-W1-49: PPE leaves only with them).
+  quality: office(A.tenant, [grant(TRAVEL_DOCUMENT_PERMISSIONS)]),
   packerA1: { audience: 'floor', tenantId: A.tenant, actorId: A.operator, siteId: A.siteA1, deviceId: newId(), grants: [{ permissions: [...SHIPPING], companies: [A.companyA], sites: [A.siteA1], parties: 'all' }] },
 }
 
@@ -148,6 +151,8 @@ beforeAll(async () => {
     if ((await admin(`SELECT 1 FROM "IntegrationAccount" WHERE "tenantId" = $1 AND provider = 'R2'`, [tenantId])).length === 0) {
       await admin(`INSERT INTO "IntegrationAccount" (id, "tenantId", provider, code, label, mode, "rateLimitPerMinute", "rateLimitBurst") VALUES ($1, $2, 'R2', 'files', 'Files', 'FAKE', 6000, 1000)`, [newId(), tenantId])
     }
+    // The shipped styles' DoC and leaflet uploads (B-W1-49) and the DDT prints pass the seeded store's default burst (10).
+    await admin(`UPDATE "IntegrationAccount" SET "rateLimitPerMinute" = 6000, "rateLimitBurst" = 1000 WHERE "tenantId" = $1 AND provider = 'R2'`, [tenantId])
   }
   redis = testRedis()
   connection = redis.connect()
@@ -165,6 +170,9 @@ beforeAll(async () => {
       logger: false,
     },
   )
+  // The shipped styles' DoC and leaflet for the work orders' frozen revision 1, in the orders' language.
+  await fileTravelDocuments(app, 'quality', seedA.quality.serialStyleId, seedA.quality.serialRevisionId)
+  await fileTravelDocuments(app, 'quality', seedA.quality.production.styleId, seedA.quality.production.revisionId)
 }, 180_000)
 
 afterAll(async () => {

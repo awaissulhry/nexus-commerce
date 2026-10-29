@@ -310,6 +310,28 @@ describe('the documents of a packed shipment (LOG-020)', () => {
     expect((await refused('packerA1', 'GET', documentsUrl(sh2()), undefined, 403)).code).toBe('forbidden')
   })
 
+  it('refuses to let the goods leave without them (409 in the compliance step\'s words, no number used), but issues the DDT', async () => {
+    const numbers = async () => (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "NumberAllocation" WHERE "recordType" = 'Ddt'`))[0]!.n
+    const before = await numbers()
+    const shipNow = await refused('warehouse', 'POST', `/shipping/shipments/${sh2()}/ddt`, { ship: true }, 409)
+    expect(shipNow.code).toBe('invalid_state')
+    expect(shipNow.message).toBe(
+      'The EU Declaration of Conformity is not on file for SEED-JKT-03 revision 1 (Reg. (EU) 2016/425 art. 8(8), art. 15): PPE is shipped only with it. ' +
+        'The user information leaflet is not on file for SEED-JKT-03 revision 1 (Reg. (EU) 2016/425 art. 8(7), Annex II 1.4): PPE is shipped only with it.',
+    )
+    expect(await numbers()).toBe(before)
+    expect(await admin('SELECT id FROM "Ddt" WHERE "shipmentId" = $1', [sh2()])).toEqual([])
+    // The DDT alone (the goods stay PACKED) never asks for them.
+    const issued = await ok('warehouse', 'POST', `/shipping/shipments/${sh2()}/ddt`, {}, 201)
+    expect(issued.shipment.status).toBe('PACKED')
+    expect(await numbers()).toBe(before + 1)
+    S.ddtFile = issued.file.id
+    S.ddtNumber = issued.ddt.number
+    const handOver = await refused('warehouse', 'POST', `/shipping/shipments/${sh2()}/ship`, {}, 409)
+    expect(handOver).toMatchObject({ code: 'invalid_state', message: shipNow.message })
+    expect((await admin<{ status: string }>('SELECT status::text AS status FROM "Shipment" WHERE id = $1', [sh2()]))[0]!.status).toBe('PACKED')
+  })
+
   it('takes the DoC in the buyer\'s language and the leaflet in its fallback once they are on file (a warning, no blocker)', async () => {
     await uploadDoc(seedA.quality.serialStyleId, seedA.quality.serialRevisionId, 'DECLARATION_OF_CONFORMITY', 'en', BODY.jkt3DocEn)
     await uploadDoc(seedA.quality.serialStyleId, seedA.quality.serialRevisionId, 'DECLARATION_OF_CONFORMITY', 'it', BODY.jkt3DocIt)
@@ -325,11 +347,9 @@ describe('the documents of a packed shipment (LOG-020)', () => {
 })
 
 describe('when the goods leave (the worker attaches the documents and mails the link)', () => {
-  it('ships SH-0002 with its DDT, then copies the DDT, the DoC and the leaflet onto it for its party, kept ten years', async () => {
-    const issued = await ok('warehouse', 'POST', `/shipping/shipments/${sh2()}/ddt`, { ship: true }, 201)
-    expect(issued.shipment.status).toBe('SHIPPED')
-    expect(issued.file).not.toBeNull()
-    const ddtPdf = (await admin<{ sha256: string; id: string }>('SELECT id, sha256 FROM "StoredFile" WHERE id = $1', [issued.file.id]))[0]!
+  it('hands SH-0002 over once they are on file, then copies the DDT, the DoC and the leaflet onto it for its party, kept ten years', async () => {
+    expect((await ok('warehouse', 'POST', `/shipping/shipments/${sh2()}/ship`, {})).shipment.status).toBe('SHIPPED')
+    const ddtPdf = (await admin<{ sha256: string; id: string }>('SELECT id, sha256 FROM "StoredFile" WHERE id = $1', [S.ddtFile]))[0]!
     await shipped(sh2())
 
     const [shipment] = await admin<{ shippedAt: Date }>('SELECT "shippedAt" FROM "Shipment" WHERE id = $1', [sh2()])
@@ -338,7 +358,7 @@ describe('when the goods leave (the worker attaches the documents and mails the 
     expect(copies.map((file) => file.sha256).sort()).toEqual([ddtPdf.sha256, sha(BODY.jkt3DocIt), sha(BODY.jkt3LeafletEn)].sort())
     for (const file of copies) expect(file).toMatchObject({ kind: 'DOCUMENT', visibility: ['OFFICE', 'PARTNER', 'LINK'], partyId: A.P1, retainUntil: keep })
     expect(copies.map((file) => file.originalName).sort()).toEqual([
-      `DDT ${issued.ddt.number.replace('/', '-')}.pdf`,
+      `DDT ${S.ddtNumber!.replace('/', '-')}.pdf`,
       'EU Declaration of Conformity, SEED-JKT-03 revision 1 (it).pdf',
       'User information, SEED-JKT-03 revision 1 (en).pdf',
     ])
@@ -351,7 +371,7 @@ describe('when the goods leave (the worker attaches the documents and mails the 
     for (const source of sources) expect(source.retainUntil.getTime()).toBeGreaterThanOrEqual(keep.getTime())
     expect(sources.find((source) => source.sha256 === sha(BODY.jkt3DocIt))!.visibility).toEqual(['OFFICE'])
     const audit = await admin(`SELECT action, after FROM "AuditLog" WHERE "recordType" = 'Shipment' AND "recordId" = $1 AND action = 'shipping.attachDocuments'`, [sh2()])
-    expect(audit).toEqual([{ action: 'shipping.attachDocuments', after: expect.objectContaining({ attached: 3, retained: 2, missing: 1 }) }])
+    expect(audit).toEqual([{ action: 'shipping.attachDocuments', after: expect.objectContaining({ attached: 3, retained: 3, missing: 1 }) }])
     expect(await admin(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE type = 'shipment.documents_attached' AND subject = $1`, [sh2()])).toEqual([{ n: 1 }])
   })
 
@@ -504,6 +524,7 @@ describe('the frozen revision (a style revised after the work order was released
     const parcel = (await ok('warehouse', 'POST', `/shipping/packing/${sb.id}/parcels`, { grossWeightKg: '2.5' }, 201)).parcelId
     await ok('warehouse', 'PUT', `/shipping/packing/${sb.id}/lines/${sb.lines[0].id}/parcel`, { parcelId: parcel })
     expect((await ok('warehouse', 'POST', `/shipping/packing/${sb.id}/pack`, {})).shipment.status).toBe('PACKED')
+    // The DDT issued and the goods shipped at once: allowed, SEED-JKT-02 revision 1's DoC and leaflet are on file.
     expect((await ok('warehouse', 'POST', `/shipping/shipments/${sb.id}/ddt`, { ship: true }, 201)).shipment.status).toBe('SHIPPED')
     await shipped(sb.id)
 
