@@ -1,0 +1,480 @@
+{
+  "list": {
+    "intro": "Ogni lotto con il risultato del cromo VI rispetto al limite, i documenti del fornitore e il rilascio. Un lotto in quarantena non si usa finché una persona della qualità non lo rilascia.",
+    "record": "Registra risultato di prova",
+    "table": "Lotti e relative prove",
+    "search": "Cerca per codice lotto",
+    "count_one": "{count} lotto",
+    "count_other": "{count} lotti",
+    "received": "Ricevuto il {date}",
+    "opening": "Giacenza iniziale",
+    "ppeComponent": "Componente DPI",
+    "receiptReversed": "Il suo ricevimento è stato stornato",
+    "col": {
+      "lot": "Lotto",
+      "material": "Materiale",
+      "crVi": "Cromo VI",
+      "evidence": "Prova",
+      "tested": "Provato il",
+      "status": "Stato del lotto",
+      "hold": "Blocco di chi ha ricevuto",
+      "actions": "Azioni"
+    },
+    "rows": "Righe: {view}",
+    "rowsHeading": "Mostra i lotti",
+    "activeFilters": "Filtri in uso",
+    "removeFilter": "Togli il filtro {name}",
+    "clearAll": "Togli i filtri",
+    "more": "Altro per questo elenco",
+    "exportView": "Esporta questa vista (CSV)",
+    "exportViewHint_one": "{count} lotto come mostrato",
+    "exportViewHint_other": "{count} lotti come mostrati",
+    "exportNothing": "Niente da esportare in questa vista",
+    "bulkExport_one": "Esporta {count} (CSV)",
+    "bulkExport_other": "Esporta {count} (CSV)",
+    "showMore_one": "Mostra altri {count}",
+    "showMore_other": "Mostra altri {count}",
+    "failedTitle": "Non è stato possibile leggere i lotti",
+    "noMatch": "Nessun lotto corrisponde a questi filtri",
+    "empty": {
+      "title": "Ancora nessun lotto",
+      "body": "I ricevimenti di pelle e di componenti DPI portano qui i loro lotti. Un lotto che richiede la prova del cromo VI resta in quarantena finché non se ne registra il risultato."
+    }
+  },
+  "noAccess": {
+    "title": "Test e sostanze non è aperto al tuo ruolo",
+    "body": "Serve il permesso di vedere la qualità dei lotti (quality.lots.view): lo hanno il controllo qualità, gli acquisti e il magazzino. Chiedi al titolare della fabbrica di aggiungerlo al tuo ruolo."
+  },
+  "view": {
+    "all": "Tutti i lotti",
+    "onHold": "Bloccati",
+    "waiting": "In attesa della prova Cr VI",
+    "failed": "Cr VI non superato, non scartati",
+    "quarantine": "In quarantena",
+    "blocked": "Bloccati dopo il rilascio",
+    "released": "Rilasciati",
+    "rejected": "Scartati"
+  },
+  "tile": {
+    "onHold": "Bloccati",
+    "onHoldHint": "In quarantena o bloccati: non utilizzabili",
+    "waiting": "In attesa della prova Cr VI",
+    "waitingHint": "In quarantena, ancora senza risultato (contati tra i bloccati)",
+    "failed": "Cr VI non superato",
+    "failedHint": "Pari o oltre il limite, non ancora scartati",
+    "released": "Rilasciati",
+    "releasedHint": "Giacenza utilizzabile (letti gli ultimi {max})",
+    "atLeast": "{count}+",
+    "unknown": "Non è stato possibile contare"
+  },
+  "status": {
+    "QUARANTINE": "In quarantena",
+    "RELEASED": "Rilasciato",
+    "REJECTED": "Scartato",
+    "BLOCKED": "Bloccato"
+  },
+  "crVi": {
+    "NOT_REQUIRED": "Prova non richiesta",
+    "PENDING": "In attesa di risultato",
+    "PASS": "Superata",
+    "NOT_DETECTED": "Superata · non rilevato",
+    "FAIL": "Non superata",
+    "value": "{value} / {limit} mg/kg"
+  },
+  "evidence": {
+    "LOT_REPORT": "Rapporto di laboratorio sul lotto",
+    "SUPPLIER_REPORT": "Rapporto del fornitore",
+    "hint": {
+      "LOT_REPORT": "Un laboratorio ha provato un campione di questo lotto.",
+      "SUPPLIER_REPORT": "Il rapporto del fornitore copre l’articolo e un periodo che comprende il giorno in cui il lotto è stato ricevuto."
+    }
+  },
+  "receipt": {
+    "OPEN": "aperto",
+    "POSTED": "registrato",
+    "REVERSED": "stornato",
+    "CANCELLED": "annullato"
+  },
+  "rule": {
+    "title": {
+      "SUPPLIER_REPORT_ACCEPTED": "Prova del cromo VI: vale il rapporto del fornitore che copre l’articolo e il periodo, come il rapporto di laboratorio sul lotto.",
+      "LOT_REPORT_REQUIRED": "Prova del cromo VI: vale solo il rapporto di laboratorio sul lotto stesso."
+    },
+    "limit": "Limite {limit} mg/kg (REACH allegato XVII voce 47); un marchio può fissarne uno più basso sul materiale.",
+    "source": {
+      "COMPANY": "Regola propria di questa società.",
+      "TENANT": "La regola di tutte le società della fabbrica.",
+      "DEFAULT": "La regola predefinita: nessuno l’ha cambiata."
+    },
+    "failed": "Non è stato possibile leggere la regola sulla prova del cromo VI.",
+    "change": "Cambia regola…",
+    "dialogTitle": "Regola sulla prova del cromo VI",
+    "option": {
+      "SUPPLIER_REPORT_ACCEPTED": "Vale il rapporto del fornitore",
+      "LOT_REPORT_REQUIRED": "Un rapporto di laboratorio per ogni lotto"
+    },
+    "optionHint": {
+      "SUPPLIER_REPORT_ACCEPTED": "Vale il rapporto del fornitore che copre l’articolo e il periodo, come il rapporto di laboratorio sul lotto. È la regola predefinita.",
+      "LOT_REPORT_REQUIRED": "Vale solo il rapporto di laboratorio sul lotto stesso. I lotti che si basano su un rapporto del fornitore tornano ai controlli di quarantena."
+    },
+    "inForce": "in vigore",
+    "limitNote": "Il limite di legge di {limit} mg/kg non è un’impostazione: è la legge.",
+    "loosenTitle": "Così si accettano più prove di oggi",
+    "loosenBody": "Scrivi il motivo. Al salvataggio verrà chiesto un codice nuovo dall’app di autenticazione.",
+    "reason": "Motivo",
+    "reasonHint": "Resta con la modifica, per la verifica.",
+    "save": "Salva regola",
+    "saveLoosen": "Conferma e salva",
+    "unchanged": "Scegli prima un’altra regola",
+    "problem": {
+      "cancelled": "Non salvato: il codice non è stato inserito.",
+      "conflict": "Qualcuno ha cambiato la regola nel frattempo. È stata riletta: controllala e salva di nuovo.",
+      "forbidden": "Il tuo ruolo non può cambiare questa regola.",
+      "invalid": "La modifica è stata rifiutata così com’è: scrivi il motivo.",
+      "failed": "Non è stato possibile salvare la regola. Riprova."
+    }
+  },
+  "stepUp": {
+    "loosen": "Accettare più prove del cromo VI richiede un codice nuovo."
+  },
+  "pick": {
+    "title": "Registra un risultato di prova",
+    "sub": "Scegli il lotto a cui si riferisce il rapporto: il risultato si registra sulla sua pagina, rispetto al suo limite.",
+    "search": "Codice lotto o materiale",
+    "none": "Nessun lotto è in attesa della prova del cromo VI",
+    "noMatch": "Nessun lotto in attesa corrisponde",
+    "noneBody": "Il risultato di un altro lotto (una nuova prova su un lotto rilasciato) si registra dalla pagina di quel lotto."
+  },
+  "row": {
+    "menu": "Azioni per il lotto {code}",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "result": "Registra risultato…",
+    "release": "Rilascia lotto…",
+    "reject": "Scarta lotto…",
+    "copy": "Copia codice lotto"
+  },
+  "held": {
+    "test": "Registrare un risultato richiede il ruolo qualità (quality.lots.test).",
+    "documents": "Allegare un documento del fornitore richiede quality.lots.documents.",
+    "release": "Rilasciare un lotto richiede il ruolo qualità (quality.lots.release).",
+    "reject": "Scartare o bloccare un lotto richiede quality.lots.reject.",
+    "rule": "Solo il titolare cambia questa regola (quality.settings.manage).",
+    "noTest": "Questo materiale non richiede la prova del cromo VI.",
+    "rejected": "Il lotto è scartato: è definitivo.",
+    "failFinal": "Il lotto non ha superato la prova del cromo VI: è definitivo (per legge), scarta il lotto.",
+    "notQuarantine": "Si rilascia solo un lotto in quarantena.",
+    "notBlocked": "Si rilascia di nuovo solo un lotto bloccato.",
+    "receiver": "Hai ricevuto tu questo lotto: lo rilascia un’altra persona della qualità.",
+    "checksOpen_one": "{count} controllo è ancora aperto: vedi l’elenco dei controlli.",
+    "checksOpen_other": "{count} controlli sono ancora aperti: vedi l’elenco dei controlli.",
+    "rejectState": "Si scarta solo un lotto in quarantena o bloccato.",
+    "blockState": "Si blocca solo un lotto rilasciato.",
+    "noHold": "Non c’è un blocco di chi ha ricevuto da togliere.",
+    "holdOwn": "Hai messo tu questo blocco al ricevimento: lo toglie un’altra persona della qualità.",
+    "listMax": "Si leggono al massimo {max} lotti alla volta: cerca per codice o scegli una vista."
+  },
+  "record": {
+    "back": "Test e sostanze",
+    "title": "Lotto {code}",
+    "receivedWith": "Ricevuto con {receipt} il {date}",
+    "opening": "Giacenza iniziale: nessun ricevimento",
+    "recordResult": "Registra risultato",
+    "more": "Altro per questo lotto",
+    "tab": {
+      "results": "Risultati e limiti",
+      "documents": "Documenti",
+      "release": "Rilascio",
+      "activity": "Attività"
+    },
+    "noPanels": "La discussione, i file e la cronologia richiedono il permesso di leggere le discussioni (threads.read).",
+    "youReceived": "Hai ricevuto tu questo lotto: puoi registrarne risultati e documenti, e lo rilascia un’altra persona della qualità.",
+    "facts": {
+      "status": "Stato del lotto",
+      "crVi": "Cromo VI",
+      "receipt": "Ricevimento"
+    }
+  },
+  "results": {
+    "title": "Risultati del cromo VI",
+    "sub": "Dal più recente; l’esito si calcola rispetto al limite di {limit} mg/kg, non si scrive a mano.",
+    "notRequired": "Questo materiale non richiede la prova del cromo VI.",
+    "empty": "Ancora nessun risultato",
+    "emptyBody": "Il lotto resta in quarantena finché non supera un risultato basato su una prova che la regola accetta.",
+    "verdict": {
+      "PASS": "Superata",
+      "FAIL": "Non superata"
+    },
+    "notDetected": "Non rilevato (sotto {lod} mg/kg) · limite {limit} mg/kg",
+    "superseded": "Sostituito da un esito negativo successivo",
+    "method": "Metodo",
+    "lab": "Laboratorio",
+    "report": "N. rapporto",
+    "testedOn": "Provato il",
+    "evidence": "Prova",
+    "article": "Articolo",
+    "period": "Periodo coperto",
+    "recorded": "Registrato",
+    "fileUnknown": "Il file del rapporto non è leggibile qui",
+    "download": "Scarica {name}",
+    "downloadShort": "Scarica",
+    "ruleTitle": "La regola in vigore",
+    "failFinal": "Un esito negativo è definitivo: nessuna deroga (per legge). Un esito negativo successivo su un lotto rilasciato lo blocca ed elenca gli ordini di produzione in cui è andato."
+  },
+  "result": {
+    "title": "Risultato del cromo VI per il lotto {code}",
+    "sub": "{item} · limite {limit} mg/kg",
+    "method": "Metodo",
+    "belowDetection": "Non rilevato: sotto il limite di rilevabilità",
+    "value": "Valore misurato",
+    "valueHint": "In mg/kg, al massimo 3 decimali.",
+    "lod": "Limite di rilevabilità",
+    "lodHint": "Il limite di rilevabilità del laboratorio in mg/kg: deve essere al massimo il limite del lotto.",
+    "lab": "Laboratorio",
+    "reportNumber": "Numero del rapporto",
+    "testedOn": "Provato il",
+    "evidence": "Su cosa si basa il risultato",
+    "supplierRefused": "La regola in vigore chiede un rapporto di laboratorio per ogni lotto: il rapporto del fornitore non vale.",
+    "article": "Articolo sul rapporto",
+    "periodFrom": "Periodo dal",
+    "periodTo": "Periodo al",
+    "note": "Nota",
+    "file": "Il rapporto",
+    "fileHint": "Un PDF o una scansione (JPEG, PNG); conservato dieci anni (REACH art. 36).",
+    "thenRelease": "Rilascia il lotto se la prova è superata",
+    "thenReleaseHint": "Poi vedi l’elenco dei controlli e scrivi il codice del lotto: senza, non si rilascia nulla.",
+    "save": "Salva risultato",
+    "saveThenRelease": "Salva risultato, poi rilascia",
+    "saving": "Invio del rapporto…",
+    "verdict": {
+      "none": "Scrivi il valore: qui compare l’esito rispetto al limite di {limit} mg/kg.",
+      "pass": "{value} mg/kg è sotto il limite di {limit} mg/kg – Superata",
+      "notDetected": "Non rilevato: sotto il limite di rilevabilità di {lod} mg/kg, quindi sotto il limite di {limit} mg/kg – Superata",
+      "fail": "{value} mg/kg è pari o oltre il limite di {limit} mg/kg – Non superata",
+      "failBody": "Questo lotto non si può usare (REACH allegato XVII voce 47). L’esito negativo è definitivo: scarta il lotto.",
+      "lodAbove": "Sotto un limite di rilevabilità di {lod} mg/kg non dimostra che il lotto sia sotto il suo limite di {limit} mg/kg: serve il metodo EN ISO 17075-2.",
+      "lodInvalid": "Scrivi il limite di rilevabilità in mg/kg, sopra 0, al massimo 3 decimali.",
+      "valueInvalid": "Scrivi il valore in mg/kg, da 0, al massimo 3 decimali."
+    },
+    "problem": {
+      "method": "Scegli il metodo della EN ISO 17075.",
+      "value": "Scrivi il valore misurato, o spunta \"non rilevato\".",
+      "lod": "Scrivi il limite di rilevabilità.",
+      "lab": "Indica il laboratorio, come sul rapporto.",
+      "testedOn": "Indica il giorno della prova.",
+      "testedOnFuture": "Il giorno della prova non può essere dopo oggi.",
+      "ruleLotReport": "La regola in vigore chiede un rapporto di laboratorio per ogni lotto.",
+      "article": "Indica l’articolo che il rapporto del fornitore copre.",
+      "periodFrom": "Indica il primo giorno coperto dal rapporto.",
+      "periodTo": "Indica l’ultimo giorno coperto dal rapporto.",
+      "periodOrder": "Il periodo finisce prima di iniziare.",
+      "file": "Scegli il file del rapporto.",
+      "upload": "Non è stato possibile inviare il file all’archivio. Riprova.",
+      "refused": "Il risultato è stato rifiutato così com’è:",
+      "conflict": "Il lotto è cambiato nel frattempo. È stato riletto: controllalo e salva di nuovo."
+    }
+  },
+  "method": {
+    "one": "EN ISO 17075-1 (colorimetrico)",
+    "two": "EN ISO 17075-2 (cromatografico)"
+  },
+  "date": {
+    "notSet": "non indicato",
+    "clear": "cancella"
+  },
+  "common": {
+    "counter": "{used} / {max}"
+  },
+  "file": {
+    "choose": "Scegli file…",
+    "change": "Scegline un altro…",
+    "none": "Nessun file scelto"
+  },
+  "documents": {
+    "title": "Documenti del fornitore",
+    "sub": "Certificati, dichiarazioni e rapporti di prova arrivati con il lotto.",
+    "empty": "Ancora nessun documento",
+    "emptyBody": "Qui si può allegare un certificato LWG o un rapporto di prova del tessuto.",
+    "emptyPpe": "Un componente DPI certificato si rilascia solo con il certificato o la dichiarazione del fornitore per il lotto.",
+    "inForce": "Valido",
+    "notInForce": "Non valido",
+    "archived": "Archiviato",
+    "validTo": "Valido fino al",
+    "noExpiry": "Senza scadenza",
+    "added": "Aggiunto",
+    "needsTitle": "Cosa serve a questo lotto",
+    "needsPpe": "Un componente DPI certificato: il certificato o la dichiarazione DPI del fornitore per il lotto, valido oggi.",
+    "needsNone": "Per questo materiale non serve alcun documento prima del rilascio.",
+    "needsLater": "I profili dei materiali con i documenti richiesti arrivano in una fase successiva."
+  },
+  "document": {
+    "add": "Aggiungi documento…",
+    "title": "Documento del fornitore per il lotto {code}",
+    "sub": "Il file resta con il lotto.",
+    "subPpe": "Un componente DPI richiede il certificato o la dichiarazione DPI del fornitore.",
+    "kind": "Che cos’è",
+    "validTo": "Valido fino al",
+    "validToHint": "Lascia vuoto se il documento non ha scadenza.",
+    "note": "Nota",
+    "file": "Il documento",
+    "save": "Allega documento",
+    "saving": "Invio del documento…",
+    "problem": {
+      "expired": "È già scaduto: allegane uno valido.",
+      "note": "Scrivi di che documento si tratta.",
+      "file": "Scegli il file del documento.",
+      "refused": "Il documento è stato rifiutato così com’è. Controlla il tipo, la data e la nota."
+    }
+  },
+  "kind": {
+    "PPE_CERTIFICATE": "Certificato o dichiarazione DPI",
+    "CR_VI_STATEMENT": "Dichiarazione sul cromo VI",
+    "LWG_CERTIFICATE": "Certificato LWG",
+    "FABRIC_TEST": "Rapporto di prova del tessuto",
+    "OTHER": "Altro documento",
+    "hint": {
+      "PPE_CERTIFICATE": "Il certificato del componente DPI o la dichiarazione del fornitore per questo lotto.",
+      "CR_VI_STATEMENT": "La dichiarazione del fornitore sul cromo VI (non è un risultato di prova).",
+      "LWG_CERTIFICATE": "Il certificato Leather Working Group della conceria.",
+      "FABRIC_TEST": "Un rapporto di prova delle proprietà del tessuto.",
+      "OTHER": "Scrivi nella nota di cosa si tratta."
+    }
+  },
+  "release": {
+    "title": "Controlli per il rilascio",
+    "titleUnblock": "Controlli per rilasciarlo di nuovo",
+    "ready": "Tutti i controlli sono superati: il lotto può essere rilasciato da una persona della qualità che non lo ha ricevuto.",
+    "open_one": "{count} controllo è ancora aperto.",
+    "open_other": "{count} controlli sono ancora aperti.",
+    "checksLabel": "Controlli per il rilascio",
+    "state": {
+      "RELEASED": "Rilasciato: giacenza utilizzabile.",
+      "REJECTED": "Scartato: definitivo.",
+      "QUARANTINE": "In quarantena.",
+      "BLOCKED": "Bloccato."
+    },
+    "final": {
+      "RELEASED": "Il lotto è rilasciato: si può prelevare per gli ordini di produzione. Una nuova scoperta lo blocca.",
+      "REJECTED": "Il lotto è scartato: torna al fornitore o va smaltito. Qui non si decide altro.",
+      "QUARANTINE": "In quarantena.",
+      "BLOCKED": "Bloccato."
+    },
+    "decidedTitle": "L’ultima decisione",
+    "decidedAt": "Deciso",
+    "who": "Sempre una persona: chi è della qualità e non ha ricevuto il lotto ne scrive il codice per rilasciarlo."
+  },
+  "check": {
+    "STATE": "Stato del lotto",
+    "RECEIPT": "Ricevimento",
+    "CR_VI": "Cromo VI",
+    "PPE_CERTIFICATE": "Certificato DPI",
+    "SUPPLIER_DOCUMENTS": "Documenti del fornitore",
+    "HOLD": "Blocco di chi ha ricevuto",
+    "RELEASER": "Chi rilascia"
+  },
+  "decide": {
+    "typeCode": "Scrivi il codice del lotto per confermare:",
+    "saving": "Salvataggio…",
+    "release": {
+      "title": "Rilascia il lotto {code}",
+      "menu": "Rilascia lotto…",
+      "confirm": "Rilascia il lotto {code}",
+      "reason": "Nota"
+    },
+    "unblock": {
+      "title": "Rilascia di nuovo il lotto {code}",
+      "menu": "Rilascia di nuovo…",
+      "confirm": "Rilascia di nuovo il lotto {code}",
+      "reason": "Perché la scoperta è risolta"
+    },
+    "reject": {
+      "title": "Scarta il lotto {code}",
+      "menu": "Scarta lotto…",
+      "confirm": "Scarta il lotto {code}",
+      "reason": "Motivo",
+      "final": "Lo scarto è definitivo: il lotto torna al fornitore o va smaltito.",
+      "next": "Poi: un reso al fornitore dagli Acquisti."
+    },
+    "block": {
+      "title": "Blocca il lotto {code}",
+      "menu": "Blocca lotto…",
+      "confirm": "Blocca il lotto {code}",
+      "reason": "Cosa è stato trovato",
+      "what": "Il blocco ferma il lotto: non si preleva finché non viene rilasciato di nuovo o scartato.",
+      "next": "Dopo il blocco si vedono gli ordini di produzione in cui è già andato."
+    },
+    "clearHold": {
+      "title": "Togli il blocco di chi ha ricevuto il lotto {code}",
+      "menu": "Togli blocco…",
+      "confirm": "Togli il blocco",
+      "reason": "Cosa hai controllato",
+      "what": "Chi ha ricevuto ha bloccato questo lotto con queste parole:"
+    },
+    "problem": {
+      "code": "Scrivi esattamente il codice del lotto {code}.",
+      "reason": "Scrivi il motivo.",
+      "reasonLong": "Al massimo 500 caratteri.",
+      "checks": "Non ancora: questi controlli sono ancora aperti.",
+      "codeRefused": "Il codice scritto non è quello del lotto.",
+      "refused": "È stato rifiutato così com’è:",
+      "conflict": "Il lotto è cambiato nel frattempo. È stato riletto: controllalo e decidi di nuovo."
+    }
+  },
+  "write": {
+    "problem": {
+      "forbidden": "Il tuo ruolo non lo consente su questo lotto.",
+      "notFound": "Il lotto non c’è più.",
+      "signedOut": "La sessione è terminata. Accedi di nuovo.",
+      "rateLimited": "Troppi tentativi. Attendi un minuto.",
+      "unavailable": "Il servizio della fabbrica non ha risposto. Riprova."
+    }
+  },
+  "answer": {
+    "laterFail": "Il lotto {code} non ha superato la nuova prova ed è bloccato",
+    "workOrders_one": "È andato in {count} ordine di produzione:",
+    "workOrders_other": "È andato in {count} ordini di produzione:",
+    "workOrder": "{number} (partita {batch}): {issued} prelevati",
+    "registerOpened": "Aperta la voce {reference} del registro DPI per i capi fatti con questo lotto",
+    "registerNone": "Nessuna voce del registro DPI è stata aperta:",
+    "blocked_one": "Bloccato. Era andato in {count} ordine di produzione:",
+    "blocked_other": "Bloccato. Era andato in {count} ordini di produzione:"
+  },
+  "done": {
+    "resultPass": "Risultato salvato: il lotto {code} supera la prova del cromo VI.",
+    "resultFail": "Risultato salvato: il lotto {code} non supera la prova del cromo VI. Scartalo.",
+    "resultLaterFail": "Risultato salvato: il lotto {code} non supera la nuova prova ed è bloccato.",
+    "document": "Documento allegato al lotto {code}.",
+    "release": "Lotto {code} rilasciato: è giacenza utilizzabile.",
+    "unblock": "Lotto {code} rilasciato di nuovo.",
+    "reject": "Lotto {code} scartato.",
+    "block": "Lotto {code} bloccato.",
+    "clearHold": "Il blocco di chi ha ricevuto il lotto {code} è stato tolto.",
+    "ruleLoosened": "Salvato: il rapporto del fornitore che copre l’articolo e il periodo torna a valere.",
+    "ruleTightened": "Salvato: da ora vale solo il rapporto di laboratorio su ogni lotto.",
+    "exported_one": "{count} lotto esportato (CSV).",
+    "exported_other": "{count} lotti esportati (CSV).",
+    "copied": "Copiato {code}.",
+    "copyFailed": "Questo browser non ha permesso di copiare.",
+    "downloadFailed": "Non è stato possibile scaricare il file. Riprova."
+  },
+  "csv": {
+    "lot": "Lotto",
+    "itemCode": "Codice materiale",
+    "itemName": "Materiale",
+    "status": "Stato del lotto",
+    "crVi": "Cromo VI",
+    "value": "Valore mg/kg",
+    "limit": "Limite mg/kg",
+    "evidence": "Prova",
+    "tested": "Provato il",
+    "received": "Ricevuto",
+    "hold": "Blocco di chi ha ricevuto"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "record": "Registra un risultato di prova",
+    "release": "Rilascia il lotto (o rilascialo di nuovo)",
+    "submit": "Salva la finestra aperta",
+    "all": "Tutte le scorciatoie"
+  }
+}

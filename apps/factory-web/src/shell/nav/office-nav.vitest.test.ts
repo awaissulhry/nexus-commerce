@@ -17,6 +17,8 @@ describe('the Office navigation (PLT-160: one declaration per area)', () => {
       [3, 'products'],
       [6, 'purchasing'],
       [8, 'production'],
+      [9, 'quality'],
+      [10, 'compliance'],
       [14, 'admin'],
     ])
     expect(OFFICE_NAV.view).toBe('office')
@@ -63,6 +65,17 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
     ])
   })
 
+  it('a quality inspector sees Quality › Inspections and Compliance › Tests & substances and the PPE register', () => {
+    const inspector = ['home.view', 'quality.inspections.view', 'quality.lots.view', 'compliance.register.view']
+    expect(ids(officeNavFor(permissionCheck(inspector)))).toEqual([
+      ['home', ['home-today']],
+      ['quality', ['quality-inspections']],
+      ['compliance', ['compliance-tests', 'compliance-register']],
+    ])
+    // A production manager sees inspections only; the lots and the register need their own permissions.
+    expect(ids(officeNavFor(permissionCheck(['quality.inspections.view'])))).toEqual([['quality', ['quality-inspections']]])
+  })
+
   it('a person with no permission sees no area: no door that leads nowhere', () => {
     expect(officeNavFor(permissionCheck([])).areas).toEqual([])
   })
@@ -79,7 +92,7 @@ describe('labels, crumbs, palette pages and the phone bar come from the same man
     expect(nav.areas.map((area) => area.label)).toEqual(['Home', 'Sales', 'Purchasing', 'Admin'])
     expect(nav.areas[3]?.sections?.map((s) => s.label)).toEqual(['Admin', 'Organisation', 'Access', 'Platform', 'Data'])
     const it = translateNav(OFFICE_NAV, createScopedTranslator('it', messagesFor('it', ['shell']), 'shell'))
-    expect(it.areas.map((area) => area.label)).toEqual(['Home', 'Vendite', 'Prodotti', 'Acquisti', 'Produzione', 'Amministrazione'])
+    expect(it.areas.map((area) => area.label)).toEqual(['Home', 'Vendite', 'Prodotti', 'Acquisti', 'Produzione', 'Qualità', 'Conformità', 'Amministrazione'])
     expect(JSON.stringify(nav)).not.toContain('shell:')
   })
 

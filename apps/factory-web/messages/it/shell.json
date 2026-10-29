@@ -47,6 +47,18 @@
       "main": "Principali",
       "floor": "Reparto ora",
       "workOrders": "Ordini di produzione"
+    },
+    "quality": {
+      "area": "Qualità",
+      "main": "Principali",
+      "inspections": "Ispezioni"
+    },
+    "compliance": {
+      "area": "Conformità",
+      "main": "Principali",
+      "tests": "Test e sostanze",
+      "safety": "Sicurezza prodotto",
+      "register": "Registro DPI e richiami"
     }
   },
   "topbar": {
