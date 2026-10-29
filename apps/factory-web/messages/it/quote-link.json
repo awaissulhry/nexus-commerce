@@ -1,0 +1,154 @@
+{
+  "title": "Preventivo {number} · versione {revision}",
+  "offer": {
+    "title": "L'offerta",
+    "total": "Totale",
+    "totalVatIncluded": "Totale IVA inclusa",
+    "from": "Da",
+    "for": "Per",
+    "yourRef": "Vostro riferimento",
+    "version": "Versione",
+    "versionValue": "Versione {revision} del {date}",
+    "validUntil": "Valido fino al",
+    "firm": "Offerta irrevocabile",
+    "firmValue": "Non può essere revocata prima del {date} (c.c. art. 1329).",
+    "delivery": "Data di consegna proposta",
+    "deliveryLater": "Confermata con l'ordine",
+    "payment": "Condizioni di pagamento",
+    "deposit": "Acconto richiesto",
+    "depositValue": "{pct} {kind}: {amount}",
+    "noDeposit": "Nessuno",
+    "shipTo": "Indirizzo di consegna"
+  },
+  "depositKind": {
+    "ACCONTO": "acconto (anticipo sul prezzo)",
+    "CAPARRA": "caparra confirmatoria"
+  },
+  "lines": {
+    "title": "Cosa comprende",
+    "item": "Articolo",
+    "qty": "Pezzi",
+    "unit": "Prezzo unitario",
+    "unitGross": "Prezzo unitario IVA inclusa",
+    "amount": "Importo",
+    "net": "Imponibile",
+    "vatRate": "IVA {rate}",
+    "vatNature": "IVA non applicata ({nature})"
+  },
+  "pdf": {
+    "title": "Il documento del preventivo",
+    "code": "Codice documento {code} — la tua accettazione registra esattamente questo documento.",
+    "none": "Il PDF non è disponibile qui; è allegato all'email.",
+    "problem": "Non è stato possibile mostrare il PDF qui. È allegato all'email, e puoi comunque rispondere.",
+    "loading": "Apertura del PDF…"
+  },
+  "terms": {
+    "title": "Condizioni di vendita (versione {version})"
+  },
+  "state": {
+    "OPEN": {
+      "title": "Aperto fino al {date}",
+      "body": "{seller} attende la tua risposta: accetta qui sotto scrivendo il tuo nome, oppure rifiuta.",
+      "firm": "Un'offerta irrevocabile: {seller} non può revocarla prima della data. Accetta qui sotto scrivendo il tuo nome, oppure rifiuta."
+    },
+    "EXPIRED": {
+      "title": "Questa offerta è scaduta il {date}",
+      "body": "Non si può più accettare. Chiedi a {seller} un nuovo link se ti interessa ancora."
+    },
+    "REVISING": {
+      "title": "È in preparazione una nuova versione",
+      "body": "{seller} sta modificando questo preventivo; riceverai un nuovo link quando sarà pronto."
+    },
+    "SUPERSEDED": {
+      "title": "Questo preventivo è stato sostituito da una versione più nuova",
+      "body": "{seller} ti ha inviato una versione più nuova con un proprio link. Chiedila di nuovo se non la trovi."
+    },
+    "DECLINED": {
+      "title": "Hai rifiutato questo preventivo",
+      "body": "{seller} ha la tua risposta. Scrivi loro se cambi idea."
+    },
+    "CANCELLED": {
+      "title": "Questo preventivo è stato ritirato",
+      "body": "{seller} l'ha ritirato. Scrivi loro se ti serve ancora un'offerta."
+    }
+  },
+  "newLink": {
+    "ask": "Chiedi un nuovo link",
+    "asked": "Abbiamo avvisato {seller}: ti invierà un nuovo link."
+  },
+  "sign": {
+    "title": "Accetta il preventivo {number} versione {revision}",
+    "summary": "Accetti il preventivo {number} versione {revision}: {total}.",
+    "summaryDeposit": "Accetti il preventivo {number} versione {revision}: {total}, con un acconto di {deposit}.",
+    "legal": "Scrivendo il tuo nome accetti questo preventivo di {seller} e le sue condizioni (versione {version}).",
+    "retention": "Conserviamo il tuo nome, l'ora, il codice del documento e la versione delle condizioni come prova dell'accettazione.",
+    "ackTerms": "Ho letto e accetto le condizioni di vendita (versione {version}).",
+    "ackNoWithdrawal": "So che per i beni su misura non c'è diritto di recesso (Codice del Consumo art. 59(c)).",
+    "ackMissing": "Spunta per continuare",
+    "name": "Nome e cognome",
+    "nameHint": "Come firmi; maiuscole e accenti non contano.",
+    "nameEmpty": "Scrivi nome e cognome",
+    "email": "La tua email",
+    "emailHint": "L'indirizzo a cui è stato inviato questo link.",
+    "emailEmpty": "Scrivi la tua email",
+    "emailInvalid": "Non sembra un indirizzo email",
+    "accept": "Accetta il preventivo",
+    "decline": "Rifiuta",
+    "busy": "Registrazione della risposta…"
+  },
+  "done": {
+    "title": "Accettato — grazie, {name}",
+    "copy": "Ti inviamo una copia per email.",
+    "name": "Nome",
+    "at": "Ora",
+    "code": "Codice documento",
+    "terms": "Versione delle condizioni",
+    "next": "Cosa succede ora",
+    "stepDeposit": "Paga l'acconto di {amount} entro il {date}.",
+    "stepConfirm": "Confermiamo l'ordine entro un giorno lavorativo."
+  },
+  "deposit": {
+    "title": "Acconto con bonifico",
+    "holder": "Beneficiario",
+    "iban": "IBAN",
+    "bic": "BIC",
+    "bank": "Banca",
+    "reference": "Causale",
+    "amount": "Importo",
+    "due": "Entro il",
+    "kind": "Tipo",
+    "copy": "Copia {what}",
+    "copyShort": "Copia",
+    "noBank": "Le coordinate bancarie seguono per email.",
+    "production": "La produzione inizia quando l'acconto è ricevuto."
+  },
+  "decline": {
+    "title": "Rifiuta questo preventivo",
+    "body": "Dicci perché, così possiamo migliorare; il venditore vede la tua risposta.",
+    "reason": "Motivo",
+    "reasons": {
+      "price": "Il prezzo",
+      "delivery": "La data di consegna",
+      "otherSupplier": "Abbiamo scelto un altro fornitore",
+      "notNeeded": "Non più necessario",
+      "other": "Un altro motivo"
+    },
+    "note": "Nota (facoltativa)",
+    "name": "Nome e cognome",
+    "nameOptional": "Nome e cognome (facoltativo)",
+    "held": {
+      "name": "Scrivi nome e cognome"
+    },
+    "back": "Indietro",
+    "go": "Rifiuta il preventivo"
+  },
+  "problem": {
+    "unavailable": "Questo link non si può più usare.",
+    "wrongPerson": "Il nome o l'email non corrispondono alla persona a cui è stato inviato il link.",
+    "changed": "Il preventivo è cambiato nel frattempo: è stato riletto. Controllalo e rispondi di nuovo.",
+    "invalid": "Manca qualche risposta: controlla le spunte, il nome e l'email.",
+    "rateLimited": "Troppi tentativi. Attendi qualche minuto e riprova.",
+    "unavailableNow": "Il servizio non risponde. Riprova tra poco.",
+    "internal": "Qualcosa non ha funzionato. Riprova."
+  }
+}

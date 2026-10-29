@@ -1,0 +1,154 @@
+{
+  "title": "Quote {number} · version {revision}",
+  "offer": {
+    "title": "The offer",
+    "total": "Total",
+    "totalVatIncluded": "Total, VAT included",
+    "from": "From",
+    "for": "For",
+    "yourRef": "Your reference",
+    "version": "Version",
+    "versionValue": "Version {revision} of {date}",
+    "validUntil": "Valid until",
+    "firm": "Firm offer",
+    "firmValue": "It cannot be withdrawn before {date} (c.c. art. 1329).",
+    "delivery": "Delivery date offered",
+    "deliveryLater": "Confirmed with the order",
+    "payment": "Payment terms",
+    "deposit": "Deposit asked",
+    "depositValue": "{pct} {kind}: {amount}",
+    "noDeposit": "None",
+    "shipTo": "Delivery address"
+  },
+  "depositKind": {
+    "ACCONTO": "acconto (an advance on the price)",
+    "CAPARRA": "caparra confirmatoria"
+  },
+  "lines": {
+    "title": "What is in it",
+    "item": "Item",
+    "qty": "Pieces",
+    "unit": "Unit price",
+    "unitGross": "Unit price, VAT included",
+    "amount": "Amount",
+    "net": "Net",
+    "vatRate": "VAT {rate}",
+    "vatNature": "VAT not charged ({nature})"
+  },
+  "pdf": {
+    "title": "The quote document",
+    "code": "Document code {code} — your acceptance records exactly this document.",
+    "none": "The PDF is not available here; the email has it attached.",
+    "problem": "The PDF couldn't be shown here. It is attached to the email, and you can still answer.",
+    "loading": "Opening the PDF…"
+  },
+  "terms": {
+    "title": "Terms and conditions (version {version})"
+  },
+  "state": {
+    "OPEN": {
+      "title": "Open until {date}",
+      "body": "{seller} is waiting for your answer: accept it below by typing your name, or decline it.",
+      "firm": "A firm offer: {seller} cannot withdraw it before the date. Accept it below by typing your name, or decline it."
+    },
+    "EXPIRED": {
+      "title": "This offer ended on {date}",
+      "body": "It can no longer be accepted. Ask {seller} for a new link if you still want it."
+    },
+    "REVISING": {
+      "title": "A new version is being prepared",
+      "body": "{seller} is changing this quote; you will get a new link when it is ready."
+    },
+    "SUPERSEDED": {
+      "title": "This quote was replaced by a newer version",
+      "body": "{seller} sent you a newer version with its own link. Ask for it again if you cannot find it."
+    },
+    "DECLINED": {
+      "title": "You declined this quote",
+      "body": "{seller} has your answer. Write to them if you change your mind."
+    },
+    "CANCELLED": {
+      "title": "This quote was withdrawn",
+      "body": "{seller} withdrew it. Write to them if you still need an offer."
+    }
+  },
+  "newLink": {
+    "ask": "Ask for a new link",
+    "asked": "We told {seller}: they will send you a new link."
+  },
+  "sign": {
+    "title": "Accept quote {number} version {revision}",
+    "summary": "You accept quote {number} version {revision}: {total}.",
+    "summaryDeposit": "You accept quote {number} version {revision}: {total}, with a deposit of {deposit}.",
+    "legal": "By typing your name you accept this quote from {seller} and its terms (version {version}).",
+    "retention": "We keep your name, the time, the document code and the terms version as proof of the acceptance.",
+    "ackTerms": "I have read and accept the terms and conditions (version {version}).",
+    "ackNoWithdrawal": "I know there is no right of withdrawal for made-to-measure goods (Codice del Consumo art. 59(c)).",
+    "ackMissing": "Tick to continue",
+    "name": "Full name",
+    "nameHint": "As you sign it; case and accents do not matter.",
+    "nameEmpty": "Type your full name",
+    "email": "Your email",
+    "emailHint": "The address this link was sent to.",
+    "emailEmpty": "Type your email",
+    "emailInvalid": "This does not look like an email address",
+    "accept": "Accept quote",
+    "decline": "Decline",
+    "busy": "Recording your answer…"
+  },
+  "done": {
+    "title": "Accepted — thank you, {name}",
+    "copy": "We send you a copy by email.",
+    "name": "Name",
+    "at": "Time",
+    "code": "Document code",
+    "terms": "Terms version",
+    "next": "What happens next",
+    "stepDeposit": "Pay the deposit of {amount} by {date}.",
+    "stepConfirm": "We confirm the order within one working day."
+  },
+  "deposit": {
+    "title": "Deposit by bank transfer",
+    "holder": "Beneficiary",
+    "iban": "IBAN",
+    "bic": "BIC",
+    "bank": "Bank",
+    "reference": "Payment reference",
+    "amount": "Amount",
+    "due": "Due by",
+    "kind": "Kind",
+    "copy": "Copy {what}",
+    "copyShort": "Copy",
+    "noBank": "The bank details follow by email.",
+    "production": "Production starts when the deposit is received."
+  },
+  "decline": {
+    "title": "Decline this quote",
+    "body": "Tell us why, so we can do better; the seller sees your answer.",
+    "reason": "Reason",
+    "reasons": {
+      "price": "The price",
+      "delivery": "The delivery date",
+      "otherSupplier": "We chose another supplier",
+      "notNeeded": "No longer needed",
+      "other": "Another reason"
+    },
+    "note": "Note (optional)",
+    "name": "Full name",
+    "nameOptional": "Full name (optional)",
+    "held": {
+      "name": "Type your full name"
+    },
+    "back": "Back",
+    "go": "Decline quote"
+  },
+  "problem": {
+    "unavailable": "This link can no longer be used.",
+    "wrongPerson": "The name or email does not match the person this link was sent to.",
+    "changed": "The quote changed meanwhile: it was read again. Check it and answer again.",
+    "invalid": "Some answer is missing: check the ticks, your name and your email.",
+    "rateLimited": "Too many tries. Wait a few minutes and try again.",
+    "unavailableNow": "The service is not answering. Try again in a moment.",
+    "internal": "Something went wrong. Try again."
+  }
+}

@@ -6,12 +6,14 @@
     "home": {
       "area": "Home",
       "today": "Today",
+      "approvals": "Approvals",
       "mailToSort": "Mail to sort"
     },
     "sales": {
       "area": "Sales",
       "main": "Main",
-      "customers": "Customers"
+      "customers": "Customers",
+      "quotes": "Quotes"
     },
     "purchasing": {
       "area": "Purchasing",

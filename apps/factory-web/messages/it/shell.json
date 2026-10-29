@@ -6,12 +6,14 @@
     "home": {
       "area": "Home",
       "today": "Oggi",
+      "approvals": "Approvazioni",
       "mailToSort": "Posta da smistare"
     },
     "sales": {
       "area": "Vendite",
       "main": "Principali",
-      "customers": "Clienti"
+      "customers": "Clienti",
+      "quotes": "Preventivi"
     },
     "purchasing": {
       "area": "Acquisti",

@@ -1,0 +1,140 @@
+/*
+ * The send dialog (SCR-037) LAYOUT: the form and the checks on the left, the PDF on the right; one column on a phone.
+ * Controls are the design system's; semantic tokens only.
+ */
+.fw-send {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: var(--nds-space-20);
+  min-width: 0;
+}
+
+@media (max-width: 960px) {
+  .fw-send {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-send-form,
+.fw-send-preview,
+.fw-send-section,
+.fw-send-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-send-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-send-h {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-send-hint,
+.fw-send-freeze {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-send-freeze {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-send-to {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-send-list {
+  margin: 0;
+  padding-left: var(--nds-space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-send-checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-send-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-send-check-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-send-ico {
+  flex: none;
+  margin-top: 2px;
+}
+
+.fw-send-ico.is-blocks {
+  color: var(--nds-danger);
+}
+
+.fw-send-ico.is-warning {
+  color: var(--nds-warning);
+}
+
+.fw-send-ico.is-passes {
+  color: var(--nds-success);
+}
+
+.fw-send-fix {
+  flex: none;
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-send-keys {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: var(--nds-space-6);
+}
+
+@media (max-width: 720px) {
+  .fw-send-keys {
+    display: none;
+  }
+}
+
+.fw-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

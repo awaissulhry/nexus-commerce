@@ -82,9 +82,11 @@ interface SendFacts {
 
 /**
  * What the send would freeze and what stops it, read in one scope (the office's client, or the command's transaction).
- * `companyLegal` is the company's letterhead problems (read through the caller beforehand).
+ * `companyLegal` is the company's letterhead problems (read through the caller beforehand). With `preview`, the
+ * customer's document is made whenever its addresses and validity are there (the checks may still fail), in the
+ * language asked: the office reads the PDF before it sends (preview.ts); nothing is stored.
  */
-async function readSendFacts(db: Reader, quote: QuoteRow, now: Date, companyLegal: readonly Issue[]): Promise<SendFacts> {
+export async function readSendFacts(db: Reader, quote: QuoteRow, now: Date, companyLegal: readonly Issue[], preview?: { readonly language: 'it' | 'en' }): Promise<SendFacts> {
   const facts = await readFacts(db, quote, now)
   const { version, party, today } = facts
   const addresses = await db.partyAddress.findMany({ where: { id: { in: [version.billToAddressId, version.shipToAddressId].filter((id): id is string => id !== null) }, status: 'ACTIVE' }, select: ADDRESS_COLUMNS })
@@ -135,9 +137,10 @@ async function readSendFacts(db: Reader, quote: QuoteRow, now: Date, companyLega
 
   let customer: CustomerQuote | null = null
   const row = versions.find((entry) => entry.id === version.id)!
-  if (checks.ready && billTo && shipTo) {
+  if (preview ? billTo && shipTo && row.validUntil !== null : checks.ready && billTo && shipTo) {
     const lines = await readCustomerLines(db, version.id)
-    customer = customerQuoteOf({ quote, version: row, lines, labels: await lineLabels(db, lines), billTo, shipTo, contact, date: today })
+    const shown = preview ? { ...row, language: preview.language } : row
+    customer = customerQuoteOf({ quote, version: shown, lines, labels: await lineLabels(db, lines), billTo: billTo!, shipTo: shipTo!, contact, date: today })
   }
   return { checks, versionId: version.id, versionStatus: version.status, billTo, shipTo, contact, customer, today }
 }
