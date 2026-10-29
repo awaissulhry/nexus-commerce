@@ -7,7 +7,7 @@ import { events as fileEvents } from '@nexus/factory-domain/files/events'
 import { events as importEvents } from '@nexus/factory-domain/imports/events'
 import type { NumberFormat } from '@nexus/factory-domain/imports/cells'
 import { mapHeaders } from '@nexus/factory-domain/imports/headers'
-import { keyOf, keyValues, markValues, unmarkValues, type ExistingRecord, type Importer, type RowValues } from '@nexus/factory-domain/imports/importer'
+import { keyOf, keyValues, markValues, unmarkValues, type ExistingRecord, type Importer, type RowIssue, type RowValues } from '@nexus/factory-domain/imports/importer'
 import { IMPORT_LIMITS, importMachine, type CsvEncoding } from '@nexus/factory-domain/imports/job'
 import { applyCheck, parseRow, planner } from '@nexus/factory-domain/imports/plan'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
@@ -19,7 +19,7 @@ import { TooLargeObjectError } from '../files/port'
 import { processFiles, type FilesRuntime } from '../files/service'
 import { defineHandler, type EventHandler } from '../outbox/dispatch'
 import { adapterRefusals, mappedColumns, unheldGrainIssues, type Layout } from './jobs'
-import { processImporters, type ImportAdapter, type ImportScope } from './registry'
+import { processImporters, type CheckRow, type ImportAdapter, type ImportScope } from './registry'
 import { readSheet, SheetError } from './sheet'
 
 /**
@@ -32,14 +32,17 @@ import { readSheet, SheetError } from './sheet'
  *             its headers, refuse a mapped money column outside the grains the job's creator held, then plan the rows
  *             in batches of IMPORT_LIMITS.planBatchSize: the adapter's `load` in a transaction that is always rolled back
  *             and refused if it wrote (a dry run cannot write a business row), the plan of the batch stored by imports.recordPlan (its receipt makes a repeated
- *             batch a no-op, the unique row number a second guard). imports.finishPlan: PLANNED with the counts, and in
- *             mode APPLY straight on to APPLYING. A sheet that cannot be planned → FAILED with its issues, no row.
+ *             batch a no-op, the unique row number a second guard); the adapter's `check` (registry.ts), when it has
+ *             one, runs in that same read-only transaction for the rows whose cells parsed: a row it refuses is an
+ *             ERROR with its issues. imports.finishPlan: PLANNED with the counts, and in mode APPLY straight on to
+ *             APPLYING. A sheet that cannot be planned → FAILED with its issues, no row.
  *   apply     handler imports.applyPlan, on `import.apply_requested`: the planned CREATE and UPDATE rows not applied
  *             yet, in row order, in batches of the importer's batchSize. Each batch is ONE command imports.applyBatch:
  *             the job row is locked (its version bumped), the job must still be APPLYING, the batch's records are loaded
- *             again and each row checked (applyCheck): changed since the dry run or already done → SKIPPED with the
- *             reason; otherwise the adapter writes it (audited) → APPLIED. A write that throws rolls back the whole batch:
- *             nothing of it is written. Then imports.finishApply: APPLIED.
+ *             again and each row checked (applyCheck, and the adapter's `check` for the person who applies): changed
+ *             since the dry run or already done → SKIPPED with the reason; otherwise the adapter writes it (audited) →
+ *             APPLIED. A write that throws rolls back the whole batch: nothing of it is written. Then
+ *             imports.finishApply: APPLIED.
  *
  * Errors: a row the plan marked ERROR is never applied (the others are). A batch that throws stops the apply: the
  * handler's job is retried (a passing failure), and after its last attempt the job is FAILED with the batch's rows
@@ -84,10 +87,10 @@ const PLAN_JOB_SELECT = {
 } as const satisfies Prisma.ImportJobSelect
 
 /**
- * The person who started a job, as their live roles make them now, for the importer's own check in the dry run
- * (registry.ts `authorize`). Two-factor is taken as proved: the session that started the job had to hold these
- * permissions, and the apply checks the person who applies on their own session. Nobody (a person who left, or no
- * person): no grants.
+ * A person of a job (who started it; for the apply's row checks, who applies it), as their live roles make them now,
+ * for the importer's own checks in the worker (registry.ts `authorize`, `check`). Two-factor is taken as proved: the
+ * session that started or applied the job had to hold these permissions. Nobody (a person who left, or no person): no
+ * grants.
  */
 async function starterOf(caller: CommandCaller, userId: string | null): Promise<Actor> {
   const tenantId = caller.factoryContext ? actorOf(caller.factoryContext).tenantId : undefined
@@ -176,6 +179,14 @@ function existingByKey(importer: Importer, records: readonly ExistingRecord[]): 
 
 const json = (value: unknown): Prisma.InputJsonValue => value as Prisma.InputJsonValue
 
+/** The adapter's row check (registry.ts `check`), one list per row; none without a check. Never fewer answers than rows. */
+async function checkRows(adapter: ImportAdapter, client: CommandTx, rows: readonly CheckRow[], scope: ImportScope, actor: Actor | null): Promise<RowIssue[][]> {
+  if (!adapter.check || rows.length === 0) return rows.map(() => [])
+  const answer = await adapter.check(client, rows, scope, actor ?? { audience: 'office', grants: [] })
+  if (answer.length !== rows.length) throw new Error(`The importer ${adapter.importer.key} checked ${answer.length} of ${rows.length} rows.`)
+  return answer.map((issues) => [...issues])
+}
+
 /** The dry run of one job (the handler's work; also called by tests). */
 export async function planImport(caller: CommandCaller, jobId: string, work: ImportWork = {}): Promise<WorkOutcome> {
   const job = await caller.withClient((client) => client.importJob.findUnique({ where: { id: jobId }, select: PLAN_JOB_SELECT }))
@@ -209,7 +220,8 @@ export async function planImport(caller: CommandCaller, jobId: string, work: Imp
       ignored: mapping.ignored,
     }
     const issues = [...mapping.issues, ...unheldGrainIssues(adapter, layout, job.grains)]
-    if (adapter.authorize) issues.push(...adapterRefusals(adapter, await starterOf(caller, job.createdById), job.companyId, mappedColumns(layout)))
+    const starter = adapter.authorize || adapter.check ? await starterOf(caller, job.createdById) : null
+    if (adapter.authorize) issues.push(...adapterRefusals(adapter, starter!, job.companyId, mappedColumns(layout)))
     if (issues.length > 0) {
       await saveLayout(caller, jobId, layout, causationId)
       return await fail({ error: 'The sheet cannot be imported as it is: see the issues.', issues })
@@ -220,8 +232,17 @@ export async function planImport(caller: CommandCaller, jobId: string, work: Imp
     for (let start = 0, batch = 0; start < sheet.rows.length; start += IMPORT_LIMITS.planBatchSize, batch++) {
       const parsed = sheet.rows.slice(start, start + IMPORT_LIMITS.planBatchSize).map((row) => parseRow(importer, mapping.columns, row, context))
       const keys = [...new Set(parsed.flatMap((row) => (row.errors.length === 0 && row.key !== null ? [row.key] : [])))]
-      const records = keys.length === 0 ? [] : await readOnly(caller, (tx) => adapter.load(tx, keys.map((key) => keyValues(importer, key)), scope))
-      const planned = run.plan(parsed, existingByKey(importer, records))
+      const checkable = adapter.check ? parsed.filter((row) => row.errors.length === 0 && row.key !== null) : []
+      const read =
+        keys.length === 0 && checkable.length === 0
+          ? { records: [] as readonly ExistingRecord[], refusals: [] as RowIssue[][] }
+          : await readOnly(caller, async (tx) => ({
+              records: keys.length === 0 ? [] : await adapter.load(tx, keys.map((key) => keyValues(importer, key)), scope),
+              refusals: await checkRows(adapter, tx, checkable.map((row) => ({ rowNumber: row.rowNumber, key: keyValues(importer, row.key!), values: row.values })), scope, starter),
+            }))
+      const refused = new Map(checkable.map((row, index) => [row, read.refusals[index]!]))
+      const judged = parsed.map((row) => ((refused.get(row)?.length ?? 0) > 0 ? { ...row, errors: refused.get(row)! } : row))
+      const planned = run.plan(judged, existingByKey(importer, read.records))
       await command(caller, { name: 'imports.recordPlan', idempotencyKey: `plan.${jobId}.${batch}`, input: { jobId, batch }, causationId }, async ({ tx, audit, now }) => {
         const current = await tx.importJob.findUnique({ where: { id: jobId }, select: { status: true } })
         if (current?.status !== 'UPLOADED') throw new Settled()
@@ -297,7 +318,7 @@ async function saveLayout(caller: CommandCaller, jobId: string, layout: Layout, 
   })
 }
 
-const APPLY_JOB_SELECT = { id: true, companyId: true, importerKey: true, status: true } as const satisfies Prisma.ImportJobSelect
+const APPLY_JOB_SELECT = { id: true, companyId: true, importerKey: true, status: true, createdById: true, applyRequestedById: true } as const satisfies Prisma.ImportJobSelect
 
 /** The apply of one job (the handler's work; also called by tests). */
 export async function applyPlan(caller: CommandCaller, jobId: string, work: ImportWork = {}): Promise<WorkOutcome> {
@@ -308,6 +329,8 @@ export async function applyPlan(caller: CommandCaller, jobId: string, work: Impo
   if (!adapter) return failJob(caller, jobId, { error: `The importer ${job.importerKey} is not available in this version of the factory.` }, causationId)
   const importer = adapter.importer
   const scope: ImportScope = { companyId: job.companyId }
+  // The person who applies (the starter, for a job started in mode APPLY): the adapter's row check judges for them.
+  const applier = adapter.check ? await starterOf(caller, job.applyRequestedById ?? job.createdById) : null
   let batch: { first: number; last: number } | null = null
 
   try {
@@ -322,7 +345,7 @@ export async function applyPlan(caller: CommandCaller, jobId: string, work: Impo
       )
       if (next.length === 0) break
       batch = { first: next[0]!.rowNumber, last: next[next.length - 1]!.rowNumber }
-      await applyBatch(caller, adapter, job.companyId, jobId, batch, scope, causationId)
+      await applyBatch(caller, adapter, job.companyId, jobId, batch, scope, applier, causationId)
     }
     batch = null
     await command(
@@ -354,6 +377,7 @@ async function applyBatch(
   jobId: string,
   batch: { readonly first: number; readonly last: number },
   scope: ImportScope,
+  applier: Actor | null,
   causationId: string | undefined,
 ): Promise<void> {
   const importer = adapter.importer
@@ -369,15 +393,20 @@ async function applyBatch(
     const keys = [...new Set(rows.flatMap((row) => (row.key === null ? [] : [row.key])))]
     const records = keys.length === 0 ? [] : await adapter.load(tx, keys.map((key) => keyValues(importer, key)), scope)
     const byKey = existingByKey(importer, records)
+    // The rows' facts as they are now, for the person who applies: a row the check refuses now is never written.
+    const checked = rows.filter((row) => row.key !== null)
+    const refusals = await checkRows(adapter, tx, checked.map((row) => ({ rowNumber: row.rowNumber, key: keyValues(importer, row.key!), values: unmarkValues(row.after) as RowValues })), scope, applier)
+    const refusedNow = new Set(checked.filter((_, index) => refusals[index]!.length > 0).map((row) => row.id))
     let applied = 0
     let skipped = 0
     for (const row of rows) {
       const before = unmarkValues(row.before)
       const after = unmarkValues(row.after) as RowValues
-      const decision =
+      const checkedDecision =
         row.key === null
           ? ({ apply: false, note: 'changed_since_dry_run' } as const)
           : applyCheck(importer, { action: row.action, recordId: row.recordId, before, after }, byKey.get(row.key) ?? null)
+      const decision = checkedDecision.apply && refusedNow.has(row.id) ? ({ apply: false, note: 'changed_since_dry_run' } as const) : checkedDecision
       if (decision.apply) {
         const written = await adapter.write(
           tools,

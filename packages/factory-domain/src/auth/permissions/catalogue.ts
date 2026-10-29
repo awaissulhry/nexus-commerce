@@ -244,6 +244,7 @@ export const INVENTORY_DEFINITIONS = definePermissions('inventory', {
   issue: { risk: 'write', description: "Pick and issue stock to a work order (only usable stock of the work order's materials, up to what it still needs), return what it did not use, and undo one's own last issue (a floor device: at its own site)." },
   'issue.over': { risk: 'write', description: 'Issue more than a work order still needs, with the reason.' },
   receive: { risk: 'write', description: 'Receive goods against a purchase order: the receipt, its lots and its hides one by one with their measured areas, posted to the stock ledger (a floor device: at its own site).' },
+  'opening.import': { risk: 'write', description: "Load a company's opening stock from a sheet: lots, hides with their areas and the existing chromium VI reports, posted as opening moves. Lots that need the quality step wait in quarantine for a quality person who did not import them." },
 })
 
 /** The money grains as they travel in grants (`../grains/grains`): from Role.grains, never Role.permissions. */

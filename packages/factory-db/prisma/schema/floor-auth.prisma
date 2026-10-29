@@ -62,6 +62,8 @@ model Device {
   // B-W1-42: correction requests asked and scans refused on it.
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]
+  // numbering.prisma: the numbers of its blocks it used.
+  numberBlockUses NumberBlockUse[]
 
   @@unique([tenantId, siteId, id])
   @@index([tenantId, siteId])
