@@ -9,6 +9,11 @@
       "approvals": "Approvals",
       "mailToSort": "Mail to sort"
     },
+    "products": {
+      "area": "Products",
+      "main": "Main",
+      "styles": "Styles"
+    },
     "sales": {
       "area": "Sales",
       "main": "Main",

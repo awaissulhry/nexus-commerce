@@ -16,6 +16,7 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   InboundEmail: '/home/mail-to-sort?open=[id]',
   Party: '/sales/customers/[id]',
   Quote: '/sales/quotes/[id]',
+  Style: '/products/styles/[id]',
 })
 
 /** An API list route → the web page that shows it (with the same query). */
@@ -25,6 +26,7 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // The quote list (SCR-034) reads `status` and `q` as the API does; the approvals queue (SCR-030) reads `view`.
   '/sales/quotes': '/sales/quotes',
   '/sales/quote-approvals': '/home/approvals',
+  '/product/styles': '/products/styles',
 })
 
 export interface RecordRef {

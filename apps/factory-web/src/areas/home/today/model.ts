@@ -395,7 +395,7 @@ export const NEW_VERBS: readonly { readonly id: string; readonly permission: str
   { id: 'purchaseOrder', permission: 'purchasing.manage', page: '/purchasing/orders' },
   { id: 'workOrder', permission: 'workorders.manage', page: '/production/work-orders' },
   { id: 'party', permission: 'parties.manage', page: '/sales/customers' },
-  { id: 'style', permission: 'product.styles.manage', page: '/product/styles' },
+  { id: 'style', permission: 'product.styles.manage', page: '/products/styles' },
   { id: 'material', permission: 'product.materials.manage', page: '/product/materials' },
   { id: 'registerEntry', permission: 'compliance.register.manage', page: '/compliance/register' },
   { id: 'certificate', permission: 'compliance.certificates.manage', page: '/compliance/certificates' },

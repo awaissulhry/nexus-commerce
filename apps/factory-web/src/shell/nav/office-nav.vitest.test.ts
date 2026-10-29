@@ -14,6 +14,7 @@ describe('the Office navigation (PLT-160: one declaration per area)', () => {
     expect(officeAreaDeclarations().map((d) => [d.order, d.area.id])).toEqual([
       [1, 'home'],
       [2, 'sales'],
+      [3, 'products'],
       [6, 'purchasing'],
       [14, 'admin'],
     ])
@@ -70,7 +71,7 @@ describe('labels, crumbs, palette pages and the phone bar come from the same man
     expect(nav.areas.map((area) => area.label)).toEqual(['Home', 'Sales', 'Purchasing', 'Admin'])
     expect(nav.areas[3]?.sections?.map((s) => s.label)).toEqual(['Admin', 'Organisation', 'Access', 'Platform', 'Data'])
     const it = translateNav(OFFICE_NAV, createScopedTranslator('it', messagesFor('it', ['shell']), 'shell'))
-    expect(it.areas.map((area) => area.label)).toEqual(['Home', 'Vendite', 'Acquisti', 'Amministrazione'])
+    expect(it.areas.map((area) => area.label)).toEqual(['Home', 'Vendite', 'Prodotti', 'Acquisti', 'Amministrazione'])
     expect(JSON.stringify(nav)).not.toContain('shell:')
   })
 

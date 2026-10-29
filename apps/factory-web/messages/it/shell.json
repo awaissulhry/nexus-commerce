@@ -9,6 +9,11 @@
       "approvals": "Approvazioni",
       "mailToSort": "Posta da smistare"
     },
+    "products": {
+      "area": "Prodotti",
+      "main": "Principali",
+      "styles": "Modelli"
+    },
     "sales": {
       "area": "Vendite",
       "main": "Principali",
