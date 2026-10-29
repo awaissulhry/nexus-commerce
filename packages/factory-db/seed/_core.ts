@@ -67,7 +67,9 @@ export async function seed({ db, namespace }: SeedContext): Promise<CoreSeed> {
         await tx.company.upsert({ where: { id: company.id }, create: { id: company.id, ...data }, update: data })
       }
       for (const site of sites) {
-        const data = { companyId: site.companyId, code: site.code, name: `Seed plant ${site.code}`, kind: SiteKind.PLANT }
+        // Its delivery address: purchase orders print it (and refuse a send without it).
+        const address = { line1: `Via Esempio ${site.code === 'A1' ? 11 : 12}`, postalCode: '00000', city: 'Seedville', country: 'IT' }
+        const data = { companyId: site.companyId, code: site.code, name: `Seed plant ${site.code}`, kind: SiteKind.PLANT, address }
         await tx.site.upsert({ where: { id: site.id }, create: { id: site.id, ...data }, update: data })
 
         const at = { companyId: site.companyId, siteId: site.id }

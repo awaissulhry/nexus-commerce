@@ -4,8 +4,8 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 /**
  * The numbering module's synthetic seed, for each company of seed/_core.ts: a yearly invoice series that issued two
  * numbers (with their NumberAllocation rows, for made-up invoice ids), a yearly DDT series that starts at 143 as if a
- * paper booklet had used 1-142, and lot, shipment, work order and batch series that never reset. Written in the tenant's office scope, as the app
- * writes it.
+ * paper booklet had used 1-142, yearly sales order and purchase order series, and lot, shipment, work order and batch series that never
+ * reset. Written in the tenant's office scope, as the app writes it.
  *
  * NumberAllocation is append-only and a used series' counter never moves back, so the seed only inserts and skips
  * rows that exist (INSERT … ON CONFLICT DO NOTHING): a second run adds nothing.
@@ -36,6 +36,13 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // number is unique in the tenant, so each company's batch series prints its own prefix.
       { id: id(`series:${company}:WORK_ORDER:MAIN:ALL`), companyId, kind: 'WORK_ORDER', code: 'MAIN', scopeKey: 'ALL', reset: 'NEVER', pattern: 'WO-{N:5}', fiscal: false, createdById: actorId },
       { id: id(`series:${company}:BATCH:MAIN:ALL`), companyId, kind: 'BATCH', code: 'MAIN', scopeKey: 'ALL', reset: 'NEVER', pattern: `B${company}-{N:5}`, fiscal: false, createdById: actorId },
+      // Sales orders are numbered from it when a quote is accepted (apps/factory-api modules/sales/orders): without one,
+      // the acceptance makes the deposit request and the order waits. Its id starts with eight f's (still derived from
+      // the namespace), so the series that sort first stay the ones the generated isolation tests copy.
+      { id: `ffffffff${id(`series:${company}:SALES_ORDER:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'SALES_ORDER', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'SO-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // Purchase orders are numbered from it (apps/factory-api modules/purchasing): without one, a new order or a "Draft
+      // PO" from the plan is refused. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:PURCHASE_ORDER:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'PURCHASE_ORDER', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'PO-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
     )
     for (const value of [1, 2]) {
       allocations.push({
