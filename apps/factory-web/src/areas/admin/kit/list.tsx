@@ -1,19 +1,16 @@
 'use client'
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { EmptyState, Modal } from '@nexus/ui/components'
-import { SelectionLabel } from '@nexus/ui/grid'
-import { Button, Kbd } from '@nexus/ui/primitives'
-import { useT } from '../../../lib/i18n/provider'
-import { listKeys, type ListKey } from '../../../list-frame/model'
-import { WithMessages } from '../../../record-panels/i18n'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ListKey } from '../../../list-frame/model'
+import { ListKeysHelp } from '../shared/view/parts'
 import { onScreen } from './bulk-model'
 import './list.css'
 
 /**
  * What the B-W0-28 lists add around the shared list frame (`src/list-frame/`, Owner rule 2026-10-29): the selection
  * (the page's, or the design gallery's own so ticking works there too), the `?` dialog with every key of the list, the
- * frame's states in our words, and a bulk button (an icon and its words; the DS hides the words first on a narrow card).
+ * reach of a bulk action in a confirm. The frame's states (FrameState), the bulk button (BulkButton) and the keys dialog
+ * (ListKeysHelp) are part 1's, in shared/view/parts.tsx: every Admin list draws them the same.
  */
 
 /**
@@ -46,67 +43,12 @@ export function useLatest<T>(value: T) {
 export function useKeysHelp(own: readonly ListKey[], withSelection: boolean) {
   const [open, setOpen] = useState(false)
   const onHelp = useCallback(() => setOpen(true), [])
-  const help = open ? (
-    <WithMessages namespaces={['lists']}>
-      <KeysDialog own={own} withSelection={withSelection} onClose={() => setOpen(false)} />
-    </WithMessages>
-  ) : null
+  // The same dialog as every Admin list (part 1's ListKeysHelp).
+  const help = <ListKeysHelp open={open} onClose={() => setOpen(false)} keys={own} selection={withSelection} />
   return { onHelp, help }
 }
 
-function KeysDialog({ own, withSelection, onClose }: { own: readonly ListKey[]; withSelection: boolean; onClose: () => void }) {
-  const t = useT('lists')
-  const words = (does: string) => {
-    const text = t(does)
-    return text === does ? does : text
-  }
-  return (
-    <Modal open onClose={onClose} title={t('keys.title')} size="sm">
-      <dl className="fw-list-keymap">
-        {listKeys(own, withSelection).map((entry) => (
-          <Fragment key={`${entry.keys.join('+')}-${entry.does}`}>
-            <dt>
-              {entry.keys.map((key) => (
-                <Kbd key={key}>{key === 'click' ? t('keys.click') : key}</Kbd>
-              ))}
-            </dt>
-            <dd>{words(entry.does)}</dd>
-          </Fragment>
-        ))}
-      </dl>
-    </Modal>
-  )
-}
 
-/** The frame's state when its read failed: the problem in words and Try again (never drawn as an empty list). */
-export function ListProblem({ problem, onRetry }: { problem: string; onRetry?: () => void }) {
-  const t = useT('admin')
-  return (
-    <EmptyState
-      title={t('list.failedTitle')}
-      description={t(problem)}
-      action={
-        onRetry ? (
-          <Button size="sm" onClick={onRetry}>
-            {t('common.retry')}
-          </Button>
-        ) : undefined
-      }
-    />
-  )
-}
-
-/**
- * One bulk action in the frame's selection bar: an icon and its words (they say the action's reach, "Close 2 series"),
- * held with the reason when it applies to none of the selected rows or the person lacks the right.
- */
-export function BulkButton({ icon, label, held, onClick, variant }: { icon: ReactNode; label: string; held: string | null; onClick?: () => void; variant?: 'danger-outline' }) {
-  return (
-    <Button size="sm" variant={variant} aria-label={label} heldReason={held} onClick={onClick}>
-      {icon} <SelectionLabel>{label}</SelectionLabel>
-    </Button>
-  )
-}
 
 /** In a bulk confirm: what the action applies to (by name), and each reason some selected rows are left out. */
 export function BulkReach({ names, left, label }: { names: readonly string[]; left: ReadonlyArray<{ why: string; count: number; words: string }>; label: string }) {

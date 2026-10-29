@@ -1,5 +1,5 @@
 import type { Notice } from '../shared/model'
-import type { BulkResult } from './bulk'
+import type { BulkResult } from '../shared/bulk'
 
 /**
  * The rules every B-W0-28 bulk action shares, pure: which of the selected rows an action applies to (and why each other
@@ -43,7 +43,8 @@ export function bulkHeld(reach: Pick<Reach<unknown>, 'applies'>, allowed: boolea
 
 /** The notice after a bulk run, with each refused row (its id, and the problem as a message key) said under it. */
 export interface BulkNotice extends Notice {
-  refused?: ReadonlyArray<{ id: string; problem: string }>
+  /** Each refused row's id (`PageNotice` names it with `nameOf`) and its problem. */
+  refusedIds?: ReadonlyArray<{ id: string; problem: string }>
 }
 
 /**
@@ -57,8 +58,8 @@ export function bulkNotice<T>(result: BulkResult<T>, keys: { done: string; parti
   const total = done + refused
   const list = result.refused.map((entry) => ({ id: idOf(entry.item), problem: entry.problem }))
   if (refused === 0) return { key: keys.done, tone: 'success', params: { count: done, total } }
-  if (done === 0) return { key: keys.failed, tone: 'danger', params: { count: refused, total }, refused: list }
-  return { key: keys.partial, tone: 'warning', params: { count: done, done, refused, total }, refused: list }
+  if (done === 0) return { key: keys.failed, tone: 'danger', params: { count: refused, total }, refusedIds: list }
+  return { key: keys.partial, tone: 'warning', params: { count: done, done, refused, total }, refusedIds: list }
 }
 
 /** The selected ids still among the rows on screen (a filter or a new read hides the others: no action reaches them). */

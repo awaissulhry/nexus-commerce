@@ -313,13 +313,13 @@ describe('every SCR-018 design case draws in both languages with no key left on 
 
   it('the Table is the list frame: find = its search, Story / Table and the filters = its tools, Show older in its footer, keys in its icon', () => {
     const html = render(designScreen.cases.find((item) => item.id === 'table')!.model, 'en').replace(/<!-- -->/g, '')
-    expect(html).toContain('class="fw-list-toolbar"')
-    expect(html).toMatch(/class="fw-list-toolbar".*placeholder="Find in the entries shown/s)
-    expect(html).toMatch(/class="fw-list-toolbar".*aria-label="Who"/s)
+    expect(html).toContain('class="nds-gridcard nds-grid-card"><div class="nds-toolbar wrap"')
+    expect(html).toMatch(/class="nds-toolbar wrap".*placeholder="Find in the entries shown/s)
+    expect(html).toMatch(/class="nds-toolbar wrap".*aria-label="Who"/s)
     expect(html).toContain('Show older')
     expect(html).toContain('aria-label="Keyboard keys of this list"')
     // The Story is a feed: no frame.
-    expect(render(designScreen.cases.find((item) => item.id === 'story')!.model, 'en')).not.toContain('fw-list-toolbar')
+    expect(render(designScreen.cases.find((item) => item.id === 'story')!.model, 'en')).not.toContain('nds-grid-card')
   })
 })
 

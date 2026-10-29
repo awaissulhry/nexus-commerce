@@ -66,30 +66,3 @@
   gap: var(--nds-space-6);
   min-width: 0;
 }
-
-/*
- * Stand-in until list-frame.css carries it (frame gap, reported): the frame puts the DS toolbar inside
- * `.fw-list-toolbar`, so the DS rules written for a card's own toolbar (`.nds-grid-card > .nds-toolbar…`, grid.css
- * "GridToolbar wrap" and "A PAGE card at phone width") miss it — on a narrow card the tools ran past the card's edge and
- * the selection bar did not take its own line. The same rules, for the frame's toolbar, on the admin pages only.
- */
-.fw-adm .fw-list-toolbar > .nds-toolbar.wrap {
-  flex-wrap: wrap;
-  row-gap: var(--nds-space-8);
-}
-
-@container (max-width: 640px) {
-  .fw-adm .fw-list-toolbar > .nds-toolbar > .nds-grid-selbar {
-    flex: 1 0 100%;
-    order: 3;
-    flex-wrap: wrap;
-    row-gap: var(--nds-space-6);
-  }
-}
-
-@container (max-width: 400px) {
-  .fw-adm .fw-list-toolbar > .nds-toolbar > .nds-grid-search {
-    flex: 1 0 100%;
-    max-width: none;
-  }
-}

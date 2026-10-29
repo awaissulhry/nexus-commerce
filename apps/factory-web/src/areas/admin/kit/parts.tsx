@@ -28,7 +28,7 @@ export function PageNotice({ namespace, notice, onDismiss, nameOf }: { namespace
   const words = useWords(namespace)
   const t = useT('admin')
   if (!notice) return null
-  const refused = notice.refused ?? []
+  const refused = notice.refusedIds ?? []
   return (
     <Banner
       tone={notice.tone}

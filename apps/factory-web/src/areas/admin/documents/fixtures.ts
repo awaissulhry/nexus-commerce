@@ -146,7 +146,7 @@ export const designScreen = defineDesignScreen<DocumentsViewModel>({
       model: base({
         series: loaded(SERIES.map((row) => (row.id === creditNote.id ? { ...row, status: 'CLOSED' as const, nextNumber: null } : row))),
         selected: [ddt.id],
-        notice: { key: 'docs.bulk.partial', tone: 'warning', params: { count: 1, done: 1, refused: 1, total: 2 }, refused: [{ id: ddt.id, problem: 'problem.conflict' }] },
+        notice: { key: 'docs.bulk.partial', tone: 'warning', params: { count: 1, done: 1, refused: 1, total: 2 }, refusedIds: [{ id: ddt.id, problem: 'problem.conflict' }] },
       }),
       note: 'Each series is one call: what was closed, and each one refused with the reason.',
     },

@@ -10,10 +10,10 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../list-frame/model'
 import { bulkHeld, leftCounts } from '../../kit/bulk-model'
-import { BulkButton, BulkReach, ListProblem, useKeysHelp, useLatest, useSelection } from '../../kit/list'
+import { BulkReach, useKeysHelp, useLatest, useSelection } from '../../kit/list'
 import { PageNotice } from '../../kit/parts'
 import { adminHref } from '../../shared/model'
-import { PageHead } from '../../shared/view/parts'
+import { BulkButton, FrameState, PageHead } from '../../shared/view/parts'
 import type { IntegrationAccount, IntegrationProvider } from '../api'
 import { MailDomainSection, type MailDomainActions } from '../mail/view/MailDomainSection'
 import {
@@ -266,7 +266,7 @@ function Connections({ model, actions }: { model: ConnectionsViewModel; actions?
   const heldWords = (key: string | null) => (key === null ? null : key === 'held.needs' ? tAdmin('held.needs', { right: t('conn.right.manage') }) : t(key))
 
   const state: ReactNode = model.accounts.problem ? (
-    <ListProblem problem={model.accounts.problem} onRetry={actions?.onRetry} />
+    <FrameState problem={model.accounts.problem} onRetry={actions?.onRetry} />
   ) : accounts && rows.length === 0 ? (
     <EmptyState
       title={tAdmin('list.noMatch')}
@@ -316,6 +316,7 @@ function Connections({ model, actions }: { model: ConnectionsViewModel; actions?
         rows={model.accounts.problem ? [] : accounts === null ? null : rows}
         rowId={(row) => row.id}
         columns={columns}
+        isRowSelectable={(row) => (row.kind === 'missing' ? t('conn.bulk.noSelect') : null)}
         count={accounts ? t('conn.count', { count: rows.length }) : '—'}
         search={
           <Input
@@ -347,7 +348,7 @@ function Connections({ model, actions }: { model: ConnectionsViewModel; actions?
                 icon={<Pause size={13} aria-hidden />}
                 label={t('conn.bulk.pause', { count: pauseReach.applies.length })}
                 held={heldWords(pauseHeld)}
-                variant="danger-outline"
+                tone="danger-outline"
                 onClick={() => actions?.onBulk?.({ pause: true, ids: selected })}
               />
               <BulkButton

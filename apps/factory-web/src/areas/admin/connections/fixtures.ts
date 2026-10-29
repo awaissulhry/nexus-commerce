@@ -250,7 +250,7 @@ export const designScreen = defineDesignScreen<Case>({
       model: list({
         accounts: loaded(ACCOUNTS.map((item) => (item.id === ACCOUNTS[0]!.id ? { ...item, status: 'PAUSED' as const, version: 2 } : item))),
         selected: [ACCOUNTS[3]!.id],
-        notice: { key: 'conn.bulk.pausedPartial', tone: 'warning', params: { count: 1, done: 1, refused: 1, total: 2 }, refused: [{ id: ACCOUNTS[3]!.id, problem: 'problem.forbidden' }] },
+        notice: { key: 'conn.bulk.pausedPartial', tone: 'warning', params: { count: 1, done: 1, refused: 1, total: 2 }, refusedIds: [{ id: ACCOUNTS[3]!.id, problem: 'problem.forbidden' }] },
       }),
       note: 'Each service is one call: what was paused, and each one refused with the reason.',
     },

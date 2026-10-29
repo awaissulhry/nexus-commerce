@@ -13,10 +13,10 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../list-frame/model'
 import { bulkHeld, leftCounts } from '../../kit/bulk-model'
-import { BulkButton, BulkReach, ListProblem, useKeysHelp, useSelection } from '../../kit/list'
+import { BulkReach, useKeysHelp, useSelection } from '../../kit/list'
 import { AdminPageMessages } from '../../kit/messages'
 import { adminHref } from '../../shared/model'
-import { dash, PageHead, StepUp } from '../../shared/view/parts'
+import { BulkButton, dash, FrameState, PageHead, StepUp } from '../../shared/view/parts'
 import { PageNotice, useWords } from '../../kit/parts'
 import { DOCUMENT_LANGUAGES, DOCUMENT_TYPES, sampleHref, type Allocation, type DocumentType, type Series } from '../api'
 import {
@@ -299,7 +299,7 @@ function Numbers({ model, actions }: { model: DocumentsViewModel; actions?: Docu
   const closeHeld = bulkHeld(reach, model.can.manage, { right: 'docs.held.manage', none: 'docs.bulk.none' })
   const held = newSeriesHeld(model)
   const state: ReactNode = model.series.problem ? (
-    <ListProblem problem={model.series.problem} onRetry={actions?.onRetry} />
+    <FrameState problem={model.series.problem} onRetry={actions?.onRetry} />
   ) : items && rows.length === 0 ? (
     <EmptyState
       icon={<Hash size={24} aria-hidden />}
@@ -330,7 +330,7 @@ function Numbers({ model, actions }: { model: DocumentsViewModel; actions?: Docu
               icon={<CircleOff size={13} aria-hidden />}
               label={reach.applies.length > 0 ? t('docs.bulk.close', { count: reach.applies.length }) : t('docs.bulk.closeNone')}
               held={closeHeld ? t(closeHeld) : null}
-              variant="danger-outline"
+              tone="danger-outline"
               onClick={() => actions?.onCloseMany?.(selected)}
             />
           ),
@@ -453,7 +453,7 @@ function Layouts({ model, actions }: { model: DocumentsViewModel; actions?: Docu
   const state: ReactNode = !model.can.documents ? (
     <EmptyState icon={<FileText size={24} aria-hidden />} title={t('docs.layouts.noRightTitle')} description={t('docs.layouts.noRight')} />
   ) : model.companies.problem ? (
-    <ListProblem problem={model.companies.problem} onRetry={actions?.onRetry} />
+    <FrameState problem={model.companies.problem} onRetry={actions?.onRetry} />
   ) : model.companies.items !== null && !company ? (
     <EmptyState title={t('docs.layouts.noCompanyTitle')} description={t('docs.layouts.noCompany')} />
   ) : undefined

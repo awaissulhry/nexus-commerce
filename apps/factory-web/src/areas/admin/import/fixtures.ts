@@ -230,7 +230,7 @@ export const designScreen = defineDesignScreen<ImportViewModel>({
       model: page({
         jobs: loaded(OPEN_JOBS.map((item) => (item.id === READING.id ? { ...item, status: 'CANCELLED' as const } : item))),
         selected: [PLANNED.id],
-        notice: { key: 'imp.bulk.partial', tone: 'warning', params: { count: 1, done: 1, refused: 1, total: 2 }, refused: [{ id: PLANNED.id, problem: 'problem.conflict' }] },
+        notice: { key: 'imp.bulk.partial', tone: 'warning', params: { count: 1, done: 1, refused: 1, total: 2 }, refusedIds: [{ id: PLANNED.id, problem: 'problem.conflict' }] },
       }),
       note: 'Each import is one call: what was cancelled, and each one refused with the reason.',
     },

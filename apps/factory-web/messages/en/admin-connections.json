@@ -322,7 +322,8 @@
       "resumedPartial_one": "{count} of {total} services resumed. Not resumed:",
       "resumedPartial_other": "{count} of {total} services resumed. Not resumed:",
       "resumedFailed_one": "The service was not resumed:",
-      "resumedFailed_other": "None of the {count} services was resumed:"
+      "resumedFailed_other": "None of the {count} services was resumed:",
+      "noSelect": "Not connected: there is nothing to pause or resume"
     }
   },
   "mail": {

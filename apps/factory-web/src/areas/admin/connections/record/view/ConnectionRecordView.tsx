@@ -8,9 +8,9 @@ import { Button, Pill, SegmentedControl, Skeleton, Tag } from '@nexus/ui/primiti
 import { formatDateTime, formatNumber } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
-import { ListProblem, useKeysHelp } from '../../../kit/list'
+import { useKeysHelp } from '../../../kit/list'
 import { adminHref } from '../../../shared/model'
-import { RecordProblem } from '../../../shared/view/parts'
+import { FrameState, RecordProblem } from '../../../shared/view/parts'
 import { RecordFrame } from '../../../shared/view/RecordFrame'
 import { INBOUND_STATUSES, type InboundDelivery, type IntegrationAccount, type IntegrationCall } from '../../api'
 import { CALL_TONE, FAILED_CALL, INBOUND_TONE, KNOWN_REASONS, KNOWN_SETTINGS, MODE_TONE, isTestMode, nextSwitch, type ConnectionRecordModel, type ConnectionTab, type PauseConfirm } from '../../model'
@@ -284,7 +284,7 @@ function CallsTab({ model, actions }: { model: ConnectionRecordModel; actions?: 
   const { onHelp, help } = useKeysHelp([], false)
   const items = model.calls.items
   const state: ReactNode = model.calls.problem ? (
-    <ListProblem problem={model.calls.problem} onRetry={actions?.onRetryCalls} />
+    <FrameState problem={model.calls.problem} onRetry={actions?.onRetryCalls} />
   ) : items && items.length === 0 ? (
     <EmptyState title={t(model.failedOnly ? 'conn.calls.noFailures' : 'conn.calls.empty')} description={t('conn.calls.emptyBody')} />
   ) : undefined
@@ -367,7 +367,7 @@ function InboundTab({ model, account, actions }: { model: ConnectionRecordModel;
   const { onHelp, help } = useKeysHelp([], false)
   const items = model.inbound.items
   const state: ReactNode = model.inbound.problem ? (
-    <ListProblem problem={model.inbound.problem} onRetry={actions?.onRetryInbound} />
+    <FrameState problem={model.inbound.problem} onRetry={actions?.onRetryInbound} />
   ) : items && items.length === 0 ? (
     <EmptyState title={t('conn.inbound.empty')} description={t('conn.inbound.emptyBody')} />
   ) : undefined
@@ -384,6 +384,7 @@ function InboundTab({ model, account, actions }: { model: ConnectionRecordModel;
           <SegmentedControl
             ariaLabel={t('conn.inbound.filter')}
             size="sm"
+            wrap
             value={model.inboundStatus ?? 'all'}
             onChange={(value) => actions?.onInboundStatus?.(value === 'all' ? null : (value as ConnectionRecordModel['inboundStatus']))}
             options={[{ value: 'all', label: t('conn.calls.all') }, ...INBOUND_STATUSES.map((status) => ({ value: status, label: t(`conn.inboundState.${status}`) }))]}

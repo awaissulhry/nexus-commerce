@@ -322,7 +322,8 @@
       "resumedPartial_one": "{count} servizio su {total} riattivato. Non riattivati:",
       "resumedPartial_other": "{count} servizi su {total} riattivati. Non riattivati:",
       "resumedFailed_one": "Il servizio non è stato riattivato:",
-      "resumedFailed_other": "Nessuno dei {count} servizi è stato riattivato:"
+      "resumedFailed_other": "Nessuno dei {count} servizi è stato riattivato:",
+      "noSelect": "Non collegato: non c’è nulla da sospendere o riattivare"
     }
   },
   "mail": {

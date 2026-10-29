@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../../lib/api/errors'
 import { StepUpCancelled } from '../shared/step-up'
-import { runBulk } from './bulk'
+import { runBulk } from '../shared/bulk'
 import { bulkHeld, bulkNotice, leftCounts, onScreen, reachOf } from './bulk-model'
 
 /**
@@ -110,7 +110,7 @@ describe('the one notice after a bulk run', () => {
       key: 'x.partial',
       tone: 'warning',
       params: { count: 1, done: 1, refused: 1, total: 2 },
-      refused: [{ id: 'b', problem: 'problem.conflict' }],
+      refusedIds: [{ id: 'b', problem: 'problem.conflict' }],
     })
   })
 
@@ -119,7 +119,7 @@ describe('the one notice after a bulk run', () => {
       key: 'x.failed',
       tone: 'danger',
       params: { count: 1, total: 1 },
-      refused: [{ id: 'a', problem: 'problem.forbidden' }],
+      refusedIds: [{ id: 'a', problem: 'problem.forbidden' }],
     })
   })
 })

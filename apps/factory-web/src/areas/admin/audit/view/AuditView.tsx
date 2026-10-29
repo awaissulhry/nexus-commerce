@@ -11,7 +11,8 @@ import { formatDate, formatDateTime, formatTime } from '../../../../lib/i18n/for
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../list-frame/model'
-import { ListProblem, useKeysHelp } from '../../kit/list'
+import { useKeysHelp } from '../../kit/list'
+import { FrameState } from '../../shared/view/parts'
 import { AdminPageMessages } from '../../kit/messages'
 import { AUDIT_SURFACES, type AuditEntry } from '../api'
 import {
@@ -604,7 +605,7 @@ function Table({ model, entries, actions, find, tools }: { model: AuditViewModel
   const { onHelp, help } = useKeysHelp(own, false)
   const items = model.entries.items
   const state: ReactNode = model.entries.problem ? (
-    <ListProblem problem={model.entries.problem} onRetry={actions?.onRetry} />
+    <FrameState problem={model.entries.problem} onRetry={actions?.onRetry} />
   ) : items && items.length === 0 ? (
     <NothingYet model={model} actions={actions} />
   ) : items && entries.length === 0 ? (

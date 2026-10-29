@@ -11,11 +11,11 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../list-frame/model'
 import { bulkHeld, leftCounts } from '../../kit/bulk-model'
-import { BulkButton, BulkReach, ListProblem, useKeysHelp, useLatest, useSelection } from '../../kit/list'
+import { BulkReach, useKeysHelp, useLatest, useSelection } from '../../kit/list'
 import { AdminPageMessages } from '../../kit/messages'
 import { PageNotice } from '../../kit/parts'
 import { adminHref } from '../../shared/model'
-import { ListState, NoAccess, PageHead } from '../../shared/view/parts'
+import { BulkButton, FrameState, ListState, NoAccess, PageHead } from '../../shared/view/parts'
 import type { ImportJob, ImportStatus } from '../api'
 import { cancelReach, lastImportOf, leftToApply, phaseOf, templateHref, type ImportRights, type ImportViewModel } from '../model'
 import { ImportWizard, useImporterWords, type WizardActions } from './ImportWizard'
@@ -172,7 +172,7 @@ function Imports({ model, actions }: { model: ImportViewModel; actions?: ImportA
   const cancelHeld = bulkHeld(reach, model.can.run, { right: 'imp.held.noRunRight', none: 'imp.bulk.none' })
   const nameOf = (id: string) => (jobs ?? []).find((job) => job.id === id)?.fileName ?? id
   const state: ReactNode = model.jobs.problem ? (
-    <ListProblem problem={model.jobs.problem} onRetry={actions?.onRetry} />
+    <FrameState problem={model.jobs.problem} onRetry={actions?.onRetry} />
   ) : jobs && jobs.length === 0 ? (
     <EmptyState icon={<Upload size={24} aria-hidden />} title={t('imp.recent.emptyTitle')} description={t('imp.recent.emptyBody')} />
   ) : undefined
@@ -263,7 +263,7 @@ function Imports({ model, actions }: { model: ImportViewModel; actions?: ImportA
                 icon={<CircleX size={13} aria-hidden />}
                 label={reach.applies.length > 0 ? t('imp.bulk.cancel', { count: reach.applies.length }) : t('imp.bulk.cancelNone')}
                 held={cancelHeld ? t(cancelHeld) : null}
-                variant="danger-outline"
+                tone="danger-outline"
                 onClick={() => actions?.onCancelMany?.(selected)}
               />
             ),
