@@ -2,12 +2,12 @@
   "$comment": "Who may read and write each model of prisma/schema/production.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context) writes floor rules, work orders and their cells, operations and planned materials through apps/factory-api's modules/production, always through command(); the API keeps staff to the companies and sites their grants reach. The floor (factory_floor_runtime) works on its OWN site only (every table here has a site key): it reads the site's floor rules, work orders, cells, operations, planned materials (the pick list), cut logs, bundles, scans and acknowledgements, and writes the floor's ledgers through floorCommand: a cut log entry with its pieces (B-W1-40), a bundle (B-W1-41) and its ticket reprint or void, an operation scan (B-W1-42) and the worker's acknowledgement of the information notice (SCR-025). No table here has a cost, price, margin or wages column, so the floor's column grants leave nothing out (plan A1 §2.2, §2.6). Portal and link sessions read nothing here. CutLog, CutLogPiece, OperationScan and WorkerNoticeAck are append-only (`@append-only`; the …_production_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes them. Nobody deletes a work order (cancelled) or a bundle (voided); the office deletes only the cells, operations and planned materials of a DRAFT work order. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "ProductionSettings": {
-      "about": "The office keeps each site's floor rules: whether floor records name the worker or the station (the monitoring switch, MES-278) and the legal basis on record. The floor reads its own site's row (the scan screen and the triggers read it).",
+      "about": "The office keeps each site's floor rules: whether floor records name the worker or the station (the monitoring switch, MES-278) and the legal basis on record. The floor reads its own site's row (the scan screen and the triggers read it), but never the legal basis: its kind, reference and who recorded it, when, are hidden from the floor role (B-W1-37).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
-        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["monitoringBasis", "monitoringReference", "monitoringRecordedAt", "monitoringRecordedById"] }
       }
     },
     "WorkOrder": {

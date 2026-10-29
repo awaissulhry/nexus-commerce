@@ -114,7 +114,7 @@ const auditRows = (siteId: string) => admin('SELECT action, reason, before, afte
 const events = (siteId: string) => admin('SELECT payload FROM "OutboxEvent" WHERE type = \'production.monitoring_changed\' AND subject = $1 ORDER BY "occurredAt", id', [siteId])
 
 /** A scan inserted by A1's floor (the cutting tablet), as scans (B-W1-42) will: the triggers judge its subject. */
-const scanAt = (operation: 'qc' | 'pack', subject: { workerId: string | null; stationId: string | null }, actorId = A.operator) =>
+const scanAt = (operation: 'qc' | 'pack', subject: { workerId: string | null; stationId: string | null }, actorId = A.operator, bundle: 0 | 1 = 1) =>
   h.database.withScope({ audience: 'floor', tenantId: A.tenant, actorId, siteId: A.siteA1 }, (client) =>
     client.operationScan.create({
       data: {
@@ -122,9 +122,10 @@ const scanAt = (operation: 'qc' | 'pack', subject: { workerId: string | null; st
         siteId: A.siteA1,
         workOrderId: seedA.workOrderId,
         workOrderOperationId: seedA.operationIds[operation],
-        bundleId: seedA.bundleIds[1],
+        bundleId: seedA.bundleIds[bundle],
         kind: 'REPORT',
-        goodQuantity: 2,
+        // Bundle 1 holds one garment, bundle 2 two.
+        goodQuantity: bundle === 0 ? 1 : 2,
         ...subject,
         deviceId: A.device,
         clientScanId: `floor-rules-${newId()}`,
@@ -381,5 +382,32 @@ describe('the floor reads its own site\'s subject, never the legal basis', () =>
     expect(await status('floorWithOffice', 'POST', `/production/settings/${A.siteA1}/scan-subject`, { scanSubject: 'WORKER' })).toBe(403)
     expect(await status('floorA1NoWork', 'GET', '/production/floor-rules')).toBe(403)
     expect((await manager.browser.get('/production/floor-rules')).status).toBe(403)
+  })
+})
+
+describe('the database hides the legal basis from the floor role (B-W1-37; ownership/production.json hiddenColumns)', () => {
+  const asFloor = <T>(work: (client: Parameters<Parameters<typeof h.database.withScope>[1]>[0]) => Promise<T>) =>
+    h.database.withScope({ audience: 'floor', tenantId: A.tenant, actorId: A.operator, siteId: A.siteA1 }, work)
+  const BASIS_COLUMNS = ['monitoringBasis', 'monitoringReference', 'monitoringRecordedAt', 'monitoringRecordedById']
+
+  it('a floor session cannot select the basis, its reference, or who recorded it, when; scanSubject still reads', async () => {
+    for (const column of BASIS_COLUMNS) {
+      await expect(asFloor((client) => client.$queryRawUnsafe(`SELECT "${column}" FROM "ProductionSettings"`))).rejects.toThrow(/permission denied/)
+    }
+    await expect(asFloor((client) => client.$queryRawUnsafe('SELECT * FROM "ProductionSettings"'))).rejects.toThrow(/permission denied/)
+    // A model read without a select asks for every column: the floor names what it reads.
+    await expect(asFloor((client) => client.productionSettings.findUnique({ where: { id: A.siteA1 } }))).rejects.toThrow(/permission denied/)
+    expect(await asFloor((client) => client.$queryRawUnsafe('SELECT id, "scanSubject"::text AS "scanSubject" FROM "ProductionSettings"'))).toEqual([{ id: A.siteA1, scanSubject: 'STATION' }])
+    expect(await asFloor((client) => scanSubjectFor(client, A.siteA1))).toBe('STATION')
+    // The office still reads every column (the API's office routes show the basis).
+    const office = await h.database.withScope({ audience: 'office', tenantId: A.tenant, actorId: newId() }, (client) =>
+      client.productionSettings.findUnique({ where: { id: A.siteA1 }, select: { monitoringBasis: true, monitoringReference: true } }),
+    )
+    expect(office).toEqual({ monitoringBasis: 'UNION_AGREEMENT', monitoringReference: 'SEED-RSU-AGREEMENT-2026-01' })
+  })
+
+  it("the subject guard still reads the site's rules when the floor role fires it", async () => {
+    await expect(scanAt('qc', { workerId: A.operator, stationId: A.qcStation }, A.operator, 0)).rejects.toThrow(/records the station, not the worker/)
+    expect((await scanAt('qc', { workerId: null, stationId: A.qcStation }, A.operator, 0)).id).toEqual(expect.any(String))
   })
 })
