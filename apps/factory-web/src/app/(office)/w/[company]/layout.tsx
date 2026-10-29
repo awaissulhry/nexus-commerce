@@ -18,7 +18,7 @@ export default async function CompanyLayout({ children, params }: { children: Re
   if (load.kind === 'signed_out') redirect(SIGN_IN_PATH)
   if (load.kind === 'forbidden') {
     const own = await loadOfficeSession()
-    const ownCode = own.kind === 'signed_in' ? own.session.company?.code : null
+    const ownCode = own.kind === 'signed_in' ? (own.session.company?.code ?? own.session.companies[0]?.code) : null
     return <OfficeUnavailable code="forbidden" ownCompanyHref={ownCode && ownCode !== code ? `${companyPrefix(ownCode)}/home` : null} />
   }
   if (load.kind !== 'signed_in') return <OfficeUnavailable code={load.code} />

@@ -90,6 +90,38 @@ export function navPermissions(nav: AreaNav = OFFICE_NAV): string[] {
   return [...names].sort()
 }
 
+/**
+ * The office pages that are built, by their company-free address. A step that builds a page adds its address here
+ * (`office-entry.vitest.test.ts` compares this list with the page files under `app/(office)/w/[company]/`): the office
+ * entry opens only a page that exists, never a row whose page comes with a later step.
+ */
+export const OFFICE_PAGES: ReadonlySet<string> = new Set(['/me'])
+
+/** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */
+export const PROFILE_PAGE = '/me'
+
+/**
+ * The page an office entry opens (`/w/<company>`, an area's own address, the brand link, a new session): the first
+ * row in the navigation's order this person may open whose page is built — inside `areaId` first when one is given —
+ * else My profile (W0 builds no area page yet; a person with no role opens no row).
+ */
+export function firstOfficePage(nav: AreaNav, options: { areaId?: string; built?: ReadonlySet<string> } = {}): string {
+  const built = options.built ?? OFFICE_PAGES
+  const firstIn = (areas: readonly AreaNavArea[]): string | undefined => {
+    for (const area of areas) {
+      if (!area.sections?.length && built.has(area.href)) return area.href
+      for (const section of area.sections ?? []) {
+        for (const item of section.items) {
+          for (const row of [item, ...(item.children ?? [])]) if (built.has(row.href)) return row.href
+        }
+      }
+    }
+    return undefined
+  }
+  const own = options.areaId ? firstIn(nav.areas.filter((area) => area.id === options.areaId)) : undefined
+  return own ?? firstIn(nav.areas) ?? PROFILE_PAGE
+}
+
 export interface Crumb {
   id: string
   name: string

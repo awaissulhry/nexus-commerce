@@ -1,17 +1,11 @@
-'use client'
+import type { Metadata } from 'next'
+import { cookies } from 'next/headers'
+import { TENANT_COOKIE } from '../_auth/auth-model'
+import { OfficeAuth } from '../_auth/OfficeAuth'
 
-import { EmptyState } from '@nexus/ui/components'
-import { useT } from '../../../lib/i18n/provider'
+export const metadata: Metadata = { title: 'Nexus Factory' }
 
-/**
- * PLACEHOLDER — where the office sends a person without a session. B-W0-26 replaces this page with the office sign-in
- * (SCR-001: password, authenticator code, invitation, reset).
- */
-export default function SignInPlaceholderPage() {
-  const t = useT('shell')
-  return (
-    <main id="main-content" className="fw-office-unavailable">
-      <EmptyState title={t('signInPlaceholder.title')} description={t('signInPlaceholder.body')} />
-    </main>
-  )
+/** `/sign-in` — where the office sends a person without a session (SCR-001). */
+export default async function SignInPage() {
+  return <OfficeAuth start="sign-in" company={(await cookies()).get(TENANT_COOKIE)?.value ?? ''} />
 }
