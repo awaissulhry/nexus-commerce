@@ -9,7 +9,9 @@ import { seed as seedEmail } from '../seed/email'
 import { seed as seedEmailIn } from '../seed/email-in'
 import { seed as seedFiles } from '../seed/files'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
+import { seed as seedFloorSync } from '../seed/floor-sync'
 import { seed as seedImports } from '../seed/imports'
+import { seed as seedInsights } from '../seed/insights'
 import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedInventory } from '../seed/inventory'
 import { seed as seedLinks } from '../seed/links'
@@ -39,8 +41,9 @@ import { loadOwnership, loadSchema } from './tools'
  * The generated isolation tests (plan A1 §6.7): for EVERY classified table and EVERY runtime role, on a database built
  * from the migrations and seeded twice (tenant A and tenant B, two sites each, one portal party each), through the
  * real login, the audited pool and the scoped client:
- *   - a role with select sees exactly the rows inside its scope (tenant, and site or party where it is scoped by them),
- *     and rows outside it exist, so the wall is really tested;
+ *   - a role with select sees exactly the rows inside its scope (tenant, and site or party where it is scoped by them,
+ *     and only the listed values of a column where it has onlyValues), and rows outside it exist, so the wall is really
+ *     tested;
  *   - it cannot read a hidden column, and Prisma's default select (every column) fails loudly;
  *   - a role with insert cannot insert a row outside its scope (the control insert inside it works; the copied row
  *     gets a new id, and its unique text and number columns new values);
@@ -126,6 +129,8 @@ beforeAll(async () => {
   await seedFloorAuth({ db: factory, namespace: 'iso-b' })
   await seedNumberingBlocks({ db: factory, namespace: 'iso-a' })
   await seedNumberingBlocks({ db: factory, namespace: 'iso-b' })
+  await seedFloorSync({ db: factory, namespace: 'iso-a' })
+  await seedFloorSync({ db: factory, namespace: 'iso-b' })
   await seedThreads({ db: factory, namespace: 'iso-a' })
   await seedThreads({ db: factory, namespace: 'iso-b' })
   await seedImports({ db: factory, namespace: 'iso-a' })
@@ -156,6 +161,8 @@ beforeAll(async () => {
   await seedCosting({ db: factory, namespace: 'iso-b' })
   await seedQualityLab({ db: factory, namespace: 'iso-a' })
   await seedQualityLab({ db: factory, namespace: 'iso-b' })
+  await seedInsights({ db: factory, namespace: 'iso-a' })
+  await seedInsights({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -165,6 +172,8 @@ afterAll(async () => {
 
 it('covers every classified table and every runtime role', () => {
   expect(classified.map(({ model }) => model.name).sort()).toEqual([
+    'AttentionAction',
+    'AttentionActionLog',
     'AuditLog',
     'Badge',
     'BomLine',
@@ -188,9 +197,11 @@ it('covers every classified table and every runtime role', () => {
     'DeviceEnrolment',
     'EmailIdentity',
     'EmailOutbound',
+    'FloorRefusedAction',
     'FloorScanRefusal',
     'FloorSession',
     'FloorSettings',
+    'FloorSyncEvent',
     'GarmentLabelPrint',
     'GarmentSerial',
     'GoodsReceipt',
@@ -289,6 +300,7 @@ it('covers every classified table and every runtime role', () => {
     'Suppression',
     'Tenant',
     'Thread',
+    'TodayLayout',
     'TrackingEvent',
     'User',
     'Variant',
@@ -320,7 +332,10 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
     const keys: PolicyKeyName[] = role === PLATFORM_ROLE ? [] : [...WALL, ...((access?.scopedBy ?? []) as PolicyKeyName[])]
     // The values exist only once the seed ran, so they are read inside the tests.
     const filter = keys.map((key) => ({ column: keyColumns[key] as string, type: POLICY_KEYS[key].type, value: () => keyValue(key) }))
-    const inside = filter.map((entry, index) => `${q(entry.column)} = $${index + 1}::${entry.type}`).join(' AND ') || 'true'
+    const keysInside = filter.map((entry, index) => `${q(entry.column)} = $${index + 1}::${entry.type}`).join(' AND ') || 'true'
+    /** The role's value filters (onlyValues): a column and the only values its rows may hold (plain names, checked by db-kit). */
+    const only = Object.entries(access?.onlyValues ?? {}).map(([column, list]) => ({ column, sql: `${q(column)}::text IN (${list.map((value) => `'${value.replace(/'/g, "''")}'`).join(', ')})` }))
+    const inside = [keysInside, ...only.map((entry) => entry.sql)].join(' AND ')
     const values = () => filter.map((entry) => entry.value())
     /** The first row matching `where`, whose `$n` parameters are the scope's values (or `params`, when given). */
     const rowOf = async (where: string, params: unknown[] = values()): Promise<Record<string, unknown>> => {
@@ -375,7 +390,12 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
           const [{ n }] = (await admin(`SELECT count(*)::int AS n FROM ${table} WHERE ${q(entry.column)} <> $1::${entry.type}`, [entry.value()])) as [{ n: number }]
           expect(n, `${model.name} rows outside ${entry.column}`).toBeGreaterThan(0)
         }
-        if (filter.length === 0) expect(new Set(seen.map((row) => row.id)).size).toBe((await admin(`SELECT 1 FROM ${table}`)).length)
+        // And for every value filter, rows inside the keys but of another value exist and stay hidden.
+        for (const entry of only) {
+          const [{ n }] = (await admin(`SELECT count(*)::int AS n FROM ${table} WHERE ${keysInside} AND NOT (${entry.sql})`, values())) as [{ n: number }]
+          expect(n, `${model.name} rows of ${entry.column} values outside the role's`).toBeGreaterThan(0)
+        }
+        if (filter.length === 0 && only.length === 0) expect(new Set(seen.map((row) => row.id)).size).toBe((await admin(`SELECT 1 FROM ${table}`)).length)
       })
 
       if (hidden.size > 0) {
@@ -398,6 +418,7 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
     if (privileges.has('insert')) {
       it('cannot insert a row outside its scope; the same insert inside it works', async () => {
         if (filter.length > 0) await expect(insert(copyOf(await rowOf(`NOT (${inside})`)))).rejects.toThrow(RLS)
+        for (const entry of only) await expect(insert(copyOf(await rowOf(`${keysInside} AND NOT (${entry.sql})`)))).rejects.toThrow(RLS)
         const own = copyOf(await rowOf(inside))
         expect(await insert(own)).toBe(1)
         await removeRow(table, q(pk), own[pk])
@@ -423,6 +444,15 @@ describe.each(classified)('$model.name', ({ model, ownership }) => {
               execute(role, `UPDATE ${table} SET ${q(entry.column)} = $1::${entry.type} WHERE ${q(pk)} = $2::uuid`, away[entry.column], own[pk]),
             ).rejects.toThrow(RLS)
           }
+        }
+        // Nor to a value outside its own: a row of another value it may not see is not touched, and none is made.
+        for (const entry of only) {
+          const away = await rowOf(`${keysInside} AND NOT (${entry.sql})`)
+          expect(await touch(away[pk])).toBe(0)
+          // A value filter's column is text or an enum (db-kit compares it as text).
+          const type = model.fields.find((field) => field.column === entry.column)?.type
+          const cast = type === 'String' ? 'text' : `text::${q(type ?? 'text')}`
+          await expect(execute(role, `UPDATE ${table} SET ${q(entry.column)} = $1::${cast} WHERE ${q(pk)} = $2::uuid`, String(away[entry.column]), own[pk])).rejects.toThrow(RLS)
         }
       })
     } else {

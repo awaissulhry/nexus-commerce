@@ -1,14 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus/factory-db'
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
-import { ConflictError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { fixedClock } from '@nexus/factory-domain/core/time'
 import type { Grant } from '@nexus/factory-domain/core/permissions'
 import type { DocumentKind, NumberReset } from '@nexus/factory-domain/numbering/kinds'
 import { callerFor, COMMAND_SETTINGS, runCommand, type CommandSettings } from '../../core/command'
 import type { RequestContext } from '../../core/context'
-import { ApiError } from '../../core/errors'
 import { allocateNumber, type IssuedNumber, type SeriesRef } from './allocate'
 import { advanceSeries, createSeries, listSeries, setSeriesStart } from './series'
 
@@ -291,7 +290,7 @@ describe('allocateNumber', () => {
     expect(await seriesRow(series.id)).toMatchObject({ nextValue: 2 })
   })
 
-  it('issues numbers only in office and system commands', async () => {
+  it('issues numbers in office and system commands; a floor command never a fiscal one (floor-documents.pg: the floor kinds)', async () => {
     const series = await newSeries('INVOICE')
     const system: RequestContext = { audience: 'system', tenantId: tenantA, actorId: '00000000-0000-7000-8000-000000000000', grants: [], requestId: newId() }
     expect((await issue(series.ref, { context: system })).value).toBe(1)
@@ -300,6 +299,7 @@ describe('allocateNumber', () => {
       await allocateNumber(tools, series.ref, { type: 'Invoice', id: newId() })
       return null
     }, at(NOW))
-    await expect(outcome).rejects.toThrow(ApiError)
+    await expect(outcome).rejects.toThrow(ForbiddenError)
+    expect(await seriesRow(series.id)).toMatchObject({ nextValue: 2 })
   })
 })

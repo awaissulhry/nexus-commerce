@@ -22,7 +22,7 @@ import { asTenantSystem, assertFloorReady } from '../../production/serials/facts
 import { readCells, type LabelHeader } from '../../production/serials/store'
 import { finalWorkOrder, inspectorOf, mayOn, officeOf, postedBy, signerOf } from './access'
 import { cellGate, cellText, documentBlockers, identityOf, inspectorSigner, makerCheck, ReleaseRefusedError, ruleInForce, type Identity } from './facts'
-import { callerIdentity, signatureOf } from './inspections'
+import { callerIdentity, qualityNumber, signatureOf } from './inspections'
 import {
   labelsOfCell,
   lockRelease,
@@ -134,10 +134,12 @@ export async function releaseGarments(caller: CommandCaller, body: ReleaseBody, 
     const id = newId()
     const signer = signerOf(context)
     const certificateIds = gate.certificate.outcome === 'covered' && gate.certificate.certificate ? [gate.certificate.certificate.id] : []
-    const signature = signatureOf({ releaseId: id, inspectionId: current.id, workOrderSizeId: body.workOrderSizeId, quantity: body.quantity, serialIds, certificateIds, signer, at: toUtcIso(now) })
+    const number = await qualityNumber(tools, 'RELEASE', header.companyId, { type: 'QualityRelease', id })
+    const signature = signatureOf({ releaseId: id, number, inspectionId: current.id, workOrderSizeId: body.workOrderSizeId, quantity: body.quantity, serialIds, certificateIds, signer, at: toUtcIso(now) })
     const row = await tx.qualityRelease.create({
       data: {
         id,
+        number,
         companyId: header.companyId,
         siteId: header.siteId,
         workOrderId: header.id,
@@ -164,7 +166,7 @@ export async function releaseGarments(caller: CommandCaller, body: ReleaseBody, 
       recordId: id,
       companyId: header.companyId,
       siteId: header.siteId,
-      after: { inspectionId: current.id, workOrderSizeId: body.workOrderSizeId, quantity: body.quantity, serialIds, certificateIds, secondPersonReasons: reasons, signatureSha256: signature, releasedBy: postedBy(context), checks: gate.checks.map((check) => ({ code: check.code, state: check.state, message: check.message })) },
+      after: { number, inspectionId: current.id, workOrderSizeId: body.workOrderSizeId, quantity: body.quantity, serialIds, certificateIds, secondPersonReasons: reasons, signatureSha256: signature, releasedBy: postedBy(context), checks: gate.checks.map((check) => ({ code: check.code, state: check.state, message: check.message })) },
     })
     for (const serialId of serialIds) tools.audit({ recordType: 'GarmentSerial', recordId: serialId, companyId: header.companyId, siteId: header.siteId, before: { status: 'MADE' }, after: { status: 'RELEASED', releaseId: id } })
     tools.emit({
@@ -172,12 +174,12 @@ export async function releaseGarments(caller: CommandCaller, body: ReleaseBody, 
       subject: id,
       companyId: header.companyId,
       siteId: header.siteId,
-      payload: { releaseId: id, inspectionId: current.id, workOrderId: header.id, number: header.number, workOrderSizeId: body.workOrderSizeId, quantity: body.quantity, serialIds, secondPersonReasons: reasons, postedBy: postedBy(context) },
+      payload: { releaseId: id, releaseNumber: number, inspectionId: current.id, workOrderId: header.id, number: header.number, workOrderSizeId: body.workOrderSizeId, quantity: body.quantity, serialIds, secondPersonReasons: reasons, postedBy: postedBy(context) },
     })
-    return { id, cell: cellText(gate.cell) }
+    return { id, number, cell: cellText(gate.cell) }
   })
   const release = await caller.withClient((db) => readRelease(db, result.id))
-  return { release: await caller.withClient((db) => releaseView(db, release!, header.number)), words: `Released ${body.quantity} garment(s) of ${result.cell}: packing allowed.` }
+  return { release: await caller.withClient((db) => releaseView(db, release!, header.number)), words: `Released ${body.quantity} garment(s) of ${result.cell} (${result.number}): packing allowed.` }
 }
 
 // ---- the views --------------------------------------------------------------------------------------------------------------
@@ -192,6 +194,8 @@ export async function releaseView(db: Reader, row: ReleaseRow, number: string) {
   const reasons = (row.secondPersonReasons ?? []) as SecondPersonReason[]
   return {
     id: row.id,
+    /** Its own number (REL-2026-0088); null for one made before the company's RELEASE series existed. */
+    releaseNumber: row.number,
     workOrderId: row.workOrderId,
     number,
     workOrderSizeId: row.workOrderSizeId,
@@ -324,7 +328,7 @@ export async function workOrderFinal(caller: CommandCaller, workOrderId: string)
     }
     const inspections = []
     for (const [index, row] of inspectionsRows.entries()) {
-      inspections.push({ id: row.id, label: inspectionLabel(header.number, index + 1), status: row.status, lotSize: row.lotSize, released: await releasedFrom(db, row.id), overridden: row.overrideReason !== null, decidedAt: row.decidedAt ? toUtcIso(row.decidedAt) : null })
+      inspections.push({ id: row.id, inspectionNumber: row.number, label: inspectionLabel(header.number, index + 1, row.number), status: row.status, lotSize: row.lotSize, released: await releasedFrom(db, row.id), overridden: row.overrideReason !== null, decidedAt: row.decidedAt ? toUtcIso(row.decidedAt) : null })
     }
     return {
       workOrder: { id: header.id, number: header.number, status: header.status, batchNumber: header.batchNumber, companyId: header.companyId, siteId: header.siteId },

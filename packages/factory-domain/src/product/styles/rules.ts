@@ -156,6 +156,26 @@ export function normalisePpe(style: Pick<StyleFields, 'ppeStandard' | 'ppeClass'
  */
 export const garmentTracking = (style: Pick<StyleFields, 'ppeCategory'>): 'LOT' | 'NONE' => (style.ppeCategory === 'NOT_PPE' ? 'NONE' : 'LOT')
 
+/** What a style's work orders already did with its garment numbering (Q31). */
+export interface GarmentTrackingUses {
+  readonly labels: number
+  readonly serials: number
+  readonly releases: number
+}
+
+/**
+ * Why a style's batch / serial choice (Q31) can no longer change, in words, or null: once its work orders printed a
+ * garment label, gave a serial or released a garment, the numbering on the garments that exist is fixed (Reg. (EU)
+ * 2016/425 art. 8(5): the type, batch or serial number that identifies each PPE garment). The database's
+ * factory_style_garment_tracking_guard holds the same rule.
+ */
+export function garmentTrackingRefusal(style: { readonly code: string; readonly tracking: 'BATCH' | 'SERIAL' }, uses: GarmentTrackingUses): string | null {
+  const done = [uses.labels > 0 ? 'garment labels printed' : null, uses.serials > 0 ? 'serials given' : null, uses.releases > 0 ? 'garments released' : null].filter((entry): entry is string => entry !== null)
+  if (done.length === 0) return null
+  const list = done.length === 1 ? done[0] : `${done.slice(0, -1).join(', ')} and ${done.at(-1)}`
+  return `Style ${style.code} has work orders with ${list}: its garments stay numbered by ${style.tracking === 'SERIAL' ? 'serial' : 'batch'} (Q31). Another numbering is a new style.`
+}
+
 // ---- the range ----------------------------------------------------------------------------------------------------------
 
 /**

@@ -94,8 +94,9 @@ export const events = [
     type: 'quality.inspection_opened',
     context: 'quality',
     description: "A final inspection of a work order's finished garments was opened (at the bench or in the office).",
-    payload: z.strictObject({ inspectionId: z.uuid(), workOrderId: z.uuid(), number: z.string(), lotSize: z.number().int(), postedBy: z.enum(['FLOOR', 'OFFICE']) }),
-    live: { permission: 'quality.inspections.view', floor: true, fields: ['inspectionId', 'workOrderId', 'number'] },
+    // number: the work order's; inspectionNumber: the inspection's own (its company's INSPECTION series).
+    payload: z.strictObject({ inspectionId: z.uuid(), inspectionNumber: z.string(), workOrderId: z.uuid(), number: z.string(), lotSize: z.number().int(), postedBy: z.enum(['FLOOR', 'OFFICE']) }),
+    live: { permission: 'quality.inspections.view', floor: true, fields: ['inspectionId', 'inspectionNumber', 'workOrderId', 'number'] },
   }),
   defineEvent({
     type: 'quality.inspection_decided',
@@ -125,6 +126,8 @@ export const events = [
     description: "Garments of a work order's cell were released to be packed and shipped (QHS-058), by an inspector who made none of them; why a second person signed, if one had to.",
     payload: z.strictObject({
       releaseId: z.uuid(),
+      /** The release's own number (its company's RELEASE series); `number` is the work order's. */
+      releaseNumber: z.string(),
       inspectionId: z.uuid(),
       workOrderId: z.uuid(),
       number: z.string(),
@@ -134,7 +137,7 @@ export const events = [
       secondPersonReasons: z.array(z.enum(SECOND_PERSON_REASONS)),
       postedBy: z.enum(['FLOOR', 'OFFICE']),
     }),
-    live: { permission: 'quality.inspections.view', floor: true, fields: ['releaseId', 'workOrderId', 'number', 'workOrderSizeId'] },
+    live: { permission: 'quality.inspections.view', floor: true, fields: ['releaseId', 'releaseNumber', 'workOrderId', 'number', 'workOrderSizeId'] },
   }),
   defineEvent({
     type: 'quality.release_reversed',

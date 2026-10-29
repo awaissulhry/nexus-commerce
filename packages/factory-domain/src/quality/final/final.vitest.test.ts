@@ -8,6 +8,7 @@ import {
   decisionProblems,
   defectCounts,
   defectProblems,
+  inspectionLabel,
   isOverride,
   planProblems,
   reasonProblem,
@@ -119,5 +120,13 @@ describe('the computed result and the override (QHS-013)', () => {
     expect(decisionProblems('FAIL', pass, 'Smell of solvent on the whole lot.')).toEqual([])
     expect(decisionProblems('FAIL', hard, null)).toEqual([])
     expect(reasonProblem('ab')!.message).toMatch(/at least 3/)
+  })
+})
+
+describe('the label', () => {
+  it("is the inspection's own number; one from before the series is named by its place in its work order", () => {
+    expect(inspectionLabel('WO-0003', 2, 'INS-A-2026-0001')).toBe('INS-A-2026-0001')
+    expect(inspectionLabel('WO-0003', 2, null)).toBe('WO-0003 · inspection 2')
+    expect(inspectionLabel('WO-0003', 1)).toBe('WO-0003 · inspection 1')
   })
 })

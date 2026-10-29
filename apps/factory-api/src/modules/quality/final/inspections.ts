@@ -24,7 +24,8 @@ import {
   type SamplingPlan,
 } from '@nexus/factory-domain/quality/final/rules'
 import { RELEASE_STATUSES } from '@nexus/factory-domain/quality/release/rules'
-import { command, StaleVersionError, type CommandCaller, type CommandTx } from '../../../core/command'
+import { command, StaleVersionError, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
+import { allocateNumber, assertNumberUniqueInTenant } from '../../../platform/numbering/allocate'
 import { asTenantSystem, assertFloorReady } from '../../production/serials/facts'
 import { readCells, type LabelHeader } from '../../production/serials/store'
 import { scanProgressOf } from '../../production/scans/progress'
@@ -135,7 +136,9 @@ export function inspectionView(row: InspectionRow, defects: readonly DefectRow[]
   const computed = computedResult({ counts: defectCounts(defects), plan, checklist })
   return {
     id: row.id,
-    label: inspectionLabel(context.number, context.seq),
+    /** Its own number (INS-2026-0412); null for one opened before the company's INSPECTION series existed. */
+    inspectionNumber: row.number,
+    label: inspectionLabel(context.number, context.seq, row.number),
     workOrderId: row.workOrderId,
     companyId: row.companyId,
     siteId: row.siteId,
@@ -169,6 +172,22 @@ async function viewOf(db: Reader, row: InspectionRow, number: string) {
 
 // ---- open --------------------------------------------------------------------------------------------------------------------------
 
+/**
+ * A number of the company's series for a final inspection or a release, inside its command (office or bench: a floor
+ * command numbers these kinds of its own site's company), unique in the tenant; a company without the series is told
+ * in words (409), not a 404 of the work order.
+ */
+export async function qualityNumber(tools: CommandTools, kind: 'INSPECTION' | 'RELEASE', companyId: string, record: { readonly type: string; readonly id: string }): Promise<string> {
+  try {
+    const issued = await allocateNumber(tools, { companyId, kind }, record)
+    await assertNumberUniqueInTenant(tools, issued)
+    return issued.formatted
+  } catch (error) {
+    if (error instanceof NotFoundError) throw new InvalidStateError(`${error.message} (${kind === 'INSPECTION' ? 'final inspections' : 'quality releases'} are numbered from it).`)
+    throw error
+  }
+}
+
 export interface OpenBody extends SamplingPlan {
   readonly workOrderId: string
   readonly note?: string | null | undefined
@@ -189,12 +208,14 @@ export async function openInspection(caller: CommandCaller, body: OpenBody, idem
     if (maker.made) throw new MakerRefusedError(maker.words)
     const signer = signerOf(context)
     const id = newId()
+    const number = await qualityNumber(tools, 'INSPECTION', header.companyId, { type: 'Inspection', id })
     const row = await tx.inspection.create({
       data: {
         id,
         companyId: header.companyId,
         siteId: header.siteId,
         workOrderId: header.id,
+        number,
         lotSize: body.lotSize,
         sampleSize: body.sampleSize,
         inspectionLevel: body.inspectionLevel.trim(),
@@ -211,8 +232,8 @@ export async function openInspection(caller: CommandCaller, body: OpenBody, idem
       },
       select: { id: true, version: true },
     })
-    tools.audit({ recordType: 'Inspection', recordId: id, companyId: header.companyId, siteId: header.siteId, after: { ...body, workOrderId: header.id, status: 'OPEN', inspector: postedBy(context) } })
-    tools.emit({ type: 'quality.inspection_opened', subject: id, companyId: header.companyId, siteId: header.siteId, payload: { inspectionId: id, workOrderId: header.id, number: header.number, lotSize: body.lotSize, postedBy: postedBy(context) } })
+    tools.audit({ recordType: 'Inspection', recordId: id, companyId: header.companyId, siteId: header.siteId, after: { ...body, number, workOrderId: header.id, status: 'OPEN', inspector: postedBy(context) } })
+    tools.emit({ type: 'quality.inspection_opened', subject: id, companyId: header.companyId, siteId: header.siteId, payload: { inspectionId: id, inspectionNumber: number, workOrderId: header.id, number: header.number, lotSize: body.lotSize, postedBy: postedBy(context) } })
     return { id: row.id }
   })
   return caller.withClient(async (db) => ({ inspection: await viewOf(db, (await readInspection(db, result.id))!, header.number) }))

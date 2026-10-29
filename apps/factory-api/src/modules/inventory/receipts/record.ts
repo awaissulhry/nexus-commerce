@@ -29,11 +29,11 @@ import {
 import { Dec, parseDecimal, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
-import { allocateNumber } from '../../../platform/numbering/allocate'
 import { allocateScanIds } from '../../../platform/numbering/scan-ids'
 import { lockOrderForReceipt, setOrderReceiptProgress } from '../../purchasing/receiving'
 import { officeContextOf, postedBy, stockContextOf } from '../ledger/access'
 import { postMoves, type MoveDraft, type PostedMove } from '../ledger/post-moves'
+import { lotNumber, receiptNumber } from './numbers'
 import { receiptDetail } from './read'
 import { readColours, readEarlierLots, readItems, readOrderLines, RECEIPT_COLUMNS, type ItemRow, type OrderLineRow } from './store'
 
@@ -46,13 +46,15 @@ import { readColours, readEarlierLots, readItems, readOrderLines, RECEIPT_COLUMN
  * inventory/receipts/rules.
  *
  * Lock order: the order's row (its version bump: a cancel or send decided on the version it read fails) → the order's
- * receiving lock (the cancel takes it too) → the number series (allocateNumber) → the tenant's HIDE scan-id counter
+ * receiving lock (the cancel takes it too) → the number series (numbers.ts: the receipt's GOODS_RECEIPT series, then
+ * every lot's LOT series, before any hide tag, as opening stock does) → the tenant's HIDE scan-id counter
  * (allocateScanIds, its `factory.scan-ids` lock) → the ledger (postMoves; a receipt only puts stock in, so it waits for
  * no stock lock).
  *
  * The office records it in W1 (inventory.receive over the order's company and site). `recordReceiptInCommand` is the
- * command's work, for the floor's receiving screen (B-W1-33) once the floor may number receipts and lots and move the
- * order (its role reads the order only): see apps/factory-api/CLAUDE.md and the step notes.
+ * command's work, for the floor's receiving screen (B-W1-33) once the floor may move the order (its role reads the
+ * order only): the floor numbers receipts and lots already (numbers.ts `numberReceipt`); see apps/factory-api/CLAUDE.md
+ * and the step notes.
  */
 
 export interface HideBody {
@@ -156,8 +158,9 @@ export async function recordReceipt(caller: CommandCaller, body: ReceiptBody, id
 export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptBody, key: string): Promise<RecordResult> {
   const context = stockContextOf({ factoryContext: tools.context, withClient: () => Promise.reject(new Error('inside a command')) })
   if (context.audience === 'floor') {
-    // B-W1-33: the floor's role reads the order only and has no grant on the number series (see the step notes); its
-    // hide tags come from the HIDE counter already (allocateScanIds online, useScanIds for tags printed offline).
+    // B-W1-33: the floor's role reads the order only (see the step notes). Its numbers are ready: the receipt's and the
+    // lots' through numbers.ts (allocateNumber serves a floor command for these kinds), hide tags from the HIDE counter
+    // (allocateScanIds online, useScanIds for tags printed offline).
     throw new ForbiddenError('Goods are received on the floor through the floor\'s receiving screen.')
   }
   const { tx, now } = tools
@@ -223,7 +226,7 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
 
   // 5. The receipt and its lines.
   const receiptId = newId()
-  const number = await numberFor(tools, { companyId: order.companyId, kind: 'GOODS_RECEIPT' }, { type: 'GoodsReceipt', id: receiptId, date: businessDate(receivedAt) })
+  const number = await receiptNumber(tools, { companyId: order.companyId, receiptId, date: businessDate(receivedAt) })
   await tx.goodsReceipt.create({
     data: {
       id: receiptId,
@@ -270,6 +273,10 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   }
 
   // 6. Lots (our numbers) and hides (the tenant's tags), then one RECEIPT move per hide, lot or untracked line.
+  // Lot numbers first (the LOT series, before the HIDE counter: the lock order of every receipt and opening line).
+  const lotIds = planned.map((line) => line.lots.map(() => newId()))
+  const lotCodes = new Map<string, string>()
+  for (const lotId of lotIds.flat()) lotCodes.set(lotId, await lotNumber(tools, { companyId: order.companyId, lotId, date: businessDate(receivedAt) }))
   // Hide tags: the tenant's HIDE scan ids, from its tenant-wide counter (one ONLINE block for the receipt's hides).
   const hideCount = planned.reduce((sum, line) => sum + line.lots.reduce((count, lot) => count + lot.hides.length, 0), 0)
   const tags = hideCount > 0 ? (await allocateScanIds(tools, 'HIDE', hideCount)).codes : []
@@ -277,7 +284,7 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   const drafts: MoveDraft[] = []
   const lotRows: { id: string; code: string; quarantined: boolean; seq: number; words: string }[] = []
   let hideTotal = 0
-  for (const line of planned) {
+  for (const [lineIndex, line] of planned.entries()) {
     const lineId = lineIds.get(line.index)!
     const unitCost = order.currency === line.item.currency ? unitCostPerBase({ unitPrice: prices.get(line.orderLine.id) ?? '0', quantity: line.orderLine.quantity.toString(), baseQuantity: line.orderLine.baseQuantity.toString() }) : null
     const move = (fields: Pick<MoveDraft, 'lotId' | 'hideId' | 'quantity' | 'uom' | 'baseQuantity'>): MoveDraft => ({
@@ -296,12 +303,9 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
       drafts.push(move({ lotId: null, hideId: null, quantity: line.quantity, uom: line.uom, baseQuantity: line.baseQuantity }))
       continue
     }
-    for (const lot of line.lots) {
-      const lotId = newId()
-      const code = await numberFor(tools, { companyId: order.companyId, kind: 'LOT' }, { type: 'Lot', id: lotId, date: businessDate(receivedAt) })
-      if (await tx.lot.findFirst({ where: { code }, select: { id: true } })) {
-        throw new InvalidStateError(`Lot number ${code} is another company's lot already: give each company's LOT series its own prefix (an admin, under numbering).`)
-      }
+    for (const [lotIndex, lot] of line.lots.entries()) {
+      const lotId = lotIds[lineIndex]![lotIndex]!
+      const code = lotCodes.get(lotId)!
       const shade = blank(lot.body.shade)
       const hold = blank(lot.body.holdReason)
       const released = lot.start.qualityStatus === 'RELEASED'
@@ -454,16 +458,6 @@ async function locationFor(tools: CommandTools, siteId: string, locationId: stri
     throw new ValidationError(docks.length === 0 ? 'The delivery site has no goods-in dock: name the location the goods go to.' : 'The delivery site has several goods-in docks: name the one the goods go to.', [{ path: 'body/locationId', message: 'Name the location.' }])
   }
   return docks[0]!
-}
-
-/** A number of the company's series, or why there is none (a 409 in words, not a 404 of the order). */
-async function numberFor(tools: CommandTools, series: { readonly companyId: string; readonly kind: 'GOODS_RECEIPT' | 'LOT' }, record: { readonly type: string; readonly id: string; readonly date: string }): Promise<string> {
-  try {
-    return (await allocateNumber(tools, series, record)).formatted
-  } catch (error) {
-    if (error instanceof NotFoundError) throw new InvalidStateError(`${error.message} (${series.kind === 'LOT' ? 'lots' : 'goods receipts'} are numbered from it).`)
-    throw error
-  }
 }
 
 /**

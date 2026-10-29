@@ -7,7 +7,9 @@ import { definePermissions } from '../auth/permissions/registry'
  * home.view alone shows an empty list (never a record the person could not open in its own area).
  *
  *   view   the needs-attention list (what waits for me, ranked, with why it is mine and what it holds up), the role's
- *          flow strip (records per stage, how many late) and what I wait for from others
+ *          flow strip (records per stage, how many late) and what I wait for from others; acting on its alerts
+ *          (assign, resolve with a note, acknowledge: each row checks the right to act on its record, insights/actions)
+ *          and arranging the page for myself
  */
 export const HOME_DEFINITIONS = definePermissions('home', {
   view: {
