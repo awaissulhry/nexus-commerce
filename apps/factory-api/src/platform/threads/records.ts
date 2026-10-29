@@ -42,17 +42,55 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const style = await client.style.findUnique({ where: { id }, select: { companyId: true, brandPartyId: true } })
     return style ? { companyId: style.companyId, siteId: null, partyId: style.brandPartyId } : null
   },
+  // modules/invoicing (SCR-081; B-W1-50 the courtesy copy of an invoice SDI could not deliver): the seller company and
+  // the customer (its buyer), so the copy and its replies stay with that customer.
+  Invoice: async (client, id) => {
+    const invoice = await client.invoice.findUnique({ where: { id }, select: { companyId: true, buyerPartyId: true } })
+    return invoice ? { companyId: invoice.companyId, siteId: null, partyId: invoice.buyerPartyId } : null
+  },
+  // modules/sales/quotes (SCR-034; B-W1-24 the quote mail with its PDF and the acceptance confirmation): the selling
+  // company and the customer.
+  Quote: async (client, id) => {
+    const quote = await client.quote.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return quote ? { companyId: quote.companyId, siteId: null, partyId: quote.partyId } : null
+  },
+  // modules/purchasing (SCR-059; B-W1-30 the order mail with its PDF and confirm link, the cancellation): the buying company,
+  // the delivery site and the supplier, so the order's mail and the supplier's replies stay with that supplier.
+  PurchaseOrder: async (client, id) => {
+    const order = await client.purchaseOrder.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
+    return order ? { companyId: order.companyId, siteId: order.siteId, partyId: order.partyId } : null
+  },
+  // modules/sales/orders (SCR-039 Activity; B-W1-25): the selling company and the customer.
+  SalesOrder: async (client, id) => {
+    const order = await client.salesOrder.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return order ? { companyId: order.companyId, siteId: null, partyId: order.partyId } : null
+  },
+  // modules/shipping (SCR-067; B-W1-49 the documents link mail): the shipment's company, site and party (its customer),
+  // so its mail and the customer's replies stay with that customer.
+  Shipment: async (client, id) => {
+    const shipment = await client.shipment.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
+    return shipment ? { companyId: shipment.companyId, siteId: shipment.siteId, partyId: shipment.partyId } : null
+  },
+  // modules/compliance/register (SCR-113 Actions; B-W1-43 the corrective actions and the distributor/authority log): the
+  // register's company and the party that reported the entry (none: internal).
+  PpeRegisterEntry: async (client, id) => {
+    const entry = await client.ppeRegisterEntry.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return entry ? { companyId: entry.companyId, siteId: null, partyId: entry.partyId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}
 
-/** Test only: more record types (a made-up `Quote` with a party). `undefined` removes them again. */
+/**
+ * Test only: more record types, or another resolver for a known one (a made-up `Quote` with a party: these win over the
+ * module's own). `undefined` removes them again.
+ */
 export function useThreadRecords(resolvers: Readonly<Record<string, RecordResolver>> | undefined): void {
   extra = resolvers ?? {}
 }
 
 /** The record's scope, or null when its type has no thread or the record does not exist (for this caller). */
 export async function resolveRecord(client: FactoryClient | CommandTx, recordType: string, recordId: string): Promise<RecordScope | null> {
-  const resolver = Object.hasOwn(THREAD_RECORDS, recordType) ? THREAD_RECORDS[recordType] : Object.hasOwn(extra, recordType) ? extra[recordType] : undefined
+  const resolver = Object.hasOwn(extra, recordType) ? extra[recordType] : Object.hasOwn(THREAD_RECORDS, recordType) ? THREAD_RECORDS[recordType] : undefined
   return resolver ? resolver(client, recordId) : null
 }

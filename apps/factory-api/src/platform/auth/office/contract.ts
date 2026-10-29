@@ -57,6 +57,8 @@ export const meContract = defineContract({
       companies: z.array(output({ id: id(), code: z.string(), name: z.string() })),
       session: sessionTimes.extend({ id: id(), createdAt: instant(), stepUpUntil: instant().nullable() }),
       mfa: mfaView.extend({ recoveryCodesLeft: z.number().int() }),
+      /** The screen's company's staff privacy notice in force and whether this person acknowledged it (B-W1-36); null: none. */
+      staffNotice: output({ noticeId: id(), label: z.string(), acknowledged: z.boolean() }).nullable(),
       /** What the session's grants allow (the web hides what is not listed). */
       permissions: z.array(z.string()),
     }),

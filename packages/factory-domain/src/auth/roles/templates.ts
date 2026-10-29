@@ -13,9 +13,9 @@ import { FACTORY_PERMISSIONS, FLOOR_AREA, FLOOR_SHARED_PERMISSIONS } from '../pe
  * and held only by a floor session on an enrolled device). A floor role holds only `floor.*` permissions, sees at
  * most wages and never requires two-factor (the device and the PIN are the floor's factors); an office role holds no
  * `floor.*` permission. The few office permissions the floor uses on the same routes, at its own site only
- * (FLOOR_SHARED_PERMISSIONS: printing labels, the site's locations and transfers between them), are the exception a
- * floor role may hold. Each module step adds its new
- * permissions to the templates that need them. The owner holds
+ * (FLOOR_SHARED_PERMISSIONS: printing labels, the site's locations and transfers between them, picking and issuing to the
+ * site's work orders, cutting hides for them, packing shipments), are the exception a floor role may hold. Each module
+ * step adds its new permissions to the templates that need them. The owner holds
  * every declared office permission and the read-only role every office `read` one, so they follow the registry by
  * themselves.
  *
@@ -97,6 +97,13 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'email.send',
       'email.manage',
       'email.triage',
+      'companies.bank.view',
+      'companies.bank.manage',
+      'shipping.settings.view',
+      'shipping.settings.manage',
+      'production.settings.view',
+      'privacy.view',
+      'privacy.manage',
     ],
     grains: [],
   }),
@@ -104,21 +111,25 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Finance',
     description: 'Invoices, payments and number series; sees prices, costs, margins and wages.',
     requireMfa: true,
-    permissions: ['numbering.view', 'numbering.manage', 'audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'product.materials.view', 'product.materials.cost', 'product.styles.view', 'inventory.locations.view', 'inventory.stock.view'],
+    permissions: ['numbering.view', 'numbering.manage', 'audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'product.materials.view', 'product.materials.cost', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'shipping.view', 'parties.view', 'parties.manage', 'parties.block', 'parties.vies', 'invoices.view', 'invoices.manage', 'invoices.issue', 'payments.view', 'payments.record', 'payments.void', 'costing.view', 'costing.rates.manage', 'quotes.view', 'quotes.approve', 'sales.settings.manage', 'companies.bank.view', 'companies.bank.manage', 'orders.view', 'orders.close'],
     grains: ['price', 'cost', 'margin', 'wages'],
   }),
   template('sales', {
     name: 'Sales',
+    // Design question S2 (what sales sees of cost) waits for the Owner: this is answer b (no margin; an approval still
+    // says why, in words). Answer a (margin % and "under the floor", never a cost: the quotes API drops the margin AMOUNT
+    // without the cost grain) is grains ['price', 'margin'] with requireMfa true (A1 §3.10: a role that sees margins
+    // requires two-factor); the email-out and email-in PG tests then enrol two-factor for their sales users.
     description: 'Customers, quotes and orders; sees selling prices, not costs or margins.',
     requireMfa: false,
-    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view'],
+    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send', 'orders.view', 'orders.manage'],
     grains: ['price'],
   }),
   template('planner', {
     name: 'Planner',
     description: 'Plans work orders and capacity; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'product.materials.view', 'product.styles.view', 'compliance.certificates.view', 'inventory.locations.view', 'inventory.stock.view'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'inventory.locations.view', 'inventory.stock.view', 'shipping.view', 'planning.view', 'planning.run', 'planning.decide', 'purchasing.view', 'workorders.view', 'workorders.manage', 'workorders.release', 'orders.view'],
     grains: [],
   }),
   template('buyer', {
@@ -143,8 +154,19 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'product.materials.manage',
       'product.materials.cost',
       'product.styles.view',
+      'product.bom.view',
       'inventory.locations.view',
       'inventory.stock.view',
+      'parties.view',
+      'parties.manage',
+      'parties.vies',
+      'planning.view',
+      'planning.run',
+      'planning.decide',
+      'purchasing.view',
+      'purchasing.manage',
+      'purchasing.send',
+      'costing.view',
     ],
     grains: ['cost'],
   }),
@@ -172,6 +194,22 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'inventory.transfer',
       'inventory.scrap',
       'inventory.reverse',
+      'inventory.issue',
+      'inventory.issue.over',
+      'inventory.receive',
+      'shipping.view',
+      'shipping.manage',
+      'shipping.pack',
+      'shipping.settings.view',
+      'shipping.settings.manage',
+      'shipping.ddt.issue',
+      'shipping.ddt.cancel',
+      'shipping.labels.buy',
+      'shipping.labels.void',
+      'parties.view',
+      'purchasing.view',
+      'workorders.view',
+      'orders.view',
     ],
     grains: [],
   }),
@@ -197,11 +235,31 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'product.materials.manage',
       'product.styles.view',
       'product.styles.manage',
+      'product.bom.view',
+      'product.bom.manage',
+      'product.bom.release',
+      'product.routing.view',
+      'product.routing.manage',
+      'product.operations.manage',
       'compliance.certificates.view',
+      'compliance.register.view',
       'inventory.locations.view',
       'inventory.stock.view',
       'inventory.transfer',
       'inventory.scrap',
+      'inventory.issue',
+      'inventory.issue.over',
+      'shipping.view',
+      'planning.view',
+      'costing.view',
+      'production.settings.view',
+      'production.settings.manage',
+      'production.cut',
+      'production.cut.correct',
+      'workorders.view',
+      'workorders.manage',
+      'workorders.release',
+      'orders.view',
     ],
     grains: [],
   }),
@@ -209,14 +267,14 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Quality inspector',
     description: 'Inspects lots and finished goods and releases them; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'compliance.certificates.view', 'compliance.certificates.manage', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'inventory.scrap'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'compliance.certificates.manage', 'compliance.declarations.manage', 'compliance.labels.manage', 'compliance.register.view', 'compliance.register.manage', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'inventory.scrap', 'parties.view', 'workorders.view'],
     grains: [],
   }),
   template('floor_supervisor', {
     name: 'Floor supervisor',
     description: 'Follows the lines of their sites from the Office, and keeps their floor devices, workers, badges and PINs; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'devices.view', 'devices.manage', 'devices.revoke', 'workers.view', 'workers.manage', 'workers.roles', 'workers.credentials', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer'],
+    permissions: ['files.read', 'devices.view', 'devices.manage', 'devices.revoke', 'workers.view', 'workers.manage', 'workers.roles', 'workers.credentials', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'production.settings.view', 'workorders.view'],
     grains: [],
   }),
   template('read_only', {
@@ -229,13 +287,13 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
   floorTemplate('operator', {
     name: 'Operator',
     description: 'Works at a station on an enrolled floor device; sees no money.',
-    permissions: ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer'],
+    permissions: ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'inventory.issue', 'production.cut', 'shipping.pack'],
     grains: [],
   }),
   floorTemplate('cutting_operator', {
     name: 'Cutting operator',
     description: 'Works at a cutting table on an enrolled floor device; sees no money.',
-    permissions: ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer'],
+    permissions: ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'inventory.issue', 'production.cut'],
     grains: [],
   }),
   floorTemplate('floor_inspector', {
@@ -247,7 +305,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
   floorTemplate('team_leader', {
     name: 'Team leader',
     description: "Leads a crew on the floor: works and sees the team leader's screens of the device's site; sees no money.",
-    permissions: ['floor.work', 'floor.lead', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer'],
+    permissions: ['floor.work', 'floor.lead', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'inventory.issue', 'production.cut', 'shipping.pack'],
     grains: [],
   }),
 ])

@@ -1,14 +1,24 @@
 import { events as compliance } from '../compliance/events'
+import { events as costing } from '../costing/events'
 import { events as email } from '../email/events'
 import { events as emailIn } from '../email-in/events'
 import { events as files } from '../files/events'
 import { events as imports } from '../imports/events'
 import { events as integration } from '../integration/events'
 import { events as inventory } from '../inventory/events'
+import { events as invoicing } from '../invoicing/events'
 import { events as links } from '../links/events'
+import { events as parties } from '../parties/events'
+import { events as payments } from '../payments/events'
+import { events as planning } from '../planning/events'
 import { events as threads } from '../threads/events'
 import { events as print } from '../print/events'
+import { events as privacy } from '../privacy/events'
+import { events as purchasing } from '../purchasing/events'
+import { events as production } from '../production/events'
 import { events as product } from '../product/events'
+import { events as sales } from '../sales/events'
+import { events as shipping } from '../shipping/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -107,9 +117,10 @@ export function createCatalogue(definitions: readonly EventDefinition[]): EventC
  * The platform's own events come first (integration: the inbound webhook ledger; files: confirmed uploads; links: a
  * one-off link's use; threads: messages and mentions on records;
  * imports: the import jobs; print: print jobs; email: mail out and its delivery; email-in: mail received); the W1
- * modules bring theirs (compliance: certificate expiry; product: the material library; inventory: stock moves).
+ * modules bring theirs (compliance: certificate expiry; product: the material library; inventory: stock moves; parties: customers and suppliers;
+ * production: floor rules and work orders; purchasing: purchase orders).
  */
-export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory] as const satisfies readonly EventDefinition[]
+export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...purchasing, ...invoicing, ...payments, ...costing, ...production, ...sales, ...privacy] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

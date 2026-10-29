@@ -39,7 +39,7 @@ const run = (guard: string, root?: string) => {
 const MODULE = 'packages/factory-domain/src/quotes/events.ts'
 const CATALOGUE = 'packages/factory-domain/src/events/catalogue.ts'
 const quotesEvents = (body: string) => `import { z } from 'zod'\nimport { defineEvent } from '../events/define'\n\nexport const events = [\n${body}\n] as const\n`
-const quoteSent = `  defineEvent({ type: 'quote.sent', version: 1, context: 'quotes', description: 'x', payload: z.strictObject({ quoteId: z.string() }) }),`
+const quoteSent = `  defineEvent({ type: 'quote.faxed', version: 1, context: 'quotes', description: 'x', payload: z.strictObject({ quoteId: z.string() }) }),`
 const assembled = (text: string) => text.replace("import type { EventDefinition } from './define'", "import type { EventDefinition } from './define'\nimport { events as quotes } from '../quotes/events'")
 const EMITTER = 'apps/factory-api/src/modules/quotes/service.ts'
 const emitting = (event: string) => `export async function send(tools: { emit(event: unknown): void }) {\n  tools.emit(${event})\n}\n`
@@ -50,35 +50,35 @@ describe('check-event-contract', () => {
   it('passes on the repository, on an untouched copy, and with a declared, assembled and emitted event', () => {
     expect(guard()).toMatchObject({ status: 0 })
     expect(guard(tree()).status).toBe(0)
-    const ok = guard(tree({ [MODULE]: quotesEvents(quoteSent), [CATALOGUE]: assembled, [EMITTER]: emitting("{ type: 'quote.sent', subject: 'q', payload: {} }") }))
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(35 declared event version\(s\), 36 literal emit/) })
+    const ok = guard(tree({ [MODULE]: quotesEvents(quoteSent), [CATALOGUE]: assembled, [EMITTER]: emitting("{ type: 'quote.faxed', subject: 'q', payload: {} }") }))
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(137 declared event version\(s\), 173 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([
-    ['an emit of an undeclared type', { [EMITTER]: emitting("{ type: 'quote.sent', subject: 'q', payload: {} }") }, /emit\('quote.sent'\) — not declared/],
+    ['an emit of an undeclared type', { [EMITTER]: emitting("{ type: 'quote.faxed', subject: 'q', payload: {} }") }, /emit\('quote.faxed'\) — not declared/],
     ['an undeclared type behind a cast, split over lines', { [EMITTER]: emitting("{\n    type: ('quote.lost' as string),\n    subject: 'q',\n    payload: {},\n  }") }, /service.ts:2 {2}emit\('quote.lost'\)/],
     [
       'an emit of an undeclared version',
-      { [MODULE]: quotesEvents(quoteSent), [CATALOGUE]: assembled, [EMITTER]: emitting("{ type: 'quote.sent', version: 2, subject: 'q', payload: {} }") },
-      /emit\('quote.sent', version 2\) — that version is not declared/,
+      { [MODULE]: quotesEvents(quoteSent), [CATALOGUE]: assembled, [EMITTER]: emitting("{ type: 'quote.faxed', version: 2, subject: 'q', payload: {} }") },
+      /emit\('quote.faxed', version 2\) — that version is not declared/,
     ],
-    ['a declaration without a payload schema', { [MODULE]: quotesEvents("  defineEvent({ type: 'quote.sent', context: 'quotes', description: 'x' }),"), [CATALOGUE]: assembled }, /quote.sent: no payload schema/],
+    ['a declaration without a payload schema', { [MODULE]: quotesEvents("  defineEvent({ type: 'quote.faxed', context: 'quotes', description: 'x' }),"), [CATALOGUE]: assembled }, /quote.faxed: no payload schema/],
     [
       'a payload that is not strict',
-      { [MODULE]: quotesEvents("  defineEvent({ type: 'quote.sent', context: 'quotes', description: 'x', payload: z.object({}) }),"), [CATALOGUE]: assembled },
+      { [MODULE]: quotesEvents("  defineEvent({ type: 'quote.faxed', context: 'quotes', description: 'x', payload: z.object({}) }),"), [CATALOGUE]: assembled },
       /the payload schema must be written z.strictObject/,
     ],
     ['a module events file the catalogue does not assemble', { [MODULE]: quotesEvents(quoteSent) }, /src\/quotes\/events.ts is not assembled/],
     ['a declaration outside a module events file', { 'packages/factory-domain/src/quotes/logic.ts': quotesEvents(quoteSent) }, /defineEvent\(\) outside src\/<module>\/events.ts/],
     ['a declaration in the catalogue machinery', { 'packages/factory-domain/src/events/extra.ts': quotesEvents(quoteSent) }, /defineEvent\(\) outside src\/<module>\/events.ts/],
-    ['one type and version declared twice', { [MODULE]: quotesEvents(`${quoteSent}\n${quoteSent}`), [CATALOGUE]: assembled }, /quote.sent version 1 is declared twice/],
+    ['one type and version declared twice', { [MODULE]: quotesEvents(`${quoteSent}\n${quoteSent}`), [CATALOGUE]: assembled }, /quote.faxed version 1 is declared twice/],
     [
       'an event declared by another module',
-      { [MODULE]: quotesEvents("  defineEvent({ type: 'quote.sent', context: 'sales', description: 'x', payload: z.strictObject({}) }),"), [CATALOGUE]: assembled },
+      { [MODULE]: quotesEvents("  defineEvent({ type: 'quote.faxed', context: 'sales', description: 'x', payload: z.strictObject({}) }),"), [CATALOGUE]: assembled },
       /the context must be the module that declares it \('quotes'\)/,
     ],
     ['a type that is not a literal', { [MODULE]: quotesEvents("  defineEvent({ type: TYPE, context: 'quotes', description: 'x', payload: z.strictObject({}) }),"), [CATALOGUE]: assembled }, /must be a string literal/],
-    ['a version that is not a whole number', { [MODULE]: quotesEvents("  defineEvent({ type: 'quote.sent', version: 0, context: 'quotes', description: 'x', payload: z.strictObject({}) }),"), [CATALOGUE]: assembled }, /whole number literal from 1/],
+    ['a version that is not a whole number', { [MODULE]: quotesEvents("  defineEvent({ type: 'quote.faxed', version: 0, context: 'quotes', description: 'x', payload: z.strictObject({}) }),"), [CATALOGUE]: assembled }, /whole number literal from 1/],
     ['an outbox row written outside platform/outbox', { [EMITTER]: 'export const sneak = (tx: any) => tx.outboxEvent.createMany({ data: [] })\n' }, /outboxEvent.createMany\(\) outside platform\/outbox/],
     ['an outbox update outside platform/outbox', { [EMITTER]: 'export const sneak = (tx: any) => tx.outboxEvent.updateMany({ where: {}, data: {} })\n' }, /outboxEvent.updateMany\(\) outside platform\/outbox/],
     ['outbox SQL outside platform/outbox', { [EMITTER]: 'export const sneak = (tx: any) => tx.$executeRaw`UPDATE "OutboxEvent" SET status = \'PUBLISHED\'`\n' }, /SQL UPDATE "OutboxEvent" outside platform\/outbox/],

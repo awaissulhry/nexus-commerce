@@ -22,7 +22,8 @@ import { testRedis, type TestRedis } from '../outbox/testing'
 import { createSecretsService } from '../secrets/envelope'
 import { localKeyProvider } from '../secrets/local'
 import { SECRET_PURPOSES, storeSecret } from '../secrets/store'
-import { createFilesRuntime, useFiles } from './service'
+import { prepareFileCopy, putGeneratedFile, recordGeneratedFile } from './files'
+import { createFilesRuntime, processFiles, useFiles } from './service'
 
 /**
  * Files on R2 on the local stack, with the app's real routes: a throwaway PostgreSQL 17 database from the migrations
@@ -492,5 +493,72 @@ describe('R2 through the gateway (A1 §4)', () => {
     } finally {
       await admin(`UPDATE "IntegrationAccount" SET status = 'ACTIVE' WHERE id = $1`, [liveStore])
     }
+  })
+})
+
+describe('a generated file recorded inside the caller\'s command (putGeneratedFile + recordGeneratedFile)', () => {
+  const office = () => callerFor(database, { audience: 'office', tenantId: tenantA, actorId: user, grants: [], requestId: newId() })
+  const generated = (text: string) => ({
+    companyId: companyOne,
+    recordType: 'Quote',
+    recordId: otherQuote,
+    kind: 'FISCAL_ARCHIVE' as const,
+    originalName: `${text}.xml`,
+    contentType: 'application/xml',
+    body: Buffer.from(`<made-up>${text}</made-up>`),
+  })
+
+  it('the put writes the object only; the row is written by the caller\'s command, with its other writes, audited', async () => {
+    const prepared = await putGeneratedFile(processFiles(), office(), generated('split-ok'))
+    expect(prepared.storageKey.startsWith('legal/')).toBe(true)
+    expect(prepared.retainUntil).not.toBeNull()
+    expect(await admin('SELECT id FROM "StoredFile" WHERE "storageKey" = $1', [prepared.storageKey])).toEqual([])
+    const { result } = await command(office(), { name: 'quotes.attachTest', input: { quote: otherQuote } }, async (tools) => {
+      const file = await recordGeneratedFile(tools, prepared, { details: { number: 'Q-1' } })
+      tools.audit({ recordType: 'Quote', recordId: otherQuote, after: { fileId: file.id } })
+      return file
+    })
+    expect(result).toMatchObject({ status: 'AVAILABLE', kind: 'FISCAL_ARCHIVE', recordId: otherQuote, sha256: prepared.sha256 })
+    const [row] = await admin('SELECT status, "storageKey", "retainUntil" FROM "StoredFile" WHERE id = $1', [result.id])
+    expect(row).toMatchObject({ status: 'AVAILABLE', storageKey: prepared.storageKey })
+    const audits = await admin('SELECT action, "recordType", after FROM "AuditLog" WHERE "recordId" IN ($1, $2) ORDER BY "recordType"', [result.id, otherQuote])
+    expect(audits.map((audit) => [audit.action, audit.recordType])).toEqual([
+      ['quotes.attachTest', 'Quote'],
+      ['quotes.attachTest', 'StoredFile'],
+    ])
+    expect(audits[1]!.after).toMatchObject({ number: 'Q-1', kind: 'FISCAL_ARCHIVE' })
+    expect((await download('admin', result.id)).status).toBe(200)
+  })
+
+  it('copies an available file onto another record with its own kind, sharing and retention, the same bytes (prepareFileCopy)', async () => {
+    const source = await uploaded('copy source')
+    const retainUntil = new Date('2036-11-24T08:00:00.000Z')
+    const target = { companyId: companyOne, recordType: 'Quote', recordId: otherQuote, kind: 'ATTACHMENT' as const, visibility: ['LINK' as const], partyId: partyOne, retainUntil }
+    const prepared = await prepareFileCopy(processFiles(), office(), source.id, target)
+    expect(prepared).toMatchObject({ sourceFileId: source.id, sha256: sha256(pdf('copy source')), kind: 'ATTACHMENT', visibility: ['OFFICE', 'LINK'], partyId: partyOne, recordId: otherQuote })
+    expect(prepared.storageKey).not.toBe(await keyOf(source.id))
+    const { result } = await command(office(), { name: 'quotes.copyTest', input: { source: source.id } }, (tools) => recordGeneratedFile(tools, prepared))
+    const [row] = await admin('SELECT status, "recordId", "retainUntil", "partyId", visibility::text[] AS visibility FROM "StoredFile" WHERE id = $1', [result.id])
+    expect(row).toEqual({ status: 'AVAILABLE', recordId: otherQuote, retainUntil, partyId: partyOne, visibility: ['OFFICE', 'LINK'] })
+    const { download: get } = await download('admin', result.id)
+    expect((await app.inject({ method: 'GET', url: get!.url })).rawPayload.equals(pdf('copy source'))).toBe(true)
+    // The source is untouched (office only, its own record).
+    expect(await admin('SELECT visibility::text[] AS visibility, "recordId" FROM "StoredFile" WHERE id = $1', [source.id])).toEqual([{ visibility: ['OFFICE'], recordId: quote }])
+
+    const floor = callerFor(database, { audience: 'floor', tenantId: tenantA, actorId: user, siteId: siteOne, deviceId: newId(), grants: [grant(ALL)], requestId: newId() })
+    await expect(prepareFileCopy(processFiles(), floor, source.id, target)).rejects.toMatchObject({ code: 'forbidden' })
+    const { file: pending } = await announce(pdf('never sent'))
+    await expect(prepareFileCopy(processFiles(), office(), pending.id, target)).rejects.toMatchObject({ code: 'invalid_state' })
+  })
+
+  it('a command that fails after recording the file leaves no row (the object stays unnamed)', async () => {
+    const prepared = await putGeneratedFile(processFiles(), office(), generated('split-rolled-back'))
+    await expect(
+      command(office(), { name: 'quotes.attachTest', input: { quote: otherQuote, fail: true } }, async (tools) => {
+        await recordGeneratedFile(tools, prepared)
+        throw new Error('made-up failure after the file was recorded')
+      }),
+    ).rejects.toThrow('made-up failure')
+    expect(await admin('SELECT id FROM "StoredFile" WHERE "storageKey" = $1', [prepared.storageKey])).toEqual([])
   })
 })

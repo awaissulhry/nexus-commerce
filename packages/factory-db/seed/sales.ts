@@ -26,6 +26,8 @@ import { seed as seedProduct } from './product'
  *       QUOTE_ACCEPT record, so that seeded link names a real quote.
  *   Q2  SEED-Q-0002: a DRAFT quote with a size-grid line (RED 52 x 3) and one made-to-measure unit for P1's team rider
  *       (the parties seed's JACKET profile).
+ *   The tenant-wide sales settings (the quote rules: a 20 % margin floor, a 15 % discount limit, 30 days' validity, a 30 %
+ *       deposit), keyed by the tenant's id.
  *
  * The generated isolation tests (src/isolation.pg.vitest.test.ts) copy the FIRST row of each table by id and insert the
  * copy: a sent or accepted version and its lines cannot be copied (the …_sales_guards triggers, the one-accepted index).
@@ -147,6 +149,11 @@ export async function seed(context: SeedContext): Promise<SalesSeed> {
 
   await db.withScope({ audience: 'office', tenantId, actorId }, (client) =>
     client.$transaction(async (tx) => {
+      // --- the tenant-wide sales settings: the quote rules' old defaults (inserted once) ------------------------------
+      await tx.salesSettings.createMany({
+        data: [{ id: tenantId, companyId: null, marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', ...stamp }],
+        skipDuplicates: true,
+      })
       // --- Q2: the draft (inserted once; its parts are left alone once it left DRAFT) ---------------------------------
       await tx.quote.createMany({
         data: [{ id: q2.quote, companyId: companyA, number: 'SEED-Q-0002', partyId, contactId: id('party-contact:P1:buyer'), status: QuoteStatus.DRAFT, ...stamp }],

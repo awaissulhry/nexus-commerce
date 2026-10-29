@@ -39,6 +39,9 @@ model Party {
   language     String      @default("it")
   /// Payment terms as printed on its quotes, orders and purchase orders (free text; terms with rules are W2a).
   paymentTerms String?
+  /// As a supplier, its usual lead time: calendar days from the order to the goods at our site, 0 or more (PLN-066).
+  /// Planning uses it when the item names none, or the item is bought from it instead of the item's default supplier.
+  leadTimeDays Int?
   /// For the office only: the partner role can neither read nor write it.
   /// @internal
   internalNote String?
@@ -72,6 +75,11 @@ model Party {
   // inventory.prisma: as a supplier, the goods received from it and its lots.
   goodsReceipts        GoodsReceipt[]
   lots                 Lot[]
+  // quality.prisma: the PPE register's entries it reported.
+  ppeRegisterEntries   PpeRegisterEntry[]
+  // money.prisma: the invoices it is the buyer of and the payments it made.
+  invoices             Invoice[]
+  payments             Payment[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the party's rows.
@@ -143,6 +151,8 @@ model PartyAddress {
   // sales.prisma: the quote versions it is the bill-to or ship-to address of.
   quoteVersionsBillTo QuoteVersion[] @relation("QuoteVersionBillTo")
   quoteVersionsShipTo QuoteVersion[] @relation("QuoteVersionShipTo")
+  // shipping.prisma: the shipments sent to it.
+  shipments           Shipment[]
 
   @@unique([tenantId, partyId, id])
 }

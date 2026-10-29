@@ -4,6 +4,7 @@ import { seed, type CoreSeed } from '../seed/_core'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
 import { seed as seedCompliance } from '../seed/compliance'
+import { seed as seedCosting } from '../seed/costing'
 import { seed as seedEmail } from '../seed/email'
 import { seed as seedEmailIn } from '../seed/email-in'
 import { seed as seedFiles } from '../seed/files'
@@ -12,14 +13,18 @@ import { seed as seedImports } from '../seed/imports'
 import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedInventory } from '../seed/inventory'
 import { seed as seedLinks } from '../seed/links'
+import { seed as seedMoney } from '../seed/money'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
 import { seed as seedPrint } from '../seed/print'
+import { seed as seedPrivacy } from '../seed/privacy'
 import { seed as seedProduct } from '../seed/product'
 import { seed as seedProduction } from '../seed/production'
+import { seed as seedQuality } from '../seed/quality'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
+import { seed as seedShipping } from '../seed/shipping'
 import { seed as seedSupply } from '../seed/supply'
 import { seed as seedThreads } from '../seed/threads'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
@@ -135,6 +140,16 @@ beforeAll(async () => {
   await seedInventory({ db: factory, namespace: 'iso-b' })
   await seedProduction({ db: factory, namespace: 'iso-a' })
   await seedProduction({ db: factory, namespace: 'iso-b' })
+  await seedPrivacy({ db: factory, namespace: 'iso-a' })
+  await seedPrivacy({ db: factory, namespace: 'iso-b' })
+  await seedQuality({ db: factory, namespace: 'iso-a' })
+  await seedQuality({ db: factory, namespace: 'iso-b' })
+  await seedShipping({ db: factory, namespace: 'iso-a' })
+  await seedShipping({ db: factory, namespace: 'iso-b' })
+  await seedMoney({ db: factory, namespace: 'iso-a' })
+  await seedMoney({ db: factory, namespace: 'iso-b' })
+  await seedCosting({ db: factory, namespace: 'iso-a' })
+  await seedCosting({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -156,8 +171,11 @@ it('covers every classified table and every runtime role', () => {
     'Colourway',
     'Company',
     'ComplianceDocument',
+    'CostingSettings',
     'CutLog',
     'CutLogPiece',
+    'Ddt',
+    'DdtCancellation',
     'DepositRequest',
     'Device',
     'DeviceEnrolment',
@@ -165,6 +183,7 @@ it('covers every classified table and every runtime role', () => {
     'EmailOutbound',
     'FloorSession',
     'FloorSettings',
+    'GarmentSerial',
     'GoodsReceipt',
     'GoodsReceiptLine',
     'Hide',
@@ -173,12 +192,17 @@ it('covers every classified table and every runtime role', () => {
     'ImportRow',
     'InboundEmail',
     'InboundWebhook',
+    'Inspection',
+    'InspectionDefect',
     'IntegrationAccount',
     'IntegrationCall',
     'Invitation',
+    'Invoice',
+    'InvoiceLine',
     'Item',
     'ItemColour',
     'LabelTemplate',
+    'LabourRate',
     'Line',
     'LinkEvidence',
     'Location',
@@ -194,17 +218,27 @@ it('covers every classified table and every runtime role', () => {
     'Operation',
     'OperationScan',
     'OutboxEvent',
+    'Parcel',
     'Party',
     'PartyAddress',
     'PartyContact',
     'PartyTaxIdentity',
     'PasswordReset',
+    'Payment',
+    'PaymentAllocation',
     'PlanningRun',
+    'PpeRegisterEntry',
     'PrintJob',
     'Printer',
+    'PrivacyDpia',
+    'PrivacyNotice',
+    'PrivacyNoticeText',
+    'ProcessingActivity',
     'ProductionSettings',
     'PurchaseOrder',
     'PurchaseOrderLine',
+    'QualityRelease',
+    'QualityReleaseReversal',
     'Quote',
     'QuoteAcceptance',
     'QuoteApproval',
@@ -217,11 +251,18 @@ it('covers every classified table and every runtime role', () => {
     'SalesOrder',
     'SalesOrderLine',
     'SalesOrderLineSize',
+    'SalesSettings',
+    'SdiNotification',
+    'SdiSubmission',
     'SecretValue',
     'Session',
+    'Shipment',
+    'ShipmentLine',
+    'ShippingSettings',
     'Site',
     'Size',
     'SizeScale',
+    'StaffNoticeAck',
     'Station',
     'StockMove',
     'StockValuation',
@@ -231,6 +272,7 @@ it('covers every classified table and every runtime role', () => {
     'Suppression',
     'Tenant',
     'Thread',
+    'TrackingEvent',
     'User',
     'Variant',
     'ViesCheck',

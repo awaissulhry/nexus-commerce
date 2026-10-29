@@ -6,6 +6,7 @@ import { ConflictError, DomainError, ForbiddenError, InvalidStateError, Validati
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { Locale } from '@nexus/factory-domain/email/rules'
 import { requireContext, type OfficeContext } from '../../../core/context'
+import { staffNoticeState } from '../../privacy/read'
 import { officeSessionOf, type OfficeSession } from '../sessions/authenticator'
 import { heldRoles } from '../roles/access'
 import { mfaRequired, mfaSatisfied } from '../sessions/grants'
@@ -61,11 +62,13 @@ async function companiesOf(client: FactoryClient, userId: string, now: Date) {
 export async function me(auth: OfficeAuth, request: FastifyRequest) {
   const context = officeContextOf(request)
   const session = officeSessionOf(request)
-  const { tenant, company, companies, user } = await request.withClient(async (client) => ({
+  const { tenant, company, companies, user, staffNotice } = await request.withClient(async (client) => ({
     tenant: await client.tenant.findUniqueOrThrow({ where: { id: context.tenantId }, select: { id: true, slug: true, name: true } }),
     company: context.companyId ? await client.company.findUnique({ where: { id: context.companyId }, select: COMPANY_VIEW }) : null,
     companies: await companiesOf(client, context.actorId, auth.clock.now()),
     user: await client.user.findUniqueOrThrow({ where: { id: context.actorId }, select: { recoveryCodeHashes: true } }),
+    // The screen's company's staff notice in force (B-W1-36): the web shows it once per version (GET /privacy/staff-notice).
+    staffNotice: await staffNoticeState(client, context.companyId, context.actorId),
   }))
   const until = stepUpUntil(session)
   return {
@@ -86,6 +89,7 @@ export async function me(auth: OfficeAuth, request: FastifyRequest) {
       satisfied: mfaSatisfied(session.user, session),
       recoveryCodesLeft: user.recoveryCodeHashes.length,
     },
+    staffNotice,
     permissions: [...new Set(context.grants.flatMap((grant) => grant.permissions))].sort(),
   }
 }

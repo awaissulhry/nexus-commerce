@@ -1,0 +1,73 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/shipping.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context: Sendcloud's tracking webhooks and polls) keeps the shipping settings, plans and ships shipments, issues and cancels DDTs and records tracking through apps/factory-api's modules/shipping (B-W1-46 to B-W1-49), always through command(); the API keeps staff to the companies, sites and parties their grants reach. The floor (factory_floor_runtime) works on its OWN site only: it reads the site's shipping settings, shipments, lines, parcels, DDTs and their cancellations, and packs: it adds, changes and removes the lines and parcels of a DRAFT shipment, weighs and labels parcels until they leave, and moves a shipment DRAFT ⇄ PACKED (nothing else: the …_quality_shipping_guards triggers). A portal or one-off link session (factory_partner_runtime; the DOCUMENT_VIEW link of B-W1-49) reads only its OWN party's shipments, lines, parcels, DDTs, cancellations and tracking (every table here but the settings carries the party's partyId), never an internal column nor which office user wrote a row. No table here has a cost, price, margin or wages column. Ddt, DdtCancellation and TrackingEvent are append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes them. Nobody deletes settings or a shipment (cancelled); lines and parcels are removed only while their shipment is a DRAFT. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "ShippingSettings": {
+      "about": "The office keeps each site's shipping settings (LOG-117): sender and return addresses, default carrier account and service, packing printers, cut-off. The floor reads its own site's row (the packing screen).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "Shipment": {
+      "about": "The office plans a shipment from a sales order, buys its labels, ships it with its DDT, records delivery or return, and cancels it. The site's floor reads its shipments and moves one DRAFT ⇄ PACKED (only that). A portal or link session reads its own party's shipments without the internal columns.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["integrationAccountId", "internalNote", "createdById"] }
+      }
+    },
+    "ShipmentLine": {
+      "about": "The office and the site's floor (packing) add, change and remove the lines of a DRAFT shipment (released garments only). A portal or link session reads its own party's lines.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["site"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "Parcel": {
+      "about": "The office and the site's floor (packing) add and remove the parcels of a DRAFT shipment and weigh, measure and label them until they leave. A portal or link session reads its own party's parcels and their tracking numbers.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["site"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "Ddt": {
+      "about": "The office issues a DDT for a packed or shipped shipment (B-W1-47). The site's floor reads its DDTs (it hands them to the driver). A portal or link session reads its own party's DDTs without the internal note. Nobody changes or removes a DDT.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["internalNote", "createdById"] }
+      }
+    },
+    "DdtCancellation": {
+      "about": "The office cancels an issued DDT with a reason (a new one replaces it). The site's floor and a portal or link session (its own party's) read the cancellations. Nobody changes or removes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "TrackingEvent": {
+      "about": "The worker (Sendcloud's webhooks and polls, in the tenant's system context) and the office (our own van) record tracking events. A portal or link session reads its own party's. Nobody changes or removes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    }
+  }
+}

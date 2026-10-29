@@ -295,6 +295,52 @@ describe('quote and purchase order', () => {
   })
 })
 
+describe('the packing list (B-W1-46, LOG-039)', () => {
+  const packingList = (fields: Partial<DocumentInput> = {}): DocumentInput => ({
+    type: 'PACKING_LIST',
+    language: 'it',
+    number: 'SH-2026-00007',
+    date: '2026-10-28',
+    currency: 'EUR',
+    company: COMPANY,
+    party: CUSTOMER,
+    references: [{ kind: 'SALES_ORDER', number: 'SO-2026-00003' }],
+    lines: [
+      { code: 'JKT-01', description: 'Giacca in pelle, nero, taglia 50', quantity: '2', uom: 'PCS', parcel: '1' },
+      { code: 'JKT-01', description: 'Giacca in pelle, nero, taglia 52', quantity: '1', uom: 'PCS', parcel: '2' },
+    ],
+    packing: { packages: 2, grossWeightKg: '6.5', shipTo: { name: 'Magazzino Est', line1: 'Via Esempio 9', postalCode: '40128', city: 'Bologna', province: 'BO', country: 'IT' } },
+    ...fields,
+  })
+
+  it('prints each line with its parcel, the number of parcels, the weight and the place of delivery, and no prices', () => {
+    const composed = composeDocument(packingList())
+    expect(composed.title).toBe('Distinta colli')
+    expect(composed.layout).toBe('PACKING_LIST/1')
+    expect(composed.table.columns.map((column) => column.key)).toEqual(['parcel', 'code', 'goods', 'quantity', 'uom'])
+    expect(composed.table.rows[1]).toEqual(['2', 'JKT-01', 'Giacca in pelle, nero, taglia 52', '1', 'PCS'])
+    expect(composed.facts).toEqual([
+      { label: 'Ns. ordine', value: 'SO-2026-00003' },
+      { label: 'Numero colli', value: '2' },
+      { label: 'Peso lordo (kg)', value: '6,5' },
+    ])
+    expect(composed.blocks.map((block) => block.heading)).toEqual(['Destinatario', 'Luogo di destinazione'])
+    expect(composed.totals).toEqual([])
+    expect(composed.signatures).toEqual([])
+    expect(composeDocument(packingList({ language: 'en' })).title).toBe('Packing list')
+  })
+
+  it('refuses a packing list without its parcels or a line without its parcel; the weight may wait', () => {
+    expect(documentProblems(packingList({ packing: null }))).toEqual([{ path: 'document/packing', message: 'A packing list says how many parcels there are.' }])
+    const lines = [{ code: 'JKT-01', description: 'Giacca', quantity: '1', uom: 'PCS' }]
+    expect(documentProblems(packingList({ lines, packing: { packages: 0 } }))).toEqual([
+      { path: 'document/packing/packages', message: 'Give the number of parcels (at least 1).' },
+      { path: 'document/lines/0/parcel', message: 'Say which parcel the line is packed in.' },
+    ])
+    expect(composeDocument(packingList({ packing: { packages: 2, grossWeightKg: null } })).facts.map((fact) => fact.label)).toEqual(['Ns. ordine', 'Numero colli'])
+  })
+})
+
 describe('composition', () => {
   it('is deterministic and plain JSON, with metadata fixed by the input', () => {
     const first = composeDocument(ddt())

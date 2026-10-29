@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { GATE_REASON_CODES } from '@nexus/factory-domain/compliance/cert-gate/gate'
 import { CERTIFICATE_STATUSES } from '@nexus/factory-domain/compliance/certificates/rules'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { fileView, presignedView } from '../../../platform/files/contract'
 
 /**
  * The certificate register's contracts (QHS-103, QHS-051, PRD-288). Dates of validity are calendar days (YYYY-MM-DD);
@@ -195,4 +196,22 @@ export const gateContract = defineContract({
       reasons: z.array(output({ code: z.enum(GATE_REASON_CODES), message: z.string(), certificateId: id().optional(), point: z.string().optional() })),
     }),
   },
+})
+
+/** The notified body's PDF (pdf.ts): announced, sent to the store with the presigned request, then confirmed. */
+export const announcePdfContract = defineContract({
+  params,
+  body: input({
+    originalName: z.string().min(1).max(500),
+    /** application/pdf. */
+    contentType: z.string().min(1).max(200),
+    sizeBytes: z.number().int().min(1),
+    /** SHA-256 of the content, 64 lower-case hex digits. */
+    sha256: z.string().regex(/^[0-9a-f]{64}$/, { message: 'Expected the SHA-256 of the content, 64 lower-case hex digits.' }),
+  }),
+  response: { 201: output({ file: fileView, upload: presignedView }) },
+})
+export const completePdfContract = defineContract({
+  params: input({ certificateId: id(), fileId: id() }),
+  response: { 200: output({ certificate: certificateDetail, file: fileView }) },
 })
