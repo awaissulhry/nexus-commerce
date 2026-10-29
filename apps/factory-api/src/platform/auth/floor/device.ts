@@ -1,11 +1,11 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import type { FactoryClient } from '@nexus/factory-db'
+import type { FactoryClient, WorkCentreKind } from '@nexus/factory-db'
 import { deviceStatus } from '@nexus/factory-domain/auth/floor/status'
 import { UnauthenticatedError } from '@nexus/factory-domain/core/errors'
 import { assertCsrf } from '../sessions/cookies'
 import type { OfficeAuth } from '../sessions/office-auth'
 import { deviceCookieOf, setDeviceCookie } from './cookies'
-import { floorCommand, floorContext, isLiveSession, liveDevice, SESSION_SELECT, siteScope, type FloorDevice } from './store'
+import { badgeOnlySignIn, floorCommand, floorContext, isLiveSession, liveDevice, SESSION_SELECT, siteScope, type FloorDevice } from './store'
 import { floorHash, mintSiteToken, parseSiteToken, type SiteToken } from './tokens'
 
 /**
@@ -14,9 +14,10 @@ import { floorHash, mintSiteToken, parseSiteToken, type SiteToken } from './toke
  *   POST /floor/device/enrol   the tablet trades the one-time code of the Office's QR code for its device token
  *                              (an HttpOnly cookie): one command claims the code (unused, unexpired, not retired),
  *                              moves the device PENDING → ACTIVE and stores the token's hash, with its audit row.
- *   GET  /floor/device         what the floor app shows before a sign-in: the device, its site and station, the
- *                              tenant's language, whether someone is signed in, and the roster of the site's active
- *                              workers who have a PIN (names only, for a sign-in by name and PIN).
+ *   GET  /floor/device         what the floor app shows before a sign-in: the device, its site and station (with its
+ *                              work centre's kind: the tablet's mode), the tenant's language, the site's sign-in rule
+ *                              (a badge alone, or badge and PIN), whether someone is signed in, and the roster of the
+ *                              site's active workers who have a PIN (names only, for a sign-in by name and PIN).
  * Both run in the FLOOR scope of the code's or token's tenant and site; a bad code or token answers 401.
  */
 
@@ -36,13 +37,17 @@ export async function requireDevice(auth: OfficeAuth, request: FastifyRequest): 
   return { device, token }
 }
 
-export const stationRef = (station: { id: string; code: string; name: string } | null) => (station ? { id: station.id, code: station.code, name: station.name } : null)
+/** What a station read must select for `stationRef`. */
+export const STATION_SELECT = { id: true, code: true, name: true, workCentre: { select: { kind: true } } } as const
+
+export const stationRef = (station: { id: string; code: string; name: string; workCentre: { kind: WorkCentreKind } } | null) =>
+  station ? { id: station.id, code: station.code, name: station.name, workCentreKind: station.workCentre.kind } : null
 
 /** The device's answer (read in its site's floor scope). */
 export async function deviceInfoOf(client: FactoryClient, device: FloorDevice, now: Date) {
-  const [site, station, tenant, current, roster] = await Promise.all([
+  const [site, station, tenant, current, roster, badgeOnly] = await Promise.all([
     client.site.findUniqueOrThrow({ where: { id: device.siteId }, select: { id: true, code: true, name: true } }),
-    device.stationId ? client.station.findUnique({ where: { id: device.stationId }, select: { id: true, code: true, name: true } }) : null,
+    device.stationId ? client.station.findUnique({ where: { id: device.stationId }, select: STATION_SELECT }) : null,
     client.tenant.findUniqueOrThrow({ where: { id: device.tenantId }, select: { defaultLocale: true } }),
     device.currentSessionId ? client.floorSession.findUnique({ where: { id: device.currentSessionId }, select: SESSION_SELECT }) : null,
     client.worker.findMany({
@@ -51,11 +56,13 @@ export async function deviceInfoOf(client: FactoryClient, device: FloorDevice, n
       take: 500,
       select: { id: true, displayName: true, locale: true },
     }),
+    badgeOnlySignIn(client, device.siteId),
   ])
   return {
     device: { id: device.id, name: device.name, kind: device.kind as 'TABLET' | 'HANDHELD' | 'PC', station: stationRef(station) },
     site,
     defaultLocale: tenant.defaultLocale,
+    signIn: { badgeOnly },
     operatorSignedIn: current !== null && isLiveSession(current, now),
     roster,
   }

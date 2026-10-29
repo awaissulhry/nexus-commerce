@@ -3,9 +3,10 @@ import type { FloorSessionEndReason } from '@nexus/factory-db'
 import { normalizeBadgeCode, badgeCodeHash } from '@nexus/factory-domain/auth/floor/badge'
 import { hashPin, isPinLocked, pinLockUntil, pinProblems, verifyPin } from '@nexus/factory-domain/auth/floor/pin'
 import { idleEndAt, sessionEndsAt, sessionState } from '@nexus/factory-domain/auth/floor/session'
-import { ConflictError, UnauthenticatedError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { ConflictError, ForbiddenError, UnauthenticatedError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 import type { CommandTx } from '../../../core/command'
 import { requireContext } from '../../../core/context'
 import { workerNoticeGate } from '../../privacy/read'
@@ -14,15 +15,20 @@ import type { OfficeAuth } from '../sessions/office-auth'
 import { floorSessionOf } from './authenticator'
 import { clearFloorCookie, deviceCookieOf, floorCookieOf, setDeviceCookie, setFloorCookie } from './cookies'
 import type { FloorCredentials } from './contract'
-import { requireDevice, stationRef, type DeviceRequest } from './device'
-import { endSessions, floorCommand, floorContext, liveDevice, SESSION_SELECT, siteScope, siteTiming, type FloorDevice } from './store'
+import { requireDevice, STATION_SELECT, stationRef, type DeviceRequest } from './device'
+import { floorStepUpUntil } from './step-up'
+import { badgeOnlySignIn, endSessions, floorCommand, floorContext, liveDevice, SESSION_SELECT, siteScope, siteTiming, type FloorDevice } from './store'
 import { floorHash, mintSessionToken, parseSessionToken, parseSiteToken } from './tokens'
 
 /**
  * Signing in and out on an enrolled device (plan A1 §3.10 "Floor"; features PLT-057, PLT-058, PLT-060, PLT-062; MES-276):
  *
  *   sign-in   a scanned badge (or the worker picked by name) and the worker's 6-digit PIN, on a device whose token the
- *             request carries. The same answer for an unknown or revoked badge, an inactive worker, a worker without a
+ *             request carries. At a site whose floor settings say so (`badgeOnlySignIn`, Owner answer F1 a) a badge
+ *             alone signs in: no PIN is checked, so the session has no proved PIN (`pinVerifiedAt` null) and signing
+ *             acts and My day ask it first (step-up.ts); a badge alone never clears a count of wrong PINs, and a
+ *             locked worker or one without a PIN is refused as with a PIN. A sign-in by name always needs the PIN, and
+ *             a site without the setting answers 400 to a badge without one (independent of the badge: no oracle). The same answer for an unknown or revoked badge, an inactive worker, a worker without a
  *             PIN, a locked worker and a wrong PIN, after the same scrypt work (no oracle); the lock is checked before
  *             the PIN, so a locked worker confirms no guess. A wrong PIN is counted on the worker (5, then locked for
  *             minutes; the device stays usable for the next person). No biometric factor exists (GDPR art. 9).
@@ -39,6 +45,8 @@ import { floorHash, mintSessionToken, parseSessionToken, parseSiteToken } from '
  *             (platform/privacy read.ts workerNoticeGate; the …_privacy_guards triggers hold the same).
  *   PIN       the signed-in worker changes their PIN (required after an administrator's reset: until then they hold
  *             nothing).
+ *   step-up   the signed-in worker proves their PIN again (POST /floor/step-up): `pinVerifiedAt` = now; a wrong PIN
+ *             counts towards the lockout as at sign-in; a locked worker gets a 403 (never a 401: they stay signed in).
  * Every write is one floor command with its audit row (audience FLOOR, the device and its site on the row); a token,
  * a badge code and a PIN never reach a command's input, result, audit row or log.
  */
@@ -63,9 +71,6 @@ interface Candidate {
 
 /** The worker the credentials name, in the device's site, or null (unknown or revoked badge, unknown worker). */
 async function candidateOf(auth: OfficeAuth, place: DeviceRequest, body: FloorCredentials): Promise<Candidate | null> {
-  if ((body.badgeCode === undefined) === (body.workerId === undefined)) {
-    throw new ValidationError('Scan a badge or pick your name, then enter your PIN.', [{ path: 'badgeCode', message: 'Send a badge code or a worker id, not both.' }])
-  }
   return auth.database.withScope(siteScope(place.token), async (client) => {
     if (body.badgeCode !== undefined) {
       const code = normalizeBadgeCode(body.badgeCode)
@@ -79,7 +84,7 @@ async function candidateOf(auth: OfficeAuth, place: DeviceRequest, body: FloorCr
 }
 
 /** Counts a wrong PIN on the worker (the device is the actor: nobody is proved yet) and sets the lock at the fifth. */
-async function recordWrongPin(auth: OfficeAuth, request: FastifyRequest, device: FloorDevice, workerId: string, actorId: string): Promise<void> {
+export async function recordWrongPin(auth: OfficeAuth, request: FastifyRequest, device: FloorDevice, workerId: string, actorId: string): Promise<void> {
   await floorCommand(auth, floorContext(request, device, actorId), { name: 'floor.signInFailed', input: { workerId } }, async ({ tx, now, audit }) => {
     const { failedPinAttempts } = await tx.worker.update({ where: { id: workerId }, data: { failedPinAttempts: { increment: 1 } }, select: { failedPinAttempts: true } })
     const until = pinLockUntil(failedPinAttempts, now)
@@ -89,21 +94,47 @@ async function recordWrongPin(auth: OfficeAuth, request: FastifyRequest, device:
   })
 }
 
-/** Checks the credentials: the worker, or a 401 after the wrong PIN was counted. */
-async function provedWorker(auth: OfficeAuth, request: FastifyRequest, place: DeviceRequest, body: FloorCredentials, actorId: string) {
+const pinRequired = (message: string) => new ValidationError(message, [{ path: 'pin', message: 'Required.' }])
+
+interface Proved {
+  readonly candidate: Candidate
+  readonly pinHash: string
+  readonly rehash: string | null
+  /** The PIN was checked (false: a badge alone at a badge-only site). */
+  readonly pinVerified: boolean
+}
+
+/**
+ * Checks the credentials: the worker, or a 401 after the wrong PIN was counted. Without a PIN: a 400 for a sign-in by
+ * name or at a site that wants the PIN (decided before the badge is looked up), else the badge alone.
+ */
+async function provedWorker(auth: OfficeAuth, request: FastifyRequest, place: DeviceRequest, body: FloorCredentials, actorId: string): Promise<Proved> {
+  if ((body.badgeCode === undefined) === (body.workerId === undefined)) {
+    throw new ValidationError('Scan a badge or pick your name, then enter your PIN.', [{ path: 'badgeCode', message: 'Send a badge code or a worker id, not both.' }])
+  }
   const now = auth.clock.now()
+  if (body.pin === undefined) {
+    if (body.workerId !== undefined) throw pinRequired('Enter your PIN: a sign-in by name always needs it.')
+    const badgeOnly = await auth.database.withScope(siteScope(place.token), (client) => badgeOnlySignIn(client, place.device.siteId))
+    if (!badgeOnly) throw pinRequired('Enter your PIN: this site signs in with a badge and a PIN.')
+    const candidate = await candidateOf(auth, place, body)
+    const worker = candidate?.worker
+    if (!candidate || !worker || worker.status !== 'ACTIVE' || worker.pinHash === null || isPinLocked(worker, now)) throw wrongCredentials()
+    return { candidate, pinHash: worker.pinHash, rehash: null, pinVerified: false }
+  }
+  const pin = body.pin
   const candidate = await candidateOf(auth, place, body)
   const worker = candidate?.worker
   if (!candidate || !worker || worker.status !== 'ACTIVE' || worker.pinHash === null || isPinLocked(worker, now)) {
-    await verifyPin(body.pin, null, auth.pins)
+    await verifyPin(pin, null, auth.pins)
     throw wrongCredentials()
   }
-  const check = await verifyPin(body.pin, worker.pinHash, auth.pins)
+  const check = await verifyPin(pin, worker.pinHash, auth.pins)
   if (!check.ok) {
     await recordWrongPin(auth, request, place.device, worker.id, actorId)
     throw wrongCredentials()
   }
-  return { candidate, pinHash: worker.pinHash, rehash: check.needsRehash ? await hashPin(body.pin, auth.pins) : null }
+  return { candidate, pinHash: worker.pinHash, rehash: check.needsRehash ? await hashPin(pin, auth.pins) : null, pinVerified: true }
 }
 
 /** The reason an expired session is closed with. */
@@ -114,6 +145,8 @@ interface Started {
   readonly startedAt: string
   readonly idleExpiresAt: string
   readonly endsAt: string
+  readonly idleMinutes: number
+  readonly stepUpUntil: string | null
 }
 
 /**
@@ -125,7 +158,7 @@ async function startSession(
   auth: OfficeAuth,
   request: FastifyRequest,
   place: DeviceRequest,
-  proved: Awaited<ReturnType<typeof provedWorker>>,
+  proved: Proved,
   token: string,
   mode: 'sign-in' | 'switch',
 ): Promise<Started> {
@@ -133,11 +166,17 @@ async function startSession(
   const { worker, badgeId } = proved.candidate
   const name = mode === 'switch' ? 'floor.switchOperator' : 'floor.signIn'
   const { result } = await floorCommand(auth, floorContext(request, device, worker.id), { name, input: { workerId: worker.id, badgeId } }, async ({ tx, now, audit }) => {
-    const claimed = await tx.worker.updateMany({
-      where: { id: worker.id, status: 'ACTIVE', pinHash: proved.pinHash, OR: [{ pinLockedUntil: null }, { pinLockedUntil: { lte: now } }] },
-      data: { failedPinAttempts: 0, pinLockedUntil: null, ...(proved.rehash ? { pinHash: proved.rehash } : {}) },
-    })
-    if (claimed.count !== 1) throw wrongCredentials()
+    const still = { id: worker.id, status: 'ACTIVE' as const, pinHash: proved.pinHash, OR: [{ pinLockedUntil: null }, { pinLockedUntil: { lte: now } }] }
+    if (proved.pinVerified) {
+      // A proved PIN clears the count of wrong ones.
+      const claimed = await tx.worker.updateMany({ where: still, data: { failedPinAttempts: 0, pinLockedUntil: null, ...(proved.rehash ? { pinHash: proved.rehash } : {}) } })
+      if (claimed.count !== 1) throw wrongCredentials()
+    } else {
+      // A badge alone proves no PIN: it leaves the count as it is (else a badge could clear wrong PINs between guesses),
+      // and the site must still allow it now.
+      if ((await tx.worker.count({ where: still })) !== 1) throw wrongCredentials()
+      if (!(await badgeOnlySignIn(tx, device.siteId))) throw pinRequired('Enter your PIN: this site signs in with a badge and a PIN.')
+    }
     if (badgeId !== null && (await tx.badge.count({ where: { id: badgeId, status: 'ACTIVE' } })) !== 1) throw wrongCredentials()
 
     const locked = await tx.$queryRaw<{ currentSessionId: string | null }[]>`
@@ -150,13 +189,34 @@ async function startSession(
     const endsAt = sessionEndsAt(now, timing)
     const idleExpiresAt = idleEndAt(now, timing.idleMinutes, endsAt)
     const sessionId = newId()
+    const pinVerifiedAt = proved.pinVerified ? now : null
     await tx.floorSession.create({
-      data: { id: sessionId, siteId: device.siteId, deviceId: device.id, workerId: worker.id, badgeId, tokenHash: floorHash(token), startedAt: now, lastSeenAt: now, idleExpiresAt, endsAt },
+      data: {
+        id: sessionId,
+        siteId: device.siteId,
+        deviceId: device.id,
+        workerId: worker.id,
+        badgeId,
+        tokenHash: floorHash(token),
+        startedAt: now,
+        lastSeenAt: now,
+        idleExpiresAt,
+        endsAt,
+        pinVerifiedAt,
+      },
       select: { id: true },
     })
     await tx.device.updateMany({ where: { id: device.id }, data: { currentSessionId: sessionId, lastSeenAt: now } })
-    audit({ recordType: 'FloorSession', recordId: sessionId, after: { workerId: worker.id, deviceId: device.id, method: badgeId ? 'badge' : 'name', endsAt: toUtcIso(endsAt) } })
-    return { sessionId, startedAt: toUtcIso(now), idleExpiresAt: toUtcIso(idleExpiresAt), endsAt: toUtcIso(endsAt) }
+    audit({ recordType: 'FloorSession', recordId: sessionId, after: { workerId: worker.id, deviceId: device.id, method: badgeId ? 'badge' : 'name', pin: proved.pinVerified, endsAt: toUtcIso(endsAt) } })
+    const stepUpUntil = floorStepUpUntil(pinVerifiedAt)
+    return {
+      sessionId,
+      startedAt: toUtcIso(now),
+      idleExpiresAt: toUtcIso(idleExpiresAt),
+      endsAt: toUtcIso(endsAt),
+      idleMinutes: timing.idleMinutes,
+      stepUpUntil: stepUpUntil ? toUtcIso(stepUpUntil) : null,
+    }
   })
   return result
 }
@@ -187,7 +247,7 @@ async function settleCurrent(
   audit({ action: 'floor.endSession', recordType: 'FloorSession', recordId: currentId, after: { endReason: reason } })
 }
 
-async function answerStarted(auth: OfficeAuth, reply: FastifyReply, place: DeviceRequest, proved: Awaited<ReturnType<typeof provedWorker>>, token: string, started: Started) {
+async function answerStarted(auth: OfficeAuth, reply: FastifyReply, place: DeviceRequest, proved: Proved, token: string, started: Started) {
   const { worker: signedIn } = proved.candidate
   const notice = await auth.database.withScope({ audience: 'floor', tenantId: place.device.tenantId, siteId: place.device.siteId, actorId: signedIn.id }, (client) =>
     workerNoticeGate(client, place.device.siteId, signedIn.id),
@@ -200,7 +260,7 @@ async function answerStarted(auth: OfficeAuth, reply: FastifyReply, place: Devic
   return {
     status: 'signed_in' as const,
     worker: { id: worker.id, displayName: worker.displayName, locale: worker.locale },
-    session: { startedAt: started.startedAt, idleExpiresAt: started.idleExpiresAt, endsAt: started.endsAt },
+    session: { startedAt: started.startedAt, idleExpiresAt: started.idleExpiresAt, endsAt: started.endsAt, idleMinutes: started.idleMinutes, stepUpUntil: started.stepUpUntil },
     pinMustChange: worker.pinMustChange,
     notice,
   }
@@ -254,16 +314,25 @@ export async function floorMe(request: FastifyRequest) {
   const context = requireContext(request)
   const session = floorSessionOf(request)
   const { device } = session
-  const { site, station, notice } = await request.withClient(async (client) => ({
+  const { site, station, notice, timing } = await request.withClient(async (client) => ({
     site: await client.site.findUniqueOrThrow({ where: { id: device.siteId }, select: { id: true, code: true, name: true } }),
-    station: device.stationId ? await client.station.findUnique({ where: { id: device.stationId }, select: { id: true, code: true, name: true } }) : null,
+    station: device.stationId ? await client.station.findUnique({ where: { id: device.stationId }, select: STATION_SELECT }) : null,
     notice: await workerNoticeGate(client, device.siteId, session.workerId),
+    timing: await siteTiming(client, device.siteId),
   }))
+  const stepUpUntil = floorStepUpUntil(session.pinVerifiedAt)
   return {
     worker: { id: session.workerId, displayName: session.worker.displayName, locale: session.worker.locale },
     device: { id: device.id, name: device.name, station: stationRef(station) },
     site,
-    session: { startedAt: toUtcIso(session.startedAt), idleExpiresAt: toUtcIso(session.idleExpiresAt), endsAt: toUtcIso(session.endsAt) },
+    scanTag: tenantTag(device.tenantId),
+    session: {
+      startedAt: toUtcIso(session.startedAt),
+      idleExpiresAt: toUtcIso(session.idleExpiresAt),
+      endsAt: toUtcIso(session.endsAt),
+      idleMinutes: timing.idleMinutes,
+      stepUpUntil: stepUpUntil ? toUtcIso(stepUpUntil) : null,
+    },
     pinMustChange: session.worker.pinMustChange,
     notice,
     permissions: [...new Set(context.grants.flatMap((grant) => grant.permissions))].sort(),
@@ -300,4 +369,37 @@ export async function changePin(auth: OfficeAuth, request: FastifyRequest, body:
     return null
   })
   return { status: 'changed' as const }
+}
+
+/** The signed-in worker proves their PIN again (step-up.ts): signing acts and My day open for a short while. */
+export async function floorStepUp(auth: OfficeAuth, request: FastifyRequest, body: { pin: string }): Promise<{ stepUpUntil: string }> {
+  const session = floorSessionOf(request)
+  const now = auth.clock.now()
+  const wrong = () => new ValidationError('The PIN is wrong.', [{ path: 'pin', message: 'Wrong PIN.' }])
+  const worker = await request.withClient((client) => client.worker.findUniqueOrThrow({ where: { id: session.workerId }, select: { pinHash: true, pinLockedUntil: true } }))
+  if (worker.pinHash === null || isPinLocked(worker, now)) {
+    await verifyPin(body.pin, null, auth.pins)
+    if (worker.pinHash === null) throw wrong()
+    throw new ForbiddenError('Too many wrong PINs: wait a few minutes, or ask your team leader to reset your PIN.')
+  }
+  const check = await verifyPin(body.pin, worker.pinHash, auth.pins)
+  if (!check.ok) {
+    await recordWrongPin(auth, request, session.device, session.workerId, session.workerId)
+    throw wrong()
+  }
+  const rehash = check.needsRehash ? await hashPin(body.pin, auth.pins) : null
+  const oldHash = worker.pinHash
+  const { result } = await floorCommand(auth, floorContext(request, session.device, session.workerId), { name: 'floor.stepUp', input: null }, async ({ tx, now: at, audit }) => {
+    // The same PIN, not locked meanwhile: the proof clears the count of wrong ones, as a sign-in with the PIN does.
+    const claimed = await tx.worker.updateMany({
+      where: { id: session.workerId, pinHash: oldHash, OR: [{ pinLockedUntil: null }, { pinLockedUntil: { lte: at } }] },
+      data: { failedPinAttempts: 0, pinLockedUntil: null, ...(rehash ? { pinHash: rehash } : {}) },
+    })
+    if (claimed.count !== 1) throw new ConflictError('The PIN changed meanwhile. Sign in again.')
+    const marked = await tx.floorSession.updateMany({ where: { id: session.id, endedAt: null }, data: { pinVerifiedAt: at } })
+    if (marked.count !== 1) throw new ConflictError('This sign-in ended meanwhile. Sign in again.')
+    audit({ recordType: 'FloorSession', recordId: session.id, after: { pinVerifiedAt: toUtcIso(at) } })
+    return toUtcIso(floorStepUpUntil(at)!)
+  })
+  return { stepUpUntil: result }
 }

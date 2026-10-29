@@ -155,7 +155,13 @@ Modules: `modules/compliance/certificates` (certificate register and gate `certi
   its badge (if any) ACTIVE. Grants: the worker's live FLOOR roles over the device's company and site, grains capped to
   wages (`factory-domain auth/floor/grants`); none while `pinMustChange`.
 - Sign-in: badge + PIN or worker id (name) + PIN; one uniform 401 for every failure; 5 wrong PINs lock the worker
-  (5 minutes, doubling, not the device). Another worker live on the device → 409 (use `POST /floor/switch`); the same
+  (5 minutes, doubling, not the device). A badge ALONE where the site's `FloorSettings.badgeOnlySignIn` says so (Owner
+  answer F1 a; `GET|PUT /auth/floor/sites/:siteId/settings`, `GET /floor/device` → `signIn.badgeOnly`): no PIN checked,
+  the session's `pinVerifiedAt` stays null, wrong-PIN counts are never cleared by it, locked or PIN-less workers are
+  refused as usual; a name always needs the PIN; a badge without a PIN elsewhere is a 400 (`pin`) before any lookup.
+  The floor step-up (`floor/step-up.ts`): signing acts and My day call `requireFloorStepUp` (403 issue `stepUp` unless
+  a PIN was proved in the last 2 minutes: at a PIN sign-in, or `POST /floor/step-up`); answers carry
+  `session.stepUpUntil`. Another worker live on the device → 409 (use `POST /floor/switch`); the same
   worker → REPLACED; an expired one → closed (IDLE, SHIFT_END). The device row is locked (`FOR UPDATE`) in the command.
 - Floor commands use `floorCommand` (store.ts): a fresh server Idempotency-Key each (a sign-in is never a replay).
 - Revoking a device or badge, deactivating a worker or resetting a PIN ends the sessions (`endSessions`); the

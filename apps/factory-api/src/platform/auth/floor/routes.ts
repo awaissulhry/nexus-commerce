@@ -10,6 +10,7 @@ import {
   editWorkerContract,
   enrolDeviceContract,
   floorMeContract,
+  floorStepUpContract,
   getSettingsContract,
   issueBadgeContract,
   listDevicesContract,
@@ -29,7 +30,7 @@ import { deviceCookieOf } from './cookies'
 import { deviceInfo, enrolDevice } from './device'
 import { manifest } from './manifest'
 import { createDevice, editDevice, getSettings, listDevices, putSettings, renewEnrolment, revokeDevice } from './registry'
-import { changePin, floorMe, floorSignIn, floorSignOut, switchOperator } from './sign-in'
+import { changePin, floorMe, floorSignIn, floorSignOut, floorStepUp, switchOperator } from './sign-in'
 import { parseSiteToken } from './tokens'
 import { createWorker, editWorker, issueBadge, listWorkers, resetPin, revokeBadge, setWorkerRoles, setWorkerStatus } from './workers'
 
@@ -37,18 +38,20 @@ import { createWorker, editWorker, issueBadge, listWorkers, resetPin, revokeBadg
  * The floor (an enrolled device):
  *   POST /floor/device/enrol    the one-time code of the Office's QR code → the device token (HttpOnly cookie)
  *   GET  /floor/device          the device, its site and station, the language, whether someone is signed in, the roster
- *   POST /floor/sign-in         badge code (or worker id) + PIN → the floor session cookie (409 if another operator is on)
+ *   POST /floor/sign-in         badge code (or worker id) + PIN → the floor session cookie (409 if another operator is on);
+ *                               a badge alone where the site's settings allow it (Owner answer F1 a)
  *   POST /floor/switch          from a signed-in device: the next worker's badge (or name) + PIN; the current one ends
  *   POST /floor/sign-out        ends the floor session, clears its cookie (the device stays enrolled)
  *   GET  /floor/me              the operator, device, site, session times, language and permissions
  *   POST /floor/pin             the operator changes their PIN (required after an administrator's reset)
+ *   POST /floor/step-up         the operator proves their PIN again: signing acts and My day open for 2 minutes
  * The Office:
  *   GET   /auth/floor/devices                        the device registry (in use or not, never by whom)
  *   POST  /auth/floor/devices                        enrol a device: a PENDING device + a one-time QR code (15 minutes)
  *   POST  /auth/floor/devices/:deviceId/enrolment    a new code for a PENDING device (the older ones retire)
  *   PATCH /auth/floor/devices/:deviceId              rename, move to a station (version)
  *   POST  /auth/floor/devices/:deviceId/revoke       revoke: its sign-ins end at once
- *   GET|PUT /auth/floor/sites/:siteId/settings       a site's idle minutes and shift ends
+ *   GET|PUT /auth/floor/sites/:siteId/settings       a site's idle minutes, shift ends and badge-only sign-in
  *   GET   /auth/floor/workers                        the floor workers (name, language, badge hint, roles, PIN state)
  *   POST  /auth/floor/workers                        add a worker (no PIN until a reset gives one)
  *   PATCH /auth/floor/workers/:workerId              name, language, employee number, office link (version)
@@ -76,6 +79,7 @@ export default defineRoutes('auth-floor', manifest, async (app) => {
   app.post('/floor/sign-out', { schema: signOutContract }, (request, reply) => floorSignOut(auth(), request, reply))
   app.get('/floor/me', { schema: floorMeContract }, (request) => floorMe(request))
   app.post('/floor/pin', { schema: changePinContract, config: perDevice(limits.floorSignIn) }, (request) => changePin(auth(), request, request.body))
+  app.post('/floor/step-up', { schema: floorStepUpContract, config: perDevice(limits.floorSignIn) }, (request) => floorStepUp(auth(), request, request.body))
 
   app.get('/auth/floor/devices', { schema: listDevicesContract }, (request) => listDevices(auth(), request, request.query))
   app.post('/auth/floor/devices', { schema: createDeviceContract }, (request) => createDevice(auth(), request, request.body))

@@ -82,6 +82,12 @@ export async function siteTiming(client: FactoryClient | CommandTx, siteId: stri
   return settings ? { idleMinutes: settings.idleMinutes, shiftEnds: settings.shiftEnds, timeZone } : defaultTiming(timeZone)
 }
 
+/** Whether a badge alone signs a worker in at this site (its FloorSettings row; false without one). Owner answer F1. */
+export async function badgeOnlySignIn(client: FactoryClient | CommandTx, siteId: string): Promise<boolean> {
+  const settings = await client.floorSettings.findUnique({ where: { id: siteId }, select: { badgeOnlySignIn: true } })
+  return settings?.badgeOnlySignIn ?? false
+}
+
 export const SESSION_SELECT = {
   id: true,
   deviceId: true,
@@ -92,6 +98,7 @@ export const SESSION_SELECT = {
   idleExpiresAt: true,
   endsAt: true,
   endedAt: true,
+  pinVerifiedAt: true,
 } as const
 
 export type FloorSessionRow = Prisma.FloorSessionGetPayload<{ select: typeof SESSION_SELECT }>
