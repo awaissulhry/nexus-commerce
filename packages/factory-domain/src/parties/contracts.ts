@@ -152,6 +152,14 @@ export const viesCheckBody = input({
 })
 export type ViesCheckBody = z.output<typeof viesCheckBody>
 
+/**
+ * What a list row may be asked to need (SCR-032's tiles "EU businesses without a valid VIES check" and "Can't be invoiced
+ * yet"): VIES = the VIES_NOT_PROVEN warning (an EU business customer without a current proof); INVOICE = a warning the
+ * invoicing steps refuse to issue without (`blocksInvoice`).
+ */
+export const PARTY_ATTENTION = ['VIES', 'INVOICE'] as const
+export type PartyAttention = (typeof PARTY_ATTENTION)[number]
+
 /** The list's filters (SCR-032, SCR-056): Customers is `role=CUSTOMER,BRAND`, Suppliers `role=SUPPLIER,SUBCONTRACTOR,CARRIER`. */
 export const listPartiesQuery = input({
   /** Code, legal or trade name, VAT number or codice fiscale. */
@@ -164,6 +172,8 @@ export const listPartiesQuery = input({
   taxMode: z.enum(PARTY_TAX_MODES).optional(),
   /** Exactly this company's parties and the tenant-wide ones. */
   companyId: id().optional(),
+  /** Only the parties that need this (PARTY_ATTENTION); `count` counts them. */
+  attention: z.enum(PARTY_ATTENTION).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   cursor: z.string().max(200).optional(),
 })
@@ -210,6 +220,10 @@ export const partyRow = output({
   /** The default invoice address's city and country, else the registered office's. */
   city: z.string().nullable(),
   vies: viesStandingView,
+  /** The codes of what the record still lacks for its work (./warnings.ts); the record names each with its words. */
+  attention: z.array(z.enum(PARTY_WARNINGS)),
+  /** One of them stops an invoice to the party (`blocksInvoice`). */
+  invoiceBlocked: z.boolean(),
   version: z.number().int(),
   updatedAt: instant(),
 })

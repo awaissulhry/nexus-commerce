@@ -1,0 +1,487 @@
+/*
+ * Admin (B-W0-27) LAYOUT: the page head, lists, record frames, the thread dock, the set-up checklist and the local
+ * stand-ins for the design's new DS parts. The controls are the design system's; this file places them with semantic
+ * tokens only (no raw colours, no restyled controls).
+ */
+/* A page fills the shell's main area (Owner, 2026-10-29: no empty space on the right; equal gutters come from
+ * .fw-office-main). Only inner parts keep a measure: the intro text column, a field column, a dialog. */
+.fw-adm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-adm-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-adm-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  max-width: 760px;
+}
+
+.fw-adm-intro,
+.fw-adm-hint,
+.fw-adm-loading,
+.fw-adm-asof {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.fw-adm-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-adm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-adm-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-12);
+}
+
+.fw-adm-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-adm-cell-row,
+.fw-adm-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-adm-name {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+/* ---- list frame cells (the grid is the design system's; these place a cell's own parts) ---- */
+/* A cell of two lines: the value, then its muted sub-line (DS .nds-cell-sub), each cut with "…" when narrow. */
+.fw-adm-cell2 {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-adm-cell2 > *,
+.fw-adm-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tags in a cell stay on one line (the row keeps its height); the last ones are cut, their words in the row's text. */
+.fw-adm-celltags {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The money chips of a row (GrainChips) on one line. */
+.fw-adm-celltags .fw-adm-grains {
+  flex-wrap: nowrap;
+}
+
+/* A row one step in a tree (a station under its line). */
+.fw-adm-tree-child {
+  display: block;
+  padding-inline-start: var(--nds-space-24);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A record tab with two lists: each under its own heading. */
+.fw-adm-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-adm-section-title {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-adm-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-adm-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.fw-adm-grains {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+
+.fw-adm-grain-icon {
+  margin-inline-end: var(--nds-space-2);
+  vertical-align: -1px;
+}
+
+/* ---- record frame ---- */
+.fw-adm-record {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-adm-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-adm-dock-keys {
+  display: inline-flex;
+  gap: var(--nds-space-2);
+  margin-inline-start: var(--nds-space-4);
+}
+
+.fw-adm-record-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+}
+
+@media (min-width: 1280px) {
+  .fw-adm-record-body.has-dock {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+  }
+}
+
+@media (max-width: 1279px) {
+  .fw-adm-record-dock {
+    display: none;
+  }
+}
+
+.fw-adm-record-main,
+.fw-adm-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-adm-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+}
+
+.fw-adm-form-wide {
+  grid-column: 1 / -1;
+}
+
+/* A card's form: its fields side by side on a wide screen (no empty half card), one under the other on a narrow one. */
+.fw-adm-form-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-items: start;
+  gap: var(--nds-space-12) var(--nds-space-24);
+}
+
+.fw-adm-form-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-adm-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-adm-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+}
+
+.fw-adm-guards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: var(--nds-space-8) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-adm-danger {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+
+.fw-adm-danger-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-adm-danger-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  max-width: 560px;
+}
+
+/* ---- set-up checklist ---- */
+.fw-adm-steps {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-adm-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--nds-space-12);
+  align-items: start;
+  padding: var(--nds-space-12) 0;
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-adm-step:first-child {
+  border-top: 0;
+}
+
+.fw-adm-step-icon {
+  display: inline-flex;
+  padding-top: var(--nds-space-2);
+  color: var(--nds-text-2);
+}
+
+.fw-adm-step.is-done .fw-adm-step-icon {
+  color: var(--nds-success);
+}
+
+.fw-adm-step.is-needs .fw-adm-step-icon,
+.fw-adm-step.is-blocked .fw-adm-step-icon,
+.fw-adm-step.is-failed .fw-adm-step-icon {
+  color: var(--nds-warning);
+}
+
+.fw-adm-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-adm-step-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-adm-step-name {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-adm-step-detail {
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-adm-step-meta {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+}
+
+@media (max-width: 719px) {
+  .fw-adm-step {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .fw-adm-step-go {
+    grid-column: 2;
+  }
+}
+
+/* ---- one-time reveal, scope, matrix ---- */
+.fw-adm-reveal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  align-items: flex-start;
+}
+
+.fw-adm-secret {
+  margin: 0;
+  padding: var(--nds-space-12) var(--nds-space-16);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xl);
+  letter-spacing: 0.2em;
+  color: var(--nds-text-strong);
+}
+
+.fw-adm-scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-adm-scope-list,
+.fw-adm-scope-sites {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-adm-scope-list {
+  padding-inline-start: var(--nds-space-12);
+}
+
+.fw-adm-scope-sites {
+  margin-top: var(--nds-space-6);
+  padding-inline-start: var(--nds-space-24);
+}
+
+.fw-adm-matrix {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-adm-matrix-summary {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-12);
+}
+
+.fw-adm-matrix-area {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-adm-matrix-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+}
+
+.fw-adm-matrix-marks {
+  display: inline-flex;
+  gap: var(--nds-space-4);
+}
+
+.fw-adm-tick {
+  display: inline-flex;
+  color: var(--nds-text-2);
+}
+
+.fw-adm-tick.is-on {
+  color: var(--nds-success);
+}
+
+.fw-adm-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-adm-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-adm-people {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-adm-person-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  gap: var(--nds-space-8);
+  align-items: end;
+}
+
+@media (max-width: 719px) {
+  .fw-adm-person-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-adm-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-adm-shift-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}

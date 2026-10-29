@@ -1,0 +1,844 @@
+{
+  "common": {
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "dismiss": "Chiudi avviso",
+    "edit": "Modifica",
+    "retry": "Riprova",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "yes": "Sì",
+    "no": "No"
+  },
+  "problem": {
+    "signedOut": "La sessione è scaduta. Accedi di nuovo per continuare.",
+    "forbidden": "Non hai il permesso per questa azione. Un amministratore può darlo al tuo ruolo.",
+    "notFound": "Questa scheda non esiste, oppure non puoi vederla.",
+    "conflict": "Qualcun altro l’ha cambiata nel frattempo. La scheda è stata riletta: controlla e riprova.",
+    "invalid": "Alcuni valori sono stati rifiutati. Controlla i campi segnati.",
+    "rateLimited": "Troppi tentativi in poco tempo. Attendi un minuto e riprova.",
+    "unavailable": "Nexus Factory non ha risposto. Controlla la connessione e riprova.",
+    "contract": "Il server ha risposto in un formato che questa pagina non conosce. Ricarica la pagina.",
+    "internal": "Qualcosa è andato storto da parte nostra. Riprova; se succede ancora, avvisa l’amministratore."
+  },
+  "live": {
+    "connecting": "Collegamento…",
+    "live": "In diretta",
+    "offline": "Offline — le modifiche attendono l’invio"
+  },
+  "status": {
+    "PROSPECT": "Potenziale",
+    "ACTIVE": "Attivo",
+    "BLOCKED": "Bloccato",
+    "ARCHIVED": "Archiviato"
+  },
+  "role": {
+    "CUSTOMER": "Cliente",
+    "BRAND": "Marchio",
+    "SUPPLIER": "Fornitore",
+    "SUBCONTRACTOR": "Terzista",
+    "CARRIER": "Corriere"
+  },
+  "kind": {
+    "ORGANISATION": "Azienda",
+    "PERSON": "Persona"
+  },
+  "taxMode": {
+    "IT_B2B": "Azienda italiana",
+    "IT_B2C": "Consumatore italiano",
+    "EU_B2B": "Azienda UE",
+    "EU_B2C": "Consumatore UE",
+    "EXTRA_EU": "Extra UE"
+  },
+  "taxModeHint": {
+    "IT_B2B": "Partita IVA; fatture via SDI al suo codice o alla PEC.",
+    "IT_B2C": "Solo codice fiscale; si applica l’IVA italiana.",
+    "EU_B2B": "Partita IVA del suo Stato; una vendita non imponibile richiede un controllo VIES valido.",
+    "EU_B2C": "Nessun codice fiscale; si applica l’IVA italiana.",
+    "EXTRA_EU": "Codice fiscale estero facoltativo; valgono le regole dell’export."
+  },
+  "master": {
+    "ACTIVE": "In uso",
+    "ARCHIVED": "Archiviato"
+  },
+  "addressKind": {
+    "REGISTERED": "Sede legale",
+    "BILL_TO": "Fatturazione",
+    "SHIP_TO": "Consegna",
+    "PICKUP": "Ritiro"
+  },
+  "contactRole": {
+    "ORDERS": "Ordini",
+    "INVOICES": "Fatture",
+    "QUALITY": "Qualità",
+    "DESIGN": "Design",
+    "OWNER": "Titolare",
+    "RIDER": "Pilota"
+  },
+  "customers": {
+    "contactRoleHint": {
+      "ORDERS": "Riceve preventivi, conferme d’ordine e i loro link",
+      "INVOICES": "Riceve fatture, richieste di acconto e pagamenti",
+      "QUALITY": "Riceve certificati, rapporti di prova e reclami",
+      "DESIGN": "Schede tecniche e campioni",
+      "OWNER": "Titolare o chi decide",
+      "RIDER": "Indossa un capo su misura"
+    },
+    "step": {
+      "none": "Niente in sospeso: si può preventivare, ordinare e fatturare."
+    },
+    "title": "Clienti",
+    "intro": "Chi compra da noi — aziende, marchi e piloti — con ciò che serve alla fattura elettronica e la prova VIES per le vendite UE non imponibili.",
+    "search": "Cerca codice, nome, partita IVA o codice fiscale",
+    "table": "Clienti",
+    "file": "clienti",
+    "failedTitle": "Caricamento dei clienti non riuscito",
+    "empty": {
+      "title": "Ancora nessun cliente",
+      "body": "Aggiungi il primo: parti dalla partita IVA."
+    },
+    "noAccess": {
+      "title": "Non hai accesso ai clienti",
+      "body": "Per vedere i clienti serve il permesso «Vedere clienti e fornitori». Lo hanno i ruoli Vendite, Acquisti e Amministrazione; chiedi a un amministratore."
+    },
+    "new": {
+      "action": "Nuovo cliente",
+      "title": "Nuovo cliente",
+      "subtitle": "Parti dalla partita IVA: per un’azienda UE si interroga VIES alla creazione.",
+      "go": "Crea cliente",
+      "after": "Si apre su Fisco e condizioni se mancano dati, altrimenti sulla Panoramica."
+    },
+    "keys": {
+      "new": "Nuovo cliente"
+    },
+    "block": {
+      "title": "Bloccare {name}?",
+      "go": "Blocca cliente",
+      "titleMany_one": "Bloccare {count} cliente?",
+      "titleMany_other": "Bloccare {count} clienti?",
+      "stops1": "Niente nuovi preventivi, ordini o spedizioni per questo cliente.",
+      "stops2": "I preventivi aperti mostrano un avviso; i documenti già fatti restano."
+    },
+    "archive": {
+      "titleOne": "Archiviare {name}?",
+      "titleMany_one": "Archiviare {count} cliente?",
+      "titleMany_other": "Archiviare {count} clienti?",
+      "reach1": "Non compare più nella scelta del cliente di preventivi e ordini."
+    },
+    "blockedBanner": "Bloccato dal {date}: niente nuovi preventivi, ordini o spedizioni.",
+    "activate": "Attiva",
+    "tab": {
+      "overview": "Panoramica",
+      "addresses": "Indirizzi e contatti",
+      "tax": "Fisco e condizioni",
+      "orders": "Preventivi e ordini",
+      "documents": "Documenti",
+      "activity": "Attività"
+    },
+    "side": {
+      "contacts": "Contatti principali",
+      "noContacts": "Ancora nessuno riceve preventivi o fatture."
+    },
+    "address": {
+      "emptyBody": "Le fatture riportano la sede legale; le consegne vanno all’indirizzo di consegna predefinito."
+    },
+    "contacts": {
+      "empty": "Nessun contatto",
+      "emptyBody": "Aggiungi chi ordina: preventivi e conferme vanno a questa persona.",
+      "addFirst": "Aggiungi chi ordina"
+    },
+    "identity": {
+      "none": "Ancora nessuna identità fiscale: non si può fatturare finché non c’è."
+    }
+  },
+  "suppliers": {
+    "contactRoleHint": {
+      "ORDERS": "Riceve gli ordini d’acquisto e i link di conferma",
+      "INVOICES": "Fatture e pagamenti",
+      "QUALITY": "Certificati, rapporti di prova e reclami",
+      "DESIGN": "Campioni e sviluppo",
+      "OWNER": "Titolare o chi decide",
+      "RIDER": "Indossa un capo su misura"
+    },
+    "step": {
+      "none": "Niente in sospeso: gli ordini d’acquisto possono partire."
+    },
+    "title": "Fornitori",
+    "intro": "Concerie, tessiture, accessori e protezioni, terzisti e corrieri: da chi compriamo e con chi lavoriamo e spediamo.",
+    "search": "Cerca codice, nome o partita IVA",
+    "table": "Fornitori",
+    "file": "fornitori",
+    "failedTitle": "Caricamento dei fornitori non riuscito",
+    "empty": {
+      "title": "Ancora nessun fornitore",
+      "body": "Aggiungi il primo: parte come potenziale finché non viene approvato."
+    },
+    "noAccess": {
+      "title": "Non hai accesso ai fornitori",
+      "body": "Per vedere i fornitori serve il permesso «Vedere clienti e fornitori». Lo hanno i ruoli Acquisti, Vendite e Amministrazione; chiedi a un amministratore."
+    },
+    "new": {
+      "action": "Nuovo fornitore",
+      "title": "Nuovo fornitore",
+      "subtitle": "Parti dalla partita IVA; il fornitore si apre come potenziale.",
+      "go": "Crea fornitore",
+      "after": "Si apre come potenziale: approvalo prima del primo ordine d’acquisto."
+    },
+    "keys": {
+      "new": "Nuovo fornitore"
+    },
+    "block": {
+      "title": "Bloccare {name}?",
+      "go": "Blocca fornitore",
+      "titleMany_one": "Bloccare {count} fornitore?",
+      "titleMany_other": "Bloccare {count} fornitori?",
+      "stops1": "Niente nuovi ordini d’acquisto a questo fornitore.",
+      "stops2": "Gli ordini già inviati restano; i ricevimenti mostrano un avviso."
+    },
+    "archive": {
+      "titleOne": "Archiviare {name}?",
+      "titleMany_one": "Archiviare {count} fornitore?",
+      "titleMany_other": "Archiviare {count} fornitori?",
+      "reach1": "Non compare più nella scelta del fornitore degli ordini d’acquisto."
+    },
+    "blockedBanner": "Bloccato dal {date}: niente nuovi ordini d’acquisto.",
+    "activate": "Approva fornitore",
+    "tab": {
+      "overview": "Panoramica",
+      "contacts": "Contatti",
+      "orders": "Ordini",
+      "activity": "Attività"
+    },
+    "side": {
+      "contacts": "Chi riceve gli ordini",
+      "noContacts": "Nessuno riceve gli ordini: gli ordini d’acquisto non si possono ancora inviare per email.",
+      "orders": "Ordini d’acquisto",
+      "openOrders": "Aperti",
+      "openValue": "Valore aperto",
+      "waiting": "In attesa del fornitore"
+    },
+    "overview": {
+      "card": "Fornitore"
+    },
+    "address": {
+      "emptyBody": "Ordini e fatture riportano la sede legale; la merce si ritira all’indirizzo di ritiro."
+    },
+    "contacts": {
+      "title": "Contatti e cosa ricevono",
+      "empty": "Nessun contatto",
+      "emptyBody": "Gli ordini non si possono inviare per email finché un contatto non riceve gli ordini.",
+      "addFirst": "Aggiungi chi riceve gli ordini"
+    },
+    "identity": {
+      "none": "Ancora nessuna identità fiscale: ordini e fatture ne riportano i codici."
+    }
+  },
+  "quoteStatus": {
+    "DRAFT": "Bozza",
+    "PENDING_APPROVAL": "In attesa di approvazione",
+    "APPROVED": "Approvato",
+    "SENT": "Inviato",
+    "ACCEPTED": "Accettato",
+    "DECLINED": "Rifiutato",
+    "EXPIRED": "Scaduto",
+    "CANCELLED": "Annullato"
+  },
+  "orderStatus": {
+    "CONFIRMED": "Confermato",
+    "IN_PRODUCTION": "In produzione",
+    "READY": "Pronto",
+    "PARTLY_SHIPPED": "Spedito in parte",
+    "SHIPPED": "Spedito",
+    "CLOSED": "Chiuso",
+    "CANCELLED": "Annullato"
+  },
+  "poStatus": {
+    "DRAFT": "Bozza",
+    "SENT": "Inviato, non confermato",
+    "CONFIRMED": "Confermato",
+    "DECLINED": "Rifiutato",
+    "CHANGES_PROPOSED": "Modifiche proposte",
+    "PARTLY_RECEIVED": "Ricevuto in parte",
+    "RECEIVED": "Ricevuto",
+    "CLOSED": "Chiuso",
+    "CANCELLED": "Annullato"
+  },
+  "warning": {
+    "NO_TAX_IDENTITY": "Nessuna identità fiscale: fatture e ordini d’acquisto ne riportano i codici.",
+    "NO_REGISTERED_ADDRESS": "Nessuna sede legale: la fattura riporta la sede.",
+    "FISCAL_DRAWER": "Nessun codice SDI o PEC: le fatture vanno nel cassetto fiscale (0000000) con una copia per email.",
+    "VIES_NOT_PROVEN": "Nessun controllo VIES valido: le vendite non sono non imponibili finché un controllo non risponde valido.",
+    "TAX_COUNTRY_DIFFERS": "L’identità fiscale è di un altro Paese rispetto alla scheda: controlla quale è giusto.",
+    "NO_DEFAULT_BILL_TO": "Nessun indirizzo di fatturazione predefinito.",
+    "NO_DEFAULT_SHIP_TO": "Nessun indirizzo di consegna predefinito.",
+    "NO_ORDERS_CONTACT": "Nessuno riceve gli ordini: dai a un contatto il ruolo Ordini e un’email.",
+    "NAME_TOO_LONG": "La ragione sociale supera gli 80 caratteri della fattura elettronica.",
+    "NOT_LATIN1": "Il nome o la sede legale hanno caratteri che la fattura elettronica non accetta."
+  },
+  "step": {
+    "blocksInvoice": "Non fatturabile",
+    "action": {
+      "identity": "Aggiungi identità fiscale",
+      "correctIdentity": "Aggiungi codice SDI o PEC",
+      "vies": "Controlla ora",
+      "address": "Aggiungi indirizzo",
+      "contact": "Aggiungi contatto",
+      "edit": "Modifica"
+    }
+  },
+  "view": {
+    "open": "Non archiviati",
+    "active": "Attivi",
+    "prospects": "Potenziali",
+    "brands": "Marchi (conto terzi)",
+    "invoice": "Dati fiscali mancanti",
+    "vies": "Problemi VIES",
+    "blocked": "Bloccati",
+    "archived": "Archiviati",
+    "all": "Tutti",
+    "suppliers": "Fornitori",
+    "subcontractors": "Terzisti",
+    "carriers": "Corrieri"
+  },
+  "tile": {
+    "unknown": "Conteggio non riuscito",
+    "customers": {
+      "active": "Attivi",
+      "activeHint": "Si possono preventivare e ordinare",
+      "prospects": "Potenziali",
+      "prospectsHint": "Non ancora attivi",
+      "vies": "Aziende UE senza controllo VIES valido",
+      "viesHint": "Vendite non ancora non imponibili",
+      "invoice": "Non ancora fatturabili",
+      "invoiceHint": "Mancano dati fiscali",
+      "blocked": "Bloccati",
+      "blockedHint": "Niente nuovi preventivi, ordini o spedizioni"
+    },
+    "suppliers": {
+      "active": "Attivi",
+      "activeHint": "Possono ricevere ordini d’acquisto",
+      "prospects": "Potenziali",
+      "prospectsHint": "Nessun ordine finché non approvati",
+      "blocked": "Bloccati",
+      "blockedHint": "Niente nuovi ordini d’acquisto"
+    }
+  },
+  "vies": {
+    "title": "Controllo VIES",
+    "checkNow": "Controlla VIES",
+    "checkAgain": "Controlla di nuovo",
+    "checking": "Controllo in corso",
+    "checkingOne": "Richiesta a VIES per {name}…",
+    "open": "VIES: {state}. Mostra il risultato",
+    "pill": "VIES {state}",
+    "popoverTitle": "Risultato VIES",
+    "resultLabel": "Esito",
+    "checkedAt": "Controllato",
+    "validUntil": "La prova vale fino al",
+    "consultation": "Numero di consultazione",
+    "number": "Numero controllato",
+    "traderName": "Nome come da VIES",
+    "traderAddress": "Indirizzo come da VIES",
+    "notYet": "Non ancora controllato. Controlla ora: la risposta resta come prova.",
+    "noAnswer": "VIES non ha risposto (Stato membro non disponibile) — non è un rifiuto. Riprova.",
+    "recheck": "I ricontrolli non sono ancora programmati: una prova vale {days} giorni, quindi ricontrolla prima di una vendita non imponibile.",
+    "history": "Tutti i controlli (conservati, mai modificati)",
+    "notApplicable": "VIES controlla le partite IVA UE fuori dall’Italia. Questa scheda non ne ha da controllare.",
+    "refused": "VIES non è stato interrogato: il collegamento potrebbe non essere configurato, o la nostra azienda non ha partita IVA. Nulla è stato registrato.",
+    "noneToCheck": "Nessuna azienda UE di questo elenco ha una partita IVA da controllare.",
+    "afterCreateFailed": "Creato. VIES non ha ancora risposto: ricontrolla da Fisco e condizioni.",
+    "state": {
+      "NOT_APPLICABLE": "Non serve",
+      "UNCHECKED": "Non controllato",
+      "VALID": "Valido",
+      "EXPIRED": "Scaduto",
+      "INVALID": "Non valido",
+      "HELD": "Senza risposta"
+    },
+    "stateOn": {
+      "VALID": "Valido {date}",
+      "EXPIRED": "Scaduto (controllo del {date})",
+      "INVALID": "Non valido {date}",
+      "HELD": "Senza risposta {date}"
+    },
+    "meaning": {
+      "NOT_APPLICABLE": "Nessuna partita IVA UE fuori dall’Italia da controllare.",
+      "UNCHECKED": "Mai controllato: una vendita non è non imponibile finché un controllo non risponde valido.",
+      "VALID": "Valido in VIES; la prova vale {days} giorni dal controllo.",
+      "EXPIRED": "L’ultimo controllo valido ha più di {days} giorni: ricontrolla prima di una vendita non imponibile.",
+      "INVALID": "VIES ha risposto non valido: niente vendita non imponibile; si applica l’IVA italiana finché un nuovo controllo non risponde valido.",
+      "HELD": "Nessuna risposta da VIES e nessuna prova valida: in sospeso, ricontrolla più tardi."
+    },
+    "result": {
+      "VALID": "Valido",
+      "INVALID": "Non valido",
+      "ERROR": "Senza risposta"
+    },
+    "done": {
+      "VALID": "VIES: {name} è valido. La risposta resta come prova.",
+      "INVALID": "VIES ha risposto che la partita IVA di {name} non è valida.",
+      "ERROR": "VIES non ha risposto per {name}: non è un rifiuto. Riprova più tardi."
+    }
+  },
+  "list": {
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "loading": "Caricamento…",
+    "failedTitle": "Caricamento non riuscito",
+    "noMatch": "Nessuna riga corrisponde a questi filtri",
+    "clearAll": "Togli tutti i filtri",
+    "rowsHeading": "Filtri salvati",
+    "rows": "Righe: {view}",
+    "filters": "Filtri",
+    "filtersCount": "Filtri ({count})",
+    "more": "Altre azioni",
+    "activeFilters": "Filtri in uso",
+    "removeFilter": "Togli il filtro {name}",
+    "bulkVies_one": "Controlla VIES per {count}",
+    "bulkVies_other": "Controlla VIES per {count}",
+    "bulkExport_one": "Esporta {count} (CSV)",
+    "bulkExport_other": "Esporta {count} (CSV)",
+    "bulkBlock_one": "Blocca {count}",
+    "bulkBlock_other": "Blocca {count}",
+    "bulkArchive_one": "Archivia {count}",
+    "bulkArchive_other": "Archivia {count}",
+    "count": "{shown} di {total}",
+    "countShown": "{shown} mostrate",
+    "showMore": "Mostra altre {count}",
+    "exportView": "Esporta questa vista (CSV)",
+    "exportViewHint": "Le {count} righe mostrate, con le colonne dell’elenco",
+    "exportNothing": "Niente da esportare in questa vista",
+    "recheckAll": "Ricontrolla ora tutte le partite IVA UE",
+    "recheckAllHint": "Una richiesta VIES ciascuna, fino a {max} alla volta",
+    "cannotInvoice": "Non ancora fatturabile",
+    "noIdentity": "Nessuna identità fiscale",
+    "exported": "Esportate {count} righe.",
+    "col": {
+      "name": "Nome",
+      "roles": "Ruoli",
+      "status": "Stato",
+      "country": "Paese",
+      "taxMode": "Regime fiscale",
+      "vies": "VIES",
+      "sdi": "Codice SDI o PEC",
+      "language": "Lingua",
+      "actions": "Azioni",
+      "vat": "Partita IVA"
+    }
+  },
+  "row": {
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "checkVies": "Controlla VIES ora",
+    "block": "Blocca…",
+    "unblock": "Sblocca",
+    "archive": "Archivia…",
+    "reactivate": "Riattiva",
+    "menu": "Azioni per {name}"
+  },
+  "sdi": {
+    "set": "Presente",
+    "missing": "Mancante",
+    "notNeeded": "Non serve"
+  },
+  "held": {
+    "manage": "Serve il permesso di gestire clienti e fornitori",
+    "block": "Serve il permesso di bloccare clienti e fornitori",
+    "vies": "Serve il permesso di controllare le partite IVA con VIES",
+    "archived": "Archiviato: prima riattivalo",
+    "archiveBlocked": "Prima sbloccalo: il blocco è una decisione a sé",
+    "noEuNumber": "Nessuna delle righe selezionate ha una partita IVA UE controllabile con VIES",
+    "bulkMax": "Al massimo {max} alla volta: selezionane meno",
+    "nothingToBlock": "Nulla di selezionato si può bloccare (solo gli attivi)",
+    "nothingToArchive": "Nulla di selezionato si può archiviare (i bloccati vanno prima sbloccati)",
+    "noEmail": "Serve prima un’email"
+  },
+  "csv": {
+    "code": "Codice",
+    "legalName": "Ragione sociale",
+    "tradeName": "Nome commerciale",
+    "roles": "Ruoli",
+    "status": "Stato",
+    "country": "Paese",
+    "city": "Città",
+    "taxMode": "Regime fiscale",
+    "vat": "Partita IVA",
+    "fiscalCode": "Codice fiscale",
+    "vies": "VIES",
+    "language": "Lingua"
+  },
+  "new": {
+    "taxFirst": "Identità fiscale",
+    "taxFirstHint": "Prima il Paese e la partita IVA: decidono cosa serve in fattura.",
+    "who": "Chi sono",
+    "viesWillCheck": "Alla creazione Nexus interroga VIES e conserva la risposta come prova.",
+    "viesNoRight": "Lo controlla dopo la creazione una persona con il permesso VIES.",
+    "duplicate_one": "Già in Nexus: {count} scheda con questo numero o un nome simile",
+    "duplicate_other": "Già in Nexus: {count} schede con questo numero o un nome simile",
+    "duplicateHint": "Una sola scheda per ogni partner: aprila e aggiungi il ruolo che manca.",
+    "conflictNumber": "Questa partita IVA o codice fiscale appartiene già a un’altra scheda.",
+    "conflictCode": "Questo codice è già usato: scegline un altro.",
+    "forbiddenEvery": "Puoi aggiungere schede solo per la tua azienda: sceglila in «Appartiene a»."
+  },
+  "edit": {
+    "title": "Modifica anagrafica",
+    "subtitle": "Nomi, ruoli e lingua dei suoi documenti. I documenti già inviati conservano la loro copia."
+  },
+  "block": {
+    "stops": "Cosa blocca",
+    "reason": "Motivo",
+    "reasonHint": "Resta con il blocco ed è mostrato sulla scheda.",
+    "goMany_one": "Blocca {count}",
+    "goMany_other": "Blocca {count}",
+    "undo": "Sbloccalo dalla scheda quando il motivo non c’è più."
+  },
+  "archive": {
+    "reach": "Cosa fa",
+    "reach2": "Preventivi, ordini e fatture già fatti la conservano.",
+    "reversal": "Annulla: Riattiva sulla scheda.",
+    "goOne": "Archivia",
+    "goMany_one": "Archivia {count}",
+    "goMany_other": "Archivia {count}",
+    "nothing": "Niente da archiviare",
+    "andMore": "altri {count}",
+    "skipped_one": "{count} riga selezionata è bloccata e resta com’è.",
+    "skipped_other": "{count} righe selezionate sono bloccate e restano come sono."
+  },
+  "address": {
+    "title": "Indirizzi",
+    "add": "Aggiungi indirizzo",
+    "addRegistered": "Aggiungi la sede legale",
+    "empty": "Ancora nessun indirizzo",
+    "kinds": "A cosa serve",
+    "newTitle": "Aggiungi un indirizzo",
+    "editTitle": "Modifica indirizzo",
+    "sentKeepCopy": "Cambiare un indirizzo non cambia preventivi, ordini o documenti già inviati: conservano la loro copia.",
+    "defaultBillTo": "Indirizzo di fatturazione predefinito",
+    "defaultShipTo": "Indirizzo di consegna predefinito",
+    "default": {
+      "billTo": "Fatturazione predefinita: {name}",
+      "shipTo": "Consegna predefinita: {name}"
+    },
+    "archive": "Archivia",
+    "archiveHint": "Un indirizzo in uso si archivia, non si cancella",
+    "restore": "Ripristina",
+    "menu": "Azioni per l’indirizzo {name}",
+    "col": {
+      "kinds": "Uso",
+      "address": "Indirizzo",
+      "contact": "Referente sul posto",
+      "billTo": "Fatture (predef.)",
+      "shipTo": "Consegne (predef.)",
+      "status": "Stato"
+    }
+  },
+  "contact": {
+    "title": "Contatti",
+    "add": "Aggiungi contatto",
+    "newTitle": "Aggiungi un contatto",
+    "editTitle": "Modifica contatto",
+    "roles": "Di cosa si occupa",
+    "archive": "Archivia",
+    "archiveHint": "Un contatto in uso si archivia, non si cancella",
+    "restore": "Ripristina",
+    "menu": "Azioni per {name}",
+    "noRole": "Nessun ruolo",
+    "receivesPosOf": "{name} riceve gli ordini d’acquisto",
+    "col": {
+      "name": "Nome",
+      "email": "Email",
+      "phone": "Telefono",
+      "receivesPos": "Riceve ordini",
+      "roles": "Ruoli",
+      "language": "Lingua",
+      "status": "Stato"
+    }
+  },
+  "identity": {
+    "title": "Identità fiscale",
+    "correct": "Correggi…",
+    "newFromDate": "Nuova identità da una data…",
+    "addFirst": "Aggiungi identità fiscale",
+    "others": "Altre identità (con data)",
+    "newTitle": "Nuova identità fiscale da una data",
+    "correctTitle": "Correggi l’identità in vigore",
+    "newSubtitle": "Un cambio da una data è una nuova identità: i documenti prima di quel giorno tengono quella vecchia.",
+    "correctSubtitle": "Per un errore di battitura o un codice SDI mancante. Un vero cambio da una data è una nuova identità.",
+    "add": "Aggiungi identità",
+    "documentsKeep": "Le fatture già emesse conservano l’identità con cui sono state emesse."
+  },
+  "field": {
+    "legalName": "Ragione sociale",
+    "legalNameHint": "Come in fattura",
+    "tradeName": "Nome commerciale",
+    "tradeNameHint": "Come lo si chiama; gli elenchi lo mostrano per primo",
+    "kind": "Tipo",
+    "code": "Codice",
+    "codeHint": "Suggerito dal nome; maiuscole, cifre e . _ - (al massimo 24)",
+    "roles": "Ruoli",
+    "country": "Paese",
+    "language": "Lingua",
+    "languageHint": "Documenti ed email in questa lingua",
+    "currency": "Valuta",
+    "paymentTerms": "Condizioni di pagamento",
+    "paymentTermsHint": "Come concordato, a parole; l’elenco delle condizioni arriverà più avanti",
+    "internalNote": "Nota interna",
+    "internalNoteHint": "Solo per noi; mai sui documenti",
+    "validFrom": "Valida dal",
+    "validFromHint": "Il primo giorno in cui vale",
+    "validFromToday": "Lascia vuoto: vale da oggi",
+    "taxCountry": "Paese fiscale",
+    "taxMode": "Regime fiscale",
+    "vatNumber": "Partita IVA",
+    "foreignTaxId": "Codice fiscale estero",
+    "fiscalCode": "Codice fiscale",
+    "fiscalCodeHint": "16 caratteri per una persona, 11 cifre per un’azienda",
+    "sdi": "Codice destinatario SDI",
+    "sdiHint": "7 caratteri; senza codice o PEC le fatture vanno nel cassetto fiscale",
+    "pec": "PEC",
+    "pecHint": "Posta certificata per le fatture",
+    "addressName": "Nome",
+    "addressNameHint": "Per esempio «Magazzino»",
+    "line1": "Via e numero",
+    "line1Hint": "Al massimo 60 caratteri",
+    "line2": "Altro",
+    "cap": "CAP",
+    "postalCode": "Codice postale",
+    "city": "Città",
+    "provinceIt": "Provincia",
+    "province": "Regione",
+    "provinceHint": "Due lettere: MI, FI, PI…",
+    "contactName": "Referente sul posto",
+    "phone": "Telefono",
+    "deliveryNotes": "Note di consegna",
+    "deliveryNotesHint": "Orari, banchina, cosa serve all’autista",
+    "contactPerson": "Nome",
+    "email": "Email",
+    "emailHint": "Qui arrivano i documenti dei suoi ruoli",
+    "contactLanguage": "Lingua",
+    "partyLanguage": "Come la scheda",
+    "belongsTo": "Appartiene a",
+    "belongsToHint": "Una scheda per tutte le aziende è vista da tutte",
+    "everyCompany": "Tutte le aziende",
+    "vatHint": {
+      "IT_B2B": "IT e 11 cifre, con la cifra di controllo",
+      "IT_B2C": "Non usata per un consumatore",
+      "EU_B2B": "Con il prefisso del Paese (DE…, FR…); la controlla VIES",
+      "EU_B2C": "Non usata per un consumatore",
+      "EXTRA_EU": "Facoltativo: da 1 a 28 lettere o cifre"
+    }
+  },
+  "form": {
+    "fixFirst_one": "Correggi prima {count} campo",
+    "fixFirst_other": "Correggi prima {count} campi",
+    "refused": "Rifiutato da Nexus Factory: controlla questo valore",
+    "submitHint": "salva",
+    "unsaved_one": "{count} modifica non salvata",
+    "unsaved_other": "{count} modifiche non salvate",
+    "tooLong": "Al massimo {max} caratteri",
+    "country": "Scegli un Paese",
+    "reasonNeeded": "Scrivi il motivo: resta con la modifica",
+    "reasonLong": "Al massimo 500 caratteri",
+    "party": {
+      "codeNeeded": "Serve il codice",
+      "codeShape": "Solo maiuscole, cifre e . _ -, al massimo 24",
+      "legalNameNeeded": "Serve la ragione sociale: il nome in fattura",
+      "rolesNeeded": "Dagli almeno un ruolo",
+      "currency": "Scegli una valuta",
+      "language": "Scegli una lingua"
+    },
+    "identity": {
+      "countryMode": {
+        "IT_B2B": "Un’azienda italiana è in Italia",
+        "IT_B2C": "Un consumatore italiano è in Italia",
+        "EU_B2B": "Un’azienda UE è in uno Stato UE diverso dall’Italia",
+        "EU_B2C": "Un consumatore UE è in uno Stato UE diverso dall’Italia",
+        "EXTRA_EU": "Extra UE significa un Paese fuori dall’UE"
+      },
+      "vatNeededIt": "Un’azienda italiana ha la partita IVA",
+      "vatNeededEu": "Un’azienda di un altro Stato UE ha la partita IVA (la controlla VIES)",
+      "foreignId": "Un codice fiscale estero ha da 1 a 28 lettere o cifre",
+      "vatMeansBusinessIt": "Con la partita IVA è un’azienda italiana",
+      "vatMeansBusinessEu": "Con la partita IVA è un’azienda UE",
+      "vatPrefix": "Una partita IVA di questo Paese inizia con {prefix}",
+      "vatShape": "Non ha il formato di una partita IVA di {country}",
+      "vatCheckDigit": "Cifra di controllo errata: confrontala con le sue fatture o la visura",
+      "fiscalItalian": "Il codice fiscale è per una scheda italiana",
+      "fiscalNeeded": "Un consumatore italiano si fattura con il codice fiscale",
+      "fiscalShape": "16 caratteri per una persona o 11 cifre per un’azienda, con il carattere di controllo",
+      "sdiItalian": "Il codice SDI è per una scheda italiana",
+      "sdiPublic": "Un codice di 6 caratteri è un ufficio della pubblica amministrazione: non si fattura da Nexus",
+      "sdiShape": "Il codice SDI ha 7 lettere o cifre",
+      "pecShape": "Non è un indirizzo email",
+      "pecItalian": "La PEC è per una scheda italiana",
+      "validFrom": "Scegli il primo giorno in cui vale"
+    },
+    "address": {
+      "kinds": "Indica a cosa serve",
+      "line1": "Servono via e numero (al massimo 60 caratteri)",
+      "line2": "Al massimo 60 caratteri",
+      "name": "Al massimo 80 caratteri",
+      "city": "Serve la città (al massimo 60 caratteri)",
+      "country": "Scegli un Paese",
+      "capIt": "Il CAP italiano ha 5 cifre",
+      "postalCode": "Da 1 a 12 lettere, cifre, spazi o trattini",
+      "provinceIt": "Le due lettere di una provincia italiana (MI, FI, PI…)",
+      "provinceLong": "Al massimo 40 caratteri",
+      "phone": "Cifre, con + ( ) . / - e spazi",
+      "contactName": "Al massimo 100 caratteri",
+      "deliveryNotes": "Al massimo 500 caratteri",
+      "defaultBillTo": "L’indirizzo di fatturazione predefinito deve servire alle fatture",
+      "defaultShipTo": "L’indirizzo di consegna predefinito deve servire alle consegne"
+    },
+    "contact": {
+      "name": "Serve il nome del contatto (al massimo 120 caratteri)",
+      "email": "Non è un indirizzo email",
+      "emailForDocuments": "Chi riceve ordini, fatture o documenti di qualità ha un’email",
+      "emailTwice": "Un altro contatto di questa scheda ha questa email",
+      "phone": "Cifre, con + ( ) . / - e spazi",
+      "language": "Scegli una lingua"
+    }
+  },
+  "done": {
+    "block": "{name} è bloccato.",
+    "unblock": "{name} è sbloccato.",
+    "reactivate": "{name} è di nuovo attivo.",
+    "activate": "{name} è attivo.",
+    "archive": "{name} è archiviato. Riattivalo dalla sua scheda.",
+    "saved": "Salvato.",
+    "addressAdded": "Indirizzo aggiunto.",
+    "addressSaved": "Indirizzo salvato.",
+    "addressArchived": "Indirizzo archiviato.",
+    "addressRestored": "Indirizzo ripristinato.",
+    "defaultSaved": "Indirizzo predefinito salvato.",
+    "contactAdded": "Contatto aggiunto.",
+    "contactSaved": "Contatto salvato.",
+    "contactArchived": "Contatto archiviato.",
+    "contactRestored": "Contatto ripristinato.",
+    "receivesPos": "Salvato: riceve gli ordini d’acquisto.",
+    "noLongerPos": "Salvato: non riceve più gli ordini d’acquisto.",
+    "identityAdded": "Identità fiscale aggiunta.",
+    "identityCorrected": "Identità fiscale corretta."
+  },
+  "bulk": {
+    "progress": "{done} di {total} fatti…",
+    "running": "Ancora in corso: si chiude quando ogni riga ha la sua risposta",
+    "archived": "Archiviato",
+    "blocked": "Bloccato",
+    "block": {
+      "title_one": "Blocca {count}",
+      "title_other": "Blocca {count}",
+      "done": "Fatto: {done} di {total}. Il motivo resta con ogni blocco."
+    },
+    "vies": {
+      "title_one": "Controlla VIES per {count}",
+      "title_other": "Controlla VIES per {count}",
+      "done": "Fatto: {done} di {total} controllati. Ogni risposta resta sulla sua scheda.",
+      "note": "Una richiesta VIES ciascuna, fino a {max} alla volta; una mancata risposta non vale mai come valida."
+    },
+    "archive": {
+      "title_one": "Archivia {count}",
+      "title_other": "Archivia {count}",
+      "done": "Fatto: {done} di {total}."
+    }
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "search": "Cerca",
+    "rows": "Riga successiva / precedente",
+    "open": "Apri la riga",
+    "select": "Seleziona la riga",
+    "palette": "Cerca ovunque",
+    "help": "Questo elenco",
+    "tabs": "Scheda successiva / precedente (nella barra)",
+    "dock": "Conversazione accanto alla scheda (schermi larghi)",
+    "save": "Salva il modulo",
+    "submit": "Conferma una finestra",
+    "close": "Chiudi una finestra"
+  },
+  "overview": {
+    "identity": "Anagrafica",
+    "now": "In corso",
+    "nothingOpen": "Niente di aperto con questo cliente.",
+    "seeAll": "Vedi tutti ({count})"
+  },
+  "numbers": {
+    "openQuotes": "Preventivi aperti",
+    "quotesHint": "In bozza, in attesa o inviati",
+    "backlog": "Ordini aperti",
+    "units_one": "{count} pezzo da spedire",
+    "units_other": "{count} pezzi da spedire",
+    "thisYear": "Ordinato nel {year}",
+    "ordersHint": "Ordini non annullati",
+    "reading": "Lettura…"
+  },
+  "side": {
+    "label": "Stato e prossimo passo",
+    "status": "Stato",
+    "next": "Prossimo passo",
+    "vies": "VIES",
+    "blockedSince": "Bloccato dal {date}",
+    "createdOn": "Aggiunto il {date}"
+  },
+  "deals": {
+    "filter": "Mostra",
+    "open": "Aperti",
+    "won": "Vinti",
+    "lost": "Persi",
+    "all": "Tutti",
+    "quote": "Preventivo",
+    "order": "Ordine",
+    "validUntil": "Valido fino al {date}",
+    "promise": "Promesso il {date}",
+    "noQuotesRight": "I preventivi non sono mostrati: il tuo ruolo non vede i preventivi.",
+    "noOrdersRight": "Gli ordini non sono mostrati: il tuo ruolo non vede gli ordini.",
+    "failed": "Caricamento di preventivi e ordini non riuscito",
+    "empty": "Niente qui.",
+    "emptyOpen": "Nessun preventivo o ordine aperto.",
+    "more": "Qui sono mostrati solo i 200 più recenti.",
+    "col": {
+      "type": "Tipo",
+      "number": "Numero",
+      "status": "Stato",
+      "date": "Data",
+      "value": "Valore",
+      "promise": "Promessa",
+      "validUntil": "Valido fino al",
+      "when": "Quando"
+    }
+  },
+  "pos": {
+    "failed": "Caricamento degli ordini d’acquisto non riuscito",
+    "empty": "Ancora nessun ordine d’acquisto.",
+    "col": {
+      "number": "Numero",
+      "status": "Stato",
+      "ordered": "Ordinato",
+      "needed": "Serve entro",
+      "confirmed": "Confermato per",
+      "lines": "Righe",
+      "value": "Valore"
+    }
+  },
+  "record": {
+    "backTo": "Torna a {name}",
+    "notFoundTitle": "Non trovato",
+    "notFoundBody": "Questa scheda non esiste, oppure è stata rimossa.",
+    "forbiddenTitle": "Non puoi aprirla",
+    "failedTitle": "Caricamento della scheda non riuscito",
+    "loading": "Caricamento della scheda…",
+    "tabsLabel": "Sezioni della scheda",
+    "dock": "Conversazione",
+    "dockHint": "Tieni la conversazione accanto alla scheda (⌘J)",
+    "dockLabel": "Conversazione della scheda",
+    "more": "Altre azioni",
+    "copyCode": "Copia il codice {code}",
+    "copied": "Codice {code} copiato.",
+    "copyFailed": "Impossibile copiare {code}: selezionalo nella pagina.",
+    "changed": "Qualcun altro ha cambiato questa scheda alle {time}. Le tue modifiche non salvate restano.",
+    "reload": "Ricarica",
+    "blockedReason": "Motivo: {reason}",
+    "archivedBanner": "Archiviato: solo lettura finché non viene riattivato (⋯ › Riattiva).",
+    "readOnly": "Puoi vedere, non modificare: il tuo ruolo non gestisce clienti e fornitori."
+  }
+}

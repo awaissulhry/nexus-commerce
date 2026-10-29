@@ -1,6 +1,6 @@
 import { hasRecordPage, recordAddress } from '../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
-import { DECIDED_HERE, type PanelRow, type QueueItem, type TodayItem } from './model'
+import { DECIDED_HERE, type HandledList, type HandledView, type PanelRow, type QueueItem, type TodayItem } from './model'
 import type { PanelRecordRow } from './panels'
 
 /**
@@ -17,4 +17,12 @@ export function queueItem(item: TodayItem, prefix: string, built: ReadonlySet<st
 
 export function panelRow(row: PanelRecordRow, prefix: string, built: ReadonlySet<string> = OFFICE_PAGES): PanelRow {
   return { id: row.id, label: row.label, sub: row.sub, word: row.word, date: row.date, href: `${prefix}${recordAddress(row.record, built)}` }
+}
+
+/** "Handled today": each row's record opens as a queue row's would. */
+export function handledView(list: HandledList, prefix: string, built: ReadonlySet<string> = OFFICE_PAGES): HandledView {
+  return {
+    count: list.count,
+    items: list.items.map((entry) => ({ ...entry, href: `${prefix}${recordAddress({ type: entry.record.type, id: entry.record.id, label: entry.record.label, companyId: entry.companyId, siteId: null }, built)}` })),
+  }
 }

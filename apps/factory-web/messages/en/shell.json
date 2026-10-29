@@ -12,24 +12,30 @@
     "sales": {
       "area": "Sales",
       "main": "Main",
+      "customers": "Customers",
       "quotes": "Quotes"
+    },
+    "purchasing": {
+      "area": "Purchasing",
+      "main": "Main",
+      "suppliers": "Suppliers"
     },
     "admin": {
       "area": "Admin",
+      "overview": "All settings",
       "organisation": "Organisation",
-      "companies": "Companies",
-      "sites": "Sites & structure",
-      "devices": "Devices",
+      "companies": "Companies & sites",
+      "devices": "Devices & printers",
       "access": "Access",
       "users": "Users",
-      "roles": "Roles",
+      "roles": "Roles & permissions",
       "platform": "Platform",
-      "numbering": "Numbering",
-      "email": "Email & addresses",
+      "documents": "Documents & numbering",
       "languages": "Languages & formats",
-      "imports": "Import",
       "audit": "Audit log",
-      "connections": "Connections"
+      "connections": "Connections & API",
+      "data": "Data",
+      "import": "Import & export"
     }
   },
   "topbar": {

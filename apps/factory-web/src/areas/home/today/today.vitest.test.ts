@@ -69,6 +69,8 @@ const item = (key: string, extra: Partial<TodayItem> = {}): TodayItem => ({
   ageDays: 2,
   decide: 'OPEN',
   figures: null,
+  condition: 'c'.repeat(32),
+  actions: { version: 0, verbs: ['ASSIGN', 'RESOLVE', 'ACKNOWLEDGE'], assigned: null, acknowledged: null },
   ...extra,
 })
 
@@ -88,6 +90,7 @@ const TODAY_ANSWER = {
   total: 1,
   items: [item('a')],
   nextCursor: 'cursor-2',
+  handled: { today: 0 },
   live: { events: ['sales_order.promise_changed'] },
 }
 
@@ -404,11 +407,12 @@ describe('the rows in the person’s language: the API’s phrases drawn with to
 })
 
 describe('the keys live in ONE info icon in the list footer (Owner rule 2026-10-29: no key hints above a list)', () => {
-  it('Today’s own keys: j / k, Enter, and a / r for a quote approval’s review — no grid keys', () => {
+  it('Today’s own keys: j / k, Enter, e for an alert, and a / r for a quote approval’s review — no grid keys', () => {
     const en = createTranslator('en', CATALOGUE.en.home!)
     expect(todayKeys(en)).toEqual([
       { keys: ['j', 'k'], does: 'keys.rows' },
       { keys: ['↵'], does: 'keys.open' },
+      { keys: ['e'], does: 'Acknowledge the alert (in the list or its review)' },
       { keys: ['a'], does: 'Approve the quote (in its review)' },
       { keys: ['r'], does: 'Reject the quote, with a reason (in its review)' },
     ])

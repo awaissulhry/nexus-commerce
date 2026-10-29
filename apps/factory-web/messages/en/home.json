@@ -34,7 +34,8 @@
     },
     "more": {
       "label": "More actions",
-      "print": "Print my list"
+      "print": "Print my list",
+      "arrange": "Arrange this page"
     },
     "tiles": {
       "all": "Needs me now",
@@ -68,7 +69,8 @@
     },
     "keys": {
       "approve": "Approve the quote (in its review)",
-      "reject": "Reject the quote, with a reason (in its review)"
+      "reject": "Reject the quote, with a reason (in its review)",
+      "acknowledge": "Acknowledge the alert (in the list or its review)"
     },
     "group": {
       "NOW": "Now",
@@ -281,7 +283,9 @@
         "stepUp": "Confirm it's you first (a fresh authenticator code), then decide again.",
         "failed": "The decision could not be sent. Try again."
       },
-      "onRecord": "It is done on its record."
+      "onRecord": "It is done on its record.",
+      "assigned": "Assigned",
+      "acknowledged": "Acknowledged"
     },
     "review": {
       "customer": "Customer",
@@ -464,6 +468,108 @@
           "THREAD_CLOSED": "the thread it answers is closed"
         }
       }
+    },
+    "actions": {
+      "menu": "Actions on {record}",
+      "acknowledge": "Acknowledge",
+      "assign": "Assign to…",
+      "resolve": "Resolve…",
+      "held": {
+        "review": "This row is decided in its review, not here.",
+        "offline": "Offline — decide when back online.",
+        "busy": "A decision is being sent.",
+        "acknowledged": "Acknowledged by {name}."
+      },
+      "acknowledged": "Acknowledged. The row stays, marked, while it is as it is.",
+      "assigned": "Assigned to {name}. It is on their Today.",
+      "takenBack": "Taken back: the row is nobody's in particular again.",
+      "resolved": "{record} resolved. It leaves Today for everyone until its condition changes.",
+      "problem": {
+        "changed": "This row changed since it was read. Today was read again: look before you decide.",
+        "gone": "This row is no longer on your Today (someone handled it, or it changed). Today was read again.",
+        "invalid": "This could not be done as asked (the person may not act on this row, or the note is too short). Today was read again.",
+        "forbidden": "You may not do this on this row.",
+        "failed": "This could not be sent. Try again."
+      }
+    },
+    "marks": {
+      "assigned": "Assigned to {name}",
+      "assignedYou": "Assigned to you by {by}",
+      "acknowledged": "Acknowledged by {name} · {time}",
+      "acknowledgedYou": "Acknowledged by you · {time}"
+    },
+    "assign": {
+      "title": "Assign {record} to",
+      "person": "Person",
+      "search": "Type a name…",
+      "hint": "Only people who may act on this row are listed: its company, the right to act on it, four eyes. The responsible ones first.",
+      "you": "you",
+      "suggested": "responsible here",
+      "now": "Now assigned to {name}.",
+      "nowYou": "Now assigned to you.",
+      "nobody": "Nobody else may act on this row.",
+      "pickFirst": "Pick a person first.",
+      "already": "It is assigned to this person already.",
+      "takeBack": "Take it back",
+      "cancel": "Cancel",
+      "confirm": "Assign"
+    },
+    "resolve": {
+      "title": "Resolve {record}",
+      "note": "What was done",
+      "hint": "Kept on the record's history. The alert closes for everyone it went to, and comes back if its condition changes.",
+      "noteNeeded": "Write what was done.",
+      "noteShort": "Write a few words more.",
+      "noteLong": "At most 1,000 characters.",
+      "cancel": "Cancel",
+      "confirm": "Resolve"
+    },
+    "handled": {
+      "footer_one": "Handled today: {count} · Show",
+      "footer_other": "Handled today: {count} · Show",
+      "title_one": "Handled today: {count}",
+      "title_other": "Handled today: {count}",
+      "titlePlain": "Handled today",
+      "close": "Close",
+      "empty": {
+        "title": "Nothing handled yet today.",
+        "body": "What you acknowledge, assign, resolve or approve from Today shows here, for your own record."
+      },
+      "verb": {
+        "ASSIGNED": "Assigned to {name}",
+        "UNASSIGNED": "Taken back from {name}",
+        "RESOLVED": "Resolved",
+        "ACKNOWLEDGED": "Acknowledged",
+        "APPROVED": "Approved",
+        "REJECTED": "Rejected"
+      }
+    },
+    "arrange": {
+      "title": "Arrange Today",
+      "list": "Sections and lists",
+      "listHint": "Ticked ones show, in this order. Needs me now always shows.",
+      "apply": "Apply",
+      "groupSections": "Sections of the page",
+      "groupPanels": "My lists",
+      "section": {
+        "focusStrip": "Your day (the tiles)",
+        "needsMe": "Needs me now",
+        "flow": "Where the work is",
+        "rolePanels": "My lists"
+      },
+      "mainLens": "My main role",
+      "mainLensNone": "The first I have",
+      "mainLensHint": "Which records the flow strip and My lists open on.",
+      "widths": "Width of each list",
+      "widthsHint": "They apply where My lists spans the page: above Needs me now, or on screens under 1440 pixels. Beside the work, each list takes the column.",
+      "widthOf": "Width of {panel}",
+      "width": {
+        "HALF": "Half",
+        "TWO_THIRDS": "Two thirds",
+        "FULL": "Whole row"
+      },
+      "saved": "Today is arranged your way. It is saved for you on every device.",
+      "changed": "Your arrangement was changed from another window. It was read again: arrange it once more."
     }
   },
   "mailToSort": {
