@@ -7,6 +7,7 @@ import { readDecisionNote } from '@nexus/factory-domain/planning/decisions'
 import type { PlanWarning, RequirementSource } from '@nexus/factory-domain/planning/explode'
 import { whyLine } from '@nexus/factory-domain/planning/explain'
 import { COST_SCALE, QUANTITY_SCALE, toBase, unitCostIn } from '@nexus/factory-domain/product/units/units'
+import type { PurchaseOrderStatus } from '@nexus/factory-domain/purchasing/orders'
 import type { LineView, RunView } from './contract'
 import { dayOf, ITEM_COLUMNS, readSupplyRules, unitsOf, type ItemRow, type Reader } from './store'
 
@@ -134,6 +135,8 @@ export interface LineContext {
   readonly colours: ReadonlyMap<string, { id: string; code: string; name: string }>
   readonly suppliers: ReadonlyMap<string, { id: string; code: string; name: string }>
   readonly orders: ReadonlyMap<string, string>
+  /** The purchase order each ordered line went into (by its purchase order line), for the "In draft PO-…" words. */
+  readonly purchaseOrders: ReadonlyMap<string, { id: string; number: string; status: PurchaseOrderStatus }>
   readonly rulesOf: (itemId: string, supplierId: string | null) => SupplyRules
 }
 
@@ -146,11 +149,17 @@ export async function readLineContext(db: Reader, rows: readonly RequirementRow[
   const suppliers = supplierIds.length === 0 ? [] : await db.party.findMany({ where: { id: { in: supplierIds } }, select: { id: true, code: true, legalName: true, tradeName: true } })
   const orderIds = [...new Set(rows.flatMap((row) => sourcesOf(row.sources).map((source) => source.orderId)))].filter((id) => id !== '')
   const orders = orderIds.length === 0 ? [] : await db.salesOrder.findMany({ where: { id: { in: orderIds } }, select: { id: true, number: true } })
+  const orderLineIds = [...new Set(rows.flatMap((row) => (row.purchaseOrderLineId ? [row.purchaseOrderLineId] : [])))]
+  const purchaseLines =
+    orderLineIds.length === 0
+      ? []
+      : await db.purchaseOrderLine.findMany({ where: { id: { in: orderLineIds } }, select: { id: true, purchaseOrder: { select: { id: true, number: true, status: true } } } })
   return {
     items: new Map(items.map((item) => [item.id, item])),
     colours: new Map(colours.map((colour) => [colour.id, colour])),
     suppliers: new Map(suppliers.map((party) => [party.id, { id: party.id, code: party.code, name: party.tradeName ?? party.legalName }])),
     orders: new Map(orders.map((order) => [order.id, order.number])),
+    purchaseOrders: new Map(purchaseLines.map((line) => [line.id, { id: line.purchaseOrder.id, number: line.purchaseOrder.number, status: line.purchaseOrder.status }])),
     rulesOf: await readSupplyRules(db, items, supplierIds),
   }
 }
@@ -198,6 +207,7 @@ export function lineViewOf(row: RequirementRow, context: LineContext, today: Bus
     decisionReason: decided?.reason ?? null,
     decisionNote: decided ? decided.note : row.decisionNote,
     purchaseOrderLineId: row.purchaseOrderLineId,
+    purchaseOrder: row.purchaseOrderLineId ? (context.purchaseOrders.get(row.purchaseOrderLineId) ?? null) : null,
     decidedAt: row.decidedAt ? toUtcIso(row.decidedAt) : null,
     ...(withCost ? { unitCost: asMoney('cost', unitCost), expectedAmount: asMoney('cost', expected) } : {}),
     currency: item.currency,

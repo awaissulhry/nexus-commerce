@@ -229,7 +229,8 @@ describe('where a row opens (one detail rule; lib/records/record-links.ts)', () 
     const quote = queueItem(item('q', { kind: 'QUOTE_APPROVAL', decide: 'REVIEW', record: { type: 'Quote', id: 'q1', label: 'Q-1' } }), '/w/DEMO')
     expect(quote).toMatchObject({ href: '/w/DEMO/sales/quotes/q1', reviewHref: null })
     const proposal = queueItem(item('p', { kind: 'PO_PROPOSAL', decide: 'REVIEW', siteId: 's1', record: { type: 'PurchaseOrder', id: 'po1', label: 'PO-1' } }), '/w/DEMO')
-    expect(proposal).toMatchObject({ href: '/w/DEMO/records/PurchaseOrder/po1?label=PO-1&company=c1&site=s1', reviewHref: null })
+    // The PO studio is built (SCR-059): a supplier's proposal opens there, and is reviewed there by the buyer.
+    expect(proposal).toMatchObject({ href: '/w/DEMO/purchasing/orders/po1', reviewHref: '/w/DEMO/purchasing/orders/po1' })
   })
 })
 

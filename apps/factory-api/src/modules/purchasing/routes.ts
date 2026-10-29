@@ -18,6 +18,7 @@ import {
   editLineContract,
   getOrderContract,
   listOrdersContract,
+  previewContract,
   removeLineContract,
   sendCheckContract,
   sendContract,
@@ -31,7 +32,7 @@ import { draftFromPlan, undoDraftFromPlan } from './from-plan'
 import { addLine, editLine, removeLine } from './lines'
 import { manifest } from './manifest'
 import { cancelOrder, createOrder, getOrder, listOrders, updateOrder } from './orders'
-import { sendCheck, sendNewLink, sendOrder } from './send'
+import { inlineDisposition, previewOrderPdf, sendCheck, sendNewLink, sendOrder } from './send'
 import { previewSupplierView } from './supplier-view'
 
 /**
@@ -65,6 +66,11 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/purchasing/from-plan', { schema: draftFromPlanContract }, async (request) => draftFromPlan(request, request.body, idempotencyKeyFrom(request)))
 
   app.post('/purchasing/from-plan/undo', { schema: undoDraftContract }, async (request) => undoDraftFromPlan(request, request.body, idempotencyKeyFrom(request)))
+
+  app.get('/purchasing/orders/:purchaseOrderId/preview', { schema: previewContract }, async (request, reply) => {
+    const { pdf, fileName } = await previewOrderPdf(request, request.params.purchaseOrderId, request.query.language)
+    return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
+  })
 
   app.get('/purchasing/orders/:purchaseOrderId/send-check', { schema: sendCheckContract }, async (request) => sendCheck(request, request.params.purchaseOrderId))
 

@@ -112,6 +112,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const lot = await client.lot.findUnique({ where: { id }, select: { companyId: true, siteId: true, supplierId: true } })
     return lot ? { companyId: lot.companyId, siteId: lot.siteId, partyId: lot.supplierId } : null
   },
+  // modules/inventory/receipts (SCR-063 the receipt's Activity tab; B-W1-32 part 2): the receiving company and site and the
+  // supplier, so its notes and the supplier's mail about the delivery stay with that supplier.
+  GoodsReceipt: async (client, id) => {
+    const receipt = await client.goodsReceipt.findUnique({ where: { id }, select: { companyId: true, siteId: true, supplierId: true } })
+    return receipt ? { companyId: receipt.companyId, siteId: receipt.siteId, partyId: receipt.supplierId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}

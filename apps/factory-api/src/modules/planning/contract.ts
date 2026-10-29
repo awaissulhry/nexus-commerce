@@ -8,6 +8,7 @@ import { LOT_QUALITY_STATUSES } from '@nexus/factory-domain/inventory/stock/over
 import { CR_VI_STATUSES } from '@nexus/factory-domain/planning/usable'
 import { money } from '@nexus/factory-domain/money/marked'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
+import { PURCHASE_ORDER_STATUSES } from '@nexus/factory-domain/purchasing/orders'
 
 /**
  * "What to buy & make" (B-W1-29; PLN-062 to PLN-066; A2 SCR-055; design 02): the planning runs of a site, their lines
@@ -109,6 +110,8 @@ export const lineView = output({
   decisionReason: z.enum(SET_ASIDE_REASONS).nullable(),
   decisionNote: z.string().nullable(),
   purchaseOrderLineId: id().nullable(),
+  /** The purchase order an ordered line went into (its number and state: "In draft PO-…", "Ordered PO-… (sent)"). */
+  purchaseOrder: output({ id: id(), number: z.string(), status: z.enum(PURCHASE_ORDER_STATUSES) }).nullable(),
   decidedAt: instant().nullable(),
   /** The item's standard cost per suggested unit, and the suggestion's expected value in minor units (cost grain). */
   unitCost: money.cost(unitPrice().nullable()),

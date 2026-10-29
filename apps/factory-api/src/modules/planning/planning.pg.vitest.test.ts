@@ -389,10 +389,12 @@ describe('deciding lines (design 02: Set aside, Undo; B-W1-30 hook)', () => {
     expect(result).toEqual({ id: black.id, version: black.version + 1 })
     const ordered = await latest()
     expect(lineOf(ordered, A.leather, A.leatherBLK)).toMatchObject({ decision: 'ORDERED', purchaseOrderLineId: po1Leather })
+    // The screen's "Ordered PO-… (confirmed)" words: the order the line went into, by its number and state.
+    expect(lineOf(ordered, A.leather, A.leatherBLK).purchaseOrder).toEqual({ id: idOf(ns.a, 'link:P2:record'), number: 'SEED-PO-0001', status: expect.any(String) })
     expect(ordered.summary).toMatchObject({ ordered: 1, inDraftPurchaseOrder: 0, toBuy: 2 })
     expect((await refused('planner', 'POST', '/planning/requirements/set-aside', { lines: [{ id: black.id, version: black.version + 1 }], reason: 'SUBSTITUTE' }, 409)).message).toMatch(/ordered already/)
     await command(caller, { name: 'purchasing.test', input: { n: 3 } }, (tools) => unorderRequirement(tools, { requirementId: black.id }))
-    expect(lineOf(await latest(), A.leather, A.leatherBLK)).toMatchObject({ decision: 'OPEN', purchaseOrderLineId: null })
+    expect(lineOf(await latest(), A.leather, A.leatherBLK)).toMatchObject({ decision: 'OPEN', purchaseOrderLineId: null, purchaseOrder: null })
   })
 })
 
