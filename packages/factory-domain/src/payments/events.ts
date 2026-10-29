@@ -53,4 +53,11 @@ export const events = [
     payload: z.strictObject({ depositRequestId: z.uuid(), partyId: z.uuid(), orderId: z.uuid().nullable() }),
     live: { permission: 'payments.view', fields: ['depositRequestId'] },
   }),
+  defineEvent({
+    type: 'deposit_request.link_sent',
+    context: 'payments',
+    description: 'The customer was mailed a DEPOSIT_INFO link to its deposit request: the amount, the due date and the bank details for the transfer.',
+    payload: z.strictObject({ depositRequestId: z.uuid(), quoteId: z.uuid(), partyId: z.uuid(), linkId: z.uuid() }),
+    live: { permission: 'payments.view', fields: ['depositRequestId', 'quoteId'] },
+  }),
 ] as const

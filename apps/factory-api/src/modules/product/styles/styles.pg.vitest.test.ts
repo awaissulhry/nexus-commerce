@@ -7,7 +7,12 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission, ScopeSet } from '@nexus/factory-domain/core/permissions'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
+import { seed as seedFiles } from '../../../../../../packages/factory-db/seed/files'
+import { seed as seedNumbering } from '../../../../../../packages/factory-db/seed/numbering'
+import { seed as seedPrivacy } from '../../../../../../packages/factory-db/seed/privacy'
 import { seed as seedProduct } from '../../../../../../packages/factory-db/seed/product'
+import { seed as seedProduction } from '../../../../../../packages/factory-db/seed/production'
+import { seed as seedQuality } from '../../../../../../packages/factory-db/seed/quality'
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
@@ -488,5 +493,42 @@ describe('the seed style (packages/factory-db seed/product.ts)', () => {
     expect(style).toMatchObject({ code: 'SEED-JKT-01', ppeStandard: 'EN 17092-3:2020', ppeClass: 'AA', matrix: { generated: true, missing: 0 } })
     const patched = (await ok('seeded', 'PATCH', `/product/styles/${seeded.styleId}`, { version: style.version, name: 'Seed leather jacket (edited)' })).style
     expect(patched).toMatchObject({ name: 'Seed leather jacket (edited)', ppeClass: 'AA', version: style.version + 1 })
+  })
+})
+
+describe('garment numbering per style (Q31): PUT /product/styles/:styleId/garment-tracking', () => {
+  it('is set while nothing was numbered: version-guarded, audited, announced; refused without the permission', async () => {
+    const made = (
+      await ok('maker', 'POST', '/product/styles', { code: 'GT-NUM-01', name: 'Numbered jacket (made up)', productType: 'JACKET', sizeScaleId: euScale.id, sizes: ['50', '52'], colourways: [{ code: 'BLK', name: 'Black' }] }, 201)
+    ).style
+    expect(made.garmentTracking).toBe('BATCH')
+    const url = `/product/styles/${made.id}/garment-tracking`
+    expect((await refused('viewer', 'PUT', url, { version: made.version, tracking: 'SERIAL' }, 403)).code).toBe('forbidden')
+    expect((await refused('maker', 'PUT', url, { version: made.version, tracking: 'LOT' }, 400)).issues[0].path).toBe('body/tracking')
+    const serial = (await ok('maker', 'PUT', url, { version: made.version, tracking: 'SERIAL' })).style
+    expect(serial).toMatchObject({ garmentTracking: 'SERIAL', version: made.version + 1 })
+    // An older version is refused; the same choice again writes nothing.
+    expect((await refused('maker', 'PUT', url, { version: made.version, tracking: 'BATCH' }, 409)).code).toBe('conflict')
+    expect((await ok('maker', 'PUT', url, { version: serial.version, tracking: 'SERIAL' })).style).toMatchObject({ garmentTracking: 'SERIAL', version: serial.version })
+    expect((await historyOf('Style', made.id))[0]).toMatchObject({ action: 'product.styles.setGarmentTracking', before: { garmentTracking: 'BATCH' }, after: { garmentTracking: 'SERIAL' } })
+    expect((await eventsOf(made.id)).filter((event) => event.type === 'style.updated')).toEqual([{ type: 'style.updated', payload: { styleId: made.id, code: 'GT-NUM-01', fields: ['garmentTracking'] } }])
+  })
+
+  it('stays once a work order numbered garments (labels, serials, releases): 409 in words before the database refuses it', async () => {
+    const namespace = 'styles-numbered'
+    const core = await seedCore({ db: database, namespace })
+    await seedPrivacy({ db: database, namespace })
+    await seedProduction({ db: database, namespace })
+    await seedNumbering({ db: database, namespace })
+    await seedFiles({ db: database, namespace })
+    const quality = await seedQuality({ db: database, namespace })
+    SESSIONS.numbered = { audience: 'office', tenantId: core.tenantId, actorId: core.actorId, grants: [{ permissions: [VIEW, MANAGE], companies: 'all', sites: 'all', parties: 'all' }] }
+    const style = (await ok('numbered', 'GET', `/product/styles/${quality.serialStyleId}`)).style
+    expect(style).toMatchObject({ code: 'SEED-JKT-03', garmentTracking: 'SERIAL' })
+    const refusal = await refused('numbered', 'PUT', `/product/styles/${style.id}/garment-tracking`, { version: style.version, tracking: 'BATCH' }, 409)
+    expect(refusal.message).toMatch(/^Style SEED-JKT-03 has work orders with .*serials given.*: its garments stay numbered by serial \(Q31\)\. Another numbering is a new style\.$/)
+    expect(await admin('SELECT "garmentTracking"::text AS tracking, version FROM "Style" WHERE id = $1', [style.id])).toEqual([{ tracking: 'SERIAL', version: style.version }])
+    // The database holds the same rule for every login.
+    await expect(admin(`UPDATE "Style" SET "garmentTracking" = 'BATCH' WHERE id = $1`, [style.id])).rejects.toThrow(/no longer changes \(Q31\)/)
   })
 })

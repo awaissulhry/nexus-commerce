@@ -182,10 +182,9 @@ beforeAll(async () => {
   }
   const actorId = newId()
   await h.database.withScope({ audience: 'office', tenantId: T.a, actorId }, async (client) => applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId }))
-  // Company A's letterhead, its quote series (its seeded SALES_ORDER series is closed for the first acceptance),
-  // a FAKE file store and a FAKE mail account with a verified conversation address.
+  // Company A's letterhead (its quote series is the numbering seed's; its seeded SALES_ORDER series is closed for the
+  // first acceptance), a FAKE file store and a FAKE mail account with a verified conversation address.
   await admin(`UPDATE "Company" SET "vatNumber" = $2, "fiscalCode" = $3, "reaOffice" = 'MI', "reaNumber" = '0000001' WHERE id = $1`, [companyA, `IT${FAKE_VAT}`, FAKE_VAT])
-  await admin(`INSERT INTO "NumberSeries" (id, "tenantId", "companyId", kind, code, "scopeKey", reset, pattern, fiscal) VALUES ($1, $2, $3, 'QUOTE', 'MAIN', $4, 'YEARLY', 'Q-{YYYY}-{N:4}', false)`, [newId(), T.a, companyA, YEAR])
   await admin(`INSERT INTO "IntegrationAccount" (id, "tenantId", provider, code, label, mode, "rateLimitPerMinute", "rateLimitBurst") VALUES ($1, $2, 'R2', 'files', 'Files', 'FAKE', 6000, 1000)`, [newId(), T.a])
   const ses = newId()
   await admin(`INSERT INTO "IntegrationAccount" (id, "tenantId", provider, code, label, mode, "rateLimitPerMinute", "rateLimitBurst") VALUES ($1, $2, 'SES', 'ses', 'Mail', 'FAKE', 6000, 1000)`, [ses, T.a])

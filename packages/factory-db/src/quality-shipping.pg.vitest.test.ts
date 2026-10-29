@@ -166,6 +166,7 @@ const inspectionRow = (extra: Record<string, unknown> = {}): Record<string, unkn
   companyId: A.companyA,
   siteId: A.siteA,
   workOrderId: production().workOrderId,
+  number: `T-INS-${randomUUID()}`,
   lotSize: 1,
   sampleSize: 1,
   inspectionLevel: 'II',
@@ -202,6 +203,7 @@ async function passedInspection(workOrderId: string, lotSize = 1): Promise<strin
 }
 const releaseRow = (extra: Record<string, unknown>): Record<string, unknown> => ({
   id: randomUUID(),
+  number: `T-REL-${randomUUID()}`,
   companyId: A.companyA,
   siteId: A.siteA,
   workOrderId: production().workOrderId,
@@ -424,6 +426,25 @@ describe('a final inspection', () => {
     const abandoned = inspectionRow()
     await insert(floor(), 'Inspection', abandoned)
     expect(await run(floor(), `UPDATE "Inspection" SET status = 'CANCELLED' WHERE id = $1::uuid`, abandoned.id)).toBe(1)
+  })
+
+  it('has its number from the moment it is made (office or floor), unique in the tenant, and the number never changes', async () => {
+    await expect(insert(floor(), 'Inspection', inspectionRow({ number: null }))).rejects.toThrow(/a new inspection has its number, from its company's INSPECTION series/)
+    await expect(insert(office(), 'Inspection', inspectionRow({ number: '  ', inspectorWorkerId: null, inspectorUserId: a.actorId }))).rejects.toThrow(/has its number/)
+    const own = inspectionRow()
+    expect(await insert(floor(), 'Inspection', own)).toBe(1)
+    await expect(insert(floor(), 'Inspection', inspectionRow({ number: own.number }))).rejects.toThrow(/Inspection_tenantId_number_key/)
+    await expect(run(floor(), 'UPDATE "Inspection" SET number = $2 WHERE id = $1::uuid', own.id, 'INS-A-2026-9999')).rejects.toThrow(/its number .* never changes/)
+    await expect(admin('UPDATE "Inspection" SET number = NULL WHERE id = $1', [own.id])).rejects.toThrow(/its number .* never changes/)
+    // A row from before the series (no number) is given one once, then keeps it.
+    const history = seeded.quality.openInspectionId
+    await admin('ALTER TABLE "Inspection" DISABLE TRIGGER "Inspection_number"')
+    await admin('UPDATE "Inspection" SET number = NULL WHERE id = $1', [history])
+    await admin('ALTER TABLE "Inspection" ENABLE TRIGGER "Inspection_number"')
+    expect(await run(office(), 'UPDATE "Inspection" SET number = $2 WHERE id = $1::uuid', history, 'SEED-INS-0002')).toBe(1)
+    await expect(run(office(), 'UPDATE "Inspection" SET number = $2 WHERE id = $1::uuid', history, 'SEED-INS-0099')).rejects.toThrow(/never changes/)
+    // A release too (append-only besides).
+    await expect(insert(office(), 'QualityRelease', releaseRow({ number: null, workOrderSizeId: cell('BLK-54'), inspectionId: seeded.quality.passedInspectionId }))).rejects.toThrow(/a new release has its number, from its company's RELEASE series/)
   })
 
   it('PASSES only within its sampling plan: no critical defect, majors and minors within the acceptance numbers, every checklist item ok', async () => {
@@ -1053,8 +1074,8 @@ describe('the seeds', () => {
       return out
     }
     const before = await counts()
-    // NumberAllocation: the numbering seed's two invoice numbers per company and the two DDT numbers.
-    expect(before).toEqual([3, 2, 5, 1, 3, 1, 2, 2, 3, 3, 2, 1, 3, 6])
+    // NumberAllocation: the numbering seed's two invoice numbers per company, company A's inspection number and the two DDT numbers.
+    expect(before).toEqual([3, 2, 5, 1, 3, 1, 2, 2, 3, 3, 2, 1, 3, 7])
     await seedShipping({ db: factory, namespace: 'qs-b' })
     expect(await counts()).toEqual(before)
     expect(await admin(`SELECT number, status::text FROM "Shipment" WHERE "tenantId" = $1 ORDER BY number`, [b.tenantId])).toEqual([

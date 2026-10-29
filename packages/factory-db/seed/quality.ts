@@ -43,6 +43,9 @@ import { seed as seedProduction, type ProductionSeed } from './production'
  *                 with the PIN), the second by the office.
  *   register      one OPEN complaint in the PPE register about SEED-JKT-02, batch SEED-BT-0001, from P1.
  *
+ * The inspections and releases carry made-up numbers (SEED-INS-…, SEED-REL-…: every new row has one), not numbers of the
+ * company's INSPECTION and RELEASE series, which stay for the app, like the other SEED- numbers.
+ *
  * The generated isolation tests (src/isolation.pg.vitest.test.ts) copy the FIRST row of each table by id and insert the
  * copy: a decided inspection never changes and takes no defect, a cell never gets more releases (less reversals) than
  * pieces nor an inspection more than its lot, a release is never reversed beyond its garments nor below what shipments
@@ -393,6 +396,7 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
           companyId: companyA,
           siteId: siteA,
           workOrderId: production.workOrderId,
+          number: 'SEED-INS-0002',
           lotSize: 2,
           sampleSize: 2,
           ...plan,
@@ -431,6 +435,7 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
           companyId: companyA,
           siteId: siteA,
           workOrderId: production.workOrderId,
+          number: 'SEED-INS-0001',
           lotSize: 5,
           sampleSize: 3,
           ...plan,
@@ -472,6 +477,7 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
           companyId: companyA,
           siteId: siteA,
           workOrderId: serialWorkOrderId,
+          number: 'SEED-INS-0003',
           lotSize: 3,
           sampleSize: 2,
           ...plan,
@@ -502,7 +508,7 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
   const serialRelease = async (tx: Prisma.TransactionClient, index: number, signer: Signer) => {
     const releaseId = serialReleaseIds[index]!
     await tx.qualityRelease.create({
-      data: { id: releaseId, companyId: companyA, siteId: siteA, workOrderId: serialWorkOrderId, workOrderSizeId: serialCellId, inspectionId: serialInspectionId, quantity: 1, certificateIds: [certificateId], ...signer },
+      data: { id: releaseId, number: `SEED-REL-000${index + 4}`, companyId: companyA, siteId: siteA, workOrderId: serialWorkOrderId, workOrderSizeId: serialCellId, inspectionId: serialInspectionId, quantity: 1, certificateIds: [certificateId], ...signer },
       select: { id: true },
     })
     await tx.garmentSerial.update({ where: { id: serialIds[index + 1]! }, data: { status: GarmentSerialStatus.RELEASED, releaseId, updatedAt: T.released }, select: { id: true } })
@@ -524,8 +530,9 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
             ['BLK-52', 2],
             ['RED-52', 1],
           ] as const
-        ).map(([key, quantity]) => ({
+        ).map(([key, quantity], index) => ({
           id: releaseIds[key],
+          number: `SEED-REL-000${index + 1}`,
           companyId: companyA,
           siteId: siteA,
           workOrderId: production.workOrderId,

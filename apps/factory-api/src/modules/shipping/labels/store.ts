@@ -55,6 +55,17 @@ export async function carrierAccountIdOf(db: CommandTx, shipment: Pick<ShipmentH
   return own.length === 1 ? own[0]!.id : null
 }
 
+/**
+ * Who the carrier label is addressed to: the shipment's ship-to snapshot; when its address has no name of its own (the
+ * customer's seat, one address for everything) the customer's name, as the DDT names the consignee.
+ */
+async function recipientOf(db: CommandTx, shipment: Pick<ShipmentHeader, 'partyId' | 'shipTo'>): Promise<ShipmentHeader['shipTo']> {
+  const shipTo = shipment.shipTo as Record<string, unknown> | null
+  if (!shipTo || typeof shipTo !== 'object' || (typeof shipTo.name === 'string' && shipTo.name.trim() !== '')) return shipment.shipTo
+  const party = await db.party.findUnique({ where: { id: shipment.partyId }, select: { legalName: true, tradeName: true } })
+  return party ? ({ ...shipTo, name: party.tradeName ?? party.legalName } as ShipmentHeader['shipTo']) : shipment.shipTo
+}
+
 /** Everything a buy needs (the office's client or the command's transaction). */
 export async function readLabelFacts(db: CommandTx, shipment: ShipmentHeader & { integrationAccountId: string | null }, environment: LabelEnvironment) {
   const settings = await db.shippingSettings.findUnique({ where: { id: shipment.siteId }, select: { senderAddress: true, integrationAccountId: true, labelPrinterId: true } })
@@ -65,7 +76,7 @@ export async function readLabelFacts(db: CommandTx, shipment: ShipmentHeader & {
   const printer = settings?.labelPrinterId ? await db.printer.findUnique({ where: { id: settings.labelPrinterId }, select: { id: true, kind: true, status: true } }) : null
   const parcels = rows.map(labelParcelOf)
   const facts: LabelFacts = {
-    shipment: { number: shipment.number, status: shipment.status, transportBy: shipment.transportBy, companyId: shipment.companyId, shipTo: shipment.shipTo, carrierCode: shipment.carrierCode, serviceCode: shipment.serviceCode },
+    shipment: { number: shipment.number, status: shipment.status, transportBy: shipment.transportBy, companyId: shipment.companyId, shipTo: await recipientOf(db, shipment), carrierCode: shipment.carrierCode, serviceCode: shipment.serviceCode },
     sender: settings?.senderAddress ?? null,
     liveDdtNumber: live?.number ?? null,
     parcels,

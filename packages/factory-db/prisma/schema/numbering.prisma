@@ -7,6 +7,12 @@
 // and two commands never get the same number. The hand-written migration …_numbering_guards adds what Prisma does not
 // model: a series' counter never moves back and its pattern, start and identity are fixed once it moved (trigger), and
 // NumberAllocation is append-only (`@append-only`, scripts/factory/check-append-only.mjs).
+//
+// Floor tablets number the floor's document kinds (@nexus/factory-domain/numbering/kinds FLOOR_DOCUMENT_KINDS: goods
+// receipts, lots, inspections, releases) from their own commands, online, through the same allocateNumber: the floor's
+// policies reach only the series and numbers of those kinds (ownership/numbering.json onlyValues), and the hand-written
+// …_numbering_floor_documents_guards triggers hold that a tablet never touches a fiscal series, numbers only for its own
+// site's company, moves a counter one number at a time past a number it recorded, and adds only a new year of a series.
 
 /// One counter: the numbers of one kind of document of one company, in one series (sezionale) and one period (the
 /// calendar year of a yearly series, `ALL` for one that never resets). A new year's row is made from the family's
@@ -36,6 +42,8 @@ model NumberSeries {
   version        Int                @default(1)
   createdAt      DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  /// Who made the row: a user, the system actor, or the tablet whose command opened a new year (the ledger names no
+  /// worker: L. 300/1970 art. 4; the audit row keeps who was signed in).
   createdById    String?            @db.Uuid
 
   company     Company            @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -75,6 +83,10 @@ enum NumberKind {
   HIDE
   /// A finished garment's serial (SN-…).
   GARMENT_SERIAL
+  /// A final inspection's number (INS-…; quality.prisma Inspection.number). A floor document kind: the bench numbers it.
+  INSPECTION
+  /// A quality release's number (REL-…; quality.prisma QualityRelease.number). A floor document kind too.
+  RELEASE
 }
 
 enum NumberReset {
@@ -109,7 +121,8 @@ model NumberAllocation {
   recordId      String     @db.Uuid
   /// The command's server time.
   allocatedAt   DateTime   @db.Timestamptz(3)
-  /// The caller of the command (a user, or the system actor of a job).
+  /// The caller of the command: a user, the system actor of a job, or the tablet of a floor command (the ledger names
+  /// no worker: L. 300/1970 art. 4; the audit row keeps who was signed in).
   allocatedById String     @db.Uuid
   /// The request (or job) that issued it, as on its audit rows.
   requestId     String

@@ -4,7 +4,8 @@
  * columns) it writes idempotent SQL:
  *   - ENABLE and FORCE ROW LEVEL SECURITY (forced: the table owner obeys the policies too);
  *   - one policy per role and command, reading `current_setting('<setting>', true)`; an unset or empty setting
- *     matches no row (default deny);
+ *     matches no row (default deny); a role may also be kept to the rows whose column holds one of a few listed values
+ *     (`onlyValues`, e.g. some kinds of a table's rows);
  *   - grants: table-level for a role that sees every column, column-level (`GRANT SELECT (…)`) that leaves out the
  *     hidden columns for the others.
  *
@@ -32,6 +33,13 @@ export interface RoleAccess {
   readonly scopedBy?: readonly string[]
   /** Columns the role may neither read nor write (cost, margin, price, internal notes …). */
   readonly hiddenColumns?: readonly string[]
+  /**
+   * Rows this role may reach only when a column holds one of the listed values (column → values), beside the keys: e.g.
+   * `{ kind: ['LOT', 'GOODS_RECEIPT'] }` keeps a role to the rows of those kinds, for reads and writes alike (a row of
+   * another value is not seen, not locked, not changed, and cannot be written). Compared as text, so it fits an enum or
+   * a text column. Values are plain names (letters, digits, `_`, `-`, `.`).
+   */
+  readonly onlyValues?: Readonly<Record<string, readonly string[]>>
 }
 
 export interface TablePolicy {
@@ -61,6 +69,7 @@ const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/
 const ROLE = /^[a-z_][a-z0-9_]{0,62}$/
 const SETTING = /^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)+$/
 const TYPE = /^[a-z][a-z0-9_]*$/
+const VALUE = /^[A-Za-z0-9_.-]{1,63}$/
 
 export class PolicyModelError extends Error {
   constructor(message: string) {
@@ -135,6 +144,13 @@ function checkTable(model: PolicyModel, table: TablePolicy, name: string): void 
       if (policyColumns.has(column)) fail(`${name}: role ${roleName} cannot hide ${column}, its own policy reads it.`)
     }
     if (hidden.length > 0 && columns.size - new Set(hidden).size === 0) fail(`${name}: role ${roleName} would see no column.`)
+    for (const [column, values] of Object.entries(access.onlyValues ?? {})) {
+      if (!columns.has(column)) fail(`${name}: role ${roleName} filters on ${column}, which is not one of its columns.`)
+      if (hidden.includes(column)) fail(`${name}: role ${roleName} cannot hide ${column}, its own policy reads it.`)
+      if (!Array.isArray(values) || values.length === 0) fail(`${name}: role ${roleName} lists no value for ${column}.`)
+      for (const value of values) if (typeof value !== 'string' || !VALUE.test(value)) fail(`${name}: role ${roleName} has an invalid value for ${column}: ${JSON.stringify(value)}.`)
+      if (new Set(values).size !== values.length) fail(`${name}: role ${roleName} lists a value of ${column} twice.`)
+    }
     for (const privilege of privileges) {
       const policy = `${roleName}_${privilege}`
       if (policy.length > 63) fail(`${name}: policy name ${policy} is longer than 63 characters.`)
@@ -145,12 +161,14 @@ function checkTable(model: PolicyModel, table: TablePolicy, name: string): void 
 const scopeKeys = (model: PolicyModel, access: RoleAccess): string[] => sorted([...model.alwaysScopedBy, ...(access.scopedBy ?? [])])
 
 function condition(model: PolicyModel, table: TablePolicy, access: RoleAccess): string {
-  return scopeKeys(model, access)
-    .map((key) => {
-      const { setting, type } = model.keys[key] as PolicyKey
-      return `${identifier(table.keyColumns[key], 'key column')} = NULLIF(current_setting('${setting}', true), '')::${type}`
-    })
-    .join(' AND ')
+  const keys = scopeKeys(model, access).map((key) => {
+    const { setting, type } = model.keys[key] as PolicyKey
+    return `${identifier(table.keyColumns[key], 'key column')} = NULLIF(current_setting('${setting}', true), '')::${type}`
+  })
+  const only = Object.entries(access.onlyValues ?? {})
+    .sort(([a], [b]) => byCodePoint(a, b))
+    .map(([column, values]) => `${identifier(column, 'column')}::text IN (${sorted(values).map((value) => `'${value}'`).join(', ')})`)
+  return [...keys, ...only].join(' AND ')
 }
 
 function grants(table: TablePolicy, name: string, roleName: string, access: RoleAccess): string[] {
