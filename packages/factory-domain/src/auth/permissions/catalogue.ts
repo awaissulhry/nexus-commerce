@@ -207,6 +207,8 @@ export const INVENTORY_DEFINITIONS = definePermissions('inventory', {
   transfer: { risk: 'write', description: 'Move stock between two locations of a site (a floor device: at its own site).' },
   scrap: { risk: 'write', description: 'Take stock out as scrap, with the reason.' },
   reverse: { risk: 'write', description: 'Reverse a stock move that was wrong: the same move with its locations swapped, with the reason.' },
+  issue: { risk: 'write', description: "Pick and issue stock to a work order (only usable stock of the work order's materials, up to what it still needs), return what it did not use, and undo one's own last issue (a floor device: at its own site)." },
+  'issue.over': { risk: 'write', description: 'Issue more than a work order still needs, with the reason.' },
 })
 
 /** The money grains as they travel in grants (`../grains/grains`): from Role.grains, never Role.permissions. */
@@ -254,8 +256,8 @@ export const FLOOR_AREA = 'floor'
  * The office permissions a floor role may hold too: what a floor device does on the same routes as the office, at its
  * own device's site only (can() pins a floor session to it, row-level security too). Printing labels at the site's
  * printer (GAP-007) and seeing its print queue; seeing the site's locations and moving stock between them (SCM-176,
- * SCM-189); packing the site's shipments (LOG-039, SCR-098). Never a money grain; floor roles still hold no other office
- * permission.
+ * SCM-189); picking and issuing to the site's work orders (SCM-215, SCR-093); packing the site's shipments (LOG-039,
+ * SCR-098). Never a money grain; floor roles still hold no other office permission.
  */
 export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS, ...INVENTORY_FLOOR_PERMISSIONS, ...SHIPPING_FLOOR_PERMISSIONS])
 

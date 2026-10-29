@@ -1,9 +1,10 @@
+import { ForbiddenError, InvalidStateError } from '@nexus/factory-domain/core/errors'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { moveChange, workOrderMachine, type ManualMove } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_MANAGE } from '@nexus/factory-domain/production/work-orders/permissions'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
-import type { CommandCaller } from '../../../core/command'
-import { readWorkOrder } from './store'
+import { command, type CommandCaller } from '../../../core/command'
+import { lockedStatus, readWorkOrder } from './store'
 import { workOrderView, type WorkOrderView } from './views'
 import { officeWorkOrder, onWorkOrder, todayOfCommand } from './work-orders'
 
@@ -57,4 +58,57 @@ export async function moveWorkOrder(
     })
     return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, current.id))!, todayOfCommand(tools)) }
   })
+}
+
+/**
+ * The first work on a released work order starts it (B-W1-39: the first issue; B-W1-40 and B-W1-42 can call it for the
+ * first cut or scan): RELEASED → IN_PROGRESS with its start time, as the system (the worker's handler; the floor role
+ * cannot update a work order) or the office, in one command on the work order (its version bump locks the row). Answers
+ * `started: false` and writes nothing when the work order is not RELEASED any more (started already, or cancelled
+ * meanwhile). The same work order is started once: its key is `workorders-start:<id>`, so a repeat answers from the
+ * receipt.
+ */
+export async function startOnFirstWork(caller: CommandCaller, workOrderId: string, cause: { readonly what: string; readonly causationId?: string }): Promise<{ started: boolean }> {
+  const context = caller.factoryContext
+  if (!context || (context.audience !== 'system' && context.audience !== 'office')) throw new ForbiddenError()
+  const current = await caller.withClient((client) => readWorkOrder(client, workOrderId))
+  if (!current || current.status !== 'RELEASED') return { started: false }
+  try {
+    const { result } = await command(
+      caller,
+      {
+        name: 'workorders.start',
+        idempotencyKey: `workorders-start:${workOrderId}`,
+        input: { workOrderId, to: 'IN_PROGRESS', cause: cause.what },
+        record: { type: 'WorkOrder', id: workOrderId },
+        ...(cause.causationId ? { causationId: cause.causationId } : {}),
+      },
+      async (tools) => {
+        const row = await lockedStatus(tools.tx, workOrderId, ['RELEASED'], 'its first work starts it')
+        const change = moveChange('IN_PROGRESS', tools.now)
+        await tools.tx.workOrder.update({ where: { id: row.id }, data: change, select: { id: true } })
+        tools.audit({
+          recordType: 'WorkOrder',
+          recordId: row.id,
+          companyId: row.companyId,
+          siteId: row.siteId,
+          before: { status: row.status },
+          after: { status: 'IN_PROGRESS', startedAt: toUtcIso(tools.now) },
+          reason: `Started by its first work: ${cause.what}.`,
+        })
+        tools.emit({
+          type: 'workorder.status_changed',
+          subject: row.id,
+          companyId: row.companyId,
+          siteId: row.siteId,
+          payload: { workOrderId: row.id, number: row.number, from: row.status, to: 'IN_PROGRESS' },
+        })
+        return { started: true }
+      },
+    )
+    return result
+  } catch (error) {
+    if (error instanceof InvalidStateError) return { started: false }
+    throw error
+  }
 }

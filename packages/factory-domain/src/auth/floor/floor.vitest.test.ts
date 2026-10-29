@@ -210,7 +210,7 @@ describe('floor roles and their grants', () => {
     for (const entry of ROLE_TEMPLATES.filter((item) => item.audience === 'office')) {
       expect(entry.permissions.some((name) => name.startsWith('floor.')), entry.key).toBe(false)
     }
-    expect(templateOf('team_leader')?.permissions).toEqual(['floor.lead', 'floor.work', 'inventory.locations.view', 'inventory.transfer', 'print.labels', 'print.view', 'shipping.pack'])
+    expect(templateOf('team_leader')?.permissions).toEqual(['floor.lead', 'floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.transfer', 'print.labels', 'print.view', 'shipping.pack'])
     expect(templateOf('admin')?.permissions).toEqual(expect.arrayContaining(['devices.manage', 'devices.revoke', 'workers.manage', 'workers.credentials']))
   })
 
