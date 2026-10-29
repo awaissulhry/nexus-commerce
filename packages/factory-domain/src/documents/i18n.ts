@@ -43,6 +43,7 @@ export interface DocumentWords {
     readonly vat: string
     readonly amount: string
     readonly delivery: string
+    readonly parcel: string
   }
   readonly facts: {
     readonly validUntil: string
@@ -85,14 +86,14 @@ export interface DocumentWords {
 }
 
 const IT: DocumentWords = {
-  title: { QUOTE: 'Offerta', PURCHASE_ORDER: 'Ordine di acquisto', DDT: 'Documento di trasporto (DDT)', INVOICE_COPY: 'Fattura - copia di cortesia' },
+  title: { QUOTE: 'Offerta', PURCHASE_ORDER: 'Ordine di acquisto', DDT: 'Documento di trasporto (DDT)', INVOICE_COPY: 'Fattura - copia di cortesia', PACKING_LIST: 'Distinta colli' },
   number: 'Numero',
   date: 'Data',
   page: 'Pagina {page} di {pages}',
   continued: 'segue',
   headings: {
-    issuer: { QUOTE: 'Emittente', PURCHASE_ORDER: 'Committente', DDT: 'Mittente (cedente)', INVOICE_COPY: 'Cedente / prestatore' },
-    party: { QUOTE: 'Cliente', PURCHASE_ORDER: 'Fornitore', DDT: 'Destinatario (cessionario)', INVOICE_COPY: 'Cessionario / committente' },
+    issuer: { QUOTE: 'Emittente', PURCHASE_ORDER: 'Committente', DDT: 'Mittente (cedente)', INVOICE_COPY: 'Cedente / prestatore', PACKING_LIST: 'Mittente' },
+    party: { QUOTE: 'Cliente', PURCHASE_ORDER: 'Fornitore', DDT: 'Destinatario (cessionario)', INVOICE_COPY: 'Cessionario / committente', PACKING_LIST: 'Destinatario' },
     destination: 'Luogo di destinazione',
     deliverTo: 'Consegnare a',
     carrier: 'Vettore',
@@ -120,6 +121,7 @@ const IT: DocumentWords = {
     vat: 'IVA',
     amount: 'Importo',
     delivery: 'Consegna',
+    parcel: 'Collo',
   },
   facts: {
     validUntil: 'Valida fino al',
@@ -172,7 +174,7 @@ const IT: DocumentWords = {
     net: 'Imponibile',
     vat: (rate) => `IVA ${rate}`,
     vatExempt: (nature) => `Senza IVA (${nature})`,
-    gross: { QUOTE: 'Totale offerta', PURCHASE_ORDER: 'Totale ordine', DDT: 'Totale', INVOICE_COPY: 'Totale documento' },
+    gross: { QUOTE: 'Totale offerta', PURCHASE_ORDER: 'Totale ordine', DDT: 'Totale', INVOICE_COPY: 'Totale documento', PACKING_LIST: 'Totale' },
     deposit: 'Acconto già fatturato',
     due: 'Netto a pagare',
   },
@@ -188,14 +190,14 @@ const IT: DocumentWords = {
 }
 
 const EN: DocumentWords = {
-  title: { QUOTE: 'Quotation', PURCHASE_ORDER: 'Purchase order', DDT: 'Transport document (DDT)', INVOICE_COPY: 'Invoice - courtesy copy' },
+  title: { QUOTE: 'Quotation', PURCHASE_ORDER: 'Purchase order', DDT: 'Transport document (DDT)', INVOICE_COPY: 'Invoice - courtesy copy', PACKING_LIST: 'Packing list' },
   number: 'Number',
   date: 'Date',
   page: 'Page {page} of {pages}',
   continued: 'continued',
   headings: {
-    issuer: { QUOTE: 'Issued by', PURCHASE_ORDER: 'Buyer', DDT: 'Sender (consignor)', INVOICE_COPY: 'Seller' },
-    party: { QUOTE: 'Customer', PURCHASE_ORDER: 'Supplier', DDT: 'Recipient (consignee)', INVOICE_COPY: 'Buyer' },
+    issuer: { QUOTE: 'Issued by', PURCHASE_ORDER: 'Buyer', DDT: 'Sender (consignor)', INVOICE_COPY: 'Seller', PACKING_LIST: 'Sender' },
+    party: { QUOTE: 'Customer', PURCHASE_ORDER: 'Supplier', DDT: 'Recipient (consignee)', INVOICE_COPY: 'Buyer', PACKING_LIST: 'Recipient' },
     destination: 'Place of delivery',
     deliverTo: 'Deliver to',
     carrier: 'Carrier',
@@ -223,6 +225,7 @@ const EN: DocumentWords = {
     vat: 'VAT',
     amount: 'Amount',
     delivery: 'Delivery',
+    parcel: 'Parcel',
   },
   facts: {
     validUntil: 'Valid until',
@@ -275,7 +278,7 @@ const EN: DocumentWords = {
     net: 'Net amount',
     vat: (rate) => `VAT ${rate}`,
     vatExempt: (nature) => `No VAT (${nature})`,
-    gross: { QUOTE: 'Quotation total', PURCHASE_ORDER: 'Order total', DDT: 'Total', INVOICE_COPY: 'Document total' },
+    gross: { QUOTE: 'Quotation total', PURCHASE_ORDER: 'Order total', DDT: 'Total', INVOICE_COPY: 'Document total', PACKING_LIST: 'Total' },
     deposit: 'Deposit already invoiced',
     due: 'Amount due',
   },

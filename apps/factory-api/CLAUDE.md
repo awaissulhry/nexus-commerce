@@ -12,6 +12,7 @@ run (`src/platform/imports/`), documents and printing (`src/platform/{documents,
 modules and the other adapters come in later steps.
 Modules: `modules/compliance/certificates` (certificate register and gate `certificateGateFor`; cron `compliance.certificateExpiry`).
 `modules/inventory/{locations,ledger,stock}`: every stock move goes through `postMoves(tools, drafts, { key })` (ledger/post-moves.ts) inside the caller's command (locks, 409 before below zero, values office/system moves; worker handler `inventory.valueFloorMoves` values floor moves); locations import `inventory.locations`.
+`modules/shipping/{settings,shipments,packing}` (B-W1-46): site settings, office shipments from released garments only (`/shipping/ready`, `/shipping/shipments…`, packing list PDF) and packing for office and floor (`/shipping/packing…`, shipping.pack); every write is a command on the Shipment (its version bump locks the row), then `cells.ts` takes the `factory.ship-cell` locks sorted and answers 409 before the trigger; SHIPPED (with the DDT) is B-W1-47's.
 
 ## Commands (from the repository root unless noted)
     cp apps/factory-api/.env.example apps/factory-api/.env   # once per worktree; loopback values only, your <step>

@@ -35,6 +35,7 @@ import {
  *                  time, the goods' appearance, the number of packages and the gross weight
  *   INVOICE_COPY   the buyer's address and each line's VAT rate; it always carries the courtesy-copy notice (the
  *                  legal invoice is the FatturaPA XML sent through SDI)
+ *   PACKING_LIST   the number of parcels and, per line, the parcel it is packed in (no prices)
  */
 
 export interface ComposedFact {
@@ -152,6 +153,26 @@ function transportProblems(input: DocumentInput): Issue[] {
   return problems
 }
 
+/** A packing list (B-W1-46, LOG-039): the number of parcels, a weight when given, the parcel of every line. */
+function packingListProblems(input: DocumentInput): Issue[] {
+  const packing = input.packing
+  const at = 'document/packing'
+  if (!packing) return [{ path: at, message: 'A packing list says how many parcels there are.' }]
+  const problems: Issue[] = []
+  if (!Number.isSafeInteger(packing.packages) || packing.packages < 1) problems.push({ path: `${at}/packages`, message: 'Give the number of parcels (at least 1).' })
+  if (packing.grossWeightKg !== null && packing.grossWeightKg !== undefined) {
+    const gross = fitsDecimal(packing.grossWeightKg, 18, 4) ? parseDecimal(packing.grossWeightKg) : null
+    if (gross === null || !gross.greaterThan(0)) problems.push({ path: `${at}/grossWeightKg`, message: 'Expected the gross weight in kilograms.' })
+  }
+  if (packing.shipTo) problems.push(...addressProblems(packing.shipTo, `${at}/shipTo`, 'The place of delivery needs its street, postal code, city and country.'))
+  if (Array.isArray(input.lines)) {
+    input.lines.forEach((line: DocumentLine, index) => {
+      if (!filled(line.parcel)) problems.push({ path: `document/lines/${index}/parcel`, message: 'Say which parcel the line is packed in.' })
+    })
+  }
+  return problems
+}
+
 /** Every reason the document cannot be printed as it stands (empty when it can). */
 export function documentProblems(input: DocumentInput): Issue[] {
   if (!isDocumentType(input?.type)) return [{ path: 'document/type', message: 'Unknown document type.' }]
@@ -183,6 +204,7 @@ export function documentProblems(input: DocumentInput): Issue[] {
   problems.push(...lineProblems(input, layout.priced))
   if (layout.priced) problems.push(...totalsProblems(input))
   if (input.type === 'DDT') problems.push(...transportProblems(input))
+  if (input.type === 'PACKING_LIST') problems.push(...packingListProblems(input))
   return problems
 }
 
@@ -235,6 +257,8 @@ function cell(key: ColumnKey, line: DocumentLine, currency: string, language: Do
       return line.deliveryDate ? formatDate(line.deliveryDate, language) : ''
     case 'amount':
       return line.amountMinor === null || line.amountMinor === undefined ? '' : formatMoney(line.amountMinor, currency, language)
+    case 'parcel':
+      return line.parcel?.trim() ?? ''
   }
 }
 
@@ -278,6 +302,14 @@ function facts(input: DocumentInput, words: DocumentWords): ComposedFact[] {
         ...fact(words.facts.paymentTerms, input.paymentTerms),
         ...date(words.facts.dueDate, input.invoice?.dueDate),
       ]
+    case 'PACKING_LIST': {
+      const packing = input.packing!
+      return [
+        ...referenceFacts(input, words),
+        { label: words.facts.packages, value: String(packing.packages) },
+        ...(packing.grossWeightKg ? [{ label: words.facts.grossWeight, value: formatDecimal(packing.grossWeightKg, language, 0, 3) }] : []),
+      ]
+    }
   }
 }
 
@@ -296,6 +328,7 @@ function blocks(input: DocumentInput, words: DocumentWords): ComposedBlock[] {
       })
     }
   }
+  if (input.type === 'PACKING_LIST' && input.packing?.shipTo) result.push({ heading: words.headings.destination, lines: namedAddress(input.packing.shipTo, language) })
   return result
 }
 

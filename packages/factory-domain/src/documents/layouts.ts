@@ -8,7 +8,7 @@ import type { DocumentType } from './model'
  * record can name the layout it was first printed with.
  */
 
-export const COLUMN_KEYS = ['code', 'description', 'goods', 'quantity', 'uom', 'unitPrice', 'discount', 'vat', 'delivery', 'amount'] as const
+export const COLUMN_KEYS = ['code', 'description', 'goods', 'quantity', 'uom', 'unitPrice', 'discount', 'vat', 'delivery', 'amount', 'parcel'] as const
 export type ColumnKey = (typeof COLUMN_KEYS)[number]
 
 export interface LayoutColumn {
@@ -79,6 +79,12 @@ export const DOCUMENT_LAYOUTS: Readonly<Record<DocumentType, DocumentLayout>> = 
       column('vat', 70, 'right'),
       column('amount', 140, 'right'),
     ],
+  },
+  PACKING_LIST: {
+    id: 'PACKING_LIST/1',
+    priced: false,
+    signatures: false,
+    columns: [column('parcel', 100), column('code', 150), column('goods', 530), column('quantity', 120, 'right'), column('uom', 100)],
   },
 })
 

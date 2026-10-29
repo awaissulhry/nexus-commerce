@@ -5,6 +5,7 @@ import { LINK_SESSION_PERMISSIONS as LINK_SESSION_NAMES, LINKS_OFFICE_PERMISSION
 import { NUMBERING_MANAGE, NUMBERING_VIEW } from '../../numbering/permissions'
 import { PRODUCT_MATERIALS_DEFINITIONS, PRODUCT_MATERIALS_PERMISSIONS } from '../../product/materials/permissions'
 import { PRODUCT_STYLES_DEFINITIONS, PRODUCT_STYLES_PERMISSIONS } from '../../product/styles/permissions'
+import { SHIPPING_DEFINITIONS, SHIPPING_FLOOR_PERMISSIONS, SHIPPING_PERMISSIONS } from '../../shipping/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -224,6 +225,7 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCT_MATERIALS_DEFINITIONS,
   PRODUCT_STYLES_DEFINITIONS,
   INVENTORY_DEFINITIONS,
+  SHIPPING_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -234,12 +236,13 @@ export const FLOOR_AREA = 'floor'
  * The office permissions a floor role may hold too: what a floor device does on the same routes as the office, at its
  * own device's site only (can() pins a floor session to it, row-level security too). Printing labels at the site's
  * printer (GAP-007) and seeing its print queue; seeing the site's locations and moving stock between them (SCM-176,
- * SCM-189). Never a money grain; floor roles still hold no other office permission.
+ * SCM-189); packing the site's shipments (LOG-039, SCR-098). Never a money grain; floor roles still hold no other office
+ * permission.
  */
-export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS, ...INVENTORY_FLOOR_PERMISSIONS])
+export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS, ...INVENTORY_FLOOR_PERMISSIONS, ...SHIPPING_FLOOR_PERMISSIONS])
 
 // The modules' constants and their declarations name the same permissions.
-for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS]) {
+for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...SHIPPING_PERMISSIONS]) {
   if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 }
 for (const name of LINK_SESSION_NAMES) {
