@@ -1,6 +1,7 @@
 import { CERTIFICATES_PERMISSIONS } from '../../compliance/certificates/permissions'
 import { REGISTER_PERMISSIONS } from '../../compliance/register/permissions'
 import { COSTING_DEFINITIONS, COSTING_PERMISSIONS } from '../../costing/permissions'
+import { HOME_DEFINITIONS, HOME_PERMISSIONS } from '../../insights/permissions'
 import type { Permission } from '../../core/permissions'
 import { INVENTORY_FLOOR_PERMISSIONS, INVENTORY_PERMISSIONS } from '../../inventory/permissions'
 import { INVOICES_DEFINITIONS, INVOICES_PERMISSIONS } from '../../invoicing/permissions'
@@ -10,6 +11,7 @@ import { PARTIES_DEFINITIONS, PARTIES_PERMISSIONS } from '../../parties/permissi
 import { PAYMENTS_DEFINITIONS, PAYMENTS_PERMISSIONS } from '../../payments/permissions'
 import { PLANNING_DEFINITIONS, PLANNING_PERMISSIONS } from '../../planning/permissions'
 import { PURCHASING_DEFINITIONS, PURCHASING_PERMISSIONS } from '../../purchasing/permissions'
+import { QUALITY_FINAL_DEFINITIONS, QUALITY_FINAL_FLOOR_PERMISSIONS, QUALITY_FINAL_PERMISSIONS } from '../../quality/final/permissions'
 import { QUALITY_LAB_DEFINITIONS, QUALITY_LAB_PERMISSIONS } from '../../quality/lab/permissions'
 import { PRODUCT_BOM_DEFINITIONS, PRODUCT_BOM_PERMISSIONS } from '../../product/bom/permissions'
 import { PRODUCT_MATERIALS_DEFINITIONS, PRODUCT_MATERIALS_PERMISSIONS } from '../../product/materials/permissions'
@@ -20,6 +22,9 @@ import { WORKORDERS_DEFINITIONS, WORKORDERS_PERMISSIONS } from '../../production
 import { PRIVACY_DEFINITIONS, PRIVACY_PERMISSIONS } from '../../privacy/permissions'
 import { PRODUCTION_SETTINGS_DEFINITIONS, PRODUCTION_SETTINGS_PERMISSIONS } from '../../production/settings/permissions'
 import { PRODUCTION_CUTTING_DEFINITIONS, PRODUCTION_CUTTING_FLOOR_PERMISSIONS, PRODUCTION_CUTTING_PERMISSIONS } from '../../production/cutting/permissions'
+import { PRODUCTION_BUNDLES_DEFINITIONS, PRODUCTION_BUNDLES_FLOOR_PERMISSIONS, PRODUCTION_BUNDLES_PERMISSIONS } from '../../production/bundles/permissions'
+import { PRODUCTION_SCANS_DEFINITIONS, PRODUCTION_SCANS_FLOOR_PERMISSIONS, PRODUCTION_SCANS_PERMISSIONS } from '../../production/scans/permissions'
+import { PRODUCTION_SERIALS_DEFINITIONS, PRODUCTION_SERIALS_FLOOR_PERMISSIONS, PRODUCTION_SERIALS_PERMISSIONS } from '../../production/serials/permissions'
 import { COMPANY_BANK_DEFINITIONS, COMPANY_BANK_PERMISSIONS } from '../../sales/deposits/permissions'
 import { ORDERS_DEFINITIONS, ORDERS_PERMISSIONS } from '../../sales/orders/permissions'
 import { QUOTES_DEFINITIONS, QUOTES_PERMISSIONS, SALES_SETTINGS_DEFINITIONS, SALES_SETTINGS_PERMISSIONS } from '../../sales/quotes/permissions'
@@ -241,6 +246,7 @@ export const INVENTORY_DEFINITIONS = definePermissions('inventory', {
   issue: { risk: 'write', description: "Pick and issue stock to a work order (only usable stock of the work order's materials, up to what it still needs), return what it did not use, and undo one's own last issue (a floor device: at its own site)." },
   'issue.over': { risk: 'write', description: 'Issue more than a work order still needs, with the reason.' },
   receive: { risk: 'write', description: 'Receive goods against a purchase order: the receipt, its lots and its hides one by one with their measured areas, posted to the stock ledger (a floor device: at its own site).' },
+  'opening.import': { risk: 'write', description: "Load a company's opening stock from a sheet: lots, hides with their areas and the existing chromium VI reports, posted as opening moves. Lots that need the quality step wait in quarantine for a quality person who did not import them." },
 })
 
 /** The money grains as they travel in grants (`../grains/grains`): from Role.grains, never Role.permissions. */
@@ -280,6 +286,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   COSTING_DEFINITIONS,
   PRODUCTION_SETTINGS_DEFINITIONS,
   PRODUCTION_CUTTING_DEFINITIONS,
+  PRODUCTION_BUNDLES_DEFINITIONS,
+  PRODUCTION_SCANS_DEFINITIONS,
+  PRODUCTION_SERIALS_DEFINITIONS,
   WORKORDERS_DEFINITIONS,
   QUOTES_DEFINITIONS,
   SALES_SETTINGS_DEFINITIONS,
@@ -287,6 +296,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   ORDERS_DEFINITIONS,
   PRIVACY_DEFINITIONS,
   QUALITY_LAB_DEFINITIONS,
+  QUALITY_FINAL_DEFINITIONS,
+  HOME_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -298,12 +309,16 @@ export const FLOOR_AREA = 'floor'
  * own device's site only (can() pins a floor session to it, row-level security too). Printing labels at the site's
  * printer (GAP-007) and seeing its print queue; seeing the site's locations and moving stock between them (SCM-176,
  * SCM-189); picking and issuing to the site's work orders (SCM-215, SCR-093); cutting hides for them (MES-056, SCR-094);
- * packing the site's shipments (LOG-039, SCR-098). Never a money grain; floor roles still hold no other office permission.
+ * making their bundles and printing the tickets (MES-065, MES-066, SCR-095); reporting bundles at operations, undoing
+ * the last report and asking corrections (MES-069, MES-090, MES-095, MES-096, SCR-090); printing the garment labels of
+ * the final operation (MES-076, PRD-348, SCR-096); the final inspection and release at the bench (QHS-050, QHS-058,
+ * SCR-097); packing the site's shipments (LOG-039, SCR-098). Never a money grain;
+ * floor roles still hold no other office permission.
  */
-export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS, ...INVENTORY_FLOOR_PERMISSIONS, ...PRODUCTION_CUTTING_FLOOR_PERMISSIONS, ...SHIPPING_FLOOR_PERMISSIONS])
+export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS, ...INVENTORY_FLOOR_PERMISSIONS, ...PRODUCTION_CUTTING_FLOOR_PERMISSIONS, ...PRODUCTION_BUNDLES_FLOOR_PERMISSIONS, ...PRODUCTION_SCANS_FLOOR_PERMISSIONS, ...PRODUCTION_SERIALS_FLOOR_PERMISSIONS, ...QUALITY_FINAL_FLOOR_PERMISSIONS, ...SHIPPING_FLOOR_PERMISSIONS])
 
 // The modules' constants and their declarations name the same permissions.
-for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...REGISTER_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...PRODUCT_BOM_PERMISSIONS, ...PRODUCT_ROUTING_PERMISSIONS, ...SHIPPING_PERMISSIONS, ...SHIPPING_LABELS_PERMISSIONS, ...PARTIES_PERMISSIONS, ...PLANNING_PERMISSIONS, ...PURCHASING_PERMISSIONS, ...INVOICES_PERMISSIONS, ...PAYMENTS_PERMISSIONS, ...COSTING_PERMISSIONS, ...PRODUCTION_SETTINGS_PERMISSIONS, ...PRODUCTION_CUTTING_PERMISSIONS, ...WORKORDERS_PERMISSIONS, ...QUOTES_PERMISSIONS, ...SALES_SETTINGS_PERMISSIONS, ...COMPANY_BANK_PERMISSIONS, ...ORDERS_PERMISSIONS, ...PRIVACY_PERMISSIONS, ...QUALITY_LAB_PERMISSIONS]) {
+for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...REGISTER_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...PRODUCT_BOM_PERMISSIONS, ...PRODUCT_ROUTING_PERMISSIONS, ...SHIPPING_PERMISSIONS, ...SHIPPING_LABELS_PERMISSIONS, ...PARTIES_PERMISSIONS, ...PLANNING_PERMISSIONS, ...PURCHASING_PERMISSIONS, ...INVOICES_PERMISSIONS, ...PAYMENTS_PERMISSIONS, ...COSTING_PERMISSIONS, ...PRODUCTION_SETTINGS_PERMISSIONS, ...PRODUCTION_CUTTING_PERMISSIONS, ...PRODUCTION_BUNDLES_PERMISSIONS, ...PRODUCTION_SCANS_PERMISSIONS, ...PRODUCTION_SERIALS_PERMISSIONS, ...WORKORDERS_PERMISSIONS, ...QUOTES_PERMISSIONS, ...SALES_SETTINGS_PERMISSIONS, ...COMPANY_BANK_PERMISSIONS, ...ORDERS_PERMISSIONS, ...PRIVACY_PERMISSIONS, ...QUALITY_LAB_PERMISSIONS, ...QUALITY_FINAL_PERMISSIONS, ...HOME_PERMISSIONS]) {
   if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 }
 for (const name of LINK_SESSION_NAMES) {

@@ -67,6 +67,14 @@ enum NumberKind {
   BATCH
   /// The PPE register's entries (REG-…; quality.prisma PpeRegisterEntry.reference).
   PPE_REGISTER
+  /// Scan-id kinds (@nexus/factory-domain/numbering/kinds SCAN_ID_KINDS): ONE tenant-wide counter each, kept as the
+  /// NumberBlock ledger below, never a NumberSeries (the …_numbering_floor_guards triggers refuse both ways).
+  /// A bundle ticket's code (BN-…; production.prisma Bundle.code).
+  BUNDLE
+  /// A hide's tag (HD-…; inventory.prisma Hide.code).
+  HIDE
+  /// A finished garment's serial (SN-…).
+  GARMENT_SERIAL
 }
 
 enum NumberReset {
@@ -113,4 +121,88 @@ model NumberAllocation {
   // A record gets one number of each kind.
   @@unique([tenantId, recordType, recordId, kind])
   @@index([tenantId, seriesId, value])
+}
+
+/// A block of scan-id references of one scan-id kind (BUNDLE, HIDE, GARMENT_SERIAL; the `TT-GG-RRRRRR-C` codes of
+/// @nexus/factory-domain/numbering/scan-id): the tenant's ledger of every reference handed out (design 02-sections-floor:
+/// "tags print offline from numbers reserved per tablet"). A scan id carries the tenant's tag, never the company, so each
+/// kind has ONE counter per tenant: the highest `toRef` here. A new block starts above every block of its kind before it
+/// (the …_numbering_floor_guards trigger, under the tenant's `factory.scan-ids` lock), so no reference is handed out twice.
+/// ONLINE: taken by one command and used by it at once (apps/factory-api allocateScanIds). DEVICE: reserved for one floor
+/// tablet, which numbers from it offline; each number it used is a NumberBlockUse row. Gaps are fine: these are not
+/// fiscal series. Closed (a lost or retired tablet), never deleted; its range never changes.
+model NumberBlock {
+  /// UUIDv7 from newId().
+  id           String             @id @db.Uuid
+  tenantId     String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  kind         NumberKind
+  purpose      NumberBlockPurpose
+  fromRef      Int
+  toRef        Int
+  /// The tablet a DEVICE block is reserved for (null for ONLINE). Not a foreign key: a Device is keyed by its site, and
+  /// this ledger is the tenant's (every tablet reads it whole, to see the counter); the guard trigger checks the device
+  /// is ACTIVE and one the inserting session sees (a tablet: its own site's).
+  deviceId     String?            @db.Uuid
+  status       NumberBlockStatus  @default(ACTIVE)
+  /// Why the office closed it (a lost tablet, a retired one): its numbers left are never used.
+  closedReason String?
+  closedAt     DateTime?          @db.Timestamptz(3)
+  /// The request (or job) that took it, as on its audit rows.
+  requestId    String
+  version      Int                @default(1)
+  createdAt    DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+
+  uses NumberBlockUse[]
+
+  // The counter: a block starts after the highest one (the trigger); no two blocks share a first or a last reference.
+  @@unique([tenantId, kind, fromRef])
+  @@unique([tenantId, kind, toRef])
+  // The target of the uses' tenant-safe reference.
+  @@unique([tenantId, id])
+  @@index([tenantId, deviceId, kind])
+}
+
+enum NumberBlockPurpose {
+  ONLINE
+  DEVICE
+}
+
+enum NumberBlockStatus {
+  ACTIVE
+  CLOSED
+}
+
+/// One number of a DEVICE block that its tablet used: printed on a label (offline too) and sent with what it numbered.
+/// The guard trigger holds that it lies in its block, the block is open and of the same kind and tablet; the unique
+/// printed code holds that a number is used once (the code is one-to-one with kind and reference, as NumberAllocation's
+/// printed number is with its value). Written by apps/factory-api useScanIds inside the tablet's command; never changed.
+/// @append-only
+model NumberBlockUse {
+  /// UUIDv7 from newId().
+  id         String     @id @db.Uuid
+  tenantId   String     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The tablet's site.
+  siteId     String     @db.Uuid
+  deviceId   String     @db.Uuid
+  blockId    String     @db.Uuid
+  kind       NumberKind
+  ref        Int
+  /// The scan id as printed (`HD-7K-0003RJ-M`).
+  code       String
+  /// The record that took the number: its model name and id (Hide, Bundle, GarmentSerial).
+  recordType String
+  recordId   String     @db.Uuid
+  /// The command's server time.
+  usedAt     DateTime   @db.Timestamptz(3)
+  /// The request that sent it, as on its audit rows (who is in the audit row, never here: floor rule, L. 300/1970 art. 4).
+  requestId  String
+
+  block  NumberBlock @relation(fields: [tenantId, blockId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  device Device      @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A number is used once in the tenant.
+  @@unique([tenantId, code])
+  @@index([tenantId, blockId])
+  @@index([tenantId, siteId, deviceId])
 }

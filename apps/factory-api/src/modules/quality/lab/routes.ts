@@ -10,6 +10,7 @@ import {
   clearHoldContract,
   getLotContract,
   getSettingsContract,
+  listLotsContract,
   listDocumentsContract,
   listResultsContract,
   recordResultContract,
@@ -22,6 +23,7 @@ import {
 import { blockLot, clearHold, rejectLot, releaseLot, unblockLot } from './decisions'
 import { announceDocument, attachDocument } from './documents'
 import { manifest } from './manifest'
+import { listLots } from './lots'
 import { getLot, listDocuments, listResults, releaseCheck } from './read'
 import { announceReport, recordResult } from './results'
 import { getQualitySettings, saveQualitySettings } from './settings'
@@ -30,9 +32,12 @@ import { getQualitySettings, saveQualitySettings } from './settings'
  * The lab step for incoming lots (B-W1-34; Owner question Q14, design answer W3): a lot's chromium VI results with their
  * reports (./results.ts), its supplier documents (./documents.ts), the release checklist and the decisions — release
  * with the typed lot code, reject, block, unblock, clear the receiver's hold (./decisions.ts) — and the Cr VI evidence
- * rule (./settings.ts). Results, documents and settings are kept through their seams (*-store.ts).
+ * rule (./settings.ts), and the lots list with its on-hold filter (./lots.ts, B-W1-45). Results, documents and settings
+ * are kept through their seams (*-store.ts).
  */
 export default defineRoutes('quality.lab', manifest, async (app) => {
+  app.get('/quality/lots', { schema: listLotsContract }, async (request) => listLots(request, { ...request.query, onHold: request.query.onHold === 'true' }))
+
   app.get('/quality/lots/:lotId', { schema: getLotContract }, async (request) => getLot(request, request.params.lotId))
 
   app.get('/quality/lots/:lotId/release-check', { schema: releaseCheckContract }, async (request) => releaseCheck(request, request.params.lotId))

@@ -15,6 +15,7 @@ import { seed as seedInventory } from '../seed/inventory'
 import { seed as seedLinks } from '../seed/links'
 import { seed as seedMoney } from '../seed/money'
 import { seed as seedNumbering } from '../seed/numbering'
+import { seed as seedNumberingBlocks } from '../seed/numbering-blocks'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
 import { seed as seedPrint } from '../seed/print'
@@ -123,6 +124,8 @@ beforeAll(async () => {
   await seedLinks({ db: factory, namespace: 'iso-b' })
   await seedFloorAuth({ db: factory, namespace: 'iso-a' })
   await seedFloorAuth({ db: factory, namespace: 'iso-b' })
+  await seedNumberingBlocks({ db: factory, namespace: 'iso-a' })
+  await seedNumberingBlocks({ db: factory, namespace: 'iso-b' })
   await seedThreads({ db: factory, namespace: 'iso-a' })
   await seedThreads({ db: factory, namespace: 'iso-b' })
   await seedImports({ db: factory, namespace: 'iso-a' })
@@ -168,6 +171,7 @@ it('covers every classified table and every runtime role', () => {
     'BomLineColour',
     'BomLineSize',
     'Bundle',
+    'BundleReprint',
     'Certificate',
     'CertificateCoverage',
     'Colour',
@@ -184,8 +188,10 @@ it('covers every classified table and every runtime role', () => {
     'DeviceEnrolment',
     'EmailIdentity',
     'EmailOutbound',
+    'FloorScanRefusal',
     'FloorSession',
     'FloorSettings',
+    'GarmentLabelPrint',
     'GarmentSerial',
     'GoodsReceipt',
     'GoodsReceiptLine',
@@ -218,10 +224,13 @@ it('covers every classified table and every runtime role', () => {
     'MeasurementTemplate',
     'Message',
     'NumberAllocation',
+    'NumberBlock',
+    'NumberBlockUse',
     'NumberSeries',
     'OneOffLink',
     'Operation',
     'OperationScan',
+    'OperationScanDefect',
     'OutboxEvent',
     'Parcel',
     'Party',
@@ -258,6 +267,8 @@ it('covers every classified table and every runtime role', () => {
     'SalesOrderLine',
     'SalesOrderLineSize',
     'SalesSettings',
+    'ScanCorrectionRequest',
+    'ScrapReason',
     'SdiNotification',
     'SdiSubmission',
     'SecretValue',

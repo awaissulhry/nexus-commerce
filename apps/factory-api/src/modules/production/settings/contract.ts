@@ -1,10 +1,12 @@
 import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { MONITORING_CHANGES } from '@nexus/factory-domain/production/events'
+import { MAX_BUNDLE_SIZE } from '@nexus/factory-domain/production/bundles/rules'
 import { MONITORING_BASES, SCAN_SUBJECTS } from '@nexus/factory-domain/production/settings/monitoring'
 
 /**
- * A site's floor rules (B-W1-37; A2 SCR-074; MES-278, PLT-208): the monitoring switch with its legal basis. The kind of
+ * A site's floor rules (B-W1-37; A2 SCR-074; MES-278, PLT-208): the monitoring switch with its legal basis, and the
+ * standard bundle size (MES-065). The kind of
  * basis and the reference are free strings here so the domain answers in words (`legalBasisProblems`); the lengths
  * below only stop oversized bodies. Counts are counts: no answer ranks or sorts people by what they did.
  */
@@ -29,6 +31,8 @@ const rulesView = output({
   /** true: the site has no floor rules yet and names workers by default (the schema's default). */
   isDefault: z.boolean(),
   legalBasis: legalBasisView.nullable(),
+  /** Garments per bundle when a make names no size (MES-065); 10 while the site has no floor rules. */
+  standardBundleSize: z.number().int(),
   /** The version to send back with a change; null while the site has no floor rules. */
   version: z.number().int().nullable(),
   updatedAt: instant().nullable(),
@@ -57,7 +61,7 @@ export const changeResult = output({
   ifSwitched: ifSwitchedView,
   /** false: nothing changed (no audit row, no event). */
   changed: z.boolean(),
-  /** What changed, as the event production.monitoring_changed says it; null when nothing did. */
+  /** What changed, as the event production.monitoring_changed says it; null when nothing did (or the bundle size did). */
   change: z.enum(MONITORING_CHANGES).nullable(),
   /** What the change means at the site, in words. */
   words: z.array(z.string()),
@@ -101,6 +105,17 @@ export const recordLegalBasisContract = defineContract({
   response: { 200: changeResult },
 })
 
+export const changeBundleSizeContract = defineContract({
+  params: input({ siteId: id() }),
+  body: input({
+    /** Garments per bundle when a make names no size, 1 to 500 (a made-to-measure unit is always one per bundle). */
+    standardBundleSize: z.number().int().min(1).max(MAX_BUNDLE_SIZE),
+    /** The version read; left out while the site has no floor rules. */
+    version: z.number().int().min(1).optional(),
+  }),
+  response: { 200: changeResult },
+})
+
 const ackView = output({ noticeVersion: z.string(), channel: z.enum(['DEVICE', 'PAPER']), acknowledgedAt: instant() })
 
 export const noticeAcksContract = defineContract({
@@ -125,6 +140,8 @@ export const floorRulesContract = defineContract({
       scanSubject: subject,
       /** The signed-in worker acknowledged the information notice (a WORKER site names nobody before that). */
       workerAcknowledged: z.boolean(),
+      /** Garments per bundle when the cutter names no size (MES-065). */
+      standardBundleSize: z.number().int(),
     }),
   },
 })

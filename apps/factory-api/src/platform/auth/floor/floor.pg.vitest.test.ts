@@ -487,11 +487,23 @@ describe('badge alone starts work, as a site setting (Owner answer F1 a)', () =>
 })
 
 describe('revocation ends sessions', () => {
-  it('a revoked device: its session ends, its token opens nothing', async () => {
+  it('a revoked device: its session ends, its token opens nothing, its number blocks close', async () => {
     const device = await tablet(p1)
     const lou = await worker(p1, 'Lou Test')
     expect((await signIn(device, lou)).status).toBe(200)
     const sessionId = await currentSession(device.deviceId)
+    // Two blocks of the tablet's for offline labels (numbering/scan-ids), and an online block that names no tablet.
+    const blockAt = async (kind: string, purpose: string, deviceId: string | null) => {
+      const [{ top }] = (await admin(`SELECT coalesce(max("toRef"), 0)::int AS top FROM "NumberBlock" WHERE "tenantId" = (SELECT "tenantId" FROM "Device" WHERE id = $1::uuid) AND kind = $2::"NumberKind"`, [device.deviceId, kind])) as [{ top: number }]
+      const id = newId()
+      await admin(
+        `INSERT INTO "NumberBlock" (id, "tenantId", kind, purpose, "fromRef", "toRef", "deviceId", "requestId") SELECT $1::uuid, "tenantId", $2::"NumberKind", $3::"NumberBlockPurpose", $4, $5, $6::uuid, 'test' FROM "Device" WHERE id = $7::uuid`,
+        [id, kind, purpose, top + 1, top + 10, deviceId, device.deviceId],
+      )
+      return id
+    }
+    const own = [await blockAt('HIDE', 'DEVICE', device.deviceId), await blockAt('BUNDLE', 'DEVICE', device.deviceId)]
+    const online = await blockAt('HIDE', 'ONLINE', null)
     const revoked = await office.post(`/auth/floor/devices/${device.deviceId}/revoke`, { reason: 'lost' })
     expect(revoked.status).toBe(200)
     expect(revoked.body).toMatchObject({ status: 'REVOKED', inUse: false })
@@ -500,6 +512,15 @@ describe('revocation ends sessions', () => {
     expect((await device.browser.get('/floor/device')).status).toBe(401)
     expect((await signIn(device, lou)).status).toBe(401)
     expect((await admin('SELECT "tokenHash" FROM "Device" WHERE id = $1::uuid', [device.deviceId]))[0]!.tokenHash).toBeNull()
+    const blocks = await admin('SELECT id::text AS id, status::text AS status, "closedReason" FROM "NumberBlock" WHERE id = ANY($1::uuid[])', [[...own, online]])
+    expect(Object.fromEntries(blocks.map((row) => [row.id, [row.status, row.closedReason]]))).toEqual({
+      [own[0]!]: ['CLOSED', 'Tablet revoked: lost'],
+      [own[1]!]: ['CLOSED', 'Tablet revoked: lost'],
+      [online]: ['ACTIVE', null],
+    })
+    const [audit] = await admin(`SELECT after FROM "AuditLog" WHERE action = 'devices.revoke' AND "recordId" = $1::uuid`, [device.deviceId])
+    expect(audit!.after).toMatchObject({ status: 'REVOKED', blocksClosed: 2 })
+    expect(await admin(`SELECT count(*)::int AS n FROM "AuditLog" WHERE action = 'numbering.closeBlock' AND "recordId" = ANY($1::uuid[])`, [own])).toEqual([{ n: 2 }])
   })
 
   it('a revoked or reprinted badge: its sessions end and it signs in no more', async () => {
@@ -555,7 +576,7 @@ describe('revocation ends sessions', () => {
     expect((await me(device)).body).toMatchObject({ pinMustChange: true, permissions: [] })
     expect((await device.browser.post('/floor/pin', { currentPin: reset.body.pin, newPin: '123456' })).status).toBe(400)
     expect((await device.browser.post('/floor/pin', { currentPin: reset.body.pin, newPin: '905218' })).body).toEqual({ status: 'changed' })
-    expect((await me(device)).body).toMatchObject({ pinMustChange: false, permissions: ['floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.transfer', 'print.labels', 'print.view', 'production.cut', 'shipping.pack'] })
+    expect((await me(device)).body).toMatchObject({ pinMustChange: false, permissions: ['floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.transfer', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'production.scan', 'production.serials', 'shipping.pack'] })
     expect((await device.browser.post('/floor/sign-out')).status).toBe(200)
     expect((await signIn(device, ola, reset.body.pin)).status).toBe(401)
     expect((await signIn(device, ola, '905218')).status).toBe(200)
@@ -567,12 +588,12 @@ describe('floor grants come from floor roles, with at most wages', () => {
     const device = await tablet(p1)
     const pia = await worker(p1, 'Pia Test', ['team_leader'])
     expect((await signIn(device, pia)).status).toBe(200)
-    expect((await me(device)).body.permissions).toEqual(['floor.lead', 'floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.transfer', 'print.labels', 'print.view', 'production.cut', 'shipping.pack'])
+    expect((await me(device)).body.permissions).toEqual(['floor.lead', 'floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.transfer', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'production.scan', 'production.serials', 'quality.inspections.view', 'shipping.pack'])
     await stepped(office)
     expect((await send(office, 'PUT', `/auth/floor/workers/${pia.id}/roles`, { roleIds: [] })).status).toBe(200)
     expect((await me(device)).body.permissions).toEqual([])
     expect((await send(office, 'PUT', `/auth/floor/workers/${pia.id}/roles`, { roleIds: [await roleId(alpha, 'operator')] })).body.roles.map((role: { key: string }) => role.key)).toEqual(['operator'])
-    expect((await me(device)).body.permissions).toEqual(['floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.transfer', 'print.labels', 'print.view', 'production.cut', 'shipping.pack'])
+    expect((await me(device)).body.permissions).toEqual(['floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.transfer', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'production.scan', 'production.serials', 'shipping.pack'])
   })
 
   it('drops every grain but wages, and refuses office roles for workers and floor roles for people', async () => {

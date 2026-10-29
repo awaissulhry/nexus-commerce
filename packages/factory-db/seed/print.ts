@@ -8,7 +8,8 @@ import { seedUuid, type SeedContext } from '../src/seeding'
  * The print module's synthetic seed, per tenant of seed/_core.ts: on each plant a label printer (203 dpi, 100 × 50 mm
  * stock) behind the FAKE relay (it records jobs and sends nothing), and on plant A1 an A4 printer too; then a few jobs:
  * on A1 a hide label still queued, a lot label sent to the relay and a PDF printed (the files seed's office document),
- * on B1 a bundle ticket that failed. The ZPL is the real layout of factory-domain/labels for made-up scannable ids.
+ * on B1 a bundle ticket that failed; A1's cutting table (station CUT-01) prints its tickets on A1's label printer
+ * (MES-184). The ZPL is the real layout of factory-domain/labels for made-up scannable ids.
  * Written in the tenant's office scope. Made up and harmless; a second run adds nothing (INSERT … ON CONFLICT DO NOTHING).
  */
 
@@ -106,6 +107,8 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
     client.$transaction(async (tx) => {
       await tx.printer.createMany({ data: printers, skipDuplicates: true })
       await tx.printJob.createMany({ data: jobs, skipDuplicates: true })
+      // MES-184: A1's cutting table prints its bundle tickets on A1's label printer (a station not yet paired only).
+      await tx.station.updateMany({ where: { id: id('site:A1:station:CUT-01'), labelPrinterId: null }, data: { labelPrinterId: id('print:printer:A1:LBL') } })
     }),
   )
 }

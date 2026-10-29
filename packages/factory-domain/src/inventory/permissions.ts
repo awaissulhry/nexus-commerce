@@ -33,6 +33,12 @@ export const INVENTORY_ISSUE_OVER = 'inventory.issue.over' satisfies Permission
  * inventory.reverse (the office); releasing a lot is the quality step's (B-W1-34).
  */
 export const INVENTORY_RECEIVE = 'inventory.receive' satisfies Permission
+/**
+ * Load a company's opening stock from a sheet (B-W1-35; SCM-288): lots, hides with their areas, the existing chromium
+ * VI reports and their files, posted as OPENING moves. Never releases a lot that needs the quality step (B-W1-34).
+ * Office only; a sheet with report columns also needs quality.lots.test.
+ */
+export const INVENTORY_OPENING_IMPORT = 'inventory.opening.import' satisfies Permission
 
 export const INVENTORY_PERMISSIONS = [
   INVENTORY_LOCATIONS_VIEW,
@@ -45,6 +51,7 @@ export const INVENTORY_PERMISSIONS = [
   INVENTORY_ISSUE,
   INVENTORY_ISSUE_OVER,
   INVENTORY_RECEIVE,
+  INVENTORY_OPENING_IMPORT,
 ] as const
 
 /**

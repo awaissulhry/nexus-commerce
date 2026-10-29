@@ -3,6 +3,7 @@ import { floorPrivacyStatus, floorReadiness, NO_DPIA_NOTE } from '../../privacy/
 import { floorRulesStatus } from '../settings/monitoring'
 import {
   cellProgress,
+  closesHide,
   correctionRefusal,
   cutDecision,
   entryPattern,
@@ -13,6 +14,7 @@ import {
   perGarmentOf,
   setsCut,
   setsNeed,
+  stateAfterReversal,
   undoRefusal,
   type CutCell,
   type CutFacts,
@@ -210,23 +212,48 @@ describe('Hide done (MES-058, SCM-253): the rest is used, the remnant goes back,
 })
 
 describe('undo and correction: a mirror entry, once, while the hide can still be cut', () => {
-  const facts: ReversalFacts = { entry: { reversalOfId: null, reversed: false }, workOrder: { number: 'WO-00001', status: 'IN_PROGRESS' }, hide: { code: 'H-1', state: 'PARTLY_CUT' }, bundles: [] }
+  const facts: ReversalFacts = { entry: { id: 'e1', reversalOfId: null, reversed: false }, workOrder: { number: 'WO-00001', status: 'IN_PROGRESS' }, hide: { code: 'H-1', state: 'PARTLY_CUT', closingCutLogId: null }, bundles: [] }
+  /** H-1 used up by entry e1 (its closing entry), or by another entry e9. */
+  const usedUpBy = (closingCutLogId: string | null) => ({ ...facts, hide: { code: 'H-1', state: 'CONSUMED' as const, closingCutLogId } })
 
   it('lets the office correct any live entry of an open work order', () => {
     expect(correctionRefusal(facts)).toBeNull()
-    expect(correctionRefusal({ ...facts, entry: { reversalOfId: 'e0', reversed: false } })).toMatchObject({ code: 'NOT_A_CUT' })
-    expect(correctionRefusal({ ...facts, entry: { reversalOfId: null, reversed: true } })).toMatchObject({ code: 'REVERSED_ALREADY' })
+    expect(correctionRefusal({ ...facts, entry: { id: 'e1', reversalOfId: 'e0', reversed: false } })).toMatchObject({ code: 'NOT_A_CUT' })
+    expect(correctionRefusal({ ...facts, entry: { id: 'e1', reversalOfId: null, reversed: true } })).toMatchObject({ code: 'REVERSED_ALREADY' })
     expect(correctionRefusal({ ...facts, workOrder: { number: 'WO-00001', status: 'COMPLETED' } })).toMatchObject({ code: 'WORK_ORDER_NOT_OPEN' })
-    expect(correctionRefusal({ ...facts, hide: { code: 'H-1', state: 'CONSUMED' } })).toMatchObject({ code: 'HIDE_USED_UP', message: expect.stringContaining('Hide H-1 is used up') })
+    expect(correctionRefusal({ ...facts, hide: { code: 'H-1', state: 'SCRAPPED', closingCutLogId: null } })).toMatchObject({ code: 'HIDE_USED_UP', message: expect.stringContaining('Hide H-1 is scrapped') })
     expect(correctionRefusal({ ...facts, bundles: ['BN-1', 'BN-2'] })).toEqual({ code: 'IN_BUNDLE', message: 'The pieces of this cut travel in bundles BN-1, BN-2: void them first.' })
+  })
+
+  it("a used-up hide's cuts are final, but its closing cut: correcting that one opens the hide again", () => {
+    expect(correctionRefusal(usedUpBy('e9'))).toEqual({
+      code: 'HIDE_USED_UP',
+      message: 'Hide H-1 is used up: its cuts are final but its closing cut. Correct the closing cut first (that opens the hide again), then this one.',
+    })
+    expect(correctionRefusal(usedUpBy(null))).toMatchObject({ code: 'HIDE_USED_UP' })
+    expect(correctionRefusal(usedUpBy('e1'))).toBeNull()
+    expect(closesHide(usedUpBy('e1'))).toBe(true)
+    expect(closesHide(usedUpBy('e9'))).toBe(false)
+    expect(closesHide({ ...facts, hide: { code: 'H-1', state: 'PARTLY_CUT', closingCutLogId: 'e1' } })).toBe(false)
+    // The closing cut's pieces in a bundle: void it first, as for any cut.
+    expect(correctionRefusal({ ...usedUpBy('e1'), bundles: ['BN-1'] })).toMatchObject({ code: 'IN_BUNDLE' })
+    // A reversal of it opens the hide; a remnant whose return the undo took back is cut on; else the state stays.
+    expect(stateAfterReversal({ state: 'CONSUMED', reopens: true, remnantReturnReversed: false })).toBe('PARTLY_CUT')
+    expect(stateAfterReversal({ state: 'CONSUMED', reopens: false, remnantReturnReversed: false })).toBe('CONSUMED')
+    expect(stateAfterReversal({ state: 'REMNANT', reopens: false, remnantReturnReversed: true })).toBe('PARTLY_CUT')
+    expect(stateAfterReversal({ state: 'REMNANT', reopens: false, remnantReturnReversed: false })).toBe('REMNANT')
+    expect(stateAfterReversal({ state: 'PARTLY_CUT', reopens: false, remnantReturnReversed: false })).toBe('PARTLY_CUT')
   })
 
   it("lets the cutter undo only their own last entry on the tablet", () => {
     expect(undoRefusal({ ...facts, own: true, latest: true })).toBeNull()
     expect(undoRefusal({ ...facts, own: false, latest: true })).toMatchObject({ code: 'NOT_LAST_ACTION' })
     expect(undoRefusal({ ...facts, own: true, latest: false })).toMatchObject({ code: 'NOT_LAST_ACTION' })
-    expect(undoRefusal({ ...facts, own: true, latest: true, entry: { reversalOfId: null, reversed: true } })).toMatchObject({ code: 'REVERSED_ALREADY' })
-    expect(undoRefusal({ ...facts, own: true, latest: true, hide: { code: 'H-1', state: 'CONSUMED' } })).toMatchObject({ code: 'HIDE_USED_UP' })
+    expect(undoRefusal({ ...facts, own: true, latest: true, entry: { id: 'e1', reversalOfId: null, reversed: true } })).toMatchObject({ code: 'REVERSED_ALREADY' })
+    expect(undoRefusal({ ...usedUpBy('e9'), own: true, latest: true })).toMatchObject({ code: 'HIDE_USED_UP' })
+    // The closing cut (a Hide done tapped by mistake) is the cutter's to undo, like any last entry.
+    expect(undoRefusal({ ...usedUpBy('e1'), own: true, latest: true })).toBeNull()
+    expect(undoRefusal({ ...usedUpBy('e1'), own: true, latest: false })).toMatchObject({ code: 'NOT_LAST_ACTION' })
     expect(undoRefusal({ ...facts, own: true, latest: true, bundles: ['BN-1'] })).toMatchObject({ code: 'IN_BUNDLE' })
   })
 })

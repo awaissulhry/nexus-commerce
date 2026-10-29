@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto'
+import type { Prisma } from '../src/generated/prisma/client'
 import {
   CertificateStatus,
   DefectClass,
+  GarmentLabelPrintKind,
   GarmentSerialStatus,
   GarmentTracking,
   InspectionStatus,
@@ -31,12 +33,14 @@ import { seed as seedProduction, type ProductionSeed } from './production'
  *                 SEED-JKT-02 and this seed's SEED-JKT-03 in every colourway and size.
  *   serial style  SEED-JKT-03 (Q31 (b): garmentTracking SERIAL), colourway BLK, its ACTIVE label template and revision 1
  *                 RELEASED with one routing step (final inspection); order SEED-SO-0003 for P1 (4 x BLK 52); work order
- *                 WO-0003 of one cell, released with batch SEED-BT-0003; three serials of the final operation.
+ *                 WO-0003 of one cell, released with batch SEED-BT-0003; three serials of the final operation and their
+ *                 labels' PRINT entry in the label log (GarmentLabelPrint, B-W1-44).
  *   WO-0001       (the production seed's, BATCH-tracked): an OPEN inspection (sample begun, one defect) and a PASSED one
  *                 (lot of 5, one minor defect within the plan); releases from it of BLK 50 x1, BLK 52 x2, RED 52 x1; one
  *                 of the two BLK 52s taken back (a stain found after release: a reversal, corrective action).
  *   WO-0003       a PASSED inspection (lot of 3) and two releases of one garment each, which name the second and third
- *                 serials.
+ *                 serials: the first by the floor inspector at the bench (B-W1-45: who signed the result releases alone
+ *                 with the PIN), the second by the office.
  *   register      one OPEN complaint in the PPE register about SEED-JKT-02, batch SEED-BT-0001, from P1.
  *
  * The generated isolation tests (src/isolation.pg.vitest.test.ts) copy the FIRST row of each table by id and insert the
@@ -44,8 +48,8 @@ import { seed as seedProduction, type ProductionSeed } from './production'
  * pieces nor an inspection more than its lot, a release is never reversed beyond its garments nor below what shipments
  * hold, a cell never gets more live serials than pieces, a serial starts MADE, a register entry starts OPEN. So the OPEN
  * inspection, its defect, the first release of WO-0003 (2 of the cell's 4 released, 2 of the lot's 3), the BLK 52
- * reversal (1 of the release's 2, the other garment on no shipment), the MADE serial (3 of the cell's 4) and the
- * register entry get ids that start with eight zeros, and the rows this seed
+ * reversal (1 of the release's 2, the other garment on no shipment), the MADE serial (3 of the cell's 4), the label
+ * print (its serials are none VOID or SHIPPED) and the register entry get ids that start with eight zeros, and the rows this seed
  * adds to other modules' tables (style, revision, label, certificate, order, work order …) ids that start with eight
  * f's (all still derived from the namespace), so those tables' first rows stay the ones their seeds chose.
  *
@@ -347,6 +351,24 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
           ...stamp(T.serialled, operatorId),
         })),
       })
+      // Their labels, printed in the same step (B-W1-44's label log): one PRINT entry naming the three serials.
+      await tx.garmentLabelPrint.create({
+        data: {
+          id: firstId('quality:label-print:WO-0003:1'),
+          companyId: companyA,
+          siteId: siteA,
+          workOrderId: serialWorkOrderId,
+          workOrderSizeId: serialCellId,
+          kind: GarmentLabelPrintKind.PRINT,
+          tracking: GarmentTracking.SERIAL,
+          quantity: serialIds.length,
+          batchNumber: 'SEED-BT-0003',
+          serialIds: [...serialIds],
+          createdAt: T.serialled,
+          createdById: operatorId,
+        },
+        select: { id: true },
+      })
     }),
   )
 
@@ -473,31 +495,28 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
   const serialReleaseIds = [firstId('quality:release:WO-0003:1'), id('quality:release:WO-0003:2')] as const
   const reversalId = firstId('quality:reversal:WO-0001:BLK-52:1')
   const signed = (key: string) => ({ releasedById: actorId, releasedAt: T.released, signatureSha256: signature(`release ${key}`), createdAt: T.released, createdById: actorId })
-  await db.withScope(office, (client) =>
+  // WO-0003: one garment per release, each naming its serial. The first is the floor inspector's at the bench (B-W1-45:
+  // the inspector who signed the result and made none of the garments releases alone, with the PIN); the second the
+  // office's.
+  type Signer = Pick<Prisma.QualityReleaseUncheckedCreateInput, 'releasedById' | 'releasedByWorkerId' | 'releasedAt' | 'signatureSha256' | 'createdAt' | 'createdById'>
+  const serialRelease = async (tx: Prisma.TransactionClient, index: number, signer: Signer) => {
+    const releaseId = serialReleaseIds[index]!
+    await tx.qualityRelease.create({
+      data: { id: releaseId, companyId: companyA, siteId: siteA, workOrderId: serialWorkOrderId, workOrderSizeId: serialCellId, inspectionId: serialInspectionId, quantity: 1, certificateIds: [certificateId], ...signer },
+      select: { id: true },
+    })
+    await tx.garmentSerial.update({ where: { id: serialIds[index + 1]! }, data: { status: GarmentSerialStatus.RELEASED, releaseId, updatedAt: T.released }, select: { id: true } })
+  }
+  await db.withScope(inspector, (client) =>
     client.$transaction(async (tx) => {
       if (await tx.qualityRelease.findUnique({ where: { id: serialReleaseIds[0] }, select: { id: true } })) return
-      // WO-0003: one garment per release, each naming its serial.
-      for (const [index, releaseId] of serialReleaseIds.entries()) {
-        await tx.qualityRelease.create({
-          data: {
-            id: releaseId,
-            companyId: companyA,
-            siteId: siteA,
-            workOrderId: serialWorkOrderId,
-            workOrderSizeId: serialCellId,
-            inspectionId: serialInspectionId,
-            quantity: 1,
-            certificateIds: [certificateId],
-            ...signed(`WO-0003:${index + 1}`),
-          },
-          select: { id: true },
-        })
-        await tx.garmentSerial.update({
-          where: { id: serialIds[index + 1]! },
-          data: { status: GarmentSerialStatus.RELEASED, releaseId, updatedAt: T.released },
-          select: { id: true },
-        })
-      }
+      await serialRelease(tx, 0, { releasedByWorkerId: inspectorId, releasedAt: T.released, signatureSha256: signature('release WO-0003:1'), createdAt: T.released, createdById: inspectorId })
+    }),
+  )
+  await db.withScope(office, (client) =>
+    client.$transaction(async (tx) => {
+      if (await tx.qualityRelease.findUnique({ where: { id: serialReleaseIds[1] }, select: { id: true } })) return
+      await serialRelease(tx, 1, signed('WO-0003:2'))
       await tx.qualityRelease.createMany({
         data: (
           [
@@ -531,6 +550,7 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
           workOrderSizeId: cell['BLK-52'],
           releaseId: releaseIds['BLK-52'],
           quantity: 1,
+          reasonCode: 'DEFECT_FOUND_LATER',
           reason: 'A stain found on a sleeve after release; back to rework, then a new inspection.',
           reversedById: actorId,
           reversedAt: T.reversed,

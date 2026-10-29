@@ -5,7 +5,7 @@ import { ConflictError, InvalidStateError, NotFoundError, ValidationError } from
 import { newId } from '@nexus/factory-domain/core/ids'
 import { fixedClock } from '@nexus/factory-domain/core/time'
 import type { Grant } from '@nexus/factory-domain/core/permissions'
-import type { NumberKind, NumberReset } from '@nexus/factory-domain/numbering/kinds'
+import type { DocumentKind, NumberReset } from '@nexus/factory-domain/numbering/kinds'
 import { callerFor, COMMAND_SETTINGS, runCommand, type CommandSettings } from '../../core/command'
 import type { RequestContext } from '../../core/context'
 import { ApiError } from '../../core/errors'
@@ -53,7 +53,7 @@ const office = (tenantId = tenantA): RequestContext => ({ audience: 'office', te
 const as = (context: RequestContext = office()) => callerFor(database, context)
 
 /** A new series of tenant A's company with its own code, so each test counts from its own start. */
-async function newSeries(kind: NumberKind = 'INVOICE', more: { reset?: NumberReset; year?: number; startValue?: number; pattern?: string } = {}) {
+async function newSeries(kind: DocumentKind = 'INVOICE', more: { reset?: NumberReset; year?: number; startValue?: number; pattern?: string } = {}) {
   const code = `T${newId().slice(-8).toUpperCase()}`
   const reset = more.reset ?? 'YEARLY'
   const series = await createSeries(as(), { companyId: companyA, kind, code, reset, year: reset === 'YEARLY' ? (more.year ?? 2026) : undefined, pattern: more.pattern, startValue: more.startValue })
