@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { formatScanId, parseScanId, tenantTag } from '../../numbering/scan-id'
 import {
   differenceWords,
   dyeBatchNote,
@@ -7,12 +6,10 @@ import {
   hideAreaUnit,
   hideCountNote,
   hideLineUnit,
-  hideTagPrefix,
   lineDifference,
   lineShapeProblems,
   lotStart,
   lotStateWords,
-  nextHideTags,
   orderStatusAfter,
   receivingProblem,
   reversalBlockers,
@@ -22,8 +19,6 @@ import {
 } from './rules'
 
 /** Goods receipts (B-W1-32), pure. Every figure below is worked out by hand in the comment beside it. */
-
-const TENANT = '0199f0a0-0000-7000-8000-000000000001'
 
 describe('the order a receipt is against', () => {
   it('receives against SENT, CONFIRMED and PARTLY_RECEIVED orders only, and says why not otherwise', () => {
@@ -110,17 +105,6 @@ describe('the lot', () => {
 })
 
 describe('hides', () => {
-  it('get the tenant\'s HIDE scan ids, after its highest one', () => {
-    const tag = tenantTag(TENANT)
-    expect(hideTagPrefix(TENANT)).toBe(`HD-${tag}-`)
-    const first = nextHideTags(TENANT, null, 2)
-    expect(first.map((code) => parseScanId(code, { types: ['HIDE'], tenantTag: tag }))).toMatchObject([{ ok: true, ref: 1 }, { ok: true, ref: 2 }])
-    const next = nextHideTags(TENANT, formatScanId({ type: 'HIDE', tenantTag: tag, ref: 41 }), 2)
-    expect(next.map((code) => (parseScanId(code) as { ref: number }).ref)).toEqual([42, 43])
-    // Another factory's tag or a code that is no scan id counts as none.
-    expect((parseScanId(nextHideTags(TENANT, 'SEED-HIDE-0002', 1)[0]) as { ref: number }).ref).toBe(1)
-  })
-
   it('are measured in the unit given, else the order line\'s area unit, else the base unit; a line is in the unit its hides share', () => {
     expect(hideAreaUnit({ areaUom: 'M2' }, 'FT2', 'FT2')).toBe('M2')
     expect(hideAreaUnit({}, 'FT2', 'M2')).toBe('FT2')

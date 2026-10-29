@@ -24,8 +24,33 @@ export const NUMBER_KINDS = [
   'LOT',
   'BATCH',
   'PPE_REGISTER',
+  'BUNDLE',
+  'HIDE',
+  'GARMENT_SERIAL',
 ] as const
 export type NumberKind = (typeof NUMBER_KINDS)[number]
+
+/**
+ * The scan-id kinds: what a floor tablet numbers, offline too, as scannable ids (`BN-…`, `HD-…`, `SN-…`; numbering/scan-id).
+ * They are NOT document series: no company, sezionale, pattern or period, and a gap is fine (a ticket printed and
+ * thrown away). The rule is that a reference is handed out once per tenant: the scan id carries only the tenant's tag,
+ * so ONE tenant-wide counter per kind, kept as the tenant's ledger of number blocks (numbering/blocks; factory-db
+ * NumberBlock). allocateNumber refuses them; apps/factory-api's allocateScanIds hands them out.
+ */
+export const SCAN_ID_KINDS = ['BUNDLE', 'HIDE', 'GARMENT_SERIAL'] as const satisfies readonly NumberKind[]
+export type ScanIdKind = (typeof SCAN_ID_KINDS)[number]
+
+/** The document kinds: a company's series with a pattern and a period (allocateNumber; factory-db NumberSeries). */
+export const DOCUMENT_KINDS = NUMBER_KINDS.filter((kind): kind is DocumentKind => !(SCAN_ID_KINDS as readonly string[]).includes(kind)) as readonly DocumentKind[] as readonly [DocumentKind, ...DocumentKind[]]
+export type DocumentKind = Exclude<NumberKind, ScanIdKind>
+
+export function isScanIdKind(value: unknown): value is ScanIdKind {
+  return typeof value === 'string' && (SCAN_ID_KINDS as readonly string[]).includes(value)
+}
+
+export function isDocumentKind(value: unknown): value is DocumentKind {
+  return isNumberKind(value) && !isScanIdKind(value)
+}
 
 /**
  * The fiscal documents: progressive numbering with no gap and never the same number twice (DPR 633/1972 art. 21 c.2
@@ -105,7 +130,7 @@ export function isScopeKey(value: unknown): value is string {
 }
 
 /** The prefix a new series of a kind starts with in its default pattern (the admin may type any pattern). */
-const DEFAULT_PREFIX: Readonly<Record<NumberKind, string>> = {
+const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   QUOTE: 'QT',
   SALES_ORDER: 'SO',
   PURCHASE_ORDER: 'PO',
@@ -123,7 +148,7 @@ const DEFAULT_PREFIX: Readonly<Record<NumberKind, string>> = {
 }
 
 /** The pattern a new series gets when the admin types none: `FT-{YYYY}-{N:5}` (yearly) or `LOT-{N:6}` (never resets). */
-export function defaultPattern(kind: NumberKind, reset: NumberReset): string {
+export function defaultPattern(kind: DocumentKind, reset: NumberReset): string {
   const prefix = DEFAULT_PREFIX[kind]
   return reset === 'YEARLY' ? `${prefix}-{YYYY}-{N:5}` : `${prefix}-{N:6}`
 }

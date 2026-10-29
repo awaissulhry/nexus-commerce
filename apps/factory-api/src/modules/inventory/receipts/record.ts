@@ -18,7 +18,6 @@ import {
   lineShapeProblems,
   lotStart,
   lotStateWords,
-  nextHideTags,
   orderStatusAfter,
   RECEIPT_LIMITS,
   receivingProblem,
@@ -31,11 +30,12 @@ import { Dec, parseDecimal, ZERO, type Decimal } from '@nexus/factory-domain/tax
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { allocateNumber } from '../../../platform/numbering/allocate'
+import { allocateScanIds } from '../../../platform/numbering/scan-ids'
 import { lockOrderForReceipt, setOrderReceiptProgress } from '../../purchasing/receiving'
 import { officeContextOf, postedBy, stockContextOf } from '../ledger/access'
 import { postMoves, type MoveDraft, type PostedMove } from '../ledger/post-moves'
 import { receiptDetail } from './read'
-import { lockHideTags, readColours, readEarlierLots, readItems, readOrderLines, RECEIPT_COLUMNS, type ItemRow, type OrderLineRow } from './store'
+import { readColours, readEarlierLots, readItems, readOrderLines, RECEIPT_COLUMNS, type ItemRow, type OrderLineRow } from './store'
 
 /**
  * Record a goods receipt against a purchase order (B-W1-32; SCM-113, SCM-116, SCM-117, SCM-187, SCM-232, SCM-233,
@@ -46,8 +46,9 @@ import { lockHideTags, readColours, readEarlierLots, readItems, readOrderLines, 
  * inventory/receipts/rules.
  *
  * Lock order: the order's row (its version bump: a cancel or send decided on the version it read fails) → the order's
- * receiving lock (the cancel takes it too) → the number series (allocateNumber) → the tenant's hide-tag lock → the
- * ledger (postMoves; a receipt only puts stock in, so it waits for no stock lock).
+ * receiving lock (the cancel takes it too) → the number series (allocateNumber) → the tenant's HIDE scan-id counter
+ * (allocateScanIds, its `factory.scan-ids` lock) → the ledger (postMoves; a receipt only puts stock in, so it waits for
+ * no stock lock).
  *
  * The office records it in W1 (inventory.receive over the order's company and site). `recordReceiptInCommand` is the
  * command's work, for the floor's receiving screen (B-W1-33) once the floor may number receipts and lots and move the
@@ -155,11 +156,11 @@ export async function recordReceipt(caller: CommandCaller, body: ReceiptBody, id
 export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptBody, key: string): Promise<RecordResult> {
   const context = stockContextOf({ factoryContext: tools.context, withClient: () => Promise.reject(new Error('inside a command')) })
   if (context.audience === 'floor') {
-    // B-W1-33: the floor's role reads the order only and has no grant on the number series (see the step notes).
+    // B-W1-33: the floor's role reads the order only and has no grant on the number series (see the step notes); its
+    // hide tags come from the HIDE counter already (allocateScanIds online, useScanIds for tags printed offline).
     throw new ForbiddenError('Goods are received on the floor through the floor\'s receiving screen.')
   }
   const { tx, now } = tools
-  const tenantId = context.tenantId
   const by = postedBy(context)
 
   // 1. The order, locked; may it receive goods now?
@@ -269,8 +270,9 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   }
 
   // 6. Lots (our numbers) and hides (the tenant's tags), then one RECEIPT move per hide, lot or untracked line.
-  const lastTag = planned.some((line) => line.item.tracking === 'HIDE') ? await lockHideTags(tx, tenantId) : null
-  const tags = nextHideTags(tenantId, lastTag, planned.reduce((sum, line) => sum + line.lots.reduce((count, lot) => count + lot.hides.length, 0), 0))
+  // Hide tags: the tenant's HIDE scan ids, from its tenant-wide counter (one ONLINE block for the receipt's hides).
+  const hideCount = planned.reduce((sum, line) => sum + line.lots.reduce((count, lot) => count + lot.hides.length, 0), 0)
+  const tags = hideCount > 0 ? (await allocateScanIds(tools, 'HIDE', hideCount)).codes : []
   let nextTag = 0
   const drafts: MoveDraft[] = []
   const lotRows: { id: string; code: string; quarantined: boolean; seq: number; words: string }[] = []

@@ -1,5 +1,4 @@
 import type { Issue } from '../../core/errors'
-import { formatScanId, parseScanId, tenantTag } from '../../numbering/scan-id'
 import { dimensionOf, UNITS, type Uom } from '../../product/units/units'
 import { STATUS_WORDS, type PurchaseOrderStatus } from '../../purchasing/orders'
 import { Dec, HUNDRED, parseDecimal, ZERO, type Decimal, type DecimalInput } from '../../tax/decimal'
@@ -237,22 +236,8 @@ export const MAX_THICKNESS_MM = '99.99'
 /** The units a hide is measured in. */
 export const HIDE_AREA_UNITS: readonly Uom[] = Object.freeze(['M2', 'DM2', 'FT2'])
 
-/** The tags of a tenant's hides start with this (`HD-<tenant tag>-`): a HIDE scan id (numbering/scan-id). */
-export const hideTagPrefix = (tenantId: string): string => `HD-${tenantTag(tenantId)}-`
-
-/**
- * The next `count` hide tags of a tenant after its last one (the highest reference among its tags; null: none yet).
- * Each is a HIDE scan id: printed on the hide's tag (B-W1-33) and scanned at picking and cutting.
- */
-export function nextHideTags(tenantId: string, lastTag: string | null, count: number): string[] {
-  const tag = tenantTag(tenantId)
-  let ref = 0
-  if (lastTag !== null) {
-    const parsed = parseScanId(lastTag, { types: ['HIDE'], tenantTag: tag })
-    if (parsed.ok) ref = parsed.ref
-  }
-  return Array.from({ length: count }, (_, index) => formatScanId({ type: 'HIDE', tenantTag: tag, ref: ref + index + 1 }))
-}
+// A hide's tag is a HIDE scan id (numbering/scan-id) from the tenant's HIDE counter (numbering/blocks; apps/factory-api
+// allocateScanIds), printed on the hide's tag (B-W1-33) and scanned at picking and cutting.
 
 // ---- what a receipt line sends ---------------------------------------------------------------------------------------------------
 

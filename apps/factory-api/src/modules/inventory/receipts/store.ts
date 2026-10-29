@@ -1,13 +1,13 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { hideTagPrefix } from '@nexus/factory-domain/inventory/receipts/rules'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTx } from '../../../core/command'
 
 /**
  * The goods receipts' reads (factory-db inventory.prisma GoodsReceipt, GoodsReceiptLine, Lot, Hide; supply.prisma
- * PurchaseOrder, PurchaseOrderLine): the columns every read names, the order lines a receipt counts against with what
- * POSTED receipts brought them, and the tenant's hide-tag lock. Inside a command's transaction the reads select no
+ * PurchaseOrder, PurchaseOrderLine): the columns every read names, and the order lines a receipt counts against with
+ * what POSTED receipts brought them (hide tags come from the tenant's HIDE counter: platform/numbering/scan-ids). Inside
+ * a command's transaction the reads select no
  * relation and run one after another on its one connection; row-level security decides what they find.
  */
 
@@ -166,19 +166,6 @@ export async function readEarlierLots(db: Reader, orderLineIds: readonly string[
     result.set(line.purchaseOrderLineId!, entry)
   }
   return result
-}
-
-/**
- * The tenant's hide-tag lock: the next tags (HIDE scan ids, after the highest one) are read and inserted by one
- * receipt at a time. Taken after the order's locks. Returns the tenant's highest tag (null: none yet). The office reads
- * every hide of the tenant; a floor device reads only its site's (B-W1-33 needs a tenant-wide counter).
- */
-export async function lockHideTags(tx: CommandTx, tenantId: string): Promise<string | null> {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.hide-tag', ${tenantId}::uuid), 0))`
-  const prefix = hideTagPrefix(tenantId)
-  const [row] = await tx.$queryRaw<{ code: string }[]>`
-    SELECT "code" FROM "Hide" WHERE "code" LIKE ${`${prefix}%`} ORDER BY length("code") DESC, "code" DESC LIMIT 1`
-  return row?.code ?? null
 }
 
 /** The RECEIPT moves a receipt posted (not their reversals), in posting order. */

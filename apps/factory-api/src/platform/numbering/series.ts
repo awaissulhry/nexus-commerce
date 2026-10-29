@@ -7,12 +7,13 @@ import { formatNumber, patternProblem } from '@nexus/factory-domain/numbering/fo
 import {
   DEFAULT_SERIES_CODE,
   defaultPattern,
+  isDocumentKind,
   isFiscalKind,
   kindLabel,
   MAX_NUMBER,
   NO_RESET_SCOPE,
   yearOfScope,
-  type NumberKind,
+  type DocumentKind,
   type NumberReset,
 } from '@nexus/factory-domain/numbering/kinds'
 import { NUMBERING_MANAGE, NUMBERING_VIEW } from '@nexus/factory-domain/numbering/permissions'
@@ -54,6 +55,8 @@ const day = (date: BusinessDate): Date => new Date(`${date}T00:00:00.000Z`)
 
 export function viewOf(row: SeriesRow): SeriesView {
   const year = yearOfScope(row.scopeKey)
+  // A series is of a document kind (the …_numbering_floor_guards trigger refuses a scan-id kind).
+  if (!isDocumentKind(row.kind)) throw new ApiError('internal_error', `number series ${row.id} has the scan-id kind ${row.kind}.`)
   return {
     id: row.id,
     companyId: row.companyId,
@@ -88,7 +91,7 @@ const audited = (row: SeriesRow) => ({
 
 export interface SeriesFilter {
   readonly companyId?: string | undefined
-  readonly kind?: NumberKind | undefined
+  readonly kind?: DocumentKind | undefined
 }
 
 /** The series the caller's numbering.view grants reach, by company, kind, code and newest period first. */
@@ -128,7 +131,7 @@ async function loadRow(tx: CommandTx, id: string): Promise<SeriesRow> {
 
 export interface CreateSeriesInput {
   readonly companyId: string
-  readonly kind: NumberKind
+  readonly kind: DocumentKind
   readonly code?: string | undefined
   readonly reset?: NumberReset | undefined
   readonly year?: number | undefined
