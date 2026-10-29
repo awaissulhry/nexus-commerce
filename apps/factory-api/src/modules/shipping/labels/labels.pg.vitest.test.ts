@@ -428,6 +428,80 @@ describe('printing the labels (GAP-007; the floor prints, never buys)', () => {
   })
 })
 
+describe('the office documents at the packing station (SCR-098 "Documents"): the live DDT and the packing list', () => {
+  const DOC_PRINTER = idOf(ns.a, 'labels-test:printer:A1:a4')
+  const OTHER_A4 = idOf(ns.a, 'labels-test:printer:A1:a4-other')
+  const docsUrl = (shipmentId: string) => `/shipping/packing/${shipmentId}/documents/print`
+
+  it('shows the floor the live DDT with its stored PDF; no packing list until the office makes one', async () => {
+    const view = (await ok('packerA1', 'GET', `/shipping/packing/${sh2()}`)).shipment
+    const [ddt] = await admin<{ id: string; number: string }>(`SELECT d.id, d.number FROM "Ddt" d WHERE d."shipmentId" = $1 AND NOT EXISTS (SELECT 1 FROM "DdtCancellation" c WHERE c."ddtId" = d.id)`, [sh2()])
+    const [pdf] = await admin<{ id: string }>(`SELECT id FROM "StoredFile" WHERE "recordType" = 'Ddt' AND "recordId" = $1 AND kind = 'FISCAL_ARCHIVE'`, [ddt!.id])
+    expect(view.documents).toEqual({ ddt: { id: ddt!.id, number: ddt!.number, documentDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), fileId: pdf!.id }, packingList: null })
+    // SB of the other order has its own DDT, and the floor reads only its own documents.
+    expect((await ok('packerA1', 'GET', `/shipping/packing/${S.sb}`)).shipment.documents.ddt).toMatchObject({ number: expect.not.stringMatching(new RegExp(`^${ddt!.number}$`)) })
+  })
+
+  it('says in words when the site has no document printer, and prints nothing', async () => {
+    const error = await refused('packerA1', 'POST', docsUrl(sh2()), {}, 400)
+    expect(error.issues).toEqual([expect.objectContaining({ path: 'body/printerId', message: expect.stringContaining("site's document printer") })])
+    expect(await admin(`SELECT count(*)::int AS n FROM "PrintJob" WHERE "payloadKind" = 'PDF'`)).toEqual([{ n: 0 }])
+  })
+
+  it("prints the DDT and the packing list on the site's document printer from a floor device (shipping.pack, no print.documents)", async () => {
+    for (const [printerId, code] of [
+      [DOC_PRINTER, 'A4-T'],
+      [OTHER_A4, 'A4-O'],
+    ] as const) {
+      await admin(`INSERT INTO "Printer" (id, "tenantId", "companyId", "siteId", code, name, kind, relay, "relayTarget") VALUES ($1, $2, $3, $4, $5, 'Test A4 printer', 'A4_PDF', 'FAKE', 'test-a4:9100')`, [printerId, A.tenant, A.companyA, A.siteA1, code])
+    }
+    await admin(`UPDATE "ShippingSettings" SET "documentPrinterId" = $1 WHERE id = $2`, [DOC_PRINTER, A.siteA1])
+    // Only the DDT is there: asking for the packing list by name says what is missing; asking for nothing prints what is there.
+    expect((await refused('packerA1', 'POST', docsUrl(sh2()), { documents: ['PACKING_LIST'] }, 409)).message).toContain('no packing list yet')
+    expect((await ok('packerA1', 'POST', docsUrl(sh2()), {}, 201)).jobs).toEqual([{ jobId: expect.any(String), document: 'DDT', status: 'QUEUED' }])
+
+    const list = await ok('packerOffice', 'POST', `/shipping/shipments/${sh2()}/packing-list`, {}, 201)
+    expect((await ok('packerA1', 'GET', `/shipping/packing/${sh2()}`)).shipment.documents.packingList).toEqual({ fileId: list.file.id, createdAt: expect.any(String) })
+    const printed = await ok('packerA1', 'POST', docsUrl(sh2()), { copies: 2 }, 201)
+    expect(printed.jobs.map((job: Json) => job.document)).toEqual(['DDT', 'PACKING_LIST'])
+    const jobs = await admin<{ recordType: string; fileId: string; copies: number; deviceId: string | null; printerId: string }>(
+      `SELECT "recordType", "fileId", copies, "deviceId", "printerId" FROM "PrintJob" WHERE id = ANY($1::uuid[]) ORDER BY "recordType"`,
+      [printed.jobs.map((job: Json) => job.jobId)],
+    )
+    const device = SESSIONS.packerA1!.audience === 'floor' ? SESSIONS.packerA1!.deviceId : null
+    expect(jobs).toEqual([
+      { recordType: 'Ddt', fileId: expect.any(String), copies: 2, deviceId: device, printerId: DOC_PRINTER },
+      { recordType: 'Shipment', fileId: list.file.id, copies: 2, deviceId: device, printerId: DOC_PRINTER },
+    ])
+  })
+
+  it('keeps every other printer to print.documents, and keeps the walls', async () => {
+    expect((await refused('packerA1', 'POST', docsUrl(sh2()), { printerId: OTHER_A4 }, 403)).code).toBe('forbidden')
+    expect((await refused('warehouse', 'POST', docsUrl(sh2()), { printerId: OTHER_A4, documents: ['DDT'] }, 403)).code).toBe('forbidden')
+    expect((await refused('viewer', 'POST', docsUrl(sh2()), {}, 403)).code).toBe('forbidden')
+    expect((await refused('companyB', 'POST', docsUrl(sh2()), {}, 404)).code).toBe('not_found')
+    expect((await refused('otherTenant', 'POST', docsUrl(sh2()), {}, 404)).code).toBe('not_found')
+  })
+})
+
+describe('the shipments list (SCR-066): the ship-today queue, the search, and what each row carries', () => {
+  it('lists what has not left yet under open=true, with the carrier, the place, the weight, the labels and the live DDT', async () => {
+    const page = await ok('warehouse', 'GET', '/shipping/shipments?open=true')
+    const row = page.shipments.find((entry: Json) => entry.id === sh2())
+    expect(page.shipments.every((entry: Json) => entry.status === 'DRAFT' || entry.status === 'PACKED')).toBe(true)
+    expect(row).toMatchObject({ status: 'PACKED', parcels: 2, labelled: 2, grossWeightKg: '4.0500', trackingNumbers: [S.track1, S.track2], ddt: { id: expect.any(String), number: expect.any(String) } })
+    expect(row.shipTo).toEqual({ city: expect.any(String), country: expect.any(String) })
+    expect((await ok('warehouse', 'GET', '/shipping/shipments?open=false')).shipments.some((entry: Json) => entry.id === sh2())).toBe(false)
+  })
+
+  it('finds a shipment by a tracking number and by its number; another company sees none of it', async () => {
+    expect((await ok('warehouse', 'GET', `/shipping/shipments?q=${encodeURIComponent(S.track2!)}`)).shipments.map((entry: Json) => entry.id)).toEqual([sh2()])
+    const number = (await ok('warehouse', 'GET', `/shipping/shipments/${sh2()}`)).shipment.number as string
+    expect((await ok('warehouse', 'GET', `/shipping/shipments?q=${encodeURIComponent(number.toLowerCase())}`)).shipments.map((entry: Json) => entry.id)).toContain(sh2())
+    expect((await ok('companyB', 'GET', `/shipping/shipments?q=${encodeURIComponent(number)}`)).shipments).toEqual([])
+  })
+})
+
 describe('the account (Owner Q20: the company own Sendcloud account; LIVE only with it)', () => {
   it('refuses SB without a Sendcloud account of its company (409), and sends nothing', async () => {
     await admin(`UPDATE "IntegrationAccount" SET status = 'DISABLED' WHERE id = $1`, [accountId])

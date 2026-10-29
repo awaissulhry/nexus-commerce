@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { Card, EmptyState, SummaryTable } from '@nexus/ui/components'
 import { SizeGridView } from '@nexus/ui/grid/size-grid/index'
-import { Pill } from '@nexus/ui/primitives'
+import { Button, Pill } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
@@ -11,7 +11,7 @@ import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { sizeGridWords } from '../../../quotes/record/view/grid-copy'
 import type { Order } from '../../api'
-import { gridOf, styleGroups } from '../../model'
+import { createShipmentHref, gridOf, mayCreateShipment, styleGroups } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 
 const SHIPMENT_TONE = { DRAFT: 'neutral', PACKED: 'info', SHIPPED: 'info', DELIVERED: 'success', RETURNED: 'warning', CANCELLED: 'danger' } as const
@@ -19,7 +19,7 @@ const SHIPMENT_TONE = { DRAFT: 'neutral', PACKED: 'info', SHIPPED: 'info', DELIV
 /**
  * Shipments (design `order.ship.left` + `order.ship.list`): per style, what is still to ship per size, beside what
  * quality released and what left; then every shipment of the order (its state, when it left, when it arrived), each a
- * real link to its record. Shipments are made in Warehouse (its pages come with their step).
+ * real link to its record (Warehouse › Shipments). Create shipment opens Warehouse's New shipment with this order chosen.
  */
 export function ShipmentsTab({ order, model }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
@@ -54,7 +54,14 @@ export function ShipmentsTab({ order, model }: { order: Order; model: OrderRecor
         </div>
       </Card>
       <Card padded>
-        <h2 className="fw-so-h2">{t('ship.listTitle')}</h2>
+        <div className="fw-so-card-head">
+          <h2 className="fw-so-h2">{t('ship.listTitle')}</h2>
+          {mayCreateShipment(order, model.can) && (
+            <Button size="sm" variant="primary" asChild>
+              <Link href={createShipmentHref(model.prefix, order.id)}>{t('action.createShipment')}</Link>
+            </Button>
+          )}
+        </div>
         {order.chain.shipments.length === 0 ? (
           <EmptyState title={t('ship.empty.title')} description={t('ship.empty.body')} />
         ) : (

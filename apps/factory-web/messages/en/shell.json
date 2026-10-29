@@ -70,7 +70,11 @@
     "warehouse": {
       "area": "Warehouse",
       "inbound": "Inbound",
-      "receipts": "Receipts"
+      "receipts": "Receipts",
+      "outbound": "Outbound",
+      "shipments": "Shipments",
+      "settings": "Settings",
+      "shipping": "Carriers & shipping"
     }
   },
   "topbar": {
