@@ -50,9 +50,11 @@ export interface FloorStore {
   signOut: (why: Exclude<SignedOutWhy, null>) => Promise<void>
   /** Why the last operator left (the sign-in screen says it once). */
   signedOut: SignedOutWhy
-  /** A code scanned on Home, for Scan anything to open. */
+  /** A code scanned on Home (or on Scan anything), for the screen it opens to take. */
   takeScan: () => string | null
   openScan: (code: string) => void
+  /** Opens a floor task's page with a scanned code for it to take (Home's scan router). */
+  openWith: (path: string, code: string | null) => void
   /**
    * A badge scanned while someone is signed in: switch person — at once where a badge alone signs in, else the sign-in
    * screen asks the next person's PIN. A refusal comes back (the person on the tablet stays).
@@ -348,6 +350,10 @@ export function FloorApp({ catalogues, children }: { catalogues: Readonly<Record
     openScan: (code) => {
       scan.current = code
       router.push('/floor/scan')
+    },
+    openWith: (path, code) => {
+      scan.current = code
+      router.push(path)
     },
     switchTo,
     sessionEnded,

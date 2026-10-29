@@ -1,0 +1,190 @@
+{
+  "title": "Operazione",
+  "noPermission": {
+    "title": "Qui non puoi segnalare operazioni",
+    "body": "Per segnalare i fasci serve il ruolo di scansione a questa postazione. Chiedi al capo squadra."
+  },
+  "scan": {
+    "label": "Scansiona il cartellino del fascio",
+    "hint": "Scansiona il cartellino del fascio su cui lavori.",
+    "empty": "Scansiona il cartellino: il fascio si apre con tutti i pezzi buoni, così Fine è un solo tocco.",
+    "loading": "Apertura del fascio…"
+  },
+  "wrongType": {
+    "title": "Etichetta {type}: scansiona il cartellino di un fascio.",
+    "body": "Qui si segnala solo il cartellino di un fascio."
+  },
+  "notOnTablet": {
+    "body": "Questo fascio non è su questo tablet e non c'è rete. Segnalalo quando torna la rete, o chiedi al capo squadra."
+  },
+  "refusal": {
+    "fallback": "Questo fascio non si può segnalare qui.",
+    "REPLACED": {
+      "message": "Questo cartellino è stato sostituito da {code}.",
+      "fix": "Usa il cartellino nuovo {code}; quello vecchio non prende più scansioni."
+    },
+    "VOIDED": {
+      "message": "Il fascio {code} è stato annullato.",
+      "fix": "Nessuna scansione lo prende più. Chiedi al capo squadra."
+    },
+    "WORK_ORDER_NOT_OPEN": {
+      "message": "L'ordine di lavoro {number} è {status}.",
+      "fix": "I suoi fasci si segnalano solo mentre è rilasciato o in corso. Chiedi al capo squadra."
+    },
+    "NO_OPERATION_HERE": {
+      "message": "Il fascio {code} non ha più niente da fare a questa postazione.",
+      "fix": "Portalo alla sua operazione successiva, o chiedi al capo squadra."
+    },
+    "NO_STATION": {
+      "message": "Questo tablet non ha una postazione: le operazioni si segnalano a una postazione.",
+      "fix": "Chiedi all'ufficio di assegnare la postazione a questo tablet."
+    },
+    "PREVIOUS_NOT_REPORTED": {
+      "message": "L'operazione precedente non è ancora segnalata.",
+      "fix": "Potrebbe essere ancora su un altro tablet. Segnalala prima, o chiedi al capo squadra."
+    },
+    "FLOOR_NOT_READY": {
+      "message": "Le segnalazioni sono ferme in questo stabilimento finché il reparto non è pronto.",
+      "fix": "Chiedi al capo squadra."
+    },
+    "NOTICE_NOT_ACKNOWLEDGED": {
+      "message": "Prima leggi l'informativa per i lavoratori.",
+      "fix": "Aprila dalla Home."
+    },
+    "UNKNOWN_BUNDLE": {
+      "message": "Questo non è il cartellino di un fascio di questo stabilimento.",
+      "fix": "Scansiona di nuovo il cartellino del fascio, o chiedi al capo squadra."
+    },
+    "OTHER_KIND": {
+      "message": "Questa operazione è un lavoro diverso da quello di questa postazione.",
+      "fix": "Porta il fascio alla postazione giusta, o chiedi al capo squadra."
+    }
+  },
+  "unknownCode": {
+    "otherFactory": {
+      "title": "Questa etichetta non è di questa fabbrica",
+      "body": "Scansiona il cartellino di un fascio di questa fabbrica."
+    },
+    "typo": {
+      "title": "Il codice è stato letto male",
+      "body": "Scansiona di nuovo il cartellino, piano e dritto."
+    }
+  },
+  "already": {
+    "station": " alla postazione {station}",
+    "own": {
+      "title": "L'hai segnalato all'Op {seq} alle {time}",
+      "undo": "Annullalo ora se i conteggi sono sbagliati: la sua finestra è ancora aperta.",
+      "ask": "Se i conteggi sono sbagliati, chiedi una correzione: la segnalazione resta finché il capo squadra decide."
+    },
+    "other": {
+      "title": "Già segnalato all'Op {seq} alle {time}{where}",
+      "body": "L'ha segnalato un'altra persona — il capo squadra può vedere chi. Una segnalazione per fascio per operazione."
+    }
+  },
+  "pick": {
+    "title": "Quale operazione?",
+    "expected_one": "{count} pezzo da segnalare",
+    "expected_other": "{count} pezzi da segnalare",
+    "state": {
+      "DONE": "Fatta",
+      "OPEN": "Aperta",
+      "NOT_REACHED": "Non ancora arrivato"
+    }
+  },
+  "counts": {
+    "title": "Conta i pezzi",
+    "good": "Buoni",
+    "scrap": "Scarti",
+    "rework": "Da rifare",
+    "of": "su {count}",
+    "atMost": "Al massimo {count}",
+    "allLeft": "Tutti i restanti",
+    "tapHint": "Tocca un conteggio per cambiarlo."
+  },
+  "finish": {
+    "label_one": "Fine · {count} buono",
+    "label_other": "Fine · {count} buoni",
+    "busy": "Salvataggio…",
+    "held": {
+      "nothing": "Conta almeno un pezzo",
+      "atMost": "Al massimo {count}",
+      "unknown": "Niente è ancora arrivato a questa operazione"
+    }
+  },
+  "fact": {
+    "bundle": "Fascio",
+    "pieces_one": "pezzo",
+    "pieces_other": "pezzi",
+    "style": "Modello",
+    "workOrder": "Ordine di lavoro",
+    "part": "Parte",
+    "operation": "Operazione",
+    "at": "Quando"
+  },
+  "opShort": "Op {seq}",
+  "opCode": "Op {seq} · {code}",
+  "count": {
+    "good_one": "{count} buono",
+    "good_other": "{count} buoni",
+    "scrap_one": "{count} scarto",
+    "scrap_other": "{count} scarti",
+    "rework_one": "{count} da rifare",
+    "rework_other": "{count} da rifare"
+  },
+  "leave": {
+    "title": "Lasciare questo conteggio?",
+    "body": "Questi conteggi non sono finiti. Continua a contare, o lasciali e apri il fascio nuovo.",
+    "leave": "Lascia",
+    "keep": "Continua a contare"
+  },
+  "undo": {
+    "done": "Annullato: {what}"
+  },
+  "reasons": {
+    "scrap": "Perché scarto? Ogni tocco aggiunge un pezzo",
+    "rework": "Perché da rifare? Ogni tocco aggiunge un pezzo",
+    "remove": "Uno in meno: {reason}"
+  },
+  "pad": {
+    "less": "Meno",
+    "more": "Più",
+    "clear": "Cancella",
+    "back": "Indietro",
+    "empty": "Scrivi un numero",
+    "done": "Fatto"
+  },
+  "correction": {
+    "open": "Chiedi una correzione",
+    "listTitle": "Le tue segnalazioni di oggi",
+    "offline": "Per l'elenco delle tue segnalazioni serve la rete. La segnalazione appena fatta su questo tablet si può correggere ora.",
+    "loading": "Lettura delle tue segnalazioni…",
+    "empty": {
+      "title": "Niente segnalato oggi",
+      "body": "Qui compaiono le tue segnalazioni di oggi, dalla più recente."
+    },
+    "pending": "In attesa del capo squadra",
+    "count_one": "{count} segnalazione",
+    "count_other": "{count} segnalazioni",
+    "reported": "Segnalazione da correggere",
+    "was": "Segnalato",
+    "keeps": "La segnalazione resta com'è finché il capo squadra decide; poi una correzione la sostituisce.",
+    "why": "Perché?",
+    "reason": {
+      "count": "Un conteggio era sbagliato",
+      "reason": "Motivo di scarto o da rifare sbagliato",
+      "found": "Pezzi trovati dopo",
+      "other": "Altro"
+    },
+    "send": "Invia al capo squadra",
+    "held": {
+      "same": "Prima cambia un conteggio",
+      "nothing": "Conta almeno un pezzo",
+      "reason": "Scegli il perché"
+    },
+    "sent": {
+      "title": "Inviata al capo squadra",
+      "body": "In attesa del capo squadra. La segnalazione resta finché non decide."
+    }
+  }
+}

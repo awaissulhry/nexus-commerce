@@ -1,0 +1,298 @@
+{
+  "bar": "Final inspection",
+  "loading": "Reading the work order…",
+  "busy": "Sending to the office…",
+  "noPermission": {
+    "title": "Final inspection is not for your role",
+    "body": "Your role does not open final inspections at this bench. Ask your team leader."
+  },
+  "role": {
+    "record": "Your role views inspections but does not record them."
+  },
+  "offline": {
+    "held": "Inspections and releases take their number from the office at once: they wait for the network."
+  },
+  "pick": {
+    "scan": "Scan the work order's traveller",
+    "hint": "Or pick one of the work orders with finished garments below.",
+    "read": "Read {code}",
+    "type": "Type a number",
+    "camera": {
+      "start": "Use the camera",
+      "stop": "Stop the camera",
+      "error": "The camera does not open. Use the scanner or type the number."
+    },
+    "notFound": "No work order {code} at this site.",
+    "notReady": "Work order {code} is {status}: its garments are inspected while it is released, in progress or completed.",
+    "empty": {
+      "title": "Nothing waits for final inspection",
+      "body": "No work order of this site has finished garments to inspect or release."
+    },
+    "title": "Finished, to inspect or release",
+    "due": "due {date}",
+    "open": "Inspection open",
+    "ready": "Ready",
+    "toRelease": "to release",
+    "count_one": "{count} work order",
+    "count_other": "{count} work orders"
+  },
+  "strip": {
+    "batch": "batch {batch}",
+    "checksOpen_one": "{count} check open",
+    "checksOpen_other": "{count} checks open",
+    "checksOk": "every check ok",
+    "groups": "checklist {done} of {total} groups"
+  },
+  "workOrderStatus": {
+    "DRAFT": "draft",
+    "RELEASED": "released",
+    "IN_PROGRESS": "in progress",
+    "COMPLETED": "completed",
+    "CLOSED": "closed",
+    "CANCELLED": "cancelled"
+  },
+  "inspectionStatus": {
+    "OPEN": "open",
+    "PASSED": "passed",
+    "FAILED": "failed",
+    "CANCELLED": "cancelled"
+  },
+  "fact": {
+    "workOrder": "Work order",
+    "toRelease": "to release",
+    "style": "Style",
+    "batch": "Batch",
+    "finished": "Finished",
+    "released": "Released",
+    "pieces": "Pieces",
+    "labels": "Garment labels printed",
+    "inspections": "Inspections",
+    "none": "None yet"
+  },
+  "maker": {
+    "made": "You worked on this order. Another inspector must inspect and release it.",
+    "ok": "You made none of these garments."
+  },
+  "rule": {
+    "WHEN_REQUIRED": "An inspector who made none of the garments releases alone; a second person only for overrides and listed customers.",
+    "ALWAYS": "This company asks a second person for every final release, after the inspector's signature.",
+    "customer": "This customer's garments always need a second person: another inspector releases them."
+  },
+  "gate": {
+    "cells": "Colour and size",
+    "start": "Start the inspection",
+    "continue": "Continue the inspection",
+    "toRelease": "Release to ship",
+    "held": {
+      "othersOpen": "Another inspector has an inspection open on this order.",
+      "nothing": "Nothing to inspect or release on this order now."
+    }
+  },
+  "cell": {
+    "ready": "Ready to release",
+    "open_one": "{count} check open",
+    "open_other": "{count} checks open",
+    "counts": "{pieces} pieces · {released} released · {releasable} can be released now",
+    "checksOk_one": "{count} check ok",
+    "checksOk_other": "{count} checks ok",
+    "release": "Release"
+  },
+  "held": {
+    "offline": "Releasing needs the network.",
+    "noRight": "Your role does not release garments.",
+    "maker": "You worked on this order: another inspector releases it.",
+    "checks": "A check is open: see what to do above.",
+    "nothing": "Nothing of this size can be released now."
+  },
+  "check": {
+    "WORK_ORDER": "Work order",
+    "INSPECTION": "Final inspection",
+    "QUANTITY": "Quantity",
+    "SERIALS": "Serials",
+    "LABELS": "Garment labels",
+    "CERTIFICATE": "Certificate",
+    "DOCUMENTS": "Declaration and user information",
+    "LOTS": "Material lots",
+    "MAKER": "Made by",
+    "SECOND_PERSON": "Second person"
+  },
+  "checkState": {
+    "OK": "ok",
+    "OPEN": "open",
+    "NOT_NEEDED": "not needed"
+  },
+  "fix": {
+    "WORK_ORDER": "Ask the office: the work order must be released, in progress or completed.",
+    "INSPECTION": "Inspect the garments and sign the result first.",
+    "QUANTITY": "Release fewer garments, or inspect the rest in a new inspection.",
+    "SERIALS": "Scan or pick the serials of these garments again.",
+    "LABELS": "Print the garment labels at the final operation first (Garment labels).",
+    "CERTIFICATE": "Ask the compliance lead: a valid certificate must cover this colour and size today.",
+    "DOCUMENTS": "Ask the office to file the signed declaration of conformity and the user information.",
+    "LOTS": "Ask quality to decide the material lot first.",
+    "MAKER": "Another inspector, who made none of these garments, releases them.",
+    "SECOND_PERSON": "Another inspector, not the one who signed the result, releases them."
+  },
+  "refusedCheck": "{check}: not ready to release.",
+  "secondPerson": {
+    "OVERRIDE": "the inspection overrode its computed result",
+    "CUSTOMER": "this customer's garments always need a second person",
+    "ALWAYS": "the company asks a second person for every release"
+  },
+  "plan": {
+    "title": "The inspection plan",
+    "lead": "Every garment of the lot is checked, no defect accepted. If the customer's plan accepts defects, change the numbers before you open (sampling with AQL tables comes later).",
+    "hundred_one": "Lot: {count} garment, all checked",
+    "hundred_other": "Lot: {count} garments, all checked",
+    "acceptMajor_one": "Major defects accepted: {count}",
+    "acceptMajor_other": "Major defects accepted: {count}",
+    "acceptMinor_one": "Minor defects accepted: {count}",
+    "acceptMinor_other": "Minor defects accepted: {count}",
+    "field": {
+      "lotSize": "Garments in the lot",
+      "acceptMajor": "Major defects accepted",
+      "acceptMinor": "Minor defects accepted"
+    },
+    "done": "Done",
+    "open": "Open the inspection"
+  },
+  "checklist": {
+    "groups": "The checklist's groups",
+    "pass": "Pass",
+    "fail": "Fail",
+    "cancelFail": "Not failed",
+    "whatIsWrong": "What is wrong with \"{check}\"?",
+    "reasons": "What is wrong",
+    "groupPasses": "Group passes",
+    "groupAnswered": "Every check of this group is answered: pick the next group.",
+    "sign": "Sign the result: {result}",
+    "resultPass": "Result now: PASS — no failed check, defects within the plan.",
+    "resultFail": "Result now: FAIL — {failed} failed check(s), {defects} defect(s) recorded."
+  },
+  "result": {
+    "PASS": "PASS",
+    "FAIL": "FAIL"
+  },
+  "group": {
+    "LABELS": "Labels",
+    "GARMENT": "Garment",
+    "ARMOUR": "Armour",
+    "PACKAGING": "Packaging & documents"
+  },
+  "groupState": {
+    "open": "to check",
+    "partly": "partly checked",
+    "passed": "passes",
+    "failed": "a check failed"
+  },
+  "item": {
+    "EN17092_CLASS_LABEL": "EN 17092 class label matches the certificate",
+    "SIZE_LABEL": "Size label",
+    "CE_MARK": "CE marking",
+    "CARE_LABEL": "Care label",
+    "FIBRE_COMPOSITION": "Fibre composition label",
+    "ANIMAL_ORIGIN_PHRASE": "\"Contains non-textile parts of animal origin\"",
+    "ZIPS": "Zips",
+    "REFLECTIVES": "Reflectives",
+    "ARMOUR_FITTED": "Armour fitted, right size, EN 1621 marked",
+    "HANGTAGS": "Hangtags",
+    "USER_INFORMATION": "User information in the market's languages",
+    "PACKAGING": "Packaging"
+  },
+  "reason": {
+    "LABEL-MISSING": "Label missing",
+    "LABEL-WRONG": "Wrong label",
+    "LABEL-UNREADABLE": "Label unreadable",
+    "STITCHING": "Stitching fault",
+    "ZIP-FAULT": "Zip does not work",
+    "REFLECTIVE-FAULT": "Reflective faulty",
+    "MATERIAL-DAMAGE": "Material damaged",
+    "ARMOUR-MISSING": "Armour missing",
+    "ARMOUR-WRONG-SIZE": "Armour of the wrong size",
+    "ARMOUR-UNMARKED": "Armour not marked",
+    "HANGTAG-MISSING": "Hangtag missing",
+    "LEAFLET-MISSING": "User information missing",
+    "PACKAGING-DAMAGED": "Packaging damaged"
+  },
+  "hold": {
+    "action": "Hold lot",
+    "title": "Hold this lot?",
+    "body": "The inspection is signed FAILED: packing is blocked until quality decides.",
+    "reasons": "Why",
+    "reason": {
+      "DEFECTS": "Defects found on the garments",
+      "LABELS": "Labels wrong or missing",
+      "ARMOUR": "Armour wrong or missing",
+      "DOCUMENTS": "Documents missing",
+      "OTHER": "Another reason: quality decides"
+    },
+    "pickReason": "Pick a reason first.",
+    "notComplete": "Answer every check first.",
+    "cancel": "Cancel",
+    "confirm": "Hold"
+  },
+  "sign": {
+    "title": "Sign the result: {result}",
+    "titleHold": "Sign: hold the lot",
+    "meaningPass": "With your PIN you confirm you inspected these garments and the result is PASS.",
+    "meaningFail": "With your PIN you confirm you inspected these garments and the result is FAIL: they are not released.",
+    "meaningHold": "With your PIN you sign the inspection FAILED and hold the lot: packing is blocked until quality decides.",
+    "statement": "I did not make these goods",
+    "tickFirst": "This site records stations, not people: tick \"I did not make these goods\" before you sign.",
+    "plan": "Lot {lot} · sample {sample}",
+    "checks": "{passed} of {total} checks passed",
+    "defects_one": "{count} defect recorded",
+    "defects_other": "{count} defects recorded",
+    "noDefects": "No defect recorded",
+    "holdReason": "Held: {reason}"
+  },
+  "release": {
+    "cell": "Colour and size",
+    "canRelease": "can be released",
+    "secondPerson": "A second person releases these: {why}.",
+    "refused": "Not released: what holds it",
+    "signTitle_one": "Sign the release of {count} garment of {cell}",
+    "signTitle_other": "Sign the release of {count} garments of {cell}",
+    "meaning": "With your PIN you confirm you inspected these goods and release them for shipping.",
+    "quantity": "Garments to release",
+    "expected": "{count} can be released",
+    "confirm_one": "Release {count} garment",
+    "confirm_other": "Release {count} garments"
+  },
+  "labels": {
+    "action": "Print garment labels",
+    "title": "Garment labels",
+    "jobs": "Print jobs",
+    "copies_one": "{count} label",
+    "copies_other": "{count} labels",
+    "retry_one": "Print {count} label again",
+    "retry_other": "Print {count} labels again",
+    "lead_one": "At least {count} more label is needed before the next release. It prints on the site's label printer that holds this label.",
+    "lead_other": "At least {count} more labels are needed before the next release. They print on the site's label printer that holds this label.",
+    "print": "Print the labels",
+    "done": "Done"
+  },
+  "job": {
+    "QUEUED": "Waiting for the printer",
+    "SENT": "Sent to the printer",
+    "PRINTED": "Printed",
+    "FAILED": "Not printed"
+  },
+  "done": {
+    "title_one": "Released · batch {batch} · {count} garment · packing can start.",
+    "title_other": "Released · batch {batch} · {count} garments · packing can start.",
+    "body": "The labels and the packing station see the release at once.",
+    "number": "{number} · {cell}",
+    "secondPerson": "Released by you as the second person.",
+    "back": "This work order",
+    "next": "Next work order"
+  },
+  "pad": {
+    "minus": "Less",
+    "plus": "More",
+    "clear": "Clear",
+    "back": "Back",
+    "empty": "Type a number",
+    "range": "From {min} to {max}"
+  }
+}

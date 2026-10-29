@@ -1,0 +1,31 @@
+/*
+ * Pick & issue (SCR-093): layout only, inside the DS FloorFrame; sizes from the floor tier's `--nds-density-*` tokens,
+ * colours from semantic `--nds-*` roles. The shared parts' layout is in ../shared/view/tasks.css.
+ */
+
+/* The last issue's line and its two ticks, side by side; the ticks drop under it on a narrow frame. */
+.fw-pick-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+}
+.fw-pick-result > .fw-floor-notice {
+  flex: 1 1 22em;
+}
+
+/* The quantity pad's step: its heading, the line it fills, the pad centred under them. */
+.fw-pick-pad {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  padding: var(--nds-space-16) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-pick-pad > .nds-floor-qty {
+  align-self: center;
+  width: 100%;
+  max-width: 760px;
+}

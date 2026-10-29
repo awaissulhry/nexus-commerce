@@ -6,11 +6,13 @@ import { HomeView, type HomeViewModel } from './view/HomeView'
 /**
  * SCR-022's cases: the floor frame (operator chip, offline banner with the queue's counts, Help, operator menu, idle
  * sign-out) around the tile home, per station mode and per person's floor permissions, and the offline queue's states. Made-up people and places only. The tiles come from the
- * same rule as the live page (model.ts `homeTiles`): only Scan anything is built; every other tile says "Coming soon".
+ * same rule as the live page (model.ts `homeTiles`): Scan anything and the floor tasks open; Receive, Garment labels and
+ * Pack say "Coming soon".
  */
 
-const OPERATOR = ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'inventory.issue', 'production.cut', 'shipping.pack']
-const INSPECTOR = ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer']
+// The floor role templates' permissions (factory-domain auth/roles/templates: operator, floor_inspector).
+const OPERATOR = ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'inventory.issue', 'production.cut', 'production.bundles', 'production.scan', 'production.serials', 'shipping.pack']
+const INSPECTOR = ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'production.scan', 'quality.inspections.view', 'quality.inspections.record', 'quality.garments.release']
 
 const home = (mode: FloorMode | null, extra: Partial<HomeViewModel> = {}, permissions = OPERATOR, blocks = false): HomeViewModel => ({
   frame: signedInFrame('home.title', { showHome: false }),
@@ -25,7 +27,7 @@ export const designScreen = defineDesignScreen<HomeViewModel>({
   title: 'Floor shell & tile home',
   view: onFloor(HomeView),
   cases: [
-    { id: 'cutting', label: 'Cutting table (operator)', model: home('cutting'), note: 'Mode from the station\'s work centre (CUTTING). Scan anything opens; Cut a hide and Bundles say "Coming soon" on the tile.' },
+    { id: 'cutting', label: 'Cutting table (operator)', model: home('cutting'), note: 'Mode from the station\'s work centre (CUTTING): Operation (the cutting operation), Cut a hide, Bundles and Scan anything open. A hide scanned here opens Cut a hide with it, a bundle opens Bundles.' },
     { id: 'sewing', label: 'Sewing station', model: home('sewing', { frame: signedInFrame('home.title', { showHome: false, station: { name: 'SEW-04 · Linea 2 St 4', site: 'Stabilimento Demo Nord' } }) }) },
     { id: 'packing', label: 'Packing bench', model: home('packing', { frame: signedInFrame('home.title', { showHome: false, station: { name: 'PACK-01 · Banco imballo', site: 'Stabilimento Demo Nord' } }) }) },
     { id: 'inspection', label: 'Inspection bench (inspector)', model: home('inspection', { frame: signedInFrame('home.title', { showHome: false, station: { name: 'QC-01 · Banco collaudo', site: 'Stabilimento Demo Nord' } }) }, INSPECTOR) },
@@ -33,7 +35,7 @@ export const designScreen = defineDesignScreen<HomeViewModel>({
       id: 'warehouse',
       label: 'Warehouse device (no station)',
       model: home('warehouse', { frame: signedInFrame('home.title', { showHome: false, station: { name: null, site: 'Stabilimento Demo Nord' } }) }),
-      note: 'A device with no station is a warehouse device. Receive needs an office permission no floor role holds yet: the tile is not shown (fail closed).',
+      note: 'A device with no station is a warehouse device: Pick & issue opens. Receive needs an office permission no floor role holds yet: the tile is not shown (fail closed).',
     },
     {
       id: 'notice-blocks',

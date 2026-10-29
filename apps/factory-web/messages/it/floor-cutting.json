@@ -1,0 +1,206 @@
+{
+  "title": "Taglia una pelle",
+  "action": {
+    "addSet": "+ 1 set",
+    "hideDone": "Pelle finita",
+    "scanAnother": "Scansiona un'altra pelle"
+  },
+  "workOrder": {
+    "title": "Per quale ordine di lavoro tagli?",
+    "scanLabel": "Scansiona l'ordine di lavoro",
+    "scanHint": "Scansiona il foglio di lavorazione, o scegli un ordine qui sotto. Il cartellino di una pelle apre l'ordine che la taglia.",
+    "loading": "Lettura degli ordini da tagliare…",
+    "empty": {
+      "title": "Nessun ordine rilasciato da tagliare",
+      "body": "Chiedi all'ufficio."
+    },
+    "sizesLeft": "Restano: {sizes}",
+    "allCut": "Tutto tagliato",
+    "due": "Consegna {date}",
+    "toCut": "da tagliare",
+    "count_one": "{count} ordine da tagliare",
+    "count_other": "{count} ordini da tagliare",
+    "for": "Taglio per",
+    "change": "Cambia",
+    "changeLabel": "Cambia l'ordine di lavoro ({number})",
+    "severalForHide": "La pelle {code} si può tagliare per più ordini: scegli quello di questo tavolo.",
+    "wrongType": "Questo non è il foglio di un ordine né il cartellino di una pelle."
+  },
+  "scan": {
+    "label": "Scansiona il cartellino della pelle",
+    "hint": "Ogni pelle inizia dal suo cartellino. Una pelle non ancora consegnata a questo ordine viene consegnata dal taglio.",
+    "empty": "Scansiona la prossima pelle.",
+    "loading": "Controllo della pelle…",
+    "wrongType": "Questo non è il cartellino di una pelle. Scansiona il cartellino della pelle.",
+    "read": "Letto: {code}",
+    "type": "Scrivi un codice",
+    "camera": {
+      "start": "Usa la fotocamera",
+      "stop": "Ferma la fotocamera",
+      "error": "La fotocamera non è partita. Usa lo scanner o scrivi il codice."
+    }
+  },
+  "hide": {
+    "type": "Pelle",
+    "grade": "scelta",
+    "item": "Pellame",
+    "area": "Superficie",
+    "left": "Resta per questo ordine",
+    "thickness": "Spessore",
+    "shadeLabel": "Tonalità e partita di tintura",
+    "batch": "partita {batch}",
+    "lot": "Lotto",
+    "defects": "Difetti",
+    "noDefects": "Nessuno segnato",
+    "issuedByCut": "Non ancora consegnata a questo ordine: il taglio la consegna prima.",
+    "state": {
+      "FULL": "Intera",
+      "PARTLY_CUT": "Tagliata in parte",
+      "REMNANT": "Avanzo",
+      "CONSUMED": "Esaurita",
+      "SCRAPPED": "Scartata",
+      "OTHER": "Altro"
+    },
+    "shade": {
+      "same": "Altre pelli di questo ordine: partita {batch} · questa pelle: {batch}.",
+      "different": "Partita diversa: le altre pelli di questo ordine sono {others}, questa pelle è {batch}. Controlla la tonalità prima di tagliare.",
+      "first": "La prima pelle di questo ordine: la sua partita di tintura fissa la tonalità."
+    },
+    "lastCut": {
+      "station": "Tagliata su {station} alle {time} per {number}: restano {left}.",
+      "noStation": "Tagliata alle {time} per {number}: restano {left}."
+    }
+  },
+  "sets": {
+    "title": "Registra i pezzi",
+    "sizes": "Taglia",
+    "remaining_one": "{count} capo da tagliare",
+    "remaining_other": "{count} capi da tagliare",
+    "done": "Tutto tagliato",
+    "allCut": "La taglia {size} è tutta tagliata.",
+    "pickSize": "Prima scegli una taglia.",
+    "fromHide": "Da questa pelle: {lines}",
+    "nothingYet": "Ancora nessun set da questa pelle: scegli una taglia e tocca + 1 set.",
+    "undo": "Annulla l'ultimo set",
+    "draftNote": "I set restano su questo tablet fino a Pelle finita.",
+    "none": {
+      "title": "Questo ordine non taglia niente da questo pellame",
+      "body": "Nessuna sua taglia usa il pellame di questa pelle. Scansiona un'altra pelle o chiedi al capo squadra."
+    }
+  },
+  "done": {
+    "title": "Pelle {code} finita",
+    "summary_one": "{count} set registrato · restano {left}.",
+    "summary_other": "{count} set registrati · restano {left}.",
+    "noRemnant": "Nessun avanzo · finita",
+    "remnant": "C'è un avanzo",
+    "noRemnantMeans": "Nessun avanzo: i {used} rimasti contano come usati (pezzi e scarto)."
+  },
+  "remnant": {
+    "title": "L'avanzo",
+    "area": "Superficie dell'avanzo",
+    "separator": "Virgola",
+    "range": "Al massimo {max}",
+    "other": "Cioè {other}.",
+    "tooLarge": "Più grande di quel che resta ({left}).",
+    "used": "Superficie usata: {used} dei {left} rimasti.",
+    "where": "Dove va",
+    "picked": "Qui",
+    "placesLoading": "Lettura delle ubicazioni…",
+    "placesCount_one": "{count} ubicazione",
+    "placesCount_other": "{count} ubicazioni",
+    "keyPick": "Sceglie l'ubicazione selezionata",
+    "placesHeld": {
+      "noPermission": "Il tuo ruolo non vede le ubicazioni dello stabilimento: chiedi al capo squadra dove vanno gli avanzi.",
+      "unavailable": "Per le ubicazioni serve la rete. Aspettala, o scegli Nessun avanzo."
+    },
+    "tag": "L'avanzo tiene il cartellino della pelle: lascialo attaccato.",
+    "save": "Salva l'avanzo · finita",
+    "held": {
+      "empty": "Scrivi la superficie dell'avanzo.",
+      "place": "Scegli dove va."
+    }
+  },
+  "pad": {
+    "less": "Meno",
+    "more": "Più",
+    "clear": "Cancella",
+    "back": "Indietro"
+  },
+  "last": {
+    "undo": "Annulla il taglio",
+    "place": "mettilo su {place}",
+    "remnant": "avanzo {area}",
+    "noRemnant": "nessun avanzo",
+    "notDone": "non finita",
+    "refused": "L'ufficio ha rifiutato l'ultimo taglio: {why} Apri la coda per la soluzione.",
+    "undone": "L'ultimo taglio è stato annullato.",
+    "undoFailed": "Il taglio non è stato annullato. Riprova, o chiedi all'ufficio di correggerlo.",
+    "notSaved": "Il tablet non ha potuto salvare il taglio. Accedi di nuovo e riprova.",
+    "undoHeld": {
+      "offline": "Per annullare serve la rete.",
+      "notRecorded": "Annulla quando l'ufficio l'ha registrato."
+    }
+  },
+  "confirm": {
+    "title": "Lasci questa pelle?",
+    "body_one": "{count} set di questa pelle non è salvato. Lo salvi prima come tagliato?",
+    "body_other": "{count} set di questa pelle non sono salvati. Li salvi prima come tagliati?",
+    "save": "Salva e cambia"
+  },
+  "noPermission": {
+    "title": "Qui non puoi tagliare",
+    "body": "Il tuo ruolo non taglia pelli a questa postazione. Chiedi al capo squadra."
+  },
+  "refusal": {
+    "doNotCut": "Non tagliare questa pelle.",
+    "putBack": "Rimettila su {place}.",
+    "lotGeneric": "Il lotto {lot} non si può tagliare.",
+    "usedUp": "Questa pelle è esaurita.",
+    "usedUpOn": "Questa pelle è stata esaurita il {date}.",
+    "usedUpFix": "Scansiona un'altra pelle. Se il cartellino è sbagliato, chiedi al capo squadra.",
+    "noWorkOrder": "Nessun ordine aperto qui taglia il pellame di questa pelle.",
+    "notForThis": "L'ordine {number} non taglia il pellame di questa pelle.",
+    "noWorkOrderFix": "Scansiona un'altra pelle, o cambia l'ordine di lavoro.",
+    "notOnTablet": {
+      "title": "Non è su questo tablet: serve la rete",
+      "body": "Il tablet non ha ancora letto questa pelle. Scansionala quando torna la rete, o chiedi al capo squadra."
+    },
+    "WORK_ORDER_NOT_OPEN": {
+      "message": "Questo ordine non è aperto per il taglio (sospeso, finito o annullato).",
+      "fix": "Chiedi all'ufficio, o scegli un altro ordine."
+    },
+    "NOT_AT_WORK_ORDER": {
+      "message": "Questa pelle non si può consegnare a questo ordine.",
+      "fix": "Controlla pellame e colore sul cartellino, o chiedi al capo squadra."
+    },
+    "NOTHING_LEFT": {
+      "message": "Di questa pelle non resta niente per questo ordine.",
+      "fix": "Chiudila con Pelle finita, o scansiona un'altra pelle."
+    },
+    "FLOOR_NOT_READY": {
+      "message": "Il taglio è fermo in questo stabilimento finché il reparto non è pronto.",
+      "fix": "Chiedi al capo squadra."
+    },
+    "CR_VI_PENDING": {
+      "message": "Il lotto di questa pelle è in blocco qualità: si attende la prova del cromo VI.",
+      "fix": "Non tagliare. Rimettila a posto."
+    },
+    "CR_VI_FAILED": {
+      "message": "Il lotto di questa pelle non ha superato la prova del cromo VI.",
+      "fix": "Non tagliare. Rimettila a posto e avvisa il capo squadra."
+    },
+    "QUALITY_HOLD": {
+      "message": "Il lotto di questa pelle è in blocco qualità.",
+      "fix": "Non tagliare. Rimettila a posto."
+    },
+    "BLOCKED": {
+      "message": "Il lotto di questa pelle è bloccato.",
+      "fix": "Non tagliare. Rimettila a posto e avvisa il capo squadra."
+    },
+    "REJECTED": {
+      "message": "Il lotto di questa pelle è stato respinto.",
+      "fix": "Non tagliare. Rimettila a posto e avvisa il capo squadra."
+    }
+  }
+}

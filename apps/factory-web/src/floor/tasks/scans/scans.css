@@ -1,0 +1,111 @@
+/*
+ * SCR-090 Operation: layout only, inside the DS FloorFrame and the floor tasks' shared parts (../shared/view/tasks.css).
+ * Sizes read the floor tier's `--nds-density-*` tokens; colours are semantic `--nds-*` roles, each tone painted as the
+ * floor kit paints it. No raw colour.
+ */
+
+/* ── the scan step's invitation: a picture of a ticket and one sentence ─────────────────────────────────────────── */
+.fw-scans-invite {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-density-gap);
+  padding-block: var(--nds-space-16);
+  text-align: center;
+}
+
+/* ── the receipt of the report just made ──────────────────────────────────────────────────────────────────────────── */
+.fw-scans-receipt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-density-gap);
+  padding: var(--nds-space-16) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-success);
+  border-inline-start-width: 6px;
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.fw-scans-receipt[data-tone='danger'] {
+  border-color: var(--nds-danger);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.fw-scans-receipt-icon {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: calc(var(--nds-density-icon) * 2.25);
+  height: calc(var(--nds-density-icon) * 2.25);
+}
+.fw-scans-receipt-icon > svg {
+  width: 100%;
+  height: 100%;
+}
+.fw-scans-receipt-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-scans-receipt-what {
+  overflow-wrap: anywhere;
+  font-size: calc(var(--nds-density-font-body) * 1.2);
+  font-weight: var(--nds-font-weight-bold);
+}
+
+/* ── the bundle card: colour and size big, the operation big ─────────────────────────────────────────────────────── */
+.fw-scans-size,
+.fw-scans-op {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: calc(var(--nds-density-font-body) * 1.35);
+  font-weight: var(--nds-font-weight-bold);
+  line-height: 1.25;
+}
+.fw-scans-op {
+  color: var(--nds-primary);
+}
+
+/* ── the three counters: name, a big numeral, "of 20" ─────────────────────────────────────────────────────────────── */
+.fw-scans-counters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--nds-density-target-gap);
+}
+@container nds-floor-frame (max-width: 520px) {
+  .fw-scans-counters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.fw-scans-counter-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding-block: var(--nds-space-6);
+}
+.fw-scans-counter-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.fw-scans-counter-value {
+  font-size: var(--nds-density-font-numeral);
+  font-weight: var(--nds-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.fw-scans-counter-of {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+/* ── a correction's reason: big choices, two a row ────────────────────────────────────────────────────────────────── */
+.fw-scans-why {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14em), 1fr));
+  gap: var(--nds-density-target-gap);
+}

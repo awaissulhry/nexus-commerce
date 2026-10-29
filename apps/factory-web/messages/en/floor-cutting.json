@@ -1,0 +1,206 @@
+{
+  "title": "Cut a hide",
+  "action": {
+    "addSet": "+ 1 set",
+    "hideDone": "Hide done",
+    "scanAnother": "Scan another hide"
+  },
+  "workOrder": {
+    "title": "Cutting for which work order?",
+    "scanLabel": "Scan the work order",
+    "scanHint": "Scan the traveller, or pick a work order below. A hide's tag opens the work order that cuts it.",
+    "loading": "Reading the work orders to cut…",
+    "empty": {
+      "title": "No released work order to cut",
+      "body": "Ask the office."
+    },
+    "sizesLeft": "Left: {sizes}",
+    "allCut": "All cut",
+    "due": "Due {date}",
+    "toCut": "to cut",
+    "count_one": "{count} work order to cut",
+    "count_other": "{count} work orders to cut",
+    "for": "Cutting for",
+    "change": "Change",
+    "changeLabel": "Change the work order ({number})",
+    "severalForHide": "Hide {code} can be cut for several work orders: pick the one at this table.",
+    "wrongType": "This is not a work order's traveller or a hide's tag."
+  },
+  "scan": {
+    "label": "Scan the hide's tag",
+    "hint": "Every hide starts with its tag. A hide not yet issued to this work order is issued by the cut.",
+    "empty": "Scan the next hide.",
+    "loading": "Checking the hide…",
+    "wrongType": "This is not a hide's tag. Scan the hide's tag.",
+    "read": "Read: {code}",
+    "type": "Type a code",
+    "camera": {
+      "start": "Use the camera",
+      "stop": "Stop the camera",
+      "error": "The camera did not start. Use the scanner or type the code."
+    }
+  },
+  "hide": {
+    "type": "Hide",
+    "grade": "grade",
+    "item": "Leather",
+    "area": "Area",
+    "left": "Left for this work order",
+    "thickness": "Thickness",
+    "shadeLabel": "Shade and dye batch",
+    "batch": "batch {batch}",
+    "lot": "Lot",
+    "defects": "Defects",
+    "noDefects": "None noted",
+    "issuedByCut": "Not yet issued to this work order: the cut issues it first.",
+    "state": {
+      "FULL": "Full",
+      "PARTLY_CUT": "Partly cut",
+      "REMNANT": "Remnant",
+      "CONSUMED": "Used up",
+      "SCRAPPED": "Scrapped",
+      "OTHER": "Other"
+    },
+    "shade": {
+      "same": "Other hides of this work order: dye batch {batch} · this hide: {batch}.",
+      "different": "Different batch: other hides of this work order are {others}, this hide is {batch}. Check the shade before you cut.",
+      "first": "The first hide of this work order: its dye batch sets the shade."
+    },
+    "lastCut": {
+      "station": "Cut on {station} at {time} for {number}: {left} left.",
+      "noStation": "Cut at {time} for {number}: {left} left."
+    }
+  },
+  "sets": {
+    "title": "Log the pieces",
+    "sizes": "Size",
+    "remaining_one": "{count} garment to cut",
+    "remaining_other": "{count} garments to cut",
+    "done": "All cut",
+    "allCut": "Size {size} is all cut.",
+    "pickSize": "Pick a size first.",
+    "fromHide": "From this hide: {lines}",
+    "nothingYet": "No set from this hide yet: pick a size and tap + 1 set.",
+    "undo": "Undo last set",
+    "draftNote": "The sets stay on this tablet until Hide done.",
+    "none": {
+      "title": "This work order cuts nothing from this leather",
+      "body": "No size of it uses this hide's leather. Scan another hide, or ask your team leader."
+    }
+  },
+  "done": {
+    "title": "Hide {code} done",
+    "summary_one": "{count} set logged · {left} left.",
+    "summary_other": "{count} sets logged · {left} left.",
+    "noRemnant": "No remnant · done",
+    "remnant": "There is a remnant",
+    "noRemnantMeans": "No remnant: the {used} left counts as used (pieces and waste)."
+  },
+  "remnant": {
+    "title": "The remnant",
+    "area": "Remnant area",
+    "separator": "Comma",
+    "range": "At most {max}",
+    "other": "That is {other}.",
+    "tooLarge": "Larger than what is left ({left}).",
+    "used": "Area used: {used} of the {left} left.",
+    "where": "Where it goes",
+    "picked": "Here",
+    "placesLoading": "Reading the places…",
+    "placesCount_one": "{count} place",
+    "placesCount_other": "{count} places",
+    "keyPick": "Pick the place with the focus",
+    "placesHeld": {
+      "noPermission": "Your role does not list the site's places: ask your team leader where remnants go.",
+      "unavailable": "The places need the network. Wait for it, or choose No remnant."
+    },
+    "tag": "The remnant keeps the hide's own tag: leave it on.",
+    "save": "Save remnant · done",
+    "held": {
+      "empty": "Type the remnant's area.",
+      "place": "Pick where it goes."
+    }
+  },
+  "pad": {
+    "less": "Less",
+    "more": "More",
+    "clear": "Clear",
+    "back": "Back"
+  },
+  "last": {
+    "undo": "Undo the cut",
+    "place": "put it on {place}",
+    "remnant": "remnant {area}",
+    "noRemnant": "no remnant",
+    "notDone": "not done",
+    "refused": "The office refused the last cut: {why} Open the queue for the fix.",
+    "undone": "The last cut was undone.",
+    "undoFailed": "The cut was not undone. Try again, or ask the office to correct it.",
+    "notSaved": "This tablet could not save the cut. Sign in again and try once more.",
+    "undoHeld": {
+      "offline": "Undo needs the network.",
+      "notRecorded": "Undo once the office has recorded it."
+    }
+  },
+  "confirm": {
+    "title": "Leave this hide?",
+    "body_one": "{count} set on this hide is not saved. Save it as cut first?",
+    "body_other": "{count} sets on this hide are not saved. Save them as cut first?",
+    "save": "Save and change"
+  },
+  "noPermission": {
+    "title": "You may not cut here",
+    "body": "Your role does not cut hides at this station. Ask your team leader."
+  },
+  "refusal": {
+    "doNotCut": "Do not cut this hide.",
+    "putBack": "Put it back on {place}.",
+    "lotGeneric": "Lot {lot} may not be cut.",
+    "usedUp": "This hide is used up.",
+    "usedUpOn": "This hide was used up on {date}.",
+    "usedUpFix": "Scan another hide. If the tag is wrong, ask your team leader.",
+    "noWorkOrder": "No open work order here cuts this hide's leather.",
+    "notForThis": "Work order {number} does not cut this hide's leather.",
+    "noWorkOrderFix": "Scan another hide, or change the work order.",
+    "notOnTablet": {
+      "title": "Not on this tablet: needs the network",
+      "body": "The tablet has not read this hide yet. Scan it when the network is back, or ask your team leader."
+    },
+    "WORK_ORDER_NOT_OPEN": {
+      "message": "This work order is not open for cutting (on hold, done or cancelled).",
+      "fix": "Ask the office, or pick another work order."
+    },
+    "NOT_AT_WORK_ORDER": {
+      "message": "This hide cannot be issued to this work order.",
+      "fix": "Check the leather and colour on the hide's tag, or ask your team leader."
+    },
+    "NOTHING_LEFT": {
+      "message": "Nothing is left of this hide for this work order.",
+      "fix": "Close it with Hide done, or scan another hide."
+    },
+    "FLOOR_NOT_READY": {
+      "message": "Cutting is held at this site until its floor is ready.",
+      "fix": "Ask your team leader."
+    },
+    "CR_VI_PENDING": {
+      "message": "This hide's lot is on quality hold: the chromium VI test is pending.",
+      "fix": "Do not cut. Put it back."
+    },
+    "CR_VI_FAILED": {
+      "message": "This hide's lot failed the chromium VI test.",
+      "fix": "Do not cut. Put it back and tell your team leader."
+    },
+    "QUALITY_HOLD": {
+      "message": "This hide's lot is on quality hold.",
+      "fix": "Do not cut. Put it back."
+    },
+    "BLOCKED": {
+      "message": "This hide's lot is blocked.",
+      "fix": "Do not cut. Put it back and tell your team leader."
+    },
+    "REJECTED": {
+      "message": "This hide's lot was rejected.",
+      "fix": "Do not cut. Put it back and tell your team leader."
+    }
+  }
+}

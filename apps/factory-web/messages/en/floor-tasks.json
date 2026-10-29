@@ -1,0 +1,79 @@
+{
+  "ticks": {
+    "saved": "Saved on this tablet",
+    "sending": "Sending to the office…",
+    "recorded": "Recorded by the office",
+    "refused": "Refused: see Waiting to send"
+  },
+  "undo": {
+    "label": "Undo",
+    "ask": "Ask a correction"
+  },
+  "pin": {
+    "label": "Your PIN",
+    "entered": "{entered} of {total}",
+    "clear": "Clear",
+    "back": "Back",
+    "busy": "Checking the PIN…",
+    "problem": {
+      "wrong": "Wrong PIN. Try again.",
+      "locked": "Too many wrong PINs: wait a few minutes or ask your team leader.",
+      "unavailable": "The office did not answer. Try again.",
+      "offline": "Signing needs the network. Wait for it, then sign."
+    }
+  },
+  "problem": {
+    "forbidden": {
+      "title": "You may not do this here",
+      "body": "Your role does not allow it at this station. Ask your team leader."
+    },
+    "notFound": {
+      "title": "Not found at this site",
+      "body": "Nothing with this code at this site. Check the label, or ask your team leader."
+    },
+    "conflict": {
+      "title": "It changed meanwhile",
+      "body": "Someone changed it a moment ago. It was read again: check it and try once more."
+    },
+    "invalid": {
+      "title": "This was not accepted",
+      "body": "The office did not accept it as it was sent. Check the numbers and try again."
+    },
+    "signedOut": {
+      "title": "You were signed out",
+      "body": "Your session ended. Sign in again: nothing saved on this tablet is lost."
+    },
+    "rateLimited": {
+      "title": "Too many tries",
+      "body": "Wait a moment, then try again."
+    },
+    "offline": {
+      "title": "No network",
+      "body": "This needs the network. It comes back by itself; then try again."
+    },
+    "unavailable": {
+      "title": "The office does not answer",
+      "body": "The server did not answer. Try again in a moment."
+    }
+  },
+  "keys": {
+    "trigger": "Keys for this list",
+    "title": "Keys",
+    "enter": "Open the row with the focus",
+    "tab": "Move between rows",
+    "escape": "Back",
+    "scan": "Scan a label: opens it at once"
+  },
+  "action": {
+    "back": "Back",
+    "retry": "Try again",
+    "home": "Home",
+    "scanAnother": "Scan another",
+    "change": "Change"
+  },
+  "asOf": "From this tablet, as of {time}",
+  "notOnTablet": {
+    "title": "Not on this tablet",
+    "body": "The tablet has no copy of it and there is no network. Do it when the network is back, or ask your team leader."
+  }
+}

@@ -264,11 +264,11 @@
     "scan": {
       "label": "Scansiona un'etichetta per iniziare",
       "hint": {
-        "cutting": "Scansiona una pelle o un ordine di lavoro per aprirlo.",
-        "sewing": "Scansiona un fascio o un ordine di lavoro per aprirlo.",
+        "cutting": "Scansiona una pelle per tagliarla, o un fascio per il suo cartellino.",
+        "sewing": "Scansiona il cartellino di un fascio per segnalarlo.",
         "packing": "Scansiona un collo, un lotto o un ordine di lavoro per aprirlo.",
-        "inspection": "Scansiona un lotto, un fascio o un ordine di lavoro per aprirlo.",
-        "warehouse": "Scansiona un'ubicazione, un lotto o una pelle per aprirla.",
+        "inspection": "Scansiona un ordine di lavoro per collaudarlo.",
+        "warehouse": "Scansiona un ordine di lavoro per prelevare, o un'etichetta per aprirla.",
         "none": "Scansiona un'etichetta qualsiasi per aprirla."
       }
     },
@@ -304,7 +304,12 @@
     "final": "Collaudo finale",
     "scan": "Scansiona",
     "hint": {
-      "scan": "Qualsiasi etichetta della fabbrica"
+      "scan": "Qualsiasi etichetta della fabbrica",
+      "operation": "Segnala un fascio alla tua operazione",
+      "cut": "Controlla una pelle e registra il taglio",
+      "bundles": "Crea i fasci e stampa i cartellini",
+      "pick": "Consegna i materiali a un ordine di lavoro",
+      "final": "Controlla, firma e rilascia i capi"
     },
     "held": {
       "notice": "Prima leggi l'informativa",
