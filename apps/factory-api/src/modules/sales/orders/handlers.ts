@@ -1,5 +1,5 @@
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
-import { followOrder, noteSettlementLost } from './moves'
+import { followOrder } from './moves'
 
 /**
  * The worker's handlers that keep a sales order's state with its facts (B-W1-25; SAL-204: the system is the one writer of
@@ -10,9 +10,11 @@ import { followOrder, noteSettlementLost } from './moves'
  *                                  never moves an order: B-W1-38 leaves it to sales)
  *   sales.ordersFollowShipments    shipment.status_changed to SHIPPED, DELIVERED or RETURNED: the shipped quantities
  *                                  (PARTLY_SHIPPED, SHIPPED; back to PARTLY_SHIPPED when a shipment came back)
- *   sales.ordersFollowSettlement   order.fully_settled (B-W1-51, the money module): a SHIPPED order closes (the close
- *                                  command's guard asks the settlement port again); order.unsettled: a CLOSED order's
- *                                  history says so (a closed order never changes)
+ *   sales.ordersFollowSettlement   order.fully_settled (B-W1-51, the money module): a SHIPPED order closes when the
+ *                                  settlement port (the money module's computation, read again under the order's lock)
+ *                                  says it is settled; the event is only the trigger. order.unsettled needs nothing
+ *                                  here: the money module writes it on the order's history itself, and a CLOSED order
+ *                                  never changes
  */
 
 const SHIPPED_MOVES = new Set(['SHIPPED', 'DELIVERED', 'RETURNED'])
@@ -44,16 +46,12 @@ export function orderHandlers(): EventHandler[] {
     }),
     defineHandler({
       name: 'sales.ordersFollowSettlement',
-      // Declared by the money module (B-W1-51); consumed by name.
-      events: ['order.fully_settled', 'order.unsettled'],
+      // Declared and emitted by the money module (B-W1-51 settleOrders); the trigger only: followOrder asks the port.
+      events: ['order.fully_settled'],
       attempts: 10,
       async handle(event, { caller }) {
-        const payload = event.payload as { orderId: string; missing?: string[] }
-        if (event.type === 'order.fully_settled') {
-          await followOrder(caller, payload.orderId, { what: 'the order is settled', causationId: event.eventId })
-          return
-        }
-        await noteSettlementLost(caller, payload.orderId, { eventId: event.eventId, missing: payload.missing ?? [] })
+        const payload = event.payload as { orderId: string }
+        await followOrder(caller, payload.orderId, { what: 'the order is settled', causationId: event.eventId })
       },
     }),
   ]

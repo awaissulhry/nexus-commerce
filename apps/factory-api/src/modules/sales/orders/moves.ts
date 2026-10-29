@@ -254,18 +254,3 @@ export async function followOrder(caller: CommandCaller, orderId: string, cause:
     throw error
   }
 }
-
-/**
- * The money module says a CLOSED order is not settled any more (a credit note, a payment taken back): a closed order
- * never changes (the trigger), so its history gets an audit row that says so, once per event. An order not closed yet
- * needs nothing: its close asks the port again.
- */
-export async function noteSettlementLost(caller: CommandCaller, orderId: string, event: { readonly eventId: string; readonly missing: readonly string[] }): Promise<{ noted: boolean }> {
-  const order = await caller.withClient((client) => readOrder(client, orderId))
-  if (!order || order.status !== 'CLOSED') return { noted: false }
-  await command(caller, { name: 'orders.settlementLost', idempotencyKey: `orders-unsettled.${event.eventId}`, input: { orderId, missing: event.missing }, causationId: event.eventId }, async (tools) => {
-    tools.audit({ recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { settled: false, missing: [...event.missing] }, reason: 'The money module says the closed order is not settled any more.' })
-    return { noted: true }
-  })
-  return { noted: true }
-}

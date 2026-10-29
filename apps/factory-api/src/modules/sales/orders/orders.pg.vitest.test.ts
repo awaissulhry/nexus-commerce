@@ -21,6 +21,7 @@ import { addUser, Browser, startHarness, type Harness, type TestTenant } from '.
 import { systemContext } from '../../../platform/outbox/system'
 import { afterAccept, afterAcceptanceHandler } from '../quotes/after-acceptance'
 import { orderHandlers } from './handlers'
+import { moneySettlementPort, useOrderSettlement } from './settlement'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A1 §2.5 "Sales order"; PLAN
@@ -30,7 +31,8 @@ import { orderHandlers } from './handlers'
  * and the walls. Four made-up tenants from the factory-db seeds up to shipping (SEED-SO-0002 for the brand P1: 7
  * jackets, WO-0001 released, quality released 3, SH-0001 SHIPPED with 2): tenant A also quotes SEED-JKT-01 and has it
  * accepted by link; in tenants B, C and D SEED-SO-0002 is cut down to the 2 jackets SH-0001 shipped, so it ships in full.
- * The money module's settle events (B-W1-51) are inserted as it will emit them. Every name, price and number is made up.
+ * The close guard asks the money module's own settlement (B-W1-51); where a test needs a settled order without invoicing
+ * one, it puts a test port in place (`useOrderSettlement`). Every name, price and number is made up.
  * Run with `node scripts/factory/run-pg-tests.mjs orders`.
  */
 
@@ -141,15 +143,15 @@ async function released(tenant: TenantKey) {
 async function shipped(tenant: TenantKey, to = 'SHIPPED') {
   await handler('sales.ordersFollowShipments').handle(envelope(tenant, 'shipment.status_changed', { shipmentId: seeded[tenant].shipmentId, number: 'SEED-SH-0001', from: 'PACKED', to }), { caller: systemCaller(tenant), attempt: 1 })
 }
-/** A settle event as the money module (B-W1-51) emits it: an OutboxEvent row of the order. */
-async function settleEvent(tenant: TenantKey, orderId: string, type: 'order.fully_settled' | 'order.unsettled', missing: string[] = []): Promise<string> {
-  const eventId = newId()
-  const payload = type === 'order.unsettled' ? { orderId, partyId: idIn(tenant, 'party:P1'), missing } : { orderId, partyId: idIn(tenant, 'party:P1') }
-  await admin(
-    `INSERT INTO "OutboxEvent" (id, "tenantId", "companyId", type, version, context, subject, "correlationId", source, "occurredAt", payload) VALUES ($1, $2, $3, $4, 1, 'invoicing', $5, $6, 'payments.allocate', clock_timestamp(), $7)`,
-    [eventId, T[tenant], idIn(tenant, 'company:A'), type, orderId, newId(), JSON.stringify(payload)],
-  )
-  return eventId
+/** The money module's order.fully_settled event, as the worker hands it to the handler (the trigger only). */
+async function settledEvent(tenant: TenantKey, orderId: string): Promise<void> {
+  await handler('sales.ordersFollowSettlement').handle(envelope(tenant, 'order.fully_settled', { orderId, partyId: idIn(tenant, 'party:P1') }), { caller: systemCaller(tenant), attempt: 1 })
+}
+/** A test port: these orders are settled; every other order asks the money module. */
+function settledForTest(orderIds: readonly string[]): void {
+  useOrderSettlement({
+    settlementOf: async (db, order) => (orderIds.includes(order.id) ? { settled: true, missing: [], source: 'test' } : moneySettlementPort.settlementOf(db, order)),
+  })
 }
 const orderUrl = (id: string) => `/sales/orders/${id}`
 const statusOf = async (orderId: string) => (await one<{ status: string }>('SELECT status::text AS status FROM "SalesOrder" WHERE id = $1', [orderId])).status
@@ -180,7 +182,7 @@ beforeAll(async () => {
   }
   const actorId = newId()
   await h.database.withScope({ audience: 'office', tenantId: T.a, actorId }, async (client) => applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId }))
-  // Company A's letterhead, its quote series (no SALES_ORDER series yet: the first acceptance shows the order waiting),
+  // Company A's letterhead, its quote series (its seeded SALES_ORDER series is closed for the first acceptance),
   // a FAKE file store and a FAKE mail account with a verified conversation address.
   await admin(`UPDATE "Company" SET "vatNumber" = $2, "fiscalCode" = $3, "reaOffice" = 'MI', "reaNumber" = '0000001' WHERE id = $1`, [companyA, `IT${FAKE_VAT}`, FAKE_VAT])
   await admin(`INSERT INTO "NumberSeries" (id, "tenantId", "companyId", kind, code, "scopeKey", reset, pattern, fiscal) VALUES ($1, $2, $3, 'QUOTE', 'MAIN', $4, 'YEARLY', 'Q-{YYYY}-{N:4}', false)`, [newId(), T.a, companyA, YEAR])
@@ -215,6 +217,8 @@ let order: Json
 
 describe('the order from the accepted quote (SAL-200, SAL-203; Owner answer S1: made at acceptance)', () => {
   it('without a SALES_ORDER series the deposit is still asked and the order waits; the office makes it once a series exists', async () => {
+    const series = `UPDATE "NumberSeries" SET status = $3 WHERE "tenantId" = $1 AND "companyId" = $2 AND kind = 'SALES_ORDER'`
+    await admin(series, [T.a, companyA, 'CLOSED'])
     waiting = await acceptedQuote()
     expect((await admin('SELECT count(*)::int AS n FROM "SalesOrder" WHERE "quoteVersionId" = $1', [waiting.versionId]))[0]!.n).toBe(0)
     const deposit = await one('SELECT id, status, "orderId" FROM "DepositRequest" WHERE "quoteVersionId" = $1', [waiting.versionId])
@@ -224,7 +228,7 @@ describe('the order from the accepted quote (SAL-200, SAL-203; Owner answer S1: 
     const noSeries = await refused('a.sales', 'POST', '/sales/orders', { quoteVersionId: waiting.versionId }, 409)
     expect(noSeries.message).toMatch(/no active SALES_ORDER number series/)
 
-    await admin(`INSERT INTO "NumberSeries" (id, "tenantId", "companyId", kind, code, "scopeKey", reset, pattern, fiscal) VALUES ($1, $2, $3, 'SALES_ORDER', 'MAIN', $4, 'YEARLY', 'SO-{YYYY}-{N:4}', false)`, [newId(), T.a, companyA, YEAR])
+    await admin(series, [T.a, companyA, 'ACTIVE']) // the seed's (packages/factory-db/seed/numbering.ts)
     const made = await ok('a.sales', 'POST', '/sales/orders', { quoteVersionId: waiting.versionId }, 201)
     expect(made).toMatchObject({ created: true, order: { number: `SO-${YEAR}-0001`, status: 'CONFIRMED', chain: { quote: { id: waiting.quoteId, versionId: waiting.versionId } } } })
     waitingOrderId = made.order.id
@@ -312,13 +316,15 @@ describe('the order from the accepted quote (SAL-200, SAL-203; Owner answer S1: 
       netAmount: 624000,
       grossAmount: 761280,
       chain: { quote: { id: accepted.quoteId, number: accepted.number, versionId: accepted.versionId, revision: 1 }, workOrders: [], shipments: [], invoices: [] },
-      settlement: { settled: false, missing: [{ code: 'NOT_SETTLED' }], source: 'settle-events' },
+      settlement: { settled: false, source: 'invoicing' },
       actions: [
         { action: 'changePromise', allowed: true },
         { action: 'cancel', allowed: true, held: null },
       ],
       progress: { ordered: 14, inWorkOrders: 0, made: null, released: 0, shipped: 0, invoiced: '0', toShip: 14 },
     })
+    // The money module's own answer: nothing shipped, nothing invoiced.
+    expect(record.settlement.missing.map((gap: Json) => gap.code)).toEqual(expect.arrayContaining(['NOT_SHIPPED', 'NO_INVOICE']))
     expect(record.chain.depositRequests).toEqual([expect.objectContaining({ orderId: order.id, quoteVersionId: accepted.versionId, status: 'OPEN', amount: 228384 })])
     expect(record.lines.map((line: Json) => [line.seq, line.colourway.code, line.unitPrice, line.sizes.map((size: Json) => [size.size, size.quantity, size.progress.ordered, size.progress.made])])).toEqual([
       [10, 'BLK', '450', [['50', 2, 2, null], ['52', 4, 4, null], ['54', 2, 2, null]]],
@@ -457,52 +463,60 @@ describe('closing (PLAN §4.7: the close command asks whether every line is ship
     const so = seeded.b.quality.production.salesOrderId
     const { order: record } = await ok('b.sales', 'GET', orderUrl(so))
     const noReason = await refused('b.finance', 'POST', `${orderUrl(so)}/close`, { version: record.version }, 409)
-    expect(noReason.message).toMatch(/every line shipped, invoiced and paid \(Nothing says yet that every line is shipped, invoiced and paid\.\), or a reason/)
+    // The money module's answer, in its words: shipped in full, not invoiced.
+    expect(record.settlement).toMatchObject({ settled: false, source: 'invoicing' })
+    const codes = record.settlement.missing.map((gap: Json) => gap.code)
+    expect(codes).toEqual(expect.arrayContaining(['NOT_INVOICED', 'NO_INVOICE']))
+    expect(codes).not.toContain('NOT_SHIPPED')
+    expect(noReason.message).toMatch(/missing: every line shipped, invoiced and paid \(Shipped, not invoiced: .*\), or a reason to close it anyway/)
     await refused('b.sales', 'POST', `${orderUrl(so)}/close`, { version: record.version, reason: 'Small balance written off.' }, 403)
     expect(await statusOf(so)).toBe('SHIPPED')
     const closed = (await ok('b.finance', 'POST', `${orderUrl(so)}/close`, { version: record.version, reason: 'Small balance written off.' })).order
     expect(closed).toMatchObject({ status: 'CLOSED', actions: [] })
     expect(closed.closedAt).not.toBeNull()
     const row = (await auditsOf(so)).find((entry) => entry.action === 'orders.close')!
-    expect(row).toMatchObject({ reason: 'Small balance written off.', before: { status: 'SHIPPED' }, after: { status: 'CLOSED', settled: false, missing: ['NOT_SETTLED'] } })
+    expect(row).toMatchObject({ reason: 'Small balance written off.', before: { status: 'SHIPPED' }, after: { status: 'CLOSED', settled: false, missing: codes, settlementSource: 'invoicing' } })
     // CLOSED is final: no promise change, and the database refuses any write for every login.
     await refused('b.sales', 'PUT', `${orderUrl(so)}/promise`, { version: closed.version, promiseDate: addDays(TODAY, 10), reason: 'Again.' }, 409)
     await refused('b.finance', 'POST', `${orderUrl(so)}/close`, { version: closed.version, reason: 'Again.' }, 409)
     await expect(admin(`UPDATE "SalesOrder" SET priority = 3 WHERE id = $1`, [so])).rejects.toThrow(/is CLOSED; it never changes/)
   })
 
-  it('settled: the settle event closes it as the system; a later unsettled event only notes it, once', async () => {
+  it('the settle event is only the trigger: the system closes what the port calls settled, and only that', async () => {
     const so = seeded.c.quality.production.salesOrderId
     await shipped('c')
     expect(await statusOf(so)).toBe('SHIPPED')
-    // Not settled any more after a payment taken back: still SHIPPED, the record says what is missing.
-    await settleEvent('c', so, 'order.unsettled', ['BALANCE_DUE'])
-    const { order: unsettled } = await ok('c.sales', 'GET', orderUrl(so))
-    expect(unsettled.settlement).toEqual({ settled: false, missing: [{ code: 'BALANCE_DUE', message: 'A balance is still due.' }], source: 'settle-events' })
-    await refused('c.sales', 'POST', `${orderUrl(so)}/close`, { version: unsettled.version }, 409)
-    const settledEvent = await settleEvent('c', so, 'order.fully_settled')
-    await handler('sales.ordersFollowSettlement').handle({ eventId: settledEvent, type: 'order.fully_settled', version: 1, tenantId: T.c, payload: { orderId: so, partyId: idIn('c', 'party:P1') } } as never, { caller: systemCaller('c'), attempt: 1 })
-    expect(await statusOf(so)).toBe('CLOSED')
-    const close = (await auditsOf(so)).filter((row) => row.action === 'orders.follow').at(-1)!
-    expect(close).toMatchObject({ audience: 'SYSTEM', reason: 'Followed: the order is settled.', before: { status: 'SHIPPED' }, after: { status: 'CLOSED', settled: true, settlementSource: 'settle-events' } })
-    expect((await statusEvents(so)).at(-1)!.payload).toMatchObject({ from: 'SHIPPED', to: 'CLOSED', by: 'system' })
-    const lost = await settleEvent('c', so, 'order.unsettled', ['REFUND_DUE'])
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      await handler('sales.ordersFollowSettlement').handle({ eventId: lost, type: 'order.unsettled', version: 1, tenantId: T.c, payload: { orderId: so, partyId: idIn('c', 'party:P1'), missing: ['REFUND_DUE'] } } as never, { caller: systemCaller('c'), attempt })
+    // An event whose settlement the money module no longer confirms (read again under the order's lock): nothing moves.
+    await settledEvent('c', so)
+    expect(await statusOf(so)).toBe('SHIPPED')
+    expect((await auditsOf(so)).filter((row) => row.action === 'orders.follow').map((row) => row.after.status)).toEqual(['IN_PRODUCTION', 'SHIPPED'])
+    settledForTest([so])
+    try {
+      await settledEvent('c', so)
+    } finally {
+      useOrderSettlement(undefined)
     }
     expect(await statusOf(so)).toBe('CLOSED')
-    expect((await auditsOf(so)).filter((row) => row.action === 'orders.settlementLost').map((row) => row.after)).toEqual([{ settled: false, missing: ['REFUND_DUE'] }])
+    const close = (await auditsOf(so)).filter((row) => row.action === 'orders.follow').at(-1)!
+    expect(close).toMatchObject({ audience: 'SYSTEM', reason: 'Followed: the order is settled.', before: { status: 'SHIPPED' }, after: { status: 'CLOSED', settled: true, settlementSource: 'test' } })
+    expect((await statusEvents(so)).at(-1)!.payload).toMatchObject({ from: 'SHIPPED', to: 'CLOSED', by: 'system' })
+    await settledEvent('c', so) // a repeat: nothing more
+    expect((await auditsOf(so)).filter((row) => row.action === 'orders.follow')).toHaveLength(3)
   })
 
   it('settled: a person with orders.manage closes it without a reason', async () => {
     const so = seeded.d.quality.production.salesOrderId
     await shipped('d')
-    await settleEvent('d', so, 'order.fully_settled')
-    const { order: record } = await ok('d.sales', 'GET', orderUrl(so))
-    expect(record.actions.find((action: Json) => action.action === 'close')).toEqual({ action: 'close', allowed: true, needsReason: false, held: null })
-    const closed = (await ok('d.sales', 'POST', `${orderUrl(so)}/close`, { version: record.version })).order
-    expect(closed.status).toBe('CLOSED')
-    expect((await auditsOf(so)).find((row) => row.action === 'orders.close')).toMatchObject({ reason: null, after: { settled: true, missing: [] } })
+    settledForTest([so])
+    try {
+      const { order: record } = await ok('d.sales', 'GET', orderUrl(so))
+      expect(record.actions.find((action: Json) => action.action === 'close')).toEqual({ action: 'close', allowed: true, needsReason: false, held: null })
+      const closed = (await ok('d.sales', 'POST', `${orderUrl(so)}/close`, { version: record.version })).order
+      expect(closed.status).toBe('CLOSED')
+    } finally {
+      useOrderSettlement(undefined)
+    }
+    expect((await auditsOf(so)).find((row) => row.action === 'orders.close')).toMatchObject({ reason: null, after: { settled: true, missing: [], settlementSource: 'test' } })
   })
 })
 
