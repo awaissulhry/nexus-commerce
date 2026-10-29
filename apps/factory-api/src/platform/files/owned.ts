@@ -37,6 +37,9 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   // A lot's chromium VI reports and supplier documents (modules/quality/lab): CERTIFICATE files only, the evidence its
   // release rests on; photos and attachments of the lot stay open to the generic routes.
   Lot: { kinds: ['CERTIFICATE'], route: 'POST /quality/lots/:lotId/results/report then POST …/results, or POST /quality/lots/:lotId/documents/upload then POST …/documents' },
+  // A company's existing chromium VI reports for its opening stock (modules/inventory/opening, B-W1-35; record id = the
+  // company's id): CERTIFICATE files only, the evidence the imported lots' results rest on.
+  OpeningStock: { kinds: ['CERTIFICATE'], route: 'POST /inventory/opening/reports, then POST /inventory/opening/reports/:fileId/complete' },
 })
 
 /** How a caller of requestUpload / completeUpload reaches them: the generic files routes, or a module's own route. */

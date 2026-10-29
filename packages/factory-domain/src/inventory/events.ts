@@ -19,6 +19,10 @@ import { STOCK_MOVE_REASONS } from './ledger/moves'
  * Receipts (B-W1-32, modules/inventory/receipts): `inventory.receipt_posted` once per receipt posted against a purchase
  * order (its moves also emit `inventory.moved`), `inventory.receipt_reversed` once per reversal. They reach the
  * receipts, lots, hides and purchase order screens of the office (inventory.stock.view).
+ *
+ * Opening stock (B-W1-35, modules/inventory/opening): `inventory.opening_posted` once per imported line of the count (its
+ * lot, new or joined, its hides and its OPENING moves, each also `inventory.moved`); posted by the import's apply, so
+ * by the system. It reaches the stock, lots and hides screens and the opening-stock summary (inventory.stock.view).
  */
 const decimal = () => z.string().regex(/^\d{1,14}\.\d{4}$/)
 
@@ -142,5 +146,31 @@ export const events = [
       postedBy: z.enum(['OFFICE', 'FLOOR', 'SYSTEM']),
     }),
     live: { permission: 'inventory.stock.view', fields: ['receiptId', 'number', 'purchaseOrderId', 'purchaseOrderStatus'] },
+  }),
+  defineEvent({
+    type: 'inventory.opening_posted',
+    context: 'inventory',
+    description: 'A line of the opening stock was posted by an import: its lot (new or one an earlier line made), its hides and its OPENING moves.',
+    payload: z.strictObject({
+      /** The import job that posted it. */
+      jobId: z.uuid(),
+      /** The line's own reference in the sheet. */
+      line: z.string().min(1).max(40),
+      itemId: z.uuid(),
+      lotId: z.uuid().nullable(),
+      lotCode: z.string().nullable(),
+      /** The line made the lot (false: it added to a lot an earlier line made). */
+      newLot: z.boolean(),
+      /** The lot's state after the line: QUARANTINE until a quality person releases it; RELEASED when it needs no quality step. */
+      qualityStatus: z.enum(['QUARANTINE', 'RELEASED', 'REJECTED', 'BLOCKED']).nullable(),
+      crViStatus: z.enum(['NOT_REQUIRED', 'PENDING', 'PASS', 'FAIL']).nullable(),
+      /** The chromium VI result the line brought (its LabResult), if any. */
+      resultId: z.uuid().nullable(),
+      hideIds: z.array(z.uuid()),
+      moveIds: z.array(z.uuid()).min(1),
+      /** In the material's base unit, all its moves together. */
+      baseQuantity: decimal(),
+    }),
+    live: { permission: 'inventory.stock.view', fields: ['jobId', 'line', 'itemId', 'lotId', 'lotCode', 'qualityStatus'] },
   }),
 ] as const
