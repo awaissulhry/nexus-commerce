@@ -1,0 +1,302 @@
+{
+  "panels": {
+    "label": "Conversazione, file e cronologia di {title}",
+    "tabs": {
+      "label": "Pannelli del record",
+      "thread": "Conversazione",
+      "files": "File",
+      "history": "Cronologia"
+    },
+    "retry": "Riprova",
+    "dismiss": "Chiudi",
+    "problem": {
+      "read": "Non è stato possibile leggere. Riprova tra un momento.",
+      "notFound": "Questo record non ha una conversazione qui, oppure non puoi vederla.",
+      "forbidden": "Non puoi vedere questa parte del record.",
+      "signedOut": "La sessione è scaduta. Accedi di nuovo per continuare.",
+      "unavailable": "Il server della fabbrica non ha risposto. Controlla la connessione e riprova."
+    }
+  },
+  "notice": {
+    "noteAdded": "Nota aggiunta. La vede solo l'ufficio.",
+    "emailQueued": "Email in coda. Parte tra un momento; il suo stato compare sul messaggio.",
+    "closed": "Conversazione chiusa. Nessuno può scrivere finché non viene riaperta.",
+    "reopened": "Conversazione riaperta.",
+    "sendConflict": "Non è stato inviato nulla: la conversazione è chiusa, oppure l'indirizzo di invio dell'azienda non è ancora pronto. È stata riletta.",
+    "statusConflict": "Qualcun altro ha cambiato questa conversazione nel frattempo. È stata riletta: controlla e riprova.",
+    "invalid": "Non è stato salvato nulla: qualcosa è stato rifiutato. Controlla gli indirizzi, i file e il testo.",
+    "forbidden": "Non puoi farlo su questo record.",
+    "stepUp": "Conferma la tua identità con il codice dell'app di autenticazione, poi riprova.",
+    "rateLimited": "Troppi tentativi in poco tempo. Aspetta un minuto e riprova.",
+    "unavailable": "Il server della fabbrica non ha risposto. Non è cambiato nulla; riprova.",
+    "failed": "Non ha funzionato. Non è cambiato nulla; riprova.",
+    "noSender": "Non è stato inviato nulla: l'azienda di questo record non ha ancora un indirizzo da cui inviare (Amministrazione › Email e indirizzi).",
+    "badRecipient": "Non è stato inviato nulla: un indirizzo è stato rifiutato (non valido, oppure in passato respinto o segnalato).",
+    "noSubject": "Non è stato inviato nulla: scrivi un oggetto per la prima email di questa conversazione.",
+    "attachmentsRefused": "Non è stato inviato nulla: un file non può più partire con l'email (non condiviso con la controparte, o troppo grande insieme agli altri).",
+    "mentionsRefused": "Non è stato salvato nulla: una persona menzionata non può leggere questo record."
+  },
+  "thread": {
+    "loading": "Lettura della conversazione…",
+    "listLabel": "Messaggi, dal più recente",
+    "older": "Mostra i messaggi precedenti",
+    "close": "Chiudi la conversazione",
+    "reopen": "Riapri",
+    "closed": {
+      "title": "Questa conversazione è chiusa",
+      "body": "Nessuno può scrivere. Chi gestisce le conversazioni può riaprirla.",
+      "bodyManage": "Nessuno può scrivere finché non la riapri."
+    },
+    "empty": {
+      "title": "Ancora nessun messaggio",
+      "body": "Qui compaiono le note interne e la posta con il cliente o il fornitore di questo record, dalla più recente."
+    }
+  },
+  "composer": {
+    "modeLabel": "Chi vede questo messaggio",
+    "mode": {
+      "note": "Nota interna",
+      "email": "Email a {party}"
+    },
+    "title": {
+      "note": "Nota interna",
+      "email": "Email a {party}"
+    },
+    "rule": {
+      "note": "Una nota interna la vede solo l'ufficio: {party} non la vede mai.",
+      "noParty": "il cliente o il fornitore",
+      "email": "Parte dall'indirizzo della tua azienda, a tuo nome. {party} la vede e la risposta torna in questa conversazione."
+    },
+    "placeholder": {
+      "note": "Scrivi una nota per i colleghi",
+      "email": "Scrivi il messaggio da inviare"
+    },
+    "send": {
+      "note": "Aggiungi la nota",
+      "email": "Invia l'email"
+    },
+    "to": "A",
+    "toHint": "Indirizzi separati da virgole.",
+    "toPlaceholder": "nome@example.com",
+    "subject": "Oggetto",
+    "subjectHint": "Lascialo vuoto per rispondere con l'oggetto dell'ultima email.",
+    "mentions": "Menziona persone",
+    "mentionsChosen_one": "Menziona persone · {count} scelta",
+    "mentionsChosen_other": "Menziona persone · {count} scelte",
+    "mentionsLegend": "Ogni persona che scegli viene avvisata di questa nota.",
+    "attach": "Allega file",
+    "attachChosen_one": "Allega file · {count} scelto",
+    "attachChosen_other": "Allega file · {count} scelti",
+    "attachLegendNote": "File di questo record",
+    "attachLegendEmail": "File già condivisi con {party}: l'email li porta con sé",
+    "noSharedFiles": "Nessun file di questo record è ancora condiviso con {party}, quindi nessuno può partire con l'email. Condividilo prima in File.",
+    "held": {
+      "closed": "La conversazione è chiusa.",
+      "sending": "Invio in corso…",
+      "emptyNote": "Scrivi prima la nota.",
+      "emptyEmail": "Scrivi prima il messaggio.",
+      "tooLong": "Togli {count} caratteri per inviarlo.",
+      "tooManyFiles": "Allega al massimo {max} file.",
+      "tooManyMentions": "Menziona al massimo {max} persone.",
+      "badAddress": "«{address}» non è un indirizzo email.",
+      "noRecipient": "Aggiungi l'indirizzo a cui inviarla.",
+      "tooManyRecipients": "Invia al massimo a {max} indirizzi.",
+      "subjectTooLong": "L'oggetto deve stare sotto i {max} caratteri.",
+      "attachmentsTooLarge": "I file insieme superano i 10 MB: allegane meno.",
+      "noSubject": "Scrivi un oggetto: è la prima email della conversazione."
+    },
+    "absent": {
+      "noParty": "Questo record non ha un cliente o un fornitore: da qui non si può inviare un'email.",
+      "noPermission": "Puoi leggere questa conversazione; per scrivere serve un altro ruolo."
+    },
+    "subjectFirst": "La prima email di questa conversazione ha bisogno di un oggetto."
+  },
+  "message": {
+    "theParty": "il cliente o il fornitore",
+    "someone": "qualcuno",
+    "label": "{kind} da {author}",
+    "author": {
+      "USER": "Qualcuno dell'ufficio",
+      "WORKER": "Un operatore di reparto",
+      "PARTY": "Il cliente o il fornitore",
+      "SYSTEM": "Nexus Factory"
+    },
+    "kind": {
+      "note": "Nota interna",
+      "outbound": "Email a {party}",
+      "inbound": "Email da {party}"
+    },
+    "email": {
+      "QUEUED": "In attesa di invio",
+      "SENDING": "In invio",
+      "SENT": "Inviata",
+      "DELIVERED": "Consegnata",
+      "BOUNCED": "Respinta",
+      "COMPLAINED": "Segnalata come spam",
+      "FAILED": "Non inviata"
+    },
+    "emailTo": "A {to} · {subject}",
+    "mentioned": "Menzionati: {names}",
+    "attachments": "File allegati"
+  },
+  "files": {
+    "listLabel": "File di questo record",
+    "uploadsLabel": "Caricamenti in corso",
+    "loading": "Lettura dei file…",
+    "empty": {
+      "title": "Ancora nessun file",
+      "body": "Qui compaiono documenti, foto e certificati di questo record.",
+      "bodyUpload": "Carica un documento, una foto o un certificato: scegli il tipo e chi può vederlo."
+    },
+    "phase": {
+      "hashing": "Controllo del file…",
+      "uploading": "Caricamento…",
+      "confirming": "Conferma…"
+    },
+    "problem": {
+      "failed": "Il caricamento non è terminato. Riprova.",
+      "type": "Questo tipo di file non accetta questo formato. Scegli un altro tipo o un altro file.",
+      "empty": "Il file è vuoto.",
+      "size": "Il file è troppo grande per questo tipo.",
+      "store": "L'archivio dei file non ha accettato il file. Riprova.",
+      "refused": "La fabbrica ha rifiutato il file così com'è (formato, dimensione o condivisione).",
+      "forbidden": "Non puoi caricare o condividere file su questo record.",
+      "moduleOwned": "Questo tipo di file di questo record si aggiunge dalla pagina del record, non da qui."
+    },
+    "notice": {
+      "uploaded": "File caricato. Compare nell'elenco e nella cronologia.",
+      "quarantined": "L'archivio ha rifiutato il file: è diverso da quanto annunciato. È in quarantena e non si può aprire."
+    },
+    "dismiss": "Chiudi",
+    "earlier_one": "{count} versione precedente",
+    "earlier_other": "{count} versioni precedenti",
+    "version": "Versione {n}",
+    "audience": {
+      "officeOnly": "Solo ufficio",
+      "OFFICE": "Ufficio",
+      "FLOOR": "Reparto",
+      "PARTNER": "Portale",
+      "LINK": "Link"
+    },
+    "quarantined": "In quarantena",
+    "quarantine": {
+      "size_mismatch": "Rifiutato: la dimensione è diversa da quella annunciata.",
+      "type_mismatch": "Rifiutato: il formato è diverso da quello annunciato.",
+      "checksum_mismatch": "Rifiutato: il contenuto è diverso da quello annunciato.",
+      "unknown": "Rifiutato dall'archivio dei file."
+    },
+    "pending": "Il caricamento non è mai stato completato.",
+    "added": "{kind} · aggiunto il {at}",
+    "kind": {
+      "ATTACHMENT": "Allegato",
+      "DOCUMENT": "Documento",
+      "PHOTO": "Foto",
+      "CERTIFICATE": "Certificato",
+      "FISCAL_ARCHIVE": "Archivio fiscale"
+    },
+    "kindHint": {
+      "ATTACHMENT": "PDF, immagini, Word, Excel, OpenDocument, CSV o testo; fino a 25 MB.",
+      "DOCUMENT": "PDF, Word, Excel, OpenDocument o CSV; fino a 25 MB.",
+      "PHOTO": "JPEG, PNG, WebP o HEIC; fino a 15 MB.",
+      "CERTIFICATE": "PDF, JPEG o PNG; fino a 20 MB.",
+      "FISCAL_ARCHIVE": "PDF, XML o .p7m firmato; fino a 20 MB. Conservato dieci anni."
+    },
+    "held": {
+      "noRead": "Per aprire i file serve un altro ruolo.",
+      "notAvailable": "Questo file non si può aprire."
+    },
+    "preview": "Visualizza",
+    "previewNamed": "Visualizza {name}",
+    "download": "Scarica",
+    "downloadNamed": "Scarica {name}",
+    "retention": {
+      "legalHold": "Blocco legale",
+      "until": "Conservato fino al {date}",
+      "fiscal": "Archivio fiscale · conservato fino al {date}"
+    },
+    "upload": {
+      "label": "Carica un file",
+      "kind": "Tipo di file",
+      "audience": "Chi lo vede",
+      "share": {
+        "FLOOR": "Il reparto di questo stabilimento",
+        "PARTNER": "{party} sul portale",
+        "LINK": "{party} tramite link"
+      },
+      "officeOnly": "Ciò che carichi lo vede solo l'ufficio. Per condividere un file serve un altro ruolo.",
+      "officeOnlyNoParty": "Lo vede solo l'ufficio: questo record non ha cliente, fornitore o stabilimento con cui condividerlo.",
+      "choose": "Scegli i file…",
+      "fiscalNote": "Un file dell'archivio fiscale si conserva dieci anni e non si può cancellare prima.",
+      "ownedAll": "I file di questo record si aggiungono dalla pagina del record.",
+      "ownedSome": "{kinds}: si aggiunge dalla pagina del record."
+    }
+  },
+  "history": {
+    "label": "Cronologia del record, dalla più recente",
+    "filterLabel": "Mostra",
+    "filter": {
+      "all": "Tutto",
+      "message": "Messaggi",
+      "change": "Modifiche",
+      "file": "File"
+    },
+    "loading": "Lettura della cronologia…",
+    "older": "Mostra i precedenti",
+    "empty": {
+      "title": "Ancora niente",
+      "body": {
+        "all": "Qui compaiono messaggi, modifiche e file di questo record, dal più recente.",
+        "message": "Ancora nessun messaggio su questo record.",
+        "change": "Ancora nessuna modifica registrata su questo record.",
+        "file": "Ancora nessun file su questo record."
+      }
+    },
+    "message": {
+      "note": "{who} ha aggiunto una nota interna",
+      "outbound": "{who} ha scritto a {party}",
+      "inbound": "{who} ha scritto all'ufficio"
+    },
+    "attachments_one": "{count} file allegato",
+    "attachments_other": "{count} file allegati",
+    "file": {
+      "available": "Aggiunto il file {name}",
+      "quarantined": "File {name} rifiutato dall'archivio",
+      "detail": "{kind} · {audiences}"
+    },
+    "actor": {
+      "OFFICE": "Qualcuno dell'ufficio",
+      "FLOOR": "Il reparto",
+      "PARTNER": "Il cliente o il fornitore",
+      "LINK": "Qualcuno con un link",
+      "SYSTEM": "Nexus Factory"
+    },
+    "change": {
+      "label": "{who}: {verb}",
+      "status": "Stato {from} → {to}",
+      "valuesLabel": "Cosa è cambiato",
+      "fields": "Modificati: {fields}",
+      "reason": "Motivo: {reason}"
+    },
+    "verb": {
+      "created": "creato",
+      "updated": "modificato",
+      "deleted": "eliminato",
+      "issued": "emesso",
+      "suspended": "sospeso",
+      "reinstated": "ripristinato",
+      "withdrawn": "ritirato",
+      "archived": "archiviato",
+      "noted": "ha aggiunto una nota",
+      "statusChanged": "ha cambiato lo stato",
+      "sent": "inviato",
+      "uploadStarted": "ha avviato un caricamento",
+      "uploaded": "ha caricato un file",
+      "shared": "ha cambiato chi vede un file",
+      "retentionChanged": "ha cambiato la conservazione di un file",
+      "assigned": "ha assegnato una email",
+      "released": "ha sbloccato una email",
+      "rejected": "ha scartato una email",
+      "changed": "ha modificato"
+    }
+  }
+}
