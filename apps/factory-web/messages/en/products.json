@@ -201,6 +201,7 @@
     "stepsAdded_other": "{count} operations added.",
     "stepRemoved": "Operation removed from the draft routing.",
     "uploaded": "The signed file is uploaded and in force for the revision.",
+    "trackingSaved": "The garment numbering is saved.",
     "labelNamed": "The revision names its garment label."
   },
   "identity": {
@@ -787,7 +788,9 @@
     },
     "tracking": {
       "title": "Garment tracking",
-      "lot": "The work order’s batch number (or a serial per garment) is given at the final operation and printed on the label; the release and the evidence trail follow it.",
+      "numbering": "Number on each garment’s label",
+      "save": "Save numbering",
+      "fixed": "It changes until the style’s work orders print a garment label, give a serial or release a garment; then the numbering of the garments that exist is fixed.",
       "none": "Not PPE: no batch number is needed on the label."
     }
   },
@@ -1206,5 +1209,11 @@
       "tenantWide": "The group’s rates (every company)",
       "where": "Rates and overhead are kept by Finance (costing settings)."
     }
+  },
+  "garmentTracking": {
+    "BATCH": "Batch number",
+    "BATCH_why": "The work order’s batch number on every label of the batch.",
+    "SERIAL": "One serial per garment",
+    "SERIAL_why": "Each garment gets its own serial at the final operation; recalls and the evidence trail follow each one."
   }
 }

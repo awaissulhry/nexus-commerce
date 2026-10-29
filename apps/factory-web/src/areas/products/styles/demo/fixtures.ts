@@ -169,6 +169,7 @@ export function demoStyle(options: StyleOptions = {}): StyleView {
     description: 'Giacca da turismo in pelle bovina 1,2 mm con membrana impermeabile e protezioni EN 1621-1 a spalle e gomiti.',
     measurementTemplate: null,
     tracking: ppe.ppeCategory === 'NOT_PPE' ? 'NONE' : 'LOT',
+    garmentTracking: 'BATCH',
     range: SIZES.map((size, index) => ({
       code: size,
       label: size === '52' ? '52 (L)' : null,

@@ -111,6 +111,11 @@ export function reactivateStyle(api: ApiClient, style: Pick<StyleView, 'id' | 'v
   return api.post(`${stylePath(style.id)}/reactivate`, { body: { version: style.version }, schema: oneStyle, ...key() }).then((answer) => answer.style)
 }
 
+/** How the garments are numbered on their labels (Q31): the batch number, or one serial per garment. */
+export function setGarmentTracking(api: ApiClient, style: Pick<StyleView, 'id' | 'version'>, tracking: StyleView['garmentTracking']): Promise<StyleView> {
+  return api.request('PUT', `${stylePath(style.id)}/garment-tracking`, { body: { version: style.version, tracking }, schema: oneStyle, ...key() }).then((answer) => answer.style)
+}
+
 // ---- colourways and SKUs (SCR-041) ------------------------------------------------------------------------------------
 
 export interface ColourwayInput {

@@ -40,6 +40,7 @@ import {
   reorderSteps,
   setBomColours,
   setBomSizes,
+  setGarmentTracking,
   startRevision,
   updateBomLine,
   updateColourway,
@@ -543,6 +544,11 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
             })
             .catch((error: unknown) => setNotice({ key: readProblem(error), tone: 'danger' }))
         },
+        onGarmentTracking: (tracking) =>
+          run(async () => {
+            const style = current()
+            if (style) setStyleValue(await setGarmentTracking(api, style, tracking))
+          }, { key: 'notice.trackingSaved', tone: 'success' }),
         onAssignLabel: (templateId) =>
           run(async () => {
             const target = revisionId ? revisionVersion(revisionId) : null

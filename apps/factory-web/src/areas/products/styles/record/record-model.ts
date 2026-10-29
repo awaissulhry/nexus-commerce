@@ -150,4 +150,5 @@ export interface StyleRecordActions {
   onUpload?: (input: { kind: 'DECLARATION_OF_CONFORMITY' | 'USER_INFORMATION'; language: string; number: string | null; file: File }) => Promise<boolean>
   onDownload?: (documentId: string, fileId: string) => void
   onAssignLabel?: (templateId: string | null) => Promise<boolean>
+  onGarmentTracking?: (tracking: StyleView['garmentTracking']) => Promise<boolean>
 }

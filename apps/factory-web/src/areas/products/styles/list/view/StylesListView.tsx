@@ -312,6 +312,8 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
             </Select>
           </>
         }
+        // Every row may be selected: Export applies to any style; Archive N is held with its reason when an archived one
+        // is among them (no isRowSelectable: no row is without a bulk action).
         selection={{
           selected,
           onChange: setSelected,

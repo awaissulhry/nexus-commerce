@@ -201,6 +201,7 @@
     "stepsAdded_other": "{count} operazioni aggiunte.",
     "stepRemoved": "Operazione tolta dal ciclo in bozza.",
     "uploaded": "Il file firmato è caricato ed è in vigore per la revisione.",
+    "trackingSaved": "La numerazione dei capi è salvata.",
     "labelNamed": "La revisione indica la sua etichetta capo."
   },
   "identity": {
@@ -787,7 +788,9 @@
     },
     "tracking": {
       "title": "Tracciabilità del capo",
-      "lot": "Il lotto dell’ordine di lavoro (o un seriale per capo) si assegna all’operazione finale e si stampa in etichetta; rilascio e traccia delle prove lo seguono.",
+      "numbering": "Numero sull’etichetta di ogni capo",
+      "save": "Salva la numerazione",
+      "fixed": "Si può cambiare finché gli ordini di lavoro del modello non stampano un’etichetta capo, non assegnano un seriale o non rilasciano un capo; poi la numerazione dei capi esistenti resta fissa.",
       "none": "Non è un DPI: non serve un lotto in etichetta."
     }
   },
@@ -1206,5 +1209,11 @@
       "tenantWide": "Tariffe del gruppo (ogni azienda)",
       "where": "Tariffe e spese generali le gestisce l’amministrazione (impostazioni costi)."
     }
+  },
+  "garmentTracking": {
+    "BATCH": "Numero di lotto",
+    "BATCH_why": "Il lotto dell’ordine di lavoro su ogni etichetta del lotto.",
+    "SERIAL": "Un seriale per capo",
+    "SERIAL_why": "Ogni capo riceve il suo seriale all’operazione finale; richiami e traccia delle prove seguono ognuno."
   }
 }

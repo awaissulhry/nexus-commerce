@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { CircleCheck, CircleMinus, CircleX, Download, Upload } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, FileDropzone, KeyValue, Modal, SummaryTable } from '@nexus/ui/components'
-import { Button, Input, Pill, Select, Spinner, Tag } from '@nexus/ui/primitives'
+import { Button, Input, Pill, RadioCard, Select, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { CoverageCell, LanguageStatus, StyleComplianceView, StyleView } from '../../api'
@@ -45,7 +45,7 @@ export function ComplianceTab({ style, model, actions }: { style: StyleView; mod
       <DocumentsCard compliance={compliance} model={model} actions={actions} />
       <div className="fw-st-pair">
         <LabelCard compliance={compliance} style={style} model={model} actions={actions} />
-        <TrackingCard style={style} />
+        <TrackingCard style={style} model={model} actions={actions} />
       </div>
       {dialog && <UploadDialog compliance={compliance} model={model} actions={actions} kind={dialog.documentKind} language={dialog.language} />}
     </div>
@@ -368,13 +368,53 @@ function LabelCard({ compliance, style, model, actions }: { compliance: StyleCom
   )
 }
 
-function TrackingCard({ style }: { style: StyleView }) {
+function TrackingCard({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
   const t = useT('products')
+  const [chosen, setChosen] = useState(style.garmentTracking)
+  const editable = model.can.manage && style.status !== 'ARCHIVED'
+  const held = !editable ? t(style.status === 'ARCHIVED' ? 'held.archived' : 'held.noManage') : chosen === style.garmentTracking ? t('sku.gtinSame') : model.busy ? t('held.busy') : null
   return (
     <Card header={t('compliance.tracking.title')}>
       <div className="fw-st-stack">
         <p>{t(`tracking.${style.tracking}`)}</p>
-        <p className="fw-st-hint">{t(style.tracking === 'LOT' ? 'compliance.tracking.lot' : 'compliance.tracking.none')}</p>
+        {style.tracking === 'LOT' ? (
+          <>
+            <fieldset className="fw-st-choices">
+              <legend className="fw-st-legend">{t('compliance.tracking.numbering')}</legend>
+              {(['BATCH', 'SERIAL'] as const).map((tracking) =>
+                editable ? (
+                  <RadioCard
+                    key={tracking}
+                    variant="row"
+                    name="fw-st-tracking"
+                    value={tracking}
+                    checked={chosen === tracking}
+                    selected={chosen === tracking}
+                    onChange={() => setChosen(tracking)}
+                    title={t(`garmentTracking.${tracking}`)}
+                    description={t(`garmentTracking.${tracking}_why`)}
+                  />
+                ) : (
+                  tracking === style.garmentTracking && (
+                    <p key={tracking}>
+                      <b>{t(`garmentTracking.${tracking}`)}</b> — {t(`garmentTracking.${tracking}_why`)}
+                    </p>
+                  )
+                ),
+              )}
+            </fieldset>
+            {editable && (
+              <span className="fw-st-inline">
+                <Button size="sm" heldReason={held} onClick={() => void actions?.onGarmentTracking?.(chosen)}>
+                  {t('compliance.tracking.save')}
+                </Button>
+              </span>
+            )}
+            <p className="fw-st-hint">{t('compliance.tracking.fixed')}</p>
+          </>
+        ) : (
+          <p className="fw-st-hint">{t('compliance.tracking.none')}</p>
+        )}
       </div>
     </Card>
   )

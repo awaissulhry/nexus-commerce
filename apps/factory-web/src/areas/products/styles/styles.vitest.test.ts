@@ -258,7 +258,7 @@ function sources(dir: string): string[] {
     return /\.tsx?$/.test(entry.name) && !entry.name.includes('.vitest.test.') && entry.name !== 'fixtures.ts' ? [path] : []
   })
 }
-const PREFIXES = ['checkState', 'docKind', 'docState', 'gate', 'certStatus', 'labelStatus', 'cellShort', 'priceSource', 'common', 'status', 'statusMeans', 'revisionStatus', 'masterStatus', 'productType', 'tracking', 'ppe', 'tab', 'record', 'action', 'save', 'held', 'problem', 'notice', 'identity', 'warning', 'side', 'check', 'coverage', 'revisions', 'range', 'measures', 'colourways', 'colourway', 'matrix', 'sku', 'generate', 'release', 'startRevision', 'abandon', 'archive', 'dialog', 'issue', 'complianceCheck', 'blocks', 'cellStatus', 'list', 'completeness', 'csv', 'newStyle', 'keys', 'bom', 'routing', 'cost', 'compliance', 'missing', 'kind', 'uom', 'department', 'category']
+const PREFIXES = ['garmentTracking', 'checkState', 'docKind', 'docState', 'gate', 'certStatus', 'labelStatus', 'cellShort', 'priceSource', 'common', 'status', 'statusMeans', 'revisionStatus', 'masterStatus', 'productType', 'tracking', 'ppe', 'tab', 'record', 'action', 'save', 'held', 'problem', 'notice', 'identity', 'warning', 'side', 'check', 'coverage', 'revisions', 'range', 'measures', 'colourways', 'colourway', 'matrix', 'sku', 'generate', 'release', 'startRevision', 'abandon', 'archive', 'dialog', 'issue', 'complianceCheck', 'blocks', 'cellStatus', 'list', 'completeness', 'csv', 'newStyle', 'keys', 'bom', 'routing', 'cost', 'compliance', 'missing', 'kind', 'uom', 'department', 'category']
 function literalKeys(): string[] {
   const pattern = new RegExp(`['"\`]((?:${PREFIXES.join('|')})\\.[A-Za-z0-9_.]*[A-Za-z0-9_])['"\`]`, 'g')
   const keys = new Set<string>()
@@ -303,6 +303,7 @@ const built = [
   ...['on', 'off', 'none', 'closed'].flatMap((state) => [`matrix.cell.${state}`, `sku.stateIs.${state}`]),
   ...['colourways', 'sizeRange', 'baseSize', 'skus', 'releasedRevision'].map((key) => `completeness.${key}`),
   ...['LOT', 'NONE'].map((tracking) => `tracking.${tracking}`),
+  ...['BATCH', 'SERIAL'].flatMap((tracking) => [`garmentTracking.${tracking}`, `garmentTracking.${tracking}_why`]),
   ...['signed_out', 'forbidden', 'not_found', 'unavailable', 'rate_limited', 'contract', 'internal'].map((kind) => `problem.read.${kind}`),
   ...['moved', 'state', 'blocked', 'codeTaken', 'invalid', 'stepUp', 'signed_out', 'forbidden', 'not_found', 'rate_limited', 'unavailable', 'internal'].map((kind) => `problem.write.${kind}`),
   ...['not_found', 'forbidden', 'error'].flatMap((state) => [`record.state.${state}.title`, ...(state === 'error' ? [] : [`record.state.${state}.body`])]),
