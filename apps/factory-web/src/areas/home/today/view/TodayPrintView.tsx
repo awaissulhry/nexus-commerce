@@ -7,6 +7,7 @@ import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { dueWords, groupItems, type Loaded, type TodayItem } from '../model'
+import { phraseText, sentenceText } from '../words'
 import '../today.css'
 
 export interface TodayPrintViewModel {
@@ -66,14 +67,14 @@ function PrintList({ model }: { model: TodayPrintViewModel }) {
                   const due = dueWords(item.due)
                   return (
                     <li key={item.key}>
-                      <strong>{item.record.label}</strong> — {item.sentence}
+                      <strong>{item.record.label}</strong> — {sentenceText(item, t, locale)}
                       <div className="fw-today-muted">
                         {t(`today.severity.${item.severity}`)}
                         {due ? ` · ${t(due.key, { count: due.count, date: formatDate(due.date, { locale }) })}` : ` · ${t(item.ageDays === 0 ? 'today.row.ageToday' : 'today.row.age', { count: item.ageDays })}`}
                         {' · '}
-                        {item.why}
+                        {phraseText(item.words.why, t, locale)}
                       </div>
-                      {item.blocks && <div className="fw-today-muted">{item.blocks}</div>}
+                      {item.words.blocks && <div className="fw-today-muted">{phraseText(item.words.blocks, t, locale)}</div>}
                     </li>
                   )
                 })}

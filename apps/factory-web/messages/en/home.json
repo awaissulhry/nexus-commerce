@@ -40,9 +40,8 @@
       "all": "Needs me now",
       "count": "{count}",
       "atLeast": "at least {count}",
-      "partial": "Not every row was read",
-      "unknown": "This count could not be read now.",
-      "none": "Nothing waits in: {kinds}."
+      "partial": "A source stopped at its limit: there may be more.",
+      "unknown": "This count could not be read now."
     },
     "dismiss": "Dismiss",
     "retry": "Try again",
@@ -310,6 +309,161 @@
       "button": "Print",
       "empty": "Nothing to print.",
       "cut": "{shown} of {total} rows printed."
+    },
+    "tile": {
+      "ALL": {
+        "label": "Needs me now",
+        "hint": "every row that waits for you"
+      },
+      "APPROVAL": {
+        "label": "Approvals",
+        "hint": "decisions you review"
+      },
+      "ALERT": {
+        "label": "Alerts on my records",
+        "hint": "late, on hold, rejected or a duty open"
+      }
+    },
+    "w": {
+      "withFigure": "{text} ({figure}).",
+      "marginFigure": "margin {value} %",
+      "listMore": "{shown} and {count} more",
+      "ORDER_PROMISE.LATE_one": "Order {number} for {customer} is {count} day late: it was promised for {promiseDate}.",
+      "ORDER_PROMISE.LATE_other": "Order {number} for {customer} is {count} days late: it was promised for {promiseDate}.",
+      "ORDER_PROMISE.AT_RISK_TODAY": "Order {number} for {customer} is promised for today ({promiseDate}) and is not ready yet.",
+      "ORDER_PROMISE.AT_RISK_one": "Order {number} for {customer} is promised for tomorrow ({promiseDate}) and is not ready yet.",
+      "ORDER_PROMISE.AT_RISK_other": "Order {number} for {customer} is promised for {promiseDate} (in {count} days) and is not ready yet.",
+      "ORDER_PROMISE.waitsPieces_one": "{customer} waits for {count} piece.",
+      "ORDER_PROMISE.waitsPieces_other": "{customer} waits for {count} pieces.",
+      "ORDER_PROMISE.waitsOrder": "{customer} waits for the order.",
+      "WORK_ORDER_HELD.HELD_one": "Work order {number} ({style}) cannot be released: {count} check open ({checks}).",
+      "WORK_ORDER_HELD.HELD_other": "Work order {number} ({style}) cannot be released: {count} checks open ({checks}).",
+      "WORK_ORDER_HELD.blocks": "Production of {orders} waits for it.",
+      "LOT_HOLD.QUARANTINE": "Lot {code} ({item}) waits in quarantine for its release.",
+      "LOT_HOLD.QUARANTINE.blocks": "Its stock cannot be issued to work orders until it is released.",
+      "LOT_HOLD.BLOCKED": "Lot {code} ({item}) is blocked.",
+      "LOT_HOLD.BLOCKED_CR_VI": "Lot {code} ({item}) is blocked: its chromium VI result failed.",
+      "LOT_HOLD.BLOCKED.blocks": "Its stock stays held: reject the lot, or release it again with new evidence.",
+      "INVOICE_SDI.REJECTED": "Invoice {number} for {customer} was rejected by SDI: correct it and send it again by {deadlineDate}.",
+      "INVOICE_SDI.REJECTED_NO_DATE": "Invoice {number} for {customer} was rejected by SDI: correct it and send it again.",
+      "INVOICE_SDI.REJECTED.blocks": "Until it is sent again it counts as never issued.",
+      "INVOICE_SDI.ERROR": "Invoice {number} for {customer} did not reach SDI: send it again.",
+      "INVOICE_SDI.ERROR.blocks": "The customer has no valid invoice yet.",
+      "INVOICE_SDI.NOT_DELIVERABLE": "SDI could not deliver invoice {number} to {customer}, and no courtesy copy went out.",
+      "INVOICE_SDI.NOT_DELIVERABLE.blocks": "The customer finds it only in their tax area until they get a copy.",
+      "INVOICE_SDI.FILES_PENDING": "Invoice {number} for {customer} is issued, but its XML or PDF is not stored yet.",
+      "INVOICE_SDI.FILES_PENDING.blocks": "It cannot go to SDI without its XML.",
+      "QUOTE_APPROVAL.PENDING": "Quote {number} for {customer} waits for an approval: {reasons}.",
+      "QUOTE_APPROVAL.blocks": "It cannot be sent to the customer until it is decided.",
+      "PO_PROPOSAL.CHANGES_PROPOSED": "{supplier} proposed changes to purchase order {number}: accept or refuse them.",
+      "PO_PROPOSAL.blocks": "Receiving and a new link wait for your answer.",
+      "PO_NOT_CONFIRMED.DAYS_one": "Purchase order {number} to {supplier} is not confirmed {count} day after it was sent.",
+      "PO_NOT_CONFIRMED.DAYS_other": "Purchase order {number} to {supplier} is not confirmed {count} days after it was sent.",
+      "PO_NOT_CONFIRMED.HOURS_one": "Purchase order {number} to {supplier} is not confirmed {count} hour after it was sent.",
+      "PO_NOT_CONFIRMED.HOURS_other": "Purchase order {number} to {supplier} is not confirmed {count} hours after it was sent.",
+      "PO_NOT_CONFIRMED.blocks": "The goods are needed by {neededDate}.",
+      "SCAN_CORRECTION.PENDING": "A correction of the scan of bundle {bundle} at {operation} ({workOrder}) waits for a decision.",
+      "SCAN_CORRECTION.blocks": "{workOrder}'s progress counts the report as it was until the correction is decided.",
+      "SCAN_REFUSAL.REFUSED": "A scan sent from {device} was refused: {message}",
+      "SCAN_REFUSAL.blocks": "{workOrder}'s progress misses it until it is scanned again or discarded.",
+      "INVOICE_TO_ISSUE.OPEN_one": "{customer}: {count} DDT of {ddtMonth} not invoiced yet ({ddts}).",
+      "INVOICE_TO_ISSUE.OPEN_other": "{customer}: {count} DDTs of {ddtMonth} not invoiced yet ({ddts}).",
+      "INVOICE_TO_ISSUE.dueLeft_one": "The goods left: invoice them ({docType}) by {dueDate}, {count} day left.",
+      "INVOICE_TO_ISSUE.dueLeft_other": "The goods left: invoice them ({docType}) by {dueDate}, {count} days left.",
+      "INVOICE_TO_ISSUE.dueToday": "The goods left: invoice them ({docType}) today, {dueDate}.",
+      "INVOICE_TO_ISSUE.dueLate_one": "The goods left: the invoice ({docType}) was due by {dueDate}, {count} day ago.",
+      "INVOICE_TO_ISSUE.dueLate_other": "The goods left: the invoice ({docType}) was due by {dueDate}, {count} days ago.",
+      "REGISTER_DUTY.OPEN": "PPE register {entryKind} {reference} ({style}): {duties}.",
+      "REGISTER_DUTY.blocks": "The entry cannot close until these duties are done (Reg. (EU) 2016/425 art. 8).",
+      "PRIVACY_DUTY.OPEN_one": "{company}: {count} privacy duty open ({privacyDuties}).",
+      "PRIVACY_DUTY.OPEN_other": "{company}: {count} privacy duties open ({privacyDuties}).",
+      "PRIVACY_DUTY.blocksFloor": "Floor work that records workers stays off until the worker notice and the DPIA are in place.",
+      "PRIVACY_DUTY.blocksPeople": "People are not told what the system keeps about them.",
+      "STYLE_COMPLIANCE.BLOCKED": "Style {style} is held by its compliance: {complianceChecks}.",
+      "STYLE_COMPLIANCE.blocks": "It holds up the {steps} of open orders (sales orders: {orders}, work orders: {workOrders}).",
+      "MAIL_TO_SORT.TRIAGE": "\"{subject}\" from {sender} reached no record: sort it.",
+      "MAIL_TO_SORT.TRIAGE_NO_SUBJECT": "Mail from {sender} reached no record: sort it.",
+      "MAIL_TO_SORT.TRIAGE.blocks": "Its sender waits: nobody sees it on a record until it is sorted.",
+      "MAIL_TO_SORT.HELD": "\"{subject}\" from {sender} is held: {heldReason}.",
+      "MAIL_TO_SORT.HELD_NO_SUBJECT": "Mail from {sender} is held: {heldReason}.",
+      "MAIL_TO_SORT.HELD.blocks": "It reaches no thread until a person releases it or throws it away.",
+      "MAIL_TO_SORT.FAILED": "\"{subject}\" from {sender} could not be read.",
+      "MAIL_TO_SORT.FAILED_NO_SUBJECT": "Mail from {sender} could not be read.",
+      "MAIL_TO_SORT.FAILED.blocks": "Throw it away, or ask the sender to send it again.",
+      "why.ORDER_PROMISE.orders_manage": "You manage this customer's orders and their promise dates.",
+      "why.WORK_ORDER_HELD.workorders_release": "You release work orders at this site.",
+      "why.LOT_HOLD.quality_lots_release": "You release lots at this site.",
+      "why.LOT_HOLD.quality_lots_reject": "You reject or block lots at this site.",
+      "why.INVOICE_SDI.invoices_issue": "You issue and send this customer's invoices.",
+      "why.QUOTE_APPROVAL.quotes_approve": "You approve this customer's quotes, and someone else asked.",
+      "why.PO_PROPOSAL.purchasing_send": "You send purchase orders to this supplier.",
+      "why.PO_NOT_CONFIRMED.purchasing_send": "You send purchase orders to this supplier.",
+      "why.SCAN_CORRECTION.production_scan_correct": "You decide the floor's scan corrections at this site, and you neither scanned nor asked.",
+      "why.SCAN_REFUSAL.production_scan_correct": "You look after this site's floor scans.",
+      "why.INVOICE_TO_ISSUE.invoices_manage": "You invoice this customer's shipped goods.",
+      "why.REGISTER_DUTY.compliance_register_manage": "You keep this company's PPE register.",
+      "why.REGISTER_DUTY.follow": "You follow this entry up.",
+      "why.PRIVACY_DUTY.privacy_manage": "You keep this company's privacy paperwork.",
+      "why.STYLE_COMPLIANCE.compliance_declarations_manage": "You file the styles' Declarations of Conformity and leaflets.",
+      "why.STYLE_COMPLIANCE.compliance_certificates_manage": "You keep the type-examination certificates.",
+      "why.STYLE_COMPLIANCE.compliance_labels_manage": "You keep the garment label templates.",
+      "why.STYLE_COMPLIANCE.product_bom_release": "You release style revisions.",
+      "why.MAIL_TO_SORT.email_triage": "You sort this company's received mail.",
+      "code": {
+        "checks": {
+          "REVISION": "revision",
+          "LABEL_TEMPLATE": "garment label",
+          "CERTIFICATE": "certificate",
+          "WORK_CENTRES": "work centres",
+          "BOM": "bill of materials",
+          "CELLS": "cells",
+          "DEPOSIT": "deposit",
+          "MATERIAL": "material",
+          "BATCH_NUMBER": "batch number series"
+        },
+        "reasons": {
+          "MARGIN_FLOOR": "margin under the floor",
+          "DISCOUNT_LIMIT": "discount over the limit",
+          "AMOUNT_LIMIT": "amount over the limit",
+          "SPECIAL_ITEM": "a special item"
+        },
+        "duties": {
+          "RISK_ASSESSMENT": "the risk to decide",
+          "CORRECTIVE_ACTION": "the corrective action",
+          "DISTRIBUTORS": "the distributors to inform",
+          "AUTHORITY": "the authority to notify"
+        },
+        "entryKind": {
+          "COMPLAINT": "complaint",
+          "NON_CONFORMITY": "non-conformity",
+          "RECALL": "recall"
+        },
+        "privacyDuties": {
+          "register": "the record of processing activities",
+          "publicNotice": "the public privacy notice",
+          "staffNotice": "the staff notice",
+          "workerNotice": "the worker notice",
+          "dpia": "the signed DPIA"
+        },
+        "complianceChecks": {
+          "REVISION": "no released revision",
+          "LABEL_TEMPLATE": "garment label",
+          "CERTIFICATE": "certificate coverage",
+          "DECLARATION_OF_CONFORMITY": "Declaration of Conformity",
+          "USER_INFORMATION": "user information leaflet"
+        },
+        "steps": {
+          "PRODUCTION": "production",
+          "LABELS": "garment labels",
+          "SHIPPING": "shipping"
+        },
+        "heldReason": {
+          "DMARC_FAIL": "its sender's address failed the DMARC check",
+          "SPAM": "it looks like spam",
+          "UNKNOWN_SENDER": "its sender is not a contact of the record",
+          "THREAD_CLOSED": "the thread it answers is closed"
+        }
+      }
     }
   },
   "mailToSort": {

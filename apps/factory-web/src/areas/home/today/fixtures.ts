@@ -1,4 +1,22 @@
 import { defineDesignScreen } from '../../../lib/design/design-screen'
+import {
+  invoiceSdiWords,
+  invoiceToIssueWords,
+  lotHoldWords,
+  mailToSortWords,
+  orderPromiseWords,
+  phrase,
+  poNotConfirmedWords,
+  quoteApprovalWords,
+  registerDutyWords,
+  scanCorrectionWords,
+  scanRefusalWords,
+  styleComplianceWords,
+  whyKey,
+  workOrderHeldWords,
+  type Phrase,
+  type RowWords,
+} from '@nexus/factory-domain/insights/words'
 import type { FlowLensView, PanelView, QueueData, QueueItem, QuoteReview, TodayItem, TodayViewModel } from './model'
 import { TodayView } from './view/TodayView'
 
@@ -17,21 +35,28 @@ const id = (n: number) => `0190f0e2-7777-7000-8000-${String(n).padStart(12, '0')
 const COMPANY = '0190f0e2-1111-7000-8000-000000000001'
 const SITE = '0190f0e2-2222-7000-8000-000000000001'
 
-function row(n: number, item: Partial<TodayItem> & Pick<TodayItem, 'kind' | 'state' | 'severity' | 'group' | 'record' | 'sentence' | 'why'>): QueueItem {
+function row(n: number, item: Omit<Partial<TodayItem>, 'sentence' | 'why' | 'blocks' | 'words'> & Pick<TodayItem, 'kind' | 'state' | 'severity' | 'group' | 'record'> & { said: RowWords; act: string }): QueueItem {
+  const { said, act, ...rest } = item
+  const why = phrase(whyKey(item.kind, act))
+  const ref = (value: Phrase) => ({ key: value.key, params: value.params as Record<string, string | number | string[]> })
   const base: TodayItem = {
     key: `${item.kind}:${item.record.id}`,
-    category: 'ALERT',
+    category: item.decide === 'REVIEW' ? 'APPROVAL' : 'ALERT',
     severityWord: '',
     companyId: COMPANY,
     siteId: null,
     partyId: null,
-    blocks: null,
+    sentence: said.sentence.text,
+    why: why.text,
+    blocks: said.blocks?.text ?? null,
+    words: { sentence: ref(said.sentence), why: ref(why), blocks: said.blocks ? ref(said.blocks) : null },
+    sentenceFigure: null,
     due: null,
     since: at(29 - (n % 9)),
     ageDays: n % 9,
     decide: 'OPEN',
     figures: null,
-    ...item,
+    ...rest,
   }
   const href = `/w/DEMO/records/${base.record.type}/${base.record.id}?label=${encodeURIComponent(base.record.label)}`
   return { ...base, href, reviewHref: base.kind === 'MAIL_TO_SORT' ? `/w/DEMO/home/mail-to-sort?open=${base.record.id}` : null }
@@ -44,9 +69,8 @@ const ROWS = {
     severity: 'HIGH',
     group: 'NOW',
     record: { type: 'SalesOrder', id: id(1), label: 'SO-2026-0042' },
-    sentence: 'Order SO-2026-0042 for Pista Demo S.r.l. is 2 days late: it was promised for 2026-10-27.',
-    why: "You manage this customer's orders and their promise dates.",
-    blocks: 'Pista Demo S.r.l. waits for 12 pieces.',
+    said: orderPromiseWords({ number: 'SO-2026-0042', customer: 'Pista Demo S.r.l.', state: 'LATE', days: 2, promiseDate: '2026-10-27', toShip: 12 }),
+    act: 'orders.manage',
     due: { date: '2026-10-27', days: -2, word: 'OVERDUE' },
     figures: { currency: 'EUR', netAmount: 504000 },
   }),
@@ -57,9 +81,8 @@ const ROWS = {
     group: 'NOW',
     siteId: SITE,
     record: { type: 'WorkOrder', id: id(2), label: 'WO-00098' },
-    sentence: 'Work order WO-00098 (DEMO-JKT-02) cannot be released: 2 checks open (deposit, material).',
-    why: 'You release work orders at this site.',
-    blocks: 'Production of SO-2026-0042 waits for it.',
+    said: workOrderHeldWords({ number: 'WO-00098', style: 'DEMO-JKT-02', checks: ['DEPOSIT', 'MATERIAL'], orders: ['SO-2026-0042'] }),
+    act: 'workorders.release',
     due: { date: '2026-10-30', days: 1, word: 'SOON' },
   }),
   sdiRejected: row(3, {
@@ -68,9 +91,8 @@ const ROWS = {
     severity: 'HIGH',
     group: 'NOW',
     record: { type: 'Invoice', id: id(3), label: 'FT-2026-00031' },
-    sentence: 'Invoice FT-2026-00031 for Pista Demo S.r.l. was rejected by SDI: correct it and send it again by 2026-11-04.',
-    why: "You issue and send this customer's invoices.",
-    blocks: 'Until it is sent again it counts as never issued.',
+    said: invoiceSdiWords({ number: 'FT-2026-00031', customer: 'Pista Demo S.r.l.', state: 'REJECTED', deadline: '2026-11-04' }),
+    act: 'invoices.issue',
     due: { date: '2026-11-04', days: 6, word: 'SOON' },
     figures: { currency: 'EUR', netAmount: 248000 },
   }),
@@ -81,22 +103,20 @@ const ROWS = {
     group: 'NOW',
     siteId: SITE,
     record: { type: 'Lot', id: id(4), label: 'LOT-A-000214' },
-    sentence: 'Lot LOT-A-000214 (Demo black cowhide 1.2 mm) is blocked: its chromium VI result failed.',
-    why: 'You release lots at this site.',
-    blocks: 'Its stock stays held: reject the lot, or release it again with new evidence.',
+    said: lotHoldWords({ code: 'LOT-A-000214', item: 'Demo black cowhide 1.2 mm', state: 'BLOCKED', crViFail: true }),
+    act: 'quality.lots.release',
   }),
   quoteApproval: row(5, {
     kind: 'QUOTE_APPROVAL',
     state: 'PENDING',
     severity: 'MEDIUM',
     group: 'TODAY',
-    category: 'APPROVAL',
     decide: 'REVIEW',
     record: { type: 'Quote', id: id(5), label: 'Q-2026-0142' },
-    sentence: 'Quote Q-2026-0142 for Moto Demo Club: margin under the floor (margin 18.2 %).',
-    why: "You approve this customer's quotes, and someone else asked.",
-    blocks: 'It cannot be sent to the customer until it is decided.',
+    said: quoteApprovalWords({ number: 'Q-2026-0142', customer: 'Moto Demo Club', reasons: ['MARGIN_FLOOR'] }),
+    act: 'quotes.approve',
     figures: { currency: 'EUR', netAmount: 1240000, marginPct: '18.2', marginAmount: 225680 },
+    sentenceFigure: 'marginPct',
   }),
   quarantineLot: row(6, {
     kind: 'LOT_HOLD',
@@ -105,21 +125,18 @@ const ROWS = {
     group: 'TODAY',
     siteId: SITE,
     record: { type: 'Lot', id: id(6), label: 'LOT-A-000219' },
-    sentence: 'Lot LOT-A-000219 (Demo mesh lining) waits in quarantine for its release.',
-    why: 'You release lots at this site.',
-    blocks: 'Its stock cannot be issued to work orders until it is released.',
+    said: lotHoldWords({ code: 'LOT-A-000219', item: 'Demo mesh lining', state: 'QUARANTINE', crViFail: false }),
+    act: 'quality.lots.release',
   }),
   mail: row(7, {
     kind: 'MAIL_TO_SORT',
     state: 'TRIAGE',
     severity: 'MEDIUM',
     group: 'TODAY',
-    category: 'TASK',
     decide: 'REVIEW',
     record: { type: 'InboundEmail', id: id(7), label: 'Preventivo 200 giacche' },
-    sentence: '"Preventivo 200 giacche" from Giulia Esempio reached no record: sort it.',
-    why: "You sort this company's received mail.",
-    blocks: 'Its sender waits: nobody sees it on a record until it is sorted.',
+    said: mailToSortWords({ sender: 'Giulia Esempio', subject: 'Preventivo 200 giacche', state: 'TRIAGE', heldReason: null }),
+    act: 'email.triage',
   }),
   riskOrder: row(8, {
     kind: 'ORDER_PROMISE',
@@ -127,9 +144,8 @@ const ROWS = {
     severity: 'MEDIUM',
     group: 'THIS_WEEK',
     record: { type: 'SalesOrder', id: id(8), label: 'SO-2026-0047' },
-    sentence: 'Order SO-2026-0047 for Moto Demo Club is promised for 2026-10-31 (in 2 days) and is not ready yet.',
-    why: "You manage this customer's orders and their promise dates.",
-    blocks: 'Moto Demo Club waits for 4 pieces.',
+    said: orderPromiseWords({ number: 'SO-2026-0047', customer: 'Moto Demo Club', state: 'AT_RISK', days: 2, promiseDate: '2026-10-31', toShip: 4 }),
+    act: 'orders.manage',
     due: { date: '2026-10-31', days: 2, word: 'SOON' },
     figures: { currency: 'EUR', netAmount: 168000 },
   }),
@@ -140,35 +156,31 @@ const ROWS = {
     group: 'THIS_WEEK',
     siteId: SITE,
     record: { type: 'PurchaseOrder', id: id(9), label: 'PO-2026-0031' },
-    sentence: 'Purchase order PO-2026-0031 to Conceria Demo is not confirmed 3 days after it was sent (EUR 4,820.00).',
-    why: 'You send purchase orders to this supplier.',
-    blocks: 'The goods are needed by 2026-11-05.',
+    said: poNotConfirmedWords({ number: 'PO-2026-0031', supplier: 'Conceria Demo', hours: 74, requestedDate: '2026-11-05' }),
+    act: 'purchasing.send',
     due: { date: '2026-11-05', days: 7, word: 'SOON' },
     figures: { currency: 'EUR', purchaseAmount: 482000 },
+    sentenceFigure: 'purchaseAmount',
   }),
   scanCorrection: row(10, {
     kind: 'SCAN_CORRECTION',
     state: 'PENDING',
     severity: 'MEDIUM',
     group: 'TODAY',
-    category: 'APPROVAL',
     decide: 'REVIEW',
     siteId: SITE,
     record: { type: 'ScanCorrectionRequest', id: id(10), label: 'WO-00091' },
-    sentence: 'A correction of the scan of bundle BN-000412 at Sew and assemble the body (WO-00091) waits for a decision.',
-    why: "You decide the floor's scan corrections at this site, and you neither scanned nor asked.",
-    blocks: "WO-00091's progress counts the report as it was until the correction is decided.",
+    said: scanCorrectionWords({ workOrder: 'WO-00091', operation: 'Sew and assemble the body', bundle: 'BN-000412' }),
+    act: 'production.scan.correct',
   }),
   registerDuty: row(11, {
     kind: 'REGISTER_DUTY',
     state: 'ASSESSING',
     severity: 'MEDIUM',
     group: 'TODAY',
-    category: 'TASK',
     record: { type: 'PpeRegisterEntry', id: id(11), label: 'REG-2026-004' },
-    sentence: 'PPE register complaint REG-2026-004 (DEMO-JKT-02): the risk to decide, the corrective action.',
-    why: "You keep this company's PPE register.",
-    blocks: 'The entry cannot close until these duties are done (Reg. (EU) 2016/425 art. 8).',
+    said: registerDutyWords({ reference: 'REG-2026-004', kind: 'COMPLAINT', style: 'DEMO-JKT-02', duties: ['RISK_ASSESSMENT', 'CORRECTIVE_ACTION'] }),
+    act: 'compliance.register.manage',
   }),
   styleHeld: row(12, {
     kind: 'STYLE_COMPLIANCE',
@@ -176,20 +188,17 @@ const ROWS = {
     severity: 'HIGH',
     group: 'NOW',
     record: { type: 'Style', id: id(12), label: 'DEMO-JKT-03' },
-    sentence: 'Style DEMO-JKT-03 is held by its compliance: Declaration of Conformity, user information leaflet.',
-    why: "You file the styles' Declarations of Conformity and leaflets.",
-    blocks: 'It holds up the shipping of 1 open sales order and 1 open work order.',
+    said: styleComplianceWords({ style: 'DEMO-JKT-03', checks: ['DECLARATION_OF_CONFORMITY', 'USER_INFORMATION'], steps: ['SHIPPING'], orders: 1, workOrders: 1 }),
+    act: 'compliance.declarations.manage',
   }),
   toInvoice: row(13, {
     kind: 'INVOICE_TO_ISSUE',
     state: 'OPEN',
     severity: 'LOW',
     group: 'LATER',
-    category: 'TASK',
     record: { type: 'Party', id: id(13), label: 'Pista Demo S.r.l.' },
-    sentence: 'Pista Demo S.r.l.: 2 DDTs of 2026-10 not invoiced yet (144/2026, 151/2026).',
-    why: "You invoice this customer's shipped goods.",
-    blocks: 'Deferred invoice (TD24) by 15/11/2026 for the DDTs of October 2026: 17 days left.',
+    said: invoiceToIssueWords({ customer: 'Pista Demo S.r.l.', month: '2026-10', ddts: ['144/2026', '151/2026'], docType: 'TD24', dueBy: '2026-11-15', daysLeft: 17 }),
+    act: 'invoices.manage',
     due: { date: '2026-11-15', days: 17, word: null },
   }),
   refusedScan: row(14, {
@@ -197,39 +206,35 @@ const ROWS = {
     state: 'FINAL',
     severity: 'LOW',
     group: 'THIS_WEEK',
-    category: 'TASK',
     siteId: SITE,
     record: { type: 'FloorScanRefusal', id: id(14), label: 'BN-000377' },
-    sentence: 'A scan sent from Demo tablet cutting was refused: This is not a bundle ticket of this site.',
-    why: "You look after this site's floor scans.",
-    blocks: null,
+    said: scanRefusalWords({ device: 'Demo tablet cutting', message: 'This is not a bundle ticket of this site.', workOrder: null }),
+    act: 'production.scan.correct',
   }),
 } satisfies Record<string, QueueItem>
 
-const tile = (kind: string, label: string, count: number, complete = true) => ({ kind, label, count, complete })
-
-function queueOf(items: readonly QueueItem[], tiles: QueueData['tiles'], extra: Partial<QueueData> = {}): QueueData {
-  return { asOf: AS_OF, total: items.length, needYou: items.length, now: items.filter((item) => item.group === 'NOW').length, tiles, items, more: false, loadingMore: false, fresh: 0, ...extra }
+function queueOf(items: readonly QueueItem[], extra: Partial<QueueData> = {}): QueueData {
+  const approvals = items.filter((item) => item.category === 'APPROVAL').length
+  return {
+    asOf: AS_OF,
+    total: items.length,
+    needYou: items.length,
+    now: items.filter((item) => item.group === 'NOW').length,
+    tiles: [
+      { tile: 'ALL', count: items.length, complete: true },
+      { tile: 'APPROVAL', count: approvals, complete: true },
+      { tile: 'ALERT', count: items.length - approvals, complete: true },
+    ],
+    kindLabels: {},
+    items,
+    more: false,
+    loadingMore: false,
+    fresh: 0,
+    ...extra,
+  }
 }
 
 const OWNER_ITEMS = [ROWS.lateOrder, ROWS.heldWorkOrder, ROWS.sdiRejected, ROWS.blockedLot, ROWS.styleHeld, ROWS.quoteApproval, ROWS.quarantineLot, ROWS.mail, ROWS.scanCorrection, ROWS.registerDuty, ROWS.riskOrder, ROWS.poNotConfirmed, ROWS.refusedScan, ROWS.toInvoice]
-const countOf = (items: readonly QueueItem[], kind: string) => items.filter((item) => item.kind === kind).length
-const OWNER_TILES = [
-  'ORDER_PROMISE',
-  'WORK_ORDER_HELD',
-  'LOT_HOLD',
-  'INVOICE_SDI',
-  'QUOTE_APPROVAL',
-  'PO_PROPOSAL',
-  'PO_NOT_CONFIRMED',
-  'SCAN_CORRECTION',
-  'SCAN_REFUSAL',
-  'INVOICE_TO_ISSUE',
-  'REGISTER_DUTY',
-  'PRIVACY_DUTY',
-  'STYLE_COMPLIANCE',
-  'MAIL_TO_SORT',
-].map((kind) => tile(kind, kind, countOf(OWNER_ITEMS, kind)))
 
 const stage = (key: string, label: string, count: number, late: number | null, oldestDays: number | null, inexact = false) => ({ key, label, count, late, oldestDays, href: null, inexact })
 const LENSES: Record<string, FlowLensView> = {
@@ -392,8 +397,9 @@ const base: TodayViewModel = {
   access: 'open',
   now: NOW,
   live: 'live',
+  tile: null,
   kind: null,
-  queue: { status: 'ready', data: queueOf(OWNER_ITEMS, OWNER_TILES) },
+  queue: { status: 'ready', data: queueOf(OWNER_ITEMS) },
   flow: flowOf('ORDERS', 'WORK_ORDERS', 'PURCHASE_ORDERS', 'INVOICES', 'LOTS'),
   lens: 'ORDERS',
   panels: panelsOf('quotesToApprove', 'lateOrders', 'ordersWaitingDeposit', 'mailToSort'),
@@ -410,7 +416,6 @@ const BUYER_ITEMS = [ROWS.mail, ROWS.poNotConfirmed].map((item) => (item.kind ==
 const INSPECTOR_ITEMS = [ROWS.blockedLot, ROWS.styleHeld, ROWS.quarantineLot, ROWS.registerDuty]
 const FINANCE_ITEMS = [ROWS.sdiRejected, ROWS.quoteApproval, ROWS.toInvoice]
 
-const tilesFor = (items: readonly QueueItem[], kinds: readonly string[]) => kinds.map((kind) => tile(kind, kind, countOf(items, kind)))
 
 export const designScreen = defineDesignScreen<TodayViewModel>({
   screen: 'SCR-029',
@@ -433,9 +438,15 @@ export const designScreen = defineDesignScreen<TodayViewModel>({
     { id: 'owner-open-mail', label: 'Owner — open a mail to sort', model: { ...base, open: ROWS.mail.key }, note: 'Mail to sort is decided in its own review: the button opens it.' },
     {
       id: 'owner-tile',
-      label: 'Owner — the Lots tile pressed',
-      model: { ...base, kind: 'LOT_HOLD', queue: { status: 'ready', data: queueOf([ROWS.blockedLot, ROWS.quarantineLot], OWNER_TILES, { total: 2 }) } },
-      note: 'A tile filters the list in place (?kind=LOT_HOLD); its chip clears it.',
+      label: 'Owner — the Approvals tile pressed',
+      model: { ...base, tile: 'APPROVAL' },
+      note: 'A tile filters the list in place (?tile=APPROVAL, aria-pressed); its chip, or the tile again, clears it. Approvals: quote approvals, supplier changes, scan corrections, mail to sort.',
+    },
+    {
+      id: 'owner-alerts',
+      label: 'Owner — the Alerts tile pressed',
+      model: { ...base, tile: 'ALERT' },
+      note: 'Alerts on my records: late or at-risk orders, held work orders, lots on hold, SDI, unconfirmed POs, refused scans, goods to invoice, register and privacy duties, styles held by compliance.',
     },
     {
       id: 'owner-lens',
@@ -446,21 +457,24 @@ export const designScreen = defineDesignScreen<TodayViewModel>({
     {
       id: 'owner-fresh',
       label: 'Owner — new rows waiting, offline',
-      model: { ...base, live: 'offline', queue: { status: 'ready', data: queueOf(OWNER_ITEMS, OWNER_TILES, { fresh: 2, more: true }) } },
+      model: { ...base, live: 'offline', queue: { status: 'ready', data: queueOf(OWNER_ITEMS, { fresh: 2, more: true }) } },
       note: 'Rows never jump in: "2 new · Show". The live channel is down: the band says so.',
     },
     {
       id: 'owner-partial',
       label: 'Owner — a count that is a lower bound',
-      model: { ...base, queue: { status: 'ready', data: queueOf(OWNER_ITEMS, OWNER_TILES.map((entry) => (entry.kind === 'MAIL_TO_SORT' ? { ...entry, count: 200, complete: false } : entry))) } },
-      note: 'A source stopped at its limit: its tile says "at least 200".',
+      model: (() => {
+        const data = queueOf(OWNER_ITEMS)
+        return { ...base, queue: { status: 'ready' as const, data: { ...data, tiles: data.tiles.map((entry) => (entry.tile === 'ALERT' ? entry : { ...entry, count: entry.count + 196, complete: false })) } } }
+      })(),
+      note: 'A source stopped at its limit (here: mail to sort): its tiles say "at least" with the reason.',
     },
     {
       id: 'sales',
       label: 'Sales',
       model: {
         ...base,
-        queue: { status: 'ready', data: queueOf(SALES_ITEMS, tilesFor(SALES_ITEMS, ['ORDER_PROMISE', 'MAIL_TO_SORT'])) },
+        queue: { status: 'ready', data: queueOf(SALES_ITEMS) },
         flow: flowOf('ORDERS', 'WORK_ORDERS', 'INVOICES'),
         panels: panelsOf('lateOrders', 'ordersWaitingDeposit', 'mailToSort'),
         newVerbs: verbs('quote', 'party'),
@@ -474,7 +488,7 @@ export const designScreen = defineDesignScreen<TodayViewModel>({
       model: {
         ...base,
         lens: 'PURCHASE_ORDERS',
-        queue: { status: 'ready', data: queueOf(BUYER_ITEMS, tilesFor(BUYER_ITEMS, ['PO_PROPOSAL', 'PO_NOT_CONFIRMED', 'MAIL_TO_SORT'])) },
+        queue: { status: 'ready', data: queueOf(BUYER_ITEMS) },
         flow: flowOf('PURCHASE_ORDERS', 'LOTS'),
         panels: panelsOf('posAwaitingSupplier', 'supplierChanges', 'mailToSort'),
         newVerbs: verbs('purchaseOrder', 'party', 'material'),
@@ -488,7 +502,7 @@ export const designScreen = defineDesignScreen<TodayViewModel>({
       model: {
         ...base,
         lens: 'LOTS',
-        queue: { status: 'ready', data: queueOf(INSPECTOR_ITEMS, tilesFor(INSPECTOR_ITEMS, ['LOT_HOLD', 'REGISTER_DUTY', 'STYLE_COMPLIANCE'])) },
+        queue: { status: 'ready', data: queueOf(INSPECTOR_ITEMS) },
         flow: flowOf('WORK_ORDERS', 'LOTS'),
         panels: panelsOf('registerOpen', 'certificatesExpiring'),
         newVerbs: verbs('registerEntry', 'certificate'),
@@ -502,7 +516,7 @@ export const designScreen = defineDesignScreen<TodayViewModel>({
       model: {
         ...base,
         lens: 'INVOICES',
-        queue: { status: 'ready', data: queueOf(FINANCE_ITEMS, tilesFor(FINANCE_ITEMS, ['INVOICE_SDI', 'QUOTE_APPROVAL', 'INVOICE_TO_ISSUE'])) },
+        queue: { status: 'ready', data: queueOf(FINANCE_ITEMS) },
         flow: flowOf('ORDERS', 'INVOICES'),
         panels: panelsOf('quotesToApprove', 'lateOrders', 'ordersWaitingDeposit', 'sdiRefused'),
         newVerbs: verbs('party'),
@@ -512,7 +526,7 @@ export const designScreen = defineDesignScreen<TodayViewModel>({
     {
       id: 'empty',
       label: 'Nothing needs you',
-      model: { ...base, queue: { status: 'ready', data: queueOf([], OWNER_TILES.map((entry) => ({ ...entry, count: 0 }))) }, panels: panelsOf('ordersWaitingDeposit', 'supplierChanges'), reviews: {} },
+      model: { ...base, queue: { status: 'ready', data: queueOf([]) }, panels: panelsOf('ordersWaitingDeposit', 'supplierChanges'), reviews: {} },
       note: 'All zero is an answer: the tiles show 0 and the list says so.',
     },
     { id: 'loading', label: 'Loading', model: { ...base, queue: { status: 'loading' }, flow: { status: 'loading' }, panels: panelsOf('scanCorrections') } },

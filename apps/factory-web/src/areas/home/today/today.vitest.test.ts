@@ -29,6 +29,9 @@ import {
   type TodayItem,
 } from './model'
 import { PANELS, panelPage, panelsFor, PanelShapeError } from './panels'
+import { phraseText, sentenceText } from './words'
+import { CODE_WORDS, EN_TEMPLATES, invoiceToIssueWords, mailToSortWords, orderPromiseWords, phrase, registerDutyWords, workOrderHeldWords } from '@nexus/factory-domain/insights/words'
+import { createTranslator } from '../../../lib/i18n/messages'
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
@@ -58,6 +61,8 @@ const item = (key: string, extra: Partial<TodayItem> = {}): TodayItem => ({
   sentence: 'Order is late.',
   why: 'You manage it.',
   blocks: null,
+  words: { sentence: { key: 'ORDER_PROMISE.LATE', params: { number: 'SO-1', customer: 'Shop', count: 2, promiseDate: '2026-10-27' } }, why: { key: 'why.ORDER_PROMISE.orders_manage', params: {} }, blocks: null },
+  sentenceFigure: null,
   due: null,
   since: '2026-10-27T09:00:00.000Z',
   ageDays: 2,
@@ -69,7 +74,16 @@ const item = (key: string, extra: Partial<TodayItem> = {}): TodayItem => ({
 const TODAY_ANSWER = {
   asOf: '2026-10-29T09:00:00.000Z',
   today: '2026-10-29',
-  counts: { total: 1, now: 1, byCategory: { APPROVAL: 0, ALERT: 1, TASK: 0 }, tiles: [{ kind: 'ORDER_PROMISE', label: 'Orders', count: 1, complete: true, filter: { kind: 'ORDER_PROMISE' } }] },
+  counts: {
+    total: 1,
+    now: 1,
+    tiles: [
+      { tile: 'ALL', count: 1, complete: true },
+      { tile: 'APPROVAL', count: 0, complete: true },
+      { tile: 'ALERT', count: 1, complete: true },
+    ],
+    byKind: [{ kind: 'ORDER_PROMISE', label: 'Orders', count: 1, complete: true }],
+  },
   total: 1,
   items: [item('a')],
   nextCursor: 'cursor-2',
@@ -81,6 +95,8 @@ describe('Today calls the API through its one client (SCR-029)', () => {
     const today = client(() => json(200, TODAY_ANSWER))
     const answer = await fetchToday(today.api, { kind: 'ORDER_PROMISE', cursor: 'abc' })
     expect(today.sent().url).toBe('/api/home/today?kind=ORDER_PROMISE&cursor=abc&limit=50')
+    await fetchToday(today.api, { category: 'APPROVAL' })
+    expect(today.sent(1).url).toBe('/api/home/today?category=APPROVAL&limit=50')
     expect(today.sent().headers.get('x-factory-company')).toBe('DEMO')
     expect(answer.items[0]!.key).toBe('a')
     const flow = client(() => json(200, { asOf: TODAY_ANSWER.asOf, today: TODAY_ANSWER.today, lenses: [{ lens: 'ORDERS', label: 'Sales orders', list: '/sales/orders', stages: [], complete: true, live: { events: [] } }] }))
@@ -295,7 +311,11 @@ describe('navigation, pages, words and the design fixtures', () => {
 
   it('the design fixtures: the role switch and every state, made-up data only', () => {
     const ids = designScreen.cases.map((entry) => entry.id)
-    for (const wanted of ['owner', 'owner-decide', 'sales', 'buyer', 'inspector', 'finance', 'empty', 'loading', 'error', 'no-permission']) expect(ids).toContain(wanted)
+    for (const wanted of ['owner', 'owner-decide', 'owner-tile', 'owner-alerts', 'sales', 'buyer', 'inspector', 'finance', 'empty', 'loading', 'error', 'no-permission']) expect(ids).toContain(wanted)
+    // Always the design's three tiles.
+    for (const entry of designScreen.cases) {
+      if (entry.model.queue.status === 'ready') expect(entry.model.queue.data.tiles.map((tile) => tile.tile), entry.id).toEqual(['ALL', 'APPROVAL', 'ALERT'])
+    }
     const text = JSON.stringify(designScreen.cases)
     expect(text).not.toMatch(/@(?!example\.)[a-z0-9-]+\.(com|it|net)/i)
   })
@@ -322,5 +342,58 @@ describe('every design case draws in both languages with no key left on screen',
     const html = (id: string) => render(designScreen as DesignScreen<unknown>, designScreen.cases.find((entry) => entry.id === id)!.model, 'en')
     expect(html('inspector')).not.toMatch(/EUR|€/)
     expect(html('sales')).not.toContain('Purchase value')
+  })
+})
+
+describe('the rows in the person’s language: the API’s phrases drawn with today.w.* (it, en)', () => {
+  const en = createTranslator('en', CATALOGUE.en.home!)
+  const it_ = createTranslator('it', CATALOGUE.it.home!)
+  const ref = (value: { key: string; params: Readonly<Record<string, string | number | readonly string[]>> }) => ({ key: value.key, params: value.params })
+
+  it('every phrase the domain can send has its words in both languages; the English is the domain’s own', () => {
+    for (const [key, template] of Object.entries(EN_TEMPLATES)) {
+      expect(CATALOGUE.en.home![`today.w.${key}`], key).toBe(template)
+      expect(CATALOGUE.it.home![`today.w.${key}`], key).toBeTruthy()
+    }
+    for (const [param, codes] of Object.entries(CODE_WORDS)) {
+      for (const [code, words] of Object.entries(codes)) {
+        expect(CATALOGUE.en.home![`today.w.code.${param}.${code}`], `${param}.${code}`).toBe(words)
+        expect(CATALOGUE.it.home![`today.w.code.${param}.${code}`], `${param}.${code}`).toBeTruthy()
+      }
+    }
+  })
+
+  it('English drawn by the web is the API’s English; Italian is Italian, dates and codes and lists included', () => {
+    const late = orderPromiseWords({ number: 'SO-1', customer: 'Officina Demo', state: 'LATE', days: 2, promiseDate: '2026-10-27', toShip: 1 })
+    expect(phraseText(ref(late.sentence), en, 'en')).toBe('Order SO-1 for Officina Demo is 2 days late: it was promised for 27/10/2026.')
+    expect(phraseText(ref(late.sentence), it_, 'it')).toBe("L'ordine SO-1 per Officina Demo è in ritardo di 2 giorni: era promesso per il 27/10/2026.")
+    expect(phraseText(ref(late.blocks!), it_, 'it')).toBe('Officina Demo aspetta 1 pezzo.')
+    const held = workOrderHeldWords({ number: 'WO-1', style: 'JKT', checks: ['DEPOSIT', 'MATERIAL'], orders: ['SO-1', 'SO-2', 'SO-3', 'SO-4', 'SO-5', 'SO-6', 'SO-7'] })
+    expect(phraseText(ref(held.sentence), en, 'en')).toBe(held.sentence.text)
+    expect(phraseText(ref(held.sentence), it_, 'it')).toBe("L'ordine di lavoro WO-1 (JKT) non può essere rilasciato: 2 controlli aperti (acconto, materiale).")
+    expect(phraseText(ref(held.blocks!), it_, 'it')).toBe('La produzione di SO-1, SO-2, SO-3, SO-4, SO-5 e altri 2 lo aspetta.')
+    const ddts = invoiceToIssueWords({ customer: 'Shop', month: '2026-10', ddts: ['144/2026'], docType: 'TD24', dueBy: '2026-11-15', daysLeft: 17 })
+    expect(phraseText(ref(ddts.sentence), it_, 'it')).toBe('Shop: 1 DDT di ottobre 2026 non ancora fatturato (144/2026).')
+    expect(phraseText(ref(registerDutyWords({ reference: 'REG-1', kind: 'COMPLAINT', style: 'JKT', duties: ['AUTHORITY'] }).sentence), it_, 'it')).toBe("Registro DPI, reclamo REG-1 (JKT): l'autorità da notificare.")
+    expect(phraseText(ref(mailToSortWords({ sender: 'Anna', subject: null, state: 'HELD', heldReason: 'SPAM' }).sentence), it_, 'it')).toBe('La posta da Anna è trattenuta: sembra spam.')
+    expect(phraseText(ref(phrase('why.QUOTE_APPROVAL.quotes_approve')), it_, 'it')).toBe("Approvi i preventivi di questo cliente, e l'ha chiesto qualcun altro.")
+  })
+
+  it('the figure beside the sentence only when the API named it (the reader holds its grain), in the reader’s format', () => {
+    const quote = { words: { sentence: { key: 'QUOTE_APPROVAL.PENDING', params: { number: 'Q-1', customer: 'Club', reasons: ['MARGIN_FLOOR'] } } }, figures: { currency: 'EUR', netAmount: 624000, marginPct: '18.25' } }
+    expect(sentenceText({ ...quote, sentenceFigure: 'marginPct' }, it_, 'it')).toBe("Il preventivo Q-1 per Club aspetta un'approvazione: margine sotto il minimo (margine 18,3 %).")
+    expect(sentenceText({ ...quote, sentenceFigure: null }, en, 'en')).toBe('Quote Q-1 for Club waits for an approval: margin under the floor.')
+    const po = { words: { sentence: { key: 'PO_NOT_CONFIRMED.DAYS', params: { number: 'PO-1', supplier: 'Tannery', count: 3 } } }, figures: { currency: 'EUR', purchaseAmount: 482000 } }
+    expect(sentenceText({ ...po, sentenceFigure: 'purchaseAmount' }, en, 'en')).toBe('Purchase order PO-1 to Tannery is not confirmed 3 days after it was sent (€4,820.00).')
+    // The API names no figure without the grain, and sends no figures: nothing is drawn.
+    expect(sentenceText({ ...po, sentenceFigure: null, figures: null }, it_, 'it')).toBe("L'ordine d'acquisto PO-1 a Tannery non è confermato 3 giorni dopo l'invio.")
+  })
+
+  it('the Italian design cases show no English sentence', () => {
+    const html = renderToString(
+      createElement(I18nProvider, { locale: 'it', messages: messagesFor('it', ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: designScreen.cases.find((entry) => entry.id === 'owner')!.model })),
+    )
+    expect(html).toContain('è in ritardo di 2 giorni')
+    expect(html).not.toMatch(/is 2 days late|waits in quarantine|You manage this customer/)
   })
 })

@@ -40,9 +40,8 @@
       "all": "Aspetta me ora",
       "count": "{count}",
       "atLeast": "almeno {count}",
-      "partial": "Non tutte le righe sono state lette",
-      "unknown": "Ora non è stato possibile leggere questo conteggio.",
-      "none": "Nulla aspetta in: {kinds}."
+      "partial": "Una fonte si è fermata al suo limite: potrebbero essercene altre.",
+      "unknown": "Ora non è stato possibile leggere questo conteggio."
     },
     "dismiss": "Chiudi",
     "retry": "Riprova",
@@ -310,6 +309,161 @@
       "button": "Stampa",
       "empty": "Nulla da stampare.",
       "cut": "{shown} di {total} righe stampate."
+    },
+    "tile": {
+      "ALL": {
+        "label": "Aspetta me ora",
+        "hint": "tutte le righe che ti aspettano"
+      },
+      "APPROVAL": {
+        "label": "Approvazioni",
+        "hint": "decisioni che esamini"
+      },
+      "ALERT": {
+        "label": "Avvisi sui miei record",
+        "hint": "in ritardo, fermi, scartati o un obbligo aperto"
+      }
+    },
+    "w": {
+      "withFigure": "{text} ({figure}).",
+      "marginFigure": "margine {value} %",
+      "listMore": "{shown} e altri {count}",
+      "ORDER_PROMISE.LATE_one": "L'ordine {number} per {customer} è in ritardo di {count} giorno: era promesso per il {promiseDate}.",
+      "ORDER_PROMISE.LATE_other": "L'ordine {number} per {customer} è in ritardo di {count} giorni: era promesso per il {promiseDate}.",
+      "ORDER_PROMISE.AT_RISK_TODAY": "L'ordine {number} per {customer} è promesso per oggi ({promiseDate}) e non è ancora pronto.",
+      "ORDER_PROMISE.AT_RISK_one": "L'ordine {number} per {customer} è promesso per domani ({promiseDate}) e non è ancora pronto.",
+      "ORDER_PROMISE.AT_RISK_other": "L'ordine {number} per {customer} è promesso per il {promiseDate} (tra {count} giorni) e non è ancora pronto.",
+      "ORDER_PROMISE.waitsPieces_one": "{customer} aspetta {count} pezzo.",
+      "ORDER_PROMISE.waitsPieces_other": "{customer} aspetta {count} pezzi.",
+      "ORDER_PROMISE.waitsOrder": "{customer} aspetta l'ordine.",
+      "WORK_ORDER_HELD.HELD_one": "L'ordine di lavoro {number} ({style}) non può essere rilasciato: {count} controllo aperto ({checks}).",
+      "WORK_ORDER_HELD.HELD_other": "L'ordine di lavoro {number} ({style}) non può essere rilasciato: {count} controlli aperti ({checks}).",
+      "WORK_ORDER_HELD.blocks": "La produzione di {orders} lo aspetta.",
+      "LOT_HOLD.QUARANTINE": "Il lotto {code} ({item}) aspetta in quarantena il suo rilascio.",
+      "LOT_HOLD.QUARANTINE.blocks": "La sua giacenza non può essere prelevata per gli ordini di lavoro finché non è rilasciato.",
+      "LOT_HOLD.BLOCKED": "Il lotto {code} ({item}) è bloccato.",
+      "LOT_HOLD.BLOCKED_CR_VI": "Il lotto {code} ({item}) è bloccato: il risultato del cromo VI non è conforme.",
+      "LOT_HOLD.BLOCKED.blocks": "La sua giacenza resta ferma: respingi il lotto, o rilascialo di nuovo con nuove prove.",
+      "INVOICE_SDI.REJECTED": "La fattura {number} per {customer} è stata scartata dallo SDI: correggila e inviala di nuovo entro il {deadlineDate}.",
+      "INVOICE_SDI.REJECTED_NO_DATE": "La fattura {number} per {customer} è stata scartata dallo SDI: correggila e inviala di nuovo.",
+      "INVOICE_SDI.REJECTED.blocks": "Finché non è inviata di nuovo vale come mai emessa.",
+      "INVOICE_SDI.ERROR": "La fattura {number} per {customer} non è arrivata allo SDI: inviala di nuovo.",
+      "INVOICE_SDI.ERROR.blocks": "Il cliente non ha ancora una fattura valida.",
+      "INVOICE_SDI.NOT_DELIVERABLE": "Lo SDI non ha potuto recapitare la fattura {number} a {customer}, e non è partita alcuna copia di cortesia.",
+      "INVOICE_SDI.NOT_DELIVERABLE.blocks": "Il cliente la trova solo nella sua area riservata finché non riceve una copia.",
+      "INVOICE_SDI.FILES_PENDING": "La fattura {number} per {customer} è emessa, ma il suo XML o PDF non è ancora archiviato.",
+      "INVOICE_SDI.FILES_PENDING.blocks": "Non può andare allo SDI senza il suo XML.",
+      "QUOTE_APPROVAL.PENDING": "Il preventivo {number} per {customer} aspetta un'approvazione: {reasons}.",
+      "QUOTE_APPROVAL.blocks": "Non può essere inviato al cliente finché non è deciso.",
+      "PO_PROPOSAL.CHANGES_PROPOSED": "{supplier} ha proposto modifiche all'ordine d'acquisto {number}: accettale o rifiutale.",
+      "PO_PROPOSAL.blocks": "Il ricevimento e un nuovo link aspettano la tua risposta.",
+      "PO_NOT_CONFIRMED.DAYS_one": "L'ordine d'acquisto {number} a {supplier} non è confermato {count} giorno dopo l'invio.",
+      "PO_NOT_CONFIRMED.DAYS_other": "L'ordine d'acquisto {number} a {supplier} non è confermato {count} giorni dopo l'invio.",
+      "PO_NOT_CONFIRMED.HOURS_one": "L'ordine d'acquisto {number} a {supplier} non è confermato {count} ora dopo l'invio.",
+      "PO_NOT_CONFIRMED.HOURS_other": "L'ordine d'acquisto {number} a {supplier} non è confermato {count} ore dopo l'invio.",
+      "PO_NOT_CONFIRMED.blocks": "La merce serve entro il {neededDate}.",
+      "SCAN_CORRECTION.PENDING": "Una correzione della scansione del mazzetto {bundle} in {operation} ({workOrder}) aspetta una decisione.",
+      "SCAN_CORRECTION.blocks": "L'avanzamento di {workOrder} conta la dichiarazione com'era finché la correzione non è decisa.",
+      "SCAN_REFUSAL.REFUSED": "Una scansione inviata da {device} è stata rifiutata: {message}",
+      "SCAN_REFUSAL.blocks": "All'avanzamento di {workOrder} manca finché non viene scansionata di nuovo o scartata.",
+      "INVOICE_TO_ISSUE.OPEN_one": "{customer}: {count} DDT di {ddtMonth} non ancora fatturato ({ddts}).",
+      "INVOICE_TO_ISSUE.OPEN_other": "{customer}: {count} DDT di {ddtMonth} non ancora fatturati ({ddts}).",
+      "INVOICE_TO_ISSUE.dueLeft_one": "La merce è partita: fatturala ({docType}) entro il {dueDate}, manca {count} giorno.",
+      "INVOICE_TO_ISSUE.dueLeft_other": "La merce è partita: fatturala ({docType}) entro il {dueDate}, mancano {count} giorni.",
+      "INVOICE_TO_ISSUE.dueToday": "La merce è partita: fatturala ({docType}) oggi, {dueDate}.",
+      "INVOICE_TO_ISSUE.dueLate_one": "La merce è partita: la fattura ({docType}) era dovuta entro il {dueDate}, {count} giorno fa.",
+      "INVOICE_TO_ISSUE.dueLate_other": "La merce è partita: la fattura ({docType}) era dovuta entro il {dueDate}, {count} giorni fa.",
+      "REGISTER_DUTY.OPEN": "Registro DPI, {entryKind} {reference} ({style}): {duties}.",
+      "REGISTER_DUTY.blocks": "La voce non può essere chiusa finché questi obblighi non sono fatti (Reg. (UE) 2016/425 art. 8).",
+      "PRIVACY_DUTY.OPEN_one": "{company}: {count} obbligo privacy aperto ({privacyDuties}).",
+      "PRIVACY_DUTY.OPEN_other": "{company}: {count} obblighi privacy aperti ({privacyDuties}).",
+      "PRIVACY_DUTY.blocksFloor": "Il lavoro in reparto che registra i lavoratori resta spento finché l'informativa ai lavoratori e la DPIA non sono in vigore.",
+      "PRIVACY_DUTY.blocksPeople": "Le persone non sono informate su ciò che il sistema conserva su di loro.",
+      "STYLE_COMPLIANCE.BLOCKED": "Il modello {style} è fermo per la conformità: {complianceChecks}.",
+      "STYLE_COMPLIANCE.blocks": "Blocca {steps} degli ordini aperti (ordini di vendita: {orders}, ordini di lavoro: {workOrders}).",
+      "MAIL_TO_SORT.TRIAGE": "«{subject}» da {sender} non ha trovato un record: smistala.",
+      "MAIL_TO_SORT.TRIAGE_NO_SUBJECT": "La posta da {sender} non ha trovato un record: smistala.",
+      "MAIL_TO_SORT.TRIAGE.blocks": "Il mittente aspetta: nessuno la vede su un record finché non è smistata.",
+      "MAIL_TO_SORT.HELD": "«{subject}» da {sender} è trattenuta: {heldReason}.",
+      "MAIL_TO_SORT.HELD_NO_SUBJECT": "La posta da {sender} è trattenuta: {heldReason}.",
+      "MAIL_TO_SORT.HELD.blocks": "Non arriva ad alcun thread finché una persona non la rilascia o la butta via.",
+      "MAIL_TO_SORT.FAILED": "«{subject}» da {sender} non è stata letta.",
+      "MAIL_TO_SORT.FAILED_NO_SUBJECT": "La posta da {sender} non è stata letta.",
+      "MAIL_TO_SORT.FAILED.blocks": "Buttala via, o chiedi al mittente di inviarla di nuovo.",
+      "why.ORDER_PROMISE.orders_manage": "Gestisci gli ordini di questo cliente e le loro date promesse.",
+      "why.WORK_ORDER_HELD.workorders_release": "Rilasci gli ordini di lavoro di questo stabilimento.",
+      "why.LOT_HOLD.quality_lots_release": "Rilasci i lotti di questo stabilimento.",
+      "why.LOT_HOLD.quality_lots_reject": "Respingi o blocchi i lotti di questo stabilimento.",
+      "why.INVOICE_SDI.invoices_issue": "Emetti e invii le fatture di questo cliente.",
+      "why.QUOTE_APPROVAL.quotes_approve": "Approvi i preventivi di questo cliente, e l'ha chiesto qualcun altro.",
+      "why.PO_PROPOSAL.purchasing_send": "Invii gli ordini d'acquisto a questo fornitore.",
+      "why.PO_NOT_CONFIRMED.purchasing_send": "Invii gli ordini d'acquisto a questo fornitore.",
+      "why.SCAN_CORRECTION.production_scan_correct": "Decidi le correzioni delle scansioni di questo stabilimento, e non hai né scansionato né chiesto.",
+      "why.SCAN_REFUSAL.production_scan_correct": "Segui le scansioni di reparto di questo stabilimento.",
+      "why.INVOICE_TO_ISSUE.invoices_manage": "Fatturi la merce spedita a questo cliente.",
+      "why.REGISTER_DUTY.compliance_register_manage": "Tieni il registro DPI di questa azienda.",
+      "why.REGISTER_DUTY.follow": "Segui tu questa voce.",
+      "why.PRIVACY_DUTY.privacy_manage": "Tieni la documentazione privacy di questa azienda.",
+      "why.STYLE_COMPLIANCE.compliance_declarations_manage": "Archivi le dichiarazioni di conformità e le note informative dei modelli.",
+      "why.STYLE_COMPLIANCE.compliance_certificates_manage": "Tieni i certificati di esame UE del tipo.",
+      "why.STYLE_COMPLIANCE.compliance_labels_manage": "Tieni i modelli delle etichette dei capi.",
+      "why.STYLE_COMPLIANCE.product_bom_release": "Rilasci le revisioni dei modelli.",
+      "why.MAIL_TO_SORT.email_triage": "Smisti la posta ricevuta da questa azienda.",
+      "code": {
+        "checks": {
+          "REVISION": "revisione",
+          "LABEL_TEMPLATE": "etichetta del capo",
+          "CERTIFICATE": "certificato",
+          "WORK_CENTRES": "centri di lavoro",
+          "BOM": "distinta base",
+          "CELLS": "celle",
+          "DEPOSIT": "acconto",
+          "MATERIAL": "materiale",
+          "BATCH_NUMBER": "serie dei numeri di lotto"
+        },
+        "reasons": {
+          "MARGIN_FLOOR": "margine sotto il minimo",
+          "DISCOUNT_LIMIT": "sconto oltre il limite",
+          "AMOUNT_LIMIT": "importo oltre il limite",
+          "SPECIAL_ITEM": "un articolo speciale"
+        },
+        "duties": {
+          "RISK_ASSESSMENT": "il rischio da decidere",
+          "CORRECTIVE_ACTION": "l'azione correttiva",
+          "DISTRIBUTORS": "i distributori da informare",
+          "AUTHORITY": "l'autorità da notificare"
+        },
+        "entryKind": {
+          "COMPLAINT": "reclamo",
+          "NON_CONFORMITY": "non conformità",
+          "RECALL": "richiamo"
+        },
+        "privacyDuties": {
+          "register": "il registro dei trattamenti",
+          "publicNotice": "l'informativa privacy pubblica",
+          "staffNotice": "l'informativa al personale",
+          "workerNotice": "l'informativa ai lavoratori",
+          "dpia": "la DPIA firmata"
+        },
+        "complianceChecks": {
+          "REVISION": "nessuna revisione rilasciata",
+          "LABEL_TEMPLATE": "etichetta del capo",
+          "CERTIFICATE": "copertura del certificato",
+          "DECLARATION_OF_CONFORMITY": "dichiarazione di conformità",
+          "USER_INFORMATION": "nota informativa per l'utilizzatore"
+        },
+        "steps": {
+          "PRODUCTION": "la produzione",
+          "LABELS": "le etichette dei capi",
+          "SHIPPING": "la spedizione"
+        },
+        "heldReason": {
+          "DMARC_FAIL": "l'indirizzo del mittente non ha superato il controllo DMARC",
+          "SPAM": "sembra spam",
+          "UNKNOWN_SENDER": "il mittente non è un contatto del record",
+          "THREAD_CLOSED": "il thread a cui risponde è chiuso"
+        }
+      }
     }
   },
   "mailToSort": {

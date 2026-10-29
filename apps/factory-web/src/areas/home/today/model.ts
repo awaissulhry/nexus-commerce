@@ -15,11 +15,18 @@ import { z } from 'zod'
 const severity = z.enum(['HIGH', 'MEDIUM', 'LOW'])
 const group = z.enum(['NOW', 'TODAY', 'THIS_WEEK', 'LATER'])
 
+const phraseSchema = z.object({ key: z.string(), params: z.record(z.string(), z.union([z.string(), z.number(), z.array(z.string())])) })
+
+/** The design's tiles (home.today focus-strip, W1): every row, Approvals (the reviews), Alerts on my records. */
+export const TILES = ['ALL', 'APPROVAL', 'ALERT'] as const
+export type Tile = (typeof TILES)[number]
+export type Category = Exclude<Tile, 'ALL'>
+
 export const todayItemSchema = z.object({
   key: z.string(),
   kind: z.string(),
   state: z.string(),
-  category: z.enum(['APPROVAL', 'ALERT', 'TASK']),
+  category: z.enum(['APPROVAL', 'ALERT']),
   severity,
   severityWord: z.string(),
   group,
@@ -27,9 +34,13 @@ export const todayItemSchema = z.object({
   companyId: z.string().nullable(),
   siteId: z.string().nullable(),
   partyId: z.string().nullable(),
+  /** English; the screen draws `words` in the person's language. */
   sentence: z.string(),
   why: z.string(),
   blocks: z.string().nullable(),
+  words: z.object({ sentence: phraseSchema, why: phraseSchema, blocks: phraseSchema.nullable() }),
+  /** The figure the sentence quotes (a field of `figures`), only when the person's grains reach it. */
+  sentenceFigure: z.enum(['netAmount', 'purchaseAmount', 'marginPct', 'marginAmount']).nullable(),
   due: z.object({ date: z.string(), days: z.number().int(), word: z.enum(['OVERDUE', 'TODAY', 'SOON']).nullable() }).nullable(),
   since: z.string(),
   ageDays: z.number().int(),
@@ -47,8 +58,8 @@ export const todaySchema = z.object({
   counts: z.object({
     total: z.number().int(),
     now: z.number().int(),
-    byCategory: z.object({ APPROVAL: z.number().int(), ALERT: z.number().int(), TASK: z.number().int() }),
-    tiles: z.array(z.object({ kind: z.string(), label: z.string(), count: z.number().int(), complete: z.boolean() })),
+    tiles: z.array(z.object({ tile: z.enum(TILES), count: z.number().int(), complete: z.boolean() })),
+    byKind: z.array(z.object({ kind: z.string(), label: z.string(), count: z.number().int(), complete: z.boolean() })),
   }),
   total: z.number().int(),
   items: z.array(todayItemSchema),
@@ -89,10 +100,9 @@ export interface QueueItem extends TodayItem {
 }
 
 export interface QueueTile {
-  readonly kind: string
-  readonly label: string
+  readonly tile: Tile
   readonly count: number
-  /** False: its source stopped at its limit, the count is a lower bound ("at least 200"). */
+  /** False: a source of its rows stopped at its limit, the count is a lower bound ("at least 200"). */
   readonly complete: boolean
 }
 
@@ -101,7 +111,10 @@ export interface QueueData {
   readonly total: number
   readonly needYou: number
   readonly now: number
+  /** The three tiles, always (0 is an answer). */
   readonly tiles: readonly QueueTile[]
+  /** The kinds' names, for the chip of a `?kind=` deep link. */
+  readonly kindLabels: Readonly<Record<string, string>>
   readonly items: readonly QueueItem[]
   /** The list goes on (`nextCursor`). */
   readonly more: boolean
@@ -192,7 +205,9 @@ export interface TodayViewModel {
   /** The read's clock (AsOf renders the same on the server and the client). */
   readonly now: number
   readonly live: LiveState
-  /** The pressed tile (`?kind=`). */
+  /** The pressed tile (`?tile=APPROVAL|ALERT`); null: every row. */
+  readonly tile: Category | null
+  /** A deep link to one kind (`?kind=`); the tiles clear it. */
   readonly kind: string | null
   readonly queue: Loaded<QueueData>
   /** Null: the person sees no lens (the section is absent). */

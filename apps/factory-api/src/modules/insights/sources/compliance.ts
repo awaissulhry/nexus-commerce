@@ -5,7 +5,7 @@ import { CERTIFICATES_VIEW } from '@nexus/factory-domain/compliance/certificates
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { actingPermission, KIND_RULES, type AttentionCandidate } from '@nexus/factory-domain/insights/attention'
 import { complianceActs, openDuties, registerSeverity } from '@nexus/factory-domain/insights/states'
-import { registerDutyWords, styleComplianceWords } from '@nexus/factory-domain/insights/words'
+import { phrase, registerDutyWords, styleComplianceWords } from '@nexus/factory-domain/insights/words'
 import { OPEN_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { ENTRY_SCOPE } from '../../compliance/register/register'
 import { readEntries } from '../../compliance/register/store'
@@ -44,7 +44,7 @@ export const registerDuty: Source = async ({ caller, viewer }) =>
         ...registerDutyWords({ reference: entry.reference, kind: KIND_WORDS[entry.kind], style: styles.get(entry.styleId) ?? 'a style', duties: open }),
         due: null,
         since: entry.reportedAt,
-        why: (personId) => (ownerId !== null && ownerId === personId ? 'You follow this entry up.' : null),
+        why: (personId) => (ownerId !== null && ownerId === personId ? phrase('why.REGISTER_DUTY.follow') : null),
       })
     }
     return { kind: 'REGISTER_DUTY', candidates, complete }
@@ -78,14 +78,13 @@ export const styleHold: Source = async ({ caller, viewer }) => {
     const checks = compliance.blockers.map((blocker) => blocker.code)
     const orders = new Set(demand.lines.filter((line) => line.styleId === style.id).map((line) => line.orderId)).size
     const workOrders = demand.workOrders.filter((row) => row.styleId === style.id).length
-    const what = [orders > 0 ? `${orders} open sales order${orders === 1 ? '' : 's'}` : null, workOrders > 0 ? `${workOrders} open work order${workOrders === 1 ? '' : 's'}` : null].filter((entry): entry is string => entry !== null)
     candidates.push({
       kind: 'STYLE_COMPLIANCE',
       state: 'BLOCKED',
       severity: 'HIGH',
       record: { type: 'Style', id: style.id, label: style.code },
       scope: { companyId: style.companyId, siteId: null, partyId: null },
-      ...styleComplianceWords({ style: style.code, checks, steps: [...new Set(compliance.blockers.flatMap((blocker) => blocker.blocks))], demand: what }),
+      ...styleComplianceWords({ style: style.code, checks, steps: [...new Set(compliance.blockers.flatMap((blocker) => blocker.blocks))], orders, workOrders }),
       due: null,
       since: compliance.revision?.releasedAt ? new Date(compliance.revision.releasedAt) : style.createdAt,
       act: complianceActs(checks, fixers),

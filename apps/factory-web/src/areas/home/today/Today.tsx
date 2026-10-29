@@ -22,6 +22,7 @@ import {
   type PanelView,
   type ReviewState,
   type TodayAnswer,
+  type Category,
   type TodayItem,
   type TodayViewModel,
 } from './model'
@@ -54,6 +55,8 @@ export function Today() {
   const allowed = permissions.has('home.view')
   const prefix = companyPrefix(session.company?.code ?? '')
   const kind = search.get('kind')
+  const tileParam = search.get('tile')
+  const tile: Category | null = tileParam === 'APPROVAL' || tileParam === 'ALERT' ? tileParam : null
   const open = search.get('open')
 
   const [queue, setQueue] = useState<Loaded<QueueState>>({ status: 'loading' })
@@ -70,24 +73,29 @@ export function Today() {
   openRef.current = open
   const kindRef = useRef(kind)
   kindRef.current = kind
+  const tileRef = useRef(tile)
+  tileRef.current = tile
   const queueSeq = useRef(0)
 
-  const setParam = useCallback(
-    (name: string, value: string | null) => {
+  const setParams = useCallback(
+    (changes: Readonly<Record<string, string | null>>) => {
       const params = new URLSearchParams(search.toString())
-      if (value === null) params.delete(name)
-      else params.set(name, value)
+      for (const [name, value] of Object.entries(changes)) {
+        if (value === null) params.delete(name)
+        else params.set(name, value)
+      }
       const qs = params.toString()
       router.replace(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false })
     },
     [router, pathname, search],
   )
+  const setParam = useCallback((name: string, value: string | null) => setParams({ [name]: value }), [setParams])
 
   // ---- reads ---------------------------------------------------------------------------------------------------------
   const loadQueue = useCallback(async () => {
     const mine = ++queueSeq.current
     try {
-      const answer = await fetchToday(api, { kind: kindRef.current })
+      const answer = await fetchToday(api, { kind: kindRef.current, category: tileRef.current })
       if (mine !== queueSeq.current) return
       setNow(Date.now())
       setQueue({ status: 'ready', data: { answer, items: answer.items, cursor: answer.nextCursor, loadingMore: false, pending: null } })
@@ -100,7 +108,7 @@ export function Today() {
   const refreshQueue = useCallback(async () => {
     const mine = ++queueSeq.current
     try {
-      const answer = await fetchToday(api, { kind: kindRef.current })
+      const answer = await fetchToday(api, { kind: kindRef.current, category: tileRef.current })
       if (mine !== queueSeq.current) return
       setNow(Date.now())
       setQueue((current) => {
@@ -119,7 +127,7 @@ export function Today() {
     const cursor = queue.data.cursor
     setQueue({ status: 'ready', data: { ...queue.data, loadingMore: true } })
     try {
-      const page = await fetchToday(api, { kind: kindRef.current, cursor })
+      const page = await fetchToday(api, { kind: kindRef.current, category: tileRef.current, cursor })
       setQueue((current) => (current.status === 'ready' ? { status: 'ready', data: { ...current.data, items: [...current.data.items, ...page.items], cursor: page.nextCursor, loadingMore: false } } : current))
     } catch (error) {
       setQueue((current) => (current.status === 'ready' ? { status: 'ready', data: { ...current.data, loadingMore: false } } : current))
@@ -184,7 +192,7 @@ export function Today() {
     if (!allowed) return
     setQueue({ status: 'loading' })
     void loadQueue()
-  }, [allowed, kind, loadQueue])
+  }, [allowed, kind, tile, loadQueue])
   useEffect(() => {
     if (allowed) void loadFlow()
   }, [allowed, loadFlow])
@@ -249,6 +257,7 @@ export function Today() {
     access: allowed ? 'open' : 'refused',
     now,
     live,
+    tile,
     kind,
     queue:
       queue.status === 'ready'
@@ -260,6 +269,7 @@ export function Today() {
               needYou: queue.data.answer.counts.total,
               now: queue.data.answer.counts.now,
               tiles: queue.data.answer.counts.tiles,
+              kindLabels: Object.fromEntries(queue.data.answer.counts.byKind.map((entry) => [entry.kind, entry.label])),
               items: queue.data.items.map((item) => queueItem(item, prefix)),
               more: queue.data.cursor !== null,
               loadingMore: queue.data.loadingMore,
@@ -277,7 +287,7 @@ export function Today() {
       seeAllHref: ((address) => (address ? `${prefix}${address}` : null))(listAddress(panel.path, panel.query, OFFICE_PAGES)),
     })),
     newVerbs: newVerbsFor(permissions, OFFICE_PAGES, prefix),
-    printHref: `${prefix}/home/today/print${kind ? `?kind=${encodeURIComponent(kind)}` : ''}`,
+    printHref: `${prefix}/home/today/print${tile ? `?tile=${tile}` : kind ? `?kind=${encodeURIComponent(kind)}` : ''}`,
     open,
     reviews,
     busy,
@@ -288,9 +298,10 @@ export function Today() {
     <TodayView
       model={model}
       actions={{
-        onKind: (next) => {
+        onTile: (next) => {
           setNotice(null)
-          setParam('kind', next)
+          // A tile drives the list; a kind deep link gives way to it.
+          setParams({ tile: next, kind: null })
         },
         onRetry: (section) => {
           if (section === 'queue') {

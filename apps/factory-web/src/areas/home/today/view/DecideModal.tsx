@@ -8,6 +8,7 @@ import { Button, Kbd, Tag, Textarea } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime, formatNumber } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { decideKey, DECIDED_HERE, dueWords, rejectReasonProblem, type Notice, type QueueItem, type QuoteReview, type ReviewState } from '../model'
+import { phraseText, sentenceText } from '../words'
 
 /** What the decide modal asks of the container: the quotes module's own approve and reject (each resolves true when done). */
 export interface DecideActions {
@@ -98,8 +99,8 @@ export function DecideModal({
   const held = !ready ? t('today.decide.reading') : !ready.decidable ? t('today.decide.notWaiting') : undefined
 
   const facts: KeyValueItem[] = [
-    { label: t('today.decide.why'), value: item.why },
-    ...(item.blocks ? [{ label: t('today.decide.blocks'), value: item.blocks }] : []),
+    { label: t('today.decide.why'), value: phraseText(item.words.why, t, locale) },
+    ...(item.words.blocks ? [{ label: t('today.decide.blocks'), value: phraseText(item.words.blocks, t, locale) }] : []),
     ...(due ? [{ label: t('today.decide.due'), value: t(due.key, { count: due.count, date: formatDate(due.date, { locale }) }) }] : []),
     { label: t('today.decide.since'), value: `${formatDateTime(item.since, { locale })} · ${t(item.ageDays === 0 ? 'today.row.ageToday' : 'today.row.age', { count: item.ageDays })}` },
     // A quote's review shows its money itself; any other row shows what the person's grains reach.
@@ -138,7 +139,7 @@ export function DecideModal({
         open
         onClose={onClose}
         title={item.record.label}
-        subtitle={item.sentence}
+        subtitle={sentenceText(item, t, locale)}
         meta={
           <span className="fw-today-decide-meta">
             <Tag tone={SEVERITY_TONE[item.severity]}>{t(`today.severity.${item.severity}`)}</Tag>

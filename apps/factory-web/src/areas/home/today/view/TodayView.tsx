@@ -7,7 +7,8 @@ import { Button, FilterChip, InfoTip, Kbd, SegmentedControl, Skeleton, Tag } fro
 import { formatDate } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { dueWords, groupItems, queueKey, tileCount, type QueueItem, type TodayViewModel } from '../model'
+import { dueWords, groupItems, queueKey, tileCount, TILES, type Category, type QueueItem, type TodayViewModel } from '../model'
+import { phraseText, sentenceText } from '../words'
 import { DecideModal, type DecideActions } from './DecideModal'
 import '../today.css'
 
@@ -15,8 +16,8 @@ export type { TodayViewModel } from '../model'
 
 /** What the page asks of its container (Today.tsx). Absent in the design index: the view then keeps its own state. */
 export interface TodayActions extends DecideActions {
-  /** A tile was pressed (null: show every row): the container sets `?kind=` and reads the list again. */
-  onKind?: (kind: string | null) => void
+  /** A tile was pressed (null: every row; it also clears a `?kind=` deep link): the container sets `?tile=`. */
+  onTile?: (tile: Category | null) => void
   onRetry?: (section: 'queue' | 'flow' | 'panels') => void
   onMore?: () => void
   /** Show the rows a live change brought ("N new · Show"). */
@@ -51,14 +52,20 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
   const t = useT('home')
   const locale = useLocale()
   // Without a container (the design index) the view keeps its own filter, open row and lens, so every key works.
+  const [ownTile, setOwnTile] = useState<Category | null>(model.tile)
   const [ownKind, setOwnKind] = useState<string | null>(model.kind)
   const [ownOpen, setOwnOpen] = useState<string | null>(model.open)
   const [ownLens, setOwnLens] = useState<string | null>(model.lens)
   useEffect(() => setOwnOpen(model.open), [model.open])
-  const kind = actions?.onKind ? model.kind : ownKind
+  const tile = actions?.onTile ? model.tile : ownTile
+  const kind = actions?.onTile ? model.kind : ownKind
   const open = actions?.onOpen ? model.open : ownOpen
   const lens = actions?.onLens ? model.lens : ownLens
-  const setKind = (next: string | null) => (actions?.onKind ? actions.onKind(next) : setOwnKind(next))
+  const setTile = (next: Category | null) => {
+    if (actions?.onTile) return actions.onTile(next)
+    setOwnTile(next)
+    setOwnKind(null)
+  }
   const setOpen = (next: string | null) => (actions?.onOpen ? actions.onOpen(next) : setOwnOpen(next))
   const setLens = (next: string) => (actions?.onLens ? actions.onLens(next) : setOwnLens(next))
 
@@ -67,8 +74,9 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
   const items = useMemo(() => {
     const all = queue?.items ?? []
     // The design index filters in the view; the container's list is filtered by the API already.
-    return !actions?.onKind && kind ? all.filter((item) => item.kind === kind) : all
-  }, [queue, kind, actions?.onKind])
+    if (actions?.onTile) return all
+    return all.filter((item) => (!tile || item.category === tile) && (!kind || item.kind === kind))
+  }, [queue, tile, kind, actions?.onTile])
   const keys = useMemo(() => items.map((item) => item.key), [items])
 
   // j / k move between rows (also with the arrows inside the list); Enter opens the focused row (the row's own button).
@@ -144,38 +152,44 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
   )
 
   // ---- Your day: tiles that filter the list ---------------------------------------------------------------------------
-  // A tile per kind that has rows (and the pressed one); the kinds with none are said in words under the strip, so the
-  // work is not pushed down by a wall of zeros while 0 stays an answer.
+  // The design's three tiles (home.today focus-strip, W1), always: every row, Approvals, Alerts on my records. A tile
+  // is a filter of the list (aria-pressed); pressing it again clears it. 0 is an answer; a count that could not be read
+  // is "—", a lower bound "at least N", each with its reason.
   const readyQueue = model.queue.status === 'ready' ? model.queue.data : null
-  const shownTiles = readyQueue ? readyQueue.tiles.filter((entry) => entry.count > 0 || !entry.complete || entry.kind === kind) : []
-  const quietKinds = readyQueue ? readyQueue.tiles.filter((entry) => !shownTiles.includes(entry)) : []
-  const tiles: Metric[] = readyQueue
-    ? [
-        { label: t('today.tiles.all'), value: t('today.tiles.count', { count: readyQueue.total }), onClick: () => setKind(null), active: kind === null },
-        ...shownTiles.map((entry): Metric => {
-          const words = tileCount(entry)
-          return {
-            label: kindLabel(entry.kind, entry.label),
-            value: t(words.key, { count: words.count }),
-            hint: entry.complete ? undefined : t('today.tiles.partial'),
-            onClick: () => setKind(kind === entry.kind ? null : entry.kind),
-            active: kind === entry.kind,
-          }
-        }),
-      ]
-    : [
-        {
-          label: t('today.tiles.all'),
-          value:
-            model.queue.status === 'error' ? (
-              <span className="fw-today-unknown">
-                —<InfoTip tip={t('today.tiles.unknown')} />
-              </span>
-            ) : (
-              '—'
-            ),
-        },
-      ]
+  const pressed = (entry: (typeof TILES)[number]) => (entry === 'ALL' ? tile === null && kind === null : tile === entry)
+  const tiles: Metric[] = TILES.map((entry): Metric => {
+    const counted = readyQueue?.tiles.find((candidate) => candidate.tile === entry)
+    const label = t(`today.tile.${entry}.label`)
+    if (!counted) {
+      return {
+        label,
+        value:
+          model.queue.status === 'error' ? (
+            <span className="fw-today-unknown">
+              —<InfoTip tip={t('today.tiles.unknown')} />
+            </span>
+          ) : (
+            '—'
+          ),
+      }
+    }
+    const words = tileCount(counted)
+    return {
+      label,
+      value: counted.complete ? (
+        t(words.key, { count: words.count })
+      ) : (
+        <span className="fw-today-unknown">
+          {t(words.key, { count: words.count })}
+          <InfoTip tip={t('today.tiles.partial')} />
+        </span>
+      ),
+      hint: t(`today.tile.${entry}.hint`),
+      onClick: () => setTile(entry === 'ALL' || tile === entry ? null : entry),
+      active: pressed(entry),
+    }
+  })
+  const chip = tile ? t(`today.tile.${tile}.label`) : kind ? kindLabel(kind, readyQueue?.kindLabels[kind] ?? kind) : null
 
   return (
     <div className="fw-today">
@@ -192,8 +206,7 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
         <h2 id="fw-today-day" className="fw-today-h">
           {t('today.day.title')}
         </h2>
-        <MetricStrip metrics={tiles} minTileWidth={150} />
-        {quietKinds.length > 0 && <p className="fw-today-muted">{t('today.tiles.none', { kinds: quietKinds.map((entry) => kindLabel(entry.kind, entry.label)).join(', ') })}</p>}
+        <MetricStrip metrics={tiles} minTileWidth={180} />
       </section>
 
       <section className="fw-today-section" aria-labelledby="fw-today-needs">
@@ -201,9 +214,9 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
           <h2 id="fw-today-needs" className="fw-today-h">
             {t('today.queue.title')}
           </h2>
-          {kind && queue && (
-            <FilterChip pressed onClick={() => setKind(null)} aria-label={t('today.queue.clearFilter', { kind: kindLabel(kind, queue.tiles.find((tile) => tile.kind === kind)?.label ?? kind) })}>
-              {kindLabel(kind, queue.tiles.find((tile) => tile.kind === kind)?.label ?? kind)} <X size={12} aria-hidden />
+          {chip && (
+            <FilterChip pressed onClick={() => setTile(null)} aria-label={t('today.queue.clearFilter', { kind: chip })}>
+              {chip} <X size={12} aria-hidden />
             </FilterChip>
           )}
           {queue && queue.fresh > 0 && (
@@ -232,8 +245,8 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
           ) : items.length === 0 ? (
             <EmptyState
               icon={<CalendarCheck size={24} aria-hidden />}
-              title={t(kind ? 'today.queue.emptyKind.title' : 'today.queue.empty.title')}
-              description={t(kind ? 'today.queue.emptyKind.body' : 'today.queue.empty.body')}
+              title={t(chip ? 'today.queue.emptyKind.title' : 'today.queue.empty.title')}
+              description={t(chip ? 'today.queue.emptyKind.body' : 'today.queue.empty.body')}
             />
           ) : (
             <>
@@ -339,6 +352,8 @@ function QueueRow({ item, current, kindLabel, onOpen }: { item: QueueItem; curre
   const locale = useLocale()
   const Icon = SEVERITY_ICON[item.severity]
   const due = dueWords(item.due)
+  const why = phraseText(item.words.why, t, locale)
+  const blocks = item.words.blocks ? phraseText(item.words.blocks, t, locale) : null
   // ⌘-click / Ctrl-click anywhere on the row opens the record in a new tab, as a link would.
   const onClickCapture = (event: ReactMouseEvent<HTMLLIElement>) => {
     if (!(event.metaKey || event.ctrlKey)) return
@@ -358,8 +373,8 @@ function QueueRow({ item, current, kindLabel, onOpen }: { item: QueueItem; curre
         stacked
         current={current}
         leading={<Icon size={18} className="fw-today-sev-icon" aria-hidden />}
-        label={item.sentence}
-        description={`${t(`today.severity.${item.severity}`)}. ${item.why}`}
+        label={sentenceText(item, t, locale)}
+        description={`${t(`today.severity.${item.severity}`)}. ${why}`}
         onClick={onOpen}
         actions={
           <a className="fw-today-record" href={item.href} title={t('today.row.openRecord', { record: item.record.label })}>
@@ -379,12 +394,12 @@ function QueueRow({ item, current, kindLabel, onOpen }: { item: QueueItem; curre
             )}
             {!due && <span className="fw-today-muted">{t(item.ageDays === 0 ? 'today.row.ageToday' : 'today.row.age', { count: item.ageDays })}</span>}
           </span>
-          {item.blocks && (
+          {blocks && (
             <span className="fw-today-blocks">
-              <ArrowRight size={12} aria-hidden /> {item.blocks}
+              <ArrowRight size={12} aria-hidden /> {blocks}
             </span>
           )}
-          <span className="fw-today-why">{item.why}</span>
+          <span className="fw-today-why">{why}</span>
         </span>
       </PressableRow>
     </li>

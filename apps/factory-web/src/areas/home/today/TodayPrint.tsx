@@ -28,17 +28,20 @@ function PrintContainer() {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const t = useT('home')
-  const kind = useSearchParams().get('kind')
+  const search = useSearchParams()
+  const kind = search.get('kind')
+  const tileParam = search.get('tile')
+  const tile = tileParam === 'APPROVAL' || tileParam === 'ALERT' ? tileParam : null
   const [list, setList] = useState<Loaded<{ asOf: string; items: readonly TodayItem[]; total: number }>>({ status: 'loading' })
   const [filter, setFilter] = useState<string | null>(null)
   useEffect(() => {
-    fetchToday(api, { kind, limit: PRINT_LIMIT })
+    fetchToday(api, { kind, category: tile, limit: PRINT_LIMIT })
       .then((answer) => {
-        setFilter(kind ? (answer.counts.tiles.find((tile) => tile.kind === kind)?.label ?? kind) : null)
+        setFilter(kind ? (answer.counts.byKind.find((entry) => entry.kind === kind)?.label ?? kind) : null)
         setList({ status: 'ready', data: { asOf: answer.asOf, items: answer.items, total: answer.total } })
       })
       .catch((error: unknown) => setList({ status: 'error', problem: readProblem(error) }))
-  }, [api, kind])
-  const kindWords = kind && t(`today.kind.${kind}`) !== `today.kind.${kind}` ? t(`today.kind.${kind}`) : filter
+  }, [api, kind, tile])
+  const kindWords = tile ? t(`today.tile.${tile}.label`) : kind && t(`today.kind.${kind}`) !== `today.kind.${kind}` ? t(`today.kind.${kind}`) : filter
   return <TodayPrintView model={{ person: session.user.displayName, filter: kindWords, list }} />
 }

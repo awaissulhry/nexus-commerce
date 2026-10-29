@@ -12,8 +12,12 @@ import { PanelShapeError, panelPage, type PanelRecordRow, type PanelSource } fro
  * overwritten) and an Idempotency-Key. Problems come back as message keys of `home`, never the API's words.
  */
 
-export async function fetchToday(api: ApiClient, query: { readonly kind?: string | null; readonly cursor?: string | null; readonly limit?: number }, signal?: AbortSignal): Promise<TodayAnswer> {
-  return api.get('/home/today', { query: { kind: query.kind ?? undefined, cursor: query.cursor ?? undefined, limit: query.limit ?? 50 }, schema: todaySchema, signal })
+export async function fetchToday(
+  api: ApiClient,
+  query: { readonly kind?: string | null; readonly category?: string | null; readonly cursor?: string | null; readonly limit?: number },
+  signal?: AbortSignal,
+): Promise<TodayAnswer> {
+  return api.get('/home/today', { query: { kind: query.kind ?? undefined, category: query.category ?? undefined, cursor: query.cursor ?? undefined, limit: query.limit ?? 50 }, schema: todaySchema, signal })
 }
 
 export async function fetchFlow(api: ApiClient, signal?: AbortSignal): Promise<FlowAnswer> {

@@ -264,7 +264,7 @@ describe('the owner: everything that waits, from every area and company, ranked'
     expect(itemOf(answer, ids.po)).toMatchObject({ kind: 'PO_NOT_CONFIRMED', figures: { currency: 'EUR' } })
     expect(itemOf(answer, ids.po)!.sentence).toMatch(/not confirmed 3 days after it was sent \(EUR \d+\.\d{2}\)\.$/)
     expect(itemOf(answer, companyB)).toMatchObject({ kind: 'PRIVACY_DUTY', severity: 'HIGH', record: { type: 'Company' } })
-    expect((answer.items as Json[]).find((item) => item.kind === 'STYLE_COMPLIANCE')!.blocks).toMatch(/^It holds up the .+ of \d+ open (sales|work) orders?/)
+    expect((answer.items as Json[]).find((item) => item.kind === 'STYLE_COMPLIANCE')!.blocks).toMatch(/^It holds up the .+ of open orders \(sales orders: \d+, work orders: \d+\)\.$/)
     expect(answer.live.events).toEqual(expect.arrayContaining(['sales_order.promise_changed', 'lot.released', 'invoice.sdi_status_changed', 'quote.approval_requested']))
   })
 
@@ -289,21 +289,50 @@ describe('the owner: everything that waits, from every area and company, ranked'
     expect((await get('owner', '/home/today?cursor=nonsense')).status).toBe(400)
   })
 
-  it('the tiles count the rows: their sum is the total, and pressing one shows exactly its count', async () => {
+  it('the design’s three tiles: all rows, approvals (the reviews), alerts; each pressed shows exactly its count', async () => {
     const answer = await today('owner')
     const tiles = answer.counts.tiles as Json[]
-    expect(tiles.map((tile) => tile.kind)).toHaveLength(14)
-    expect(tiles.reduce((sum, tile) => sum + tile.count, 0)).toBe(answer.counts.total)
-    expect(answer.counts.total).toBe(answer.total)
-    expect(answer.counts.total).toBe(answer.items.length)
-    expect(answer.counts.byCategory.APPROVAL + answer.counts.byCategory.ALERT + answer.counts.byCategory.TASK).toBe(answer.counts.total)
+    expect(tiles.map((tile) => tile.tile)).toEqual(['ALL', 'APPROVAL', 'ALERT'])
+    const [all, approvals, alerts] = tiles.map((tile) => tile.count) as [number, number, number]
+    expect(all).toBe(answer.total)
+    expect(all).toBe(answer.items.length)
+    expect(approvals + alerts).toBe(all)
+    expect(tiles.every((tile) => tile.complete === true)).toBe(true)
+    // Approvals are the decisions a person reviews; everything else is an alert.
+    for (const item of answer.items as Json[]) expect(item.category, item.kind).toBe(item.decide === 'REVIEW' ? 'APPROVAL' : 'ALERT')
     expect(answer.counts.now).toBe((answer.items as Json[]).filter((item) => item.group === 'NOW').length)
-    for (const tile of tiles) {
-      const pressed = await ok('owner', `/home/today?limit=200&kind=${tile.kind}`)
-      expect(pressed.total, tile.kind).toBe(tile.count)
-      expect(pressed.items.every((item: Json) => item.kind === tile.kind)).toBe(true)
-      expect(pressed.counts.total).toBe(answer.counts.total)
+    for (const [category, count] of [['APPROVAL', approvals], ['ALERT', alerts]] as const) {
+      const pressed = await ok('owner', `/home/today?limit=200&category=${category}`)
+      expect(pressed.total, category).toBe(count)
+      expect(pressed.items.every((item: Json) => item.category === category)).toBe(true)
+      expect(pressed.counts.tiles).toEqual(tiles)
     }
+    // A deep link by kind still works, and its count is the kind's.
+    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toHaveLength(14)
+    for (const entry of answer.counts.byKind as Json[]) {
+      const pressed = await ok('owner', `/home/today?limit=200&kind=${entry.kind}`)
+      expect(pressed.total, entry.kind).toBe(entry.count)
+    }
+    expect((await get('owner', '/home/today?category=TASK')).status).toBe(400)
+  })
+
+  it('every row comes as phrases for the reader’s language: keys and params, the English the same words', async () => {
+    const answer = await today('owner')
+    for (const item of answer.items as Json[]) {
+      expect(item.words.sentence.key, item.kind).toMatch(new RegExp(`^${item.kind}\\.`))
+      expect(item.words.why.key, item.kind).toMatch(new RegExp(`^why\\.${item.kind}\\.`))
+      expect(item.words.blocks === null, item.kind).toBe(item.blocks === null)
+    }
+    expect(itemOf(answer, ids.lateOrder)!.words).toMatchObject({
+      sentence: { key: 'ORDER_PROMISE.LATE', params: { number: 'SEED-SO-0001', count: 2, promiseDate: addDays(TODAY, -2) } },
+      why: { key: 'why.ORDER_PROMISE.orders_manage', params: {} },
+      blocks: { key: 'ORDER_PROMISE.waitsPieces' },
+    })
+    expect(itemOf(answer, ids.heldWorkOrder)!.words.sentence.params.checks).toContain('BATCH_NUMBER')
+    expect(itemOf(answer, ids.rejectedInvoice)!.words.sentence).toEqual({ key: 'INVOICE_SDI.REJECTED', params: expect.objectContaining({ deadlineDate: resendDeadline(rejectedAt) }) })
+    // The quote's margin is beside the sentence only for a reader with the margin grain; never in the params.
+    expect(itemOf(answer, ids.quote)).toMatchObject({ sentenceFigure: 'marginPct', words: { sentence: { key: 'QUOTE_APPROVAL.PENDING', params: { reasons: ['MARGIN_FLOOR'] } } } })
+    expect(JSON.stringify((answer.items as Json[]).map((item) => item.words))).not.toMatch(/EUR|624000|14\.25/)
   })
 
   it('the company and site filters (the top bar’s switcher)', async () => {
@@ -323,10 +352,15 @@ describe('each role gets what it acts on, and nothing it cannot', () => {
   it('the buyer: its unconfirmed purchase order with its value; no quote approval, no lot it cannot release', async () => {
     const answer = await today('buyer')
     expect(kindsOf(answer)).toEqual(['MAIL_TO_SORT', 'PO_NOT_CONFIRMED'])
-    expect(answer.counts.tiles.map((tile: Json) => [tile.kind, tile.count])).toEqual([
+    expect(answer.counts.byKind.map((entry: Json) => [entry.kind, entry.count])).toEqual([
       ['PO_PROPOSAL', 0],
       ['PO_NOT_CONFIRMED', 1],
       ['MAIL_TO_SORT', 3],
+    ])
+    expect(answer.counts.tiles.map((tile: Json) => [tile.tile, tile.count])).toEqual([
+      ['ALL', 4],
+      ['APPROVAL', 3],
+      ['ALERT', 1],
     ])
     expect(itemOf(answer, ids.po)).toMatchObject({ why: 'You send purchase orders to this supplier.', figures: { currency: 'EUR' } })
     expect(itemOf(answer, ids.po)!.figures.purchaseAmount).toEqual(expect.any(Number))
@@ -362,7 +396,7 @@ describe('each role gets what it acts on, and nothing it cannot', () => {
     expect(text).not.toContain('purchaseAmount')
     expect(text).not.toContain('marginAmount')
     expect(itemOf(answer, ids.quote)).toBeUndefined()
-    expect(answer.counts.tiles.map((tile: Json) => tile.kind)).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT'])
+    expect(answer.counts.byKind.map((entry: Json) => entry.kind)).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT'])
   })
 
   it('mail to sort: the email-in list of whoever sorts the company’s mail (triage, held, unreadable), opened in its own review', async () => {
@@ -372,7 +406,7 @@ describe('each role gets what it acts on, and nothing it cannot', () => {
     const rows = (answer.items as Json[]).filter((item) => item.kind === 'MAIL_TO_SORT')
     expect(rows.map((row) => row.record.id).sort()).toEqual(mails.map((mail) => mail.id).sort())
     for (const row of rows) {
-      expect(row).toMatchObject({ category: 'TASK', decide: 'REVIEW', record: { type: 'InboundEmail' }, why: "You sort this company's received mail.", figures: null, due: null })
+      expect(row).toMatchObject({ category: 'APPROVAL', decide: 'REVIEW', record: { type: 'InboundEmail' }, why: "You sort this company's received mail.", figures: null, due: null })
       expect(row.severity).toBe(row.state === 'FAILED' ? 'LOW' : 'MEDIUM')
     }
     expect(rows.find((row) => row.state === 'TRIAGE')!.sentence).toMatch(/reached no record: sort it\.$/)
@@ -403,7 +437,13 @@ describe('each role gets what it acts on, and nothing it cannot', () => {
 
   it('a person with nothing to act on gets an empty list, zero tiles, no lens and no wait; other audiences and no home.view are refused', async () => {
     const answer = await today('nobody')
-    expect(answer).toMatchObject({ total: 0, items: [], nextCursor: null, counts: { total: 0, now: 0, tiles: [] }, live: { events: [] } })
+    expect(answer).toMatchObject({
+      total: 0,
+      items: [],
+      nextCursor: null,
+      counts: { total: 0, now: 0, byKind: [], tiles: [{ tile: 'ALL', count: 0, complete: true }, { tile: 'APPROVAL', count: 0, complete: true }, { tile: 'ALERT', count: 0, complete: true }] },
+      live: { events: [] },
+    })
     expect((await ok('nobody', '/home/flow')).lenses).toEqual([])
     expect((await ok('nobody', '/home/waiting-on-others')).items).toEqual([])
     expect((await get('noHome', '/home/today')).status).toBe(403)
