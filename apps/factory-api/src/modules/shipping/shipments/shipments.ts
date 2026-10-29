@@ -4,6 +4,7 @@ import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { SHIPPING_MANAGE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
+import { carrierNameFor } from '@nexus/factory-domain/shipping/labels/labels'
 import { lineProblems, lineQuantityProblems, shipmentMachine, type ShipmentStatus, type TransportBy } from '@nexus/factory-domain/shipping/shipments'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
@@ -285,6 +286,8 @@ export async function createShipment(caller: CommandCaller, body: CreateShipment
   const carrierCode = body.carrierCode !== undefined ? blankToNull(body.carrierCode) : (settings?.defaultCarrierCode ?? null)
   const serviceCode = body.serviceCode !== undefined ? blankToNull(body.serviceCode) : carrierCode === settings?.defaultCarrierCode ? (settings?.defaultServiceCode ?? null) : null
   const transportBy = body.transportBy ?? settings?.defaultTransportBy ?? 'CARRIER'
+  // The carrier's name follows the carrier chosen (B-W1-48): the DDT's default carrier.
+  const carrierName = carrierNameFor(transportBy, carrierCode)
 
   const { result } = await command(caller, { name: 'shipping.create', idempotencyKey, input: body }, async (tools) => {
     const id = newId()
@@ -301,6 +304,7 @@ export async function createShipment(caller: CommandCaller, body: CreateShipment
         shipTo,
         transportBy,
         carrierCode,
+        carrierName,
         serviceCode,
         integrationAccountId: transportBy === 'CARRIER' ? (settings?.integrationAccountId ?? null) : null,
         internalNote: blankToNull(body.internalNote),
@@ -316,7 +320,7 @@ export async function createShipment(caller: CommandCaller, body: CreateShipment
       recordId: id,
       companyId: order.companyId,
       siteId,
-      after: { number: number.formatted, status: 'DRAFT', salesOrderId: order.id, siteId, transportBy, carrierCode, serviceCode, shipToAddressId: body.shipToAddressId ?? null, lines: added },
+      after: { number: number.formatted, status: 'DRAFT', salesOrderId: order.id, siteId, transportBy, carrierCode, carrierName, serviceCode, shipToAddressId: body.shipToAddressId ?? null, lines: added },
     })
     tools.emit({ type: 'shipment.created', subject: id, companyId: order.companyId, siteId, payload: { shipmentId: id, number: number.formatted, salesOrderId: order.id, siteId, lines: added.length, garments } })
     changed(tools, scope, 'DRAFT', 'lines')
@@ -430,13 +434,17 @@ export async function updateShipment(caller: CommandCaller, shipmentId: string, 
       ...(body.shipToAddressId ? { shipToAddressId: body.shipToAddressId, shipTo } : {}),
       ...(body.transportBy ? { transportBy: body.transportBy } : {}),
       ...(body.carrierCode !== undefined ? { carrierCode: blankToNull(body.carrierCode) } : {}),
+      // A new carrier (or who carries) gives the carrier's name again: the DDT's default carrier (B-W1-48).
+      ...(body.carrierCode !== undefined || body.transportBy !== undefined
+        ? { carrierName: carrierNameFor(body.transportBy ?? current.transportBy, body.carrierCode !== undefined ? blankToNull(body.carrierCode) : current.carrierCode) }
+        : {}),
       ...(body.serviceCode !== undefined ? { serviceCode: blankToNull(body.serviceCode) } : {}),
       ...(body.internalNote !== undefined ? { internalNote: blankToNull(body.internalNote) } : {}),
     }
-    const before = { shipToAddressId: current.shipToAddressId, transportBy: current.transportBy, carrierCode: current.carrierCode, serviceCode: current.serviceCode, internalNote: current.internalNote }
+    const before = { shipToAddressId: current.shipToAddressId, transportBy: current.transportBy, carrierCode: current.carrierCode, carrierName: current.carrierName, serviceCode: current.serviceCode, internalNote: current.internalNote }
     await tools.tx.shipment.update({ where: { id: current.id }, data, select: { id: true } })
     const after = (await readShipment(tools.tx, current.id))!
-    tools.audit({ recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before, after: { shipToAddressId: after.shipToAddressId, transportBy: after.transportBy, carrierCode: after.carrierCode, serviceCode: after.serviceCode, internalNote: after.internalNote } })
+    tools.audit({ recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before, after: { shipToAddressId: after.shipToAddressId, transportBy: after.transportBy, carrierCode: after.carrierCode, carrierName: after.carrierName, serviceCode: after.serviceCode, internalNote: after.internalNote } })
     changed(tools, current, current.status, 'details')
     return { shipment: await shipmentDetail(tools.tx, after) }
   })
