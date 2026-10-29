@@ -22,7 +22,7 @@ import { APPROVAL_VIEWS, heldKey, recheck } from '../../home/approvals/model'
 import { designScreen as acceptScreen } from '../../../links/quote-accept/fixtures'
 import { declineNote, DECLINE_REASONS, groupedIban, privacyCompany } from '../../../links/quote-accept/model'
 import { APPROVAL_REASONS, APPROVAL_STATUSES, DECIDE_HELD, VERSION_STATUSES } from './api'
-import { designScreen as listScreen } from './list/fixtures'
+import { designScreen as listScreen, ROWS as LIST_ROWS } from './list/fixtures'
 import {
   abilitiesOf,
   decideHeld,
@@ -37,6 +37,7 @@ import {
   nextStep,
   parsePercent,
   parsePrice,
+  quotesCsv,
   QUOTE_TABS,
   QUOTE_TILES,
   styleBlocks,
@@ -330,5 +331,31 @@ describe('every design case draws in both languages with no key left on screen',
     const link = render(acceptScreen as DesignScreen<unknown>, acceptScreen.cases[0]!.model, 'en')
     expect(link.toLowerCase()).not.toContain('margin')
     expect(link.toLowerCase()).not.toContain('cost')
+  })
+})
+
+describe('Export N (CSV): the selected quotes, never more than the screen shows', () => {
+  const words = { header: (key: string) => key, status: (status: string) => `status.${status}` }
+  const rows = LIST_ROWS.slice(0, 2).map((row, index) => (index === 0 ? { ...row, partyName: 'Rossi, "Moto" S.r.l.' } : row))
+
+  it('one header line and one line per quote; a cell with a comma or a quote is quoted', () => {
+    const lines = quotesCsv(rows, grainsOf(['money.price', 'money.margin']), words, 'en').split('\r\n')
+    expect(lines).toHaveLength(4)
+    expect(lines[0]).toContain('list.col.net')
+    expect(lines[0]).toContain('list.col.margin')
+    expect(lines[1]).toContain('"Rossi, ""Moto"" S.r.l."')
+    expect(lines[1]).toContain('status.DRAFT')
+    expect(lines[3]).toBe('')
+  })
+
+  it('no money without the price grain, no margin without the margin grain', () => {
+    const csv = quotesCsv(rows, grainsOf([]), words, 'en')
+    expect(csv).not.toContain('list.col.net')
+    expect(csv).not.toContain('list.col.margin')
+    expect(csv).not.toContain('6,240')
+    expect(csv).not.toContain('34.5')
+    const priceOnly = quotesCsv(rows, grainsOf(['money.price']), words, 'en')
+    expect(priceOnly).toContain('list.col.gross')
+    expect(priceOnly).not.toContain('list.col.margin')
   })
 })

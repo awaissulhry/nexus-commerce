@@ -31,13 +31,6 @@ p.fw-apv-hint[role='status'] {
   gap: var(--nds-space-6);
 }
 
-.fw-apv-skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-8);
-  margin-top: var(--nds-space-12);
-}
-
 .fw-apv-cell {
   display: flex;
   flex-direction: column;
@@ -67,11 +60,6 @@ p.fw-apv-hint[role='status'] {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--nds-space-6);
-}
-
-.fw-apv-table {
-  overflow-x: auto;
-  min-width: 0;
 }
 
 .fw-apv-h {
@@ -106,10 +94,3 @@ p.fw-apv-hint[role='status'] {
   border-left-color: var(--nds-warning);
 }
 
-/* The table's footer: one information icon holds the keys (Owner rule 2026-10-29). */
-.fw-apv-foot {
-  display: flex;
-  justify-content: flex-end;
-  padding: var(--nds-space-8) var(--nds-space-16);
-  color: var(--nds-text-2);
-}

@@ -38,6 +38,11 @@ export interface QuotesListViewModel {
   updates: number
   newQuote: NewQuoteModel | null
   notice: { key: string; tone: Tone; params?: Record<string, string | number> } | null
+  /** A bulk action runs (the dialog's button is held meanwhile). */
+  busy?: boolean
+  /** Design cases: the rows ticked, the row that has the focus. */
+  selected?: readonly string[]
+  focusRow?: number
 }
 
 export interface QuotesListActions {
@@ -53,4 +58,10 @@ export interface QuotesListActions {
   onNewField?: (field: 'contactId' | 'customerRef', value: string) => void
   onCreate?: () => void
   onDismissNotice?: () => void
+  /** Enter on a row: open its record. */
+  onOpen?: (id: string) => void
+  /** The selected rows as a CSV file (the columns this person sees). */
+  onExport?: (ids: readonly string[]) => void
+  /** Cancel the selected quotes, one by one with each one's version; resolves true when all were cancelled. */
+  onCancelMany?: (ids: readonly string[], reason: string) => Promise<boolean>
 }

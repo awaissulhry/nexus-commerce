@@ -1,11 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Check, ExternalLink, Inbox, X } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, KeyValue, MetricStrip, Modal, SummaryTable } from '@nexus/ui/components'
+import { Banner, EmptyState, Field, KeyValue, MetricStrip, Modal, SummaryTable } from '@nexus/ui/components'
+import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { DetailModal } from '@nexus/ui/patterns'
-import { Button, InfoTip, Kbd, Pill, Skeleton, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
+import { Button, Kbd, Pill, Tag, Textarea } from '@nexus/ui/primitives'
+import { ListFrame } from '../../../../list-frame/ListFrame'
+import { listKeys } from '../../../../list-frame/model'
 import { formatDate, formatDateTime, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
@@ -25,7 +28,7 @@ export type { ApprovalsViewModel, ApprovalsActions } from '../model'
  */
 export function ApprovalsView({ model, actions }: { model: ApprovalsViewModel; actions?: ApprovalsActions }) {
   return (
-    <WithMessages namespaces={['approvals', 'sales']}>
+    <WithMessages namespaces={['approvals', 'sales', 'lists']}>
       <Approvals model={model} actions={actions} />
     </WithMessages>
   )
@@ -34,6 +37,7 @@ export function ApprovalsView({ model, actions }: { model: ApprovalsViewModel; a
 function Approvals({ model, actions }: { model: ApprovalsViewModel; actions?: ApprovalsActions }) {
   const t = useT('approvals')
   const sales = useT('sales')
+  const lists = useT('lists')
   const locale = useLocale()
   const items = model.rows.items
   // Read and write problems are the quotes screens' words (sales catalogue); the rest is this page's.
@@ -44,32 +48,56 @@ function Approvals({ model, actions }: { model: ApprovalsViewModel; actions?: Ap
     if (row.reasons.includes('MARGIN_FLOOR') && row.marginPct !== undefined && row.marginFloorPct !== undefined) return t('sentence.margin', { number: row.number, customer: row.partyName, pct: percent(row.marginPct, locale), floor: percent(row.marginFloorPct, locale) })
     return t('sentence.reasons', { number: row.number, customer: row.partyName, reasons })
   }
-  const columns = [t('col.request'), t('col.askedBy'), ...(model.grains.price ? [t('col.amount')] : []), t('col.since'), t('col.state'), t('col.open')]
-  const rows = (items ?? []).map((row) => ({
-    id: row.id,
-    cells: [
-      <span key="r" className="fw-apv-cell">
-        <Link className="fw-apv-link" href={`${model.prefix}/home/approvals?view=${model.view}&open=${row.id}`} onClick={(event) => {
-          if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return
-          event.preventDefault()
-          actions?.onOpen?.(row.id)
-        }}>
-          {sentence(row)}
+  const selecting = model.view === 'waiting' && model.can.approve
+  const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
+  const [dialog, setDialog] = useState<'approve' | 'help' | null>(null)
+  const rowsKey = items?.map((row) => row.id).join(',') ?? ''
+  useEffect(() => setSelected((current) => current.filter((id) => rowsKey.includes(id))), [rowsKey])
+  useEffect(() => setSelected(model.selected ?? []), [model.selected])
+  const picked = (items ?? []).filter((row) => selected.includes(row.id))
+  const notMine = picked.filter((row) => !row.mayDecide).length
+
+  const columns = useMemo<ColDef<ApprovalRow>[]>(() => {
+    const RequestCell = ({ data }: ICellRendererParams<ApprovalRow>) =>
+      data ? (
+        <span className="fw-apv-cell">
+          <Link
+            className="fw-apv-link"
+            href={`${model.prefix}/home/approvals?view=${model.view}&open=${data.id}`}
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return
+              event.preventDefault()
+              actions?.onOpen?.(data.id)
+            }}
+          >
+            {sentence(data)}
+          </Link>
+          <span className="fw-apv-sub">{t('version', { revision: data.revision })}</span>
+        </span>
+      ) : null
+    const StateCell = ({ data }: ICellRendererParams<ApprovalRow>) =>
+      data ? (
+        <span className="fw-apv-tags">
+          <Pill tone={APPROVAL_TONE[data.status]}>{sales(`approvalStatus.${data.status}`)}</Pill>
+          {data.status === 'PENDING' && data.held && data.held !== 'NOT_WAITING' && <Tag tone="neutral">{t(`heldShort.${data.held}`)}</Tag>}
+        </span>
+      ) : null
+    const QuoteCell = ({ data }: ICellRendererParams<ApprovalRow>) =>
+      data ? (
+        <Link className="fw-apv-link" href={`${model.prefix}/sales/quotes/${data.quoteId}?tab=approval`}>
+          {data.number}
         </Link>
-        <span className="fw-apv-sub">{t('version', { revision: row.revision })}</span>
-      </span>,
-      who(row.askedBy),
-      ...(model.grains.price ? [money(row.netAmount, row.currency, locale)] : []),
-      formatDateTime(row.askedAt, { locale }),
-      <span key="s" className="fw-apv-tags">
-        <Pill tone={APPROVAL_TONE[row.status]}>{sales(`approvalStatus.${row.status}`)}</Pill>
-        {row.status === 'PENDING' && row.held && row.held !== 'NOT_WAITING' && <Tag tone="neutral">{t(`heldShort.${row.held}`)}</Tag>}
-      </span>,
-      <Link key="o" className="fw-apv-link" href={`${model.prefix}/sales/quotes/${row.quoteId}?tab=approval`}>
-        {row.number}
-      </Link>,
-    ],
-  }))
+      ) : null
+    return [
+      { colId: 'request', headerName: t('col.request'), field: 'number', flex: 3, minWidth: 280, cellRenderer: RequestCell },
+      { colId: 'askedBy', headerName: t('col.askedBy'), flex: 1, minWidth: 140, valueGetter: (params) => (params.data ? who(params.data.askedBy) : '') },
+      ...(model.grains.price ? ([{ colId: 'amount', headerName: t('col.amount'), field: 'netAmount', flex: 1, minWidth: 120, type: 'rightAligned', valueFormatter: (params) => (params.data ? money(params.data.netAmount, params.data.currency, locale) : '') }] satisfies ColDef<ApprovalRow>[]) : []),
+      { colId: 'since', headerName: t('col.since'), field: 'askedAt', flex: 1, minWidth: 150, valueFormatter: (params) => (params.value ? formatDateTime(params.value as string, { locale }) : '') },
+      { colId: 'state', headerName: t('col.state'), field: 'status', flex: 1, minWidth: 170, cellRenderer: StateCell },
+      { colId: 'quote', headerName: t('col.open'), field: 'number', flex: 1, minWidth: 130, cellRenderer: QuoteCell },
+    ]
+    // The cells read the words, the language, the view and the grains through the closure: a change rebuilds them.
+  }, [t, sales, locale, model.prefix, model.view, model.grains.price])
 
   return (
     <div className="fw-apv">
@@ -98,48 +126,110 @@ function Approvals({ model, actions }: { model: ApprovalsViewModel; actions?: Ap
           return { label: t(`tile.${view}`), value: count === null ? '—' : model.counts.capped && count >= 200 ? t('tileMore', { count }) : String(count), onClick: () => actions?.onView?.(view), active: model.view === view }
         })}
       />
-      {model.rows.problem ? (
-        <Card padded>
-          <EmptyState title={t('failed')} description={words(model.rows.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('retry')}</Button>} />
-        </Card>
-      ) : items === null ? (
-        <Card padded aria-busy="true">
-          <p className="fw-apv-hint" role="status">
-            <Spinner size={14} /> {t('loading')}
-          </p>
-          <div className="fw-apv-skeleton">
-            {Array.from({ length: 4 }, (_, index) => (
-              <Skeleton key={index} height={22} />
+      {(
+        <ListFrame<ApprovalRow>
+          label={t(`tableLabel.${model.view}`)}
+          rows={items}
+          rowId={(row) => row.id}
+          columns={columns}
+          count={items ? t('count', { count: items.length }) : '—'}
+          selection={
+            selecting
+              ? {
+                  selected,
+                  onChange: setSelected,
+                  actions: (
+                    <Button size="sm" variant="primary" aria-label={t('bulk.approve', { count: picked.length })} heldReason={notMine > 0 ? t('bulk.approveHeld', { count: notMine }) : model.busy ? t('held.busy') : null} onClick={() => setDialog('approve')}>
+                      <Check size={13} aria-hidden /> <SelectionLabel>{t('bulk.approve', { count: picked.length })}</SelectionLabel>
+                    </Button>
+                  ),
+                }
+              : undefined
+          }
+          keys={[]}
+          onHelp={() => setDialog('help')}
+          onOpen={(row) => actions?.onOpen?.(row.id)}
+          state={
+            model.rows.problem ? (
+              <EmptyState title={t('failed')} description={words(model.rows.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('retry')}</Button>} />
+            ) : items && items.length === 0 ? (
+              <EmptyState
+                icon={<Inbox size={24} aria-hidden />}
+                title={t(`empty.${model.view}.title`)}
+                description={t(`empty.${model.view}.body`)}
+                action={
+                  model.view === 'waiting' && (model.counts.mine ?? 0) > 0 ? (
+                    <Button size="sm" onClick={() => actions?.onView?.('mine')}>
+                      {t('empty.showMine', { count: model.counts.mine ?? 0 })}
+                    </Button>
+                  ) : undefined
+                }
+              />
+            ) : undefined
+          }
+          focusRow={model.focusRow}
+        />
+      )}
+      {dialog === 'approve' && <ApproveManyDialog rows={picked} busy={model.busy} actions={actions} onDone={() => setSelected([])} onClose={() => setDialog(null)} />}
+      {dialog === 'help' && (
+        <Modal open onClose={() => setDialog(null)} title={t('keysTitle')} size="sm">
+          <ul className="fw-apv-list">
+            {[...listKeys([], selecting), { keys: ['A'], does: t('keyApprove') }, { keys: ['R'], does: t('keyReject') }, { keys: ['J', 'K'], does: t('keyWalk') }].map((entry) => (
+              <li key={entry.does}>
+                <b>{entry.keys.join(' ')}</b> — {entry.does.startsWith('keys.') ? lists(entry.does) : entry.does}
+              </li>
             ))}
-          </div>
-        </Card>
-      ) : items.length === 0 ? (
-        <Card padded>
-          <EmptyState
-            icon={<Inbox size={24} aria-hidden />}
-            title={t(`empty.${model.view}.title`)}
-            description={t(`empty.${model.view}.body`)}
-            action={
-              model.view === 'waiting' && (model.counts.mine ?? 0) > 0 ? (
-                <Button size="sm" onClick={() => actions?.onView?.('mine')}>
-                  {t('empty.showMine', { count: model.counts.mine ?? 0 })}
-                </Button>
-              ) : undefined
-            }
-          />
-        </Card>
-      ) : (
-        <Card>
-          <div className="fw-apv-table">
-            <SummaryTable label={t(`tableLabel.${model.view}`)} columns={columns} rows={rows} density="roomy" stackOnPhone widths={model.grains.price ? ['36%', '14%', '12%', '14%', '14%', '10%'] : ['40%', '16%', '16%', '16%', '12%']} />
-          </div>
-          <div className="fw-apv-foot">
-            <InfoTip tip={t('keys')} size={14} />
-          </div>
-        </Card>
+          </ul>
+        </Modal>
       )}
       <Review model={model} actions={actions} />
     </div>
+  )
+}
+
+/** Approve several requests: each one listed, one optional note for all; the quotes module decides each one apart. */
+function ApproveManyDialog({ rows, busy, actions, onDone, onClose }: { rows: readonly ApprovalRow[]; busy?: boolean; actions?: ApprovalsActions; onDone: () => void; onClose: () => void }) {
+  const t = useT('approvals')
+  const [note, setNote] = useState('')
+  const held = note.trim().length > 500 ? t('held.long') : busy ? t('held.busy') : null
+  const go = () => {
+    if (held) return
+    void actions?.onApproveMany?.(rows.map((row) => row.id), note).then((done) => {
+      if (done) {
+        onDone()
+        onClose()
+      }
+    })
+  }
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={t('bulk.approveTitle', { count: rows.length })}
+      size="md"
+      footer={
+        <>
+          <Button onClick={onClose}>{t('back')}</Button>
+          <Button variant="primary" heldReason={held} onClick={go}>
+            {t('bulk.approve', { count: rows.length })}
+          </Button>
+        </>
+      }
+    >
+      <div className="fw-apv-review">
+        <p className="fw-apv-hint">{t('bulk.approveBody')}</p>
+        <ul className="fw-apv-list">
+          {rows.map((row) => (
+            <li key={row.id}>
+              {row.number} · {row.partyName}
+            </li>
+          ))}
+        </ul>
+        <Field label={t('review.note')} hint={t('review.noteHint')}>
+          <Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} maxLength={500} />
+        </Field>
+      </div>
+    </Modal>
   )
 }
 

@@ -495,3 +495,28 @@ export function styleTags(style: Pick<StyleRow, 'revisionState' | 'ppeClass' | '
   if (style.mtmAllowed) tags.push('style.mtm')
   return tags
 }
+
+/** A CSV cell: quoted when it holds a separator, a quote or a line break (RFC 4180). */
+const csvCell = (value: string): string => (/[",\n\r;]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value)
+
+/**
+ * The selected quotes as a CSV file ("Export N (CSV)"): the columns this person sees in the list, in their words; money
+ * only with the price grain, the margin only with the margin grain (never more than the screen shows).
+ */
+export function quotesCsv(rows: readonly QuoteListRow[], grains: Grains, words: { header: (key: string) => string; status: (status: QuoteStatus) => string }, locale: Locale): string {
+  const header = ['list.col.number', 'list.col.customer', 'terms.customerRef', 'list.col.status', 'versions.col.version', 'list.col.units', ...(grains.price ? ['list.col.net', 'list.col.gross'] : []), ...(grains.margin ? ['list.col.margin'] : []), 'list.col.validUntil'].map(words.header)
+  const lines = rows.map((row) =>
+    [
+      row.number,
+      row.partyName,
+      row.customerRef ?? '',
+      words.status(row.status),
+      String(row.revision),
+      String(row.units),
+      ...(grains.price ? [money(row.netAmount, row.currency, locale), money(row.grossAmount, row.currency, locale)] : []),
+      ...(grains.margin ? [row.marginPct ?? ''] : []),
+      row.validUntil ?? '',
+    ].map(csvCell).join(','),
+  )
+  return [header.map(csvCell).join(','), ...lines].join('\r\n') + '\r\n'
+}

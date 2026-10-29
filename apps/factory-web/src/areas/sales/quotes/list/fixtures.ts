@@ -43,7 +43,7 @@ function row(n: number, extra: Partial<QuoteListRow>): QuoteListRow {
   }
 }
 
-const ROWS: QuoteListRow[] = [
+export const ROWS: QuoteListRow[] = [
   row(42, {}),
   row(41, { status: 'PENDING_APPROVAL', approval: 'PENDING', marginPct: '18.9490', marginFloorBreached: true, netAmount: 504000, grossAmount: 614880 }),
   row(40, { status: 'SENT', revision: 2, approval: 'APPROVED', validUntil: '2026-11-03', units: 40, lineCount: 4, netAmount: 1824000, grossAmount: 2225280 }),
@@ -100,6 +100,8 @@ export const designScreen = defineDesignScreen<QuotesListViewModel>({
     { id: 'sales', label: 'Sales · prices and margin %', model: model({ grains: GRAINS.sales, can: CAN.sales }), note: 'S2: margin % and "under the floor", never a cost.' },
     { id: 'finance', label: 'Finance · approves, does not make quotes', model: model({ grains: GRAINS.finance, can: CAN.finance }), note: 'New quote is held with the reason.' },
     { id: 'price-only', label: 'A role with prices only', model: model({ grains: GRAINS.priceOnly, can: CAN.viewer, rows: { items: priceOnly(ROWS), more: false, problem: null } }) },
+    { id: 'selected', label: 'Rows selected: bulk actions in the toolbar', model: model({ selected: [id(42), id(39)], focusRow: 0 }), note: 'The header box is mixed; the toolbar swaps to Export 2 (CSV) and Cancel 2 quotes; x ticks the focused row, shift-click a range.' },
+    { id: 'selected-held', label: 'Selected rows that cannot all be cancelled', model: model({ selected: [id(42), id(38)] }), note: 'An accepted quote is selected: Cancel is held with the reason before the click.' },
     { id: 'tile-waiting', label: 'Tile pressed: Waiting for approval', model: model({ filters: { ...NO_FILTERS, status: 'PENDING_APPROVAL' }, rows: { items: ROWS.filter((item) => item.status === 'PENDING_APPROVAL'), more: false, problem: null } }), note: 'The tile is pressed and its chip is in the filter row (one filter model); Clear all.' },
     { id: 'expiring', label: 'Tile pressed: Expiring in 7 days', model: model({ filters: { ...NO_FILTERS, status: 'SENT', expiring: true }, rows: { items: ROWS.filter((item) => item.status === 'SENT'), more: false, problem: null } }) },
     { id: 'updates', label: 'Live: 3 updates waiting', model: model({ updates: 3 }), note: 'Rows never move under the cursor: "3 updates · Show" reads them.' },

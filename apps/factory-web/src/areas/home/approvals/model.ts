@@ -34,6 +34,9 @@ export interface ApprovalsViewModel {
   rejecting: boolean
   busy: boolean
   notice: { key: string; tone: Tone; params?: Record<string, string | number> } | null
+  /** Design cases: the rows ticked, the row that has the focus. */
+  selected?: readonly string[]
+  focusRow?: number
 }
 
 export interface ApprovalsActions {
@@ -45,6 +48,8 @@ export interface ApprovalsActions {
   onReject?: (reason: string) => Promise<boolean>
   onRejecting?: (open: boolean) => void
   onDismissNotice?: () => void
+  /** Approve the selected requests, one by one (the quotes module checks each); resolves true when all were approved. */
+  onApproveMany?: (ids: readonly string[], note: string) => Promise<boolean>
 }
 
 /** Is the request still what was asked? Its quote waits for approval at the version the row was read with. */

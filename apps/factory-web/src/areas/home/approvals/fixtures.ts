@@ -41,6 +41,7 @@ export const designScreen = defineDesignScreen<ApprovalsViewModel>({
   view: ApprovalsView,
   cases: [
     { id: 'finance-queue', label: 'Finance · waiting for me', model: model(), note: 'Each row says what is asked and why ("margin 18.9 % under the 20 % floor"), who asked, the net and since when.' },
+    { id: 'selected', label: 'Finance · two requests selected', model: model({ selected: WAITING.map((row) => row.id), focusRow: 0 }), note: 'Approve 2 in the toolbar. When a selected request is not yours to decide, the button is held and says why.' },
     { id: 'finance-review', label: 'Finance · the review (A approve, R reject, J / K)', model: model({ open: review }), note: 'Still current · checked 10:42; the numbers behind the rule; the lines under the floor; the note; Open full quote.' },
     { id: 'reject', label: 'Finance · reject with a reason', model: model({ open: review, rejecting: true }) },
     { id: 'changed', label: 'Changed since asked (held)', model: model({ open: { id: WAITING[0]!.id, quote: { status: 'ready', value: { ...pending(), version: 9 } } } }), note: 'The quote moved after the request: Approve and Reject are held, the line says why.' },

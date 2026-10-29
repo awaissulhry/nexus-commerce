@@ -123,6 +123,27 @@ export function Approvals() {
     }
   }
 
+  const approveMany = async (ids: readonly string[], note: string): Promise<boolean> => {
+    const chosen = rowsRef.current.filter((row) => ids.includes(row.id) && row.mayDecide)
+    setBusy(true)
+    setNotice(null)
+    let done = 0
+    for (const row of chosen) {
+      try {
+        // Each with the quote's version as read: a request that moved meanwhile is refused, never decided blind.
+        await approveQuote(api, { id: row.quoteId, version: row.quoteVersion }, note || null)
+        done++
+      } catch {
+        // Counted below; the queue is read again.
+      }
+    }
+    setBusy(false)
+    const failed = ids.length - done
+    setNotice(failed === 0 ? { key: 'bulk.approved', tone: 'success', params: { count: done } } : { key: 'bulk.approvedPartly', tone: 'warning', params: { done, failed } })
+    void load()
+    return failed === 0
+  }
+
   const model: ApprovalsViewModel = {
     prefix,
     me: session.user.id,
@@ -156,6 +177,7 @@ export function Approvals() {
         onReject: (reason) => decide((current) => rejectQuote(api, current, reason), 'notice.rejected'),
         onRejecting: setRejecting,
         onDismissNotice: () => setNotice(null),
+        onApproveMany: approveMany,
       }}
     />
   )

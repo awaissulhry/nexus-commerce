@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { useLiveChanges } from '../../../../record-panels/live'
-import { createQuote, findCustomers, getParty, listQuotes, nextNumber, QUOTE_STATUSES, type QuoteListRow, type QuoteStatus } from '../api'
-import { abilitiesOf, filtersOfTile, grainsOf, romeToday, tileCount, type ListFilters, type QuoteTile, type TileCount } from '../model'
+import { cancelQuote, createQuote, findCustomers, getParty, listQuotes, nextNumber, QUOTE_STATUSES, type QuoteListRow, type QuoteStatus } from '../api'
+import { abilitiesOf, filtersOfTile, grainsOf, quotesCsv, romeToday, tileCount, type ListFilters, type QuoteTile, type TileCount } from '../model'
+import { useLocale, useT } from '../../../../lib/i18n/provider'
+import { WithMessages } from '../../../../record-panels/i18n'
 import { readProblem, writeProblem } from '../problems'
 import type { NewQuoteModel, QuotesListViewModel } from './list-model'
 import { QuotesListView } from './view/QuotesListView'
@@ -48,6 +50,16 @@ function searchOf(filters: ListFilters): string {
  * its contacts and defaults, the number it will get (`GET /sales/quote-numbers/next`), then Create opens the record.
  */
 export function QuotesPage() {
+  return (
+    <WithMessages namespaces={['sales']}>
+      <QuotesContainer />
+    </WithMessages>
+  )
+}
+
+function QuotesContainer() {
+  const t = useT('sales')
+  const locale = useLocale()
   const api = useOfficeApi()
   const session = useOfficeSession()
   const router = useRouter()
@@ -64,6 +76,7 @@ export function QuotesPage() {
   const [tiles, setTiles] = useState<Record<QuoteTile, TileCount>>(() => Object.fromEntries(Object.keys(TILE_READS).map((tile) => [tile, { count: null, more: false }])) as Record<QuoteTile, TileCount>)
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<QuotesListViewModel['notice']>(null)
+  const [busy, setBusy] = useState(false)
   const [newQuote, setNewQuote] = useState<NewQuoteModel | null>(params?.get('new') === '1' && can.manage ? emptyNew(session.companies, companyId) : null)
   const filtersRef = useRef(filters)
   filtersRef.current = filters
@@ -198,6 +211,44 @@ export function QuotesPage() {
     updates,
     newQuote,
     notice,
+    busy,
+  }
+
+  const cancelMany = async (ids: readonly string[], reason: string): Promise<boolean> => {
+    const chosen = (rows.items ?? []).filter((row) => ids.includes(row.id))
+    setBusy(true)
+    setNotice(null)
+    let done = 0
+    for (const row of chosen) {
+      try {
+        // One by one, each with the version it was read with: a quote moved meanwhile is refused, never overwritten.
+        await cancelQuote(api, { id: row.id, version: row.version }, reason)
+        done++
+      } catch {
+        // Counted below; the list is read again.
+      }
+    }
+    setBusy(false)
+    const failed = chosen.length - done
+    setNotice(failed === 0 ? { key: 'list.bulk.cancelled', tone: 'success', params: { count: done } } : { key: 'list.bulk.cancelPartly', tone: 'warning', params: { done, failed } })
+    setUpdates(0)
+    void load()
+    void loadTiles()
+    return failed === 0
+  }
+
+  const exportCsv = (ids: readonly string[]) => {
+    const chosen = (rows.items ?? []).filter((row) => ids.includes(row.id))
+    const csv = quotesCsv(chosen, grains, { header: (key) => t(key), status: (status) => t(`status.${status}`) }, locale)
+    const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `quotes-${romeToday()}.csv`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    setNotice({ key: 'list.bulk.exported', tone: 'success', params: { count: chosen.length } })
   }
 
   return (
@@ -227,6 +278,9 @@ export function QuotesPage() {
         onNewField: (field, value) => setNewQuote((current) => (current ? { ...current, [field]: value } : current)),
         onCreate: create,
         onDismissNotice: () => setNotice(null),
+        onOpen: (id) => router.push(`${prefix}/sales/quotes/${id}`),
+        onExport: exportCsv,
+        onCancelMany: cancelMany,
       }}
     />
   )
