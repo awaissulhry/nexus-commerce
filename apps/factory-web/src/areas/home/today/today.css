@@ -68,10 +68,11 @@
   font-weight: var(--nds-font-weight-semibold);
 }
 
-.fw-today-keys {
-  margin-left: auto;
-  color: var(--nds-text-3);
-  font-size: var(--nds-font-size-xs);
+
+.fw-today-queue-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
 }
 
 .fw-today-muted {
@@ -273,9 +274,6 @@ a.fw-today-stage-box:hover {
 
 /* Phone: rows and panels in one column, the keys hint gone (no keyboard), stages two per row. */
 @media (max-width: 760px) {
-  .fw-today-keys {
-    display: none;
-  }
 
   .fw-today-panels {
     grid-template-columns: minmax(0, 1fr);

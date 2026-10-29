@@ -3,9 +3,12 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { AlertOctagon, AlertTriangle, ArrowRight, CalendarCheck, ChevronRight, Circle, ExternalLink, MoreHorizontal, Sun, X } from 'lucide-react'
 import { AsOf, Banner, Card, EmptyState, Menu, MetricStrip, PressableRow, type Metric } from '@nexus/ui/components'
-import { Button, FilterChip, InfoTip, Kbd, SegmentedControl, Skeleton, Tag } from '@nexus/ui/primitives'
+import { Button, FilterChip, InfoTip, SegmentedControl, Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
+import { ListKeysInfo } from '../../../../list-frame/ListKeysInfo'
+import type { ListKey } from '../../../../list-frame/model'
+import type { Translate } from '../../../../lib/i18n/messages'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { dueWords, groupItems, queueKey, tileCount, TILES, type Category, type QueueItem, type TodayViewModel } from '../model'
 import { phraseText, sentenceText } from '../words'
@@ -28,6 +31,19 @@ export interface TodayActions extends DecideActions {
   onDismissNotice?: () => void
 }
 
+/**
+ * Today's keys, in the list footer's info icon. Not a grid: no cells, no selection, no "?" list — j / k and Enter in the
+ * list (j / k also step through rows in the decide modal), a / r in a quote approval's review.
+ */
+export function todayKeys(t: Translate): ListKey[] {
+  return [
+    { keys: ['j', 'k'], does: 'keys.rows' },
+    { keys: ['↵'], does: 'keys.open' },
+    { keys: ['a'], does: t('today.keys.approve') },
+    { keys: ['r'], does: t('today.keys.reject') },
+  ]
+}
+
 const SEVERITY_ICON = { HIGH: AlertOctagon, MEDIUM: AlertTriangle, LOW: Circle } as const
 const SEVERITY_TONE = { HIGH: 'danger', MEDIUM: 'warning', LOW: 'neutral' } as const
 
@@ -42,7 +58,7 @@ const SEVERITY_TONE = { HIGH: 'danger', MEDIUM: 'warning', LOW: 'neutral' } as c
  */
 export function TodayView({ model, actions }: { model: TodayViewModel; actions?: TodayActions }) {
   return (
-    <WithMessages namespaces={['home']}>
+    <WithMessages namespaces={['home', 'lists']}>
       <Today model={model} actions={actions} />
     </WithMessages>
   )
@@ -227,9 +243,6 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
               {t('today.queue.fresh', { count: queue.fresh })}
             </Button>
           )}
-          <span className="fw-today-keys" aria-hidden>
-            <Kbd>J</Kbd> <Kbd>K</Kbd> {t('today.keys.move')} · <Kbd>Enter</Kbd> {t('today.keys.open')}
-          </span>
         </div>
 
         <div ref={listRef}>
@@ -265,11 +278,15 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
                   </ul>
                 </div>
               ))}
-              {queue?.more && (
-                <Button variant="secondary" onClick={() => actions?.onMore?.()} disabled={queue.loadingMore}>
-                  {t(queue.loadingMore ? 'today.queue.loadingMore' : 'today.queue.more')}
-                </Button>
-              )}
+              {/* The list's footer: more rows, and its keys in ONE info icon (Owner rule 2026-10-29: no key hints above a list). */}
+              <div className="fw-today-queue-foot">
+                {queue?.more && (
+                  <Button variant="secondary" onClick={() => actions?.onMore?.()} disabled={queue.loadingMore}>
+                    {t(queue.loadingMore ? 'today.queue.loadingMore' : 'today.queue.more')}
+                  </Button>
+                )}
+                <ListKeysInfo keys={todayKeys(t)} />
+              </div>
             </>
           )}
         </div>

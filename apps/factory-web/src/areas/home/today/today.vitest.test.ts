@@ -30,6 +30,7 @@ import {
 } from './model'
 import { PANELS, panelPage, panelsFor, PanelShapeError } from './panels'
 import { phraseText, sentenceText } from './words'
+import { todayKeys } from './view/TodayView'
 import { CODE_WORDS, EN_TEMPLATES, invoiceToIssueWords, mailToSortWords, orderPromiseWords, phrase, registerDutyWords, workOrderHeldWords } from '@nexus/factory-domain/insights/words'
 import { createTranslator } from '../../../lib/i18n/messages'
 
@@ -395,5 +396,27 @@ describe('the rows in the person’s language: the API’s phrases drawn with to
     )
     expect(html).toContain('è in ritardo di 2 giorni')
     expect(html).not.toMatch(/is 2 days late|waits in quarantine|You manage this customer/)
+  })
+})
+
+describe('the keys live in ONE info icon in the list footer (Owner rule 2026-10-29: no key hints above a list)', () => {
+  it('Today’s own keys: j / k, Enter, and a / r for a quote approval’s review — no grid keys', () => {
+    const en = createTranslator('en', CATALOGUE.en.home!)
+    expect(todayKeys(en)).toEqual([
+      { keys: ['j', 'k'], does: 'keys.rows' },
+      { keys: ['↵'], does: 'keys.open' },
+      { keys: ['a'], does: 'Approve the quote (in its review)' },
+      { keys: ['r'], does: 'Reject the quote, with a reason (in its review)' },
+    ])
+  })
+
+  it('the queue draws no key hint in its header, and its footer holds the keys icon', () => {
+    const html = renderToString(
+      createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: designScreen.cases.find((entry) => entry.id === 'owner')!.model })),
+    )
+    const head = html.slice(html.indexOf('id="fw-today-needs"'), html.indexOf('fw-today-group'))
+    expect(head).not.toMatch(/<kbd/i)
+    expect(html).toContain('fw-today-queue-foot')
+    expect(html.slice(html.indexOf('fw-today-queue-foot'))).toContain('Keyboard keys of this list')
   })
 })

@@ -67,8 +67,8 @@
       "loadingMore": "Lettura di altre righe…"
     },
     "keys": {
-      "move": "sposta",
-      "open": "apri"
+      "approve": "Approva il preventivo (nella sua revisione)",
+      "reject": "Respingi il preventivo, con un motivo (nella sua revisione)"
     },
     "group": {
       "NOW": "Ora",

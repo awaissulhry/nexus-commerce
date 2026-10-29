@@ -67,8 +67,8 @@
       "loadingMore": "Reading more…"
     },
     "keys": {
-      "move": "move",
-      "open": "open"
+      "approve": "Approve the quote (in its review)",
+      "reject": "Reject the quote, with a reason (in its review)"
     },
     "group": {
       "NOW": "Now",
