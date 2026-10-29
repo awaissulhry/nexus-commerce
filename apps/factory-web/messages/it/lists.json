@@ -45,6 +45,7 @@
     "retry": "Riprova",
     "empty": "Ancora niente qui",
     "noMatch": "Nessuna riga corrisponde a questi filtri",
-    "clearFilters": "Togli i filtri"
+    "clearFilters": "Togli i filtri",
+    "blockedReason": "Bloccato: sbloccalo prima di agire"
   }
 }

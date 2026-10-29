@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { id, input, instant, output } from '../../core/contracts'
+import { GARMENT_TRACKINGS } from '../../production/serials/rules'
 import { localisedNames } from '../materials/contracts'
 import { sizeCode } from '../sizes/contracts'
 import { BODY_MEASURE_UNITS, MASTER_STATUSES } from '../sizes/rules'
@@ -77,6 +78,15 @@ export const updateStyleBody = input(editable)
 export type UpdateStyleBody = z.output<typeof updateStyleBody>
 
 export const styleStatusBody = input({ version: version(), reason: text(500).optional() })
+
+/**
+ * How the garments of a style are numbered on their labels (Q31: both are built, a setting per style): BATCH = the
+ * work order's batch number on every label; SERIAL = one serial per garment. It changes until the style's work orders
+ * print their first garment label, give a serial or release a garment (rules `garmentTrackingRefusal`; the database's
+ * factory_style_garment_tracking_guard holds the same rule).
+ */
+export const garmentTrackingBody = input({ version: version(), tracking: z.enum(GARMENT_TRACKINGS) })
+export type GarmentTrackingBody = z.infer<typeof garmentTrackingBody>
 
 export const updateColourwayBody = input({
   version: version(),
@@ -252,6 +262,8 @@ export const styleView = output({
   measurementTemplate: ref.nullable(),
   /** How its garments are traced (PRD-025; Reg. (EU) 2016/425 art. 8(5)): by lot when PPE. */
   tracking: z.enum(['LOT', 'NONE']),
+  /** How its garments are numbered on their labels (Q31): the batch number, or one serial per garment. */
+  garmentTracking: z.enum(GARMENT_TRACKINGS),
   /** The range with each size's label and body measures. */
   range: z.array(
     output({

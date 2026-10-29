@@ -69,6 +69,11 @@ model Inspection {
   companyId         String           @db.Uuid
   siteId            String           @db.Uuid
   workOrderId       String           @db.Uuid
+  /// Its number (INS-2026-0412), from the company's INSPECTION series when it is opened (office or bench: allocateNumber),
+  /// unique in the tenant (each company's series prints its own prefix), given once and never changed (the
+  /// …_numbering_floor_documents_guards trigger: every new row has one). Null only for an inspection opened before the
+  /// series existed (W1 history, labelled "WO-0003 · inspection 2").
+  number            String?
   /// The finished garments this inspection judges (the inspection lot), from 1 up to the work order's pieces.
   lotSize           Int
   /// The garments examined, from 1 up to the lot.
@@ -121,6 +126,8 @@ model Inspection {
 
   // The target of the defects' and releases' references: an inspection of the same site and work order.
   @@unique([tenantId, siteId, workOrderId, id])
+  // One inspection per number in the tenant (NULLs, the W1 history, do not clash).
+  @@unique([tenantId, number])
   @@index([tenantId, workOrderId])
   @@index([tenantId, status])
 }
@@ -202,6 +209,10 @@ model QualityRelease {
   siteId          String   @db.Uuid
   workOrderId     String   @db.Uuid
   workOrderSizeId String   @db.Uuid
+  /// Its number (REL-2026-0088), from the company's RELEASE series at the release (office or bench: allocateNumber),
+  /// unique in the tenant, given once (the …_numbering_floor_documents_guards trigger: every new row has one; the row is
+  /// append-only). Null only for a release made before the series existed (W1 history).
+  number          String?
   /// The PASSED inspection of the work order it releases from.
   inspectionId    String   @db.Uuid
   /// Garments released, from 1.
@@ -232,6 +243,8 @@ model QualityRelease {
 
   // The target of the serials' and reversals' references: a release of the same cell.
   @@unique([tenantId, siteId, workOrderSizeId, id])
+  // One release per number in the tenant (NULLs, the W1 history, do not clash).
+  @@unique([tenantId, number])
   @@index([tenantId, workOrderId])
   @@index([tenantId, inspectionId])
 }

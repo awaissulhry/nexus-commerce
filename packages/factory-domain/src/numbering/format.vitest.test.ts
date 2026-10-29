@@ -4,7 +4,10 @@ import {
   defaultPattern,
   DOCUMENT_KINDS,
   FISCAL_KINDS,
+  FLOOR_DOCUMENT_KINDS,
+  isDocumentKind,
   isFiscalKind,
+  isFloorDocumentKind,
   isScopeKey,
   isSeriesCode,
   MAX_NUMBER,
@@ -18,6 +21,18 @@ describe('number kinds and periods', () => {
   it('marks invoices, deposit invoices, credit notes and DDTs as fiscal, and nothing else', () => {
     expect(NUMBER_KINDS.filter(isFiscalKind)).toEqual(['DDT', 'INVOICE', 'DEPOSIT_INVOICE', 'CREDIT_NOTE'])
     expect(FISCAL_KINDS.every((kind) => NUMBER_KINDS.includes(kind))).toBe(true)
+  })
+
+  it("lets the floor number goods receipts, lots, inspections and releases: document kinds, never a fiscal one", () => {
+    expect([...FLOOR_DOCUMENT_KINDS].sort()).toEqual(['GOODS_RECEIPT', 'INSPECTION', 'LOT', 'RELEASE'])
+    for (const kind of FLOOR_DOCUMENT_KINDS) {
+      expect(isDocumentKind(kind)).toBe(true)
+      expect(isFiscalKind(kind)).toBe(false)
+    }
+    expect(NUMBER_KINDS.filter(isFloorDocumentKind)).toHaveLength(FLOOR_DOCUMENT_KINDS.length)
+    for (const kind of [...FISCAL_KINDS, 'BUNDLE', 'WORK_ORDER', 'nonsense', null]) expect(isFloorDocumentKind(kind)).toBe(false)
+    expect(defaultPattern('INSPECTION', 'YEARLY')).toBe('INS-{YYYY}-{N:5}')
+    expect(defaultPattern('RELEASE', 'YEARLY')).toBe('REL-{YYYY}-{N:5}')
   })
 
   it('numbers a yearly series by the calendar year of the business date, a never-resetting one in ALL', () => {

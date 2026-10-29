@@ -1,20 +1,22 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/numbering.prisma (rules: src/ownership.ts; roles: src/roles.ts). Document numbers (NumberSeries, NumberAllocation) are issued by apps/factory-api's allocateNumber inside an office (or worker) command; floor and portal sessions get no grant on them, so a tablet can never move a company's counter (a fiscal one least of all). Scan ids (BUNDLE, HIDE, GARMENT_SERIAL) are the floor's numbers: a tablet takes a block of them (online, or for itself to number offline) and records the numbers it used; the …_numbering_floor_guards triggers hold that a block starts above every block before it, is never changed but closed, and that a used number lies in an open block of its tablet. NumberAllocation and NumberBlockUse are append-only (`@append-only`, scripts/factory/check-append-only.mjs): no update or delete grant, and their triggers refuse UPDATE, DELETE and TRUNCATE for every login. Series and blocks are closed, never deleted. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/numbering.prisma (rules: src/ownership.ts; roles: src/roles.ts). Document numbers (NumberSeries, NumberAllocation) are issued by apps/factory-api's allocateNumber inside a command. Office sessions and the worker reach every series. Floor sessions reach ONLY the series and numbers of the floor's document kinds (onlyValues kind: GOODS_RECEIPT, LOT, INSPECTION, RELEASE = @nexus/factory-domain/numbering/kinds FLOOR_DOCUMENT_KINDS): a tablet numbers goods received at the dock, their lots, a final inspection and its release from its own command, online; a fiscal series (invoice, deposit invoice, credit note, DDT) and every other kind stay invisible to it, so it can never read, lock or move one. The …_numbering_floor_documents_guards triggers hold the rest for the floor: never a fiscal series, only its own site's company, a counter moves one number at a time and only past a number it recorded, and a new row is only a new year of an existing series. Portal sessions get nothing. Scan ids (BUNDLE, HIDE, GARMENT_SERIAL) are the floor's numbers: a tablet takes a block of them (online, or for itself to number offline) and records the numbers it used; the …_numbering_floor_guards triggers hold that a block starts above every block before it, is never changed but closed, and that a used number lies in an open block of its tablet. NumberAllocation and NumberBlockUse are append-only (`@append-only`, scripts/factory/check-append-only.mjs): no update or delete grant, and their triggers refuse UPDATE, DELETE and TRUNCATE for every login. Series and blocks are closed, never deleted. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "NumberSeries": {
-      "about": "Office sessions and the worker keep the series: an admin creates one, sets its start or moves it past a number (numbering.manage, through command()), and allocateNumber locks the row and moves its counter. The API keeps staff to the companies their grants reach (scopeWhere / can()).",
+      "about": "Office sessions and the worker keep the series: an admin creates one, sets its start or moves it past a number (numbering.manage, through command()), and allocateNumber locks the row and moves its counter. The API keeps staff to the companies their grants reach (scopeWhere / can()). Floor sessions take numbers of the floor's document kinds only (onlyValues): they read and lock those series, move a counter past the number they took, and add the next year's row of a yearly series on its first number; the guards keep them to their site's company and away from any fiscal series.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId" },
       "access": {
-        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "onlyValues": { "kind": ["GOODS_RECEIPT", "LOT", "INSPECTION", "RELEASE"] } }
       }
     },
     "NumberAllocation": {
-      "about": "Office sessions and the worker add one row per issued number (allocateNumber) and read the ledger (which record has which number; the no-gap check). Nobody changes or removes a row.",
+      "about": "Office sessions and the worker add one row per issued number (allocateNumber) and read the ledger (which record has which number; the no-gap check). Floor sessions add and read the rows of the floor's document kinds only (onlyValues). Nobody changes or removes a row.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId" },
       "access": {
-        "factory_runtime": { "privileges": ["select", "insert"] }
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "onlyValues": { "kind": ["GOODS_RECEIPT", "LOT", "INSPECTION", "RELEASE"] } }
       }
     },
     "NumberBlock": {

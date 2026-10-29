@@ -14,13 +14,12 @@ import type { PriceBasis } from '../../tax/vat-summary'
 import { vatOn } from '../../tax/vat-summary'
 import { treatmentKey, type VatTreatment } from '../../tax/vat-treatment'
 import {
+  fatturaPaText,
   fifteenthOfNextMonth,
-  firstNonLatin1,
   formatDateIt,
-  isBasicLatinText,
-  isLatin1Text,
   isLocalDate,
   monthOf,
+  type FatturaPaCharset,
 } from './format'
 import type {
   Address,
@@ -132,9 +131,13 @@ class Issues {
   }
 }
 
-type Charset = 'LATIN1' | 'ASCII'
+type Charset = FatturaPaCharset
 
-/** A text field: trimmed, within the schema's character set and length. Returns null (and records why) when not. */
+/**
+ * A text field, as the file carries it: in the schema's character set (format.ts `fatturaPaText`: typographic
+ * characters to their plain forms, accents dropped only where the set has no room for them), trimmed, within its
+ * length. Returns null (and records why, naming the field and the character) when a character has no close form.
+ */
 function text(
   issues: Issues,
   path: string,
@@ -151,18 +154,18 @@ function text(
     issues.add(path, 'NOT_TEXT', 'must be text')
     return null
   }
-  const trimmed = value.trim()
-  if (charset === 'ASCII' && !isBasicLatinText(trimmed)) {
-    issues.add(path, 'NOT_ASCII', 'may hold only printable ASCII characters (FatturaPA basic-Latin field)')
-    return null
-  }
-  if (charset === 'LATIN1' && !isLatin1Text(trimmed)) {
-    const bad = firstNonLatin1(trimmed)
+  const carried = fatturaPaText(value, charset)
+  if (!carried.ok) {
     issues.add(
       path,
-      'NOT_LATIN1',
-      `holds "${bad}", which FatturaPA cannot carry (Latin-1 only); replace it (for instance "EUR" for "€", "-" for a dash)`,
+      charset === 'ASCII' ? 'NOT_ASCII' : 'NOT_LATIN1',
+      `holds "${carried.character}" (${carried.codePoint}), which FatturaPA cannot carry and which has no close ${charset === 'ASCII' ? 'basic-Latin' : 'Latin-1'} form; replace it`,
     )
+    return null
+  }
+  const trimmed = carried.text.trim()
+  if (trimmed === '') {
+    if (required) issues.add(path, 'REQUIRED', 'is required')
     return null
   }
   if (trimmed.length > max || trimmed.length < min) {

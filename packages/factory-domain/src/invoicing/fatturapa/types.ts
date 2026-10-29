@@ -6,7 +6,9 @@ import type { VatTreatment } from '../../tax/vat-treatment'
 /**
  * Input of the FatturaPA builder (format FPR12, schema VFPR12 v1.2.3: invoices between private parties, B2B and B2C).
  * Amounts are decimals or plain decimal strings, never numbers. Dates are calendar dates, "YYYY-MM-DD".
- * Text must be Latin-1 (the schema allows nothing else); the builder refuses other characters rather than change them.
+ * Text is carried in the schema's character set (Latin-1, basic Latin for codes): the builder maps typographic
+ * characters to their plain forms (format.ts `fatturaPaText`: dashes, quotes, ellipsis, spaces, accents a field cannot
+ * hold) and refuses, naming the field and the character, only what has no close form.
  */
 
 /** The document types the factory issues. */

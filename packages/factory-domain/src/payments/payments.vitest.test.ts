@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { depositLinkMail } from './deposit-link'
 import { bankReferenceProblem, normaliseBankReference, openOnDeposit, openOnInvoice, planAllocations, voidProblems } from './payments'
 
 describe('a payment received (FIN-121, FIN-122)', () => {
@@ -28,5 +29,21 @@ describe('a payment received (FIN-121, FIN-122)', () => {
     expect(voidProblems({ status: 'RECEIVED', allocated: 0 })).toEqual([])
     expect(voidProblems({ status: 'RECEIVED', allocated: 100 })).toHaveLength(1)
     expect(voidProblems({ status: 'VOIDED', allocated: 0 })).toHaveLength(1)
+  })
+})
+
+describe('the deposit page mail (DEPOSIT_INFO link)', () => {
+  const input = { locale: 'it' as const, quoteDocument: 'QT-2026-00001 v1', orderNumber: 'SO-2026-0001', expiresAt: new Date('2026-11-28T09:00:00.000Z'), message: null }
+
+  it('says what the page holds; the text the thread keeps never holds the link', () => {
+    const kept = depositLinkMail(input, null)
+    expect(kept.subject).toBe("Acconto per l'offerta QT-2026-00001 v1: importo e coordinate per il bonifico")
+    expect(kept.body).toContain("l'offerta QT-2026-00001 v1 (ordine SO-2026-0001)")
+    expect(kept.body).toContain('[Link personale inviato solo per e-mail: non è conservato qui.]')
+    expect(kept.body).not.toContain('#token=')
+    const sent = depositLinkMail({ ...input, locale: 'en', orderNumber: null, message: 'Thank you for your order.' }, 'https://factory.example.com/l#token=abc')
+    expect(sent.subject).toBe('Deposit for quote QT-2026-00001 v1: amount and bank details')
+    expect(sent.body).toContain('https://factory.example.com/l#token=abc')
+    expect(sent.body.endsWith('Thank you for your order.')).toBe(true)
   })
 })
