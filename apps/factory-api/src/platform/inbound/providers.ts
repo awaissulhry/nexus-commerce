@@ -1,10 +1,12 @@
 import type { IntegrationProvider } from '@nexus/factory-db'
 import type { Clock } from '@nexus/factory-domain/ports/clock'
 import type { SignatureVerifier } from '@nexus/factory-domain/ports/signature'
+import { sendcloudVerifier } from '../../adapters/sendcloud/webhook'
 import { snsVerifier } from '../../adapters/ses/sns'
 import type { CommandTools } from '../../core/command'
 import { serverClock } from '../../core/time'
 import { loadFactoryEnv, type FactoryEnv } from '../../env'
+import { sendcloudTrackingProcessor } from '../../modules/shipping/labels/webhook'
 import type { SecretsService } from '../secrets/envelope'
 import { sesNotificationProcessor } from '../email-out/notifications'
 import { emailInProcessor } from '../email-in/receive'
@@ -55,11 +57,13 @@ export type InboundProviders = Readonly<Partial<Record<IntegrationProvider, Inbo
 
 /**
  * The providers' entries. SES via SNS: a received mail ("Received", email in, platform/email-in/receive.ts), else a
- * delivery, bounce or complaint notification (email out, platform/email-out/notifications.ts). The W1 adapters (the SDI
- * intermediary, Sendcloud) add theirs here.
+ * delivery, bounce or complaint notification (email out, platform/email-out/notifications.ts). Sendcloud: its
+ * Sendcloud-Signature header (adapters/sendcloud/webhook.ts) and the parcels' tracking (modules/shipping/labels). The
+ * SDI intermediary adds its entry here.
  */
 export const INBOUND_PROVIDERS: InboundProviders = Object.freeze({
   SES: { verifier: snsVerifier, processor: emailInProcessor(sesNotificationProcessor) },
+  SENDCLOUD: { verifier: sendcloudVerifier, processor: sendcloudTrackingProcessor() },
 })
 
 /** What the inbound route and its job need. */

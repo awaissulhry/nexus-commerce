@@ -218,9 +218,9 @@ describe('the packing list', () => {
 })
 
 describe('declarations', () => {
-  it('declares seven permissions (the floor packs only) and six events without money', () => {
+  it('declares seven permissions (the floor packs only) and ten events without money', () => {
     expect(SHIPPING_PERMISSIONS).toEqual(['shipping.view', 'shipping.manage', 'shipping.pack', 'shipping.settings.view', 'shipping.settings.manage', 'shipping.ddt.issue', 'shipping.ddt.cancel'])
     expect(SHIPPING_FLOOR_PERMISSIONS).toEqual(['shipping.pack'])
-    expect(events.map((event) => event.type)).toEqual(['shipment.created', 'shipment.status_changed', 'shipment.packing_changed', 'shipping.settings_saved', 'ddt.issued', 'ddt.cancelled'])
+    expect(events.map((event) => event.type)).toEqual(['shipment.created', 'shipment.status_changed', 'shipment.packing_changed', 'shipping.settings_saved', 'ddt.issued', 'ddt.cancelled', 'shipment.labels_bought', 'shipment.label_voided', 'shipment.tracking_recorded', 'shipment.tracking_poll_due'])
   })
 })

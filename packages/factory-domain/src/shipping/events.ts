@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { defineEvent } from '../events/define'
+import { TRACKING_SOURCES, TRACKING_STATUSES } from './labels/tracking'
 import { SHIPMENT_STATUSES } from './shipments'
 
 /**
@@ -14,6 +15,10 @@ import { SHIPMENT_STATUSES } from './shipments'
  *   ddt.issued                a shipment's DDT was issued with its number (B-W1-47; the label (B-W1-48) and the
  *                             deferred invoice (B-W1-51) follow it), `shipped` when the goods left in the same command
  *   ddt.cancelled             an issued DDT was cancelled (it keeps its number; a new one replaces it)
+ *   shipment.labels_bought    carrier labels were bought for parcels of a shipment (B-W1-48; the packers print them)
+ *   shipment.label_voided     a parcel's carrier label was voided (the parcel can change again)
+ *   shipment.tracking_recorded  the carrier's tracking events were recorded (webhook or poll); `status` is the latest
+ *   shipment.tracking_poll_due  the scheduler found parcels of the shipment with no news: the worker asks the carrier
  */
 const status = z.enum(SHIPMENT_STATUSES)
 
@@ -61,5 +66,32 @@ export const events = [
     description: 'An issued DDT was cancelled with its reason; it keeps its number.',
     payload: z.strictObject({ ddtId: z.uuid(), shipmentId: z.uuid(), number: z.string() }),
     live: { permission: 'shipping.view', fields: ['ddtId', 'shipmentId', 'number'] },
+  }),
+  defineEvent({
+    type: 'shipment.labels_bought',
+    context: 'shipping',
+    description: "Carrier labels were bought for parcels of a shipment through the company's Sendcloud account.",
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), bought: z.number().int().min(0), failed: z.number().int().min(0) }),
+    live: { permission: 'shipping.pack', floor: true, fields: ['shipmentId', 'number', 'bought', 'failed'] },
+  }),
+  defineEvent({
+    type: 'shipment.label_voided',
+    context: 'shipping',
+    description: "A parcel's carrier label was voided before the goods left (cancelled at the carrier, or queued there).",
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), parcelId: z.uuid(), seq: z.number().int().min(1), queued: z.boolean() }),
+    live: { permission: 'shipping.pack', floor: true, fields: ['shipmentId', 'number', 'parcelId', 'seq'] },
+  }),
+  defineEvent({
+    type: 'shipment.tracking_recorded',
+    context: 'shipping',
+    description: "The carrier's tracking events of a shipment were recorded (a Sendcloud webhook or a poll).",
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), events: z.number().int().min(1), status: z.enum(TRACKING_STATUSES), source: z.enum(TRACKING_SOURCES) }),
+    live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'status'] },
+  }),
+  defineEvent({
+    type: 'shipment.tracking_poll_due',
+    context: 'shipping',
+    description: 'Parcels of a shipment had no tracking news for hours: the worker asks the carrier.',
+    payload: z.strictObject({ shipmentId: z.uuid(), parcels: z.number().int().min(0) }),
   }),
 ] as const
