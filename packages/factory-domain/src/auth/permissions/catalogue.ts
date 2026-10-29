@@ -1,4 +1,5 @@
 import { CERTIFICATES_PERMISSIONS } from '../../compliance/certificates/permissions'
+import { REGISTER_PERMISSIONS } from '../../compliance/register/permissions'
 import { COSTING_DEFINITIONS, COSTING_PERMISSIONS } from '../../costing/permissions'
 import type { Permission } from '../../core/permissions'
 import { INVENTORY_FLOOR_PERMISSIONS, INVENTORY_PERMISSIONS } from '../../inventory/permissions'
@@ -193,7 +194,10 @@ export const EMAIL_TRIAGE = 'email.triage' satisfies Permission
  * constants live in factory-domain/src/compliance/certificates/permissions.ts. Not step-up: a certificate is typed from
  * the notified body's PDF, and registering one needs that PDF on the record. The style compliance tab (B-W1-20,
  * factory-domain/src/product/compliance/permissions.ts) reads with certificates.view and uploads the signed DoC and
- * leaflet with declarations.manage (not step-up either: the PDF was signed by hand before it is uploaded).
+ * leaflet with declarations.manage (not step-up either: the PDF was signed by hand before it is uploaded). The PPE
+ * register (B-W1-43, factory-domain/src/compliance/register/permissions.ts) is read with register.view and kept with
+ * register.manage, over the entry's company and reporting party; not step-up (every move is audited and an entry is
+ * never deleted).
  */
 export const COMPLIANCE_DEFINITIONS = definePermissions('compliance', {
   'certificates.view': {
@@ -206,6 +210,14 @@ export const COMPLIANCE_DEFINITIONS = definePermissions('compliance', {
   'labels.manage': {
     risk: 'write',
     description: 'Build garment label templates (maker, composition, animal-origin phrase, care symbols, layout), activate them when their rule checks pass, retire and revise them, print a test label, and name one on a draft style revision.',
+  },
+  'register.view': {
+    risk: 'read',
+    description: 'See the PPE register of complaints, non-conformities and recalls, and for each entry where the garments it concerns went: work orders, shipments, DDTs and the customers that got them.',
+  },
+  'register.manage': {
+    risk: 'write',
+    description: 'Record complaints, non-conformities and recalls in the PPE register, edit an open entry and its risk assessment, record the corrective action, the information to distributors and the notice to the authority, and close the entry.',
   },
 })
 
@@ -282,7 +294,7 @@ export const FLOOR_AREA = 'floor'
 export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS, ...INVENTORY_FLOOR_PERMISSIONS, ...SHIPPING_FLOOR_PERMISSIONS])
 
 // The modules' constants and their declarations name the same permissions.
-for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...PRODUCT_BOM_PERMISSIONS, ...PRODUCT_ROUTING_PERMISSIONS, ...SHIPPING_PERMISSIONS, ...SHIPPING_LABELS_PERMISSIONS, ...PARTIES_PERMISSIONS, ...PLANNING_PERMISSIONS, ...INVOICES_PERMISSIONS, ...PAYMENTS_PERMISSIONS, ...COSTING_PERMISSIONS, ...PRODUCTION_SETTINGS_PERMISSIONS, ...WORKORDERS_PERMISSIONS, ...QUOTES_PERMISSIONS, ...SALES_SETTINGS_PERMISSIONS, ...COMPANY_BANK_PERMISSIONS, ...ORDERS_PERMISSIONS]) {
+for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...REGISTER_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...PRODUCT_BOM_PERMISSIONS, ...PRODUCT_ROUTING_PERMISSIONS, ...SHIPPING_PERMISSIONS, ...SHIPPING_LABELS_PERMISSIONS, ...PARTIES_PERMISSIONS, ...PLANNING_PERMISSIONS, ...INVOICES_PERMISSIONS, ...PAYMENTS_PERMISSIONS, ...COSTING_PERMISSIONS, ...PRODUCTION_SETTINGS_PERMISSIONS, ...WORKORDERS_PERMISSIONS, ...QUOTES_PERMISSIONS, ...SALES_SETTINGS_PERMISSIONS, ...COMPANY_BANK_PERMISSIONS, ...ORDERS_PERMISSIONS]) {
   if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 }
 for (const name of LINK_SESSION_NAMES) {

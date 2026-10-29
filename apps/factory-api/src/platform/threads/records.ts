@@ -65,6 +65,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const shipment = await client.shipment.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
     return shipment ? { companyId: shipment.companyId, siteId: shipment.siteId, partyId: shipment.partyId } : null
   },
+  // modules/compliance/register (SCR-113 Actions; B-W1-43 the corrective actions and the distributor/authority log): the
+  // register's company and the party that reported the entry (none: internal).
+  PpeRegisterEntry: async (client, id) => {
+    const entry = await client.ppeRegisterEntry.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return entry ? { companyId: entry.companyId, siteId: null, partyId: entry.partyId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}

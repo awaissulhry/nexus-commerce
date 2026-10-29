@@ -235,6 +235,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'product.routing.manage',
       'product.operations.manage',
       'compliance.certificates.view',
+      'compliance.register.view',
       'inventory.locations.view',
       'inventory.stock.view',
       'inventory.transfer',
@@ -257,7 +258,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Quality inspector',
     description: 'Inspects lots and finished goods and releases them; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'compliance.certificates.manage', 'compliance.declarations.manage', 'compliance.labels.manage', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'inventory.scrap', 'parties.view', 'workorders.view'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'compliance.certificates.manage', 'compliance.declarations.manage', 'compliance.labels.manage', 'compliance.register.view', 'compliance.register.manage', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'inventory.scrap', 'parties.view', 'workorders.view'],
     grains: [],
   }),
   template('floor_supervisor', {
