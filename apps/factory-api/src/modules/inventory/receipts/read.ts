@@ -17,7 +17,7 @@ import {
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
-import { actorOf, type RequestContext } from '../../../core/context'
+import { actorOf, type OfficeContext, type RequestContext } from '../../../core/context'
 import { mayAt, officeContextOf, seesCost, type StockContext } from '../ledger/access'
 import {
   byId,
@@ -111,7 +111,15 @@ function total(values: readonly ({ currency: string; valueAmount: number } | und
 
 export interface Blockers {
   readonly receiptLocation: string
-  readonly blockers: { readonly code: ReversalBlockerCode; readonly path: string; readonly message: string }[]
+  readonly blockers: {
+    readonly code: ReversalBlockerCode
+    readonly path: string
+    readonly message: string
+    /** The work order number, the location code or the move's reason (as the message names it). */
+    readonly where: string
+    /** The lots and hides of this group, by their codes (a screen says the group in its own words). */
+    readonly items: { readonly kind: 'LOT' | 'HIDE'; readonly code: string }[]
+  }[]
   readonly message: string | null
 }
 
@@ -147,9 +155,16 @@ export async function blockersOf(db: Reader, moves: readonly ReceiptMoveRow[]): 
   )
   if (blockers.length === 0) return { receiptLocation, blockers: [], message: null }
   const refusal = reversalRefusal(blockers, receiptLocation)
+  // The same groups as the refusal's issues (one per kind of use and place, in the same order): what each names.
+  const items = new Map(
+    tracked.map((move) => [move.hideId ?? move.lotId!, move.hideId ? { kind: 'HIDE' as const, code: hides.get(move.hideId)?.code ?? move.hideId } : { kind: 'LOT' as const, code: lots.get(move.lotId!)?.code ?? move.lotId! }]),
+  )
+  const groups = new Map<string, typeof blockers>()
+  for (const blocker of blockers) groups.set(`${blocker.code}|${blocker.where}`, [...(groups.get(`${blocker.code}|${blocker.where}`) ?? []), blocker])
+  const named = [...groups.values()].map((group) => ({ where: group[0]!.where, items: [...new Map(group.map((blocker) => [blocker.key, items.get(blocker.key)!])).values()] }))
   return {
     receiptLocation,
-    blockers: refusal.issues.map((issue) => ({ code: issue.path.split('/')[1] as ReversalBlockerCode, path: issue.path, message: issue.message })),
+    blockers: refusal.issues.map((issue, index) => ({ code: issue.path.split('/')[1] as ReversalBlockerCode, path: issue.path, message: issue.message, where: named[index]?.where ?? '', items: named[index]?.items ?? [] })),
     message: refusal.message,
   }
 }
@@ -258,7 +273,7 @@ export async function receiptDetail(db: Reader, context: RequestContext, receipt
       quantities: [...quantities].map(([uom, baseQuantity]) => ({ uom, baseQuantity: quantityText(baseQuantity) })),
     },
     lines: viewLines,
-    reversal: blockers ? { possible: blockers.blockers.length === 0, blockers: blockers.blockers } : null,
+    reversal: blockers ? { possible: blockers.blockers.length === 0, location: blockers.receiptLocation || null, blockers: blockers.blockers } : null,
     ...(withCost ? { value: asMoney('cost', total(moves.map((move) => values.get(move.id)))) } : {}),
   }
 }
@@ -277,24 +292,54 @@ export interface ListReceiptsQuery {
   readonly supplierId?: string | undefined
   readonly status?: 'OPEN' | 'POSTED' | 'REVERSED' | 'CANCELLED' | undefined
   readonly q?: string | undefined
+  /** Posted at or after this instant (the screen's "Posted today": the start of the site's day). */
+  readonly postedFrom?: string | undefined
+  /** Posted receipts with a lot still in quarantine (waiting for its test, certificate or quality check). */
+  readonly waiting?: boolean | undefined
   readonly cursor?: string | undefined
   readonly limit: number
+}
+
+/** A posted receipt with a lot still in quarantine. */
+const WAITING: Prisma.GoodsReceiptWhereInput = { status: 'POSTED', lines: { some: { lots: { some: { qualityStatus: 'QUARANTINE' } } } } }
+
+/** The list's walls and filters (the list and its counts read the same ones). */
+function receiptsWhere(context: OfficeContext, query: Omit<ListReceiptsQuery, 'limit' | 'cursor'>): Prisma.GoodsReceiptWhereInput[] {
+  return [
+    scopeWhere(actorOf(context), INVENTORY_STOCK_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.GoodsReceiptWhereInput,
+    query.siteId ? { siteId: query.siteId } : {},
+    query.purchaseOrderId ? { purchaseOrderId: query.purchaseOrderId } : {},
+    query.supplierId ? { supplierId: query.supplierId } : {},
+    query.status ? { status: query.status } : {},
+    query.q ? { OR: [{ number: { contains: query.q, mode: 'insensitive' } }, { supplierDdtNumber: { contains: query.q, mode: 'insensitive' } }] } : {},
+    query.postedFrom ? { postedAt: { gte: new Date(query.postedFrom) } } : {},
+    query.waiting ? WAITING : {},
+  ]
+}
+
+/**
+ * GET /inventory/receipts/counts: the Receipts tiles, in the list's walls — posted, posted since `postedFrom` (the
+ * start of the site's day, which the screen knows), posted with a lot still in quarantine, reversed.
+ */
+export async function countReceipts(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly postedFrom?: string | undefined }) {
+  const context = officeContextOf(caller)
+  const walls = receiptsWhere(context, { siteId: query.siteId })
+  return caller.withClient(async (client) => {
+    const count = (extra: Prisma.GoodsReceiptWhereInput) => client.goodsReceipt.count({ where: { AND: [...walls, extra] } })
+    const [posted, reversed, waiting, postedSince] = await Promise.all([
+      count({ status: 'POSTED' }),
+      count({ status: 'REVERSED' }),
+      count(WAITING),
+      query.postedFrom ? count({ postedAt: { gte: new Date(query.postedFrom) } }) : Promise.resolve(null),
+    ])
+    return { counts: { posted, reversed, waiting, postedSince } }
+  })
 }
 
 /** GET /inventory/receipts: the receipts the caller may see, newest first (by id: UUIDv7). */
 export async function listReceipts(caller: CommandCaller, query: ListReceiptsQuery) {
   const context = officeContextOf(caller)
-  const where: Prisma.GoodsReceiptWhereInput = {
-    AND: [
-      scopeWhere(actorOf(context), INVENTORY_STOCK_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.GoodsReceiptWhereInput,
-      query.siteId ? { siteId: query.siteId } : {},
-      query.purchaseOrderId ? { purchaseOrderId: query.purchaseOrderId } : {},
-      query.supplierId ? { supplierId: query.supplierId } : {},
-      query.status ? { status: query.status } : {},
-      query.q ? { OR: [{ number: { contains: query.q, mode: 'insensitive' } }, { supplierDdtNumber: { contains: query.q, mode: 'insensitive' } }] } : {},
-      query.cursor ? { id: { lt: query.cursor } } : {},
-    ],
-  }
+  const where: Prisma.GoodsReceiptWhereInput = { AND: [...receiptsWhere(context, query), query.cursor ? { id: { lt: query.cursor } } : {}] }
   return caller.withClient(async (client) => {
     const rows = await client.goodsReceipt.findMany({ where, select: RECEIPT_COLUMNS, orderBy: { id: 'desc' }, take: query.limit + 1 })
     const page = rows.slice(0, query.limit)

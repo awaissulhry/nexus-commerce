@@ -1,8 +1,8 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
-import { expectedContract, getReceiptContract, listReceiptsContract, receiptLotsContract, recordReceiptContract, reverseReceiptContract } from './contract'
+import { countReceiptsContract, expectedContract, getReceiptContract, listReceiptsContract, receiptLotsContract, recordReceiptContract, reverseReceiptContract } from './contract'
 import { manifest } from './manifest'
-import { expectedLines, getReceipt, listReceipts, receiptLots } from './read'
+import { countReceipts, expectedLines, getReceipt, listReceipts, receiptLots } from './read'
 import { recordReceipt } from './record'
 import { reverseReceipt } from './reverse'
 
@@ -14,6 +14,8 @@ import { reverseReceipt } from './reverse'
  */
 export default defineRoutes('inventory.receipts', manifest, async (app) => {
   app.get('/inventory/receipts', { schema: listReceiptsContract }, async (request) => listReceipts(request, request.query))
+
+  app.get('/inventory/receipts/counts', { schema: countReceiptsContract }, async (request) => countReceipts(request, request.query))
 
   app.get('/inventory/receipts/expected', { schema: expectedContract }, async (request) => expectedLines(request, request.query))
 
