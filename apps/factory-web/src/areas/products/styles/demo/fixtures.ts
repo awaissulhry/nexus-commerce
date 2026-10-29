@@ -1,6 +1,6 @@
 import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
 import type { RecordPanelsViewModel } from '../../../../record-panels/model'
-import type { BomLine, BomView, BrandRow, ColourRow, MaterialView, RoutingView, ScaleRow, StyleComplianceView, StyleRow, StyleView } from '../api'
+import type { BomLine, BomView, BrandRow, ColourRow, CostDiffView, CostSheetView, MaterialView, OperationRow, RoutingView, ScaleRow, StyleComplianceView, StyleRow, StyleView } from '../api'
 import type { Grains, StyleAbilities } from '../model'
 import type { StyleRecordViewModel } from '../record/record-model'
 
@@ -324,7 +324,7 @@ interface LineSpec {
   note?: string
 }
 
-const itemColour = (lineN: number, code: string) => ({ id: uid('4444', lineN * 10 + code.length), code, name: code === 'NERO' ? 'Nero' : code === 'ANTR' ? 'Antracite' : code === 'ROSSO' ? 'Rosso' : code, status: 'ACTIVE' as const })
+const itemColour = (lineN: number, code: string) => ({ id: uid('4444', 100 + lineN * 10 + ['NERO', 'ANTR', 'ROSSO'].indexOf(code) + 1), code, name: code === 'NERO' ? 'Nero' : code === 'ANTR' ? 'Antracite' : code === 'ROSSO' ? 'Rosso' : code, status: 'ACTIVE' as const })
 const grossOf = (qty: string, pct: string) => (Number(qty) * (1 + Number(pct) / 100)).toFixed(4).replace(/\.?0+$/, '')
 
 function line(spec: LineSpec): BomLine {
@@ -658,4 +658,184 @@ export function recordModel(role: keyof typeof GRAINS, overrides: Partial<StyleR
     panelsPreview: can.thread ? demoPanels() : undefined,
     ...overrides,
   }
+}
+
+// ---- materials of the BOM (their colours fill the colour grid) ---------------------------------------------------------
+
+/** The material of BOM line n, with the colours its lines name (ids as `line()` makes them). */
+export function lineMaterial(n: number): MaterialView {
+  const line = demoLines(true).find((entry) => entry.seq === n * 10)!
+  const codes = ['NERO', 'ANTR', 'ROSSO']
+  return {
+    ...MATERIAL,
+    id: line.item.id,
+    code: line.item.code,
+    name: line.item.name,
+    kind: line.item.kind,
+    baseUom: line.item.baseUom,
+    consumptionUom: line.item.baseUom,
+    purchaseUom: line.item.kind === 'LEATHER' ? 'HIDE' : line.item.baseUom,
+    units: {
+      base: { uom: line.item.baseUom, factor: '1', fixed: true },
+      purchase: line.item.kind === 'LEATHER' ? { uom: 'HIDE', factor: '52.5', fixed: false } : { uom: line.item.baseUom, factor: '1', fixed: true },
+      consumption: { uom: line.item.baseUom, factor: '1', fixed: true },
+    },
+    colours: codes.map((code) => ({ ...itemColour(n, code), supplierColourCode: `S-${code}`, colourId: null, version: 1, createdAt: at(15, 9), updatedAt: at(15, 9) })),
+    colourCount: 3,
+  }
+}
+
+export const LINE_MATERIALS: Record<string, MaterialView> = Object.fromEntries([1, 6, 7].map((n) => [uid('4400', n), lineMaterial(n)]))
+
+export const MATERIAL_RESULTS = [MATERIAL, lineMaterial(2), lineMaterial(3)].map(({ units: _units, standardCostPerPurchaseUnit: _a, standardCostPerConsumptionUnit: _b, animalSpecies: _c, tannage: _d, grade: _e, finish: _f, thicknessMinMm: _g, thicknessMaxMm: _h, composition: _i, animalOrigin: _j, attributes: _k, colours: _l, warnings: _m, createdAt: _n, createdById: _o, ...row }) => row)
+
+// ---- the operation library (for Add operations) -----------------------------------------------------------------------------
+
+export const OPERATIONS: OperationRow[] = [
+  ...OPS.map(([code, name, kind, minutes, machine, skill]: (typeof OPS)[number], index: number) => ({ id: uid('2200', index + 1), companyId: null, code, name, nameI18n: null, workCentreKind: kind, machineType: machine, skill, standardMinutes: code === 'CUC-MAN' ? '17' : minutes, status: 'ACTIVE' as const, usedIn: 4, differing: code === 'CUC-MAN' ? 1 : 0, version: 1, updatedAt: at(10, 9) })),
+  { id: uid('2200', 20), companyId: null, code: 'CUC-RIF', name: 'Applicazione inserti riflettenti', nameI18n: null, workCentreKind: 'SEWING', machineType: 'Piana 1 ago', skill: 'Cucitrice', standardMinutes: '4.5', status: 'ACTIVE', usedIn: 1, differing: 0, version: 1, updatedAt: at(10, 9) },
+  { id: uid('2200', 21), companyId: null, code: 'IMB-SAC', name: 'Imbustamento e cartellino', nameI18n: null, workCentreKind: 'PACKING', machineType: null, skill: null, standardMinutes: '1.5', status: 'ACTIVE', usedIn: 6, differing: 0, version: 1, updatedAt: at(10, 9) },
+]
+
+// ---- the cost sheet (made-up prices and rates; every figure worked out below from the BOM and the routing) ----------------------
+
+/** € per base unit. */
+const PRICE: Record<string, string | null> = { 'PEL-BOV-12': '3.2', 'FOD-MESH': '4.5', 'MEM-WP-3L': '9.8', 'PROT-SPAL-L2': '6.4', 'PROT-GOM-L2': '5.9', 'ZIP-DIV-8': '2.75', 'FILO-40': '0.012', 'ETI-CURA': '0.18' }
+/** € per standard minute and planned efficiency %. */
+const RATE: Record<string, [string, string]> = { CUTTING: ['0.62', '100'], SEWING: ['0.55', '80'], ASSEMBLY: ['0.5', '100'], FINISHING: ['0.48', '100'], INSPECTION: ['0.6', '100'] }
+const CATEGORY: Record<string, CostSheetView['cells'][number]['material']['lines'][number]['category']> = { LEATHER: 'LEATHER', LINING: 'MATERIALS', MEMBRANE: 'MATERIALS', PROTECTOR: 'MATERIALS', TRIM: 'TRIMS', THREAD: 'TRIMS', LABEL: 'TRIMS' }
+const fix = (value: number) => value.toFixed(6)
+
+export function demoCost(options: { revision?: Revision; noPrice?: boolean } = {}): CostSheetView {
+  const rev = options.revision ?? REVISIONS[0]!
+  const lines = demoLines(rev.status !== 'DRAFT')
+  const routing = demoRouting({ revision: rev })
+  const prices = options.noPrice ? { ...PRICE, 'MEM-WP-3L': null } : PRICE
+  const missing: CostSheetView['missing'] = []
+  if (lines.some((line) => line.bySize.some((entry) => entry.qty === null))) missing.push({ key: 'BOM_QUANTITY:58', code: 'BOM_QUANTITY', itemId: null, lineId: lines[0]!.id, size: '58', workCentreKind: null, message: 'x' })
+  if (options.noPrice) missing.push({ key: 'MATERIAL_PRICE:MEM', code: 'MATERIAL_PRICE', itemId: lines[2]!.item.id, lineId: null, size: null, workCentreKind: null, message: 'x' })
+  const cells = (['BLK', 'ANT', 'RED'] as const).flatMap((key) =>
+    SIZES.map((size) => {
+      const keys: string[] = []
+      const materialLines = lines.map((line) => {
+        const bySize = line.bySize.find((entry) => entry.size === size)!
+        const price = prices[line.item.code] ?? null
+        const amount = bySize.base !== null && price !== null ? Number(bySize.base) * Number(price) : null
+        if (bySize.base === null) keys.push('BOM_QUANTITY:58')
+        if (price === null) keys.push('MATERIAL_PRICE:MEM')
+        return { lineId: line.id, seq: line.seq, itemId: line.item.id, code: line.item.code, category: CATEGORY[line.item.kind]!, placement: line.placement, qty: bySize.qty, uom: line.uom, wastagePct: line.wastagePct, baseQuantity: bySize.base, baseUom: line.item.baseUom, unitCost: price, amount: amount === null ? null : fix(amount) }
+      })
+      const known = (category?: string) => materialLines.filter((line) => !category || line.category === category).reduce((sum, line) => sum + Number(line.amount ?? 0), 0)
+      const materialComplete = materialLines.every((line) => line.amount !== null)
+      const labourLines = routing.minutes.byKind.map((entry) => {
+        const [rate, efficiency] = RATE[entry.workCentreKind] ?? ['0.5', '100']
+        return { workCentreKind: entry.workCentreKind, steps: entry.steps, minutes: entry.minutes, costPerMinute: rate, plannedEfficiencyPct: efficiency, amount: fix((Number(entry.minutes) * Number(rate)) / (Number(efficiency) / 100)) }
+      })
+      const material = known()
+      const labour = labourLines.reduce((sum, line) => sum + Number(line.amount), 0)
+      const base = material + labour
+      const overhead = base * 0.12
+      const complete = materialComplete
+      const categories = (['LEATHER', 'MATERIALS', 'TRIMS'] as const).map((category) => ({ category, complete: materialLines.filter((line) => line.category === category).every((line) => line.amount !== null), amount: fix(known(category)) }))
+      let running = 0
+      const waterfall = [
+        ...categories.map((category) => {
+          running += Number(category.amount)
+          return { step: 'MATERIAL' as const, category: category.category, workCentreKind: null, complete: category.complete, amount: category.amount, runningTotal: fix(running) }
+        }),
+        ...labourLines.map((line) => {
+          running += Number(line.amount)
+          return { step: 'LABOUR' as const, category: null, workCentreKind: line.workCentreKind, complete: true, amount: line.amount, runningTotal: fix(running) }
+        }),
+        { step: 'OVERHEAD' as const, category: null, workCentreKind: null, complete, amount: fix(overhead), runningTotal: fix(running + overhead) },
+      ]
+      return {
+        colourwayId: CW[key],
+        size,
+        complete,
+        missing: [...new Set(keys)],
+        minutes: routing.minutes.perGarment,
+        material: { complete: materialComplete, amount: fix(material), byCategory: categories, lines: materialLines },
+        labour: { complete: true, amount: fix(labour), lines: labourLines },
+        overhead: { overheadPct: '12', base: fix(base), amount: fix(overhead) },
+        knownTotal: fix(base + overhead),
+        total: complete ? fix(base + overhead) : null,
+        waterfall,
+      }
+    }),
+  )
+  const sheet = {
+    style: { ...STYLE_REF, status: 'ACTIVE', baseSize: '52' },
+    revision: { id: rev.id, revision: rev.revision, status: rev.status, version: rev.version },
+    estimate: rev.status === 'DRAFT',
+    sizes: SIZES,
+    colourways: [
+      { id: CW.BLK, code: 'NERO', name: 'Nero' },
+      { id: CW.ANT, code: 'ANTR', name: 'Antracite' },
+      { id: CW.RED, code: 'ROSSO', name: 'Rosso corsa' },
+    ],
+    computedAt: at(29, 9, 30),
+    currency: 'EUR',
+    companyId: COMPANY_ID,
+    on: '2026-10-29',
+    complete: missing.length === 0,
+    missing,
+    inputs: {
+      materials: lines.map((line) => ({
+        itemId: line.item.id,
+        code: line.item.code,
+        name: line.item.name,
+        kind: line.item.kind,
+        category: CATEGORY[line.item.kind]!,
+        source: 'STANDARD' as const,
+        baseUom: line.item.baseUom,
+        standardCost: prices[line.item.code] ?? null,
+        currency: 'EUR',
+        asOf: prices[line.item.code] ? at(18, 9) : null,
+        purchaseUom: line.item.kind === 'LEATHER' ? ('HIDE' as const) : line.item.baseUom,
+        standardCostPerPurchaseUnit: prices[line.item.code] ? fix(Number(prices[line.item.code]) * (line.item.kind === 'LEATHER' ? 52.5 : 1)) : null,
+      })),
+      labour: routing.minutes.byKind.map((entry) => ({ workCentreKind: entry.workCentreKind, steps: entry.steps, minutes: entry.minutes, source: 'LABOUR_RATE' as const, rateId: uid('3131', 1), companyId: null, costPerMinute: RATE[entry.workCentreKind]![0], currency: 'EUR', plannedEfficiencyPct: RATE[entry.workCentreKind]![1], validFrom: '2026-01-01' })),
+      overhead: { source: 'OVERHEAD_RULE', ruleId: uid('3132', 1), companyId: null, overheadPct: '12', updatedAt: at(2, 9) },
+    },
+    cells,
+  }
+  // The money fields are branded by grain in the contract; made-up figures are plain strings.
+  return sheet as unknown as CostSheetView
+}
+
+/** The sheet as a person without the cost grain receives it: every money field left out by the API. */
+export function withoutCost(sheet: CostSheetView): CostSheetView {
+  const strip = <T extends object>(value: T, fields: readonly string[]): T => Object.fromEntries(Object.entries(value).filter(([key]) => !fields.includes(key))) as T
+  return {
+    ...sheet,
+    inputs: {
+      materials: sheet.inputs.materials.map((material) => strip(material, ['standardCost', 'standardCostPerPurchaseUnit'])),
+      labour: sheet.inputs.labour.map((rate) => strip(rate, ['costPerMinute'])),
+      overhead: sheet.inputs.overhead,
+    },
+    cells: sheet.cells.map((cell) => ({
+      ...strip(cell, ['knownTotal', 'total']),
+      material: { ...strip(cell.material, ['amount']), byCategory: cell.material.byCategory.map((category) => strip(category, ['amount'])), lines: cell.material.lines.map((line) => strip(line, ['unitCost', 'amount'])) },
+      labour: { ...strip(cell.labour, ['amount']), lines: cell.labour.lines.map((line) => strip(line, ['costPerMinute', 'amount'])) },
+      overhead: cell.overhead ? strip(cell.overhead, ['base', 'amount']) : null,
+      waterfall: cell.waterfall.map((step) => strip(step, ['amount', 'runningTotal'])),
+    })) as CostSheetView['cells'],
+  }
+}
+
+/** The draft's change against revision 2: the cells it touches (made up: the level 2 protectors add €3.10 a garment). */
+export function demoCompare(): CostDiffView {
+  const diff = {
+    style: { ...STYLE_REF, status: 'ACTIVE', baseSize: '52' },
+    from: { id: REV.r2, revision: 2, status: 'RELEASED', version: 3, complete: true, missing: [] },
+    to: { id: REV.r3, revision: 3, status: 'DRAFT', version: 7, complete: false, missing: [] },
+    currency: 'EUR',
+    companyId: COMPANY_ID,
+    on: '2026-10-29',
+    computedAt: at(29, 9, 30),
+    cells: (['BLK', 'ANT', 'RED'] as const).flatMap((key) => SIZES.filter((size) => size !== '58').map((size) => ({ colourwayId: CW[key], size, from: null, to: null, materialCostChange: '3.1', labourCostChange: '0', overheadCostChange: '0.372', totalChange: '3.472', materials: [], labour: [] }))),
+    unchanged: 0,
+  }
+  return diff as unknown as CostDiffView
 }

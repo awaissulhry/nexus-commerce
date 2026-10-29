@@ -597,3 +597,216 @@
 .fw-st-grow {
   flex: 1 1 auto;
 }
+
+/* ---- text tones (data states) ---- */
+.fw-st-danger {
+  color: var(--nds-danger-text);
+}
+
+.fw-st-warn {
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ---- a chosen thing inside a dialog (a material) ---- */
+.fw-st-chosen {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+}
+
+/* ---- editable grids (BOM by size, by colourway; the routing): a plain table with inputs ---- */
+.fw-st-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 100%;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-st-grid th,
+.fw-st-grid td {
+  padding: var(--nds-space-6) var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.fw-st-grid thead th {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-medium);
+  white-space: nowrap;
+}
+
+.fw-st-grid tbody th {
+  font-weight: var(--nds-font-weight-normal);
+}
+
+.fw-st-grid .fw-st-grid-first {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 200px;
+  background: var(--nds-surface);
+}
+
+.fw-st-grid th.is-base,
+.fw-st-grid td.is-base {
+  background: var(--nds-surface-sunken);
+}
+
+.fw-st-grid td.is-missing {
+  box-shadow: inset 0 -2px 0 var(--nds-danger);
+}
+
+.fw-st-grid td .nds-field,
+.fw-st-grid td select {
+  min-width: 84px;
+}
+
+.fw-st-grid-total th,
+.fw-st-grid-total td {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-st-routing td:nth-child(5) {
+  min-width: 140px;
+}
+
+/* ---- the operation picker (Add operations) ---- */
+.fw-st-pick {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  max-height: 46vh;
+  overflow-y: auto;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+}
+
+.fw-st-pick li + li {
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-st-pick-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  cursor: pointer;
+}
+
+.fw-st-pick-row:hover {
+  background: var(--nds-surface-hover);
+}
+
+/* ---- the cost sheet (the DS has no Waterfall yet: rows with a share bar) ---- */
+.fw-st-cellpick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-st-sheetrow {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--nds-space-8);
+  width: 100%;
+  min-width: 0;
+}
+
+.fw-st-sheetrow-flat {
+  display: flex;
+  padding: var(--nds-space-6) 0;
+}
+
+.fw-st-sheetrow-total {
+  display: flex;
+  padding-top: var(--nds-space-10);
+  border-top: 1px solid var(--nds-border-strong);
+}
+
+.fw-st-bar {
+  position: relative;
+  flex: 0 0 120px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--nds-surface-sunken);
+  overflow: hidden;
+}
+
+.fw-st-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 4px;
+  background: var(--nds-primary);
+}
+
+@media (max-width: 719px) {
+  .fw-st-bar {
+    flex-basis: 56px;
+  }
+}
+
+.fw-st-how {
+  display: inline-flex;
+  align-items: center;
+  color: var(--nds-text-2);
+}
+
+.fw-st-howbody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  max-width: 340px;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-st-howbody p {
+  margin: 0;
+}
+
+.fw-st-step + .fw-st-step {
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-st-step-head {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  width: 100%;
+  padding: var(--nds-space-8) 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fw-st-step-head:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+.fw-st-step-chevron {
+  flex: none;
+  color: var(--nds-text-2);
+  transition: transform 120ms ease;
+}
+
+.fw-st-step-head[aria-expanded='true'] .fw-st-step-chevron {
+  transform: rotate(90deg);
+}
+
+.fw-st-step-body {
+  padding: 0 0 var(--nds-space-10) var(--nds-space-20);
+}

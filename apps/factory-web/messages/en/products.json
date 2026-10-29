@@ -194,7 +194,14 @@
     "archived": "The style is archived.",
     "archivedMany_one": "{count} style archived.",
     "archivedMany_other": "{count} styles archived.",
-    "reactivated": "The style is reactivated."
+    "reactivated": "The style is reactivated.",
+    "lineAdded": "Material added to the BOM.",
+    "lineRemoved": "Line removed from the draft BOM.",
+    "stepsAdded_one": "{count} operation added.",
+    "stepsAdded_other": "{count} operations added.",
+    "stepRemoved": "Operation removed from the draft routing.",
+    "uploaded": "The signed file is uploaded and in force for the revision.",
+    "labelNamed": "The revision names its garment label."
   },
   "identity": {
     "title": "Identity",
@@ -492,6 +499,8 @@
     "SIZE_QUANTITIES_ALL_ZERO": "Line {line}: every size is 0.",
     "COLOUR_MISSING": "Line {line}: no colour for colourway {colourway}.",
     "COLOUR_ARCHIVED": "Line {line}: the colour for {colourway} is archived.",
+    "COLOUR_MISSING_LINE": "Line {line}: the material comes in colours: choose one, or make the line vary by colourway.",
+    "COLOUR_ARCHIVED_LINE": "Line {line}: its colour is archived.",
     "LEATHER_WITHOUT_WASTAGE": "Line {line}: leather without wastage (the hide’s yield is in the wastage).",
     "NO_PLANNED_HIDE_YIELD": "No planned hide yield for this revision.",
     "LINE_OF_ARCHIVED_COLOURWAY": "Line {line}: only for an archived colourway.",
@@ -503,19 +512,29 @@
   },
   "complianceCheck": {
     "REVISION": {
-      "BLOCKED": "No released revision"
+      "BLOCKED": "No released revision",
+      "OK": "A released revision",
+      "NOT_REQUIRED": "A released revision: not required"
     },
     "LABEL_TEMPLATE": {
-      "BLOCKED": "No active garment label for the revision"
+      "BLOCKED": "No active garment label for the revision",
+      "OK": "An active garment label for the revision",
+      "NOT_REQUIRED": "An active garment label for the revision: not required"
     },
     "CERTIFICATE": {
-      "BLOCKED": "Some switched-on colour and size combinations are not covered by a valid certificate"
+      "BLOCKED": "Some switched-on colour and size combinations are not covered by a valid certificate",
+      "OK": "Every switched-on colour and size covered by a valid certificate",
+      "NOT_REQUIRED": "Every switched-on colour and size covered by a valid certificate: not required"
     },
     "DECLARATION_OF_CONFORMITY": {
-      "BLOCKED": "The signed declaration of conformity of the revision is missing"
+      "BLOCKED": "The signed declaration of conformity of the revision is missing",
+      "OK": "The signed declaration of conformity of the revision",
+      "NOT_REQUIRED": "The signed declaration of conformity of the revision: not required"
     },
     "USER_INFORMATION": {
-      "BLOCKED": "The user information leaflet of the revision is missing"
+      "BLOCKED": "The user information leaflet of the revision is missing",
+      "OK": "The user information leaflet of the revision",
+      "NOT_REQUIRED": "The user information leaflet of the revision: not required"
     }
   },
   "blocks": {
@@ -589,7 +608,6 @@
     "col": {
       "style": "Style",
       "typeSeason": "Type",
-      "season": "Season",
       "status": "Status",
       "revision": "Revision",
       "range": "Size range",
@@ -667,7 +685,110 @@
     "upload": {
       "notPdf": "A signed DoC or a leaflet is a PDF.",
       "tooBig": "At most 20 MB.",
-      "empty": "The file is empty."
+      "empty": "The file is empty.",
+      "title": "Upload a signed PDF for revision {revision}",
+      "kind": "Document",
+      "languageHint": "Two letters: it, en, de…",
+      "number": "Declaration number (optional)",
+      "numberHint": "As printed on it; fixed once issued.",
+      "hint": "A PDF of at most 20 MB.",
+      "chosen": "Chosen: {name}",
+      "what": "It is checked, kept for 10 years and becomes the one in force for revision {revision}; an earlier version is kept.",
+      "go": "Upload",
+      "held": {
+        "file": "Choose the signed PDF.",
+        "language": "Type the language: two letters."
+      }
+    },
+    "loading": "Reading compliance…",
+    "failed": "Could not load compliance",
+    "checks": {
+      "title": "Checks",
+      "intro": "For revision {revision} ({status}): what stops production, labels or shipping.",
+      "noRevision": "The style has no revision yet.",
+      "allOk": "Nothing stops production, labels or shipping.",
+      "other": "Shown for revision {revision}: open it"
+    },
+    "class": {
+      "title": "PPE classification",
+      "change": "Change in Overview",
+      "category": "Category",
+      "part": "part {part}, edition {edition}",
+      "partClass": "The part sets class {class}",
+      "maker": "Legal maker",
+      "brand": "The brand (private label)",
+      "company": "Our company",
+      "certificate": "Notified-body certificate needed",
+      "documents": "Declaration and leaflet needed"
+    },
+    "coverage": {
+      "title": "Certificate coverage",
+      "intro": "Each colourway × size against the certificates, on {date}.",
+      "expired_one": "{count} expired",
+      "expired_other": "{count} expired",
+      "suspended_one": "{count} suspended",
+      "suspended_other": "{count} suspended",
+      "noColourways": "The style has no colourway: nothing to cover yet.",
+      "cell": "{colourway}, size {size}: {status}, valid until {until}",
+      "ok": "Covered",
+      "daysLeft_one": "{count} day left",
+      "daysLeft_other": "{count} days left",
+      "legend": "Green: covered · amber: expires within 60 days · red: not covered (blocks release, labels and shipping of the cell) · grey: switched off.",
+      "certificates": "Certificates of the style",
+      "certificate": "Certificate",
+      "body": "Notified body",
+      "valid": "Valid",
+      "covers": "Covers",
+      "coversValue_one": "Sizes {sizes} in {count} colourway",
+      "coversValue_other": "Sizes {sizes} in {count} colourways",
+      "cellTitle": "{colourway} · size {size}",
+      "notOffered": "switched off",
+      "blocks": "Not covered: its work orders are not released, its labels not printed and it is not shipped.",
+      "where": "Certificates are registered in Compliance › Certificates."
+    },
+    "docs": {
+      "title": "Declaration of conformity and leaflet",
+      "intro": "Signed PDFs for revision {revision}, in the languages its label prints ({languages}). Shipping needs them.",
+      "notRequired": "Not PPE: no declaration of conformity or leaflet is needed.",
+      "language": "Language",
+      "state": "State",
+      "document": "Document",
+      "actions": "Actions",
+      "pending": "An upload is waiting to be confirmed",
+      "issued": "issued {date}",
+      "versions_one": "{count} version kept",
+      "versions_other": "{count} versions kept",
+      "download": "Download",
+      "downloadOne": "Download the {language} file",
+      "upload": "Upload signed PDF",
+      "newVersion": "New version",
+      "uploadOne": "Upload the {language} file",
+      "uploadOther": "Upload in another language",
+      "noLanguages": "No language yet: the revision’s garment label names them.",
+      "held": {
+        "right": "Your role does not upload declarations (compliance and files rights)."
+      },
+      "maker": "Maker on the declaration: {name}, {address}."
+    },
+    "label": {
+      "title": "Garment label",
+      "intro": "The sewn-in label the revision prints at the final operation.",
+      "template": "Template",
+      "status": "Status",
+      "languages": "Languages",
+      "none": "Revision {revision} names no garment label yet: it blocks production and labels.",
+      "name": "Label of the draft revision",
+      "nameHint": "An active template of this style or for every style.",
+      "loading": "Reading the label templates…",
+      "noTemplates": "No active label template yet: make one in Compliance › Labels & marking.",
+      "noneChosen": "No label",
+      "save": "Name this label",
+      "where": "Templates are made and approved in Compliance › Labels & marking."
+    },
+    "tracking": {
+      "title": "Garment tracking",
+      "lot": "The work order’s batch number (or a serial per garment) is given at the final operation and printed on the label; the release and the evidence trail follow it.",
+      "none": "Not PPE: no batch number is needed on the label."
     }
   },
   "keys": {
@@ -684,5 +805,406 @@
     "moveUp": "Move up (BOM line, operation)",
     "moveDown": "Move down (BOM line, operation)",
     "help": "These shortcuts"
+  },
+  "kind": {
+    "LEATHER": "Leather",
+    "TEXTILE": "Fabric",
+    "LINING": "Lining",
+    "MEMBRANE": "Membrane",
+    "PADDING": "Padding",
+    "THREAD": "Thread",
+    "TRIM": "Trim",
+    "HARDWARE": "Hardware",
+    "PROTECTOR": "Protector",
+    "LABEL": "Label",
+    "PACKAGING": "Packaging",
+    "COMPONENT": "Component"
+  },
+  "uom": {
+    "PCS": "pcs",
+    "PAIR": "pair",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hide",
+    "SIDE": "side",
+    "ROLL": "roll",
+    "CONE": "cone",
+    "BOX": "box"
+  },
+  "department": {
+    "CUTTING": "Cutting",
+    "SEWING": "Sewing",
+    "ASSEMBLY": "Assembly",
+    "FINISHING": "Finishing",
+    "INSPECTION": "Inspection",
+    "PACKING": "Packing",
+    "SUBCONTRACT": "Subcontract"
+  },
+  "category": {
+    "LEATHER": "Leather",
+    "MATERIALS": "Materials",
+    "TRIMS": "Trims and labels",
+    "PACKAGING": "Packaging"
+  },
+  "priceSource": {
+    "STANDARD": "Standard"
+  },
+  "certStatus": {
+    "DRAFT": "Draft",
+    "VALID": "Valid",
+    "SUSPENDED": "Suspended",
+    "WITHDRAWN": "Withdrawn",
+    "EXPIRED": "Expired"
+  },
+  "labelStatus": {
+    "DRAFT": "Draft",
+    "ACTIVE": "Active",
+    "RETIRED": "Retired"
+  },
+  "docKind": {
+    "DECLARATION_OF_CONFORMITY": "EU declaration of conformity (signed)",
+    "USER_INFORMATION": "User information leaflet"
+  },
+  "docState": {
+    "CURRENT": "Current (rev {revision})",
+    "OLDER_REVISION": "Only for rev {revision}",
+    "MISSING": "Missing"
+  },
+  "checkState": {
+    "OK": "OK",
+    "BLOCKED": "Blocks",
+    "NOT_REQUIRED": "Not required"
+  },
+  "cellShort": {
+    "COVERED": "OK",
+    "NOT_COVERED": "Not covered",
+    "EXPIRED": "Expired",
+    "SUSPENDED": "Suspended",
+    "NOT_REQUIRED": "Not required"
+  },
+  "gate": {
+    "no_certificate": "No certificate is registered for this style.",
+    "certificate_not_valid": "The certificate is not valid (suspended or withdrawn).",
+    "certificate_expired": "The certificate has expired.",
+    "certificate_not_yet_valid": "The certificate is not valid yet.",
+    "colourway_not_covered": "The certificate does not cover this colourway.",
+    "size_not_covered": "The certificate does not cover this size.",
+    "style_not_made_to_measure": "The style is not made to measure.",
+    "made_to_measure_not_allowed": "The certificate does not allow made-to-measure units.",
+    "body_measures_missing": "The size has no body measures.",
+    "measurement_missing": "A measurement is missing.",
+    "measurement_invalid": "A measurement is not valid.",
+    "measurement_outside": "A measurement is outside what the certificate covers."
+  },
+  "missing": {
+    "NO_BOM": "The revision has no BOM lines.",
+    "NO_ROUTING": "The revision has no operations.",
+    "BOM_QUANTITY": "Line {line}: no quantity for size {size}.",
+    "MATERIAL_UNIT": "Line {line}: its unit does not convert to the material’s unit.",
+    "MATERIAL_PRICE": "{material} has no standard cost: set it on the material.",
+    "MATERIAL_CURRENCY": "{material} is priced in another currency.",
+    "LABOUR_RATE": "No cost per minute for {kind}: Finance sets it.",
+    "LABOUR_CURRENCY": "The cost per minute for {kind} is in another currency."
+  },
+  "bom": {
+    "noRevision": {
+      "title": "No revision yet",
+      "body": "Start revision 1 (⋯ or Overview): its BOM, routing, cost and label go into it."
+    },
+    "loading": "Reading the BOM…",
+    "failed": "Could not load the BOM",
+    "check": {
+      "title_one": "{count} thing to fix in the BOM",
+      "title_other": "{count} things to fix in the BOM",
+      "intro": "Show me lands on the line or the cell."
+    },
+    "title_one": "Materials ({count})",
+    "title_other": "Materials ({count})",
+    "intro": "Every material of one garment in revision {revision}.",
+    "viewLabel": "BOM view",
+    "view": {
+      "lines": "Lines",
+      "sizes": "By size",
+      "colours": "By colourway"
+    },
+    "add": "Add material",
+    "addFirst": "Add the first material",
+    "empty": {
+      "title": "No materials yet",
+      "body": "Add the leather, lining, protectors, trims and labels of one garment."
+    },
+    "held": {
+      "frozen": "This revision is not a draft: start a new revision to change it.",
+      "first": "Already the first.",
+      "last": "Already the last."
+    },
+    "col": {
+      "seq": "Place",
+      "material": "Material",
+      "placement": "Placement",
+      "qty": "Qty (size {size})",
+      "wastage": "Wastage",
+      "gross": "With wastage",
+      "depends": "Varies by",
+      "actions": "Actions"
+    },
+    "bySize": "size",
+    "byColour": "colourway",
+    "onlyIn": "only {code}",
+    "missing": "— missing",
+    "missingShort": "missing",
+    "edit": "Edit",
+    "editOne": "Edit line {line}",
+    "moveUp": "Move line {line} up",
+    "moveDown": "Move line {line} down",
+    "remove": "Remove",
+    "removeOne": "Remove line {line}",
+    "removeTitle": "Remove line {line} ({code})?",
+    "removeBody": "It leaves the draft BOM of revision {revision}; released revisions keep theirs.",
+    "sizeCell": "{line}, size {size}",
+    "sizes": {
+      "empty": {
+        "title": "No size-dependent lines",
+        "body": "Switch “Varies by size” on in a line (Edit) to type its quantity per size here."
+      },
+      "leatherTotal": "Leather with wastage",
+      "notNumber": "That is not a number: type it as 6,35 or 6.35.",
+      "hint": "Type a quantity and leave the cell (or Enter) to save it; 0 means the size does not use the line; Escape puts it back.",
+      "hintRead": "Quantities per garment, in the line’s unit."
+    },
+    "colourCell": "{line}, colourway {colourway}",
+    "colours": {
+      "empty": {
+        "title": "No colour-dependent lines",
+        "body": "Switch “Varies by colourway” on in a line (Edit) to choose its colour per colourway here."
+      },
+      "choose": "Choose a colour",
+      "loading": "Reading the material’s colours…",
+      "none": "— no colour",
+      "hint": "Only the material’s own colours are offered; every active colourway needs one."
+    },
+    "leather": {
+      "title": "Leather and hide wastage",
+      "intro": "How much hide a garment really takes, with the revision’s planned hide yield.",
+      "sentence": "Size {size} cuts {net} {unit} and needs {gross} {unit} of hide ({pct} % wastage).",
+      "noBase": "The base size has no quantity yet.",
+      "hideArea": "Average hide",
+      "hideUnknown": "Not known (the material is not bought by the hide)",
+      "perGarment": "Hides per garment (base size)",
+      "per100": "Hides per 100 garments",
+      "yield": "Planned hide yield",
+      "yieldHint": "The share of a hide’s area the cutting plan expects to use; cutting compares the real yield with it.",
+      "yieldRange": "A share above 0 and at most 100 %.",
+      "saveYield": "Save yield"
+    },
+    "line": {
+      "addTitle": "Add a material",
+      "editTitle": "Line {line} · {code}",
+      "material": "Material",
+      "materialHint": "Search the materials library by code or name.",
+      "materialPlaceholder": "Leather, lining, protector, zip…",
+      "typeToSearch": "Type to search",
+      "searching": "Searching…",
+      "noneFound": "No active material matches.",
+      "found_one": "{count} material",
+      "found_other": "{count} materials",
+      "colours_one": "{count} colour",
+      "colours_other": "{count} colours",
+      "loadingMaterial": "Reading the material…",
+      "baseUnit": "base unit {unit}",
+      "crVi": "Cr VI test per lot",
+      "ppeComponent": "PPE component",
+      "change": "Choose another",
+      "placementHint": "Front panel, sleeve, lining, armour pocket.",
+      "unit": "Unit",
+      "qty": "Quantity per garment",
+      "qtyHint": "Above 0; decimals with , or .",
+      "wastageHint": "0 to 60 %.",
+      "wastageLeather": "On leather, include the hide’s yield (0 to 60 %).",
+      "sizeDependent": "Varies by size",
+      "sizeDependentHint": "A quantity per size of the range.",
+      "colourDependent": "Varies by colourway",
+      "colourDependentHint": "A material colour per colourway.",
+      "oneColour": "Colour",
+      "oneColourHint": "The same in every colourway.",
+      "noColour": "No colour",
+      "onlyIn": "Used in",
+      "onlyInHint": "A line of one colourway only (a contrast panel).",
+      "everyColourway": "Every colourway",
+      "note": "Note",
+      "sizesAfter": "Type the quantity of each size in the By size view.",
+      "coloursAfter": "Choose the colour of each colourway in the By colourway view.",
+      "add": "Add to the BOM",
+      "save": "Save the line",
+      "held": {
+        "material": "Choose a material.",
+        "qty": "Type a quantity above 0.",
+        "wastage": "Wastage is 0 to 60 %."
+      }
+    }
+  },
+  "routing": {
+    "loading": "Reading the routing…",
+    "failed": "Could not load the routing",
+    "minutes": "{minutes} min",
+    "strip": {
+      "total": "Standard minutes per garment",
+      "totalHint": "The same in every size (W1)",
+      "steps_one": "{count} operation",
+      "steps_other": "{count} operations",
+      "scans": "Scan points",
+      "scansHint_one": "of {count} operation",
+      "scansHint_other": "of {count} operations",
+      "labour": "Labour per garment",
+      "labourHint": "Minutes × cost per minute ÷ efficiency"
+    },
+    "issuesTitle_one": "{count} thing to fix in the routing",
+    "issuesTitle_other": "{count} things to fix in the routing",
+    "warningsTitle_one": "{count} point to note",
+    "warningsTitle_other": "{count} points to note",
+    "title_one": "Operations ({count})",
+    "title_other": "Operations ({count})",
+    "intro": "In order, from the library, with their minutes for this style (revision {revision}).",
+    "filtered": "Only {department}: the tile above filters.",
+    "showAll": "Show every department",
+    "add": "Add operations",
+    "addFirst": "Add from the library",
+    "empty": {
+      "title": "No operations yet",
+      "body": "Add the operations that make the garment, from cutting to the final check."
+    },
+    "col": {
+      "seq": "Place",
+      "operation": "Operation",
+      "department": "Department",
+      "machine": "Machine · skill",
+      "minutes": "Standard minutes",
+      "scanned": "Scanned",
+      "actions": "Actions"
+    },
+    "final": "final",
+    "archivedOp": "archived in the library",
+    "addInstructions": "Add instructions",
+    "minutesOf": "Standard minutes of {step}",
+    "scannedOf": "{step} is scanned",
+    "library": "Library: {minutes} min",
+    "libraryList": "Operations of the library",
+    "useLibrary": "Use library value",
+    "moveUp": "Move operation {step} up",
+    "moveDown": "Move operation {step} down",
+    "removeOne": "Remove operation {step}",
+    "removeTitle": "Remove {step}?",
+    "removeBody": "It leaves the draft routing; released revisions keep theirs.",
+    "removeFinal": "It is the final operation: the batch is then given at the scanned one before it.",
+    "addTitle": "Add operations from the library",
+    "search": "Search code, name, machine or skill",
+    "everyDepartment": "Every department",
+    "searching": "Searching…",
+    "noneFound": "No active operation matches.",
+    "pickOrder": "{n}.",
+    "alreadyIn": "already in the routing",
+    "addOrder": "They are added at the end, in the order you tick them; each copies its minutes from the library.",
+    "addN_one": "Add {count} operation",
+    "addN_other": "Add {count} operations",
+    "addHeld": "Tick at least one operation.",
+    "instructionsTitle": "Instructions · {step}",
+    "instructions": "Instructions",
+    "instructionsHint": "How it is done for this style: the traveller and the floor screen show it."
+  },
+  "cost": {
+    "loading": "Working out the cost…",
+    "failed": "Could not compute the cost sheet",
+    "empty": {
+      "title": "Add BOM lines and operations to see a cost",
+      "body": "The sheet is worked out from the BOM by size and the routing’s minutes."
+    },
+    "noGrain": "Cost figures are not in your role: the sheet shows quantities, minutes and what is missing.",
+    "estimate": "Revision {revision} is a draft: this cost is an estimate and may still change.",
+    "colourway": "Colourway",
+    "size": "Size",
+    "computed": "Worked out {date} · {currency}",
+    "notInRole": "Not in your role",
+    "notInRoleHint": "Cost figures need the cost grain",
+    "strip": {
+      "total": "Cost per garment · {colourway} {size}",
+      "complete": "Every input known",
+      "incomplete_one": "{count} input missing",
+      "incomplete_other": "{count} inputs missing",
+      "material": "Materials",
+      "labour": "Labour",
+      "overhead": "Overhead",
+      "change": "Against rev {revision}"
+    },
+    "up": "more",
+    "down": "less",
+    "changeUnknown": "One side is not complete",
+    "partial": "partial",
+    "noOverhead": "No overhead rule",
+    "overheadPct": "{pct} % on materials and labour",
+    "incomplete": "incomplete",
+    "knownSoFar": "— (known so far: {amount})",
+    "sheet": {
+      "title": "Cost sheet",
+      "intro": "From materials to cost: open a step for the lines behind it; ⓘ says how a figure is made.",
+      "labour": "Labour · {minutes} min",
+      "labourTable": "Labour by department",
+      "overhead": "Overhead · {pct} %",
+      "rounding": "Rounding",
+      "total": "Cost per garment"
+    },
+    "col": {
+      "material": "Material",
+      "qty": "Qty + wastage",
+      "base": "In base unit",
+      "unitCost": "Price",
+      "amount": "Amount",
+      "minutes": "Minutes",
+      "perMinute": "Cost per minute",
+      "efficiency": "Efficiency"
+    },
+    "how": "How is the figure of {what} made?",
+    "howTitle": "How is this made?",
+    "howMaterial": "{qty} + {wastage} % wastage = {base} {unit} per garment.",
+    "howMaterialCost": "{base} × {price} = {amount}",
+    "howLabour": "{minutes} min × {rate} ÷ {efficiency} % = {amount}",
+    "howOverhead": "{base} × {pct} % = {amount}",
+    "bySize": {
+      "title": "Cost by size",
+      "intro": "The colourway above in every size of the range.",
+      "what": "Part",
+      "hint": "“—” where an input is missing; the base size is marked with ·.",
+      "hintNoGrain": "Figures are not in your role (·); “—” where an input is missing."
+    },
+    "missingTitle_one": "{count} input missing: the cost is not complete",
+    "missingTitle_other": "{count} inputs missing: the cost is not complete",
+    "prices": {
+      "title": "Material prices",
+      "intro": "The price each material is costed at (W1: its standard cost).",
+      "source": "Source",
+      "perBase": "Per base unit",
+      "perPurchase": "Per purchase unit",
+      "asOf": "Set on",
+      "none": "— no standard cost",
+      "noGrain": "Prices are not in your role."
+    },
+    "rates": {
+      "title": "Labour rates and overhead",
+      "intro": "What the sheet used today, per department of the routing.",
+      "from": "Valid from",
+      "none": "— no rate",
+      "overhead": "Overhead",
+      "company": "Priced with",
+      "companyOwn": "The company’s rates and currency",
+      "tenantWide": "The group’s rates (every company)",
+      "where": "Rates and overhead are kept by Finance (costing settings)."
+    }
   }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, CircleCheck, CircleX } from 'lucide-react'
 import { Banner, Card, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
@@ -84,8 +84,13 @@ function IdentityCard({ style, model, actions }: { style: StyleView; model: Styl
   const seeded = model.identityDraft ? { ...base, ...applyDesignDraft(base, model.identityDraft) } : base
   const [draft, setDraft] = useState<Identity>(seeded)
   const [saving, setSaving] = useState(false)
-  // A new read of the style (saved, or changed by someone else and reloaded) starts the form again.
-  useEffect(() => setDraft(model.identityDraft ? { ...base, ...applyDesignDraft(base, model.identityDraft) } : base), [base, model.identityDraft])
+  // A new read of the style starts the form again — unless the person has unsaved changes in it (they stay; after a
+  // save they equal the new read anyway).
+  const lastBase = useRef(base)
+  useEffect(() => {
+    setDraft((current) => (sameIdentity(current, lastBase.current) ? base : current))
+    lastBase.current = base
+  }, [base])
   const editable = model.can.manage && style.status !== 'ARCHIVED'
   const codeFrozen = style.matrix.generated
   const patch = identityPatch(style, draft)
@@ -95,9 +100,8 @@ function IdentityCard({ style, model, actions }: { style: StyleView; model: Styl
   const save = async () => {
     if (held || count === 0) return
     setSaving(true)
-    const done = (await actions?.onSaveIdentity?.(patch)) ?? false
+    await actions?.onSaveIdentity?.(patch)
     setSaving(false)
-    if (done) setDraft(base)
   }
   const brandName = style.brand ? style.brand.name : t('identity.ownCollection')
 
@@ -194,6 +198,8 @@ function IdentityCard({ style, model, actions }: { style: StyleView; model: Styl
     </Card>
   )
 }
+
+const sameIdentity = (a: Identity, b: Identity) => JSON.stringify(a) === JSON.stringify(b)
 
 function applyDesignDraft(base: Identity, patch: StylePatch): Partial<Identity> {
   return {

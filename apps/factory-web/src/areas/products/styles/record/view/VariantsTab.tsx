@@ -38,7 +38,12 @@ function RangeCard({ style, model, actions }: { style: StyleView; model: StyleRe
   const base = useMemo<RangeValue>(() => ({ sizeScaleId: style.sizeScale.id, sizes: [...style.sizes], baseSize: style.baseSize }), [style])
   const [draft, setDraft] = useState<RangeValue>(model.rangeDraft ?? base)
   const [saving, setSaving] = useState(false)
-  useEffect(() => setDraft(model.rangeDraft ?? base), [base, model.rangeDraft])
+  // A new read starts the card again unless it holds unsaved changes (after Apply they equal the new read).
+  const lastBase = useRef(base)
+  useEffect(() => {
+    setDraft((current) => (JSON.stringify(current) === JSON.stringify(lastBase.current) ? base : current))
+    lastBase.current = base
+  }, [base])
   const editable = model.can.manage && style.status !== 'ARCHIVED'
   const dirty = draft.sizeScaleId !== base.sizeScaleId || draft.baseSize !== base.baseSize || draft.sizes.join(',') !== base.sizes.join(',')
   const effect = rangeEffect(style, draft.sizes)
@@ -46,9 +51,8 @@ function RangeCard({ style, model, actions }: { style: StyleView; model: StyleRe
   const save = async () => {
     if (held || !dirty) return
     setSaving(true)
-    const done = (await actions?.onSaveRange?.(draft)) ?? false
+    await actions?.onSaveRange?.(draft)
     setSaving(false)
-    if (done) setDraft(base)
   }
   return (
     <Card header={t('range.title')} description={editable ? t('range.intro') : t('identity.readOnly')}>
@@ -130,7 +134,7 @@ function ColourwaysCard({ style, model, actions }: { style: StyleView; model: St
           density="roomy"
           stackOnPhone
           columns={[t('colourways.col.colourway'), t('colourways.col.colour'), t('colourways.col.skus'), t('colourways.col.status'), t('colourways.col.actions')]}
-          widths={['34%', '22%', '12%', '14%', undefined]}
+          widths={['32%', '22%', '10%', '14%', undefined]}
           rows={style.colourways.map((colourway) => ({
             id: colourway.id,
             cells: [
@@ -146,7 +150,7 @@ function ColourwaysCard({ style, model, actions }: { style: StyleView; model: St
               <Pill key="s" tone={colourway.status === 'ACTIVE' ? 'success' : 'neutral'}>
                 {t(`masterStatus.${colourway.status}`)}
               </Pill>,
-              <span key="a" className="fw-st-inline">
+              <span key="a" className="fw-st-inline fw-st-nowrap">
                 <Button size="sm" variant="quiet" heldReason={editable ? null : t(style.status === 'ARCHIVED' ? 'held.archived' : 'held.noManage')} onClick={() => actions?.onDialog?.({ kind: 'colourway', colourwayId: colourway.id })} aria-label={t('colourways.editOne', { code: colourway.code })}>
                   {t('colourways.edit')}
                 </Button>

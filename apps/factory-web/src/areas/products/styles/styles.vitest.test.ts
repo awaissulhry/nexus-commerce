@@ -19,6 +19,21 @@ import { demoBom, demoRouting, demoStyle, REV, ROWS, SIZES } from './demo/fixtur
 import { identityPatch } from './record/view/OverviewTab'
 import { designScreen as listScreen } from './list/fixtures'
 import { designScreen as recordScreen } from './record/fixtures'
+import { designScreen as bomScreen } from './bom/fixtures'
+import { designScreen as routingScreen } from './routing/fixtures'
+import { designScreen as costScreen } from './cost/fixtures'
+import { designScreen as complianceScreen } from './compliance/fixtures'
+import { moveSeq, sizeCells } from './bom/bom-model'
+import { WORK_CENTRE_KINDS } from '@nexus/factory-domain/product/routing/operations'
+import { ITEM_KINDS } from '@nexus/factory-domain/product/materials/rules'
+import { UOMS } from '@nexus/factory-domain/product/units/units'
+import { COST_CATEGORIES, PRICE_SOURCES } from '@nexus/factory-domain/costing/inputs'
+import { MISSING_CODES } from '@nexus/factory-domain/costing/contracts'
+import { DOCUMENT_KINDS, DOCUMENT_STATES, COMPLIANCE_CHECK_STATES } from '@nexus/factory-domain/product/compliance/rules'
+import { GATE_REASON_CODES } from '@nexus/factory-domain/compliance/cert-gate/gate'
+import { CERTIFICATE_STATUSES } from '@nexus/factory-domain/compliance/certificates/rules'
+import { LABEL_TEMPLATE_STATUSES } from '@nexus/factory-domain/compliance/labels/rules'
+import { demoCost, withoutCost } from './demo/fixtures'
 import { settlePpe, standardsFor } from './forms'
 import {
   abilitiesOf,
@@ -243,7 +258,7 @@ function sources(dir: string): string[] {
     return /\.tsx?$/.test(entry.name) && !entry.name.includes('.vitest.test.') && entry.name !== 'fixtures.ts' ? [path] : []
   })
 }
-const PREFIXES = ['common', 'status', 'statusMeans', 'revisionStatus', 'masterStatus', 'productType', 'tracking', 'ppe', 'tab', 'record', 'action', 'save', 'held', 'problem', 'notice', 'identity', 'warning', 'side', 'check', 'coverage', 'revisions', 'range', 'measures', 'colourways', 'colourway', 'matrix', 'sku', 'generate', 'release', 'startRevision', 'abandon', 'archive', 'dialog', 'issue', 'complianceCheck', 'blocks', 'cellStatus', 'list', 'completeness', 'csv', 'newStyle', 'keys', 'bom', 'routing', 'cost', 'compliance', 'missing', 'kind', 'uom', 'department', 'category']
+const PREFIXES = ['checkState', 'docKind', 'docState', 'gate', 'certStatus', 'labelStatus', 'cellShort', 'priceSource', 'common', 'status', 'statusMeans', 'revisionStatus', 'masterStatus', 'productType', 'tracking', 'ppe', 'tab', 'record', 'action', 'save', 'held', 'problem', 'notice', 'identity', 'warning', 'side', 'check', 'coverage', 'revisions', 'range', 'measures', 'colourways', 'colourway', 'matrix', 'sku', 'generate', 'release', 'startRevision', 'abandon', 'archive', 'dialog', 'issue', 'complianceCheck', 'blocks', 'cellStatus', 'list', 'completeness', 'csv', 'newStyle', 'keys', 'bom', 'routing', 'cost', 'compliance', 'missing', 'kind', 'uom', 'department', 'category']
 function literalKeys(): string[] {
   const pattern = new RegExp(`['"\`]((?:${PREFIXES.join('|')})\\.[A-Za-z0-9_.]*[A-Za-z0-9_])['"\`]`, 'g')
   const keys = new Set<string>()
@@ -263,7 +278,23 @@ const built = [
   ...STYLE_WARNINGS.map((code) => `warning.${code}`),
   ...BOM_ISSUE_CODES.map((code) => `issue.${code}`),
   ...ROUTING_ISSUE_CODES.map((code) => `issue.${code}`),
-  ...COMPLIANCE_CHECKS.map((code) => `complianceCheck.${code}.BLOCKED`),
+  'issue.COLOUR_MISSING_LINE',
+  'issue.COLOUR_ARCHIVED_LINE',
+  ...COMPLIANCE_CHECKS.flatMap((code) => COMPLIANCE_CHECK_STATES.map((state) => `complianceCheck.${code}.${state}`)),
+  ...COMPLIANCE_CHECK_STATES.map((state) => `checkState.${state}`),
+  ...WORK_CENTRE_KINDS.map((kind) => `department.${kind}`),
+  ...ITEM_KINDS.map((kind) => `kind.${kind}`),
+  ...UOMS.map((uom) => `uom.${uom}`),
+  ...COST_CATEGORIES.map((category) => `category.${category}`),
+  ...PRICE_SOURCES.map((source) => `priceSource.${source}`),
+  ...MISSING_CODES.map((code) => `missing.${code}`),
+  ...DOCUMENT_KINDS.map((kind) => `docKind.${kind}`),
+  ...DOCUMENT_STATES.map((state) => `docState.${state}`),
+  ...GATE_REASON_CODES.map((code) => `gate.${code}`),
+  ...CERTIFICATE_STATUSES.map((status) => `certStatus.${status}`),
+  ...LABEL_TEMPLATE_STATUSES.map((status) => `labelStatus.${status}`),
+  ...CELL_STATUSES.map((status) => `cellShort.${status}`),
+  ...['lines', 'sizes', 'colours'].map((view) => `bom.view.${view}`),
   ...BLOCKED_STEPS.map((step) => `blocks.${step}`),
   ...CELL_STATUSES.map((status) => `cellStatus.${status}`),
   ...STYLE_TABS.map((tab) => `tab.${tab}`),
@@ -295,7 +326,7 @@ function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof L
 }
 
 describe('every design case draws in both languages with no key left on screen', () => {
-  for (const screen of [listScreen, recordScreen] as DesignScreen<unknown>[]) {
+  for (const screen of [listScreen, recordScreen, bomScreen, routingScreen, costScreen, complianceScreen] as DesignScreen<unknown>[]) {
     for (const locale of LOCALES) {
       it(`${screen.screen} in ${locale}: ${screen.cases.length} cases`, () => {
         for (const item of screen.cases) {
@@ -307,4 +338,54 @@ describe('every design case draws in both languages with no key left on screen',
       })
     }
   }
+})
+
+describe('the BOM tab\'s rules', () => {
+  it('a line moves to a free place between its new neighbours (places are unique)', () => {
+    const lines = [10, 20, 30, 40].map((seq) => ({ id: `l${seq}`, seq }))
+    expect(moveSeq(lines, 'l30', -1)).toBe(15)
+    expect(moveSeq(lines, 'l20', -1)).toBe(5)
+    expect(moveSeq(lines, 'l20', 1)).toBe(35)
+    expect(moveSeq(lines, 'l40', 1)).toBeNull()
+    expect(moveSeq(lines, 'l10', -1)).toBeNull()
+    expect(moveSeq([{ id: 'a', seq: 1 }, { id: 'b', seq: 2 }], 'b', -1)).toBeNull()
+  })
+
+  it('leather per size adds the lines with waste; a size any line lacks is unknown, never a partial sum', () => {
+    const lines = [
+      { bySize: [{ size: '50', qty: '7', gross: '8.26', base: '8.26' }, { size: '58', qty: null, gross: null, base: null }] },
+      { bySize: [{ size: '50', qty: '1', gross: '1.1', base: '1.1' }, { size: '58', qty: '1', gross: '1.1', base: '1.1' }] },
+    ]
+    expect(sizeCells(lines, ['50', '58'])).toEqual([
+      { size: '50', total: '9.3600' },
+      { size: '58', total: null },
+    ])
+  })
+})
+
+describe('money by grain on the Cost tab (A1 §2.6)', () => {
+  it('without the cost grain no figure reaches the page, the structure does', () => {
+    const owner = costScreen.cases.find((item) => item.id === 'owner')!
+    const production = costScreen.cases.find((item) => item.id === 'production')!
+    const sales = costScreen.cases.find((item) => item.id === 'sales')!
+    const ownerHtml = render(costScreen as DesignScreen<unknown>, owner.model, 'en')
+    expect(ownerHtml).toContain('€')
+    for (const item of [production, sales]) {
+      const html = render(costScreen as DesignScreen<unknown>, item.model, 'en')
+      expect(html, item.id).not.toContain('€')
+      expect(html, item.id).toContain('Not in your role')
+      expect(html, item.id).toContain('PEL-BOV-12')
+    }
+    // The routing's labour tile follows the same grain.
+    expect(render(routingScreen as DesignScreen<unknown>, routingScreen.cases.find((item) => item.id === 'production')!.model, 'en')).not.toContain('€')
+  })
+
+  it('the made-up sheet adds up: base size 52 NERO of revision 2 is materials + labour + 12 % overhead', () => {
+    const cell = demoCost({ revision: undefined }).cells.find((entry) => entry.size === '52')!
+    const sum = Number(cell.material.amount) + Number(cell.labour.amount)
+    expect(Number(cell.knownTotal)).toBeCloseTo(sum * 1.12, 5)
+    const stripped = withoutCost(demoCost()).cells[0]!
+    expect('total' in stripped || 'knownTotal' in stripped).toBe(false)
+    expect(stripped.material.lines.every((line) => !('amount' in line) && !('unitCost' in line))).toBe(true)
+  })
 })

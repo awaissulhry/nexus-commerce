@@ -194,7 +194,14 @@
     "archived": "Il modello è archiviato.",
     "archivedMany_one": "{count} modello archiviato.",
     "archivedMany_other": "{count} modelli archiviati.",
-    "reactivated": "Il modello è riattivato."
+    "reactivated": "Il modello è riattivato.",
+    "lineAdded": "Materiale aggiunto alla distinta.",
+    "lineRemoved": "Riga tolta dalla distinta in bozza.",
+    "stepsAdded_one": "{count} operazione aggiunta.",
+    "stepsAdded_other": "{count} operazioni aggiunte.",
+    "stepRemoved": "Operazione tolta dal ciclo in bozza.",
+    "uploaded": "Il file firmato è caricato ed è in vigore per la revisione.",
+    "labelNamed": "La revisione indica la sua etichetta capo."
   },
   "identity": {
     "title": "Identità",
@@ -492,6 +499,8 @@
     "SIZE_QUANTITIES_ALL_ZERO": "Riga {line}: tutte le taglie sono a 0.",
     "COLOUR_MISSING": "Riga {line}: manca il colore della variante {colourway}.",
     "COLOUR_ARCHIVED": "Riga {line}: il colore di {colourway} è archiviato.",
+    "COLOUR_MISSING_LINE": "Riga {line}: il materiale ha più colori: scegline uno, o fai variare la riga per variante.",
+    "COLOUR_ARCHIVED_LINE": "Riga {line}: il suo colore è archiviato.",
     "LEATHER_WITHOUT_WASTAGE": "Riga {line}: pelle senza scarto (la resa della pelle è nello scarto).",
     "NO_PLANNED_HIDE_YIELD": "Nessuna resa pelle pianificata per questa revisione.",
     "LINE_OF_ARCHIVED_COLOURWAY": "Riga {line}: solo per una variante archiviata.",
@@ -503,19 +512,29 @@
   },
   "complianceCheck": {
     "REVISION": {
-      "BLOCKED": "Nessuna revisione rilasciata"
+      "BLOCKED": "Nessuna revisione rilasciata",
+      "OK": "Una revisione rilasciata",
+      "NOT_REQUIRED": "Una revisione rilasciata: non richiesto"
     },
     "LABEL_TEMPLATE": {
-      "BLOCKED": "Nessuna etichetta capo attiva per la revisione"
+      "BLOCKED": "Nessuna etichetta capo attiva per la revisione",
+      "OK": "Un’etichetta capo attiva per la revisione",
+      "NOT_REQUIRED": "Un’etichetta capo attiva per la revisione: non richiesto"
     },
     "CERTIFICATE": {
-      "BLOCKED": "Alcune combinazioni colore e taglia attive non sono coperte da un certificato valido"
+      "BLOCKED": "Alcune combinazioni colore e taglia attive non sono coperte da un certificato valido",
+      "OK": "Ogni colore e taglia attivi coperti da un certificato valido",
+      "NOT_REQUIRED": "Ogni colore e taglia attivi coperti da un certificato valido: non richiesto"
     },
     "DECLARATION_OF_CONFORMITY": {
-      "BLOCKED": "Manca la dichiarazione di conformità firmata della revisione"
+      "BLOCKED": "Manca la dichiarazione di conformità firmata della revisione",
+      "OK": "La dichiarazione di conformità firmata della revisione",
+      "NOT_REQUIRED": "La dichiarazione di conformità firmata della revisione: non richiesto"
     },
     "USER_INFORMATION": {
-      "BLOCKED": "Manca la nota informativa per l’utilizzatore della revisione"
+      "BLOCKED": "Manca la nota informativa per l’utilizzatore della revisione",
+      "OK": "La nota informativa per l’utilizzatore della revisione",
+      "NOT_REQUIRED": "La nota informativa per l’utilizzatore della revisione: non richiesto"
     }
   },
   "blocks": {
@@ -589,7 +608,6 @@
     "col": {
       "style": "Modello",
       "typeSeason": "Tipo",
-      "season": "Stagione",
       "status": "Stato",
       "revision": "Revisione",
       "range": "Gamma taglie",
@@ -667,7 +685,110 @@
     "upload": {
       "notPdf": "Una DoC firmata o una nota informativa è un PDF.",
       "tooBig": "Al massimo 20 MB.",
-      "empty": "Il file è vuoto."
+      "empty": "Il file è vuoto.",
+      "title": "Carica un PDF firmato per la revisione {revision}",
+      "kind": "Documento",
+      "languageHint": "Due lettere: it, en, de…",
+      "number": "Numero della dichiarazione (facoltativo)",
+      "numberHint": "Come stampato; fisso una volta emessa.",
+      "hint": "Un PDF di al massimo 20 MB.",
+      "chosen": "Scelto: {name}",
+      "what": "Viene controllato, conservato 10 anni e diventa quello in vigore per la revisione {revision}; la versione precedente resta conservata.",
+      "go": "Carica",
+      "held": {
+        "file": "Scegli il PDF firmato.",
+        "language": "Scrivi la lingua: due lettere."
+      }
+    },
+    "loading": "Lettura della conformità…",
+    "failed": "Non è stato possibile caricare la conformità",
+    "checks": {
+      "title": "Controlli",
+      "intro": "Per la revisione {revision} ({status}): cosa ferma produzione, etichette o spedizione.",
+      "noRevision": "Il modello non ha ancora revisioni.",
+      "allOk": "Nulla ferma produzione, etichette o spedizione.",
+      "other": "Mostrati per la revisione {revision}: aprila"
+    },
+    "class": {
+      "title": "Classificazione DPI",
+      "change": "Modifica in Panoramica",
+      "category": "Categoria",
+      "part": "parte {part}, edizione {edition}",
+      "partClass": "La parte fissa la classe {class}",
+      "maker": "Fabbricante",
+      "brand": "Il marchio (private label)",
+      "company": "La nostra azienda",
+      "certificate": "Serve il certificato dell’organismo notificato",
+      "documents": "Servono dichiarazione e nota informativa"
+    },
+    "coverage": {
+      "title": "Copertura del certificato",
+      "intro": "Ogni variante × taglia rispetto ai certificati, al {date}.",
+      "expired_one": "{count} scaduta",
+      "expired_other": "{count} scadute",
+      "suspended_one": "{count} sospesa",
+      "suspended_other": "{count} sospese",
+      "noColourways": "Il modello non ha varianti: niente da coprire ancora.",
+      "cell": "{colourway}, taglia {size}: {status}, valido fino al {until}",
+      "ok": "Coperta",
+      "daysLeft_one": "manca {count} giorno",
+      "daysLeft_other": "mancano {count} giorni",
+      "legend": "Verde: coperta · ambra: scade entro 60 giorni · rosso: non coperta (blocca rilascio, etichette e spedizione della cella) · grigio: spenta.",
+      "certificates": "Certificati del modello",
+      "certificate": "Certificato",
+      "body": "Organismo notificato",
+      "valid": "Validità",
+      "covers": "Copre",
+      "coversValue_one": "Taglie {sizes} in {count} variante",
+      "coversValue_other": "Taglie {sizes} in {count} varianti",
+      "cellTitle": "{colourway} · taglia {size}",
+      "notOffered": "spenta",
+      "blocks": "Non coperta: i suoi ordini di lavoro non si rilasciano, le etichette non si stampano e non si spedisce.",
+      "where": "I certificati si registrano in Conformità › Certificati."
+    },
+    "docs": {
+      "title": "Dichiarazione di conformità e nota informativa",
+      "intro": "PDF firmati per la revisione {revision}, nelle lingue della sua etichetta ({languages}). La spedizione ne ha bisogno.",
+      "notRequired": "Non è un DPI: non servono dichiarazione di conformità né nota informativa.",
+      "language": "Lingua",
+      "state": "Stato",
+      "document": "Documento",
+      "actions": "Azioni",
+      "pending": "Un caricamento attende la conferma",
+      "issued": "emessa il {date}",
+      "versions_one": "{count} versione conservata",
+      "versions_other": "{count} versioni conservate",
+      "download": "Scarica",
+      "downloadOne": "Scarica il file {language}",
+      "upload": "Carica il PDF firmato",
+      "newVersion": "Nuova versione",
+      "uploadOne": "Carica il file {language}",
+      "uploadOther": "Carica in un’altra lingua",
+      "noLanguages": "Nessuna lingua: le indica l’etichetta capo della revisione.",
+      "held": {
+        "right": "Il tuo ruolo non carica dichiarazioni (permessi conformità e file)."
+      },
+      "maker": "Fabbricante sulla dichiarazione: {name}, {address}."
+    },
+    "label": {
+      "title": "Etichetta capo",
+      "intro": "L’etichetta cucita che la revisione stampa all’operazione finale.",
+      "template": "Modello etichetta",
+      "status": "Stato",
+      "languages": "Lingue",
+      "none": "La revisione {revision} non indica ancora un’etichetta capo: blocca produzione ed etichette.",
+      "name": "Etichetta della revisione in bozza",
+      "nameHint": "Un modello attivo di questo modello o per ogni modello.",
+      "loading": "Lettura dei modelli di etichetta…",
+      "noTemplates": "Nessun modello di etichetta attivo: creane uno in Conformità › Etichette e marcature.",
+      "noneChosen": "Nessuna etichetta",
+      "save": "Indica questa etichetta",
+      "where": "I modelli si creano e si approvano in Conformità › Etichette e marcature."
+    },
+    "tracking": {
+      "title": "Tracciabilità del capo",
+      "lot": "Il lotto dell’ordine di lavoro (o un seriale per capo) si assegna all’operazione finale e si stampa in etichetta; rilascio e traccia delle prove lo seguono.",
+      "none": "Non è un DPI: non serve un lotto in etichetta."
     }
   },
   "keys": {
@@ -684,5 +805,406 @@
     "moveUp": "Sposta su (riga, operazione)",
     "moveDown": "Sposta giù (riga, operazione)",
     "help": "Queste scorciatoie"
+  },
+  "kind": {
+    "LEATHER": "Pelle",
+    "TEXTILE": "Tessuto",
+    "LINING": "Fodera",
+    "MEMBRANE": "Membrana",
+    "PADDING": "Imbottitura",
+    "THREAD": "Filo",
+    "TRIM": "Accessorio",
+    "HARDWARE": "Minuteria",
+    "PROTECTOR": "Protezione",
+    "LABEL": "Etichetta",
+    "PACKAGING": "Imballo",
+    "COMPONENT": "Componente"
+  },
+  "uom": {
+    "PCS": "pz",
+    "PAIR": "paio",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelle",
+    "SIDE": "mezzina",
+    "ROLL": "rotolo",
+    "CONE": "cono",
+    "BOX": "scatola"
+  },
+  "department": {
+    "CUTTING": "Taglio",
+    "SEWING": "Cucitura",
+    "ASSEMBLY": "Montaggio",
+    "FINISHING": "Rifinitura",
+    "INSPECTION": "Controllo",
+    "PACKING": "Imballaggio",
+    "SUBCONTRACT": "Terzisti"
+  },
+  "category": {
+    "LEATHER": "Pelle",
+    "MATERIALS": "Materiali",
+    "TRIMS": "Accessori ed etichette",
+    "PACKAGING": "Imballo"
+  },
+  "priceSource": {
+    "STANDARD": "Standard"
+  },
+  "certStatus": {
+    "DRAFT": "Bozza",
+    "VALID": "Valido",
+    "SUSPENDED": "Sospeso",
+    "WITHDRAWN": "Ritirato",
+    "EXPIRED": "Scaduto"
+  },
+  "labelStatus": {
+    "DRAFT": "Bozza",
+    "ACTIVE": "Attiva",
+    "RETIRED": "Ritirata"
+  },
+  "docKind": {
+    "DECLARATION_OF_CONFORMITY": "Dichiarazione UE di conformità (firmata)",
+    "USER_INFORMATION": "Nota informativa per l’utilizzatore"
+  },
+  "docState": {
+    "CURRENT": "Attuale (rev {revision})",
+    "OLDER_REVISION": "Solo per la rev {revision}",
+    "MISSING": "Mancante"
+  },
+  "checkState": {
+    "OK": "OK",
+    "BLOCKED": "Blocca",
+    "NOT_REQUIRED": "Non richiesto"
+  },
+  "cellShort": {
+    "COVERED": "OK",
+    "NOT_COVERED": "Non coperta",
+    "EXPIRED": "Scaduto",
+    "SUSPENDED": "Sospeso",
+    "NOT_REQUIRED": "Non richiesto"
+  },
+  "gate": {
+    "no_certificate": "Nessun certificato è registrato per questo modello.",
+    "certificate_not_valid": "Il certificato non è valido (sospeso o ritirato).",
+    "certificate_expired": "Il certificato è scaduto.",
+    "certificate_not_yet_valid": "Il certificato non è ancora valido.",
+    "colourway_not_covered": "Il certificato non copre questa variante.",
+    "size_not_covered": "Il certificato non copre questa taglia.",
+    "style_not_made_to_measure": "Il modello non è su misura.",
+    "made_to_measure_not_allowed": "Il certificato non consente capi su misura.",
+    "body_measures_missing": "La taglia non ha misure del corpo.",
+    "measurement_missing": "Manca una misura.",
+    "measurement_invalid": "Una misura non è valida.",
+    "measurement_outside": "Una misura è fuori da ciò che il certificato copre."
+  },
+  "missing": {
+    "NO_BOM": "La revisione non ha righe di distinta.",
+    "NO_ROUTING": "La revisione non ha operazioni.",
+    "BOM_QUANTITY": "Riga {line}: manca la quantità della taglia {size}.",
+    "MATERIAL_UNIT": "Riga {line}: la sua unità non si converte in quella del materiale.",
+    "MATERIAL_PRICE": "{material} non ha un costo standard: impostalo sul materiale.",
+    "MATERIAL_CURRENCY": "{material} ha il prezzo in un’altra valuta.",
+    "LABOUR_RATE": "Nessun costo al minuto per {kind}: lo imposta l’amministrazione.",
+    "LABOUR_CURRENCY": "Il costo al minuto per {kind} è in un’altra valuta."
+  },
+  "bom": {
+    "noRevision": {
+      "title": "Ancora nessuna revisione",
+      "body": "Avvia la revisione 1 (⋯ o Panoramica): distinta, ciclo, costo ed etichetta vanno lì."
+    },
+    "loading": "Lettura della distinta…",
+    "failed": "Non è stato possibile caricare la distinta",
+    "check": {
+      "title_one": "{count} cosa da sistemare nella distinta",
+      "title_other": "{count} cose da sistemare nella distinta",
+      "intro": "Mostrami porta alla riga o alla cella."
+    },
+    "title_one": "Materiali ({count})",
+    "title_other": "Materiali ({count})",
+    "intro": "Ogni materiale di un capo nella revisione {revision}.",
+    "viewLabel": "Vista della distinta",
+    "view": {
+      "lines": "Righe",
+      "sizes": "Per taglia",
+      "colours": "Per variante"
+    },
+    "add": "Aggiungi materiale",
+    "addFirst": "Aggiungi il primo materiale",
+    "empty": {
+      "title": "Ancora nessun materiale",
+      "body": "Aggiungi pelle, fodera, protezioni, accessori ed etichette di un capo."
+    },
+    "held": {
+      "frozen": "Questa revisione non è una bozza: avvia una nuova revisione per modificarla.",
+      "first": "È già la prima.",
+      "last": "È già l’ultima."
+    },
+    "col": {
+      "seq": "Pos.",
+      "material": "Materiale",
+      "placement": "Posizione",
+      "qty": "Q.tà (taglia {size})",
+      "wastage": "Scarto",
+      "gross": "Con scarto",
+      "depends": "Varia per",
+      "actions": "Azioni"
+    },
+    "bySize": "taglia",
+    "byColour": "variante",
+    "onlyIn": "solo {code}",
+    "missing": "— manca",
+    "missingShort": "manca",
+    "edit": "Modifica",
+    "editOne": "Modifica la riga {line}",
+    "moveUp": "Sposta su la riga {line}",
+    "moveDown": "Sposta giù la riga {line}",
+    "remove": "Togli",
+    "removeOne": "Togli la riga {line}",
+    "removeTitle": "Togliere la riga {line} ({code})?",
+    "removeBody": "Esce dalla distinta in bozza della revisione {revision}; le revisioni rilasciate mantengono la loro.",
+    "sizeCell": "{line}, taglia {size}",
+    "sizes": {
+      "empty": {
+        "title": "Nessuna riga per taglia",
+        "body": "Attiva “Varia per taglia” in una riga (Modifica) per scriverne qui la quantità per taglia."
+      },
+      "leatherTotal": "Pelle con scarto",
+      "notNumber": "Non è un numero: scrivilo come 6,35 o 6.35.",
+      "hint": "Scrivi una quantità ed esci dalla cella (o Invio) per salvarla; 0 vuol dire che la taglia non usa la riga; Esc la ripristina.",
+      "hintRead": "Quantità per capo, nell’unità della riga."
+    },
+    "colourCell": "{line}, variante {colourway}",
+    "colours": {
+      "empty": {
+        "title": "Nessuna riga per variante",
+        "body": "Attiva “Varia per variante” in una riga (Modifica) per sceglierne qui il colore per variante."
+      },
+      "choose": "Scegli un colore",
+      "loading": "Lettura dei colori del materiale…",
+      "none": "— nessun colore",
+      "hint": "Si offrono solo i colori del materiale; ogni variante attiva ne ha bisogno."
+    },
+    "leather": {
+      "title": "Pelle e scarto della pelle",
+      "intro": "Quanta pelle consuma davvero un capo, con la resa pianificata della revisione.",
+      "sentence": "La taglia {size} taglia {net} {unit} e consuma {gross} {unit} di pelle ({pct} % di scarto).",
+      "noBase": "La taglia base non ha ancora una quantità.",
+      "hideArea": "Pelle media",
+      "hideUnknown": "Non nota (il materiale non si compra a pelle)",
+      "perGarment": "Pelli per capo (taglia base)",
+      "per100": "Pelli ogni 100 capi",
+      "yield": "Resa pelle pianificata",
+      "yieldHint": "La parte dell’area della pelle che il piano di taglio prevede di usare; il taglio confronta la resa reale con questa.",
+      "yieldRange": "Una percentuale sopra 0 e al massimo 100 %.",
+      "saveYield": "Salva la resa"
+    },
+    "line": {
+      "addTitle": "Aggiungi un materiale",
+      "editTitle": "Riga {line} · {code}",
+      "material": "Materiale",
+      "materialHint": "Cerca nella libreria materiali per codice o nome.",
+      "materialPlaceholder": "Pelle, fodera, protezione, cerniera…",
+      "typeToSearch": "Scrivi per cercare",
+      "searching": "Ricerca…",
+      "noneFound": "Nessun materiale attivo corrisponde.",
+      "found_one": "{count} materiale",
+      "found_other": "{count} materiali",
+      "colours_one": "{count} colore",
+      "colours_other": "{count} colori",
+      "loadingMaterial": "Lettura del materiale…",
+      "baseUnit": "unità base {unit}",
+      "crVi": "test Cr VI per lotto",
+      "ppeComponent": "componente DPI",
+      "change": "Scegline un altro",
+      "placementHint": "Davanti, manica, fodera, tasca protezione.",
+      "unit": "Unità",
+      "qty": "Quantità per capo",
+      "qtyHint": "Sopra 0; decimali con , o .",
+      "wastageHint": "Da 0 a 60 %.",
+      "wastageLeather": "Sulla pelle, includi la resa della pelle (da 0 a 60 %).",
+      "sizeDependent": "Varia per taglia",
+      "sizeDependentHint": "Una quantità per ogni taglia della gamma.",
+      "colourDependent": "Varia per variante",
+      "colourDependentHint": "Un colore del materiale per variante.",
+      "oneColour": "Colore",
+      "oneColourHint": "Lo stesso in ogni variante.",
+      "noColour": "Nessun colore",
+      "onlyIn": "Usato in",
+      "onlyInHint": "Una riga di una sola variante (un pannello a contrasto).",
+      "everyColourway": "Ogni variante",
+      "note": "Nota",
+      "sizesAfter": "Scrivi la quantità di ogni taglia nella vista Per taglia.",
+      "coloursAfter": "Scegli il colore di ogni variante nella vista Per variante.",
+      "add": "Aggiungi alla distinta",
+      "save": "Salva la riga",
+      "held": {
+        "material": "Scegli un materiale.",
+        "qty": "Scrivi una quantità sopra 0.",
+        "wastage": "Lo scarto va da 0 a 60 %."
+      }
+    }
+  },
+  "routing": {
+    "loading": "Lettura del ciclo…",
+    "failed": "Non è stato possibile caricare il ciclo",
+    "minutes": "{minutes} min",
+    "strip": {
+      "total": "Minuti standard per capo",
+      "totalHint": "Uguali in ogni taglia (W1)",
+      "steps_one": "{count} operazione",
+      "steps_other": "{count} operazioni",
+      "scans": "Punti di scansione",
+      "scansHint_one": "su {count} operazione",
+      "scansHint_other": "su {count} operazioni",
+      "labour": "Manodopera per capo",
+      "labourHint": "Minuti × costo al minuto ÷ efficienza"
+    },
+    "issuesTitle_one": "{count} cosa da sistemare nel ciclo",
+    "issuesTitle_other": "{count} cose da sistemare nel ciclo",
+    "warningsTitle_one": "{count} punto da notare",
+    "warningsTitle_other": "{count} punti da notare",
+    "title_one": "Operazioni ({count})",
+    "title_other": "Operazioni ({count})",
+    "intro": "In ordine, dalla libreria, con i minuti per questo modello (revisione {revision}).",
+    "filtered": "Solo {department}: il riquadro sopra filtra.",
+    "showAll": "Mostra ogni reparto",
+    "add": "Aggiungi operazioni",
+    "addFirst": "Aggiungi dalla libreria",
+    "empty": {
+      "title": "Ancora nessuna operazione",
+      "body": "Aggiungi le operazioni che fanno il capo, dal taglio al controllo finale."
+    },
+    "col": {
+      "seq": "Pos.",
+      "operation": "Operazione",
+      "department": "Reparto",
+      "machine": "Macchina · abilità",
+      "minutes": "Minuti standard",
+      "scanned": "Scansionata",
+      "actions": "Azioni"
+    },
+    "final": "finale",
+    "archivedOp": "archiviata nella libreria",
+    "addInstructions": "Aggiungi istruzioni",
+    "minutesOf": "Minuti standard di {step}",
+    "scannedOf": "{step} è scansionata",
+    "library": "Libreria: {minutes} min",
+    "libraryList": "Operazioni della libreria",
+    "useLibrary": "Usa il valore della libreria",
+    "moveUp": "Sposta su l’operazione {step}",
+    "moveDown": "Sposta giù l’operazione {step}",
+    "removeOne": "Togli l’operazione {step}",
+    "removeTitle": "Togliere {step}?",
+    "removeBody": "Esce dal ciclo in bozza; le revisioni rilasciate mantengono il loro.",
+    "removeFinal": "È l’operazione finale: il lotto si assegnerà alla scansionata precedente.",
+    "addTitle": "Aggiungi operazioni dalla libreria",
+    "search": "Cerca codice, nome, macchina o abilità",
+    "everyDepartment": "Ogni reparto",
+    "searching": "Ricerca…",
+    "noneFound": "Nessuna operazione attiva corrisponde.",
+    "pickOrder": "{n}.",
+    "alreadyIn": "già nel ciclo",
+    "addOrder": "Si aggiungono in fondo, nell’ordine in cui le spunti; ognuna copia i minuti dalla libreria.",
+    "addN_one": "Aggiungi {count} operazione",
+    "addN_other": "Aggiungi {count} operazioni",
+    "addHeld": "Spunta almeno un’operazione.",
+    "instructionsTitle": "Istruzioni · {step}",
+    "instructions": "Istruzioni",
+    "instructionsHint": "Come si fa per questo modello: il cartellino e lo schermo di reparto la mostrano."
+  },
+  "cost": {
+    "loading": "Calcolo del costo…",
+    "failed": "Non è stato possibile calcolare il foglio costi",
+    "empty": {
+      "title": "Aggiungi righe di distinta e operazioni per vedere un costo",
+      "body": "Il foglio si calcola dalla distinta per taglia e dai minuti del ciclo."
+    },
+    "noGrain": "Le cifre di costo non sono nel tuo ruolo: il foglio mostra quantità, minuti e ciò che manca.",
+    "estimate": "La revisione {revision} è una bozza: questo costo è una stima e può ancora cambiare.",
+    "colourway": "Variante",
+    "size": "Taglia",
+    "computed": "Calcolato il {date} · {currency}",
+    "notInRole": "Non nel tuo ruolo",
+    "notInRoleHint": "Le cifre di costo richiedono il permesso costi",
+    "strip": {
+      "total": "Costo per capo · {colourway} {size}",
+      "complete": "Ogni dato è noto",
+      "incomplete_one": "manca {count} dato",
+      "incomplete_other": "mancano {count} dati",
+      "material": "Materiali",
+      "labour": "Manodopera",
+      "overhead": "Spese generali",
+      "change": "Rispetto alla rev {revision}"
+    },
+    "up": "in più",
+    "down": "in meno",
+    "changeUnknown": "Uno dei due non è completo",
+    "partial": "parziale",
+    "noOverhead": "Nessuna regola di spese generali",
+    "overheadPct": "{pct} % su materiali e manodopera",
+    "incomplete": "incompleto",
+    "knownSoFar": "— (noto finora: {amount})",
+    "sheet": {
+      "title": "Foglio costi",
+      "intro": "Dai materiali al costo: apri una voce per le righe dietro; ⓘ dice come nasce una cifra.",
+      "labour": "Manodopera · {minutes} min",
+      "labourTable": "Manodopera per reparto",
+      "overhead": "Spese generali · {pct} %",
+      "rounding": "Arrotondamento",
+      "total": "Costo per capo"
+    },
+    "col": {
+      "material": "Materiale",
+      "qty": "Q.tà + scarto",
+      "base": "In unità base",
+      "unitCost": "Prezzo",
+      "amount": "Importo",
+      "minutes": "Minuti",
+      "perMinute": "Costo al minuto",
+      "efficiency": "Efficienza"
+    },
+    "how": "Come nasce la cifra di {what}?",
+    "howTitle": "Come nasce?",
+    "howMaterial": "{qty} + {wastage} % di scarto = {base} {unit} per capo.",
+    "howMaterialCost": "{base} × {price} = {amount}",
+    "howLabour": "{minutes} min × {rate} ÷ {efficiency} % = {amount}",
+    "howOverhead": "{base} × {pct} % = {amount}",
+    "bySize": {
+      "title": "Costo per taglia",
+      "intro": "La variante sopra in ogni taglia della gamma.",
+      "what": "Voce",
+      "hint": "“—” dove manca un dato; la taglia base è segnata con ·.",
+      "hintNoGrain": "Le cifre non sono nel tuo ruolo (·); “—” dove manca un dato."
+    },
+    "missingTitle_one": "manca {count} dato: il costo non è completo",
+    "missingTitle_other": "mancano {count} dati: il costo non è completo",
+    "prices": {
+      "title": "Prezzi dei materiali",
+      "intro": "Il prezzo a cui si calcola ogni materiale (W1: il costo standard).",
+      "source": "Fonte",
+      "perBase": "Per unità base",
+      "perPurchase": "Per unità d’acquisto",
+      "asOf": "Impostato il",
+      "none": "— nessun costo standard",
+      "noGrain": "I prezzi non sono nel tuo ruolo."
+    },
+    "rates": {
+      "title": "Tariffe manodopera e spese generali",
+      "intro": "Ciò che il foglio ha usato oggi, per reparto del ciclo.",
+      "from": "Valida dal",
+      "none": "— nessuna tariffa",
+      "overhead": "Spese generali",
+      "company": "Calcolato con",
+      "companyOwn": "Tariffe e valuta dell’azienda",
+      "tenantWide": "Tariffe del gruppo (ogni azienda)",
+      "where": "Tariffe e spese generali le gestisce l’amministrazione (impostazioni costi)."
+    }
   }
 }

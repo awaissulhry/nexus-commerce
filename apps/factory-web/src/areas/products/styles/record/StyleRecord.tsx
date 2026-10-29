@@ -7,31 +7,55 @@ import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { useLiveChanges } from '../../../../record-panels/live'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { putToStore, storeUrl } from '../../../../record-panels/store'
 import {
+  addBomLine,
   addColourway,
+  addSteps,
+  announceDocument,
   archiveStyle,
+  assignLabel,
+  compareCost,
+  confirmDocument,
   copyRevision,
+  documentDownload,
+  findMaterials,
+  findOperations,
   generateSkus,
   getBom,
   getCompliance,
+  getCostSheet,
+  getMaterial,
   getRouting,
   getStyle,
   listBrands,
   listColours,
+  listLabelTemplates,
   listScales,
   obsoleteRevision,
   reactivateStyle,
   releaseRevision,
+  removeBomLine,
+  removeStep,
+  reorderSteps,
+  setBomColours,
+  setBomSizes,
   startRevision,
+  updateBomLine,
   updateColourway,
+  updateRevision,
   updateSku,
+  updateStep,
   updateStyle,
   type BomView,
+  type CostDiffView,
+  type CostSheetView,
+  type MaterialView,
   type RoutingView,
   type StyleComplianceView,
   type StyleView,
 } from '../api'
-import { abilitiesOf, grainsOf, releasedOf, revisionInView, tabOf, type StyleTab } from '../model'
+import { abilitiesOf, grainsOf, releasedOf, revisionInView, sha256Of, tabOf, type StyleTab } from '../model'
 import { readProblem, writeProblem } from '../problems'
 import type { BomViewMode, Loaded, Part, SaveState, StyleDialog, StyleNotice, StyleRecordViewModel } from './record-model'
 import { StyleRecordView } from './view/StyleRecordView'
@@ -72,7 +96,16 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const [bom, setBom] = useState<Part<BomView>>({ status: 'idle' })
   const bomRef = useRef<BomView | null>(null)
   const [routing, setRouting] = useState<Part<RoutingView>>({ status: 'idle' })
+  const routingRef = useRef<RoutingView | null>(null)
   const [compliance, setCompliance] = useState<Part<StyleComplianceView>>({ status: 'idle' })
+  const [cost, setCost] = useState<Part<CostSheetView>>({ status: 'idle' })
+  const [costCompare, setCostCompare] = useState<CostDiffView | null>(null)
+  const [costCell, setCostCell] = useState<{ colourwayId: string; size: string } | null>(null)
+  const [materials, setMaterials] = useState<Record<string, MaterialView | null>>({})
+  const [materialSearch, setMaterialSearch] = useState<StyleRecordViewModel['materialSearch']>({ query: '', results: null, problem: null })
+  const [operationSearch, setOperationSearch] = useState<StyleRecordViewModel['operationSearch']>({ query: '', kind: null, results: null, problem: null })
+  /** The latest version of the revision in view (a revision's BOM and routing are one versioned record). */
+  const revisionVersionRef = useRef<{ id: string; version: number } | null>(null)
   const [libraries, setLibraries] = useState<StyleRecordViewModel['libraries']>({ scales: null, colours: null, brands: null, labels: null })
   const [save, setSave] = useState<SaveState>({ state: 'idle', at: null })
   const [dialog, setDialog] = useState<StyleDialog | null>(null)
@@ -94,7 +127,13 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   }, [])
   const setBomValue = useCallback((next: BomView) => {
     bomRef.current = next
+    revisionVersionRef.current = { id: next.revision.id, version: next.revision.version }
     setBom({ status: 'ready', value: next })
+  }, [])
+  const setRoutingValue = useCallback((next: RoutingView) => {
+    routingRef.current = next
+    revisionVersionRef.current = { id: next.revision.id, version: next.revision.version }
+    setRouting({ status: 'ready', value: next })
   }, [])
 
   const loadStyle = useCallback(async () => {
@@ -107,6 +146,24 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
       else setStyle({ status: 'error', problem: readProblem(error) })
     }
   }, [api, styleId, setStyleValue])
+
+  /** The cost sheet of a revision, and (for a draft of a style with a released revision) the change against it. */
+  const loadCost = (id: string) => {
+    const style = styleRef.current
+    // A tenant-wide style is priced for the company the page works in; a company's style for its own company.
+    const pricedFor = style && style.companyId === null ? companyId : null
+    setCost((current) => (current.status === 'ready' && current.value.revision.id === id ? current : { status: 'loading' }))
+    getCostSheet(api, styleId, id, pricedFor)
+      .then((sheet) => setCost({ status: 'ready', value: sheet }))
+      .catch((error: unknown) => setCost({ status: 'error', problem: readProblem(error) }))
+    const released = style ? releasedOf(style.revisions) : null
+    const viewing = style?.revisions.find((entry) => entry.id === id)
+    if (released && viewing && viewing.status === 'DRAFT') {
+      compareCost(api, styleId, released.id, id, pricedFor)
+        .then(setCostCompare)
+        .catch(() => setCostCompare(null))
+    } else setCostCompare(null)
+  }
 
   const loadParts = useCallback(
     (id: string | null) => {
@@ -124,9 +181,10 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
         if (can.routingView) {
           setRouting((current) => (current.status === 'ready' && current.value.revision.id === id ? current : { status: 'loading' }))
           getRouting(api, styleId, id)
-            .then((next) => setRouting({ status: 'ready', value: next }))
+            .then(setRoutingValue)
             .catch((error: unknown) => setRouting({ status: 'error', problem: readProblem(error) }))
         }
+        if (can.costView) loadCost(id)
       }
       if (can.complianceView) {
         getCompliance(api, styleId, id)
@@ -134,7 +192,7 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
           .catch((error: unknown) => setCompliance({ status: 'error', problem: readProblem(error) }))
       }
     },
-    [api, styleId, can.bomView, can.routingView, can.complianceView, setBomValue],
+    [api, styleId, can.bomView, can.routingView, can.complianceView, can.costView, setBomValue, setRoutingValue],
   )
 
   useEffect(() => {
@@ -160,7 +218,11 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
       listBrands(api)
         .then((brands) => setLibraries((current) => ({ ...current, brands })))
         .catch(() => undefined)
-  }, [api, companyId, can.brands])
+    if (can.labels && can.complianceView)
+      listLabelTemplates(api)
+        .then((labels) => setLibraries((current) => ({ ...current, labels })))
+        .catch(() => setLibraries((current) => ({ ...current, labels: [] })))
+  }, [api, companyId, can.brands, can.labels, can.complianceView])
 
   // The thread beside the tab (Owner O1), remembered on this device (a per-viewer convenience).
   useEffect(() => {
@@ -246,6 +308,7 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
 
   const current = () => styleRef.current
   const revisionVersion = (id: string): { id: string; version: number } | null => {
+    if (revisionVersionRef.current?.id === id) return revisionVersionRef.current
     const fromBom = bomRef.current?.revision.id === id ? bomRef.current.revision : null
     if (fromBom) return { id, version: fromBom.version }
     const listed = styleRef.current?.revisions.find((entry) => entry.id === id)
@@ -253,6 +316,55 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   }
 
   const goToRevision = (id: string) => router.replace(hrefFor(tab, id))
+
+  /** After a BOM write: the routing (its version moved) and the cost read again; and the other way round. */
+  const afterBom = () => {
+    if (!revisionId) return
+    if (can.routingView) getRouting(api, styleId, revisionId).then(setRoutingValue).catch(() => undefined)
+    if (can.costView) loadCost(revisionId)
+  }
+  const afterRouting = () => {
+    if (!revisionId) return
+    if (can.bomView) getBom(api, styleId, revisionId).then(setBomValue).catch(() => undefined)
+    if (can.costView) loadCost(revisionId)
+  }
+  const bomWrite = (work: (target: { id: string; version: number }) => Promise<BomView>, done?: StyleNotice) =>
+    run(async () => {
+      const target = revisionId ? revisionVersion(revisionId) : null
+      if (!target) return
+      setBomValue(await work(target))
+      afterBom()
+    }, done)
+  const routingWrite = (work: (target: { id: string; version: number }) => Promise<RoutingView>, done?: StyleNotice) =>
+    run(async () => {
+      const target = revisionId ? revisionVersion(revisionId) : null
+      if (!target) return
+      setRoutingValue(await work(target))
+      afterRouting()
+    }, done)
+
+  const loadMaterial = (itemId: string) => {
+    setMaterials((current) => (itemId in current ? current : { ...current, [itemId]: null }))
+    getMaterial(api, itemId)
+      .then((material) => setMaterials((current) => ({ ...current, [itemId]: material })))
+      .catch(() => undefined)
+  }
+  const materialSeq = useRef(0)
+  const onMaterialQuery = (query: string) => {
+    const mine = ++materialSeq.current
+    setMaterialSearch({ query, results: null, problem: null })
+    findMaterials(api, query, companyId)
+      .then((results) => mine === materialSeq.current && setMaterialSearch({ query, results, problem: null }))
+      .catch((error: unknown) => mine === materialSeq.current && setMaterialSearch({ query, results: null, problem: readProblem(error) }))
+  }
+  const operationSeq = useRef(0)
+  const onOperationQuery = (query: string, kind: string | null) => {
+    const mine = ++operationSeq.current
+    setOperationSearch({ query, kind, results: null, problem: null })
+    findOperations(api, query, kind, companyId)
+      .then((results) => mine === operationSeq.current && setOperationSearch({ query, kind, results, problem: null }))
+      .catch((error: unknown) => mine === operationSeq.current && setOperationSearch({ query, kind, results: null, problem: readProblem(error) }))
+  }
 
   const model: StyleRecordViewModel = {
     prefix,
@@ -264,15 +376,15 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     revisionId,
     bom,
     routing,
-    cost: { status: 'idle' },
-    costCompare: null,
+    cost,
+    costCompare,
     compliance,
     libraries,
-    materials: {},
-    materialSearch: { query: '', results: null, problem: null },
-    operationSearch: { query: '', kind: null, results: null, problem: null },
+    materials,
+    materialSearch,
+    operationSearch,
     bomView,
-    costCell: null,
+    costCell,
     save,
     dialog,
     busy,
@@ -289,7 +401,11 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
         onRetry: () => void loadStyle(),
         onReload: reloadAll,
         onDock: toggleDock,
-        onDialog: setDialog,
+        onDialog: (next) => {
+          // A new material search starts empty (never the last dialog's results under an empty box).
+          if (next?.kind === 'bomLine' && next.lineId === null) setMaterialSearch({ query: '', results: null, problem: null })
+          setDialog(next)
+        },
         onDismissNotice: () => setNotice(null),
         onRevision: goToRevision,
         onSaveIdentity: (patch) =>
@@ -384,6 +500,57 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
             if (style) setStyleValue(await reactivateStyle(api, style))
           }, { key: 'notice.reactivated', tone: 'success' }),
         onBomView: setBomView,
+        onMaterialQuery,
+        onLoadMaterial: loadMaterial,
+        onAddLine: (input) => bomWrite((target) => addBomLine(api, styleId, target, input), { key: 'notice.lineAdded', tone: 'success' }),
+        onEditLine: (lineId, input) => bomWrite((target) => updateBomLine(api, styleId, target, lineId, input), { key: 'notice.saved', tone: 'success' }),
+        onRemoveLine: (lineId) => bomWrite((target) => removeBomLine(api, styleId, target, lineId), { key: 'notice.lineRemoved', tone: 'success' }),
+        onLineSizes: (lineId, sizes) => void bomWrite((target) => setBomSizes(api, styleId, target, lineId, sizes)),
+        onLineColours: (lineId, colours) => void bomWrite((target) => setBomColours(api, styleId, target, lineId, colours)),
+        onHideYield: (pct) => bomWrite((target) => updateRevision(api, styleId, target, { plannedHideYieldPct: pct }), { key: 'notice.saved', tone: 'success' }),
+        onOperationQuery,
+        onAddSteps: (operationIds) => routingWrite((target) => addSteps(api, styleId, target, operationIds), { key: 'notice.stepsAdded', tone: 'success', params: { count: operationIds.length } }),
+        onStep: (stepId, patch) => routingWrite((target) => updateStep(api, styleId, target, stepId, patch)),
+        onRemoveStep: (stepId) => routingWrite((target) => removeStep(api, styleId, target, stepId), { key: 'notice.stepRemoved', tone: 'success' }),
+        onMoveStep: (stepId, delta) => {
+          const steps = routingRef.current?.steps ?? []
+          const index = steps.findIndex((step) => step.id === stepId)
+          const to = index + delta
+          if (index < 0 || to < 0 || to >= steps.length) return
+          const order = steps.map((step) => step.id)
+          ;[order[index], order[to]] = [order[to]!, order[index]!]
+          void routingWrite((target) => reorderSteps(api, styleId, target, order))
+        },
+        onCostCell: setCostCell,
+        onUpload: ({ kind, language, number, file }) =>
+          run(async () => {
+            if (!revisionId) return
+            const sha256 = await sha256Of(file)
+            const announced = await announceDocument(api, styleId, { revisionId, kind, language, number, originalName: file.name, contentType: 'application/pdf', sizeBytes: file.size, sha256 })
+            await putToStore(announced.upload, file)
+            await confirmDocument(api, styleId, announced.documentId, announced.fileId)
+            setCompliance({ status: 'ready', value: await getCompliance(api, styleId, revisionId) })
+          }, { key: 'notice.uploaded', tone: 'success' }),
+        onDownload: (documentId, fileId) => {
+          documentDownload(api, styleId, documentId, fileId)
+            .then((download) => {
+              const anchor = document.createElement('a')
+              anchor.href = storeUrl(download.url)
+              anchor.rel = 'noopener'
+              document.body.appendChild(anchor)
+              anchor.click()
+              anchor.remove()
+            })
+            .catch((error: unknown) => setNotice({ key: readProblem(error), tone: 'danger' }))
+        },
+        onAssignLabel: (templateId) =>
+          run(async () => {
+            const target = revisionId ? revisionVersion(revisionId) : null
+            if (!target) return
+            await assignLabel(api, styleId, target, templateId)
+            loadParts(revisionId)
+            if (can.bomView && revisionId) setBomValue(await getBom(api, styleId, revisionId))
+          }, { key: 'notice.labelNamed', tone: 'success' }),
       }}
     />
   )

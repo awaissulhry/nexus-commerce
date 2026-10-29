@@ -66,7 +66,7 @@ export function abilitiesOf(permissions: readonly string[]): StyleAbilities {
 
 export type StyleTab = 'overview' | 'variants' | 'bom' | 'routing' | 'cost' | 'compliance' | 'activity'
 /** The studio's tabs, in the band's order. */
-export const STYLE_TABS: readonly StyleTab[] = ['overview', 'variants', 'activity']
+export const STYLE_TABS: readonly StyleTab[] = ['overview', 'variants', 'bom', 'routing', 'cost', 'compliance', 'activity']
 
 export function tabOf(value: string | null | undefined): StyleTab {
   return (STYLE_TABS as readonly string[]).includes(value ?? '') ? (value as StyleTab) : 'overview'
@@ -280,12 +280,22 @@ export function decimalText(value: string | null | undefined, locale: 'it' | 'en
   return new Intl.NumberFormat(locale === 'it' ? 'it-IT' : 'en-GB', { maximumFractionDigits: maxDecimals }).format(number)
 }
 
+/** A decimal from the API as a person types it back ("6.3500" → "6,35" in Italian, "6.35" in English), no grouping. */
+export function editText(value: string | null | undefined, locale: 'it' | 'en'): string {
+  if (value === null || value === undefined) return ''
+  const normal = decimalInput(value, 12)
+  if (normal === undefined || normal === null) return value
+  return locale === 'it' ? normal.replace('.', ',') : normal
+}
+
 /** A cost figure (decimal string from the API, rounded once there) in its currency, two decimals for the eye. */
 export function moneyText(value: string | null | undefined, currency: string, locale: 'it' | 'en', decimals = 2): string {
   if (value === null || value === undefined) return '—'
   const number = Number(value)
   if (!Number.isFinite(number)) return '—'
-  return new Intl.NumberFormat(locale === 'it' ? 'it-IT' : 'en-GB', { style: 'currency', currency, minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(number)
+  // A price below one unit keeps its own precision (thread at €0.012 a metre, never "€0.01").
+  const max = Math.abs(number) < 1 && number !== 0 ? Math.max(decimals, 4) : decimals
+  return new Intl.NumberFormat(locale === 'it' ? 'it-IT' : 'en-GB', { style: 'currency', currency, minimumFractionDigits: decimals, maximumFractionDigits: max }).format(number)
 }
 
 /** Minutes: "96,5 min". */
@@ -305,8 +315,10 @@ export function issueWords(issue: BomIssue, bom: Pick<BomView, 'lines' | 'colour
   const line = issue.lineId ? bom?.lines.find((entry) => entry.id === issue.lineId) : undefined
   const step = issue.stepId ? routing?.steps.find((entry) => entry.id === issue.stepId) : undefined
   const colourway = issue.colourwayId ? bom?.colourways.find((entry) => entry.id === issue.colourwayId) : undefined
+  // A colour finding without a colourway is about the line's one colour ("it comes in colours: choose one").
+  const lineOnly = (issue.code === 'COLOUR_MISSING' || issue.code === 'COLOUR_ARCHIVED') && !issue.colourwayId
   return {
-    key: `issue.${issue.code}`,
+    key: `issue.${issue.code}${lineOnly ? '_LINE' : ''}`,
     params: {
       line: line ? `${line.seq} · ${line.item.code}` : '—',
       size: issue.size ?? '—',
