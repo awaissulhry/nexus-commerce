@@ -1,4 +1,317 @@
 {
+  "today": {
+    "refused": {
+      "title": "Oggi non è aperto per te",
+      "body": "I tuoi ruoli non includono Oggi (home.view). Chiedi a un amministratore se ti serve."
+    },
+    "band": {
+      "label": "Stato e azioni di Oggi",
+      "reading": "Lettura…",
+      "needYou_one": "{count} aspetta te",
+      "needYou_other": "{count} aspettano te"
+    },
+    "live": {
+      "connecting": "Connessione…",
+      "live": "In tempo reale",
+      "offline": "Offline — le righe si aggiornano al ritorno"
+    },
+    "new": {
+      "menu": "Nuovo",
+      "notBuilt": "La sua pagina non è ancora pronta.",
+      "quote": "Nuovo preventivo",
+      "purchaseOrder": "Nuovo ordine d'acquisto",
+      "workOrder": "Nuovo ordine di lavoro",
+      "party": "Nuovo cliente o fornitore",
+      "style": "Nuovo modello",
+      "material": "Nuovo materiale",
+      "registerEntry": "Nuova voce del registro DPI",
+      "certificate": "Nuovo certificato"
+    },
+    "workThrough": {
+      "label_one": "Esamina {count}",
+      "label_other": "Esamina {count}",
+      "none": "Ora non ti aspetta nulla."
+    },
+    "more": {
+      "label": "Altre azioni",
+      "print": "Stampa il mio elenco"
+    },
+    "tiles": {
+      "all": "Aspetta me ora",
+      "count": "{count}",
+      "atLeast": "almeno {count}",
+      "partial": "Non tutte le righe sono state lette",
+      "unknown": "Ora non è stato possibile leggere questo conteggio.",
+      "none": "Nulla aspetta in: {kinds}."
+    },
+    "dismiss": "Chiudi",
+    "retry": "Riprova",
+    "day": {
+      "title": "La tua giornata"
+    },
+    "queue": {
+      "title": "Aspetta me ora",
+      "clearFilter": "Mostra di nuovo tutte le righe (ora: {kind})",
+      "fresh_one": "{count} nuova · Mostra",
+      "fresh_other": "{count} nuove · Mostra",
+      "loading": "Lettura di ciò che ti aspetta…",
+      "error": "Non è stato possibile caricare ciò che ti aspetta.",
+      "empty": {
+        "title": "Ora non ti aspetta nulla.",
+        "body": "Quando un ordine è in ritardo, un lotto aspetta il rilascio o ti viene chiesta un'approvazione, compare qui."
+      },
+      "emptyKind": {
+        "title": "Nulla di questo tipo ti aspetta.",
+        "body": "Premi di nuovo il riquadro per vedere tutte le righe."
+      },
+      "more": "Mostra altro",
+      "loadingMore": "Lettura di altre righe…"
+    },
+    "keys": {
+      "move": "sposta",
+      "open": "apri"
+    },
+    "group": {
+      "NOW": "Ora",
+      "TODAY": "Oggi",
+      "THIS_WEEK": "Questa settimana",
+      "LATER": "Più avanti",
+      "count_one": "{count} riga",
+      "count_other": "{count} righe"
+    },
+    "kind": {
+      "ORDER_PROMISE": "Ordini in ritardo o a rischio",
+      "WORK_ORDER_HELD": "Ordini di lavoro fermi al rilascio",
+      "LOT_HOLD": "Lotti bloccati",
+      "INVOICE_SDI": "Fatture allo SDI",
+      "QUOTE_APPROVAL": "Approvazioni di preventivi",
+      "PO_PROPOSAL": "Modifiche dei fornitori",
+      "PO_NOT_CONFIRMED": "Ordini d'acquisto non confermati",
+      "SCAN_CORRECTION": "Correzioni di scansioni",
+      "SCAN_REFUSAL": "Scansioni rifiutate",
+      "INVOICE_TO_ISSUE": "Merce da fatturare",
+      "REGISTER_DUTY": "Obblighi del registro DPI",
+      "PRIVACY_DUTY": "Obblighi privacy",
+      "STYLE_COMPLIANCE": "Modelli fermi per la conformità",
+      "MAIL_TO_SORT": "Posta da smistare"
+    },
+    "severity": {
+      "HIGH": "Urgente",
+      "MEDIUM": "Da fare",
+      "LOW": "Quando puoi"
+    },
+    "due": {
+      "overdue_one": "Scaduto da {count} giorno",
+      "overdue_other": "Scaduto da {count} giorni",
+      "today": "Scade oggi",
+      "soon_one": "Scade domani",
+      "soon_other": "Scade tra {count} giorni",
+      "on": "Scade il {date}"
+    },
+    "row": {
+      "openRecord": "Apri {record} (⌘-clic: una nuova scheda)",
+      "ageToday": "In attesa da oggi",
+      "age_one": "In attesa da {count} giorno",
+      "age_other": "In attesa da {count} giorni"
+    },
+    "flow": {
+      "title": "Dov'è il lavoro",
+      "lensLabel": "Record di",
+      "loading": "Lettura delle fasi…",
+      "error": "Non è stato possibile leggere dov'è il lavoro.",
+      "late_one": "{count} in ritardo",
+      "late_other": "{count} in ritardo",
+      "noneLate": "nessuno in ritardo",
+      "noDate": "nessuna data da rispettare",
+      "oldest_one": "il più vecchio {count} giorno",
+      "oldest_other": "il più vecchio {count} giorni",
+      "inexact": "il suo elenco mostra di più",
+      "noLists": "Le fasi apriranno i loro elenchi quando le pagine degli elenchi saranno pronte.",
+      "partial": "Moltissimi record: i conteggi sono dei primi 5.000.",
+      "lens": {
+        "ORDERS": "Ordini di vendita",
+        "WORK_ORDERS": "Ordini di lavoro",
+        "PURCHASE_ORDERS": "Ordini d'acquisto",
+        "INVOICES": "Fatture",
+        "LOTS": "Lotti"
+      },
+      "stage": {
+        "ORDERS": {
+          "WAITING_FOR_DEPOSIT": "In attesa di acconto",
+          "PLANNED": "Pianificati",
+          "IN_PRODUCTION": "In produzione",
+          "READY": "Pronti da spedire",
+          "PARTLY_SHIPPED": "Spediti in parte",
+          "SHIPPED": "Spediti, da chiudere"
+        },
+        "WORK_ORDERS": {
+          "DRAFT": "Bozza",
+          "RELEASED": "Rilasciati",
+          "IN_PROGRESS": "In corso",
+          "COMPLETED": "Completati"
+        },
+        "PURCHASE_ORDERS": {
+          "DRAFT": "Bozza",
+          "SENT": "Inviati",
+          "CHANGES_PROPOSED": "Modifiche proposte",
+          "CONFIRMED": "Confermati",
+          "PARTLY_RECEIVED": "Ricevuti in parte",
+          "RECEIVED": "Ricevuti"
+        },
+        "INVOICES": {
+          "DRAFT": "Bozza",
+          "TO_SEND": "Da inviare allo SDI",
+          "AT_SDI": "Allo SDI",
+          "DELIVERED": "Consegnate, non pagate",
+          "PAID": "Pagate"
+        },
+        "LOTS": {
+          "QUARANTINE": "In quarantena",
+          "BLOCKED": "Bloccati",
+          "RELEASED": "Rilasciati (30 giorni)",
+          "REJECTED": "Respinti (30 giorni)"
+        }
+      }
+    },
+    "panels": {
+      "title": "I miei elenchi",
+      "seeAll": "Vedi tutti i {count}",
+      "seeAllMore": "Vedi tutti",
+      "moreNoList": "Altri nell'elenco (la sua pagina non è ancora pronta)",
+      "allShown": "{count} in tutto",
+      "quotesToApprove": {
+        "title": "Quali preventivi aspettano un'approvazione?",
+        "empty": "Nessun preventivo aspetta un'approvazione."
+      },
+      "lateOrders": {
+        "title": "Quali ordini sono in ritardo?",
+        "empty": "Nessun ordine è in ritardo."
+      },
+      "ordersWaitingDeposit": {
+        "title": "Quali ordini aspettano l'acconto?",
+        "empty": "Nessun ordine aspetta l'acconto."
+      },
+      "draftWorkOrders": {
+        "title": "Quali ordini di lavoro aspettano il rilascio?",
+        "empty": "Nessun ordine di lavoro in bozza."
+      },
+      "lateWorkOrders": {
+        "title": "Quali ordini di lavoro sono in ritardo?",
+        "empty": "Nessun ordine di lavoro è in ritardo."
+      },
+      "scanCorrections": {
+        "title": "Quali correzioni di scansioni aspettano?",
+        "empty": "Nessuna correzione aspetta."
+      },
+      "posAwaitingSupplier": {
+        "title": "Quali ordini d'acquisto aspettano il fornitore?",
+        "empty": "Nessun ordine d'acquisto aspetta il fornitore."
+      },
+      "supplierChanges": {
+        "title": "Quali modifiche dei fornitori aspettano te?",
+        "empty": "Nessun fornitore ha proposto modifiche."
+      },
+      "sdiRefused": {
+        "title": "Quali fatture ha scartato lo SDI?",
+        "empty": "Lo SDI non ha scartato fatture."
+      },
+      "registerOpen": {
+        "title": "Quali voci del registro DPI sono aperte?",
+        "empty": "Nessuna voce del registro aperta."
+      },
+      "certificatesExpiring": {
+        "title": "Quali certificati scadono entro 90 giorni?",
+        "empty": "Nessun certificato scade entro 90 giorni."
+      },
+      "mailToSort": {
+        "title": "Quale posta aspetta di essere smistata?",
+        "empty": "Nessuna posta da smistare."
+      },
+      "word": {
+        "waitsApproval": "in attesa di approvazione",
+        "daysLate_one": "{count} giorno di ritardo",
+        "daysLate_other": "{count} giorni di ritardo",
+        "depositOpen": "acconto aperto",
+        "draft": "bozza",
+        "waitsDecision": "in attesa di decisione",
+        "notConfirmed": "non confermato",
+        "changesProposed": "modifiche proposte",
+        "sdiRejected": "scartata",
+        "open": "aperta",
+        "expiresIn_one": "scade tra {count} giorno",
+        "expiresIn_other": "scade tra {count} giorni",
+        "mail": {
+          "TRIAGE": "senza record",
+          "HELD": "trattenuta",
+          "FAILED": "illeggibile"
+        }
+      }
+    },
+    "decide": {
+      "noun": "riga",
+      "reading": "Lettura del preventivo in corso.",
+      "notWaiting": "Su questo preventivo non aspetta più alcuna richiesta di approvazione.",
+      "busy": "La decisione è in invio.",
+      "why": "Perché è tuo",
+      "blocks": "Cosa aspetta",
+      "due": "Scadenza",
+      "since": "In attesa da",
+      "value": "Valore",
+      "purchaseValue": "Valore d'acquisto",
+      "openRecord": "Apri {record}",
+      "openReview": "Apri la sua revisione",
+      "ownReview": "Si decide nella sua revisione.",
+      "ownPage": "La sua revisione arriva con le schermate della sua area: apri il record.",
+      "approve": "Approva",
+      "approved": "Approvato. Il preventivo può essere inviato.",
+      "rejected": "Respinto. Il preventivo torna in bozza; chi lo ha chiesto vede il motivo.",
+      "reject": {
+        "button": "Respingi",
+        "title": "Respingi {record}: spiega il motivo a chi lo ha chiesto",
+        "reason": "Motivo",
+        "hint": "Lo vede chi ha chiesto l'approvazione e resta nella storia del preventivo.",
+        "cancel": "Annulla",
+        "confirm": "Respingi",
+        "reasonNeeded": "Scrivi perché l'approvazione è rifiutata.",
+        "reasonShort": "Scrivi qualche parola in più.",
+        "reasonLong": "Al massimo 1.000 caratteri."
+      },
+      "problem": {
+        "changed": "Il preventivo è cambiato dopo la lettura. È stato riletto: guardalo prima di decidere.",
+        "forbidden": "Non puoi decidere questa richiesta (l'hai chiesta tu, o servono i diritti sui margini).",
+        "stepUp": "Prima conferma che sei tu (un nuovo codice dell'autenticatore), poi decidi di nuovo.",
+        "failed": "Non è stato possibile inviare la decisione. Riprova."
+      },
+      "onRecord": "Si fa sul suo record."
+    },
+    "review": {
+      "customer": "Cliente",
+      "revision": "Revisione",
+      "revisionValue": "Revisione {revision}",
+      "value": "Valore",
+      "margin": "Margine",
+      "floor": "Minimo {floor} %",
+      "validUntil": "Valido fino al",
+      "rules": "Regole che non rispetta",
+      "asked": "Chiesta il {at}"
+    },
+    "problem": {
+      "read": "Non è stato possibile leggerlo. Riprova.",
+      "forbidden": "Non puoi vederlo.",
+      "notFound": "Non c'è più.",
+      "offline": "Non è stato possibile raggiungere la fabbrica. Riprova tra poco.",
+      "shape": "Questo elenco ha risposto in una forma che questa pagina non conosce ancora."
+    },
+    "print": {
+      "title": "Cosa aspetta me",
+      "meta": "{at} · {person}",
+      "filter": "Solo: {filter}",
+      "all": "Tutte le righe",
+      "button": "Stampa",
+      "empty": "Nulla da stampare.",
+      "cut": "{shown} di {total} righe stampate."
+    }
+  },
   "mailToSort": {
     "intro": "Email arrivate agli indirizzi dell'azienda che non hanno trovato un record, email trattenute finché qualcuno non le guarda ed email che non è stato possibile leggere. Assegnale a un record, sbloccale o scartale.",
     "filterLabel": "Mostra",

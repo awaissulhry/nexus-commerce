@@ -33,8 +33,9 @@ export const DEMO_SITES = [
 
 export const DEMO_USER = { id: '0190f0e2-3333-7000-8000-000000000001', email: 'alex.demo@example.com', displayName: 'Alex Demo', locale: 'en' }
 
-/** Every W0 office permission, and the four that later steps declare: the owner's view of the navigation. */
+/** Every W0 office permission, Today (W1), and the four that later steps declare: the owner's view of the navigation. */
 export const OWNER_PERMISSIONS = [
+  'home.view',
   'email.triage',
   'companies.view',
   'sites.view',
@@ -49,8 +50,8 @@ export const OWNER_PERMISSIONS = [
   'integrations.view',
 ]
 
-/** A sales person in W0: Home's mail to sort, nothing of Admin. */
-export const SALES_PERMISSIONS = ['email.triage', 'threads.read', 'threads.post', 'email.send']
+/** A sales person: Home's Today and mail to sort, nothing of Admin. */
+export const SALES_PERMISSIONS = ['home.view', 'email.triage', 'threads.read', 'threads.post', 'email.send']
 
 /** The palette's pages for a permission list, addressed under `/w/DEMO` (labels stay message keys). */
 export function demoPages(permissions: readonly string[], company = 'DEMO'): PalettePage[] {

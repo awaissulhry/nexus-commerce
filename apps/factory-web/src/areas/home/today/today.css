@@ -1,0 +1,329 @@
+/*
+ * Home › Today (SCR-029) LAYOUT: the band's status and actions row, the sections, the queue rows, the flow strip, the
+ * panels and the print page. The controls are the design system's; this file places them with semantic tokens only.
+ */
+.fw-today {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-20);
+  min-width: 0;
+  max-width: 1200px;
+}
+
+.fw-today-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-10) var(--nds-space-16);
+}
+
+.fw-today-status,
+.fw-today-actions,
+.fw-today-head,
+.fw-today-row-line,
+.fw-today-decide-meta,
+.fw-today-decide-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-today-needyou {
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-today-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-today-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-today-keys {
+  margin-left: auto;
+  color: var(--nds-text-3);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-today-muted {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-today-unknown {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-today-skeleton,
+.fw-today-list,
+.fw-today-panel-rows,
+.fw-today-review-rules {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-today-review-rules {
+  padding-left: var(--nds-space-16);
+  list-style: disc;
+}
+
+.fw-today-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin-bottom: var(--nds-space-12);
+}
+
+.fw-today-group-h {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-today-row--high .fw-today-sev-icon {
+  color: var(--nds-danger);
+}
+
+.fw-today-row--medium .fw-today-sev-icon {
+  color: var(--nds-warning);
+}
+
+.fw-today-row--low .fw-today-sev-icon {
+  color: var(--nds-text-3);
+}
+
+.fw-today-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-3);
+  min-width: 0;
+}
+
+.fw-today-blocks,
+.fw-today-why {
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-today-blocks {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nds-space-4);
+}
+
+.fw-today-why {
+  color: var(--nds-text-2);
+}
+
+.fw-today-due {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-today-due--late {
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-today-record {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-link);
+  font-size: var(--nds-font-size-sm);
+  white-space: nowrap;
+}
+
+.fw-today-flow {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--nds-space-6);
+}
+
+.fw-today-stage {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-today-stage-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 120px;
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+a.fw-today-stage-box:hover {
+  background: var(--nds-surface-hover);
+}
+
+.fw-today-stage-name {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-today-stage-count {
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-today-stage-arrow {
+  color: var(--nds-text-3);
+}
+
+.fw-today-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-today-panel-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-4) 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.fw-today-panel-row:hover .fw-today-panel-label {
+  text-decoration: underline;
+}
+
+.fw-today-panel-label {
+  font-weight: var(--nds-font-weight-medium);
+  white-space: nowrap;
+}
+
+.fw-today-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-today-panel-foot,
+.fw-today-panel-problem {
+  margin: var(--nds-space-8) 0 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-today-decide,
+.fw-today-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-today-decide-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  width: 100%;
+}
+
+/* Phone: rows and panels in one column, the keys hint gone (no keyboard), stages two per row. */
+@media (max-width: 760px) {
+  .fw-today-keys {
+    display: none;
+  }
+
+  .fw-today-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-today-stage {
+    flex: 1 1 calc(50% - var(--nds-space-6));
+  }
+
+  .fw-today-stage-box {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .fw-today-stage-arrow {
+    display: none;
+  }
+
+  .fw-today-panel-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+}
+
+/* Print my list: paper, without the Office frame. */
+.fw-today-print {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  max-width: 900px;
+}
+
+.fw-today-print-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-today-print-title {
+  margin: 0;
+  font-size: var(--nds-font-size-xl);
+}
+
+.fw-today-print-list {
+  margin: 0;
+  padding-left: var(--nds-space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-today-print-button {
+  align-self: flex-start;
+}
+
+@media print {
+  .fw-topbar,
+  .h10-rail,
+  .fw-office-subheader,
+  .nds-bottombar,
+  .fw-system-banner,
+  .fw-today-print-button {
+    display: none !important;
+  }
+
+  .fw-today-print {
+    max-width: none;
+  }
+
+  .fw-today-print-group {
+    break-inside: avoid-page;
+  }
+}
