@@ -46,6 +46,25 @@ export const USERS_PERMISSIONS = definePermissions('users', {
   resetPassword: { risk: 'stepUp', description: 'Require a new password at the next sign-in.' },
 })
 
+/**
+ * The tenancy core in the Office (apps/factory-api platform/admin/org; SCR-008, SCR-009; PLT-003, PLT-004, MES-292):
+ * the companies with their legal and e-invoicing data, and the sites with their lines, work centres and stations.
+ * Checked with can() against the company (and the site). Creating a company needs a grant over every company. Not
+ * step-up: the bank account has its own (companies.bank.manage); every change is audited from → to.
+ */
+export const COMPANIES_DEFINITIONS = definePermissions('companies', {
+  view: { risk: 'read', description: "See the companies: legal name, VAT and tax codes, PEC and SDI code, defaults, and whether they can issue invoices." },
+  manage: { risk: 'write', description: "Add a company, change its legal, e-invoicing and default data, archive it when nothing uses it." },
+})
+export const SITES_DEFINITIONS = definePermissions('sites', {
+  view: { risk: 'read', description: 'See the sites of the companies with their lines, work centres and stations.' },
+  manage: { risk: 'write', description: 'Add and change sites, lines, work centres and stations; archive them when nothing active uses them.' },
+})
+export const COMPANIES_VIEW = 'companies.view' satisfies Permission
+export const COMPANIES_MANAGE = 'companies.manage' satisfies Permission
+export const SITES_VIEW = 'sites.view' satisfies Permission
+export const SITES_MANAGE = 'sites.manage' satisfies Permission
+
 /** Roles and their assignments (platform/auth/roles). */
 export const ROLES_PERMISSIONS = definePermissions('roles', {
   view: { risk: 'read', description: 'See the role templates, the roles of the tenant and who holds them.' },
@@ -288,7 +307,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   WORKORDERS_DEFINITIONS,
   QUOTES_DEFINITIONS,
   SALES_SETTINGS_DEFINITIONS,
+  COMPANIES_DEFINITIONS,
   COMPANY_BANK_DEFINITIONS,
+  SITES_DEFINITIONS,
   ORDERS_DEFINITIONS,
   PRIVACY_DEFINITIONS,
   QUALITY_LAB_DEFINITIONS,

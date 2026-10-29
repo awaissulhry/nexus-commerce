@@ -63,6 +63,10 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     description: 'People, roles and the audit log; sees no money unless also given a role that does.',
     requireMfa: true,
     permissions: [
+      'companies.view',
+      'companies.manage',
+      'sites.view',
+      'sites.manage',
       'users.view',
       'users.invite',
       'users.suspend',
