@@ -27,6 +27,8 @@ import { APPROVAL_REASONS } from './quotes/quotes'
  *   quote.declined            the customer declined the version through its link
  *   quote.link_requested      the customer asked for a new link (an ended offer, a replaced version)
  *   deposit_request.created   the deposit request of an accepted version (OPEN), with its fiscal decision
+ *   company.bank_details_changed  a company's bank account was set, changed or removed (the IBAN masked): the owners and
+ *                             administrators are told (live: companies.bank.view)
  */
 const live = { permission: 'quotes.view', fields: ['quoteId', 'versionId'] } as const
 const ids = { quoteId: z.uuid(), versionId: z.uuid() }
@@ -151,5 +153,12 @@ export const events = [
     description: 'The deposit request of an accepted quote version was made (OPEN), with its due date and fiscal decision.',
     payload: z.strictObject({ depositRequestId: z.uuid(), quoteId: z.uuid(), versionId: z.uuid(), partyId: z.uuid(), fiscalDocument: z.enum(['TD02', 'NONE']), dueDate: z.iso.date() }),
     live: { permission: 'quotes.view', fields: ['depositRequestId', 'quoteId', 'versionId'] },
+  }),
+  defineEvent({
+    type: 'company.bank_details_changed',
+    context: 'sales',
+    description: "A company's bank account (where deposits are paid) was set, changed or removed: who did it is in the audit row; the IBAN is shown masked.",
+    payload: z.strictObject({ companyId: z.uuid(), fields: z.array(z.string()), ibanBefore: z.string().nullable(), ibanAfter: z.string().nullable() }),
+    live: { permission: 'companies.bank.view', fields: ['companyId', 'fields', 'ibanBefore', 'ibanAfter'] },
   }),
 ] as const

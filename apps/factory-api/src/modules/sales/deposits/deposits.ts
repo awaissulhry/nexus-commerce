@@ -20,8 +20,9 @@ import type { CommandTools, CommandTx } from '../../../core/command'
  *   paid       `markDepositPaid`: OPEN → PAID when the payments allocated cover it, inside the payments command that
  *              allocated (payments.ts allocateInCommand, under the request's money lock). Moved here from
  *              modules/payments (B-W1-28 kept it there until sales had its own).
- *   pay how    `depositBankDetailsFor` (the seam): the company's bank account for the instructions; null until the
- *              company's bank details exist (the schema step after this one), the page and the mail say they follow.
+ *   pay how    `depositBankDetailsFor` (= `companyBankDetails`, the Company row's bank account): the
+ *              account for the instructions; null when the company has none (the page and the mail say they follow).
+ *              The account itself is kept by bank.ts (a step-up each time).
  */
 
 const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tools.context.audience === 'office' ? tools.context.actorId : null)
@@ -156,24 +157,19 @@ export async function markDepositPaid(tools: CommandTools, request: { id: string
 
 // ---- how to pay it -------------------------------------------------------------------------------------------------
 
-/** Where a company's bank details come from (the seam; tests swap it with `useDepositBankDetails`). */
-export interface BankDetailsSource {
-  bankDetailsFor(client: FactoryClient | CommandTx, companyId: string): Promise<BankDetails | null>
-}
-
-/** Today: none. The company's bank details are a schema step of their own (the lead's queue); then this reads them. */
-export const NO_BANK_DETAILS: BankDetailsSource = Object.freeze({ bankDetailsFor: async () => null })
-
-let configured: BankDetailsSource | undefined
-
-export function useDepositBankDetails(source: BankDetailsSource | undefined): void {
-  configured = source
+/**
+ * The company's bank account as stored (factory-db Company.bankAccountHolder, iban, bic, bankName), or null when it has
+ * none. Read in the office or system scope only: the floor and partner roles cannot select these columns, so a deposit
+ * page or a document reads it through the tenant's system caller. The invoicing XML (DatiPagamento MP05) can use it too.
+ */
+export async function companyBankDetails(client: FactoryClient | CommandTx, companyId: string): Promise<BankDetails | null> {
+  const row = await client.company.findUnique({ where: { id: companyId }, select: { bankAccountHolder: true, iban: true, bic: true, bankName: true } })
+  if (!row || row.iban === null || row.bankAccountHolder === null) return null
+  return { accountHolder: row.bankAccountHolder, iban: row.iban, bic: row.bic, bankName: row.bankName }
 }
 
 /** The company's bank account a deposit is paid to, or null when none is on record. Read in the office or system scope. */
-export function depositBankDetailsFor(client: FactoryClient | CommandTx, companyId: string): Promise<BankDetails | null> {
-  return (configured ?? NO_BANK_DETAILS).bankDetailsFor(client, companyId)
-}
+export const depositBankDetailsFor = companyBankDetails
 
 /** The instructions of a request: amount, due date, reference, the company's account (read in the office or system scope). */
 export async function instructionsFor(client: FactoryClient | CommandTx, request: Pick<DepositRow, 'companyId' | 'amount' | 'currency' | 'dueDate' | 'kind'>, documentNumber: string, language: DocumentLanguage): Promise<PaymentInstructions> {
