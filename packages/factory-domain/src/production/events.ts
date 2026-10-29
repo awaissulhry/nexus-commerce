@@ -21,6 +21,11 @@ import { WORK_ORDER_STATUSES } from './work-orders/machine'
  *                                   (B-W1-40; the cutting tables of the site and the work order record refresh)
  *   production.hide_closed          a hide was closed for a work order (Hide done): its remnant back to stock, or used up
  *   production.cut_reversed         a cut log entry was undone by its cutter or corrected by the office (a mirror entry)
+ *   production.bundle_created       a bundle was made from a cell's cut garments, its ticket's code given (B-W1-41; the
+ *                                   bundles screens of the site and the work order record refresh)
+ *   production.bundle_reprinted     a bundle's ticket was reprinted with a new code; the old code is refused at a scan
+ *   production.bundle_voided        a bundle made by mistake was voided before any scan: its garments are cut, not in
+ *                                   bundles, again
  */
 export const MONITORING_CHANGES = ['WIDENED', 'NARROWED', 'BASIS_RECORDED', 'BASIS_REPLACED'] as const
 
@@ -34,6 +39,8 @@ const decimal = () => z.string().regex(/^\d{1,14}\.\d{4}$/)
 const postedBy = () => z.enum(['OFFICE', 'FLOOR', 'SYSTEM'])
 /** The cutting tables of the event's site and the office's cutting screens (production.cut). */
 const cutLive = { permission: 'production.cut', floor: true, fields: ['workOrderId', 'number', 'hideId'] } as const
+/** The bundles screens of the event's site and the office's (production.bundles). */
+const bundleLive = { permission: 'production.bundles', floor: true, fields: ['workOrderId', 'number', 'bundleId'] } as const
 
 export const events = [
   defineEvent({
@@ -155,5 +162,36 @@ export const events = [
       postedBy: postedBy(),
     }),
     live: cutLive,
+  }),
+  defineEvent({
+    type: 'production.bundle_created',
+    context: 'production',
+    description: "A bundle was made from a cell's cut garments (whole garments, or one part), with its ticket's code.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      bundleId: z.uuid(),
+      code: z.string(),
+      workOrderSizeId: z.uuid(),
+      /** A part bundle's part; null: whole garments. */
+      part: z.string().nullable(),
+      quantity: z.number().int().min(1),
+      postedBy: postedBy(),
+    }),
+    live: bundleLive,
+  }),
+  defineEvent({
+    type: 'production.bundle_reprinted',
+    context: 'production',
+    description: "A bundle's ticket was reprinted with a new code; a scan of the old code is refused with the new one in the words.",
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), bundleId: z.uuid(), code: z.string(), replacedCode: z.string(), postedBy: postedBy() }),
+    live: bundleLive,
+  }),
+  defineEvent({
+    type: 'production.bundle_voided',
+    context: 'production',
+    description: 'A bundle made by mistake was voided before any scan named it: its garments are cut, not in bundles, again.',
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), bundleId: z.uuid(), code: z.string(), workOrderSizeId: z.uuid(), quantity: z.number().int().min(1), postedBy: postedBy() }),
+    live: bundleLive,
   }),
 ] as const

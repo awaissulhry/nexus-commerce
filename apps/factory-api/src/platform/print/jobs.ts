@@ -5,7 +5,7 @@ import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
-import { composeLabel, type LabelInput } from '@nexus/factory-domain/labels/model'
+import { composeLabel, type LabelInput, type LabelKind } from '@nexus/factory-domain/labels/model'
 import { labelZpl, MAX_LABEL_COPIES } from '@nexus/factory-domain/labels/zpl'
 import { tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 import { RelayError, type PrintRelayKind, type RelayJob } from '../../adapters/print-relay/port'
@@ -198,16 +198,17 @@ export async function queueLabel(caller: CommandCaller, input: QueueLabel, idemp
 }
 
 /**
- * A label a module lays out itself (the PPE garment label, B-W1-19/44): the module checks its own permission and
- * record, gives the kind and the id printed on it (the batch number, the serial, or SAMPLE for a test label) and makes
- * the ZPL for the printer's stock; the printer, the copies and print.labels are checked here as for any label.
+ * A label a module lays out itself (the PPE garment label, B-W1-19/44; a bundle ticket with its operations under the
+ * BUNDLE label, B-W1-41): the module checks its own permission and record, gives the kind and the id printed on it (the
+ * batch number, the serial, the bundle's code, or SAMPLE for a test label) and makes the ZPL for the printer's stock;
+ * the printer, the copies and print.labels are checked here as for any label.
  */
 export interface QueueModuleLabel {
   readonly printerId: string
   readonly recordType: string
   readonly recordId: string
   readonly copies: number
-  readonly labelKind: ModuleLabelKind
+  readonly labelKind: ModuleLabelKind | LabelKind
   readonly scanId: string
   readonly zplFor: (stock: { readonly dpi: number; readonly widthMm: number; readonly heightMm: number }) => string
 }
