@@ -20,6 +20,7 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { systemContext } from '../../../platform/outbox/system'
 import { startOnIssueHandler } from './start'
+import { lockWorkOrderIssues } from './store'
 
 /**
  * Pick and issue to the work order on the floor (B-W1-39; SCM-215, SCM-194, SCM-216; PLAN §4.7 stage 11a-issue; A2
@@ -200,7 +201,7 @@ async function addLot(spec: {
 }
 
 /** A CONFIRMED sales order of company A for black SEED-JKT-02 in size 50, typed by the office. */
-async function salesOrder(pieces: number): Promise<string> {
+async function salesOrder(pieces: number, suffix = '1'): Promise<string> {
   const orderId = newId()
   const lineId = newId()
   await asOffice(async (tx) => {
@@ -209,7 +210,7 @@ async function salesOrder(pieces: number): Promise<string> {
         id: orderId,
         companyId: A.companyA,
         partyId: A.brand,
-        number: `T-${run}-SO-1`,
+        number: `T-${run}-SO-${suffix}`,
         status: 'CONFIRMED',
         orderDate: new Date('2026-10-20T00:00:00.000Z'),
         taxMode: 'IT_B2B',
@@ -252,7 +253,7 @@ async function releasedWorkOrder(lineId: string): Promise<Json> {
   return released.workOrder
 }
 
-const WO: Record<'main' | 'race1' | 'race2' | 'undo', Json> = {} as never
+const WO: Record<'main' | 'race1' | 'race2' | 'undo' | 'cancel1' | 'cancel2' | 'cancel3', Json> = {} as never
 
 beforeAll(async () => {
   db = await migratedDatabase('pick_issue')
@@ -319,6 +320,10 @@ beforeAll(async () => {
   WO.race1 = await releasedWorkOrder(line)
   WO.race2 = await releasedWorkOrder(line)
   WO.undo = await releasedWorkOrder(line)
+  const second = await salesOrder(3, '2')
+  WO.cancel1 = await releasedWorkOrder(second)
+  WO.cancel2 = await releasedWorkOrder(second)
+  WO.cancel3 = await releasedWorkOrder(second)
 }, 300_000)
 
 afterAll(async () => {
@@ -601,5 +606,79 @@ describe('the walls: the floor at its own site, companies and tenants', () => {
   it('a floor write needs an Idempotency-Key', async () => {
     const response = await call('floor', 'POST', `/inventory/picking/work-orders/${WO.main.id}/issue`, { hideId: hides.H05!.id })
     expect(response.statusCode).toBe(400)
+  })
+})
+
+// ---- a cancel and an issue at once ------------------------------------------------------------------------------------------------
+
+describe('a cancel and an issue at once take turns on the work order\'s issue lock: never an issue on a cancelled work order', () => {
+  /** Another session holds the work order's issue lock (an issue in flight) until released. */
+  async function holdIssueLock(workOrderId: string) {
+    let release!: () => void
+    const released = new Promise<void>((resolve) => (release = resolve))
+    let locked!: () => void
+    const holding = new Promise<void>((resolve) => (locked = resolve))
+    const holder = asOffice(async (tx) => {
+      await lockWorkOrderIssues(tx, A.tenant, workOrderId)
+      locked()
+      await released
+    })
+    await holding
+    return async () => {
+      release()
+      await holder
+    }
+  }
+  const waiting = async () =>
+    (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`))[0]!.n
+  async function untilWaiting(n: number, what: string) {
+    for (let tries = 0; (await waiting()) < n; tries++) {
+      if (tries > 250) throw new Error(`${what} never waited for the work order's issue lock`)
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+  }
+  const cancel = (workOrderId: string) => call('planner', 'POST', `/production/work-orders/${workOrderId}/cancel`, { reason: 'The customer cancelled the order' })
+  const statusOf = async (workOrderId: string) => (await admin<{ status: string }>(`SELECT status FROM "WorkOrder" WHERE id = $1`, [workOrderId]))[0]!.status
+
+  it('a cancel waits for the issue in flight: the issue goes through, then the cancel; the office returns the stock', async () => {
+    const release = await holdIssueLock(WO.cancel1.id)
+    const issued = issueTo(WO.cancel1.id, { hideId: hides.H06!.id })
+    await untilWaiting(1, 'the issue')
+    const cancelled = cancel(WO.cancel1.id)
+    await untilWaiting(2, 'the cancel')
+    await release()
+    const [issue, done] = await Promise.all([issued, cancelled])
+    expect(issue.statusCode, issue.body).toBe(201)
+    expect(done.statusCode, done.body).toBe(200)
+    expect(await statusOf(WO.cancel1.id)).toBe('CANCELLED')
+    // What it was issued before the cancel stays on it until it comes back.
+    const back = await call('warehouse', 'POST', `/inventory/picking/work-orders/${WO.cancel1.id}/return`, { hideId: hides.H06!.id, quantity: '55', toLocationId: A.bin })
+    expect(back.statusCode, back.body).toBe(201)
+    expect(back.json().return.hideState).toBe('FULL')
+    expect(await onHand(A.bin, { hideId: hides.H06!.id })).toBe('55.0000')
+  })
+
+  it('an issue waits for the cancel in flight, then refuses: the work order is cancelled', async () => {
+    const release = await holdIssueLock(WO.cancel2.id)
+    const cancelled = cancel(WO.cancel2.id)
+    await untilWaiting(1, 'the cancel')
+    const issued = issueTo(WO.cancel2.id, { hideId: hides.H07!.id })
+    await untilWaiting(2, 'the issue')
+    await release()
+    const [done, issue] = await Promise.all([cancelled, issued])
+    expect(done.statusCode, done.body).toBe(200)
+    expect(issue.statusCode, issue.body).toBe(409)
+    expect(refusalOf(issue.json().error)).toBe('refusal/WORK_ORDER_NOT_OPEN')
+    expect(await admin(`SELECT count(*)::int AS n FROM "StockMove" WHERE "workOrderId" = $1`, [WO.cancel2.id])).toEqual([{ n: 0 }])
+    expect(await onHand(A.bin, { hideId: hides.H07!.id })).toBe('55.0000')
+  })
+
+  it('raced plainly: whichever comes first, both answer and nothing is issued after the cancel', async () => {
+    const [issue, done] = await Promise.all([issueTo(WO.cancel3.id, { hideId: hides.H08!.id }), cancel(WO.cancel3.id)])
+    expect(done.statusCode, done.body).toBe(200)
+    expect([201, 409]).toContain(issue.statusCode)
+    if (issue.statusCode === 409) expect(refusalOf(issue.json().error)).toBe('refusal/WORK_ORDER_NOT_OPEN')
+    const moves = await admin(`SELECT count(*)::int AS n FROM "StockMove" WHERE "workOrderId" = $1`, [WO.cancel3.id])
+    expect(moves).toEqual([{ n: issue.statusCode === 201 ? 1 : 0 }])
   })
 })

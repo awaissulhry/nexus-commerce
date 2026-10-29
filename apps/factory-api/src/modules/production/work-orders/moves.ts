@@ -1,9 +1,11 @@
-import { ForbiddenError, InvalidStateError } from '@nexus/factory-domain/core/errors'
+import { ForbiddenError, InvalidStateError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { moveChange, workOrderMachine, type ManualMove } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_MANAGE } from '@nexus/factory-domain/production/work-orders/permissions'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
-import { command, type CommandCaller } from '../../../core/command'
+import { command, StaleVersionError, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
+import { lockWorkOrderIssues } from '../../inventory/issue/store'
+import { officeContextOf } from './access'
 import { lockedStatus, readWorkOrder } from './store'
 import { workOrderView, type WorkOrderView } from './views'
 import { officeWorkOrder, onWorkOrder, todayOfCommand } from './work-orders'
@@ -16,7 +18,29 @@ import { officeWorkOrder, onWorkOrder, todayOfCommand } from './work-orders'
  * status with its time in one row update (the trigger refuses a status without its time). A cancelled work order gives
  * its pieces back to its order lines; what was issued to it stays on it in the ledger until it is returned (the record
  * lists it per material: `spec.materials[].issued`).
+ *
+ * Complete, close and cancel end the issuing (B-W1-39: stock is issued only to a RELEASED or IN_PROGRESS work order), so
+ * they take the work order's issue lock (modules/inventory/issue store `lockWorkOrderIssues`, the lock every issue,
+ * return, undo and reversal takes first) BEFORE the work order's row: an issue in flight finishes first and the move
+ * follows it, or the move commits first and the issue, reading the status under the same lock, refuses. Never an issue
+ * on a cancelled work order. (The floor cannot lock the row itself: its role only reads work orders.)
  */
+
+/** The moves after which nothing more is issued to the work order. */
+const ENDS_ISSUING: readonly ManualMove[] = Object.freeze(['COMPLETED', 'CLOSED', 'CANCELLED'])
+
+/** command()'s record guard, by hand (after the issue lock): the version the caller read, then compare-and-set. */
+async function bumpVersion(tx: CommandTx, workOrderId: string, expected: number | undefined): Promise<void> {
+  const row = await tx.workOrder.findUnique({ where: { id: workOrderId }, select: { version: true } })
+  if (!row) throw new NotFoundError('WorkOrder not found.')
+  if (expected !== undefined && expected !== row.version) throw new StaleVersionError('WorkOrder', workOrderId, row.version, expected)
+  const { count } = await tx.workOrder.updateMany({ where: { id: workOrderId, version: row.version }, data: { version: row.version + 1 } })
+  if (count !== 1) {
+    const current = await tx.workOrder.findUnique({ where: { id: workOrderId }, select: { version: true } })
+    if (!current) throw new NotFoundError('WorkOrder not found.')
+    throw new StaleVersionError('WorkOrder', workOrderId, current.version, row.version)
+  }
+}
 
 const COMMAND: Readonly<Record<ManualMove, `workorders.${string}`>> = {
   IN_PROGRESS: 'workorders.start',
@@ -33,7 +57,8 @@ export async function moveWorkOrder(
   idempotencyKey?: string,
 ): Promise<{ workOrder: WorkOrderView }> {
   const workOrder = await officeWorkOrder(caller, workOrderId, WORKORDERS_MANAGE)
-  return onWorkOrder(caller, workOrder, { name: COMMAND[to], idempotencyKey, input: { workOrderId, to, ...body }, version: body.version }, async (tools) => {
+  const spec = { name: COMMAND[to], idempotencyKey, input: { workOrderId, to, ...body }, version: body.version }
+  const work = async (tools: CommandTools): Promise<{ workOrder: WorkOrderView }> => {
     const { tx, now } = tools
     const current = (await readWorkOrder(tx, workOrder.id))!
     assertTransition(workOrderMachine, current.status, to, { reason: body.reason ?? null })
@@ -57,7 +82,15 @@ export async function moveWorkOrder(
       payload: { workOrderId: current.id, number: current.number, from: current.status, to },
     })
     return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, current.id))!, todayOfCommand(tools)) }
+  }
+  if (!ENDS_ISSUING.includes(to)) return onWorkOrder(caller, workOrder, spec, work)
+  const { tenantId } = officeContextOf(caller)
+  const { result } = await command(caller, { name: spec.name, idempotencyKey, input: spec.input }, async (tools) => {
+    await lockWorkOrderIssues(tools.tx, tenantId, workOrder.id)
+    await bumpVersion(tools.tx, workOrder.id, body.version)
+    return work(tools)
   })
+  return result
 }
 
 /**
