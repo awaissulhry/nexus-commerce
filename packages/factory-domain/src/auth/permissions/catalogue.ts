@@ -226,6 +226,7 @@ export const INVENTORY_DEFINITIONS = definePermissions('inventory', {
   reverse: { risk: 'write', description: 'Reverse a stock move that was wrong: the same move with its locations swapped, with the reason.' },
   issue: { risk: 'write', description: "Pick and issue stock to a work order (only usable stock of the work order's materials, up to what it still needs), return what it did not use, and undo one's own last issue (a floor device: at its own site)." },
   'issue.over': { risk: 'write', description: 'Issue more than a work order still needs, with the reason.' },
+  receive: { risk: 'write', description: 'Receive goods against a purchase order: the receipt, its lots and its hides one by one with their measured areas, posted to the stock ledger (a floor device: at its own site).' },
 })
 
 /** The money grains as they travel in grants (`../grains/grains`): from Role.grains, never Role.permissions. */

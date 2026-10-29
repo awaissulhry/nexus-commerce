@@ -15,6 +15,7 @@ import { sendEmail } from '../../platform/email-out/outbound'
 import { allocateNumber } from '../../platform/numbering/allocate'
 import { unorderRequirement } from '../planning/hooks'
 import { revokeConfirmLinks } from './confirm-links'
+import { lockOrderReceiving, receiptStopsCancel } from './receiving'
 import {
   actorIdOf,
   assertMay,
@@ -329,6 +330,11 @@ export async function cancelOrder(caller: CommandCaller, orderId: string, body: 
     const from = current.status as PurchaseOrderStatus
     const problem = cancelProblem(from)
     if (problem) throw new InvalidStateError(problem)
+    // After the version bump (the order's row), the lock a goods receipt takes: a receipt that names the order (also a
+    // floor one, which cannot move the order's state) stops the cancel (./receiving.ts).
+    await lockOrderReceiving(tools.tx, context.tenantId, current.id)
+    const received = await receiptStopsCancel(tools.tx, current.id)
+    if (received) throw new InvalidStateError(received)
     const told = supplierKnows(from)
     if (told && !mayOn(context, PURCHASING_SEND, current)) throw new ForbiddenError('The supplier has this order: cancelling it tells the supplier, which needs the right to send purchase orders.')
     const reason = body.reason.trim()

@@ -196,6 +196,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'inventory.reverse',
       'inventory.issue',
       'inventory.issue.over',
+      'inventory.receive',
       'shipping.view',
       'shipping.manage',
       'shipping.pack',
