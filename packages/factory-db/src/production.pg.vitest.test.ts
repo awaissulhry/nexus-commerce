@@ -236,6 +236,7 @@ describe('the floor', () => {
       'CutLog',
       'CutLogPiece',
       'FloorScanRefusal',
+      'GarmentLabelPrint',
       'OperationScan',
       'OperationScanDefect',
       'ProductionSettings',

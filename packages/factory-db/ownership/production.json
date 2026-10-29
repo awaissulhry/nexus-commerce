@@ -100,6 +100,15 @@
         "factory_floor_runtime": { "privileges": ["select"] }
       }
     },
+    "GarmentLabelPrint": {
+      "about": "The label log of the final operation (B-W1-44; PRD-348): every print and reprint of a cell's garment labels, with the batch number or the serials, the printer, the device and a reprint's reason. The site's floor writes its prints and reprints and reads its site's log; the office reads every site's and reprints. Append-only: nobody changes or removes an entry.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    },
     "OperationScanDefect": {
       "about": "A scan's (or a correction request's) scrap and rework lines per reason (B-W1-42), written with it by the site's floor (a report, an ask) or the office (an approved correction). Both read the site's lines. Append-only: nobody changes or removes a line.",
       "kind": "tenant",

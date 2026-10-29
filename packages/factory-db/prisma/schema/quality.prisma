@@ -266,6 +266,10 @@ model GarmentSerial {
   /// The shipment line it is packed in (shipping.prisma): set and cleared while it is RELEASED and the shipment is a
   /// DRAFT; fixed once SHIPPED.
   shipmentLineId  String?             @db.Uuid
+  /// The bundle its garment came to the final operation in (MES-076: genealogy bundle → cut log entries → hides and
+  /// lots, for a recall): a whole-garment bundle of its cell, set when the serial is given and never changed; null: not
+  /// known (a serial given before its bundle was).
+  bundleId        String?             @db.Uuid
   /// VOID: when and why (set exactly then).
   voidedAt        DateTime?           @db.Timestamptz(3)
   voidReason      String?
@@ -279,11 +283,13 @@ model GarmentSerial {
   // workOrderSizeId.
   release       QualityRelease? @relation(fields: [tenantId, siteId, workOrderSizeId, releaseId], references: [tenantId, siteId, workOrderSizeId, id], onDelete: Restrict, onUpdate: Restrict)
   shipmentLine  ShipmentLine?   @relation(fields: [tenantId, siteId, workOrderSizeId, shipmentLineId], references: [tenantId, siteId, workOrderSizeId, id], onDelete: Restrict, onUpdate: Restrict)
+  bundle        Bundle?         @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, serial])
   @@index([tenantId, workOrderSizeId])
   @@index([tenantId, releaseId])
   @@index([tenantId, shipmentLineId])
+  @@index([tenantId, bundleId])
 }
 
 /// MADE → RELEASED → SHIPPED; VOID from MADE; RELEASED → MADE | VOID through a release reversal. SHIPPED and VOID are

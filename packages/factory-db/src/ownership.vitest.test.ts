@@ -40,6 +40,7 @@ describe('model ownership', () => {
       'FloorScanRefusal',
       'FloorSession',
       'FloorSettings',
+      'GarmentLabelPrint',
       'GarmentSerial',
       'GoodsReceipt',
       'GoodsReceiptLine',

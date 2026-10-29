@@ -65,6 +65,8 @@ export type LabelGraphic =
   | { readonly kind: 'CE'; readonly notifiedBodyNumber: string | null }
   | { readonly kind: 'PICTOGRAM'; readonly pictogram: 'MOTORCYCLIST' | 'GLOVE' | 'NONE'; readonly standardCode: string | null; readonly ppeClass: string | null }
   | { readonly kind: 'CARE'; readonly symbols: readonly { readonly code: string; readonly mark: string; readonly words: string }[] }
+  /** The batch number or serial as Code 128 bars (B-W1-44: packing scans it); value null: a preview's empty bar row. */
+  | { readonly kind: 'BARCODE'; readonly value: string | null }
 
 export interface RenderedBlock {
   readonly field: LabelField
@@ -351,6 +353,11 @@ export function buildBlocks(template: LabelTemplateFacts, values: LabelValues): 
       case 'batchOrSerial': {
         const id = values.identification
         const prefix = id.kind === 'SERIAL' ? 'SN' : 'LOT'
+        // A serial is a SERIAL scan id (`SN-…`): printed once, never "SN SN-…".
+        const printed = (value: string): string => (value.startsWith(`${prefix}-`) ? value : `${prefix} ${value}`)
+        // The bars carry the value as it is (Code 128 set B: printable ASCII); the row is kept in a preview too, so a
+        // template's fit check counts it.
+        const bars: LabelGraphic = { kind: 'BARCODE', value: id.value !== null && /^[\x20-\x7E]+$/.test(id.value) ? id.value : null }
         if (id.value === null && !values.sample) {
           problems.push({ path: 'batchOrSerial', message: `A PPE garment carries its ${id.kind === 'SERIAL' ? 'serial' : 'batch'} number (Reg. (EU) 2016/425 art. 8(5)): none is given for this label yet.` })
         }
@@ -358,8 +365,8 @@ export function buildBlocks(template: LabelTemplateFacts, values: LabelValues): 
           id.value !== null
             ? {
                 value: id.value,
-                lines: wrap(`${prefix} ${id.value}`),
-                graphic: null,
+                lines: wrap(printed(id.value)),
+                graphic: bars,
                 placeholder: false,
                 source: {
                   kind: id.kind === 'SERIAL' ? 'SERIAL' : 'WORK_ORDER',
@@ -370,15 +377,15 @@ export function buildBlocks(template: LabelTemplateFacts, values: LabelValues): 
                   recordType: id.recordType,
                   recordId: id.recordId,
                 },
-                height: 0,
+                height: preset.barcode,
               }
             : {
                 value: null,
                 lines: wrap(`${prefix} ________`),
-                graphic: null,
+                graphic: bars,
                 placeholder: true,
                 source: { kind: 'SAMPLE', words: id.kind === 'SERIAL' ? "The garment's serial fills it at print (B-W1-44)." : "The work order's batch number, given at its release, fills it at print (B-W1-44).", recordType: null, recordId: null },
-                height: 0,
+                height: preset.barcode,
               },
         )
         break

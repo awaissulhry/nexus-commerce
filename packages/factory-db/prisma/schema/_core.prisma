@@ -204,6 +204,8 @@ model Site {
   // quality.prisma: the lab results and supplier documents of its lots.
   labResults              LabResult[]
   lotDocuments            LotDocument[]
+  // production.prisma: its garment label prints (B-W1-44).
+  garmentLabelPrints      GarmentLabelPrint[]
   // shipping.prisma: its shipping settings, the shipments that leave it and their DDTs.
   shippingSettings   ShippingSettings[]
   shipments          Shipment[]

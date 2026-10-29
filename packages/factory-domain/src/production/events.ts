@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { defineEvent } from '../events/define'
 import { HIDE_STATES } from '../inventory/issue/rules'
+import { GARMENT_TRACKINGS } from './serials/rules'
 import { SCAN_SUBJECTS } from './settings/monitoring'
 import { WORK_ORDER_STATUSES } from './work-orders/machine'
 
@@ -32,6 +33,11 @@ import { WORK_ORDER_STATUSES } from './work-orders/machine'
  *   production.scan_correction_decided    a correction request was approved (a CORRECTION row) or refused
  *   production.scan_refused         a floor scan was refused (online or from the offline queue): the refused scans list
  *                                   (SCR-023) and the device's queue refresh; no counts, no person
+ *   production.garment_labels_printed    garment labels of a cell's finished garments printed at the final operation:
+ *                                        with the batch number, or one serial each (B-W1-44; the label screens refresh)
+ *   production.garment_labels_reprinted  labels printed again (the same batch or serials); the reason stays in the log
+ *   production.garment_serial_voided     a MADE serial voided (a spoilt label, a garment scrapped): its cell has one
+ *                                        more garment to label
  */
 export const MONITORING_CHANGES = ['WIDENED', 'NARROWED', 'BASIS_RECORDED', 'BASIS_REPLACED'] as const
 
@@ -51,6 +57,8 @@ const bundleLive = { permission: 'production.bundles', floor: true, fields: ['wo
 const scanLive = { permission: 'workorders.view', floor: true, fields: ['workOrderId', 'number', 'bundleId'] } as const
 /** Approvals and the refused scans (production.scan.correct) and the floor devices of the event's site. */
 const correctionLive = { permission: 'production.scan.correct', floor: true, fields: ['workOrderId', 'number', 'requestId'] } as const
+/** The garment label screens of the event's site and the office's (production.serials). */
+const labelLive = { permission: 'production.serials', floor: true, fields: ['workOrderId', 'number', 'workOrderSizeId'] } as const
 
 export const events = [
   defineEvent({
@@ -260,5 +268,44 @@ export const events = [
       bundleId: z.uuid().nullable(),
     }),
     live: { permission: 'production.scan.correct', floor: true, fields: ['refusalId', 'deviceId', 'code'] },
+  }),
+  defineEvent({
+    type: 'production.garment_labels_printed',
+    context: 'production',
+    description: "Garment labels of a cell's finished garments were printed at the final operation: with the work order's batch number, or a serial given (MADE) to each garment with its own label.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      workOrderSizeId: z.uuid(),
+      tracking: z.enum(GARMENT_TRACKINGS),
+      quantity: z.number().int().min(1),
+      batchNumber: z.string(),
+      /** SERIAL: the serials given; BATCH: none. */
+      serialIds: z.array(z.uuid()),
+      postedBy: postedBy(),
+    }),
+    live: labelLive,
+  }),
+  defineEvent({
+    type: 'production.garment_labels_reprinted',
+    context: 'production',
+    description: 'Garment labels were printed again with the same batch number or serials (the reason is in the label log, not here).',
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      workOrderSizeId: z.uuid(),
+      tracking: z.enum(GARMENT_TRACKINGS),
+      quantity: z.number().int().min(1),
+      serialIds: z.array(z.uuid()),
+      postedBy: postedBy(),
+    }),
+    live: labelLive,
+  }),
+  defineEvent({
+    type: 'production.garment_serial_voided',
+    context: 'production',
+    description: 'A garment serial was voided before release (a spoilt label, a garment scrapped): its cell has one more garment to label.',
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), workOrderSizeId: z.uuid(), serialId: z.uuid(), serial: z.string(), postedBy: postedBy() }),
+    live: labelLive,
   }),
 ] as const

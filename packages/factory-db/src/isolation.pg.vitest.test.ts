@@ -190,6 +190,7 @@ it('covers every classified table and every runtime role', () => {
     'FloorScanRefusal',
     'FloorSession',
     'FloorSettings',
+    'GarmentLabelPrint',
     'GarmentSerial',
     'GoodsReceipt',
     'GoodsReceiptLine',
