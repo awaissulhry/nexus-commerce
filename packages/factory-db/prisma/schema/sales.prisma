@@ -464,7 +464,12 @@ model DepositRequest {
   party        Party         @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   quoteVersion QuoteVersion? @relation(fields: [tenantId, partyId, quoteVersionId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   order        SalesOrder?   @relation(fields: [tenantId, companyId, partyId, orderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // money.prisma: its deposit invoices (TD02) and the payments allocated to it.
+  invoices     Invoice[]
+  allocations  PaymentAllocation[]
 
+  // The target of the references from its deposit invoices and payment allocations: the same company and party.
+  @@unique([tenantId, companyId, partyId, id])
   @@index([tenantId, quoteVersionId])
   @@index([tenantId, orderId])
   // Open deposits by due date.
@@ -554,6 +559,8 @@ model SalesOrder {
   depositRequests DepositRequest[]
   // shipping.prisma: its shipments.
   shipments       Shipment[]
+  // money.prisma: the invoices that bill it.
+  invoices        Invoice[]
 
   @@unique([tenantId, companyId, number])
   // The target of the references from the order's lines and deposit requests: the same company and party.
@@ -637,6 +644,8 @@ model SalesOrderLine {
   workOrderSizes     WorkOrderSize[]
   // shipping.prisma: the shipment lines that ship it.
   shipmentLines      ShipmentLine[]
+  // money.prisma: the invoice lines that bill it.
+  invoiceLines       InvoiceLine[]
 
   @@unique([tenantId, orderId, seq])
   // The target of the references from the line's size rows (and the work orders of W1-23).

@@ -1,0 +1,467 @@
+// Money (plan A1 §2.1 "Money", "Append-only", "Issued documents", §2.4 G, §2.5 "Invoice", §2.6; PLAN §2.4 F2, F3,
+// §2.8 "Corrections only by credit note", "Rejected file resent within 5 working days", "Legal archiving", "Sequential,
+// gap-free numbering", §4.7 stages 06b-deposit, 15-invoice; Q12; features FIN-054, FIN-057, FIN-061, FIN-069, FIN-084,
+// FIN-086, FIN-087, FIN-121): the company's sales invoices and their lines, every send of an invoice to SDI and SDI's
+// notifications about it, the payments received and what they pay. apps/factory-api's modules/invoicing and
+// modules/payments write them (B-W1-28 deposit payment, TD02 and the invoice core; B-W1-50 the SDI provider adapter;
+// B-W1-51 invoices from shipped quantity, credit notes, the deposit deducted, the balance allocated), always through
+// command(). Bank statement import (FIN-130, BankImport, BankLine) and card payments (FIN-123) are W2b.
+//
+// An invoice (FatturaPA FPR12; the XML built by @nexus/factory-domain/invoicing/fatturapa) is a DRAFT while the office
+// prepares it: no number, no date, its lines and totals change freely. Issuing it (DRAFT → ISSUED) gives it its number
+// and date from a fiscal series of its company (apps/factory-api's allocateNumber in the issuing command: gapless per
+// company, series and year; the NumberAllocation row holds the same number, checked at commit) and freezes it: from then
+// on its number, date, year, type, company, party, links, lines and totals never change (DPR 633/1972 art. 26: a
+// correction is a TD04 credit note; FIN-061), for every login. Only its status moves, along the SDI states:
+//   DRAFT → ISSUED → SENT (the provider took the file) → DELIVERED (RC) | NOT_DELIVERABLE (MC: in the buyer's tax area,
+//   still a valid invoice) | REJECTED (NS); ERROR (the send failed before SDI) from ISSUED, SENT or after a rejection;
+//   REJECTED and ERROR → SENT again. A rejected file counts as never issued (circolare AdE 13/E/2018): it is corrected
+//   and sent again within five working days under the SAME number and date (Provv. AdE 89757/2018; FIN-087), so while
+//   REJECTED its buyer and seller data, payment terms, printed text, files, lines, totals, VAT summary and stamp duty
+//   may change (the error behind an NS may be in the lines or totals, e.g. 00423), never its number, series, year,
+//   date, type, company, party or links; leaving REJECTED runs every check of the issue again, and a corrected total
+//   never drops below what is paid and credited on it. DELIVERED and NOT_DELIVERABLE are final.
+// A DRAFT may be deleted (it has no number, so no gap); nothing else is ever deleted (no cascade, A1 §2.1).
+//
+// Document types (FatturaPA TipoDocumento): TD01 invoice (an immediate one, or a sale without DDT), TD02 the deposit
+// invoice of a deposit request (acconto, DPR 633/1972 art. 6 c.4: issued when the payment is received, if the VAT rule
+// for the party asks for one; Q12: by bank transfer), TD04 a credit note of an issued invoice (never more than is still
+// creditable), TD24 the deferred invoice of the goods shipped with DDTs (art. 21 c.4 lett. a). A TD01 or TD24 deducts a
+// deposit invoice with a DEPOSIT_DEDUCTION line (never more than the TD02's net in total).
+//
+// Payments (FIN-121): a payment received (W1: a bank transfer typed by the office, one row per transfer, its bank
+// reference unique per company so it is never counted twice) is allocated to deposit requests (before any invoice
+// exists) and to TD01/TD24 invoices; a TD02 is paid through its deposit request, a TD04 is not paid. Allocations are
+// append-only; a wrong one is taken back by a reversal row. A payment's allocations never pass its amount, an invoice's
+// never pass its gross total less its credit notes, a deposit request's never pass its amount (under locks; the
+// …_money_guards triggers). A payment typed by mistake is VOIDED once its allocations are all reversed.
+//
+// SDI (FIN-084, FIN-086, B-W1-50): one SdiSubmission per send attempt (its file name, the exact XML file sent, the
+// provider's and SDI's ids, its outcome); SDI's notifications (RC, NS, MC; NE, DT, AT for public bodies) are
+// append-only rows of their submission. The XML of an issued invoice, its PDF courtesy copy and the signed SDI receipts
+// are StoredFile rows of FISCAL_ARCHIVE kind (ten years, legal/ bucket; DM 17.6.2014, c.c. art. 2220); the invoice names
+// its current XML and PDF, each submission the XML it sent.
+//
+// Money (A1 §2.1, §2.6): amounts are Int minor units in the document's currency, unit prices Decimal(18,6),
+// quantities Decimal(18,4); every money column is grain price. The totals are the lines' (+ the VAT summary's
+// rounding), checked at issue; the VAT of each rate is computed by factory-domain's computeVat (SDI checks it again).
+//
+// Who sees what (ownership/money.json): the office reads and writes (the API keeps money to the price grain and staff
+// to their companies); the floor reads nothing here; a portal or link session (DOCUMENT_VIEW) reads only its OWN party's
+// issued invoices (a draft has no partner key), their lines, sends and notifications, its payments and their
+// allocations, never an internal column nor who in the office wrote a row.
+
+/// A sales invoice or credit note of a company to a party (FIN-054, FIN-057, FIN-061; A1 §2.4 G Invoice): numbered
+/// only at issue, frozen after it (only its SDI status moves; a REJECTED file is corrected). Never deleted once issued.
+model Invoice {
+  id               String             @id @db.Uuid
+  tenantId         String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The seller (CedentePrestatore): its fiscal series, its data.
+  companyId        String             @db.Uuid
+  /// The buyer (CessionarioCommittente). Every reference of the invoice and its lines goes through it.
+  buyerPartyId     String             @db.Uuid
+  /// The partner role's policy key: null while DRAFT (a draft is the office's work), the buyer from ISSUED on.
+  partyId          String?            @db.Uuid
+  docType          InvoiceDocType
+  status           InvoiceStatus      @default(DRAFT)
+  /// Set exactly from ISSUED on, at issue, and never changed after: the fiscal series of the company (INVOICE; also
+  /// DEPOSIT_INVOICE for a TD02, CREDIT_NOTE for a TD04) and the number it gave, as printed (Numero, at most 20
+  /// characters; allocateNumber's NumberAllocation row, recordType "Invoice", holds the same number and date); the
+  /// calendar year and the date of the invoice (Data, Europe/Rome); when and by whom it was issued.
+  numberSeriesId   String?            @db.Uuid
+  number           String?
+  year             Int?
+  issueDate        DateTime?          @db.Date
+  issuedAt         DateTime?          @db.Timestamptz(3)
+  issuedById       String?            @db.Uuid
+  /// ISO 4217 (FatturaPA Divisa; W1 builds EUR).
+  currency         String             @default("EUR")
+  /// NET: the unit prices exclude VAT (business price lists); GROSS: they include it (consumers, deposits received).
+  /// @not-money which kind of price the lines carry, not an amount
+  priceBasis      InvoicePriceBasis  @default(NET)
+  /// The seller as issued (the company's c.c. art. 2250 and FatturaPA data, FatturaPaSeller's shape); set from ISSUED on.
+  seller           Json?
+  /// The buyer as invoiced (FatturaPaBuyer's shape: kind, ids, name, address, SDI code or PEC); refreshed while DRAFT.
+  billTo           Json
+  /// The sums of the document, minor units: taxable (ImponibileImporto), VAT (Imposta) and their sum
+  /// (ImportoTotaleDocumento, after a deposit deducted): gross = net + VAT; checked against the lines at issue.
+  /// @grain price
+  netTotal         Int                @default(0)
+  /// @grain price
+  vatTotal         Int                @default(0)
+  /// @grain price
+  grossTotal       Int                @default(0)
+  /// The VAT summary (DatiRiepilogo), one entry per VAT treatment, amounts in minor units:
+  /// [{ "rate": "22.00" | null, "nature": "N3.2" | null, "legalRef": "…" | null, "taxable": 80000, "vat": 17600,
+  ///    "rounding": 0 }]. At issue: the taxables add up to netTotal, the VATs to vatTotal, and the lines' net amounts
+  /// plus the roundings to netTotal.
+  vatSummary       Json               @default("[]")
+  /// Stamp duty (ImportoBollo, 2.00 euro when due on non-taxable amounts; not part of the total), when due.
+  /// @grain price
+  stampDutyAmount  Int?
+  /// The payment terms (DatiPagamento): { "condition": "TP02", "installments": [{ "method": "MP05", "amount": 97600,
+  /// "dueDate": "2026-12-24", "iban": "…" }] }, amounts in minor units.
+  paymentTerms     Json?
+  /// The printed reason (Causale); a TD04 says why it credits.
+  causale          String?
+  /// The documents it refers to as printed (the customer's purchase order: DatiOrdineAcquisto): [{ "kind": "PURCHASE_ORDER",
+  /// "number": "…", "date": "…" }].
+  documentRefs     Json?
+  /// The sales order it bills (TD01, TD02, TD24), when it bills one.
+  salesOrderId     String?            @db.Uuid
+  /// TD02 only, and required there: the deposit request it invoices (its fiscalDocument is TD02).
+  depositRequestId String?            @db.Uuid
+  /// TD04 only, and required there: the issued invoice it credits (not a credit note).
+  creditOfId       String?            @db.Uuid
+  /// The FatturaPA XML (the legal invoice) and its PDF courtesy copy: StoredFile rows of the invoice (FISCAL_ARCHIVE).
+  /// The XML is required from SENT on; each is named once, and changes only while the invoice is REJECTED.
+  xmlFileId        String?            @db.Uuid
+  pdfFileId        String?            @db.Uuid
+  /// For the office only: the partner role can neither read nor write it.
+  /// @internal
+  internalNote     String?
+  version          Int                @default(1)
+  createdAt        DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?            @db.Uuid
+
+  company        Company         @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  buyer          Party           @relation(fields: [tenantId, buyerPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and
+  // buyerPartyId.
+  numberSeries   NumberSeries?   @relation(fields: [tenantId, companyId, numberSeriesId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  salesOrder     SalesOrder?     @relation(fields: [tenantId, companyId, buyerPartyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  depositRequest DepositRequest? @relation(fields: [tenantId, companyId, buyerPartyId, depositRequestId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  creditOf       Invoice?        @relation("InvoiceCredit", fields: [tenantId, companyId, buyerPartyId, creditOfId], references: [tenantId, companyId, buyerPartyId, id], onDelete: Restrict, onUpdate: Restrict)
+  credits        Invoice[]       @relation("InvoiceCredit")
+  xmlFile        StoredFile?     @relation("InvoiceXml", fields: [tenantId, xmlFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  pdfFile        StoredFile?     @relation("InvoicePdf", fields: [tenantId, pdfFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines          InvoiceLine[]   @relation("InvoiceLines")
+  /// The lines of other invoices that deduct this deposit invoice (TD02).
+  deductedBy     InvoiceLine[]   @relation("InvoiceDepositDeduction")
+  submissions    SdiSubmission[]
+  allocations    PaymentAllocation[]
+
+  // Never the same number twice in a series period (a draft has none).
+  @@unique([tenantId, numberSeriesId, number])
+  // The targets of the references from its lines, sends and notifications (the same buyer), and from credit notes
+  // and payment allocations (the same company and buyer).
+  @@unique([tenantId, buyerPartyId, id])
+  @@unique([tenantId, companyId, buyerPartyId, id])
+  @@index([tenantId, status])
+  @@index([tenantId, partyId])
+  @@index([tenantId, companyId, year])
+  @@index([tenantId, salesOrderId])
+  @@index([tenantId, depositRequestId])
+  @@index([tenantId, creditOfId])
+}
+
+/// FatturaPA TipoDocumento of the documents the factory issues (factory-domain FatturaPaDocumentType). Additive.
+enum InvoiceDocType {
+  /// Invoice: immediate, or a sale without a DDT.
+  TD01
+  /// Deposit invoice (acconto), DPR 633/1972 art. 6 c.4.
+  TD02
+  /// Credit note, DPR 633/1972 art. 26.
+  TD04
+  /// Deferred invoice of goods shipped with DDTs, art. 21 c.4 lett. a.
+  TD24
+}
+
+/// Where an invoice is (A1 §2.5 "Invoice"); the moves are in the header of this file.
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  /// The SDI provider took the file; SDI's answer is awaited.
+  SENT
+  /// RC: delivered to the buyer.
+  DELIVERED
+  /// MC: not deliverable; the invoice is valid and sits in the buyer's tax area (FIN-088).
+  NOT_DELIVERABLE
+  /// NS: rejected by SDI; counts as never issued until sent again, corrected, under the same number and date.
+  REJECTED
+  /// The send failed before SDI (the provider refused it or did not answer); sent again.
+  ERROR
+}
+
+/// Which prices the lines carry (factory-domain PriceBasis).
+enum InvoicePriceBasis {
+  NET
+  GROSS
+}
+
+/// One line of an invoice (A1 §2.4 G InvoiceLine; FatturaPA DettaglioLinee): what is billed, its price and VAT, and
+/// what it comes from (the sales order line and size, the DDT the goods travelled with). Written, changed and removed
+/// only while the invoice is a DRAFT, or REJECTED (the corrected file, checked again when it is sent).
+model InvoiceLine {
+  id               String          @id @db.Uuid
+  tenantId         String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  invoiceId        String          @db.Uuid
+  /// The invoice's buyer (its references).
+  buyerPartyId     String          @db.Uuid
+  /// The partner role's policy key: null while the invoice is a DRAFT; its party from the issue on (set by the
+  /// invoice's issue; a line added while REJECTED gets it).
+  partyId          String?         @db.Uuid
+  /// NumeroLinea: 1, 2, 3 … in the invoice.
+  seq              Int
+  kind             InvoiceLineKind @default(GOODS)
+  /// Descrizione (at most 1000 characters).
+  description      String
+  /// CodiceArticolo, e.g. the SKU.
+  itemCode         String?
+  /// Above 0 (a deduction: 1).
+  quantity         Decimal         @db.Decimal(18, 4)
+  /// UnitaMisura (PZ, PA, MQ …).
+  uom              String?
+  /// PrezzoUnitario on the invoice's price basis (negative only on a deduction).
+  /// @grain price
+  unitPrice        Decimal         @db.Decimal(18, 6)
+  /// A percentage discount, above 0 and below 100.
+  discountPct      Decimal?        @db.Decimal(7, 4)
+  /// PrezzoTotale without VAT, minor units (factory-domain computeVat); negative only on a deduction.
+  /// @grain price
+  netAmount        Int
+  /// The line with VAT, minor units: GROSS basis and deductions only.
+  /// @grain price
+  grossAmount      Int?
+  /// AliquotaIVA (0.00 when not taxable), and when not taxable its Natura (N1 … N7, e.g. N3.2) and the law that says
+  /// why (RiferimentoNormativo).
+  vatRatePct       Decimal         @db.Decimal(5, 2)
+  vatNature        String?
+  vatLegalRef      String?
+  /// The sales order line and size it bills (a size-grid line bills one size per invoice line), when it bills one.
+  salesOrderLineId String?         @db.Uuid
+  size             String?
+  /// The DDT the goods travelled with: every GOODS line of a TD24 names one.
+  ddtId            String?         @db.Uuid
+  /// DEPOSIT_DEDUCTION only, and required there: the issued deposit invoice (TD02) it deducts.
+  depositInvoiceId String?         @db.Uuid
+  version          Int             @default(1)
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?         @db.Uuid
+
+  invoice        Invoice         @relation("InvoiceLines", fields: [tenantId, buyerPartyId, invoiceId], references: [tenantId, buyerPartyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and buyerPartyId.
+  depositInvoice Invoice?        @relation("InvoiceDepositDeduction", fields: [tenantId, buyerPartyId, depositInvoiceId], references: [tenantId, buyerPartyId, id], onDelete: Restrict, onUpdate: Restrict)
+  salesOrderLine SalesOrderLine? @relation(fields: [tenantId, buyerPartyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  ddt            Ddt?            @relation(fields: [tenantId, buyerPartyId, ddtId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, invoiceId, seq])
+  @@index([tenantId, partyId])
+  // What is invoiced per order line and size (the shipped-not-invoiced queue, FIN-116), per DDT and per deposit.
+  @@index([tenantId, salesOrderLineId])
+  @@index([tenantId, ddtId])
+  @@index([tenantId, depositInvoiceId])
+}
+
+/// What a line bills (factory-domain FatturaPaLine kind, and the supply kind its VAT treatment depends on).
+enum InvoiceLineKind {
+  GOODS
+  SERVICE
+  /// A deposit invoice deducted (Storno acconto): a negative amount with the TD02's VAT treatment.
+  DEPOSIT_DEDUCTION
+}
+
+/// One send of an issued invoice to SDI through the company's SDI provider (FIN-084; B-W1-50): the file name (unique:
+/// SDI refuses a name it has seen), the exact XML sent, the provider's and SDI's ids, and how it ended. A resend after
+/// a rejection or an error is a new row; the invoice keeps its number and date. Never deleted.
+model SdiSubmission {
+  id                   String              @id @db.Uuid
+  tenantId             String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The invoice's party (the partner role's policy key).
+  partyId              String              @db.Uuid
+  invoiceId            String              @db.Uuid
+  /// 1, 2, 3 … per invoice.
+  attempt              Int
+  /// The company's SDI account (IntegrationAccount, provider SDI) it went through.
+  /// @internal
+  integrationAccountId String              @db.Uuid
+  /// The SDI file name, <country><transmitter id>_<progressive>.xml.
+  fileName             String
+  /// The XML sent: the invoice's XML at the time (a StoredFile of the invoice, FISCAL_ARCHIVE).
+  xmlFileId            String              @db.Uuid
+  /// SENDING (written before the call) → SENT (the provider took it) | FAILED (it never reached SDI); SENT →
+  /// DELIVERED (RC) | NOT_DELIVERABLE (MC) | REJECTED (NS). The last four are final.
+  status               SdiSubmissionStatus @default(SENDING)
+  /// The provider's id of the send.
+  /// @internal
+  providerRef          String?
+  /// IdentificativoSdI: SDI's id of the file, from its first notification.
+  sdiIdentifier        String?
+  /// When the provider took it (from SENT on), and when SDI's outcome arrived (DELIVERED, NOT_DELIVERABLE, REJECTED).
+  sentAt               DateTime?           @db.Timestamptz(3)
+  outcomeAt            DateTime?           @db.Timestamptz(3)
+  /// Why it failed (FAILED) or the gist of the rejection (REJECTED; the errors are in the NS notification).
+  /// @internal
+  failureReason        String?
+  version              Int                 @default(1)
+  createdAt            DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?             @db.Uuid
+
+  invoice            Invoice            @relation(fields: [tenantId, partyId, invoiceId], references: [tenantId, buyerPartyId, id], onDelete: Restrict, onUpdate: Restrict)
+  integrationAccount IntegrationAccount @relation(fields: [tenantId, integrationAccountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  xmlFile            StoredFile         @relation(fields: [tenantId, xmlFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  notifications      SdiNotification[]
+
+  @@unique([tenantId, invoiceId, attempt])
+  @@unique([tenantId, fileName])
+  // The target of its notifications' reference: the same party and invoice.
+  @@unique([tenantId, partyId, invoiceId, id])
+  @@index([tenantId, status])
+}
+
+enum SdiSubmissionStatus {
+  SENDING
+  SENT
+  FAILED
+  DELIVERED
+  NOT_DELIVERABLE
+  REJECTED
+}
+
+/// One notification of SDI about a send (FIN-086, FIN-087; A1 §2.4 G SdiNotification): its type, SDI's message id, when
+/// it was received, and the message as received. A repeated delivery of the same message is recorded once (sdiMessageId).
+/// The signed receipt file is a StoredFile of the row (FISCAL_ARCHIVE). Never changed or removed (the triggers, for
+/// every login).
+/// @append-only
+model SdiNotification {
+  id               String               @id @db.Uuid
+  tenantId         String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The invoice's party (the partner role's policy key).
+  partyId          String               @db.Uuid
+  invoiceId        String               @db.Uuid
+  submissionId     String               @db.Uuid
+  type             SdiNotificationType
+  /// SDI's MessageId of the notification: one row per send and message.
+  sdiMessageId     String?
+  /// When SDI issued it (DataOraRicezione / DataOraConsegna), and when the factory recorded it.
+  receivedAt       DateTime             @db.Timestamptz(3)
+  recordedAt       DateTime             @default(now()) @db.Timestamptz(3)
+  /// The notification as received, parsed (the SDI message's fields: IdentificativoSdI, NomeFile, MessageId, the
+  /// ListaErrori of an NS, Note …), whole: the record the office and the archive read.
+  /// @internal
+  payload          Json
+  /// The inbound ledger's receipt (InboundWebhook) it came with, when the provider sent it by webhook; null when it was
+  /// polled. No reference: ledgers keep what was true when written.
+  /// @internal
+  inboundWebhookId String?              @db.Uuid
+  createdById      String?              @db.Uuid
+
+  submission SdiSubmission @relation(fields: [tenantId, partyId, invoiceId, submissionId], references: [tenantId, partyId, invoiceId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, submissionId, sdiMessageId])
+  @@index([tenantId, invoiceId, receivedAt])
+}
+
+/// SDI's notification types (Specifiche tecniche SDI): RC, MC, NS for every invoice; NE, DT, AT for public bodies.
+enum SdiNotificationType {
+  /// Ricevuta di consegna: delivered.
+  RC
+  /// Mancata consegna: not deliverable; in the buyer's tax area.
+  MC
+  /// Notifica di scarto: rejected.
+  NS
+  /// Notifica di esito (public body: accepted or refused).
+  NE
+  /// Decorrenza termini (public body: no answer in 15 days).
+  DT
+  /// Attestazione di avvenuta trasmissione con impossibilità di recapito.
+  AT
+}
+
+/// A payment received from a party (FIN-121; A1 §2.4 G Payment): one bank transfer, typed by the office (W1; Q12: the
+/// deposit is paid by bank transfer). Its amount, date, reference and party never change; it is VOIDED (with a reason)
+/// when it was typed by mistake, after its allocations are all reversed. Never deleted.
+model Payment {
+  id            String        @id @db.Uuid
+  tenantId      String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that received it.
+  companyId     String        @db.Uuid
+  /// The party that paid.
+  partyId       String        @db.Uuid
+  method        PaymentMethod @default(BANK_TRANSFER)
+  /// Above 0, minor units of the currency.
+  /// @grain price
+  amount        Int
+  /// ISO 4217.
+  currency      String        @default("EUR")
+  /// The date the money arrived (the bank's value date).
+  receivedOn    DateTime      @db.Date
+  /// The bank's reference of the transfer (CRO / TRN): unique in the company, so a payment is never counted twice.
+  externalRef   String
+  /// RECEIVED → VOIDED (typed by mistake; its allocations reversed first). VOIDED is final.
+  status        PaymentStatus @default(RECEIVED)
+  /// Set exactly when VOIDED.
+  voidedAt      DateTime?     @db.Timestamptz(3)
+  /// @internal
+  voidReason    String?
+  /// For the office only.
+  /// @internal
+  internalNote  String?
+  version       Int           @default(1)
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?       @db.Uuid
+
+  company     Company             @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party       Party               @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  allocations PaymentAllocation[]
+
+  @@unique([tenantId, companyId, externalRef])
+  // The target of its allocations' reference: the same company and party.
+  @@unique([tenantId, companyId, partyId, id])
+  @@index([tenantId, partyId, receivedOn])
+}
+
+/// How a payment was made. W1: bank transfers only (Q12); card and SEPA debit come later (W2b), as new values.
+enum PaymentMethod {
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  RECEIVED
+  VOIDED
+}
+
+/// What a payment pays (FIN-121, FIN-122; A1 §2.4 G PaymentAllocation): part of a payment allocated to ONE deposit
+/// request (before any invoice exists) or ONE issued TD01/TD24 invoice of the same company and party. Never changed or
+/// removed (the triggers, for every login); a wrong one is taken back by a reversal row (reversalOfId, the opposite
+/// amount, once). A payment's allocations never pass its amount; a deposit request's never pass its amount; an
+/// invoice's never pass its gross total less its credit notes (the triggers, under a lock per payment and per target).
+/// @append-only
+model PaymentAllocation {
+  id               String          @id @db.Uuid
+  tenantId         String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The payment's company and party.
+  companyId        String          @db.Uuid
+  partyId          String          @db.Uuid
+  paymentId        String          @db.Uuid
+  /// Exactly one of them.
+  invoiceId        String?         @db.Uuid
+  depositRequestId String?         @db.Uuid
+  /// Minor units: above 0, or below 0 on a reversal (the opposite of the allocation it takes back).
+  /// @grain price
+  amount           Int
+  /// A reversal: the allocation of the same payment and target it takes back.
+  reversalOfId     String?         @db.Uuid
+  /// Why (required on a reversal).
+  /// @internal
+  note             String?
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  createdById      String?         @db.Uuid
+
+  payment        Payment             @relation(fields: [tenantId, companyId, partyId, paymentId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and
+  // partyId.
+  invoice        Invoice?            @relation(fields: [tenantId, companyId, partyId, invoiceId], references: [tenantId, companyId, buyerPartyId, id], onDelete: Restrict, onUpdate: Restrict)
+  depositRequest DepositRequest?     @relation(fields: [tenantId, companyId, partyId, depositRequestId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversalOf     PaymentAllocation?  @relation("PaymentAllocationReversal", fields: [tenantId, paymentId, reversalOfId], references: [tenantId, paymentId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversals      PaymentAllocation[] @relation("PaymentAllocationReversal")
+
+  // The target of the reversals' reference: an allocation of the same payment.
+  @@unique([tenantId, paymentId, id])
+  @@index([tenantId, invoiceId])
+  @@index([tenantId, depositRequestId])
+}

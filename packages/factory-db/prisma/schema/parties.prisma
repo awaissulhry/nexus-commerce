@@ -74,6 +74,9 @@ model Party {
   lots                 Lot[]
   // quality.prisma: the PPE register's entries it reported.
   ppeRegisterEntries   PpeRegisterEntry[]
+  // money.prisma: the invoices it is the buyer of and the payments it made.
+  invoices             Invoice[]
+  payments             Payment[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the party's rows.

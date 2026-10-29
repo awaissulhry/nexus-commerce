@@ -74,6 +74,10 @@ model StoredFile {
   importJobs   ImportJob[]
   // print.prisma: the print jobs that printed this file.
   printJobs    PrintJob[]
+  // money.prisma: the invoices whose XML or PDF copy it is, and the SDI sends that sent it.
+  invoiceXmlOf   Invoice[]       @relation("InvoiceXml")
+  invoicePdfOf   Invoice[]       @relation("InvoicePdf")
+  sdiSubmissions SdiSubmission[]
 
   @@unique([tenantId, storageKey])
   // The target of the tenant-safe references from other rows (a company's logo, a document's PDF).
