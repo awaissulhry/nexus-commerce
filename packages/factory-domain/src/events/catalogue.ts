@@ -1,4 +1,5 @@
 import { events as compliance } from '../compliance/events'
+import { events as costing } from '../costing/events'
 import { events as email } from '../email/events'
 import { events as emailIn } from '../email-in/events'
 import { events as files } from '../files/events'
@@ -114,7 +115,7 @@ export function createCatalogue(definitions: readonly EventDefinition[]): EventC
  * imports: the import jobs; print: print jobs; email: mail out and its delivery; email-in: mail received); the W1
  * modules bring theirs (compliance: certificate expiry; product: the material library; inventory: stock moves; parties: customers and suppliers).
  */
-export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...invoicing, ...payments] as const satisfies readonly EventDefinition[]
+export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...invoicing, ...payments, ...costing] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

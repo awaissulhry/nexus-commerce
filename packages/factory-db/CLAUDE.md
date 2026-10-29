@@ -42,7 +42,7 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    (`…_audit_append_only`, `…_numbering_guards`, `…_outbox_guard`, `…_integration_guards`, `…_files_guards`,
    `…_links_guards`, `…_threads_guards`, `…_print_guards`, `…_parties_guards`, `…_email_guards`, `…_product_guards`,
    `…_email_in_guards`, `…_sales_guards`, `…_supply_guards`, `…_production_guards`, `…_quality_shipping_guards`,
-   `…_money_guards`:
+   `…_money_guards`, `…_costing_guards`:
    triggers, partial unique indexes and deferred constraint triggers) are not regenerated: `git mv` the branch's one,
    unchanged, to a timestamp between its new schema and policy folders; keep it out of `prisma/migrations` while
    `npm run migration` runs (it replays every folder, and the triggers need the new table).
