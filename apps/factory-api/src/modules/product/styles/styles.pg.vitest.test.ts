@@ -400,6 +400,29 @@ describe('lists, archive, idempotency and the walls', () => {
     expect((await ok('viewer', 'GET', '/product/size-scales')).scales.map((row: Json) => row.code)).toEqual(['EU-46-58', 'LETTERS'])
   })
 
+  it('lists the styles whose draft revision waits for its release, with the revision numbers on each row (SCR-040)', async () => {
+    const page = async (query: string) => (await ok('viewer', 'GET', `/product/styles${query}`)) as Json
+    const waiting = await page('?draftRevision=true')
+    expect(waiting.styles.map((row: Json) => row.code)).toEqual(['GT-JKT-01'])
+    expect(waiting.count).toBe(1)
+    // Revision 1 was made obsolete above; revision 2 is the open draft.
+    expect(waiting.styles[0]).toMatchObject({ revisionState: 'DRAFT', releasedRevision: null, draftRevision: 2 })
+    expect((await page('?draftRevision=false')).styles.map((row: Json) => row.code)).toEqual(['GT-TRS-01', 'GT-VST-01'])
+    expect((await page('?draftRevision=false')).styles[0]).toMatchObject({ releasedRevision: null, draftRevision: null })
+    expect((await ok('viewer', 'GET', `/product/styles/${jacket.id}`)).style).toMatchObject({ releasedRevision: null, draftRevision: 2 })
+    expect((await call('viewer', 'GET', '/product/styles?draftRevision=maybe')).statusCode).toBe(400)
+  })
+
+  it('lists the colour library a colourway picks from: active by code, searched, scoped to the tenant', async () => {
+    expect((await ok('viewer', 'GET', '/product/colours')).colours).toEqual([
+      { id: blackLibrary, companyId: null, code: 'BLK', name: 'Black', hex: '#111111', status: 'ACTIVE' },
+      { id: redLibrary, companyId: null, code: 'RED', name: 'Red', hex: '#B00020', status: 'ACTIVE' },
+    ])
+    expect((await ok('viewer', 'GET', '/product/colours?q=re')).colours.map((row: Json) => row.code)).toEqual(['RED'])
+    expect((await ok('otherTenant', 'GET', '/product/colours')).colours).toEqual([])
+    expect((await call('materialsOnly', 'GET', '/product/colours')).statusCode).toBe(403)
+  })
+
   it('archives a style out of new use, read only until it is reactivated (PRD-022)', async () => {
     const vest = (await ok('viewer', 'GET', '/product/styles?q=GT-VST-01')).styles[0]
     const archived = (await ok('maker', 'POST', `/product/styles/${vest.id}/archive`, { version: vest.version, reason: 'Dropped from the collection (made up)' })).style

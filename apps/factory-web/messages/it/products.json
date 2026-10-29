@@ -1,0 +1,688 @@
+{
+  "common": {
+    "back": "Indietro",
+    "close": "Chiudi",
+    "dismiss": "Chiudi avviso",
+    "retry": "Riprova",
+    "yes": "Sì",
+    "no": "No"
+  },
+  "status": {
+    "DRAFT": "Bozza",
+    "ACTIVE": "Attivo",
+    "ARCHIVED": "Archiviato"
+  },
+  "statusMeans": {
+    "DRAFT": "Non ancora rilasciato: non si può ordinare né produrre.",
+    "ACTIVE": "Ha una revisione rilasciata: si può quotare, ordinare e produrre.",
+    "ARCHIVED": "Fuori uso: gli ordini aperti lo mantengono; mai eliminato."
+  },
+  "revisionStatus": {
+    "DRAFT": "Bozza",
+    "RELEASED": "Rilasciata",
+    "OBSOLETE": "Obsoleta"
+  },
+  "masterStatus": {
+    "ACTIVE": "Attivo",
+    "ARCHIVED": "Archiviato"
+  },
+  "productType": {
+    "JACKET": "Giacca",
+    "TROUSERS": "Pantaloni",
+    "SUIT": "Tuta",
+    "GLOVES": "Guanti",
+    "VEST": "Gilet",
+    "OTHER": "Altro"
+  },
+  "tracking": {
+    "LOT": "Numero di lotto su ogni etichetta (DPI: Reg. 2016/425 art. 8(5))",
+    "NONE": "Nessuna (non è un DPI)"
+  },
+  "ppe": {
+    "question": "Ha protezioni da impatto o contro l’abrasione per motociclisti?",
+    "category": {
+      "NOT_PPE": "No — non è un DPI",
+      "CATEGORY_I": "Categoria I — solo rischi minimi",
+      "CATEGORY_II": "Sì — DPI di categoria II",
+      "CATEGORY_III": "Categoria III — rischi mortali o irreversibili"
+    },
+    "why": {
+      "NOT_PPE": "Capo moda: nessun certificato, nessuna dichiarazione di conformità.",
+      "CATEGORY_I": "Autocertificato; capi e guanti da moto non sono di categoria I.",
+      "CATEGORY_II": "Capo o guanto protettivo per motociclisti (EN 17092, EN 13594): serve un certificato dell’organismo notificato.",
+      "CATEGORY_III": "Certificato e controlli di produzione dell’organismo notificato."
+    },
+    "short": {
+      "NOT_PPE": "Non DPI",
+      "CATEGORY_I": "Cat. I",
+      "CATEGORY_II": "Cat. II",
+      "CATEGORY_III": "Cat. III"
+    },
+    "standard": "Norma ed edizione",
+    "standardHint": "EN 17092: la parte fissa la classe (2 = AAA … 6 = C).",
+    "standardHintGloves": "I guanti da moto seguono la EN 13594.",
+    "standardOption": "{standard} — classe {class}",
+    "noStandard": "Non ancora scelta",
+    "class": "Classe",
+    "classByPart": "Classe {class} (fissata dalla parte)",
+    "classAfterStandard": "Viene dalla norma",
+    "classIs": "classe {class}",
+    "level": "Livello",
+    "noLevel": "Non ancora scelto",
+    "levelName": {
+      "1": "Livello 1",
+      "2": "Livello 2",
+      "1KP": "Livello 1 con protezione nocche",
+      "2KP": "Livello 2 con protezione nocche"
+    }
+  },
+  "tab": {
+    "overview": "Panoramica",
+    "variants": "Varianti e taglie",
+    "bom": "Distinta base",
+    "routing": "Ciclo di lavoro",
+    "cost": "Costo",
+    "compliance": "Conformità",
+    "activity": "Attività",
+    "problems_one": "{count} problema prima del rilascio",
+    "problems_other": "{count} problemi prima del rilascio"
+  },
+  "record": {
+    "back": "Modelli",
+    "backToList": "Torna ai modelli",
+    "title": "Modello",
+    "loading": "Apertura del modello…",
+    "state": {
+      "not_found": {
+        "title": "Questo modello non esiste",
+        "body": "Può appartenere a un’altra azienda, oppure il link è errato."
+      },
+      "forbidden": {
+        "title": "Non hai accesso a questo modello",
+        "body": "Il tuo ruolo non legge i modelli di questa azienda. L’ufficio prodotto o il titolare possono darti accesso."
+      },
+      "error": {
+        "title": "Non è stato possibile aprire il modello"
+      }
+    },
+    "tabsLabel": "Parti del modello",
+    "viewing": "Stai vedendo",
+    "revisionPicker": "Revisione visualizzata",
+    "revisionOption": "Rev {revision} · {status}",
+    "noRevision": "Nessuna revisione",
+    "releasedIs": "La Rev {revision} è quella rilasciata",
+    "thingsBefore_one": "{count} cosa prima del rilascio",
+    "thingsBefore_other": "{count} cose prima del rilascio",
+    "readyToRelease": "Pronta per il rilascio",
+    "dock": "Conversazione",
+    "dockHint": "Mostra la conversazione accanto alla scheda (⌘J)",
+    "dockLabel": "Conversazione del modello",
+    "more": "Altre azioni",
+    "noPanels": "La conversazione si apre qui quando il modello è caricato.",
+    "changed": "Qualcun altro ha modificato questo modello alle {time}.",
+    "reload": "Ricarica",
+    "archivedBanner": "Archiviato: sola lettura. Riattivalo (⋯) per modificarlo.",
+    "frozenReleased": "La revisione {revision} è rilasciata e bloccata: gli ordini di lavoro la usano così com’è.",
+    "frozenObsolete": "La revisione {revision} è obsoleta: conservata per lo storico, non più usata.",
+    "goToDraft": "Vai alla revisione {revision} (bozza)"
+  },
+  "action": {
+    "release": "Rilascia la revisione {revision}",
+    "startRevision": "Avvia la revisione {revision}",
+    "abandon": "Abbandona la bozza della revisione {revision}…",
+    "archive": "Archivia il modello…",
+    "reactivate": "Riattiva il modello",
+    "copyCode": "Copia il codice",
+    "keys": "Scorciatoie da tastiera"
+  },
+  "save": {
+    "saving": "Salvataggio…",
+    "saved": "Salvato alle {time}",
+    "failed": "Non salvato"
+  },
+  "held": {
+    "busy": "Attendi: l’ultima modifica è ancora in salvataggio.",
+    "noManage": "Il tuo ruolo può vedere questo modello, non modificarlo.",
+    "noRelease": "Il tuo ruolo non rilascia revisioni.",
+    "archived": "Il modello è archiviato: prima riattivalo.",
+    "draftOpen": "La revisione {revision} è ancora in bozza: prima rilasciala o abbandonala.",
+    "notDraft": "Si rilascia solo una revisione in bozza.",
+    "noRevision": "Il modello non ha ancora revisioni: avvia la revisione 1.",
+    "checking": "Il controllo di rilascio è ancora in lettura.",
+    "blockers_one": "{count} cosa da sistemare prima (r apre il controllo)",
+    "blockers_other": "{count} cose da sistemare prima (r apre il controllo)",
+    "long": "Al massimo 500 caratteri."
+  },
+  "problem": {
+    "read": {
+      "signed_out": "La sessione è scaduta: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non legge questi dati.",
+      "not_found": "Non c’è più.",
+      "unavailable": "Il server della fabbrica non ha risposto: riprova tra poco.",
+      "rate_limited": "Troppe richieste: attendi un momento.",
+      "contract": "Il server ha risposto in un formato che questa pagina non conosce: ricarica la pagina.",
+      "internal": "Qualcosa è andato storto durante la lettura: riprova."
+    },
+    "write": {
+      "moved": "Qualcun altro l’ha modificato nel frattempo: è stato riletto, controlla e ripeti.",
+      "state": "Il suo stato non lo consente più: è stato riletto.",
+      "blocked": "Il rilascio è stato rifiutato: il controllo qui sotto dice cosa sistemare.",
+      "codeTaken": "Questo codice è già usato da un altro record: scegline un altro.",
+      "invalid": "Il server ha rifiutato un valore: controlla i campi segnati.",
+      "stepUp": "Conferma la tua identità (codice dell’app) e ripeti.",
+      "signed_out": "La sessione è scaduta: accedi di nuovo. Nulla è stato salvato.",
+      "forbidden": "Il tuo ruolo non consente questa modifica.",
+      "not_found": "Non c’è più: la pagina è stata riletta.",
+      "rate_limited": "Troppe modifiche insieme: attendi un momento e ripeti.",
+      "unavailable": "Il server della fabbrica non ha risposto: nulla è stato salvato, riprova.",
+      "internal": "Qualcosa è andato storto: nulla è stato salvato, riprova."
+    }
+  },
+  "notice": {
+    "saved": "Salvato.",
+    "rangeSaved": "La gamma taglie è salvata; gli SKU l’hanno seguita.",
+    "colourwayAdded": "Variante colore aggiunta.",
+    "colourwayArchived": "Variante archiviata: i suoi SKU sono spenti.",
+    "colourwayRestored": "Variante ripristinata: i suoi SKU nella gamma sono di nuovo accesi.",
+    "generated_one": "{count} SKU creato.",
+    "generated_other": "{count} SKU creati.",
+    "skusSaved_one": "{count} SKU salvato.",
+    "skusSaved_other": "{count} SKU salvati.",
+    "released": "La revisione {revision} è rilasciata: i nuovi ordini di lavoro la usano.",
+    "revisionStarted": "La nuova revisione in bozza è aperta.",
+    "abandoned": "La revisione in bozza è abbandonata.",
+    "archived": "Il modello è archiviato.",
+    "archivedMany_one": "{count} modello archiviato.",
+    "archivedMany_other": "{count} modelli archiviati.",
+    "reactivated": "Il modello è riattivato."
+  },
+  "identity": {
+    "title": "Identità",
+    "intro": "Che cosa è il modello. Salva con ⌘S.",
+    "readOnly": "Puoi vedere, non modificare.",
+    "readArchived": "Archiviato: sola lettura.",
+    "code": "Codice",
+    "codeHint": "Da 1 a 24 lettere maiuscole o cifre, con . _ - all’interno. Gli SKU iniziano con questo.",
+    "codeFrozen": "Bloccato: il modello ha SKU.",
+    "name": "Nome",
+    "type": "Tipo di prodotto",
+    "season": "Stagione",
+    "seasonHint": "Come FW27 o SS28.",
+    "brand": "Marchio",
+    "brandHint": "Un modello private label indica il marchio per cui è prodotto.",
+    "ownCollection": "Nostra collezione",
+    "mtm": "Su misura consentito",
+    "mtmHint": "Il modello di misure si sceglie con gli ordini su misura (W2a).",
+    "ppe": "DPI",
+    "tracking": "Tracciabilità del capo",
+    "description": "Descrizione",
+    "descriptionHint": "Costruzione, materiali, cosa lo distingue.",
+    "unsaved_one": "{count} modifica non salvata",
+    "unsaved_other": "{count} modifiche non salvate",
+    "save": "Salva",
+    "held": {
+      "name": "Scrivi un nome.",
+      "code": "Il codice è da 1 a 24 lettere maiuscole o cifre, con . _ - all’interno."
+    }
+  },
+  "warning": {
+    "title_one": "{count} cosa che manca ancora a questo modello",
+    "title_other": "{count} cose che mancano ancora a questo modello",
+    "NO_SIZE_RANGE": "Scegli le taglie in cui è prodotto: gli SKU nascono da queste.",
+    "NO_BASE_SIZE": "Scegli la taglia base (campione) da cui parte lo sviluppo.",
+    "NO_COLOURWAY": "Aggiungi una variante colore: ordini, colori della distinta e scorte sono per variante.",
+    "SKUS_MISSING": "Alcune combinazioni colore e taglia non hanno ancora uno SKU: genera gli SKU.",
+    "NO_PPE_STANDARD": "Indica la norma: etichetta, certificato e dichiarazione ne hanno bisogno.",
+    "NO_PPE_CLASS": "Indica la classe: l’etichetta la mostra.",
+    "NO_MEASUREMENT_TEMPLATE": "Il su misura è consentito, ma manca ancora il modello di misure.",
+    "fix": "Sistema"
+  },
+  "side": {
+    "label": "Stato, controllo di rilascio e revisioni",
+    "state": "Stato",
+    "skus": "SKU attivi",
+    "skusValue": "{skus} in {colourways} varianti",
+    "range": "Gamma",
+    "created": "Creato",
+    "updated": "Aggiornato",
+    "activity": "Conversazione e storico",
+    "release": "Controllo di rilascio",
+    "coverage": "Copertura del certificato",
+    "open": "Apri",
+    "revisions": "Revisioni"
+  },
+  "check": {
+    "noRevision": "Nessuna revisione: avvia la revisione 1 per compilare distinta e ciclo.",
+    "noBomView": "Il tuo ruolo non legge la distinta, quindi il controllo non è mostrato.",
+    "released": "La revisione {revision} è rilasciata: niente da controllare.",
+    "obsolete": "La revisione {revision} è obsoleta.",
+    "checking": "Controllo in corso…",
+    "ready": "La revisione {revision} supera il controllo: si può rilasciare.",
+    "showMe": "Mostrami",
+    "fix": "Sistema",
+    "more_one": "altra {count} nel controllo",
+    "more_other": "altre {count} nel controllo",
+    "open": "Apri il controllo",
+    "complianceAfter_one": "Dopo il rilascio, {count} punto di conformità blocca ancora produzione, etichette o spedizione.",
+    "complianceAfter_other": "Dopo il rilascio, {count} punti di conformità bloccano ancora produzione, etichette o spedizione.",
+    "seeCompliance": "Vedi Conformità",
+    "inUse": "La Rev {released} resta in uso finché non si rilascia la Rev {draft}."
+  },
+  "coverage": {
+    "covered_one": "{count} coperta",
+    "covered_other": "{count} coperte",
+    "expiring_one": "{count} in scadenza entro 60 giorni",
+    "expiring_other": "{count} in scadenza entro 60 giorni",
+    "notCoveredCount_one": "{count} non coperta",
+    "notCoveredCount_other": "{count} non coperte",
+    "ofOffered_one": "su {count} combinazione colore e taglia attiva",
+    "ofOffered_other": "su {count} combinazioni colore e taglia attive",
+    "notPpe": "Non è un DPI: nessun certificato richiesto.",
+    "notRequired": "Per questa categoria non serve il certificato dell’organismo notificato."
+  },
+  "revisions": {
+    "none": "Nessuna revisione.",
+    "col": {
+      "revision": "Revisione",
+      "status": "Stato",
+      "when": "Rilasciata o avviata"
+    },
+    "rev": "Rev {revision}"
+  },
+  "range": {
+    "title": "Gamma taglie",
+    "intro": "La scala, le taglie prodotte e la taglia base. Gli SKU seguono la gamma.",
+    "scale": "Scala taglie",
+    "scaleHint": "Le scale si gestiscono in Taglie e misure.",
+    "scaleLocked": "Bloccata: il modello ha SKU.",
+    "chooseScale": "Scegli una scala",
+    "base": "Taglia base",
+    "baseHint": "La taglia campione; quantità e sviluppo partono da questa.",
+    "noBase": "Non ancora scelta",
+    "baseMark": "base",
+    "sizes_one": "Taglie nella gamma: {count}",
+    "sizes_other": "Taglie nella gamma: {count}",
+    "noSizes": "Scegli una scala per vederne le taglie.",
+    "effectTitle": "Cosa fa Applica",
+    "effectAdd_one": "Aggiunge {sizes}: {count} nuovo SKU, uno per variante attiva.",
+    "effectAdd_other": "Aggiunge {sizes}: {count} nuovi SKU, uno per variante attiva.",
+    "effectAddPlain": "Aggiunge {sizes}.",
+    "effectRemove_one": "Toglie {sizes}: {count} SKU spento (conservato, mai eliminato).",
+    "effectRemove_other": "Toglie {sizes}: {count} SKU spenti (conservati, mai eliminati).",
+    "effectRemovePlain": "Toglie {sizes}.",
+    "unsaved": "La gamma è cambiata",
+    "apply": "Applica",
+    "held": {
+      "empty": "Scegli almeno una taglia.",
+      "base": "Scegli la taglia base fra quelle della gamma."
+    }
+  },
+  "measures": {
+    "title": "Misure del corpo",
+    "intro": "Dalla scala: a chi veste ogni taglia (il pittogramma della taglia in etichetta).",
+    "none": "La scala non ha misure del corpo.",
+    "size": "Taglia"
+  },
+  "colourways": {
+    "title_one": "Varianti colore ({count})",
+    "title_other": "Varianti colore ({count})",
+    "intro": "Ogni variante ha il colore principale dalla libreria; quelle archiviate conservano lo storico.",
+    "add": "Aggiungi variante",
+    "edit": "Modifica",
+    "editOne": "Modifica la variante {code}",
+    "archive": "Archivia",
+    "archiveOne": "Archivia la variante {code}",
+    "restore": "Ripristina",
+    "restoreOne": "Ripristina la variante {code}",
+    "empty": {
+      "title": "Aggiungi la prima variante",
+      "body": "Ordini, colori della distinta e scorte sono per variante."
+    },
+    "col": {
+      "colourway": "Variante",
+      "colour": "Colore principale",
+      "skus": "SKU attivi",
+      "status": "Stato",
+      "actions": "Azioni"
+    }
+  },
+  "colourway": {
+    "addTitle": "Aggiungi variante colore",
+    "editTitle": "Variante {code}",
+    "code": "Codice",
+    "codeHint": "Da 1 a 12 lettere maiuscole o cifre, con . o _ all’interno (senza -).",
+    "codeInUse": "Bloccato: SKU, colori della distinta o ordini lo usano.",
+    "name": "Nome",
+    "colour": "Colore principale",
+    "colourHint": "Dalla libreria colori.",
+    "colourNone": "Non è stato possibile leggere la libreria colori.",
+    "noColour": "Nessun colore di libreria",
+    "description": "Pannelli a contrasto, cuciture, loghi",
+    "descriptionHint": "Cosa la distingue dalle altre varianti.",
+    "addsSkus_one": "Aggiungerla crea {count} SKU, uno per taglia della gamma.",
+    "addsSkus_other": "Aggiungerla crea {count} SKU, uno per taglia della gamma.",
+    "add": "Aggiungi variante",
+    "save": "Salva",
+    "held": {
+      "code": "Il codice è da 1 a 12 lettere maiuscole o cifre, con . o _ all’interno.",
+      "taken": "Un’altra variante di questo modello è {code}.",
+      "name": "Scrivi un nome."
+    }
+  },
+  "matrix": {
+    "title": "SKU colore × taglia",
+    "intro": "Uno SKU per variante e taglia: accendi o spegni una cella, un’intera variante dal suo nome, un’intera taglia dalla sua colonna; apri una cella per il suo SKU e GTIN.",
+    "generate_one": "Genera {count} SKU",
+    "generate_other": "Genera {count} SKU",
+    "generateNone": "Genera SKU",
+    "nothingToGenerate": "Ogni cella attiva ha il suo SKU.",
+    "empty": {
+      "title": "Ancora nessuno SKU",
+      "body": "Aggiungi varianti e una gamma taglie per generare gli SKU."
+    },
+    "colourway": "Variante",
+    "toggleColumn": "Accendi o spegni la taglia {size} in ogni variante",
+    "toggleRow": "Accendi o spegni tutte le taglie di {code}",
+    "cell": {
+      "on": "{colourway}, taglia {size}: SKU {sku} attivo",
+      "off": "{colourway}, taglia {size}: SKU {sku} spento",
+      "none": "{colourway}, taglia {size}: ancora nessuno SKU",
+      "closed": "{colourway}, taglia {size}: variante archiviata"
+    },
+    "notCovered": "non coperta da un certificato valido",
+    "legend": {
+      "on": "Attivo",
+      "off": "Spento",
+      "none": "Nessuno SKU",
+      "notCovered": "Non coperta da un certificato valido (blocca rilascio, etichette e spedizione della cella)"
+    },
+    "keys": {
+      "move": "Muoviti fra le celle",
+      "cell": "Accendi o spegni la cella",
+      "row": "Accendi o spegni l’intera variante",
+      "open": "Apri la cella (SKU, GTIN, certificato)"
+    }
+  },
+  "sku": {
+    "title": "{colourway} · taglia {size}",
+    "code": "SKU",
+    "noneYet": "Ancora nessuno",
+    "state": "Stato",
+    "stateIs": {
+      "on": "Attivo: si può ordinare e produrre",
+      "off": "Spento: conservato, non offerto",
+      "none": "Nessuno SKU: genera gli SKU",
+      "closed": "La variante è archiviata"
+    },
+    "coverage": "Certificato",
+    "coverageUnknown": "Indicato nella scheda Conformità",
+    "certificate": "{number}, valido fino al {until}",
+    "generateFirst": "Genera gli SKU per creare questo.",
+    "gtin": "GTIN (codice a barre)",
+    "gtinHint": "8, 12, 13 o 14 cifre con la cifra di controllo; mai riutilizzato.",
+    "gtinFormat": "Un GTIN ha 8, 12, 13 o 14 cifre.",
+    "gtinSame": "Nulla è cambiato.",
+    "saveGtin": "Salva GTIN",
+    "switchOn": "Accendi",
+    "switchOff": "Spegni"
+  },
+  "generate": {
+    "title_one": "Genera {count} SKU",
+    "title_other": "Genera {count} SKU",
+    "what": "Uno SKU per ogni variante e taglia attiva che non ce l’ha:",
+    "pattern": "Ogni SKU è modello-variante-taglia, come {example}.",
+    "go_one": "Genera {count} SKU",
+    "go_other": "Genera {count} SKU"
+  },
+  "release": {
+    "title": "Rilascia la revisione {revision}",
+    "titlePlain": "Rilascia",
+    "go": "Rilascia la revisione {revision}",
+    "checkTitle": "Controllo di rilascio",
+    "okBom_one": "Distinta completa: {count} riga, quantità, colori per variante e taglie",
+    "okBom_other": "Distinta completa: {count} righe, quantità, colori per variante e taglie",
+    "okRouting": "Ciclo: {steps} operazioni, {minutes} minuti standard, una fase scansionata",
+    "okRoutingPlain": "Il ciclo ha operazioni con minuti e una fase scansionata",
+    "warningPasses": "annotato, non blocca il rilascio",
+    "afterTitle": "Non fa parte del rilascio, ma ferma il lavoro dopo:",
+    "blocks": "blocca {steps}",
+    "whatHappens": "Cosa succede",
+    "becomes": "La revisione {revision} diventa quella usata da ogni nuovo ordine di lavoro; distinta, ciclo ed etichetta vengono bloccati.",
+    "obsoletes": "La revisione {revision} diventa obsoleta: gli ordini di lavoro già creati la mantengono, le offerte calcolate su di essa mantengono il prezzo.",
+    "activates": "Il modello diventa Attivo: si può quotare, ordinare e produrre.",
+    "frozen": "Una modifica successiva è una nuova revisione (Avvia revisione).",
+    "note": "Cosa è cambiato (facoltativo)",
+    "noteHint": "Conservato con la revisione e nello storico."
+  },
+  "startRevision": {
+    "title": "Avviare la revisione {revision}?",
+    "copy": "La revisione {from} viene copiata in una nuova bozza, la revisione {revision} (distinta, ciclo ed etichetta). La revisione {from} resta in uso finché non rilasci la {revision}.",
+    "copyObsolete": "La revisione {from} (obsoleta) viene copiata in una nuova bozza, la revisione {revision}.",
+    "first": "La revisione 1 parte vuota: distinta, ciclo ed etichetta si compilano dopo.",
+    "note": "Cosa cambierà (facoltativo)",
+    "noteHint": "Conservato con la revisione."
+  },
+  "abandon": {
+    "title": "Abbandonare la bozza della revisione {revision}?",
+    "what": "La revisione {revision} diventa obsoleta: distinta e ciclo restano nello storico, mai usati.",
+    "after": "Dopo puoi avviare una nuova revisione.",
+    "go": "Abbandona la bozza"
+  },
+  "archive": {
+    "title": "Archiviare {code}?",
+    "reach": "Non si potrà più usare in nuove offerte o ordini di lavoro.",
+    "kept": "Gli ordini aperti lo mantengono; non viene mai eliminato.",
+    "back": "Riattiva lo riporta in uso.",
+    "go": "Archivia"
+  },
+  "dialog": {
+    "reason": "Motivo (facoltativo)",
+    "reasonHint": "Conservato nello storico."
+  },
+  "issue": {
+    "NO_LINES": "La distinta non ha ancora materiali.",
+    "NO_SIZE_RANGE": "Il modello non ha una gamma taglie.",
+    "NO_ACTIVE_COLOURWAY": "Il modello non ha varianti attive.",
+    "MATERIAL_ARCHIVED": "Riga {line}: il materiale è archiviato.",
+    "UNIT_NOT_CONVERTIBLE": "Riga {line}: la sua unità non si converte in quella del materiale.",
+    "QUANTITY_NOT_POSITIVE": "Riga {line}: la quantità deve essere maggiore di 0.",
+    "WASTAGE_OUT_OF_RANGE": "Riga {line}: lo scarto va da 0 a 60 %.",
+    "SIZE_QUANTITY_MISSING": "Riga {line}: manca la quantità della taglia {size}.",
+    "SIZE_OUTSIDE_RANGE": "Riga {line}: la taglia {size} non è nella gamma.",
+    "SIZE_QUANTITIES_ALL_ZERO": "Riga {line}: tutte le taglie sono a 0.",
+    "COLOUR_MISSING": "Riga {line}: manca il colore della variante {colourway}.",
+    "COLOUR_ARCHIVED": "Riga {line}: il colore di {colourway} è archiviato.",
+    "LEATHER_WITHOUT_WASTAGE": "Riga {line}: pelle senza scarto (la resa della pelle è nello scarto).",
+    "NO_PLANNED_HIDE_YIELD": "Nessuna resa pelle pianificata per questa revisione.",
+    "LINE_OF_ARCHIVED_COLOURWAY": "Riga {line}: solo per una variante archiviata.",
+    "NO_STEPS": "Il ciclo non ha ancora operazioni.",
+    "MINUTES_NOT_POSITIVE": "Operazione {step}: i minuti devono essere maggiori di 0.",
+    "NO_SCAN_POINT": "Nessuna operazione è scansionata: il reparto ne ha bisogno di almeno una.",
+    "OPERATION_ARCHIVED": "Operazione {step}: archiviata nella libreria (il ciclo la mantiene).",
+    "LAST_STEP_NOT_SCANNED": "L’ultima operazione non è scansionata: il lotto si assegna all’ultima scansionata."
+  },
+  "complianceCheck": {
+    "REVISION": {
+      "BLOCKED": "Nessuna revisione rilasciata"
+    },
+    "LABEL_TEMPLATE": {
+      "BLOCKED": "Nessuna etichetta capo attiva per la revisione"
+    },
+    "CERTIFICATE": {
+      "BLOCKED": "Alcune combinazioni colore e taglia attive non sono coperte da un certificato valido"
+    },
+    "DECLARATION_OF_CONFORMITY": {
+      "BLOCKED": "Manca la dichiarazione di conformità firmata della revisione"
+    },
+    "USER_INFORMATION": {
+      "BLOCKED": "Manca la nota informativa per l’utilizzatore della revisione"
+    }
+  },
+  "blocks": {
+    "PRODUCTION": "la produzione",
+    "LABELS": "le etichette",
+    "SHIPPING": "la spedizione"
+  },
+  "cellStatus": {
+    "COVERED": "Coperta",
+    "NOT_COVERED": "Non coperta",
+    "EXPIRED": "Certificato scaduto",
+    "SUSPENDED": "Certificato sospeso",
+    "NOT_REQUIRED": "Non richiesto"
+  },
+  "list": {
+    "intro": "Ogni modello con varianti e taglie, distinta, ciclo, costo e conformità in un unico studio.",
+    "updated": "Aggiornato alle {time} · in tempo reale",
+    "notYet": "Lettura…",
+    "new": "Nuovo modello",
+    "keyNew": "Nuovo modello",
+    "tableLabel": "Modelli",
+    "search": "Cerca codice, nome o stagione",
+    "viewFilter": "Filtro salvato",
+    "typeFilter": "Tipo di prodotto",
+    "ppeFilter": "DPI",
+    "allTypes": "Ogni tipo",
+    "allPpe": "Ogni categoria DPI",
+    "view": {
+      "open": "Aperti (bozza e attivi)",
+      "drafts": "Bozze (mai rilasciate)",
+      "waiting": "In attesa di rilascio",
+      "active": "Attivi",
+      "archived": "Archiviati",
+      "all": "Tutti"
+    },
+    "tile": {
+      "drafts": "Bozze",
+      "waiting": "In attesa di rilascio",
+      "active": "Attivi",
+      "archived": "Archiviati"
+    },
+    "tileHint": {
+      "drafts": "Mai rilasciati",
+      "waiting": "Una revisione in bozza è aperta",
+      "active": "Si possono ordinare e produrre",
+      "archived": "Fuori uso"
+    },
+    "activeFilters": "Filtri attivi",
+    "removeFilter": "Togli questo filtro",
+    "chipSearch": "Ricerca: {q}",
+    "clearAll": "Togli i filtri",
+    "count_one": "{count} modello",
+    "count_other": "{count} modelli",
+    "countMore": "{count} di {total}",
+    "more": "Mostra altri",
+    "failed": "Non è stato possibile caricare i modelli",
+    "noMatch": {
+      "title": "Nessun modello corrisponde a questi filtri",
+      "body": "Togli un filtro o cerca altro."
+    },
+    "forbidden": {
+      "title": "Non hai accesso ai modelli",
+      "body": "I ruoli ufficio prodotto, responsabile di produzione e titolare leggono i modelli; chiedine uno al titolare."
+    },
+    "empty": {
+      "title": "Ancora nessun modello",
+      "body": "Crea il primo modello: varianti, taglie, distinta e ciclo seguono nel suo studio.",
+      "bodyView": "I modelli li crea l’ufficio prodotto."
+    },
+    "emptyCreate": "Crea il primo modello",
+    "col": {
+      "style": "Modello",
+      "typeSeason": "Tipo",
+      "season": "Stagione",
+      "status": "Stato",
+      "revision": "Revisione",
+      "range": "Gamma taglie",
+      "skus": "SKU attivi",
+      "ppe": "DPI",
+      "ready": "Completezza",
+      "updated": "Aggiornato",
+      "more": "Azioni"
+    },
+    "rev": {
+      "released": "Rev {revision} rilasciata",
+      "draft": "Rev {revision} bozza"
+    },
+    "noRevision": "Nessuna revisione",
+    "base": "base {size}",
+    "colourwaysCount_one": "in {count} variante",
+    "colourwaysCount_other": "in {count} varianti",
+    "noStandard": "norma non indicata",
+    "ready": "{done} su {of}",
+    "rowMenu": "Azioni per {code}",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "openVariants": "Apri varianti e taglie",
+    "bulk": {
+      "export_one": "Esporta {count} (CSV)",
+      "export_other": "Esporta {count} (CSV)",
+      "archive_one": "Archivia {count}…",
+      "archive_other": "Archivia {count}…",
+      "archiveHeld_one": "{count} è già archiviato: toglilo dalla selezione.",
+      "archiveHeld_other": "{count} sono già archiviati: toglili dalla selezione.",
+      "archiveTitle_one": "Archiviare {count} modello?",
+      "archiveTitle_other": "Archiviare {count} modelli?"
+    }
+  },
+  "completeness": {
+    "colourways": "Manca: varianti",
+    "sizeRange": "Manca: gamma taglie",
+    "baseSize": "Manca: taglia base",
+    "skus": "Manca: sku",
+    "releasedRevision": "Manca: revisione rilasciata"
+  },
+  "csv": {
+    "code": "Codice",
+    "name": "Nome",
+    "type": "Tipo",
+    "season": "Stagione",
+    "brand": "Marchio",
+    "status": "Stato",
+    "released": "Revisione rilasciata",
+    "draft": "Revisione in bozza",
+    "sizes": "Taglie",
+    "base": "Taglia base",
+    "colourways": "Varianti",
+    "skus": "SKU attivi",
+    "ppe": "DPI",
+    "class": "Classe"
+  },
+  "newStyle": {
+    "title": "Nuovo modello",
+    "intro": "Un modello in bozza con la revisione 1: varianti, distinta e ciclo seguono nel suo studio.",
+    "company": "Azienda",
+    "companyHint": "Ogni azienda: prodotto da tutte le aziende del gruppo.",
+    "everyCompany": "Ogni azienda",
+    "create": "Crea il modello in bozza",
+    "after": "Si apre sulla Panoramica con la revisione 1 (bozza).",
+    "noScales": "Nessuna scala taglie: prima si crea una scala in Taglie e misure.",
+    "refused": "Il server ha rifiutato questo valore.",
+    "held": {
+      "code": "Scrivi un codice: da 1 a 24 lettere maiuscole o cifre, con . _ - all’interno.",
+      "name": "Scrivi un nome.",
+      "scale": "Scegli una scala taglie."
+    }
+  },
+  "compliance": {
+    "upload": {
+      "notPdf": "Una DoC firmata o una nota informativa è un PDF.",
+      "tooBig": "Al massimo 20 MB.",
+      "empty": "Il file è vuoto."
+    }
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "release": "Apri il controllo di rilascio",
+    "prevRevision": "Revisione precedente",
+    "nextRevision": "Revisione successiva",
+    "thread": "Conversazione accanto alla scheda",
+    "save": "Salva il modulo",
+    "add": "Aggiungi una riga di distinta o operazioni",
+    "bomView": "Vista successiva della distinta",
+    "skuCell": "Accendi o spegni una cella SKU",
+    "skuRow": "Accendi o spegni un’intera variante",
+    "moveUp": "Sposta su (riga, operazione)",
+    "moveDown": "Sposta giù (riga, operazione)",
+    "help": "Queste scorciatoie"
+  }
+}

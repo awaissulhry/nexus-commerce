@@ -8,6 +8,11 @@
       "today": "Today",
       "mailToSort": "Mail to sort"
     },
+    "products": {
+      "area": "Products",
+      "main": "Main",
+      "styles": "Styles"
+    },
     "admin": {
       "area": "Admin",
       "organisation": "Organisation",

@@ -1,0 +1,599 @@
+/*
+ * Styles (SCR-040 list, SCR-041 … SCR-045 studio) LAYOUT: the studio's band and tabs, the body with the optional thread
+ * beside it, the two-column overview, the colour × size SKU matrix, the BOM's size and colour grids, the routing, the
+ * cost waterfall and the compliance coverage. The controls are the design system's; this file places them with semantic
+ * tokens only. A swatch's colour is the colour library's own value (data), set inline on the element.
+ * No page max-width (Owner 2026-10-29): every block fills the shell's main area; wide screens get more columns.
+ */
+.fw-st,
+.fw-stl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+/* ---- the band ---- */
+.fw-st-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-st-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-st-title {
+  overflow-wrap: anywhere;
+}
+
+.fw-st-title-name {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-2);
+}
+
+.fw-st-meta,
+.fw-st-actions,
+.fw-st-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-st-actions {
+  gap: var(--nds-space-8);
+}
+
+.fw-st-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-st-keys {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: var(--nds-space-4);
+}
+
+.fw-st-save {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-height: 1em;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-st-save.is-failed {
+  color: var(--nds-danger-text);
+}
+
+.fw-st-tablabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-st-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--nds-warning);
+}
+
+@media (max-width: 719px) {
+  .fw-st-hide-phone {
+    display: none;
+  }
+}
+
+/* ---- the body, with the thread beside it (O1, 1280 px and wider) ---- */
+.fw-st-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-st-body.has-dock {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+}
+
+@media (max-width: 1279px) {
+  .fw-st-body.has-dock {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-st-dock {
+    display: none;
+  }
+}
+
+.fw-st-main,
+.fw-st-col,
+.fw-st-side,
+.fw-st-stack,
+.fw-st-stack-lg,
+.fw-st-dialog,
+.fw-st-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-st-stack-lg,
+.fw-st-main {
+  gap: var(--nds-space-14);
+}
+
+.fw-st-dock {
+  position: sticky;
+  top: var(--nds-space-16);
+  min-width: 0;
+}
+
+/* Overview: the identity two thirds, the side one third on a wide screen; one column below 1100 px. */
+.fw-st-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .fw-st-split {
+    grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  }
+}
+
+/* Two cards side by side on a wide screen (colourways beside the body measures). */
+.fw-st-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 1280px) {
+  .fw-st-pair {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
+/* Many cards of one kind: as many columns as fit. */
+.fw-st-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+.fw-st-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  align-items: start;
+}
+
+.fw-st-form-grid > *,
+.fw-st-cards > * {
+  min-width: 0;
+}
+
+/* ---- text ---- */
+.fw-st-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-st-static {
+  margin: 0;
+  min-height: var(--nds-control-h-md);
+  display: flex;
+  align-items: center;
+  color: var(--nds-text-strong);
+}
+
+.fw-st-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-st-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-st-list {
+  margin: 0;
+  padding-left: var(--nds-space-18);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-st-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-link);
+  font-size: var(--nds-font-size-sm);
+  text-decoration: none;
+}
+
+.fw-st-link:hover,
+.fw-st-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-st-linkbtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nds-text-link);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.fw-st-linkbtn[aria-current='true'] {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-st-linkbtn:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+.fw-st-ok {
+  color: var(--nds-success-text);
+}
+
+.fw-st-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-st-scroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.fw-st-cellstack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-st-kv {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--nds-space-6) var(--nds-space-14);
+  margin: 0;
+}
+
+.fw-st-kv dt {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-st-kv dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-st-keymap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-st-keymap-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: var(--nds-space-12);
+  align-items: center;
+}
+
+.fw-st-keymap-row dt {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.fw-st-keymap-row dd {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ---- forms ---- */
+.fw-st-choices,
+.fw-st-chips {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-st-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-st-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+
+.fw-st-ppe,
+.fw-st-range {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-st-ppe-read {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+/* ---- the release check (the DS has no GateChecklist yet: composed here) ---- */
+.fw-st-checklist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-st-check {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: var(--nds-space-8);
+  align-items: start;
+}
+
+.fw-st-check > svg {
+  margin-top: 2px;
+}
+
+.fw-st-check.is-blocked > svg {
+  color: var(--nds-danger-text);
+}
+
+.fw-st-check.is-ok > svg {
+  color: var(--nds-success-text);
+}
+
+.fw-st-check.is-warning > svg {
+  color: var(--nds-warning-text);
+}
+
+/* ---- swatch (the DS has no Swatch yet: composed here) ---- */
+.fw-st-swatch {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--nds-border-strong);
+}
+
+.fw-st-swatch.is-empty {
+  background: repeating-linear-gradient(45deg, transparent 0 3px, var(--nds-border) 3px 4px);
+}
+
+/* ---- the colour × size SKU matrix (the DS has no VariantMatrix yet: composed here) ---- */
+.fw-st-matrix {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 100%;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-st-matrix th,
+.fw-st-matrix td {
+  padding: 0;
+  border-bottom: 1px solid var(--nds-border);
+  text-align: center;
+}
+
+.fw-st-matrix thead th {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-st-matrix th[scope='row'],
+.fw-st-matrix-corner {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--nds-surface);
+  min-width: 140px;
+}
+
+.fw-st-matrix th.fw-st-matrix-corner {
+  padding: var(--nds-space-6) var(--nds-space-8);
+  text-align: left;
+}
+
+.fw-st-matrix th.is-base,
+.fw-st-matrix td.is-base {
+  background: var(--nds-surface-sunken);
+}
+
+.fw-st-matrix-head,
+.fw-st-matrix-row,
+.fw-st-matrix-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  width: 100%;
+  min-height: 34px;
+  padding: var(--nds-space-4) var(--nds-space-8);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.fw-st-matrix-head,
+.fw-st-matrix-cell {
+  justify-content: center;
+  min-width: 52px;
+}
+
+.fw-st-matrix-cell {
+  position: relative;
+  flex-direction: column;
+  gap: 0;
+}
+
+.fw-st-matrix td.is-on .fw-st-matrix-cell {
+  color: var(--nds-success-text);
+}
+
+.fw-st-matrix td.is-off .fw-st-matrix-cell,
+.fw-st-matrix td.is-closed .fw-st-matrix-cell {
+  color: var(--nds-text-3);
+}
+
+.fw-st-matrix td.is-none .fw-st-matrix-cell {
+  color: var(--nds-text-link);
+}
+
+.fw-st-matrix-head:hover,
+.fw-st-matrix-row:hover,
+.fw-st-matrix-cell:hover {
+  background: var(--nds-surface-hover);
+}
+
+.fw-st-matrix-head:focus-visible,
+.fw-st-matrix-row:focus-visible,
+.fw-st-matrix-cell:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: -2px;
+}
+
+.fw-st-matrix-mark {
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--nds-text-2);
+}
+
+.fw-st-matrix-flag {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--nds-danger);
+}
+
+.fw-st-matrix-flag.is-legend {
+  position: static;
+  display: inline-block;
+}
+
+.fw-st-legend-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-16);
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ---- the list (SCR-040) ---- */
+.fw-stl-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-stl-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-stl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-st-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-st-rowlink {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+
+.fw-st-rowlink:hover,
+.fw-st-rowlink:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-st-row-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-st-right {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.fw-st-nowrap {
+  flex-wrap: nowrap;
+}
+
+.fw-st-grow {
+  flex: 1 1 auto;
+}

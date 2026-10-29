@@ -79,6 +79,7 @@ export async function listStyles(caller: CommandCaller, query: ListStylesQuery):
     query.brandPartyId ? { brandPartyId: query.brandPartyId } : {},
     query.sizeScaleId ? { sizeScaleId: query.sizeScaleId } : {},
     query.mtmAllowed === undefined ? {} : { mtmAllowed: query.mtmAllowed },
+    query.draftRevision === undefined ? {} : query.draftRevision ? { revisions: { some: { status: 'DRAFT' } } } : { revisions: { none: { status: 'DRAFT' } } },
     query.companyId ? { OR: [{ companyId: query.companyId }, { companyId: null }] } : {},
   ]
   const cursor = decodeCursor(query.cursor)

@@ -8,6 +8,11 @@
       "today": "Oggi",
       "mailToSort": "Posta da smistare"
     },
+    "products": {
+      "area": "Prodotti",
+      "main": "Principali",
+      "styles": "Modelli"
+    },
     "admin": {
       "area": "Amministrazione",
       "organisation": "Organizzazione",

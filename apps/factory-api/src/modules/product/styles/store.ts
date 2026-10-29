@@ -228,6 +228,8 @@ export function styleRowView(row: StyleRowData, facts: RowFacts): StyleRow {
     colourwayCount,
     skuCount: facts.skuCount,
     revisionState: state,
+    releasedRevision: facts.revisions.find((entry) => entry.status === 'RELEASED')?.revision ?? null,
+    draftRevision: facts.revisions.find((entry) => entry.status === 'DRAFT')?.revision ?? null,
     completeness: {
       colourways: colourwayCount > 0,
       sizeRange: row.sizes.length > 0,

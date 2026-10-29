@@ -1,0 +1,390 @@
+'use client'
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { isApiError } from '../../../../lib/api/errors'
+import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
+import { WithMessages } from '../../../../record-panels/i18n'
+import { useLiveChanges } from '../../../../record-panels/live'
+import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import {
+  addColourway,
+  archiveStyle,
+  copyRevision,
+  generateSkus,
+  getBom,
+  getCompliance,
+  getRouting,
+  getStyle,
+  listBrands,
+  listColours,
+  listScales,
+  obsoleteRevision,
+  reactivateStyle,
+  releaseRevision,
+  startRevision,
+  updateColourway,
+  updateSku,
+  updateStyle,
+  type BomView,
+  type RoutingView,
+  type StyleComplianceView,
+  type StyleView,
+} from '../api'
+import { abilitiesOf, grainsOf, releasedOf, revisionInView, tabOf, type StyleTab } from '../model'
+import { readProblem, writeProblem } from '../problems'
+import type { BomViewMode, Loaded, Part, SaveState, StyleDialog, StyleNotice, StyleRecordViewModel } from './record-model'
+import { StyleRecordView } from './view/StyleRecordView'
+
+const WIDE = '(min-width: 1280px)'
+const DOCK_KEY = 'fw.products.dock.Style'
+
+/**
+ * `/w/<company>/products/styles/<id>` (SCR-041 … SCR-045): loads the style (product.styles.view; the API checks the
+ * company) and, for the revision in view, the parts the person's role reads — the BOM (its release check), the routing,
+ * the compliance tab — each failing alone; it does what the view asks, one write at a time, each with the version as
+ * read (a 409 reads it again and says so, never overwrites). Live: the style's events read it again; with unsaved work
+ * the page says it changed instead.
+ */
+export function StyleRecord({ styleId }: { styleId: string }) {
+  return (
+    <WithMessages namespaces={['products', 'records']}>
+      <StyleRecordContainer styleId={styleId} />
+    </WithMessages>
+  )
+}
+
+function StyleRecordContainer({ styleId }: { styleId: string }) {
+  const api = useOfficeApi()
+  const session = useOfficeSession()
+  const router = useRouter()
+  const pathname = usePathname()
+  const params = useSearchParams()
+  const tab = tabOf(params?.get('tab'))
+  const askedRevision = params?.get('rev') ?? null
+  const prefix = pathname.replace(/\/products\/styles\/[^/]+\/?$/, '')
+  const can = useMemo(() => abilitiesOf(session.permissions), [session.permissions])
+  const grains = useMemo(() => grainsOf(session.permissions), [session.permissions])
+  const companyId = session.company?.id ?? null
+
+  const [style, setStyle] = useState<Loaded<StyleView>>({ status: 'loading' })
+  const styleRef = useRef<StyleView | null>(null)
+  const [bom, setBom] = useState<Part<BomView>>({ status: 'idle' })
+  const bomRef = useRef<BomView | null>(null)
+  const [routing, setRouting] = useState<Part<RoutingView>>({ status: 'idle' })
+  const [compliance, setCompliance] = useState<Part<StyleComplianceView>>({ status: 'idle' })
+  const [libraries, setLibraries] = useState<StyleRecordViewModel['libraries']>({ scales: null, colours: null, brands: null, labels: null })
+  const [save, setSave] = useState<SaveState>({ state: 'idle', at: null })
+  const [dialog, setDialog] = useState<StyleDialog | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<StyleNotice | null>(null)
+  const [changed, setChanged] = useState<{ at: string } | null>(null)
+  const [dockOpen, setDockOpen] = useState(false)
+  const [bomView, setBomView] = useState<BomViewMode>('lines')
+  const inFlight = useRef(0)
+  const queue = useRef<Promise<unknown>>(Promise.resolve())
+
+  const value = style.status === 'ready' ? style.value : null
+  const revision = value ? revisionInView(value.revisions, askedRevision) : null
+  const revisionId = revision?.id ?? null
+
+  const setStyleValue = useCallback((next: StyleView) => {
+    styleRef.current = next
+    setStyle({ status: 'ready', value: next })
+  }, [])
+  const setBomValue = useCallback((next: BomView) => {
+    bomRef.current = next
+    setBom({ status: 'ready', value: next })
+  }, [])
+
+  const loadStyle = useCallback(async () => {
+    try {
+      setStyleValue(await getStyle(api, styleId))
+      setChanged(null)
+    } catch (error) {
+      if (isApiError(error) && error.kind === 'not_found') setStyle({ status: 'not_found' })
+      else if (isApiError(error) && error.kind === 'forbidden') setStyle({ status: 'forbidden' })
+      else setStyle({ status: 'error', problem: readProblem(error) })
+    }
+  }, [api, styleId, setStyleValue])
+
+  const loadParts = useCallback(
+    (id: string | null) => {
+      if (!id) {
+        bomRef.current = null
+        setBom({ status: 'idle' })
+        setRouting({ status: 'idle' })
+      } else {
+        if (can.bomView) {
+          setBom((current) => (current.status === 'ready' && current.value.revision.id === id ? current : { status: 'loading' }))
+          getBom(api, styleId, id)
+            .then(setBomValue)
+            .catch((error: unknown) => setBom({ status: 'error', problem: readProblem(error) }))
+        }
+        if (can.routingView) {
+          setRouting((current) => (current.status === 'ready' && current.value.revision.id === id ? current : { status: 'loading' }))
+          getRouting(api, styleId, id)
+            .then((next) => setRouting({ status: 'ready', value: next }))
+            .catch((error: unknown) => setRouting({ status: 'error', problem: readProblem(error) }))
+        }
+      }
+      if (can.complianceView) {
+        getCompliance(api, styleId, id)
+          .then((next) => setCompliance({ status: 'ready', value: next }))
+          .catch((error: unknown) => setCompliance({ status: 'error', problem: readProblem(error) }))
+      }
+    },
+    [api, styleId, can.bomView, can.routingView, can.complianceView, setBomValue],
+  )
+
+  useEffect(() => {
+    void loadStyle()
+  }, [loadStyle])
+
+  // The parts of the revision in view, read again when another revision is chosen.
+  const versionKey = value ? `${revisionId}:${value.revisions.map((entry) => `${entry.id}.${entry.status}`).join(',')}` : null
+  useEffect(() => {
+    if (versionKey !== null) loadParts(revisionId)
+    // The key holds the revision in view and every revision's state.
+  }, [versionKey])
+
+  // The libraries the forms pick from (each optional: without it the field is drawn as text).
+  useEffect(() => {
+    listScales(api, companyId)
+      .then((scales) => setLibraries((current) => ({ ...current, scales })))
+      .catch(() => undefined)
+    listColours(api, companyId)
+      .then((colours) => setLibraries((current) => ({ ...current, colours })))
+      .catch(() => undefined)
+    if (can.brands)
+      listBrands(api)
+        .then((brands) => setLibraries((current) => ({ ...current, brands })))
+        .catch(() => undefined)
+  }, [api, companyId, can.brands])
+
+  // The thread beside the tab (Owner O1), remembered on this device (a per-viewer convenience).
+  useEffect(() => {
+    try {
+      setDockOpen(window.localStorage.getItem(DOCK_KEY) === '1' && window.matchMedia(WIDE).matches)
+    } catch {
+      setDockOpen(false)
+    }
+  }, [])
+  const toggleDock = () => {
+    let wide = false
+    try {
+      wide = window.matchMedia(WIDE).matches
+    } catch {
+      wide = false
+    }
+    if (!wide) {
+      router.push(hrefFor('activity'))
+      return
+    }
+    setDockOpen((current) => {
+      try {
+        window.localStorage.setItem(DOCK_KEY, current ? '0' : '1')
+      } catch {
+        // Not kept on this device; the dock still toggles.
+      }
+      return !current
+    })
+  }
+
+  const hrefFor = (next: StyleTab, rev: string | null = askedRevision) => `${prefix}/products/styles/${styleId}?tab=${next}${rev ? `&rev=${rev}` : ''}`
+
+  // ---- live -----------------------------------------------------------------------------------------------------------
+  const reloadAll = useCallback(() => {
+    void loadStyle()
+    loadParts(revisionId)
+  }, [loadStyle, loadParts, revisionId])
+
+  useLiveChanges({
+    onChange: (change) => {
+      if (change.fields.styleId !== styleId) return
+      if (inFlight.current > 0) return
+      if (dialog) setChanged({ at: new Date().toISOString() })
+      else reloadAll()
+    },
+    onReconnect: () => {
+      if (inFlight.current === 0 && !dialog) reloadAll()
+    },
+  })
+
+  // ---- writes ---------------------------------------------------------------------------------------------------------
+  const enqueue = useCallback(<T,>(work: () => Promise<T>): Promise<T> => {
+    const next = queue.current.then(work, work)
+    queue.current = next.catch(() => undefined)
+    return next
+  }, [])
+
+  /** One write; true when the server took it. A 409 reads the style again and says why. */
+  const run = useCallback(
+    async (work: () => Promise<void>, done?: StyleNotice): Promise<boolean> =>
+      enqueue(async () => {
+        inFlight.current++
+        setBusy(true)
+        setSave({ state: 'saving', at: null })
+        try {
+          await work()
+          setSave({ state: 'saved', at: new Date().toISOString() })
+          setNotice(done ?? null)
+          return true
+        } catch (error) {
+          const problem = writeProblem(error)
+          setNotice({ key: problem.key, tone: 'danger' })
+          setSave((state) => ({ state: 'failed', at: state.at }))
+          if (problem.reload) reloadAll()
+          return false
+        } finally {
+          inFlight.current--
+          setBusy(false)
+        }
+      }),
+    [enqueue, reloadAll],
+  )
+
+  const current = () => styleRef.current
+  const revisionVersion = (id: string): { id: string; version: number } | null => {
+    const fromBom = bomRef.current?.revision.id === id ? bomRef.current.revision : null
+    if (fromBom) return { id, version: fromBom.version }
+    const listed = styleRef.current?.revisions.find((entry) => entry.id === id)
+    return listed ? { id, version: listed.version } : null
+  }
+
+  const goToRevision = (id: string) => router.replace(hrefFor(tab, id))
+
+  const model: StyleRecordViewModel = {
+    prefix,
+    tab,
+    can,
+    grains,
+    companyId,
+    style,
+    revisionId,
+    bom,
+    routing,
+    cost: { status: 'idle' },
+    costCompare: null,
+    compliance,
+    libraries,
+    materials: {},
+    materialSearch: { query: '', results: null, problem: null },
+    operationSearch: { query: '', kind: null, results: null, problem: null },
+    bomView,
+    costCell: null,
+    save,
+    dialog,
+    busy,
+    notice,
+    changed,
+    dockOpen,
+  }
+
+  return (
+    <StyleRecordView
+      model={model}
+      panels={value ? <RecordPanels record={{ type: 'Style', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.code} · ${value.name}`} party={value.brand ? { id: value.brand.id, name: value.brand.name, emails: [] } : null} /> : null}
+      actions={{
+        onRetry: () => void loadStyle(),
+        onReload: reloadAll,
+        onDock: toggleDock,
+        onDialog: setDialog,
+        onDismissNotice: () => setNotice(null),
+        onRevision: goToRevision,
+        onSaveIdentity: (patch) =>
+          run(async () => {
+            const style = current()
+            if (style) setStyleValue(await updateStyle(api, style, patch))
+          }, { key: 'notice.saved', tone: 'success' }),
+        onSaveRange: (range) =>
+          run(async () => {
+            const style = current()
+            if (!style) return
+            setStyleValue(await updateStyle(api, style, { ...(range.sizeScaleId !== style.sizeScale.id ? { sizeScaleId: range.sizeScaleId } : {}), sizes: range.sizes, baseSize: range.baseSize }))
+            loadParts(revisionId)
+          }, { key: 'notice.rangeSaved', tone: 'success' }),
+        onColourway: (input, colourwayId) =>
+          run(async () => {
+            const style = current()
+            if (!style) return
+            if (colourwayId === null) setStyleValue(await addColourway(api, style.id, input))
+            else {
+              const colourway = style.colourways.find((entry) => entry.id === colourwayId)
+              if (!colourway) return
+              const patch = { ...(input.code !== colourway.code && !colourway.inUse ? { code: input.code } : {}), name: input.name, colourId: input.colourId, description: input.description }
+              setStyleValue(await updateColourway(api, style.id, colourway, patch))
+            }
+            loadParts(revisionId)
+          }, { key: colourwayId === null ? 'notice.colourwayAdded' : 'notice.saved', tone: 'success' }),
+        onColourwayStatus: (colourwayId, status) =>
+          void run(async () => {
+            const style = current()
+            const colourway = style?.colourways.find((entry) => entry.id === colourwayId)
+            if (!style || !colourway) return
+            setStyleValue(await updateColourway(api, style.id, colourway, { status }))
+            loadParts(revisionId)
+          }, { key: status === 'ARCHIVED' ? 'notice.colourwayArchived' : 'notice.colourwayRestored', tone: 'success' }),
+        onGenerate: () =>
+          run(async () => {
+            const style = current()
+            if (!style) return
+            const answer = await generateSkus(api, style.id, false)
+            setStyleValue(answer.style)
+            setNotice({ key: 'notice.generated', tone: 'success', params: { count: answer.skus.length } })
+          }),
+        onSkus: (changes) =>
+          run(async () => {
+            for (const change of changes) {
+              const style = current()
+              if (!style) return
+              const { skuId, version: _version, ...patch } = change
+              // Each SKU with the version the latest answer holds (a row toggle writes one after the other).
+              const latest = style.skus.find((sku) => sku.id === skuId)
+              setStyleValue(await updateSku(api, style.id, { id: skuId, version: latest?.version ?? change.version }, patch))
+            }
+          }, { key: 'notice.skusSaved', tone: 'success', params: { count: changes.length } }),
+        onRelease: (changeNote) =>
+          run(async () => {
+            const style = current()
+            const target = revisionId ? revisionVersion(revisionId) : null
+            if (!style || !target) return
+            setBomValue(await releaseRevision(api, style.id, target, changeNote || undefined))
+            await loadStyle()
+            loadParts(revisionId)
+          }, { key: 'notice.released', tone: 'success', params: { revision: revision?.revision ?? 0 } }),
+        onStartRevision: (changeNote) =>
+          run(async () => {
+            const style = current()
+            if (!style) return
+            const from = releasedOf(style.revisions) ?? [...style.revisions].sort((a, b) => b.revision - a.revision)[0] ?? null
+            const nextId = from ? (await copyRevision(api, style.id, from.id, changeNote || undefined)).revision.id : (await startRevision(api, style.id, changeNote || undefined)).id
+            await loadStyle()
+            goToRevision(nextId)
+          }, { key: 'notice.revisionStarted', tone: 'success' }),
+        onAbandon: (reason) =>
+          run(async () => {
+            const style = current()
+            const draft = style?.revisions.find((entry) => entry.status === 'DRAFT')
+            const target = draft ? revisionVersion(draft.id) : null
+            if (!style || !target) return
+            await obsoleteRevision(api, style.id, target, reason || undefined)
+            await loadStyle()
+            const released = releasedOf(styleRef.current?.revisions ?? [])
+            if (released) goToRevision(released.id)
+          }, { key: 'notice.abandoned', tone: 'success' }),
+        onArchive: (reason) =>
+          run(async () => {
+            const style = current()
+            if (style) setStyleValue(await archiveStyle(api, style, reason || undefined))
+          }, { key: 'notice.archived', tone: 'success' }),
+        onReactivate: () =>
+          void run(async () => {
+            const style = current()
+            if (style) setStyleValue(await reactivateStyle(api, style))
+          }, { key: 'notice.reactivated', tone: 'success' }),
+        onBomView: setBomView,
+      }}
+    />
+  )
+}

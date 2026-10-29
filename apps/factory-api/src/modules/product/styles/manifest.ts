@@ -22,6 +22,7 @@ export const manifest = defineManifest({
   'PATCH /product/styles/:styleId/skus/:skuId': manage,
   'GET /product/styles/:styleId/revisions': view,
   'POST /product/styles/:styleId/revisions': manage,
+  'GET /product/colours': view,
   'GET /product/size-scales': view,
   'GET /product/size-scales/:scaleId': view,
   'POST /product/size-scales': manage,

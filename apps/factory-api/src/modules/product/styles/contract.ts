@@ -7,6 +7,8 @@ import {
   createStyleBody,
   generatedSkus,
   generateSkusBody,
+  colourRow,
+  listColoursQuery,
   listStylesQuery,
   revisionView,
   styleRow,
@@ -45,6 +47,8 @@ export const updateSkuContract = defineContract({ params: input({ styleId: id(),
 
 export const listRevisionsContract = defineContract({ params: style, response: { 200: output({ revisions: z.array(revisionView) }) } })
 export const createRevisionContract = defineContract({ params: style, body: createRevisionBody, response: { 201: output({ revision: revisionView }) } })
+
+export const listColoursContract = defineContract({ querystring: listColoursQuery, response: { 200: output({ colours: z.array(colourRow) }) } })
 
 export const listScalesContract = defineContract({
   querystring: listScalesQuery,
