@@ -26,6 +26,16 @@ import { SDI_SEND_STATUSES } from './sdi/states'
  *   invoice.sdi_archived              the sent invoice is in legal archiving (conservazione) at the intermediary
  *   invoice.courtesy_copy_queued      SDI could not deliver it: the customer's copy is queued by e-mail (FIN-088)
  *   invoice.courtesy_copy_missing     … and could not be: why (no contact with an address, no sender, no PDF …)
+ *
+ * Invoices from shipped goods, credit notes, the order settled (B-W1-51; FIN-054, FIN-069, FIN-078, FIN-121;
+ * modules/invoicing/from-shipment, credit-note):
+ *   invoice.refund_due     a credit note was issued on what is paid: a refund is due to the customer (refunds are W2b;
+ *                          the needs-attention list)
+ *   order.fully_settled    the order became settled: every line shipped, invoiced (SDI delivered or not deliverable) and
+ *                          paid. Emitted once per change, by the command that completed it (a payment allocated, an SDI
+ *                          outcome); B-W1-25's close command consumes it (the order's CLOSED state is sales')
+ *   order.unsettled        a settled order is not settled any more (a credit note, an allocation reversed, a new invoice):
+ *                          `missing` says what (factory-domain invoicing/from-shipment/settlement codes)
  */
 const docType = z.enum(INVOICE_DOC_TYPES)
 const live = { permission: 'invoices.view', fields: ['invoiceId', 'docType'] } as const
@@ -108,5 +118,26 @@ export const events = [
     description: 'SDI could not deliver the invoice and its copy could not be e-mailed: a person sends it.',
     payload: z.strictObject({ invoiceId: z.uuid(), submissionId: z.uuid(), reason: z.string().max(500) }),
     live: sdiLive,
+  }),
+  defineEvent({
+    type: 'invoice.refund_due',
+    context: 'invoicing',
+    description: 'A credit note was issued on an invoice paid beyond what it is now worth: a refund is due to the customer.',
+    payload: z.strictObject({ invoiceId: z.uuid(), creditOfId: z.uuid(), partyId: z.uuid() }),
+    live: { permission: 'invoices.view', fields: ['invoiceId', 'creditOfId'] },
+  }),
+  defineEvent({
+    type: 'order.fully_settled',
+    context: 'invoicing',
+    description: 'The order is settled: every line shipped and invoiced, every fiscal document delivered by SDI, the balance paid.',
+    payload: z.strictObject({ orderId: z.uuid(), partyId: z.uuid() }),
+    live: { permission: 'invoices.view', fields: ['orderId'] },
+  }),
+  defineEvent({
+    type: 'order.unsettled',
+    context: 'invoicing',
+    description: 'A settled order is not settled any more (a credit note, a payment taken back, a new invoice).',
+    payload: z.strictObject({ orderId: z.uuid(), partyId: z.uuid(), missing: z.array(z.string().max(40)).max(20) }),
+    live: { permission: 'invoices.view', fields: ['orderId'] },
   }),
 ] as const

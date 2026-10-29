@@ -60,6 +60,11 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const order = await client.purchaseOrder.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
     return order ? { companyId: order.companyId, siteId: order.siteId, partyId: order.partyId } : null
   },
+  // modules/sales/orders (SCR-039 Activity; B-W1-25): the selling company and the customer.
+  SalesOrder: async (client, id) => {
+    const order = await client.salesOrder.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return order ? { companyId: order.companyId, siteId: null, partyId: order.partyId } : null
+  },
   // modules/shipping (SCR-067; B-W1-49 the documents link mail): the shipment's company, site and party (its customer),
   // so its mail and the customer's replies stay with that customer.
   Shipment: async (client, id) => {

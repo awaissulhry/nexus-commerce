@@ -20,4 +20,11 @@ export const manifest = defineManifest({
   'GET /invoicing/invoices/:invoiceId/sdi': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
   'POST /invoicing/invoices/:invoiceId/sdi/send': { audiences: ['office'], permission: 'invoices.issue', scope: 'record' },
   'PUT /invoicing/invoices/:invoiceId/sdi/correction': { audiences: ['office'], permission: 'invoices.issue', scope: 'record' },
+  // Invoices of shipped goods (B-W1-51; handlers in ./from-shipment, ./credit-note): drafts are invoices.manage, they are
+  // issued and sent by the routes above (invoices.issue + step-up); a credit note has no permission of its own.
+  'GET /invoicing/shipped-not-invoiced': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'POST /invoicing/invoices/from-ddts': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  'DELETE /invoicing/invoices/:invoiceId/deductions/:lineId': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  'POST /invoicing/invoices/:invoiceId/credit-note': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  'GET /invoicing/orders/:orderId/settlement': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
 })

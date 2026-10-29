@@ -10,7 +10,12 @@ import { command, type CommandCaller, type CommandTools } from '../../core/comma
 import { serverClock } from '../../core/time'
 import { allocateNumber } from '../../platform/numbering/allocate'
 import type { FilesRuntime } from '../../platform/files/service'
+import { markMoney } from '@nexus/factory-domain/money/marked'
+import { refundDueAfter } from '@nexus/factory-domain/invoicing/credit-note/credit-note'
 import { lockAll, lockMoney } from '../payments/locks'
+import { lockInvoicing } from './from-shipment/locks'
+import { ordersOfInvoices, settleOrders } from './from-shipment/settlement'
+import { creditedInvoiceOf } from './from-shipment/store'
 import { reviewIssue } from './facts'
 import { makeInvoiceFiles } from './invoice-files'
 import { invoiceDetail, officeInvoice, readInvoice, readLines, type InvoiceDetail, type Reader } from './store'
@@ -19,8 +24,9 @@ import { invoiceDetail, officeInvoice, readInvoice, readLines, type InvoiceDetai
  * Issuing an invoice (B-W1-28 invoice core; A2 SCR-081 "Check and issue"; FIN-057, FIN-061, FIN-085; DPR 633/1972
  * art. 21 c.2: numbers in sequence, without a gap, never twice). Three steps, the first one atomic:
  *
- *   (a) the ISSUE command, on the Invoice (its version bump locks its row): the money locks of what it is about (a TD02's
- *       deposit request, a TD04's credited invoice, the TD02s it deducts; payments/locks.ts), the checks before issue
+ *   (a) the ISSUE command, on the Invoice (its version bump locks its row): the locks of the DDTs its lines bill
+ *       (B-W1-51, from-shipment/locks.ts), the money locks of what it is about (a TD02's deposit request, a TD04's
+ *       credited invoice, the TD02s it deducts; payments/locks.ts), the checks before issue
  *       again under them, the number (allocateNumber: the series row locked; a rollback consumes no number), then the
  *       number fields, the seller and buyer as issued (with the VIES proof), the party key and invoice.issued, in one
  *       transaction. The …_money_guards triggers check it all again for every login.
@@ -63,10 +69,13 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string): Pr
   const invoice = await readInvoice(tx, invoiceId)
   if (!invoice) throw new NotFoundError('Invoice not found.')
   if (invoice.status !== 'DRAFT') throw new InvalidStateError(`The invoice is ${invoice.status} already, number ${invoice.number}.`)
-  // The money locks first, in the triggers' order (target, then the series): the sums below are read under them.
+  // The lines of a draft cannot change under its row's lock. The DDTs they bill first (B-W1-51: what other invoices bill
+  // of them is read under these), then the money locks in the triggers' order (target, then the series): the sums below
+  // are read under them.
+  const lines = await readLines(tx, invoice.id)
+  await lockInvoicing(tx, context, 'ddt', lines.flatMap((line) => (line.ddtId ? [line.ddtId] : [])))
   if (invoice.docType === 'TD02' && invoice.depositRequestId) await lockMoney(tx, context, 'deposit', invoice.depositRequestId)
   if (invoice.docType === 'TD04' && invoice.creditOfId) await lockMoney(tx, context, 'invoice', invoice.creditOfId)
-  const lines = await readLines(tx, invoice.id)
   await lockAll(tx, context, 'invoice', lines.flatMap((line) => (line.depositInvoiceId ? [line.depositInvoiceId] : [])))
 
   const date = businessDate(now)
@@ -75,6 +84,9 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string): Pr
   const problems = [...review.problems, ...(kind === null ? [noSeries(invoice.docType)] : [])]
   if (problems.length > 0 || kind === null || !review.seller || !review.billTo) throw refusal(problems)
 
+  // B-W1-51: a credit note on what is paid leaves a refund due (W2b), recorded on the audit row and by invoice.refund_due.
+  const credited = invoice.docType === 'TD04' && invoice.creditOfId ? await creditedInvoiceOf(tx, invoice.creditOfId, invoice.id) : null
+  const refundDue = credited ? refundDueAfter(credited, invoice.grossTotal) : 0
   const number = await allocateNumber(tools, { companyId: invoice.companyId, kind }, { type: 'Invoice', id: invoice.id, date })
   await tx.invoice.update({
     where: { id: invoice.id },
@@ -98,7 +110,15 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string): Pr
     recordId: invoice.id,
     companyId: invoice.companyId,
     before: { status: 'DRAFT' },
-    after: { status: 'ISSUED', docType: invoice.docType, number: number.formatted, issueDate: number.documentDate, series: `${kind}/${number.code}`, viesCheckId: review.party?.viesProof?.checkId ?? null },
+    after: {
+      status: 'ISSUED',
+      docType: invoice.docType,
+      number: number.formatted,
+      issueDate: number.documentDate,
+      series: `${kind}/${number.code}`,
+      viesCheckId: review.party?.viesProof?.checkId ?? null,
+      ...(credited ? { creditOfId: credited.id, refundDue: markMoney('price', refundDue) } : {}),
+    },
   })
   tools.emit({
     type: 'invoice.issued',
@@ -106,6 +126,9 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string): Pr
     companyId: invoice.companyId,
     payload: { invoiceId: invoice.id, docType: invoice.docType, number: number.formatted, issueDate: number.documentDate, partyId: invoice.buyerPartyId, depositRequestId: invoice.depositRequestId },
   })
+  if (credited && refundDue > 0) tools.emit({ type: 'invoice.refund_due', subject: invoice.id, companyId: invoice.companyId, payload: { invoiceId: invoice.id, creditOfId: credited.id, partyId: invoice.buyerPartyId } })
+  // B-W1-51: the orders it is about (a new invoice or a credit note unsettles a settled one), announced at the end.
+  await settleOrders(tools, await ordersOfInvoices(tx, [invoice.id]))
   return { invoiceId: invoice.id, number: number.formatted, issueDate: number.documentDate }
 }
 

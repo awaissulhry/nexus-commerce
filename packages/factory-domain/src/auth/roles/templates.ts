@@ -109,7 +109,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Finance',
     description: 'Invoices, payments and number series; sees prices, costs, margins and wages.',
     requireMfa: true,
-    permissions: ['numbering.view', 'numbering.manage', 'audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'product.materials.view', 'product.materials.cost', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'shipping.view', 'parties.view', 'parties.manage', 'parties.block', 'parties.vies', 'invoices.view', 'invoices.manage', 'invoices.issue', 'payments.view', 'payments.record', 'payments.void', 'costing.view', 'costing.rates.manage', 'quotes.view', 'quotes.approve', 'sales.settings.manage', 'companies.bank.view', 'companies.bank.manage'],
+    permissions: ['numbering.view', 'numbering.manage', 'audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'product.materials.view', 'product.materials.cost', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'shipping.view', 'parties.view', 'parties.manage', 'parties.block', 'parties.vies', 'invoices.view', 'invoices.manage', 'invoices.issue', 'payments.view', 'payments.record', 'payments.void', 'costing.view', 'costing.rates.manage', 'quotes.view', 'quotes.approve', 'sales.settings.manage', 'companies.bank.view', 'companies.bank.manage', 'orders.view', 'orders.close'],
     grains: ['price', 'cost', 'margin', 'wages'],
   }),
   template('sales', {
@@ -120,14 +120,14 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     // requires two-factor); the email-out and email-in PG tests then enrol two-factor for their sales users.
     description: 'Customers, quotes and orders; sees selling prices, not costs or margins.',
     requireMfa: false,
-    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send'],
+    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send', 'orders.view', 'orders.manage'],
     grains: ['price'],
   }),
   template('planner', {
     name: 'Planner',
     description: 'Plans work orders and capacity; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'inventory.locations.view', 'inventory.stock.view', 'shipping.view', 'planning.view', 'planning.run', 'planning.decide', 'purchasing.view', 'workorders.view', 'workorders.manage', 'workorders.release'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'inventory.locations.view', 'inventory.stock.view', 'shipping.view', 'planning.view', 'planning.run', 'planning.decide', 'purchasing.view', 'workorders.view', 'workorders.manage', 'workorders.release', 'orders.view'],
     grains: [],
   }),
   template('buyer', {
@@ -205,6 +205,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'shipping.labels.void',
       'parties.view',
       'workorders.view',
+      'orders.view',
     ],
     grains: [],
   }),
@@ -251,6 +252,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'workorders.view',
       'workorders.manage',
       'workorders.release',
+      'orders.view',
     ],
     grains: [],
   }),

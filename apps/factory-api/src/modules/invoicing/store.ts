@@ -183,16 +183,33 @@ export function headerView(invoice: InvoiceRow) {
   }
 }
 
-/** The invoice record: header, buyer's name, lines, and what is paid on it (TD01/TD24). */
+/**
+ * What an invoice still asks or owes (B-W1-51; A2 SCR-081 "Payments": the balance): its gross (after the deposits it
+ * deducts) less its issued credit notes less what is paid on it. A TD02 is paid through its deposit request: a credit
+ * note on it is money to give back. A credit note asks nothing.
+ */
+export function balanceOf(invoice: Pick<InvoiceRow, 'docType' | 'status' | 'grossTotal'>, paid: number, credited: number): { open: number; refundDue: number } {
+  if (invoice.status === 'DRAFT' || invoice.docType === 'TD04') return { open: 0, refundDue: 0 }
+  if (invoice.docType === 'TD02') return { open: 0, refundDue: credited }
+  const rest = invoice.grossTotal - credited - paid
+  return { open: Math.max(0, rest), refundDue: Math.max(0, -rest) }
+}
+
+/** The invoice record: header, buyer's name, lines, what is paid and credited on it and its balance. */
 export async function invoiceDetail(db: Reader, invoice: InvoiceRow) {
   const lines = await readLines(db, invoice.id)
   const party = await db.party.findUnique({ where: { id: invoice.buyerPartyId }, select: { code: true, legalName: true } })
-  const paid = await db.paymentAllocation.aggregate({ where: { invoiceId: invoice.id }, _sum: { amount: true } })
+  const paid = (await db.paymentAllocation.aggregate({ where: { invoiceId: invoice.id }, _sum: { amount: true } }))._sum.amount ?? 0
+  const credited = (await db.invoice.aggregate({ where: { creditOfId: invoice.id, docType: 'TD04', status: { not: 'DRAFT' } }, _sum: { grossTotal: true } }))._sum.grossTotal ?? 0
+  const balance = balanceOf(invoice, paid, credited)
   return {
     ...headerView(invoice),
     party: party ?? { code: '', legalName: '' },
     lines: lines.map(lineView),
-    paidAmount: asMoney('price', paid._sum.amount ?? 0),
+    paidAmount: asMoney('price', paid),
+    creditedAmount: asMoney('price', credited),
+    openAmount: asMoney('price', balance.open),
+    refundDueAmount: asMoney('price', balance.refundDue),
   }
 }
 

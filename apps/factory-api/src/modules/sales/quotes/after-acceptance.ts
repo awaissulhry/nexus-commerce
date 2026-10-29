@@ -5,6 +5,7 @@ import { command, type CommandCaller } from '../../../core/command'
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
 import { sendEmail } from '../../../platform/email-out/outbound'
 import { depositOfVersion, depositViewOf, instructionsFor, requestDepositInCommand, type DepositView } from '../deposits/deposits'
+import { makeOrderInCommand, type OrderWait } from '../orders/make'
 import { quotePartyOf } from './store'
 
 /**
@@ -14,8 +15,11 @@ import { quotePartyOf } from './store'
  * Right after it, in the same request, the tenant's system context (the office role) runs:
  *
  *   1. `quotes.afterAccept` (idempotency key `accepted-<versionId>`): the version's row locked, its deposit request made
- *      OPEN when it asks one (sales/deposits). B-W1-25 makes the sales order from the ACCEPTED version HERE, in this
- *      command, so the order and the deposit request appear at the same moment (the design; Owner answer S1);
+ *      OPEN when it asks one (sales/deposits), then the sales order made from the ACCEPTED version (B-W1-25,
+ *      sales/orders/make: numbered from the company's SALES_ORDER series, its lines, prices, costs, dates and addresses
+ *      as accepted) and named on the deposit request, in this command, so the order and the deposit request appear at the
+ *      same moment (the design; Owner answer S1). A company without an active SALES_ORDER series still gets its deposit
+ *      request; the audit row says the order waits, and the office makes it (POST /sales/orders) once a series exists;
  *   2. `quotes.confirmAccept` (key `accepted-mail-<versionId>`): the confirmation on the quote's thread, with the accepted
  *      PDF and the deposit's payment instructions (Codice del Consumo art. 51 c.7: the contract confirmed on a durable
  *      medium), sent by the worker like any record mail.
@@ -31,8 +35,15 @@ export interface AcceptedIds {
 
 const VERSION_FACTS = { id: true, quoteId: true, partyId: true, revision: true, status: true, currency: true, language: true, depositPct: true, depositKind: true, depositAmount: true, documentSha256: true, sentById: true } as const
 
-/** Step 1: the deposit request (and, from B-W1-25, the order) of an accepted version. */
-export async function afterAccept(caller: CommandCaller, ids: AcceptedIds, causationId?: string): Promise<{ deposit: DepositView | null }> {
+export interface AfterAccept {
+  readonly deposit: DepositView | null
+  /** The order made from the version (now or by an earlier run); null while it waits (`orderWaits`). */
+  readonly order: { readonly id: string; readonly number: string } | null
+  readonly orderWaits: OrderWait | null
+}
+
+/** Step 1: the deposit request and the order of an accepted version. */
+export async function afterAccept(caller: CommandCaller, ids: AcceptedIds, causationId?: string): Promise<AfterAccept> {
   const { result } = await command(caller, { name: 'quotes.afterAccept', idempotencyKey: `accepted-${ids.versionId}`, input: ids, ...(causationId ? { causationId } : {}) }, async (tools) => {
     const { tx } = tools
     // One at a time per version: the deposit (and the order) are made once.
@@ -58,8 +69,17 @@ export async function afterAccept(caller: CommandCaller, ids: AcceptedIds, causa
       },
       party?.profile ?? null,
     )
-    tools.audit({ action: 'quotes.afterAccept', recordType: 'Quote', recordId: ids.quoteId, companyId: quote.companyId, after: { versionId: version.id, depositRequestId: deposit?.row.id ?? null, depositCreated: deposit?.created ?? false } })
-    return { deposit: deposit ? depositViewOf(deposit.row) : null }
+    const made = await makeOrderInCommand(tools, version.id)
+    tools.audit({
+      action: 'quotes.afterAccept',
+      recordType: 'Quote',
+      recordId: ids.quoteId,
+      companyId: quote.companyId,
+      after: { versionId: version.id, depositRequestId: deposit?.row.id ?? null, depositCreated: deposit?.created ?? false, orderId: made.order?.id ?? null, orderCreated: made.created, orderWaits: made.waits },
+    })
+    // The request as it is now (the order just named on it).
+    const request = deposit ? ((await depositOfVersion(tx, version.id)) ?? deposit.row) : null
+    return { deposit: request ? depositViewOf(request) : null, order: made.order, orderWaits: made.waits }
   })
   return result
 }
@@ -101,16 +121,16 @@ export async function confirmAccept(caller: CommandCaller, ids: AcceptedIds, cau
   return result
 }
 
-/** Both steps; a failure of the mail never undoes the deposit. Returns the deposit request. */
-export async function afterAcceptance(caller: CommandCaller, ids: AcceptedIds, causationId?: string): Promise<{ deposit: DepositView | null; mailed: boolean }> {
-  const { deposit } = await afterAccept(caller, ids, causationId)
+/** Both steps; a failure of the mail never undoes the deposit or the order. Returns the deposit request and the order. */
+export async function afterAcceptance(caller: CommandCaller, ids: AcceptedIds, causationId?: string): Promise<AfterAccept & { mailed: boolean }> {
+  const done = await afterAccept(caller, ids, causationId)
   let mailed = false
   try {
     mailed = (await confirmAccept(caller, ids, causationId)).outboundId !== null
   } catch (error) {
     if (!(error instanceof DomainError)) throw error
   }
-  return { deposit, mailed }
+  return { ...done, mailed }
 }
 
 /**
