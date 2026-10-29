@@ -53,6 +53,9 @@ const VIEW = 'product.bom.view'
 const MANAGE = 'product.bom.manage'
 const RELEASE = 'product.bom.release'
 const STYLES: Permission[] = ['product.styles.view', 'product.styles.manage']
+const ROUTING: Permission[] = ['product.routing.view', 'product.routing.manage']
+const CUT = seedId('product:operation:CUT')
+const QC = seedId('product:operation:QC')
 
 interface Person {
   readonly tenantId: string
@@ -63,7 +66,7 @@ const PEOPLE: Record<string, Person> = {
   maker: { tenantId: tenant, permissions: [VIEW, MANAGE, RELEASE, ...STYLES, 'product.materials.view', 'product.materials.manage', 'audit.read'], companies: 'all' },
   developer: { tenantId: tenant, permissions: [VIEW, MANAGE], companies: 'all' },
   viewer: { tenantId: tenant, permissions: [VIEW], companies: 'all' },
-  companyA: { tenantId: tenant, permissions: [VIEW, MANAGE, RELEASE, ...STYLES], companies: [companyA] },
+  companyA: { tenantId: tenant, permissions: [VIEW, MANAGE, RELEASE, ...STYLES, ...ROUTING], companies: [companyA] },
   companyB: { tenantId: tenant, permissions: [VIEW, MANAGE, RELEASE], companies: [companyB] },
   stylesOnly: { tenantId: tenant, permissions: STYLES, companies: 'all' },
   otherTenant: { tenantId: otherTenant, permissions: [VIEW, MANAGE, RELEASE], companies: 'all' },
@@ -263,7 +266,12 @@ describe('the colour grid and the quantity per size before a release (PRD-043, P
     expect(bom.issues).toEqual([{ code: 'COLOUR_MISSING', lineId: leatherLine, size: null, colourwayId: green, message: 'Line 10 (SEED-LEA-100): no SEED-LEA-100 colour for colourway GRN.' }])
     expect(bom.requirements.find((entry: Json) => entry.colourwayId === green).materials.map((entry: Json) => entry.code)).toEqual(['SEED-LIN-200', 'SEED-PRO-300'])
     const refusal = await refused('companyA', 'POST', `${bomUrl(jacket2, draft2)}/release`, { version: bom.revision.version }, 409)
-    expect(refusal).toMatchObject({ code: 'invalid_state', message: 'The BOM is not ready to release: 1 problem(s) to fix first.', issues: [{ path: `lines/${leatherLine}/colours/${green}` }] })
+    // Every blocker at once: the BOM's and the routing's (it has no step yet).
+    expect(refusal).toMatchObject({
+      code: 'invalid_state',
+      message: 'The BOM and the routing are not ready to release: 2 problem(s) to fix first.',
+      issues: [{ path: `lines/${leatherLine}/colours/${green}` }, { path: 'routing/NO_STEPS', message: 'The routing has no operation yet.' }],
+    })
 
     const lineUrl = `${bomUrl(jacket2, draft2)}/bom/lines/${leatherLine}`
     bom = (await ok('companyA', 'PUT', `${lineUrl}/colours`, { version: bom.revision.version, colours: [{ colourwayId: green, itemColourId: leatherRED }] })).bom
@@ -301,6 +309,15 @@ describe('the colour grid and the quantity per size before a release (PRD-043, P
 describe('release (A1 §2.5; the PPE technical file a work order is made from, Reg. (EU) 2016/425 art. 8(3))', () => {
   it('releases the draft, makes the style active, and the database refuses any change to its BOM for every login', async () => {
     let bom = await getBom(jacket2, draft2)
+    // A complete BOM is not enough: a work order is released with one operation per routing step (B-W1-14).
+    expect(bom).toMatchObject({ issues: [], releasable: true })
+    expect(await refused('companyA', 'POST', `${bomUrl(jacket2, draft2)}/release`, { version: bom.revision.version }, 409)).toMatchObject({
+      code: 'invalid_state',
+      message: 'The routing is not ready to release: 1 problem(s) to fix first.',
+      issues: [{ path: 'routing/NO_STEPS', message: 'The routing has no operation yet.' }],
+    })
+    await ok('companyA', 'POST', `${bomUrl(jacket2, draft2)}/routing/steps`, { version: bom.revision.version, operations: [{ operationId: CUT }, { operationId: QC }] }, 201)
+    bom = await getBom(jacket2, draft2)
     expect((await refused('developer', 'POST', `${bomUrl(jacket2, draft2)}/release`, { version: bom.revision.version }, 403)).code).toBe('forbidden')
     bom = (await ok('companyA', 'POST', `${bomUrl(jacket2, draft2)}/release`, { version: bom.revision.version, changeNote: 'Ready for the sample (made up).' })).bom
     expect(bom.revision).toMatchObject({ status: 'RELEASED', changeNote: 'Ready for the sample (made up).', releasedById: ACTORS.companyA! })

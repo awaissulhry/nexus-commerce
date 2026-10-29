@@ -233,7 +233,7 @@ export const routingView = output({
   steps: z.array(stepView),
   minutes: routingMinutesView,
   finalStepId: id().nullable(),
-  /** What the release check reports (a draft only; a frozen routing is not checked again). */
+  /** What the release refuses (issues) and points out (warnings): a draft only; a frozen routing is not checked again. */
   issues: z.array(issue),
   warnings: z.array(issue),
   /** A DRAFT revision of a style that is not archived: its routing may be changed. */

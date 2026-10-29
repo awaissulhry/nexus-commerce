@@ -6,11 +6,13 @@ import { copyLines } from '@nexus/factory-domain/product/bom/copy'
 import { diffBoms } from '@nexus/factory-domain/product/bom/diff'
 import { PRODUCT_BOM_MANAGE, PRODUCT_BOM_RELEASE } from '@nexus/factory-domain/product/bom/permissions'
 import { bomIssues, obsoleteRefusal, releaseRefusal, type BomLineData } from '@nexus/factory-domain/product/bom/rules'
+import { routingIssues } from '@nexus/factory-domain/product/routing/rules'
 import { newRevisionRefusal, nextRevisionNumber, styleRevisionMachine } from '@nexus/factory-domain/product/styles/revisions'
 import { styleMachine } from '@nexus/factory-domain/product/styles/rules'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, type CommandCaller } from '../../../core/command'
+import { readOperations, readSteps } from '../routing/store'
 import {
   assertMayWrite,
   bomStyleOf,
@@ -33,10 +35,13 @@ import {
  * the next DRAFT, two revisions compared, a draft released, and a revision made obsolete. Each write locks the style row
  * first and then compares and sets the revision's version.
  *
- * Release (no routing needed: the …_product_guards triggers ask for none, and the routing step adds its own check): the
- * draft's BOM has no blocker (./store bomViewOf `issues`); the style's RELEASED revision becomes OBSOLETE first, then
- * this one RELEASED (the partial unique index allows one RELEASED revision per style, checked row by row), and a DRAFT
- * style becomes ACTIVE (it can now be sold). From then on the database refuses any change to its parts, for every login.
+ * Release: the draft's BOM has no blocker (./store bomViewOf `issues`) and neither has its routing (factory-domain
+ * product/routing `routingIssues`: at least one step, minutes above 0, a scanned step), because a work order is released
+ * with one operation per routing step and the floor reports at the scanned ones: a released revision without a routing
+ * would be a dead end. Every blocker of both is refused at once (409); warnings pass. The style's RELEASED revision
+ * becomes OBSOLETE first, then this one RELEASED (the partial unique index allows one RELEASED revision per style,
+ * checked row by row), and a DRAFT style becomes ACTIVE (it can now be sold). From then on the database refuses any
+ * change to its parts, for every login.
  */
 
 /** product.bom.copyRevision: a RELEASED (or OBSOLETE) revision's BOM, routing, planned yield and label into the next DRAFT. */
@@ -185,12 +190,19 @@ export async function releaseRevision(caller: CommandCaller, styleId: string, re
     const { blockers } = bomIssues(lines, bomStyleOf(current, await readColourways(tx, styleId)), materials, {
       plannedHideYieldPct: row.plannedHideYieldPct === null ? null : decimalText(row.plannedHideYieldPct.toString()),
     })
-    if (blockers.length > 0) {
-      const issues = blockers.map((issue) => ({
-        path: issue.lineId === null ? `bom/${issue.code}` : `lines/${issue.lineId}${issue.size === null ? '' : `/sizes/${issue.size}`}${issue.colourwayId === null ? '' : `/colours/${issue.colourwayId}`}`,
-        message: issue.message,
-      }))
-      throw new DomainError('invalid_state', `The BOM is not ready to release: ${blockers.length} problem(s) to fix first.`, issues)
+    // The routing as it is now (its steps change only under the style row this command holds).
+    const steps = await readSteps(tx, revisionId)
+    const routing = routingIssues(steps, await readOperations(tx, steps.map((step) => step.operationId))).blockers
+    if (blockers.length > 0 || routing.length > 0) {
+      const issues = [
+        ...blockers.map((issue) => ({
+          path: issue.lineId === null ? `bom/${issue.code}` : `lines/${issue.lineId}${issue.size === null ? '' : `/sizes/${issue.size}`}${issue.colourwayId === null ? '' : `/colours/${issue.colourwayId}`}`,
+          message: issue.message,
+        })),
+        ...routing.map((issue) => ({ path: issue.stepId === null ? `routing/${issue.code}` : `routing/steps/${issue.stepId}`, message: issue.message })),
+      ]
+      const what = blockers.length === 0 ? 'The routing is' : routing.length === 0 ? 'The BOM is' : 'The BOM and the routing are'
+      throw new DomainError('invalid_state', `${what} not ready to release: ${issues.length} problem(s) to fix first.`, issues)
     }
 
     const previous = await tx.styleRevision.findFirst({ where: { styleId, status: 'RELEASED' }, select: { id: true, revision: true, version: true } })

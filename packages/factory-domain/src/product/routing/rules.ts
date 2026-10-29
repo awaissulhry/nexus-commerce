@@ -162,7 +162,7 @@ export function finalStepOf<Step extends Pick<StepData, 'id' | 'seq' | 'scanRequ
   return inOrder(steps).filter((step) => step.scanRequired).at(-1) ?? null
 }
 
-/** Blockers (the release check shows them) and warnings (shown only). */
+/** Blockers (the revision's release refuses them: product/bom release, B-W1-14) and warnings (shown only). */
 export const ROUTING_BLOCKERS = ['NO_STEPS', 'MINUTES_NOT_POSITIVE', 'NO_SCAN_POINT'] as const
 export const ROUTING_WARNINGS = ['OPERATION_ARCHIVED', 'LAST_STEP_NOT_SCANNED'] as const
 export const ROUTING_ISSUE_CODES = [...ROUTING_BLOCKERS, ...ROUTING_WARNINGS] as const
@@ -181,8 +181,9 @@ export interface RoutingCheck {
 
 /**
  * What a draft routing still lacks before its revision is released (the release check, A2 SCR-046: "routing has
- * operations with SMV"), and what it points out without refusing; against the library as it is now. A released routing
- * is frozen and never checked again.
+ * operations with SMV"; the release refuses every blocker: a work order is released with one operation per step, and the
+ * floor reports at the scanned ones), and what it points out without refusing; against the library as it is now. A
+ * released routing is frozen and never checked again.
  */
 export function routingIssues(steps: readonly StepData[], operations: ReadonlyMap<string, Pick<LibraryOperation, 'code' | 'status'>>): RoutingCheck {
   const blockers: RoutingIssue[] = []

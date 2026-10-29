@@ -190,6 +190,10 @@ describe('a routing built through the API: cut, sew, finish, inspect (PRD-109, P
 
     let routing = await getRouting(jacket2, draft2)
     expect(routing).toMatchObject({ steps: [], minutes: { perGarment: '0', steps: 0 }, finalStepId: null, issues: [{ code: 'NO_STEPS', stepId: null }], editable: true })
+    // The release gate (NO_STEPS): no revision is released without a routing, whatever its BOM says.
+    const refusal = await refused('companyA', 'POST', `${revisionUrl(jacket2, draft2)}/release`, { version: 1 }, 409)
+    expect(refusal).toMatchObject({ code: 'invalid_state', message: expect.stringMatching(/^The BOM and the routing are not ready to release/) })
+    expect(refusal.issues).toEqual(expect.arrayContaining([{ path: 'routing/NO_STEPS', message: 'The routing has no operation yet.' }]))
 
     routing = (await ok('companyA', 'POST', url, { version: 1, operations: [{ operationId: CUT }, { operationId: SEW, standardMinutes: '90.12345' }] }, 201)).routing
     expect(routing.revision.version).toBe(2)
@@ -284,10 +288,51 @@ describe('a routing built through the API: cut, sew, finish, inspect (PRD-109, P
   })
 })
 
+describe('the release gate: a revision is released only with a routing a work order can be made from', () => {
+  const release = async (expected: number): Promise<Json> => {
+    const bom = (await ok('engineer', 'GET', `${revisionUrl(jacket, revision1)}/bom`)).bom
+    expect(bom).toMatchObject({ issues: [], releasable: true })
+    const response = await call('engineer', 'POST', `${revisionUrl(jacket, revision1)}/release`, { version: bom.revision.version })
+    expect(response.statusCode, response.body).toBe(expected)
+    return response.json()
+  }
+  const patchStep = async (stepId: string, change: Json): Promise<Json> =>
+    (await ok('engineer', 'PATCH', `${routingUrl(jacket, revision1)}/steps/${stepId}`, { version: (await getRouting(jacket, revision1)).revision.version, ...change })).routing
+
+  it('refuses a routing that scans no step (NO_SCAN_POINT): the floor could not report a garment', async () => {
+    let routing = await getRouting(jacket, revision1)
+    for (const step of routing.steps) routing = await patchStep(step.id, { scanRequired: false })
+    expect(routing).toMatchObject({ finalStepId: null, issues: [{ code: 'NO_SCAN_POINT', stepId: null }], minutes: { scanPoints: 0 } })
+    expect((await release(409)).error).toMatchObject({
+      code: 'invalid_state',
+      message: 'The routing is not ready to release: 1 problem(s) to fix first.',
+      issues: [{ path: 'routing/NO_SCAN_POINT', message: 'No step is scanned: the floor could not report a garment. Mark at least the final operation as scanned.' }],
+    })
+    for (const step of routing.steps) routing = await patchStep(step.id, { scanRequired: true })
+    expect(routing.issues).toEqual([])
+  })
+
+  it('refuses a step whose minutes are not above 0 (MINUTES_NOT_POSITIVE), as a row written outside the API may hold', async () => {
+    const pack = seedStep('SEED-PACK')
+    await admin('UPDATE "RoutingOperation" SET "standardMinutes" = 0 WHERE id = $1', [pack])
+    expect((await getRouting(jacket, revision1)).issues).toEqual([{ code: 'MINUTES_NOT_POSITIVE', stepId: pack, message: 'Step 40 (SEED-PACK): its standard minutes are above 0.' }])
+    expect((await release(409)).error).toMatchObject({
+      code: 'invalid_state',
+      message: 'The routing is not ready to release: 1 problem(s) to fix first.',
+      issues: [{ path: `routing/steps/${pack}`, message: 'Step 40 (SEED-PACK): its standard minutes are above 0.' }],
+    })
+    expect((await patchStep(pack, { standardMinutes: '3.5' })).issues).toEqual([])
+  })
+
+  it('lets warnings pass: the last step unscanned, the batch or serial goes to the last scanned one', async () => {
+    const routing = await patchStep(seedStep('SEED-PACK'), { scanRequired: false })
+    expect(routing).toMatchObject({ issues: [], warnings: [{ code: 'LAST_STEP_NOT_SCANNED', stepId: seedStep('SEED-PACK') }], finalStepId: seedStep('SEED-FIN-QC') })
+    expect((await release(200)).bom.revision).toMatchObject({ id: revision1, status: 'RELEASED' })
+  })
+})
+
 describe('release, copy and compare (A1 §2.5)', () => {
   it('freezes the routing at release: the API answers 409 first, the database refuses any change for every login', async () => {
-    const bom = (await ok('engineer', 'GET', `${revisionUrl(jacket, revision1)}/bom`)).bom
-    await ok('engineer', 'POST', `${revisionUrl(jacket, revision1)}/release`, { version: bom.revision.version })
     const routing = await getRouting(jacket, revision1)
     expect(routing).toMatchObject({ revision: { status: 'RELEASED' }, editable: false, issues: [], warnings: [] })
     const version = routing.revision.version
