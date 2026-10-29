@@ -20,7 +20,8 @@ import { seedUuid, type SeedContext } from '../src/seeding'
  *   P1  an Italian business customer and brand, tenant-wide: the party the audit, outbox, files, links and threads
  *       seeds already write partner rows for (the same derived id), so their made-up party is now a real one; its rider
  *       has a measurement profile.
- *   P2  an Italian supplier and subcontractor of company A only (the links seed's PO_CONFIRM party).
+ *   P2  an Italian supplier and subcontractor of company A only (the links seed's PO_CONFIRM party), usually 21 days
+ *       from order to delivery.
  *   P3  a German business customer, with a VALID VIES check and an earlier one that got no answer.
  *   P4  an Italian private rider (a person), with two revisions of a jacket profile.
  *
@@ -87,6 +88,8 @@ export async function seed({ db, namespace }: SeedContext): Promise<PartiesSeed>
       currency: 'EUR',
       language: 'it',
       paymentTerms: 'Bank transfer 60 days end of month',
+      // Its usual lead time, for an item that names none (planning's order-by date).
+      leadTimeDays: 21,
       internalNote: null,
       ...stamp,
     },

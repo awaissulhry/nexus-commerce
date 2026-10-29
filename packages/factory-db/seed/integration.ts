@@ -3,8 +3,8 @@ import type { Prisma } from '../src/generated/prisma/client'
 import { seedUuid, type SeedContext } from '../src/seeding'
 
 /**
- * The integration module's synthetic seed, per tenant of seed/_core.ts: FAKE accounts (a tenant-wide SES account and
- * an SDI account for company A), one SecretValue, two IntegrationCall rows (a success and a refusal) and two
+ * The integration module's synthetic seed, per tenant of seed/_core.ts: FAKE accounts (a tenant-wide SES account, an
+ * SDI account for company A and a tenant-wide VIES account), one SecretValue, two IntegrationCall rows (a success and a refusal) and two
  * InboundWebhook receipts (one verified and waiting, one rejected). Written in the tenant's office scope.
  *
  * Made up and harmless: every account is FAKE (no network), and the seeded SecretValue is NOT openable (its key id,
@@ -46,6 +46,8 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
   const accounts: Prisma.IntegrationAccountCreateManyInput[] = [
     { id: ses, companyId: null, provider: 'SES', code: 'ses', label: 'Mail (fake)', mode: 'FAKE', createdById: actorId },
     { id: sdi, companyId: companyA, provider: 'SDI', code: 'sdi-a', label: 'SDI company A (fake)', mode: 'FAKE', createdById: actorId },
+    // The parties module checks EU VAT numbers through it: without a VIES account a check is refused.
+    { id: id('integration:account:vies'), companyId: null, provider: 'VIES', code: 'vies', label: 'VIES (fake)', mode: 'FAKE', createdById: actorId },
   ]
   const calls: Prisma.IntegrationCallCreateManyInput[] = [
     {
