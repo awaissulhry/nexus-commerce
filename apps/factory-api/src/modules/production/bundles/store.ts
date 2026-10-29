@@ -46,6 +46,7 @@ export const BUNDLE_COLUMNS = {
   voidedAt: true,
   voidReason: true,
   deviceId: true,
+  clientEventId: true,
   version: true,
   createdAt: true,
 } as const satisfies Prisma.BundleSelect
@@ -69,6 +70,11 @@ export async function lockBundle(tx: CommandTx, bundleId: string): Promise<Bundl
   if (!isUuid(bundleId)) return null
   await tx.$queryRaw`SELECT "id" FROM "Bundle" WHERE "id" = ${bundleId}::uuid FOR UPDATE`
   return readBundle(tx, bundleId)
+}
+
+/** The bundle the floor queue's event made (Bundle.clientEventId, unique in the tenant), as the caller sees it. */
+export async function readBundleByClientEvent(db: Reader, clientEventId: string): Promise<BundleRow | null> {
+  return db.bundle.findFirst({ where: { clientEventId }, select: BUNDLE_COLUMNS })
 }
 
 /** The bundle a ticket's code names: its current code, or one of its replaced ones (an old ticket). */
@@ -100,6 +106,27 @@ export async function readCellLabels(db: Reader, workOrderId: string): Promise<M
 export async function deviceStationOf(db: Reader, deviceId: string): Promise<string | null> {
   const device = await db.device.findUnique({ where: { id: deviceId }, select: { stationId: true } })
   return device?.stationId ?? null
+}
+
+/**
+ * The label printer of the floor device's station (MES-184: Station.labelPrinterId), where its tickets print when the
+ * request names none; null for a roaming tablet or a station without one.
+ */
+export async function stationPrinterOf(db: Reader, deviceId: string): Promise<string | null> {
+  const stationId = await deviceStationOf(db, deviceId)
+  if (!stationId) return null
+  const station = await db.station.findUnique({ where: { id: stationId }, select: { labelPrinterId: true } })
+  return station?.labelPrinterId ?? null
+}
+
+/** The reprints of these bundles' tickets (BundleReprint, with the reason), oldest first. */
+export async function readReprints(db: Reader, bundleIds: readonly string[]) {
+  if (bundleIds.length === 0) return []
+  return db.bundleReprint.findMany({
+    where: { bundleId: { in: [...bundleIds] } },
+    select: { id: true, bundleId: true, code: true, replacedCode: true, reason: true, printerId: true, deviceId: true, createdAt: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  })
 }
 
 /** The work order's operations in routing order (the ticket's list, the scan card's ticks). */

@@ -161,7 +161,7 @@ const release = (workOrderId: string, extra: { labelTemplateId?: string | null; 
   )
 
 /** A bundle of `quantity` garments of a cell of a work order, made on the floor of A1. */
-async function bundle(options: { workOrderId?: string; cellId?: string; quantity?: number; scope?: FactoryScope } = {}): Promise<string> {
+async function bundle(options: { workOrderId?: string; cellId?: string; quantity?: number; scope?: FactoryScope; clientEventId?: string } = {}): Promise<string> {
   const id = randomUUID()
   await insert(options.scope ?? floor(), 'Bundle', {
     id,
@@ -171,6 +171,7 @@ async function bundle(options: { workOrderId?: string; cellId?: string; quantity
     code: `T-BN-${tag()}`,
     quantity: options.quantity ?? 1,
     deviceId: seeded.deviceId,
+    ...(options.clientEventId === undefined ? {} : { clientEventId: options.clientEventId }),
   })
   return id
 }
@@ -233,6 +234,7 @@ describe('the floor', () => {
   it('never reads or writes a cost, price or wages column: no production table holds one, nor a productivity figure', () => {
     expect(models.map(({ model }) => model.name).sort()).toEqual([
       'Bundle',
+      'BundleReprint',
       'CutLog',
       'CutLogPiece',
       'FloorScanRefusal',
@@ -614,8 +616,40 @@ describe('a bundle', () => {
     const id = await bundle()
     const [{ code }] = (await sql(floor(), 'SELECT code FROM "Bundle" WHERE id = $1::uuid', id)) as [{ code: string }]
     await expect(run(floor(), `UPDATE "Bundle" SET code = 'T-NEW-1' WHERE id = $1::uuid`, id)).rejects.toThrow(/gives its ticket a new code and voids the old one \(MES-073\)/)
-    expect(await run(floor(), `UPDATE "Bundle" SET code = 'T-NEW-${id}', "replacedCodes" = "replacedCodes" || code WHERE id = $1::uuid`, id)).toBe(1)
+    // A new code says why: its BundleReprint row (the reason) comes first, in the same transaction.
+    const reprint = (newCode: string, extra: Record<string, unknown> = {}) => ({
+      id: randomUUID(),
+      companyId: A.companyA,
+      siteId: A.siteA,
+      workOrderId: seeded.workOrderId,
+      bundleId: id,
+      code: newCode,
+      replacedCode: code,
+      reason: 'The ticket was torn off.',
+      deviceId: seeded.deviceId,
+      ...extra,
+    })
+    await expect(run(floor(), `UPDATE "Bundle" SET code = 'T-NEW-${id}', "replacedCodes" = "replacedCodes" || code WHERE id = $1::uuid`, id)).rejects.toThrow(/says why: its BundleReprint row/)
+    await expect(insert(floor(), 'BundleReprint', reprint(`T-NEW-${id}`, { reason: '  ' }))).rejects.toThrow(/says why the ticket is printed again/)
+    await expect(insert(floor(), 'BundleReprint', reprint(code))).rejects.toThrow(/a new code, not the one it replaces/)
+    await expect(insert(floor(), 'BundleReprint', reprint(`T-NEW-${id}`, { replacedCode: 'T-NOT-ITS' }))).rejects.toThrow(/which is not a ticket of bundle/)
+    // A reprint row without the reprint itself is refused when its transaction commits (the deferred check).
+    await expect(insert(floor(), 'BundleReprint', reprint(`T-NEW-${id}`))).rejects.toThrow(/in the same transaction \(MES-073\)/)
+    expect(await count('SELECT count(*) AS n FROM "BundleReprint" WHERE "bundleId" = $1', [id])).toBe(0)
+    await as(floor(), (client) =>
+      client.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(...insertSql('BundleReprint', reprint(`T-NEW-${id}`)))
+        await tx.$executeRawUnsafe(`UPDATE "Bundle" SET code = 'T-NEW-${id}', "replacedCodes" = "replacedCodes" || code WHERE id = $1::uuid`, id)
+      }),
+    )
     expect(await sql(floor(), 'SELECT "replacedCodes" FROM "Bundle" WHERE id = $1::uuid', id)).toEqual([{ replacedCodes: [code] }])
+    // The reprint log is append-only, for every login.
+    await expect(run(floor(), `UPDATE "BundleReprint" SET reason = 'x' WHERE "bundleId" = $1::uuid`, id)).rejects.toThrow(DENIED)
+    await expect(admin(`UPDATE "BundleReprint" SET reason = 'x' WHERE "bundleId" = $1`, [id])).rejects.toThrow(/append-only: UPDATE on "BundleReprint" is refused/)
+    await expect(admin('DELETE FROM "BundleReprint" WHERE "bundleId" = $1', [id])).rejects.toThrow(/append-only: DELETE on "BundleReprint" is refused/)
+    // A client event id is not blank, and never changes.
+    await expect(run(floor(), `UPDATE "Bundle" SET "clientEventId" = 'ce-1' WHERE id = $1::uuid`, id)).rejects.toThrow(/changes only by a reprint of its ticket or by being voided/)
+    await expect(bundle({ clientEventId: ' ' })).rejects.toThrow(/client event id that is not blank/)
     await expect(run(floor(), 'UPDATE "Bundle" SET quantity = 2 WHERE id = $1::uuid', id)).rejects.toThrow(/changes only by a reprint of its ticket or by being voided/)
     await expect(run(floor(), `UPDATE "Bundle" SET status = 'VOID', "voidedAt" = now() WHERE id = $1::uuid`, id)).rejects.toThrow(/wrong void/)
     expect(await run(floor(), `UPDATE "Bundle" SET status = 'VOID', "voidedAt" = now(), "voidReason" = 'ticket lost twice' WHERE id = $1::uuid`, id)).toBe(1)
@@ -628,14 +662,14 @@ describe('a bundle', () => {
 
 describe('the seeds', () => {
   it('are idempotent', async () => {
-    const tables = ['ProductionSettings', 'WorkOrder', 'WorkOrderSize', 'WorkOrderOperation', 'WorkOrderMaterial', 'CutLog', 'CutLogPiece', 'Bundle', 'OperationScan', 'WorkerNoticeAck', 'StyleRevision', 'SalesOrder']
+    const tables = ['ProductionSettings', 'WorkOrder', 'WorkOrderSize', 'WorkOrderOperation', 'WorkOrderMaterial', 'CutLog', 'CutLogPiece', 'Bundle', 'BundleReprint', 'OperationScan', 'WorkerNoticeAck', 'StyleRevision', 'SalesOrder']
     const counts = async () => {
       const out: number[] = []
       for (const table of tables) out.push(await count(`SELECT count(*) AS n FROM "${table}" WHERE "tenantId" = $1`, [b.tenantId]))
       return out
     }
     const before = await counts()
-    expect(before).toEqual([2, 2, 7, 8, 21, 1, 2, 2, 3, 1, 2, 2])
+    expect(before).toEqual([2, 2, 7, 8, 21, 1, 2, 2, 1, 3, 1, 2, 2])
     await seedProduction({ db: factory, namespace: 'production-b' })
     expect(await counts()).toEqual(before)
     expect(await admin(`SELECT number, status::text, "batchNumber" FROM "WorkOrder" WHERE "tenantId" = $1 ORDER BY number`, [b.tenantId])).toEqual([

@@ -308,8 +308,8 @@ describe('a work order from order lines (MES-001, MES-002)', () => {
       progress: { counted: false },
     })
     expect(workOrder.cells.map((cell: Json) => [cell.colourwayCode, cell.size, cell.quantity, cell.lineSeq, cell.progress])).toEqual([
-      ['BLK', '50', 2, 10, { cut: null, sewn: null, finished: null }],
-      ['BLK', '52', 3, 10, { cut: null, sewn: null, finished: null }],
+      ['BLK', '50', 2, 10, { cut: null, bundled: null, sewn: null, finished: null }],
+      ['BLK', '52', 3, 10, { cut: null, bundled: null, sewn: null, finished: null }],
     ])
     expect(workOrder.spec).toMatchObject({ frozen: false, frozenAt: null, standardMinutes: { perGarment: '122', allPieces: '610' } })
     expect(workOrder.spec.operations.map((op: Json) => [op.seq, op.code, op.standardMinutes, op.workCentreCode, op.id])).toEqual([
