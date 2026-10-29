@@ -1,0 +1,115 @@
+/*
+ * Home › Approvals (SCR-030) LAYOUT: the head, the tiles, the queue and the review's parts. Controls are the design
+ * system's; semantic tokens only.
+ */
+.fw-apv,
+.fw-apv-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-apv-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-apv-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-apv-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-apv-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-12);
+}
+
+.fw-apv-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-apv-sub {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-apv a.fw-apv-link,
+.fw-apv-review a.fw-apv-link {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+
+.fw-apv a.fw-apv-link:hover {
+  text-decoration: underline;
+}
+
+.fw-apv-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-apv-table {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.fw-apv-h {
+  margin: 0 0 var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-apv-list {
+  margin: 0;
+  padding-left: var(--nds-space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-apv-recheck {
+  margin: 0;
+  padding: var(--nds-space-6) var(--nds-space-12);
+  border-left: 4px solid var(--nds-border);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-apv-recheck.is-current {
+  border-left-color: var(--nds-success);
+}
+
+.fw-apv-recheck.is-changed {
+  border-left-color: var(--nds-warning);
+}
+
+/* The table's footer: one information icon holds the keys (Owner rule 2026-10-29). */
+.fw-apv-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--nds-space-8) var(--nds-space-16);
+  color: var(--nds-text-2);
+}

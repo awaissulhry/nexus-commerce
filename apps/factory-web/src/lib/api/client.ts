@@ -58,6 +58,8 @@ export interface ApiClient {
   request<T>(method: HttpMethod, path: string, options?: RequestOptions<T>): Promise<T>
   get<T>(path: string, options?: RequestOptions<T>): Promise<T>
   post<T>(path: string, options?: RequestOptions<T>): Promise<T>
+  /** A GET whose answer is a file the API makes (a PDF): its bytes; an error answer is an ApiError as for JSON. */
+  bytes(path: string, options?: Pick<RequestOptions<unknown>, 'query' | 'signal'>): Promise<Uint8Array>
 }
 
 const UNSAFE: ReadonlySet<HttpMethod> = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -131,5 +133,27 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   function post<T>(path: string, options?: RequestOptions<T>): Promise<T> {
     return request<T>('POST', path, options)
   }
-  return { request, get, post }
+  async function bytes(path: string, read: Pick<RequestOptions<unknown>, 'query' | 'signal'> = {}): Promise<Uint8Array> {
+    let response: Response
+    try {
+      const headers = requestHeaders(options, 'GET', {})
+      headers.set('accept', 'application/pdf, application/json')
+      response = await doFetch(apiUrl(options.baseUrl, path, read.query), { method: 'GET', headers, credentials: 'same-origin', cache: 'no-store', signal: read.signal })
+    } catch (cause) {
+      if ((cause as { name?: string } | null)?.name === 'AbortError') throw cause
+      throw networkError(cause)
+    }
+    if (!response.ok) {
+      const text = await response.text()
+      let body: unknown = undefined
+      try {
+        body = text === '' ? undefined : JSON.parse(text)
+      } catch {
+        body = undefined
+      }
+      throw apiErrorFrom(response.status, body)
+    }
+    return new Uint8Array(await response.arrayBuffer())
+  }
+  return { request, get, post, bytes }
 }

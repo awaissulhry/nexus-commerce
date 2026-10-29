@@ -1,0 +1,751 @@
+{
+  "status": {
+    "DRAFT": "Bozza",
+    "PENDING_APPROVAL": "In attesa di approvazione",
+    "APPROVED": "Approvato",
+    "SENT": "Inviato",
+    "ACCEPTED": "Accettato",
+    "DECLINED": "Rifiutato",
+    "EXPIRED": "Scaduto",
+    "SUPERSEDED": "Sostituito",
+    "CANCELLED": "Annullato"
+  },
+  "approvalStatus": {
+    "PENDING": "In attesa",
+    "APPROVED": "Approvata",
+    "REJECTED": "Rifiutata",
+    "WITHDRAWN": "Ritirata"
+  },
+  "reason": {
+    "MARGIN_FLOOR": "margine sotto la soglia",
+    "DISCOUNT_LIMIT": "sconto oltre il limite",
+    "AMOUNT_LIMIT": "importo oltre il limite",
+    "SPECIAL_ITEM": "articolo speciale"
+  },
+  "ruleName": {
+    "MARGIN_FLOOR": "Margine rispetto alla soglia",
+    "DISCOUNT_LIMIT": "Sconto rispetto al limite",
+    "AMOUNT_LIMIT": "Importo rispetto al limite",
+    "SPECIAL_ITEM": "Articoli speciali"
+  },
+  "severity": {
+    "BLOCKS": "Blocca",
+    "BLOCKS_SEND": "Blocca l'invio",
+    "WARNING": "Da verificare",
+    "INFO": "Nota"
+  },
+  "issue": {
+    "PARTY_NOT_QUOTABLE": "Il cliente è bloccato o archiviato: non gli si può fare un preventivo.",
+    "NO_LINES": "Aggiungi almeno un modello con dei pezzi.",
+    "NOT_PRICED": "Una riga non ha ancora un prezzo.",
+    "COST_INCOMPLETE": "Il costo di una riga è incompleto: alla scheda costo manca un dato.",
+    "NO_COST_REVISION": "Un modello non ha ancora una scheda costo: il suo costo è ignoto.",
+    "COST_ESTIMATE": "Il costo di un modello viene da una revisione in bozza: è una stima.",
+    "CERTIFICATE": "Taglia {size}: nessun certificato valido la copre alla data di consegna.",
+    "VIES_NOT_PROVEN": "L'IVA si applica al 22 % finché il VIES non conferma la partita IVA UE del cliente.",
+    "APPROVAL_NEEDED": "Una regola non è rispettata: serve un'approvazione prima dell'invio.",
+    "NO_VALIDITY": "Indica fino a quando vale l'offerta (Condizioni e consegna).",
+    "VALIDITY_PAST": "La data di validità è passata: impostane una nuova.",
+    "NO_BILL_TO": "Scegli l'indirizzo di fatturazione.",
+    "NO_SHIP_TO": "Scegli l'indirizzo di consegna.",
+    "NO_CONTACT_EMAIL": "Il contatto non ha un'email: il preventivo e il suo link partono per email.",
+    "NO_PROMISE_DATE": "Un consumatore deve vedere la data di consegna: impostala (Codice del Consumo art. 49)."
+  },
+  "check": {
+    "fix": "Correggi",
+    "PARTY_NOT_QUOTABLE": "Il cliente è bloccato o archiviato: non gli si può fare un preventivo.",
+    "NO_LINES": "Aggiungi almeno un modello con dei pezzi.",
+    "NOT_PRICED": "Una riga non ha ancora un prezzo.",
+    "COST_INCOMPLETE": "Il costo di una riga è incompleto: alla scheda costo manca un dato.",
+    "NO_COST_REVISION": "Un modello non ha ancora una scheda costo: il suo costo è ignoto.",
+    "COST_ESTIMATE": "Il costo di un modello viene da una revisione in bozza: è una stima.",
+    "CERTIFICATE": "Taglia {size}: nessun certificato valido la copre alla data di consegna.",
+    "VIES_NOT_PROVEN": "L'IVA si applica al 22 % finché il VIES non conferma la partita IVA UE del cliente.",
+    "APPROVAL_NEEDED": "Una regola non è rispettata: serve un'approvazione prima dell'invio.",
+    "NO_VALIDITY": "Indica fino a quando vale l'offerta (Condizioni e consegna).",
+    "VALIDITY_PAST": "La data di validità è passata: impostane una nuova.",
+    "NO_BILL_TO": "Scegli l'indirizzo di fatturazione.",
+    "NO_SHIP_TO": "Scegli l'indirizzo di consegna.",
+    "NO_CONTACT_EMAIL": "Il contatto non ha un'email: il preventivo e il suo link partono per email.",
+    "NO_PROMISE_DATE": "Un consumatore deve vedere la data di consegna: impostala (Codice del Consumo art. 49).",
+    "COMPANY_LEGAL": "I dati di intestazione della società sono incompleti (Amministrazione › Società).",
+    "BILL_TO_INCOMPLETE": "All'indirizzo di fatturazione mancano via, CAP, città o paese.",
+    "SHIP_TO_INCOMPLETE": "All'indirizzo di consegna mancano via, CAP, città o paese.",
+    "SDI_IDENTITY": "Un'azienda italiana si fattura tramite SDI: aggiungi al cliente il codice SDI o la PEC.",
+    "VAT_CHANGED": "Il trattamento IVA del cliente è cambiato dal calcolo dei prezzi: ricalcola dalla scheda Righe.",
+    "FIRM_OFFER_STANDS": "Una versione precedente è un'offerta irrevocabile ancora valida: non si può ancora sostituire.",
+    "TERMS_VERSION": "Dai una versione alle condizioni, così l'accettazione registra quali sono state accettate.",
+    "NO_BANK_DETAILS": "La società non ha ancora coordinate bancarie: le istruzioni per l'acconto seguiranno a parte.",
+    "pass": {
+      "approval": "Approvazione fatta o non necessaria",
+      "validity": "Validità impostata",
+      "billTo": "Indirizzo di fatturazione completo",
+      "shipTo": "Indirizzo di consegna completo",
+      "sdi": "Dati fiscali completi per lo SDI",
+      "priced": "Ogni riga ha un prezzo",
+      "certificates": "Ogni taglia coperta da un certificato valido",
+      "email": "Il contatto ha un'email",
+      "letterhead": "L'intestazione è completa"
+    }
+  },
+  "taxMode": {
+    "IT_B2B": "Azienda italiana",
+    "IT_B2C": "Consumatore italiano",
+    "EU_B2B": "Azienda UE",
+    "EU_B2C": "Consumatore UE",
+    "EXTRA_EU": "Fuori UE"
+  },
+  "vies": {
+    "NOT_APPLICABLE": "Non necessario",
+    "UNCHECKED": "Non ancora verificato",
+    "VALID": "Valido",
+    "EXPIRED": "Verifica troppo vecchia: ripetila",
+    "INVALID": "Non valido",
+    "HELD": "In attesa del VIES"
+  },
+  "partyStatus": {
+    "PROSPECT": "Potenziale",
+    "ACTIVE": "Attivo",
+    "BLOCKED": "Bloccato",
+    "ARCHIVED": "Archiviato"
+  },
+  "priceBasis": {
+    "NET": "Prezzi netti (IVA esclusa)",
+    "GROSS": "Prezzi IVA inclusa (consumatore)"
+  },
+  "depositKind": {
+    "ACCONTO": "Acconto",
+    "CAPARRA": "Caparra confirmatoria"
+  },
+  "depositKindBody": {
+    "ACCONTO": "Un anticipo sul prezzo.",
+    "CAPARRA": "Trattenuta se il compratore recede, restituita il doppio se recediamo noi (c.c. art. 1385)."
+  },
+  "languageName": {
+    "it": "Italiano",
+    "en": "Inglese"
+  },
+  "link": {
+    "state": {
+      "LIVE": "Attivo",
+      "REVOKED": "Ritirato",
+      "USED_UP": "Usato",
+      "EXPIRED": "Scaduto"
+    }
+  },
+  "common": {
+    "retry": "Riprova",
+    "dismiss": "Chiudi",
+    "back": "Indietro",
+    "keep": "Mantieni",
+    "you": "tu",
+    "colleague": "un collega"
+  },
+  "problem": {
+    "read": {
+      "signed_out": "La sessione è scaduta. Accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non ti permette di vederlo.",
+      "not_found": "Non esiste, o è stato rimosso.",
+      "unavailable": "Il server della fabbrica non risponde. Riprova tra poco.",
+      "rate_limited": "Troppe richieste. Attendi un momento e riprova.",
+      "contract": "Questa pagina e il server non concordano sui dati: ricarica la pagina.",
+      "internal": "Qualcosa non ha funzionato sul server. Riprova."
+    },
+    "write": {
+      "signed_out": "La sessione è scaduta: nulla è stato salvato. Accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non permette questa modifica.",
+      "not_found": "Il preventivo o la riga non esistono più.",
+      "invalid": "Il server ha rifiutato i valori: controlla ciò che hai scritto.",
+      "rate_limited": "Troppe modifiche insieme. Attendi un momento e riprova.",
+      "unavailable": "Il server non risponde: non salvato. Riprova.",
+      "internal": "Non salvato: qualcosa non ha funzionato sul server.",
+      "moved": "Qualcuno ha modificato il preventivo nel frattempo: è stato riletto. Controlla e ripeti la modifica.",
+      "state": "Il preventivo è in uno stato che ora non lo permette: è stato riletto.",
+      "stepUp": "Serve un nuovo codice dell'autenticatore."
+    }
+  },
+  "held": {
+    "busy": "In corso…",
+    "noManage": "Il tuo ruolo non può modificare i preventivi.",
+    "noSend": "Il tuo ruolo non può inviare preventivi.",
+    "checking": "Verifica del preventivo in corso.",
+    "needsApproval": "Serve prima l'approvazione: {reasons}",
+    "cannotAsk": "Prima risolvi ciò che blocca il preventivo (vedi i problemi)."
+  },
+  "decide": {
+    "held": {
+      "OWN_REQUEST": "Hai chiesto tu questa approvazione: decide un altro approvatore.",
+      "NO_RIGHT": "Il tuo ruolo non approva preventivi.",
+      "NEEDS_MARGIN": "La richiesta riguarda il margine: decide un approvatore che vede i margini.",
+      "NOT_WAITING": "Nessuna richiesta in attesa."
+    }
+  },
+  "readOnly": {
+    "noRight": "Sola lettura: il tuo ruolo può vedere i preventivi, non modificarli.",
+    "pending": "Sola lettura in attesa di approvazione: ritira la richiesta per modificarlo.",
+    "approved": "Approvato: riaprilo per modificarlo (l'approvazione andrà richiesta di nuovo).",
+    "sent": "La versione {revision} è stata inviata e non può cambiare. Crea la versione {next} per modificarla.",
+    "accepted": "Accettato dal cliente: non può cambiare.",
+    "closed": "Chiuso: non può cambiare."
+  },
+  "action": {
+    "send": "Invia al cliente…",
+    "ask": "Chiedi approvazione",
+    "approve": "Approva",
+    "reject": "Rifiuta",
+    "withdraw": "Ritira la richiesta",
+    "revise": "Crea la versione {next}",
+    "previewPdf": "Anteprima PDF (nuova scheda)",
+    "reopen": "Riapri per modificare",
+    "newLink": "Invia un nuovo link",
+    "cancel": "Annulla preventivo…",
+    "copyNumber": "Copia numero"
+  },
+  "tab": {
+    "lines": "Righe",
+    "price": "Prezzo e margine",
+    "terms": "Condizioni e consegna",
+    "versions": "Versioni",
+    "approval": "Approvazione",
+    "documents": "Documenti",
+    "activity": "Attività",
+    "problems_one": "{count} problema",
+    "problems_other": "{count} problemi"
+  },
+  "record": {
+    "back": "Preventivi",
+    "backToList": "Torna ai Preventivi",
+    "title": "Preventivo",
+    "loading": "Apertura del preventivo…",
+    "state": {
+      "not_found": {
+        "title": "Questo preventivo non esiste",
+        "body": "Potrebbe essere stato rimosso, o l'indirizzo è errato."
+      },
+      "forbidden": {
+        "title": "Non hai accesso a questo preventivo",
+        "body": "I preventivi sono per Vendite, Amministrazione e il Titolare; chiedi il ruolo a un amministratore."
+      },
+      "error": {
+        "title": "Impossibile aprire il preventivo",
+        "body": "Riprova."
+      }
+    },
+    "versionChip": "v{revision}",
+    "validLeft_one": "Valido ancora {count} giorno",
+    "validLeft_other": "Valido ancora {count} giorni",
+    "validEnded": "Offerta scaduta",
+    "dock": "Conversazione",
+    "dockHint": "Mostra la conversazione accanto alla scheda (⌘J)",
+    "dockLabel": "La conversazione del preventivo",
+    "more": "Altre azioni",
+    "tabsLabel": "Sezioni del preventivo",
+    "changed": "Qualcuno ha modificato il preventivo alle {time}. Le tue modifiche non salvate restano su questa pagina.",
+    "reload": "Ricarica",
+    "waitingApproval": "In attesa di approvazione: {reasons}",
+    "waitingYours": "L'hai chiesta tu: decide un approvatore (Amministrazione o Titolare). Nel frattempo le righe sono bloccate.",
+    "waitingWho": "Decide un approvatore qui o da Home › Approvazioni; chi ha chiesto non decide mai.",
+    "accepted": "Accettato dal cliente. Le prove e la richiesta di acconto sono nella scheda Documenti.",
+    "noPanels": "Conversazione e file si aprono con il preventivo."
+  },
+  "save": {
+    "saving": "Salvataggio…",
+    "saved": "Tutte le modifiche salvate · {time}",
+    "failed": "Una modifica non è stata salvata",
+    "retry": "Riprova"
+  },
+  "composer": {
+    "title": "Aggiungi un modello",
+    "style": "Modello",
+    "styleHint": "Scrivi codice o nome del modello, sceglilo, scegli i colori: la sua griglia taglie si apre pronta per i numeri.",
+    "placeholder": "Codice, nome o stagione",
+    "searching": "Ricerca modelli…",
+    "none": "Nessun modello corrisponde.",
+    "found_one": "{count} modello",
+    "found_other": "{count} modelli",
+    "change": "Scegli un altro modello",
+    "colours": "Colori da quotare",
+    "estimate": "Il suo costo viene da una revisione in bozza: è una stima finché il modello non è rilasciato.",
+    "noCost": "Questo modello non ha ancora una scheda costo: costo e margine restano ignoti.",
+    "add_one": "Aggiungi il modello con {count} colore",
+    "add_other": "Aggiungi il modello con {count} colori",
+    "held": {
+      "style": "Prima scegli un modello.",
+      "colour": "Spunta almeno un colore."
+    },
+    "added": "{style} aggiunto: scrivi i pezzi nella sua griglia."
+  },
+  "style": {
+    "released": "Rilasciato",
+    "estimate": "Stima — non rilasciato",
+    "noRevision": "Nessuna scheda costo",
+    "mtm": "Su misura",
+    "ppeClass": "DPI {value}"
+  },
+  "grid": {
+    "caption": "Pezzi per colore e taglia",
+    "captionOf": "Pezzi di {style} per colore e taglia",
+    "colour": "Colore",
+    "total": "Totale",
+    "cell": "{colour}, taglia {size}",
+    "notOffered": "non disponibile",
+    "empty": "Ancora nessun colore o taglia.",
+    "totals": "{colour}: {rowTotal}. Taglia {size}: {columnTotal}. Totale: {grand}.",
+    "notWhole": "{cell}: solo pezzi interi, da 0 a {max}. Esci dalla cella per rimettere l'ultima quantità.",
+    "cutToMax": "{cell}: al massimo {max} pezzi in una cella.",
+    "pasted": "Incollati {applied} valori; {skipped} non sono entrati; {clamped} riportati nei limiti.",
+    "issues": "Da verificare in questa griglia"
+  },
+  "lines": {
+    "empty": {
+      "title": "Ancora nessuna riga",
+      "body": "Scrivi sopra codice o nome di un modello per aggiungere la prima riga.",
+      "bodyReadOnly": "Questa versione non ha righe."
+    },
+    "certificate": "Taglia {size}: nessun certificato valido la copre.",
+    "certificateCount_one": "{count} taglia senza certificato",
+    "certificateCount_other": "{count} taglie senza certificato",
+    "revReleased": "Costo: rev {revision} rilasciata",
+    "revEstimate": "Costo: rev {revision} in bozza — stima",
+    "noCostSheet": "Nessuna scheda costo",
+    "styleUnread": "Dettagli del modello non letti",
+    "blockMenu": "Azioni del modello",
+    "addColour": "Aggiungi il colore {colour}",
+    "removeStyle": "Rimuovi questo modello…",
+    "removeTitle": "Rimuovere {style} dal preventivo?",
+    "removeBody_one": "La sua {count} riga e i suoi pezzi escono da questa bozza. Puoi aggiungere di nuovo il modello.",
+    "removeBody_other": "Le sue {count} righe e i loro pezzi escono da questa bozza. Puoi aggiungere di nuovo il modello.",
+    "removeGo_one": "Rimuovi {count} riga",
+    "removeGo_other": "Rimuovi {count} righe",
+    "removed_one": "{count} riga rimossa.",
+    "removed_other": "{count} righe rimosse.",
+    "col": {
+      "colour": "Riga colore",
+      "pieces": "Pezzi",
+      "unitNet": "Prezzo unitario (netto)",
+      "unitGross": "Prezzo unitario (IVA incl.)",
+      "net": "Netto riga",
+      "unitCost": "Costo unitario",
+      "margin": "Margine %"
+    },
+    "priceOf": "Prezzo unitario di {colour}",
+    "pricePlaceholder": "es. 450,00",
+    "pricesOf": "Prezzi di {style}",
+    "costMissing": "Costo incompleto",
+    "belowFloor": "Sotto la soglia",
+    "autosave": "Si salva poco dopo che smetti di scrivere. Un colore senza pezzi non viene quotato.",
+    "keys": "Tasti: n — aggiungi un modello (da qualunque punto della scheda) · frecce, Tab, Invio — spostati tra le celle · Esc — rimetti la cella · ⌘V — incolla un blocco da un foglio di calcolo.",
+    "priceInvalid": "Non è un prezzo: scrivi un numero come 450,00 (o 450.00)."
+  },
+  "summary": {
+    "label": "L'affare in sintesi",
+    "title": "Riepilogo",
+    "lines": "Righe e pezzi",
+    "linesValue": "Righe {lines} · pezzi {units}",
+    "net": "Imponibile",
+    "vatRate": "IVA {rate}",
+    "vatNature": "IVA {nature} (0 %)",
+    "gross": "Totale",
+    "grossConsumer": "Totale IVA inclusa (prezzo per il consumatore)",
+    "deposit": "Acconto",
+    "depositValue": "{pct} {kind} = {amount}, entro 7 giorni dall'accettazione",
+    "noDeposit": "Nessun acconto richiesto",
+    "money": "Importi",
+    "noPrice": "I prezzi non sono visibili per il tuo ruolo.",
+    "cost": "Costo",
+    "costIncomplete": "Incompleto: manca un dato di costo",
+    "marginAmount": "Margine €",
+    "margin": "Margine",
+    "marginOver": "{pct} — sopra la soglia del {floor}",
+    "marginUnder": "{pct} — sotto la soglia del {floor}, serve approvazione",
+    "marginUnknown": "Ignoto finché tutti i costi non sono noti",
+    "needsApproval": "Serve approvazione: {reasons}",
+    "noApproval": "Nessuna approvazione necessaria",
+    "validUntil": "Valido fino al {date}",
+    "issues": "Cosa blocca o riguarda il preventivo"
+  },
+  "price": {
+    "noPrice": {
+      "title": "I prezzi non sono visibili per il tuo ruolo",
+      "body": "Questa scheda la vede un ruolo con visibilità sui prezzi."
+    },
+    "empty": {
+      "title": "Prima aggiungi le righe",
+      "body": "Prezzi e margini compaiono qui quando la scheda Righe ha modelli con pezzi."
+    },
+    "tile": {
+      "net": "Imponibile",
+      "cost": "Costo",
+      "marginAmount": "Margine €",
+      "marginPct": "Margine %",
+      "floor": "soglia {floor}",
+      "lowest": "Riga col margine più basso"
+    },
+    "grainNote": "Le colonne di costo e margine non sono visibili per il tuo ruolo.",
+    "grainNoteMargin": "Vedi le percentuali di margine rispetto alla soglia, non i costi.",
+    "tableLabel": "Prezzi per riga",
+    "col": {
+      "line": "Riga",
+      "qty": "Pezzi",
+      "list": "Prezzo di listino",
+      "unitNet": "Unitario netto",
+      "unitGross": "Unitario IVA incl.",
+      "net": "Netto riga",
+      "unitCost": "Costo unitario",
+      "source": "Fonte del costo",
+      "marginAmount": "Margine €",
+      "marginPct": "Margine %"
+    },
+    "negative": "Sotto costo",
+    "editOnLines": "I prezzi si cambiano nella scheda Righe (un solo punto di modifica)."
+  },
+  "terms": {
+    "party": {
+      "title": "Cliente e indirizzi"
+    },
+    "contact": "Contatto destinatario",
+    "contactHint": "Il preventivo e il link di accettazione vanno a questa persona.",
+    "noContact": "Nessun contatto",
+    "noEmail": "senza email",
+    "customerRef": "Riferimento cliente",
+    "customerRefHint": "Il loro numero di richiesta o RFQ, stampato sul preventivo.",
+    "billTo": "Indirizzo di fatturazione",
+    "shipTo": "Indirizzo di consegna",
+    "noAddress": "Non scelto",
+    "default": "predefinito",
+    "addressUnknown": "Un indirizzo non più attivo",
+    "identity": "Partita IVA / codice fiscale",
+    "sdi": "Codice SDI o PEC",
+    "vies": "VIES",
+    "vat": {
+      "title": "IVA e lingua"
+    },
+    "taxMode": "Regime",
+    "priceBasis": "Prezzi mostrati",
+    "vatLines": "IVA sulle righe",
+    "nature": "natura {nature}",
+    "currency": "Valuta",
+    "language": "Lingua del documento",
+    "languageHint": "Il PDF e l'email partono in questa lingua.",
+    "validity": {
+      "title": "Validità e offerta"
+    },
+    "validUntil": "Valido fino al",
+    "firmOffer": "Offerta irrevocabile",
+    "firmOfferHint": "Non possiamo revocarla prima di quella data (c.c. art. 1329).",
+    "firmOn": "Sì — vale fino alla data",
+    "firmOff": "No",
+    "termsVersion": "Versione delle condizioni",
+    "termsNote": "Le condizioni di vendita standard per il tipo di cliente (azienda, consumatore, export) sono stampate sul PDF.",
+    "delivery": {
+      "title": "Consegna"
+    },
+    "promiseDate": "Data di consegna promessa",
+    "promiseHint": "La data in cui promettiamo la consegna.",
+    "promiseConsumer": "Obbligatoria per un consumatore (Codice del Consumo art. 49).",
+    "payment": {
+      "title": "Pagamento e acconto"
+    },
+    "paymentTerms": "Condizioni di pagamento",
+    "depositPct": "Acconto %",
+    "depositHint": "Del totale IVA inclusa; vuoto: nessun acconto.",
+    "depositKind": "Tipo di acconto",
+    "depositAmount": "Importo dell'acconto",
+    "depositDue": "Scadenza",
+    "depositDueValue": "7 giorni dall'accettazione",
+    "consumer": {
+      "title": "Ciò che la legge impone di dire a un privato",
+      "grossFirst": "Il totale IVA inclusa è mostrato prima dell'accettazione (Codice del Consumo art. 49).",
+      "noWithdrawal": "Nessun diritto di recesso per un capo su misura (art. 59(c))."
+    },
+    "unsaved_one": "{count} modifica non salvata",
+    "unsaved_other": "{count} modifiche non salvate",
+    "save": "Salva le condizioni",
+    "fixFirst_one": "Prima correggi {count} campo",
+    "fixFirst_other": "Prima correggi {count} campi",
+    "saved": "Condizioni salvate.",
+    "problem": {
+      "validPast": "L'offerta deve valere almeno fino a domani.",
+      "depositPct": "Una percentuale da 0 a 100."
+    }
+  },
+  "versions": {
+    "loading": "Lettura delle versioni…",
+    "empty": "Esiste solo la versione 1.",
+    "tableLabel": "Versioni del preventivo",
+    "col": {
+      "version": "Versione",
+      "status": "Stato",
+      "made": "Creata",
+      "sent": "Inviata",
+      "total": "Imponibile / Totale",
+      "changed": "Cosa è cambiato",
+      "decision": "Decisione",
+      "pdf": "PDF"
+    },
+    "byAt": "{who} · {at}",
+    "acceptedBy": "Accettata da {name} · {at}",
+    "declined": "Rifiutata: {note}",
+    "superseded": "Sostituita da una versione più nuova",
+    "openUntil": "Aperta fino al {date}",
+    "download": "Scarica",
+    "reviseNote": "La versione {revision} resta valida finché non invii la versione {next}. Poi il suo link dirà che è stata sostituita."
+  },
+  "approval": {
+    "rules": {
+      "title": "Verifica delle regole",
+      "none": "Nessuna regola richiede un'approvazione. Puoi inviarlo.",
+      "broken": "serve approvazione",
+      "passes": "rispettata",
+      "unknown": "non ancora noto (manca un costo)",
+      "marginNumbers": "Margine {pct}, soglia {floor}.",
+      "discountLimit": "Limite {limit}.",
+      "lines": "Sulle righe {lines}."
+    },
+    "who": "Chi decide: un approvatore (Amministrazione o Titolare); una richiesta sul margine va a un approvatore che vede i margini. Chi ha chiesto non decide mai.",
+    "requests": {
+      "title": "Richieste e decisioni",
+      "loading": "Lettura delle richieste…",
+      "none": "Non ancora richiesta",
+      "asked": "Chiesta da {who} · {at}",
+      "decided": "{status} da {who} · {at}",
+      "withdrawn": "Ritirata · {at}"
+    }
+  },
+  "docs": {
+    "pdfTitle": "Preventivo {number} v{revision}",
+    "pdf": {
+      "preview": "PDF del preventivo — anteprima",
+      "frozen": "PDF del preventivo — come inviato"
+    },
+    "language": "Lingua dell'anteprima",
+    "newTab": "Apri in una nuova scheda",
+    "previewNote": "Creato dal server da questa versione, con la dicitura \"esempio\"; il cliente lo riceve senza dicitura quando viene inviato.",
+    "sentLine": "Inviato {at} · codice documento {sha}…",
+    "loading": "Creazione del PDF…",
+    "problem": {
+      "needs": "Per il PDF servono gli indirizzi di fatturazione e consegna e una validità: compilali in Condizioni e consegna.",
+      "frozen": "Impossibile aprire il PDF inviato. Riprova, o scaricalo da Versioni."
+    },
+    "link": {
+      "title": "Link di accettazione",
+      "none": "Ancora nessun link — viene creato all'invio.",
+      "state": "Stato",
+      "version": "Per",
+      "to": "Inviato a",
+      "until": "Si apre fino al",
+      "never": "Il link è solo nell'email del cliente: qui nessuno ne vede l'indirizzo."
+    },
+    "evidence": {
+      "title": "Prove dell'accettazione",
+      "none": "Non ancora accettato",
+      "signer": "Nome come digitato",
+      "at": "Ora del server",
+      "channel": "Canale",
+      "channelOf": {
+        "LINK": "Link monouso",
+        "OFFICE": "Ufficio (copia firmata)"
+      },
+      "email": "Verifica email",
+      "emailCheck": {
+        "MATCHED": "L'indirizzo a cui era stato inviato il link",
+        "NOT_KNOWN": "Un indirizzo che non conoscevamo",
+        "NOT_ASKED": "Non richiesta"
+      },
+      "document": "Codice documento",
+      "matches": "Corrisponde al PDF inviato",
+      "differs": "Non corrisponde al PDF archiviato",
+      "terms": "Versione delle condizioni",
+      "noWithdrawal": "Dichiarazione di nessun recesso",
+      "noWithdrawalYes": "Accettata"
+    },
+    "deposit": {
+      "title": "Richiesta di acconto",
+      "none": "Nessun acconto richiesto.",
+      "atAcceptance": "Viene creata quando il cliente accetta.",
+      "status": "Stato",
+      "amount": "Importo",
+      "kind": "Tipo",
+      "due": "Scadenza",
+      "fiscal": "Documento fiscale",
+      "fiscalDoc": {
+        "TD02": "Una fattura di acconto (TD02) al pagamento",
+        "NONE": "Nessuno (per la regola dell'acconto)"
+      },
+      "state": {
+        "OPEN": "Aperta",
+        "PAID": "Pagata",
+        "WAIVED": "Rinunciata",
+        "CANCELLED": "Annullata"
+      }
+    }
+  },
+  "dialog": {
+    "reason": "Motivo",
+    "held": {
+      "reason": "Scrivi il motivo (almeno 3 caratteri).",
+      "long": "Al massimo 500 caratteri."
+    },
+    "ask": {
+      "title": "Chiedi approvazione",
+      "body": "Il preventivo non rispetta: {reasons}. Decide un approvatore (Amministrazione o Titolare); fino ad allora le righe sono bloccate.",
+      "note": "Nota per l'approvatore",
+      "noteHint": "Perché questo prezzo ha senso (facoltativa).",
+      "go": "Invia la richiesta"
+    },
+    "withdraw": {
+      "title": "Ritirare la richiesta di approvazione?",
+      "body": "Il preventivo torna in Bozza e si può modificare di nuovo. Chiedi di nuovo quando è pronto.",
+      "go": "Ritira la richiesta"
+    },
+    "approve": {
+      "title": "Approvare il preventivo {number}?",
+      "body": "Approvi: {reasons}. Il preventivo potrà poi essere inviato così com'è.",
+      "note": "Nota della decisione (facoltativa)"
+    },
+    "reject": {
+      "title": "Rifiuta la richiesta",
+      "body": "Il preventivo torna in Bozza. Il motivo finisce nella storia del preventivo per chi ha chiesto.",
+      "hint": "Obbligatorio: indica cosa cambiare."
+    },
+    "cancel": {
+      "title": "Annullare il preventivo {number}?",
+      "body": "Si ferma qui; nulla va al cliente. Duplicalo per ricominciare.",
+      "bodySent": "Il link di accettazione del cliente smette di funzionare e dice che il preventivo è stato ritirato. Serve un motivo.",
+      "go": "Annulla preventivo"
+    },
+    "revise": {
+      "title": "Creare la versione {next}?",
+      "body": "La versione {revision} resta valida finché non invii la versione {next}. Poi il suo link dirà che è stata sostituita.",
+      "note": "Cosa cambia",
+      "noteHint": "Con parole per il cliente, stampate sulla nuova versione (facoltativo).",
+      "go": "Crea la versione {next}"
+    },
+    "newLink": {
+      "title": "Inviare un nuovo link?",
+      "body": "Un nuovo link di accettazione va a {email} con lo stesso PDF. Il vecchio link smette di funzionare.",
+      "go": "Invia il nuovo link"
+    },
+    "reopen": {
+      "title": "Riaprire per modificare?",
+      "body": "L'approvazione non vale più: il preventivo torna in Bozza e, se una regola resta non rispettata, serve una nuova approvazione.",
+      "go": "Riapri"
+    }
+  },
+  "notice": {
+    "asked": "Approvazione richiesta. Le righe sono bloccate finché un approvatore non decide.",
+    "reopened": "Tornato in Bozza: il preventivo si può modificare di nuovo.",
+    "approved": "Approvato. Il preventivo si può inviare.",
+    "rejected": "Rifiutato con il tuo motivo. Il preventivo è tornato in Bozza.",
+    "cancelled": "Preventivo annullato.",
+    "revised": "Versione {next} creata in bozza: modificala, poi inviala.",
+    "linkSent": "È stato inviato un nuovo link.",
+    "linkFailed": "Il nuovo link è stato creato ma la mail non è partita: riprova."
+  },
+  "send": {
+    "title": "Invia il preventivo {number} v{revision} al cliente",
+    "freeze": "Dopo l'invio la versione {revision} non può cambiare. Una modifica crea la versione {next}.",
+    "can": {
+      "accept": "Leggere il preventivo e accettarlo scrivendo il proprio nome, o rifiutarlo.",
+      "deposit": "Vedere l'acconto richiesto e come pagarlo con bonifico.",
+      "consumer": "Vedere prima il totale IVA inclusa e la dichiarazione di nessun recesso quando si applica."
+    },
+    "refused": "Non inviato: una verifica non è più passata. Le verifiche sono state rilette."
+  },
+  "list": {
+    "intro": "Preventivi per modello, colore e taglia, con prezzo, margine, approvazione e la risposta del cliente.",
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "updates_one": "{count} aggiornamento · Mostra",
+    "updates_other": "{count} aggiornamenti · Mostra",
+    "new": "Nuovo preventivo",
+    "keys": "Tasti: c — nuovo preventivo · / — cerca · Tab su un numero, Invio — aprilo.",
+    "tile": {
+      "myDrafts": "Le mie bozze",
+      "waiting": "In attesa di approvazione",
+      "sent": "Inviati — in attesa del cliente",
+      "expiring": "In scadenza entro 7 giorni",
+      "accepted": "Accettati"
+    },
+    "tileMore": "{count}+",
+    "search": "Cerca numero o riferimento cliente",
+    "statusFilter": "Stato",
+    "allStatuses": "Tutti gli stati",
+    "onlyMine": "Solo i miei",
+    "activeFilters": "Filtri attivi",
+    "chip": {
+      "status": "Stato: {status}",
+      "expiring": "In scadenza entro 7 giorni",
+      "search": "Ricerca: {q}"
+    },
+    "removeFilter": "Togli questo filtro",
+    "clearAll": "Togli tutti",
+    "failed": "Impossibile caricare i preventivi",
+    "loading": "Lettura dei preventivi…",
+    "noMatch": {
+      "title": "Nessun preventivo corrisponde a questi filtri",
+      "body": "Cambia o togli i filtri."
+    },
+    "empty": {
+      "title": "Ancora nessun preventivo",
+      "body": "Crea il primo: premi c o Nuovo preventivo.",
+      "bodyView": "Qui compaiono i preventivi che creano i colleghi."
+    },
+    "count_one": "{count} preventivo",
+    "count_other": "{count} preventivi",
+    "countMore_one": "{count} preventivo mostrato · altri sotto",
+    "countMore_other": "{count} preventivi mostrati · altri sotto",
+    "tableLabel": "Preventivi",
+    "col": {
+      "number": "Numero",
+      "customer": "Cliente",
+      "status": "Stato",
+      "units": "Pezzi",
+      "net": "Imponibile",
+      "gross": "Totale",
+      "margin": "Margine %",
+      "approval": "Approvazione",
+      "validUntil": "Valido fino al",
+      "updated": "Aggiornato",
+      "more": "Azioni"
+    },
+    "ref": "Rif. {ref}",
+    "units": "{units} · righe {lines}",
+    "expiringSoon": "In scadenza",
+    "rowMenu": "Azioni per {number}",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "more": "Mostra altri",
+    "noMarginNote": "Le colonne di margine non sono visibili per il tuo ruolo."
+  },
+  "newQuote": {
+    "title": "Nuovo preventivo",
+    "company": "Società che vende",
+    "customer": "Cliente",
+    "customerHint": "Nome, codice, partita IVA o codice fiscale.",
+    "customerPlaceholder": "Cerca clienti",
+    "searching": "Ricerca clienti…",
+    "none": "Nessun cliente corrisponde.",
+    "found_one": "{count} cliente",
+    "found_other": "{count} clienti",
+    "viesWarning": "VIES non valido",
+    "change": "Scegli un altro cliente",
+    "code": "Codice",
+    "taxMode": "Regime",
+    "vies": "VIES",
+    "warnings_one": "Il cliente ha {count} avviso: vedi la sua scheda.",
+    "warnings_other": "Il cliente ha {count} avvisi: vedi la sua scheda.",
+    "contact": "Contatto",
+    "contactHint": "Se c'è, viene scelto il contatto per gli ordini.",
+    "contactDefault": "Il predefinito del cliente",
+    "number": "Riceverà il numero {number} (salvo che un altro preventivo lo prenda prima).",
+    "numberLoading": "Lettura del prossimo numero…",
+    "numberUnknown": "Il numero viene dato quando il preventivo viene creato.",
+    "create": "Crea la bozza",
+    "held": {
+      "customer": "Prima scegli un cliente.",
+      "party": "Questo cliente è {status}: non gli si può fare un preventivo.",
+      "identity": "Questo cliente non ha dati fiscali in vigore: aggiungili prima al cliente."
+    }
+  }
+}

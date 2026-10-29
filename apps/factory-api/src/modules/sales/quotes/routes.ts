@@ -1,7 +1,7 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { AUTH_RATE_LIMITS } from '../../../platform/auth/sessions/office-auth'
-import { answerQuote, askNewLink, openQuote } from './accept'
+import { answerQuote, askNewLink, linkQuoteDocument, openQuote } from './accept'
 import { approve, askApproval, reject, reopen } from './approval'
 import {
   addLineContract,
@@ -18,6 +18,10 @@ import {
   removeLineContract,
   reopenContract,
   acceptLinkQuoteContract,
+  approvalsContract,
+  linkDocumentContract,
+  nextNumberContract,
+  previewContract,
   declineLinkQuoteContract,
   newLinkQuoteContract,
   openLinkQuoteContract,
@@ -35,6 +39,8 @@ import { cancelQuote, createQuote, getQuote, listQuotes, updateQuote } from './q
 import { reviseQuote, sendCheck, sendNewLink, sendQuote } from './send'
 import { getSalesSettings, saveSalesSettings } from './settings'
 import { listVersions } from './versions'
+import { listQuoteApprovals, nextQuoteNumber } from './approvals'
+import { inlineDisposition, previewQuotePdf } from './preview'
 
 /**
  * Quotes, part 1 (B-W1-21): the list and the record, a new quote, its header and terms, its size-grid lines (each costed
@@ -74,6 +80,16 @@ export default defineRoutes('sales.quotes', manifest, async (app) => {
 
   app.post('/sales/quotes/:quoteId/cancel', { schema: cancelContract }, async (request) => cancelQuote(request, request.params.quoteId, request.body, idempotencyKeyFrom(request)))
 
+  // B-W1-21 part 2: the approvals queue, the next number, the PDF before it is sent (shown inline; a new tab opens it).
+  app.get('/sales/quote-approvals', { schema: approvalsContract }, async (request) => listQuoteApprovals(request, request.query))
+
+  app.get('/sales/quote-numbers/next', { schema: nextNumberContract }, async (request) => nextQuoteNumber(request, request.query.companyId))
+
+  app.get('/sales/quotes/:quoteId/preview', { schema: previewContract }, async (request, reply) => {
+    const { pdf, fileName } = await previewQuotePdf(request, request.params.quoteId, request.query.language)
+    return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
+  })
+
   app.get('/sales/quotes/:quoteId/send-check', { schema: sendCheckContract }, async (request) => sendCheck(request, request.params.quoteId))
 
   app.post('/sales/quotes/:quoteId/send', { schema: sendContract }, async (request) => sendQuote(request, request.params.quoteId, request.body, idempotencyKeyFrom(request)))
@@ -88,6 +104,11 @@ export default defineRoutes('sales.quotes', manifest, async (app) => {
   const limited = { rateLimit: { max: linkUse.max, timeWindow: linkUse.timeWindowMs } }
 
   app.get('/link/quote', { schema: openLinkQuoteContract, config: limited }, async (request) => openQuote(request))
+
+  app.get('/link/quote/document', { schema: linkDocumentContract, config: limited }, async (request, reply) => {
+    const { pdf, fileName } = await linkQuoteDocument(request)
+    return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
+  })
 
   app.post('/link/quote/accept', { schema: acceptLinkQuoteContract, config: limited }, async (request) => answerQuote(request, 'accept', request.body))
 

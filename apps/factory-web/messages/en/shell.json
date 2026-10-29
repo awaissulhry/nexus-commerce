@@ -5,7 +5,13 @@
   "nav": {
     "home": {
       "area": "Home",
+      "approvals": "Approvals",
       "mailToSort": "Mail to sort"
+    },
+    "sales": {
+      "area": "Sales",
+      "main": "Main",
+      "quotes": "Quotes"
     },
     "admin": {
       "area": "Admin",

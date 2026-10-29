@@ -5,7 +5,13 @@
   "nav": {
     "home": {
       "area": "Home",
+      "approvals": "Approvazioni",
       "mailToSort": "Posta da smistare"
+    },
+    "sales": {
+      "area": "Vendite",
+      "main": "Principali",
+      "quotes": "Preventivi"
     },
     "admin": {
       "area": "Amministrazione",

@@ -1,5 +1,5 @@
 import type { FastifyRequest } from 'fastify'
-import { DomainError } from '@nexus/factory-domain/core/errors'
+import { DomainError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { privacyNoticeUrl } from '@nexus/factory-domain/email/footer'
@@ -15,6 +15,7 @@ import { linkSessionOf, linkUnavailable } from '../../../platform/links/authenti
 import { linkCommand, useLink } from '../../../platform/links/use'
 import { processEmail } from '../../../platform/email-out/service'
 import { systemCallerOf } from '../../../platform/files/files'
+import { processFiles } from '../../../platform/files/service'
 import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import { depositOfVersion, depositViewOf, instructionsFor } from '../deposits/deposits'
 import { afterAcceptance } from './after-acceptance'
@@ -186,6 +187,28 @@ export async function openQuote(request: FastifyRequest) {
   const link = linkOf(request)
   const facts = await request.withClient((client) => readLinkFacts(client, link.id, link.record.id, todayOf(request)))
   return linkView(request, facts)
+}
+
+/**
+ * The PDF the customer accepts (B-W1-24 part 2; the design's `pdf` panel of links.quote): the bytes of the version's
+ * stored document as it was sent (the StoredFile whose SHA-256 the version froze, shared with the party's links), read
+ * from the store by the tenant's system scope for THIS link's quote only. A QUOTE_ACCEPT session reads no files
+ * (links/purposes: readsFiles false), so the page cannot use GET /files/:id/download; this route is its one document.
+ */
+export async function linkQuoteDocument(request: FastifyRequest): Promise<{ pdf: Buffer; fileName: string }> {
+  const link = linkOf(request)
+  const context = requireContext(request) as LinkContext
+  const facts = await request.withClient((client) => readLinkFacts(client, link.id, link.record.id, todayOf(request)))
+  const sha256 = facts.version.documentSha256
+  if (!sha256) throw new NotFoundError('This quote has no PDF yet.')
+  const system = systemCallerOf(request)(context.tenantId)
+  const row = await system.withClient((client) =>
+    client.storedFile.findFirst({ where: { recordType: 'Quote', recordId: facts.quote.id, sha256, status: 'AVAILABLE' }, select: { originalName: true, storeAccountId: true, storageKey: true, visibility: true, sizeBytes: true } }),
+  )
+  if (!row || !row.visibility.includes('LINK')) throw new NotFoundError('This quote has no PDF for its link.')
+  const pdf = await processFiles().storage.read(system, row.storeAccountId, row.storageKey, row.sizeBytes + 1)
+  if (!pdf) throw new NotFoundError('This quote has no PDF for its link.')
+  return { pdf, fileName: row.originalName }
 }
 
 export interface AnswerBody {
