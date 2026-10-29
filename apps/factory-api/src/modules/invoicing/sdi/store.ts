@@ -1,4 +1,5 @@
 import type { Prisma } from '@nexus/factory-db'
+import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { ConflictError } from '@nexus/factory-domain/core/errors'
 import type { CommandTools, CommandTx } from '../../../core/command'
 import type { Reader } from '../store'
@@ -6,8 +7,7 @@ import type { Reader } from '../store'
 /**
  * The SDI part of the invoicing module's reads and writes (factory-db money.prisma SdiSubmission, SdiNotification): the
  * columns every read names, the company's SDI account, the row lock every SDI command takes first, and the legal
- * archive's record (ONE reader and ONE writer: today an audit row of the invoice, until SdiSubmission gets its archive
- * columns; swapping them changes these two functions only).
+ * archive's record (ONE reader and ONE writer: the send's archive columns, with an audit row and an event).
  */
 
 export const SEND_COLUMNS = {
@@ -82,17 +82,19 @@ export interface ArchiveRecord {
   readonly archivedAt: string
 }
 
-/** Where the invoice's sent file is archived for legal keeping, or null. */
+/** Where the invoice's sent file is archived for legal keeping (its send's archive columns), or null. */
 export async function readArchive(db: Reader, invoiceId: string): Promise<ArchiveRecord | null> {
-  const row = await db.auditLog.findFirst({ where: { recordType: 'Invoice', recordId: invoiceId, action: ARCHIVE_ACTION }, select: { after: true }, orderBy: { at: 'desc' } })
-  const after = row?.after as Partial<ArchiveRecord> | null | undefined
-  return after && typeof after.submissionId === 'string' && typeof after.archiveRef === 'string' && typeof after.archivedAt === 'string'
-    ? { submissionId: after.submissionId, archiveRef: after.archiveRef, archivedAt: after.archivedAt }
-    : null
+  const row = await db.sdiSubmission.findFirst({ where: { invoiceId, archivedAt: { not: null } }, select: { id: true, archiveRef: true, archivedAt: true }, orderBy: { attempt: 'asc' } })
+  return row && row.archivedAt && row.archiveRef ? { submissionId: row.id, archiveRef: row.archiveRef, archivedAt: toUtcIso(row.archivedAt) } : null
 }
 
-/** Records the archive of a sent file (inside the caller's command), with the event invoice.sdi_archived. */
-export function writeArchive(tools: Pick<CommandTools, 'audit' | 'emit'>, invoice: { id: string; companyId: string }, record: ArchiveRecord): void {
+/**
+ * Records the archive of a sent file inside the caller's command: the send's archive columns (set once, only on a
+ * DELIVERED or NOT_DELIVERABLE send: the …_money_sdi_archive_guards trigger), its audit row on the invoice and the
+ * event invoice.sdi_archived.
+ */
+export async function writeArchive(tools: Pick<CommandTools, 'tx' | 'audit' | 'emit'>, invoice: { id: string; companyId: string }, record: ArchiveRecord): Promise<void> {
+  await tools.tx.sdiSubmission.update({ where: { id: record.submissionId }, data: { archivedAt: new Date(record.archivedAt), archiveRef: record.archiveRef, version: { increment: 1 } }, select: { id: true } })
   tools.audit({ action: ARCHIVE_ACTION, recordType: 'Invoice', recordId: invoice.id, companyId: invoice.companyId, after: { ...record } })
   tools.emit({ type: 'invoice.sdi_archived', subject: invoice.id, companyId: invoice.companyId, payload: { invoiceId: invoice.id, submissionId: record.submissionId } })
 }

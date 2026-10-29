@@ -281,6 +281,9 @@ describe('send → RC → DELIVERED, archived (FIN-084, FIN-086, FIN-092; D.Lgs.
     expect(status.sends[0]).toMatchObject({ status: 'DELIVERED', sdiIdentifier: expect.any(String), outcomeAt: expect.any(String), notifications: [{ type: 'RC', source: 'webhook' }] })
     expect(status.archive).toMatchObject({ submissionId: status.sends[0].id, archiveRef: expect.stringMatching(/^fake-archive-/) })
     expect(fake.archives.filter((entry) => entry.fileName === status.sends[0].fileName)).toHaveLength(1)
+    const [archived] = await admin<{ archiveRef: string; archived: boolean }>('SELECT "archiveRef", "archivedAt" IS NOT NULL AS archived FROM "SdiSubmission" WHERE id = $1', [status.sends[0].id])
+    expect(archived).toEqual({ archiveRef: status.archive.archiveRef, archived: true })
+    expect(await admin(`SELECT id FROM "OutboxEvent" WHERE type = 'invoice.sdi_archived' AND subject = $1`, [invoice.id])).toHaveLength(1)
     const receipts = await admin(`SELECT status FROM "InboundWebhook" WHERE "accountId" = $1 AND status <> 'PROCESSED'`, [sdiAccount])
     expect(receipts).toEqual([])
     expect((await admin<{ status: string }>('SELECT status FROM "Invoice" WHERE id = $1', [invoice.id]))[0]!.status).toBe('DELIVERED')
@@ -508,6 +511,58 @@ describe('the database refuses what the API never sends (the …_money_guards tr
     const otherDraft = (await as(finance, 'POST', '/invoicing/invoices', { companyId: c1(), buyerPartyId: ids.customer, docType: 'TD01', lines: [{ description: 'Giacca', quantity: '1', unitPrice: '100' }] }, 201)).invoice
     await expect(insert(otherDraft.id, other.xmlFileId)).rejects.toThrow(/is a DRAFT/)
     await expect(h.database.withScope({ audience: 'office', tenantId: tenant.id, actorId: newId() }, (client) => client.sdiNotification.deleteMany({}))).rejects.toThrow()
+  })
+})
+
+describe('the legal archive is recorded once, only for a file SDI handed over (…_money_sdi_archive_guards; DM 17.6.2014)', () => {
+  const asOffice = <T>(work: (client: Parameters<Parameters<Harness['database']['withScope']>[1]>[0]) => Promise<T>) => h.database.withScope({ audience: 'office', tenantId: tenant.id, actorId: newId() }, work)
+  const archive = (id: string, data: { archivedAt?: Date | null; archiveRef?: string | null }) => asOffice((client) => client.sdiSubmission.update({ where: { id }, data, select: { id: true } }))
+
+  it('refuses an archive on a send SDI did not hand over, half an archive, a second one, and one at the start', async () => {
+    const invoice = await issued()
+    fake.scriptNext({ kind: 'NS' })
+    const { sdi: sent } = await send(invoice.id)
+    const id = sent.sends[0].id
+    await expect(archive(id, { archivedAt: new Date(), archiveRef: 'ARCH-1' })).rejects.toThrow(/only a DELIVERED or NOT_DELIVERABLE send is archived/)
+    sdiAnswers()
+    await webhooks()
+    expect((await sdiOf(invoice.id)).sends[0].status).toBe('REJECTED')
+    await expect(archive(id, { archivedAt: new Date(), archiveRef: 'ARCH-1' })).rejects.toThrow(/only a DELIVERED or NOT_DELIVERABLE send is archived/)
+
+    const other = await issued()
+    const { sdi: delivered } = await send(other.id)
+    sdiAnswers()
+    await webhooks()
+    const done = delivered.sends[0].id
+    const [row] = await admin<{ archiveRef: string }>('SELECT "archiveRef" FROM "SdiSubmission" WHERE id = $1', [done])
+    expect(row!.archiveRef).toMatch(/^fake-archive-/)
+    await expect(archive(done, { archiveRef: 'ARCH-2' })).rejects.toThrow(/recorded once and never changed/)
+    await expect(archive(done, { archivedAt: null, archiveRef: null })).rejects.toThrow(/recorded once and never changed/)
+    await expect(
+      asOffice((client) =>
+        client.sdiSubmission.create({ data: { id: newId(), partyId: ids.customer, invoiceId: other.id, attempt: 9, integrationAccountId: sdiAccount, fileName: `IT${FAKE_VAT.company}_ZZ${Math.floor(Math.random() * 900 + 100)}.xml`, xmlFileId: other.xmlFileId, status: 'SENT', sentAt: new Date(), archivedAt: new Date(), archiveRef: 'ARCH-3' }, select: { id: true } }),
+      ),
+    ).rejects.toThrow(/starts without a legal archive/)
+  })
+
+  it('a send delivered but not archived yet takes both columns together, once', async () => {
+    const invoice = await issued()
+    const { sdi: sent } = await send(invoice.id)
+    const id = sent.sends[0].id
+    // The archive job has not run: SDI's answer recorded without the worker's handlers.
+    sdiAnswers()
+    const saved = handlers
+    handlers = handlers.filter((handler) => handler.name !== 'invoicing.sdiArchive')
+    try {
+      await webhooks()
+    } finally {
+      handlers = saved
+    }
+    expect((await sdiOf(invoice.id)).archive).toBeNull()
+    await expect(archive(id, { archivedAt: new Date() })).rejects.toThrow(/both its time and its reference/)
+    await expect(archive(id, { archivedAt: new Date(), archiveRef: '  ' })).rejects.toThrow(/both its time and its reference/)
+    await archive(id, { archivedAt: new Date(), archiveRef: 'ARCH-4' })
+    expect((await sdiOf(invoice.id)).archive).toMatchObject({ submissionId: id, archiveRef: 'ARCH-4' })
   })
 })
 

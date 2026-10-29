@@ -1,13 +1,14 @@
 import { command, type CommandCaller } from '../../../core/command'
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
 import { processSdi, type SdiRuntime } from './runtime'
-import { readArchive, readSends, writeArchive } from './store'
+import { lockInvoice, readArchive, readSends, writeArchive } from './store'
 
 /**
  * Legal archiving (conservazione; FIN-092; DM 17.6.2014, c.c. art. 2220: ten years), rented from the SDI intermediary
  * (A1 §4; PLAN §2.8): once SDI handed the file to the customer's side (DELIVERED, or NOT_DELIVERABLE: issued, in the
  * tax drawer), the worker's handler `invoicing.sdiArchive` asks the provider to archive that send (one gateway call,
- * sdi.archive, idempotent) and records it in ONE command (store.ts writeArchive; the event invoice.sdi_archived). A
+ * sdi.archive, idempotent) and records it in ONE command (store.ts writeArchive: the send's archivedAt and archiveRef,
+ * set once; an audit row; the event invoice.sdi_archived). A
  * refused or failed call is retried by the queue. A rejected file is never archived: it counts as never issued. The
  * factory keeps its own copy too: the XML, the PDF and the receipts are FISCAL_ARCHIVE files (ten years).
  */
@@ -25,8 +26,9 @@ export async function archiveInvoice(sdi: SdiRuntime, caller: CommandCaller, inv
   if (!send.providerRef) throw new Error(`Send ${send.id} has no provider id yet; it is archived once the poll names it.`)
   const receipt = await sdi.archive(caller, send.integrationAccountId, { providerRef: send.providerRef, fileName: send.fileName })
   const { result } = await command(caller, { name: 'invoices.sdiArchive', idempotencyKey: `sdi-archive.${send.id}`, input: { invoiceId, submissionId: send.id }, ...(causationId ? { causationId } : {}) }, async (tools) => {
+    await lockInvoice(tools.tx, invoiceId)
     if (await readArchive(tools.tx, invoiceId)) return { archived: false }
-    writeArchive(tools, found.invoice, { submissionId: send.id, archiveRef: receipt.archiveRef, archivedAt: receipt.archivedAt })
+    await writeArchive(tools, found.invoice, { submissionId: send.id, archiveRef: receipt.archiveRef, archivedAt: receipt.archivedAt })
     return { archived: true }
   })
   return result.archived ? 'archived' : 'already'
