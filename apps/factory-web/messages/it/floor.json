@@ -32,7 +32,12 @@
       "seconds_other": "{count} secondi",
       "stay": "Sono qui",
       "signOut": "Esci ora"
-    }
+    },
+    "refused_one": "{count} rifiutata",
+    "refused_other": "{count} rifiutate",
+    "synced": "Tutto registrato",
+    "lastSent": "Ultimo invio {time}",
+    "openQueue": "Apri coda"
   },
   "mode": {
     "cutting": "Taglio",
@@ -278,7 +283,15 @@
       "open": "Leggila"
     },
     "switched": "{from} è uscito · {to} è entrato",
-    "badgeRefused": "Questo badge non apre questo tablet. Chiedi al tuo capoturno."
+    "badgeRefused": "Questo badge non apre questo tablet. Chiedi al tuo capoturno.",
+    "offline": {
+      "queues": "Nessuna rete: il tuo lavoro resta salvato sul tablet e parte quando torna la rete.",
+      "held": {
+        "receive": "Nessuna rete: il ricevimento merci aspetta la rete (il ricevimento e i suoi lotti prendono il numero dall'ufficio). Il resto del lavoro resta salvato sul tablet.",
+        "inspect": "Nessuna rete: collaudi e rilasci aspettano la rete (prendono il numero dall'ufficio). Le scansioni restano salvate sul tablet.",
+        "serials": "Nessuna rete: i seriali dei capi e le loro etichette aspettano la rete (li dà l'ufficio). Il resto del lavoro resta salvato sul tablet."
+      }
+    }
   },
   "tile": {
     "operation": "Operazione",
@@ -429,6 +442,184 @@
       "QUARANTINE": "Quarantena",
       "PRODUCTION": "Produzione",
       "SHIPPING": "Spedizione"
+    }
+  },
+  "sync": {
+    "title": "In attesa di invio",
+    "actions": "Azioni della coda",
+    "sendNow": "Invia ora",
+    "sending": "Invio in corso…",
+    "noNetwork": "Nessuna rete",
+    "needsNetwork": "Serve la rete",
+    "needsNetworkDiscard": "Per scartare serve la rete: l'ufficio lo sa subito.",
+    "now": {
+      "title": "Questo tablet ora",
+      "waiting": "In attesa",
+      "refused": "Rifiutate",
+      "recorded": "Registrate oggi",
+      "online": "In linea",
+      "offline": "Senza rete",
+      "lastSent": "ultimo invio {time}",
+      "neverSent": "nessun invio ancora"
+    },
+    "problem": {
+      "unavailable": "L'ufficio non ha risposto all'ultimo invio. Le azioni restano sul tablet e vengono inviate di nuovo.",
+      "signedOut": "La sessione è finita: accedi di nuovo e le azioni partono."
+    },
+    "clock": {
+      "behind_one": "L'orologio di questo tablet è indietro di {count} minuto. Avvisa l'ufficio.",
+      "behind_other": "L'orologio di questo tablet è indietro di {count} minuti. Avvisa l'ufficio.",
+      "ahead_one": "L'orologio di questo tablet è avanti di {count} minuto. Avvisa l'ufficio.",
+      "ahead_other": "L'orologio di questo tablet è avanti di {count} minuti. Avvisa l'ufficio."
+    },
+    "storage": {
+      "kept": "Dati conservati sul tablet",
+      "low": "Spazio scarso: restano {mb} MB. Avvisa l'ufficio.",
+      "mayClear": "Il browser potrebbe cancellare i dati del tablet: installa l'app e avvisa l'ufficio."
+    },
+    "numbers": {
+      "left_one": "{count} numero per {what} rimasto sul tablet",
+      "left_other": "{count} numeri per {what} rimasti sul tablet",
+      "lowOnline_one": "Resta solo {count} numero per {what}: altri arrivano con il prossimo invio.",
+      "lowOnline_other": "Restano solo {count} numeri per {what}: altri arrivano con il prossimo invio.",
+      "lowOffline_one": "Resta solo {count} numero per {what} sul tablet. Collegati alla rete per averne altri.",
+      "lowOffline_other": "Restano solo {count} numeri per {what} sul tablet. Collegati alla rete per averne altri.",
+      "kind": {
+        "BUNDLE": "cartellino del fascio",
+        "HIDE": "etichetta della pelle",
+        "GARMENT_SERIAL": "seriale del capo"
+      }
+    },
+    "refused": {
+      "title": "Rifiutate, con la soluzione",
+      "empty": "Nessuna azione rifiutata.",
+      "final": "Rifiutata",
+      "again": "Si reinvia da sola",
+      "others_one": "Un'altra persona ha {count} azione rifiutata: la vede il capo squadra.",
+      "others_other": "Un'altra persona ha {count} azioni rifiutate: le vede il capo squadra."
+    },
+    "waiting": {
+      "title": "In attesa, in ordine di invio",
+      "empty": "Tutto registrato.",
+      "offline": "Nessuna rete. Parte da sola quando torna la rete.",
+      "sending": "Invio in corso…",
+      "saved": "Salvata sul tablet",
+      "again": "Salvata sul tablet, già provata",
+      "others_one": "Un'altra persona ha {count} azione in attesa su questo tablet: parte quando accede.",
+      "others_other": "Un'altra persona ha {count} azioni in attesa su questo tablet: partono quando accede."
+    },
+    "recorded": {
+      "title": "Registrate oggi",
+      "show_one": "Mostra registrate oggi ({count})",
+      "show_other": "Mostra registrate oggi ({count})",
+      "hide": "Nascondi registrate oggi",
+      "empty": "Ancora niente registrato oggi.",
+      "at": "Fatta {device} · registrata {server}",
+      "status": "Registrata dall'ufficio"
+    },
+    "detail": {
+      "actions": "Azione rifiutata",
+      "back": "Indietro",
+      "again": "Invia di nuovo",
+      "discard": "Scarta",
+      "fix": "Cosa fare:",
+      "when": "Fatta su questo tablet alle {time}",
+      "final": "Così com'è non passerà.",
+      "notFinal": "Si reinvia da sola con il prossimo invio."
+    },
+    "discard": {
+      "title": "Scartare questa azione?",
+      "body": "Non verrà registrata. Il capo squadra vede che è stata scartata.",
+      "cancel": "Annulla",
+      "confirm": "Scarta"
+    },
+    "what": {
+      "report_one": "Avanzamento {code} · {count} buono",
+      "report_other": "Avanzamento {code} · {count} buoni",
+      "undo": "Annulla un avanzamento",
+      "ask_one": "Chiedi una correzione · {count} buono",
+      "ask_other": "Chiedi una correzione · {count} buoni",
+      "cut_one": "Taglio su {code} · {count} kit",
+      "cut_other": "Taglio su {code} · {count} kit",
+      "remnant": "Scampolo di {code}",
+      "bundle_one": "Fascio {code} · {count} capo",
+      "bundle_other": "Fascio {code} · {count} capi",
+      "other": "Azione",
+      "noCode": "senza codice",
+      "scrap_one": "{count} scarto",
+      "scrap_other": "{count} scarti",
+      "rework_one": "{count} da rilavorare",
+      "rework_other": "{count} da rilavorare"
+    },
+    "refusal": {
+      "UNKNOWN_BUNDLE": {
+        "message": "Questo non è un cartellino di fascio di questo stabilimento.",
+        "fix": "Scansiona di nuovo il cartellino del fascio, o chiedi al capo squadra."
+      },
+      "REPLACED": {
+        "message": "Questo cartellino è stato sostituito da uno nuovo.",
+        "fix": "Scartala e scansiona il cartellino nuovo."
+      },
+      "VOIDED": {
+        "message": "Questo fascio è stato annullato.",
+        "fix": "Scartala."
+      },
+      "WORK_ORDER_NOT_OPEN": {
+        "message": "L'ordine di lavoro non è aperto (sospeso, finito o annullato).",
+        "fix": "Chiedi al capo squadra."
+      },
+      "PREVIOUS_NOT_REPORTED": {
+        "message": "L'operazione prima di questa non è ancora registrata (può essere ancora su un altro tablet).",
+        "fix": "Si reinvia da sola; se resta qui, chiedi al capo squadra."
+      },
+      "FLOOR_NOT_READY": {
+        "message": "Il lavoro è fermo in questo stabilimento finché il reparto non è pronto.",
+        "fix": "Si reinvia da sola quando il reparto è pronto; chiedi al capo squadra."
+      },
+      "NOT_RESERVED": {
+        "message": "Questo numero di etichetta non è tra i numeri di questo tablet.",
+        "fix": "Scartala, stampa un'etichetta nuova e mettila al posto di quella."
+      },
+      "BLOCK_CLOSED": {
+        "message": "Il blocco di numeri di questa etichetta è stato chiuso dall'ufficio.",
+        "fix": "Scartala, stampa un'etichetta nuova e mettila al posto di quella."
+      },
+      "ALREADY_USED": {
+        "message": "Questo numero di etichetta è già stato usato.",
+        "fix": "Scartala, stampa un'etichetta nuova e mettila al posto di quella."
+      },
+      "NOT_ALLOWED": {
+        "message": "Chi ha fatto l'accesso non può farlo in questo stabilimento.",
+        "fix": "Chiedi il ruolo al capo squadra, o scartala."
+      },
+      "BAD_EVENT": {
+        "message": "Il tablet ha salvato l'azione con qualcosa che manca o non va.",
+        "fix": "Scartala e rifalla."
+      },
+      "UNKNOWN_KIND": {
+        "message": "L'ufficio non accetta questo tipo di azione dal tablet.",
+        "fix": "Scartala e aggiorna l'app; chiedi al capo squadra."
+      },
+      "CLIENT_ID_REUSED": {
+        "message": "Il tablet ha usato il codice di un'azione per un'altra.",
+        "fix": "Scartala e rifalla."
+      },
+      "HIDE_USED_UP": {
+        "message": "La pelle è finita: i suoi tagli sono definitivi.",
+        "fix": "Scartala."
+      },
+      "ALREADY_REPORTED": {
+        "message": "Questo fascio è già registrato a questa operazione.",
+        "fix": "Scartala."
+      },
+      "NOT_FOUND": {
+        "message": "Quello che questa azione indica non risulta qui.",
+        "fix": "Scartala, scansiona di nuovo l'etichetta o chiedi al capo squadra."
+      },
+      "CONFLICT": {
+        "message": "L'ufficio non ha potuto registrarla ora.",
+        "fix": "Si reinvia da sola; se resta qui, chiedi al capo squadra."
+      }
     }
   }
 }

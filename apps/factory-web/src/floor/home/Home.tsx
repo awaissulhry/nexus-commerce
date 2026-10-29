@@ -6,12 +6,14 @@ import { useConfirmFeedback } from '@nexus/ui/floor'
 import { zxingCamera } from '../camera'
 import { useFloor } from '../FloorApp'
 import { homeTiles, modeOf } from '../model'
+import { heldWorkOf } from '../queue/actions'
 import { readScan } from '../scan/scan-model'
 import { HomeView, type HomeAction } from './view/HomeView'
 
 /**
  * The live SCR-022 home (`/floor`): the tiles of this station's mode that the operator's floor permissions open, the
  * scan strip (a label opens Scan anything with it; a badge switches person), and the notice card while it is due.
+ * Offline, what goes on and what waits for the network; the tablet's label numbers when they run low.
  */
 export function FloorHome() {
   const store = useFloor()
@@ -48,7 +50,16 @@ export function FloorHome() {
 
   return (
     <HomeView
-      model={{ frame, mode, tiles, notice: { due: me.notice.due, blocksScans: me.notice.blocksScans }, switched: store.switched, badgeRefused: refused }}
+      model={{
+        frame,
+        mode,
+        tiles,
+        notice: { due: me.notice.due, blocksScans: me.notice.blocksScans },
+        switched: store.switched,
+        badgeRefused: refused,
+        offline: store.online ? null : { held: heldWorkOf(mode) },
+        lowNumbers: store.shellQueue.lowNumbers,
+      }}
       onFrame={onFrame}
       onAction={(action) => void onAction(action)}
       camera={zxingCamera}
