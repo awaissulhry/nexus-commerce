@@ -21,6 +21,7 @@ import { allocateNumber } from '../../../platform/numbering/allocate'
 import { assertMay, mayOn, officeContextOf } from '../access'
 import { tenantOf } from '../cells'
 import { shipmentDetail, officeShipment } from '../shipments/shipments'
+import { shipmentDocumentBlockers } from '../documents/read'
 import { lockedStatus, readShipment, shipmentFacts, type ShipmentHeader } from '../store'
 import { ddtView, expectedDdtNumber, issuedOf, languageOf, liveDdtOf, pdfFileIdOf, pdfFileIdsOf, readDdt, readDdtFacts, type DdtRow, type DdtView } from './store'
 
@@ -36,7 +37,9 @@ import { ddtView, expectedDdtNumber, issuedOf, languageOf, liveDdtOf, pdfFileIdO
  *             only with its shipment), the audit rows and the events. After the commit the PDF is rendered from the
  *             frozen row and stored (FISCAL_ARCHIVE, ten years) by platform/documents' own command: when the file
  *             store is down the DDT stays issued and POST /shipping/ddts/:ddtId/pdf prints it again.
- *   ship      PACKED → SHIPPED (the goods were handed over): a live DDT unless an immediate invoice travels instead.
+ *   ship      PACKED → SHIPPED (the goods were handed over): a live DDT unless an immediate invoice travels instead, and
+ *             every PPE style's DoC and leaflet on file for its frozen revision (B-W1-49: 409 in the compliance step's
+ *             words; the same check when `issue` ships). Issuing a DDT without shipping never asks for them.
  *   cancel    an append-only DdtCancellation under the shipment's lock (one per DDT); the shipment stays as it is (the
  *             guards allow no way back from SHIPPED): PACKED can be unpacked or take a new DDT, SHIPPED takes a
  *             replacement DDT with a new number.
@@ -117,6 +120,16 @@ async function shipGoods(tools: CommandTools, shipment: ShipmentHeader): Promise
   return serials.map((serial) => serial.serial)
 }
 
+/**
+ * PPE leaves only with its EU Declaration of Conformity and user information (B-W1-49; Reg. (EU) 2016/425 art. 8(7),
+ * 8(8)): inside the shipping command, after its state check, a 409 with the compliance step's words when a PPE style's
+ * documents are not on file for its frozen revision (modules/shipping/documents shipmentDocumentBlockers).
+ */
+async function assertDocumentsTravel(tools: CommandTools, shipmentId: string): Promise<void> {
+  const blockers = await shipmentDocumentBlockers(tools.tx, shipmentId)
+  if (blockers.length > 0) throw new InvalidStateError(blockers.map((check) => check.message).join(' '))
+}
+
 const shipmentState = async (tools: CommandTools, shipmentId: string) => {
   const row = (await readShipment(tools.tx, shipmentId))!
   return { id: row.id, number: row.number, status: row.status, version: row.version }
@@ -148,6 +161,7 @@ export async function issueDdt(files: FilesRuntime, caller: CommandCaller, shipm
       const facts = await readDdtFacts(tools.tx, current, company)
       const state = issueStateProblems(current.status, facts.liveDdtNumber, body.ship === true)
       if (state.length > 0) throw new InvalidStateError(state.join(' '))
+      if (body.ship === true) await assertDocumentsTravel(tools, current.id)
       const { draft, problems } = draftDdt(facts, body, tools.now)
       if (problems.length > 0) throw issues(problems)
       const layout = layoutProblems(draft, facts)
@@ -378,6 +392,7 @@ export async function shipShipment(caller: CommandCaller, shipmentId: string, bo
     const current = await lockedStatus(tools, shipment.id, ['PACKED'], 'it leaves')
     const facts = { ...(await shipmentFacts(tools.tx, current.id)), ddtRequired: current.ddtRequired }
     assertTransition(shipmentMachine, current.status, 'SHIPPED', facts)
+    await assertDocumentsTravel(tools, current.id)
     const live = await liveDdtOf(tools.tx, current.id)
     const serials = await shipGoods(tools, current)
     tools.audit({ recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { status: 'PACKED' }, after: { status: 'SHIPPED', ddt: live?.number ?? null, serials } })

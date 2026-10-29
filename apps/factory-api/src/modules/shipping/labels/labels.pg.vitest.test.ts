@@ -35,6 +35,7 @@ import { localKeyProvider } from '../../../platform/secrets/local'
 import { SECRET_PURPOSES, storeSecret } from '../../../platform/secrets/store'
 import { createCarrierRuntime, useCarrier, type CarrierRuntime } from './carrier'
 import { pollShipment, runTrackingPoll } from './poll'
+import { fileTravelDocuments, TRAVEL_DOCUMENT_PERMISSIONS } from '../documents/testing/compliance'
 
 /**
  * Carrier labels and tracking (B-W1-48; PLAN §4.7 stage 14-ship "2 parcels; DDT; carrier label (fake); tracking
@@ -78,6 +79,8 @@ const SESSIONS: Record<string, SessionContext> = {
   packerOffice: office(A.tenant, [grant(['shipping.view', 'shipping.pack'])]),
   companyB: office(A.tenant, [grant([...SHIPPING, 'print.labels'], [A.companyB])]),
   otherTenant: office(B.tenant, [grant([...SHIPPING, 'print.labels'])]),
+  // Puts each shipped PPE style's DoC and leaflet on file (B-W1-49: PPE leaves only with them).
+  quality: office(A.tenant, [grant(TRAVEL_DOCUMENT_PERMISSIONS)]),
   packerA1: { audience: 'floor', tenantId: A.tenant, actorId: A.operator, siteId: A.siteA1, deviceId: newId(), grants: [{ permissions: ['shipping.pack', 'print.view', 'print.labels'], companies: [A.companyA], sites: [A.siteA1], parties: 'all' }] },
 }
 
@@ -196,6 +199,9 @@ beforeAll(async () => {
       logger: false,
     },
   )
+  // The shipped styles' DoC and leaflet for the work orders' frozen revision 1, in the orders' language.
+  await fileTravelDocuments(app, 'quality', seedA.quality.serialStyleId, seedA.quality.serialRevisionId)
+  await fileTravelDocuments(app, 'quality', seedA.quality.production.styleId, seedA.quality.production.revisionId)
 }, 180_000)
 
 afterAll(async () => {
