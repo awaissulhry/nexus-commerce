@@ -10,11 +10,13 @@
 /** Record type (the API's model name) → its own page. W1 so far: a received mail opens in Mail to sort's review. */
 export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   InboundEmail: '/home/mail-to-sort?open=[id]',
+  WorkOrder: '/production/work-orders/[id]',
 })
 
 /** An API list route → the web page that shows it (with the same query). */
 export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/email/inbound': '/home/mail-to-sort',
+  '/production/work-orders': '/production/work-orders',
 })
 
 export interface RecordRef {

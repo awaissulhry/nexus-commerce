@@ -129,6 +129,38 @@ function materialsView(planned: readonly PlannedMaterial[], parts: SpecParts, is
     .map(({ firstSeq: _first, ...rest }) => rest)
 }
 
+/** A work order's progress summed over its cells, as the list shows it (SCR-069 "Progress"). */
+export interface ProgressTotals {
+  readonly cut: number | null
+  readonly bundled: number | null
+  readonly sewn: number | null
+  readonly finished: number | null
+}
+
+/** A sum that stays null when no cell counts the step (a cell with no part cut from hides, a routing that sews nowhere). */
+function sumOrNull(values: Iterable<number | null>): number | null {
+  let total: number | null = null
+  for (const value of values) if (value !== null) total = (total ?? 0) + value
+  return total
+}
+
+/**
+ * The list's progress of one work order (SCR-069): the record's cells' cut, bundled, sewn and finished garments, summed;
+ * null for a draft (nothing is frozen to count against, never a made-up 0). The same counts as the record (cutCountsOf,
+ * scanProgressOf), so the list and the record never disagree.
+ */
+export async function progressTotalsOf(db: Reader, workOrder: Pick<Header, 'id' | 'siteId' | 'styleId' | 'status'>): Promise<ProgressTotals | null> {
+  if (workOrder.status === 'DRAFT') return null
+  const cut = await cutCountsOf(db, workOrder.id, workOrder.styleId)
+  const scanned = [...(await scanProgressOf(db, workOrder)).values()]
+  return {
+    cut: sumOrNull(cut.values()),
+    bundled: sumOrNull(scanned.map((cell) => cell.bundled)),
+    sewn: sumOrNull(scanned.map((cell) => cell.sewn)),
+    finished: sumOrNull(scanned.map((cell) => cell.finished)),
+  }
+}
+
 /** The record of one work order, read with one reader (a request's client, or the command's transaction). */
 export async function workOrderView(db: Reader, workOrder: Header, today: BusinessDate, loaded?: Basics) {
   const basics = loaded ?? (await readBasics(db, workOrder))

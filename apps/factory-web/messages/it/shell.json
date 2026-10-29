@@ -24,6 +24,12 @@
       "imports": "Importazione",
       "audit": "Registro attività",
       "connections": "Collegamenti"
+    },
+    "production": {
+      "area": "Produzione",
+      "main": "Principali",
+      "floor": "Reparto ora",
+      "workOrders": "Ordini di produzione"
     }
   },
   "topbar": {

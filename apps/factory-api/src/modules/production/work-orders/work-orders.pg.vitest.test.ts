@@ -336,6 +336,29 @@ describe('a work order from order lines (MES-001, MES-002)', () => {
     expect((await ok('viewer', 'GET', `/production/work-orders?status=IN_PROGRESS&styleId=${A.style}&siteId=${A.siteA1}`)).workOrders.map((row: Json) => row.number)).toEqual(['SEED-WO-0001'])
     const listed = await ok('viewer', 'GET', `/production/work-orders?salesOrderId=${order.orderId}`)
     expect(listed.workOrders).toEqual([expect.objectContaining({ id: workOrder.id, number: 'WO-00001', colourways: ['BLK'], pieces: 5, cells: 2, progress: null, daysLate: 0, orders: [expect.objectContaining({ number: order.number })] })])
+    // The list's search (part of the number, the batch number, the style's code or name, any case) and its open view.
+    const numbers = async (query: string) => (await ok('viewer', 'GET', `/production/work-orders?${query}`)).workOrders.map((row: Json) => row.number)
+    expect(await numbers('q=wo-0000')).toEqual(['WO-00001'])
+    expect(await numbers('q=seed-wo-0001')).toEqual(['SEED-WO-0001'])
+    expect(await numbers('q=jkt-02&status=DRAFT')).toContain('WO-00001')
+    expect(await numbers('q=no-such-thing')).toEqual([])
+    const open = await ok('viewer', 'GET', '/production/work-orders?open=true&limit=200')
+    expect(open.workOrders.map((row: Json) => row.status).every((status: string) => ['DRAFT', 'RELEASED', 'IN_PROGRESS'].includes(status))).toBe(true)
+    expect(open.workOrders.map((row: Json) => row.number)).toContain('WO-00001')
+    // A work order past its draft carries its progress, summed over its cells (the record's own counts).
+    const seeded = (await ok('viewer', 'GET', `/production/work-orders?q=SEED-WO-0001`)).workOrders[0]
+    const record = (await ok('viewer', 'GET', `/production/work-orders/${seeded.id}`)).workOrder
+    const sum = (step: 'cut' | 'bundled' | 'sewn' | 'finished') => {
+      const values = record.cells.map((cell: Json) => cell.progress[step]).filter((value: number | null) => value !== null)
+      return values.length ? values.reduce((total: number, value: number) => total + value, 0) : null
+    }
+    expect(seeded.progress).toEqual({ cut: sum('cut'), bundled: sum('bundled'), sewn: sum('sewn'), finished: sum('finished') })
+    // The tiles' counts: the same scope as the list, one count per state, late = open past the due date.
+    const { counts } = await ok('viewer', 'GET', '/production/work-orders/counts')
+    const all = (await ok('viewer', 'GET', '/production/work-orders?limit=200')).workOrders
+    const of = (status: string) => all.filter((row: Json) => row.status === status).length
+    expect(counts).toEqual({ draft: of('DRAFT'), released: of('RELEASED'), inProgress: of('IN_PROGRESS'), completed: of('COMPLETED'), open: open.workOrders.length, late: 0 })
+    expect((await ok('viewer', 'GET', `/production/work-orders/counts?siteId=${A.siteA1}`)).counts.draft).toBe(all.filter((row: Json) => row.status === 'DRAFT' && row.siteId === A.siteA1).length)
   })
 
   it('takes only what is open on the line, one style, and refuses a made-to-measure line (deferred: 409)', async () => {
@@ -606,10 +629,13 @@ describe('the walls (A1 §2.2): tenant, company, site; the floor reads and never
     expect(seenByB.some((row) => row.companyId === A.companyA || row.companyId === A.companyB)).toBe(false)
     expect((await ok('companyB', 'GET', '/production/work-orders')).workOrders.every((row: Json) => row.companyId === A.companyB)).toBe(true)
     expect((await ok('otherSite', 'GET', '/production/work-orders')).workOrders).toEqual([])
+    expect((await ok('otherSite', 'GET', '/production/work-orders/counts')).counts).toEqual({ draft: 0, released: 0, inProgress: 0, completed: 0, open: 0, late: 0 })
+    expect((await ok('otherTenant', 'GET', '/production/work-orders?q=WO-00')).workOrders.map((row: Json) => row.id)).not.toContain(workOrder.id)
     expect((await refused('companyB', 'POST', '/production/work-orders', { lines: [{ salesOrderLineId: order.lineIds[0]! }] }, 404)).message).toBe('Sales order line not found.')
     expect((await refused('companyB', 'GET', `/production/work-orders/open-lines?salesOrderId=${order.orderId}`, undefined, 404)).message).toBe('Sales order not found.')
     for (const session of ['floor', 'partner', 'noWorkOrders']) {
       expect((await call(session, 'GET', url)).statusCode).toBe(403)
+      expect((await call(session, 'GET', '/production/work-orders/counts')).statusCode).toBe(403)
       expect((await call(session, 'POST', `${url}/release`, {})).statusCode).toBe(403)
     }
     expect((await call('viewer', 'POST', `${url}/release`, {})).statusCode).toBe(403)

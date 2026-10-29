@@ -1,11 +1,11 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { compareWithMaster } from './compare'
-import { cancelContract, cellsContract, compareContract, createContract, getContract, listContract, moveContract, openLinesContract, releaseCheckContract, releaseContract, updateContract } from './contract'
+import { cancelContract, cellsContract, compareContract, countsContract, createContract, getContract, listContract, moveContract, openLinesContract, releaseCheckContract, releaseContract, updateContract } from './contract'
 import { manifest } from './manifest'
 import { moveWorkOrder } from './moves'
 import { releaseCheck, releaseWorkOrder } from './release'
-import { createWorkOrder, getWorkOrder, listWorkOrders, openLines, setCells, updateWorkOrder } from './work-orders'
+import { countWorkOrders, createWorkOrder, getWorkOrder, listWorkOrders, openLines, setCells, updateWorkOrder } from './work-orders'
 
 /**
  * Work orders from sales order lines with a frozen specification (B-W1-38; MES-001, MES-002, MES-005, MES-007,
@@ -15,6 +15,8 @@ import { createWorkOrder, getWorkOrder, listWorkOrders, openLines, setCells, upd
  */
 export default defineRoutes('production.work-orders', manifest, async (app) => {
   app.get('/production/work-orders', { schema: listContract }, async (request) => listWorkOrders(request, request.query))
+
+  app.get('/production/work-orders/counts', { schema: countsContract }, async (request) => countWorkOrders(request, request.query))
 
   app.get('/production/work-orders/open-lines', { schema: openLinesContract }, async (request) => openLines(request, request.query.salesOrderId))
 

@@ -24,6 +24,12 @@
       "imports": "Import",
       "audit": "Audit log",
       "connections": "Connections"
+    },
+    "production": {
+      "area": "Production",
+      "main": "Main",
+      "floor": "Floor now",
+      "workOrders": "Work orders"
     }
   },
   "topbar": {
