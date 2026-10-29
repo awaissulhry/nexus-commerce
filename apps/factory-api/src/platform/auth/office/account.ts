@@ -4,6 +4,7 @@ import { verifyPassword } from '@nexus/factory-domain/auth/password/password'
 import { ConflictError, DomainError, ForbiddenError, InvalidStateError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { requireContext, type OfficeContext } from '../../../core/context'
+import { staffNoticeState } from '../../privacy/read'
 import { officeSessionOf, type OfficeSession } from '../sessions/authenticator'
 import { mfaRequired, mfaSatisfied } from '../sessions/grants'
 import type { OfficeAuth } from '../sessions/office-auth'
@@ -42,12 +43,14 @@ export function requireStepUp(auth: OfficeAuth, request: FastifyRequest): void {
 export async function me(request: FastifyRequest) {
   const context = officeContextOf(request)
   const session = officeSessionOf(request)
-  const { tenant, company, user } = await request.withClient(async (client) => ({
+  const { tenant, company, user, staffNotice } = await request.withClient(async (client) => ({
     tenant: await client.tenant.findUniqueOrThrow({ where: { id: context.tenantId }, select: { id: true, slug: true, name: true } }),
     company: context.companyId
       ? await client.company.findUnique({ where: { id: context.companyId }, select: { id: true, code: true, legalName: true, tradeName: true } })
       : null,
     user: await client.user.findUniqueOrThrow({ where: { id: context.actorId }, select: { recoveryCodeHashes: true } }),
+    // The screen's company's staff notice in force (B-W1-36): the web shows it once per version (GET /privacy/staff-notice).
+    staffNotice: await staffNoticeState(client, context.companyId, context.actorId),
   }))
   const until = stepUpUntil(session)
   return {
@@ -67,6 +70,7 @@ export async function me(request: FastifyRequest) {
       satisfied: mfaSatisfied(session.user, session),
       recoveryCodesLeft: user.recoveryCodeHashes.length,
     },
+    staffNotice,
     permissions: [...new Set(context.grants.flatMap((grant) => grant.permissions))].sort(),
   }
 }

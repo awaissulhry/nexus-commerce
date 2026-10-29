@@ -498,6 +498,8 @@ model StyleRevision {
   salesOrderLines SalesOrderLine[]
   // production.prisma: the work orders released with it as their frozen specification.
   workOrders      WorkOrder[]
+  // quality.prisma: the PPE register entries about garments made to it.
+  ppeRegisterEntries PpeRegisterEntry[]
 
   @@unique([tenantId, styleId, revision])
   // The target of the references from the revision's parts: a revision of the same style.

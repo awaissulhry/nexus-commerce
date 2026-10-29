@@ -18,6 +18,7 @@ import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
 import { seed as seedPrint } from '../seed/print'
+import { seed as seedPrivacy } from '../seed/privacy'
 import { seed as seedProduct } from '../seed/product'
 import { seed as seedProduction } from '../seed/production'
 import { seed as seedQuality } from '../seed/quality'
@@ -139,6 +140,8 @@ beforeAll(async () => {
   await seedInventory({ db: factory, namespace: 'iso-b' })
   await seedProduction({ db: factory, namespace: 'iso-a' })
   await seedProduction({ db: factory, namespace: 'iso-b' })
+  await seedPrivacy({ db: factory, namespace: 'iso-a' })
+  await seedPrivacy({ db: factory, namespace: 'iso-b' })
   await seedQuality({ db: factory, namespace: 'iso-a' })
   await seedQuality({ db: factory, namespace: 'iso-b' })
   await seedShipping({ db: factory, namespace: 'iso-a' })
@@ -227,6 +230,10 @@ it('covers every classified table and every runtime role', () => {
     'PpeRegisterEntry',
     'PrintJob',
     'Printer',
+    'PrivacyDpia',
+    'PrivacyNotice',
+    'PrivacyNoticeText',
+    'ProcessingActivity',
     'ProductionSettings',
     'PurchaseOrder',
     'PurchaseOrderLine',
@@ -255,6 +262,7 @@ it('covers every classified table and every runtime role', () => {
     'Site',
     'Size',
     'SizeScale',
+    'StaffNoticeAck',
     'Station',
     'StockMove',
     'StockValuation',
