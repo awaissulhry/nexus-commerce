@@ -12,14 +12,14 @@
       }
     },
     "Company": {
-      "about": "Office keeps the legal entities. The floor reads names, address and logo (labels printed at a station carry the manufacturer), not the fiscal identifiers or the share capital.",
+      "about": "Office keeps the legal entities. The floor reads names, address and logo (labels printed at a station carry the manufacturer), not the fiscal identifiers, the share capital or the bank account (written by the office only with a step-up; deposit pages and documents read it in the system scope).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
         "factory_floor_runtime": {
           "privileges": ["select"],
-          "hiddenColumns": ["vatNumber", "fiscalCode", "regimeFiscale", "reaOffice", "reaNumber", "shareCapital", "soleShareholder", "inLiquidation", "pec", "sdiReceiverCode", "documentFooter"]
+          "hiddenColumns": ["vatNumber", "fiscalCode", "regimeFiscale", "reaOffice", "reaNumber", "shareCapital", "soleShareholder", "inLiquidation", "pec", "sdiReceiverCode", "documentFooter", "bankAccountHolder", "iban", "bic", "bankName"]
         }
       }
     },
