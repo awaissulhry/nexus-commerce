@@ -1,4 +1,4 @@
-import { ShoppingCart, Truck } from 'lucide-react'
+import { FileText, ShoppingCart, Truck } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -20,7 +20,10 @@ export const officeArea: OfficeAreaNav = {
         label: 'shell:nav.purchasing.main',
         hideLabel: true,
         noCrumb: true,
-        items: [{ id: 'purchasing-suppliers', label: 'shell:nav.purchasing.suppliers', href: '/purchasing/suppliers', icon: Truck, permission: 'parties.view' }],
+        items: [
+          { id: 'purchasing-suppliers', label: 'shell:nav.purchasing.suppliers', href: '/purchasing/suppliers', icon: Truck, permission: 'parties.view' },
+          { id: 'purchasing-orders', label: 'shell:nav.purchasing.orders', href: '/purchasing/orders', icon: FileText, permission: 'purchasing.view' },
+        ],
       },
     ],
   },

@@ -281,6 +281,19 @@ describe('send: the PDF, the confirm link and the mail (SCM-054, SCM-055)', () =
     }
   })
 
+  it('the PDF before the send (the preview in the send dialog): inline, stored nowhere; it prints prices, so it needs the cost grain', async () => {
+    const files = await admin('SELECT id FROM "StoredFile" WHERE "recordId" = $1', [order.id])
+    const response = await wall('manager', 'GET', `${orderUrl(order.id)}/preview?language=en`)
+    expect(response.statusCode, response.body).toBe(200)
+    expect(response.headers['content-type']).toBe('application/pdf')
+    expect(String(response.headers['content-disposition'])).toMatch(/^inline; filename="/)
+    expect(response.headers['cache-control']).toBe('no-store')
+    expect(response.rawPayload.subarray(0, 5).toString('latin1')).toBe('%PDF-')
+    expect(await admin('SELECT id FROM "StoredFile" WHERE "recordId" = $1', [order.id])).toEqual(files)
+    expect((await wall('clerk', 'GET', `${orderUrl(order.id)}/preview`)).statusCode).toBe(403)
+    expect((await wall('companyB', 'GET', `${orderUrl(order.id)}/preview`)).statusCode).toBe(404)
+  })
+
   it('sends: the PDF stored with the prices and the leather specs, the link made, the mail queued and sent; the token in no row', async () => {
     ;({ answer: sent, token } = await send(order, {}, 'po-first-send-0001'))
     expect(token).toMatch(/^[0-9a-f-]{36}\.[0-9a-f-]{36}\.[0-9a-f-]{36}\./)
@@ -413,6 +426,37 @@ describe('a send and a cancel never both happen (compare-and-set on the order ve
     const received = (await as('GET', orderUrl(seedId('link:P2:record')))).order
     expect(received.status).toBe('PARTLY_RECEIVED')
     expect((await refusedAs('POST', `${orderUrl(received.id)}/cancel`, { version: received.version, reason: 'No' }, 409)).message).toMatch(/Goods were received/)
+  })
+
+  it('the record says what was received per line; the list finds the orders unanswered after 48 hours and counts the proposals', async () => {
+    // The inventory seed posted a receipt against PO1: each line's received quantity is the posted receipt lines' sum.
+    const received = (await as('GET', orderUrl(seedId('link:P2:record')))).order
+    const posted = await admin<{ line: string; base: string }>(
+      `SELECT l."purchaseOrderLineId" AS line, sum(l."baseQuantity")::text AS base FROM "GoodsReceiptLine" l JOIN "GoodsReceipt" r ON r.id = l."receiptId" WHERE r.status = 'POSTED' AND l."purchaseOrderLineId" = ANY($1::uuid[]) GROUP BY 1`,
+      [received.lines.map((line: Json) => line.id)],
+    )
+    expect(posted.length).toBeGreaterThan(0)
+    for (const line of received.lines as Json[]) {
+      const sum = posted.find((row) => row.line === line.id)?.base ?? '0'
+      expect(Number(line.receivedBaseQuantity)).toBe(Number(sum))
+    }
+    const fresh = await manualOrder()
+    expect(fresh.lines.every((line: Json) => line.receivedBaseQuantity === '0.0000')).toBe(true)
+
+    // Sent three days ago and not answered: "Not confirmed after 48 h" counts it and the filter lists it; a fresh send not.
+    // (The trigger never lets a send time change: the test moves it back with the triggers off, as a replica would apply it.)
+    const { answer: late } = await send(await manualOrder())
+    const { answer: recent } = await send(await manualOrder())
+    expect(late.order.id).toMatch(/^[0-9a-f-]{36}$/)
+    await admin(`SET session_replication_role = replica; UPDATE "PurchaseOrder" SET "sentAt" = "sentAt" - interval '3 days' WHERE id = '${late.order.id}'; SET session_replication_role = origin`)
+    const list = await as('GET', '/purchasing/orders?waitingOver48h=true&limit=200')
+    const ids = (list.orders as Json[]).map((row) => row.id)
+    expect(ids).toContain(late.order.id)
+    expect(ids).not.toContain(recent.order.id)
+    expect(list.orders.every((row: Json) => row.status === 'SENT')).toBe(true)
+    expect(list.summary.notConfirmedAfter48h).toBe(ids.length)
+    const proposals = await one<{ n: number }>(`SELECT count(*)::int AS n FROM "PurchaseOrder" WHERE "tenantId" = $1 AND status = 'CHANGES_PROPOSED'`, [tenant])
+    expect(list.summary.changesProposed).toBe(proposals.n)
   })
 })
 

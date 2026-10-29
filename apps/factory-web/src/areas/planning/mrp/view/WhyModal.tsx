@@ -1,0 +1,274 @@
+'use client'
+
+import { useEffect } from 'react'
+import Link from 'next/link'
+import { ChevronDown, ChevronUp, FilePlus2 } from 'lucide-react'
+import { Banner, Modal, SummaryTable } from '@nexus/ui/components'
+import { Button, Kbd, Spinner, Tag } from '@nexus/ui/primitives'
+import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
+import { useLocale, useT } from '../../../../lib/i18n/provider'
+import { dayAt, decimalValue, quantity } from '../../../_shared/buying/model'
+import type { Explain, PlanLine } from '../api'
+import { draftHeld, type PlanActions, type PlanModel } from '../model'
+
+/**
+ * "Why this number — <material>" (design planning.mrp why-drawer, shown as a centred detail: the Owner's rule for
+ * details): the netting as sentences from the numbers, the ladder (need → − usable → − on order → = short → rounding →
+ * = buy), what each order and size needs, today's stock with the reason a lot is not counted, the open purchase lines
+ * (one arriving after the need is not counted), and the dates. ⌘↑ / ⌘↓ walk the lines, b drafts the PO, Esc closes.
+ * Every word is this app's (the API's English sentence is never drawn).
+ */
+export function WhyModal({ model, actions, order }: { model: PlanModel; actions?: PlanActions; order: readonly string[] }) {
+  const t = useT('buying')
+  const locale = useLocale()
+  const why = model.why!
+  const explain = why.explain.status === 'ready' ? why.explain.value : null
+  const planLine = model.plan.status === 'ready' ? (model.plan.value.lines.find((line) => line.id === why.lineId) ?? null) : null
+  const line: PlanLine | null = explain?.line ?? planLine
+  const at = order.indexOf(why.lineId)
+  const previous = at > 0 ? order[at - 1] : null
+  const next = at >= 0 && at < order.length - 1 ? order[at + 1] : null
+  const held = line ? draftHeld(line, model.can) : null
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'ArrowUp' && previous) {
+        event.preventDefault()
+        actions?.onWhy?.(previous)
+      } else if ((event.metaKey || event.ctrlKey) && event.key === 'ArrowDown' && next) {
+        event.preventDefault()
+        actions?.onWhy?.(next)
+      } else if (event.key === 'b' && !event.metaKey && !event.ctrlKey && line && !held) {
+        const target = event.target as HTMLElement | null
+        if (target?.closest('input, textarea, select')) return
+        event.preventDefault()
+        actions?.onDraftOne?.(line.id)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
+  const unit = line ? t(`uom.${line.uom}`) : ''
+  const q = (value: string | null | undefined) => quantity(value, locale)
+
+  return (
+    <Modal
+      open
+      onClose={() => actions?.onWhy?.(null)}
+      size="detail"
+      title={line ? t('why.title', { material: `${line.item.code} ${line.item.name}${line.colour ? ` · ${line.colour.name}` : ''}` }) : t('why.titleLoading')}
+      subtitle={line ? t('why.subtitle', { action: t(`plan.action.${line.action}`), supplier: line.supplier?.name ?? t('plan.noSupplier') }) : undefined}
+      headerActions={
+        <span className="fw-by-inline">
+          <Button size="sm" variant="quiet" heldReason={previous ? null : t('why.first')} onClick={() => previous && actions?.onWhy?.(previous)} aria-keyshortcuts="Meta+ArrowUp" aria-label={t('why.previous')}>
+            <ChevronUp size={14} aria-hidden />
+          </Button>
+          <span className="fw-by-hint">{at >= 0 ? t('why.position', { at: at + 1, count: order.length }) : null}</span>
+          <Button size="sm" variant="quiet" heldReason={next ? null : t('why.last')} onClick={() => next && actions?.onWhy?.(next)} aria-keyshortcuts="Meta+ArrowDown" aria-label={t('why.next')}>
+            <ChevronDown size={14} aria-hidden />
+          </Button>
+        </span>
+      }
+      footer={
+        <>
+          <span className="fw-by-hint">
+            <Kbd>⌘</Kbd>
+            <Kbd>↑</Kbd> <Kbd>⌘</Kbd>
+            <Kbd>↓</Kbd> {t('why.walk')}
+          </span>
+          <span className="grow" />
+          <Button size="sm" onClick={() => actions?.onWhy?.(null)}>
+            {t('common.close')}
+          </Button>
+          {line?.action === 'BUY' && (
+            <Button size="sm" variant="primary" heldReason={held ? t(held) : null} onClick={() => line && actions?.onDraftOne?.(line.id)} aria-keyshortcuts="b">
+              <FilePlus2 size={13} aria-hidden /> {t('plan.draftShort')}
+            </Button>
+          )}
+        </>
+      }
+    >
+      {why.explain.status === 'loading' ? (
+        <p className="fw-by-hint" role="status">
+          <Spinner size={14} /> {t('why.loading')}
+        </p>
+      ) : why.explain.status !== 'ready' ? (
+        <Banner tone="danger" title={t(why.explain.status === 'error' ? why.explain.problem : 'problem.gone')} />
+      ) : (
+        <WhyBody explain={why.explain.value} unit={unit} q={q} model={model} actions={actions} />
+      )}
+    </Modal>
+  )
+}
+
+function WhyBody({ explain, unit, q, model, actions }: { explain: Explain; unit: string; q: (value: string | null | undefined) => string; model: PlanModel; actions?: PlanActions }) {
+  const t = useT('buying')
+  const locale = useLocale()
+  const place = { locale, timeZone: model.timeZone }
+  const { line, now } = explain
+  const held = decimalValue(line.heldStock) ?? 0
+  const short = (decimalValue(line.netQuantity) ?? 0) > 0
+  const sentences = [
+    t('why.s.need', { quantity: q(line.grossQuantity), unit, count: line.orders.length }),
+    t('why.s.usable', { quantity: q(line.usableStock), unit }),
+    ...(held > 0 ? [t('why.s.held', { quantity: q(line.heldStock), unit })] : []),
+    (decimalValue(line.onOrder) ?? 0) > 0 ? t('why.s.onOrder', { quantity: q(line.onOrder), unit }) : t('why.s.nothingOnOrder'),
+    short ? t('why.s.short', { quantity: q(line.netQuantity), unit }) : t('why.s.covered'),
+    ...(short && line.action === 'BUY'
+      ? [
+          line.estimatedHides !== null && line.suggestedUom !== 'HIDE'
+            ? t('why.s.buyHides', { quantity: q(line.suggestedQuantity), unit: t(`uom.${line.suggestedUom}`), count: line.estimatedHides })
+            : t('why.s.buy', { quantity: q(line.suggestedQuantity), unit: t(`uom.${line.suggestedUom}`) }),
+        ]
+      : short
+        ? [t('why.s.make', { quantity: q(line.suggestedQuantity), unit: t(`uom.${line.suggestedUom}`) })]
+        : []),
+    ...(line.orderBy
+      ? [
+          line.orderBy.leadTimeDays === null
+            ? t('why.s.orderByNoLead', { date: formatDate(dayAt(line.orderBy.date), place) })
+            : t('why.s.orderBy', { date: formatDate(dayAt(line.orderBy.date), place), need: formatDate(dayAt(line.needDate), place), count: line.orderBy.leadTimeDays }),
+        ]
+      : []),
+  ]
+
+  return (
+    <div className="fw-by-dialog">
+      {now.changedSinceRun && (
+        <Banner
+          tone="info"
+          title={t('why.changed', { usable: q(now.usableStock), onOrder: q(now.onOrder), net: q(now.netQuantity), unit })}
+          action={
+            model.can.planRun ? (
+              <Button size="sm" onClick={() => actions?.onRun?.()} heldReason={model.running ? t('held.running') : null}>
+                {t('plan.run')}
+              </Button>
+            ) : undefined
+          }
+        />
+      )}
+      <section className="fw-by-stack" aria-labelledby="fw-why-words">
+        <h3 id="fw-why-words" className="fw-by-h3">
+          {t('why.words')}
+        </h3>
+        <p className="fw-by-text">{sentences.join(' ')}</p>
+      </section>
+
+      <section className="fw-by-stack" aria-labelledby="fw-why-ladder">
+        <h3 id="fw-why-ladder" className="fw-by-h3">
+          {t('why.ladder')}
+        </h3>
+        <ol className="fw-by-ladder">
+          {explain.bridge.map((rung) => (
+            <li key={rung.step} className={rung.step === 'SHORT' || rung.step === 'BUY' ? 'fw-by-rung is-result' : 'fw-by-rung'}>
+              <span className="fw-by-rung-label">{t(`why.step.${rung.step}.${line.action}`)}</span>
+              <span className="fw-by-rung-value">
+                {(decimalValue(rung.quantity) ?? 0) < 0 ? '− ' : rung.step === 'ROUNDING' ? '+ ' : rung.step === 'SHORT' || rung.step === 'BUY' ? '= ' : ''}
+                {quantity(Math.abs(decimalValue(rung.quantity) ?? 0), locale)} {t(`uom.${rung.uom}`)}
+              </span>
+            </li>
+          ))}
+        </ol>
+        {explain.rounding.length > 0 && (
+          <ul className="fw-by-list">
+            {explain.rounding.map((step) => (
+              <li key={step.rule}>{t(`why.rounding.${step.rule}`, { quantity: q(step.quantity), unit: t(`uom.${line.suggestedUom}`) })}</li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <div className="fw-by-stack">
+        <section className="fw-by-card" aria-labelledby="fw-why-orders">
+          <h3 id="fw-why-orders" className="fw-by-h3">
+            {t('why.orders')}
+          </h3>
+          {line.sources.length === 0 ? (
+            <p className="fw-by-hint">{t('why.noOrders')}</p>
+          ) : (
+            <SummaryTable
+              label={t('why.orders')}
+              density="compact"
+              stackOnPhone
+              columns={[t('why.col.order'), t('why.col.size'), t('why.col.pieces'), t('why.col.needs'), t('why.col.issued'), t('why.col.due')]}
+              align={['left', 'left', 'right', 'right', 'right', 'left']}
+              rows={line.sources.map((source, index) => ({
+                id: `${source.orderLineId}-${source.size}-${index}`,
+                cells: [
+                  `${source.orderNumber} · ${t('why.lineSeq', { seq: source.lineSeq })}`,
+                  source.size,
+                  source.made > 0 ? t('why.piecesMade', { pieces: source.pieces, made: source.made }) : String(source.pieces),
+                  `${q(source.quantity)} ${unit}`,
+                  `${q(source.issued)} ${unit}`,
+                  source.dueDate ? formatDate(dayAt(source.dueDate), place) : '—',
+                ],
+              }))}
+            />
+          )}
+        </section>
+
+        <section className="fw-by-card" aria-labelledby="fw-why-stock">
+          <h3 id="fw-why-stock" className="fw-by-h3">
+            {t('why.stock')}
+          </h3>
+          {now.stock.length === 0 ? (
+            <p className="fw-by-hint">{t('why.noStock')}</p>
+          ) : (
+            <SummaryTable
+              label={t('why.stock')}
+              density="compact"
+              stackOnPhone
+              columns={[t('why.col.lot'), t('why.col.quantity'), t('why.col.counted')]}
+              align={['left', 'right', 'left']}
+              rows={now.stock.map((entry, index) => ({
+                id: `${entry.lot?.id ?? 'none'}-${index}`,
+                cells: [
+                  entry.lot ? (
+                    <Link className="fw-by-link" href={`${model.prefix}/compliance/tests/${entry.lot.id}`}>
+                      {entry.lot.code}
+                    </Link>
+                  ) : (
+                    t('why.noLot')
+                  ),
+                  `${q(entry.quantity)} ${t(`uom.${entry.item.baseUom}`)}${entry.hides > 0 ? ` · ${t('why.hideCount', { count: entry.hides })}` : ''}`,
+                  entry.reason ? <Tag tone={entry.held ? 'warning' : 'neutral'}>{t(`why.reason.${entry.reason}`)}</Tag> : <Tag tone="success">{t('why.reason.counted')}</Tag>,
+                ],
+              }))}
+            />
+          )}
+        </section>
+
+        <section className="fw-by-card" aria-labelledby="fw-why-purchases">
+          <h3 id="fw-why-purchases" className="fw-by-h3">
+            {t('why.purchases')}
+          </h3>
+          {now.purchases.length === 0 ? (
+            <p className="fw-by-hint">{t('why.noPurchases')}</p>
+          ) : (
+            <SummaryTable
+              label={t('why.purchases')}
+              density="compact"
+              stackOnPhone
+              columns={[t('why.col.po'), t('why.col.open'), t('why.col.due'), t('why.col.counted')]}
+              align={['left', 'right', 'left', 'left']}
+              rows={now.purchases.map((purchase) => ({
+                id: purchase.purchaseOrderLineId,
+                cells: [
+                  <Link key="po" className="fw-by-link" href={`${model.prefix}/purchasing/orders/${purchase.purchaseOrderId}`}>
+                    {purchase.purchaseOrderNumber} · {t('why.lineSeq', { seq: purchase.seq })}
+                  </Link>,
+                  `${q(purchase.openQuantity)} ${unit}`,
+                  `${formatDate(dayAt(purchase.dueDate), place)}${purchase.confirmed ? ` · ${t('why.confirmed')}` : ` · ${t('why.asked')}`}`,
+                  purchase.why ? <Tag tone="warning">{t(`why.purchaseWhy.${purchase.why}`, { quantity: q(purchase.notCounted), unit })}</Tag> : <Tag tone="success">{t('why.countedQuantity', { quantity: q(purchase.counted), unit })}</Tag>,
+                ],
+              }))}
+            />
+          )}
+        </section>
+      </div>
+
+      <p className="fw-by-hint">{t('why.inputs', { time: formatDateTime(explain.run.finishedAt ?? explain.run.startedAt, place), trigger: t(`plan.trigger.${explain.run.trigger}`) })}</p>
+    </div>
+  )
+}

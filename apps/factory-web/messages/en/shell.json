@@ -24,7 +24,8 @@
     "purchasing": {
       "area": "Purchasing",
       "main": "Main",
-      "suppliers": "Suppliers"
+      "suppliers": "Suppliers",
+      "orders": "Purchase orders"
     },
     "admin": {
       "area": "Admin",
@@ -61,8 +62,15 @@
       "safety": "Product safety",
       "register": "PPE register & recalls"
     },
+    "planning": {
+      "area": "Planning",
+      "main": "Main",
+      "mrp": "What to buy & make"
+    },
     "warehouse": {
       "area": "Warehouse",
+      "inbound": "Inbound",
+      "receipts": "Receipts",
       "outbound": "Outbound",
       "shipments": "Shipments",
       "settings": "Settings",

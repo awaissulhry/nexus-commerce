@@ -24,7 +24,8 @@
     "purchasing": {
       "area": "Acquisti",
       "main": "Principali",
-      "suppliers": "Fornitori"
+      "suppliers": "Fornitori",
+      "orders": "Ordini d'acquisto"
     },
     "admin": {
       "area": "Amministrazione",
@@ -61,8 +62,15 @@
       "safety": "Sicurezza prodotto",
       "register": "Registro DPI e richiami"
     },
+    "planning": {
+      "area": "Pianificazione",
+      "main": "Principali",
+      "mrp": "Cosa comprare e produrre"
+    },
     "warehouse": {
       "area": "Magazzino",
+      "inbound": "In entrata",
+      "receipts": "Ricevimenti",
       "outbound": "In uscita",
       "shipments": "Spedizioni",
       "settings": "Impostazioni",

@@ -110,6 +110,15 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/sales/orders/[id]',
   '/purchasing/suppliers',
   '/purchasing/suppliers/[partyId]',
+  // B-W1-30/31 part 2: Purchase orders (SCR-058) and the PO studio (SCR-059).
+  '/purchasing/orders',
+  '/purchasing/orders/[id]',
+  // B-W1-29 part 2: What to buy & make (SCR-055).
+  '/planning/mrp',
+  // B-W1-32 part 2: Receipts (SCR-063), receiving against a PO with lots and hides one by one (SCR-061/062), a receipt.
+  '/warehouse/receipts',
+  '/warehouse/receipts/new',
+  '/warehouse/receipts/[id]',
   '/products/styles',
   '/products/styles/[id]',
   // B-W1-46 … 49 part 2 Warehouse: Shipments (SCR-066), a shipment (SCR-067), Carriers & shipping (SCR-068).

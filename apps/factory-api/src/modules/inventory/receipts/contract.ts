@@ -147,7 +147,15 @@ const lineView = output({
   value,
 })
 
-const blockerView = output({ code: z.enum(REVERSAL_BLOCKERS), path: z.string(), message: z.string() })
+const blockerView = output({
+  code: z.enum(REVERSAL_BLOCKERS),
+  path: z.string(),
+  message: z.string(),
+  /** The work order number, the location code or the move's reason. */
+  where: z.string(),
+  /** The lots and hides this use concerns. */
+  items: z.array(output({ kind: z.enum(['LOT', 'HIDE']), code: z.string() })),
+})
 
 export const receiptView = output({
   id: id(),
@@ -184,7 +192,7 @@ export const receiptView = output({
   }),
   lines: z.array(lineView),
   /** POSTED: may it be reversed now, and if not what used its stock (in words). */
-  reversal: output({ possible: z.boolean(), blockers: z.array(blockerView) }).nullable(),
+  reversal: output({ possible: z.boolean(), /** The goods-in location the stock must lie at (its code). */ location: z.string().nullable(), blockers: z.array(blockerView) }).nullable(),
   value,
 })
 
@@ -220,6 +228,10 @@ export const listReceiptsContract = defineContract({
     status: z.enum(GOODS_RECEIPT_STATUSES).optional(),
     /** A receipt number or a supplier DDT number (contains, any case). */
     q: z.string().trim().min(1).max(60).optional(),
+    /** Posted at or after this instant (the start of the site's day for "Posted today"). */
+    postedFrom: instant().optional(),
+    /** Only posted receipts with a lot still in quarantine. */
+    waiting: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
@@ -248,6 +260,16 @@ export const listReceiptsContract = defineContract({
         }),
       ),
       nextCursor: id().nullable(),
+    }),
+  },
+})
+
+export const countReceiptsContract = defineContract({
+  querystring: input({ siteId: id().optional(), postedFrom: instant().optional() }),
+  response: {
+    200: output({
+      /** The Receipts tiles: posted, reversed, posted with a lot still in quarantine, and posted since `postedFrom` (null without it). */
+      counts: output({ posted: z.number().int(), reversed: z.number().int(), waiting: z.number().int(), postedSince: z.number().int().nullable() }),
     }),
   },
 })
