@@ -12,6 +12,12 @@ import { defineEvent } from '../events/define'
  * revision is created or its draft edited, `compliance.label_template_activated` (frozen from then on),
  * `compliance.label_template_retired` (no new work-order release with it) and `compliance.label_assigned` when a draft
  * style revision names a template (or none). Live on the Labels & marking screens (SCR-053).
+ *
+ * The PPE register (B-W1-43, modules/compliance/register; Reg. (EU) 2016/425 art. 8(4), 8(8)) emits
+ * `compliance.register_entry_opened` (a person's entry, or one another step opened: B-W1-45's reversal of garments that
+ * already left), `compliance.register_entry_changed` (edited, the corrective action done, distributors informed, the
+ * authority told) and `compliance.register_entry_closed`. The W2a notification centre alerts the owner and
+ * quality on a risk (`risk` YES). Live on the PPE register (SCR-113) for compliance.register.view.
  */
 const day = () => z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const labelTemplate = {
@@ -21,6 +27,14 @@ const labelTemplate = {
   styleId: z.uuid().nullable(),
 }
 const labelLive = { permission: 'compliance.certificates.view', fields: ['templateId', 'code', 'revision'] } as const
+const registerEntry = {
+  entryId: z.uuid(),
+  reference: z.string(),
+  kind: z.enum(['COMPLAINT', 'NON_CONFORMITY', 'RECALL']),
+  styleId: z.uuid(),
+  risk: z.enum(['NO', 'ASSESSING', 'YES']),
+}
+const registerLive = { permission: 'compliance.register.view', fields: ['entryId', 'reference', 'risk'] } as const
 
 export const events = [
   defineEvent({
@@ -85,5 +99,35 @@ export const events = [
       previousLabelTemplateId: z.uuid().nullable(),
     }),
     live: { permission: 'compliance.certificates.view', fields: ['styleId', 'styleRevisionId', 'labelTemplateId'] },
+  }),
+  defineEvent({
+    type: 'compliance.register_entry_opened',
+    context: 'compliance',
+    description: 'A complaint, a non-conformity or a recall was recorded in the PPE register (Reg. (EU) 2016/425 art. 8(4)), by a person or by another step (a release reversal of garments that already left).',
+    payload: z.strictObject({
+      ...registerEntry,
+      sourceType: z.string().nullable(),
+      sourceId: z.uuid().nullable(),
+      shippedGoods: z.boolean(),
+    }),
+    live: registerLive,
+  }),
+  defineEvent({
+    type: 'compliance.register_entry_changed',
+    context: 'compliance',
+    description: 'An open PPE register entry changed: edited (the risk assessment among it), its corrective action done, the distributors informed, or the authority told. A note on its thread is thread.message_posted.',
+    payload: z.strictObject({
+      ...registerEntry,
+      change: z.enum(['EDITED', 'ACTION_COMPLETED', 'DISTRIBUTORS_INFORMED', 'AUTHORITY_NOTIFIED']),
+      previousRisk: z.enum(['NO', 'ASSESSING', 'YES']),
+    }),
+    live: registerLive,
+  }),
+  defineEvent({
+    type: 'compliance.register_entry_closed',
+    context: 'compliance',
+    description: 'A PPE register entry was closed with its reason, its corrective action done and its duties met; it never changes again.',
+    payload: z.strictObject({ ...registerEntry, shippedGoods: z.boolean() }),
+    live: registerLive,
   }),
 ] as const

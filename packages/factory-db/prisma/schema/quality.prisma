@@ -289,9 +289,15 @@ enum GarmentSerialStatus {
 }
 
 /// One entry of the PPE register (QHS-118; Reg. 2016/425 art. 8(4)): a complaint, a non-conforming PPE found, or a
-/// recall, about a style (and a batch or serials of it), with the investigation, the action taken and when distributors
-/// and, where the PPE presents a risk, the authorities were told (art. 8(9)). OPEN → CLOSED; never deleted, a closed
-/// entry never changes.
+/// recall, about a style (and the batches, serials, material lots, work orders and shipments of it it concerns), with
+/// the investigation, whether the PPE may present a risk, the corrective action and when it was done (art. 8(8)), when
+/// distributors were kept informed (art. 8(4)) and, where the PPE presents a risk, when the market surveillance
+/// authorities were told and their reference (art. 8(8)). OPEN → CLOSED; never deleted, a closed entry never changes.
+/// Closing needs (the …_quality_ppe_register_guards trigger, as apps/factory-api's modules/compliance/register checks in
+/// words first): a reason, the risk decided, the corrective action recorded and done, the distributors informed when
+/// garments it concerns left on a SHIPPED or DELIVERED shipment, and the authority's date and reference when risk is YES.
+/// The id lists have no foreign key (an array's elements cannot have one): the trigger checks each is a row of the
+/// entry's tenant and company (work orders also of its style).
 model PpeRegisterEntry {
   id                     String               @id @db.Uuid
   tenantId               String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -304,22 +310,42 @@ model PpeRegisterEntry {
   styleId                String               @db.Uuid
   batchNumbers           String[]             @default([])
   serials                String[]             @default([])
+  /// The style revision the garments were made to, when known (a revision of the style).
+  styleRevisionId        String?              @db.Uuid
+  /// What it concerns beyond batch numbers and serials: material lots (every work order they were issued to), work orders
+  /// (all their garments) and shipments (their garments of the style), ids of the entry's company.
+  lotIds                 String[]             @default([]) @db.Uuid
+  workOrderIds           String[]             @default([]) @db.Uuid
+  shipmentIds            String[]             @default([]) @db.Uuid
   /// Who reported it (a customer or distributor), when it came from a party.
   partyId                String?              @db.Uuid
+  /// The office user who follows it up.
+  ownerId                String?              @db.Uuid
+  /// The record that opened it (QualityReleaseReversal, QualityRelease, Inspection, Shipment; later the complaint and the
+  /// NCR), both or neither; one entry per source record.
+  sourceType             String?
+  sourceId               String?              @db.Uuid
   /// When it was received or found.
   reportedAt             DateTime             @db.Timestamptz(3)
   description            String
   /// The investigation, its finding and the risk it found.
   investigation          String?
-  /// The corrective action taken (a repair, a replacement, a recall, a change of the style).
+  /// May the PPE present a risk? ASSESSING until someone decides; YES brings the duty to tell the authorities.
+  risk                   PpeRegisterRisk      @default(ASSESSING)
+  /// The corrective action taken (a repair, a replacement, a recall, a change of the style), and when it was done (only
+  /// with an action).
   actionTaken            String?
-  /// When the distributors were kept informed (art. 8(4)), and the market surveillance authorities told (art. 8(9)).
+  actionCompletedAt      DateTime?            @db.Timestamptz(3)
+  /// When the distributors were kept informed (art. 8(4)), and the market surveillance authorities told (art. 8(8)) with
+  /// their reference of the notice (only with its date).
   distributorsInformedAt DateTime?            @db.Timestamptz(3)
   authorityNotifiedAt    DateTime?            @db.Timestamptz(3)
+  authorityReference     String?
   status                 PpeRegisterStatus    @default(OPEN)
-  /// Set exactly when CLOSED.
+  /// Set exactly when CLOSED (the reason too).
   closedAt               DateTime?            @db.Timestamptz(3)
   closedById             String?              @db.Uuid
+  closeReason            String?
   version                Int                  @default(1)
   createdAt              DateTime             @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
@@ -329,9 +355,13 @@ model PpeRegisterEntry {
   style   Style   @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
   party   Party?  @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not SetNull: that would also clear tenantId and styleId.
+  styleRevision StyleRevision? @relation(fields: [tenantId, styleId, styleRevisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, companyId, reference])
   @@index([tenantId, styleId])
+  // The register's tiles: open entries that may present a risk.
+  @@index([tenantId, status, risk])
 }
 
 /// What a register entry records (Reg. 2016/425 art. 8(4)).
@@ -344,4 +374,11 @@ enum PpeRegisterKind {
 enum PpeRegisterStatus {
   OPEN
   CLOSED
+}
+
+/// May the PPE of a register entry present a risk (Reg. 2016/425 art. 8(8))?
+enum PpeRegisterRisk {
+  NO
+  ASSESSING
+  YES
 }

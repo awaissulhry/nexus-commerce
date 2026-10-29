@@ -65,6 +65,8 @@ enum NumberKind {
   RETURN
   LOT
   BATCH
+  /// The PPE register's entries (REG-…; quality.prisma PpeRegisterEntry.reference).
+  PPE_REGISTER
 }
 
 enum NumberReset {
