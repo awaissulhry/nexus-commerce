@@ -77,6 +77,11 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const entry = await client.ppeRegisterEntry.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
     return entry ? { companyId: entry.companyId, siteId: null, partyId: entry.partyId } : null
   },
+  // modules/quality/lab (SCR-075; B-W1-34 the lot's quality status timeline): the lot's company, site and supplier.
+  Lot: async (client, id) => {
+    const lot = await client.lot.findUnique({ where: { id }, select: { companyId: true, siteId: true, supplierId: true } })
+    return lot ? { companyId: lot.companyId, siteId: lot.siteId, partyId: lot.supplierId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}

@@ -1,0 +1,231 @@
+{
+  "mailToSort": {
+    "intro": "Email arrivate agli indirizzi dell'azienda che non hanno trovato un record, email trattenute finché qualcuno non le guarda ed email che non è stato possibile leggere. Assegnale a un record, sbloccale o scartale.",
+    "filterLabel": "Mostra",
+    "filter": {
+      "all": "Tutte da smistare",
+      "TRIAGE": "Senza record",
+      "HELD": "Trattenute",
+      "FAILED": "Non lette"
+    },
+    "count_one": "{count} email",
+    "count_other": "{count} email",
+    "countMore_one": "{count} email mostrata, altre sotto",
+    "countMore_other": "{count} email mostrate, altre sotto",
+    "listLabel": "Email da smistare, dalla più recente",
+    "loading": "Lettura delle email…",
+    "reading": "Lettura dell'email…",
+    "retry": "Riprova",
+    "dismiss": "Chiudi",
+    "more": "Mostra altre",
+    "noSubject": "(senza oggetto)",
+    "unknownSender": "Mittente sconosciuto",
+    "empty": {
+      "all": {
+        "title": "Niente da smistare",
+        "body": "Ogni email ha trovato il suo record. Le nuove email che non lo trovano compaiono qui."
+      },
+      "TRIAGE": {
+        "title": "Nessuna email senza record",
+        "body": "Qui compaiono le email che non corrispondono a nessun record né a un mittente noto."
+      },
+      "HELD": {
+        "title": "Nessuna email trattenuta",
+        "body": "Le email che non hanno superato un controllo o vengono da un mittente sconosciuto restano qui per te."
+      },
+      "FAILED": {
+        "title": "Nessuna email non letta",
+        "body": "Qui compaiono le email che l'archivio della posta non è riuscito a consegnare."
+      }
+    },
+    "status": {
+      "RECEIVED": "Ricevuta",
+      "FETCHED": "Letta",
+      "TRIAGE": "Senza record",
+      "HELD": "Trattenuta",
+      "FAILED": "Non letta",
+      "MATCHED": "In una conversazione",
+      "REJECTED": "Scartata"
+    },
+    "heldReason": {
+      "DMARC_FAIL": {
+        "short": "Mittente non confermato",
+        "body": "Il dominio del mittente non ha superato il controllo DMARC: l'email potrebbe non venire da chi dice. Sbloccala solo se sai che è autentica."
+      },
+      "SPAM": {
+        "short": "Sembra spam",
+        "body": "Il servizio di posta l'ha segnalata come spam. Sbloccala solo se conosci il mittente."
+      },
+      "UNKNOWN_SENDER": {
+        "short": "Mittente sconosciuto",
+        "body": "Risponde a una nostra conversazione, ma il mittente non è qualcuno che quella conversazione conosce. Controlla chi ha scritto prima che entri nella conversazione."
+      },
+      "THREAD_CLOSED": {
+        "short": "Conversazione chiusa",
+        "body": "Risponde a una conversazione chiusa. Sbloccala per metterla comunque in quella conversazione, oppure assegnala a un altro record."
+      }
+    },
+    "whyTitle": {
+      "TRIAGE": "Nessun record trovato",
+      "HELD": "Trattenuta per te",
+      "FAILED": "Non è stato possibile leggere questa email"
+    },
+    "why": {
+      "TRIAGE": "Non nomina nessuno dei nostri record e il mittente non è un contatto noto. Assegnala al record di cui parla, oppure scartala.",
+      "FAILED_one": "L'archivio della posta non è riuscito a consegnarla dopo {count} tentativo (non c'è più, è troppo grande o illeggibile). Se ne conosce solo la busta: scartala e chiedi al mittente di riscrivere, se era importante.",
+      "FAILED_other": "L'archivio della posta non è riuscito a consegnarla dopo {count} tentativi (non c'è più, è troppo grande o illeggibile). Se ne conosce solo la busta: scartala e chiedi al mittente di riscrivere, se era importante."
+    },
+    "attachmentCount_one": "{count} file",
+    "attachmentCount_other": "{count} file",
+    "suggested": "Azienda del mittente nota",
+    "suggestedBody": "Il mittente scrive dal dominio di un cliente o fornitore che conosciamo: cerca tra i record di quella controparte.",
+    "action": {
+      "assign": "Assegna a un record…",
+      "release": "Sblocca…",
+      "reject": "Scarta…"
+    },
+    "held": {
+      "noWrite": "Per scrivere un'email nella conversazione di un record serve un altro ruolo.",
+      "busy": "Operazione in corso…",
+      "noFiles": "Per aprire i file serve un altro ruolo.",
+      "reason": "Scrivi almeno 3 caratteri, oppure lascialo vuoto."
+    },
+    "field": {
+      "from": "Da",
+      "received": "Ricevuta",
+      "to": "A",
+      "cc": "Cc",
+      "checks": "Controlli"
+    },
+    "check": {
+      "spf": "SPF",
+      "dkim": "DKIM",
+      "dmarc": "DMARC",
+      "spam": "Spam",
+      "virus": "Virus"
+    },
+    "verdict": {
+      "auth": {
+        "PASS": "superato",
+        "FAIL": "non superato",
+        "GRAY": "incerto",
+        "PROCESSING_FAILED": "non eseguito",
+        "DISABLED": "disattivato"
+      },
+      "content": {
+        "PASS": "non trovato",
+        "FAIL": "trovato",
+        "GRAY": "incerto",
+        "PROCESSING_FAILED": "non eseguito",
+        "DISABLED": "disattivato"
+      }
+    },
+    "bodyLabel": "L'email",
+    "frameTitle": "L'email, mostrata in sicurezza",
+    "pictures": {
+      "blocked_one": "{count} immagine dal web non viene mostrata.",
+      "blocked_other": "{count} immagini dal web non vengono mostrate.",
+      "shown_one": "{count} immagine dal web è mostrata.",
+      "shown_other": "{count} immagini dal web sono mostrate.",
+      "show": "Mostra le immagini",
+      "hide": "Nascondi le immagini"
+    },
+    "noBody": "L'email non ha testo.",
+    "noBodyFailed": "Non è stato possibile leggere l'email: non c'è testo da mostrare.",
+    "attachmentsLabel": "File allegati",
+    "attachments_one": "{count} file allegato",
+    "attachments_other": "{count} file allegati",
+    "attachmentsNote": "I file conservati diventano file del record quando l'email viene assegnata o sbloccata. I file di altri formati non vengono mai conservati.",
+    "download": "Scarica",
+    "downloadNamed": "Scarica {name}",
+    "keptLater": "Conservato",
+    "skip": {
+      "type_not_allowed": "Non conservato: formato non ammesso",
+      "too_large": "Non conservato: troppo grande",
+      "empty": "Non conservato: vuoto",
+      "inline": "Immagine nel testo",
+      "too_many": "Non conservato: troppi file"
+    },
+    "cancel": "Annulla",
+    "recordKind": {
+      "Certificate": "Certificato",
+      "Quote": "Offerta",
+      "SalesOrder": "Ordine",
+      "PurchaseOrder": "Ordine di acquisto"
+    },
+    "assign": {
+      "title": "Assegna a un record",
+      "body": "L'email entra nella conversazione del record come messaggio del cliente o del fornitore, e i suoi file conservati diventano file del record.",
+      "loading": "Lettura dei record…",
+      "none": "Non è stato trovato nessun record che possa ricevere email. Serve un record con un cliente o un fornitore.",
+      "placeholder": "es. 2026-0042",
+      "go": "Assegna",
+      "held": "Scegli prima il record.",
+      "withoutParty_one": "{count} record senza cliente o fornitore non viene proposto: la sua conversazione non può ricevere email.",
+      "withoutParty_other": "{count} record senza cliente o fornitore non vengono proposti: le loro conversazioni non possono ricevere email.",
+      "files": "Non viene inviato nulla a nessuno: l'email e i suoi file passano soltanto nel record.",
+      "number": "Numero del record",
+      "numberHint": "Scrivi il numero, o una sua parte.",
+      "matches_one": "{count} record trovato",
+      "matches_other": "{count} record trovati",
+      "noMatch": "Nessun record con questo numero può ricevere email.",
+      "moreMatches_one": "Altro {count}: scrivi più cifre del numero.",
+      "moreMatches_other": "Altri {count}: scrivi più cifre del numero."
+    },
+    "release": {
+      "title": "Sblocca questa email",
+      "body": {
+        "thread": "Entra nella conversazione a cui risponde, come messaggio del cliente o del fornitore, con i file conservati.",
+        "list": "Torna nell'elenco come email senza record: poi assegnala a un record."
+      },
+      "go": {
+        "thread": "Sblocca nella conversazione",
+        "list": "Sblocca nell'elenco"
+      },
+      "risky": "Non ha superato un controllo: sbloccala solo se sei sicuro di chi l'ha inviata.",
+      "reason": "Motivo (facoltativo)"
+    },
+    "reasonHint": "Resta con la modifica, per chi guarderà in seguito.",
+    "reject": {
+      "title": "Scarta questa email",
+      "body": "Esce dall'elenco. Non viene cancellato nulla e nessuno viene avvisato.",
+      "legend": "Motivo",
+      "reason": {
+        "MARKED_SPAM": {
+          "title": "Spam",
+          "body": "Posta indesiderata: pubblicità, phishing, un mittente con cui non lavoriamo."
+        },
+        "DISCARDED": {
+          "title": "Non è per noi",
+          "body": "Un'email vera che non serve a nessun record: una newsletter, una risposta automatica, un doppione."
+        }
+      },
+      "note": "Nota (facoltativa)",
+      "go": "Scarta"
+    },
+    "notice": {
+      "assigned": "Assegnata. L'email ora è un messaggio della conversazione del record.",
+      "releasedThread": "Sbloccata nella sua conversazione.",
+      "releasedList": "Sbloccata. È tornata nell'elenco e aspetta un record.",
+      "rejected": {
+        "MARKED_SPAM": "Scartata come spam.",
+        "DISCARDED": "Scartata: non è per noi."
+      },
+      "conflict": "Qualcun altro, o il servizio di posta, ha smistato questa email nel frattempo. È stata riletta: controlla e riprova.",
+      "cannot": "L'email non può andare lì: il record deve avere un cliente o un fornitore, oppure l'email è già stata smistata. È stata riletta.",
+      "notFound": "Questa email o quel record non ci sono più. L'elenco è stato riletto.",
+      "forbidden": "Non puoi farlo con questa email o con questo record.",
+      "invalid": "La risposta è stata rifiutata così com'è. Controlla quello che hai scritto.",
+      "signedOut": "La sessione è scaduta. Accedi di nuovo per continuare.",
+      "rateLimited": "Troppi tentativi in poco tempo. Aspetta un minuto e riprova.",
+      "unavailable": "Il server della fabbrica non ha risposto. Non è cambiato nulla; riprova.",
+      "failed": "Non ha funzionato. Non è cambiato nulla; riprova."
+    },
+    "problem": {
+      "read": "Non è stato possibile leggere le email. Riprova tra un momento.",
+      "forbidden": "Non puoi smistare la posta di questa azienda.",
+      "notFound": "Questa email non c'è più.",
+      "unavailable": "Il server della fabbrica non ha risposto. Controlla la connessione e riprova."
+    }
+  }
+}

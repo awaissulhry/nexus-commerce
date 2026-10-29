@@ -2,7 +2,7 @@
 
 Next.js 16 (App Router), the same Next and React versions as `apps/web`, built from the design system `@nexus/ui`
 (packages/ui, compiled here: `transpilePackages`). Four views as route groups: Office `(office)` (built), Links
-`(links)` (built), Floor `(floor)` and Portal `(portal)` (later steps); sign-in `(auth)` (B-W0-26; today a placeholder).
+`(links)` (built), Floor `(floor)` and Portal `(portal)` (later steps); office sign-in `(auth)` (built: B-W0-26).
 
 ## Commands (from the repository root unless noted)
     FACTORY_API_URL=http://127.0.0.1:8190 npm run dev -w @nexus/factory-web     # :3200
@@ -30,6 +30,17 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (`apps/web/src/app/settings/_shell/SettingsShellHeader.tsx`): a band on top of the page — the toggle button, then a
   dense `DetailHeader` (page title, area › group as meta) — whose button opens the area's pages as an overlay. No
   permanent column, no collapse strip (Owner, 2026-10-28).
+- `src/app/(auth)/` — office sign-in (SCR-001), no chrome, no session: `/sign-in`, `/forgot-password`, and the mailed
+  links `/reset-password#token=…`, `/accept-invitation#token=…` (the token read from the fragment once, then removed
+  from the address bar). One flow container (`_auth/OfficeAuth.tsx`) over one view; the company's sign-in name is a
+  page cookie (`factory_tenant`). A new session opens `/w/<company>`, or the profile's authenticator card while
+  the person's role needs two-factor they have not set up. `src/areas/me/` — my profile & security (SCR-007,
+  `/w/<company>/me`, from the person menu; no navigation row).
+- Office entries — `/w/<company>` and each area's own address (`/home`, `/admin`; the rail and the brand link go
+  there) — redirect on the server to the first page the person may open, in navigation order, among the BUILT pages
+  (`shell/office/office-entry.ts`, `OFFICE_PAGES` in shell/nav/office-nav.ts); none built: My profile. A step that
+  builds an office page adds its address to `OFFICE_PAGES`; a new area adds its entry page (`office-entry.vitest.test.ts`
+  holds both).
 - `src/app/(links)/` — no chrome: `/l#token=…` (a one-off link; the token is read from the fragment, removed from the
   address bar, sent only in `x-factory-link`), `/privacy/<company id>` (the privacy-notice slot, GAP-005).
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
@@ -37,6 +48,9 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),
   `nav/office-nav.ts` (assembles the area manifests). `src/areas/<area>/nav.ts` — one navigation declaration per area.
 - `src/lib/` — shared by every view: `api/` (the client), `session/`, `i18n/`, `theme/`, `pdf/`, `links/`, `design/`.
+- `src/record-panels/` — SCR-006, the panels every record page mounts: `<RecordPanels record={{ type, id, companyId,
+  siteId }} title party />` (thread, files, history; live refresh from `/live`). A screen with its own catalogue wraps its
+  view in `WithMessages` (record-panels/i18n.tsx): the layouts load `shell` only.
 
 ## Rules
 - `FACTORY_API_URL` has NO fallback: without it `next dev`, `next build` and `next start` refuse to start

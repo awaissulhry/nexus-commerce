@@ -30,11 +30,11 @@ export type RegisterRisk = (typeof REGISTER_RISKS)[number]
 
 /**
  * Where an entry came from, when another record opened it: a release reversal whose garments had already left
- * (B-W1-45, "shipped ones go to the PPE register"), a final inspection, a shipment. A person's own entry has none.
- * The complaint (SAL-416) and the NCR (W2a) join with their modules. The …_quality_ppe_register_guards trigger lists the
- * same types.
+ * (B-W1-45, "shipped ones go to the PPE register"), a final inspection, a shipment, a lab result (B-W1-34: a later
+ * chromium VI FAIL on a lot whose stock was issued). A person's own entry has none. The complaint (SAL-416) and the NCR
+ * (W2a) join with their modules. The register guard trigger lists the same types (…_quality_lab_guards redefines it).
  */
-export const REGISTER_SOURCE_TYPES = ['QualityReleaseReversal', 'QualityRelease', 'Inspection', 'Shipment'] as const
+export const REGISTER_SOURCE_TYPES = ['QualityReleaseReversal', 'QualityRelease', 'Inspection', 'Shipment', 'LabResult'] as const
 export type RegisterSourceType = (typeof REGISTER_SOURCE_TYPES)[number]
 
 export const KIND_WORDS: Readonly<Record<RegisterKind, string>> = Object.freeze({ COMPLAINT: 'complaint', NON_CONFORMITY: 'non-conformity', RECALL: 'recall' })

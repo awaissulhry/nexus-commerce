@@ -212,9 +212,5 @@
       "body": "The service did not answer as it should (code {code}). Try again in a moment.",
       "action": "Try again"
     }
-  },
-  "signInPlaceholder": {
-    "title": "Sign-in",
-    "body": "The office sign-in page arrives with the next build step. Your session has ended or you have not signed in yet."
   }
 }

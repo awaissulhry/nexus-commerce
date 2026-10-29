@@ -10,5 +10,6 @@ export const manifest = defineManifest({
   'GET /threads/:recordType/:recordId': { audiences: ['office', 'partner', 'link'], permission: 'threads.read', scope: 'record' },
   'GET /threads/:recordType/:recordId/timeline': { audiences: ['office'], permission: 'threads.read', scope: 'record' },
   'POST /threads/:recordType/:recordId/notes': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  'GET /threads/:recordType/:recordId/people': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
   'PUT /threads/:recordType/:recordId/status': { audiences: ['office'], permission: 'threads.manage', scope: 'record' },
 })

@@ -1,0 +1,99 @@
+{
+  "title": "My profile",
+  "subtitle": "{name} · {email} · {tenant}",
+  "display": {
+    "title": "Language and display",
+    "description": "Your language follows you on every device. The theme is kept on this device.",
+    "language": "Language",
+    "theme": "Theme",
+    "themes": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "As the device"
+    },
+    "formats": "Numbers and dates",
+    "timeZone": "Times are shown in",
+    "timeZoneValue": "{zone}, the site's time zone"
+  },
+  "password": {
+    "title": "Password",
+    "description": "A new password signs out every other device where you are signed in.",
+    "change": "Change password",
+    "current": "Current password",
+    "new": "New password",
+    "newHint": "At least {min} characters. A short sentence is easy to remember. Do not use your name or email.",
+    "repeat": "Repeat the new password",
+    "submit": "Save the new password",
+    "cancel": "Cancel",
+    "done": "Your password is changed.",
+    "ended_one": "{count} other device was signed out.",
+    "ended_other": "{count} other devices were signed out."
+  },
+  "authenticator": {
+    "title": "Authenticator app",
+    "description": "After the password, sign-in asks for a code from an app on your phone (two-factor).",
+    "state": "State",
+    "on": "On",
+    "off": "Off",
+    "required": "Your role needs an authenticator app. Until you set it up, you can open only this page.",
+    "requiredOn": "Your role needs it, so it cannot be switched off.",
+    "setup": "Set up the app",
+    "scan": "1. Scan this code with your authenticator app, for example Google Authenticator, Microsoft Authenticator or 1Password. No camera? Type the key under the code into the app.",
+    "qrLabel": "QR code that adds Nexus Factory to your authenticator app",
+    "enter": "2. Enter the 6-digit code the app now shows.",
+    "code": "Code from the app",
+    "confirm": "Switch on",
+    "cancel": "Cancel",
+    "codesTitle": "Save your recovery codes",
+    "codesBody": "If you lose your phone, each of these codes signs you in once instead of the app. They are shown only now: copy or print them, or write them down, and keep them somewhere safe.",
+    "copy": "Copy the codes",
+    "copied": "Copied",
+    "copyFailed": "Could not copy. Select the codes and copy them.",
+    "codesDone": "I have saved them",
+    "recoveryLeft": "Recovery codes left",
+    "recoveryLow": "Few recovery codes are left. Switch the app off and on again to get 10 new ones.",
+    "turnedOn": "The authenticator app is on. Sign-in now asks for its code.",
+    "disable": "Switch off",
+    "disableBody": "Enter your password to switch the authenticator app off. Your recovery codes stop working.",
+    "disableSubmit": "Switch off the app",
+    "turnedOff": "The authenticator app is off."
+  },
+  "sessions": {
+    "title": "Sessions",
+    "description": "Where you are signed in now.",
+    "thisDevice": "This device",
+    "started": "Signed in",
+    "idle": "Ends if unused",
+    "idleHint": "Each use moves it later.",
+    "absolute": "Ends at the latest",
+    "others": "The list of your other devices comes later. To sign out everywhere else now, change your password.",
+    "signOut": "Sign out on this device"
+  },
+  "qr": {
+    "copy": "Copy the key",
+    "copied": "Copied",
+    "copyFailed": "Could not copy. Select the key and copy it.",
+    "loading": "Drawing the code",
+    "tooLong": "This is too long for a QR code."
+  },
+  "field": {
+    "currentRequired": "Enter your current password.",
+    "codeFormat": "Enter the 6 digits the app shows.",
+    "passwordRequired": "Enter your password.",
+    "passwordShort": "Use at least {min} characters.",
+    "passwordLong": "Use at most {max} characters.",
+    "passwordSimple": "Use more different characters.",
+    "passwordName": "Do not use your name or email in the password.",
+    "repeatMismatch": "The two passwords are not the same."
+  },
+  "problem": {
+    "wrongPassword": "The password is not right. After several wrong tries the account is locked for a few minutes.",
+    "wrongCode": "The code does not match. Check that the phone's clock is right, then enter the current code.",
+    "locked": "Too many wrong tries. Wait a few minutes, then try again.",
+    "rateLimited": "Too many tries from this device. Wait a few minutes, then try again.",
+    "passwordRefused": "This password is too easy to guess. Choose another.",
+    "changed": "Something changed meanwhile. Load the page again and repeat.",
+    "unavailable": "Nexus Factory is not answering. Try again in a moment.",
+    "signedOut": "Your session has ended. Sign in again."
+  }
+}

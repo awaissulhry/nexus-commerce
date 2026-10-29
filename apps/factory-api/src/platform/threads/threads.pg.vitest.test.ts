@@ -368,6 +368,26 @@ describe('mentions (COL-006) and events', () => {
   })
 })
 
+describe('who a note may mention (COL-006; the record panel composer)', () => {
+  const people = async (session: string, companyId: string) => call(session, 'GET', `/threads/Company/${companyId}/people`)
+
+  it('lists the active people whose roles read the record, by name, and no address', async () => {
+    const one = await people('author', companyOne)
+    expect(one.statusCode, one.body).toBe(200)
+    // Olga reads company two only, Sara is suspended, Bea is another tenant's.
+    expect(one.json()).toEqual({ people: [{ id: author, name: 'Ada Author' }, { id: colleague, name: 'Carlo Colleague' }] })
+    const two = await people('author', companyTwo)
+    expect(two.json().people.map((person: Json) => person.name)).toEqual(['Ada Author', 'Carlo Colleague', 'Olga Outsider'])
+  })
+
+  it('is for people who may write a note on the record', async () => {
+    expect((await people('reader', companyOne)).statusCode).toBe(403)
+    expect((await people('company-two', companyOne)).statusCode).toBe(404)
+    expect((await people('partner-one', companyOne)).statusCode).toBe(403)
+    expect((await call('author', 'GET', `/threads/Nothing/${companyOne}/people`)).statusCode).toBe(404)
+  })
+})
+
 describe('scope, tenant wall and status', () => {
   it("keeps a company-limited person to their company's records", async () => {
     expect((await call('company-two', 'GET', `/threads/Company/${companyOne}`)).statusCode).toBe(404)

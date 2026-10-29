@@ -3,6 +3,7 @@ import { daysLate, nextActions } from '@nexus/factory-domain/production/work-ord
 import type { PlannedMaterial, PlannedOperation } from '@nexus/factory-domain/production/work-orders/spec'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
+import { cutCountsOf } from '../cutting/views'
 import { planSpec, readBasics, readIssued, readSpecParts, type Basics, type SpecParts } from './facts'
 import { dayOrNull, type Header, type Reader } from './store'
 
@@ -10,11 +11,12 @@ import { dayOrNull, type Header, type Reader } from './store'
  * The work order record (A2 SCR-070; design 02 "Record: Work order"): facts, the orders and customers it makes for,
  * the size run, and the specification — for a DRAFT what the release would freeze now (from the chosen revision, the
  * site's work centres and the BOM math), from RELEASED on the frozen rows themselves — with what the ledger issued to
- * it. Progress per cell (cut, sewn, finished) is counted from the cut log and the floor's scans, which come with
- * B-W1-40 and B-W1-42: until then each is null ("not counted yet"), never a made-up 0.
+ * it. Progress per cell: "cut" is counted from the cut log from the release on (B-W1-40: garments with every part cut
+ * from hides; null for a draft, or a cell with no part cut from hides); sewn and finished come with the floor's scans
+ * (B-W1-42): until then null ("not counted yet"), never a made-up 0.
  */
 
-export const PROGRESS_NOTE = 'Cut, sewn and finished pieces are counted from the cutting log and the floor scans (B-W1-40, B-W1-42); not counted yet.'
+export const PROGRESS_NOTE = 'Cut garments are counted from the cutting log; sewn and finished ones from the floor scans (B-W1-42): not counted yet.'
 
 const at = (value: Date | null): string | null => (value ? toUtcIso(value) : null)
 
@@ -132,6 +134,7 @@ export async function workOrderView(db: Reader, workOrder: Header, today: Busine
   const draft = frozen ? null : planSpec(parts, cells)
   const plan = draft ? { operations: draft.operations.map((op) => ({ ...op, id: null })), materials: draft.materials } : await frozenSpec(db, workOrder, parts)
   const issued = await readIssued(db, workOrder.siteId, [workOrder.id])
+  const cut = frozen ? await cutCountsOf(db, workOrder.id, workOrder.styleId) : null
   const pieces = cells.reduce((sum, cell) => sum + cell.quantity, 0)
   const perGarment = plan.operations.reduce<Decimal>((sum, op) => sum.plus(op.standardMinutes), ZERO)
   const dueDate = dayOrNull(workOrder.dueDate)
@@ -174,7 +177,7 @@ export async function workOrderView(db: Reader, workOrder: Header, today: Busine
       salesOrderLineId: cell.salesOrderLineId,
       salesOrderId: cell.salesOrderId,
       lineSeq: cell.lineSeq,
-      progress: { cut: null, sewn: null, finished: null },
+      progress: { cut: cut?.get(cell.id) ?? null, sewn: null, finished: null },
     })),
     pieces,
     progress: { counted: false, note: PROGRESS_NOTE },

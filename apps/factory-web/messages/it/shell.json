@@ -212,9 +212,5 @@
       "body": "Il servizio non ha risposto come dovrebbe (codice {code}). Riprova tra un momento.",
       "action": "Riprova"
     }
-  },
-  "signInPlaceholder": {
-    "title": "Accesso",
-    "body": "La pagina di accesso dell'ufficio arriva con il prossimo passo. La tua sessione è terminata oppure non hai ancora effettuato l'accesso."
   }
 }
