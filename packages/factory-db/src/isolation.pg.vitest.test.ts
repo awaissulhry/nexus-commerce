@@ -9,7 +9,9 @@ import { seed as seedEmail } from '../seed/email'
 import { seed as seedEmailIn } from '../seed/email-in'
 import { seed as seedFiles } from '../seed/files'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
+import { seed as seedFloorSync } from '../seed/floor-sync'
 import { seed as seedImports } from '../seed/imports'
+import { seed as seedInsights } from '../seed/insights'
 import { seed as seedIntegration } from '../seed/integration'
 import { seed as seedInventory } from '../seed/inventory'
 import { seed as seedLinks } from '../seed/links'
@@ -127,6 +129,8 @@ beforeAll(async () => {
   await seedFloorAuth({ db: factory, namespace: 'iso-b' })
   await seedNumberingBlocks({ db: factory, namespace: 'iso-a' })
   await seedNumberingBlocks({ db: factory, namespace: 'iso-b' })
+  await seedFloorSync({ db: factory, namespace: 'iso-a' })
+  await seedFloorSync({ db: factory, namespace: 'iso-b' })
   await seedThreads({ db: factory, namespace: 'iso-a' })
   await seedThreads({ db: factory, namespace: 'iso-b' })
   await seedImports({ db: factory, namespace: 'iso-a' })
@@ -157,6 +161,8 @@ beforeAll(async () => {
   await seedCosting({ db: factory, namespace: 'iso-b' })
   await seedQualityLab({ db: factory, namespace: 'iso-a' })
   await seedQualityLab({ db: factory, namespace: 'iso-b' })
+  await seedInsights({ db: factory, namespace: 'iso-a' })
+  await seedInsights({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -166,6 +172,8 @@ afterAll(async () => {
 
 it('covers every classified table and every runtime role', () => {
   expect(classified.map(({ model }) => model.name).sort()).toEqual([
+    'AttentionAction',
+    'AttentionActionLog',
     'AuditLog',
     'Badge',
     'BomLine',
@@ -189,9 +197,11 @@ it('covers every classified table and every runtime role', () => {
     'DeviceEnrolment',
     'EmailIdentity',
     'EmailOutbound',
+    'FloorRefusedAction',
     'FloorScanRefusal',
     'FloorSession',
     'FloorSettings',
+    'FloorSyncEvent',
     'GarmentLabelPrint',
     'GarmentSerial',
     'GoodsReceipt',
@@ -290,6 +300,7 @@ it('covers every classified table and every runtime role', () => {
     'Suppression',
     'Tenant',
     'Thread',
+    'TodayLayout',
     'TrackingEvent',
     'User',
     'Variant',

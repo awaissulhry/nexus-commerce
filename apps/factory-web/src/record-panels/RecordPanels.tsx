@@ -35,6 +35,7 @@ import {
   type PanelParty,
   type PanelPerson,
   type PanelRecord,
+  type PanelTab,
   type PanelTimelineEntry,
   type PanelUpload,
   type RecordPanelsViewModel,
@@ -57,6 +58,8 @@ export interface RecordPanelsProps {
   title: string
   /** The record's customer, supplier or brand, when it has one (the page knows it; the thread confirms it). */
   party?: PanelParty | null
+  /** The panel shown first (a record's Documents tab opens on Files); default the thread. */
+  tab?: PanelTab
 }
 
 type Notice = NonNullable<RecordPanelsViewModel['notice']>
@@ -130,7 +133,7 @@ function fileOf(file: ApiFile): PanelFile {
   }
 }
 
-export function RecordPanels({ record, title, party: givenParty = null }: RecordPanelsProps) {
+export function RecordPanels({ record, title, party: givenParty = null, tab }: RecordPanelsProps) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const key = useMemo(() => ({ type: record.type, id: record.id }), [record.type, record.id])
@@ -417,6 +420,7 @@ export function RecordPanels({ record, title, party: givenParty = null }: Record
     notice,
     preview,
     sending,
+    ...(tab ? { tab } : {}),
   }
 
   return (

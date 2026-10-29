@@ -481,8 +481,8 @@ describe('mail to sort (COL-023, A2 SCR-019)', () => {
     expect(await first(`SELECT "recordType", "recordId", "partyId" FROM "Thread" WHERE id = $1`, [joined.threadId])).toEqual({ recordType: 'Party', recordId: partyTwo, partyId: partyTwo })
     const unsure = await deliver({ from: 'luca@buyer-two.example.com', to: ['ordini@in-a.example.com'], subject: 'Nuovo ordine', messageId: '<n2@buyer-two.example.com>', text: 'x', verdicts: { dmarc: 'GRAY' } })
     expect(unsure).toMatchObject({ status: 'TRIAGE', senderPartyId: partyTwo, threadId: null })
-    // Without a thread resolver for parties (the parties module brings it), a known contact waits in triage too.
-    useThreadRecords({ Quote: quoteResolverOf() })
+    // When the party's thread cannot be resolved (no such party for the caller), a known contact waits in triage too.
+    useThreadRecords({ Quote: quoteResolverOf(), Party: async () => null })
     try {
       const waiting = await deliver({ from: 'anna@buyer-one.example.com', to: ['ordini@in-a.example.com'], subject: 'Domanda', messageId: '<n3@buyer-one.example.com>', text: 'x' })
       expect(waiting).toMatchObject({ status: 'TRIAGE', senderPartyId: partyOne, senderContactId: anna })

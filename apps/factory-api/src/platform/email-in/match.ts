@@ -12,7 +12,7 @@ import { resolveRecord } from '../threads/records'
  *   - whether the thread knows the sender: an ACTIVE contact of its party, a recipient of its mail, or an address at a
  *     contact's company domain;
  *   - without a thread: the one party the sender is a contact of, and that party's own thread (record type `Party`,
- *     once the parties module gives it a thread resolver; until then none: the mail waits in triage with the party);
+ *     its resolver in threads/records.ts; a party it cannot resolve leaves the mail in triage with the party);
  *   - whether its Message-ID is already a thread message (our own mail come back, or the same mail again).
  * Plus the suggestion kept on the row for a person: the sender's party and contact, else the one party a contact's
  * company domain points at.

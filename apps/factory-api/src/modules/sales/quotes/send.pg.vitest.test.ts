@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -231,6 +232,18 @@ describe('the link: open, accept with a typed name, the evidence, the deposit (S
       const keys = JSON.stringify(view.body)
       for (const word of ['unitCost', 'costAmount', 'margin', 'internalNote', 'token']) expect(keys).not.toContain(word)
     }
+    expect((await admin('SELECT uses FROM "OneOffLink" WHERE id = $1', [firstSent.sent.link.id]))[0]).toEqual({ uses: 0 })
+  })
+
+  it('the link page reads the PDF it accepts, as sent (its SHA-256 is the version\'s), through the link only (B-W1-21 part 2)', async () => {
+    const response = await h.app.inject({ method: 'GET', url: '/link/quote/document', headers: { 'x-factory-link': firstToken } })
+    expect(response.statusCode, response.body.slice(0, 200)).toBe(200)
+    expect(response.headers['content-type']).toBe('application/pdf')
+    expect(String(response.headers['content-disposition'])).toMatch(/^inline; filename=/)
+    const sha = createHash('sha256').update(response.rawPayload).digest('hex')
+    expect(sha).toBe(firstSent.sent.documentSha256)
+    // A link of another quote, or none at all, reads nothing.
+    expect((await h.app.inject({ method: 'GET', url: '/link/quote/document' })).statusCode).toBe(401)
     expect((await admin('SELECT uses FROM "OneOffLink" WHERE id = $1', [firstSent.sent.link.id]))[0]).toEqual({ uses: 0 })
   })
 

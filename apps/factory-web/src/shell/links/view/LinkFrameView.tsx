@@ -44,6 +44,8 @@ export type LinkFrameBody =
     }
   /** The sender's privacy notice (`/privacy/<company>`); W0: not published here yet. */
   | { kind: 'privacy'; notice: string | null }
+  /** A module's task page (accept a quote, SCR-099): the frame, and the task as the children; the page says its own states. */
+  | { kind: 'task' }
 
 export interface LinkFrameViewModel {
   /** Who sent the link; null when the page cannot know (no token, or the link opened nothing). */
@@ -108,7 +110,15 @@ export function LinkFrameView({ model, children }: LinkFrameViewProps) {
 
       <main id="main-content" className="fw-link-main" tabIndex={-1}>
         {model.title && <h1 className="fw-link-title">{model.title}</h1>}
-        {model.body.kind === 'privacy' ? <PrivacyBody notice={model.body.notice} senderName={senderName} /> : <LinkBody body={model.body} senderName={senderName} timeZone={model.timeZone}>{children}</LinkBody>}
+        {model.body.kind === 'privacy' ? (
+          <PrivacyBody notice={model.body.notice} senderName={senderName} />
+        ) : model.body.kind === 'task' ? (
+          <div className="fw-link-body">{children}</div>
+        ) : (
+          <LinkBody body={model.body} senderName={senderName} timeZone={model.timeZone}>
+            {children}
+          </LinkBody>
+        )}
       </main>
 
       <footer className="fw-link-foot">

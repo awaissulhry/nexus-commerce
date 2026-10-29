@@ -1,0 +1,106 @@
+/*
+ * The accept-link page (SCR-099) LAYOUT inside the link frame (comfortable density, phone first). Controls are the
+ * design system's; semantic tokens only.
+ */
+.fw-qa-card,
+.fw-qa-dialog,
+.fw-qa-deposit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-qa-h2,
+.fw-qa-h3 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-qa-h2 {
+  font-size: var(--nds-font-size-lg);
+}
+
+.fw-qa-h3 {
+  font-size: var(--nds-density-font-body, var(--nds-font-size-sm));
+}
+
+.fw-qa-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+
+p.fw-qa-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-qa-total {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-qa-total-label {
+  color: var(--nds-text-2);
+}
+
+.fw-qa-total-value {
+  font-size: var(--nds-font-size-2xl);
+  font-weight: var(--nds-font-weight-bold);
+  color: var(--nds-text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-qa-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-qa-sub {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-qa-terms,
+.fw-qa-steps {
+  margin: 0;
+  padding-left: var(--nds-space-20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  line-height: 1.5;
+}
+
+.fw-qa-sign-summary {
+  margin: 0;
+  font-weight: var(--nds-font-weight-medium);
+  line-height: 1.5;
+}
+
+.fw-qa-ok {
+  color: var(--nds-success);
+}
+
+.fw-qa-copy {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-qa-mono {
+  font-family: var(--nds-font-mono);
+  overflow-wrap: anywhere;
+}
