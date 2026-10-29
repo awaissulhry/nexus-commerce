@@ -229,6 +229,9 @@ model FloorSession {
   endsAt        DateTime               @db.Timestamptz(3)
   endedAt       DateTime?              @db.Timestamptz(3)
   endReason     FloorSessionEndReason?
+  /// When the worker last proved their PIN in this session: at a sign-in with a PIN, or a later PIN step-up
+  /// (POST /floor/step-up). Null: started by a badge alone and not proved since. Signing acts and My day need a recent one.
+  pinVerifiedAt DateTime?              @db.Timestamptz(3)
 
   device          Device   @relation("DeviceSessions", fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   worker          Worker   @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -270,6 +273,9 @@ model FloorSettings {
   idleMinutes Int      @default(10)
   /// `HH:MM` in the site's time zone, sorted.
   shiftEnds   String[] @default([])
+  /// A badge alone signs a worker in (Owner answer F1 a); the PIN is still asked to sign, to open My day, and with a
+  /// sign-in by name. False: every sign-in needs the PIN.
+  badgeOnlySignIn Boolean @default(false)
   version     Int      @default(1)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
