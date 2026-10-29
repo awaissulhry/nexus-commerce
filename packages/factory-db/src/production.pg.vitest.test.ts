@@ -464,24 +464,29 @@ describe('the scans', () => {
   it('refuse a worker who has not acknowledged the information notice (Statuto dei Lavoratori art. 4, GDPR art. 13)', async () => {
     const bundleId = await bundle()
     const byLead = scanRow({ bundleId, workerId: seeded.leadId })
-    await expect(insert(floor(), 'OperationScan', byLead)).rejects.toThrow(/worker .* has not acknowledged the information notice; no scan names a worker before that \(Statuto dei Lavoratori art\. 4 c\.3/)
+    await expect(insert(floor(), 'OperationScan', byLead)).rejects.toThrow(/worker .* has not acknowledged the information notice in force \(version 2026-10\); no scan names a worker before that \(Statuto dei Lavoratori art\. 4 c\.3/)
     await expect(insert(floor(), 'CutLog', cutRow(seeded.inventory.hideIds[0], '0.5000', { workerId: seeded.leadId }))).rejects.toThrow(/has not acknowledged the information notice/)
     // A site that records workers names the signed-in one.
     await expect(insert(floor(), 'OperationScan', scanRow({ bundleId, workerId: null }))).rejects.toThrow(/records the worker; scan .* names the signed-in worker/)
-    // The team leader acknowledges the notice on the tablet; then the scan is taken.
+    // The team leader acknowledges the worker notice in force (the privacy seed's 2026-10) on the tablet, with the
+    // fingerprint of its English text; then the scan is taken.
+    const [english] = await admin(`SELECT sha256 FROM "PrivacyNoticeText" WHERE "noticeId" = $1 AND locale = 'en'`, [seeded.workerNoticeId])
     const ack = {
       id: randomUUID(),
       siteId: A.siteA,
       workerId: seeded.leadId,
+      noticeId: seeded.workerNoticeId,
       noticeVersion: '2026-10',
       locale: 'en',
-      noticeSha256: 'a'.repeat(64),
+      noticeSha256: english!.sha256 as string,
       channel: 'DEVICE',
       deviceId: seeded.deviceId,
       deviceTime: new Date().toISOString(),
     }
     await expect(insert(floor(), 'WorkerNoticeAck', { ...ack, deviceId: null })).rejects.toThrow(/names its device exactly when it was given on one/)
     await expect(insert(floor(), 'WorkerNoticeAck', { ...ack, noticeSha256: 'not-a-hash' })).rejects.toThrow(/SHA-256 of the text as shown/)
+    await expect(insert(floor(), 'WorkerNoticeAck', { ...ack, noticeId: null })).rejects.toThrow(/names the worker notice it acknowledges/)
+    await expect(insert(floor(), 'WorkerNoticeAck', { ...ack, noticeSha256: 'a'.repeat(64) })).rejects.toThrow(/stores the fingerprint of notice/)
     expect(await insert(floor(), 'WorkerNoticeAck', ack)).toBe(1)
     await expect(insert(floor(), 'WorkerNoticeAck', { ...ack, id: randomUUID() })).rejects.toThrow(/WorkerNoticeAck_tenantId_workerId_noticeVersion_key/)
     expect(await insert(floor(), 'OperationScan', byLead)).toBe(1)

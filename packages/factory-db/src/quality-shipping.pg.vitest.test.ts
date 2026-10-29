@@ -1007,8 +1007,19 @@ describe('the PPE register', () => {
     expect(await insert(office(), 'PpeRegisterEntry', entry)).toBe(1)
     await expect(run(office(), `UPDATE "PpeRegisterEntry" SET status = 'CLOSED' WHERE id = $1::uuid`, entry.id)).rejects.toThrow(/wrong closing/)
     await expect(run(office(), `UPDATE "PpeRegisterEntry" SET kind = 'RECALL' WHERE id = $1::uuid`, entry.id)).rejects.toThrow(/never change/)
-    expect(await run(office(), `UPDATE "PpeRegisterEntry" SET "actionTaken" = 'Pocket re-opened on the batch', "distributorsInformedAt" = now() WHERE id = $1::uuid`, entry.id)).toBe(1)
-    expect(await run(office(), `UPDATE "PpeRegisterEntry" SET status = 'CLOSED', "closedAt" = now(), "closedById" = $2::uuid WHERE id = $1::uuid`, entry.id, a.actorId)).toBe(1)
+    // Closing needs its duties met (202610285001_quality_ppe_register_guards): a reason, the risk decided, the corrective
+    // action written and done, and here, since SEED-BT-0001's garments left on SEED-SH-0001, the distributors informed.
+    const close = (reason: string) =>
+      run(office(), `UPDATE "PpeRegisterEntry" SET status = 'CLOSED', "closedAt" = now(), "closedById" = $2::uuid, "closeReason" = $3 WHERE id = $1::uuid`, entry.id, a.actorId, reason)
+    await expect(close('Fixed.')).rejects.toThrow(/closes once its risk is decided/)
+    expect(await run(office(), `UPDATE "PpeRegisterEntry" SET risk = 'NO' WHERE id = $1::uuid`, entry.id)).toBe(1)
+    await expect(close('Fixed.')).rejects.toThrow(/corrective action is written and done/)
+    await expect(run(office(), `UPDATE "PpeRegisterEntry" SET "actionCompletedAt" = now() WHERE id = $1::uuid`, entry.id)).rejects.toThrow(/corrective action done without the action/)
+    expect(await run(office(), `UPDATE "PpeRegisterEntry" SET "actionTaken" = 'Pocket re-opened on the batch', "actionCompletedAt" = now() WHERE id = $1::uuid`, entry.id)).toBe(1)
+    await expect(close(' ')).rejects.toThrow(/closes with a reason/)
+    await expect(close('Fixed.')).rejects.toThrow(/left for customers: it closes once the distributors were informed/)
+    expect(await run(office(), `UPDATE "PpeRegisterEntry" SET "distributorsInformedAt" = now() WHERE id = $1::uuid`, entry.id)).toBe(1)
+    expect(await close('Pocket re-opened on every garment of the batch; P1 informed.')).toBe(1)
     await expect(run(office(), `UPDATE "PpeRegisterEntry" SET "actionTaken" = 'x' WHERE id = $1::uuid`, entry.id)).rejects.toThrow(/is CLOSED; it never changes/)
     await expect(run(office(), 'DELETE FROM "PpeRegisterEntry" WHERE id = $1::uuid', entry.id)).rejects.toThrow(DENIED)
     await expect(admin('DELETE FROM "PpeRegisterEntry" WHERE id = $1', [entry.id])).rejects.toThrow(/never deleted/)

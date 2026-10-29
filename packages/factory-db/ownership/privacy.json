@@ -1,0 +1,47 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/privacy.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context) writes the privacy notices and their languages, the DPIAs, the record of processing activities and the staff acknowledgements through apps/factory-api's platform/privacy, always through command(); the API keeps staff to the companies their privacy.view and privacy.manage grants reach. The floor (factory_floor_runtime) only reads the notices and their texts: the API answers a device only the published worker notice of its own company, and production's subject check (…_privacy_guards) reads the notice in force when a scan or a cut log names a worker; who published or wrote a notice is hidden from it. The floor reads no DPIA, no processing activity and no staff acknowledgement. Portal and link sessions (factory_partner_runtime, always scoped by party) read nothing here: a notice belongs to a company, not a party; the API reads the published public notice for them, and for anyone, at /privacy/<company id>. A notice's language is written only while the notice is a DRAFT, a DPIA is deleted only while it is a DRAFT, a notice too; processing activities are archived, never deleted; StaffNoticeAck is append-only (`@append-only`; the …_privacy_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "PrivacyNotice": {
+      "about": "The office writes a company's notice versions (privacy.manage) and publishes one (step-up); the floor reads them to show the worker notice in force and to check a worker-named scan.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "hiddenColumns": ["publishedById", "createdById"] }
+      }
+    },
+    "PrivacyNoticeText": {
+      "about": "The office writes a DRAFT notice's languages (text and/or PDF, with the fingerprint); the floor reads the text it shows and the fingerprint it stores.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "hiddenColumns": ["fileId", "createdById"] }
+      }
+    },
+    "PrivacyDpia": {
+      "about": "The office writes a company's DPIA and stores its signed PDF (step-up); office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "ProcessingActivity": {
+      "about": "The office keeps a company's record of processing activities (GDPR art. 30); archived, never deleted; office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "StaffNoticeAck": {
+      "about": "An office person acknowledges their company's staff notice at sign-in; the office reads them (counts, names with privacy.manage). Nobody changes or removes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    }
+  }
+}
