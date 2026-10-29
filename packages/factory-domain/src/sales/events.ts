@@ -15,6 +15,7 @@ import { APPROVAL_REASONS } from './quotes/quotes'
  *   quote.approval_decided    an approver approved or rejected it
  *   quote.reopened            the version went back to DRAFT for a change (a waiting request is withdrawn)
  *   quote.cancelled           the office withdrew the quote before sending it
+ *   sales_settings.changed    a company's or the tenant's quote rules changed (which fields)
  */
 const live = { permission: 'quotes.view', fields: ['quoteId', 'versionId'] } as const
 const ids = { quoteId: z.uuid(), versionId: z.uuid() }
@@ -61,6 +62,13 @@ export const events = [
     description: 'A quote version waiting for approval, or approved, went back to draft for a change; a waiting request was withdrawn.',
     payload: z.strictObject({ ...ids, withdrawnApprovalId: z.uuid().nullable() }),
     live,
+  }),
+  defineEvent({
+    type: 'sales_settings.changed',
+    context: 'sales',
+    description: "A company's (or the tenant-wide) sales settings changed: the quote rules new quotes and every draft's next change are checked against.",
+    payload: z.strictObject({ settingsId: z.uuid(), fields: z.array(z.string()) }),
+    live: { permission: 'quotes.view', fields: ['settingsId'] },
   }),
   defineEvent({
     type: 'quote.cancelled',

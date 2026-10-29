@@ -317,3 +317,45 @@ export const rejectContract = defineContract({ params: quoteParams, body: input(
 export const reopenContract = defineContract({ params: quoteParams, body: input({ version, reason: text(MAX_TEXT.reason).nullish() }), response: { 200: one } })
 
 export const cancelContract = defineContract({ params: quoteParams, body: input({ version, reason: text(MAX_TEXT.reason).nullish() }), response: { 200: one } })
+
+// ---- the sales settings -----------------------------------------------------------------------------------------------
+
+const settingsView = output({
+  /** The company's id, or the tenant's for the tenant-wide row. */
+  id: id(),
+  companyId: id().nullable(),
+  marginFloorPct: money.margin(z.string()),
+  discountLimitPct: z.string(),
+  defaultValidityDays: z.number().int(),
+  defaultDepositPct: z.string().nullable(),
+  version: z.number().int(),
+  updatedAt: instant(),
+})
+
+const rulesView = output({
+  marginFloorPct: money.margin(z.string()),
+  discountLimitPct: z.string(),
+  defaultValidityDays: z.number().int(),
+  defaultDepositPct: z.string().nullable(),
+  /** DEFAULT (no row), TENANT (the tenant-wide row) or COMPANY (the company's own row). */
+  source: z.enum(['DEFAULT', 'TENANT', 'COMPANY']),
+})
+
+export const getSettingsContract = defineContract({
+  querystring: input({ companyId: id().optional() }),
+  response: { 200: output({ settings: output({ tenant: settingsView.nullable(), company: settingsView.nullable(), inForce: rulesView, defaults: rulesView }) }) },
+})
+
+export const saveSettingsContract = defineContract({
+  body: input({
+    /** A company's own settings; none: the tenant-wide ones (a role over every company). */
+    companyId: id().optional(),
+    marginFloorPct: money.margin(pct),
+    discountLimitPct: pct,
+    defaultValidityDays: z.number().int(),
+    defaultDepositPct: pct.nullable(),
+    /** Required once the row exists (the edit-conflict guard); absent on the first save. */
+    version: version.optional(),
+  }),
+  response: { 200: output({ settings: settingsView }) },
+})

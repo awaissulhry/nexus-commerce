@@ -129,6 +129,8 @@ model Company {
   labourRates          LabourRate[]
   /// @not-money the relation to its costing settings rows (an overhead percentage, no amount)
   costingSettings      CostingSettings[]
+  // sales.prisma: the company's sales settings (its margin floor, discount limit, validity and deposit).
+  salesSettings        SalesSettings[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.

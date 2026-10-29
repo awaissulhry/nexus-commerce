@@ -9,21 +9,25 @@ import {
   createQuoteContract,
   editLineContract,
   getQuoteContract,
+  getSettingsContract,
   listQuotesContract,
   recomputeContract,
   rejectContract,
   removeLineContract,
   reopenContract,
+  saveSettingsContract,
   updateQuoteContract,
 } from './contract'
 import { addLine, editLine, recompute, removeLine } from './lines'
 import { manifest } from './manifest'
 import { cancelQuote, createQuote, getQuote, listQuotes, updateQuote } from './quotes'
+import { getSalesSettings, saveSalesSettings } from './settings'
 
 /**
  * Quotes, part 1 (B-W1-21): the list and the record, a new quote, its header and terms, its size-grid lines (each costed
  * from its style's cost sheet), a recompute, the approval (ask, approve, reject, reopen) and the cancellation. Sending,
- * the frozen version, its PDF, the accept link and the deposit request are B-W1-24; the order is B-W1-25.
+ * the frozen version, its PDF, the accept link and the deposit request are B-W1-24; the order is B-W1-25. And the sales
+ * settings: the quote rules (margin floor, discount limit, default validity and deposit) of a company or the tenant.
  */
 export default defineRoutes('sales.quotes', manifest, async (app) => {
   app.get('/sales/quotes', { schema: listQuotesContract }, async (request) => listQuotes(request, request.query))
@@ -51,4 +55,8 @@ export default defineRoutes('sales.quotes', manifest, async (app) => {
   app.post('/sales/quotes/:quoteId/reopen', { schema: reopenContract }, async (request) => reopen(request, request.params.quoteId, request.body, idempotencyKeyFrom(request)))
 
   app.post('/sales/quotes/:quoteId/cancel', { schema: cancelContract }, async (request) => cancelQuote(request, request.params.quoteId, request.body, idempotencyKeyFrom(request)))
+
+  app.get('/sales/settings', { schema: getSettingsContract }, async (request) => getSalesSettings(request, request.query))
+
+  app.put('/sales/settings', { schema: saveSettingsContract }, async (request) => saveSalesSettings(request, request.body, idempotencyKeyFrom(request)))
 })

@@ -24,3 +24,15 @@ export const QUOTES_VIEW = 'quotes.view' satisfies Permission
 export const QUOTES_MANAGE = 'quotes.manage' satisfies Permission
 export const QUOTES_APPROVE = 'quotes.approve' satisfies Permission
 export const QUOTES_PERMISSIONS: readonly Permission[] = Object.freeze([QUOTES_VIEW, QUOTES_MANAGE, QUOTES_APPROVE])
+
+/**
+ * The sales settings (B-W1-21; SAL-184, FIN-023; the design's Sales settings), in the sales area: the margin floor and
+ * the discount limit quotes are checked against, the default validity and deposit, for a company or tenant-wide (a
+ * tenant-wide row only by a grant over every company). Seeing them is quotes.view (the floor with the margin grain).
+ */
+export const SALES_SETTINGS_DEFINITIONS = definePermissions('sales', {
+  'settings.manage': { risk: 'write', description: "Set a company's (or the tenant's) quote rules: the margin floor, the discount limit, how long a quote stands and the deposit it asks." },
+})
+
+export const SALES_SETTINGS_MANAGE = 'sales.settings.manage' satisfies Permission
+export const SALES_SETTINGS_PERMISSIONS: readonly Permission[] = Object.freeze([SALES_SETTINGS_MANAGE])

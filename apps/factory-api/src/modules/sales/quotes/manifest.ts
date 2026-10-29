@@ -20,4 +20,7 @@ export const manifest = defineManifest({
   'POST /sales/quotes/:quoteId/approval/reject': { audiences: ['office'], permission: 'quotes.approve', scope: 'record' },
   'POST /sales/quotes/:quoteId/reopen': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },
   'POST /sales/quotes/:quoteId/cancel': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },
+  // The sales settings: the quote rules of a company or of the tenant.
+  'GET /sales/settings': { audiences: ['office'], permission: 'quotes.view', scope: 'record' },
+  'PUT /sales/settings': { audiences: ['office'], permission: 'sales.settings.manage', scope: 'record' },
 })

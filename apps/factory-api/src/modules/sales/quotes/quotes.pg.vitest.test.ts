@@ -71,6 +71,8 @@ const PEOPLE: Record<string, Person> = {
   // everything, and approves.
   sales: fromTemplate('sales'),
   finance: fromTemplate('finance'),
+  // Finance over company A only: it keeps company A's sales settings, never the tenant-wide ones.
+  financeA: { ...fromTemplate('finance'), companies: [companyA] },
   // Sales as design answer a (the template with the margin grain too): margin % against the floor, never a cost.
   salesWithMargin: fromTemplate('sales', ['money.margin']),
   // A manager who may edit and approve, with every grain: asks, then may not approve their own request.
@@ -91,7 +93,7 @@ SESSIONS.floor = { audience: 'floor', tenantId: tenant, actorId: newId(), siteId
 SESSIONS.partner = { audience: 'partner', tenantId: tenant, actorId: newId(), partyId: P1, grants: [{ permissions: [...QUOTES, 'money.price'], companies: 'all', sites: 'all', parties: [P1] }] }
 
 type Json = Record<string, any>
-type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE'
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 const admin = async <T = Json>(sql: string, values: unknown[] = []): Promise<T[]> => (await db.admin.query(sql, values)).rows as T[]
 const call = (session: string, method: Method, url: string, payload?: unknown) =>
   app.inject({ method, url, headers: { 'x-test-session': session }, ...(payload === undefined ? {} : { payload: payload as object }) })
@@ -532,5 +534,57 @@ describe('replays (PLT-189)', () => {
     expect(again.statusCode, again.body).toBe(201)
     expect(again.json().quote).toEqual(first.json().quote)
     expect(await admin('SELECT count(*)::int AS n FROM "Quote" WHERE "customerRef" = $1', ['RFQ-REPLAY'])).toEqual([{ n: 1 }])
+  })
+})
+
+describe('the sales settings: the quote rules of the tenant and of a company (SAL-184, FIN-023)', () => {
+  const settingsUrl = '/sales/settings'
+  it('no row: the defaults are in force; the floor only with the margin grain', async () => {
+    const { settings } = await ok('finance', 'GET', settingsUrl)
+    expect(settings).toEqual({
+      tenant: null,
+      company: null,
+      inForce: { marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' },
+      defaults: { marginFloorPct: '20', discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' },
+    })
+    expect((await ok('sales', 'GET', settingsUrl)).settings.inForce).toEqual({ discountLimitPct: '15', defaultValidityDays: 30, defaultDepositPct: '30', source: 'DEFAULT' })
+  })
+
+  it('finance sets the tenant-wide rules; a new quote takes them (validity, deposit, the floor it is checked against)', async () => {
+    await refused('sales', 'PUT', settingsUrl, { discountLimitPct: '10', defaultValidityDays: 45, defaultDepositPct: '40' }, 403)
+    expect((await refused('financeA', 'PUT', settingsUrl, { marginFloorPct: '25', discountLimitPct: '10', defaultValidityDays: 45, defaultDepositPct: '40' }, 403)).message).toBe('The tenant-wide sales settings are changed only by a role over every company.')
+    const invalid = await refused('finance', 'PUT', settingsUrl, { marginFloorPct: '101', discountLimitPct: '10', defaultValidityDays: 0, defaultDepositPct: '0' }, 400)
+    expect(invalid.issues.map((issue: Json) => issue.path)).toEqual(['body/marginFloorPct', 'body/defaultDepositPct', 'body/defaultValidityDays'])
+    const saved = (await ok('finance', 'PUT', settingsUrl, { marginFloorPct: '25', discountLimitPct: '10', defaultValidityDays: 45, defaultDepositPct: '40' })).settings
+    expect(saved).toMatchObject({ id: tenant, companyId: null, marginFloorPct: '25', discountLimitPct: '10', defaultValidityDays: 45, defaultDepositPct: '40', version: 1 })
+    expect((await refused('finance', 'PUT', settingsUrl, { marginFloorPct: '25', discountLimitPct: '10', defaultValidityDays: 45, defaultDepositPct: '40' }, 409)).message).toBe('These sales settings exist: send their version to change them.')
+
+    quote = (await ok('boss', 'POST', '/sales/quotes', { companyId: companyA, partyId: P1 }, 201)).quote
+    expect(quote.current).toMatchObject({ validUntil: addDays(TODAY, 45), depositPct: '40', marginFloorPct: '25' })
+    // 8 BLK at 380: 3040.00 − 2328.22 = 711.78 = 23.41 %: over the old 20 %, under the tenant's new 25 %.
+    await addLine('boss', { styleId: jacket, colourwayId: BLK, sizes: BLK_GRID, unitPrice: '380' })
+    expect(quote.approval).toMatchObject({ needed: true, marginFloorPct: '25', discountLimitPct: '10' })
+    expect(await eventsOf(tenant)).toEqual(['sales_settings.changed'])
+  })
+
+  it("a company's own row wins for its quotes; a stale version is a 409; the database holds the ranges for every login", async () => {
+    const saved = (await ok('financeA', 'PUT', settingsUrl, { companyId: companyA, marginFloorPct: '12.5', discountLimitPct: '20', defaultValidityDays: 14, defaultDepositPct: null })).settings
+    expect(saved).toMatchObject({ id: companyA, companyId: companyA, marginFloorPct: '12.5', defaultDepositPct: null, version: 1 })
+    expect((await ok('finance', 'GET', `${settingsUrl}?companyId=${companyA}`)).settings).toMatchObject({ tenant: { id: tenant }, company: { id: companyA }, inForce: { marginFloorPct: '12.5', source: 'COMPANY' } })
+    expect((await ok('finance', 'GET', `${settingsUrl}?companyId=${companyB}`)).settings.inForce).toMatchObject({ marginFloorPct: '25', source: 'TENANT' })
+    // The draft's next change is checked against the company's rules: 380 is over a 12.5 % floor.
+    await act('boss', '/recompute')
+    expect(quote.approval).toMatchObject({ needed: false, marginFloorPct: '12.5' })
+    expect(quote.current.marginFloorPct).toBe('12.5')
+    const fresh = (await ok('boss', 'POST', '/sales/quotes', { companyId: companyA, partyId: P1 }, 201)).quote
+    expect(fresh.current).toMatchObject({ validUntil: addDays(TODAY, 14), depositPct: null, depositKind: null })
+
+    expect((await ok('financeA', 'PUT', settingsUrl, { companyId: companyA, marginFloorPct: '15', discountLimitPct: '20', defaultValidityDays: 14, defaultDepositPct: null, version: 1 })).settings).toMatchObject({ marginFloorPct: '15', version: 2 })
+    expect((await refused('financeA', 'PUT', settingsUrl, { companyId: companyA, marginFloorPct: '18', discountLimitPct: '20', defaultValidityDays: 14, defaultDepositPct: null, version: 1 }, 409)).message).toContain('it is now at version 2')
+    await expect(admin('UPDATE "SalesSettings" SET "marginFloorPct" = 101 WHERE id = $1', [companyA])).rejects.toThrow(/margin floor of the sales settings .* is 0 to 100 percent/)
+    await expect(admin('UPDATE "SalesSettings" SET "defaultValidityDays" = 0 WHERE id = $1', [companyA])).rejects.toThrow(/1 to 365 days/)
+    await expect(admin('DELETE FROM "SalesSettings" WHERE id = $1', [companyA])).rejects.toThrow(/changed, never deleted/)
+    // Another tenant sees none of it.
+    expect((await ok('otherTenant', 'GET', settingsUrl)).settings).toMatchObject({ tenant: null, inForce: { source: 'DEFAULT' } })
   })
 })

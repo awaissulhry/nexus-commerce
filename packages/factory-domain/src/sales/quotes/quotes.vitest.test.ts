@@ -289,7 +289,8 @@ describe('states, validity and rules', () => {
   })
   it('the defaults are valid rules; a broken setting is refused with its path', () => {
     expect(quoteRuleProblems(QUOTE_RULE_DEFAULTS)).toEqual([])
-    expect(quoteRuleProblems({ marginFloorPct: '-1', discountLimitPct: '100', defaultValidityDays: 0, defaultDepositPct: '0' }).map((issue) => issue.path)).toEqual([
+    expect(quoteRuleProblems({ marginFloorPct: '100', discountLimitPct: '100', defaultValidityDays: 365, defaultDepositPct: '100' })).toEqual([])
+    expect(quoteRuleProblems({ marginFloorPct: '-1', discountLimitPct: '100.0001', defaultValidityDays: 0, defaultDepositPct: '0' }).map((issue) => issue.path)).toEqual([
       'body/marginFloorPct',
       'body/discountLimitPct',
       'body/defaultDepositPct',
