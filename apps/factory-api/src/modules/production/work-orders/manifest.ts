@@ -1,0 +1,23 @@
+import { defineManifest } from '../../../core/manifest'
+
+/**
+ * The office's work orders (B-W1-38; A2 SCR-069, SCR-070): office only (a floor, portal or link session is refused by
+ * audience; the floor reads its own site's work orders through its own screens, B-W1-39, 40, 42). A work order belongs
+ * to a company and a site, so the handlers check each record with can() and filter the list with scopeWhere()
+ * (`record`).
+ */
+export const manifest = defineManifest({
+  'GET /production/work-orders': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
+  'GET /production/work-orders/open-lines': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
+  'GET /production/work-orders/:workOrderId': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
+  'GET /production/work-orders/:workOrderId/release-check': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
+  'GET /production/work-orders/:workOrderId/spec/compare': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
+  'POST /production/work-orders': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
+  'PATCH /production/work-orders/:workOrderId': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
+  'PUT /production/work-orders/:workOrderId/cells': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
+  'POST /production/work-orders/:workOrderId/release': { audiences: ['office'], permission: 'workorders.release', scope: 'record' },
+  'POST /production/work-orders/:workOrderId/start': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
+  'POST /production/work-orders/:workOrderId/complete': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
+  'POST /production/work-orders/:workOrderId/close': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
+  'POST /production/work-orders/:workOrderId/cancel': { audiences: ['office'], permission: 'workorders.manage', scope: 'record' },
+})

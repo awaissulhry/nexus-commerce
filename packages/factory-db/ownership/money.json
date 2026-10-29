@@ -20,12 +20,12 @@
       }
     },
     "SdiSubmission": {
-      "about": "The office or the worker (B-W1-50) records each send of an issued invoice to SDI and moves it to its outcome. A portal or link session reads its own party's sends (file name, SDI id, outcome), never the account, the provider's id or the failure text.",
+      "about": "The office or the worker (B-W1-50) records each send of an issued invoice to SDI and moves it to its outcome. A portal or link session reads its own party's sends (file name, SDI id, outcome, when it was archived), never the account, the provider's ids or the failure text.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
-        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["integrationAccountId", "providerRef", "failureReason", "createdById"] }
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["integrationAccountId", "providerRef", "failureReason", "archiveRef", "createdById"] }
       }
     },
     "SdiNotification": {

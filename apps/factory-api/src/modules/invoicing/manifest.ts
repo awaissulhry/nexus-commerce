@@ -16,4 +16,8 @@ export const manifest = defineManifest({
   'DELETE /invoicing/invoices/:invoiceId': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
   'POST /invoicing/invoices/:invoiceId/issue': { audiences: ['office'], permission: 'invoices.issue', scope: 'record' },
   'POST /invoicing/invoices/:invoiceId/files': { audiences: ['office'], permission: 'invoices.issue', scope: 'record' },
+  // SDI (B-W1-50; handlers in ./sdi): the status, the send (step-up), the correction of a rejected invoice (step-up).
+  'GET /invoicing/invoices/:invoiceId/sdi': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'POST /invoicing/invoices/:invoiceId/sdi/send': { audiences: ['office'], permission: 'invoices.issue', scope: 'record' },
+  'PUT /invoicing/invoices/:invoiceId/sdi/correction': { audiences: ['office'], permission: 'invoices.issue', scope: 'record' },
 })

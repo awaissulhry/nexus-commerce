@@ -20,12 +20,18 @@ import { makeFilesRoute } from './invoice-files'
 import { getInvoice, listInvoices } from './invoices'
 import { issueChecks, issueInvoice } from './issue'
 import { manifest } from './manifest'
+import { correctSdiContract, getSdiContract, sendSdiContract } from './sdi/contract'
+import { correctInvoice } from './sdi/correct'
+import { processSdi } from './sdi/runtime'
+import { sendToSdi } from './sdi/send'
+import { getSdiStatus } from './sdi/view'
 
 /**
  * Invoices (B-W1-28 invoice core and the deposit invoice; A2 SCR-080, SCR-081): the list and the record, drafts (generic
  * TD01/TD24, a TD02 from a deposit request), their text and lines, the checks before issue, the issue (step-up: number,
- * XML and PDF), and "make the files" for an issued invoice whose files are pending. Sending to SDI is B-W1-50; invoices
- * from DDTs, credit notes and deductions are B-W1-51 (they reuse this core).
+ * XML and PDF), and "make the files" for an issued invoice whose files are pending; its SDI status, the send to SDI and
+ * the correction of a rejected invoice (B-W1-50, handlers in ./sdi: the autoloader reads this folder's routes file only).
+ * Invoices from DDTs, credit notes and deductions are B-W1-51 (they reuse this core).
  */
 export default defineRoutes('invoicing', manifest, async (app) => {
   app.get('/invoicing/invoices', { schema: listInvoicesContract }, async (request) => listInvoices(request, request.query))
@@ -49,4 +55,14 @@ export default defineRoutes('invoicing', manifest, async (app) => {
   )
 
   app.post('/invoicing/invoices/:invoiceId/files', { schema: makeFilesContract }, async (request) => makeFilesRoute(processFiles(), request, request.params.invoiceId))
+
+  app.get('/invoicing/invoices/:invoiceId/sdi', { schema: getSdiContract }, async (request) => getSdiStatus(request, request.params.invoiceId))
+
+  app.post('/invoicing/invoices/:invoiceId/sdi/send', { schema: sendSdiContract }, async (request) =>
+    sendToSdi(processFiles(), processSdi(), request, request.params.invoiceId, request.body, idempotencyKeyFrom(request), () => requireStepUp(officeAuthOf(app), request)),
+  )
+
+  app.put('/invoicing/invoices/:invoiceId/sdi/correction', { schema: correctSdiContract }, async (request) =>
+    correctInvoice(request, request.params.invoiceId, request.body, idempotencyKeyFrom(request), () => requireStepUp(officeAuthOf(app), request)),
+  )
 })

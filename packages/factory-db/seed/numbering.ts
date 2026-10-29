@@ -4,7 +4,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 /**
  * The numbering module's synthetic seed, for each company of seed/_core.ts: a yearly invoice series that issued two
  * numbers (with their NumberAllocation rows, for made-up invoice ids), a yearly DDT series that starts at 143 as if a
- * paper booklet had used 1-142, and a lot series and a shipment series that never reset. Written in the tenant's office scope, as the app
+ * paper booklet had used 1-142, and lot, shipment, work order and batch series that never reset. Written in the tenant's office scope, as the app
  * writes it.
  *
  * NumberAllocation is append-only and a used series' counter never moves back, so the seed only inserts and skips
@@ -31,6 +31,11 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       { id: id(`series:${company}:LOT:MAIN:ALL`), companyId, kind: 'LOT', code: 'MAIN', scopeKey: 'ALL', reset: 'NEVER', pattern: 'LOT-{N:6}', fiscal: false, createdById: actorId },
       // Shipments are numbered from it (apps/factory-api modules/shipping): without one, creating a shipment is refused.
       { id: id(`series:${company}:SHIPMENT:MAIN:ALL`), companyId, kind: 'SHIPMENT', code: 'MAIN', scopeKey: 'ALL', reset: 'NEVER', pattern: 'SH-{N:5}', fiscal: false, createdById: actorId },
+      // Work orders are numbered from the first and get their batch number (MES-076) from the second at release
+      // (apps/factory-api modules/production/work-orders): without them, making or releasing one is refused. A batch
+      // number is unique in the tenant, so each company's batch series prints its own prefix.
+      { id: id(`series:${company}:WORK_ORDER:MAIN:ALL`), companyId, kind: 'WORK_ORDER', code: 'MAIN', scopeKey: 'ALL', reset: 'NEVER', pattern: 'WO-{N:5}', fiscal: false, createdById: actorId },
+      { id: id(`series:${company}:BATCH:MAIN:ALL`), companyId, kind: 'BATCH', code: 'MAIN', scopeKey: 'ALL', reset: 'NEVER', pattern: `B${company}-{N:5}`, fiscal: false, createdById: actorId },
     )
     for (const value of [1, 2]) {
       allocations.push({
