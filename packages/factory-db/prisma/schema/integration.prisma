@@ -72,6 +72,8 @@ model IntegrationAccount {
   // shipping.prisma: the (Sendcloud) account's sites and the shipments labelled with it.
   shippingSettings ShippingSettings[]
   shipments        Shipment[]
+  // money.prisma: the (SDI) account's sends of invoices.
+  sdiSubmissions   SdiSubmission[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, id])

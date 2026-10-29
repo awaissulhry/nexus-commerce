@@ -42,6 +42,8 @@ model NumberSeries {
   allocations NumberAllocation[]
   // shipping.prisma: the DDTs numbered from it.
   ddts        Ddt[]
+  // money.prisma: the invoices and credit notes numbered from it.
+  invoices    Invoice[]
 
   @@unique([tenantId, companyId, kind, code, scopeKey])
   // The target of the allocations' tenant- and company-safe reference.
