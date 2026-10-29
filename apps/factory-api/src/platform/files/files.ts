@@ -33,6 +33,7 @@ import {
   type Sharing,
   type Viewer,
 } from './rules'
+import { assertGenericPath, type UploadPath } from './owned'
 import type { FilesRuntime } from './service'
 import { RetainedFileError } from './store'
 
@@ -54,6 +55,8 @@ import { RetainedFileError } from './store'
  *   share      files.setVisibility; retention and legal hold: files.setRetention (the date only moves later)
  *   generated  storeGeneratedFile: bytes the API made itself (a rendered document) are written to the store first,
  *              then recorded AVAILABLE in one command (the module that made them names it and checked its permission)
+ *   owned      a record type whose files its module owns (owned.ts: ComplianceDocument; a Certificate's CERTIFICATE
+ *              files) is uploaded and confirmed only through that module's route: the generic routes answer 409
  *
  * Every write goes through command() with its audit row; no store call runs inside a transaction.
  */
@@ -253,8 +256,12 @@ export interface UploadRequest {
   readonly retainUntil?: string | null | undefined
 }
 
-/** files.requestUpload, then the presigned PUT. A repeat with the same Idempotency-Key gets the same file, freshly presigned. */
-export async function requestUpload(runtime: FilesRuntime, caller: CommandCaller, input: UploadRequest, idempotencyKey?: string) {
+/**
+ * files.requestUpload, then the presigned PUT. A repeat with the same Idempotency-Key gets the same file, freshly
+ * presigned. A record type whose files its module owns (owned.ts) is refused unless that module calls with `viaModule`.
+ */
+export async function requestUpload(runtime: FilesRuntime, caller: CommandCaller, input: UploadRequest, idempotencyKey?: string, path: UploadPath = {}) {
+  assertGenericPath(input.recordType, input.kind, path)
   const now = runtime.clock.now()
   const contentType = normaliseContentType(input.contentType)
   const originalName = cleanFileName(input.originalName)
@@ -503,10 +510,14 @@ function mismatchOf(file: OfficeRow, object: StoredObject): QuarantineReason | n
   return null
 }
 
-/** files.completeUpload: the store's HEAD decides AVAILABLE or QUARANTINED. Confirming an AVAILABLE file again changes nothing. */
-export async function completeUpload(runtime: FilesRuntime, caller: CommandCaller, fileId: string, idempotencyKey?: string): Promise<FileView> {
+/**
+ * files.completeUpload: the store's HEAD decides AVAILABLE or QUARANTINED. Confirming an AVAILABLE file again changes
+ * nothing. A file of a record type its module owns (owned.ts) is confirmed only by that module (`viaModule`).
+ */
+export async function completeUpload(runtime: FilesRuntime, caller: CommandCaller, fileId: string, idempotencyKey?: string, path: UploadPath = {}): Promise<FileView> {
   const before = await readOffice(caller, fileId)
   mayWrite(caller, FILES_UPLOAD, { companyId: before.companyId, floorSiteId: null, partyId: null })
+  assertGenericPath(before.recordType, before.kind, path)
   if (before.status === 'AVAILABLE') return viewOf(before)
   if (before.status !== 'PENDING_UPLOAD') throw new InvalidStateError(`This file is ${before.status}; only a pending upload is confirmed.`)
   const object = await storeCall(() => runtime.storage.head(caller, before.storeAccountId, before.storageKey))

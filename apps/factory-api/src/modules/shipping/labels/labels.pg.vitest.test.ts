@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -74,6 +74,7 @@ const office = (tenantId: string, grants: Grant[]): SessionContext => ({ audienc
 const SESSIONS: Record<string, SessionContext> = {
   warehouse: office(A.tenant, [grant([...SHIPPING, 'files.read', 'print.view', 'print.labels'])]),
   viewer: office(A.tenant, [grant(['shipping.view'])]),
+  uploader: office(A.tenant, [grant(['shipping.view', 'files.read', 'files.upload'])]),
   packerOffice: office(A.tenant, [grant(['shipping.view', 'shipping.pack'])]),
   companyB: office(A.tenant, [grant([...SHIPPING, 'print.labels'], [A.companyB])]),
   otherTenant: office(B.tenant, [grant([...SHIPPING, 'print.labels'])]),
@@ -312,6 +313,25 @@ describe('buying labels (LOG-025, LOG-032; the company pays)', () => {
     ])
     expect(await calls('carrier.label_document')).toEqual([{ status: 'SUCCEEDED', n: 2 }])
     expect(await admin(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE type = 'shipment.labels_bought' AND subject = $1`, [sh2()])).toEqual([{ n: 1 }])
+  })
+
+  it('a file never joins a parcel\'s label files through the generic upload: every kind is refused (409)', async () => {
+    const body = Buffer.from('^XA^FDnot a label we bought^FS^XZ')
+    for (const kind of ['ATTACHMENT', 'DOCUMENT', 'PHOTO']) {
+      const refusedUpload = await call('uploader', 'POST', '/files', {
+        companyId: A.companyA,
+        recordType: 'Parcel',
+        recordId: S.p1,
+        kind,
+        originalName: 'label.pdf',
+        contentType: kind === 'PHOTO' ? 'image/png' : 'application/pdf',
+        sizeBytes: body.length,
+        sha256: createHash('sha256').update(body).digest('hex'),
+      })
+      expect(refusedUpload.statusCode, kind).toBe(409)
+      expect(refusedUpload.json().error.message).toMatch(/of a Parcel is uploaded and confirmed only through its own route: POST \/shipping\/shipments\/:shipmentId\/labels/)
+    }
+    expect(await admin('SELECT count(*)::int AS n FROM "StoredFile" WHERE "recordType" = $1 AND "recordId" = $2', ['Parcel', S.p1])).toEqual([{ n: 2 }])
   })
 
   it('keeps a labelled parcel as it was bought: no new weight or size (409) until its label is voided', async () => {
