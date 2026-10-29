@@ -94,7 +94,7 @@ describe('the grants of a session', () => {
     const browser = new Browser(h.app)
     const answer = await browser.signIn('alpha', user.email, user.password)
     expect(answer.body.mfa).toEqual({ enabled: false, required: true, satisfied: false })
-    expect(await permissionsOf(browser)).toEqual(['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'money.price', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'])
+    expect(await permissionsOf(browser)).toEqual(['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'money.price', 'parties.manage', 'parties.vies', 'parties.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'])
     expect((await browser.get('/auth/users')).status).toBe(403)
 
     await enrolTotp(h, browser)
@@ -111,7 +111,7 @@ describe('the grants of a session', () => {
     const later = new Date(h.clock.now().getTime() + 24 * 3_600_000).toISOString()
     await assign(reader.user.id, { roleId: await roleIdOf(owner, 'planner'), allCompanies: true, validFrom: later })
     expect(await permissionsOf(reader.browser)).toEqual([
-      'audit.read', 'compliance.certificates.view', 'devices.view', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.view', 'inventory.locations.view', 'inventory.stock.view', 'links.view', 'money.price', 'numbering.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'roles.view', 'threads.post', 'threads.read', 'users.view', 'workers.view',
+      'audit.read', 'compliance.certificates.view', 'devices.view', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'inventory.locations.view', 'inventory.stock.view', 'links.view', 'money.price', 'numbering.view', 'parties.manage', 'parties.vies', 'parties.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'roles.view', 'threads.post', 'threads.read', 'users.view', 'workers.view',
     ])
     const listed = (await reader.browser.get(`/auth/users/${reader.user.id}/roles`)).body.assignments as { roleKey: string; live: boolean }[]
     expect(listed.map((entry) => [entry.roleKey, entry.live])).toEqual(expect.arrayContaining([['planner', false], ['sales', true], ['read_only', true]]))
@@ -145,19 +145,19 @@ describe('scope: company A from a role does not reach company B', () => {
 describe('custom roles', () => {
   it('are created from a template and edited through command(), with an audit row that says what changed', async () => {
     const created = await asOwner('post', '/auth/roles', { key: 'quoting', name: 'Quoting', basedOn: 'sales' })
-    expect(created.body).toMatchObject({ key: 'custom.quoting', system: false, basedOn: 'sales', permissions: ['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'], grains: ['price'], version: 1, holders: 0 })
+    expect(created.body).toMatchObject({ key: 'custom.quoting', system: false, basedOn: 'sales', permissions: ['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'parties.manage', 'parties.vies', 'parties.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'], grains: ['price'], version: 1, holders: 0 })
     expect((await asOwner('post', '/auth/roles', { key: 'quoting', name: 'Again' })).status).toBe(409)
 
-    const edited = await asOwner('patch', `/auth/roles/${created.body.id}`, { version: 1, permissions: ['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'numbering.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'], reason: 'Quotes need the series' })
+    const edited = await asOwner('patch', `/auth/roles/${created.body.id}`, { version: 1, permissions: ['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'numbering.view', 'parties.manage', 'parties.vies', 'parties.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'], reason: 'Quotes need the series' })
     expect(edited.status).toBe(200)
-    expect(edited.body).toMatchObject({ permissions: ['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'numbering.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'], version: 2 })
+    expect(edited.body).toMatchObject({ permissions: ['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'numbering.view', 'parties.manage', 'parties.vies', 'parties.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'], version: 2 })
     const history = (await owner.get(`/audit/Role/${created.body.id}`)).body.entries
     expect(history[0]).toMatchObject({
       action: 'roles.edit',
       actorId: ownerUser.id,
       reason: 'Quotes need the series',
-      before: { permissions: ['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'] },
-      after: { permissions: ['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'numbering.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'], permissionsAdded: ['numbering.view'], permissionsRemoved: [] },
+      before: { permissions: ['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'parties.manage', 'parties.vies', 'parties.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'] },
+      after: { permissions: ['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'numbering.view', 'parties.manage', 'parties.vies', 'parties.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'], permissionsAdded: ['numbering.view'], permissionsRemoved: [] },
     })
     expect(history[1]).toMatchObject({ action: 'roles.create' })
 
@@ -194,9 +194,9 @@ describe('custom roles', () => {
 
     expect((await asOwner('post', '/auth/roles/sync-templates')).body).toEqual({ created: 0, updated: 1 })
     const roles = (await owner.get('/auth/roles')).body.roles as { id: string; outdated: boolean; permissions: string[] }[]
-    expect(roles.find((role) => role.id === salesId)).toMatchObject({ outdated: false, permissions: ['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'] })
+    expect(roles.find((role) => role.id === salesId)).toMatchObject({ outdated: false, permissions: ['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'parties.manage', 'parties.vies', 'parties.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'] })
     expect(roles.find((role) => role.id === copy.body.id)?.permissions).toEqual(['users.view'])
-    expect((await owner.get(`/audit/Role/${salesId}`)).body.entries[0]).toMatchObject({ action: 'roles.syncTemplates', before: { permissions: [] }, after: { permissions: ['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'] } })
+    expect((await owner.get(`/audit/Role/${salesId}`)).body.entries[0]).toMatchObject({ action: 'roles.syncTemplates', before: { permissions: [] }, after: { permissions: ['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'parties.manage', 'parties.vies', 'parties.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'] } })
     expect((await asOwner('post', '/auth/roles/sync-templates')).body).toEqual({ created: 0, updated: 0 })
   })
 })
@@ -323,7 +323,7 @@ describe('invitations carry roles', () => {
     await guest.get('/auth/csrf')
     const accepted = await guest.post('/auth/invitations/accept', { token: decodeURIComponent(message.link.split('#token=')[1]!), password: 'calm-meadow-river-91' })
     expect(accepted.body).toMatchObject({ status: 'signed_in', mfa: { required: false, satisfied: true } })
-    expect(await permissionsOf(guest)).toEqual(['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'money.price', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'])
+    expect(await permissionsOf(guest)).toEqual(['audit.read', 'documents.view', 'email.send', 'email.triage', 'files.read', 'files.upload', 'imports.apply', 'imports.run', 'imports.view', 'money.price', 'parties.manage', 'parties.vies', 'parties.view', 'print.documents', 'print.view', 'product.materials.view', 'product.styles.view', 'threads.post', 'threads.read'])
   })
 
   it('needs roles.assign to give roles with an invitation', async () => {
