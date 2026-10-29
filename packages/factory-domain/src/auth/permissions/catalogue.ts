@@ -198,10 +198,14 @@ export const COMPLIANCE_DEFINITIONS = definePermissions('compliance', {
   'certificates.view': {
     risk: 'read',
     description:
-      "See the EU type-examination certificates, what they cover and when they expire; ask the certificate gate whether a garment is covered; see a style's compliance: its PPE class, coverage per colourway and size, Declarations of Conformity and user information leaflets.",
+      "See the EU type-examination certificates, what they cover and when they expire; ask the certificate gate whether a garment is covered; see a style's compliance: its PPE class, coverage per colourway and size, Declarations of Conformity and user information leaflets; see the garment label templates and preview a garment label.",
   },
   'certificates.manage': { risk: 'write', description: 'Type in certificates, register them with their PDF, suspend, reinstate and withdraw them, and record or end what they cover.' },
   'declarations.manage': { risk: 'write', description: "Upload a style revision's signed EU Declaration of Conformity and user information leaflet per language, and replace them with a new version (the old one is kept)." },
+  'labels.manage': {
+    risk: 'write',
+    description: 'Build garment label templates (maker, composition, animal-origin phrase, care symbols, layout), activate them when their rule checks pass, retire and revise them, print a test label, and name one on a draft style revision.',
+  },
 })
 
 /**
