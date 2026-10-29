@@ -4,7 +4,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 /**
  * The numbering module's synthetic seed, for each company of seed/_core.ts: a yearly invoice series that issued two
  * numbers (with their NumberAllocation rows, for made-up invoice ids), a yearly DDT series that starts at 143 as if a
- * paper booklet had used 1-142, yearly sales order, purchase order, goods receipt and PPE register series, and lot,
+ * paper booklet had used 1-142, yearly quote, sales order, purchase order, goods receipt and PPE register series, and lot,
  * shipment, work order and batch series that never reset. Written in the tenant's office scope, as the app writes it.
  *
  * NumberAllocation is append-only and a used series' counter never moves back, so the seed only inserts and skips
@@ -50,6 +50,9 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // PPE register entries take their reference from it (apps/factory-api modules/compliance/register; Reg. 2016/425 art.
       // 8(4)): without one, recording an entry is refused. Eight f's as above.
       { id: `ffffffff${id(`series:${company}:PPE_REGISTER:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'PPE_REGISTER', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'REG-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // Quotes are numbered from it (apps/factory-api modules/sales/quotes): without one, a new quote is refused. The
+      // kind's own pattern, as POST /numbering/series makes it. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:QUOTE:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'QUOTE', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'QT-{YYYY}-{N:5}', fiscal: false, createdById: actorId },
     )
     for (const value of [1, 2]) {
       allocations.push({

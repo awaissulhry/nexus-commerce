@@ -70,7 +70,7 @@ export const events = [
   defineEvent({
     type: 'style.updated',
     context: 'product',
-    description: 'A style changed: its name, product type, brand, size range, base size, PPE classification or made-to-measure settings.',
+    description: 'A style changed: its name, product type, brand, size range, base size, PPE classification, made-to-measure settings or how its garments are numbered (Q31).',
     payload: z.strictObject({ styleId: z.uuid(), code: z.string(), fields: z.array(z.string()) }),
     live: styleLive,
   }),
