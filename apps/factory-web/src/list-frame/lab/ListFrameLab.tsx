@@ -36,12 +36,19 @@ export interface ListFrameLabModel {
   state?: 'failed' | 'empty' | 'no-match'
   /** A list without bulk actions: no checkboxes. */
   readOnly?: boolean
+  /** Blocked rows may not be selected (the frame's `isRowSelectable`: their box is disabled and says why). */
+  blockedLocked?: boolean
   focusRow?: number
   keysOpen?: boolean
   helpOpen?: boolean
 }
 
 const TONE = { ACTIVE: 'success', PROSPECT: 'info', BLOCKED: 'danger' } as const
+
+/** Why a lab row may not be selected (a blocked one), or null. */
+export function labRowReason(row: LabRow, t: (key: string) => string): string | null {
+  return row.status === 'BLOCKED' ? t('lab.blockedReason') : null
+}
 
 function NameCell({ data }: ICellRendererParams<LabRow>) {
   if (!data) return null
@@ -129,6 +136,7 @@ function Lab({ model }: { model: ListFrameLabModel }) {
             onChange={(event) => setQuery(event.target.value)}
           />
         }
+        isRowSelectable={model.blockedLocked ? (row) => labRowReason(row, t) : undefined}
         selection={
           model.readOnly
             ? undefined

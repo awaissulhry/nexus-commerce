@@ -92,3 +92,25 @@ export function isListKey(
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return false
   return !(target.closest?.('[role="dialog"], [role="menu"], [role="listbox"]') ?? null)
 }
+
+/**
+ * Several frames on one page (a record's tabs, two lists side by side): the list keys belong to ONE of them — the frame
+ * that holds the focus, else the page's first frame. `own` is this frame's place among the page's frames, `holding`
+ * the place of the frame the focus is in (null: none).
+ */
+export function ownsKeys(own: number, holding: number | null): boolean {
+  return holding === null ? own === 0 : own === holding
+}
+
+
+/** One page of rows (Owner answer L3: 50). */
+export const FIT_ROWS = 50
+
+/**
+ * How the grid takes its height (Owner, 2026-10-29: no dead space). Up to one page of rows it is exactly as tall as its
+ * rows (`fit`: AG's 150 px minimum body, kept for its overlay, is lifted); with more (after "Show N more") it keeps a
+ * bounded height and scrolls inside, its header in view. No row at all keeps AG's minimum for the "no rows" overlay.
+ */
+export function gridLayout(rowCount: number): { domLayout: 'autoHeight' | 'normal'; fit: boolean } {
+  return rowCount <= FIT_ROWS ? { domLayout: 'autoHeight', fit: rowCount > 0 } : { domLayout: 'normal', fit: false }
+}
