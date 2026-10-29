@@ -585,6 +585,43 @@ describe('the bench (design floor.final)', () => {
   })
 })
 
+describe('the bench\'s work orders (design floor.final "scan")', () => {
+  it('lists what the site can inspect or release, finds a traveller by its number, and keeps to the site and company', async () => {
+    const openOf = async (workOrderId: string) => (await admin<{ id: string }>('SELECT id::text FROM "Inspection" WHERE "workOrderId" = $1 AND status = \'OPEN\' ORDER BY "createdAt" DESC LIMIT 1', [workOrderId]))[0]?.id ?? null
+    // An OPEN inspection the bench continues.
+    const opened = (await as(inspector2.browser, 'POST', '/quality/inspections', { workOrderId: WO.lot.id, lotSize: 1, sampleSize: 1, ...PLAN }, 201)).inspection
+    const listed = (await ok('qc', 'GET', '/quality/final/work-orders')).workOrders as Json[]
+    expect(listed.length).toBeGreaterThan(0)
+    for (const row of listed) {
+      expect(row).toMatchObject({ siteId: A.siteA1, ready: true, style: { code: expect.any(String) } })
+      expect(row.finished).toBeGreaterThan(row.released)
+      expect(['RELEASED', 'IN_PROGRESS', 'COMPLETED']).toContain(row.status)
+      expect(row.openInspectionId).toBe(await openOf(row.id))
+    }
+    expect(listed.find((row) => row.id === WO.lot.id)?.openInspectionId).toBe(opened.id)
+    // Released in full: not on the list any more (the bench released WO.bench above).
+    expect(listed.map((row) => row.id)).not.toContain(WO.bench.id)
+    // No money and no person anywhere.
+    expect(keysOf(listed).filter((key) => MONEY.test(key) || /worker|user|inspector|name$/i.test(key) && key !== 'name')).toEqual([])
+
+    // A scanned number: that work order, whatever its state (the bench says why it is not ready).
+    const scanned = (await ok('qc', 'GET', `/quality/final/work-orders?number=${encodeURIComponent(WO.bench.number)}`)).workOrders as Json[]
+    expect(scanned).toEqual([expect.objectContaining({ id: WO.bench.id, number: WO.bench.number, ready: false, finished: 2, released: 2, pieces: 2 })])
+    expect((await ok('qc', 'GET', '/quality/final/work-orders?number=NO-SUCH-WO')).workOrders).toEqual([])
+
+    // The office sees its companies' rows; another company, another site's tablet, another tenant: nothing.
+    expect(((await ok('viewer', 'GET', '/quality/final/work-orders')).workOrders as Json[]).map((row) => row.id)).toEqual(listed.map((row) => row.id))
+    expect((await ok('companyB', 'GET', `/quality/final/work-orders?number=${encodeURIComponent(WO.main.number)}`)).workOrders).toEqual([])
+    SESSIONS.elsewhere = { audience: 'floor', tenantId: A.tenant, actorId: A.operatorA1, siteId: newId(), deviceId: A.qc, grants: [{ permissions: FLOOR, companies: [A.companyA], sites: 'all', parties: 'all' }] }
+    expect((await ok('elsewhere', 'GET', `/quality/final/work-orders?number=${encodeURIComponent(WO.main.number)}`)).workOrders).toEqual([])
+    expect((await ok('otherTenant', 'GET', '/quality/final/work-orders')).workOrders).toEqual([])
+    // Without quality.inspections.view: refused.
+    SESSIONS.noQuality = { ...floor(A.qc), grants: [{ permissions: ['floor.work', 'production.scan'], companies: [A.companyA], sites: [A.siteA1], parties: 'all' }] }
+    expect((await call('noQuality', 'GET', '/quality/final/work-orders')).statusCode).toBe(403)
+    await as(inspector2.browser, 'POST', `/quality/inspections/${opened.id}/cancel`, { version: opened.version, reason: 'Opened for the bench list test' })
+  })
+})
+
 // ---- the reversal -----------------------------------------------------------------------------------------------------------------------
 
 describe('the reversal (Reg. 2016/425 art. 8(8))', () => {

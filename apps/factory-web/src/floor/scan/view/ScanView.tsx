@@ -15,8 +15,9 @@ import type { HideCard, LabelType, LocationCard, ScanResult, WorkOrderCard } fro
  * SCR-024 — scan anything (design floor.scan; PLT-126, PLT-155, PLT-243, SCM-273, MES-016, MES-074): one big field for
  * every label of the factory (scanner first, the camera as the fallback, typing as the last way), then the card of
  * what was scanned — the facts a floor person needs, big, never money — and the person's own scans of this session.
- * Every fact is text, not a link (a kiosk). The card's own action is held with its reason while its job screen is
- * not built yet ("Coming soon"): nothing dead, nothing pretending.
+ * Every fact is text, not a link (a kiosk). A hide's or a work order's card opens Cut a hide with its code (SCR-094); a
+ * card whose job screen is not built yet holds its action with the reason ("Coming soon"): nothing dead, nothing
+ * pretending.
  */
 
 export interface RecentScan {
@@ -36,9 +37,11 @@ export interface ScanViewModel {
   timeZone?: string
   /** The worker notice holds scans. */
   held?: boolean
+  /** The person may open Cut a hide (SCR-094): a hide's card and a work order's card open it with the code. */
+  canCut?: boolean
 }
 
-export type ScanAction = { type: 'scan'; code: string } | { type: 'clear' } | { type: 'home' }
+export type ScanAction = { type: 'scan'; code: string } | { type: 'clear' } | { type: 'home' } | { type: 'cut'; code: string }
 
 export interface ScanViewProps {
   model: ScanViewModel
@@ -75,8 +78,10 @@ export function ScanView({ model, onAction, onFrame, camera }: ScanViewProps) {
   const coming = (label: string, icon: ReactNode) => ({ label, icon, onPress: () => undefined, heldReason: t('tile.held.coming') })
   let actions: FloorActions | null = null
   if (result && !model.loading) {
-    if (result.kind === 'hide') actions = [scanAnother, coming(t('scan.action.cut'), <Scissors />)]
-    else if (result.kind === 'workOrder') actions = [scanAnother, coming(t('scan.action.workOrder'), <ScanSearch />)]
+    // Cut a hide is built (SCR-094): the card opens it with its code; without the cutting permission, Scan another only.
+    const cut = (label: string, icon: ReactNode, code: string) => ({ label, icon, onPress: () => send({ type: 'cut', code }) })
+    if (result.kind === 'hide') actions = model.canCut ? [scanAnother, cut(t('scan.action.cut'), <Scissors />, result.code)] : [scanAnother]
+    else if (result.kind === 'workOrder') actions = model.canCut ? [scanAnother, cut(t('scan.action.workOrder'), <ScanSearch />, result.number)] : [scanAnother]
     else if (result.kind === 'location') actions = [scanAnother, coming(t('scan.action.move'), <MapPin />)]
     else actions = [{ label: t('frame.home'), icon: <House />, onPress: () => send({ type: 'home' }) }, scanAnother]
   }

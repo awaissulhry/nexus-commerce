@@ -53,16 +53,22 @@ export interface TileRule {
   readonly takesScans: boolean
 }
 
-/** In the order a station shows them; Scan anything last. Built: Scan only (B-W0-29). */
+/**
+ * In the order a station shows them; Scan anything last. Each tile's permission is the one its page's API needs (fail
+ * closed). Built: Scan (B-W0-29); Operation, Cut a hide, Bundles, Pick & issue, Final inspection (the floor tasks:
+ * SCR-090, 094, 095, 093, 097). Their pages: `TASK_ROUTES` (tasks/routes.ts).
+ */
 export const TILE_RULES: readonly TileRule[] = [
-  { key: 'operation', permission: 'floor.work', modes: ['sewing'], built: false, takesScans: true },
-  { key: 'cut', permission: 'production.cut', modes: ['cutting'], built: false, takesScans: true },
-  { key: 'bundles', permission: 'production.cut', modes: ['cutting'], built: false, takesScans: true },
+  // design floor.operation: sewing, cutting, packing; and the inspection bench, where a routing's scanned INSPECTION
+  // operation is reported (the scans module wants a station of the operation's kind, else a reason).
+  { key: 'operation', permission: 'production.scan', modes: ['sewing', 'cutting', 'packing', 'inspection'], built: true, takesScans: true },
+  { key: 'cut', permission: 'production.cut', modes: ['cutting'], built: true, takesScans: true },
+  { key: 'bundles', permission: 'production.bundles', modes: ['cutting'], built: true, takesScans: true },
   { key: 'receive', permission: 'inventory.receive', modes: ['warehouse'], built: false, takesScans: true },
-  { key: 'pick', permission: 'inventory.issue', modes: ['warehouse'], built: false, takesScans: true },
+  { key: 'pick', permission: 'inventory.issue', modes: ['warehouse'], built: true, takesScans: true },
   { key: 'labels', permission: 'print.labels', modes: ['packing'], built: false, takesScans: true },
   { key: 'pack', permission: 'shipping.pack', modes: ['packing'], built: false, takesScans: true },
-  { key: 'final', permission: 'floor.work', modes: ['inspection'], built: false, takesScans: true },
+  { key: 'final', permission: 'quality.inspections.view', modes: ['inspection'], built: true, takesScans: true },
   { key: 'scan', permission: 'floor.work', modes: 'all', built: true, takesScans: true },
 ]
 

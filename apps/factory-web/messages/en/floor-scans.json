@@ -1,0 +1,190 @@
+{
+  "title": "Operation",
+  "noPermission": {
+    "title": "You may not report operations here",
+    "body": "Reporting bundles needs the scan role at this station. Ask your team leader."
+  },
+  "scan": {
+    "label": "Scan the bundle ticket",
+    "hint": "Scan the ticket of the bundle you work on.",
+    "empty": "Scan the ticket: the bundle opens with all its pieces good, so Finish is one tap.",
+    "loading": "Opening the bundle…"
+  },
+  "wrongType": {
+    "title": "{type} label: scan a bundle ticket.",
+    "body": "Only a bundle's ticket is reported here."
+  },
+  "notOnTablet": {
+    "body": "This bundle is not on this tablet and there is no network. Report it when the network is back, or ask your team leader."
+  },
+  "refusal": {
+    "fallback": "This bundle cannot be reported here.",
+    "REPLACED": {
+      "message": "This ticket was replaced by {code}.",
+      "fix": "Use the new ticket {code}; the old one takes no scan any more."
+    },
+    "VOIDED": {
+      "message": "Bundle {code} was voided.",
+      "fix": "No scan takes it any more. Ask your team leader."
+    },
+    "WORK_ORDER_NOT_OPEN": {
+      "message": "Work order {number} is {status}.",
+      "fix": "Its bundles are reported only while it is released or in progress. Ask your team leader."
+    },
+    "NO_OPERATION_HERE": {
+      "message": "Bundle {code} has nothing left to do at this station.",
+      "fix": "Take it to its next operation, or ask your team leader."
+    },
+    "NO_STATION": {
+      "message": "This tablet has no station: operations are reported at a station.",
+      "fix": "Ask the office to give this tablet its station."
+    },
+    "PREVIOUS_NOT_REPORTED": {
+      "message": "The operation before this one is not reported yet.",
+      "fix": "It may still be on another tablet. Report it first, or ask your team leader."
+    },
+    "FLOOR_NOT_READY": {
+      "message": "Reports are held at this site until its floor is ready.",
+      "fix": "Ask your team leader."
+    },
+    "NOTICE_NOT_ACKNOWLEDGED": {
+      "message": "Read the worker notice first.",
+      "fix": "Open it on Home."
+    },
+    "UNKNOWN_BUNDLE": {
+      "message": "This is not a bundle ticket of this site.",
+      "fix": "Scan the bundle's ticket again, or ask your team leader."
+    },
+    "OTHER_KIND": {
+      "message": "This operation is other work than this station does.",
+      "fix": "Take the bundle to the right station, or ask your team leader."
+    }
+  },
+  "unknownCode": {
+    "otherFactory": {
+      "title": "This label is not from this factory",
+      "body": "Scan a bundle ticket of this factory."
+    },
+    "typo": {
+      "title": "The code was misread",
+      "body": "Scan the ticket again, slowly and straight."
+    }
+  },
+  "already": {
+    "station": " on {station}",
+    "own": {
+      "title": "You reported it at Op {seq} at {time}",
+      "undo": "Undo it now if the counts are wrong: its window is still open.",
+      "ask": "If the counts are wrong, ask a correction: the report stays until your team leader decides."
+    },
+    "other": {
+      "title": "Already reported at Op {seq} at {time}{where}",
+      "body": "It was reported by another person — your team leader can see who. One report per bundle per operation."
+    }
+  },
+  "pick": {
+    "title": "Which operation?",
+    "expected_one": "{count} piece to report",
+    "expected_other": "{count} pieces to report",
+    "state": {
+      "DONE": "Done",
+      "OPEN": "Open",
+      "NOT_REACHED": "Not reached yet"
+    }
+  },
+  "counts": {
+    "title": "Count the pieces",
+    "good": "Good",
+    "scrap": "Scrap",
+    "rework": "Rework",
+    "of": "of {count}",
+    "atMost": "At most {count}",
+    "allLeft": "All left",
+    "tapHint": "Tap a count to change it."
+  },
+  "finish": {
+    "label_one": "Finish · {count} good",
+    "label_other": "Finish · {count} good",
+    "busy": "Saving…",
+    "held": {
+      "nothing": "Count at least one piece",
+      "atMost": "At most {count}",
+      "unknown": "Nothing passed to this operation yet"
+    }
+  },
+  "fact": {
+    "bundle": "Bundle",
+    "pieces_one": "piece",
+    "pieces_other": "pieces",
+    "style": "Style",
+    "workOrder": "Work order",
+    "part": "Part",
+    "operation": "Operation",
+    "at": "When"
+  },
+  "opShort": "Op {seq}",
+  "opCode": "Op {seq} · {code}",
+  "count": {
+    "good_one": "{count} good",
+    "good_other": "{count} good",
+    "scrap_one": "{count} scrap",
+    "scrap_other": "{count} scrap",
+    "rework_one": "{count} rework",
+    "rework_other": "{count} rework"
+  },
+  "leave": {
+    "title": "Leave this count?",
+    "body": "These counts are not finished. Keep counting, or leave them and open the new bundle.",
+    "leave": "Leave it",
+    "keep": "Keep counting"
+  },
+  "undo": {
+    "done": "Undone: {what}"
+  },
+  "reasons": {
+    "scrap": "Why scrap? Each tap adds one piece",
+    "rework": "Why rework? Each tap adds one piece",
+    "remove": "One less: {reason}"
+  },
+  "pad": {
+    "less": "Less",
+    "more": "More",
+    "clear": "Clear",
+    "back": "Back",
+    "empty": "Type a number",
+    "done": "Done"
+  },
+  "correction": {
+    "open": "Ask a correction",
+    "listTitle": "Your reports today",
+    "offline": "The list of your reports needs the network. The report just made on this tablet can be corrected now.",
+    "loading": "Reading your reports…",
+    "empty": {
+      "title": "Nothing reported today",
+      "body": "Your reports of today show here, newest first."
+    },
+    "pending": "Waiting for your team leader",
+    "count_one": "{count} report",
+    "count_other": "{count} reports",
+    "reported": "Report to correct",
+    "was": "Reported",
+    "keeps": "The report stays as it is until your team leader decides; then a correction replaces it.",
+    "why": "Why?",
+    "reason": {
+      "count": "A count was wrong",
+      "reason": "Wrong scrap or rework reason",
+      "found": "Pieces found later",
+      "other": "Something else"
+    },
+    "send": "Send to team leader",
+    "held": {
+      "same": "Change a count first",
+      "nothing": "Count at least one piece",
+      "reason": "Pick why"
+    },
+    "sent": {
+      "title": "Sent to your team leader",
+      "body": "Waiting for your team leader. The report stays until it is decided."
+    }
+  }
+}

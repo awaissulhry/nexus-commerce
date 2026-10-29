@@ -137,6 +137,44 @@ export const workOrderFinalContract = defineContract({
   },
 })
 
+/**
+ * The inspection bench's work orders (A2 SCR-097 floor.final "scan"): the caller's sites' work orders with finished garments
+ * still to inspect or release, or the one with a scanned number (any status: the bench then says why it is not ready).
+ * The floor inspector's role has no other way to turn a traveller's number into a work order. No money, no person.
+ */
+export const benchWorkOrdersContract = defineContract({
+  querystring: input({
+    /** A scanned or typed work order number (exact, any status). */
+    number: z.string().trim().min(1).max(60).optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(30),
+  }),
+  response: {
+    200: output({
+      workOrders: z.array(
+        output({
+          id: id(),
+          number: z.string(),
+          batchNumber: z.string().nullable(),
+          status: z.string(),
+          siteId: id(),
+          dueDate: businessDate().nullable(),
+          priority: z.number().int(),
+          style: output({ code: z.string(), name: z.string() }),
+          pieces: z.number().int(),
+          /** Good garments at the final operation; null: the routing has no scanned operation. */
+          finished: z.number().int().nullable(),
+          /** Garments released (less reversals). */
+          released: z.number().int(),
+          /** The OPEN inspection of the work order (the bench continues it), or null. */
+          openInspectionId: id().nullable(),
+          /** Released, in progress or completed with finished garments not yet released. */
+          ready: z.boolean(),
+        }),
+      ),
+    }),
+  },
+})
+
 // ---- inspections ------------------------------------------------------------------------------------------------------------
 
 export const openInspectionContract = defineContract({

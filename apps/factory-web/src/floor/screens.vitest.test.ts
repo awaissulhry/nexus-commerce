@@ -29,10 +29,13 @@ import { designScreen as signInScreen } from './sign-in/fixtures'
 const DIR = fileURLToPath(new URL('.', import.meta.url))
 const APP = fileURLToPath(new URL('../app/(floor)', import.meta.url))
 
+// The floor tasks (floor/tasks/**) speak their own catalogues (floor-tasks, floor-scans …): tasks/tasks.vitest.test.ts holds them.
+const TASKS = join(DIR, 'tasks')
+
 function sources(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name)
-    if (entry.isDirectory()) return sources(path)
+    if (entry.isDirectory()) return path === TASKS ? [] : sources(path)
     return /\.tsx?$/.test(entry.name) && !entry.name.includes('.vitest.test.') && !entry.name.endsWith('fixtures.ts') ? [path] : []
   })
 }
@@ -127,10 +130,12 @@ describe('every floor design case draws in both languages', () => {
     expect(pin).not.toContain('<input')
   })
 
-  it('held tiles say why on the tile; only Scan anything opens', () => {
-    const html = render(homeScreen as DesignScreen<unknown>, homeScreen.cases.find((item) => item.id === 'cutting')!.model, 'en')
+  it('held tiles say why on the tile; the floor tasks and Scan anything open', () => {
+    const cutting = render(homeScreen as DesignScreen<unknown>, homeScreen.cases.find((item) => item.id === 'cutting')!.model, 'en')
+    expect(cutting).not.toContain('Coming soon')
+    expect(cutting).toContain('Scan anything')
+    const html = render(homeScreen as DesignScreen<unknown>, homeScreen.cases.find((item) => item.id === 'packing')!.model, 'en')
     expect(html.match(/Coming soon/g)?.length).toBeGreaterThanOrEqual(2)
-    expect(html).toContain('Scan anything')
     const held = render(homeScreen as DesignScreen<unknown>, homeScreen.cases.find((item) => item.id === 'notice-blocks')!.model, 'en')
     expect(held).toContain('Read the notice first')
     expect(held).not.toContain('Coming soon')

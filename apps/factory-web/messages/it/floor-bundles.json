@@ -1,0 +1,229 @@
+{
+  "title": "Fasci e cartellini",
+  "loading": "Ricerca in corso…",
+  "busy": "In corso…",
+  "scan": {
+    "label": "Scansiona un ordine di lavoro o un cartellino",
+    "read": "Letto {code}",
+    "type": "Digita un codice",
+    "camera": {
+      "start": "Usa la fotocamera",
+      "stop": "Ferma la fotocamera",
+      "error": "La fotocamera non si apre: usa lo scanner o digita il codice."
+    },
+    "hint": {
+      "pick": "Scansiona la scheda dell'ordine di lavoro, un cartellino da sistemare, o scegli un ordine qui sotto.",
+      "proposal": "Scansiona un altro ordine di lavoro, o un cartellino da sistemare.",
+      "card": "Scansiona un altro cartellino, o un ordine di lavoro da mettere in fasci."
+    }
+  },
+  "noPermission": {
+    "title": "I fasci non sono per il tuo ruolo",
+    "body": "Per creare i fasci e stampare i cartellini serve il permesso dei fasci a questa postazione. Chiedi al capo squadra."
+  },
+  "pick": {
+    "title": "Tagliati, non in fasci",
+    "cell": "{cell}: {cut} tagliati · {bundled} in fasci",
+    "toBundle": "da mettere in fasci",
+    "footer_one": "{count} ordine di lavoro aspetta i fasci",
+    "footer_other": "{count} ordini di lavoro aspettano i fasci",
+    "empty": {
+      "title": "Niente di tagliato aspetta i fasci",
+      "body": "Quando i pezzi sono tagliati, il loro ordine di lavoro arriva qui. Scansiona una scheda per aprirne uno comunque."
+    }
+  },
+  "fact": {
+    "workOrder": "Ordine di lavoro",
+    "style": "Modello",
+    "colour": "Colore",
+    "size": "Taglia",
+    "scans": "Scansioni finora",
+    "replaced": "Cartellini precedenti (sostituiti)"
+  },
+  "proposal": {
+    "type": "Ordine di lavoro",
+    "title": "Fasci proposti",
+    "closed": "Questo ordine di lavoro non è aperto (sospeso, finito o annullato): non si possono creare fasci. Chiedi al capo squadra.",
+    "singlePiece": "Su misura: un capo per fascio, ognuno con il suo cartellino.",
+    "singlePieceHeld": "Su misura: sempre un capo per fascio",
+    "size": {
+      "label": "Dimensione del fascio",
+      "standard": "Standard di questo stabilimento: {size}",
+      "smaller": "Fasci più piccoli",
+      "bigger": "Fasci più grandi",
+      "min": "Un capo è il fascio più piccolo",
+      "max": "{size} capi è il fascio più grande"
+    },
+    "cell": {
+      "bundles_one": "{cell}: 1 fascio ({sizes})",
+      "bundles_other": "{cell}: {count} fasci ({sizes})",
+      "nothing": "{cell}: niente da mettere in fasci",
+      "counts": "{cut} tagliati · {bundled} in fasci · {toBundle} da mettere in fasci",
+      "pending_one": "{count} in arrivo da questo tablet",
+      "pending_other": "{count} in arrivo da questo tablet",
+      "chips": "Fasci di {cell}",
+      "edit": "Fascio {index} di {cell}: {quantity} capi. Cambialo"
+    },
+    "make_one": "Crea 1 fascio · stampa 1 cartellino",
+    "make_other": "Crea {count} fasci · stampa {count} cartellini",
+    "makeNone": "Crea i fasci",
+    "another": "Altro ordine di lavoro",
+    "held": {
+      "printer": "Prima scegli la stampante dei cartellini",
+      "closed": "L'ordine di lavoro non è aperto",
+      "nothing": "Niente di tagliato aspetta un fascio",
+      "tooMany": "Al massimo {count} fasci alla volta: fai fasci più grandi",
+      "making": "Salvataggio dei fasci su questo tablet…"
+    }
+  },
+  "pad": {
+    "title": "Un fascio di {cell}",
+    "label": "Capi nel fascio {index}",
+    "unit": "capi",
+    "expected": "Rimasti per questo {count}",
+    "less": "Meno",
+    "more": "Più",
+    "clear": "Cancella",
+    "back": "Indietro",
+    "empty": "Scrivi quanti capi",
+    "range": "Da {min} a {max}",
+    "set": "Imposta"
+  },
+  "printer": {
+    "station": "I cartellini si stampano su {name}, la stampante di questa postazione.",
+    "site": "I cartellini si stampano su {name}.",
+    "choose": "Quale stampante stampa i cartellini?",
+    "none": "Nessuna stampante di etichette in questo stabilimento: i cartellini non si stampano qui. Chiedi all'ufficio di stamparli.",
+    "noView": "Il tuo ruolo non vede la coda di stampa."
+  },
+  "tickets": {
+    "title_one": "Cartellino creato qui",
+    "title_other": "{count} cartellini creati qui",
+    "offline": "Niente rete: i fasci sono salvati su questo tablet; i cartellini si stampano sulla stampante della postazione quando l'ufficio li registra.",
+    "codePending": "Numerato dall'ufficio quando arriva",
+    "garments_one": "{count} capo",
+    "garments_other": "{count} capi",
+    "numbersLow_one": "Resta solo {count} numero di cartellino su questo tablet: ne riceve altri al prossimo invio.",
+    "numbersLow_other": "Restano solo {count} numeri di cartellino su questo tablet: ne riceve altri al prossimo invio.",
+    "retry": "Stampa di nuovo",
+    "retryOffline": "Per stampare di nuovo serve la rete",
+    "print": {
+      "queued": "In coda di stampa",
+      "sent": "Inviato alla stampante",
+      "printed": "Stampato",
+      "failed": "Non stampato",
+      "waiting": "Si stampa quando l'ufficio lo registra.",
+      "none": "Non si stampa qui: non c'è una stampante di etichette.",
+      "hidden": "Stampato dalla coda dell'ufficio (il tuo ruolo non la vede).",
+      "looking": "Ricerca del lavoro di stampa…"
+    }
+  },
+  "label": {
+    "name": "Cartellino del fascio {code}",
+    "workOrder": "Ordine di lavoro",
+    "style": "Modello",
+    "colour": "Colore",
+    "size": "Taglia",
+    "pieces": "Pezzi",
+    "operations": "Fasi",
+    "numbering": "Codice dato dall'ufficio",
+    "qr": "Codice QR {code}",
+    "barcode": "Codice a barre {code}",
+    "invalid": "Questo codice non si può stampare: {code}"
+  },
+  "card": {
+    "type": "Fascio",
+    "status": {
+      "ACTIVE": "Attivo",
+      "VOID": "Annullato"
+    },
+    "garments": "capi",
+    "piecesOf": "pezzi di {part}",
+    "operations": "Fasi",
+    "op": {
+      "done": "Fatta",
+      "open": "Non ancora"
+    },
+    "replaced": "Il cartellino {scanned} è stato sostituito da {code}: usa quello nuovo, butta il vecchio.",
+    "voided": "Questo fascio è stato annullato: nessuna scansione lo prende e il cartellino non si ristampa.",
+    "reprint": "Ristampa",
+    "void": "Annulla fascio",
+    "held": {
+      "network": "Ristampa e annullamento hanno bisogno della rete: aspettano che torni."
+    }
+  },
+  "reprint": {
+    "title": "Perché un cartellino nuovo?",
+    "body": "Il cartellino nuovo ha un codice nuovo; la scansione del vecchio dice che è stato sostituito.",
+    "reason": {
+      "lost": "Perso",
+      "damaged": "Rovinato",
+      "unreadable": "Illeggibile"
+    },
+    "done": "Cartellino nuovo {code}. Il cartellino {old} è sostituito: buttalo."
+  },
+  "void": {
+    "title": "Annullare questo fascio?",
+    "body": "Nessuna scansione prende più {code}. I suoi pezzi tornano tra i tagliati, non in fasci.",
+    "reason": {
+      "label": "Perché?",
+      "needed": "Prima scegli il perché",
+      "mistake": "Creato per errore",
+      "wrongSize": "Taglia sbagliata",
+      "wrongQuantity": "Quantità sbagliata"
+    },
+    "cancel": "Indietro",
+    "confirm": "Annulla fascio",
+    "done": {
+      "title": "Il fascio {code} è annullato",
+      "body_one": "Il suo {count} capo è tornato tra i tagliati, non in fasci.",
+      "body_other": "I suoi {count} capi sono tornati tra i tagliati, non in fasci."
+    }
+  },
+  "refusal": {
+    "FLOOR_NOT_READY": {
+      "message": "I fasci aspettano in questo stabilimento finché il reparto non è pronto.",
+      "fix": "Chiedi al capo squadra: l'ufficio finisce di impostare le regole del reparto."
+    },
+    "WORK_ORDER_NOT_OPEN": {
+      "message": "L'ordine di lavoro non è aperto (sospeso, finito o annullato).",
+      "fix": "Chiedi al capo squadra."
+    },
+    "NOT_CUT_FROM_HIDES": {
+      "message": "Questa taglia non ha parti tagliate dalle pelli: non va in fasci qui.",
+      "fix": "Chiedi al capo squadra."
+    },
+    "NOTHING_TO_BUNDLE": {
+      "message": "In questa taglia niente di tagliato aspetta più un fascio.",
+      "fix": "Forse un altro tablet l'ha messo in fasci: rileggi l'ordine di lavoro."
+    },
+    "MORE_THAN_CUT": {
+      "message": "È più di quanto è tagliato e non è in fasci.",
+      "fix": "Fai il fascio più piccolo, o taglia prima il resto."
+    },
+    "NOT_A_PART": {
+      "message": "Questa parte non è una delle parti della taglia.",
+      "fix": "Chiedi al capo squadra."
+    },
+    "SINGLE_PIECE": {
+      "message": "Un capo su misura va in un fascio tutto suo.",
+      "fix": "Crea un fascio per capo."
+    },
+    "TOO_MANY_BUNDLES": {
+      "message": "Troppi fasci in una volta.",
+      "fix": "Fai fasci più grandi, o creali in due volte."
+    },
+    "VOIDED": {
+      "message": "Questo fascio è stato annullato.",
+      "fix": "Scansiona un altro cartellino."
+    },
+    "SCANNED": {
+      "message": "Questo fascio è già stato scansionato: un fascio si annulla solo prima di ogni scansione.",
+      "fix": "Chiedi al capo squadra di annullare o correggere le sue scansioni."
+    },
+    "REPLACED": {
+      "message": "Questo cartellino è stato sostituito da uno nuovo.",
+      "fix": "Scansiona il cartellino nuovo."
+    }
+  }
+}

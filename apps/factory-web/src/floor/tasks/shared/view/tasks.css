@@ -1,0 +1,207 @@
+/*
+ * The floor task screens' shared parts (SCR-090, 093, 094, 095, 097): layout only, inside the DS FloorFrame. Sizes read
+ * the floor tier's `--nds-density-*` tokens, colours are semantic `--nds-*` roles painted as the floor kit paints a tone
+ * (`--nds-<tone>-text` on `--nds-<tone>-soft`). No raw colour. Each screen's own layout lives in its folder.
+ */
+
+/* ── a big numeral beside a card's head (the bundle's quantity, the area left) ───────────────────────────────────── */
+.fw-task-big {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1;
+}
+.fw-task-big-value {
+  font-size: max(40px, calc(var(--nds-density-font-body) * 2));
+  font-weight: var(--nds-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+.fw-task-big-label {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* ── the two ticks ────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-task-ticks {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  white-space: nowrap;
+}
+.fw-task-ticks[data-state='recorded'] {
+  color: var(--nds-success-text);
+}
+.fw-task-ticks[data-state='refused'] {
+  color: var(--nds-danger-text);
+}
+.fw-task-ticks[data-state='saved'],
+.fw-task-ticks[data-state='sending'] {
+  color: var(--nds-text-muted);
+}
+
+/* ── the undo strip (stand-in for the DS gap FloorUndoStrip) ─────────────────────────────────────────────────────── */
+.fw-task-undo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-10) var(--nds-density-gap);
+  padding: var(--nds-space-10) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-inline-start: 6px solid var(--nds-success);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-task-undo-text {
+  display: inline-flex;
+  flex: 1 1 18em;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+  font-size: var(--nds-density-font-body);
+}
+.fw-task-undo-what {
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.fw-task-undo-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-target-gap);
+}
+
+/* ── reason tiles (stand-in for the DS gap FloorReasonGrid) ───────────────────────────────────────────────────────── */
+.fw-task-reasons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13em), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+.fw-task-reason {
+  display: flex;
+  align-items: stretch;
+  gap: var(--nds-space-6);
+}
+.fw-task-reason > :first-child {
+  flex: 1 1 auto;
+}
+/* The "−1" beside a counted reason keeps its own width (it never wraps or squeezes). */
+.fw-task-reason > :not(:first-child) {
+  flex: none;
+}
+.fw-task-reason-label {
+  flex: 1 1 auto;
+  text-align: start;
+}
+.fw-task-reason-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 2em;
+  padding: 0 var(--nds-space-6);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--nds-font-weight-bold);
+}
+
+/* ── sign with the PIN (stand-in for the DS gap PinSignBlock) ─────────────────────────────────────────────────────── */
+.fw-task-pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nds-density-gap);
+  max-width: 640px;
+  margin: 0 auto;
+}
+.fw-task-pin > .fw-floor-section-title,
+.fw-task-pin-meaning {
+  align-self: stretch;
+}
+.fw-task-pin-meaning {
+  margin: 0;
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-inline-start: 6px solid var(--nds-info);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* ── a refusal's other lines ──────────────────────────────────────────────────────────────────────────────────────── */
+.fw-task-others {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding-inline-start: 1.2em;
+  text-align: start;
+  font-size: var(--nds-density-font-label);
+}
+
+/* ── a floor list's footer: its count and ONE keys icon (Owner rule 2026-10-29) ───────────────────────────────────── */
+.fw-task-list-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-density-gap);
+  padding-inline: var(--nds-space-4);
+}
+.fw-task-keys-trigger {
+  display: inline-grid;
+  place-items: center;
+  min-width: var(--nds-density-target-min);
+  min-height: var(--nds-density-target-min);
+}
+.fw-task-keys-trigger > svg {
+  width: var(--nds-density-icon);
+  height: var(--nds-density-icon);
+}
+.fw-task-keys {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 16em;
+}
+.fw-task-keymap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+.fw-task-keymap-row {
+  display: grid;
+  grid-template-columns: minmax(4.5em, auto) 1fr;
+  gap: var(--nds-space-10);
+  align-items: baseline;
+}
+.fw-task-keymap-row > dd {
+  margin: 0;
+}
+
+/* ── a task's step: a heading line with its step word ─────────────────────────────────────────────────────────────── */
+.fw-task-step-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+}
+
+/* ── two columns on a landscape tablet (the card and the job side by side), one on a phone ──────────────────────── */
+.fw-task-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-density-gap);
+  align-items: start;
+}
+@container nds-floor-frame (min-width: 900px) {
+  .fw-task-split {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  }
+}

@@ -5,6 +5,7 @@ import { requireFloorStepUp } from '../../../platform/auth/floor/step-up'
 import { requireStepUp } from '../../../platform/auth/office/account'
 import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import {
+  benchWorkOrdersContract,
   cancelInspectionContract,
   decideInspectionContract,
   evidenceContract,
@@ -21,6 +22,7 @@ import {
   updateInspectionContract,
   workOrderFinalContract,
 } from './contract'
+import { benchWorkOrders } from './bench'
 import { evidenceTrail } from './evidence'
 import { cancelInspection, decideInspection, getInspection, openInspection, putDefects, updateInspection } from './inspections'
 import { listInspections } from './lists'
@@ -39,6 +41,8 @@ import { getReleaseRule, saveReleaseRule } from './rule'
 export default defineRoutes('quality.final', manifest, async (app) => {
   const sign = (request: FastifyRequest) => () => (request.factoryContext?.audience === 'floor' ? requireFloorStepUp(officeAuthOf(app), request) : requireStepUp(officeAuthOf(app), request))
   const flag = (value: 'true' | 'false' | undefined) => value === 'true'
+
+  app.get('/quality/final/work-orders', { schema: benchWorkOrdersContract }, async (request) => benchWorkOrders(request, request.query))
 
   app.get('/quality/final/work-orders/:workOrderId', { schema: workOrderFinalContract }, async (request) => workOrderFinal(request, request.params.workOrderId))
 

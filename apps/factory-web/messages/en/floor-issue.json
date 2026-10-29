@@ -1,0 +1,193 @@
+{
+  "title": "Pick & issue",
+  "noPermission": {
+    "title": "Issuing is not part of your role",
+    "body": "Pick & issue needs the issuing permission at this site. Ask your team leader."
+  },
+  "choose": {
+    "scan": {
+      "label": "For which work order?",
+      "hint": "Scan the work order's traveller, or pick it below."
+    },
+    "loading": "Reading the work orders…",
+    "empty": {
+      "title": "No released work order to pick for",
+      "body": "Nothing is waiting for materials at this site. Ask the office."
+    },
+    "list": "Released work orders",
+    "due": "due {date}",
+    "pieces_one": "piece",
+    "pieces_other": "pieces",
+    "count_one": "{count} work order",
+    "count_other": "{count} work orders"
+  },
+  "offline": {
+    "choose": "No network: issuing waits until it is back. The list below is this tablet's copy.",
+    "held": "Issuing needs the network: the stock leaves only when the office records it. Scan again when the network is back.",
+    "short": "Needs the network"
+  },
+  "list": {
+    "loading": "Reading the pick list…",
+    "workOrder": "Work order",
+    "coveredLabel": "covered",
+    "fact": {
+      "style": "Style",
+      "batch": "Batch",
+      "due": "Due"
+    },
+    "notOpen": "This work order is {status}: nothing is issued to it. Ask the office.",
+    "notOpenShort": "This work order is not open",
+    "scan": {
+      "label": "Scan to issue",
+      "hint": "A hide is issued whole by its scan. A lot or a material asks how much."
+    },
+    "title": "What it needs",
+    "empty": {
+      "title": "This work order needs no materials",
+      "body": "Its bill of materials plans nothing to issue. Ask the office."
+    },
+    "count": "{covered} of {total} covered"
+  },
+  "line": {
+    "issued": "Issued {issued} of {planned}",
+    "next": "Oldest: {code} at {location}",
+    "tapMaterial": "Tap to issue",
+    "covered": "Covered",
+    "noStock": "None usable here",
+    "toIssue": "{quantity} to issue",
+    "need": "needed, {unit}"
+  },
+  "held": {
+    "title": "Not to issue",
+    "row": "{lot} · {item}: {reason} ({quantity})",
+    "hides_one": "{count} hide",
+    "hides_other": "{count} hides",
+    "reason": {
+      "CR_VI_PENDING": "no chromium VI result yet, cannot be issued",
+      "CR_VI_FAILED": "failed the chromium VI test, cannot be issued",
+      "QUALITY_HOLD": "on quality hold, cannot be issued",
+      "BLOCKED": "blocked, cannot be issued",
+      "REJECTED": "rejected, cannot be issued"
+    }
+  },
+  "pad": {
+    "title": "How much of {code}?",
+    "label": "Quantity",
+    "expected": "Still needed {quantity}",
+    "all": "All needed",
+    "separator": "Point",
+    "minus": "Less",
+    "plus": "More",
+    "clear": "Clear",
+    "back": "Back",
+    "empty": "Type a quantity",
+    "range": "From {min} to {max}",
+    "covered": "The work order has all it needs of this. More is an over-issue: the office issues it, with a reason.",
+    "onHandOnly": "Only {quantity} is usable here: the rest comes later."
+  },
+  "action": {
+    "cancel": "Cancel",
+    "issue": "Issue {quantity}",
+    "issueNothing": "Issue",
+    "done": "Done"
+  },
+  "busy": "Issuing {code}…",
+  "busyUndo": "Undoing…",
+  "last": {
+    "issued": "Issued {code} · {quantity} to {workOrder}",
+    "undone": "Undone: {code} · {quantity} is back in stock"
+  },
+  "undo": {
+    "text": "Last issue: {code} · {quantity}"
+  },
+  "keys": {
+    "issue": "Issue the quantity",
+    "done": "Done with this work order",
+    "digits": "Type into the pad"
+  },
+  "notStock": {
+    "message": "This is no hide, lot or material of this site.",
+    "fix": "Scan the stock's own label, or ask your team leader."
+  },
+  "badge": {
+    "message": "This badge does not open this tablet.",
+    "fix": "The person signed in stays. Ask your team leader."
+  },
+  "refusal": {
+    "WORK_ORDER_NOT_OPEN": {
+      "message": "This work order is not open: stock is issued only to a released work order.",
+      "fix": "Ask the office."
+    },
+    "NOT_IN_WORK_ORDER": {
+      "message": "This work order does not use this material.",
+      "fix": "Put it back, and scan a material of the pick list."
+    },
+    "OTHER_COLOUR": {
+      "message": "This work order needs this material in another colour.",
+      "fix": "Put it back, and take the colour of the pick list."
+    },
+    "CR_VI_PENDING": {
+      "message": "This lot has no chromium VI result yet: it cannot be issued.",
+      "fix": "Put it back on its rack; take released stock."
+    },
+    "CR_VI_FAILED": {
+      "message": "This lot failed the chromium VI test: it cannot be issued.",
+      "fix": "Put it back on the quarantine rack and tell your team leader."
+    },
+    "QUALITY_HOLD": {
+      "message": "This lot is on quality hold: it cannot be issued.",
+      "fix": "Put it back on its rack; take released stock."
+    },
+    "BLOCKED": {
+      "message": "This lot is blocked: it cannot be issued.",
+      "fix": "Put it back on the quarantine rack and tell your team leader."
+    },
+    "REJECTED": {
+      "message": "This lot was rejected: it cannot be issued.",
+      "fix": "Put it back on the quarantine rack and tell your team leader."
+    },
+    "HIDE_USED_UP": {
+      "message": "This hide is used up or scrapped.",
+      "fix": "Take another hide of the pick list."
+    },
+    "NOTHING_ON_HAND": {
+      "message": "None of this is in stock at this site.",
+      "fix": "Take another one of the pick list, or ask the office."
+    },
+    "MORE_THAN_ON_HAND": {
+      "message": "Less than that is in stock at this site.",
+      "fix": "Issue what is on hand; the office sees the rest is missing."
+    },
+    "OVER_ISSUE": {
+      "message": "The work order has all it needs of this.",
+      "fix": "More is an over-issue: the office issues it, with a reason."
+    },
+    "NOT_LAST_ACTION": {
+      "message": "This is not your last action any more: it cannot be undone here.",
+      "fix": "Ask the office to reverse it."
+    },
+    "REVERSED_ALREADY": {
+      "message": "This issue was undone already.",
+      "fix": "Nothing to do."
+    }
+  },
+  "unit": {
+    "PCS": "pcs",
+    "PAIR": "pairs",
+    "SET": "sets",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  }
+}
