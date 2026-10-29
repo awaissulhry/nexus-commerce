@@ -41,7 +41,7 @@ describe('the permission registry', () => {
     expect(FACTORY_PERMISSIONS.get('roles.assign')?.risk).toBe('stepUp')
     expect(FACTORY_PERMISSIONS.assignable.some((definition) => definition.area === 'money')).toBe(false)
     expect(FACTORY_PERMISSIONS.undeclared(['users.view', 'quotes.send', 'quotes.send'])).toEqual(['quotes.send'])
-    expect([...FACTORY_PERMISSIONS.byArea().keys()]).toEqual(['users', 'roles', 'audit', 'numbering', 'files', 'links', 'devices', 'workers', 'floor', 'threads', 'imports', 'documents', 'print', 'email', 'compliance', 'product', 'inventory', 'shipping', 'parties', 'planning', 'invoices', 'payments', 'costing', 'money'])
+    expect([...FACTORY_PERMISSIONS.byArea().keys()]).toEqual(['users', 'roles', 'audit', 'numbering', 'files', 'links', 'devices', 'workers', 'floor', 'threads', 'imports', 'documents', 'print', 'email', 'compliance', 'product', 'inventory', 'shipping', 'parties', 'planning', 'invoices', 'payments', 'costing', 'production', 'money'])
   })
 
   it('refuses a name declared twice, a bad area, a bad risk, an empty description', () => {
