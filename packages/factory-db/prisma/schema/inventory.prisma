@@ -287,6 +287,10 @@ model Hide {
   /// Defects seen (holes, scars, brand marks) and where; its photos are its files.
   defects      String?
   state        HideState @default(FULL)
+  /// Set exactly while the hide is CONSUMED: the cut log entry after which nothing of it was left (the Hide done's
+  /// entry, or the last cut when Hide done used nothing more). Reversing that entry, and only that one, opens the hide
+  /// again (CONSUMED → PARTLY_CUT, this cleared): a wrong closing cut is corrected (B-W1-40's gap).
+  closingCutLogId String? @db.Uuid
   version      Int       @default(1)
   createdAt    DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
@@ -295,15 +299,17 @@ model Hide {
   lot   Lot         @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
   moves StockMove[]
   // production.prisma: the cut log entries of the hide.
-  cutLogs CutLog[]
+  cutLogs CutLog[] @relation("HideCutLogs")
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  closingCutLog CutLog? @relation("HideClosingCutLog", fields: [tenantId, siteId, closingCutLogId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, code])
   // The target of the moves' reference: a hide of the move's own site and lot.
   @@unique([tenantId, siteId, lotId, id])
 }
 
-/// FULL → PARTLY_CUT | REMNANT | CONSUMED | SCRAPPED; between PARTLY_CUT and REMNANT freely; CONSUMED and SCRAPPED are
-/// final.
+/// FULL → PARTLY_CUT | REMNANT | CONSUMED | SCRAPPED; between PARTLY_CUT and REMNANT freely; SCRAPPED is final, and so
+/// is CONSUMED but for one move: CONSUMED → PARTLY_CUT when its closing cut log entry is reversed.
 enum HideState {
   FULL
   PARTLY_CUT

@@ -28,6 +28,7 @@ export type {
   BomLineColour,
   BomLineSize,
   Bundle,
+  BundleReprint,
   Certificate,
   CertificateCoverage,
   Colour,

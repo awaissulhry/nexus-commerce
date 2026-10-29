@@ -62,8 +62,9 @@ model Device {
   // B-W1-42: correction requests asked and scans refused on it.
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]
-  // B-W1-44: the garment labels printed on it.
+  // B-W1-44: the garment labels printed on it; the bundle tickets printed again on it.
   garmentLabelPrints     GarmentLabelPrint[]
+  bundleReprints         BundleReprint[]
   // numbering.prisma: the numbers of its blocks it used.
   numberBlockUses NumberBlockUse[]
 

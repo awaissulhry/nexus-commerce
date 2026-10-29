@@ -5,21 +5,22 @@ import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { parseScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 import { PRODUCTION_BUNDLES } from '@nexus/factory-domain/production/bundles/permissions'
-import { DEFAULT_BUNDLE_SIZE, MAX_BUNDLE_SIZE, scannedBundleRefusal, splitBundles } from '@nexus/factory-domain/production/bundles/rules'
+import { scannedBundleRefusal, splitBundles, targetBundleSize } from '@nexus/factory-domain/production/bundles/rules'
 import { CUTTABLE_STATUSES } from '@nexus/factory-domain/production/cutting/rules'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
+import { standardBundleSizeFor } from '../settings/bundle-size'
 import { bundleView, bundleWorkOrder, cellView, countsOf, mayBundle, ticketBase, ticketOf, workerOf } from './bundles'
-import { BUNDLE_HEADER, readBundleByCode, readBundles, readCellLabels, readHeader, readOperations, readScans, readTicketJobs, type Reader, type ScanRow } from './store'
+import { BUNDLE_HEADER, readBundleByCode, readBundles, readCellLabels, readHeader, readOperations, readReprints, readScans, readTicketJobs, stationPrinterOf, type Reader, type ScanRow } from './store'
 
 /**
  * The bundles screens' reads (B-W1-41; A2 SCR-095 floor bundles, SCR-072 the work order's bundles; MES-065, MES-066,
- * MES-073): the work orders whose cut garments wait for bundles, a work order as the bundles step sees it (its cells
- * with what is cut, in bundles and still to bundle, the proposed bundles, its bundles, its operations, the site's label
- * printer), a scanned ticket (the bundle card: its operations with ticks, an old ticket refused with the new code), and
- * for the office a work order's bundles with their genealogy, scans and tickets. The floor sees no worker's name;
- * nothing here carries money.
+ * MES-073, MES-184): the work orders whose cut garments wait for bundles, a work order as the bundles step sees it (its
+ * cells with what is cut, in bundles and still to bundle, the proposed bundles in the site's standard bundle size, its
+ * bundles, its operations, the site's label printers and the one the tickets go to), a scanned ticket (the bundle card:
+ * its operations with ticks, an old ticket refused with the new code), and for the office a work order's bundles with
+ * their genealogy, scans, tickets and reprints. The floor sees no worker's name; nothing here carries money.
  */
 
 const day = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : null)
@@ -77,18 +78,22 @@ export async function bundleWorkOrders(caller: CommandCaller, query: BundleWorkO
 
 // ---- a work order at the bundles step -----------------------------------------------------------------------------------------
 
-/** A work order as the bundles step sees it: cells with counts and the proposed bundles, its bundles, operations, printer. */
+/** A work order as the bundles step sees it: cells with counts and the proposed bundles, its bundles, operations, printers. */
 export async function bundlesOfWorkOrder(caller: CommandCaller, workOrderId: string, query: { readonly bundleSize?: number | undefined }) {
   const workOrder = await bundleWorkOrder(caller, workOrderId, PRODUCTION_BUNDLES)
+  const context = workerOf(caller)
   const singlePiece = workOrder.kind === 'MADE_TO_MEASURE'
-  const size = singlePiece ? 1 : Math.min(MAX_BUNDLE_SIZE, query.bundleSize ?? DEFAULT_BUNDLE_SIZE)
   return caller.withClient(async (db) => {
+    // The proposal's size: asked, else the site's standard bundle size (production settings), one for made-to-measure.
+    const standardBundleSize = await standardBundleSizeFor(db, workOrder.siteId)
+    const size = targetBundleSize(workOrder.kind, query.bundleSize, standardBundleSize)
     const style = await db.style.findUnique({ where: { id: workOrder.styleId }, select: { id: true, code: true, name: true } })
     const labels = await readCellLabels(db, workOrder.id)
     const bundles = await readBundles(db, workOrder.id)
     const { cells } = await countsOf(db, workOrder)
     const scans = await readScans(db, bundles.map((bundle) => bundle.id))
     const printers = await db.printer.findMany({ where: { siteId: workOrder.siteId, kind: 'LABEL_ZPL', status: 'ACTIVE' }, select: { id: true, code: true, name: true }, orderBy: { code: 'asc' } })
+    const stationPrinterId = context.audience === 'floor' ? await stationPrinterOf(db, context.deviceId) : null
     return {
       workOrder: {
         id: workOrder.id,
@@ -103,12 +108,17 @@ export async function bundlesOfWorkOrder(caller: CommandCaller, workOrderId: str
         style: style ?? { id: workOrder.styleId, code: '', name: '' },
       },
       bundleSize: size,
+      standardBundleSize,
       singlePiece,
       cells: cells.filter((cell) => cell.cut !== null).map((cell) => ({ ...cellView(cell, labels.get(cell.cellId)), proposal: splitBundles(cell.toBundle, size) })),
       bundles: bundles.map((bundle) => ({ ...bundleView(bundle, labels), scans: scans.filter((scan) => scan.bundleId === bundle.id).length })),
       operations: (await readOperations(db, workOrder.id)).map((operation) => ({ id: operation.id, seq: operation.seq, code: operation.code, name: operation.name, scanRequired: operation.scanRequired })),
-      /** The site's ACTIVE label printers: the tickets go to the only one unless the request names one. */
+      /** The site's ACTIVE label printers. */
       printers,
+      /** The floor device's station's label printer (MES-184), or null. */
+      stationPrinterId,
+      /** Where the tickets go when the make names no printer: the station's, else the site's only one; null: name one. */
+      defaultPrinterId: stationPrinterId ?? (printers.length === 1 ? printers[0]!.id : null),
     }
   })
 }
@@ -160,7 +170,8 @@ async function hidesOf(db: Reader, cutLogIds: readonly string[]) {
 /**
  * A work order's bundles for the office (SCR-072 "Bundles"): each with its cell, part, garments, state, the operations
  * it is done at and its last scan (time, operation, station; never who), its genealogy (the hides and lots of its cut
- * log entries), and its tickets' print jobs (with print.view); and each cell's cut, bundled and still-to-bundle counts.
+ * log entries), its tickets' print jobs (with print.view) and its reprints with their reasons; and each cell's cut,
+ * bundled and still-to-bundle counts.
  */
 export async function workOrderBundles(caller: CommandCaller, workOrderId: string) {
   const workOrder = await bundleWorkOrder(caller, workOrderId, WORKORDERS_VIEW)
@@ -177,6 +188,7 @@ export async function workOrderBundles(caller: CommandCaller, workOrderId: strin
     )
     const genealogy = await hidesOf(db, [...new Set(bundles.flatMap((bundle) => bundle.cutLogIds))])
     const jobs = seesPrints ? await readTicketJobs(db, bundles.map((bundle) => bundle.id)) : []
+    const reprints = await readReprints(db, bundles.map((bundle) => bundle.id))
     return {
       workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status, siteId: workOrder.siteId },
       cells: cells.filter((cell) => cell.cut !== null).map((cell) => cellView(cell, labels.get(cell.cellId))),
@@ -194,6 +206,10 @@ export async function workOrderBundles(caller: CommandCaller, workOrderId: strin
             : null,
           hides: [...hides.values()].sort((a, b) => (a.code < b.code ? -1 : 1)),
           tickets: seesPrints ? jobs.filter((job) => job.recordId === bundle.id).map((job) => ({ jobId: job.id, printerId: job.printerId, scanId: job.scanId, status: job.status, lastError: job.lastError, createdAt: toUtcIso(job.createdAt) })) : null,
+          // Its tickets printed again, oldest first, with why; on the floor or in the office (never who).
+          reprints: reprints
+            .filter((row) => row.bundleId === bundle.id)
+            .map((row) => ({ code: row.code, replacedCode: row.replacedCode, reason: row.reason, printerId: row.printerId, postedBy: row.deviceId ? ('FLOOR' as const) : ('OFFICE' as const), at: toUtcIso(row.createdAt) })),
         }
       }),
     }
