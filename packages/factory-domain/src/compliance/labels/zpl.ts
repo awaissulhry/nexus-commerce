@@ -1,3 +1,4 @@
+import { code128Bars } from '../../labels/code128'
 import { dotsOf, LABEL_DPIS, MAX_LABEL_COPIES, zplText } from '../../labels/zpl'
 import { hundredthsOf, LAYOUT_PRESETS } from './rules'
 import type { RenderedBlock, RenderedLabel } from './render'
@@ -10,8 +11,10 @@ import type { RenderedBlock, RenderedLabel } from './render'
  *
  * The drawn marks are stand-ins until the artwork is licensed or drawn (W2b): the CE mark as the letters "CE" at the
  * mark's height (the CE marking's own proportions, Reg. (EC) 765/2008 Annex II, come with the artwork), the pictogram
- * as a framed box with the standard and the class letters, each care symbol as a framed box with its short mark. A
- * sample (preview, test print) carries a black band with the SAMPLE banner across the middle.
+ * as a framed box with the standard and the class letters, each care symbol as a framed box with its short mark. The
+ * batch number or serial is also printed as Code 128 bars (`^BC`, B-W1-44: packing scans the serial), as wide a module
+ * as the label holds (1 to 3 dots); a preview's empty bar row is a framed box. A sample (preview, test print) carries a
+ * black band with the SAMPLE banner across the middle.
  */
 
 export interface GarmentPrint {
@@ -33,7 +36,19 @@ export function blockPositions(label: Pick<RenderedLabel, 'blocks' | 'preset'>):
 /** The height of a block's drawn element (hundredths), 0 without one. */
 export function graphicHeight(block: Pick<RenderedBlock, 'graphic'>, preset: (typeof LAYOUT_PRESETS)[keyof typeof LAYOUT_PRESETS]): number {
   if (!block.graphic) return 0
-  return block.graphic.kind === 'CE' ? preset.ce : block.graphic.kind === 'PICTOGRAM' ? preset.pictogram : preset.care
+  const kind = block.graphic.kind
+  return kind === 'CE' ? preset.ce : kind === 'PICTOGRAM' ? preset.pictogram : kind === 'BARCODE' ? preset.barcode : preset.care
+}
+
+/** The bars' height inside their row (hundredths): a little space is left above the value's text line. */
+export const barHeight = (preset: (typeof LAYOUT_PRESETS)[keyof typeof LAYOUT_PRESETS]): number => preset.barcode - 80
+
+/**
+ * The module (narrowest bar) of a Code 128 symbol of `value` that fits `inner` dots: 1 to 3 dots, the widest that fits
+ * (a 203 dpi head prints 0.125 mm per dot; a 50 mm label holds a serial at 1 dot, a 300 dpi head at 2).
+ */
+export function barModule(value: string, inner: number): number {
+  return Math.max(1, Math.min(3, Math.floor(inner / code128Bars(value).modules)))
 }
 
 /**
@@ -71,6 +86,10 @@ export function garmentLabelZpl(label: RenderedLabel, dpi: number, copies = 1): 
         commands.push(box(left, y, side, side))
         commands.push(text(left + 40, y + Math.round(side * 0.3), Math.round(side * 0.4), symbol.mark))
       })
+    } else if (graphic?.kind === 'BARCODE') {
+      const bars = dots(barHeight(preset))
+      if (graphic.value === null) commands.push(box(x, y, width - 2 * preset.margin, barHeight(preset)))
+      else commands.push(`^FO${dots(x)},${dots(y)}^BY${barModule(graphic.value, dots(width - 2 * preset.margin))},3,${bars}^BCN,${bars},N,N,N^FH^FD${zplText(graphic.value)}^FS`)
     }
     let lineY = y + graphicHeight(block, preset)
     for (const line of block.lines) {

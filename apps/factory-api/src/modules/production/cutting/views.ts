@@ -326,7 +326,7 @@ export async function cutLog(caller: CommandCaller, workOrderId: string) {
     const pieces = await readPieces(db, all.entries.map((entry) => entry.id))
     const livePieces = pieces.filter((piece) => live.some((entry) => entry.id === piece.cutLogId))
     const hideIds = [...new Set([...(await heldHides(db, workOrder)), ...all.entries.map((entry) => entry.hideId)])]
-    const hides = hideIds.length === 0 ? [] : await db.hide.findMany({ where: { id: { in: hideIds } }, select: { id: true, code: true, lotId: true, itemId: true, state: true } })
+    const hides = hideIds.length === 0 ? [] : await db.hide.findMany({ where: { id: { in: hideIds } }, select: { id: true, code: true, lotId: true, itemId: true, state: true, closingCutLogId: true } })
     const lots = new Map((await db.lot.findMany({ where: { id: { in: [...new Set(hides.map((hide) => hide.lotId))] } }, select: { id: true, code: true, itemColourId: true } })).map((lot) => [lot.id, lot]))
     const hideOf = new Map(hides.map((hide) => [hide.id, hide]))
     const ledger = await readHideLedger(db, workOrder.siteId, workOrder.id, hideIds)
@@ -354,6 +354,7 @@ export async function cutLog(caller: CommandCaller, workOrderId: string) {
           pattern: pattern === null ? null : text(Dec.min(pattern, new Dec(entry.baseAreaUsed.toString()))),
           reversedById: all.entries.find((row) => row.reversalOfId === entry.id)?.id ?? null,
           live: live.some((row) => row.id === entry.id),
+          closing: hideOf.get(entry.hideId)?.closingCutLogId === entry.id,
           worker: entry.workerId ? (workers.get(entry.workerId) ?? null) : null,
           station: entry.stationId ? (stations.get(entry.stationId) ?? null) : null,
           cells: [...new Set(pieces.filter((piece) => piece.cutLogId === entry.id).map((piece) => piece.cellId))].map((cellId) => ({

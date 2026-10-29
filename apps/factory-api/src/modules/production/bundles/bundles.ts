@@ -28,6 +28,7 @@ import { queueModuleLabel } from '../../../platform/print/jobs'
 import { readPrinter, type PrinterRow } from '../../../platform/print/printers'
 import { lockWorkOrderIssues } from '../../inventory/issue/store'
 import { cutForBundles } from '../cutting/views'
+import { standardBundleSizeFor } from '../settings/bundle-size'
 import { floorRecordSubjectFor } from '../settings/subject'
 import { asTenantSystem, withTicketCodes, type TicketCodes } from './codes'
 import {
@@ -37,10 +38,12 @@ import {
   lockBundle,
   lockCells,
   readBundle,
+  readBundleByClientEvent,
   readBundles,
   readCellLabels,
   readHeader,
   readOperations,
+  stationPrinterOf,
   type BundleHeader,
   type BundleRow,
   type CellLabel,
@@ -54,17 +57,24 @@ import {
  * a 409 with its code (`refusal/<CODE>`); the …_production_guards Bundle trigger stays the last word.
  *
  *   make     the floor: the garments cut and not yet in bundles, per cell (or "all cut, not bundled"), split into
- *            bundles of the target size (the last one takes the rest), each with the next ticket code; they name the
+ *            bundles of the target size (the request's, else the site's standard bundle size, production settings;
+ *            the last one takes the rest), each with the next ticket code; they name the
  *            cell's live cut log entries (genealogy: hides, lots). Lock order: the work order's issue lock (a cut's undo
  *            or correction and the work order's complete, close and cancel take it first, so no cut is reversed under
  *            bundles being made and no bundle lands on a cancelled work order) → the cells' bundle locks (sorted) → the
- *            tenant's ticket-code lock (codes.ts). Two tablets on one cell take turns; the second is told what is left.
+ *            tenant's BUNDLE counter (codes.ts → allocateScanIds, its `factory.scan-ids` lock). Two tablets on one cell
+ *            take turns; the second is told what is left. An event of the floor queue (A1 §3.8) makes ONE bundle and
+ *            carries its client event id (Bundle.clientEventId, unique in the tenant): sent again, under any key, it
+ *            answers the bundle it made.
  *   reprint  floor or office: the ticket gets a new code, the old one joins `replacedCodes` (a scan of it is refused
- *            with the new code in the words); the bundle row is locked FOR UPDATE first (store.ts lockBundle).
+ *            with the new code in the words); the bundle row is locked FOR UPDATE first (store.ts lockBundle); the
+ *            reprint's row (BundleReprint: codes, reason, printer, device, who) comes before the new code (the Bundle
+ *            trigger refuses a new code without it).
  *   void     floor or office: a bundle made by mistake, only before any scan names it (B-W1-42 locks the bundle row
  *            FOR SHARE before a scan: store.ts lockBundleForScan), with the reason; its garments are to bundle again.
- * After the command, each new ticket is queued on the label printer (platform/print queueModuleLabel, label kind
- * BUNDLE: the BUNDLE label and the operations, ZPL for the printer's stock) under the key `bundle-ticket:<id>:<code>`,
+ * After the command, each new ticket is queued on the label printer (the one asked; else the station's, MES-184; else
+ * the site's only one; platform/print queueModuleLabel, label kind BUNDLE: the BUNDLE label and the operations, ZPL for
+ * the printer's stock) under the key `bundle-ticket:<id>:<code>`,
  * so a resent request queues no ticket twice; without a label printer the answer carries the label for the browser's
  * PDF (POST /print/labels/pdf). Before a floor make or reprint the site's floor must be ready (platform/privacy
  * floorReadinessFor, read as the tenant's system caller): 409 FLOOR_NOT_READY in the gate's words. A bundle names who
@@ -135,6 +145,7 @@ export function bundleView(row: BundleRow, cells: ReadonlyMap<string, CellLabel>
     voidReason: row.voidReason,
     cutLogIds: [...row.cutLogIds],
     deviceId: row.deviceId,
+    clientEventId: row.clientEventId,
     version: row.version,
     createdAt: toUtcIso(row.createdAt),
   }
@@ -196,11 +207,15 @@ const NO_PRINTER = 'No label printer is chosen: print the tickets as PDF.'
 /**
  * The label printer the tickets go to, checked BEFORE anything is made: the one asked (a label printer of the work
  * order's site, ACTIVE, where the caller prints labels), none (null: the tickets print as PDF), or, when none is named,
- * the site's only ACTIVE label printer (several: the caller chooses; MES-184's station printer is a later schema step).
+ * the label printer of the floor device's station (MES-184: Station.labelPrinterId), else the site's only ACTIVE label
+ * printer (several: the caller chooses).
  */
 async function ticketPrinter(caller: CommandCaller, workOrder: BundleHeader, printerId: string | null | undefined): Promise<TicketPrinter> {
   const context = workerOf(caller)
   if (printerId === null) return { printer: null, problem: NO_PRINTER }
+  if (printerId === undefined && context.audience === 'floor') {
+    printerId = (await caller.withClient((client) => stationPrinterOf(client, context.deviceId))) ?? undefined
+  }
   if (printerId === undefined) {
     const rows = await caller.withClient((client) => client.printer.findMany({ where: { siteId: workOrder.siteId, kind: 'LABEL_ZPL', status: 'ACTIVE' }, select: { id: true } }))
     if (rows.length === 0) return { printer: null, problem: 'This site has no active label printer: print the tickets as PDF.' }
@@ -279,11 +294,13 @@ async function assertFloorReady(caller: CommandCaller, context: FloorContext, si
 export interface MakeInput {
   /** Per cell (and part); absent: every cell's whole garments cut and not yet in bundles. */
   readonly cells?: readonly { readonly workOrderSizeId: string; readonly part?: string | null | undefined; readonly quantity?: number | undefined; readonly quantities?: readonly number[] | undefined; readonly bundleSize?: number | undefined }[] | undefined
-  /** The target size (default 10; a made-to-measure work order: 1). */
+  /** The target size (default: the site's standard bundle size, else 10; a made-to-measure work order: 1). */
   readonly bundleSize?: number | undefined
-  /** The label printer; null: the tickets print as PDF; absent: the site's only label printer. */
+  /** The label printer; null: the tickets print as PDF; absent: the station's, else the site's only label printer. */
   readonly printerId?: string | null | undefined
   readonly language?: LabelLanguage | undefined
+  /** The floor queue's id for this event (A1 §3.8): the make is ONE bundle, made once whatever the resends. */
+  readonly clientEventId?: string | undefined
 }
 
 async function makeInCommand(tools: CommandTools, workOrderId: string, body: MakeInput, codes: TicketCodes) {
@@ -309,8 +326,15 @@ async function makeInCommand(tools: CommandTools, workOrderId: string, body: Mak
     }),
     asks,
     bundleSize: body.bundleSize,
+    // The site's standard bundle size (production settings; the floor reads that one column).
+    standardSize: await standardBundleSizeFor(tx, workOrder.siteId),
   })
   if (!plan.ok) return refused(plan.refusal)
+  if (body.clientEventId !== undefined && plan.bundles.length !== 1) {
+    throw new ValidationError(`An event of the floor queue makes one bundle; this one makes ${plan.bundles.length}.`, [
+      { path: 'body/clientEventId', message: 'Send one event per bundle: one cell, with its quantity (quantities: [n]) or a size that holds it.' },
+    ])
+  }
 
   const taken = await codes.take(tx, plan.bundles.length)
   const entriesOf = new Map(cut.map((cell) => [cell.workOrderSizeId, cell.cutLogIds]))
@@ -325,6 +349,7 @@ async function makeInCommand(tools: CommandTools, workOrderId: string, body: Mak
     // Genealogy: every live entry that cut pieces for the cell (the cut module refuses to reverse one while it is named).
     cutLogIds: [...(entriesOf.get(bundle.cellId) ?? [])],
     deviceId: context.deviceId,
+    clientEventId: body.clientEventId ?? null,
     createdAt: tools.now,
     updatedAt: tools.now,
     createdById,
@@ -338,7 +363,7 @@ async function makeInCommand(tools: CommandTools, workOrderId: string, body: Mak
       recordId: row.id,
       companyId: workOrder.companyId,
       siteId: workOrder.siteId,
-      after: { workOrderId: workOrder.id, workOrderSizeId: row.workOrderSizeId, code: row.code, quantity: row.quantity, part: row.part, cutLogIds: row.cutLogIds, deviceId: row.deviceId },
+      after: { workOrderId: workOrder.id, workOrderSizeId: row.workOrderSizeId, code: row.code, quantity: row.quantity, part: row.part, cutLogIds: row.cutLogIds, deviceId: row.deviceId, clientEventId: row.clientEventId },
     })
     tools.emit({
       ...event,
@@ -367,17 +392,61 @@ async function makeInCommand(tools: CommandTools, workOrderId: string, body: Mak
   }
 }
 
+/**
+ * The bundle a floor queue's event made before (its client event id), as the answer to a resend: the bundle, its
+ * ticket (queued again under the same key: the same job), the cells' counts; nothing written now. The same id for a
+ * bundle of another work order or cell is a 409 (a new bundle takes a new id).
+ */
+async function madeBefore(caller: CommandCaller, workOrder: BundleHeader, body: MakeInput) {
+  const clientEventId = body.clientEventId
+  if (clientEventId === undefined) return null
+  const found = await caller.withClient(async (client) => {
+    const row = await readBundleByClientEvent(client, clientEventId)
+    if (!row) return null
+    const labels = await readCellLabels(client, workOrder.id)
+    return { row, labels, base: await ticketBase(client, workOrder, body.language ?? 'it'), cells: (await countsOf(client, workOrder)).cells }
+  })
+  if (!found) return null
+  const asked = body.cells?.length === 1 ? body.cells[0]! : null
+  if (found.row.workOrderId !== workOrder.id || (asked && (asked.workOrderSizeId !== found.row.workOrderSizeId || (asked.part?.trim() || null) !== found.row.part))) {
+    throw new ConflictError(`Client event ${clientEventId} made another bundle (${found.row.code}); send a new client event id for a new bundle.`)
+  }
+  // The ticket again under its key: the job queued then (a printer refusal now is the ticket's problem, never a 409).
+  const target = await ticketPrinter(caller, workOrder, body.printerId).catch((error: unknown) => {
+    if (error instanceof DomainError) return { printer: null, problem: error.message }
+    throw error
+  })
+  return {
+    workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status },
+    singlePiece: workOrder.kind === 'MADE_TO_MEASURE',
+    bundles: [bundleView(found.row, found.labels)],
+    tickets: await printTickets(caller, target, [{ bundleId: found.row.id, ticket: ticketOf(found.base, found.row, found.labels) }]),
+    cells: found.cells.filter((cell) => cell.cut !== null).map((cell) => cellView(cell, found.labels.get(cell.cellId))),
+    replayed: true,
+  }
+}
+
 /** The floor's "make bundles and print their tickets": one command, then the tickets. */
 export async function makeBundles(caller: CommandCaller, workOrderId: string, body: MakeInput, idempotencyKey?: string) {
   const context = floorOf(caller)
   const workOrder = await bundleWorkOrder(caller, workOrderId, PRODUCTION_BUNDLES)
+  // A resent queue event answers the bundle it made (before the gate: it was made while the floor was ready).
+  const before = await madeBefore(caller, workOrder, body)
+  if (before) return before
   await assertFloorReady(caller, context, workOrder.siteId)
   const target = await ticketPrinter(caller, workOrder, body.printerId)
-  const outcome = await withTicketCodes(caller, (codes) =>
-    command(caller, { name: 'production.makeBundles', idempotencyKey, input: { workOrderId, ...body } }, (tools) => makeInCommand(tools, workOrderId, body, codes)),
-  )
-  const { tickets, ...made } = outcome.result
-  return { ...made, tickets: await printTickets(caller, target, tickets), replayed: outcome.replayed }
+  try {
+    const outcome = await withTicketCodes(caller, (codes) =>
+      command(caller, { name: 'production.makeBundles', idempotencyKey, input: { workOrderId, ...body } }, (tools) => makeInCommand(tools, workOrderId, body, codes)),
+    )
+    const { tickets, ...made } = outcome.result
+    return { ...made, tickets: await printTickets(caller, target, tickets), replayed: outcome.replayed }
+  } catch (error) {
+    // The same event sent twice at once under two keys: the unique key refused the second; the first one's bundle answers.
+    const raced = await madeBefore(caller, workOrder, body).catch(() => null)
+    if (raced) return raced
+    throw error
+  }
 }
 
 // ---- reprint and void -----------------------------------------------------------------------------------------------------
@@ -394,13 +463,13 @@ async function namedBundle(caller: CommandCaller, bundleId: string): Promise<{ b
 const postedBy = (context: Worker) => (context.audience === 'floor' ? 'FLOOR' : 'OFFICE')
 
 export interface ReprintInput {
-  /** Why: lost, damaged, unreadable … (kept in the audit row). */
+  /** Why: lost, damaged, unreadable … (BundleReprint.reason; the audit row keeps it too). */
   readonly reason: string
   readonly printerId?: string | null | undefined
   readonly language?: LabelLanguage | undefined
 }
 
-async function reprintInCommand(tools: CommandTools, bundleId: string, body: ReprintInput, codes: TicketCodes) {
+async function reprintInCommand(tools: CommandTools, bundleId: string, body: ReprintInput, codes: TicketCodes, printerId: string | null) {
   const context = tools.context as Worker
   const { tx } = tools
   const bundle = await lockBundle(tx, bundleId)
@@ -408,9 +477,34 @@ async function reprintInCommand(tools: CommandTools, bundleId: string, body: Rep
   const workOrder = (await readHeader(tx, bundle.workOrderId))!
   const refusal = reprintRefusal({ bundle, workOrder })
   if (refusal) refused(refusal)
+  // Who the reprint names: on the floor the site's rules (409 in words; at a station site nobody); the office user.
+  const createdById =
+    context.audience === 'floor'
+      ? (await floorRecordSubjectFor(tx, { siteId: workOrder.siteId, workerId: context.actorId, stationId: await deviceStationOf(tx, context.deviceId) })).workerId
+        ? context.actorId
+        : null
+      : context.actorId
   const [code] = await codes.take(tx, 1)
-  await tx.bundle.update({ where: { id: bundle.id }, data: { code: code!, replacedCodes: [...bundle.replacedCodes, bundle.code], version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
   const reason = body.reason.trim()
+  // The reprint's row with its reason first: the Bundle trigger refuses a new code without it (MES-073).
+  await tx.bundleReprint.create({
+    data: {
+      id: newId(),
+      companyId: workOrder.companyId,
+      siteId: workOrder.siteId,
+      workOrderId: workOrder.id,
+      bundleId: bundle.id,
+      code: code!,
+      replacedCode: bundle.code,
+      reason,
+      printerId,
+      deviceId: context.audience === 'floor' ? context.deviceId : null,
+      createdAt: tools.now,
+      createdById,
+    },
+    select: { id: true },
+  })
+  await tx.bundle.update({ where: { id: bundle.id }, data: { code: code!, replacedCodes: [...bundle.replacedCodes, bundle.code], version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
   const scope = { companyId: workOrder.companyId, siteId: workOrder.siteId }
   tools.audit({ recordType: 'Bundle', recordId: bundle.id, ...scope, before: { code: bundle.code, replacedCodes: bundle.replacedCodes }, after: { code, replacedCodes: [...bundle.replacedCodes, bundle.code] }, reason })
   tools.audit({ recordType: 'WorkOrder', recordId: workOrder.id, ...scope, after: { bundleId: bundle.id, code, replacedCode: bundle.code }, reason })
@@ -427,7 +521,7 @@ export async function reprintBundle(caller: CommandCaller, bundleId: string, bod
   if (context.audience === 'floor') await assertFloorReady(caller, context, workOrder.siteId)
   const target = await ticketPrinter(caller, workOrder, body.printerId)
   const outcome = await withTicketCodes(caller, (codes) =>
-    command(caller, { name: 'production.reprintBundle', idempotencyKey, input: { bundleId, ...body } }, (tools) => reprintInCommand(tools, bundleId, body, codes)),
+    command(caller, { name: 'production.reprintBundle', idempotencyKey, input: { bundleId, ...body } }, (tools) => reprintInCommand(tools, bundleId, body, codes, target.printer?.id ?? null)),
   )
   const { ticket, ...reprinted } = outcome.result
   const [answer] = await printTickets(caller, target, [ticket])

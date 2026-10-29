@@ -1,13 +1,12 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { SCAN_TYPES } from '@nexus/factory-domain/numbering/scan-id'
 import { scannedBundleRefusal, type BundleRefusal } from '@nexus/factory-domain/production/bundles/rules'
 import type { CommandTx } from '../../../core/command'
 
 /**
  * The bundles' reads and locks (B-W1-41): a work order as the bundles see it, its operations, its bundles, a bundle by
- * its ticket's code (the current one or a replaced one), the scans that name bundles, the tenant's highest ticket code,
- * and the advisory locks of a cell's bundles and of the tenant's ticket codes. Every read names its columns, selects no
+ * its ticket's code (the current one or a replaced one), the scans that name bundles, and the advisory locks of a cell's
+ * bundles (ticket codes come from the tenant's BUNDLE counter: codes.ts). Every read names its columns, selects no
  * relation (inside a command's transaction the queries run one after another on its one connection) and runs as the
  * caller: row-level security keeps a floor device to its own site.
  */
@@ -47,6 +46,7 @@ export const BUNDLE_COLUMNS = {
   voidedAt: true,
   voidReason: true,
   deviceId: true,
+  clientEventId: true,
   version: true,
   createdAt: true,
 } as const satisfies Prisma.BundleSelect
@@ -70,6 +70,11 @@ export async function lockBundle(tx: CommandTx, bundleId: string): Promise<Bundl
   if (!isUuid(bundleId)) return null
   await tx.$queryRaw`SELECT "id" FROM "Bundle" WHERE "id" = ${bundleId}::uuid FOR UPDATE`
   return readBundle(tx, bundleId)
+}
+
+/** The bundle the floor queue's event made (Bundle.clientEventId, unique in the tenant), as the caller sees it. */
+export async function readBundleByClientEvent(db: Reader, clientEventId: string): Promise<BundleRow | null> {
+  return db.bundle.findFirst({ where: { clientEventId }, select: BUNDLE_COLUMNS })
 }
 
 /** The bundle a ticket's code names: its current code, or one of its replaced ones (an old ticket). */
@@ -101,6 +106,27 @@ export async function readCellLabels(db: Reader, workOrderId: string): Promise<M
 export async function deviceStationOf(db: Reader, deviceId: string): Promise<string | null> {
   const device = await db.device.findUnique({ where: { id: deviceId }, select: { stationId: true } })
   return device?.stationId ?? null
+}
+
+/**
+ * The label printer of the floor device's station (MES-184: Station.labelPrinterId), where its tickets print when the
+ * request names none; null for a roaming tablet or a station without one.
+ */
+export async function stationPrinterOf(db: Reader, deviceId: string): Promise<string | null> {
+  const stationId = await deviceStationOf(db, deviceId)
+  if (!stationId) return null
+  const station = await db.station.findUnique({ where: { id: stationId }, select: { labelPrinterId: true } })
+  return station?.labelPrinterId ?? null
+}
+
+/** The reprints of these bundles' tickets (BundleReprint, with the reason), oldest first. */
+export async function readReprints(db: Reader, bundleIds: readonly string[]) {
+  if (bundleIds.length === 0) return []
+  return db.bundleReprint.findMany({
+    where: { bundleId: { in: [...bundleIds] } },
+    select: { id: true, bundleId: true, code: true, replacedCode: true, reason: true, printerId: true, deviceId: true, createdAt: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  })
 }
 
 /** The work order's operations in routing order (the ticket's list, the scan card's ticks). */
@@ -145,23 +171,6 @@ export async function lockCells(tx: CommandTx, tenantId: string, siteId: string,
   for (const cellId of [...new Set(cellIds)].sort()) {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.bundle-cell', ${tenantId}::uuid, ${siteId}::uuid, ${cellId}::uuid), 0))`
   }
-}
-
-/** The tenant's ticket-code lock: the next codes (after the highest one) are read and taken by one write at a time. Taken last. */
-export async function lockBundleCodes(tx: CommandTx, tenantId: string): Promise<void> {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.bundle-code', ${tenantId}::uuid), 0))`
-}
-
-/**
- * The highest ticket code the reader sees among the tenant's BUNDLE codes (`BN-<tag>-…`), or null. A ticket's code is
- * never reused: the highest reference ever given is always some bundle's current code (a reprint takes a higher one,
- * and a void bundle keeps its code), so the current codes are enough. The office and the tenant's system context see
- * every site's bundles; a floor device sees its own site's only (see codes.ts).
- */
-export async function highestBundleCode(db: Reader, tag: string): Promise<string | null> {
-  const prefix = `${SCAN_TYPES.BUNDLE}-${tag}-%`
-  const [row] = await db.$queryRaw<{ code: string }[]>`SELECT "code" FROM "Bundle" WHERE "code" LIKE ${prefix} ORDER BY length("code") DESC, "code" DESC LIMIT 1`
-  return row?.code ?? null
 }
 
 // ---- the scan's lock (B-W1-42) -------------------------------------------------------------------------------------------------

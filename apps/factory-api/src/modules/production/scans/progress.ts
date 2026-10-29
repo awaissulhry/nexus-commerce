@@ -29,10 +29,16 @@ export async function wipFor(db: Reader, workOrder: Pick<ScanHeader, 'id' | 'sit
   return wipOf({ operations, cells, bundles, scans, lineOf: (stationId) => stations.get(stationId)?.lineId ?? null })
 }
 
-/** The size grid's sewn and finished garments per cell (the work order record's progress), from the scans. */
-export async function scanProgressOf(db: Reader, workOrder: Pick<ScanHeader, 'id' | 'siteId'>): Promise<Map<string, { readonly sewn: number | null; readonly finished: number | null }>> {
+/**
+ * The size grid's bundled, sewn and finished garments per cell (the work order record's progress): bundled from the
+ * ACTIVE whole-garment bundles, sewn and finished from the scans.
+ */
+export async function scanProgressOf(
+  db: Reader,
+  workOrder: Pick<ScanHeader, 'id' | 'siteId'>,
+): Promise<Map<string, { readonly bundled: number; readonly sewn: number | null; readonly finished: number | null }>> {
   const wip = await wipFor(db, workOrder)
-  return new Map(wip.cells.map((cell) => [cell.workOrderSizeId, { sewn: cell.sewn, finished: cell.finished }]))
+  return new Map(wip.cells.map((cell) => [cell.workOrderSizeId, { bundled: cell.bundled, sewn: cell.sewn, finished: cell.finished }]))
 }
 
 /** One work order's WIP for the office (SCR-072): operations × cells, lines, bundles, the size grid, corrections waiting. */

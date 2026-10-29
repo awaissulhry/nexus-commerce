@@ -4,15 +4,14 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, businessDayStart, toUtcIso } from '@nexus/factory-domain/core/time'
 import type { RowValues } from '@nexus/factory-domain/imports/importer'
 import { openingMoveKey, planOpeningRow, type OpeningPlan, type PlannedResult } from '@nexus/factory-domain/inventory/opening/rules'
-import { nextHideTags } from '@nexus/factory-domain/inventory/receipts/rules'
 import { CR_VI_UNIT, type CrViMethod } from '@nexus/factory-domain/quality/lab/rules'
 import type { CommandTools } from '../../../core/command'
 import { addYears } from '../../../platform/files/rules'
 import { retainFilesInCommand } from '../../../platform/files/files'
 import { allocateNumber } from '../../../platform/numbering/allocate'
+import { allocateScanIds } from '../../../platform/numbering/scan-ids'
 import { processLabResults, type LabResultRow } from '../../quality/lab/results-store'
 import { postMoves, type MoveDraft } from '../ledger/post-moves'
-import { lockHideTags } from '../receipts/store'
 import { readOpeningFacts } from './facts'
 
 /**
@@ -25,7 +24,8 @@ import { readOpeningFacts } from './facts'
  *      applied the import, else the one who started it): the lab step's four-eyes check keeps them from releasing it;
  *   2. the existing report: the lot's Cr VI columns and the LabResult through the lab step's seam (processLabResults),
  *      on the report file of the company's opening-stock reports, kept ten years (REACH art. 36); never a release;
- *   3. the hides, tagged with the tenant's HIDE scan ids (the receipts' hide-tag lock);
+ *   3. the hides, tagged with the tenant's HIDE scan ids (its tenant-wide counter: allocateScanIds, one ONLINE block in
+ *      this command, so only a line that posts takes numbers; a line posted before is planned UNCHANGED and never written);
  *   4. the OPENING moves through the ledger's postMoves, each with the line's own idempotency key (a line posts once,
  *      whatever import brings it again: the ledger refuses a key used before), valued at the given unit cost (MANUAL)
  *      or the standard cost;
@@ -146,7 +146,7 @@ export async function postOpeningLine(tools: CommandTools, line: string, values:
   // 3. The hides.
   const hideIds: string[] = []
   if (plan.hides.length > 0 && lot) {
-    const tags = nextHideTags(tenantId, await lockHideTags(tx, tenantId), plan.hides.length)
+    const { codes: tags } = await allocateScanIds(tools, 'HIDE', plan.hides.length)
     for (const [index, hide] of plan.hides.entries()) {
       const id = newId()
       await tx.hide.create({

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { defineEvent } from '../events/define'
 import { CR_VI_EVIDENCE, EVIDENCE_RULES, LAB_TESTS, LOT_DOCUMENT_KINDS } from './lab/rules'
+import { FOUR_EYES_RULES, REVERSAL_REASONS, SECOND_PERSON_REASONS, SERIALS_TO } from './release/rules'
 
 /**
  * The quality module's events (plan A1 §3.4). The lab step (B-W1-34, modules/quality/lab) emits them in the command that
@@ -10,6 +11,12 @@ import { CR_VI_EVIDENCE, EVIDENCE_RULES, LAB_TESTS, LOT_DOCUMENT_KINDS } from '.
  * stock is usable: planning nets it, the pick list offers it), `lot.rejected` (final) and `lot.blocked`;
  * `quality.settings_changed` when the Cr VI evidence rule changes. They reach the lot, receipt, stock and test screens of
  * the office (quality.lots.view). No cost, price or person's name in a payload.
+ *
+ * The final inspection and release (B-W1-45, modules/quality/final): `quality.inspection_opened`, `…_decided` (PASSED or
+ * FAILED, the computed result, an override), `…_cancelled`; `quality.garments_released` once per release (why a second
+ * person signed, if one did), `quality.release_reversed` once per reversal (the PPE register entry it opened), and
+ * `quality.release_rule_changed` when the four-eyes rule or its list of customers changes (Q1). They reach the
+ * inspection screens of the office (quality.inspections.view) and the site's floor devices (the bench).
  */
 const lotStatus = z.enum(['QUARANTINE', 'RELEASED', 'REJECTED', 'BLOCKED'])
 
@@ -82,5 +89,83 @@ export const events = [
     description: 'What counts as chromium VI evidence (Q14) changed, for a company or tenant-wide.',
     payload: z.strictObject({ companyId: z.uuid().nullable(), crViEvidenceRule: z.enum(EVIDENCE_RULES), previousRule: z.enum(EVIDENCE_RULES), loosened: z.boolean() }),
     live: { permission: 'quality.lots.view', fields: ['companyId', 'crViEvidenceRule'] },
+  }),
+  defineEvent({
+    type: 'quality.inspection_opened',
+    context: 'quality',
+    description: "A final inspection of a work order's finished garments was opened (at the bench or in the office).",
+    payload: z.strictObject({ inspectionId: z.uuid(), workOrderId: z.uuid(), number: z.string(), lotSize: z.number().int(), postedBy: z.enum(['FLOOR', 'OFFICE']) }),
+    live: { permission: 'quality.inspections.view', floor: true, fields: ['inspectionId', 'workOrderId', 'number'] },
+  }),
+  defineEvent({
+    type: 'quality.inspection_decided',
+    context: 'quality',
+    description: 'A final inspection was signed: PASSED or FAILED, with the computed result and whether the inspector overrode it (QHS-013).',
+    payload: z.strictObject({
+      inspectionId: z.uuid(),
+      workOrderId: z.uuid(),
+      number: z.string(),
+      status: z.enum(['PASSED', 'FAILED']),
+      computedResult: z.enum(['PASS', 'FAIL']),
+      overridden: z.boolean(),
+      postedBy: z.enum(['FLOOR', 'OFFICE']),
+    }),
+    live: { permission: 'quality.inspections.view', floor: true, fields: ['inspectionId', 'workOrderId', 'number', 'status'] },
+  }),
+  defineEvent({
+    type: 'quality.inspection_cancelled',
+    context: 'quality',
+    description: 'An open final inspection was abandoned (started by mistake), with the reason.',
+    payload: z.strictObject({ inspectionId: z.uuid(), workOrderId: z.uuid(), number: z.string() }),
+    live: { permission: 'quality.inspections.view', floor: true, fields: ['inspectionId', 'workOrderId', 'number'] },
+  }),
+  defineEvent({
+    type: 'quality.garments_released',
+    context: 'quality',
+    description: "Garments of a work order's cell were released to be packed and shipped (QHS-058), by an inspector who made none of them; why a second person signed, if one had to.",
+    payload: z.strictObject({
+      releaseId: z.uuid(),
+      inspectionId: z.uuid(),
+      workOrderId: z.uuid(),
+      number: z.string(),
+      workOrderSizeId: z.uuid(),
+      quantity: z.number().int(),
+      serialIds: z.array(z.uuid()),
+      secondPersonReasons: z.array(z.enum(SECOND_PERSON_REASONS)),
+      postedBy: z.enum(['FLOOR', 'OFFICE']),
+    }),
+    live: { permission: 'quality.inspections.view', floor: true, fields: ['releaseId', 'workOrderId', 'number', 'workOrderSizeId'] },
+  }),
+  defineEvent({
+    type: 'quality.release_reversed',
+    context: 'quality',
+    description: 'Released garments were taken back before they shipped (corrective action, Reg. 2016/425 art. 8(8)); serials back to rework or scrapped; the PPE register entry it opened.',
+    payload: z.strictObject({
+      reversalId: z.uuid(),
+      releaseId: z.uuid(),
+      workOrderId: z.uuid(),
+      number: z.string(),
+      workOrderSizeId: z.uuid(),
+      quantity: z.number().int(),
+      reasonCode: z.enum(REVERSAL_REASONS),
+      serialIds: z.array(z.uuid()),
+      serialsTo: z.enum(SERIALS_TO).nullable(),
+      registerEntryId: z.uuid().nullable(),
+    }),
+    live: { permission: 'quality.inspections.view', floor: true, fields: ['reversalId', 'releaseId', 'workOrderId', 'number', 'workOrderSizeId'] },
+  }),
+  defineEvent({
+    type: 'quality.release_rule_changed',
+    context: 'quality',
+    description: 'Who releases finished garments changed (Owner answer Q1): the four-eyes rule or the customers that always need a second person, for a company or tenant-wide.',
+    payload: z.strictObject({
+      companyId: z.uuid().nullable(),
+      releaseFourEyes: z.enum(FOUR_EYES_RULES).nullable(),
+      previousRule: z.enum(FOUR_EYES_RULES).nullable(),
+      customersAdded: z.array(z.uuid()),
+      customersRemoved: z.array(z.uuid()),
+      loosened: z.boolean(),
+    }),
+    live: { permission: 'quality.inspections.view', fields: ['companyId', 'releaseFourEyes'] },
   }),
 ] as const

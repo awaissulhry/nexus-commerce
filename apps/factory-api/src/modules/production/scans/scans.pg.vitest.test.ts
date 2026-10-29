@@ -394,9 +394,9 @@ describe('a bundle through its operations (MES-069, MES-090): one tap, each oper
     expect(wip.cells).toEqual([{ workOrderSizeId: WO.flow.cells[0].id, colourwayCode: 'BLK', size: '50', quantity: 12, bundled: 12, sewn: 4, finished: 0, scrapped: 1, inRework: 0 }])
     expect(wip).toMatchObject({ allFinished: false, readyToComplete: false, correctionsWaiting: 0 })
     expect(keysOf(wip).filter((name) => /worker|station/i.test(name) || MONEY.test(name))).toEqual([])
-    // The work order record's size grid: cut, sewn and finished per cell.
+    // The work order record's size grid: cut, bundled, sewn and finished per cell.
     const { workOrder } = await ok('planner', 'GET', `/production/work-orders/${WO.flow.id}`)
-    expect(workOrder.cells.map((cell: Json) => cell.progress)).toEqual([{ cut: 12, sewn: 4, finished: 0 }])
+    expect(workOrder.cells.map((cell: Json) => cell.progress)).toEqual([{ cut: 12, bundled: 12, sewn: 4, finished: 0 }])
     expect(workOrder.progress.counted).toBe(true)
     // The site's floor at a glance: every open work order with its operations.
     const site = await ok('supervisor', 'GET', `/production/scans/wip?siteId=${A.siteA1}`)
@@ -709,7 +709,7 @@ describe('the work order completes when every garment is finished (by the office
     expect(wip.cells).toEqual([expect.objectContaining({ quantity: 6, sewn: 6, finished: 6 })])
     expect(wip).toMatchObject({ allFinished: true, readyToComplete: true })
     const { workOrder: record } = await ok('planner', 'GET', `/production/work-orders/${WO.done.id}`)
-    expect(record.cells.map((cell: Json) => cell.progress)).toEqual([{ cut: 6, sewn: 6, finished: 6 }])
+    expect(record.cells.map((cell: Json) => cell.progress)).toEqual([{ cut: 6, bundled: 6, sewn: 6, finished: 6 }])
     const completed = await ok('planner', 'POST', `/production/work-orders/${WO.done.id}/complete`, {})
     expect(completed.workOrder.status).toBe('COMPLETED')
     expect((await wipOf(WO.done.id)).readyToComplete).toBe(false)

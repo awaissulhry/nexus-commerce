@@ -9,12 +9,14 @@ import { baseQuantityOf } from '@nexus/factory-domain/inventory/ledger/units'
 import { PRODUCTION_CUT, PRODUCTION_CUT_CORRECT } from '@nexus/factory-domain/production/cutting/permissions'
 import {
   cellLabel,
+  closesHide,
   correctionRefusal,
   cutDecision,
   cuttableRefusal,
   floorReadyRefusal,
   partsOf,
   piecesOf,
+  stateAfterReversal,
   undoRefusal,
   type CutCell,
   type CutPiece,
@@ -33,6 +35,7 @@ import { LEDGER_SELECT, postMoves, type PostedMove } from '../../inventory/ledge
 import { floorRecordSubjectFor } from '../settings/subject'
 import {
   deviceStationOf,
+  lastLiveEntryOf,
   latestEntryOf,
   readBundlesOf,
   readCells,
@@ -356,8 +359,19 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
     remnant = posted[0] ?? null
   }
   if (decision.hideState !== hide.state) {
-    await tx.hide.update({ where: { id: hide.id }, data: { state: decision.hideState, version: { increment: 1 } }, select: { id: true } })
-    tools.audit({ action: 'production.hideState', recordType: 'Hide', recordId: hide.id, companyId: workOrder.companyId, siteId: workOrder.siteId, before: { state: hide.state }, after: { state: decision.hideState } })
+    // A used-up hide names its closing entry: this one, or (Hide done used nothing more) the last cut that took what was
+    // left. Reversing that entry, and only that one, opens the hide again (the …_production_leftovers_guards triggers).
+    const closingCutLogId = decision.hideState === 'CONSUMED' ? (entry?.id ?? (await lastLiveEntryOf(tx, workOrder.siteId, workOrder.id, hide.id))) : null
+    await tx.hide.update({ where: { id: hide.id }, data: { state: decision.hideState, closingCutLogId, version: { increment: 1 } }, select: { id: true } })
+    tools.audit({
+      action: 'production.hideState',
+      recordType: 'Hide',
+      recordId: hide.id,
+      companyId: workOrder.companyId,
+      siteId: workOrder.siteId,
+      before: { state: hide.state },
+      after: { state: decision.hideState, ...(closingCutLogId ? { closingCutLogId } : {}) },
+    })
   }
   const cellsCut = entry ? cellTotals(decision.entry!.pieces) : []
   tools.audit({
@@ -489,7 +503,9 @@ async function reverseInCommand(tools: CommandTools, original: EntryRow, options
   await lockHideCuts(tx, context.tenantId, original.siteId, original.hideId)
   const hide = (await readHideById(tx, original.hideId))!
   const reversed = (await tx.cutLog.count({ where: { reversalOfId: original.id } })) > 0
-  const facts = { entry: { reversalOfId: original.reversalOfId, reversed }, workOrder, hide, bundles: await readBundlesOf(tx, original.id) }
+  const facts = { entry: { id: original.id, reversalOfId: original.reversalOfId, reversed }, workOrder, hide, bundles: await readBundlesOf(tx, original.id) }
+  // The closing entry of a used-up hide: its reversal opens the hide again (B-W1-40's gap: a wrong closing cut).
+  const reopens = closesHide(facts)
   if (options.undo) {
     const floor = context as FloorContext
     const own = original.deviceId === floor.deviceId && (original.createdById === null || original.createdById === floor.actorId)
@@ -533,18 +549,26 @@ async function reverseInCommand(tools: CommandTools, original: EntryRow, options
   })
   // The undo of Hide done takes its remnant back to the work order too (while it is still where it went).
   let remnantReturnReversed = false
-  let hideState: HideState = hide.state
   if (options.undo) {
     const move = await tx.stockMove.findFirst({ where: { idempotencyKey: remnantKey(original.id) }, select: LEDGER_SELECT })
     if (move && (await tx.stockMove.count({ where: { reversalOfId: move.id } })) === 0) {
       await postMoves(tools, [{ ...reversalOf({ ...move, quantity: move.quantity.toString(), baseQuantity: move.baseQuantity.toString() }, options.reason), uom: move.uom }], { key: `${options.key}:remnant`, issuePath: () => 'body' })
       remnantReturnReversed = true
-      if (hide.state === 'REMNANT') hideState = 'PARTLY_CUT'
     }
   }
+  // After the mirror (the Hide trigger opens a used-up hide only once its closing entry is reversed).
+  const hideState: HideState = stateAfterReversal({ state: hide.state, reopens, remnantReturnReversed })
   if (hideState !== hide.state) {
-    await tx.hide.update({ where: { id: hide.id }, data: { state: hideState, version: { increment: 1 } }, select: { id: true } })
-    tools.audit({ action: 'production.hideState', recordType: 'Hide', recordId: hide.id, companyId: workOrder.companyId, siteId: workOrder.siteId, before: { state: hide.state }, after: { state: hideState } })
+    await tx.hide.update({ where: { id: hide.id }, data: { state: hideState, ...(reopens ? { closingCutLogId: null } : {}), version: { increment: 1 } }, select: { id: true } })
+    tools.audit({
+      action: 'production.hideState',
+      recordType: 'Hide',
+      recordId: hide.id,
+      companyId: workOrder.companyId,
+      siteId: workOrder.siteId,
+      before: { state: hide.state, ...(reopens ? { closingCutLogId: original.id } : {}) },
+      after: { state: hideState },
+    })
   }
   const action = options.undo ? 'production.undoCut' : 'production.correctCut'
   tools.audit({ action, recordType: 'CutLog', recordId: id, companyId: workOrder.companyId, siteId: workOrder.siteId, after: { reversalOfId: original.id, hideId: original.hideId, baseAreaUsed: text(original.baseAreaUsed), remnantReturnReversed }, reason: options.reason })
