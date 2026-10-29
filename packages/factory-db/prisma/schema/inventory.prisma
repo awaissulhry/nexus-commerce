@@ -227,6 +227,9 @@ model Lot {
   hides       Hide[]
   moves       StockMove[]
   valuations  StockValuation[]
+  // quality.prisma: its lab results (the Cr VI result's history) and supplier documents (B-W1-34).
+  labResults  LabResult[]
+  documents   LotDocument[]
 
   @@unique([tenantId, code])
   // The target of the hides', moves' and valuations' references: a lot of the same site and item.

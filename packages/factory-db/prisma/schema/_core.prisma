@@ -129,8 +129,9 @@ model Company {
   quotes               Quote[]
   salesOrders          SalesOrder[]
   depositRequests      DepositRequest[]
-  // quality.prisma: its PPE register.
+  // quality.prisma: its PPE register and its quality settings (the Cr VI evidence rule).
   ppeRegisterEntries   PpeRegisterEntry[]
+  qualitySettings      QualitySettings[]
   // money.prisma: its invoices and the payments it received.
   invoices             Invoice[]
   payments             Payment[]
@@ -200,6 +201,9 @@ model Site {
   inspections             Inspection[]
   qualityReleases         QualityRelease[]
   qualityReleaseReversals QualityReleaseReversal[]
+  // quality.prisma: the lab results and supplier documents of its lots.
+  labResults              LabResult[]
+  lotDocuments            LotDocument[]
   // shipping.prisma: its shipping settings, the shipments that leave it and their DDTs.
   shippingSettings   ShippingSettings[]
   shipments          Shipment[]

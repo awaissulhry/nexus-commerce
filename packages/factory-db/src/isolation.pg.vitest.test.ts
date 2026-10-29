@@ -22,6 +22,7 @@ import { seed as seedPrivacy } from '../seed/privacy'
 import { seed as seedProduct } from '../seed/product'
 import { seed as seedProduction } from '../seed/production'
 import { seed as seedQuality } from '../seed/quality'
+import { seed as seedQualityLab } from '../seed/quality-lab'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
 import { seed as seedShipping } from '../seed/shipping'
@@ -150,6 +151,8 @@ beforeAll(async () => {
   await seedMoney({ db: factory, namespace: 'iso-b' })
   await seedCosting({ db: factory, namespace: 'iso-a' })
   await seedCosting({ db: factory, namespace: 'iso-b' })
+  await seedQualityLab({ db: factory, namespace: 'iso-a' })
+  await seedQualityLab({ db: factory, namespace: 'iso-b' })
 }, 60_000)
 
 afterAll(async () => {
@@ -201,12 +204,14 @@ it('covers every classified table and every runtime role', () => {
     'InvoiceLine',
     'Item',
     'ItemColour',
+    'LabResult',
     'LabelTemplate',
     'LabourRate',
     'Line',
     'LinkEvidence',
     'Location',
     'Lot',
+    'LotDocument',
     'MaterialRequirement',
     'MeasurementPoint',
     'MeasurementProfile',
@@ -239,6 +244,7 @@ it('covers every classified table and every runtime role', () => {
     'PurchaseOrderLine',
     'QualityRelease',
     'QualityReleaseReversal',
+    'QualitySettings',
     'Quote',
     'QuoteAcceptance',
     'QuoteApproval',

@@ -36,6 +36,13 @@
 // recalls, kept and exported for the authorities. With a brand label the brand is the legal maker and keeps the
 // register; the factory keeps the same records to hand over (PLAN §2.8). An entry is closed, never deleted.
 //
+// The lab step for incoming lots (B-W1-34; QHS-029, QHS-030, SCM-117; REACH Annex XVII entry 47; Owner question Q14):
+// a lot's chromium VI results with their reports (LabResult, append-only: the history behind the Lot's own Cr VI columns,
+// which stay the gate for release, issue and planning), its supplier documents (LotDocument: the PPE component's
+// certificate or declaration, an LWG certificate, a test report), and what counts as Cr VI evidence (QualitySettings, a
+// row per company or tenant-wide). A result's verdict is computed against the lot's limit, never typed (the
+// …_quality_lab_guards trigger checks it again); a later FAIL is a new row that supersedes the PASS.
+//
 // Who sees what (ownership/quality.json): the office reads and writes (releases and their reversals are the office's);
 // the floor reads its OWN site's inspections, defects, releases, reversals and serials, records inspections and their
 // defects (a floor inspector, signed in) and the serials of the final operation; portal and link sessions read nothing here (the Declaration of Conformity reaches a customer
@@ -381,4 +388,153 @@ enum PpeRegisterRisk {
   NO
   ASSESSING
   YES
+}
+
+/// What counts as chromium VI evidence (Owner question Q14, B-W1-34; REACH Annex XVII entry 47) for a company, or
+/// tenant-wide. The row's id is the company's id, or the tenant's own id for the tenant-wide row (companyId null), as
+/// SalesSettings: a company's own row wins; no row at all: the domain's default (factory-domain quality/lab/rules
+/// DEFAULT_EVIDENCE_RULE, Q14 (a)). The legal limit, 3 mg/kg, is not a setting; a brand's lower limit is the material's
+/// (Item.crViLimitMgKg). Loosening the rule (a lab report for every lot → a supplier report) asks for a fresh step-up.
+model QualitySettings {
+  /// The company's id; the tenant's id for the tenant-wide row (companyId null).
+  id               String           @id @db.Uuid
+  tenantId         String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: the tenant-wide settings.
+  companyId        String?          @db.Uuid
+  crViEvidenceRule CrViEvidenceRule @default(SUPPLIER_REPORT_ACCEPTED)
+  version          Int              @default(1)
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?          @db.Uuid
+
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId])
+}
+
+/// What counts as chromium VI evidence (Q14).
+enum CrViEvidenceRule {
+  /// (a) A supplier report that covers the article and the period counts, as does a lab report on the lot (the default).
+  SUPPLIER_REPORT_ACCEPTED
+  /// (b) Only a lab report on the lot itself counts.
+  LOT_REPORT_REQUIRED
+}
+
+/// One lab result of a lot (QHS-029; B-W1-34): the test, its method (EN ISO 17075-1 or -2 for chromium VI), the measured
+/// value in mg/kg or "below the detection limit" with that limit, the limit it was judged against (the lot's), the
+/// verdict computed from them (below the limit PASS, at or above it FAIL; below a detection limit only when that limit is
+/// at or below the lot's), the lab and its report number, the day of the test, the evidence it is (a lab report on this
+/// lot, or the supplier's report covering an article and a period) and the report file. A later FAIL on new evidence is a
+/// new row that names the result it supersedes. Kept as written: a mistake is a new result.
+/// @append-only
+model LabResult {
+  id                  String       @id @db.Uuid
+  tenantId            String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId           String       @db.Uuid
+  siteId              String       @db.Uuid
+  /// The lot's item (the reference to the lot names it).
+  itemId              String       @db.Uuid
+  lotId               String       @db.Uuid
+  test                LabTest
+  /// The method as written on the report ("EN ISO 17075-1").
+  method              String
+  /// The measured content, mg/kg; null below the detection limit.
+  valueMgKg           Decimal?     @db.Decimal(8, 3)
+  /// "Not detected": below the lab's detection limit (detectionLimitMgKg), exactly when there is no value.
+  belowDetectionLimit Boolean      @default(false)
+  detectionLimitMgKg  Decimal?     @db.Decimal(8, 3)
+  /// mg/kg for chromium VI.
+  unit                String
+  /// The limit it was judged against: the lot's own (Lot.crViLimitMgKg).
+  limitMgKg           Decimal      @db.Decimal(8, 3)
+  verdict             LabVerdict
+  /// The laboratory, as on its report.
+  lab                 String
+  reportNumber        String?
+  testedOn            DateTime     @db.Date
+  evidence            CrViEvidence
+  /// A supplier report: the article it covers and its period (both days included); none for a lab report on the lot.
+  article             String?
+  periodFrom          DateTime?    @db.Date
+  periodTo            DateTime?    @db.Date
+  /// The report: a CERTIFICATE file of this lot, or of the lot whose supplier report it reuses.
+  fileId              String       @db.Uuid
+  /// The earlier result of the same lot a later FAIL supersedes.
+  supersedesId        String?      @db.Uuid
+  note                String?
+  createdAt           DateTime     @default(now()) @db.Timestamptz(3)
+  createdById         String?      @db.Uuid
+
+  site         Site        @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot          Lot         @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  file         StoredFile  @relation(fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and lotId.
+  supersedes   LabResult?  @relation("LabResultSupersedes", fields: [tenantId, lotId, supersedesId], references: [tenantId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+  supersededBy LabResult[] @relation("LabResultSupersedes")
+
+  // The target of a superseding result's reference: a result of the same lot.
+  @@unique([tenantId, lotId, id])
+  // A lot's results, newest first.
+  @@index([tenantId, lotId, createdAt])
+  // The results resting on one report (a supplier report reused for another lot of the article).
+  @@index([tenantId, fileId])
+}
+
+/// The tests a lab result records (W1: chromium VI; tear strength, rub fastness, abrasion come with W2b).
+enum LabTest {
+  CR_VI
+}
+
+enum LabVerdict {
+  PASS
+  FAIL
+}
+
+/// A supplier document of a lot (QHS-030; B-W1-34): what it is, its file (a CERTIFICATE file of the lot) and the last day
+/// it is valid. A certified PPE component's lot is released only with a valid PPE_CERTIFICATE document. Its content never
+/// changes; a document no longer in force is ARCHIVED, never deleted.
+model LotDocument {
+  id          String            @id @db.Uuid
+  tenantId    String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String            @db.Uuid
+  siteId      String            @db.Uuid
+  /// The lot's item (the reference to the lot names it).
+  itemId      String            @db.Uuid
+  lotId       String            @db.Uuid
+  kind        LotDocumentKind
+  fileId      String            @db.Uuid
+  /// The last day it is valid; null: no end.
+  validTo     DateTime?         @db.Date
+  status      LotDocumentStatus @default(ACTIVE)
+  /// What it is (required for OTHER).
+  note        String?
+  version     Int               @default(1)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?           @db.Uuid
+
+  site Site       @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot  Lot        @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  file StoredFile @relation(fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, lotId])
+  @@index([tenantId, fileId])
+}
+
+/// What a supplier document of a lot is.
+enum LotDocumentKind {
+  /// The PPE component's certificate or declaration from the supplier (EN 1621 protectors).
+  PPE_CERTIFICATE
+  /// The supplier's chromium VI statement.
+  CR_VI_STATEMENT
+  /// The tannery's Leather Working Group certificate.
+  LWG_CERTIFICATE
+  FABRIC_TEST
+  OTHER
+}
+
+enum LotDocumentStatus {
+  ACTIVE
+  /// No longer in force (replaced, withdrawn); kept.
+  ARCHIVED
 }
