@@ -20,7 +20,7 @@ export async function scanSubjectFor(tx: Pick<CommandTx, 'productionSettings'>, 
 
 /**
  * The worker acknowledged the information notice that counts at the site (the database's rule for naming them, B-W1-36:
- * the worker notice in force at the site's company; before the company ever published one, any acknowledgement).
+ * the worker notice in force at the site's company; none counts while it has none in force).
  */
 export async function hasAcknowledgedNotice(tx: Pick<CommandTx, 'workerNoticeAck' | 'site' | 'privacyNotice'>, siteId: string, workerId: string): Promise<boolean> {
   return acknowledgedInForce(tx, siteId, workerId)

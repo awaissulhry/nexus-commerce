@@ -9,8 +9,8 @@
 -- this session cannot see (another tenant's): the policies refuse that write anyway. A trigger reads only tables (and
 -- columns) the role that fires it may read, and locks a row FOR SHARE only where that role may update it.
 --
--- It also redefines production's subject check (202610283801_production_guards): once a company has published a worker
--- notice, a scan or a cut log names a worker only when that worker acknowledged the version in force.
+-- It also redefines production's subject check (202610283801_production_guards): a scan or a cut log names a worker only
+-- when that worker acknowledged the worker notice in force at the site's company; without one in force, no worker.
 
 CREATE FUNCTION "factory_privacy_refuse_truncate"() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -357,19 +357,20 @@ CREATE TRIGGER "StaffNoticeAck_check" BEFORE INSERT ON "StaffNoticeAck"
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- WorkerNoticeAck, INSERT, the notice it names (PLT-208, SCR-025; Statuto dei Lavoratori art. 4 c.3; GDPR art. 13). Beside
--- production's own check (factory_worker_notice_ack_check): an acknowledgement that names a notice names the
--- WORKER_FLOOR notice in force of the worker's site's company, by its label, and the fingerprint of one of its texts in
--- the language shown. One without a notice (recorded before the company published one in Nexus) is not checked here:
--- it counts only while the company has never published one (factory_production_check_subject, below).
+-- production's own check (factory_worker_notice_ack_check): every new acknowledgement names the WORKER_FLOOR notice in
+-- force of the worker's site's company and the fingerprint of one of its texts in the language shown. Its label
+-- ("noticeVersion") is the API's copy of the notice's (the generated isolation test copies a row with its unique text
+-- columns suffixed, so it is not compared here); the unique key keeps one per worker and label.
 CREATE FUNCTION "factory_worker_notice_ack_notice_check"() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
   notice record;
   site_company uuid;
 BEGIN
   IF NEW."noticeId" IS NULL THEN
-    RETURN NEW;
+    RAISE EXCEPTION 'privacy: notice acknowledgement % names the worker notice it acknowledges', NEW."id"
+      USING ERRCODE = 'check_violation';
   END IF;
-  SELECT n."kind"::text AS kind, n."status"::text AS status, n."companyId", n."label" INTO notice FROM "PrivacyNotice" n WHERE n."tenantId" = NEW."tenantId" AND n."id" = NEW."noticeId";
+  SELECT n."kind"::text AS kind, n."status"::text AS status, n."companyId" INTO notice FROM "PrivacyNotice" n WHERE n."tenantId" = NEW."tenantId" AND n."id" = NEW."noticeId";
   IF NOT FOUND THEN
     -- Outside this session's scope: the policies refuse the row.
     RETURN NEW;
@@ -377,10 +378,6 @@ BEGIN
   SELECT s."companyId" INTO site_company FROM "Site" s WHERE s."tenantId" = NEW."tenantId" AND s."id" = NEW."siteId";
   IF notice.kind <> 'WORKER_FLOOR' OR notice.status <> 'PUBLISHED' OR (site_company IS NOT NULL AND notice."companyId" <> site_company) THEN
     RAISE EXCEPTION 'privacy: a worker acknowledges the worker notice in force of their site''s company; notice % is a % % one', NEW."noticeId", notice.status, notice.kind
-      USING ERRCODE = 'check_violation';
-  END IF;
-  IF NEW."noticeVersion" <> notice."label" THEN
-    RAISE EXCEPTION 'privacy: notice acknowledgement % names notice % by its label %', NEW."id", NEW."noticeId", notice."label"
       USING ERRCODE = 'check_violation';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM "PrivacyNoticeText" t WHERE t."tenantId" = NEW."tenantId" AND t."noticeId" = NEW."noticeId" AND t."locale" = NEW."locale" AND t."sha256" = NEW."noticeSha256") THEN
@@ -398,11 +395,11 @@ CREATE TRIGGER "WorkerNoticeAck_notice_check" BEFORE INSERT ON "WorkerNoticeAck"
 -- Who a floor record names (Statuto dei Lavoratori art. 4; PLAN §2.8; MES-278, PLT-208; Q16), as
 -- 202610283801_production_guards defined it, now with the notice in force (B-W1-36). A site whose floor rules record the
 -- STATION names its station and no worker; any other site (WORKER, the default, also without a row) names the
--- signed-in worker, and only a worker who has acknowledged the information notice: once the site's company has
--- published a worker notice in Nexus, the version in force (an acknowledgement of an earlier version, or of none, does
--- not count: art. 4 c.3, the workers are told what the tools record before anything is recorded; GDPR art. 13);
--- before that, any acknowledgement on record (as in B-W1-37; the floor is not ready then anyway: platform/privacy
--- floorPrivacyReady). Called by the cut log and scan triggers for a row inside the session's scope.
+-- signed-in worker, and only a worker who has acknowledged the worker notice IN FORCE at the site's company (art. 4 c.3:
+-- the workers are told what the tools record before anything is recorded; GDPR art. 13): an acknowledgement of an
+-- earlier version does not count, and while the company has no notice in force no record names a worker at all (the
+-- API's gate says the same: platform/privacy floorPrivacyReady). Called by the cut log and scan triggers for a row
+-- inside the session's scope.
 CREATE OR REPLACE FUNCTION "factory_production_check_subject"(tenant uuid, site uuid, worker uuid, station uuid, what text, row_id uuid) RETURNS void LANGUAGE plpgsql AS $$
 DECLARE
   subject text;
@@ -429,11 +426,8 @@ BEGIN
       RAISE EXCEPTION 'production: worker % has not acknowledged the information notice in force (version %); no % names a worker before that (Statuto dei Lavoratori art. 4 c.3, GDPR art. 13)', worker, in_force."label", what
         USING ERRCODE = 'check_violation';
     END IF;
-  ELSIF EXISTS (SELECT 1 FROM "PrivacyNotice" n WHERE n."tenantId" = tenant AND n."companyId" = company AND n."kind" = 'WORKER_FLOOR' AND n."status" = 'SUPERSEDED') THEN
-    RAISE EXCEPTION 'production: the company of site % has no worker notice in force; no % names a worker (Statuto dei Lavoratori art. 4 c.3, GDPR art. 13)', site, what
-      USING ERRCODE = 'check_violation';
-  ELSIF NOT EXISTS (SELECT 1 FROM "WorkerNoticeAck" a WHERE a."tenantId" = tenant AND a."siteId" = site AND a."workerId" = worker) THEN
-    RAISE EXCEPTION 'production: worker % has not acknowledged the information notice; no % names a worker before that (Statuto dei Lavoratori art. 4 c.3, GDPR art. 13)', worker, what
+  ELSE
+    RAISE EXCEPTION 'production: the company of site % has no worker notice in force; no % names a worker before workers acknowledged one (Statuto dei Lavoratori art. 4 c.3, GDPR art. 13)', site, what
       USING ERRCODE = 'check_violation';
   END IF;
 END

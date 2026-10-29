@@ -4,39 +4,40 @@ import { NoticeAckChannel, PrivacyDpiaStatus, PrivacyNoticeKind, PrivacyNoticeSt
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedAuth } from './auth'
 import { seed as seedFiles } from './files'
-import { seed as seedProduction, type ProductionSeed } from './production'
+import { seed as seedFloorAuth } from './floor-auth'
 
 /**
  * The privacy seed (B-W1-36), per tenant of seed/_core.ts, for company A, written as the app does: the office's rows in
  * the tenant's office scope, the worker's acknowledgement in plant A1's floor scope with the operator signed in on the
  * cutting tablet.
  *
- *   worker notice   version 2026-11 PUBLISHED (Italian and English screens) after the production seed's floor day; the
- *                   operator acknowledged it on the tablet; version 2026-12 is a DRAFT (Italian only so far). The team
- *                   leader has acknowledged nothing: no scan names them.
- *   staff notice    version 2026-11 PUBLISHED; the seed's member acknowledged it at sign-in.
- *   public notice   version 2026-11 PUBLISHED: what `/privacy/<company A>` shows.
+ *   worker notice   version 2026-10 PUBLISHED (Italian and English screens), and the operator's acknowledgement of it on
+ *                   the tablet (`seedWorkerNotice`: the production seed runs it first, as a floor record names a worker
+ *                   only once they acknowledged the notice in force, …_privacy_guards); version 2026-11 is a DRAFT
+ *                   (Italian only so far). The team leader has acknowledged nothing: no scan names them.
+ *   staff notice    version 2026-10 PUBLISHED; the seed's member acknowledged it at sign-in.
+ *   public notice   version 2026-10 PUBLISHED: what `/privacy/<company A>` shows.
  *   DPIA            version 1 STORED with its signed PDF (a file row: no object is in any store), signed and stored on
  *                   2026-11-12, reviewed on 2027-11-12; version 2 is a DRAFT. Company A's floor is ready; company B has
  *                   nothing, so its floor stays shut (the gate's words).
  *   register        three processing activities of company A (floor scans, office staff, business contacts).
  *
  * EVERY TEXT HERE IS A MADE-UP SAMPLE and says so: the real notices and the DPIA come from the company's privacy
- * consultant. The CLI runs the seeds in name order and privacy comes before production: run the seeds this one builds on
- * first (all idempotent). The production seed's acknowledgement (version 2026-10, recorded before any notice was
- * published here) stays: once 2026-11 is in force it no longer counts.
+ * consultant. The CLI runs the seeds in name order (privacy before production): this seed runs the floor sign-in, auth
+ * and files seeds it builds on first (all idempotent), never the production seed (which runs `seedWorkerNotice`).
  *
  * The generated isolation tests copy the FIRST row of each table by id and insert the copy: a notice is written as a
  * DRAFT, a language only while its notice is a DRAFT, a DPIA as a DRAFT without its PDF, an acknowledgement only of the
- * version in force. So the DRAFT worker notice 2026-12, its Italian text and the DRAFT DPIA get ids that start with
- * eight zeros, and the rows this seed adds to other modules' tables (the operator's acknowledgement, the DPIA's file)
- * ids that start with eight f's. Idempotent: each step runs once and is skipped when its rows exist.
+ * version in force (the operator's is the only one, so its copy names it). So the DRAFT worker notice 2026-11, its
+ * Italian text and the DRAFT DPIA get ids that start with eight zeros, and the DPIA's file row (another module's table)
+ * an id that starts with eight f's. Idempotent: each step runs once and is skipped when its rows exist.
  */
 
 const T = {
   dpiaStored: new Date('2026-11-12T09:00:00.000Z'),
-  published: new Date('2026-11-17T07:00:00.000Z'),
-  acknowledged: new Date('2026-11-17T07:30:00.000Z'),
+  published: new Date('2026-11-14T07:00:00.000Z'),
+  // The production seed's floor day starts with it (2026-11-16).
+  acknowledged: new Date('2026-11-16T06:00:00.000Z'),
   staffAcknowledged: new Date('2026-11-17T08:30:00.000Z'),
   drafted: new Date('2026-11-20T09:00:00.000Z'),
 } as const
@@ -64,7 +65,7 @@ const TEXTS: Readonly<Record<'worker' | 'workerDraft' | 'staff' | 'public', Read
     ].join('\n\n'),
   },
   workerDraft: {
-    it: [SAMPLE_IT, 'Bozza della versione 2026-12: aggiunge i tempi di conservazione.'].join('\n\n'),
+    it: [SAMPLE_IT, 'Bozza della versione 2026-11: aggiunge i tempi di conservazione.'].join('\n\n'),
   },
   staff: {
     it: [SAMPLE_IT, "Cosa conserva il sistema di chi lavora in ufficio: chi ha cambiato cosa (registro delle modifiche) e la posta di lavoro tenuta sulle schede."].join('\n\n'),
@@ -76,15 +77,18 @@ const TEXTS: Readonly<Record<'worker' | 'workerDraft' | 'staff' | 'public', Read
   },
 }
 
-export interface PrivacySeed {
-  readonly production: ProductionSeed
-  readonly companyId: string
-  /** Company A's notices in force (2026-11), and the DRAFT worker notice 2026-12. */
+export interface WorkerNoticeSeed {
+  /** Company A's worker notice 2026-10, in force, and the operator's acknowledgement of it (A1, the cutting tablet). */
   readonly workerNoticeId: string
+  readonly operatorAckId: string
+}
+
+export interface PrivacySeed extends WorkerNoticeSeed {
+  readonly companyId: string
+  /** Company A's staff and public notices in force (2026-10), and the DRAFT worker notice 2026-11. */
   readonly workerDraftId: string
   readonly staffNoticeId: string
   readonly publicNoticeId: string
-  readonly operatorAckId: string
   readonly staffAckId: string
   /** The stored DPIA, its PDF's file row, and the DRAFT that follows it. */
   readonly dpiaId: string
@@ -95,89 +99,124 @@ export interface PrivacySeed {
 
 const sha256 = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex')
 
-export async function seed(context: SeedContext): Promise<PrivacySeed> {
-  const { db, namespace } = context
-  const production = await seedProduction(context)
-  const { memberId } = await seedAuth(context)
-  await seedFiles(context)
+/** The ids and scopes of a namespace's tenant (seed/_core.ts) the privacy rows use. */
+function idsOf(namespace: string) {
   const id = (key: string): string => seedUuid(namespace, key)
-  /** Ids that sort first, and ids that sort last (see above). */
-  const firstId = (key: string): string => `00000000${id(key).slice(8)}`
-  const lastId = (key: string): string => `ffffffff${id(key).slice(8)}`
   const tenantId = id('tenant')
   const actorId = id('actor')
-  const companyA = id('company:A')
-  const siteA = id('site:A1')
-  const store = id('files:account:r2')
-  const office = { audience: 'office' as const, tenantId, actorId }
-  const stamp = (at: Date, by: string = actorId) => ({ createdAt: at, updatedAt: at, createdById: by })
+  return {
+    id,
+    /** Ids that sort first, and ids that sort last (see above). */
+    firstId: (key: string): string => `00000000${id(key).slice(8)}`,
+    lastId: (key: string): string => `ffffffff${id(key).slice(8)}`,
+    tenantId,
+    actorId,
+    companyA: id('company:A'),
+    siteA: id('site:A1'),
+    office: { audience: 'office' as const, tenantId, actorId },
+    stamp: (at: Date, by: string = actorId) => ({ createdAt: at, updatedAt: at, createdById: by }),
+  }
+}
 
-  const workerNoticeId = id('privacy:notice:A:WORKER_FLOOR:1')
+interface NoticeSpec {
+  readonly noticeId: string
+  readonly kind: PrivacyNoticeKind
+  readonly versionNo: number
+  readonly label: string
+  readonly texts: Readonly<Record<string, string>>
+  readonly at: Date
+  readonly publish: boolean
+  /** Its Italian text sorts first among the texts (the isolation copy test copies a DRAFT's language). */
+  readonly firstText: boolean
+}
+
+/** A notice of company A written as a DRAFT with its languages, then published (unless a draft); once. */
+async function writeNotice(db: SeedContext['db'], ids: ReturnType<typeof idsOf>, notice: NoticeSpec): Promise<void> {
+  await db.withScope(ids.office, (client) =>
+    client.$transaction(async (tx) => {
+      if (await tx.privacyNotice.findUnique({ where: { id: notice.noticeId }, select: { id: true } })) return
+      await tx.privacyNotice.create({
+        data: { id: notice.noticeId, companyId: ids.companyA, kind: notice.kind, versionNo: notice.versionNo, label: notice.label, ...ids.stamp(notice.at) },
+        select: { id: true },
+      })
+      for (const [locale, body] of Object.entries(notice.texts)) {
+        const key = `privacy:text:${notice.noticeId}:${locale}`
+        await tx.privacyNoticeText.create({
+          data: { id: notice.firstText && locale === 'it' ? ids.firstId(key) : ids.id(key), noticeId: notice.noticeId, locale, body, sha256: sha256(body), ...ids.stamp(notice.at) },
+          select: { id: true },
+        })
+      }
+      if (notice.publish) {
+        await tx.privacyNotice.update({
+          where: { id: notice.noticeId },
+          data: { status: PrivacyNoticeStatus.PUBLISHED, publishedAt: notice.at, publishedById: ids.actorId, version: 2, updatedAt: notice.at },
+          select: { id: true },
+        })
+      }
+    }),
+  )
+}
+
+/**
+ * Company A's worker notice 2026-10, published, and plant A1's operator's acknowledgement of it on the cutting tablet:
+ * what a floor record that names the operator needs (the production seed runs it before its floor day).
+ */
+export async function seedWorkerNotice(context: SeedContext): Promise<WorkerNoticeSeed> {
+  const { db, namespace } = context
+  await seedFloorAuth(context)
+  const ids = idsOf(namespace)
+  const workerNoticeId = ids.id('privacy:notice:A:WORKER_FLOOR:1')
+  // The production seed's key from before the privacy pack: its tests know this acknowledgement by it.
+  const operatorAckId = ids.id('production:ack:A1:operator:2026-10')
+  const operatorId = ids.id('worker:A1:operator')
+  const deviceId = ids.id('device:A1:cutting')
+  await writeNotice(db, ids, { noticeId: workerNoticeId, kind: PrivacyNoticeKind.WORKER_FLOOR, versionNo: 1, label: '2026-10', texts: TEXTS.worker, at: T.published, publish: true, firstText: false })
+  await db.withScope({ audience: 'floor', tenantId: ids.tenantId, actorId: operatorId, siteId: ids.siteA }, (client) =>
+    client.$transaction(async (tx) => {
+      if (await tx.workerNoticeAck.findUnique({ where: { id: operatorAckId }, select: { id: true } })) return
+      await tx.workerNoticeAck.create({
+        data: {
+          id: operatorAckId,
+          siteId: ids.siteA,
+          workerId: operatorId,
+          noticeId: workerNoticeId,
+          noticeVersion: '2026-10',
+          locale: 'it',
+          noticeSha256: sha256(TEXTS.worker.it!),
+          channel: NoticeAckChannel.DEVICE,
+          deviceId,
+          deviceTime: T.acknowledged,
+          serverTime: T.acknowledged,
+          createdById: operatorId,
+        },
+        select: { id: true },
+      })
+    }),
+  )
+  return { workerNoticeId, operatorAckId }
+}
+
+export async function seed(context: SeedContext): Promise<PrivacySeed> {
+  const { db, namespace } = context
+  const { workerNoticeId, operatorAckId } = await seedWorkerNotice(context)
+  const { memberId } = await seedAuth(context)
+  await seedFiles(context)
+  const ids = idsOf(namespace)
+  const { id, firstId, lastId, tenantId, actorId, companyA, office, stamp } = ids
+  const store = id('files:account:r2')
+
   const workerDraftId = firstId('privacy:notice:A:WORKER_FLOOR:2')
   const staffNoticeId = id('privacy:notice:A:OFFICE_STAFF:1')
   const publicNoticeId = id('privacy:notice:A:PRIVACY_PUBLIC:1')
   const dpiaId = id('privacy:dpia:A:1')
   const dpiaDraftId = firstId('privacy:dpia:A:2')
   const dpiaFileId = lastId('privacy:file:dpia:A:1')
-  const operatorAckId = lastId('privacy:ack:A1:operator:2026-11')
-  const staffAckId = id('privacy:staff-ack:A:member:2026-11')
+  const staffAckId = id('privacy:staff-ack:A:member:2026-10')
 
-  // --- the notices: each written as a DRAFT with its languages, then published --------------------------------------------
-  const notices = [
-    { noticeId: workerDraftId, kind: PrivacyNoticeKind.WORKER_FLOOR, versionNo: 2, label: '2026-12', texts: TEXTS.workerDraft, at: T.drafted, publish: false, firstText: true },
-    { noticeId: workerNoticeId, kind: PrivacyNoticeKind.WORKER_FLOOR, versionNo: 1, label: '2026-11', texts: TEXTS.worker, at: T.published, publish: true, firstText: false },
-    { noticeId: staffNoticeId, kind: PrivacyNoticeKind.OFFICE_STAFF, versionNo: 1, label: '2026-11', texts: TEXTS.staff, at: T.published, publish: true, firstText: false },
-    { noticeId: publicNoticeId, kind: PrivacyNoticeKind.PRIVACY_PUBLIC, versionNo: 1, label: '2026-11', texts: TEXTS.public, at: T.published, publish: true, firstText: false },
-  ] as const
-  for (const notice of notices) {
-    await db.withScope(office, (client) =>
-      client.$transaction(async (tx) => {
-        if (await tx.privacyNotice.findUnique({ where: { id: notice.noticeId }, select: { id: true } })) return
-        await tx.privacyNotice.create({
-          data: { id: notice.noticeId, companyId: companyA, kind: notice.kind, versionNo: notice.versionNo, label: notice.label, ...stamp(notice.at) },
-          select: { id: true },
-        })
-        for (const [locale, body] of Object.entries(notice.texts)) {
-          const key = `privacy:text:${notice.noticeId}:${locale}`
-          await tx.privacyNoticeText.create({
-            data: { id: notice.firstText && locale === 'it' ? firstId(key) : id(key), noticeId: notice.noticeId, locale, body, sha256: sha256(body), ...stamp(notice.at) },
-            select: { id: true },
-          })
-        }
-        if (notice.publish) {
-          await tx.privacyNotice.update({
-            where: { id: notice.noticeId },
-            data: { status: PrivacyNoticeStatus.PUBLISHED, publishedAt: notice.at, publishedById: actorId, version: 2, updatedAt: notice.at },
-            select: { id: true },
-          })
-        }
-      }),
-    )
-  }
-
-  // --- the operator acknowledges the worker notice in force on the cutting tablet -----------------------------------------
-  await db.withScope({ audience: 'floor', tenantId, actorId: production.operatorId, siteId: siteA }, (client) =>
-    client.$transaction(async (tx) => {
-      if (await tx.workerNoticeAck.findUnique({ where: { id: operatorAckId }, select: { id: true } })) return
-      await tx.workerNoticeAck.create({
-        data: {
-          id: operatorAckId,
-          siteId: siteA,
-          workerId: production.operatorId,
-          noticeId: workerNoticeId,
-          noticeVersion: '2026-11',
-          locale: 'it',
-          noticeSha256: sha256(TEXTS.worker.it!),
-          channel: NoticeAckChannel.DEVICE,
-          deviceId: production.deviceId,
-          deviceTime: T.acknowledged,
-          serverTime: T.acknowledged,
-          createdById: production.operatorId,
-        },
-        select: { id: true },
-      })
-    }),
-  )
+  // --- the other notices: each written as a DRAFT with its languages, then published --------------------------------------
+  await writeNotice(db, ids, { noticeId: workerDraftId, kind: PrivacyNoticeKind.WORKER_FLOOR, versionNo: 2, label: '2026-11', texts: TEXTS.workerDraft, at: T.drafted, publish: false, firstText: true })
+  await writeNotice(db, ids, { noticeId: staffNoticeId, kind: PrivacyNoticeKind.OFFICE_STAFF, versionNo: 1, label: '2026-10', texts: TEXTS.staff, at: T.published, publish: true, firstText: false })
+  await writeNotice(db, ids, { noticeId: publicNoticeId, kind: PrivacyNoticeKind.PRIVACY_PUBLIC, versionNo: 1, label: '2026-10', texts: TEXTS.public, at: T.published, publish: true, firstText: false })
 
   // --- the member acknowledges the staff notice at sign-in ----------------------------------------------------------------
   await db.withScope({ audience: 'office', tenantId, actorId: memberId }, (client) =>
@@ -189,7 +228,7 @@ export async function seed(context: SeedContext): Promise<PrivacySeed> {
           companyId: companyA,
           noticeId: staffNoticeId,
           userId: memberId,
-          noticeVersion: '2026-11',
+          noticeVersion: '2026-10',
           locale: 'en',
           noticeSha256: sha256(TEXTS.staff.en!),
           serverTime: T.staffAcknowledged,
@@ -303,7 +342,6 @@ export async function seed(context: SeedContext): Promise<PrivacySeed> {
   await db.withScope(office, (client) => client.processingActivity.createMany({ data: activities, skipDuplicates: true }))
 
   return {
-    production,
     companyId: companyA,
     workerNoticeId,
     workerDraftId,

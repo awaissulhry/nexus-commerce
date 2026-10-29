@@ -497,9 +497,9 @@ model WorkerNoticeAck {
   workerId       String           @db.Uuid
   /// The notice's version as published ("2026-10"): the label of `notice` when one is named.
   noticeVersion  String
-  /// The WORKER_FLOOR notice version acknowledged (privacy.prisma, B-W1-36): published, of the worker's site's company,
-  /// and the fingerprint is one of its texts in `locale` (the …_privacy_guards triggers). Null only on rows recorded
-  /// before the company published a notice in Nexus: they count only while it has none.
+  /// The WORKER_FLOOR notice version acknowledged (privacy.prisma, B-W1-36): required on every new row, the version in
+  /// force of the worker's site's company, and the fingerprint is one of its texts in `locale` (the …_privacy_guards
+  /// triggers). Null only on a row written before B-W1-36: it counts for nothing.
   noticeId       String?          @db.Uuid
   /// The language it was shown in (ISO 639-1).
   locale         String

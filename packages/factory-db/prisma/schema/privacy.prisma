@@ -17,9 +17,9 @@
 // seeds hold made-up samples only.
 //
 // A floor record (a scan, a cut log) names a worker only after that worker acknowledged the worker notice IN FORCE at
-// their site's company: once a company has published one, an acknowledgement of an earlier version, or of none,
-// no longer counts (the …_privacy_guards triggers redefine production's subject check). The floor's badge scans also
-// wait for a stored DPIA (apps/factory-api platform/privacy readiness: floorPrivacyReady).
+// their site's company: an acknowledgement of an earlier version does not count, and while the company has no notice in
+// force no record names a worker (the …_privacy_guards triggers redefine production's subject check). The floor's badge
+// scans also wait for a stored DPIA (apps/factory-api platform/privacy readiness: floorPrivacyReady).
 //
 // Who sees what (ownership/privacy.json): the office reads and writes everything (the API asks privacy.view or
 // privacy.manage over the company); the floor reads the notices and their texts (the API answers only the published

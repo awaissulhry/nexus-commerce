@@ -146,7 +146,6 @@ const acknowledge = (session: string, body: Json, idempotencyKey: string | null 
   call(session, 'POST', '/privacy/floor/notice/acknowledge', body, idempotencyKey ? { 'idempotency-key': idempotencyKey } : {})
 
 const SAMPLE = {
-  workerIt: 'ESEMPIO - informativa inventata per i test.\n\nIl tablet registra quale fascio hai scansionato, quando e dove.',
   workerEn: 'SAMPLE - made-up notice for tests.\n\nThe tablet records which bundle you scanned, when and where.',
   workerIt2: 'ESEMPIO - versione 2 inventata per i test.\n\nAggiunge per quanto tempo si conservano i dati.',
   staffIt: 'ESEMPIO - informativa per il personale, inventata.',
@@ -199,41 +198,78 @@ describe('the lists of factory-domain', () => {
   }, 60_000)
 })
 
-describe('the floor gate before anything is stored (GDPR art. 35; L. 300/1970 art. 4 c.3)', () => {
-  it('keeps the floor shut without a DPIA and a published worker notice, in words', async () => {
-    const overview = await ok('manager', 'GET', `/privacy/overview?companyId=${A.companyA}`)
-    const [company] = overview.companies
-    expect(company.duties.every((duty: Json) => duty.done === false)).toBe(true)
-    expect(company.duties.find((duty: Json) => duty.key === 'dpia').words).toMatch(/No signed DPIA is stored \(GDPR art\. 35\)/)
-    const a1 = company.sites.find((site: Json) => site.id === A.siteA1)
+describe('the floor gate without a DPIA (GDPR art. 35; L. 300/1970 art. 4 c.3)', () => {
+  it('keeps the floor shut without a stored DPIA, and without a published worker notice, in words', async () => {
+    const overview = await ok('manager', 'GET', '/privacy/overview')
+    const byCompany = new Map(overview.companies.map((entry: Json) => [entry.company.id, entry]))
+    // Company A: the seed's worker notice 2026-10 is in force (the production seed's floor day needs it); no DPIA.
+    const companyA = byCompany.get(A.companyA) as Json
+    expect(companyA.duties.filter((duty: Json) => duty.done).map((duty: Json) => duty.key)).toEqual(['workerNotice'])
+    expect(companyA.duties.find((duty: Json) => duty.key === 'dpia').words).toMatch(/No signed DPIA is stored \(GDPR art\. 35\)/)
+    const a1 = companyA.sites.find((site: Json) => site.id === A.siteA1)
     expect(a1).toMatchObject({ readyForFloor: false })
-    expect(a1.notes).toEqual(expect.arrayContaining([NO_DPIA_NOTE, NO_WORKER_NOTICE_NOTE]))
+    expect(a1.notes[0]).toBe(NO_DPIA_NOTE)
+    expect(a1.notes).not.toContain(NO_WORKER_NOTICE_NOTE)
+    // Company B: nothing at all.
+    const b1 = (byCompany.get(A.companyB) as Json).sites.find((site: Json) => site.id === A.siteB1)
+    expect(b1.notes).toEqual(expect.arrayContaining([NO_DPIA_NOTE, NO_WORKER_NOTICE_NOTE]))
     const status = await h.database.withScope({ audience: 'office', tenantId: A.tenant, actorId: newId() }, (client) => floorPrivacyReady(client, A.companyA, new Date()))
-    expect(status).toMatchObject({ ready: false, dpiaStored: false, workerNoticePublished: false })
+    expect(status).toMatchObject({ ready: false, dpiaStored: false, workerNoticePublished: true })
   }, 60_000)
 })
 
 describe('worker notice versions and the scan gate (PLT-208, SCR-025)', () => {
-  it('a draft stores each language with the SHA-256 of the exact text; publishing needs Italian and English and a fresh code', async () => {
-    const made = await asAdmin('POST', '/privacy/notices', { companyId: A.companyA, kind: 'WORKER_FLOOR', label: '2026-11' })
+  it('v1 in force: the operator who acknowledged it scans; the team leader reads it on the tablet, acknowledges, then scans', async () => {
+    const listed = await ok('manager', 'GET', `/privacy/notices?companyId=${A.companyA}&kind=WORKER_FLOOR`)
+    expect(listed.notices.map((notice: Json) => [notice.label, notice.status])).toEqual([['2026-10', 'PUBLISHED']])
+    v1 = (await ok('manager', 'GET', `/privacy/notices/${listed.notices[0].id}`)).notice
+    for (const language of v1.languages) expect(language.sha256).toBe(sha(language.body))
+    expect(await floorRules('floorOperator')).toBe(true)
+    expect(await scanBy(A.operator)).toMatchObject({ id: expect.any(String) })
+
+    expect(await floorRules('floorLead')).toBe(false)
+    await expect(scanBy(A.lead)).rejects.toThrow(/has not acknowledged the information notice in force \(version 2026-10\)/)
+    const shown = await floorNotice('floorLead', '?locale=en')
+    const english = v1.languages.find((language: Json) => language.locale === 'en')
+    expect(shown.notice).toMatchObject({ id: v1.id, label: '2026-10', locale: 'en', body: english.body, sha256: sha(english.body), languages: ['en', 'it'], languageReady: true })
+    expect(shown.gate).toEqual({ noticeId: v1.id, label: '2026-10', acknowledged: false, due: true, blocksScans: true })
+    expect(shown.means).toMatch(/does not sign anything else/)
+    expect((await floorNotice('floorLead', '?locale=ro')).notice).toMatchObject({ locale: 'it', languageReady: false })
+    // B-W1-40/42 ask first, in words (409), before the triggers.
+    await expect(h.database.withScope({ audience: 'floor', tenantId: A.tenant, actorId: A.lead, siteId: A.siteA1 }, (client) => floorRecordSubjectFor(client, { siteId: A.siteA1, workerId: A.lead, stationId: null }))).rejects.toThrow(
+      InvalidStateError,
+    )
+
+    expect((await acknowledge('floorLead', { noticeId: v1.id, locale: 'en', sha256: shown.notice.sha256 }, null)).statusCode).toBe(400)
+    expect((await acknowledge('floorLead', { noticeId: v1.id, locale: 'en', sha256: sha('another text') })).statusCode).toBe(409)
+    const done = await acknowledge('floorLead', { noticeId: v1.id, locale: 'en', sha256: shown.notice.sha256, deviceTime: '2026-11-17T07:29:58.000Z' })
+    expect(done.statusCode, done.body).toBe(200)
+    expect(done.json()).toEqual({ acknowledged: true, changed: true, gate: { noticeId: v1.id, label: '2026-10', acknowledged: true, due: false, blocksScans: false } })
+    expect((await acknowledge('floorLead', { noticeId: v1.id, locale: 'en', sha256: shown.notice.sha256 })).json()).toMatchObject({ changed: false })
+    const rows = await admin('SELECT "noticeId", "noticeVersion", locale, "noticeSha256", channel::text, "deviceId", "deviceTime" FROM "WorkerNoticeAck" WHERE "workerId" = $1', [A.lead])
+    expect(rows).toEqual([{ noticeId: v1.id, noticeVersion: '2026-10', locale: 'en', noticeSha256: sha(english.body), channel: 'DEVICE', deviceId: A.device, deviceTime: new Date('2026-11-17T07:29:58.000Z') }])
+    expect(await floorRules('floorLead')).toBe(true)
+    expect(await scanBy(A.lead)).toMatchObject({ id: expect.any(String) })
+    expect(await admin('SELECT count(*)::int AS n FROM "OutboxEvent" WHERE type = \'privacy.notice_acknowledged\' AND payload->>\'channel\' = \'DEVICE\'')).toEqual([{ n: 1 }])
+  }, 60_000)
+
+  it('a draft stores each language with the SHA-256 of the exact text; publishing v2 needs Italian and English and a fresh code; every worker acknowledges again', async () => {
+    const made = await asAdmin('POST', '/privacy/notices', { companyId: A.companyA, kind: 'WORKER_FLOOR', label: '2026-11', copyTexts: false })
     expect(made.status, JSON.stringify(made.body)).toBe(201)
-    expect(made.body.notice).toMatchObject({ kind: 'WORKER_FLOOR', versionNo: 1, label: '2026-11', status: 'DRAFT', languages: [] })
-    const second = await asAdmin('POST', '/privacy/notices', { companyId: A.companyA, kind: 'WORKER_FLOOR' })
-    expect(second.status).toBe(409)
+    expect(made.body.notice).toMatchObject({ kind: 'WORKER_FLOOR', versionNo: 2, label: '2026-11', status: 'DRAFT', languages: [] })
+    expect((await asAdmin('POST', '/privacy/notices', { companyId: A.companyA, kind: 'WORKER_FLOOR' })).status).toBe(409)
     // Line ends and trailing blanks are normalised; the fingerprint is of the text as stored and shown.
-    const put = await privacyAdmin.browser.send('PUT' as never, `/privacy/notices/${made.body.notice.id}/texts/it`, { body: `${SAMPLE.workerIt.replace(/\n/g, '\r\n')}  \r\n`, version: 1 })
+    const put = await privacyAdmin.browser.send('PUT' as never, `/privacy/notices/${made.body.notice.id}/texts/it`, { body: `${SAMPLE.workerIt2.replace(/\n/g, '\r\n')}  \r\n`, version: 1 })
     expect(put.status, JSON.stringify(put.body)).toBe(200)
-    expect(put.body.notice.languages).toEqual([{ locale: 'it', body: SAMPLE.workerIt, hasText: true, fileId: null, sha256: sha(SAMPLE.workerIt) }])
+    expect(put.body.notice.languages).toEqual([{ locale: 'it', body: SAMPLE.workerIt2, hasText: true, fileId: null, sha256: sha(SAMPLE.workerIt2) }])
     const [stored] = await admin<{ body: string; sha256: string }>('SELECT body, sha256 FROM "PrivacyNoticeText" WHERE "noticeId" = $1 AND locale = \'it\'', [made.body.notice.id])
-    expect(stored).toEqual({ body: SAMPLE.workerIt, sha256: sha(SAMPLE.workerIt) })
-    const stale = await privacyAdmin.browser.send('PUT' as never, `/privacy/notices/${made.body.notice.id}/texts/en`, { body: SAMPLE.workerEn, version: 1 })
-    expect(stale.status).toBe(409)
+    expect(stored).toEqual({ body: SAMPLE.workerIt2, sha256: sha(SAMPLE.workerIt2) })
+    expect((await privacyAdmin.browser.send('PUT' as never, `/privacy/notices/${made.body.notice.id}/texts/en`, { body: SAMPLE.workerEn, version: 1 })).status).toBe(409)
     // Without English: refused in words, before any code is asked.
     const missing = await asAdmin('POST', `/privacy/notices/${made.body.notice.id}/publish`, { version: 2 })
     expect(missing.status).toBe(409)
     expect(missing.body.error).toMatchObject({ code: 'invalid_state', issues: [{ path: 'texts/en' }] })
-    const en = await privacyAdmin.browser.send('PUT' as never, `/privacy/notices/${made.body.notice.id}/texts/en`, { body: SAMPLE.workerEn, version: 2 })
-    expect(en.status).toBe(200)
+    expect((await privacyAdmin.browser.send('PUT' as never, `/privacy/notices/${made.body.notice.id}/texts/en`, { body: SAMPLE.workerEn, version: 2 })).status).toBe(200)
     h.clock.advance(6 * 60_000)
     const noCode = await asAdmin('POST', `/privacy/notices/${made.body.notice.id}/publish`, { version: 3 })
     expect(noCode.status).toBe(403)
@@ -241,71 +277,24 @@ describe('worker notice versions and the scan gate (PLT-208, SCR-025)', () => {
     await stepped()
     const done = await asAdmin('POST', `/privacy/notices/${made.body.notice.id}/publish`, { version: 3 })
     expect(done.status, JSON.stringify(done.body)).toBe(200)
-    expect(done.body).toMatchObject({ notice: { status: 'PUBLISHED', label: '2026-11', publishedById: privacyAdmin.userId }, superseded: null })
+    expect(done.body).toMatchObject({ notice: { status: 'PUBLISHED', label: '2026-11', publishedById: privacyAdmin.userId }, superseded: { id: v1.id, label: '2026-10' } })
     expect(done.body.words[0]).toMatch(/Every worker reads and acknowledges it on the tablet/)
-    v1 = done.body.notice
-    expect(await admin('SELECT payload FROM "OutboxEvent" WHERE type = \'privacy.notice_published\' AND subject = $1', [v1.id])).toEqual([
-      { payload: { noticeId: v1.id, companyId: A.companyA, kind: 'WORKER_FLOOR', versionNo: 1, label: '2026-11', supersededId: null } },
-    ])
-    // Frozen once published.
-    const after = await privacyAdmin.browser.send('PUT' as never, `/privacy/notices/${v1.id}/texts/it`, { body: 'changed', version: v1.version })
-    expect(after.status).toBe(409)
-  }, 60_000)
-
-  it('an acknowledgement recorded before the notice was published no longer counts: the operator acknowledges v1, then scans', async () => {
-    // The seed's operator acknowledged a notice recorded before any was published here: it no longer counts.
-    expect(await floorRules('floorOperator')).toBe(false)
-    await expect(scanBy(A.operator)).rejects.toThrow(/has not acknowledged the information notice in force \(version 2026-11\)/)
-    const shown = await floorNotice('floorOperator')
-    expect(shown.notice).toMatchObject({ id: v1.id, label: '2026-11', body: SAMPLE.workerIt, sha256: sha(SAMPLE.workerIt), languages: ['en', 'it'] })
-    expect(shown.gate).toEqual({ noticeId: v1.id, label: '2026-11', acknowledged: false, due: true, blocksScans: true })
-    expect(shown.means).toMatch(/does not sign anything else/)
-    expect((await floorNotice('floorOperator', '?locale=en')).notice).toMatchObject({ locale: 'en', body: SAMPLE.workerEn, languageReady: true })
-    expect((await floorNotice('floorOperator', '?locale=ro')).notice).toMatchObject({ locale: 'it', languageReady: false })
-    // B-W1-40/42 ask first, in words (409), before the triggers.
-    await expect(h.database.withScope({ audience: 'floor', tenantId: A.tenant, actorId: A.operator, siteId: A.siteA1 }, (client) => floorRecordSubjectFor(client, { siteId: A.siteA1, workerId: A.operator, stationId: null }))).rejects.toThrow(
-      InvalidStateError,
-    )
-
-    expect((await acknowledge('floorOperator', { noticeId: v1.id, locale: 'it', sha256: sha(SAMPLE.workerIt) }, null)).statusCode).toBe(400)
-    const wrongText = await acknowledge('floorOperator', { noticeId: v1.id, locale: 'it', sha256: sha('another text') })
-    expect(wrongText.statusCode).toBe(409)
-    const done = await acknowledge('floorOperator', { noticeId: v1.id, locale: 'it', sha256: sha(SAMPLE.workerIt), deviceTime: '2026-11-17T07:29:58.000Z' })
-    expect(done.statusCode, done.body).toBe(200)
-    expect(done.json()).toEqual({ acknowledged: true, changed: true, gate: { noticeId: v1.id, label: '2026-11', acknowledged: true, due: false, blocksScans: false } })
-    expect((await acknowledge('floorOperator', { noticeId: v1.id, locale: 'en', sha256: sha(SAMPLE.workerEn) })).json()).toMatchObject({ changed: false })
-    const rows = await admin('SELECT "noticeId", "noticeVersion", locale, "noticeSha256", channel::text, "deviceId", "deviceTime" FROM "WorkerNoticeAck" WHERE "workerId" = $1 AND "noticeId" IS NOT NULL', [A.operator])
-    expect(rows).toEqual([{ noticeId: v1.id, noticeVersion: '2026-11', locale: 'it', noticeSha256: sha(SAMPLE.workerIt), channel: 'DEVICE', deviceId: A.device, deviceTime: new Date('2026-11-17T07:29:58.000Z') }])
-    expect(await floorRules('floorOperator')).toBe(true)
-    expect(await scanBy(A.operator)).toMatchObject({ id: expect.any(String) })
-    // The team leader has not acknowledged: still refused, in words and by the database.
-    await expect(scanBy(A.lead)).rejects.toThrow(/has not acknowledged the information notice in force/)
-    expect((await floorNotice('floorLead')).gate).toMatchObject({ due: true, blocksScans: true })
-  }, 60_000)
-
-  it('publishing v2 supersedes v1: every worker acknowledges again before the next scan', async () => {
-    const made = await asAdmin('POST', '/privacy/notices', { companyId: A.companyA, kind: 'WORKER_FLOOR', label: '2026-12' })
-    expect(made.status).toBe(201)
-    // A new version starts from the texts in force.
-    expect(made.body.notice.languages.map((language: Json) => [language.locale, language.sha256])).toEqual([
-      ['en', sha(SAMPLE.workerEn)],
-      ['it', sha(SAMPLE.workerIt)],
-    ])
-    const put = await privacyAdmin.browser.send('PUT' as never, `/privacy/notices/${made.body.notice.id}/texts/it`, { body: SAMPLE.workerIt2, version: made.body.notice.version })
-    expect(put.status).toBe(200)
-    await stepped()
-    const done = await asAdmin('POST', `/privacy/notices/${made.body.notice.id}/publish`, { version: put.body.notice.version })
-    expect(done.status, JSON.stringify(done.body)).toBe(200)
-    expect(done.body.superseded).toEqual({ id: v1.id, label: '2026-11' })
     v2 = done.body.notice
+    expect(await admin('SELECT payload FROM "OutboxEvent" WHERE type = \'privacy.notice_published\' AND subject = $1', [v2.id])).toEqual([
+      { payload: { noticeId: v2.id, companyId: A.companyA, kind: 'WORKER_FLOOR', versionNo: 2, label: '2026-11', supersededId: v1.id } },
+    ])
     expect((await admin('SELECT status::text FROM "PrivacyNotice" WHERE id = $1', [v1.id]))[0]).toEqual({ status: 'SUPERSEDED' })
+    // Frozen once published.
+    expect((await privacyAdmin.browser.send('PUT' as never, `/privacy/notices/${v2.id}/texts/it`, { body: 'changed', version: v2.version })).status).toBe(409)
 
+    // v1's acknowledgements no longer count, for anybody.
     expect(await floorRules('floorOperator')).toBe(false)
-    expect((await floorNotice('floorOperator')).gate).toEqual({ noticeId: v2.id, label: '2026-12', acknowledged: false, due: true, blocksScans: true })
-    await expect(scanBy(A.operator)).rejects.toThrow(/has not acknowledged the information notice in force \(version 2026-12\)/)
-    const old = await acknowledge('floorOperator', { noticeId: v1.id, locale: 'it', sha256: sha(SAMPLE.workerIt) })
+    expect((await floorNotice('floorOperator')).gate).toEqual({ noticeId: v2.id, label: '2026-11', acknowledged: false, due: true, blocksScans: true })
+    await expect(scanBy(A.operator)).rejects.toThrow(/has not acknowledged the information notice in force \(version 2026-11\)/)
+    await expect(scanBy(A.lead)).rejects.toThrow(/has not acknowledged the information notice in force \(version 2026-11\)/)
+    const old = await acknowledge('floorOperator', { noticeId: v1.id, locale: 'en', sha256: sha(v1.languages.find((language: Json) => language.locale === 'en').body) })
     expect(old.statusCode).toBe(409)
-    expect(old.json().error.message).toMatch(/A newer version \(2026-12\) is in force: read it first/)
+    expect(old.json().error.message).toMatch(/A newer version \(2026-11\) is in force: read it first/)
     expect((await acknowledge('floorOperator', { noticeId: v2.id, locale: 'it', sha256: sha(SAMPLE.workerIt2) })).statusCode).toBe(200)
     expect(await scanBy(A.operator)).toMatchObject({ id: expect.any(String) })
     // The floor rules' words (B-W1-37) count the version in force: the team leader has not acknowledged v2.
@@ -363,13 +352,13 @@ describe('a real floor sign-in tells the tablet what to do about the notice', ()
 
     const signedIn = await tablet.post('/floor/sign-in', { badgeCode: badge.body.code, pin: '482913' })
     expect(signedIn.status, JSON.stringify(signedIn.body)).toBe(200)
-    expect(signedIn.body.notice).toEqual({ noticeId: v2.id, label: '2026-12', acknowledged: false, due: true, blocksScans: true })
+    expect(signedIn.body.notice).toEqual({ noticeId: v2.id, label: '2026-11', acknowledged: false, due: true, blocksScans: true })
     expect((await tablet.get('/floor/me')).body.notice).toMatchObject({ due: true, blocksScans: true })
     const shown = await tablet.get('/privacy/floor/notice')
     expect(shown.body.notice).toMatchObject({ id: v2.id, locale: 'en' })
     const ack = await tablet.post('/privacy/floor/notice/acknowledge', { noticeId: v2.id, locale: 'en', sha256: shown.body.notice.sha256 }, { headers: { 'idempotency-key': key() } })
     expect(ack.status, JSON.stringify(ack.body)).toBe(200)
-    expect((await tablet.get('/floor/me')).body.notice).toEqual({ noticeId: v2.id, label: '2026-12', acknowledged: true, due: false, blocksScans: false })
+    expect((await tablet.get('/floor/me')).body.notice).toEqual({ noticeId: v2.id, label: '2026-11', acknowledged: true, due: false, blocksScans: false })
   }, 60_000)
 })
 

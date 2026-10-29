@@ -172,7 +172,7 @@ describe('model ownership', () => {
     ['an unknown key in a model', (m) => (m.Line!.owner = 'x'), /Line: unknown key "owner"/],
     ['an unknown role', (m) => (m.Line!.access.factory_admin = { privileges: ['select'] }), /factory_admin is not a runtime role/],
     ['an unknown privilege', (m) => (m.Line!.access.factory_runtime.privileges = ['select', 'truncate']), /privileges must list some of/],
-    ['a hidden column that does not exist', (m) => (m.Company!.access.factory_floor_runtime.hiddenColumns = ['iban']), /hidden column iban is not a column/],
+    ['a hidden column that does not exist', (m) => (m.Company!.access.factory_floor_runtime.hiddenColumns = ['noSuchColumn']), /hidden column noSuchColumn is not a column/],
     ['a key column that does not exist', (m) => (m.Line!.keyColumns.site = 'plantId'), /key column plantId is not a column/],
     ['a site column without the site key', (m) => delete m.Line!.keyColumns.site, /it has a siteId column, so keyColumns.site must be "siteId"/],
     ['the floor role unscoped on a site table', (m) => delete m.Station!.access.factory_floor_runtime.scopedBy, /the floor role must be scopedBy site/],

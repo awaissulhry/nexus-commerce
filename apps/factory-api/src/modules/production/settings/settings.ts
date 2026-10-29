@@ -354,8 +354,7 @@ export async function listNoticeAcks(caller: CommandCaller, siteId: string) {
   const withNames = mayOn(context, PRODUCTION_SETTINGS_MANAGE, site)
   return caller.withClient(async (client) => {
     const rule = await workerNoticeRule(client, site.id)
-    const counts = (acks: readonly { noticeId: string | null }[]): boolean =>
-      rule.inForce ? acks.some((ack) => ack.noticeId === rule.inForce!.id) : !rule.everPublished && acks.length > 0
+    const counts = (acks: readonly { noticeId: string | null }[]): boolean => rule.inForce !== null && acks.some((ack) => ack.noticeId === rule.inForce!.id)
     const workers = await client.worker.findMany({
       where: { siteId: site.id, status: 'ACTIVE' },
       select: { id: true, displayName: withNames, noticeAcks: { select: { noticeId: true, noticeVersion: true, channel: true, serverTime: true }, orderBy: [{ noticeVersion: 'asc' }, { id: 'asc' }] } },

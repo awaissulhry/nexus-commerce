@@ -1,10 +1,8 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import {
   HideState,
   LabelTemplateStatus,
   MonitoringBasis,
-  NoticeAckChannel,
   PartyTaxMode,
   PpeCategory,
   ProductType,
@@ -24,6 +22,7 @@ import {
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFloorAuth } from './floor-auth'
 import { seed as seedInventory, type InventorySeed } from './inventory'
+import { seedWorkerNotice } from './privacy'
 
 /**
  * The production seed, per tenant of seed/_core.ts: the golden flow's stages 10-work-order, 11a-issue, 11b-cut and
@@ -43,7 +42,8 @@ import { seed as seedInventory, type InventorySeed } from './inventory'
  *   issue        hide SEED-HIDE-0001 (the inventory seed's), whole, issued to the released WO-0001 and valued at the
  *                lot's cost (a move to a work order needs it RELEASED or IN_PROGRESS: …_inventory_issue_work_order_guards).
  *   WO-0002      a DRAFT work order of one cell (BLK 52), with its operations and planned materials.
- *   floor        the operator's acknowledgement of the information notice (version 2026-10); one cut of the issued hide
+ *   floor        the operator's acknowledgement of the worker notice 2026-10 in force (both made by seed/privacy.ts
+ *                seedWorkerNotice, run first); one cut of the issued hide
  *                (20 ft² for sleeves of BLK 50 and 52, so the hide stays PARTLY_CUT); two bundles of sleeves from it;
  *                three scans at sewing: a report of the first bundle undone at once (a mis-scan) and a report of the
  *                second.
@@ -66,7 +66,6 @@ const T = {
   ordered: new Date('2026-11-12T08:00:00.000Z'),
   planned: new Date('2026-11-15T08:00:00.000Z'),
   woReleased: new Date('2026-11-15T10:00:00.000Z'),
-  acknowledged: new Date('2026-11-16T06:00:00.000Z'),
   issued: new Date('2026-11-16T07:30:00.000Z'),
   cut: new Date('2026-11-16T09:00:00.000Z'),
   bundled: new Date('2026-11-16T10:00:00.000Z'),
@@ -110,6 +109,8 @@ export interface ProductionSeed {
   /** The undone report, its undo, the standing report. */
   readonly scanIds: readonly [string, string, string]
   readonly ackId: string
+  /** Company A's worker notice in force (2026-10, seed/privacy.ts), which the operator acknowledged. */
+  readonly workerNoticeId: string
   /** Plant A1's operator (acknowledged the notice) and team leader (has not), and the cutting tablet. */
   readonly operatorId: string
   readonly leadId: string
@@ -119,9 +120,11 @@ export interface ProductionSeed {
 export async function seed(context: SeedContext): Promise<ProductionSeed> {
   const { db, namespace } = context
   // The CLI runs the seeds in name order: the hide this seed cuts comes from the inventory seed, the workers and the
-  // tablet from the floor sign-in seed; run them first (both are idempotent).
+  // tablet from the floor sign-in seed, the worker notice in force and the operator's acknowledgement of it from the
+  // privacy seed (a floor record names a worker only then: …_privacy_guards); run them first (all idempotent).
   const inventory = await seedInventory(context)
   await seedFloorAuth(context)
+  const notice = await seedWorkerNotice(context)
   const id = (key: string): string => seedUuid(namespace, key)
   /** Ids that sort first, and ids that sort last (see above). */
   const firstId = (key: string): string => `00000000${id(key).slice(8)}`
@@ -481,8 +484,8 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
     }),
   )
 
-  // --- the floor: the notice, the cut, the bundles, the scans -----------------------------------------------------------
-  const ackId = id('production:ack:A1:operator:2026-10')
+  // --- the floor: the cut, the bundles, the scans (the notice: seedWorkerNotice, above) ---------------------------------
+  const ackId = notice.operatorAckId
   const cutLogId = id('production:cut:H1:1')
   const [hide1] = inventory.hideIds
   const bundleIds = [id('production:bundle:WO-0001:1'), id('production:bundle:WO-0001:2')] as const
@@ -490,28 +493,6 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
   const signedIn = { audience: 'floor' as const, tenantId, actorId: operatorId, siteId: siteA }
   const onDevice = { workerId: operatorId, deviceId }
 
-  await db.withScope(signedIn, (client) =>
-    client.$transaction(async (tx) => {
-      if (await tx.workerNoticeAck.findUnique({ where: { id: ackId }, select: { id: true } })) return
-      await tx.workerNoticeAck.create({
-        data: {
-          id: ackId,
-          siteId: siteA,
-          workerId: operatorId,
-          noticeVersion: '2026-10',
-          locale: 'it',
-          // The SHA-256 of a made-up notice text.
-          noticeSha256: createHash('sha256').update(`seed floor information notice 2026-10, it (${namespace})`).digest('hex'),
-          channel: NoticeAckChannel.DEVICE,
-          deviceId,
-          deviceTime: T.acknowledged,
-          serverTime: T.acknowledged,
-          createdById: operatorId,
-        },
-        select: { id: true },
-      })
-    }),
-  )
   await db.withScope(signedIn, (client) =>
     client.$transaction(async (tx) => {
       if (await tx.cutLog.findUnique({ where: { id: cutLogId }, select: { id: true } })) return
@@ -599,6 +580,7 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
     bundleIds,
     scanIds,
     ackId,
+    workerNoticeId: notice.workerNoticeId,
     operatorId,
     leadId,
     deviceId,

@@ -11,10 +11,10 @@ import type { CommandTx } from '../../core/command'
  * what that scope may read: the floor scope reads notices, texts, its own site, its workers' acknowledgements and the
  * site's scan subject; the DPIA and the legal basis need the office scope (or the tenant's system caller).
  *
- *   workerNoticeRule(db, siteId)              the site's company's worker notice in force, and whether one was ever published
+ *   workerNoticeRule(db, siteId)              the site's company and its worker notice in force
  *   acknowledgedInForce(db, siteId, workerId) the database's rule for naming a worker on a floor record (…_privacy_guards):
- *                                             an acknowledgement of the version in force; before the company ever
- *                                             published one, any acknowledgement on record
+ *                                             an acknowledgement of the version in force; none counts while the
+ *                                             site's company has no worker notice in force
  *   workerNoticeGate(db, siteId, workerId)    what the tablet does at sign-in: show the notice (due), hold the scan tiles
  *   floorPrivacyReady(db, companyId, now)     a stored DPIA and a published worker notice (office scope)
  *   floorReadinessFor(db, siteId, now)        that and the site's floor rules (B-W1-37) in one answer (office scope)
@@ -40,22 +40,17 @@ export async function noticeInForce(db: Pick<CommandTx, 'privacyNotice'>, compan
 export interface WorkerNoticeRule {
   readonly companyId: string | null
   readonly inForce: InForce | null
-  /** The company published a worker notice at some time (then only the version in force counts). */
-  readonly everPublished: boolean
 }
 
 export async function workerNoticeRule(db: NoticeReader, siteId: string): Promise<WorkerNoticeRule> {
   const site = await db.site.findUnique({ where: { id: siteId }, select: { companyId: true } })
-  if (!site) return { companyId: null, inForce: null, everPublished: false }
-  const inForce = await noticeInForce(db, site.companyId, 'WORKER_FLOOR')
-  const everPublished = inForce !== null || (await db.privacyNotice.count({ where: { companyId: site.companyId, kind: 'WORKER_FLOOR', status: 'SUPERSEDED' } })) > 0
-  return { companyId: site.companyId, inForce, everPublished }
+  if (!site) return { companyId: null, inForce: null }
+  return { companyId: site.companyId, inForce: await noticeInForce(db, site.companyId, 'WORKER_FLOOR') }
 }
 
-/** The acknowledgements that count under the rule (null: none can). */
+/** The acknowledgements that count under the rule: those of the version in force (null: none can, none is in force). */
 export function countingAcks(rule: WorkerNoticeRule): Prisma.WorkerNoticeAckWhereInput | null {
-  if (rule.inForce) return { noticeId: rule.inForce.id }
-  return rule.everPublished ? null : {}
+  return rule.inForce ? { noticeId: rule.inForce.id } : null
 }
 
 /** The worker acknowledged the notice that counts at the site now (the database's rule for naming them). */
