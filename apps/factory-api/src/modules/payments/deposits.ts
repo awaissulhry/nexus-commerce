@@ -11,6 +11,7 @@ import { partyFacts } from '../invoicing/facts'
 import { filesAfterIssue, issueInCommand, refusal, seriesKindFor } from '../invoicing/issue'
 import { invoiceDetail, readInvoice, type InvoiceDetail } from '../invoicing/store'
 import { lockMoney } from './locks'
+import { settleOrders } from '../invoicing/from-shipment/settlement'
 import { allocateInCommand, checkPayment, insertPayment, recordingCommand } from './payments'
 import { assertMay, mayOn, officeContextOf, paymentDetail, readPayment, type PaymentDetail } from './store'
 
@@ -90,11 +91,13 @@ export async function depositReceived(files: FilesRuntime, caller: CommandCaller
     command(caller, { name: 'payments.depositReceived', idempotencyKey, input: body }, async (tools) => {
       const payment = await insertPayment(tools, checked)
       // Allocate BEFORE issuing: the payment's lock, then the request's (allocateInCommand), then the series.
-      const [allocation] = await allocateInCommand(tools, payment, [{ depositRequestId: current.id }])
+      const [allocation] = await allocateInCommand(tools, payment, [{ depositRequestId: current.id }], 'body/allocations', { settle: false })
       const decision: DepositInvoiceDecision = depositInvoiceDecision({ fiscalDocument: current.fiscalDocument, fiscalRule: current.fiscalRule, paidAmount: allocation?.amount ?? 0, paidOn: checked.receivedOn, goodsLeftOn: await goodsLeftOn(tools.tx, current.orderId) })
       let invoiceId: string | null = null
       if (decision.required && body.issueDepositInvoice !== false) invoiceId = await issueDeposit(tools, current, allocation!.amount, checked.receivedOn)
       const status = (await tools.tx.depositRequest.findUnique({ where: { id: current.id }, select: { status: true } }))!.status
+      // B-W1-51: the order's settlement, announced at the end (after the TD02's series).
+      await settleOrders(tools, current.orderId ? [current.orderId] : [])
       return { paymentId: payment.id, invoiceId, required: decision.required, reason: decision.reason, status }
     }),
   )

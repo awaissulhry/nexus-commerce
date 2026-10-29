@@ -9,6 +9,7 @@ import { PAYMENTS_RECORD, PAYMENTS_VIEW, PAYMENTS_VOID } from '@nexus/factory-do
 import { command, type CommandCaller, type CommandTools } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { serverClock } from '../../core/time'
+import { ordersOfInvoices, ordersOfRequests, settleOrders } from '../invoicing/from-shipment/settlement'
 import { markDepositPaid } from '../sales/deposits/deposits'
 import { lockAll, lockMoney } from './locks'
 import { allocatedOf, assertMay, officeContextOf, officePayment, paymentDetail, readPayment, type PaymentDetail, type PaymentRow, type Reader } from './store'
@@ -52,7 +53,7 @@ const requestLabel = (number: string | null) => (number ? `deposit request of or
  * not open, in another currency, or an amount that passes a cap; an ask without an amount takes what fits. A deposit
  * request it covers becomes PAID. Returns the allocations written.
  */
-export async function allocateInCommand(tools: CommandTools, payment: Pick<PaymentRow, 'id' | 'companyId' | 'partyId' | 'currency' | 'amount' | 'status'>, asks: readonly AllocationInput[], path = 'body/allocations'): Promise<Allocated[]> {
+export async function allocateInCommand(tools: CommandTools, payment: Pick<PaymentRow, 'id' | 'companyId' | 'partyId' | 'currency' | 'amount' | 'status'>, asks: readonly AllocationInput[], path = 'body/allocations', options: { readonly settle?: boolean } = {}): Promise<Allocated[]> {
   const { tx, context } = tools
   if (asks.length === 0) return []
   if (payment.status !== 'RECEIVED') throw new InvalidStateError(`The payment is ${payment.status}; it pays nothing.`)
@@ -129,6 +130,14 @@ export async function allocateInCommand(tools: CommandTools, payment: Pick<Payme
   for (const [requestId, request] of requests) {
     const allocated = (await tx.paymentAllocation.aggregate({ where: { depositRequestId: requestId }, _sum: { amount: true } }))._sum.amount ?? 0
     if (allocated >= request.amount) await markDepositPaid(tools, { id: requestId, companyId: payment.companyId, partyId: payment.partyId, orderId: request.orderId })
+  }
+  // B-W1-51: the orders these targets are about may become settled (the balance paid), announced at the end. A caller that
+  // does more after the allocation (deposits.ts issues the TD02 first) announces them itself, at its own end.
+  if (options.settle !== false) {
+    await settleOrders(tools, [
+      ...(await ordersOfInvoices(tx, written.flatMap((allocation) => (allocation.target === 'INVOICE' ? [allocation.targetId] : [])))),
+      ...(await ordersOfRequests(tx, written.flatMap((allocation) => (allocation.target === 'DEPOSIT_REQUEST' ? [allocation.targetId] : [])))),
+    ])
   }
   return written
 }
@@ -323,6 +332,8 @@ export async function reverseAllocation(caller: CommandCaller, paymentId: string
       data: { id, companyId: payment.companyId, partyId: payment.partyId, paymentId: payment.id, invoiceId: original.invoiceId, depositRequestId: original.depositRequestId, amount: -original.amount, reversalOfId: original.id, note, createdAt: tools.now, createdById: actorIdOf(tools) },
       select: { id: true },
     })
+    // B-W1-51: taking money back unsettles a settled order (order.unsettled), announced at the end.
+    await settleOrders(tools, original.invoiceId ? await ordersOfInvoices(tools.tx, [original.invoiceId]) : await ordersOfRequests(tools.tx, [original.depositRequestId!]))
     const target: AllocationTarget = original.invoiceId ? 'INVOICE' : 'DEPOSIT_REQUEST'
     const targetId = (original.invoiceId ?? original.depositRequestId)!
     tools.audit({ action: 'payments.reverseAllocation', recordType: 'PaymentAllocation', recordId: id, companyId: payment.companyId, after: { paymentId: payment.id, reversalOfId: original.id, target, targetId, amount: markMoney('price', -original.amount) }, reason: note })

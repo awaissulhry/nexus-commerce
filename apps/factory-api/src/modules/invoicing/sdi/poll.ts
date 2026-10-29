@@ -10,6 +10,7 @@ import { serverClock, type Clock } from '../../../core/time'
 import { GatewayCallFailed, GatewayRefusal } from '../../../platform/gateway/gateway'
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
 import { activeTenants, asSystem, systemContext } from '../../../platform/outbox/system'
+import { settleNoted } from '../from-shipment/settlement'
 import { afterSendMove, applyMessages } from './record'
 import { processSdi, type SdiRuntime } from './runtime'
 import { lockInvoice, readSend } from './store'
@@ -51,6 +52,8 @@ export async function recordPoll(tools: CommandTools, submissionId: string, answ
   const applied = answer.messages.length > 0 ? await applyMessages(tools, send.id, answer.messages, { inboundWebhookId: null }) : null
   tools.audit({ action: 'invoices.sdiPoll', recordType: 'SdiSubmission', recordId: send.id, companyId, after: { known: answer.known, notifications: answer.messages.length, recorded: applied?.recorded ?? 0 } })
   const now = (await readSend(tools.tx, submissionId))!
+  // B-W1-51: the orders an outcome may have settled, at the end of the command.
+  await settleNoted(tools)
   return { sendStatus: now.status, recorded: applied?.recorded ?? 0 }
 }
 
