@@ -16,7 +16,7 @@ const status = z.enum(INVOICE_STATUSES)
 const json = z.record(z.string(), z.unknown())
 const paymentMethod = z.string().regex(/^MP(0[1-9]|1[0-9]|2[0-3])$/, { message: 'Expected a FatturaPA ModalitaPagamento, MP05 for a bank transfer.' })
 
-const lineInput = input({
+export const lineInput = input({
   kind: z.enum(['GOODS', 'SERVICE']).optional(),
   description: z.string().trim().min(1).max(MAX_DESCRIPTION),
   itemCode: z.string().trim().max(35).nullish(),
@@ -31,8 +31,8 @@ const lineInput = input({
   size: z.string().trim().max(20).nullish(),
   ddtId: id().nullish(),
 })
-const paymentInput = input({ method: paymentMethod.optional(), dueDate: businessDate().nullish(), iban: z.string().trim().max(40).nullish() })
-const refInput = input({ number: z.string().trim().min(1).max(20), date: businessDate().nullish() })
+export const paymentInput = input({ method: paymentMethod.optional(), dueDate: businessDate().nullish(), iban: z.string().trim().max(40).nullish() })
+export const refInput = input({ number: z.string().trim().min(1).max(20), date: businessDate().nullish() })
 
 const lineView = output({
   id: id(),

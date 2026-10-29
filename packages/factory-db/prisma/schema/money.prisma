@@ -36,8 +36,8 @@
 // never pass its gross total less its credit notes, a deposit request's never pass its amount (under locks; the
 // …_money_guards triggers). A payment typed by mistake is VOIDED once its allocations are all reversed.
 //
-// SDI (FIN-084, FIN-086, B-W1-50): one SdiSubmission per send attempt (its file name, the exact XML file sent, the
-// provider's and SDI's ids, its outcome); SDI's notifications (RC, NS, MC; NE, DT, AT for public bodies) are
+// SDI (FIN-084, FIN-086, FIN-092, B-W1-50): one SdiSubmission per send attempt (its file name, the exact XML file sent,
+// the provider's and SDI's ids, its outcome, its legal archive at the intermediary); SDI's notifications (RC, NS, MC; NE, DT, AT for public bodies) are
 // append-only rows of their submission. The XML of an issued invoice, its PDF courtesy copy and the signed SDI receipts
 // are StoredFile rows of FISCAL_ARCHIVE kind (ten years, legal/ bucket; DM 17.6.2014, c.c. art. 2220); the invoice names
 // its current XML and PDF, each submission the XML it sent.
@@ -295,6 +295,12 @@ model SdiSubmission {
   /// Why it failed (FAILED) or the gist of the rejection (REJECTED; the errors are in the NS notification).
   /// @internal
   failureReason        String?
+  /// Legal archiving (conservazione, DM 17.6.2014, c.c. art. 2220; FIN-092) at the SDI intermediary: when it archived
+  /// this send's file and receipts, and its id of the archive package. Set once, together, only on a DELIVERED or
+  /// NOT_DELIVERABLE send (the file SDI handed to the buyer's side); never changed after (…_money_sdi_archive_guards).
+  archivedAt           DateTime?           @db.Timestamptz(3)
+  /// @internal
+  archiveRef           String?
   version              Int                 @default(1)
   createdAt            DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime            @default(now()) @updatedAt @db.Timestamptz(3)

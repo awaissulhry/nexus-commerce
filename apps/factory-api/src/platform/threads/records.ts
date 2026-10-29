@@ -42,6 +42,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const style = await client.style.findUnique({ where: { id }, select: { companyId: true, brandPartyId: true } })
     return style ? { companyId: style.companyId, siteId: null, partyId: style.brandPartyId } : null
   },
+  // modules/invoicing (SCR-081; B-W1-50 the courtesy copy of an invoice SDI could not deliver): the seller company and
+  // the customer (its buyer), so the copy and its replies stay with that customer.
+  Invoice: async (client, id) => {
+    const invoice = await client.invoice.findUnique({ where: { id }, select: { companyId: true, buyerPartyId: true } })
+    return invoice ? { companyId: invoice.companyId, siteId: null, partyId: invoice.buyerPartyId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}

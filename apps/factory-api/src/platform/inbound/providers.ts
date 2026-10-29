@@ -1,6 +1,7 @@
 import type { IntegrationProvider } from '@nexus/factory-db'
 import type { Clock } from '@nexus/factory-domain/ports/clock'
 import type { SignatureVerifier } from '@nexus/factory-domain/ports/signature'
+import { SDI_PROVIDER_VERIFIER } from '../../adapters/sdi/port'
 import { snsVerifier } from '../../adapters/ses/sns'
 import type { CommandTools } from '../../core/command'
 import { serverClock } from '../../core/time'
@@ -8,6 +9,7 @@ import { loadFactoryEnv, type FactoryEnv } from '../../env'
 import type { SecretsService } from '../secrets/envelope'
 import { sesNotificationProcessor } from '../email-out/notifications'
 import { emailInProcessor } from '../email-in/receive'
+import { sdiInboundProcessor } from '../../modules/invoicing/sdi/inbound'
 import { processSecrets } from '../secrets/service'
 
 /**
@@ -55,11 +57,13 @@ export type InboundProviders = Readonly<Partial<Record<IntegrationProvider, Inbo
 
 /**
  * The providers' entries. SES via SNS: a received mail ("Received", email in, platform/email-in/receive.ts), else a
- * delivery, bounce or complaint notification (email out, platform/email-out/notifications.ts). The W1 adapters (the SDI
- * intermediary, Sendcloud) add theirs here.
+ * delivery, bounce or complaint notification (email out, platform/email-out/notifications.ts). SDI: the intermediary's
+ * notifications about the invoices sent (modules/invoicing/sdi/inbound.ts); its LIVE verifier is the chosen provider's
+ * (none until Q21: SDI_PROVIDER_VERIFIER refuses). The other W1 adapters (Sendcloud) add theirs here.
  */
 export const INBOUND_PROVIDERS: InboundProviders = Object.freeze({
   SES: { verifier: snsVerifier, processor: emailInProcessor(sesNotificationProcessor) },
+  SDI: { verifier: SDI_PROVIDER_VERIFIER, processor: sdiInboundProcessor() },
 })
 
 /** What the inbound route and its job need. */

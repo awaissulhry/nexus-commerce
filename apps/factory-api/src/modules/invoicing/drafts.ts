@@ -49,7 +49,7 @@ export interface PaymentInput {
   readonly iban?: string | null | undefined
 }
 
-interface PreparedLine {
+export interface PreparedLine {
   readonly core: CoreLine
   readonly salesOrderLineId: string | null
   readonly size: string | null
@@ -111,8 +111,11 @@ export function prepareLines(lines: readonly LineInput[], profile: CustomerTaxPr
   return prepared as PreparedLine[]
 }
 
-/** The order lines and DDTs the lines name must be the buyer's (and the company's, and the order's when it names one). */
-async function checkSources(db: CommandTx, invoice: { companyId: string; buyerPartyId: string; salesOrderId: string | null }, lines: readonly PreparedLine[], path = 'body/lines'): Promise<void> {
+/**
+ * The order lines and DDTs the lines name must be the buyer's (and the company's, and the order's when it names one).
+ * Also used by the correction of a REJECTED invoice (sdi/correct.ts).
+ */
+export async function checkSources(db: CommandTx, invoice: { companyId: string; buyerPartyId: string; salesOrderId: string | null }, lines: readonly PreparedLine[], path = 'body/lines'): Promise<void> {
   const issues: Issue[] = []
   for (const [index, line] of lines.entries()) {
     if (line.salesOrderLineId) {
