@@ -9,7 +9,7 @@ import type { FileKind } from './rules'
  * So requestUpload and completeUpload refuse these record types (and kinds) with a 409 that names the module's route,
  * unless the module's own code calls them with `{ viaModule: true }`. Files the API makes itself (storeGeneratedFile)
  * are the calling module's business and are not affected. Add a record type here in the step that makes its upload
- * route.
+ * route (or with its generated files' step).
  */
 
 export interface ModuleOwnedFiles {
@@ -25,6 +25,11 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   // The notified body's PDF (modules/compliance/certificates): CERTIFICATE files only; attachments of the certificate's
   // thread (test reports, mail) stay open to the generic routes.
   Certificate: { kinds: ['CERTIFICATE'], route: 'POST /compliance/certificates/:certificateId/pdf, then POST …/pdf/:fileId/complete' },
+  // A parcel's carrier label files (modules/shipping/labels): only ever generated when the label is bought; every kind.
+  Parcel: { route: 'POST /shipping/shipments/:shipmentId/labels (the carrier label is made by the API, never uploaded)' },
+  // The DDT's legal PDF (modules/shipping/ddt): FISCAL_ARCHIVE files only, made at the issue or by a print of a missing
+  // one; the first stored is the document. A scan of the signed delivery note (another kind) stays open.
+  Ddt: { kinds: ['FISCAL_ARCHIVE'], route: 'POST /shipping/shipments/:shipmentId/ddt, or POST /shipping/ddts/:ddtId/pdf for a missing PDF (made by the API, never uploaded)' },
 })
 
 /** How a caller of requestUpload / completeUpload reaches them: the generic files routes, or a module's own route. */

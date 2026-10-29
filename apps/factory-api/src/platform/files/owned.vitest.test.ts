@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { assertGenericPath, MODULE_OWNED_FILES, ownerOf } from './owned'
 
 describe('record types whose files only their module writes (owned.ts)', () => {
-  it('lists the compliance document (every kind) and the certificate (its CERTIFICATE files)', () => {
-    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['Certificate', 'ComplianceDocument'])
+  it('lists the compliance document and the parcel (every kind), the certificate (CERTIFICATE) and the DDT (FISCAL_ARCHIVE)', () => {
+    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['Certificate', 'ComplianceDocument', 'Ddt', 'Parcel'])
+    expect(ownerOf('Parcel', 'PHOTO')).not.toBeNull()
+    expect(ownerOf('Ddt', 'FISCAL_ARCHIVE')).not.toBeNull()
+    expect(ownerOf('Ddt', 'PHOTO')).toBeNull()
     expect(ownerOf('ComplianceDocument', 'DOCUMENT')).not.toBeNull()
     expect(ownerOf('ComplianceDocument', 'ATTACHMENT')).not.toBeNull()
     expect(ownerOf('Certificate', 'CERTIFICATE')).not.toBeNull()

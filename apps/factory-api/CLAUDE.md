@@ -220,7 +220,7 @@ Modules: `modules/compliance/certificates` (certificate register and gate `certi
 - Visibility (COL-050): OFFICE always; FLOOR with `floorSiteId`, PARTNER/LINK with `partyId`. Those two columns are the
   floor and partner roles' policy keys, set exactly when shared (the …_files_guards trigger), so RLS keeps a floor to its
   site's floor files and a party to its own; `audienceSees()` adds portal vs link (LINK also needs the link's record).
-- Module-owned files (`owned.ts`, MODULE_OWNED_FILES): a record type whose "current" file its module decides (ComplianceDocument: every kind; Certificate: CERTIFICATE) is uploaded and confirmed only through that module's route: requestUpload/completeUpload refuse it (409 naming the route) unless the module passes `{ viaModule: true }`; generated files are not affected. Add a record type with its upload route.
+- Module-owned files (`owned.ts`, MODULE_OWNED_FILES): a record type whose "current" file its module decides (ComplianceDocument and Parcel: every kind; Certificate: CERTIFICATE; Ddt: FISCAL_ARCHIVE, the first stored print being the DDT's PDF, `ddt/store.ts pdfFileIdsOf`) is uploaded and confirmed only through that module's route: requestUpload/completeUpload refuse it (409 naming the route) unless the module passes `{ viaModule: true }`; generated files are not affected. Add a record type with its upload route.
 - Retention: a delete is refused under legal hold or before `retainUntil` (the state machine's guard and the trigger);
   FISCAL_ARCHIVE keeps ten years at least; content columns never change; rows are never deleted (status DELETED).
 - Store calls go through the gateway (`store.ts`: files.presign_upload, files.presign_download, files.head, files.delete,
