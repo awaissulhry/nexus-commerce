@@ -23,7 +23,7 @@ import { Button, Skeleton, Spinner } from '@nexus/ui/primitives'
 import { useT } from '../lib/i18n/provider'
 import { WithMessages } from '../record-panels/i18n'
 import { ListKeysInfo } from './ListKeysInfo'
-import { isListKey, listKeys, nextRowIndex, sameIds, toggleId, type ListKey } from './model'
+import { isListKey, listKeys, nextRowIndex, ownsKeys, sameIds, toggleId, type ListKey } from './model'
 import './list-frame.css'
 
 /** AG's own selection column (the row checkboxes and the header's select-all). */
@@ -57,6 +57,11 @@ export interface ListFrameProps<T> {
   right?: ReactNode
   /** Multi-select with bulk actions; absent: a read-only list without checkboxes. */
   selection?: ListFrameSelection
+  /**
+   * A row that may not be selected: the reason in words (shown on its disabled box), or null when it may. The header box
+   * and x skip such rows.
+   */
+  isRowSelectable?: (row: T) => string | null
   /** Live changes waiting behind "N updates · Show" (rows never move under the cursor). */
   updates?: { count: number; onShow: () => void } | null
   /** The footer's "Show N more" (pages of 50 read with a cursor). */
@@ -92,7 +97,7 @@ export function ListFrame<T>(props: ListFrameProps<T>) {
   )
 }
 
-function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, selection, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', focusRow, keysOpen }: ListFrameProps<T>) {
+function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', focusRow, keysOpen }: ListFrameProps<T>) {
   const t = useT('lists')
   const frameRef = useRef<HTMLDivElement>(null)
   const apiRef = useRef<GridApi<T> | null>(null)
@@ -155,11 +160,16 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!isListKey(event, event.target as HTMLElement | null)) return
+      // Two frames on one page: only the one with the focus (else the first) answers the keys.
+      const frames = Array.from(document.querySelectorAll('.fw-list'))
+      const own = frameRef.current ? frames.indexOf(frameRef.current) : -1
+      const holding = frames.findIndex((frame) => frame.contains(document.activeElement))
+      if (own < 0 || !ownsKeys(own, holding < 0 ? null : holding)) return
       const api = apiRef.current
       const count = api && !api.isDestroyed() ? api.getDisplayedRowCount() : 0
       const focused = api && !api.isDestroyed() ? (api.getFocusedCell()?.rowIndex ?? null) : null
       if (event.key === '/') {
-        const field = frameRef.current?.querySelector<HTMLInputElement>('.fw-list-toolbar input, input[type="search"]')
+        const field = frameRef.current?.querySelector<HTMLInputElement>('.nds-toolbar input[type="search"], .nds-toolbar input')
         if (!field) return
         event.preventDefault()
         field.focus()
@@ -172,14 +182,14 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
         if (next !== null) focusRowAt(next)
       } else if (event.key === 'x' && selection && api && focused !== null) {
         const node = api.getDisplayedRowAtIndex(focused)
-        if (!node?.data) return
+        if (!node?.data || (isRowSelectable && isRowSelectable(node.data) !== null)) return
         event.preventDefault()
         selection.onChange(toggleId(selectedRef.current, rowId(node.data)))
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [focusRowAt, onHelp, rowId, selection])
+  }, [focusRowAt, isRowSelectable, onHelp, rowId, selection])
 
   // Enter on a row opens it (not on its checkbox: Space ticks there).
   const onCellKeyDown = useCallback(
@@ -191,44 +201,64 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
   )
 
   const getRowId = useCallback((params: { data: T }) => rowId(params.data), [rowId])
-  const rowSelection = useMemo(() => (selection ? ({ mode: 'multiRow', checkboxes: true, headerCheckbox: false, enableClickSelection: false } as const) : undefined), [selection])
+  const rowSelection = useMemo(
+    () =>
+      selection
+        ? ({
+            mode: 'multiRow',
+            checkboxes: true,
+            headerCheckbox: false,
+            enableClickSelection: false,
+            ...(isRowSelectable ? { isRowSelectable: (node: IRowNode<T>) => !node.data || isRowSelectable(node.data) === null } : {}),
+          } as const)
+        : undefined,
+    [selection, isRowSelectable],
+  )
   const selectionColumnDef = useMemo(
-    () => ({ width: gridGeometry.selectColW, maxWidth: gridGeometry.selectColW, resizable: false, headerComponent: LoadedRowsSelectionHeader, headerName: t('selectAll') }),
-    [t],
+    () => ({
+      width: gridGeometry.selectColW,
+      maxWidth: gridGeometry.selectColW,
+      resizable: false,
+      headerComponent: LoadedRowsSelectionHeader,
+      headerName: t('selectAll'),
+      // A row that may not be selected says why on its disabled box.
+      ...(isRowSelectable ? { tooltipValueGetter: (params: { data?: T }) => (params.data ? isRowSelectable(params.data) : null) } : {}),
+    }),
+    [t, isRowSelectable],
   )
 
   const picked = selection ? selected.length : 0
+  // Straight into the card (no wrapper): the DS toolbar's wrap rules match only `.nds-grid-card > .nds-toolbar`, so a
+  // phone's card takes a second line instead of pushing tools past its clipped edge.
   const toolbar = (
-    <div className="fw-list-toolbar">
-      <GridToolbar
-        wrap
-        count={picked > 0 ? t('selected', { count: picked }) : count}
-        right={
-          <>
-            {updates && updates.count > 0 && (
-              <Button size="sm" variant="tonal" onClick={updates.onShow}>
-                {t('updates', { count: updates.count })}
-              </Button>
-            )}
-            {right}
-          </>
-        }
-      >
-        {picked > 0 && selection ? (
-          <GridSelectionActions>
-            {selection.actions}
-            <Button size="sm" variant="link" onClick={() => selection.onChange([])} aria-label={t('clear')}>
-              <X size={13} aria-hidden /> <SelectionLabel>{t('clear')}</SelectionLabel>
+    <GridToolbar
+      wrap
+      count={picked > 0 ? t('selected', { count: picked }) : count}
+      right={
+        <>
+          {updates && updates.count > 0 && (
+            <Button size="sm" variant="tonal" onClick={updates.onShow}>
+              {t('updates', { count: updates.count })}
             </Button>
-          </GridSelectionActions>
-        ) : (
-          <>
-            {search && <GridSearchSlot>{search}</GridSearchSlot>}
-            {tools}
-          </>
-        )}
-      </GridToolbar>
-    </div>
+          )}
+          {right}
+        </>
+      }
+    >
+      {picked > 0 && selection ? (
+        <GridSelectionActions>
+          {selection.actions}
+          <Button size="sm" variant="link" onClick={() => selection.onChange([])} aria-label={t('clear')}>
+            <X size={13} aria-hidden /> <SelectionLabel>{t('clear')}</SelectionLabel>
+          </Button>
+        </GridSelectionActions>
+      ) : (
+        <>
+          {search && <GridSearchSlot>{search}</GridSearchSlot>}
+          {tools}
+        </>
+      )}
+    </GridToolbar>
   )
   const footer = (
     <GridFooterStrip>
