@@ -41,6 +41,11 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const worker = await client.worker.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
     return worker ? { companyId: worker.companyId, siteId: worker.siteId, partyId: null } : null
   },
+  // platform/admin/connections (B-W0-28, SCR-087): an outside service's account, of a company or tenant-wide.
+  IntegrationAccount: async (client, id) => {
+    const account = await client.integrationAccount.findUnique({ where: { id }, select: { companyId: true } })
+    return account ? { companyId: account.companyId, siteId: null, partyId: null } : null
+  },
   // modules/compliance/certificates (SCR-051): the holder company (none: brand-held); the party only when a brand holds
   // it (the brand is the legal maker), not a supplier holding a protector's certificate.
   Certificate: async (client, id) => {

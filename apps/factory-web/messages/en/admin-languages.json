@@ -1,0 +1,66 @@
+{
+  "langs": {
+    "intro": "Which languages the office, the documents and the floor speak, how numbers and dates are written, and how time is kept.",
+    "on": "On",
+    "office": {
+      "title": "Office languages",
+      "intro": "Every office screen speaks both. Both are always on in this version.",
+      "written": "{percent} % of the screens' words written",
+      "people_one": "1 person uses it",
+      "people_other": "{count} people use it",
+      "pick": "Each person picks their own language in",
+      "profile": "My profile"
+    },
+    "documents": {
+      "title": "Document and e-mail languages",
+      "intro": "Quotes, purchase orders, DDTs, invoices and their e-mails go out in Italiano or English: in the language on the customer's or supplier's record. Below, each company's own language.",
+      "label": "The language of each company",
+      "pickFor": "Language of {name}",
+      "noCompany": "No active company yet."
+    },
+    "col": {
+      "company": "Company",
+      "language": "Its language",
+      "where": "Company or site",
+      "zone": "Time zone"
+    },
+    "formats": {
+      "title": "Numbers and dates",
+      "intro": "Each person sees numbers and dates written the way of their own language.",
+      "number": "A number",
+      "date": "A date",
+      "week": "The week starts on",
+      "monday": "Monday",
+      "imports": "A sheet you import may write numbers either way: you say which when you upload it.",
+      "importLink": "Import & export"
+    },
+    "time": {
+      "title": "Time zones",
+      "intro": "How the factory keeps time, and the zone of each company and site.",
+      "stored": "Stored",
+      "storedValue": "In UTC, to the millisecond",
+      "shown": "Shown",
+      "shownValue": "In Europe/Rome",
+      "site": "Shifts, calendars and cut-offs",
+      "siteValue": "In each site's own zone",
+      "label": "Time zones of the companies and sites",
+      "several": "{count} different zones are in use."
+    },
+    "floor": {
+      "title": "Floor languages",
+      "intro": "The languages the floor workers read, each in its own words. The floor screens speak Italiano and English; a worker who reads another language sees Italiano for now.",
+      "screens": "Floor screens speak it",
+      "notYet": "Not on the screens yet",
+      "workers_one": "1 worker",
+      "workers_other": "{count} workers"
+    },
+    "later": "A glossary of trade terms and a check of machine-translated messages come in later steps.",
+    "done": {
+      "saved_one": "1 company's language saved.",
+      "saved_other": "{count} companies' languages saved."
+    },
+    "problem": {
+      "conflict": "Someone changed a company meanwhile ({count} saved before it). The page was read again: check and save once more."
+    }
+  }
+}

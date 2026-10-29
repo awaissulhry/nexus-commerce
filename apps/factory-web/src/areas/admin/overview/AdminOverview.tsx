@@ -6,7 +6,9 @@ import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { listCompanies, listDevices, listIdentities, listPrinters, listRoles, listSeries, listUsers, privacyOverview } from '../shared/api'
 import { problemKey } from '../shared/model'
-import { READ_RIGHTS, setupSteps, STEP_READ, type OverviewFacts, type Read, type ReadName } from './model'
+import { listAccounts } from '../connections/api'
+import { listImports } from '../import/api'
+import { OPENING_STOCK, READ_RIGHTS, setupSteps, STEP_READ, type OverviewFacts, type Read, type ReadName } from './model'
 import { AdminOverviewView } from './view/AdminOverviewView'
 
 const CHECKING: Read<never> = { state: 'checking' }
@@ -30,6 +32,8 @@ export function AdminOverview() {
     devices: CHECKING,
     printers: CHECKING,
     privacy: CHECKING,
+    accounts: CHECKING,
+    imports: CHECKING,
   })
   const [checkedAt, setCheckedAt] = useState<string | null>(null)
 
@@ -50,6 +54,8 @@ export function AdminOverview() {
         devices: () => listDevices(api),
         printers: () => listPrinters(api),
         privacy: () => privacyOverview(api),
+        accounts: () => listAccounts(api, { provider: 'SDI' }),
+        imports: () => listImports(api, { importerKey: OPENING_STOCK, limit: 20 }),
       }
       try {
         const value = await work[name]()

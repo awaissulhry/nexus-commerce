@@ -18,12 +18,12 @@
       "users": "Utenti",
       "roles": "Ruoli e permessi",
       "platform": "Piattaforma",
-      "numbering": "Numerazioni",
-      "email": "Email e indirizzi",
+      "documents": "Documenti e numerazioni",
       "languages": "Lingue e formati",
-      "imports": "Importazione",
       "audit": "Registro attività",
-      "connections": "Collegamenti"
+      "connections": "Connessioni e API",
+      "data": "Dati",
+      "import": "Importa ed esporta"
     }
   },
   "topbar": {

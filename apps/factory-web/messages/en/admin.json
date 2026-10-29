@@ -311,7 +311,12 @@
         "none": "No printer yet: labels print from the browser as PDF until one is added."
       },
       "sdi": {
-        "unknown": "Not checked yet: the SDI connection is read by Connections (the next step)."
+        "blocked": "Blocked by: company legal data (add a company first).",
+        "none": "{name} has no SDI connection yet: its invoices cannot reach the tax system.",
+        "paused": "The SDI connection of {name} is paused: invoices wait until it is resumed.",
+        "test": "SDI is connected in test mode for {name}: invoices do not reach the tax system yet.",
+        "done_one": "The active company sends its invoices to SDI for real.",
+        "done_other": "All {count} active companies send their invoices to SDI for real."
       },
       "privacy": {
         "done": "Every privacy duty is done.",
@@ -321,7 +326,11 @@
         "needsLater_other": "{count} privacy duties are still open. Their page comes with Privacy & notices."
       },
       "stock": {
-        "unknown": "Not checked yet: the opening-stock import comes with the warehouse steps."
+        "none": "No opening stock loaded yet: import it from a sheet.",
+        "waiting_one": "1 opening-stock import waits to be checked or applied.",
+        "waiting_other": "{count} opening-stock imports wait to be checked or applied.",
+        "done_one": "Opening stock loaded (1 import applied).",
+        "done_other": "Opening stock loaded ({count} imports applied)."
       }
     }
   },
@@ -352,7 +361,9 @@
     "workers_credentials": "Issue badges and reset PINs",
     "email_send": "Send mail",
     "numbering_view": "See number series",
-    "privacy_view": "See privacy duties"
+    "privacy_view": "See privacy duties",
+    "integrations_view": "See the outside services",
+    "imports_view": "See imports"
   },
   "org": {
     "intro": "The legal companies of the group with their tax and e-invoicing data, and their plants, warehouses and offices. Open a site to build its lines and stations.",
@@ -1460,6 +1471,7 @@
     "documents": "Documents",
     "print": "Printing",
     "email": "E-mail",
+    "integrations": "Connections",
     "compliance": "Compliance",
     "product": "Products",
     "inventory": "Warehouse",
@@ -1526,6 +1538,8 @@
     "email_send": "Send mail from a record's thread",
     "email_manage": "Manage the sending domains and identities",
     "email_triage": "Sort received mail",
+    "integrations_view": "See the outside services and their calls",
+    "integrations_manage": "Pause and resume outside services",
     "compliance_certificates_view": "See the EU type-examination certificates",
     "compliance_certificates_manage": "Register, suspend and withdraw certificates",
     "compliance_declarations_manage": "Upload declarations of conformity and leaflets",
