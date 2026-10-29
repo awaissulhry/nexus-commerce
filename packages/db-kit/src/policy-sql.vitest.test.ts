@@ -80,6 +80,28 @@ describe('policySql', () => {
     expect(tablePolicySql(model, 'Quote')).toBe(sql.slice(sql.indexOf('-- "public"."Quote"'), sql.indexOf('-- "public"."StockMove"')))
   })
 
+  it('keeps a role to the rows whose column holds a listed value, for every command, after the keys', () => {
+    const series: TablePolicy = {
+      table: 'Series',
+      columns: ['id', 'tenantId', 'kind', 'nextValue'],
+      keyColumns: { tenant: 'tenantId' },
+      access: {
+        office_rt: { privileges: ['select', 'update'] },
+        floor_rt: { privileges: ['select', 'insert', 'update'], onlyValues: { kind: ['LOT', 'GOODS_RECEIPT'] } },
+      },
+    }
+    const sql = tablePolicySql({ ...model, tables: [series] }, 'Series')
+    const check = `("tenantId" = NULLIF(current_setting('example.tenant_id', true), '')::uuid AND "kind"::text IN ('GOODS_RECEIPT', 'LOT'))`
+    expect(sql).toContain(`CREATE POLICY "floor_rt_select" ON "public"."Series" AS PERMISSIVE FOR SELECT TO "floor_rt" USING ${check};`)
+    expect(sql).toContain(`CREATE POLICY "floor_rt_insert" ON "public"."Series" AS PERMISSIVE FOR INSERT TO "floor_rt" WITH CHECK ${check};`)
+    expect(sql).toContain(`CREATE POLICY "floor_rt_update" ON "public"."Series" AS PERMISSIVE FOR UPDATE TO "floor_rt" USING ${check} WITH CHECK ${check};`)
+    // Another role on the same table is not filtered.
+    expect(sql).toContain(`CREATE POLICY "office_rt_select" ON "public"."Series" AS PERMISSIVE FOR SELECT TO "office_rt" USING ("tenantId" = NULLIF(current_setting('example.tenant_id', true), '')::uuid);`)
+    // The order of the values does not matter.
+    const reversed = { ...series, access: { ...series.access, floor_rt: { ...series.access.floor_rt!, onlyValues: { kind: ['GOODS_RECEIPT', 'LOT'] } } } }
+    expect(tablePolicySql({ ...model, tables: [reversed] }, 'Series')).toBe(sql)
+  })
+
   it.each<[string, PolicyModel]>([
     ['no managed role', { ...model, roles: [] }],
     ['a role with capitals', { ...model, roles: ['Office'] }],
@@ -99,6 +121,11 @@ describe('policySql', () => {
     ['a hidden column that is not a column', { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['select'], hiddenColumns: ['cost'] } } }] }],
     ['hiding the column the policy reads', { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['select'], hiddenColumns: ['tenantId'] } } }] }],
     ['a table that grants nothing', { ...model, tables: [{ ...stockMove, access: {} }] }],
+    ['a value filter on a column it lacks', { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['select'], onlyValues: { kind: ['A'] } } } }] }],
+    ['a value filter with no value', { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['select'], onlyValues: { qty: [] } } } }] }],
+    ["a value with a quote in it", { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['select'], onlyValues: { qty: ["1') OR (true"] } } } }] }],
+    ['a value listed twice', { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['select'], onlyValues: { qty: ['1', '1'] } } } }] }],
+    ['a value filter on a hidden column', { ...model, tables: [{ ...stockMove, access: { floor_rt: { privileges: ['select'], hiddenColumns: ['unitCost'], onlyValues: { unitCost: ['1'] } } } }] }],
   ])('refuses a model with %s', (_label, bad) => {
     expect(() => policySql(bad)).toThrow(PolicyModelError)
   })

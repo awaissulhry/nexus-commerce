@@ -63,7 +63,8 @@ export async function listInspections(caller: CommandCaller, query: InspectionQu
       if (query.waitingRelease && (toRelease === 0 || hold.onHold)) continue
       out.push({
         id: row.id,
-        label: inspectionLabel(numbers.get(row.workOrderId) ?? '', list.findIndex((entry) => entry.id === row.id) + 1),
+        inspectionNumber: row.number,
+        label: inspectionLabel(numbers.get(row.workOrderId) ?? '', list.findIndex((entry) => entry.id === row.id) + 1, row.number),
         workOrderId: row.workOrderId,
         number: numbers.get(row.workOrderId) ?? '',
         companyId: row.companyId,

@@ -17,6 +17,7 @@ export const INSPECTION_COLUMNS = {
   companyId: true,
   siteId: true,
   workOrderId: true,
+  number: true,
   lotSize: true,
   sampleSize: true,
   inspectionLevel: true,
@@ -45,6 +46,7 @@ export type DefectRow = Prisma.InspectionDefectGetPayload<{ select: typeof DEFEC
 
 export const RELEASE_COLUMNS = {
   id: true,
+  number: true,
   companyId: true,
   siteId: true,
   workOrderId: true,
@@ -82,7 +84,7 @@ export async function readInspection(db: Reader, inspectionId: string): Promise<
   return isUuid(inspectionId) ? db.inspection.findUnique({ where: { id: inspectionId }, select: INSPECTION_COLUMNS }) : null
 }
 
-/** A work order's inspections, oldest first (their place in this order is their label: "WO-0003 · inspection 2"). */
+/** A work order's inspections, oldest first (their place in this order labels one without a number: "WO-0003 · inspection 2"). */
 export async function readWorkOrderInspections(db: Reader, workOrderId: string): Promise<InspectionRow[]> {
   return db.inspection.findMany({ where: { workOrderId }, select: INSPECTION_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
 }

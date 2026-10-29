@@ -337,7 +337,11 @@ afterAll(async () => {
 describe('the final inspection (QHS-050, QHS-013)', () => {
   it('is opened by an office inspector, recorded, and signed with a fresh code; the computed result is the database’s', async () => {
     const { inspection } = await as(inspector1.browser, 'POST', '/quality/inspections', { workOrderId: WO.main.id, lotSize: 6, sampleSize: 6, ...PLAN }, 201)
-    expect(inspection).toMatchObject({ status: 'OPEN', label: `${WO.main.number} · inspection 1`, plan: { lotSize: 6, sampleSize: 6, hundredPercent: true, aqlMajor: '2.500' }, inspector: { kind: 'OFFICE', userId: inspector1.id } })
+    expect(inspection).toMatchObject({ status: 'OPEN', plan: { lotSize: 6, sampleSize: 6, hundredPercent: true, aqlMajor: '2.500' }, inspector: { kind: 'OFFICE', userId: inspector1.id } })
+    // Its own number, from company A's INSPECTION series (the seed issued INS-A-2026-0001), in the ledger under its id.
+    expect(inspection.inspectionNumber).toMatch(/^INS-A-\d{4}-\d{4}$/)
+    expect(inspection.label).toBe(inspection.inspectionNumber)
+    expect(await admin('SELECT formatted, kind::text AS kind FROM "NumberAllocation" WHERE "recordType" = \'Inspection\' AND "recordId" = $1', [inspection.id])).toEqual([{ formatted: inspection.inspectionNumber, kind: 'INSPECTION' }])
     // More than the finished garments: refused in words.
     expect(pathsOf((await inspector1.browser.post('/quality/inspections', { workOrderId: WO.main.id, lotSize: 7, sampleSize: 1, ...PLAN })).body.error)).toEqual(['body/lotSize'])
     // Record: part of the checklist, then the defects (one minor: within Ac 1).
@@ -408,8 +412,8 @@ describe('the release gate (QHS-051, QHS-058, PLT-097)', () => {
     // The database refuses it too, for every login.
     await expect(
       admin(
-        `INSERT INTO "QualityRelease" (id, "tenantId", "companyId", "siteId", "workOrderId", "workOrderSizeId", "inspectionId", quantity, "certificateIds", "releasedById", "releasedAt", "signatureSha256")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 1, ARRAY[$8]::uuid[], $9, now(), 'x')`,
+        `INSERT INTO "QualityRelease" (id, number, "tenantId", "companyId", "siteId", "workOrderId", "workOrderSizeId", "inspectionId", quantity, "certificateIds", "releasedById", "releasedAt", "signatureSha256")
+         VALUES ($1, 'T-REL-' || gen_random_uuid()::text, $2, $3, $4, $5, $6, $7, 1, ARRAY[$8]::uuid[], $9, now(), 'x')`,
         [newId(), A.tenant, A.companyA, A.siteA1, WO.main.id, cellOf('main'), mainInspection.id, quality.certificateId, maker.id],
       ),
     ).rejects.toThrow(/is worker .*, who made garments of work order/)
@@ -457,13 +461,14 @@ describe('the release gate (QHS-051, QHS-058, PLT-097)', () => {
     expect(noCode.status).toBe(403)
     await stepped(inspector1)
     const answer = await release(inspector1, { inspectionId: mainInspection.id, workOrderSizeId: cellOf('main'), quantity: 3 })
-    expect(answer.words).toBe('Released 3 garment(s) of BLK 50: packing allowed.')
+    expect(answer.release.releaseNumber).toMatch(/^REL-A-\d{4}-\d{4}$/)
+    expect(answer.words).toBe(`Released 3 garment(s) of BLK 50 (${answer.release.releaseNumber}): packing allowed.`)
     expect(answer.release).toMatchObject({ quantity: 3, releasedBy: { kind: 'OFFICE', userId: inspector1.id }, secondPerson: { reasons: [] }, certificates: [{ id: quality.certificateId, statusNow: 'VALID' }] })
     expect(await netReleased(cellOf('main'))).toBe(3)
     await stepped(inspector1)
     await release(inspector1, { inspectionId: mainInspection.id, workOrderSizeId: cellOf('main', '52'), quantity: 1 })
     expect(await admin('SELECT type, payload FROM "OutboxEvent" WHERE type = $1 ORDER BY "occurredAt", id', ['quality.garments_released'])).toEqual([
-      expect.objectContaining({ payload: expect.objectContaining({ quantity: 3, secondPersonReasons: [], postedBy: 'OFFICE' }) }),
+      expect.objectContaining({ payload: expect.objectContaining({ quantity: 3, releaseNumber: answer.release.releaseNumber, secondPersonReasons: [], postedBy: 'OFFICE' }) }),
       expect.objectContaining({ payload: expect.objectContaining({ quantity: 1 }) }),
     ])
   })
@@ -488,8 +493,8 @@ describe('four eyes as a setting (Owner answer Q1 (a))', () => {
     // The database refuses the inspector alone, for every login.
     await expect(
       admin(
-        `INSERT INTO "QualityRelease" (id, "tenantId", "companyId", "siteId", "workOrderId", "workOrderSizeId", "inspectionId", quantity, "certificateIds", "releasedById", "releasedAt", "signatureSha256")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 1, ARRAY[$8]::uuid[], $9, now(), 'x')`,
+        `INSERT INTO "QualityRelease" (id, number, "tenantId", "companyId", "siteId", "workOrderId", "workOrderSizeId", "inspectionId", quantity, "certificateIds", "releasedById", "releasedAt", "signatureSha256")
+         VALUES ($1, 'T-REL-' || gen_random_uuid()::text, $2, $3, $4, $5, $6, $7, 1, ARRAY[$8]::uuid[], $9, now(), 'x')`,
         [newId(), A.tenant, A.companyA, A.siteA1, WO.main.id, cellOf('main', '52'), mainInspection.id, quality.certificateId, inspector1.id],
       ),
     ).rejects.toThrow(/needs a second person \(CUSTOMER\): the inspector who signed inspection .* does not release it alone/)
@@ -545,6 +550,14 @@ describe('the bench (design floor.final)', () => {
     expect(final.cells[0]).toMatchObject({ size: '50', releasable: 0, summary: 'Release · 2 checks open' })
     const opened = (await as(bench, 'POST', '/quality/inspections', { workOrderId: WO.bench.id, lotSize: 2, sampleSize: 2, ...PLAN }, 201, freshKey())).inspection
     expect(opened.inspector).toEqual({ kind: 'FLOOR', workerId: created.body.id, userId: null })
+    // The bench numbers it from company A's INSPECTION series, after the office's; the ledger names the tablet, not the worker.
+    expect(opened.inspectionNumber).toMatch(/^INS-A-\d{4}-\d{4}$/)
+    const officeNumbers = (await admin<{ number: string }>('SELECT number FROM "Inspection" WHERE "companyId" = $1 AND number LIKE \'INS-A-%\' AND id <> $2', [A.companyA, opened.id])).map((row) => row.number)
+    expect(officeNumbers.length).toBeGreaterThan(0)
+    expect(officeNumbers.every((number) => number < opened.inspectionNumber)).toBe(true)
+    const [benchAllocation] = await admin<{ allocatedById: string }>('SELECT "allocatedById"::text AS "allocatedById" FROM "NumberAllocation" WHERE "recordId" = $1', [opened.id])
+    expect(benchAllocation!.allocatedById).not.toBe(created.body.id)
+    expect(await admin('SELECT 1 FROM "Device" WHERE id = $1', [benchAllocation!.allocatedById])).toHaveLength(1)
     // The PIN proved at sign-in opens signing for 2 minutes; later the bench asks it again.
     h.clock.advance(3 * 60_000)
     const late = await bench.send('POST', `/quality/inspections/${opened.id}/decide`, { version: opened.version, result: 'PASS', checklist: allOk() }, { headers: { 'idempotency-key': freshKey() } })
@@ -555,6 +568,9 @@ describe('the bench (design floor.final)', () => {
     expect(decided).toMatchObject({ status: 'PASSED', inspector: { kind: 'FLOOR' } })
     const released = await as(bench, 'POST', '/quality/releases', { inspectionId: opened.id, workOrderSizeId: cellOf('bench'), quantity: 2 }, 201, freshKey())
     expect(released.release).toMatchObject({ quantity: 2, releasedBy: { kind: 'FLOOR', workerId: created.body.id, userId: null }, secondPerson: { reasons: [] } })
+    // A release number taken at the bench, from the office's RELEASE series.
+    expect(released.release.releaseNumber).toMatch(/^REL-A-\d{4}-\d{4}$/)
+    expect(await admin('SELECT kind::text AS kind, "allocatedById"::text AS "by" FROM "NumberAllocation" WHERE "recordId" = $1', [released.release.id])).toEqual([{ kind: 'RELEASE', by: benchAllocation!.allocatedById }])
     expect(await releasesOf(WO.bench.id)).toEqual([expect.objectContaining({ releasedById: null, releasedByWorkerId: created.body.id, reasons: [] })])
     // The bench never reverses (an office act).
     expect((await bench.post(`/quality/releases/${released.release.id}/reverse`, { quantity: 1, reasonCode: 'DEFECT_FOUND_LATER', reason: 'Seam opened' }, { headers: { 'idempotency-key': freshKey() } })).status).toBe(403)
@@ -682,8 +698,8 @@ describe('the database holds the rules too, for every login', () => {
     const insertInspection = async (acceptMajor: number) => {
       const id = newId()
       await admin(
-        `INSERT INTO "Inspection" (id, "tenantId", "companyId", "siteId", "workOrderId", "lotSize", "sampleSize", "inspectionLevel", "aqlMajor", "aqlMinor", "acceptMajor", "acceptMinor", "inspectorUserId")
-         VALUES ($1, $2, $3, $4, $5, 2, 2, 'II', 2.5, 4.0, $6, 0, $7)`,
+        `INSERT INTO "Inspection" (id, number, "tenantId", "companyId", "siteId", "workOrderId", "lotSize", "sampleSize", "inspectionLevel", "aqlMajor", "aqlMinor", "acceptMajor", "acceptMinor", "inspectorUserId")
+         VALUES ($1, 'T-INS-' || gen_random_uuid()::text, $2, $3, $4, $5, 2, 2, 'II', 2.5, 4.0, $6, 0, $7)`,
         [id, A.tenant, A.companyA, A.siteA1, WO.bench.id, acceptMajor, inspector2.id],
       )
       return id
@@ -710,8 +726,8 @@ describe('the database holds the rules too, for every login', () => {
     // A release names exactly one releaser.
     const row = (releasedById: string | null, releasedByWorkerId: string | null) =>
       admin(
-        `INSERT INTO "QualityRelease" (id, "tenantId", "companyId", "siteId", "workOrderId", "workOrderSizeId", "inspectionId", quantity, "certificateIds", "releasedById", "releasedByWorkerId", "releasedAt", "signatureSha256")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 1, ARRAY[$8]::uuid[], $9, $10, now(), 'x')`,
+        `INSERT INTO "QualityRelease" (id, number, "tenantId", "companyId", "siteId", "workOrderId", "workOrderSizeId", "inspectionId", quantity, "certificateIds", "releasedById", "releasedByWorkerId", "releasedAt", "signatureSha256")
+         VALUES ($1, 'T-REL-' || gen_random_uuid()::text, $2, $3, $4, $5, $6, $7, 1, ARRAY[$8]::uuid[], $9, $10, now(), 'x')`,
         [newId(), A.tenant, A.companyA, A.siteA1, WO.bench.id, cellOf('bench'), clean, quality.certificateId, releasedById, releasedByWorkerId],
       )
     await expect(row(null, null)).rejects.toThrow(/names exactly one releaser/)

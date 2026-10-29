@@ -4,8 +4,11 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 /**
  * The numbering module's synthetic seed, for each company of seed/_core.ts: a yearly invoice series that issued two
  * numbers (with their NumberAllocation rows, for made-up invoice ids), a yearly DDT series that starts at 143 as if a
- * paper booklet had used 1-142, yearly sales order, purchase order, goods receipt and PPE register series, and lot,
- * shipment, work order and batch series that never reset. Written in the tenant's office scope, as the app writes it.
+ * paper booklet had used 1-142, yearly sales order, purchase order, goods receipt, PPE register, inspection and release
+ * series, and lot, shipment, work order and batch series that never reset. Company A's inspection series issued one
+ * number (for a made-up inspection id), so the ledger holds a number of a floor document kind (the floor's policies
+ * see only those: the generated isolation tests read and copy it). Written in the tenant's office scope, as the app
+ * writes it.
  *
  * NumberAllocation is append-only and a used series' counter never moves back, so the seed only inserts and skips
  * rows that exist (INSERT … ON CONFLICT DO NOTHING): a second run adds nothing.
@@ -25,6 +28,7 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
   for (const company of ['A', 'B']) {
     const companyId = id(`company:${company}`)
     const invoices = id(`series:${company}:INVOICE:MAIN:${YEAR}`)
+    const inspections = id(`series:${company}:INSPECTION:MAIN:${YEAR}`)
     series.push(
       { id: invoices, companyId, kind: 'INVOICE', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'FT-{YYYY}-{N:5}', fiscal: true, startValue: 1, nextValue: 3, lastIssuedDate: ISSUED_ON, createdById: actorId },
       { id: id(`series:${company}:DDT:MAIN:${YEAR}`), companyId, kind: 'DDT', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: '{N}/{YYYY}', fiscal: true, startValue: 143, nextValue: 143, createdById: actorId },
@@ -50,7 +54,30 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // PPE register entries take their reference from it (apps/factory-api modules/compliance/register; Reg. 2016/425 art.
       // 8(4)): without one, recording an entry is refused. Eight f's as above.
       { id: `ffffffff${id(`series:${company}:PPE_REGISTER:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'PPE_REGISTER', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'REG-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // Final inspections and quality releases take their numbers from these (apps/factory-api modules/quality/final, office
+      // and bench): without them, opening an inspection or releasing garments is refused. Inspection.number and
+      // QualityRelease.number are unique in the tenant, so each company prints its own prefix. Company A's release series
+      // starts with eight zeros: the series the generated isolation tests copy, for the floor too, is then one of the floor's
+      // kinds, of the floor's company (plant A1) and unused (a tablet adds only a fresh year of a series).
+      { id: inspections, companyId, kind: 'INSPECTION', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: `INS-${company}-{YYYY}-{N:4}`, fiscal: false, nextValue: company === 'A' ? 2 : 1, lastIssuedDate: company === 'A' ? ISSUED_ON : null, createdById: actorId },
+      { id: company === 'A' ? `00000000${id(`series:${company}:RELEASE:MAIN:${YEAR}`).slice(8)}` : id(`series:${company}:RELEASE:MAIN:${YEAR}`), companyId, kind: 'RELEASE', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: `REL-${company}-{YYYY}-{N:4}`, fiscal: false, createdById: actorId },
     )
+    if (company === 'A') {
+      allocations.push({
+        id: id(`allocation:${company}:INSPECTION:1`),
+        companyId,
+        seriesId: inspections,
+        kind: 'INSPECTION',
+        value: 1,
+        formatted: `INS-${company}-${YEAR}-0001`,
+        documentDate: ISSUED_ON,
+        recordType: 'Inspection',
+        recordId: id(`inspection:${company}:1`),
+        allocatedAt: ISSUED_AT,
+        allocatedById: actorId,
+        requestId: `seed-numbering-${company}-inspection-1`,
+      })
+    }
     for (const value of [1, 2]) {
       allocations.push({
         id: id(`allocation:${company}:INVOICE:${value}`),
