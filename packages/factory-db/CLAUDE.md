@@ -42,11 +42,12 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    (`…_audit_append_only`, `…_numbering_guards`, `…_outbox_guard`, `…_integration_guards`, `…_files_guards`,
    `…_links_guards`, `…_threads_guards`, `…_print_guards`, `…_parties_guards`, `…_email_guards`, `…_product_guards`,
    `…_email_in_guards`, `…_sales_guards`, `…_supply_guards`, `…_production_guards`, `…_quality_shipping_guards`,
-   `…_money_guards`, `…_costing_guards`, `…_money_sdi_archive_guards`, `…_sales_settings_guards`:
-   triggers, partial unique indexes and deferred constraint triggers) are not regenerated: `git mv` the branch's one,
-   unchanged, to a timestamp between its new schema and policy folders; keep it out of `prisma/migrations` while
-   `npm run migration` runs (it replays every folder, and the triggers need the new table).
-   The policy folder is always the last migration.
+   `…_money_guards`, `…_costing_guards`, `…_money_sdi_archive_guards`, `…_sales_settings_guards`,
+   `…_inventory_issue_work_order_guards`: triggers, partial unique indexes and deferred constraint triggers) are not
+   regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
+   out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
+   table). A guards folder with no schema folder of its own (…_inventory_issue_work_order_guards) still gets a policy
+   folder after it (the generator's output again): the policy folder is always the last migration.
 
 ## Rules
 - Run the Prisma CLI only from this folder. `prisma.config.ts` reads only `packages/factory-db/.env`
