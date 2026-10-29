@@ -19,6 +19,7 @@ import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/aut
 import { addUser, Browser, enrolTotp, startHarness, stepUp, type Harness } from '../../../platform/auth/sessions/testing/harness'
 import { createGateway } from '../../../platform/gateway/gateway'
 import { systemContext } from '../../../platform/outbox/system'
+import { fileTravelDocuments, TRAVEL_DOCUMENT_PERMISSIONS } from '../../shipping/documents/testing/compliance'
 import { pollSend } from '../sdi/poll'
 import { createSdiRuntime, useSdi, type SdiRuntime } from '../sdi/runtime'
 
@@ -66,6 +67,7 @@ const grant = (permissions: Permission[], companies: Grant['companies'] = 'all')
 const office = (tenantId: string, grants: Grant[]): SessionContext => ({ audience: 'office', tenantId, actorId: newId(), grants })
 const SESSIONS: Record<string, () => SessionContext> = {
   warehouse: () => office(A.tenant, [grant(SHIPPING)]),
+  quality: () => office(A.tenant, [grant(TRAVEL_DOCUMENT_PERMISSIONS)]),
   noPrice: () => office(A.tenant, [grant(['invoices.view', 'invoices.manage'])]),
   companyB: () => office(A.tenant, [grant(MONEY, [A.companyB])]),
   otherTenant: () => office(B.tenant, [grant(MONEY)]),
@@ -175,6 +177,9 @@ beforeAll(async () => {
     { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
     { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])]?.() ?? null), logger: false },
   )
+  // PPE leaves only with its styles' signed DoC and user information on file (B-W1-49): both jackets' revisions.
+  await fileTravelDocuments(walls, 'quality', moneyA.shipping.quality.serialStyleId, moneyA.shipping.quality.serialRevisionId)
+  await fileTravelDocuments(walls, 'quality', moneyA.shipping.quality.production.styleId, moneyA.shipping.quality.production.revisionId)
 }, 240_000)
 
 afterAll(async () => {

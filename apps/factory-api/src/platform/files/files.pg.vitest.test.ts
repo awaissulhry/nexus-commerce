@@ -22,7 +22,7 @@ import { testRedis, type TestRedis } from '../outbox/testing'
 import { createSecretsService } from '../secrets/envelope'
 import { localKeyProvider } from '../secrets/local'
 import { SECRET_PURPOSES, storeSecret } from '../secrets/store'
-import { putGeneratedFile, recordGeneratedFile } from './files'
+import { prepareFileCopy, putGeneratedFile, recordGeneratedFile } from './files'
 import { createFilesRuntime, processFiles, useFiles } from './service'
 
 /**
@@ -528,6 +528,27 @@ describe('a generated file recorded inside the caller\'s command (putGeneratedFi
     ])
     expect(audits[1]!.after).toMatchObject({ number: 'Q-1', kind: 'FISCAL_ARCHIVE' })
     expect((await download('admin', result.id)).status).toBe(200)
+  })
+
+  it('copies an available file onto another record with its own kind, sharing and retention, the same bytes (prepareFileCopy)', async () => {
+    const source = await uploaded('copy source')
+    const retainUntil = new Date('2036-11-24T08:00:00.000Z')
+    const target = { companyId: companyOne, recordType: 'Quote', recordId: otherQuote, kind: 'ATTACHMENT' as const, visibility: ['LINK' as const], partyId: partyOne, retainUntil }
+    const prepared = await prepareFileCopy(processFiles(), office(), source.id, target)
+    expect(prepared).toMatchObject({ sourceFileId: source.id, sha256: sha256(pdf('copy source')), kind: 'ATTACHMENT', visibility: ['OFFICE', 'LINK'], partyId: partyOne, recordId: otherQuote })
+    expect(prepared.storageKey).not.toBe(await keyOf(source.id))
+    const { result } = await command(office(), { name: 'quotes.copyTest', input: { source: source.id } }, (tools) => recordGeneratedFile(tools, prepared))
+    const [row] = await admin('SELECT status, "recordId", "retainUntil", "partyId", visibility::text[] AS visibility FROM "StoredFile" WHERE id = $1', [result.id])
+    expect(row).toEqual({ status: 'AVAILABLE', recordId: otherQuote, retainUntil, partyId: partyOne, visibility: ['OFFICE', 'LINK'] })
+    const { download: get } = await download('admin', result.id)
+    expect((await app.inject({ method: 'GET', url: get!.url })).rawPayload.equals(pdf('copy source'))).toBe(true)
+    // The source is untouched (office only, its own record).
+    expect(await admin('SELECT visibility::text[] AS visibility, "recordId" FROM "StoredFile" WHERE id = $1', [source.id])).toEqual([{ visibility: ['OFFICE'], recordId: quote }])
+
+    const floor = callerFor(database, { audience: 'floor', tenantId: tenantA, actorId: user, siteId: siteOne, deviceId: newId(), grants: [grant(ALL)], requestId: newId() })
+    await expect(prepareFileCopy(processFiles(), floor, source.id, target)).rejects.toMatchObject({ code: 'forbidden' })
+    const { file: pending } = await announce(pdf('never sent'))
+    await expect(prepareFileCopy(processFiles(), office(), pending.id, target)).rejects.toMatchObject({ code: 'invalid_state' })
   })
 
   it('a command that fails after recording the file leaves no row (the object stays unnamed)', async () => {
