@@ -71,6 +71,11 @@ export function privacySeverity(open: readonly string[]): Severity {
   return open.some((duty) => FLOOR_PRIVACY_DUTIES.includes(duty)) ? 'HIGH' : 'MEDIUM'
 }
 
+/** Mail to sort: a customer or supplier waits on what reached no record or was held; unreadable mail matters less. */
+export function mailSeverity(state: 'TRIAGE' | 'HELD' | 'FAILED'): Severity {
+  return state === 'FAILED' ? 'LOW' : 'MEDIUM'
+}
+
 /** Who acts on each of a style's compliance blockers (product/compliance COMPLIANCE_CHECKS). */
 export const COMPLIANCE_CHECK_ACT: Readonly<Record<string, Permission>> = Object.freeze({
   REVISION: PRODUCT_BOM_RELEASE,

@@ -5,6 +5,7 @@
   "nav": {
     "home": {
       "area": "Home",
+      "today": "Today",
       "approvals": "Approvals",
       "mailToSort": "Mail to sort"
     },

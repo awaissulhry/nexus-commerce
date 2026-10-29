@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
-import { ATTENTION_KINDS, CATEGORIES, DECIDE_MODES, GROUPS, SEVERITIES } from '@nexus/factory-domain/insights/attention'
+import { AMOUNT_FIELDS, ATTENTION_KINDS, CATEGORIES, DECIDE_MODES, GROUPS, SEVERITIES } from '@nexus/factory-domain/insights/attention'
 import { FLOW_LENSES } from '@nexus/factory-domain/insights/flow'
 import { WAITING_KINDS } from '@nexus/factory-domain/insights/waiting'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
@@ -29,6 +29,9 @@ const figures = output({
 
 const live = output({ events: z.array(z.string()) })
 
+/** A phrase in the reader's language: the web's `today.w.<key>` with these params (factory-domain insights/words). */
+const phraseRef = output({ key: z.string(), params: z.record(z.string(), z.union([z.string(), z.number(), z.array(z.string()).readonly()])) })
+
 const item = output({
   /** `<kind>:<record id>[:<sub key>]`: stable while the row needs attention. */
   key: z.string(),
@@ -48,6 +51,10 @@ const item = output({
   why: z.string(),
   /** What waits on it. */
   blocks: z.string().nullable(),
+  /** The sentence, the why and the blocks as phrases (the English above is the same words). */
+  words: output({ sentence: phraseRef, why: phraseRef, blocks: phraseRef.nullable() }),
+  /** The figure the sentence quotes (a field of `figures`), only when the reader holds its grain. */
+  sentenceFigure: z.enum(AMOUNT_FIELDS).nullable(),
   due: output({ date: z.string(), days: z.number().int(), word: z.enum(['OVERDUE', 'TODAY', 'SOON']).nullable() }).nullable(),
   since: instant(),
   ageDays: z.number().int(),
@@ -58,8 +65,10 @@ const item = output({
 
 export const todayContract = defineContract({
   querystring: input({
-    /** One kind only (a pressed tile). */
+    /** One kind only (a deep link). */
     kind: z.enum(ATTENTION_KINDS).optional(),
+    /** One of the design's tiles: APPROVAL (the decisions to review) or ALERT (late, on hold, rejected, a duty open). */
+    category: z.enum(CATEGORIES).optional(),
     ...scopeQuery,
     cursor: z.string().min(1).max(500).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -68,14 +77,15 @@ export const todayContract = defineContract({
     200: output({
       asOf: instant(),
       today: z.string(),
-      /** Under the company and site filters, never the kind filter. */
+      /** Under the company and site filters, never the kind or tile filter. */
       counts: output({
         total: notMoney(z.number().int()),
         /** Overdue or urgent. */
         now: z.number().int(),
-        byCategory: output({ APPROVAL: z.number().int(), ALERT: z.number().int(), TASK: z.number().int() }),
-        /** One per kind the reader acts on (0 is an answer); `complete` false: the source stopped at its limit. */
-        tiles: z.array(output({ kind: z.enum(ATTENTION_KINDS), label: z.string(), count: z.number().int(), complete: z.boolean(), filter: output({ kind: z.enum(ATTENTION_KINDS) }) })),
+        /** The design's three tiles, always: ALL (every row), APPROVAL, ALERT; `complete` false: a count is a lower bound. */
+        tiles: z.array(output({ tile: z.enum(['ALL', ...CATEGORIES]), count: z.number().int(), complete: z.boolean() })),
+        /** Per kind the reader acts on (0 is an answer), for a deep link's chip. */
+        byKind: z.array(output({ kind: z.enum(ATTENTION_KINDS), label: z.string(), count: z.number().int(), complete: z.boolean() })),
       }),
       /** The rows under every filter (the kind's too). */
       total: notMoney(z.number().int()),

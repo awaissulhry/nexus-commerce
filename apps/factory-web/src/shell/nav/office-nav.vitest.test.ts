@@ -29,9 +29,9 @@ describe('the Office navigation (PLT-160: one declaration per area)', () => {
 })
 
 describe('navigation filtered by permission (areaNavForPerson, fail closed per row)', () => {
-  it('the owner sees every W0 area and page', () => {
+  it('the owner sees every W0 area and page, and Today', () => {
     expect(ids(officeNavFor(permissionCheck(OWNER_PERMISSIONS)))).toEqual([
-      ['home', ['home-mail-to-sort']],
+      ['home', ['home-today', 'home-mail-to-sort']],
       [
         'admin',
         ['admin-companies', 'admin-sites', 'admin-devices', 'admin-users', 'admin-roles', 'admin-numbering', 'admin-email', 'admin-languages', 'admin-imports', 'admin-audit', 'admin-connections'],
@@ -39,8 +39,8 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
     ])
   })
 
-  it('a sales person sees Home › Mail to sort and no Admin at all', () => {
-    expect(ids(officeNavFor(permissionCheck(SALES_PERMISSIONS)))).toEqual([['home', ['home-mail-to-sort']]])
+  it('a sales person sees Home › Today and Mail to sort, and no Admin at all', () => {
+    expect(ids(officeNavFor(permissionCheck(SALES_PERMISSIONS)))).toEqual([['home', ['home-today', 'home-mail-to-sort']]])
   })
 
   it('the administrator template today: the rows whose permission exists, never a pending one', () => {
@@ -88,8 +88,8 @@ describe('labels, crumbs, palette pages and the phone bar come from the same man
   })
 
   it('the palette jumps to every page the person may open', () => {
-    expect(navPages(officeNavFor(permissionCheck(SALES_PERMISSIONS))).map((page) => page.href)).toEqual(['/home/mail-to-sort'])
-    expect(navPages(nav)).toHaveLength(12)
+    expect(navPages(officeNavFor(permissionCheck(SALES_PERMISSIONS))).map((page) => page.href)).toEqual(['/home/today', '/home/mail-to-sort'])
+    expect(navPages(nav)).toHaveLength(13)
   })
 
   it('on a phone: Home and Admin as tabs (one entry under More becomes a tab), Admin current on its pages', () => {
