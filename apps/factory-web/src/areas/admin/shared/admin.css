@@ -3,12 +3,13 @@
  * stand-ins for the design's new DS parts. The controls are the design system's; this file places them with semantic
  * tokens only (no raw colours, no restyled controls).
  */
+/* A page fills the shell's main area (Owner, 2026-10-29: no empty space on the right; equal gutters come from
+ * .fw-office-main). Only inner parts keep a measure: the intro text column, a field column, a dialog. */
 .fw-adm {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-14);
   min-width: 0;
-  max-width: 1280px;
 }
 
 .fw-adm-head {
@@ -204,11 +205,20 @@
   grid-column: 1 / -1;
 }
 
+/* A card's form: its fields side by side on a wide screen (no empty half card), one under the other on a narrow one. */
 .fw-adm-form-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-items: start;
+  gap: var(--nds-space-12) var(--nds-space-24);
+}
+
+.fw-adm-form-cell {
   display: flex;
   flex-direction: column;
-  gap: var(--nds-space-12);
-  max-width: 560px;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  min-width: 0;
 }
 
 .fw-adm-toggles {
