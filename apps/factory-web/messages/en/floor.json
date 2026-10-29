@@ -1,0 +1,434 @@
+{
+  "brand": "Nexus Factory",
+  "frame": {
+    "home": "Home",
+    "help": "Help",
+    "close": "Close",
+    "where": "{station} · {site}",
+    "noStation": "No station",
+    "operatorLabel": "{name}: sign out, switch person or language",
+    "offline": "Offline: work waits on this tablet",
+    "sending": "Sending",
+    "pending_one": "waiting to be sent",
+    "pending_other": "waiting to be sent",
+    "menu": {
+      "switch": "To switch person, the next person scans their badge.",
+      "language": "Language for this session",
+      "signOut": "Sign out"
+    },
+    "helpDialog": {
+      "title": "Help",
+      "body": "Ask your team leader, or the office.",
+      "later": "Calling for help from the tablet comes later."
+    },
+    "languageDialog": {
+      "title": "Language",
+      "body": "For this screen only. After sign-in the screen speaks your own language."
+    },
+    "idle": {
+      "title": "Are you still there?",
+      "message": "You will be signed out of this tablet soon. Saved work stays.",
+      "seconds_one": "{count} second",
+      "seconds_other": "{count} seconds",
+      "stay": "I am here",
+      "signOut": "Sign out now"
+    }
+  },
+  "mode": {
+    "cutting": "Cutting",
+    "sewing": "Sewing",
+    "packing": "Packing",
+    "inspection": "Inspection",
+    "warehouse": "Warehouse",
+    "none": "No floor mode (scan only)"
+  },
+  "start": {
+    "title": "Floor",
+    "loading": "Opening…",
+    "retry": "Try again",
+    "unavailable": {
+      "title": "The factory server does not answer",
+      "body": "Check the factory Wi-Fi, then try again."
+    }
+  },
+  "enrol": {
+    "title": "Set up this tablet",
+    "step": "Step {n} of {total}",
+    "continue": "Continue",
+    "scanAgain": "Scan again",
+    "checking": "Checking the code…",
+    "scan": {
+      "title": "Scan the set-up code",
+      "where": "In the office: Admin › Devices & printers › the device › Set-up code. Hold the tablet over the QR code.",
+      "label": "Set-up code",
+      "hint": "The code works once, for 15 minutes.",
+      "read": "Code read",
+      "type": "Type the code",
+      "cameraHelp": "No scanner yet? Use the camera. If Android asks, allow the camera for this app."
+    },
+    "problem": {
+      "codeInvalid": {
+        "title": "This code does not work",
+        "body": "It was used already, it ended after 15 minutes, or it is for another factory. Make a new one in the office."
+      },
+      "offline": {
+        "title": "Set-up needs the network",
+        "body": "Connect the tablet to the factory Wi-Fi, then scan again."
+      },
+      "unavailable": {
+        "title": "The factory server does not answer",
+        "body": "Try again in a minute. The code stays valid for 15 minutes."
+      },
+      "rateLimited": {
+        "title": "Too many tries",
+        "body": "Wait a few minutes, then scan a new code."
+      }
+    },
+    "replace": {
+      "title": "Replace this tablet's set-up?",
+      "now": "Now",
+      "after": "After",
+      "afterValue": "The new code decides what it becomes. The old set-up stops working on this tablet.",
+      "keep": "Keep it",
+      "confirm": "Replace"
+    },
+    "binding": {
+      "title": "This tablet is now",
+      "device": "Device",
+      "site": "Site",
+      "station": "Station",
+      "mode": "Mode",
+      "language": "Language before sign-in",
+      "office": "Change it in the office: Admin › Devices & printers."
+    },
+    "install": {
+      "title": "Install as an app",
+      "app": {
+        "title": "App on the home screen",
+        "available": "Ready to install",
+        "installed": "Installed",
+        "manual": "From the browser menu",
+        "button": "Install",
+        "manualSteps": "Open the browser menu (⋮) and choose Install app or Add to Home screen."
+      },
+      "storage": {
+        "title": "Keep the data on this tablet",
+        "kept": "Kept",
+        "notKept": "Not kept",
+        "unknown": "Not asked yet",
+        "notKeptWhy": "Android may clear what waits on the tablet. Install the app, then ask again.",
+        "button": "Keep the data"
+      }
+    },
+    "checks": {
+      "title": "Check the parts",
+      "camera": "Camera",
+      "scanner": "Scanner",
+      "scannerHint": "Scan any label to test it.",
+      "sound": "Sound (tap to play)",
+      "vibration": "Vibration",
+      "printer": "The printer test comes with the station's printer, after sign-in.",
+      "status": {
+        "ok": "Works",
+        "missing": "Not on this tablet",
+        "waiting": "Waiting for a scan",
+        "untested": "Not tested"
+      }
+    },
+    "kiosk": {
+      "title": "Lock the tablet to the app",
+      "step1": "Open the app from the home screen.",
+      "step2": "Android Settings › Security › App pinning: switch it on.",
+      "step3": "Open Recent apps, tap the app's icon, then Pin.",
+      "step4": "To unpin: hold Back and Recent apps together (the office knows the PIN).",
+      "honest": "Android does not tell an app whether it is pinned: press Home to test it."
+    },
+    "done": {
+      "title": "Ready",
+      "body": "This tablet is {station} at {site}.",
+      "bodyNoStation": "This tablet is set up at {site}, with no station.",
+      "signIn": "Go to sign-in"
+    }
+  },
+  "signIn": {
+    "title": "Sign in",
+    "badge": {
+      "title": "Scan your badge",
+      "alone": "Your badge signs you in.",
+      "withPin": "Then type your PIN.",
+      "label": "Badge",
+      "read": "Badge read",
+      "scanOnly": "Scan it: a badge typed by hand is not taken.",
+      "noBadge": "No badge? Pick your name"
+    },
+    "names": {
+      "title": "Pick your name",
+      "pinAfter": "Then type your PIN.",
+      "letters": "Jump to a letter",
+      "all": "All",
+      "emptyTitle": "No one to pick",
+      "empty": "No one is set up for this site yet. Ask the office.",
+      "back": "Back to the badge"
+    },
+    "pin": {
+      "title": "Type your PIN",
+      "forName": "For {name}",
+      "forBadge": "For the badge you scanned",
+      "label": "PIN",
+      "entered": "{entered} of {total}",
+      "clear": "Clear",
+      "backspace": "Back",
+      "notYou": "Not you?",
+      "forgot": "Forgot your PIN?"
+    },
+    "forgot": {
+      "title": "Forgot your PIN?",
+      "body": "Your team leader or the office resets it. You choose a new one at your next sign-in."
+    },
+    "problem": {
+      "wrong": "This badge or PIN does not open this tablet. After 5 wrong PINs a person is locked for a few minutes. Ask your team leader.",
+      "rateLimited": "Too many tries on this tablet. Wait a minute.",
+      "unavailable": "The factory server does not answer. Try again.",
+      "operatorActive": "Someone else is signed in on this tablet. Ask them to sign out.",
+      "pinNeeded": "This site signs in with a badge and a PIN."
+    },
+    "signedOut": {
+      "idle": "You were signed out after a time without use.",
+      "self": "Signed out.",
+      "ended": "Your sign-in ended (shift end, or the office). Sign in again."
+    },
+    "switch": {
+      "frameTitle": "Switch person",
+      "title": "Switch person",
+      "body": "{name} is signed in. The next person types their PIN.",
+      "cancel": "Keep the person signed in"
+    },
+    "change": {
+      "title": "Choose a new PIN",
+      "current": "Type the PIN the office gave you",
+      "new": "Type a new PIN",
+      "repeat": "Type the new PIN again",
+      "rules": "Six digits. Not one digit six times, not digits in a row (like 123456), not your employee number.",
+      "problem": {
+        "mismatch": "The two PINs were not the same. Start again.",
+        "refused": "Choose another PIN: this one is too easy to guess.",
+        "wrong": "That is not the PIN the office gave you. Type it again.",
+        "repeat": "Not one digit six times. Choose another.",
+        "run": "Not digits in a row. Choose another."
+      }
+    }
+  },
+  "notice": {
+    "title": "Worker notice",
+    "heading": "Worker notice",
+    "loading": "Opening the notice…",
+    "version": "Version {label}",
+    "page": "Page {n} of {total}",
+    "next": "Next",
+    "previous": "Back",
+    "firstPage": "This is the first page.",
+    "acknowledge": "I have read it",
+    "sending": "Sending…",
+    "means": "This records that you saw this notice. It does not sign anything else.",
+    "blocks": "Scans wait until you have read it.",
+    "languageNotReady": "Your language is not ready on screen: HR gives you a paper copy in your language.",
+    "otherLanguage": "Show in another language",
+    "home": "Go to Home",
+    "reload": "Try again",
+    "done": {
+      "title": "Thank you",
+      "body": "Recorded: you saw version {label}."
+    },
+    "none": {
+      "title": "No notice to read",
+      "body": "No worker notice is in force for this company."
+    },
+    "newer": {
+      "title": "A newer version is in force",
+      "body": "Read the new version: it opens now.",
+      "open": "Open the new version"
+    },
+    "unavailable": {
+      "title": "The notice did not open",
+      "body": "The factory server does not answer. Try again."
+    }
+  },
+  "home": {
+    "title": "Home",
+    "tiles": "What you can do here",
+    "scan": {
+      "label": "Scan a label to start",
+      "hint": {
+        "cutting": "Scan a hide or a work order to open it.",
+        "sewing": "Scan a bundle or a work order to open it.",
+        "packing": "Scan a carton, a lot or a work order to open it.",
+        "inspection": "Scan a lot, a bundle or a work order to open it.",
+        "warehouse": "Scan a location, a lot or a hide to open it.",
+        "none": "Scan any label to open it."
+      }
+    },
+    "empty": {
+      "title": "Nothing to do here",
+      "body": "Nothing to do here with your role at this station. Ask your team leader."
+    },
+    "notice": {
+      "title": "New worker notice",
+      "body": "Read it when you have a minute.",
+      "blocks": "Read it before your first scan.",
+      "open": "Read it"
+    },
+    "switched": "{from} signed out · {to} signed in",
+    "badgeRefused": "This badge does not open this tablet. Ask your team leader."
+  },
+  "tile": {
+    "operation": "Operation",
+    "cut": "Cut a hide",
+    "bundles": "Bundles",
+    "receive": "Receive",
+    "pick": "Pick & issue",
+    "labels": "Garment labels",
+    "pack": "Pack",
+    "final": "Final inspection",
+    "scan": "Scan anything",
+    "hint": {
+      "scan": "Any label of the factory"
+    },
+    "held": {
+      "notice": "Read the notice first",
+      "coming": "Coming soon"
+    }
+  },
+  "scan": {
+    "title": "Scan anything",
+    "label": "Scan any label",
+    "hint": "Bundle, hide, lot, work order or location.",
+    "read": "Read {code}",
+    "type": "Type a code",
+    "camera": {
+      "start": "Camera",
+      "stop": "Close camera",
+      "error": "The camera did not start. Allow it in Android, or use the scanner."
+    },
+    "empty": "Scan a label: its card opens here.",
+    "loading": "Looking it up…",
+    "recent": "Your scans",
+    "recentNothing": "Nothing found",
+    "another": "Scan another",
+    "action": {
+      "cut": "Cut this hide",
+      "workOrder": "Open at cutting",
+      "move": "Move here"
+    },
+    "hide": {
+      "notUsable": "Do not cut this hide: its lot is not released."
+    },
+    "notOnFloor": {
+      "title": "{type} label read",
+      "body": "Its card is not on the tablet yet. Ask the office."
+    },
+    "noPermission": "You cannot open {type} here.",
+    "noPermissionBody": "Your role at this station does not open them. Ask your team leader.",
+    "unknown": {
+      "otherFactory": {
+        "title": "This label is not from this factory",
+        "body": "Check the label, or ask your team leader."
+      },
+      "typo": {
+        "title": "This code has a typo",
+        "body": "It was misread or mistyped. Scan it again."
+      },
+      "notFound": {
+        "title": "Nothing found",
+        "body": "Nothing you may open on this tablet has this code."
+      },
+      "badge": {
+        "title": "This badge does not open this tablet",
+        "body": "The person signed in stays. Ask your team leader."
+      }
+    },
+    "unavailable": {
+      "title": "The factory server does not answer",
+      "body": "Scan the label again in a minute."
+    },
+    "fact": {
+      "item": "Material",
+      "area": "Area",
+      "grade": "Grade",
+      "thickness": "Thickness",
+      "shade": "Shade",
+      "lot": "Lot",
+      "crVi": "Chromium VI",
+      "where": "Where",
+      "nowhere": "Not in stock",
+      "forWorkOrders": "Can be cut for",
+      "none": "None",
+      "style": "Style",
+      "batch": "Batch",
+      "due": "Due",
+      "colourways": "Colours",
+      "pieces": "Pieces",
+      "toCut": "Still to cut",
+      "sizesLeft": "Sizes left",
+      "name": "Name",
+      "path": "Where it is"
+    }
+  },
+  "label": {
+    "hide": "Hide",
+    "bundle": "Bundle",
+    "lot": "Lot",
+    "batch": "Batch",
+    "serial": "Serial",
+    "carton": "Carton",
+    "location": "Location",
+    "workOrder": "Work order"
+  },
+  "labelPlural": {
+    "hide": "hides",
+    "bundle": "bundles",
+    "lot": "lots",
+    "batch": "batches",
+    "serial": "serials",
+    "carton": "cartons",
+    "location": "locations",
+    "workOrder": "work orders"
+  },
+  "status": {
+    "hide": {
+      "FULL": "Whole",
+      "PARTLY_CUT": "Partly cut",
+      "REMNANT": "Remnant",
+      "CONSUMED": "Used up",
+      "SCRAPPED": "Scrapped"
+    },
+    "lot": {
+      "QUARANTINE": "On hold",
+      "RELEASED": "Released",
+      "REJECTED": "Rejected",
+      "BLOCKED": "Blocked"
+    },
+    "crVi": {
+      "NOT_REQUIRED": "Not required",
+      "PENDING": "Test pending",
+      "PASS": "Passed",
+      "FAIL": "Failed"
+    },
+    "workOrder": {
+      "DRAFT": "Draft",
+      "RELEASED": "Released",
+      "IN_PROGRESS": "In progress",
+      "COMPLETED": "Completed",
+      "CLOSED": "Closed",
+      "CANCELLED": "Cancelled"
+    },
+    "location": {
+      "WAREHOUSE": "Warehouse",
+      "ZONE": "Zone",
+      "BIN": "Bin",
+      "RECEIVING": "Receiving",
+      "QUARANTINE": "Quarantine",
+      "PRODUCTION": "Production",
+      "SHIPPING": "Shipping"
+    }
+  }
+}
