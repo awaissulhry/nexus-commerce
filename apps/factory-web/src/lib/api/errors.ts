@@ -28,9 +28,17 @@ export type ApiErrorKind =
   | 'internal'
 
 export interface ApiIssue {
-  path?: ReadonlyArray<string | number>
+  /** Where the problem is: the factory API sends a dotted string (`stepUp`, `lines.0.qty`); a list is read too. */
+  path?: string | ReadonlyArray<string | number>
   message?: string
   code?: string
+}
+
+/** An issue's path as one dotted string, whichever shape it came in (`''` without one). */
+export function issuePath(issue: ApiIssue): string {
+  const path = issue.path
+  if (typeof path === 'string') return path
+  return Array.isArray(path) ? path.join('.') : ''
 }
 
 export class ApiError extends Error {
@@ -55,7 +63,7 @@ export function isApiError(error: unknown): error is ApiError {
 /** The kind for an HTTP status (and, for 403, whether the API asked for a step-up). */
 export function errorKindFor(status: number, issues: readonly ApiIssue[] = []): ApiErrorKind {
   if (status === 401) return 'signed_out'
-  if (status === 403) return issues.some((issue) => issue.path?.[0] === 'stepUp') ? 'step_up' : 'forbidden'
+  if (status === 403) return issues.some((issue) => issuePath(issue).split('.')[0] === 'stepUp') ? 'step_up' : 'forbidden'
   if (status === 404) return 'not_found'
   if (status === 409) return 'conflict'
   if (status === 400 || status === 422) return 'invalid'

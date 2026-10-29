@@ -4,7 +4,7 @@ import { useEffect, useMemo, type MouseEvent } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Card, EmptyState } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
-import { messagesFor } from '../../../lib/i18n/messages'
+import { CATALOGUE, messagesFor } from '../../../lib/i18n/messages'
 import { LOCALES } from '../../../lib/i18n/locales'
 import { I18nProvider, LocaleSwitchProvider } from '../../../lib/i18n/provider'
 import { findCase, findScreen } from '../_registry'
@@ -22,7 +22,8 @@ export function DesignFrame({ screenId, caseId, options }: { screenId: string; c
   const pathname = usePathname()
   const screen = findScreen(screenId)
   const item = screen ? findCase(screen, caseId) : undefined
-  const messages = useMemo(() => messagesFor(options.locale, ['shell']), [options.locale])
+  // Every catalogue (shell, auth, me, each area's): a screen's view reads its own namespace as the live page gives it.
+  const messages = useMemo(() => messagesFor(options.locale, Object.keys(CATALOGUE[options.locale])), [options.locale])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', options.theme === 'dark')

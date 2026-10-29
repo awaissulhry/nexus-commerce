@@ -4,8 +4,9 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 /**
  * The tenancy core's synthetic seed: one made-up tenant with two companies, one plant per company, and on each plant
  * four work centres, a line and five stations (two on the line, three standing alone). Every name is invented
- * ("Seed …"); no fiscal identifier is filled in. The tenant is written in the platform scope, everything else in the
- * tenant's office scope, as the app does.
+ * ("Seed …"); no fiscal identifier is filled in. Company A has a bank account for its deposits: the IBAN is the
+ * documented Italian example of the SWIFT IBAN registry (no real account), no BIC; company B has none. The tenant is
+ * written in the platform scope, everything else in the tenant's office scope, as the app does.
  */
 
 export interface CoreSeed {
@@ -15,9 +16,12 @@ export interface CoreSeed {
   readonly sites: readonly { readonly id: string; readonly companyId: string; readonly code: string }[]
 }
 
+/** The IBAN registry's documented example for Italy (ISO 13616): a valid check digit, no real account. */
+export const EXAMPLE_IBAN_IT = 'IT60X0542811101000000123456'
+
 const COMPANIES = [
-  { key: 'A', site: 'A1' },
-  { key: 'B', site: 'B1' },
+  { key: 'A', site: 'A1', bank: { bankAccountHolder: 'Seed Company A', iban: EXAMPLE_IBAN_IT, bic: null, bankName: 'Seed example bank' } },
+  { key: 'B', site: 'B1', bank: { bankAccountHolder: null, iban: null, bic: null, bankName: null } },
 ] as const
 
 const WORK_CENTRES = [
@@ -58,11 +62,14 @@ export async function seed({ db, namespace }: SeedContext): Promise<CoreSeed> {
           tradeName: `Seed ${company.key}`,
           address: { line1: `Via Esempio ${company.key === 'A' ? 1 : 2}`, postalCode: '00000', city: 'Seedville', country: 'IT' },
           documentFooter: `Seed Company ${company.key} - synthetic data`,
+          ...company.bank,
         }
         await tx.company.upsert({ where: { id: company.id }, create: { id: company.id, ...data }, update: data })
       }
       for (const site of sites) {
-        const data = { companyId: site.companyId, code: site.code, name: `Seed plant ${site.code}`, kind: SiteKind.PLANT }
+        // Its delivery address: purchase orders print it (and refuse a send without it).
+        const address = { line1: `Via Esempio ${site.code === 'A1' ? 11 : 12}`, postalCode: '00000', city: 'Seedville', country: 'IT' }
+        const data = { companyId: site.companyId, code: site.code, name: `Seed plant ${site.code}`, kind: SiteKind.PLANT, address }
         await tx.site.upsert({ where: { id: site.id }, create: { id: site.id, ...data }, update: data })
 
         const at = { companyId: site.companyId, siteId: site.id }

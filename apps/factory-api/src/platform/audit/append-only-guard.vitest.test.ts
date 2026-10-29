@@ -42,7 +42,7 @@ const laterMigration = (sql: string) => ({ [`${MIGRATIONS}/209912010000_zz_later
 
 describe('check-append-only', () => {
   it('passes on the repository and on an untouched copy', () => {
-    expect(guard()).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(14 append-only model\(s\): AuditLog, IdempotencyReceipt, IntegrationCall, StockMove, StockValuation, LinkEvidence, NumberAllocation, ViesCheck, CutLog, CutLogPiece, OperationScan, WorkerNoticeAck, QuoteAcceptance, Message/) })
+    expect(guard()).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(22 append-only model\(s\): AuditLog, IdempotencyReceipt, IntegrationCall, StockMove, StockValuation, LinkEvidence, SdiNotification, PaymentAllocation, NumberAllocation, ViesCheck, StaffNoticeAck, CutLog, CutLogPiece, OperationScan, WorkerNoticeAck, QualityRelease, QualityReleaseReversal, QuoteAcceptance, Ddt, DdtCancellation, TrackingEvent, Message/) })
     expect(guard(tree()).status).toBe(0)
   })
 

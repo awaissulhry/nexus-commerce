@@ -1,0 +1,413 @@
+// Shipping (plan A1 §2.1 "Append-only", "Issued documents", §2.4 F, §2.5 "Shipment"; PLAN §2.8 "DDT", "Sequential,
+// gap-free numbering", §4.7 stage 14-ship; features LOG-001, LOG-039, LOG-054, LOG-059, LOG-117, QHS-058): the shipping
+// settings of each site, shipments of a sales order's released garments in parcels, the transport document (DDT) that
+// travels with them and its cancellation, and the carrier's tracking events. apps/factory-api's modules/shipping writes
+// them (B-W1-46 settings, shipments and packing, B-W1-47 DDT, B-W1-48 carrier labels and tracking through Sendcloud,
+// B-W1-49 the Declaration of Conformity with the shipment), always through command(); the floor packs through
+// floorCommand.
+//
+// A shipment (LOG-001) sends garments of one sales order from one site to the order's party: DRAFT (lines and parcels
+// are planned and packed) → PACKED (every parcel weighed; a serial-tracked line holds its serials; carrier labels are
+// bought) → SHIPPED (the goods left; with its DDT) → DELIVERED | RETURNED (the carrier brought them back); CANCELLED from
+// DRAFT or PACKED. Its lines are cells (colourway x size) of the order's work orders: only RELEASED garments ship, so
+// the lines of a cell, over every shipment that is not CANCELLED, never hold more than the cell's quality releases
+// (QHS-058, LOG-001; the …_quality_shipping_guards triggers, under a lock per cell).
+//
+// The DDT (Documento di trasporto, DPR 472/1996 art. 1 c.3 with DPR 627/1978; LOG-054): numbered from the company's
+// DDT series (NumberKind DDT, fiscal: gapless per company and year; apps/factory-api's allocateNumber in the issuing
+// command), with the sender, the recipient, the goods (nature, quality, quantity), the reason for the transport, who
+// carries it, its start, the goods' appearance, the packages and the weight. Issued once, then never changed or removed
+// (append-only, for every login); a wrong DDT is cancelled by a DdtCancellation row (it keeps its number) and a new one
+// is issued. Its PDF is a file of the row (StoredFile recordType "Ddt", kind FISCAL_ARCHIVE: ten years). A shipment
+// leaves (SHIPPED) only with a DDT that is not cancelled, unless an immediate invoice travels with the goods
+// (ddtRequired false; DPR 633/1972 art. 21 c.4).
+//
+// Carriers (LOG-039, LOG-059): Sendcloud through the integration gateway (B-W1-48), or the company's own van, or the
+// customer's carrier. A parcel carries its tracking number and its carrier label (a file of the row); tracking events
+// are append-only.
+//
+// Who sees what (ownership/shipping.json): the office reads and writes; the floor reads its OWN site's settings,
+// shipments, lines, parcels, DDTs and their cancellations, packs (lines and parcels of a DRAFT shipment; DRAFT ⇄
+// PACKED); a portal or link session (DOCUMENT_VIEW) reads its OWN party's shipments, lines, parcels, DDTs, cancellations
+// and tracking, never an internal note nor who in the office wrote a row. No table here has a cost, price, margin or
+// wages column (freight is the money module's).
+
+/// Who carries the goods (trasporto a cura del; DPR 472/1996), as factory-domain documents DDT_TRANSPORT_BY.
+enum TransportBy {
+  /// The sender: our own van.
+  SENDER
+  /// The recipient: the customer collects (ex works, LOG-053).
+  RECIPIENT
+  /// A carrier (Sendcloud's carriers, or one named on the DDT).
+  CARRIER
+}
+
+/// A site's shipping settings (LOG-117): the sender and return addresses printed on labels and DDTs, the default carrier
+/// account and service, the default transport and goods' appearance, the label and document printers of the packing
+/// station, and the daily cut-off. The site's row has the site's own id.
+model ShippingSettings {
+  /// The site's own id (`siteId`): a site has at most one row, read by the site's id.
+  id                     String       @id @db.Uuid
+  tenantId               String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId              String       @db.Uuid
+  siteId                 String       @db.Uuid
+  /// The sender as printed on carrier labels and DDTs: { name, line1, line2?, postalCode, city, province?, country,
+  /// phone?, email? }; and where returns go (null: the sender's address).
+  senderAddress          Json
+  returnAddress          Json?
+  /// The Sendcloud account (integration.prisma, provider SENDCLOUD) labels are bought with, its default carrier code
+  /// ("brt", "gls") and service (Sendcloud's shipping method); null: none set.
+  integrationAccountId   String?      @db.Uuid
+  defaultCarrierCode     String?
+  defaultServiceCode     String?
+  defaultTransportBy     TransportBy  @default(CARRIER)
+  /// The goods' appearance a DDT starts with (aspetto esteriore dei beni: "scatole di cartone").
+  defaultGoodsAppearance String?
+  /// The packing station's printers (print.prisma, this site's): carrier labels and A4 documents (DDT, DoC).
+  labelPrinterId         String?      @db.Uuid
+  documentPrinterId      String?      @db.Uuid
+  /// The time of day (HH:MM, the site's zone) after which a parcel leaves the next working day.
+  cutOffTime             String?
+  version                Int          @default(1)
+  createdAt              DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById            String?      @db.Uuid
+
+  site               Site                @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and
+  // siteId.
+  integrationAccount IntegrationAccount? @relation(fields: [tenantId, integrationAccountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  labelPrinter       Printer?            @relation("ShippingLabelPrinter", fields: [tenantId, companyId, siteId, labelPrinterId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  documentPrinter    Printer?            @relation("ShippingDocumentPrinter", fields: [tenantId, companyId, siteId, documentPrinterId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, siteId])
+}
+
+/// A shipment (LOG-001, LOG-039; A1 §2.4 F Shipment): released garments of one sales order sent from one site to the
+/// order's party, in parcels, with its DDT. DRAFT → PACKED → SHIPPED → DELIVERED | RETURNED; CANCELLED (with a reason)
+/// from DRAFT or PACKED. Never deleted.
+model Shipment {
+  id                   String         @id @db.Uuid
+  tenantId             String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company, and the site the goods leave from (one of its sites).
+  companyId            String         @db.Uuid
+  siteId               String         @db.Uuid
+  /// The order's party (the partner role's policy key).
+  partyId              String         @db.Uuid
+  salesOrderId         String         @db.Uuid
+  /// The number from the company's SHIPMENT series, unique in the company.
+  number               String
+  /// DRAFT → PACKED → SHIPPED → DELIVERED | RETURNED; PACKED → DRAFT (unpacked); CANCELLED from DRAFT or PACKED.
+  /// DELIVERED, RETURNED and CANCELLED are final.
+  status               ShipmentStatus @default(DRAFT)
+  /// The delivery address it goes to (the party's), and as sent (a snapshot, the shape of SalesOrder.shipTo; fixed
+  /// once SHIPPED).
+  shipToAddressId      String?        @db.Uuid
+  shipTo               Json
+  transportBy          TransportBy    @default(CARRIER)
+  /// The Sendcloud account its labels were bought with (B-W1-48): for the office only.
+  /// @internal
+  integrationAccountId String?        @db.Uuid
+  /// The carrier (Sendcloud's code, and its name as printed), the service, and the carrier's id of the shipment.
+  carrierCode          String?
+  carrierName          String?
+  serviceCode          String?
+  carrierShipmentId    String?
+  /// False only when an immediate invoice travels with the goods instead of a DDT (DPR 633/1972 art. 21 c.4): then it
+  /// leaves without one.
+  ddtRequired          Boolean        @default(true)
+  /// Set from PACKED on (cleared when unpacked); shipped from SHIPPED on; delivered exactly when DELIVERED; returned
+  /// exactly when RETURNED.
+  packedAt             DateTime?      @db.Timestamptz(3)
+  shippedAt            DateTime?      @db.Timestamptz(3)
+  deliveredAt          DateTime?      @db.Timestamptz(3)
+  returnedAt           DateTime?      @db.Timestamptz(3)
+  /// Set exactly when CANCELLED.
+  cancelledAt          DateTime?      @db.Timestamptz(3)
+  cancelReason         String?
+  /// For the office and the packers only: the partner role can neither read nor write it.
+  /// @internal
+  internalNote         String?
+  version              Int            @default(1)
+  createdAt            DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?        @db.Uuid
+
+  site               Site                @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  salesOrder         SalesOrder          @relation(fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  shipToAddress      PartyAddress?       @relation(fields: [tenantId, partyId, shipToAddressId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  integrationAccount IntegrationAccount? @relation(fields: [tenantId, integrationAccountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines              ShipmentLine[]
+  parcels            Parcel[]
+  ddts               Ddt[]
+  trackingEvents     TrackingEvent[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the references from its lines, parcels, DDTs and tracking events: the same site and party.
+  @@unique([tenantId, siteId, partyId, id])
+  @@index([tenantId, salesOrderId])
+  @@index([tenantId, status])
+}
+
+enum ShipmentStatus {
+  DRAFT
+  PACKED
+  SHIPPED
+  DELIVERED
+  /// The carrier brought the goods back (not delivered).
+  RETURNED
+  CANCELLED
+}
+
+/// One line of a shipment (LOG-001): garments of one cell (colourway x size) of a work order that makes a line of the
+/// shipment's order, released by quality, and the parcel they are packed in. A serial-tracked style's line holds its
+/// serials (GarmentSerial.shipmentLineId) once PACKED. Written, changed and removed only while the shipment is a DRAFT.
+model ShipmentLine {
+  id               String   @id @db.Uuid
+  tenantId         String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId           String   @db.Uuid
+  /// The shipment's party (the partner role's policy key).
+  partyId          String   @db.Uuid
+  shipmentId       String   @db.Uuid
+  /// The parcel it is packed in; null: not packed yet.
+  parcelId         String?  @db.Uuid
+  /// The work order cell the garments come from, and that cell's sales order line and size (copied; kept equal).
+  workOrderId      String   @db.Uuid
+  workOrderSizeId  String   @db.Uuid
+  salesOrderLineId String   @db.Uuid
+  size             String
+  /// Garments, from 1.
+  quantity         Int
+  version          Int      @default(1)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?  @db.Uuid
+
+  shipment       Shipment        @relation(fields: [tenantId, siteId, partyId, shipmentId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and
+  // shipmentId.
+  parcel         Parcel?         @relation(fields: [tenantId, siteId, shipmentId, parcelId], references: [tenantId, siteId, shipmentId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrderSize  WorkOrderSize   @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  salesOrderLine SalesOrderLine  @relation(fields: [tenantId, partyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  serials        GarmentSerial[]
+
+  // The target of the serials' reference: a line of the serial's cell.
+  @@unique([tenantId, siteId, workOrderSizeId, id])
+  @@index([tenantId, shipmentId])
+  // The shipped garments per cell (only released ones ship).
+  @@index([tenantId, workOrderSizeId])
+}
+
+/// One parcel of a shipment (LOG-039: one consignment of several boxes): its place, weight and size, and once a carrier
+/// label is bought its tracking number and the carrier's parcel id; the label is a file of the row (StoredFile
+/// recordType "Parcel"). Added and removed while the shipment is a DRAFT; its weight, size and label change until it
+/// leaves (DRAFT or PACKED).
+model Parcel {
+  id              String    @id @db.Uuid
+  tenantId        String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId          String    @db.Uuid
+  /// The shipment's party (the partner role's policy key).
+  partyId         String    @db.Uuid
+  shipmentId      String    @db.Uuid
+  /// 1, 2, 3 … in the shipment.
+  seq             Int
+  /// Kilograms, above 0; every parcel has one from PACKED on.
+  grossWeightKg   Decimal?  @db.Decimal(18, 4)
+  /// Centimetres, above 0.
+  lengthCm        Decimal?  @db.Decimal(10, 2)
+  widthCm         Decimal?  @db.Decimal(10, 2)
+  heightCm        Decimal?  @db.Decimal(10, 2)
+  /// The carrier's tracking number and its id of the parcel, set when the label is bought.
+  trackingNumber  String?
+  carrierParcelId String?
+  labelledAt      DateTime? @db.Timestamptz(3)
+  version         Int       @default(1)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?   @db.Uuid
+
+  shipment       Shipment        @relation(fields: [tenantId, siteId, partyId, shipmentId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines          ShipmentLine[]
+  trackingEvents TrackingEvent[]
+
+  @@unique([tenantId, shipmentId, seq])
+  // The target of the lines' and tracking events' references: a parcel of the same site and shipment.
+  @@unique([tenantId, siteId, shipmentId, id])
+  @@index([tenantId, trackingNumber])
+}
+
+/// A transport document (DDT, Documento di trasporto; DPR 472/1996; LOG-054; A1 §2.4 F TransportDocument): issued for a
+/// PACKED or SHIPPED shipment with a number from the company's DDT series, and frozen: the data printed on its PDF.
+/// Never changed or removed (the triggers, for every login); cancelled by a DdtCancellation row, which keeps its number
+/// (a new DDT replaces it).
+/// @append-only
+model Ddt {
+  id             String       @id @db.Uuid
+  tenantId       String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The shipment's company (the sender) and site (where the transport starts).
+  companyId      String       @db.Uuid
+  siteId         String       @db.Uuid
+  /// The recipient: the shipment's party (the partner role's policy key).
+  partyId        String       @db.Uuid
+  shipmentId     String       @db.Uuid
+  /// The number series (a company's DDT series, NumberKind DDT, for the year) and the number it gave, as printed;
+  /// unique in the series. allocateNumber's NumberAllocation row (recordType "Ddt") holds the same number.
+  numberSeriesId String       @db.Uuid
+  number         String
+  /// The DDT's date (Europe/Rome).
+  documentDate   DateTime     @db.Date
+  /// The reason for the transport (causale; factory-domain DDT_REASONS); OTHER says it in words.
+  reason         DdtReason
+  reasonText     String?
+  transportBy    TransportBy
+  /// The carrier's identity when a carrier carries it: { name, address?, vatNumber? }.
+  carrier        Json?
+  /// The start of the transport (data e ora di inizio trasporto).
+  startAt        DateTime     @db.Timestamptz(3)
+  /// The goods' external appearance (aspetto esteriore dei beni).
+  appearance     String
+  /// The number of packages (numero colli), from 1: the shipment's parcels.
+  packages       Int
+  /// Kilograms, above 0; the net weight at most the gross.
+  grossWeightKg  Decimal      @db.Decimal(18, 4)
+  netWeightKg    Decimal?     @db.Decimal(18, 4)
+  /// Porto: FREE (franco) or FORWARD (assegnato), when printed.
+  freight        DdtFreight?
+  /// As printed: the sender (the company's c.c. art. 2250 data), the recipient { name, address, vatNumber?, fiscalCode? }
+  /// and the place of delivery when it differs (factory-domain documents' DocumentParty and DdtTransport.destination).
+  sender         Json
+  recipient      Json
+  destination    Json?
+  /// The goods, as printed (nature, quality, quantity; no price): [{ "seq": 1, "description": "…", "quantity": "2",
+  /// "uom": "PCS", "salesOrderLineId": "…", "size": "52", "batchNumber": "…", "serials": ["…"] }], at least one.
+  lines          Json
+  /// The documents it refers to (the customer's order number), as factory-domain DocumentReference: [{ kind, number,
+  /// date? }].
+  documentRefs   Json?
+  /// Printed remarks.
+  remarks        String?
+  /// For the office only: the partner role can neither read nor write it.
+  /// @internal
+  internalNote   String?
+  /// The issuing command's server time; who issued it is createdById.
+  issuedAt       DateTime     @db.Timestamptz(3)
+  createdById    String?      @db.Uuid
+
+  site          Site              @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  shipment      Shipment          @relation(fields: [tenantId, siteId, partyId, shipmentId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  numberSeries  NumberSeries      @relation(fields: [tenantId, companyId, numberSeriesId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  cancellations DdtCancellation[]
+  // money.prisma: the invoice lines of the goods it carried (TD24).
+  invoiceLines  InvoiceLine[]
+
+  // Never the same number twice in a series period.
+  @@unique([tenantId, numberSeriesId, number])
+  // The target of the cancellations' reference: the same site and party.
+  @@unique([tenantId, siteId, partyId, id])
+  // The target of the invoice lines' reference: the same party.
+  @@unique([tenantId, partyId, id])
+  @@index([tenantId, shipmentId])
+}
+
+/// Why the goods travel (causale del trasporto), as factory-domain documents DDT_REASONS.
+enum DdtReason {
+  SALE
+  /// Goods sent to be worked on (conto lavorazione).
+  WORK_ON_ACCOUNT
+  RETURN_FROM_WORK
+  RETURN
+  ON_APPROVAL
+  REPAIR
+  SAMPLE
+  TRANSFER
+  OTHER
+}
+
+/// Porto (who pays the carriage), as factory-domain documents DDT_FREIGHT.
+enum DdtFreight {
+  /// Franco: the sender pays.
+  FREE
+  /// Assegnato: the recipient pays.
+  FORWARD
+}
+
+/// The cancellation of an issued DDT (A1 §2.5: a DDT is never deleted; LOG-054): why and when. The DDT keeps its number
+/// in the series (no gap); a new DDT replaces it. Never changed or removed (the triggers, for every login). One per DDT
+/// (the shipping module's, under the DDT's lock: a unique key of ids alone cannot be copied by the generated isolation
+/// tests).
+/// @append-only
+model DdtCancellation {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId      String   @db.Uuid
+  /// The DDT's party (the partner role's policy key).
+  partyId     String   @db.Uuid
+  ddtId       String   @db.Uuid
+  reason      String
+  cancelledAt DateTime @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  ddt Ddt @relation(fields: [tenantId, siteId, partyId, ddtId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, ddtId])
+}
+
+/// One tracking event of a shipment or one of its parcels (LOG-059; A1 §2.4 F TrackingEvent): the carrier's status
+/// mapped to one list, when it happened, where, and where the event came from (a Sendcloud webhook, a poll, or typed by
+/// the office for our own van). A resent carrier event is recorded once (externalEventId). Never changed or removed (the
+/// triggers, for every login).
+/// @append-only
+model TrackingEvent {
+  id                String         @id @db.Uuid
+  tenantId          String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId            String         @db.Uuid
+  /// The shipment's party (the partner role's policy key).
+  partyId           String         @db.Uuid
+  shipmentId        String         @db.Uuid
+  /// The parcel it is about; null: the whole shipment.
+  parcelId          String?        @db.Uuid
+  status            TrackingStatus
+  /// The carrier's own status code and text, and the place, as reported.
+  carrierStatusCode String?
+  description       String?
+  location          String?
+  /// When it happened (the carrier's time), and when the factory recorded it.
+  occurredAt        DateTime       @db.Timestamptz(3)
+  recordedAt        DateTime       @default(now()) @db.Timestamptz(3)
+  source            TrackingSource
+  /// The carrier's (or Sendcloud's) id of the event: one row per shipment and id; null for a typed event.
+  externalEventId   String?
+  createdById       String?        @db.Uuid
+
+  shipment Shipment @relation(fields: [tenantId, siteId, partyId, shipmentId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and
+  // shipmentId.
+  parcel   Parcel?  @relation(fields: [tenantId, siteId, shipmentId, parcelId], references: [tenantId, siteId, shipmentId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, shipmentId, externalEventId])
+  @@index([tenantId, shipmentId, occurredAt])
+}
+
+/// One status list for every carrier (LOG-059).
+enum TrackingStatus {
+  /// The label is printed; the carrier has not collected it.
+  LABEL_CREATED
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  /// A delay, an address problem, a failed delivery.
+  EXCEPTION
+  /// Going or gone back to the sender.
+  RETURNED
+}
+
+/// Where a tracking event came from.
+enum TrackingSource {
+  /// A verified Sendcloud webhook (the inbound ledger).
+  WEBHOOK
+  /// A poll of the carrier through the gateway.
+  POLL
+  /// Typed by the office (our own van, the customer's carrier).
+  MANUAL
+}

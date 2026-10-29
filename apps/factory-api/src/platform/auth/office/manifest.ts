@@ -14,4 +14,6 @@ export const manifest = defineManifest({
   'POST /auth/office/totp/setup': { audiences: ['office'], permission: SIGNED_IN, scope: 'tenant' },
   'POST /auth/office/totp/confirm': { audiences: ['office'], permission: SIGNED_IN, scope: 'tenant' },
   'POST /auth/office/totp/disable': { audiences: ['office'], permission: SIGNED_IN, scope: 'tenant' },
+  'POST /auth/office/password': { audiences: ['office'], permission: SIGNED_IN, scope: 'tenant' },
+  'POST /auth/office/locale': { audiences: ['office'], permission: SIGNED_IN, scope: 'tenant' },
 })

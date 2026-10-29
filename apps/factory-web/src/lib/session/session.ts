@@ -25,8 +25,8 @@ export interface OfficeSession {
   /** The company the request works in (`x-factory-company`, else the session's starting one). */
   company: CompanyRef | null
   /**
-   * The companies this person may switch to. W0: the API lists none yet (the Companies screen and its routes come
-   * with B-W0-27), so this holds the current company only; the switcher already takes many.
+   * The companies this person may switch to: those their live roles reach (`me.companies`), else the current one. A
+   * tenant of several companies starts a session in none (`company` null) until the address names one.
    */
   companies: CompanyRef[]
   /** The current company's sites (W0: none listed by the API yet; the switcher then offers "All sites"). */
@@ -40,7 +40,7 @@ export function sessionFromMe(me: OfficeMe): OfficeSession {
     user: me.user,
     tenant: me.tenant,
     company: me.company,
-    companies: me.company ? [me.company] : [],
+    companies: me.companies.length > 0 ? me.companies : me.company ? [me.company] : [],
     sites: [],
     permissions: me.permissions,
     mfa: { enabled: me.mfa.enabled, required: me.mfa.required, satisfied: me.mfa.satisfied },

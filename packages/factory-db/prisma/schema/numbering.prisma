@@ -40,6 +40,10 @@ model NumberSeries {
 
   company     Company            @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   allocations NumberAllocation[]
+  // shipping.prisma: the DDTs numbered from it.
+  ddts        Ddt[]
+  // money.prisma: the invoices and credit notes numbered from it.
+  invoices    Invoice[]
 
   @@unique([tenantId, companyId, kind, code, scopeKey])
   // The target of the allocations' tenant- and company-safe reference.
@@ -61,6 +65,8 @@ enum NumberKind {
   RETURN
   LOT
   BATCH
+  /// The PPE register's entries (REG-…; quality.prisma PpeRegisterEntry.reference).
+  PPE_REGISTER
 }
 
 enum NumberReset {

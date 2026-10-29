@@ -19,8 +19,11 @@ import type { CurrencyCode, DecimalString, MinorUnits } from '../core/money'
  * business dates (`YYYY-MM-DD`), the start of a transport an instant (ISO 8601 with a zone).
  */
 
-/** The fixed layouts (GAP-008). The invoice is a COPY: the legal invoice is the FatturaPA XML sent through SDI. */
-export const DOCUMENT_TYPES = ['QUOTE', 'PURCHASE_ORDER', 'DDT', 'INVOICE_COPY'] as const
+/**
+ * The fixed layouts (GAP-008). The invoice is a COPY: the legal invoice is the FatturaPA XML sent through SDI. The
+ * packing list (B-W1-46, LOG-039) says which garments are in which parcel of a shipment: no prices, not a fiscal document.
+ */
+export const DOCUMENT_TYPES = ['QUOTE', 'PURCHASE_ORDER', 'DDT', 'INVOICE_COPY', 'PACKING_LIST'] as const
 export type DocumentType = (typeof DOCUMENT_TYPES)[number]
 
 /** The languages every layout is printed in. */
@@ -105,6 +108,8 @@ export interface DocumentLine {
   readonly vatNature?: string | null
   /** A purchase order line's requested delivery date. */
   readonly deliveryDate?: BusinessDate | null
+  /** PACKING_LIST: the parcel (collo) the line is packed in, as printed ("1", "2"). */
+  readonly parcel?: string | null
 }
 
 /** One VAT rate of the totals. */
@@ -163,6 +168,16 @@ export interface DdtTransport {
   readonly destination?: (PostalAddress & { readonly name?: string | null }) | null
 }
 
+/** What a packing list says beside its lines (B-W1-46, LOG-039). */
+export interface PackingFacts {
+  /** Number of parcels, at least 1. */
+  readonly packages: number
+  /** The parcels' gross weight in kilograms, Decimal(18,4); null while a parcel is not weighed. */
+  readonly grossWeightKg?: DecimalString | null
+  /** Where the parcels go, when it is not the party's address. */
+  readonly shipTo?: (PostalAddress & { readonly name?: string | null }) | null
+}
+
 /** References to other documents, printed in the header facts. */
 export const REFERENCE_KINDS = ['CUSTOMER_ORDER', 'QUOTE', 'SALES_ORDER', 'PURCHASE_ORDER', 'SUPPLIER_QUOTE', 'DDT', 'INVOICE'] as const
 export type ReferenceKind = (typeof REFERENCE_KINDS)[number]
@@ -204,6 +219,8 @@ export interface DocumentInput {
   readonly deliveryTerms?: string | null
   /** DDT only, required there. */
   readonly transport?: DdtTransport | null
+  /** PACKING_LIST only, required there: the parcels, their gross weight when every one is weighed, and where they go. */
+  readonly packing?: PackingFacts | null
   /** INVOICE_COPY: the FatturaPA document kind (default TD01), the SDI file id once known, the due date. */
   readonly invoice?: { readonly kind?: InvoiceKind | null; readonly sdiId?: string | null; readonly dueDate?: BusinessDate | null } | null
   readonly notes?: string | null

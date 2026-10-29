@@ -90,6 +90,12 @@ model Item {
   defaultSupplierId   String?      @db.Uuid
   /// That supplier's article code.
   supplierArticleCode String?
+  /// The default supplier's terms (PLN-066; planning's suggestion and order-by date): calendar days from the order to
+  /// the goods at the site, 0 or more; the least it sells and the steps it sells in, both above 0, in `purchaseUom`.
+  /// null: none on record (planning orders by the need date and rounds only to whole units).
+  leadTimeDays        Int?
+  minOrderQty         Decimal?     @db.Decimal(18, 4)
+  orderMultiple       Decimal?     @db.Decimal(18, 4)
   /// The standard purchase price per base unit, typed by the office (GAP-006): quotes and the cost sheet use it until
   /// supplier price lists come (W2a). Never shown to the floor, a portal or a link.
   /// @grain cost
@@ -336,6 +342,9 @@ model Style {
   ppeClass              String?
   /// Made-to-measure single units may be made from it (PRD-288: inside the certified range of its basic model).
   mtmAllowed            Boolean     @default(false)
+  /// How its garments are traced (Q31, quality.prisma): one batch number per work order (BATCH, the default) or also a
+  /// serial per garment (SERIAL). Changes only while none of its work orders has a serial or a quality release.
+  garmentTracking       GarmentTracking @default(BATCH)
   /// The measurement template a made-to-measure unit is measured with (PRD-200).
   measurementTemplateId String?     @db.Uuid
   status                StyleStatus @default(DRAFT)
@@ -359,6 +368,8 @@ model Style {
   salesOrderLines     SalesOrderLine[]
   // production.prisma: the work orders that make it.
   workOrders          WorkOrder[]
+  // quality.prisma: the PPE register's entries about it.
+  ppeRegisterEntries  PpeRegisterEntry[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the style's rows.
@@ -487,6 +498,8 @@ model StyleRevision {
   salesOrderLines SalesOrderLine[]
   // production.prisma: the work orders released with it as their frozen specification.
   workOrders      WorkOrder[]
+  // quality.prisma: the PPE register entries about garments made to it.
+  ppeRegisterEntries PpeRegisterEntry[]
 
   @@unique([tenantId, styleId, revision])
   // The target of the references from the revision's parts: a revision of the same style.

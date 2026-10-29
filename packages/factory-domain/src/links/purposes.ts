@@ -4,6 +4,9 @@ import { isUuid } from '../core/ids'
 import type { Grant, Permission } from '../core/permissions'
 import { LINK_ACCEPT, LINK_CONFIRM, LINK_DECLINE, LINK_OPEN } from './permissions'
 
+/** files.read (auth/permissions/catalogue FILES_DEFINITIONS), named here: the catalogue imports this folder. */
+const FILES_READ = 'files.read' satisfies Permission
+
 /**
  * The purposes of a one-off link (plan A1 §3.10 "Links", §2.6, §3.11; PLAN §4.7 stages 06a-accept and 08-buy; features
  * SAL-099, PLT-007, PLT-035). A link is a bearer key for ONE purpose on ONE record of ONE party, with an expiry and a use
@@ -12,8 +15,13 @@ import { LINK_ACCEPT, LINK_CONFIRM, LINK_DECLINE, LINK_OPEN } from './permission
  *   purpose        record          answers           counted uses           grains  typed name      email check
  *   QUOTE_ACCEPT   Quote           accept, decline   accept, decline (1)    price   accept: needed  accept, when known
  *   PO_CONFIRM     PurchaseOrder   confirm, decline  confirm, decline (1)   none    optional        no
- *   DOCUMENT_VIEW  StoredFile      none              every open (20)        price   no              no
+ *   DOCUMENT_VIEW  StoredFile,     none              every open (20)        price   no              no
+ *                  Shipment
  *   DEPOSIT_INFO   DepositRequest  none              every open (20)        price   no              no
+ *
+ * A DOCUMENT_VIEW session also reads files (files.read, over the link's company and party): platform/files lets a link
+ * see only the files shared with its party's links that are its record or belong to it (audienceSees), behind the
+ * partner role's wall. The shipping module's link of a Shipment shows its DDT, DoC and leaflet copies (B-W1-49).
  *
  * The price grain goes only to purposes that show the party its OWN document (its quote, its invoice, its deposit
  * request: the party scope of the session makes it its own). A PO_CONFIRM link holds no grain at all: the supplier
@@ -69,6 +77,8 @@ export interface PurposeRule {
   readonly expiryDays: { readonly default: number; readonly max: number }
   /** Counted uses: the default, and the most the office may give. */
   readonly uses: { readonly default: number; readonly max: number }
+  /** The session reads the files shared with its party's links on its record (files.read). */
+  readonly readsFiles: boolean
 }
 
 const notCounted: ActionRule = Object.freeze({ counts: false, typedName: 'none', checksEmail: false })
@@ -93,6 +103,7 @@ export const PURPOSE_RULES: Readonly<Record<LinkPurpose, PurposeRule>> = Object.
     grains: ['price'],
     expiryDays: { default: 30, max: 90 },
     uses: { default: 1, max: 1 },
+    readsFiles: false,
   }),
   PO_CONFIRM: rule({
     purpose: 'PO_CONFIRM',
@@ -102,15 +113,17 @@ export const PURPOSE_RULES: Readonly<Record<LinkPurpose, PurposeRule>> = Object.
     grains: [],
     expiryDays: { default: 14, max: 60 },
     uses: { default: 1, max: 1 },
+    readsFiles: false,
   }),
   DOCUMENT_VIEW: rule({
     purpose: 'DOCUMENT_VIEW',
-    description: 'The customer or supplier opens one of its own documents (an invoice copy, a DDT, a declaration of conformity) to read or download it.',
-    recordTypes: ['StoredFile'],
+    description: 'The customer or supplier opens one of its own documents (an invoice copy, a DDT, a declaration of conformity), or the documents of one of its shipments, to read or download them.',
+    recordTypes: ['StoredFile', 'Shipment'],
     actions: { open: counted('none') },
     grains: ['price'],
     expiryDays: { default: 30, max: 365 },
     uses: { default: 20, max: 100 },
+    readsFiles: true,
   }),
   DEPOSIT_INFO: rule({
     purpose: 'DEPOSIT_INFO',
@@ -120,6 +133,7 @@ export const PURPOSE_RULES: Readonly<Record<LinkPurpose, PurposeRule>> = Object.
     grains: ['price'],
     expiryDays: { default: 30, max: 90 },
     uses: { default: 20, max: 100 },
+    readsFiles: false,
   }),
 })
 
@@ -147,7 +161,8 @@ export function linkPermissions(purpose: LinkPurpose): Permission[] {
   const rule = PURPOSE_RULES[purpose]
   if (!rule) return []
   const actions = LINK_ACTIONS.filter((action) => rule.actions[action] !== undefined).map((action) => ACTION_PERMISSIONS[action])
-  return [...new Set([...actions, ...rule.grains.map((grain) => grainPermission(grain) as Permission)])].sort()
+  const files: Permission[] = rule.readsFiles ? [FILES_READ] : []
+  return [...new Set([...actions, ...files, ...rule.grains.map((grain) => grainPermission(grain) as Permission)])].sort()
 }
 
 /**

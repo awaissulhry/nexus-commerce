@@ -1,0 +1,115 @@
+/*
+ * Office sign-in (SCR-001): no office chrome, one narrow column in the middle of the page, phone first. Layout only:
+ * colours, sizes and radii are semantic design-system tokens; the controls are the design system's own, unrestyled.
+ */
+.fw-auth {
+  box-sizing: border-box;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--nds-bg);
+  color: var(--nds-text);
+}
+
+.fw-auth-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-12) var(--nds-space-16);
+}
+
+.fw-auth-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+/* The same mark as the office top bar's. */
+.fw-auth-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-primary);
+  color: var(--nds-white);
+  font-weight: var(--nds-font-weight-extrabold);
+  font-size: var(--nds-font-size-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fw-auth-main {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: var(--nds-space-24) var(--nds-space-16) var(--nds-space-32);
+  outline: none;
+}
+
+.fw-auth-column {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+}
+
+@media (min-width: 720px) {
+  .fw-auth-main {
+    padding-top: 8vh;
+  }
+}
+
+.fw-auth-title {
+  text-align: center;
+}
+
+.fw-auth-title h1 {
+  margin: 0;
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-bold);
+  color: var(--nds-text-strong);
+  line-height: 1.25;
+}
+
+.fw-auth-title p {
+  margin: var(--nds-space-6) 0 0;
+  color: var(--nds-text-muted);
+  line-height: 1.45;
+}
+
+.fw-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+}
+
+/* A grid stretches its buttons to the column's width. */
+.fw-auth-actions {
+  display: grid;
+  gap: var(--nds-space-8);
+}
+
+.fw-auth-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--nds-space-4) var(--nds-space-16);
+}
+
+.fw-auth-waiting {
+  display: flex;
+  justify-content: center;
+  padding: var(--nds-space-16) 0;
+}
+
+.fw-auth-foot {
+  padding: var(--nds-space-16);
+  text-align: center;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}

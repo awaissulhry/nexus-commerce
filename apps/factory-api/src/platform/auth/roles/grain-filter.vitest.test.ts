@@ -163,7 +163,7 @@ export default defineRoutes('quotes', manifest, async (app) => { app.get('/quote
   }
 
   it('refuses to boot a routes file that names an undeclared permission', async () => {
-    await expect(boot({ routesRoot: tree('quotes.send') })).rejects.toThrow(/names permissions that are not declared .*: quotes\.send/)
+    await expect(boot({ routesRoot: tree('quotes.export') })).rejects.toThrow(/names permissions that are not declared .*: quotes\.export/)
   })
 
   it('boots a routes file whose permissions are declared', async () => {

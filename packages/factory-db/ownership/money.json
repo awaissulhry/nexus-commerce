@@ -1,0 +1,59 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/money.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context: the SDI provider's notifications, the sends) drafts, issues and sends invoices and credit notes, records payments and allocates them through apps/factory-api's modules/invoicing and modules/payments (B-W1-28, B-W1-50, B-W1-51), always through command(); the API keeps staff to the companies their grants reach and money to the price grain (A1 §2.6). The floor (factory_floor_runtime) reads nothing here: no grant on any table. A portal or one-off link session (factory_partner_runtime; DOCUMENT_VIEW) reads only its OWN party's rows (the partyId of each table), never an internal column nor which office user wrote a row; an invoice and its lines have no partyId while DRAFT (it is set at issue), so the partner role never sees a draft. Prices are the party's own document (grain price stays readable). Nobody deletes an issued invoice, its lines, a send, a payment or an allocation; the office deletes only a DRAFT invoice and the lines of a DRAFT or of a REJECTED invoice being corrected (the …_money_guards triggers hold it for every login). SdiNotification and PaymentAllocation are append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes them. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Invoice": {
+      "about": "The office drafts an invoice or credit note (and deletes a draft), issues it (number and date from a fiscal series), and moves its SDI status; after issue nothing else changes (corrections are credit notes; a rejected file is corrected, lines and totals included, and sent again under the same number and date). A portal or link session reads its own party's issued invoices without the internal note or who issued them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["internalNote", "issuedById", "createdById"] }
+      }
+    },
+    "InvoiceLine": {
+      "about": "The office writes, changes and deletes the lines of a DRAFT invoice, or of a REJECTED one being corrected; the issue fixes them (and gives them the invoice's partyId; a line added while REJECTED gets it). A portal or link session reads the lines of its own party's issued invoices.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "SdiSubmission": {
+      "about": "The office or the worker (B-W1-50) records each send of an issued invoice to SDI and moves it to its outcome. A portal or link session reads its own party's sends (file name, SDI id, outcome, when it was archived), never the account, the provider's ids or the failure text.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["integrationAccountId", "providerRef", "failureReason", "archiveRef", "createdById"] }
+      }
+    },
+    "SdiNotification": {
+      "about": "The worker (the SDI provider's webhooks and polls, in the tenant's system context) or the office records SDI's notifications of a send. A portal or link session reads its own party's (type and time), never the message body or the ledger reference. Nobody changes or removes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["payload", "inboundWebhookId", "createdById"] }
+      }
+    },
+    "Payment": {
+      "about": "The office records a payment received (W1: a bank transfer) and voids one typed by mistake. A portal or link session reads its own party's payments, never the office's notes.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["voidReason", "internalNote", "createdById"] }
+      }
+    },
+    "PaymentAllocation": {
+      "about": "The office allocates a payment to deposit requests and issued invoices, and reverses a wrong allocation with a new row. A portal or link session reads its own party's allocations. Nobody changes or removes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["note", "createdById"] }
+      }
+    }
+  }
+}

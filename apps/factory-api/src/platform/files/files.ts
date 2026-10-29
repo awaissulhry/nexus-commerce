@@ -33,6 +33,7 @@ import {
   type Sharing,
   type Viewer,
 } from './rules'
+import { assertGenericPath, type UploadPath } from './owned'
 import type { FilesRuntime } from './service'
 import { RetainedFileError } from './store'
 
@@ -54,6 +55,8 @@ import { RetainedFileError } from './store'
  *   share      files.setVisibility; retention and legal hold: files.setRetention (the date only moves later)
  *   generated  storeGeneratedFile: bytes the API made itself (a rendered document) are written to the store first,
  *              then recorded AVAILABLE in one command (the module that made them names it and checked its permission)
+ *   owned      a record type whose files its module owns (owned.ts: ComplianceDocument; a Certificate's CERTIFICATE
+ *              files) is uploaded and confirmed only through that module's route: the generic routes answer 409
  *
  * Every write goes through command() with its audit row; no store call runs inside a transaction.
  */
@@ -253,8 +256,12 @@ export interface UploadRequest {
   readonly retainUntil?: string | null | undefined
 }
 
-/** files.requestUpload, then the presigned PUT. A repeat with the same Idempotency-Key gets the same file, freshly presigned. */
-export async function requestUpload(runtime: FilesRuntime, caller: CommandCaller, input: UploadRequest, idempotencyKey?: string) {
+/**
+ * files.requestUpload, then the presigned PUT. A repeat with the same Idempotency-Key gets the same file, freshly
+ * presigned. A record type whose files its module owns (owned.ts) is refused unless that module calls with `viaModule`.
+ */
+export async function requestUpload(runtime: FilesRuntime, caller: CommandCaller, input: UploadRequest, idempotencyKey?: string, path: UploadPath = {}) {
+  assertGenericPath(input.recordType, input.kind, path)
   const now = runtime.clock.now()
   const contentType = normaliseContentType(input.contentType)
   const originalName = cleanFileName(input.originalName)
@@ -348,15 +355,33 @@ export interface GeneratedFileOptions {
 }
 
 /**
- * Stores a file the API made itself (A1 §3.9: "stored in R2 with its hash, linked to the record"): the bytes go to the
- * tenant's store first (one gateway call, files.put, under a new random key), then ONE command records the file
- * AVAILABLE with its audit row and the event file.available (the …_files_guards trigger lets a generated document be
- * born AVAILABLE). The caller is an office session or a tenant's system context and has checked its own permission for
- * the record (quotes.send, ddt.issue, documents.view for a preview…): no files.* permission is asked, as for every
- * document the system makes. Sharing and retention follow the upload's rules. When the command fails after the put,
- * the object stays behind with no row naming it: never listed, never downloadable, removed by a later sweep.
+ * A generated file whose bytes are in the store and whose row is not written yet (putGeneratedFile → recordGeneratedFile).
+ * Plain data: the row's content, sharing and retention as checked before the put.
  */
-export async function storeGeneratedFile(runtime: FilesRuntime, caller: CommandCaller, file: GeneratedFile, options: GeneratedFileOptions = {}): Promise<FileView> {
+export interface PreparedGeneratedFile {
+  readonly companyId: string | null
+  readonly recordType: string
+  readonly recordId: string
+  readonly kind: FileKind
+  readonly originalName: string
+  readonly contentType: string
+  readonly sizeBytes: number
+  readonly sha256: string
+  readonly visibility: readonly FileAudience[]
+  readonly floorSiteId: string | null
+  readonly partyId: string | null
+  readonly retainUntil: Date | null
+  readonly storeAccountId: string
+  readonly storageKey: string
+}
+
+/**
+ * The first half of storing a generated file, OUTSIDE any transaction: the file's rules (type, size, name, sharing,
+ * retention), the tenant's store, a new random key, and the bytes put there (one gateway call, files.put). Nothing is
+ * written to the database: recordGeneratedFile does that inside the caller's command. When that command never runs or
+ * fails, the object stays behind with no row naming it: never listed, never downloadable, removed by a later sweep.
+ */
+export async function putGeneratedFile(runtime: FilesRuntime, caller: CommandCaller, file: GeneratedFile): Promise<PreparedGeneratedFile> {
   const context = contextOf(caller)
   if (context.audience !== 'office' && context.audience !== 'system') throw new ForbiddenError()
   const now = runtime.clock.now()
@@ -381,57 +406,148 @@ export async function storeGeneratedFile(runtime: FilesRuntime, caller: CommandC
   const storeAccountId = await storeAccountOf(caller, sharing.companyId)
   const storageKey = storageKeyFor({ tenantId: tenantOf(context), companyId: sharing.companyId, kind: file.kind, now, random: randomUUID() })
   await storeCall(() => runtime.storage.put(caller, storeAccountId, { key: storageKey, contentType, body, sha256 }))
-
-  const input = {
+  return {
     companyId: sharing.companyId,
     recordType: file.recordType,
     recordId: file.recordId,
     kind: file.kind,
-    originalName,
+    originalName: originalName!,
     contentType,
     sizeBytes: body.length,
     sha256,
     visibility: sharing.visibility,
     floorSiteId: sharing.floorSiteId,
     partyId: sharing.partyId,
+    retainUntil: retention.retainUntil,
+    storeAccountId,
+    storageKey,
+  }
+}
+
+/**
+ * The second half, INSIDE the caller's command (the module's own command, e.g. the one that names the file on its
+ * record): the StoredFile row AVAILABLE (the …_files_guards trigger lets a generated document be born AVAILABLE), its
+ * audit row and the event file.available, in the caller's transaction. A rollback leaves no row.
+ */
+export async function recordGeneratedFile(
+  tools: Pick<CommandTools, 'tx' | 'audit' | 'emit' | 'now' | 'context'>,
+  prepared: PreparedGeneratedFile,
+  options: { readonly action?: Permission; readonly details?: GeneratedFileOptions['details'] } = {},
+): Promise<FileView> {
+  const { tx, now: at, context: inside } = tools
+  const sharing: Sharing = { visibility: [...prepared.visibility], companyId: prepared.companyId, floorSiteId: prepared.floorSiteId, partyId: prepared.partyId }
+  if (sharing.companyId !== null && !(await tx.company.findUnique({ where: { id: sharing.companyId }, select: { id: true } }))) {
+    throw new NotFoundError('Company not found.')
+  }
+  await checkSite(tx, sharing)
+  const id = newId()
+  const row = await tx.storedFile.create({
+    data: {
+      id,
+      companyId: prepared.companyId,
+      recordType: prepared.recordType,
+      recordId: prepared.recordId,
+      kind: prepared.kind,
+      originalName: prepared.originalName,
+      contentType: prepared.contentType,
+      sizeBytes: prepared.sizeBytes,
+      sha256: prepared.sha256,
+      storeAccountId: prepared.storeAccountId,
+      storageKey: prepared.storageKey,
+      status: 'AVAILABLE',
+      availableAt: at,
+      visibility: [...prepared.visibility] as FileAudience[],
+      floorSiteId: prepared.floorSiteId,
+      partyId: prepared.partyId,
+      retainUntil: prepared.retainUntil,
+      createdAt: at,
+      updatedAt: at,
+      createdById: inside.audience === 'office' ? inside.actorId : null,
+    },
+    select: SELECT_FOR.office,
+  })
+  tools.audit({ ...(options.action ? { action: options.action } : {}), recordType: 'StoredFile', recordId: id, companyId: prepared.companyId, after: { ...audited(row), ...(options.details ?? {}) } })
+  tools.emit({ type: 'file.available', subject: id, companyId: row.companyId, payload: { fileId: id, recordType: row.recordType, recordId: row.recordId, kind: row.kind } })
+  return viewOf(row)
+}
+
+/**
+ * Stores a file the API made itself (A1 §3.9: "stored in R2 with its hash, linked to the record"): the bytes go to the
+ * tenant's store first (putGeneratedFile: one gateway call, files.put, under a new random key), then ONE command records
+ * the file AVAILABLE with its audit row and the event file.available (recordGeneratedFile). The caller is an office
+ * session or a tenant's system context and has checked its own permission for the record (quotes.send, ddt.issue,
+ * documents.view for a preview…): no files.* permission is asked, as for every document the system makes. Sharing and
+ * retention follow the upload's rules. A module that names the file on its own record in the same transaction calls the
+ * two halves itself (invoicing: the invoice's XML and PDF).
+ */
+export async function storeGeneratedFile(runtime: FilesRuntime, caller: CommandCaller, file: GeneratedFile, options: GeneratedFileOptions = {}): Promise<FileView> {
+  const prepared = await putGeneratedFile(runtime, caller, file)
+  const input = {
+    companyId: prepared.companyId,
+    recordType: prepared.recordType,
+    recordId: prepared.recordId,
+    kind: prepared.kind,
+    originalName: prepared.originalName,
+    contentType: prepared.contentType,
+    sizeBytes: prepared.sizeBytes,
+    sha256: prepared.sha256,
+    visibility: prepared.visibility,
+    floorSiteId: prepared.floorSiteId,
+    partyId: prepared.partyId,
     details: options.details ?? null,
   }
-  const { result } = await command(caller, { name: options.commandName ?? 'files.storeGenerated', idempotencyKey: options.idempotencyKey, input }, async ({ tx, audit, emit, now: at, context: inside }) => {
-    if (sharing.companyId !== null && !(await tx.company.findUnique({ where: { id: sharing.companyId }, select: { id: true } }))) {
-      throw new NotFoundError('Company not found.')
-    }
-    await checkSite(tx, sharing)
-    const id = newId()
-    const row = await tx.storedFile.create({
-      data: {
-        id,
-        companyId: sharing.companyId,
-        recordType: file.recordType,
-        recordId: file.recordId,
-        kind: file.kind,
-        originalName: originalName!,
-        contentType,
-        sizeBytes: body.length,
-        sha256,
-        storeAccountId,
-        storageKey,
-        status: 'AVAILABLE',
-        availableAt: at,
-        visibility: sharing.visibility as FileAudience[],
-        floorSiteId: sharing.floorSiteId,
-        partyId: sharing.partyId,
-        retainUntil: retention.retainUntil,
-        createdAt: at,
-        updatedAt: at,
-        createdById: inside.audience === 'office' ? inside.actorId : null,
-      },
-      select: SELECT_FOR.office,
-    })
-    audit({ recordType: 'StoredFile', recordId: id, companyId: sharing.companyId, after: { ...audited(row), ...(options.details ?? {}) } })
-    emit({ type: 'file.available', subject: id, companyId: row.companyId, payload: { fileId: id, recordType: row.recordType, recordId: row.recordId, kind: row.kind } })
-    return viewOf(row)
-  })
+  const { result } = await command(caller, { name: options.commandName ?? 'files.storeGenerated', idempotencyKey: options.idempotencyKey, input }, (tools) =>
+    recordGeneratedFile(tools, prepared, options.details ? { details: options.details } : {}),
+  )
   return result
+}
+
+/** Where a copy of a file goes: another record, maybe another kind, with its own sharing and retention. */
+export interface FileCopyTarget {
+  readonly companyId: string | null
+  readonly recordType: string
+  readonly recordId: string
+  /** Default: the source's kind (a fiscal archive copy for a party is a DOCUMENT). */
+  readonly kind?: FileKind | undefined
+  /** Default: the source's name. */
+  readonly originalName?: string | undefined
+  readonly visibility?: readonly FileAudience[] | undefined
+  readonly floorSiteId?: string | null | undefined
+  readonly partyId?: string | null | undefined
+  readonly retainUntil?: Date | null | undefined
+}
+
+/**
+ * The first half of copying a stored file onto another record, OUTSIDE any transaction, like putGeneratedFile (B-W1-49:
+ * a style's signed DoC, OFFICE only because it serves every customer, copied onto a shipment and shared with that
+ * shipment's party; the copy is the evidence of what travelled). The source must be AVAILABLE; its bytes are read from
+ * the store (files.read), checked against its SHA-256 and put under a new key (files.put) with the target's rules
+ * (kind, sharing, retention). recordGeneratedFile then records the copy inside the caller's command. The caller is an
+ * office session or a tenant's system context and has checked its own permission for both records: no files.*
+ * permission is asked, as for generated files.
+ */
+export async function prepareFileCopy(runtime: FilesRuntime, caller: CommandCaller, sourceFileId: string, target: FileCopyTarget): Promise<PreparedGeneratedFile & { readonly sourceFileId: string }> {
+  const context = contextOf(caller)
+  if (context.audience !== 'office' && context.audience !== 'system') throw new ForbiddenError()
+  const source = await readOffice(caller, sourceFileId)
+  if (source.status !== 'AVAILABLE') throw new InvalidStateError(`This file is ${source.status}; only an available file is copied.`)
+  const body = await storeCall(() => runtime.storage.read(caller, source.storeAccountId, source.storageKey, source.sizeBytes))
+  if (!body) throw new ConflictError('The file is missing from the file store; nothing was copied.')
+  if (createHash('sha256').update(body).digest('hex') !== source.sha256) throw new ConflictError('The stored file does not match its SHA-256; nothing was copied.')
+  const prepared = await putGeneratedFile(runtime, caller, {
+    companyId: target.companyId,
+    recordType: target.recordType,
+    recordId: target.recordId,
+    kind: target.kind ?? source.kind,
+    originalName: target.originalName ?? source.originalName,
+    contentType: source.contentType,
+    body,
+    visibility: target.visibility,
+    floorSiteId: target.floorSiteId,
+    partyId: target.partyId,
+    retainUntil: target.retainUntil,
+  })
+  return { ...prepared, sourceFileId: source.id }
 }
 
 /** Why a stored object is not the file that was announced, or null when it is. */
@@ -442,10 +558,14 @@ function mismatchOf(file: OfficeRow, object: StoredObject): QuarantineReason | n
   return null
 }
 
-/** files.completeUpload: the store's HEAD decides AVAILABLE or QUARANTINED. Confirming an AVAILABLE file again changes nothing. */
-export async function completeUpload(runtime: FilesRuntime, caller: CommandCaller, fileId: string, idempotencyKey?: string): Promise<FileView> {
+/**
+ * files.completeUpload: the store's HEAD decides AVAILABLE or QUARANTINED. Confirming an AVAILABLE file again changes
+ * nothing. A file of a record type its module owns (owned.ts) is confirmed only by that module (`viaModule`).
+ */
+export async function completeUpload(runtime: FilesRuntime, caller: CommandCaller, fileId: string, idempotencyKey?: string, path: UploadPath = {}): Promise<FileView> {
   const before = await readOffice(caller, fileId)
   mayWrite(caller, FILES_UPLOAD, { companyId: before.companyId, floorSiteId: null, partyId: null })
+  assertGenericPath(before.recordType, before.kind, path)
   if (before.status === 'AVAILABLE') return viewOf(before)
   if (before.status !== 'PENDING_UPLOAD') throw new InvalidStateError(`This file is ${before.status}; only a pending upload is confirmed.`)
   const object = await storeCall(() => runtime.storage.head(caller, before.storeAccountId, before.storageKey))

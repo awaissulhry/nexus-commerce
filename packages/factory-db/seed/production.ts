@@ -1,10 +1,8 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import {
   HideState,
   LabelTemplateStatus,
   MonitoringBasis,
-  NoticeAckChannel,
   PartyTaxMode,
   PpeCategory,
   ProductType,
@@ -12,6 +10,8 @@ import {
   SalesOrderStatus,
   ScanKind,
   ScanSubject,
+  StockMoveReason,
+  StockValuationMethod,
   StyleRevisionStatus,
   StyleStatus,
   Uom,
@@ -22,11 +22,12 @@ import {
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFloorAuth } from './floor-auth'
 import { seed as seedInventory, type InventorySeed } from './inventory'
+import { seedWorkerNotice } from './privacy'
 
 /**
- * The production seed, per tenant of seed/_core.ts: the golden flow's stages 10-work-order, 11b-cut and 12-scans on
- * plant A1, written as the app does: the office's rows in the tenant's office scope, the floor's in A1's floor scope
- * with the operator signed in on the cutting tablet (seed/floor-auth.ts).
+ * The production seed, per tenant of seed/_core.ts: the golden flow's stages 10-work-order, 11a-issue, 11b-cut and
+ * 12-scans on plant A1, written as the app does: the office's rows in the tenant's office scope, the floor's in A1's
+ * floor scope with the operator signed in on the cutting tablet (seed/floor-auth.ts).
  *
  *   floor rules  A1 names workers (an agreement on record); B1 records the station only (Q16 (b)).
  *   style        SEED-JKT-02, a second made-up jacket made only for production: colourways BLK and RED, sizes 50-54,
@@ -37,9 +38,12 @@ import { seed as seedInventory, type InventorySeed } from './inventory'
  *   order        SEED-SO-0002 for the brand P1, typed by the office: BLK 1/2/1 and RED 1/1/1 of sizes 50/52/54.
  *   WO-0001      2 colours x 3 sizes, released with the revision, its label template and batch SEED-BT-0001, its four
  *                operations at A1's work centres and its 18 planned materials (BOM line x cell); IN_PROGRESS after the
- *                first cut. Its id is the made-up work order the inventory seed issued hide SEED-HIDE-0001 to.
+ *                first cut.
+ *   issue        hide SEED-HIDE-0001 (the inventory seed's), whole, issued to the released WO-0001 and valued at the
+ *                lot's cost (a move to a work order needs it RELEASED or IN_PROGRESS: …_inventory_issue_work_order_guards).
  *   WO-0002      a DRAFT work order of one cell (BLK 52), with its operations and planned materials.
- *   floor        the operator's acknowledgement of the information notice (version 2026-10); one cut of the issued hide
+ *   floor        the operator's acknowledgement of the worker notice 2026-10 in force (both made by seed/privacy.ts
+ *                seedWorkerNotice, run first); one cut of the issued hide
  *                (20 ft² for sleeves of BLK 50 and 52, so the hide stays PARTLY_CUT); two bundles of sleeves from it;
  *                three scans at sewing: a report of the first bundle undone at once (a mis-scan) and a report of the
  *                second.
@@ -62,7 +66,7 @@ const T = {
   ordered: new Date('2026-11-12T08:00:00.000Z'),
   planned: new Date('2026-11-15T08:00:00.000Z'),
   woReleased: new Date('2026-11-15T10:00:00.000Z'),
-  acknowledged: new Date('2026-11-16T06:00:00.000Z'),
+  issued: new Date('2026-11-16T07:30:00.000Z'),
   cut: new Date('2026-11-16T09:00:00.000Z'),
   bundled: new Date('2026-11-16T10:00:00.000Z'),
   scanned: new Date('2026-11-17T08:00:00.000Z'),
@@ -98,11 +102,15 @@ export interface ProductionSeed {
   readonly operationIds: { readonly cut: string; readonly sew: string; readonly qc: string; readonly pack: string }
   /** WO-0002: draft. */
   readonly draftWorkOrderId: string
+  /** Hide SEED-HIDE-0001, whole, issued to WO-0001 (stage 11a-issue). */
+  readonly issueMoveId: string
   readonly cutLogId: string
   readonly bundleIds: readonly [string, string]
   /** The undone report, its undo, the standing report. */
   readonly scanIds: readonly [string, string, string]
   readonly ackId: string
+  /** Company A's worker notice in force (2026-10, seed/privacy.ts), which the operator acknowledged. */
+  readonly workerNoticeId: string
   /** Plant A1's operator (acknowledged the notice) and team leader (has not), and the cutting tablet. */
   readonly operatorId: string
   readonly leadId: string
@@ -112,9 +120,11 @@ export interface ProductionSeed {
 export async function seed(context: SeedContext): Promise<ProductionSeed> {
   const { db, namespace } = context
   // The CLI runs the seeds in name order: the hide this seed cuts comes from the inventory seed, the workers and the
-  // tablet from the floor sign-in seed; run them first (both are idempotent).
+  // tablet from the floor sign-in seed, the worker notice in force and the operator's acknowledgement of it from the
+  // privacy seed (a floor record names a worker only then: …_privacy_guards); run them first (all idempotent).
   const inventory = await seedInventory(context)
   await seedFloorAuth(context)
+  const notice = await seedWorkerNotice(context)
   const id = (key: string): string => seedUuid(namespace, key)
   /** Ids that sort first, and ids that sort last (see above). */
   const firstId = (key: string): string => `00000000${id(key).slice(8)}`
@@ -184,7 +194,7 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
         baseSize: '52',
         ppeCategory: PpeCategory.CATEGORY_II,
         ppeStandard: 'EN 17092-3:2020',
-        ppeClass: 'A',
+        ppeClass: 'AA',
         status: StyleStatus.ACTIVE,
         ...stamp(T.setup),
       }
@@ -424,8 +434,58 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
     }),
   )
 
-  // --- the floor: the notice, the cut, the bundles, the scans -----------------------------------------------------------
-  const ackId = id('production:ack:A1:operator:2026-10')
+  // --- 11a-issue: the first hide, whole, issued to the released WO-0001 and valued at the lot's cost (once) ----------------
+  // (Here, not in the inventory seed: a stock move to a work order names a RELEASED or IN_PROGRESS one of its site.)
+  const issue = { move: id('inventory:move:issue:H1'), value: id('inventory:value:issue:H1') }
+  await db.withScope({ audience: 'office', tenantId, actorId }, (client) =>
+    client.$transaction(async (tx) => {
+      if (await tx.stockMove.findUnique({ where: { id: issue.move }, select: { id: true } })) return
+      await tx.stockMove.create({
+        data: {
+          id: issue.move,
+          companyId: companyA,
+          siteId: siteA,
+          reason: StockMoveReason.ISSUE,
+          itemId: item.leather,
+          itemColourId: itemColour.BLK,
+          lotId: inventory.leatherLotId,
+          hideId: inventory.hideIds[0],
+          fromLocationId: inventory.locations.bin,
+          quantity: '53.2000',
+          uom: Uom.FT2,
+          baseQuantity: '53.2000',
+          workOrderId,
+          reference: 'SEED-WO-0001',
+          idempotencyKey: 'seed-issue-H1',
+          occurredAt: T.issued,
+          createdAt: T.issued,
+          createdById: actorId,
+        },
+        select: { id: true },
+      })
+      await tx.stockValuation.create({
+        data: {
+          id: issue.value,
+          companyId: companyA,
+          siteId: siteA,
+          moveId: issue.move,
+          itemId: item.leather,
+          lotId: inventory.leatherLotId,
+          quantity: '-53.2000',
+          unitCost: '4.200000',
+          valueAmount: -22_344,
+          method: StockValuationMethod.LOT_COST,
+          idempotencyKey: `move:${issue.move}`,
+          createdAt: T.issued,
+          createdById: actorId,
+        },
+        select: { id: true },
+      })
+    }),
+  )
+
+  // --- the floor: the cut, the bundles, the scans (the notice: seedWorkerNotice, above) ---------------------------------
+  const ackId = notice.operatorAckId
   const cutLogId = id('production:cut:H1:1')
   const [hide1] = inventory.hideIds
   const bundleIds = [id('production:bundle:WO-0001:1'), id('production:bundle:WO-0001:2')] as const
@@ -433,28 +493,6 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
   const signedIn = { audience: 'floor' as const, tenantId, actorId: operatorId, siteId: siteA }
   const onDevice = { workerId: operatorId, deviceId }
 
-  await db.withScope(signedIn, (client) =>
-    client.$transaction(async (tx) => {
-      if (await tx.workerNoticeAck.findUnique({ where: { id: ackId }, select: { id: true } })) return
-      await tx.workerNoticeAck.create({
-        data: {
-          id: ackId,
-          siteId: siteA,
-          workerId: operatorId,
-          noticeVersion: '2026-10',
-          locale: 'it',
-          // The SHA-256 of a made-up notice text.
-          noticeSha256: createHash('sha256').update(`seed floor information notice 2026-10, it (${namespace})`).digest('hex'),
-          channel: NoticeAckChannel.DEVICE,
-          deviceId,
-          deviceTime: T.acknowledged,
-          serverTime: T.acknowledged,
-          createdById: operatorId,
-        },
-        select: { id: true },
-      })
-    }),
-  )
   await db.withScope(signedIn, (client) =>
     client.$transaction(async (tx) => {
       if (await tx.cutLog.findUnique({ where: { id: cutLogId }, select: { id: true } })) return
@@ -537,10 +575,12 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
     cellIds,
     operationIds,
     draftWorkOrderId,
+    issueMoveId: issue.move,
     cutLogId,
     bundleIds,
     scanIds,
     ackId,
+    workerNoticeId: notice.workerNoticeId,
     operatorId,
     leadId,
     deviceId,

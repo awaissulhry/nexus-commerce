@@ -3,6 +3,8 @@ import { defineRoutes } from '../../../core/manifest'
 import { createCertificate, getCertificate, listCertificates, moveCertificate, updateCertificate } from './certificates'
 import {
   addCoverageContract,
+  announcePdfContract,
+  completePdfContract,
   archiveCoverageContract,
   createCertificateContract,
   gateContract,
@@ -17,6 +19,7 @@ import {
 import { addCoverage, archiveCoverage } from './coverage'
 import { checkGate } from './gate'
 import { manifest } from './manifest'
+import { announcePdf, completePdf } from './pdf'
 
 /**
  * The EN 17092 certificate register (B-W1-12; QHS-103, QHS-051, PRD-288; Reg. (EU) 2016/425): certificates typed in as
@@ -64,5 +67,14 @@ export default defineRoutes('compliance.certificates', manifest, async (app) => 
 
   app.post('/compliance/certificates/:certificateId/coverage/:coverageId/archive', { schema: archiveCoverageContract }, async (request) =>
     archiveCoverage(request, request.params.certificateId, request.params.coverageId, request.body, idempotencyKeyFrom(request)),
+  )
+
+  // The notified body's PDF: only through these two routes (platform/files/owned.ts).
+  app.post('/compliance/certificates/:certificateId/pdf', { schema: announcePdfContract }, async (request, reply) => {
+    return reply.code(201).send(await announcePdf(request, request.params.certificateId, request.body, idempotencyKeyFrom(request)))
+  })
+
+  app.post('/compliance/certificates/:certificateId/pdf/:fileId/complete', { schema: completePdfContract }, async (request) =>
+    completePdf(request, request.params.certificateId, request.params.fileId, idempotencyKeyFrom(request)),
   )
 })

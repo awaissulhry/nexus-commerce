@@ -217,6 +217,9 @@ model PlanningRun {
   /// FAILED: why, for the office.
   error       String?
   note        String?
+  /// What the run could not plan, or planned on an assumption (factory-domain planning PlanWarning), in words:
+  /// [{ "code": "NO_RELEASED_BOM", "message": "…", "orderId": "…", "orderLineId": "…", "itemId": "…", "size": "52" }].
+  warnings    Json              @default("[]")
   version     Int               @default(1)
   createdAt   DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime          @default(now()) @updatedAt @db.Timestamptz(3)

@@ -1,9 +1,28 @@
 import { CERTIFICATES_PERMISSIONS } from '../../compliance/certificates/permissions'
+import { REGISTER_PERMISSIONS } from '../../compliance/register/permissions'
+import { COSTING_DEFINITIONS, COSTING_PERMISSIONS } from '../../costing/permissions'
 import type { Permission } from '../../core/permissions'
 import { INVENTORY_FLOOR_PERMISSIONS, INVENTORY_PERMISSIONS } from '../../inventory/permissions'
+import { INVOICES_DEFINITIONS, INVOICES_PERMISSIONS } from '../../invoicing/permissions'
 import { LINK_SESSION_PERMISSIONS as LINK_SESSION_NAMES, LINKS_OFFICE_PERMISSIONS } from '../../links/permissions'
 import { NUMBERING_MANAGE, NUMBERING_VIEW } from '../../numbering/permissions'
+import { PARTIES_DEFINITIONS, PARTIES_PERMISSIONS } from '../../parties/permissions'
+import { PAYMENTS_DEFINITIONS, PAYMENTS_PERMISSIONS } from '../../payments/permissions'
+import { PLANNING_DEFINITIONS, PLANNING_PERMISSIONS } from '../../planning/permissions'
+import { PURCHASING_DEFINITIONS, PURCHASING_PERMISSIONS } from '../../purchasing/permissions'
+import { PRODUCT_BOM_DEFINITIONS, PRODUCT_BOM_PERMISSIONS } from '../../product/bom/permissions'
 import { PRODUCT_MATERIALS_DEFINITIONS, PRODUCT_MATERIALS_PERMISSIONS } from '../../product/materials/permissions'
+import { PRODUCT_ROUTING_DEFINITIONS, PRODUCT_ROUTING_PERMISSIONS } from '../../product/routing/permissions'
+import { PRODUCT_STYLES_DEFINITIONS, PRODUCT_STYLES_PERMISSIONS } from '../../product/styles/permissions'
+import { SHIPPING_LABELS_DEFINITIONS, SHIPPING_LABELS_PERMISSIONS } from '../../shipping/labels/permissions'
+import { WORKORDERS_DEFINITIONS, WORKORDERS_PERMISSIONS } from '../../production/work-orders/permissions'
+import { PRIVACY_DEFINITIONS, PRIVACY_PERMISSIONS } from '../../privacy/permissions'
+import { PRODUCTION_SETTINGS_DEFINITIONS, PRODUCTION_SETTINGS_PERMISSIONS } from '../../production/settings/permissions'
+import { PRODUCTION_CUTTING_DEFINITIONS, PRODUCTION_CUTTING_FLOOR_PERMISSIONS, PRODUCTION_CUTTING_PERMISSIONS } from '../../production/cutting/permissions'
+import { COMPANY_BANK_DEFINITIONS, COMPANY_BANK_PERMISSIONS } from '../../sales/deposits/permissions'
+import { ORDERS_DEFINITIONS, ORDERS_PERMISSIONS } from '../../sales/orders/permissions'
+import { QUOTES_DEFINITIONS, QUOTES_PERMISSIONS, SALES_SETTINGS_DEFINITIONS, SALES_SETTINGS_PERMISSIONS } from '../../sales/quotes/permissions'
+import { SHIPPING_DEFINITIONS, SHIPPING_FLOOR_PERMISSIONS, SHIPPING_PERMISSIONS } from '../../shipping/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -176,11 +195,33 @@ export const EMAIL_TRIAGE = 'email.triage' satisfies Permission
  * Compliance: the EU type-examination certificate register (apps/factory-api modules/compliance/certificates; QHS-103,
  * QHS-051, PRD-288; Reg. (EU) 2016/425). Checked with can() against the certificate's company and holder party. The
  * constants live in factory-domain/src/compliance/certificates/permissions.ts. Not step-up: a certificate is typed from
- * the notified body's PDF, and registering one needs that PDF on the record.
+ * the notified body's PDF, and registering one needs that PDF on the record. The style compliance tab (B-W1-20,
+ * factory-domain/src/product/compliance/permissions.ts) reads with certificates.view and uploads the signed DoC and
+ * leaflet with declarations.manage (not step-up either: the PDF was signed by hand before it is uploaded). The PPE
+ * register (B-W1-43, factory-domain/src/compliance/register/permissions.ts) is read with register.view and kept with
+ * register.manage, over the entry's company and reporting party; not step-up (every move is audited and an entry is
+ * never deleted).
  */
 export const COMPLIANCE_DEFINITIONS = definePermissions('compliance', {
-  'certificates.view': { risk: 'read', description: 'See the EU type-examination certificates, what they cover and when they expire; ask the certificate gate whether a garment is covered.' },
+  'certificates.view': {
+    risk: 'read',
+    description:
+      "See the EU type-examination certificates, what they cover and when they expire; ask the certificate gate whether a garment is covered; see a style's compliance: its PPE class, coverage per colourway and size, Declarations of Conformity and user information leaflets; see the garment label templates and preview a garment label.",
+  },
   'certificates.manage': { risk: 'write', description: 'Type in certificates, register them with their PDF, suspend, reinstate and withdraw them, and record or end what they cover.' },
+  'declarations.manage': { risk: 'write', description: "Upload a style revision's signed EU Declaration of Conformity and user information leaflet per language, and replace them with a new version (the old one is kept)." },
+  'labels.manage': {
+    risk: 'write',
+    description: 'Build garment label templates (maker, composition, animal-origin phrase, care symbols, layout), activate them when their rule checks pass, retire and revise them, print a test label, and name one on a draft style revision.',
+  },
+  'register.view': {
+    risk: 'read',
+    description: 'See the PPE register of complaints, non-conformities and recalls, and for each entry where the garments it concerns went: work orders, shipments, DDTs and the customers that got them.',
+  },
+  'register.manage': {
+    risk: 'write',
+    description: 'Record complaints, non-conformities and recalls in the PPE register, edit an open entry and its risk assessment, record the corrective action, the information to distributors and the notice to the authority, and close the entry.',
+  },
 })
 
 /**
@@ -196,6 +237,9 @@ export const INVENTORY_DEFINITIONS = definePermissions('inventory', {
   transfer: { risk: 'write', description: 'Move stock between two locations of a site (a floor device: at its own site).' },
   scrap: { risk: 'write', description: 'Take stock out as scrap, with the reason.' },
   reverse: { risk: 'write', description: 'Reverse a stock move that was wrong: the same move with its locations swapped, with the reason.' },
+  issue: { risk: 'write', description: "Pick and issue stock to a work order (only usable stock of the work order's materials, up to what it still needs), return what it did not use, and undo one's own last issue (a floor device: at its own site)." },
+  'issue.over': { risk: 'write', description: 'Issue more than a work order still needs, with the reason.' },
+  receive: { risk: 'write', description: 'Receive goods against a purchase order: the receipt, its lots and its hides one by one with their measured areas, posted to the stock ledger (a floor device: at its own site).' },
 })
 
 /** The money grains as they travel in grants (`../grains/grains`): from Role.grains, never Role.permissions. */
@@ -221,7 +265,26 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   EMAIL_DEFINITIONS,
   COMPLIANCE_DEFINITIONS,
   PRODUCT_MATERIALS_DEFINITIONS,
+  PRODUCT_STYLES_DEFINITIONS,
+  PRODUCT_BOM_DEFINITIONS,
+  PRODUCT_ROUTING_DEFINITIONS,
   INVENTORY_DEFINITIONS,
+  SHIPPING_DEFINITIONS,
+  SHIPPING_LABELS_DEFINITIONS,
+  PARTIES_DEFINITIONS,
+  PLANNING_DEFINITIONS,
+  PURCHASING_DEFINITIONS,
+  INVOICES_DEFINITIONS,
+  PAYMENTS_DEFINITIONS,
+  COSTING_DEFINITIONS,
+  PRODUCTION_SETTINGS_DEFINITIONS,
+  PRODUCTION_CUTTING_DEFINITIONS,
+  WORKORDERS_DEFINITIONS,
+  QUOTES_DEFINITIONS,
+  SALES_SETTINGS_DEFINITIONS,
+  COMPANY_BANK_DEFINITIONS,
+  ORDERS_DEFINITIONS,
+  PRIVACY_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -232,12 +295,13 @@ export const FLOOR_AREA = 'floor'
  * The office permissions a floor role may hold too: what a floor device does on the same routes as the office, at its
  * own device's site only (can() pins a floor session to it, row-level security too). Printing labels at the site's
  * printer (GAP-007) and seeing its print queue; seeing the site's locations and moving stock between them (SCM-176,
- * SCM-189). Never a money grain; floor roles still hold no other office permission.
+ * SCM-189); picking and issuing to the site's work orders (SCM-215, SCR-093); cutting hides for them (MES-056, SCR-094);
+ * packing the site's shipments (LOG-039, SCR-098). Never a money grain; floor roles still hold no other office permission.
  */
-export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS, ...INVENTORY_FLOOR_PERMISSIONS])
+export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS, ...INVENTORY_FLOOR_PERMISSIONS, ...PRODUCTION_CUTTING_FLOOR_PERMISSIONS, ...SHIPPING_FLOOR_PERMISSIONS])
 
 // The modules' constants and their declarations name the same permissions.
-for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS]) {
+for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...REGISTER_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...PRODUCT_BOM_PERMISSIONS, ...PRODUCT_ROUTING_PERMISSIONS, ...SHIPPING_PERMISSIONS, ...SHIPPING_LABELS_PERMISSIONS, ...PARTIES_PERMISSIONS, ...PLANNING_PERMISSIONS, ...PURCHASING_PERMISSIONS, ...INVOICES_PERMISSIONS, ...PAYMENTS_PERMISSIONS, ...COSTING_PERMISSIONS, ...PRODUCTION_SETTINGS_PERMISSIONS, ...PRODUCTION_CUTTING_PERMISSIONS, ...WORKORDERS_PERMISSIONS, ...QUOTES_PERMISSIONS, ...SALES_SETTINGS_PERMISSIONS, ...COMPANY_BANK_PERMISSIONS, ...ORDERS_PERMISSIONS, ...PRIVACY_PERMISSIONS]) {
   if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 }
 for (const name of LINK_SESSION_NAMES) {

@@ -464,7 +464,12 @@ model DepositRequest {
   party        Party         @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   quoteVersion QuoteVersion? @relation(fields: [tenantId, partyId, quoteVersionId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   order        SalesOrder?   @relation(fields: [tenantId, companyId, partyId, orderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // money.prisma: its deposit invoices (TD02) and the payments allocated to it.
+  invoices     Invoice[]
+  allocations  PaymentAllocation[]
 
+  // The target of the references from its deposit invoices and payment allocations: the same company and party.
+  @@unique([tenantId, companyId, partyId, id])
   @@index([tenantId, quoteVersionId])
   @@index([tenantId, orderId])
   // Open deposits by due date.
@@ -552,6 +557,10 @@ model SalesOrder {
   quoteVersion    QuoteVersion?    @relation(fields: [tenantId, partyId, quoteVersionId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   lines           SalesOrderLine[]
   depositRequests DepositRequest[]
+  // shipping.prisma: its shipments.
+  shipments       Shipment[]
+  // money.prisma: the invoices that bill it.
+  invoices        Invoice[]
 
   @@unique([tenantId, companyId, number])
   // The target of the references from the order's lines and deposit requests: the same company and party.
@@ -633,6 +642,10 @@ model SalesOrderLine {
   sizes              SalesOrderLineSize[]
   // production.prisma: the work order cells that make it.
   workOrderSizes     WorkOrderSize[]
+  // shipping.prisma: the shipment lines that ship it.
+  shipmentLines      ShipmentLine[]
+  // money.prisma: the invoice lines that bill it.
+  invoiceLines       InvoiceLine[]
 
   @@unique([tenantId, orderId, seq])
   // The target of the references from the line's size rows (and the work orders of W1-23).
@@ -662,4 +675,35 @@ model SalesOrderLineSize {
   line SalesOrderLine @relation(fields: [tenantId, partyId, lineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, lineId, size])
+}
+
+/// The sales settings of a company, or the tenant-wide ones (SAL-184, FIN-023; the design's Sales settings): the margin
+/// floor and the discount limit a quote is checked against (breaking either asks for an approval), how long a new quote
+/// stands and the deposit it asks by default. The row's id is the company's id, or the tenant's own id for the tenant-wide
+/// row, as CostingSettings: a company's own row wins for its quotes; no row at all: the domain's defaults
+/// (factory-domain sales/quotes/rules QUOTE_RULE_DEFAULTS). A quote version keeps the floor it was checked against
+/// (QuoteVersion.marginFloorPct), so a later change never rewrites an old quote.
+model SalesSettings {
+  /// The company's id; the tenant's id for the tenant-wide row (companyId null).
+  id                  String   @id @db.Uuid
+  tenantId            String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: the tenant-wide settings.
+  companyId           String?  @db.Uuid
+  /// The lowest margin, percent of the net amount, a quote is sent with without an approval: 0 to 100.
+  /// @grain margin
+  marginFloorPct      Decimal  @db.Decimal(7, 4)
+  /// The largest discount off the list price, percent, a line is sent with without an approval: 0 to 100.
+  discountLimitPct    Decimal  @db.Decimal(7, 4)
+  /// A new quote stands this many days (its validUntil): 1 to 365.
+  defaultValidityDays Int
+  /// The deposit asked at acceptance, percent of the gross total, above 0 and at most 100; null: none by default.
+  defaultDepositPct   Decimal? @db.Decimal(7, 4)
+  version             Int      @default(1)
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?  @db.Uuid
+
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId])
 }

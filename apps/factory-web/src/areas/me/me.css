@@ -1,0 +1,75 @@
+/*
+ * My profile & security (SCR-007): the page header, then the cards in two columns where there is room, one on a
+ * phone. Layout only: colours, sizes and radii are semantic design-system tokens; the controls are the DS's own.
+ */
+.fw-me {
+  max-width: 1120px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+}
+
+.fw-me-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  align-items: start;
+  gap: var(--nds-space-16);
+}
+
+/* A hash link (`#authenticator`) scrolls the card into view below the page's top. */
+.fw-me-cards > [id] {
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-me-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+}
+
+.fw-me-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.fw-me-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-me-note,
+.fw-me-step {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.fw-me-note {
+  color: var(--nds-text-muted);
+}
+
+.fw-me-qr {
+  display: flex;
+  justify-content: center;
+}
+
+/* The ten recovery codes: two columns of figures, read back from paper. */
+.fw-me-codes {
+  margin: 0;
+  padding: var(--nds-space-12) var(--nds-space-16);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-16);
+  list-style: none;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-me-codes code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-md);
+  color: var(--nds-text-strong);
+  letter-spacing: 0.04em;
+}
