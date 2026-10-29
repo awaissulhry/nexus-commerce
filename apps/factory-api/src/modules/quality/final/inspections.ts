@@ -1,0 +1,420 @@
+import { createHash } from 'node:crypto'
+import type { Prisma } from '@nexus/factory-db'
+import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { newId } from '@nexus/factory-domain/core/ids'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
+import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { QUALITY_INSPECTIONS_RECORD, QUALITY_INSPECTIONS_VIEW } from '@nexus/factory-domain/quality/final/permissions'
+import {
+  aqlText,
+  checklistOf,
+  checklistProblems,
+  computedResult,
+  decisionProblems,
+  defectCounts,
+  defectProblems,
+  inspectionLabel,
+  isOverride,
+  planProblems,
+  reasonProblem,
+  resultWords,
+  type ChecklistAnswer,
+  type DefectLine,
+  type InspectionResult,
+  type SamplingPlan,
+} from '@nexus/factory-domain/quality/final/rules'
+import { RELEASE_STATUSES } from '@nexus/factory-domain/quality/release/rules'
+import { command, StaleVersionError, type CommandCaller, type CommandTx } from '../../../core/command'
+import { asTenantSystem, assertFloorReady } from '../../production/serials/facts'
+import { readCells, type LabelHeader } from '../../production/serials/store'
+import { scanProgressOf } from '../../production/scans/progress'
+import { finalWorkOrder, inspectorOf, mayOn, postedBy, signerOf, type Inspector } from './access'
+import { identityOf, MakerRefusedError, makerCheck, type Identity } from './facts'
+import { makersOf, readDefects, readInspection, readWorkOrderInspections, type DefectRow, type InspectionRow, type Reader } from './store'
+
+/**
+ * The final inspection of a work order's finished garments (B-W1-45; QHS-013, QHS-050, QHS-058; A1 §2.5 "Final release";
+ * design quality.inspections, floor.final; SCR-075, SCR-076, SCR-097). The office (a quality inspector) or the site's
+ * floor (a floor inspector, signed in, at its own site) opens one, records the sample, the checklist and the defects, and
+ * signs the result; each write is ONE command() with its audit row and event; the rules and words are factory-domain
+ * quality/final; the …_quality_final_release_guards triggers are the last word (they write the computed result).
+ *
+ *   open      quality.inspections.record over the work order: released, in progress or completed; a lot of its FINISHED
+ *             garments (B-W1-42's scans at the final operation); the opener is the inspector (an office user, or the
+ *             floor's signed-in worker) and made none of the garments (cut log, bundles, scans). The floor first needs
+ *             the site's floor to be ready (B-W1-36/37).
+ *   record    PATCH (plan, checklist, note, the signed statement) and PUT …/defects (the whole list; lines matched by
+ *             class and code) while OPEN, by its inspector, with the inspection's version.
+ *   decide    the signature (QHS-058): the office's fresh code (step-up) or the floor's PIN; every check answered; the
+ *             decision is the computed result, or an override with the written reason (QHS-013; a PASS over a critical
+ *             defect or a failed check never); the inspector still made none of the garments, and signs the statement
+ *             where the floor's records name the station only. Its SHA-256 is the e-signature.
+ *   cancel    an OPEN inspection abandoned, with the reason.
+ */
+
+/** A decided or cancelled inspection never changes (409 before the trigger). */
+const assertOpen = (inspection: Pick<InspectionRow, 'status'>) => {
+  if (inspection.status !== 'OPEN') throw new InvalidStateError(`This inspection is ${inspection.status}; a signed or cancelled inspection never changes (a correction is an amendment, W2b).`)
+}
+
+/**
+ * The inspection's row FOR UPDATE inside a command, then its version (edit-conflict guard: 409) and its state (an OPEN
+ * one only: 409 in words, before the trigger would refuse). Every write bumps the version itself.
+ */
+async function lockInspection(tx: CommandTx, inspectionId: string, expectedVersion: number): Promise<InspectionRow> {
+  await tx.$queryRaw`SELECT "id" FROM "Inspection" WHERE "id" = ${inspectionId}::uuid FOR UPDATE`
+  const row = await readInspection(tx, inspectionId)
+  if (!row) throw new NotFoundError('Inspection not found.')
+  if (row.version !== expectedVersion) throw new StaleVersionError('Inspection', row.id, row.version, expectedVersion)
+  assertOpen(row)
+  return row
+}
+
+const invalid = (message: string, problems: readonly Issue[]) => new ValidationError(message, problems.map((problem) => ({ ...problem, path: `body/${problem.path}` })))
+
+/** The inspection and its work order, as the caller may reach them. */
+async function inspectionFor(caller: CommandCaller, inspectionId: string, permission: Permission = QUALITY_INSPECTIONS_VIEW): Promise<{ inspection: InspectionRow; header: LabelHeader }> {
+  const context = inspectorOf(caller)
+  const inspection = await caller.withClient((client) => readInspection(client, inspectionId))
+  if (!inspection || !(mayOn(context, QUALITY_INSPECTIONS_VIEW, inspection) || mayOn(context, permission, inspection))) throw new NotFoundError('Inspection not found.')
+  const header = await finalWorkOrder(caller, inspection.workOrderId, permission)
+  return { inspection, header }
+}
+
+/** The caller is the inspection's inspector (the same worker or office user). */
+const isOwn = (context: Inspector, inspection: Pick<InspectionRow, 'inspectorWorkerId' | 'inspectorUserId'>): boolean => {
+  const signer = signerOf(context)
+  return (signer.workerId !== null && signer.workerId === inspection.inspectorWorkerId) || (signer.userId !== null && signer.userId === inspection.inspectorUserId)
+}
+
+/** Only its inspector records and signs an inspection (one inspector per inspection in W1; assigning is W2a). */
+function assertOwnInspection(context: Inspector, inspection: InspectionRow) {
+  if (!isOwn(context, inspection)) throw new ForbiddenError('This inspection is recorded and signed by the inspector who opened it.')
+}
+
+/** The caller as people (office: their own reads; floor: through the tenant's system view, which reads Worker.userId). */
+export async function callerIdentity(caller: CommandCaller): Promise<Identity> {
+  const context = inspectorOf(caller)
+  const reader = context.audience === 'office' ? caller : asTenantSystem(caller)
+  return reader.withClient((client) => identityOf(client, signerOf(context)))
+}
+
+/** The finished garments of the work order (good at the final operation; null: no scanned operation). */
+async function finishedOf(db: Reader, header: LabelHeader): Promise<number | null> {
+  const progress = await scanProgressOf(db, header)
+  const values = [...progress.values()].map((cell) => cell.finished)
+  if (values.length === 0 || values.some((value) => value === null)) return values.length === 0 ? 0 : null
+  return values.reduce<number>((sum, value) => sum + (value ?? 0), 0)
+}
+
+const piecesOf = async (db: Reader, workOrderId: string) => (await readCells(db, workOrderId)).reduce((sum, cell) => sum + cell.quantity, 0)
+
+// ---- the views -------------------------------------------------------------------------------------------------------------------
+
+const defectView = (row: DefectRow) => ({ id: row.id, defectClass: row.defectClass, code: row.code, description: row.description, quantity: row.quantity, workOrderSizeId: row.workOrderSizeId, note: row.note })
+
+export const checklistAnswers = (value: unknown): ChecklistAnswer[] =>
+  Array.isArray(value)
+    ? value.filter((entry): entry is { code: string; ok: boolean | null; note?: string | null } => entry !== null && typeof entry === 'object' && typeof (entry as { code?: unknown }).code === 'string')
+    : []
+
+export const planOf = (row: InspectionRow): SamplingPlan => ({
+  lotSize: row.lotSize,
+  sampleSize: row.sampleSize,
+  inspectionLevel: row.inspectionLevel,
+  aqlMajor: row.aqlMajor.toString(),
+  aqlMinor: row.aqlMinor.toString(),
+  acceptMajor: row.acceptMajor,
+  acceptMinor: row.acceptMinor,
+})
+
+/** One inspection as every screen shows it: its plan, checklist, defects, the result now (computed) and the decision. */
+export function inspectionView(row: InspectionRow, defects: readonly DefectRow[], context: { readonly number: string; readonly seq: number }) {
+  const plan = planOf(row)
+  const checklist = checklistAnswers(row.checklist)
+  const computed = computedResult({ counts: defectCounts(defects), plan, checklist })
+  return {
+    id: row.id,
+    label: inspectionLabel(context.number, context.seq),
+    workOrderId: row.workOrderId,
+    companyId: row.companyId,
+    siteId: row.siteId,
+    status: row.status,
+    plan: { ...plan, aqlMajor: aqlText(plan.aqlMajor), aqlMinor: aqlText(plan.aqlMinor), hundredPercent: plan.sampleSize === plan.lotSize },
+    checklist: checklistOf(checklist),
+    defects: defects.filter((defect) => defect.inspectionId === row.id).map(defectView),
+    counts: defectCounts(defects.filter((defect) => defect.inspectionId === row.id)),
+    /** The rules' result now (an OPEN inspection: as it stands); a decided one: what the database wrote. */
+    computed: { result: (row.computedResult ?? computed.result) as InspectionResult, words: resultWords(computed) },
+    overridden: row.overrideReason !== null,
+    overrideReason: row.overrideReason,
+    inspector: { kind: row.inspectorWorkerId ? ('FLOOR' as const) : ('OFFICE' as const), workerId: row.inspectorWorkerId, userId: row.inspectorUserId },
+    notMakerStatement: row.notMakerStatement,
+    decidedAt: row.decidedAt ? toUtcIso(row.decidedAt) : null,
+    signatureSha256: row.signatureSha256,
+    note: row.note,
+    version: row.version,
+    createdAt: toUtcIso(row.createdAt),
+  }
+}
+
+/** An inspection's place among its work order's inspections (oldest first). */
+export async function seqOf(db: Reader, inspection: Pick<InspectionRow, 'id' | 'workOrderId'>): Promise<number> {
+  return (await readWorkOrderInspections(db, inspection.workOrderId)).findIndex((row) => row.id === inspection.id) + 1
+}
+
+async function viewOf(db: Reader, row: InspectionRow, number: string) {
+  return inspectionView(row, await readDefects(db, [row.id]), { number, seq: await seqOf(db, row) })
+}
+
+// ---- open --------------------------------------------------------------------------------------------------------------------------
+
+export interface OpenBody extends SamplingPlan {
+  readonly workOrderId: string
+  readonly note?: string | null | undefined
+}
+
+export async function openInspection(caller: CommandCaller, body: OpenBody, idempotencyKey: string | undefined) {
+  const context = inspectorOf(caller)
+  const header = await finalWorkOrder(caller, body.workOrderId, QUALITY_INSPECTIONS_RECORD)
+  if (context.audience === 'floor') await assertFloorReady(caller, header.siteId)
+  const identity = await callerIdentity(caller)
+  const { result } = await command(caller, { name: 'quality.inspection.open', idempotencyKey, input: body }, async (tools) => {
+    const { tx, now } = tools
+    const current = (await tx.workOrder.findUnique({ where: { id: header.id }, select: { status: true } }))?.status ?? header.status
+    if (!(RELEASE_STATUSES as readonly string[]).includes(current)) throw new InvalidStateError(`Work order ${header.number} is ${current.toLowerCase()}: its garments are inspected while it is released, in progress or completed.`)
+    const problems = planProblems(body, { pieces: await piecesOf(tx, header.id), finished: await finishedOf(tx, header) })
+    if (problems.length > 0) throw invalid('The sampling plan is not valid.', problems)
+    const maker = makerCheck(identity, await makersOf(tx, header.id), header.number)
+    if (maker.made) throw new MakerRefusedError(maker.words)
+    const signer = signerOf(context)
+    const id = newId()
+    const row = await tx.inspection.create({
+      data: {
+        id,
+        companyId: header.companyId,
+        siteId: header.siteId,
+        workOrderId: header.id,
+        lotSize: body.lotSize,
+        sampleSize: body.sampleSize,
+        inspectionLevel: body.inspectionLevel.trim(),
+        aqlMajor: aqlText(body.aqlMajor),
+        aqlMinor: aqlText(body.aqlMinor),
+        acceptMajor: body.acceptMajor,
+        acceptMinor: body.acceptMinor,
+        inspectorWorkerId: signer.workerId,
+        inspectorUserId: signer.userId,
+        note: body.note?.trim() || null,
+        createdAt: now,
+        updatedAt: now,
+        createdById: context.actorId,
+      },
+      select: { id: true, version: true },
+    })
+    tools.audit({ recordType: 'Inspection', recordId: id, companyId: header.companyId, siteId: header.siteId, after: { ...body, workOrderId: header.id, status: 'OPEN', inspector: postedBy(context) } })
+    tools.emit({ type: 'quality.inspection_opened', subject: id, companyId: header.companyId, siteId: header.siteId, payload: { inspectionId: id, workOrderId: header.id, number: header.number, lotSize: body.lotSize, postedBy: postedBy(context) } })
+    return { id: row.id }
+  })
+  return caller.withClient(async (db) => ({ inspection: await viewOf(db, (await readInspection(db, result.id))!, header.number) }))
+}
+
+// ---- record ------------------------------------------------------------------------------------------------------------------------
+
+export interface UpdateBody extends Partial<SamplingPlan> {
+  readonly version: number
+  readonly checklist?: readonly ChecklistAnswer[] | undefined
+  readonly note?: string | null | undefined
+  readonly notMakerStatement?: boolean | undefined
+}
+
+export async function updateInspection(caller: CommandCaller, inspectionId: string, body: UpdateBody, idempotencyKey: string | undefined) {
+  const context = inspectorOf(caller)
+  const { inspection, header } = await inspectionFor(caller, inspectionId, QUALITY_INSPECTIONS_RECORD)
+  assertOwnInspection(context, inspection)
+  const { result } = await command(caller, { name: 'quality.inspection.record', idempotencyKey, input: body }, async (tools) => {
+    const { tx, now } = tools
+    const before = await lockInspection(tx, inspection.id, body.version)
+    const was = planOf(before)
+    const plan: SamplingPlan = {
+      lotSize: body.lotSize ?? was.lotSize,
+      sampleSize: body.sampleSize ?? was.sampleSize,
+      inspectionLevel: body.inspectionLevel ?? was.inspectionLevel,
+      aqlMajor: body.aqlMajor ?? was.aqlMajor,
+      aqlMinor: body.aqlMinor ?? was.aqlMinor,
+      acceptMajor: body.acceptMajor ?? was.acceptMajor,
+      acceptMinor: body.acceptMinor ?? was.acceptMinor,
+    }
+    const counts = defectCounts(await readDefects(tx, [before.id]))
+    const most = Math.max(counts.critical, counts.major, counts.minor)
+    const problems = [
+      ...planProblems(plan, { pieces: await piecesOf(tx, header.id), finished: await finishedOf(tx, header) }),
+      ...(body.checklist ? checklistProblems(body.checklist, { forDecision: false }) : []),
+      ...(most > plan.sampleSize ? [{ path: 'sampleSize', message: `The defects recorded name ${most} garments of one class: the sample is at least that.` }] : []),
+    ]
+    if (problems.length > 0) throw invalid('The inspection is not valid.', problems)
+    const data: Prisma.InspectionUpdateInput = {
+      lotSize: plan.lotSize,
+      sampleSize: plan.sampleSize,
+      inspectionLevel: plan.inspectionLevel.trim(),
+      aqlMajor: aqlText(plan.aqlMajor),
+      aqlMinor: aqlText(plan.aqlMinor),
+      acceptMajor: plan.acceptMajor,
+      acceptMinor: plan.acceptMinor,
+      ...(body.checklist ? { checklist: checklistOf(body.checklist) } : {}),
+      ...(body.note !== undefined ? { note: body.note?.trim() || null } : {}),
+      ...(body.notMakerStatement !== undefined ? { notMakerStatement: body.notMakerStatement } : {}),
+      version: { increment: 1 },
+      updatedAt: now,
+    }
+    await tx.inspection.update({ where: { id: before.id }, data, select: { id: true } })
+    tools.audit({ recordType: 'Inspection', recordId: before.id, companyId: header.companyId, siteId: header.siteId, before: { ...was, checklist: before.checklist, note: before.note }, after: { ...plan, checklist: body.checklist ?? before.checklist, note: body.note ?? before.note } })
+    return { id: before.id }
+  })
+  return caller.withClient(async (db) => ({ inspection: await viewOf(db, (await readInspection(db, result.id))!, header.number) }))
+}
+
+export interface DefectsBody {
+  readonly version: number
+  readonly defects: readonly DefectLine[]
+}
+
+export async function putDefects(caller: CommandCaller, inspectionId: string, body: DefectsBody, idempotencyKey: string | undefined) {
+  const context = inspectorOf(caller)
+  const { inspection, header } = await inspectionFor(caller, inspectionId, QUALITY_INSPECTIONS_RECORD)
+  assertOwnInspection(context, inspection)
+  const { result } = await command(caller, { name: 'quality.inspection.defects', idempotencyKey, input: body }, async (tools) => {
+    const { tx, now } = tools
+    const current = await lockInspection(tx, inspection.id, body.version)
+    const cells = await readCells(tx, header.id)
+    const problems = defectProblems(body.defects, { sampleSize: current.sampleSize, cellIds: new Set(cells.map((cell) => cell.id)) })
+    if (problems.length > 0) throw invalid('The defects are not valid.', problems)
+    const existing = await readDefects(tx, [current.id])
+    const key = (line: Pick<DefectLine, 'defectClass' | 'code'>) => `${line.defectClass}|${line.code}`
+    const wanted = new Map(body.defects.map((line) => [key(line), line]))
+    for (const row of existing) if (!wanted.has(key(row))) await tx.inspectionDefect.delete({ where: { id: row.id }, select: { id: true } })
+    for (const line of body.defects) {
+      const row = existing.find((entry) => key(entry) === key(line))
+      const data = { quantity: line.quantity, workOrderSizeId: line.workOrderSizeId ?? null, description: line.description?.trim() || null, note: line.note?.trim() || null }
+      if (row) await tx.inspectionDefect.update({ where: { id: row.id }, data: { ...data, version: { increment: 1 }, updatedAt: now }, select: { id: true } })
+      else
+        await tx.inspectionDefect.create({
+          data: { id: newId(), siteId: current.siteId, workOrderId: current.workOrderId, inspectionId: current.id, defectClass: line.defectClass, code: line.code, ...data, createdAt: now, updatedAt: now, createdById: context.actorId },
+          select: { id: true },
+        })
+    }
+    await tx.inspection.update({ where: { id: current.id }, data: { version: { increment: 1 }, updatedAt: now }, select: { id: true } })
+    tools.audit({ recordType: 'Inspection', recordId: current.id, companyId: header.companyId, siteId: header.siteId, before: { defects: existing.map(defectView) }, after: { defects: body.defects } })
+    return { id: current.id }
+  })
+  return caller.withClient(async (db) => ({ inspection: await viewOf(db, (await readInspection(db, result.id))!, header.number) }))
+}
+
+// ---- decide ---------------------------------------------------------------------------------------------------------------------------
+
+export interface DecideBody {
+  readonly version: number
+  readonly result: InspectionResult
+  readonly checklist: readonly ChecklistAnswer[]
+  readonly notMakerStatement?: boolean | undefined
+  readonly overrideReason?: string | null | undefined
+  readonly note?: string | null | undefined
+}
+
+/** The e-signature: SHA-256 of what was signed, by whom, when (QHS-058). */
+export const signatureOf = (what: unknown): string => createHash('sha256').update(JSON.stringify(what)).digest('hex')
+
+export async function decideInspection(caller: CommandCaller, inspectionId: string, body: DecideBody, options: { readonly sign: () => void | Promise<void>; readonly idempotencyKey?: string | undefined }) {
+  const context = inspectorOf(caller)
+  const { inspection, header } = await inspectionFor(caller, inspectionId, QUALITY_INSPECTIONS_RECORD)
+  assertOwnInspection(context, inspection)
+  assertOpen(inspection)
+  if (context.audience === 'floor') await assertFloorReady(caller, header.siteId)
+  const checklistIssues = checklistProblems(body.checklist, { forDecision: true })
+  if (checklistIssues.length > 0) throw invalid('Answer the checklist before signing.', checklistIssues)
+  const defects = await caller.withClient((db) => readDefects(db, [inspection.id]))
+  const computed = computedResult({ counts: defectCounts(defects), plan: planOf(inspection), checklist: body.checklist })
+  const decisionIssues = decisionProblems(body.result, computed, body.overrideReason)
+  if (decisionIssues.length > 0) throw invalid('The decision is not valid.', decisionIssues)
+  const identity = await callerIdentity(caller)
+  await options.sign()
+  const { result } = await command(caller, { name: 'quality.inspection.decide', idempotencyKey: options.idempotencyKey, input: body }, async (tools) => {
+    const { tx, now } = tools
+    const current = await lockInspection(tx, inspection.id, body.version)
+    const counts = defectCounts(await readDefects(tx, [current.id]))
+    const again = computedResult({ counts, plan: planOf(current), checklist: body.checklist })
+    const problems = decisionProblems(body.result, again, body.overrideReason)
+    if (problems.length > 0) throw new ConflictError(`The inspection changed while you signed: ${problems.map((problem) => problem.message).join(' ')}`)
+    const makers = await makersOf(tx, current.workOrderId)
+    const maker = makerCheck(identity, makers, header.number)
+    if (maker.made) throw new MakerRefusedError(maker.words)
+    const statement = body.notMakerStatement ?? current.notMakerStatement
+    if (makers.unnamed && !statement) {
+      throw new MakerRefusedError("This site records the station, not the worker, so the floor's records cannot tell who made the garments: sign the statement 'I did not make these garments' (notMakerStatement).")
+    }
+    const checklist = checklistOf(body.checklist)
+    const overrideReason = isOverride(body.result, again) ? body.overrideReason!.trim() : null
+    const status = body.result === 'PASS' ? 'PASSED' : 'FAILED'
+    const signature = signatureOf({ inspectionId: current.id, workOrderId: current.workOrderId, status, computed: again.result, counts, plan: planOf(current), checklist, overrideReason, notMakerStatement: statement, signer: signerOf(context), at: toUtcIso(now) })
+    const decided = await tx.inspection.update({
+      where: { id: current.id },
+      data: { status, checklist, decidedAt: now, signatureSha256: signature, overrideReason, notMakerStatement: statement, ...(body.note !== undefined ? { note: body.note?.trim() || null } : {}), version: { increment: 1 }, updatedAt: now },
+      select: { computedResult: true },
+    })
+    if (decided.computedResult !== again.result) throw new ConflictError('The computed result differs from the rules: reload the inspection.')
+    tools.audit({
+      recordType: 'Inspection',
+      recordId: current.id,
+      companyId: header.companyId,
+      siteId: header.siteId,
+      before: { status: 'OPEN' },
+      after: { status, computedResult: again.result, counts, checklist, overrideReason, notMakerStatement: statement, signatureSha256: signature, signedBy: postedBy(context) },
+      ...(overrideReason ? { reason: overrideReason } : {}),
+    })
+    tools.emit({
+      type: 'quality.inspection_decided',
+      subject: current.id,
+      companyId: header.companyId,
+      siteId: header.siteId,
+      payload: { inspectionId: current.id, workOrderId: header.id, number: header.number, status, computedResult: again.result, overridden: overrideReason !== null, postedBy: postedBy(context) },
+    })
+    return { id: current.id }
+  })
+  return caller.withClient(async (db) => ({ inspection: await viewOf(db, (await readInspection(db, result.id))!, header.number) }))
+}
+
+export async function cancelInspection(caller: CommandCaller, inspectionId: string, body: { readonly version: number; readonly reason: string }, idempotencyKey: string | undefined) {
+  const context = inspectorOf(caller)
+  const { inspection, header } = await inspectionFor(caller, inspectionId, QUALITY_INSPECTIONS_RECORD)
+  assertOwnInspection(context, inspection)
+  const problem = reasonProblem(body.reason)
+  if (problem) throw invalid('Say why the inspection is cancelled.', [problem])
+  const { result } = await command(caller, { name: 'quality.inspection.cancel', idempotencyKey, input: body }, async (tools) => {
+    const current = await lockInspection(tools.tx, inspection.id, body.version)
+    await tools.tx.inspection.update({ where: { id: current.id }, data: { status: 'CANCELLED', version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
+    tools.audit({ recordType: 'Inspection', recordId: current.id, companyId: header.companyId, siteId: header.siteId, before: { status: 'OPEN' }, after: { status: 'CANCELLED' }, reason: body.reason.trim() })
+    tools.emit({ type: 'quality.inspection_cancelled', subject: current.id, companyId: header.companyId, siteId: header.siteId, payload: { inspectionId: current.id, workOrderId: header.id, number: header.number } })
+    return { id: current.id }
+  })
+  return caller.withClient(async (db) => ({ inspection: await viewOf(db, (await readInspection(db, result.id))!, header.number) }))
+}
+
+// ---- read -------------------------------------------------------------------------------------------------------------------------
+
+export async function getInspection(caller: CommandCaller, inspectionId: string) {
+  const context = inspectorOf(caller)
+  const { inspection, header } = await inspectionFor(caller, inspectionId)
+  const identity = await callerIdentity(caller)
+  return caller.withClient(async (db) => {
+    const makers = await makersOf(db, header.id)
+    return {
+      inspection: await viewOf(db, inspection, header.number),
+      workOrder: { id: header.id, number: header.number, status: header.status, batchNumber: header.batchNumber },
+      /** The viewer's maker check (design ins-side "You are not among them"). */
+      maker: makerCheck(identity, makers, header.number),
+      /** Where the floor's records name only the station, the signer ticks the statement. */
+      statementNeeded: makers.unnamed,
+      /** The viewer is its inspector: they record and sign it. */
+      yours: isOwn(context, inspection),
+    }
+  })
+}
