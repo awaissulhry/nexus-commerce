@@ -67,6 +67,9 @@ model Device {
   bundleReprints         BundleReprint[]
   // numbering.prisma: the numbers of its blocks it used.
   numberBlockUses NumberBlockUse[]
+  // floor-sync.prisma: its queue's recorded events and refused actions.
+  syncEvents      FloorSyncEvent[]
+  refusedActions  FloorRefusedAction[]
 
   @@unique([tenantId, siteId, id])
   @@index([tenantId, siteId])
@@ -151,6 +154,8 @@ model Worker {
   // B-W1-42: the correction requests they asked and the refused scans they sent (a site that names workers).
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]
+  // floor-sync.prisma: its refused queued actions (a site that names workers).
+  refusedActions         FloorRefusedAction[]
   // quality.prisma: the final inspections the worker made as the inspector.
   inspections    Inspection[]
   // The quality releases a floor inspector signed (B-W1-45).

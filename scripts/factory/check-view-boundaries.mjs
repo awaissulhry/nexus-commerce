@@ -10,7 +10,7 @@
  *      `fetch(`, no `'use server'`, no `process.env`, no TanStack Query. The page or container that renders the view
  *      loads the data (a build step swaps fixtures for the API without touching the view).
  *   3. A view (route group) never imports another's files: Office (`src/app/(office)`, `src/shell/{office,nav,switcher,
- *      palette}`, `src/areas`), Links (`src/app/(links)`, `src/shell/links`), Floor (`src/app/(floor)`, `src/floor`),
+ *      palette}`, `src/areas`), Links (`src/app/(links)`, `src/shell/links`, `src/links`), Floor (`src/app/(floor)`, `src/floor`),
  *      Portal (`src/app/(portal)`, `src/portal`, `src/shell/portal`). Shared code lives in src/lib. Design-only files
  *      (`fixtures.ts`, `src/shell/design-data.ts`) and tests are exempt, and nothing but a fixture, a test or the
  *      design index may import a design-only file.
@@ -59,7 +59,7 @@ const VIEW_FETCHING_FILES = [
 
 const VIEWS = [
   ['office', [/^app\/\(office\)\//, /^shell\/(office|nav|switcher|palette)\//, /^areas\//]],
-  ['links', [/^app\/\(links\)\//, /^shell\/links\//]],
+  ['links', [/^app\/\(links\)\//, /^shell\/links\//, /^links\//]],
   ['floor', [/^app\/\(floor\)\//, /^floor\//]],
   ['portal', [/^app\/\(portal\)\//, /^portal\//, /^shell\/portal\//]],
 ]

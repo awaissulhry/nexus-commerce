@@ -1,0 +1,772 @@
+{
+  "status": {
+    "DRAFT": "Draft",
+    "PENDING_APPROVAL": "Waiting for approval",
+    "APPROVED": "Approved",
+    "SENT": "Sent",
+    "ACCEPTED": "Accepted",
+    "DECLINED": "Declined",
+    "EXPIRED": "Expired",
+    "SUPERSEDED": "Replaced",
+    "CANCELLED": "Cancelled"
+  },
+  "approvalStatus": {
+    "PENDING": "Waiting",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "WITHDRAWN": "Withdrawn"
+  },
+  "reason": {
+    "MARGIN_FLOOR": "margin under the floor",
+    "DISCOUNT_LIMIT": "discount over the limit",
+    "AMOUNT_LIMIT": "amount over the limit",
+    "SPECIAL_ITEM": "special item"
+  },
+  "ruleName": {
+    "MARGIN_FLOOR": "Margin against the floor",
+    "DISCOUNT_LIMIT": "Discount against the limit",
+    "AMOUNT_LIMIT": "Amount against the limit",
+    "SPECIAL_ITEM": "Special items"
+  },
+  "severity": {
+    "BLOCKS": "Stops",
+    "BLOCKS_SEND": "Stops sending",
+    "WARNING": "Check",
+    "INFO": "Note"
+  },
+  "issue": {
+    "PARTY_NOT_QUOTABLE": "The customer is blocked or archived: no quote can go to them.",
+    "NO_LINES": "Add at least one style with pieces.",
+    "NOT_PRICED": "A line has no price yet.",
+    "COST_INCOMPLETE": "A line's cost is incomplete: the cost sheet misses an input.",
+    "NO_COST_REVISION": "A style has no cost sheet yet: its cost is unknown.",
+    "COST_ESTIMATE": "A style's cost comes from a draft revision: it is an estimate.",
+    "CERTIFICATE": "Size {size}: no valid certificate covers it on the delivery date.",
+    "VIES_NOT_PROVEN": "VAT is charged at 22 % until VIES confirms the customer's EU VAT number.",
+    "APPROVAL_NEEDED": "A rule is broken: an approval is needed before sending.",
+    "NO_VALIDITY": "Set how long the offer stands (Terms & delivery).",
+    "VALIDITY_PAST": "The validity date has passed: set a new one.",
+    "NO_BILL_TO": "Choose the invoice address.",
+    "NO_SHIP_TO": "Choose the delivery address.",
+    "NO_CONTACT_EMAIL": "The contact has no email: the quote and its link go by email.",
+    "NO_PROMISE_DATE": "A consumer must see the delivery date: set it (Codice del Consumo art. 49)."
+  },
+  "check": {
+    "fix": "Fix",
+    "PARTY_NOT_QUOTABLE": "The customer is blocked or archived: no quote can go to them.",
+    "NO_LINES": "Add at least one style with pieces.",
+    "NOT_PRICED": "A line has no price yet.",
+    "COST_INCOMPLETE": "A line's cost is incomplete: the cost sheet misses an input.",
+    "NO_COST_REVISION": "A style has no cost sheet yet: its cost is unknown.",
+    "COST_ESTIMATE": "A style's cost comes from a draft revision: it is an estimate.",
+    "CERTIFICATE": "Size {size}: no valid certificate covers it on the delivery date.",
+    "VIES_NOT_PROVEN": "VAT is charged at 22 % until VIES confirms the customer's EU VAT number.",
+    "APPROVAL_NEEDED": "A rule is broken: an approval is needed before sending.",
+    "NO_VALIDITY": "Set how long the offer stands (Terms & delivery).",
+    "VALIDITY_PAST": "The validity date has passed: set a new one.",
+    "NO_BILL_TO": "Choose the invoice address.",
+    "NO_SHIP_TO": "Choose the delivery address.",
+    "NO_CONTACT_EMAIL": "The contact has no email: the quote and its link go by email.",
+    "NO_PROMISE_DATE": "A consumer must see the delivery date: set it (Codice del Consumo art. 49).",
+    "COMPANY_LEGAL": "The company's letterhead data is incomplete (Admin › Companies).",
+    "BILL_TO_INCOMPLETE": "The invoice address needs street, postal code, city and country.",
+    "SHIP_TO_INCOMPLETE": "The delivery address needs street, postal code, city and country.",
+    "SDI_IDENTITY": "An Italian business is invoiced through SDI: add its SDI code or PEC to the customer.",
+    "VAT_CHANGED": "The customer's VAT treatment changed since pricing: open the Lines tab to recompute.",
+    "FIRM_OFFER_STANDS": "An earlier version is a firm offer that still stands: it cannot be replaced yet.",
+    "TERMS_VERSION": "Give your terms a version, so the acceptance records which ones were accepted.",
+    "NO_BANK_DETAILS": "The company has no bank details yet: the deposit instructions follow separately.",
+    "pass": {
+      "approval": "Approval done or not needed",
+      "validity": "Validity set",
+      "billTo": "Invoice address complete",
+      "shipTo": "Delivery address complete",
+      "sdi": "Tax identity complete for SDI",
+      "priced": "Every line priced",
+      "certificates": "Every size covered by a valid certificate",
+      "email": "The contact has an email",
+      "letterhead": "The letterhead is complete"
+    }
+  },
+  "taxMode": {
+    "IT_B2B": "Italian business",
+    "IT_B2C": "Italian consumer",
+    "EU_B2B": "EU business",
+    "EU_B2C": "EU consumer",
+    "EXTRA_EU": "Outside the EU"
+  },
+  "vies": {
+    "NOT_APPLICABLE": "Not needed",
+    "UNCHECKED": "Not checked yet",
+    "VALID": "Valid",
+    "EXPIRED": "Check too old: check again",
+    "INVALID": "Not valid",
+    "HELD": "Waiting for VIES"
+  },
+  "partyStatus": {
+    "PROSPECT": "Prospect",
+    "ACTIVE": "Active",
+    "BLOCKED": "Blocked",
+    "ARCHIVED": "Archived"
+  },
+  "priceBasis": {
+    "NET": "Net prices (VAT added)",
+    "GROSS": "Prices VAT included (consumer)"
+  },
+  "depositKind": {
+    "ACCONTO": "Acconto (advance)",
+    "CAPARRA": "Caparra confirmatoria"
+  },
+  "depositKindBody": {
+    "ACCONTO": "An advance on the price.",
+    "CAPARRA": "Kept if the buyer withdraws, paid back double if we do (c.c. art. 1385)."
+  },
+  "languageName": {
+    "it": "Italian",
+    "en": "English"
+  },
+  "link": {
+    "state": {
+      "LIVE": "Live",
+      "REVOKED": "Withdrawn",
+      "USED_UP": "Used",
+      "EXPIRED": "Expired"
+    }
+  },
+  "common": {
+    "retry": "Try again",
+    "dismiss": "Dismiss",
+    "back": "Back",
+    "keep": "Keep it",
+    "you": "you",
+    "colleague": "a colleague"
+  },
+  "problem": {
+    "read": {
+      "signed_out": "You were signed out. Sign in again.",
+      "forbidden": "Your role does not let you see this.",
+      "not_found": "It does not exist, or it was removed.",
+      "unavailable": "The factory server is not answering. Try again in a moment.",
+      "rate_limited": "Too many requests. Wait a moment and try again.",
+      "contract": "This page and the server disagree on the data: reload the page.",
+      "internal": "Something went wrong on the server. Try again."
+    },
+    "write": {
+      "signed_out": "You were signed out: nothing was saved. Sign in again.",
+      "forbidden": "Your role does not allow this change.",
+      "not_found": "The quote or line no longer exists.",
+      "invalid": "The server refused the values: check what you typed.",
+      "rate_limited": "Too many changes at once. Wait a moment and try again.",
+      "unavailable": "The server is not answering: not saved. Try again.",
+      "internal": "Not saved: something went wrong on the server.",
+      "moved": "Someone changed this quote meanwhile: it was read again. Check and repeat your change.",
+      "state": "The quote is in a state that does not allow this now: it was read again.",
+      "stepUp": "This needs a fresh authenticator code."
+    }
+  },
+  "held": {
+    "busy": "Working on it…",
+    "noManage": "Your role cannot change quotes.",
+    "noSend": "Your role cannot send quotes.",
+    "checking": "Still checking the quote.",
+    "needsApproval": "Needs approval first: {reasons}",
+    "cannotAsk": "Fix what stops the quote first (see the issues)."
+  },
+  "decide": {
+    "held": {
+      "OWN_REQUEST": "You asked for this approval: another approver decides.",
+      "NO_RIGHT": "Your role does not approve quotes.",
+      "NEEDS_MARGIN": "This request is about the margin: an approver who sees margins decides.",
+      "NOT_WAITING": "No request is waiting."
+    }
+  },
+  "readOnly": {
+    "noRight": "Read only: your role can view quotes, not change them.",
+    "pending": "Read only while waiting for approval: withdraw the request to change it.",
+    "approved": "Approved: reopen it to change it (the approval is asked again).",
+    "sent": "Version {revision} was sent and cannot change. Make version {next} to change it.",
+    "accepted": "Accepted by the customer: it cannot change.",
+    "closed": "Closed: it cannot change."
+  },
+  "action": {
+    "send": "Send to customer…",
+    "ask": "Ask for approval",
+    "approve": "Approve",
+    "reject": "Reject",
+    "withdraw": "Withdraw request",
+    "revise": "Make version {next}",
+    "previewPdf": "Preview PDF (new tab)",
+    "reopen": "Reopen to edit",
+    "newLink": "Send a new link",
+    "cancel": "Cancel quote…",
+    "copyNumber": "Copy number"
+  },
+  "tab": {
+    "lines": "Lines",
+    "price": "Price & margin",
+    "terms": "Terms & delivery",
+    "versions": "Versions",
+    "approval": "Approval",
+    "documents": "Documents",
+    "activity": "Activity",
+    "problems_one": "{count} problem",
+    "problems_other": "{count} problems"
+  },
+  "record": {
+    "back": "Quotes",
+    "backToList": "Back to Quotes",
+    "title": "Quote",
+    "loading": "Opening the quote…",
+    "state": {
+      "not_found": {
+        "title": "This quote does not exist",
+        "body": "It may have been removed, or the address is wrong."
+      },
+      "forbidden": {
+        "title": "You don't have access to this quote",
+        "body": "Quotes are for Sales, Finance and the Owner; ask an administrator for the role."
+      },
+      "error": {
+        "title": "Couldn't open the quote",
+        "body": "Try again."
+      }
+    },
+    "versionChip": "v{revision}",
+    "validLeft_one": "Valid {count} more day",
+    "validLeft_other": "Valid {count} more days",
+    "validEnded": "Offer ended",
+    "dock": "Thread",
+    "dockHint": "Show the thread beside the tab (⌘J)",
+    "dockLabel": "The quote's thread",
+    "more": "More actions",
+    "tabsLabel": "The quote's sections",
+    "changed": "Someone changed this quote at {time}. Your unsaved changes are kept on this page.",
+    "reload": "Reload",
+    "waitingApproval": "Waiting for approval: {reasons}",
+    "waitingYours": "You asked: an approver (Finance or the Owner) decides. The lines are frozen meanwhile.",
+    "waitingWho": "An approver decides here or from Home › Approvals; the person who asked never decides.",
+    "accepted": "Accepted by the customer. The evidence and the deposit request are on the Documents tab.",
+    "noPanels": "The thread and files open with the quote."
+  },
+  "save": {
+    "saving": "Saving…",
+    "saved": "All changes saved · {time}",
+    "failed": "A change was not saved",
+    "retry": "Retry"
+  },
+  "composer": {
+    "title": "Add a style",
+    "style": "Style",
+    "styleHint": "Type a style code or name, pick it, choose its colours: its size grid opens ready for numbers.",
+    "placeholder": "Code, name or season",
+    "searching": "Searching styles…",
+    "none": "No style matches.",
+    "found_one": "{count} style",
+    "found_other": "{count} styles",
+    "change": "Choose another style",
+    "colours": "Colours to quote",
+    "estimate": "Its cost comes from a draft revision: an estimate until the style is released.",
+    "noCost": "This style has no cost sheet yet: its cost and margin stay unknown.",
+    "add_one": "Add the style with {count} colour",
+    "add_other": "Add the style with {count} colours",
+    "held": {
+      "style": "Pick a style first.",
+      "colour": "Tick at least one colour."
+    },
+    "added": "{style} added: type the pieces in its grid."
+  },
+  "style": {
+    "released": "Released",
+    "estimate": "Estimate — not released",
+    "noRevision": "No cost sheet",
+    "mtm": "Made to measure",
+    "ppeClass": "PPE {value}"
+  },
+  "grid": {
+    "caption": "Pieces by colour and size",
+    "captionOf": "Pieces of {style} by colour and size",
+    "colour": "Colour",
+    "total": "Total",
+    "cell": "{colour}, size {size}",
+    "notOffered": "not offered",
+    "empty": "No colours or sizes yet.",
+    "totals": "{colour}: {rowTotal}. Size {size}: {columnTotal}. Total: {grand}.",
+    "notWhole": "{cell}: whole pieces only, 0 to {max}. Leave the cell to put the last quantity back.",
+    "cutToMax": "{cell}: at most {max} pieces in one cell.",
+    "pasted": "Pasted {applied} values; {skipped} could not land; {clamped} brought into range.",
+    "issues": "To check in this grid"
+  },
+  "lines": {
+    "empty": {
+      "title": "No lines yet",
+      "body": "Type a style code or name above to add the first line.",
+      "bodyReadOnly": "This version has no lines."
+    },
+    "certificate": "Size {size}: no valid certificate covers it.",
+    "certificateCount_one": "{count} size without certificate",
+    "certificateCount_other": "{count} sizes without certificate",
+    "revReleased": "Cost: rev {revision} released",
+    "revEstimate": "Cost: draft rev {revision} — estimate",
+    "noCostSheet": "No cost sheet",
+    "styleUnread": "Style details not read",
+    "blockMenu": "Style actions",
+    "addColour": "Add colour {colour}",
+    "removeStyle": "Remove this style…",
+    "removeTitle": "Remove {style} from the quote?",
+    "removeBody_one": "Its {count} line and its pieces leave this draft. You can add the style again.",
+    "removeBody_other": "Its {count} lines and their pieces leave this draft. You can add the style again.",
+    "removeGo_one": "Remove {count} line",
+    "removeGo_other": "Remove {count} lines",
+    "removed_one": "{count} line removed.",
+    "removed_other": "{count} lines removed.",
+    "col": {
+      "colour": "Colour line",
+      "pieces": "Pieces",
+      "unitNet": "Unit price (net)",
+      "unitGross": "Unit price (VAT incl.)",
+      "net": "Line net",
+      "unitCost": "Unit cost",
+      "margin": "Margin %"
+    },
+    "priceOf": "Unit price of {colour}",
+    "pricePlaceholder": "e.g. 450.00",
+    "pricesOf": "Prices of {style}",
+    "costMissing": "Cost incomplete",
+    "belowFloor": "Under the floor",
+    "autosave": "Saved shortly after you stop typing. A colour with no piece is not quoted.",
+    "keys": "Keys: n — add a style (from anywhere on this tab) · arrows, Tab, Enter — move between cells · Esc — put a cell back · ⌘V — paste a block from a spreadsheet.",
+    "priceInvalid": "Not a price: type a number like 450.00 (or 450,00)."
+  },
+  "summary": {
+    "label": "The deal at a glance",
+    "title": "Summary",
+    "lines": "Lines and pieces",
+    "linesValue": "Lines {lines} · pieces {units}",
+    "net": "Net",
+    "vatRate": "VAT {rate}",
+    "vatNature": "VAT {nature} (0 %)",
+    "gross": "Total",
+    "grossConsumer": "Total VAT included (the consumer's price)",
+    "deposit": "Deposit",
+    "depositValue": "{pct} {kind} = {amount}, due 7 days after acceptance",
+    "noDeposit": "No deposit asked",
+    "money": "Money",
+    "noPrice": "Prices are not shown for your role.",
+    "cost": "Cost",
+    "costIncomplete": "Incomplete: a cost input is missing",
+    "marginAmount": "Margin €",
+    "margin": "Margin",
+    "marginOver": "{pct} — over the {floor} floor",
+    "marginUnder": "{pct} — under the {floor} floor, needs approval",
+    "marginUnknown": "Not known until every cost is known",
+    "needsApproval": "Needs approval: {reasons}",
+    "noApproval": "No approval needed",
+    "validUntil": "Valid until {date}",
+    "issues": "What stops or concerns the quote"
+  },
+  "price": {
+    "noPrice": {
+      "title": "Prices are not shown for your role",
+      "body": "A role with the price grain sees this tab."
+    },
+    "empty": {
+      "title": "Add lines first",
+      "body": "Prices and margins appear here once the Lines tab has styles with pieces."
+    },
+    "tile": {
+      "net": "Net",
+      "cost": "Cost",
+      "marginAmount": "Margin €",
+      "marginPct": "Margin %",
+      "floor": "floor {floor}",
+      "lowest": "Lowest-margin line"
+    },
+    "grainNote": "Cost and margin columns are not shown for your role.",
+    "grainNoteMargin": "You see margin percentages against the floor, not costs.",
+    "tableLabel": "Pricing by line",
+    "col": {
+      "line": "Line",
+      "qty": "Pieces",
+      "list": "List price",
+      "unitNet": "Net unit",
+      "unitGross": "Unit VAT incl.",
+      "net": "Line net",
+      "unitCost": "Unit cost",
+      "source": "Cost source",
+      "marginAmount": "Margin €",
+      "marginPct": "Margin %"
+    },
+    "negative": "Under cost",
+    "editOnLines": "Prices change on the Lines tab (one place to edit)."
+  },
+  "terms": {
+    "party": {
+      "title": "Customer and addresses"
+    },
+    "contact": "Contact it goes to",
+    "contactHint": "The quote and its accept link go to this person.",
+    "noContact": "No contact",
+    "noEmail": "no email",
+    "customerRef": "Customer reference",
+    "customerRefHint": "Their request or RFQ number, printed on the quote.",
+    "billTo": "Invoice address",
+    "shipTo": "Delivery address",
+    "noAddress": "Not chosen",
+    "default": "default",
+    "addressUnknown": "An address no longer active",
+    "identity": "VAT number / tax code",
+    "sdi": "SDI code or PEC",
+    "vies": "VIES",
+    "vat": {
+      "title": "VAT and language"
+    },
+    "taxMode": "Tax mode",
+    "priceBasis": "Prices shown",
+    "vatLines": "VAT on the lines",
+    "nature": "nature {nature}",
+    "currency": "Currency",
+    "language": "Document language",
+    "languageHint": "The PDF and the email go out in this language.",
+    "validity": {
+      "title": "Validity and offer"
+    },
+    "validUntil": "Valid until",
+    "firmOffer": "Firm offer",
+    "firmOfferHint": "We can't withdraw it before that date (c.c. art. 1329).",
+    "firmOn": "Yes — it stands until the date",
+    "firmOff": "No",
+    "termsVersion": "Terms version",
+    "termsNote": "The standard terms of sale for the customer's kind (business, consumer, export) are printed on the PDF.",
+    "delivery": {
+      "title": "Delivery"
+    },
+    "promiseDate": "Promise date",
+    "promiseHint": "The date we promise delivery.",
+    "promiseConsumer": "Required for a consumer (Codice del Consumo art. 49).",
+    "payment": {
+      "title": "Payment and deposit"
+    },
+    "paymentTerms": "Payment terms",
+    "depositPct": "Deposit %",
+    "depositHint": "Of the total VAT included; empty: no deposit.",
+    "depositKind": "Deposit kind",
+    "depositAmount": "Deposit amount",
+    "depositDue": "Due",
+    "depositDueValue": "7 days after acceptance",
+    "consumer": {
+      "title": "What the law makes us say to a private buyer",
+      "grossFirst": "The total VAT included is shown before acceptance (Codice del Consumo art. 49).",
+      "noWithdrawal": "No right of withdrawal for a made-to-measure unit (art. 59(c))."
+    },
+    "unsaved_one": "{count} change not saved",
+    "unsaved_other": "{count} changes not saved",
+    "save": "Save terms",
+    "fixFirst_one": "Fix {count} field first",
+    "fixFirst_other": "Fix {count} fields first",
+    "saved": "Terms saved.",
+    "problem": {
+      "validPast": "The offer must stand at least until tomorrow.",
+      "depositPct": "A percentage from 0 to 100."
+    }
+  },
+  "versions": {
+    "loading": "Reading the versions…",
+    "empty": "Only version 1 exists.",
+    "tableLabel": "Versions of the quote",
+    "col": {
+      "version": "Version",
+      "status": "State",
+      "made": "Made",
+      "sent": "Sent",
+      "total": "Net / Total",
+      "changed": "What changed",
+      "decision": "Decision",
+      "pdf": "PDF"
+    },
+    "byAt": "{who} · {at}",
+    "acceptedBy": "Accepted by {name} · {at}",
+    "declined": "Declined: {note}",
+    "superseded": "Replaced by a newer version",
+    "openUntil": "Open until {date}",
+    "download": "Download",
+    "reviseNote": "Version {revision} stays valid until you send version {next}. Then its link says it was replaced."
+  },
+  "approval": {
+    "rules": {
+      "title": "Rule check",
+      "none": "No rule needs an approval. You can send it.",
+      "broken": "needs approval",
+      "passes": "passes",
+      "unknown": "not known yet (a cost is missing)",
+      "marginNumbers": "Margin {pct}, floor {floor}.",
+      "discountLimit": "Limit {limit}.",
+      "lines": "On lines {lines}."
+    },
+    "who": "Who decides: an approver (Finance or the Owner); a margin request goes to an approver who sees margins. The person who asked never decides.",
+    "requests": {
+      "title": "Requests and decisions",
+      "loading": "Reading the requests…",
+      "none": "Not asked yet",
+      "asked": "Asked by {who} · {at}",
+      "decided": "{status} by {who} · {at}",
+      "withdrawn": "Withdrawn · {at}"
+    }
+  },
+  "docs": {
+    "pdfTitle": "Quote {number} v{revision}",
+    "pdf": {
+      "preview": "Quote PDF — preview",
+      "frozen": "Quote PDF — as sent"
+    },
+    "language": "Preview language",
+    "newTab": "Open in new tab",
+    "previewNote": "Made by the server from this version, with a \"sample\" banner; the customer gets it without the banner when it is sent.",
+    "sentLine": "Sent {at} · document code {sha}…",
+    "loading": "Making the PDF…",
+    "problem": {
+      "needs": "The PDF needs the invoice and delivery addresses and a validity: fill them on Terms & delivery.",
+      "frozen": "The sent PDF couldn't be opened. Try again, or download it from Versions."
+    },
+    "link": {
+      "title": "Accept link",
+      "none": "No link yet — it is made when you send.",
+      "state": "State",
+      "version": "For",
+      "to": "Sent to",
+      "until": "Opens until",
+      "never": "The link is only in the customer's email: nobody here sees its address."
+    },
+    "evidence": {
+      "title": "Acceptance evidence",
+      "none": "Not accepted yet",
+      "signer": "Name as typed",
+      "at": "Server time",
+      "channel": "Channel",
+      "channelOf": {
+        "LINK": "One-off link",
+        "OFFICE": "Office (signed copy)"
+      },
+      "email": "Email check",
+      "emailCheck": {
+        "MATCHED": "The address the link was sent to",
+        "NOT_KNOWN": "An address we did not know",
+        "NOT_ASKED": "Not asked"
+      },
+      "document": "Document code",
+      "matches": "Matches the sent PDF",
+      "differs": "Does not match the stored PDF",
+      "terms": "Terms version",
+      "noWithdrawal": "No-withdrawal statement",
+      "noWithdrawalYes": "Accepted"
+    },
+    "deposit": {
+      "title": "Deposit request",
+      "none": "No deposit asked.",
+      "atAcceptance": "Made when the customer accepts.",
+      "status": "State",
+      "amount": "Amount",
+      "kind": "Kind",
+      "due": "Due",
+      "fiscal": "Fiscal document",
+      "fiscalDoc": {
+        "TD02": "A deposit invoice (TD02) when it is paid",
+        "NONE": "None (by the deposit rule)"
+      },
+      "state": {
+        "OPEN": "Open",
+        "PAID": "Paid",
+        "WAIVED": "Waived",
+        "CANCELLED": "Cancelled"
+      }
+    }
+  },
+  "dialog": {
+    "reason": "Reason",
+    "held": {
+      "reason": "Write the reason (at least 3 characters).",
+      "long": "At most 500 characters."
+    },
+    "ask": {
+      "title": "Ask for approval",
+      "body": "The quote breaks: {reasons}. An approver (Finance or the Owner) decides; the lines are frozen until then.",
+      "note": "Note to the approver",
+      "noteHint": "Why this price makes sense (optional).",
+      "go": "Send request"
+    },
+    "withdraw": {
+      "title": "Withdraw the approval request?",
+      "body": "The quote goes back to Draft and can change again. Ask again when it is ready.",
+      "go": "Withdraw request"
+    },
+    "approve": {
+      "title": "Approve quote {number}?",
+      "body": "You approve: {reasons}. The quote can then be sent as it is.",
+      "note": "Decision note (optional)"
+    },
+    "reject": {
+      "title": "Reject the request",
+      "body": "The quote goes back to Draft. The reason lands in the quote's history for the person who asked.",
+      "hint": "Required: tell them what to change."
+    },
+    "cancel": {
+      "title": "Cancel quote {number}?",
+      "body": "It stops here; nothing goes to the customer. Duplicate it to start again.",
+      "bodySent": "The customer's accept link stops working and says the quote was withdrawn. A reason is required.",
+      "go": "Cancel quote"
+    },
+    "revise": {
+      "title": "Make version {next}?",
+      "body": "Version {revision} stays valid until you send version {next}. Then its link says it was replaced.",
+      "note": "What changed",
+      "noteHint": "In the customer's words, printed on the new version (optional).",
+      "go": "Make version {next}"
+    },
+    "newLink": {
+      "title": "Send a new link?",
+      "body": "A new accept link goes to {email} with the same PDF. The old link stops working.",
+      "go": "Send the new link"
+    },
+    "reopen": {
+      "title": "Reopen to edit?",
+      "body": "The approval no longer counts: the quote goes back to Draft and, if a rule is still broken, needs a new approval.",
+      "go": "Reopen"
+    }
+  },
+  "notice": {
+    "asked": "Approval asked. The lines are frozen until an approver decides.",
+    "reopened": "Back to Draft: the quote can change again.",
+    "approved": "Approved. The quote can be sent.",
+    "rejected": "Rejected with your reason. The quote is back in Draft.",
+    "cancelled": "Quote cancelled.",
+    "revised": "Version {next} made as a draft: change it, then send it.",
+    "linkSent": "A new link was sent.",
+    "linkFailed": "The new link was made but the mail could not leave: try again."
+  },
+  "send": {
+    "title": "Send quote {number} v{revision} to the customer",
+    "freeze": "After sending, version {revision} can't change. A change makes version {next}.",
+    "can": {
+      "accept": "Read the quote and accept it by typing their name, or decline it.",
+      "deposit": "See the deposit asked and how to pay it by bank transfer.",
+      "consumer": "See the total VAT included first, and the no-withdrawal statement when it applies."
+    },
+    "refused": "Not sent: a check failed meanwhile. The checks were read again."
+  },
+  "list": {
+    "intro": "Quotes by style, colour and size, with their price, margin, approval and the customer's answer.",
+    "updated": "Updated {time}",
+    "notYet": "Not read yet",
+    "updates_one": "{count} update · Show",
+    "updates_other": "{count} updates · Show",
+    "new": "New quote",
+    "keyNew": "New quote",
+    "keysTitle": "Keys of the quote list",
+    "bulk": {
+      "export_one": "Export {count} (CSV)",
+      "export_other": "Export {count} (CSV)",
+      "exported_one": "{count} quote exported (CSV, the columns you see).",
+      "exported_other": "{count} quotes exported (CSV, the columns you see).",
+      "cancel_one": "Cancel {count} quote",
+      "cancel_other": "Cancel {count} quotes",
+      "cancelHeld_one": "{count} selected quote is closed already (accepted, declined, expired or cancelled): untick it.",
+      "cancelHeld_other": "{count} selected quotes are closed already (accepted, declined, expired or cancelled): untick them.",
+      "cancelTitle_one": "Cancel {count} quote?",
+      "cancelTitle_other": "Cancel {count} quotes?",
+      "cancelBody": "Each stops here; nothing goes to the customer. A quote that moved meanwhile is left as it is and said.",
+      "cancelBodySent_one": "{count} of them was sent: its accept link stops and says the quote was withdrawn. A reason is required.",
+      "cancelBodySent_other": "{count} of them were sent: their accept links stop and say the quote was withdrawn. A reason is required.",
+      "reasonNeeded_one": "Write the reason: {count} quote was sent.",
+      "reasonNeeded_other": "Write the reason: {count} quotes were sent.",
+      "cancelled_one": "{count} quote cancelled.",
+      "cancelled_other": "{count} quotes cancelled.",
+      "cancelPartly": "{done} cancelled; {failed} not (changed meanwhile or not allowed): the list was read again."
+    },
+    "tile": {
+      "myDrafts": "My drafts",
+      "waiting": "Waiting for approval",
+      "sent": "Sent — waiting for the customer",
+      "expiring": "Expiring in 7 days",
+      "accepted": "Accepted"
+    },
+    "tileMore": "{count}+",
+    "search": "Search number or customer reference",
+    "statusFilter": "State",
+    "allStatuses": "Every state",
+    "onlyMine": "Only mine",
+    "activeFilters": "Filters in use",
+    "chip": {
+      "status": "State: {status}",
+      "expiring": "Expiring in 7 days",
+      "search": "Search: {q}"
+    },
+    "removeFilter": "Remove this filter",
+    "clearAll": "Clear all",
+    "failed": "Couldn't load quotes",
+    "loading": "Reading quotes…",
+    "noMatch": {
+      "title": "No quotes match these filters",
+      "body": "Change or clear the filters."
+    },
+    "empty": {
+      "title": "No quotes yet",
+      "body": "Make the first one: press c or New quote.",
+      "bodyView": "Quotes your colleagues make appear here."
+    },
+    "count_one": "{count} quote",
+    "count_other": "{count} quotes",
+    "countMore_one": "{count} quote shown · more below",
+    "countMore_other": "{count} quotes shown · more below",
+    "tableLabel": "Quotes",
+    "col": {
+      "number": "Number",
+      "customer": "Customer",
+      "status": "State",
+      "units": "Pieces",
+      "net": "Net",
+      "gross": "Total",
+      "margin": "Margin %",
+      "approval": "Approval",
+      "validUntil": "Valid until",
+      "updated": "Updated",
+      "more": "Actions"
+    },
+    "ref": "Ref. {ref}",
+    "units": "{units} · lines {lines}",
+    "expiringSoon": "Expiring",
+    "rowMenu": "Actions for {number}",
+    "open": "Open",
+    "openNewTab": "Open in new tab",
+    "more": "Show more",
+    "noMarginNote": "Margin columns are not shown for your role."
+  },
+  "newQuote": {
+    "title": "New quote",
+    "company": "Selling company",
+    "customer": "Customer",
+    "customerHint": "Name, code, VAT number or tax code.",
+    "customerPlaceholder": "Search customers",
+    "searching": "Searching customers…",
+    "none": "No customer matches.",
+    "found_one": "{count} customer",
+    "found_other": "{count} customers",
+    "viesWarning": "VIES not valid",
+    "change": "Choose another customer",
+    "code": "Code",
+    "taxMode": "Tax mode",
+    "vies": "VIES",
+    "warnings_one": "The customer has {count} warning: see their record.",
+    "warnings_other": "The customer has {count} warnings: see their record.",
+    "contact": "Contact",
+    "contactHint": "The orders contact is picked when there is one.",
+    "contactDefault": "The customer's default",
+    "number": "It will get number {number} (unless another quote takes it first).",
+    "numberLoading": "Reading the next number…",
+    "numberUnknown": "The number is given when the quote is made.",
+    "create": "Create draft",
+    "held": {
+      "customer": "Pick a customer first.",
+      "party": "This customer is {status}: no quote can go to them.",
+      "identity": "This customer has no tax identity in force: add it to the customer first."
+    }
+  }
+}

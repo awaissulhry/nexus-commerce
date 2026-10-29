@@ -10,7 +10,7 @@ import { PARTIES_VIEW } from '@nexus/factory-domain/parties/permissions'
 import type { PartyFields, PartyStatus } from '@nexus/factory-domain/parties/rules'
 import { identityAt, taxKeysOf, type TaxIdentityFields } from '@nexus/factory-domain/parties/tax'
 import { viesStanding, type ViesCheckFacts, type ViesStanding } from '@nexus/factory-domain/parties/vies'
-import { partyWarnings } from '@nexus/factory-domain/parties/warnings'
+import { partyWarnings, type PartyWarning } from '@nexus/factory-domain/parties/warnings'
 import { viesErrorMeaning } from '@nexus/factory-domain/ports/vies'
 import type { CommandCaller, CommandTools, CommandTx } from '../../core/command'
 import { actorOf, type RequestContext } from '../../core/context'
@@ -260,7 +260,26 @@ function cityOf(addresses: readonly AddressRowData[]): string | null {
   return chosen ? chosen.city : null
 }
 
-export function partyRowOf(row: PartyRowData, current: TaxRowData | null, standing: ViesStanding, addresses: readonly AddressRowData[]): PartyRow {
+/** What a party still lacks for its work (factory-domain parties/warnings), from its rows: the ACTIVE addresses and contacts count. */
+export function warningsOf(
+  party: Pick<PartyRowData, 'kind' | 'roles' | 'country' | 'legalName'>,
+  current: TaxRowData | null,
+  standing: ViesStanding,
+  addresses: readonly AddressRowData[],
+  contacts: readonly Pick<ContactRowData, 'email' | 'roles' | 'status'>[],
+): PartyWarning[] {
+  return partyWarnings({
+    party: { kind: party.kind, roles: party.roles, country: party.country, legalName: party.legalName },
+    identity: current ? taxFieldsOf(current) : null,
+    vies: standing,
+    addresses: addresses
+      .filter((address) => address.status === 'ACTIVE')
+      .map((address) => ({ kinds: address.kinds, isDefaultBillTo: address.isDefaultBillTo, isDefaultShipTo: address.isDefaultShipTo, line1: address.line1, line2: address.line2, city: address.city })),
+    contacts: contacts.filter((contact) => contact.status === 'ACTIVE').map((contact) => ({ email: contact.email, roles: contact.roles })),
+  })
+}
+
+export function partyRowOf(row: PartyRowData, current: TaxRowData | null, standing: ViesStanding, addresses: readonly AddressRowData[], warnings: readonly PartyWarning[]): PartyRow {
   return {
     id: row.id,
     companyId: row.companyId,
@@ -278,6 +297,8 @@ export function partyRowOf(row: PartyRowData, current: TaxRowData | null, standi
     fiscalCode: current?.fiscalCode ?? null,
     city: cityOf(addresses),
     vies: standingView(standing),
+    attention: warnings.map((warning) => warning.code),
+    invoiceBlocked: warnings.some((warning) => warning.blocksInvoice),
     version: row.version,
     updatedAt: toUtcIso(row.updatedAt),
   }
@@ -302,10 +323,9 @@ export async function readRecord(client: Reader, partyId: string, now: Date): Pr
     party.status === 'BLOCKED'
       ? await client.auditLog.findFirst({ where: { recordType: 'Party', recordId: partyId, action: 'parties.block' }, select: { reason: true, at: true }, orderBy: [{ at: 'desc' }] })
       : null
-  const active = addresses.filter((address) => address.status === 'ACTIVE')
-  const activeContacts = contacts.filter((contact) => contact.status === 'ACTIVE')
+  const warnings = warningsOf(party, current, standing, addresses, contacts)
   return {
-    ...partyRowOf(party, current, standing, addresses),
+    ...partyRowOf(party, current, standing, addresses, warnings),
     paymentTerms: party.paymentTerms,
     internalNote: party.internalNote,
     blocked: blocked ? { reason: blocked.reason, at: toUtcIso(blocked.at) } : null,
@@ -313,13 +333,7 @@ export async function readRecord(client: Reader, partyId: string, now: Date): Pr
     contacts: [...contacts].sort((a, b) => (a.status === b.status ? 0 : a.status === 'ACTIVE' ? -1 : 1)).map(contactViewOf),
     taxIdentities: identities.map((row) => taxViewOf(row, current?.id ?? null)),
     viesChecks: checks.slice(0, RECORD_VIES_CHECKS).map(viesCheckViewOf),
-    warnings: partyWarnings({
-      party: { kind: party.kind, roles: party.roles, country: party.country, legalName: party.legalName },
-      identity: current ? taxFieldsOf(current) : null,
-      vies: standing,
-      addresses: active.map((address) => ({ kinds: address.kinds, isDefaultBillTo: address.isDefaultBillTo, isDefaultShipTo: address.isDefaultShipTo, line1: address.line1, line2: address.line2, city: address.city })),
-      contacts: activeContacts.map((contact) => ({ email: contact.email, roles: contact.roles })),
-    }),
+    warnings,
     createdAt: toUtcIso(party.createdAt),
     createdById: party.createdById,
   }

@@ -29,6 +29,30 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const site = await client.site.findUnique({ where: { id }, select: { companyId: true } })
     return site ? { companyId: site.companyId, siteId: id, partyId: null } : null
   },
+  // modules/parties (SCR-033, SCR-057 Activity and Documents; B-W1-07): the party's company (none: tenant-wide) and the
+  // party itself, so its shared messages reach its own contacts only; a known contact's mail without a thread joins it
+  // (platform/email-in/match.ts PARTY_RECORD).
+  Party: async (client, id) => {
+    const party = await client.party.findUnique({ where: { id }, select: { companyId: true } })
+    return party ? { companyId: party.companyId, siteId: null, partyId: id } : null
+  },
+  // platform/auth (SCR-011, SCR-012, SCR-013; B-W0-27): an office person and a role are tenant-wide; a floor device and a
+  // floor worker sit on their site. Admin records take internal notes only (no party).
+  User: async (client, id) => ((await client.user.findUnique({ where: { id }, select: { id: true } })) ? { companyId: null, siteId: null, partyId: null } : null),
+  Role: async (client, id) => ((await client.role.findUnique({ where: { id }, select: { id: true } })) ? { companyId: null, siteId: null, partyId: null } : null),
+  Device: async (client, id) => {
+    const device = await client.device.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
+    return device ? { companyId: device.companyId, siteId: device.siteId, partyId: null } : null
+  },
+  Worker: async (client, id) => {
+    const worker = await client.worker.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
+    return worker ? { companyId: worker.companyId, siteId: worker.siteId, partyId: null } : null
+  },
+  // platform/admin/connections (B-W0-28, SCR-087): an outside service's account, of a company or tenant-wide.
+  IntegrationAccount: async (client, id) => {
+    const account = await client.integrationAccount.findUnique({ where: { id }, select: { companyId: true } })
+    return account ? { companyId: account.companyId, siteId: null, partyId: null } : null
+  },
   // modules/compliance/certificates (SCR-051): the holder company (none: brand-held); the party only when a brand holds
   // it (the brand is the legal maker), not a supplier holding a protector's certificate.
   Certificate: async (client, id) => {

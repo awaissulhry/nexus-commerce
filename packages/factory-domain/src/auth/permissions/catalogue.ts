@@ -1,6 +1,7 @@
 import { CERTIFICATES_PERMISSIONS } from '../../compliance/certificates/permissions'
 import { REGISTER_PERMISSIONS } from '../../compliance/register/permissions'
 import { COSTING_DEFINITIONS, COSTING_PERMISSIONS } from '../../costing/permissions'
+import { FLOOR_SYNC_DEFINITIONS, FLOOR_SYNC_PERMISSIONS } from '../../floor-sync/permissions'
 import { HOME_DEFINITIONS, HOME_PERMISSIONS } from '../../insights/permissions'
 import type { Permission } from '../../core/permissions'
 import { INVENTORY_FLOOR_PERMISSIONS, INVENTORY_PERMISSIONS } from '../../inventory/permissions'
@@ -48,6 +49,25 @@ export const USERS_PERMISSIONS = definePermissions('users', {
   deactivate: { risk: 'stepUp', description: 'Deactivate a person who left: credentials cleared, history kept.' },
   resetPassword: { risk: 'stepUp', description: 'Require a new password at the next sign-in.' },
 })
+
+/**
+ * The tenancy core in the Office (apps/factory-api platform/admin/org; SCR-008, SCR-009; PLT-003, PLT-004, MES-292):
+ * the companies with their legal and e-invoicing data, and the sites with their lines, work centres and stations.
+ * Checked with can() against the company (and the site). Creating a company needs a grant over every company. Not
+ * step-up: the bank account has its own (companies.bank.manage); every change is audited from → to.
+ */
+export const COMPANIES_DEFINITIONS = definePermissions('companies', {
+  view: { risk: 'read', description: "See the companies: legal name, VAT and tax codes, PEC and SDI code, defaults, and whether they can issue invoices." },
+  manage: { risk: 'write', description: "Add a company, change its legal, e-invoicing and default data, archive it when nothing uses it." },
+})
+export const SITES_DEFINITIONS = definePermissions('sites', {
+  view: { risk: 'read', description: 'See the sites of the companies with their lines, work centres and stations.' },
+  manage: { risk: 'write', description: 'Add and change sites, lines, work centres and stations; archive them when nothing active uses them.' },
+})
+export const COMPANIES_VIEW = 'companies.view' satisfies Permission
+export const COMPANIES_MANAGE = 'companies.manage' satisfies Permission
+export const SITES_VIEW = 'sites.view' satisfies Permission
+export const SITES_MANAGE = 'sites.manage' satisfies Permission
 
 /** Roles and their assignments (platform/auth/roles). */
 export const ROLES_PERMISSIONS = definePermissions('roles', {
@@ -198,6 +218,22 @@ export const EMAIL_MANAGE = 'email.manage' satisfies Permission
 export const EMAIL_TRIAGE = 'email.triage' satisfies Permission
 
 /**
+ * The outside services the factory rents (apps/factory-api platform/admin/connections; design 02 admin.connections,
+ * SCR-087; PLT-139, PLT-195, PLT-197): each IntegrationAccount (SES, R2, SDI, Sendcloud, VIES) with its mode, state,
+ * calls and received webhooks. integrations.view reads them (never a secret: secrets are sealed and write-only);
+ * integrations.manage pauses an account (the kill switch: the gateway refuses its calls) and resumes it, each after a
+ * confirm. Checked with can() against the account's company; a tenant-wide account (SES, R2, VIES: every company's
+ * mail, files, VAT checks) needs a grant over every active company. Not step-up: nothing it does widens what anyone
+ * can see or do, and the account's secrets stay sealed (connecting and replacing secrets come later).
+ */
+export const INTEGRATIONS_DEFINITIONS = definePermissions('integrations', {
+  view: { risk: 'read', description: "See the outside services the factory uses (mail, files, SDI, carriers, VAT checks): what each is for, its mode, whether it works, its calls and received messages; never a secret." },
+  manage: { risk: 'write', description: 'Pause a service so no call reaches it, and resume it.' },
+})
+export const INTEGRATIONS_VIEW = 'integrations.view' satisfies Permission
+export const INTEGRATIONS_MANAGE = 'integrations.manage' satisfies Permission
+
+/**
  * Compliance: the EU type-examination certificate register (apps/factory-api modules/compliance/certificates; QHS-103,
  * QHS-051, PRD-288; Reg. (EU) 2016/425). Checked with can() against the certificate's company and holder party. The
  * constants live in factory-domain/src/compliance/certificates/permissions.ts. Not step-up: a certificate is typed from
@@ -270,6 +306,7 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   DOCUMENTS_DEFINITIONS,
   PRINT_DEFINITIONS,
   EMAIL_DEFINITIONS,
+  INTEGRATIONS_DEFINITIONS,
   COMPLIANCE_DEFINITIONS,
   PRODUCT_MATERIALS_DEFINITIONS,
   PRODUCT_STYLES_DEFINITIONS,
@@ -292,12 +329,15 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   WORKORDERS_DEFINITIONS,
   QUOTES_DEFINITIONS,
   SALES_SETTINGS_DEFINITIONS,
+  COMPANIES_DEFINITIONS,
   COMPANY_BANK_DEFINITIONS,
+  SITES_DEFINITIONS,
   ORDERS_DEFINITIONS,
   PRIVACY_DEFINITIONS,
   QUALITY_LAB_DEFINITIONS,
   QUALITY_FINAL_DEFINITIONS,
   HOME_DEFINITIONS,
+  FLOOR_SYNC_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -318,7 +358,7 @@ export const FLOOR_AREA = 'floor'
 export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS, ...INVENTORY_FLOOR_PERMISSIONS, ...PRODUCTION_CUTTING_FLOOR_PERMISSIONS, ...PRODUCTION_BUNDLES_FLOOR_PERMISSIONS, ...PRODUCTION_SCANS_FLOOR_PERMISSIONS, ...PRODUCTION_SERIALS_FLOOR_PERMISSIONS, ...QUALITY_FINAL_FLOOR_PERMISSIONS, ...SHIPPING_FLOOR_PERMISSIONS])
 
 // The modules' constants and their declarations name the same permissions.
-for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...REGISTER_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...PRODUCT_BOM_PERMISSIONS, ...PRODUCT_ROUTING_PERMISSIONS, ...SHIPPING_PERMISSIONS, ...SHIPPING_LABELS_PERMISSIONS, ...PARTIES_PERMISSIONS, ...PLANNING_PERMISSIONS, ...PURCHASING_PERMISSIONS, ...INVOICES_PERMISSIONS, ...PAYMENTS_PERMISSIONS, ...COSTING_PERMISSIONS, ...PRODUCTION_SETTINGS_PERMISSIONS, ...PRODUCTION_CUTTING_PERMISSIONS, ...PRODUCTION_BUNDLES_PERMISSIONS, ...PRODUCTION_SCANS_PERMISSIONS, ...PRODUCTION_SERIALS_PERMISSIONS, ...WORKORDERS_PERMISSIONS, ...QUOTES_PERMISSIONS, ...SALES_SETTINGS_PERMISSIONS, ...COMPANY_BANK_PERMISSIONS, ...ORDERS_PERMISSIONS, ...PRIVACY_PERMISSIONS, ...QUALITY_LAB_PERMISSIONS, ...QUALITY_FINAL_PERMISSIONS, ...HOME_PERMISSIONS]) {
+for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...REGISTER_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...PRODUCT_BOM_PERMISSIONS, ...PRODUCT_ROUTING_PERMISSIONS, ...SHIPPING_PERMISSIONS, ...SHIPPING_LABELS_PERMISSIONS, ...PARTIES_PERMISSIONS, ...PLANNING_PERMISSIONS, ...PURCHASING_PERMISSIONS, ...INVOICES_PERMISSIONS, ...PAYMENTS_PERMISSIONS, ...COSTING_PERMISSIONS, ...PRODUCTION_SETTINGS_PERMISSIONS, ...PRODUCTION_CUTTING_PERMISSIONS, ...PRODUCTION_BUNDLES_PERMISSIONS, ...PRODUCTION_SCANS_PERMISSIONS, ...PRODUCTION_SERIALS_PERMISSIONS, ...WORKORDERS_PERMISSIONS, ...QUOTES_PERMISSIONS, ...SALES_SETTINGS_PERMISSIONS, ...COMPANY_BANK_PERMISSIONS, ...ORDERS_PERMISSIONS, ...PRIVACY_PERMISSIONS, ...QUALITY_LAB_PERMISSIONS, ...QUALITY_FINAL_PERMISSIONS, ...HOME_PERMISSIONS, ...FLOOR_SYNC_PERMISSIONS]) {
   if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 }
 for (const name of LINK_SESSION_NAMES) {

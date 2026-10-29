@@ -1,7 +1,9 @@
 import type { Prisma } from '@nexus/factory-db'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { FLOOR_DISCARD_REASON } from '@nexus/factory-domain/floor-sync/rules'
 import { command, StaleVersionError, type CommandCaller, type CommandTx } from '../../../core/command'
+import { discardForModuleRefusal } from '../../../platform/floor-sync/store'
 import type { Reader } from './store'
 
 /**
@@ -15,6 +17,9 @@ import type { Reader } from './store'
  */
 
 export const REFUSED_ACTIONS = ['REPORT', 'UNDO', 'ASK_CORRECTION'] as const
+
+/** Why a refused scan discarded in the office's refused scans list left the floor sync's open list too. */
+const SCAN_OFFICE_DISCARD_REASON = 'Discarded in the office, in the refused scans list.'
 export type RefusedAction = (typeof REFUSED_ACTIONS)[number]
 
 export interface FloorScanRefusal {
@@ -206,9 +211,10 @@ export async function readRefusal(db: Reader, refusalId: string): Promise<Refusa
 /**
  * Discards a refusal (the device's "Discard": it will not be recorded; the team leader sees that it was), once: a
  * discarded one is answered as it is. `caller`: the device that sent it, or the office; `by`: who discarded (the worker
- * at a site that names workers, the office user; null at a site that records the station only).
+ * at a site that names workers, the office user; null at a site that records the station only) and why. The floor sync's
+ * refused action of the same scan (platform/floor-sync, B-W0-30) is discarded in the same command.
  */
-export async function discardRefusal(caller: CommandCaller, refusal: RefusalState, by: { readonly discardedById: string | null; readonly idempotencyKey?: string | undefined }): Promise<RefusalState> {
+export async function discardRefusal(caller: CommandCaller, refusal: RefusalState, by: { readonly discardedById: string | null; readonly idempotencyKey?: string | undefined; readonly reason?: string | undefined }): Promise<RefusalState> {
   if (refusal.discardedAt) return refusal
   try {
     const { result } = await command(caller, { name: 'production.discardScanRefusal', idempotencyKey: by.idempotencyKey, input: { refusalId: refusal.id, discardedById: by.discardedById } }, async (tools) => {
@@ -218,7 +224,9 @@ export async function discardRefusal(caller: CommandCaller, refusal: RefusalStat
       const { count } = await tools.tx.floorScanRefusal.updateMany({ where: { id: current.id, version: current.version, discardedAt: null }, data: { discardedAt: tools.now, discardedById: by.discardedById, version: current.version + 1, updatedAt: tools.now } })
       if (count !== 1) throw new StaleVersionError('FloorScanRefusal', current.id, current.version + 1, current.version)
       const row = (await readRefusal(tools.tx, current.id))!
-      tools.audit({ action: 'production.discardScanRefusal', recordType: 'FloorScanRefusal', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { discardedAt: null, version: current.version }, after: { discardedAt: row.discardedAt, discardedById: row.discardedById, version: row.version } })
+      tools.audit({ action: 'production.discardScanRefusal', recordType: 'FloorScanRefusal', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { discardedAt: null, version: current.version }, after: { discardedAt: row.discardedAt, discardedById: row.discardedById, version: row.version }, ...(by.reason ? { reason: by.reason } : {}) })
+      const audience = tools.context.audience === 'floor' ? 'FLOOR' : 'OFFICE'
+      await discardForModuleRefusal(tools, { type: 'FloorScanRefusal', id: row.id }, { discardedById: by.discardedById, discardedBy: audience, reason: by.reason ?? (audience === 'FLOOR' ? FLOOR_DISCARD_REASON : SCAN_OFFICE_DISCARD_REASON) })
       return row
     })
     return result

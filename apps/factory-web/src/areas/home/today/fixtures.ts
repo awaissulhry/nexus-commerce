@@ -17,15 +17,16 @@ import {
   type Phrase,
   type RowWords,
 } from '@nexus/factory-domain/insights/words'
-import type { FlowLensView, PanelView, QueueData, QueueItem, QuoteReview, TodayItem, TodayViewModel } from './model'
+import { DEFAULT_LAYOUT, type FlowLensView, type HandledView, type PanelView, type QueueData, type QueueItem, type QuoteReview, type TodayItem, type TodayLayout, type TodayViewModel } from './model'
 import { TodayView } from './view/TodayView'
 
 /**
  * SCR-029 Home › Today — made-up data only (PLAN §3.1): invented companies, customers, suppliers, numbers and amounts.
  * Each case is one state the Owner reviews: the role switch (Owner, Sales, Buyer, Inspector, Finance), the decide modal
  * on a quote approval and on other rows, a pressed tile, new rows waiting, a count that is a lower bound, nothing to do,
- * loading, an error, and a person without Today. Open a case alone for the keyboard: j / k move, Enter opens, and in
- * the modal a approves, r rejects, j / k step through.
+ * loading, an error, and a person without Today; the alert verbs (assigned and acknowledged rows, Assign to, Resolve
+ * with a note, held while offline), Handled today and Arrange Today. Open a case alone for the keyboard: j / k move,
+ * Enter opens, e acknowledges an alert, and in the modal a approves, r rejects, j / k step through.
  */
 
 const NOW = Date.UTC(2026, 9, 29, 9, 42)
@@ -56,6 +57,8 @@ function row(n: number, item: Omit<Partial<TodayItem>, 'sentence' | 'why' | 'blo
     ageDays: n % 9,
     decide: 'OPEN',
     figures: null,
+    condition: String(n).padStart(32, 'a'),
+    actions: { version: 0, verbs: item.decide === 'REVIEW' ? [] : ['ASSIGN', 'RESOLVE', 'ACKNOWLEDGE'], assigned: null, acknowledged: null },
     ...rest,
   }
   const href = `/w/DEMO/records/${base.record.type}/${base.record.id}?label=${encodeURIComponent(base.record.label)}`
@@ -230,6 +233,7 @@ function queueOf(items: readonly QueueItem[], extra: Partial<QueueData> = {}): Q
     more: false,
     loadingMore: false,
     fresh: 0,
+    handledToday: 0,
     ...extra,
   }
 }
@@ -409,6 +413,56 @@ const base: TodayViewModel = {
   reviews: { [ROWS.quoteApproval.key]: { status: 'ready', data: REVIEW } },
   busy: false,
   notice: null,
+  layout: DEFAULT_LAYOUT,
+  dialog: null,
+  arrangeable: {
+    panels: ['quotesToApprove', 'lateOrders', 'ordersWaitingDeposit', 'draftWorkOrders', 'lateWorkOrders', 'posAwaitingSupplier', 'sdiRefused', 'mailToSort'].map((panel) => ({ id: panel })),
+    lenses: Object.values(LENSES).map((entry) => ({ lens: entry.lens, label: entry.label })),
+  },
+}
+
+// ---- what people did about the rows (made-up people) -------------------------------------------------------------------
+const person = (n: number, name: string, me = false) => ({ id: id(300 + n), name, me })
+const MARCO = person(1, 'Marco Esempio')
+const LUCIA = person(2, 'Lucia Demo')
+const ME = person(3, 'Anna Prova', true)
+const acted = (item: QueueItem, actions: Partial<QueueItem['actions']>): QueueItem => ({ ...item, actions: { ...item.actions, version: 2, ...actions } })
+const ACTED = {
+  lateOrder: acted(ROWS.lateOrder, { assigned: { to: MARCO, by: ME, at: at(29, 8) } }),
+  blockedLot: acted(ROWS.blockedLot, { acknowledged: { by: LUCIA, at: at(29, 7) }, verbs: ['ASSIGN', 'RESOLVE'] }),
+  heldWorkOrder: acted(ROWS.heldWorkOrder, { assigned: { to: ME, by: LUCIA, at: at(28, 15) }, acknowledged: { by: ME, at: at(28, 16) }, verbs: ['ASSIGN', 'RESOLVE'] }),
+}
+const ACTED_ITEMS = OWNER_ITEMS.map((item) => (item.key === ROWS.lateOrder.key ? ACTED.lateOrder : item.key === ROWS.blockedLot.key ? ACTED.blockedLot : item.key === ROWS.heldWorkOrder.key ? ACTED.heldWorkOrder : item))
+const acting = { ...base, queue: { status: 'ready' as const, data: queueOf(ACTED_ITEMS, { handledToday: 4 }) } }
+const PEOPLE = [
+  { id: MARCO.id, name: MARCO.name, me: false, suggested: true, assigned: true },
+  { id: id(304), name: 'Giulia Esempio', me: false, suggested: true, assigned: false },
+  { id: ME.id, name: ME.name, me: true, suggested: false, assigned: false },
+  { id: id(305), name: 'Paolo Demo', me: false, suggested: false, assigned: false },
+]
+const HANDLED: HandledView = {
+  count: 4,
+  items: [
+    { at: at(29, 9), verb: 'RESOLVED', kind: 'INVOICE_TO_ISSUE', key: `INVOICE_TO_ISSUE:${id(40)}`, record: { type: 'Party', id: id(40), label: 'Officina Demo' }, companyId: COMPANY, note: 'Invoiced with TD24 FT-2026-00030 this morning.', assignee: null, href: `/w/DEMO/records/Party/${id(40)}` },
+    { at: at(29, 8), verb: 'ASSIGNED', kind: 'ORDER_PROMISE', key: ROWS.lateOrder.key, record: ROWS.lateOrder.record, companyId: COMPANY, note: null, assignee: { id: MARCO.id, name: MARCO.name }, href: ROWS.lateOrder.href },
+    { at: at(29, 8), verb: 'APPROVED', kind: 'QUOTE_APPROVAL', key: null, record: { type: 'Quote', id: id(41), label: 'Q-2026-0139' }, companyId: COMPANY, note: null, assignee: null, href: `/w/DEMO/records/Quote/${id(41)}` },
+    { at: at(29, 7), verb: 'ACKNOWLEDGED', kind: 'LOT_HOLD', key: ROWS.quarantineLot.key, record: ROWS.quarantineLot.record, companyId: COMPANY, note: null, assignee: null, href: ROWS.quarantineLot.href },
+  ],
+}
+const ARRANGED: TodayLayout = {
+  sections: [
+    { id: 'focus-strip', hidden: false },
+    { id: 'role-panels', hidden: false },
+    { id: 'needs-me', hidden: false },
+    { id: 'flow', hidden: true },
+  ],
+  panels: [
+    { id: 'lateOrders', hidden: false, width: 'TWO_THIRDS' },
+    { id: 'mailToSort', hidden: false, width: 'HALF' },
+    { id: 'quotesToApprove', hidden: false, width: 'HALF' },
+    { id: 'ordersWaitingDeposit', hidden: true, width: 'HALF' },
+  ],
+  mainLens: 'ORDERS',
 }
 
 const SALES_ITEMS = [ROWS.lateOrder, ROWS.mail, ROWS.riskOrder]
@@ -543,5 +597,79 @@ export const designScreen = defineDesignScreen<TodayViewModel>({
       note: 'The approval went through; the next row opened.',
     },
     { id: 'no-permission', label: 'Without Today', model: { ...base, access: 'refused' }, note: 'A person without home.view: the page says so (the navigation hides the row).' },
+    {
+      id: 'owner-acted',
+      label: 'Owner — assigned and acknowledged rows',
+      model: acting,
+      note: 'SO-2026-0042 assigned to Marco; LOT-A-000214 acknowledged by Lucia; WO-00098 assigned to you and acknowledged by you. Each alert row has ⋯ with Acknowledge (e), Assign to…, Resolve…; "Handled today: 4 · Show" in the list footer.',
+    },
+    {
+      id: 'owner-alert-verbs',
+      label: 'Owner — an alert in the decide modal',
+      model: { ...acting, open: ACTED.lateOrder.key },
+      note: 'An alert decides with its verbs: Acknowledge (E, the primary), Assign to…, Resolve…; who it is assigned to among its facts.',
+    },
+    {
+      id: 'owner-acknowledged-held',
+      label: 'Owner — an acknowledged alert: Acknowledge held',
+      model: { ...acting, open: ACTED.blockedLot.key },
+      note: 'Acknowledged in this condition by Lucia: the button says so instead of acting again; Assign and Resolve stay.',
+    },
+    {
+      id: 'owner-assign',
+      label: 'Owner — Assign to',
+      model: { ...acting, dialog: { kind: 'assign', key: ACTED.lateOrder.key, people: { status: 'ready', data: PEOPLE } } },
+      note: 'Only people who may act on the row (its company, its permission, four eyes); the responsible ones first; "Take it back" while assigned.',
+    },
+    {
+      id: 'owner-assign-loading',
+      label: 'Owner — Assign to, reading who may act',
+      model: { ...base, dialog: { kind: 'assign', key: ROWS.riskOrder.key, people: { status: 'loading' } } },
+    },
+    {
+      id: 'owner-resolve',
+      label: 'Owner — Resolve with a note',
+      model: { ...acting, open: ACTED.lateOrder.key, dialog: { kind: 'resolve', key: ACTED.lateOrder.key } },
+      note: 'A note says what was done (required, 3 to 1,000 characters, ⌘Enter); the alert leaves Today for everyone until its condition changes.',
+    },
+    {
+      id: 'owner-resolved',
+      label: 'Owner — after a resolve',
+      model: { ...acting, queue: { status: 'ready', data: queueOf(ACTED_ITEMS.filter((item) => item.key !== ACTED.lateOrder.key), { handledToday: 5 }) }, notice: { key: 'today.actions.resolved', tone: 'success', params: { record: 'SO-2026-0042' } } },
+      note: 'The row left Today for everyone; it comes back if its condition changes (a promise date moved, a new state).',
+    },
+    {
+      id: 'owner-offline',
+      label: 'Owner — offline: the verbs are held',
+      model: { ...acting, live: 'offline', open: ACTED.lateOrder.key },
+      note: 'Rows stay readable; Acknowledge, Assign and Resolve are held: "Offline — decide when back online".',
+    },
+    { id: 'owner-handled', label: 'Owner — Handled today', model: { ...acting, dialog: { kind: 'handled', list: { status: 'ready', data: HANDLED } } }, note: 'What I decided today, newest first, with the notes I wrote.' },
+    { id: 'owner-handled-empty', label: 'Owner — Handled today, nothing yet', model: { ...base, dialog: { kind: 'handled', list: { status: 'ready', data: { count: 0, items: [] } } } } },
+    {
+      id: 'owner-arrange',
+      label: 'Owner — Arrange Today',
+      model: { ...acting, dialog: { kind: 'arrange' } },
+      note: 'The one Customise dialog: tick what shows, drag the order ("Needs me now" always shows); widths of My lists and the main lens on the left. Saved on the server for this person.',
+    },
+    {
+      id: 'owner-arranged',
+      label: 'Owner — arranged: My lists first, the flow strip hidden',
+      model: { ...acting, layout: ARRANGED, panels: panelsOf('quotesToApprove', 'lateOrders', 'ordersWaitingDeposit', 'mailToSort') },
+      note: 'My lists above the work, across the page, each list at its width (Late orders two thirds); Where the work is hidden; orders waiting for a deposit hidden.',
+    },
+    {
+      id: 'sales-assigned',
+      label: 'Sales — a row assigned to me',
+      model: {
+        ...base,
+        queue: { status: 'ready', data: queueOf([acted(ROWS.lateOrder, { assigned: { to: { ...MARCO, me: true }, by: { ...ME, me: false }, at: at(29, 8) } }), ROWS.mail, ROWS.riskOrder], { handledToday: 1 }) },
+        flow: flowOf('ORDERS', 'WORK_ORDERS', 'INVOICES'),
+        panels: panelsOf('lateOrders', 'ordersWaitingDeposit', 'mailToSort'),
+        newVerbs: verbs('quote', 'party'),
+        reviews: {},
+      },
+      note: 'The assignee sees "Assigned to you by Anna Prova"; mail to sort has no alert verbs (it is sorted in its review).',
+    },
   ],
 })

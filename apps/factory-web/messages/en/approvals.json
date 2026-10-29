@@ -1,0 +1,137 @@
+{
+  "intro": "Requests that wait for your yes, your own requests and recent decisions. In this release: quote approvals.",
+  "updated": "Updated {time}",
+  "notYet": "Not read yet",
+  "dismiss": "Dismiss",
+  "retry": "Try again",
+  "back": "Back",
+  "you": "you",
+  "colleague": "a colleague",
+  "noun": "request",
+  "count_one": "{count} request",
+  "count_other": "{count} requests",
+  "keysTitle": "Keys of the approvals",
+  "keyApprove": "Approve (in the review)",
+  "keyReject": "Reject (in the review)",
+  "keyWalk": "Next / previous request (in the review)",
+  "bulk": {
+    "approve_one": "Approve {count}",
+    "approve_other": "Approve {count}",
+    "approveTitle_one": "Approve {count} request?",
+    "approveTitle_other": "Approve {count} requests?",
+    "approveBody": "Each is checked again when it is decided: one that changed since it was asked is left waiting and said.",
+    "approved_one": "{count} request approved.",
+    "approved_other": "{count} requests approved.",
+    "approvedPartly": "{done} approved; {failed} not (changed since asked or not yours): the queue was read again."
+  },
+  "version": "Version {revision}",
+  "approve": "Approve",
+  "reject": "Reject",
+  "failed": "Couldn't load approvals",
+  "loading": "Reading the requests…",
+  "tileMore": "{count}+",
+  "tile": {
+    "waiting": "Waiting for me",
+    "mine": "My requests waiting",
+    "decided": "Decided in the last 7 days"
+  },
+  "tableLabel": {
+    "waiting": "Requests waiting for your decision",
+    "mine": "Your requests",
+    "decided": "Decided in the last 7 days"
+  },
+  "empty": {
+    "waiting": {
+      "title": "Nothing waits for your yes.",
+      "body": "When a quote breaks a rule and someone asks, it appears here."
+    },
+    "mine": {
+      "title": "You have no open requests.",
+      "body": "Requests you ask from a quote appear here until someone decides."
+    },
+    "decided": {
+      "title": "Nothing decided in the last 7 days.",
+      "body": "Decisions you made, and decisions on your requests, appear here."
+    },
+    "showMine_one": "Your requests: {count} waiting · Show",
+    "showMine_other": "Your requests: {count} waiting · Show"
+  },
+  "col": {
+    "request": "Request",
+    "askedBy": "Asked by",
+    "amount": "Net",
+    "since": "Asked",
+    "state": "State",
+    "open": "Quote"
+  },
+  "sentence": {
+    "margin": "{number} {customer} — margin {pct} under the {floor} floor",
+    "reasons": "{number} {customer} — {reasons}"
+  },
+  "held": {
+    "OWN_REQUEST": "You asked for this: another approver decides.",
+    "NO_RIGHT": "Your role does not approve quotes.",
+    "NEEDS_MARGIN": "About the margin: an approver who sees margins decides.",
+    "NOT_WAITING": "Already decided.",
+    "busy": "Working on it…",
+    "changed": "Changed since asked: open the quote and ask again.",
+    "reason": "Write the reason (at least 3 characters).",
+    "long": "At most 500 characters."
+  },
+  "heldShort": {
+    "OWN_REQUEST": "Yours",
+    "NO_RIGHT": "Not yours to decide",
+    "NEEDS_MARGIN": "Needs margin rights",
+    "NOT_WAITING": "Decided"
+  },
+  "review": {
+    "title": "Approve quote {number}?",
+    "titleUnknown": "Request",
+    "not_found": "This request is not in this view any more: it may have been decided or withdrawn.",
+    "forbidden": "You may not open this quote.",
+    "asked": "Asked by {who} · {at}",
+    "noNote": "No note.",
+    "decided": "{status} by {who} · {at}",
+    "current": "Still current · checked {time}",
+    "changed": "Changed since asked: the quote is no longer the one asked about.",
+    "checking": "Checking the quote…",
+    "customer": "Customer",
+    "net": "Net",
+    "gross": "Total",
+    "margin": "Margin",
+    "marginValue": "{pct} (floor {floor})",
+    "discountLimit": "Discount limit",
+    "validUntil": "Valid until",
+    "rules": "Why it needs you",
+    "noRule": "No rule is broken now: the request may be out of date.",
+    "lowLine": "Under the floor: {line} at {pct}",
+    "noMargin": "Margin figures are not shown for your role.",
+    "lines": "Lines of the quote",
+    "col": {
+      "line": "Line",
+      "pieces": "Sizes × pieces",
+      "unit": "Unit price",
+      "net": "Net",
+      "margin": "Margin %"
+    },
+    "note": "Decision note",
+    "noteHint": "Optional; kept with the decision.",
+    "openQuote": "Open full quote"
+  },
+  "rule": {
+    "MARGIN_FLOOR": "The margin is under the floor.",
+    "DISCOUNT_LIMIT": "A discount is over the {limit} limit.",
+    "AMOUNT_LIMIT": "The amount is over the limit.",
+    "SPECIAL_ITEM": "It holds a special item."
+  },
+  "rejectDialog": {
+    "title": "Reject — tell {who} why",
+    "body": "The quote goes back to Draft; your reason lands in its history for the person who asked.",
+    "reason": "Reason"
+  },
+  "notice": {
+    "approved": "{number} approved. The next request is open.",
+    "rejected": "{number} rejected with your reason.",
+    "forbidden": "Not decided: you may not decide this request (your own, or a margin request without margin rights)."
+  }
+}

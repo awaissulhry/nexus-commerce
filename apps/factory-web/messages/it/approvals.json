@@ -1,0 +1,137 @@
+{
+  "intro": "Le richieste che aspettano il tuo sì, le tue richieste e le decisioni recenti. In questa versione: approvazioni dei preventivi.",
+  "updated": "Aggiornato alle {time}",
+  "notYet": "Non ancora letto",
+  "dismiss": "Chiudi",
+  "retry": "Riprova",
+  "back": "Indietro",
+  "you": "tu",
+  "colleague": "un collega",
+  "noun": "richiesta",
+  "count_one": "{count} richiesta",
+  "count_other": "{count} richieste",
+  "keysTitle": "Tasti delle approvazioni",
+  "keyApprove": "Approva (nella revisione)",
+  "keyReject": "Rifiuta (nella revisione)",
+  "keyWalk": "Richiesta successiva / precedente (nella revisione)",
+  "bulk": {
+    "approve_one": "Approva {count}",
+    "approve_other": "Approva {count}",
+    "approveTitle_one": "Approvare {count} richiesta?",
+    "approveTitle_other": "Approvare {count} richieste?",
+    "approveBody": "Ognuna viene ricontrollata al momento della decisione: una cambiata dalla richiesta resta in attesa e viene segnalata.",
+    "approved_one": "{count} richiesta approvata.",
+    "approved_other": "{count} richieste approvate.",
+    "approvedPartly": "{done} approvate; {failed} no (cambiate dalla richiesta o non tue): la coda è stata riletta."
+  },
+  "version": "Versione {revision}",
+  "approve": "Approva",
+  "reject": "Rifiuta",
+  "failed": "Impossibile caricare le approvazioni",
+  "loading": "Lettura delle richieste…",
+  "tileMore": "{count}+",
+  "tile": {
+    "waiting": "In attesa di me",
+    "mine": "Mie richieste in attesa",
+    "decided": "Decise negli ultimi 7 giorni"
+  },
+  "tableLabel": {
+    "waiting": "Richieste in attesa della tua decisione",
+    "mine": "Le tue richieste",
+    "decided": "Decise negli ultimi 7 giorni"
+  },
+  "empty": {
+    "waiting": {
+      "title": "Niente aspetta il tuo sì.",
+      "body": "Quando un preventivo non rispetta una regola e qualcuno chiede, compare qui."
+    },
+    "mine": {
+      "title": "Non hai richieste aperte.",
+      "body": "Le richieste che fai da un preventivo compaiono qui finché qualcuno non decide."
+    },
+    "decided": {
+      "title": "Nulla deciso negli ultimi 7 giorni.",
+      "body": "Qui compaiono le decisioni che hai preso e quelle sulle tue richieste."
+    },
+    "showMine_one": "Le tue richieste: {count} in attesa · Mostra",
+    "showMine_other": "Le tue richieste: {count} in attesa · Mostra"
+  },
+  "col": {
+    "request": "Richiesta",
+    "askedBy": "Chiesta da",
+    "amount": "Imponibile",
+    "since": "Chiesta il",
+    "state": "Stato",
+    "open": "Preventivo"
+  },
+  "sentence": {
+    "margin": "{number} {customer} — margine {pct} sotto la soglia del {floor}",
+    "reasons": "{number} {customer} — {reasons}"
+  },
+  "held": {
+    "OWN_REQUEST": "L'hai chiesta tu: decide un altro approvatore.",
+    "NO_RIGHT": "Il tuo ruolo non approva preventivi.",
+    "NEEDS_MARGIN": "Riguarda il margine: decide un approvatore che vede i margini.",
+    "NOT_WAITING": "Già decisa.",
+    "busy": "In corso…",
+    "changed": "Cambiata dalla richiesta: apri il preventivo e chiedi di nuovo.",
+    "reason": "Scrivi il motivo (almeno 3 caratteri).",
+    "long": "Al massimo 500 caratteri."
+  },
+  "heldShort": {
+    "OWN_REQUEST": "Tua",
+    "NO_RIGHT": "Non decidi tu",
+    "NEEDS_MARGIN": "Servono i margini",
+    "NOT_WAITING": "Decisa"
+  },
+  "review": {
+    "title": "Approvare il preventivo {number}?",
+    "titleUnknown": "Richiesta",
+    "not_found": "Questa richiesta non è più in questa vista: potrebbe essere stata decisa o ritirata.",
+    "forbidden": "Non puoi aprire questo preventivo.",
+    "asked": "Chiesta da {who} · {at}",
+    "noNote": "Nessuna nota.",
+    "decided": "{status} da {who} · {at}",
+    "current": "Ancora attuale · verificata alle {time}",
+    "changed": "Cambiata dalla richiesta: il preventivo non è più quello della richiesta.",
+    "checking": "Verifica del preventivo…",
+    "customer": "Cliente",
+    "net": "Imponibile",
+    "gross": "Totale",
+    "margin": "Margine",
+    "marginValue": "{pct} (soglia {floor})",
+    "discountLimit": "Limite di sconto",
+    "validUntil": "Valido fino al",
+    "rules": "Perché serve il tuo sì",
+    "noRule": "Ora nessuna regola è violata: la richiesta potrebbe essere superata.",
+    "lowLine": "Sotto la soglia: {line} al {pct}",
+    "noMargin": "I dati di margine non sono visibili per il tuo ruolo.",
+    "lines": "Righe del preventivo",
+    "col": {
+      "line": "Riga",
+      "pieces": "Taglie × pezzi",
+      "unit": "Prezzo unitario",
+      "net": "Imponibile",
+      "margin": "Margine %"
+    },
+    "note": "Nota della decisione",
+    "noteHint": "Facoltativa; resta con la decisione.",
+    "openQuote": "Apri il preventivo completo"
+  },
+  "rule": {
+    "MARGIN_FLOOR": "Il margine è sotto la soglia.",
+    "DISCOUNT_LIMIT": "Uno sconto supera il limite del {limit}.",
+    "AMOUNT_LIMIT": "L'importo supera il limite.",
+    "SPECIAL_ITEM": "Contiene un articolo speciale."
+  },
+  "rejectDialog": {
+    "title": "Rifiuta — spiega a {who} perché",
+    "body": "Il preventivo torna in Bozza; il motivo finisce nella sua storia per chi ha chiesto.",
+    "reason": "Motivo"
+  },
+  "notice": {
+    "approved": "{number} approvato. È aperta la richiesta successiva.",
+    "rejected": "{number} rifiutato con il tuo motivo.",
+    "forbidden": "Non decisa: non puoi decidere questa richiesta (tua, o sul margine senza visibilità sui margini)."
+  }
+}

@@ -207,6 +207,8 @@ model Site {
   // production.prisma: its garment label prints (B-W1-44) and bundle ticket reprints.
   garmentLabelPrints      GarmentLabelPrint[]
   bundleReprints          BundleReprint[]
+  // floor-sync.prisma: the refused queued actions of its tablets.
+  refusedActions          FloorRefusedAction[]
   // shipping.prisma: its shipping settings, the shipments that leave it and their DDTs.
   shippingSettings   ShippingSettings[]
   shipments          Shipment[]
@@ -316,6 +318,8 @@ model Station {
   // B-W1-42: correction requests asked and refused scans sent at the station.
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]
+  // floor-sync.prisma: the refused queued actions of its tablets.
+  refusedActions         FloorRefusedAction[]
 
   @@unique([tenantId, siteId, code])
   // The target of the tenant- and site-safe references from the station's rows (a device at a station).
