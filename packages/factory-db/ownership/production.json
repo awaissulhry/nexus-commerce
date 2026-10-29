@@ -1,5 +1,5 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/production.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context) writes floor rules, work orders and their cells, operations and planned materials through apps/factory-api's modules/production, always through command(); the API keeps staff to the companies and sites their grants reach. The floor (factory_floor_runtime) works on its OWN site only (every table here has a site key): it reads the site's floor rules, work orders, cells, operations, planned materials (the pick list), cut logs, bundles, scans and acknowledgements, and writes the floor's ledgers through floorCommand: a cut log entry with its pieces (B-W1-40), a bundle (B-W1-41) and its ticket reprint or void, an operation scan (B-W1-42) and the worker's acknowledgement of the information notice (SCR-025). No table here has a cost, price, margin or wages column, so the floor's column grants leave nothing out (plan A1 §2.2, §2.6). Portal and link sessions read nothing here. CutLog, CutLogPiece, OperationScan and WorkerNoticeAck are append-only (`@append-only`; the …_production_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes them. Nobody deletes a work order (cancelled) or a bundle (voided); the office deletes only the cells, operations and planned materials of a DRAFT work order. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/production.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context) writes floor rules, work orders and their cells, operations and planned materials through apps/factory-api's modules/production, always through command(); the API keeps staff to the companies and sites their grants reach. The floor (factory_floor_runtime) works on its OWN site only (every table here has a site key): it reads the site's floor rules, work orders, cells, operations, planned materials (the pick list), cut logs, bundles, scans and acknowledgements, and writes the floor's ledgers through floorCommand: a cut log entry with its pieces (B-W1-40), a bundle (B-W1-41) and its ticket reprint or void, an operation scan with its scrap and rework lines, a correction request of one of its own scans and its refused scans (B-W1-42), and the worker's acknowledgement of the information notice (SCR-025); the office decides the correction requests and keeps the tenant's scrap and rework reasons (which every floor device reads). No table here has a cost, price, margin or wages column, so the floor's column grants leave nothing out (plan A1 §2.2, §2.6). Portal and link sessions read nothing here. CutLog, CutLogPiece, OperationScan, OperationScanDefect and WorkerNoticeAck are append-only (`@append-only`; the …_production_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes them. Nobody deletes a work order (cancelled) or a bundle (voided); the office deletes only the cells, operations and planned materials of a DRAFT work order. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "ProductionSettings": {
       "about": "The office keeps each site's floor rules: whether floor records name the worker or the station (the monitoring switch, MES-278) and the legal basis on record. The floor reads its own site's row (the scan screen and the triggers read it), but never the legal basis: its kind, reference and who recorded it, when, are hidden from the floor role (B-W1-37).",
@@ -89,6 +89,42 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert"] },
         "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    },
+    "ScrapReason": {
+      "about": "The tenant's scrap and rework reasons of the operation screen (B-W1-42), seeded with W1's list; the office keeps them (W2a's Floor rules & codes: labels, order, active; a code never changes, a reason no longer used is set inactive, never deleted). Every floor device reads the tenant's list (the reason tiles): no site key, nothing personal or secret.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "OperationScanDefect": {
+      "about": "A scan's (or a correction request's) scrap and rework lines per reason (B-W1-42), written with it by the site's floor (a report, an ask) or the office (an approved correction). Both read the site's lines. Append-only: nobody changes or removes a line.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    },
+    "ScanCorrectionRequest": {
+      "about": "The site's floor asks a correction of one of its own older scans (B-W1-42; MES-096); the office (a lead or the production manager) decides it, approved with the CORRECTION scan or refused with a note. The floor reads its site's requests (its own asks and their answers) and inserts them; only the office updates (decides) one. Nobody deletes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    },
+    "FloorScanRefusal": {
+      "about": "The scans a site's floor devices sent from their offline queue that the server refused (B-W1-42; SCR-023 data), with the reason and the one fix. The floor keeps its own (insert), discards them and marks them resolved when the same client scan id is accepted (update); the office reads them and discards them too. Their content never changes; nobody deletes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
       }
     }
   }

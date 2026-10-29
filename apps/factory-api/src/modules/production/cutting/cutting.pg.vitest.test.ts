@@ -655,7 +655,8 @@ describe('undo (the cutter, before the next cut) and correction (the office, wit
 describe('the work order record counts its cut garments; the walls hold', () => {
   it("replaces the record's null cut count with the cut log's, per cell", async () => {
     const { workOrder } = await ok('planner', 'GET', `/production/work-orders/${WO.main.id}`)
-    expect(workOrder.cells.map((cell: Json) => cell.progress)).toEqual([{ cut: 1, sewn: null, finished: null }])
+    // Sewn and finished are counted from the floor's scans (B-W1-42): none yet.
+    expect(workOrder.cells.map((cell: Json) => cell.progress)).toEqual([{ cut: 1, sewn: 0, finished: 0 }])
     // The seeded work order: its cut is sleeves only, so no garment of it is cut yet.
     const seeded = await ok('planner', 'GET', `/production/work-orders/${A.seededWorkOrder}`)
     expect(seeded.workOrder.cells.every((cell: Json) => cell.progress.cut === 0)).toBe(true)
