@@ -114,6 +114,8 @@
     "block": {
       "title": "Bloccare {name}?",
       "go": "Blocca cliente",
+      "titleMany_one": "Bloccare {count} cliente?",
+      "titleMany_other": "Bloccare {count} clienti?",
       "stops1": "Niente nuovi preventivi, ordini o spedizioni per questo cliente.",
       "stops2": "I preventivi aperti mostrano un avviso; i documenti già fatti restano."
     },
@@ -188,6 +190,8 @@
     "block": {
       "title": "Bloccare {name}?",
       "go": "Blocca fornitore",
+      "titleMany_one": "Bloccare {count} fornitore?",
+      "titleMany_other": "Bloccare {count} fornitori?",
       "stops1": "Niente nuovi ordini d’acquisto a questo fornitore.",
       "stops2": "Gli ordini già inviati restano; i ricevimenti mostrano un avviso."
     },
@@ -388,24 +392,18 @@
     "filters": "Filtri",
     "filtersCount": "Filtri ({count})",
     "more": "Altre azioni",
-    "updates_one": "{count} aggiornamento · Mostra",
-    "updates_other": "{count} aggiornamenti · Mostra",
     "activeFilters": "Filtri in uso",
     "removeFilter": "Togli il filtro {name}",
-    "selection": "Righe selezionate",
-    "selected_one": "{count} selezionata",
-    "selected_other": "{count} selezionate",
     "bulkVies_one": "Controlla VIES per {count}",
     "bulkVies_other": "Controlla VIES per {count}",
     "bulkExport_one": "Esporta {count} (CSV)",
     "bulkExport_other": "Esporta {count} (CSV)",
+    "bulkBlock_one": "Blocca {count}",
+    "bulkBlock_other": "Blocca {count}",
     "bulkArchive_one": "Archivia {count}",
     "bulkArchive_other": "Archivia {count}",
-    "selectPage": "Seleziona tutte le {count} di questa pagina",
-    "clearSelection": "Annulla selezione",
     "count": "{shown} di {total}",
     "countShown": "{shown} mostrate",
-    "keysSr": "Tasti: j e k per spostarsi tra le righe, x per selezionare, punto interrogativo per l’elenco dei tasti.",
     "showMore": "Mostra altre {count}",
     "exportView": "Esporta questa vista (CSV)",
     "exportViewHint": "Le {count} righe mostrate, con le colonne dell’elenco",
@@ -414,10 +412,8 @@
     "recheckAllHint": "Una richiesta VIES ciascuna, fino a {max} alla volta",
     "cannotInvoice": "Non ancora fatturabile",
     "noIdentity": "Nessuna identità fiscale",
-    "selectRow": "Seleziona {name}",
     "exported": "Esportate {count} righe.",
     "col": {
-      "select": "Scegli",
       "name": "Nome",
       "roles": "Ruoli",
       "status": "Stato",
@@ -453,6 +449,7 @@
     "archiveBlocked": "Prima sbloccalo: il blocco è una decisione a sé",
     "noEuNumber": "Nessuna delle righe selezionate ha una partita IVA UE controllabile con VIES",
     "bulkMax": "Al massimo {max} alla volta: selezionane meno",
+    "nothingToBlock": "Nulla di selezionato si può bloccare (solo gli attivi)",
     "nothingToArchive": "Nulla di selezionato si può archiviare (i bloccati vanno prima sbloccati)",
     "noEmail": "Serve prima un’email"
   },
@@ -491,6 +488,8 @@
     "stops": "Cosa blocca",
     "reason": "Motivo",
     "reasonHint": "Resta con il blocco ed è mostrato sulla scheda.",
+    "goMany_one": "Blocca {count}",
+    "goMany_other": "Blocca {count}",
     "undo": "Sbloccalo dalla scheda quando il motivo non c’è più."
   },
   "archive": {
@@ -725,6 +724,12 @@
     "progress": "{done} di {total} fatti…",
     "running": "Ancora in corso: si chiude quando ogni riga ha la sua risposta",
     "archived": "Archiviato",
+    "blocked": "Bloccato",
+    "block": {
+      "title_one": "Blocca {count}",
+      "title_other": "Blocca {count}",
+      "done": "Fatto: {done} di {total}. Il motivo resta con ogni blocco."
+    },
     "vies": {
       "title_one": "Controlla VIES per {count}",
       "title_other": "Controlla VIES per {count}",

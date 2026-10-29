@@ -750,7 +750,7 @@ export function partiesCsv(
 
 // ---- bulk runs (Check VIES for N, Archive N) --------------------------------------------------------------------------
 
-export type BulkKind = 'vies' | 'archive'
+export type BulkKind = 'vies' | 'archive' | 'block'
 export interface BulkResult {
   id: string
   code: string
@@ -768,7 +768,8 @@ export interface BulkRun {
 
 /** Which selected rows a bulk action reaches, and the rest with why not (held before the click, 00 §2.1). */
 export function bulkReach(kind: BulkKind, rows: readonly PartyRow[]): { reach: PartyRow[]; skipped: PartyRow[] } {
-  const reaches = (row: PartyRow) => (kind === 'vies' ? viesApplies(row) && row.status !== 'ARCHIVED' : row.status === 'ACTIVE' || row.status === 'PROSPECT')
+  const reaches = (row: PartyRow) =>
+    kind === 'vies' ? viesApplies(row) && row.status !== 'ARCHIVED' : kind === 'block' ? row.status === 'ACTIVE' : row.status === 'ACTIVE' || row.status === 'PROSPECT'
   return { reach: rows.filter(reaches), skipped: rows.filter((row) => !reaches(row)) }
 }
 
@@ -784,7 +785,7 @@ export interface ListCan {
   vies: boolean
 }
 
-export type ListDialog = { kind: 'new' } | { kind: 'block'; partyId: string } | { kind: 'archive'; partyIds: readonly string[] } | { kind: 'bulk' } | { kind: 'shortcuts' }
+export type ListDialog = { kind: 'new' } | { kind: 'block'; partyIds: readonly string[] } | { kind: 'archive'; partyIds: readonly string[] } | { kind: 'bulk' } | { kind: 'shortcuts' }
 
 export type LiveState = 'connecting' | 'live' | 'offline'
 

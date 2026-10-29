@@ -26,6 +26,7 @@ import {
   TILE_VIEW,
   viesApplies,
   viewQuery,
+  type BulkKind,
   type BulkResult,
   type BulkRun,
   type ListDialog,
@@ -244,7 +245,7 @@ function PartiesListContainer({ side }: { side: Side }) {
   }
 
   /** One call per row, one result per row (the dialog shows them as they come). */
-  const runBulk = async (kind: 'vies' | 'archive', targets: readonly PartyRow[]) => {
+  const runBulk = async (kind: BulkKind, targets: readonly PartyRow[], reason?: string) => {
     const list = targets.slice(0, BULK_MAX)
     const results: BulkResult[] = []
     setBulk({ kind, total: list.length, results: [], done: false })
@@ -261,6 +262,9 @@ function PartiesListContainer({ side }: { side: Side }) {
             outcome: `vies.result.${answer.check.result}`,
             tone: answer.check.result === 'VALID' ? 'success' : answer.check.result === 'INVALID' ? 'danger' : 'warning',
           }
+        } else if (kind === 'block') {
+          await moveParty(api, row.id, 'block', { version: row.version, reason: reason ?? '' })
+          result = { id: row.id, code: row.code, name: partyName(row), outcome: 'bulk.blocked', tone: 'success' }
         } else {
           await moveParty(api, row.id, 'archive', { version: row.version })
           result = { id: row.id, code: row.code, name: partyName(row), outcome: 'bulk.archived', tone: 'success' }
@@ -403,7 +407,12 @@ function PartiesListContainer({ side }: { side: Side }) {
           )
         },
         onCreate,
-        onBlock: (id, reason) => void move(id, 'block', reason),
+        onBlock: (ids, reason) => {
+          const targets = ids.map(rowOf).filter((row): row is PartyRow => !!row)
+          if (targets.length === 1) void move(targets[0]!.id, 'block', reason)
+          else void runBulk('block', targets, reason)
+        },
+        onOpen: (row) => router.push(recordHref(prefix, config, row.id)),
         onUnblock: (id) => void move(id, 'unblock'),
         onReactivate: (id) => void move(id, 'reactivate'),
         onArchive: (ids) => {

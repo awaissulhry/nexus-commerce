@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import { inShell, listModel, rowOf, SUPPLIERS } from '../../parties/_shared/fixtures'
+import { inShell, listModel, rowOf, SUPPLIERS, useDesignList } from '../../parties/_shared/fixtures'
 import { blankNewParty, failed, loaded, loading, SIDES, type PartiesListModel } from '../../parties/_shared/model'
 import { SuppliersView } from './view/SuppliersView'
 
@@ -14,7 +14,7 @@ const list = (over: Partial<PartiesListModel> = {}) => listModel('suppliers', ov
 const pick = (...codes: string[]) => rows.filter((row) => codes.includes(row.code)).map((row) => row.id)
 
 function SuppliersDesign({ model }: { model: PartiesListModel }) {
-  return inShell('/purchasing/suppliers', createElement(SuppliersView, { model }))
+  return inShell('/purchasing/suppliers', createElement(SuppliersView, useDesignList(model)))
 }
 
 const euDraft = () => {
@@ -55,7 +55,8 @@ export const designScreen = defineDesignScreen<PartiesListModel>({
       label: 'New supplier: already a customer',
       model: list({ dialog: { kind: 'new' }, dialogProblem: 'new.conflictNumber', duplicates: [rowOf(SUPPLIERS.find((item) => item.code === 'PELLETTERIA-DOPPIA')!)] }),
     },
-    { id: 'block', label: 'Block a supplier', model: list({ dialog: { kind: 'block', partyId: pick('TESSITURA-ESEMPIO')[0]! } }) },
+    { id: 'block', label: 'Block a supplier', model: list({ dialog: { kind: 'block', partyIds: pick('TESSITURA-ESEMPIO') } }) },
+    { id: 'all-selected', label: 'Every loaded row selected (header box)', model: list({ selected: rows.map((row) => row.id) }) },
     { id: 'archive', label: 'Archive a supplier', model: list({ dialog: { kind: 'archive', partyIds: pick('PROTEZIONI-PROVA') } }) },
     { id: 'shortcuts', label: 'Keyboard shortcuts (?)', model: list({ dialog: { kind: 'shortcuts' } }) },
   ],

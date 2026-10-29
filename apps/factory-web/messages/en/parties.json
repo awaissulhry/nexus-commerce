@@ -114,6 +114,8 @@
     "block": {
       "title": "Block {name}?",
       "go": "Block customer",
+      "titleMany_one": "Block {count} customer?",
+      "titleMany_other": "Block {count} customers?",
       "stops1": "No new quotes, orders or shipments for this customer.",
       "stops2": "Open quotes show a warning; records already made keep it."
     },
@@ -188,6 +190,8 @@
     "block": {
       "title": "Block {name}?",
       "go": "Block supplier",
+      "titleMany_one": "Block {count} supplier?",
+      "titleMany_other": "Block {count} suppliers?",
       "stops1": "No new purchase orders to this supplier.",
       "stops2": "Orders already sent stay as they are; receipts show a warning."
     },
@@ -388,24 +392,18 @@
     "filters": "Filters",
     "filtersCount": "Filters ({count})",
     "more": "More actions",
-    "updates_one": "{count} update · Show",
-    "updates_other": "{count} updates · Show",
     "activeFilters": "Filters in use",
     "removeFilter": "Remove the filter {name}",
-    "selection": "Selected rows",
-    "selected_one": "{count} selected",
-    "selected_other": "{count} selected",
     "bulkVies_one": "Check VIES for {count}",
     "bulkVies_other": "Check VIES for {count}",
     "bulkExport_one": "Export {count} (CSV)",
     "bulkExport_other": "Export {count} (CSV)",
+    "bulkBlock_one": "Block {count}",
+    "bulkBlock_other": "Block {count}",
     "bulkArchive_one": "Archive {count}",
     "bulkArchive_other": "Archive {count}",
-    "selectPage": "Select all {count} on this page",
-    "clearSelection": "Clear selection",
     "count": "{shown} of {total}",
     "countShown": "{shown} shown",
-    "keysSr": "Keys: j and k move between rows, x selects, question mark lists the keys.",
     "showMore": "Show {count} more",
     "exportView": "Export this view (CSV)",
     "exportViewHint": "The {count} rows shown, with the columns of the list",
@@ -414,10 +412,8 @@
     "recheckAllHint": "One VIES call each, up to {max} at a time",
     "cannotInvoice": "Can't invoice yet",
     "noIdentity": "No tax identity",
-    "selectRow": "Select {name}",
     "exported": "Exported {count} rows.",
     "col": {
-      "select": "Select",
       "name": "Name",
       "roles": "Roles",
       "status": "Status",
@@ -453,6 +449,7 @@
     "archiveBlocked": "Unblock it first: a block is a decision of its own",
     "noEuNumber": "None of the selected has an EU VAT number VIES can check",
     "bulkMax": "At most {max} at a time: select fewer",
+    "nothingToBlock": "Nothing selected can be blocked (only active ones)",
     "nothingToArchive": "Nothing selected can be archived (blocked ones are unblocked first)",
     "noEmail": "Needs an email first"
   },
@@ -491,6 +488,8 @@
     "stops": "What it stops",
     "reason": "Reason",
     "reasonHint": "Kept with the block and shown on the record.",
+    "goMany_one": "Block {count}",
+    "goMany_other": "Block {count}",
     "undo": "Unblock it from the record when the reason is gone."
   },
   "archive": {
@@ -725,6 +724,12 @@
     "progress": "{done} of {total} done…",
     "running": "Still running: it closes when every row has its answer",
     "archived": "Archived",
+    "blocked": "Blocked",
+    "block": {
+      "title_one": "Block {count}",
+      "title_other": "Block {count}",
+      "done": "Done: {done} of {total}. The reason is kept with each block."
+    },
     "vies": {
       "title_one": "Check VIES for {count}",
       "title_other": "Check VIES for {count}",

@@ -19,9 +19,9 @@ import '../parties.css'
  * (LiveUpdates = a Button in the head, RecordNav and SaveStatus absent, the page band = the record's own DetailHeader).
  */
 
-/** The parties text (`parties`) and the record panels' (`records`), in the page's language. */
+/** The parties text (`parties`), the record panels' (`records`) and the list frame's (`lists`), in the page's language. */
 export function PartiesMessages({ children }: { children?: ReactNode }) {
-  return <WithMessages namespaces={['parties', 'records']}>{children}</WithMessages>
+  return <WithMessages namespaces={['parties', 'records', 'lists']}>{children}</WithMessages>
 }
 
 /** "—" for an unknown value (never 0, never empty). */

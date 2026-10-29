@@ -233,6 +233,9 @@ describe('money only with its grain; a bulk action says its reach before the cli
     const vies = bulkReach('vies', rows)
     expect(vies.reach.map((row) => row.code)).toEqual(['DE-BEISPIEL', 'FR-EXEMPLE', 'AT-MUSTER', 'ES-PRUEBA'])
     expect(bulkReach('archive', rows).skipped.map((row) => row.code)).toEqual(['BLOCCATO-DEMO'])
+    // Block N reaches the active ones only (a prospect is approved or archived, a blocked one is blocked already).
+    expect(bulkReach('block', rows).skipped.map((row) => row.code).sort()).toEqual(['BLOCCATO-DEMO', 'ES-PRUEBA', 'NUOVO-PROVA'])
+    expect(bulkReach('block', rows).reach.every((row) => row.status === 'ACTIVE')).toBe(true)
   })
 
   it('exports the view with its words, quoting what needs it', () => {
@@ -314,7 +317,7 @@ const built = [
   ...['connecting', 'live', 'offline'].map((value) => `live.${value}`),
   ...['ACTIVE', 'ARCHIVED'].map((value) => `master.${value}`),
   ...['block', 'unblock', 'reactivate', 'activate', 'archive'].map((value) => `done.${value}`),
-  ...['vies', 'archive'].flatMap((value) => [`bulk.${value}.title`, `bulk.${value}.done`]),
+  ...['vies', 'archive', 'block'].flatMap((value) => [`bulk.${value}.title`, `bulk.${value}.done`]),
   ...['billTo', 'shipTo'].map((value) => `address.default.${value}`),
   ...['open', 'won', 'lost', 'all', 'quote', 'order'].map((value) => `deals.${value}`),
   ...Object.values(SIDES).flatMap((side) => [
@@ -342,7 +345,7 @@ const built = [
       'step.none',
     ].map((key) => `${side.side}.${key}`),
     ...['action', 'title', 'subtitle', 'go', 'after'].map((key) => `${side.side}.new.${key}`),
-    ...['title', 'go', 'stops1', 'stops2'].map((key) => `${side.side}.block.${key}`),
+    ...['title', 'titleMany', 'go', 'stops1', 'stops2'].map((key) => `${side.side}.block.${key}`),
     ...['titleOne', 'titleMany', 'reach1'].map((key) => `${side.side}.archive.${key}`),
     ...['empty', 'emptyBody', 'addFirst'].map((key) => `${side.side}.contacts.${key}`),
   ]),

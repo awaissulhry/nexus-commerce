@@ -564,10 +564,11 @@ export function EditPartyModal({
 
 // ---- Block, archive -----------------------------------------------------------------------------------------------------
 
+/** Block one or several (one reason for all; the API blocks each with it). */
 export function BlockModal({
   side,
   open,
-  name,
+  names,
   busy,
   problem,
   onBlock,
@@ -575,7 +576,7 @@ export function BlockModal({
 }: {
   side: Side
   open: boolean
-  name: string
+  names: readonly string[]
   busy?: boolean
   problem?: string | null
   onBlock?: (reason: string) => void
@@ -599,7 +600,7 @@ export function BlockModal({
     <Modal
       open={open}
       onClose={() => onClose?.()}
-      title={t(`${side}.block.title`, { name })}
+      title={names.length > 1 ? t(`${side}.block.titleMany`, { count: names.length }) : t(`${side}.block.title`, { name: names[0] ?? '' })}
       size="md"
       busy={busy}
       footer={
@@ -608,7 +609,7 @@ export function BlockModal({
           <span className="grow" />
           <Button onClick={() => onClose?.()}>{t('common.cancel')}</Button>
           <Button variant="danger" onClick={submit} heldReason={busy ? t('common.saving') : tried && issue ? t(issue) : null}>
-            {t(`${side}.block.go`)}
+            {names.length > 1 ? t('block.goMany', { count: names.length }) : t(`${side}.block.go`)}
           </Button>
         </>
       }
@@ -629,6 +630,7 @@ export function BlockModal({
             <li>{t(`${side}.block.stops2`)}</li>
           </ul>
         </div>
+        {names.length > 1 && <p className="fw-pty-hint">{names.slice(0, 8).join(' · ') + (names.length > 8 ? ` · ${t('archive.andMore', { count: names.length - 8 })}` : '')}</p>}
         <Field label={t('block.reason')} required hint={t('block.reasonHint')} error={tried && issue ? t(issue) : undefined}>
           <Textarea rows={3} autoFocus value={reason} onChange={(event) => setReason(event.target.value)} onBlur={() => setTried(reason !== '' || tried)} />
         </Field>

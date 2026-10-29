@@ -244,7 +244,7 @@ function PartyRecord({ model, actions, panels, documents }: { model: PartyRecord
         )}
         {tab === 'contacts' && <ContactsCard model={model} party={party} actions={actions} editable={editable} />}
         {tab === 'tax' && (
-          <div className="fw-pty-stack">
+          <div className="fw-pty-two-wide">
             <IdentityCard model={model} party={party} current={current} actions={actions} editable={editable} />
             <ViesCard model={model} party={party} actions={actions} viesHeld={viesHeld} />
           </div>
@@ -268,7 +268,7 @@ function PartyRecord({ model, actions, panels, documents }: { model: PartyRecord
       <BlockModal
         side={side}
         open={dialog?.kind === 'block'}
-        name={partyName(party)}
+        names={[partyName(party)]}
         busy={model.busy}
         problem={model.dialogProblem}
         onBlock={(reason) => actions?.onBlock?.(reason)}

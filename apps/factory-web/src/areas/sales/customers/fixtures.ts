@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import { CUSTOMERS, inShell, listModel, rowOf, SUPPLIERS } from '../../parties/_shared/fixtures'
+import { CUSTOMERS, inShell, listModel, rowOf, SUPPLIERS, useDesignList } from '../../parties/_shared/fixtures'
 import { blankNewParty, failed, loaded, loading, SIDES, type PartiesListModel } from '../../parties/_shared/model'
 import { CustomersView } from './view/CustomersView'
 
@@ -16,7 +16,7 @@ const list = (over: Partial<PartiesListModel> = {}) => listModel('customers', ov
 const pick = (...codes: string[]) => rows.filter((row) => codes.includes(row.code)).map((row) => row.id)
 
 function CustomersDesign({ model }: { model: PartiesListModel }) {
-  return inShell('/sales/customers', createElement(CustomersView, { model }))
+  return inShell('/sales/customers', createElement(CustomersView, useDesignList(model)))
 }
 
 const euDraft = () => {
@@ -74,7 +74,7 @@ export const designScreen = defineDesignScreen<PartiesListModel>({
     { id: 'offline', label: 'Offline: rows stay readable with their time', model: list({ live: 'offline' }) },
     { id: 'more', label: 'More than one page (Show more)', model: list({ more: true, total: 132 }) },
     { id: 'notice', label: 'A receipt after blocking', model: list({ notice: { key: 'done.block', tone: 'success', params: { name: 'Bloccato Demo S.p.A.' } } }) },
-    { id: 'keyboard', label: 'Keyboard: j / k on the rows, x selects', model: list({ focusRow: 2, selected: pick('FR-EXEMPLE') }) },
+    { id: 'keyboard', label: 'Keyboard: j / k on the rows, x selects, the keys in the footer icon', model: list({ focusRow: 2, selected: pick('FR-EXEMPLE') }) },
     { id: 'new', label: 'New customer (VAT number first)', model: list({ dialog: { kind: 'new' } }), note: '⌘↵ creates; the code follows the name until it is typed.' },
     { id: 'new-eu', label: 'New customer: an EU business (VIES asked on create)', model: list({ dialog: { kind: 'new' }, newDraft: euDraft() }) },
     {
@@ -95,7 +95,13 @@ export const designScreen = defineDesignScreen<PartiesListModel>({
         ],
       }),
     },
-    { id: 'block', label: 'Block a customer (reason required)', model: list({ dialog: { kind: 'block', partyId: rows.find((row) => row.code === 'MODA-DEMO')!.id } }) },
+    { id: 'block', label: 'Block a customer (reason required)', model: list({ dialog: { kind: 'block', partyIds: pick('MODA-DEMO') } }) },
+    {
+      id: 'block-many',
+      label: 'Block 3 customers with one reason',
+      model: list({ selected: pick('MODA-DEMO', 'MARCHIO-ESEMPIO', 'DE-BEISPIEL', 'NUOVO-PROVA'), dialog: { kind: 'block', partyIds: pick('MODA-DEMO', 'MARCHIO-ESEMPIO', 'DE-BEISPIEL') } }),
+      note: 'Block N reaches the active ones only (the prospect is left out).',
+    },
     { id: 'archive', label: 'Archive a customer', model: list({ dialog: { kind: 'archive', partyIds: pick('NUOVO-PROVA') } }) },
     {
       id: 'archive-many',

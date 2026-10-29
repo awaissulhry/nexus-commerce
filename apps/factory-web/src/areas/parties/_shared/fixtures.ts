@@ -1,4 +1,4 @@
-import { createElement, type ReactNode } from 'react'
+import { createElement, useEffect, useState, type ReactNode } from 'react'
 import { permissionCheck } from '../../../lib/session/session'
 import { designScreen as panelsScreen } from '../../../record-panels/fixtures'
 import type { RecordPanelsViewModel } from '../../../record-panels/model'
@@ -498,6 +498,16 @@ export const withoutMoney = <Row extends { netAmount?: number }>(rows: readonly 
 
 export const LIST_CAN: ListCan = { view: true, manage: true, block: true, vies: true }
 export const RECORD_CAN: RecordCan = { view: true, manage: true, block: true, vies: true, quotes: true, orders: true, purchaseOrders: true, price: true, cost: true, threads: true }
+
+/**
+ * The list design cases keep their own selection, so ticking rows, the header box, shift-click and x work in the
+ * design index as on the page (the toolbar swaps to the bulk actions); everything else stays as the case's model says.
+ */
+export function useDesignList(model: PartiesListModel): { model: PartiesListModel; actions: { onSelect: (ids: readonly string[]) => void } } {
+  const [selected, setSelected] = useState<readonly string[]>(model.selected)
+  useEffect(() => setSelected(model.selected), [model.selected])
+  return { model: { ...model, selected }, actions: { onSelect: (ids) => setSelected([...ids]) } }
+}
 
 export function listModel(side: Side, over: Partial<PartiesListModel> = {}): PartiesListModel {
   const parties = side === 'customers' ? CUSTOMERS : SUPPLIERS
