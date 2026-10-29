@@ -7,6 +7,16 @@
       "area": "Home",
       "mailToSort": "Mail to sort"
     },
+    "sales": {
+      "area": "Sales",
+      "main": "Main",
+      "customers": "Customers"
+    },
+    "purchasing": {
+      "area": "Purchasing",
+      "main": "Main",
+      "suppliers": "Suppliers"
+    },
     "admin": {
       "area": "Admin",
       "organisation": "Organisation",

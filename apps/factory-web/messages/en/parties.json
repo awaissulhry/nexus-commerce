@@ -1,0 +1,839 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "dismiss": "Dismiss",
+    "edit": "Edit",
+    "retry": "Try again",
+    "save": "Save",
+    "saving": "Saving…",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "problem": {
+    "signedOut": "Your session ended. Sign in again to go on.",
+    "forbidden": "You don't have the right for this. An administrator can give your role the permission.",
+    "notFound": "This record does not exist, or you cannot see it.",
+    "conflict": "Someone else changed this meanwhile. The record was read again: check it and try once more.",
+    "invalid": "Some values were refused. Check the fields marked below.",
+    "rateLimited": "Too many tries in a short time. Wait a minute and try again.",
+    "unavailable": "Nexus Factory didn't answer. Check the connection and try again.",
+    "contract": "The server answered in a form this page does not know. Reload the page.",
+    "internal": "Something went wrong on our side. Try again; if it repeats, tell your administrator."
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline — changes wait to be sent"
+  },
+  "status": {
+    "PROSPECT": "Prospect",
+    "ACTIVE": "Active",
+    "BLOCKED": "Blocked",
+    "ARCHIVED": "Archived"
+  },
+  "role": {
+    "CUSTOMER": "Customer",
+    "BRAND": "Brand",
+    "SUPPLIER": "Supplier",
+    "SUBCONTRACTOR": "Subcontractor",
+    "CARRIER": "Carrier"
+  },
+  "kind": {
+    "ORGANISATION": "Company",
+    "PERSON": "Person"
+  },
+  "taxMode": {
+    "IT_B2B": "Italian business",
+    "IT_B2C": "Italian consumer",
+    "EU_B2B": "EU business",
+    "EU_B2C": "EU consumer",
+    "EXTRA_EU": "Outside the EU"
+  },
+  "taxModeHint": {
+    "IT_B2B": "Partita IVA; invoices through SDI to its code or PEC.",
+    "IT_B2C": "Codice fiscale only; Italian VAT applies.",
+    "EU_B2B": "VAT number of its state; a zero-rated sale needs a valid VIES check.",
+    "EU_B2C": "No tax number; Italian VAT applies.",
+    "EXTRA_EU": "Optional foreign tax id; export rules apply."
+  },
+  "master": {
+    "ACTIVE": "In use",
+    "ARCHIVED": "Archived"
+  },
+  "addressKind": {
+    "REGISTERED": "Registered office",
+    "BILL_TO": "Invoices",
+    "SHIP_TO": "Deliveries",
+    "PICKUP": "Pick-up"
+  },
+  "contactRole": {
+    "ORDERS": "Orders",
+    "INVOICES": "Invoices",
+    "QUALITY": "Quality",
+    "DESIGN": "Design",
+    "OWNER": "Owner",
+    "RIDER": "Rider"
+  },
+  "customers": {
+    "contactRoleHint": {
+      "ORDERS": "Receives quotes, order confirmations and their links",
+      "INVOICES": "Receives invoices, deposit requests and payments",
+      "QUALITY": "Receives certificates, test reports and complaints",
+      "DESIGN": "Tech packs and samples",
+      "OWNER": "Owner or decision maker",
+      "RIDER": "Wears a made-to-measure garment"
+    },
+    "step": {
+      "none": "Nothing waiting: it can be quoted, ordered and invoiced."
+    },
+    "title": "Customers",
+    "intro": "Everyone we sell to — companies, brands and riders — with what an e-invoice needs and the VIES proof for zero-rated EU sales.",
+    "search": "Search code, name, VAT number or codice fiscale",
+    "table": "Customers",
+    "file": "customers",
+    "failedTitle": "Couldn't load customers",
+    "empty": {
+      "title": "No customers yet",
+      "body": "Add the first one: start from its VAT number."
+    },
+    "noAccess": {
+      "title": "You don't have access to customers",
+      "body": "Seeing customers needs the permission \"See customers and suppliers\". The Sales, Buyer and Finance roles have it; ask an administrator."
+    },
+    "new": {
+      "action": "New customer",
+      "title": "New customer",
+      "subtitle": "Start from the VAT number: for an EU business VIES is asked when you create it.",
+      "go": "Create customer",
+      "after": "It opens on Tax & terms when data is missing, else on its Overview."
+    },
+    "keys": {
+      "new": "New customer"
+    },
+    "block": {
+      "title": "Block {name}?",
+      "go": "Block customer",
+      "stops1": "No new quotes, orders or shipments for this customer.",
+      "stops2": "Open quotes show a warning; records already made keep it."
+    },
+    "archive": {
+      "titleOne": "Archive {name}?",
+      "titleMany_one": "Archive {count} customer?",
+      "titleMany_other": "Archive {count} customers?",
+      "reach1": "Hidden from the customer pickers of quotes and orders."
+    },
+    "blockedBanner": "Blocked since {date}: no new quotes, orders or shipments.",
+    "activate": "Activate",
+    "tab": {
+      "overview": "Overview",
+      "addresses": "Addresses & contacts",
+      "tax": "Tax & terms",
+      "orders": "Quotes & orders",
+      "documents": "Documents",
+      "activity": "Activity"
+    },
+    "side": {
+      "contacts": "Main contacts",
+      "noContacts": "Nobody receives quotes or invoices yet."
+    },
+    "address": {
+      "emptyBody": "Invoices name the registered office; deliveries go to the default delivery address."
+    },
+    "contacts": {
+      "empty": "No contacts",
+      "emptyBody": "Add the person who orders: quotes and confirmations go to them.",
+      "addFirst": "Add the person who orders"
+    },
+    "identity": {
+      "none": "No tax identity yet: it cannot be invoiced until it has one."
+    }
+  },
+  "suppliers": {
+    "contactRoleHint": {
+      "ORDERS": "Receives purchase orders and their confirm links",
+      "INVOICES": "Invoices and remittances",
+      "QUALITY": "Certificates, test reports and claims",
+      "DESIGN": "Samples and development",
+      "OWNER": "Owner or decision maker",
+      "RIDER": "Wears a made-to-measure garment"
+    },
+    "step": {
+      "none": "Nothing waiting: purchase orders can go out."
+    },
+    "title": "Suppliers",
+    "intro": "Tanneries, mills, trim and protector makers, subcontractors and carriers: who we buy from and send work and goods with.",
+    "search": "Search code, name or VAT number",
+    "table": "Suppliers",
+    "file": "suppliers",
+    "failedTitle": "Couldn't load suppliers",
+    "empty": {
+      "title": "No suppliers yet",
+      "body": "Add the first one: it starts as a prospect until it is approved."
+    },
+    "noAccess": {
+      "title": "You don't have access to suppliers",
+      "body": "Seeing suppliers needs the permission \"See customers and suppliers\". The Buyer, Sales and Finance roles have it; ask an administrator."
+    },
+    "new": {
+      "action": "New supplier",
+      "title": "New supplier",
+      "subtitle": "Start from the VAT number; the supplier opens as a prospect.",
+      "go": "Create supplier",
+      "after": "It opens as a prospect: approve it before its first purchase order."
+    },
+    "keys": {
+      "new": "New supplier"
+    },
+    "block": {
+      "title": "Block {name}?",
+      "go": "Block supplier",
+      "stops1": "No new purchase orders to this supplier.",
+      "stops2": "Orders already sent stay as they are; receipts show a warning."
+    },
+    "archive": {
+      "titleOne": "Archive {name}?",
+      "titleMany_one": "Archive {count} supplier?",
+      "titleMany_other": "Archive {count} suppliers?",
+      "reach1": "Hidden from the supplier pickers of purchase orders."
+    },
+    "blockedBanner": "Blocked since {date}: no new purchase orders.",
+    "activate": "Approve supplier",
+    "tab": {
+      "overview": "Overview",
+      "contacts": "Contacts",
+      "orders": "Orders",
+      "activity": "Activity"
+    },
+    "side": {
+      "contacts": "Who receives POs",
+      "noContacts": "Nobody receives POs: purchase orders cannot be emailed yet.",
+      "orders": "Purchase orders",
+      "openOrders": "Open",
+      "openValue": "Open value",
+      "waiting": "Waiting for the supplier"
+    },
+    "overview": {
+      "card": "Supplier"
+    },
+    "address": {
+      "emptyBody": "Purchase orders and invoices name the registered office; goods are collected from the pick-up address."
+    },
+    "contacts": {
+      "title": "Contacts and what they receive",
+      "empty": "No contacts",
+      "emptyBody": "POs cannot be emailed until one contact receives POs.",
+      "addFirst": "Add who receives POs"
+    },
+    "identity": {
+      "none": "No tax identity yet: purchase orders and its invoices name its tax numbers."
+    }
+  },
+  "quoteStatus": {
+    "DRAFT": "Draft",
+    "PENDING_APPROVAL": "Waiting for approval",
+    "APPROVED": "Approved",
+    "SENT": "Sent",
+    "ACCEPTED": "Accepted",
+    "DECLINED": "Declined",
+    "EXPIRED": "Expired",
+    "CANCELLED": "Cancelled"
+  },
+  "orderStatus": {
+    "CONFIRMED": "Confirmed",
+    "IN_PRODUCTION": "In production",
+    "READY": "Ready",
+    "PARTLY_SHIPPED": "Partly shipped",
+    "SHIPPED": "Shipped",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled"
+  },
+  "poStatus": {
+    "DRAFT": "Draft",
+    "SENT": "Sent, not confirmed",
+    "CONFIRMED": "Confirmed",
+    "DECLINED": "Declined",
+    "CHANGES_PROPOSED": "Changes proposed",
+    "PARTLY_RECEIVED": "Partly received",
+    "RECEIVED": "Received",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled"
+  },
+  "warning": {
+    "NO_TAX_IDENTITY": "No tax identity: an invoice or a purchase order needs its tax numbers.",
+    "NO_REGISTERED_ADDRESS": "No registered office: the invoice names its seat (sede legale).",
+    "FISCAL_DRAWER": "No SDI code or PEC: invoices go to its fiscal drawer (0000000) and a copy by mail.",
+    "VIES_NOT_PROVEN": "No valid VIES check: its sales are not zero-rated until a check answers valid.",
+    "TAX_COUNTRY_DIFFERS": "The tax identity is of another country than the record: check which is right.",
+    "NO_DEFAULT_BILL_TO": "No default invoice address.",
+    "NO_DEFAULT_SHIP_TO": "No default delivery address.",
+    "NO_ORDERS_CONTACT": "Nobody receives orders: give a contact the Orders role and an email.",
+    "NAME_TOO_LONG": "The legal name is longer than the 80 characters an e-invoice carries.",
+    "NOT_LATIN1": "The name or the registered office has characters an e-invoice cannot carry."
+  },
+  "step": {
+    "blocksInvoice": "Can't invoice",
+    "action": {
+      "identity": "Add tax identity",
+      "correctIdentity": "Add SDI code or PEC",
+      "vies": "Check now",
+      "address": "Add address",
+      "contact": "Add contact",
+      "edit": "Edit"
+    }
+  },
+  "view": {
+    "open": "Not archived",
+    "active": "Active",
+    "prospects": "Prospects",
+    "brands": "Brands (private label)",
+    "invoice": "Missing tax data",
+    "vies": "VIES problems",
+    "blocked": "Blocked",
+    "archived": "Archived",
+    "all": "All",
+    "suppliers": "Suppliers",
+    "subcontractors": "Subcontractors",
+    "carriers": "Carriers"
+  },
+  "tile": {
+    "unknown": "Couldn't count",
+    "customers": {
+      "active": "Active",
+      "activeHint": "Can be quoted and ordered",
+      "prospects": "Prospects",
+      "prospectsHint": "Not active yet",
+      "vies": "EU businesses without a valid VIES check",
+      "viesHint": "Their sales are not zero-rated yet",
+      "invoice": "Can't be invoiced yet",
+      "invoiceHint": "Tax data missing",
+      "blocked": "Blocked",
+      "blockedHint": "No new quotes, orders or shipments"
+    },
+    "suppliers": {
+      "active": "Active",
+      "activeHint": "Can receive purchase orders",
+      "prospects": "Prospects",
+      "prospectsHint": "No POs until approved",
+      "blocked": "Blocked",
+      "blockedHint": "No new purchase orders"
+    }
+  },
+  "vies": {
+    "title": "VIES check",
+    "checkNow": "Check VIES",
+    "checkAgain": "Check again",
+    "checking": "A check is running",
+    "checkingOne": "Asking VIES about {name}…",
+    "open": "VIES: {state}. Show the result",
+    "pill": "VIES {state}",
+    "popoverTitle": "VIES result",
+    "resultLabel": "Result",
+    "checkedAt": "Checked",
+    "validUntil": "Proof counts until",
+    "consultation": "Consultation number",
+    "number": "Number checked",
+    "traderName": "Name as VIES gave it",
+    "traderAddress": "Address as VIES gave it",
+    "notYet": "Not checked yet. Check now: the answer is kept as the proof.",
+    "noAnswer": "VIES didn't answer (member state unavailable) — not a refusal. Try again.",
+    "recheck": "Re-checks are not scheduled yet: a proof counts for {days} days, so check again before a zero-rated sale.",
+    "history": "Every check (kept, never changed)",
+    "notApplicable": "VIES checks EU VAT numbers outside Italy. This party has none to check.",
+    "refused": "VIES was not asked: the connection may not be set up, or our company has no VAT number. Nothing was recorded.",
+    "noneToCheck": "No EU business in this list has a VAT number to check.",
+    "afterCreateFailed": "Created. VIES didn't answer yet: check again from Tax & terms.",
+    "state": {
+      "NOT_APPLICABLE": "Not needed",
+      "UNCHECKED": "Not checked",
+      "VALID": "Valid",
+      "EXPIRED": "Expired",
+      "INVALID": "Not valid",
+      "HELD": "No answer"
+    },
+    "stateOn": {
+      "VALID": "Valid {date}",
+      "EXPIRED": "Expired (checked {date})",
+      "INVALID": "Not valid {date}",
+      "HELD": "No answer {date}"
+    },
+    "meaning": {
+      "NOT_APPLICABLE": "No EU VAT number outside Italy to check.",
+      "UNCHECKED": "Never checked: a sale is not zero-rated until a check answers valid.",
+      "VALID": "Valid in VIES; the proof counts for {days} days after the check.",
+      "EXPIRED": "The last valid check is older than {days} days: check again before a zero-rated sale.",
+      "INVALID": "VIES answered not valid: no zero-rated sale; Italian VAT applies until a new check answers valid.",
+      "HELD": "No answer from VIES and no current proof: held, check again later."
+    },
+    "result": {
+      "VALID": "Valid",
+      "INVALID": "Not valid",
+      "ERROR": "No answer"
+    },
+    "done": {
+      "VALID": "VIES: {name} is valid. The answer is kept as the proof.",
+      "INVALID": "VIES answered that the VAT number of {name} is not valid.",
+      "ERROR": "VIES didn't answer for {name}: not a refusal. Try again later."
+    }
+  },
+  "list": {
+    "updated": "Updated {time}",
+    "notYet": "Not read yet",
+    "loading": "Loading…",
+    "failedTitle": "Couldn't load",
+    "noMatch": "No rows match these filters",
+    "clearAll": "Clear all",
+    "rowsHeading": "Saved filters",
+    "rows": "Rows: {view}",
+    "filters": "Filters",
+    "filtersCount": "Filters ({count})",
+    "more": "More actions",
+    "updates_one": "{count} update · Show",
+    "updates_other": "{count} updates · Show",
+    "activeFilters": "Filters in use",
+    "removeFilter": "Remove the filter {name}",
+    "selection": "Selected rows",
+    "selected_one": "{count} selected",
+    "selected_other": "{count} selected",
+    "bulkVies_one": "Check VIES for {count}",
+    "bulkVies_other": "Check VIES for {count}",
+    "bulkExport_one": "Export {count} (CSV)",
+    "bulkExport_other": "Export {count} (CSV)",
+    "bulkArchive_one": "Archive {count}",
+    "bulkArchive_other": "Archive {count}",
+    "selectPage": "Select all {count} on this page",
+    "clearSelection": "Clear selection",
+    "count": "{shown} of {total}",
+    "countShown": "{shown} shown",
+    "keysSr": "Keys: j and k move between rows, x selects, question mark lists the keys.",
+    "showMore": "Show {count} more",
+    "exportView": "Export this view (CSV)",
+    "exportViewHint": "The {count} rows shown, with the columns of the list",
+    "exportNothing": "Nothing to export in this view",
+    "recheckAll": "Re-check every EU VAT number now",
+    "recheckAllHint": "One VIES call each, up to {max} at a time",
+    "cannotInvoice": "Can't invoice yet",
+    "noIdentity": "No tax identity",
+    "selectRow": "Select {name}",
+    "exported": "Exported {count} rows.",
+    "col": {
+      "select": "Select",
+      "name": "Name",
+      "roles": "Roles",
+      "status": "Status",
+      "country": "Country",
+      "taxMode": "Tax mode",
+      "vies": "VIES",
+      "sdi": "SDI code or PEC",
+      "language": "Language",
+      "actions": "Actions",
+      "vat": "VAT number"
+    }
+  },
+  "row": {
+    "open": "Open",
+    "openNewTab": "Open in new tab",
+    "checkVies": "Check VIES now",
+    "block": "Block…",
+    "unblock": "Unblock",
+    "archive": "Archive…",
+    "reactivate": "Reactivate",
+    "menu": "Actions for {name}"
+  },
+  "sdi": {
+    "set": "Set",
+    "missing": "Missing",
+    "notNeeded": "Not needed"
+  },
+  "held": {
+    "manage": "Needs the right to manage customers and suppliers",
+    "block": "Needs the right to block customers and suppliers",
+    "vies": "Needs the right to check VAT numbers with VIES",
+    "archived": "Archived: reactivate it first",
+    "archiveBlocked": "Unblock it first: a block is a decision of its own",
+    "noEuNumber": "None of the selected has an EU VAT number VIES can check",
+    "bulkMax": "At most {max} at a time: select fewer",
+    "nothingToArchive": "Nothing selected can be archived (blocked ones are unblocked first)",
+    "noEmail": "Needs an email first"
+  },
+  "csv": {
+    "code": "Code",
+    "legalName": "Legal name",
+    "tradeName": "Trade name",
+    "roles": "Roles",
+    "status": "Status",
+    "country": "Country",
+    "city": "City",
+    "taxMode": "Tax mode",
+    "vat": "VAT number",
+    "fiscalCode": "Codice fiscale",
+    "vies": "VIES",
+    "language": "Language"
+  },
+  "new": {
+    "taxFirst": "Tax identity",
+    "taxFirstHint": "The country and the VAT number first: they set what an invoice needs.",
+    "who": "Who they are",
+    "viesWillCheck": "When you create it, Nexus asks VIES and keeps the answer as the proof.",
+    "viesNoRight": "A person with the VIES right checks it after it is created.",
+    "duplicate_one": "Already in Nexus: {count} party with this number or a close name",
+    "duplicate_other": "Already in Nexus: {count} parties with this number or a close name",
+    "duplicateHint": "One record per business partner: open it and give it the role it lacks.",
+    "conflictNumber": "This VAT number or codice fiscale already belongs to another party.",
+    "conflictCode": "This code is taken: choose another.",
+    "forbiddenEvery": "You may add parties only for your company: choose it under \"Belongs to\"."
+  },
+  "edit": {
+    "title": "Edit identity",
+    "subtitle": "The names, roles and language its documents use. Sent documents keep their own copy."
+  },
+  "block": {
+    "stops": "What it stops",
+    "reason": "Reason",
+    "reasonHint": "Kept with the block and shown on the record.",
+    "undo": "Unblock it from the record when the reason is gone."
+  },
+  "archive": {
+    "reach": "What it does",
+    "reach2": "Quotes, orders and invoices already made keep it.",
+    "reversal": "Undo: Reactivate on the record.",
+    "goOne": "Archive",
+    "goMany_one": "Archive {count}",
+    "goMany_other": "Archive {count}",
+    "nothing": "Nothing to archive",
+    "andMore": "{count} more",
+    "skipped_one": "{count} selected row is blocked and stays as it is.",
+    "skipped_other": "{count} selected rows are blocked and stay as they are."
+  },
+  "address": {
+    "title": "Addresses",
+    "add": "Add address",
+    "addRegistered": "Add the registered office",
+    "empty": "No address yet",
+    "kinds": "What it is for",
+    "newTitle": "Add an address",
+    "editTitle": "Edit address",
+    "sentKeepCopy": "Changing an address doesn't change quotes, orders or documents already sent: they keep their own copy.",
+    "defaultBillTo": "Default invoice address",
+    "defaultShipTo": "Default delivery address",
+    "default": {
+      "billTo": "Default invoice address: {name}",
+      "shipTo": "Default delivery address: {name}"
+    },
+    "archive": "Archive",
+    "archiveHint": "An address in use is archived, never deleted",
+    "restore": "Restore",
+    "menu": "Actions for the address {name}",
+    "col": {
+      "kinds": "For",
+      "address": "Address",
+      "contact": "Contact at the address",
+      "billTo": "Invoices (default)",
+      "shipTo": "Deliveries (default)",
+      "status": "Status"
+    }
+  },
+  "contact": {
+    "title": "Contacts",
+    "add": "Add contact",
+    "newTitle": "Add a contact",
+    "editTitle": "Edit contact",
+    "roles": "What they deal with",
+    "archive": "Archive",
+    "archiveHint": "A contact in use is archived, never deleted",
+    "restore": "Restore",
+    "menu": "Actions for {name}",
+    "noRole": "No role",
+    "receivesPosOf": "{name} receives purchase orders",
+    "col": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "receivesPos": "Receives POs",
+      "roles": "Roles",
+      "language": "Language",
+      "status": "Status"
+    }
+  },
+  "identity": {
+    "title": "Tax identity",
+    "correct": "Correct…",
+    "newFromDate": "New identity from a date…",
+    "addFirst": "Add tax identity",
+    "others": "Other identities (dated)",
+    "newTitle": "New tax identity from a date",
+    "correctTitle": "Correct the identity in force",
+    "newSubtitle": "A change from a date is a new identity: documents before that day keep the old one.",
+    "correctSubtitle": "For a typing mistake or a missing SDI code. A real change from a date is a new identity.",
+    "add": "Add identity",
+    "documentsKeep": "Invoices already issued keep the identity they were issued with."
+  },
+  "field": {
+    "legalName": "Legal name",
+    "legalNameHint": "As on its invoices",
+    "tradeName": "Trade name",
+    "tradeNameHint": "What people call it; lists show it first",
+    "kind": "Kind",
+    "code": "Code",
+    "codeHint": "Suggested from the name; capitals, digits and . _ - (at most 24)",
+    "roles": "Roles",
+    "country": "Country",
+    "language": "Language",
+    "languageHint": "Its documents and mail are in this language",
+    "currency": "Currency",
+    "paymentTerms": "Payment terms",
+    "paymentTermsHint": "As agreed, in words; the terms library comes later",
+    "internalNote": "Internal note",
+    "internalNoteHint": "Staff only; never on a document",
+    "validFrom": "Valid from",
+    "validFromHint": "The first day it applies",
+    "validFromToday": "Leave empty: it applies from today",
+    "taxCountry": "Tax country",
+    "taxMode": "Tax mode",
+    "vatNumber": "VAT number",
+    "foreignTaxId": "Foreign tax id",
+    "fiscalCode": "Codice fiscale",
+    "fiscalCodeHint": "16 characters for a person, 11 digits for a company",
+    "sdi": "SDI recipient code",
+    "sdiHint": "7 characters; without it or a PEC, invoices go to the fiscal drawer",
+    "pec": "PEC",
+    "pecHint": "Certified email for invoices",
+    "addressName": "Name",
+    "addressNameHint": "For example \"Warehouse\"",
+    "line1": "Street and number",
+    "line1Hint": "At most 60 characters",
+    "line2": "More",
+    "cap": "CAP",
+    "postalCode": "Postal code",
+    "city": "City",
+    "provinceIt": "Province",
+    "province": "Region",
+    "provinceHint": "Two letters: MI, FI, PI…",
+    "contactName": "Contact at the address",
+    "phone": "Phone",
+    "deliveryNotes": "Delivery notes",
+    "deliveryNotesHint": "Opening hours, dock, what the driver needs",
+    "contactPerson": "Name",
+    "email": "Email",
+    "emailHint": "Documents for their roles go here",
+    "contactLanguage": "Language",
+    "partyLanguage": "As the party",
+    "belongsTo": "Belongs to",
+    "belongsToHint": "A party for every company is seen by all of them",
+    "everyCompany": "Every company",
+    "vatHint": {
+      "IT_B2B": "IT and 11 digits, with its check digit",
+      "IT_B2C": "Not used for a consumer",
+      "EU_B2B": "With its country prefix (DE…, FR…); VIES checks it",
+      "EU_B2C": "Not used for a consumer",
+      "EXTRA_EU": "Optional: 1 to 28 letters or digits"
+    }
+  },
+  "form": {
+    "fixFirst_one": "Fix {count} field first",
+    "fixFirst_other": "Fix {count} fields first",
+    "refused": "Refused by Nexus Factory: check this value",
+    "submitHint": "saves",
+    "unsaved_one": "{count} change not saved",
+    "unsaved_other": "{count} changes not saved",
+    "tooLong": "At most {max} characters",
+    "country": "Choose a country",
+    "reasonNeeded": "Say why: the reason is kept with the change",
+    "reasonLong": "At most 500 characters",
+    "party": {
+      "codeNeeded": "The code is needed",
+      "codeShape": "Capitals, digits and . _ - only, at most 24",
+      "legalNameNeeded": "The legal name is needed: the name on its invoices",
+      "rolesNeeded": "Give it at least one role",
+      "currency": "Choose a currency",
+      "language": "Choose a language"
+    },
+    "identity": {
+      "countryMode": {
+        "IT_B2B": "An Italian business is in Italy",
+        "IT_B2C": "An Italian consumer is in Italy",
+        "EU_B2B": "An EU business is in an EU state other than Italy",
+        "EU_B2C": "An EU consumer is in an EU state other than Italy",
+        "EXTRA_EU": "Outside the EU means a country outside the EU"
+      },
+      "vatNeededIt": "An Italian business has a Partita IVA",
+      "vatNeededEu": "A business in another EU state has a VAT number (VIES checks it)",
+      "foreignId": "A foreign tax id is 1 to 28 letters or digits",
+      "vatMeansBusinessIt": "With a Partita IVA it is an Italian business",
+      "vatMeansBusinessEu": "With a VAT number it is an EU business",
+      "vatPrefix": "A VAT number of this country starts with {prefix}",
+      "vatShape": "This doesn't have the format of a VAT number of {country}",
+      "vatCheckDigit": "Wrong check digit: compare it with its invoices or the visura",
+      "fiscalItalian": "A codice fiscale is for an Italian party",
+      "fiscalNeeded": "An Italian consumer is invoiced with the codice fiscale",
+      "fiscalShape": "16 characters for a person or 11 digits for a company, with its check character",
+      "sdiItalian": "An SDI code is for an Italian party",
+      "sdiPublic": "A 6-character code is a public administration office: not invoiced from Nexus",
+      "sdiShape": "The SDI code has 7 letters or digits",
+      "pecShape": "This is not an email address",
+      "pecItalian": "A PEC is for an Italian party",
+      "validFrom": "Choose the first day it applies"
+    },
+    "address": {
+      "kinds": "Say what it is for",
+      "line1": "The street and number are needed (at most 60 characters)",
+      "line2": "At most 60 characters",
+      "name": "At most 80 characters",
+      "city": "The city is needed (at most 60 characters)",
+      "country": "Choose a country",
+      "capIt": "An Italian CAP is 5 digits",
+      "postalCode": "1 to 12 letters, digits, spaces or dashes",
+      "provinceIt": "The two letters of an Italian province (MI, FI, PI…)",
+      "provinceLong": "At most 40 characters",
+      "phone": "Digits, with + ( ) . / - and spaces",
+      "contactName": "At most 100 characters",
+      "deliveryNotes": "At most 500 characters",
+      "defaultBillTo": "The default invoice address is an invoices address",
+      "defaultShipTo": "The default delivery address is a deliveries address"
+    },
+    "contact": {
+      "name": "The contact's name is needed (at most 120 characters)",
+      "email": "This is not an email address",
+      "emailForDocuments": "A contact who receives orders, invoices or quality documents has an email",
+      "emailTwice": "Another contact of this party has this email",
+      "phone": "Digits, with + ( ) . / - and spaces",
+      "language": "Choose a language"
+    }
+  },
+  "done": {
+    "block": "{name} is blocked.",
+    "unblock": "{name} is unblocked.",
+    "reactivate": "{name} is active again.",
+    "activate": "{name} is active.",
+    "archive": "{name} is archived. Reactivate it from its record.",
+    "saved": "Saved.",
+    "addressAdded": "Address added.",
+    "addressSaved": "Address saved.",
+    "addressArchived": "Address archived.",
+    "addressRestored": "Address restored.",
+    "defaultSaved": "Default address saved.",
+    "contactAdded": "Contact added.",
+    "contactSaved": "Contact saved.",
+    "contactArchived": "Contact archived.",
+    "contactRestored": "Contact restored.",
+    "receivesPos": "Saved: they receive purchase orders.",
+    "noLongerPos": "Saved: they no longer receive purchase orders.",
+    "identityAdded": "Tax identity added.",
+    "identityCorrected": "Tax identity corrected."
+  },
+  "bulk": {
+    "progress": "{done} of {total} done…",
+    "running": "Still running: it closes when every row has its answer",
+    "archived": "Archived",
+    "vies": {
+      "title_one": "Check VIES for {count}",
+      "title_other": "Check VIES for {count}",
+      "done": "Done: {done} of {total} checked. Each answer is kept on its record.",
+      "note": "One VIES call each, up to {max} at a time; no answer is never taken as a pass."
+    },
+    "archive": {
+      "title_one": "Archive {count}",
+      "title_other": "Archive {count}",
+      "done": "Done: {done} of {total}."
+    }
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "search": "Search",
+    "rows": "Next / previous row",
+    "open": "Open the row",
+    "select": "Select the row",
+    "palette": "Search everything",
+    "help": "This list",
+    "tabs": "Next / previous tab (in the tab bar)",
+    "dock": "Thread beside the tab (wide screens)",
+    "save": "Save the form",
+    "submit": "Send a dialog",
+    "close": "Close a dialog"
+  },
+  "overview": {
+    "identity": "Identity",
+    "now": "Now",
+    "nothingOpen": "Nothing open with this customer.",
+    "seeAll": "See all {count}"
+  },
+  "numbers": {
+    "openQuotes": "Open quotes",
+    "quotesHint": "Draft, waiting or sent",
+    "backlog": "Open orders",
+    "units_one": "{count} unit to ship",
+    "units_other": "{count} units to ship",
+    "thisYear": "Ordered in {year}",
+    "ordersHint": "Orders not cancelled",
+    "reading": "Reading…"
+  },
+  "side": {
+    "label": "Status and next step",
+    "status": "Status",
+    "next": "Next step",
+    "vies": "VIES",
+    "blockedSince": "Blocked since {date}",
+    "createdOn": "Added on {date}"
+  },
+  "deals": {
+    "filter": "Show",
+    "open": "Open",
+    "won": "Won",
+    "lost": "Lost",
+    "all": "All",
+    "quote": "Quote",
+    "order": "Order",
+    "validUntil": "Valid until {date}",
+    "promise": "Promised {date}",
+    "noQuotesRight": "Quotes are not shown: your role does not see quotes.",
+    "noOrdersRight": "Orders are not shown: your role does not see orders.",
+    "failed": "Couldn't load quotes and orders",
+    "empty": "Nothing here.",
+    "emptyOpen": "No open quotes or orders.",
+    "more": "Only the newest 200 are shown here.",
+    "col": {
+      "type": "Type",
+      "number": "Number",
+      "status": "Status",
+      "date": "Date",
+      "value": "Value",
+      "promise": "Promise",
+      "validUntil": "Valid until",
+      "when": "When"
+    }
+  },
+  "pos": {
+    "failed": "Couldn't load purchase orders",
+    "empty": "No purchase orders yet.",
+    "col": {
+      "number": "Number",
+      "status": "Status",
+      "ordered": "Ordered",
+      "needed": "Needed by",
+      "confirmed": "Confirmed for",
+      "lines": "Lines",
+      "value": "Value"
+    }
+  },
+  "record": {
+    "backTo": "Back to {name}",
+    "notFoundTitle": "Not found",
+    "notFoundBody": "This record does not exist, or it was removed.",
+    "forbiddenTitle": "You can't open this",
+    "failedTitle": "Couldn't load the record",
+    "loading": "Loading the record…",
+    "tabsLabel": "Sections of the record",
+    "dock": "Thread",
+    "dockHint": "Keep the thread beside the tab (⌘J)",
+    "dockLabel": "Thread of the record",
+    "more": "More actions",
+    "copyCode": "Copy code {code}",
+    "copied": "Code {code} copied.",
+    "copyFailed": "Couldn't copy {code}: select it on the page.",
+    "changed": "Someone else changed this record at {time}. Your unsaved changes are kept.",
+    "reload": "Reload",
+    "blockedReason": "Reason: {reason}",
+    "archivedBanner": "Archived: read only until it is reactivated (⋯ › Reactivate).",
+    "readOnly": "You can view, not change: your role does not manage customers and suppliers."
+  }
+}

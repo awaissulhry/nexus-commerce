@@ -29,6 +29,13 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const site = await client.site.findUnique({ where: { id }, select: { companyId: true } })
     return site ? { companyId: site.companyId, siteId: id, partyId: null } : null
   },
+  // modules/parties (SCR-033, SCR-057 Activity and Documents; B-W1-07): the party's company (none: tenant-wide) and the
+  // party itself, so its shared messages reach its own contacts only; a known contact's mail without a thread joins it
+  // (platform/email-in/match.ts PARTY_RECORD).
+  Party: async (client, id) => {
+    const party = await client.party.findUnique({ where: { id }, select: { companyId: true } })
+    return party ? { companyId: party.companyId, siteId: null, partyId: id } : null
+  },
   // modules/compliance/certificates (SCR-051): the holder company (none: brand-held); the party only when a brand holds
   // it (the brand is the legal maker), not a supplier holding a protector's certificate.
   Certificate: async (client, id) => {
