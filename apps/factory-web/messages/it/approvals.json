@@ -17,8 +17,6 @@
   "bulk": {
     "approve_one": "Approva {count}",
     "approve_other": "Approva {count}",
-    "approveHeld_one": "{count} richiesta selezionata non la decidi tu (tua, o sul margine senza visibilità sui margini): togli la spunta.",
-    "approveHeld_other": "{count} richieste selezionate non le decidi tu (tue, o sul margine senza visibilità sui margini): togli la spunta.",
     "approveTitle_one": "Approvare {count} richiesta?",
     "approveTitle_other": "Approvare {count} richieste?",
     "approveBody": "Ognuna viene ricontrollata al momento della decisione: una cambiata dalla richiesta resta in attesa e viene segnalata.",

@@ -14,6 +14,8 @@ import { ApprovalsView } from './view/ApprovalsView'
 const at = (day: number, hour: number, minute = 0) => new Date(Date.UTC(2026, 9, day, hour, minute)).toISOString()
 const second = approvalRow({ id: '0190f0e2-9999-7000-8000-200000000002', quoteId: '0190f0e2-9999-7000-8000-000000000140', number: 'Q-2026-0140', partyName: 'Moto Club Esempio', reasons: ['DISCOUNT_LIMIT'], requestNote: null, marginPct: '26.4000', netAmount: 1824000, grossAmount: 2225280, askedBy: { id: PEOPLE.owner, name: 'Olga Titolare', you: false }, askedAt: at(28, 15, 30) })
 const WAITING: ApprovalRow[] = [approvalRow(), second]
+/** Finance's own request in the queue (four eyes): its box is disabled and says why. */
+const own = approvalRow({ id: '0190f0e2-9999-7000-8000-200000000004', quoteId: '0190f0e2-9999-7000-8000-000000000139', number: 'Q-2026-0139', partyName: 'Concessionaria Fittizia Tre S.p.A.', reasons: ['DISCOUNT_LIMIT'], requestNote: null, marginPct: '24.0000', askedBy: { id: PEOPLE.finance, name: 'Fiona Conti', you: true }, askedAt: at(29, 9, 15), mayDecide: false, held: 'OWN_REQUEST' })
 
 function model(overrides: Partial<ApprovalsViewModel> = {}): ApprovalsViewModel {
   return {
@@ -41,7 +43,7 @@ export const designScreen = defineDesignScreen<ApprovalsViewModel>({
   view: ApprovalsView,
   cases: [
     { id: 'finance-queue', label: 'Finance · waiting for me', model: model(), note: 'Each row says what is asked and why ("margin 18.9 % under the 20 % floor"), who asked, the net and since when.' },
-    { id: 'selected', label: 'Finance · two requests selected', model: model({ selected: WAITING.map((row) => row.id), focusRow: 0 }), note: 'Approve 2 in the toolbar. When a selected request is not yours to decide, the button is held and says why.' },
+    { id: 'selected', label: 'Finance · two requests selected', model: model({ rows: { items: [...WAITING, own], problem: null }, counts: { waiting: 3, mine: 1, decided: 3, capped: false }, selected: WAITING.map((row) => row.id), focusRow: 0 }), note: 'Approve 2 in the toolbar. Finance\'s own request cannot be ticked: its box is disabled and says why (four eyes); the header box and x skip it.' },
     { id: 'finance-review', label: 'Finance · the review (A approve, R reject, J / K)', model: model({ open: review }), note: 'Still current · checked 10:42; the numbers behind the rule; the lines under the floor; the note; Open full quote.' },
     { id: 'reject', label: 'Finance · reject with a reason', model: model({ open: review, rejecting: true }) },
     { id: 'changed', label: 'Changed since asked (held)', model: model({ open: { id: WAITING[0]!.id, quote: { status: 'ready', value: { ...pending(), version: 9 } } } }), note: 'The quote moved after the request: Approve and Reject are held, the line says why.' },

@@ -54,8 +54,8 @@ function Approvals({ model, actions }: { model: ApprovalsViewModel; actions?: Ap
   const rowsKey = items?.map((row) => row.id).join(',') ?? ''
   useEffect(() => setSelected((current) => current.filter((id) => rowsKey.includes(id))), [rowsKey])
   useEffect(() => setSelected(model.selected ?? []), [model.selected])
-  const picked = (items ?? []).filter((row) => selected.includes(row.id))
-  const notMine = picked.filter((row) => !row.mayDecide).length
+  // A request this person may not decide is never ticked (its box says why), so the selection is what Approve N decides.
+  const picked = (items ?? []).filter((row) => row.mayDecide && selected.includes(row.id))
 
   const columns = useMemo<ColDef<ApprovalRow>[]>(() => {
     const RequestCell = ({ data }: ICellRendererParams<ApprovalRow>) =>
@@ -139,13 +139,14 @@ function Approvals({ model, actions }: { model: ApprovalsViewModel; actions?: Ap
                   selected,
                   onChange: setSelected,
                   actions: (
-                    <Button size="sm" variant="primary" aria-label={t('bulk.approve', { count: picked.length })} heldReason={notMine > 0 ? t('bulk.approveHeld', { count: notMine }) : model.busy ? t('held.busy') : null} onClick={() => setDialog('approve')}>
+                    <Button size="sm" variant="primary" aria-label={t('bulk.approve', { count: picked.length })} heldReason={model.busy ? t('held.busy') : null} onClick={() => setDialog('approve')}>
                       <Check size={13} aria-hidden /> <SelectionLabel>{t('bulk.approve', { count: picked.length })}</SelectionLabel>
                     </Button>
                   ),
                 }
               : undefined
           }
+          isRowSelectable={selecting ? (row) => (row.mayDecide ? null : t(`held.${row.held ?? 'NO_RIGHT'}`)) : undefined}
           keys={[]}
           onHelp={() => setDialog('help')}
           onOpen={(row) => actions?.onOpen?.(row.id)}
