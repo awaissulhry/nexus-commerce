@@ -19,10 +19,16 @@ import { SHIPMENT_STATUSES } from './shipments'
  *   shipment.label_voided     a parcel's carrier label was voided (the parcel can change again)
  *   shipment.tracking_recorded  the carrier's tracking events were recorded (webhook or poll); `status` is the latest
  *   shipment.tracking_poll_due  the scheduler found parcels of the shipment with no news: the worker asks the carrier
+ *   shipment.documents_attached   copies of the documents that travel (DDT, DoC, leaflet) were put on the shipment,
+ *                                 shared with its party (B-W1-49)
+ *   shipment.documents_link_sent  a link to them was mailed to the party: when the goods left, by the office, or because
+ *                                 the party asked for a new one
  */
 const status = z.enum(SHIPMENT_STATUSES)
 
 export const PACKING_CHANGES = ['lines', 'parcels', 'serials', 'details', 'status'] as const
+/** Why a documents link was sent. */
+export const DOCUMENT_LINK_REASONS = ['SHIPPED', 'OFFICE', 'ASKED_AGAIN'] as const
 
 export const events = [
   defineEvent({
@@ -93,5 +99,19 @@ export const events = [
     context: 'shipping',
     description: 'Parcels of a shipment had no tracking news for hours: the worker asks the carrier.',
     payload: z.strictObject({ shipmentId: z.uuid(), parcels: z.number().int().min(0) }),
+  }),
+  defineEvent({
+    type: 'shipment.documents_attached',
+    context: 'shipping',
+    description: "Copies of a shipment's travelling documents (DDT, declaration of conformity, user information) were put on the shipment, shared with its party.",
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), attached: z.number().int().min(0), missing: z.number().int().min(0) }),
+    live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'attached', 'missing'] },
+  }),
+  defineEvent({
+    type: 'shipment.documents_link_sent',
+    context: 'shipping',
+    description: "A link to a shipment's documents was mailed to its party's contacts.",
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), links: z.number().int().min(1), reason: z.enum(DOCUMENT_LINK_REASONS) }),
+    live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'links', 'reason'] },
   }),
 ] as const

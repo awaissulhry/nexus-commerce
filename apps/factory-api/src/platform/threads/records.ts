@@ -48,6 +48,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const invoice = await client.invoice.findUnique({ where: { id }, select: { companyId: true, buyerPartyId: true } })
     return invoice ? { companyId: invoice.companyId, siteId: null, partyId: invoice.buyerPartyId } : null
   },
+  // modules/shipping (SCR-067; B-W1-49 the documents link mail): the shipment's company, site and party (its customer),
+  // so its mail and the customer's replies stay with that customer.
+  Shipment: async (client, id) => {
+    const shipment = await client.shipment.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
+    return shipment ? { companyId: shipment.companyId, siteId: shipment.siteId, partyId: shipment.partyId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}

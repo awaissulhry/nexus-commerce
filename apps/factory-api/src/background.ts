@@ -11,6 +11,7 @@ import { invoiceFilesHandler } from './modules/invoicing/invoice-files'
 import { sdiArchiveHandler } from './modules/invoicing/sdi/archive'
 import { sdiCourtesyCopyHandler } from './modules/invoicing/sdi/copy'
 import { sdiPollCron, sdiPollHandler } from './modules/invoicing/sdi/poll'
+import { shipDocumentsHandler } from './modules/shipping/documents/handler'
 import { trackingPollCron, trackingPollHandler } from './modules/shipping/labels/poll'
 import { emailInHandlers } from './platform/email-in/handlers'
 import { emailSendHandler } from './platform/email-out/outbound'
@@ -47,7 +48,7 @@ const MODES = ['worker', 'scheduler'] as const
 type Mode = (typeof MODES)[number]
 
 /** The handlers of published events, one list for the worker. Modules add theirs here (dispatch.ts defineHandler). */
-const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler(), invoiceFilesHandler(), sdiPollHandler(), sdiArchiveHandler(), sdiCourtesyCopyHandler(), trackingPollHandler()]
+const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler(), invoiceFilesHandler(), sdiPollHandler(), sdiArchiveHandler(), sdiCourtesyCopyHandler(), trackingPollHandler(), shipDocumentsHandler()]
 
 const mode = process.argv[2] as Mode
 if (!MODES.includes(mode)) {
