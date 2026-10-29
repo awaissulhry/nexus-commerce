@@ -103,7 +103,7 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/home/mail-to-sort',
   '/records/[type]/[id]',
   '/sales/quotes',
-  '/sales/quotes/[quoteId]',
+  '/sales/quotes/[id]',
 ])
 
 /** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */

@@ -7,14 +7,21 @@
  * (shell/nav/office-nav.ts): the opener follows by itself. `[id]` stands for the record's id; a `?…` part is kept.
  */
 
-/** Record type (the API's model name) → its own page. W1 so far: a received mail opens in Mail to sort's review. */
+/**
+ * Record type (the API's model name) → its own page. W1 so far: a received mail opens in Mail to sort's review; a
+ * quote opens its studio (SCR-035).
+ */
 export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   InboundEmail: '/home/mail-to-sort?open=[id]',
+  Quote: '/sales/quotes/[id]',
 })
 
 /** An API list route → the web page that shows it (with the same query). */
 export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/email/inbound': '/home/mail-to-sort',
+  // The quote list (SCR-034) reads `status` and `q` as the API does; the approvals queue (SCR-030) reads `view`.
+  '/sales/quotes': '/sales/quotes',
+  '/sales/quote-approvals': '/home/approvals',
 })
 
 export interface RecordRef {
