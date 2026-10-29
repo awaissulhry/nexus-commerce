@@ -261,7 +261,7 @@ describe('the partner wall', () => {
   })
 
   it('the floor reads and writes nothing of sales', async () => {
-    expect(models).toHaveLength(10)
+    expect(models).toHaveLength(11)
     for (const { model, ownership } of models) {
       expect(ownership.access[FLOOR_ROLE], model.name).toBeUndefined()
       await expect(sql(floor(), `SELECT id FROM "${model.table}" LIMIT 1`), model.name).rejects.toThrow(DENIED)
