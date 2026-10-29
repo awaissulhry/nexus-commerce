@@ -7,6 +7,7 @@ import { businessDate } from '@nexus/factory-domain/core/time'
 import { addDays } from '@nexus/factory-domain/planning/buy'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../packages/factory-db/seed/_core'
+import { seed as seedNumbering } from '../../../../../packages/factory-db/seed/numbering'
 import { seed as seedProduction } from '../../../../../packages/factory-db/seed/production'
 import { seedUuid } from '../../../../../packages/factory-db/src/seeding'
 import { textOf } from '../../adapters/ses/fake'
@@ -114,11 +115,11 @@ beforeAll(async () => {
   h.clock.set(new Date())
   await seedCore({ db: h.database, namespace: NS })
   await seedProduction({ db: h.database, namespace: NS }) // parties, product, sales, supply, inventory, floor-auth come with it
+  await seedNumbering({ db: h.database, namespace: NS }) // each company's PURCHASE_ORDER series (PO-{YYYY}-{N:4})
   const actorId = newId()
   await h.database.withScope({ audience: 'office', tenantId: tenant, actorId }, async (client) => applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId }))
-  // Company A's purchase order series, a FAKE file store and a FAKE mail account with a verified conversation address.
-  // Its letterhead and site A1's address are completed by the send-check test (they stop a send until then).
-  await admin(`INSERT INTO "NumberSeries" (id, "tenantId", "companyId", kind, code, "scopeKey", reset, pattern, fiscal) VALUES ($1, $2, $3, 'PURCHASE_ORDER', 'MAIN', $4, 'YEARLY', 'PO-{YYYY}-{N:4}', false)`, [newId(), tenant, companyA, YEAR])
+  // A FAKE file store and a FAKE mail account with a verified conversation address. Company A's letterhead is completed
+  // by the send-check test (it stops a send until then).
   await admin(`INSERT INTO "IntegrationAccount" (id, "tenantId", provider, code, label, mode, "rateLimitPerMinute", "rateLimitBurst") VALUES ($1, $2, 'R2', 'files', 'Files', 'FAKE', 6000, 1000)`, [newId(), tenant])
   const ses = newId()
   await admin(`INSERT INTO "IntegrationAccount" (id, "tenantId", provider, code, label, mode, "rateLimitPerMinute", "rateLimitBurst") VALUES ($1, $2, 'SES', 'ses', 'Mail', 'FAKE', 6000, 1000)`, [ses, tenant])
@@ -256,10 +257,14 @@ describe('send: the PDF, the confirm link and the mail (SCM-054, SCM-055)', () =
   it('the send check says what stops it: the letterhead, the delivery address, a blocked supplier', async () => {
     const check = await as('GET', `${orderUrl(order.id)}/send-check`)
     expect(check).toMatchObject({ ready: false, recipient: { name: 'Seed Order Desk', email: ORDERS_P2 }, documentNumber: order.number, language: 'it', subject: `Ordine di acquisto ${order.number}` })
-    expect(check.checks.filter((entry: Json) => entry.severity === 'BLOCKS').map((entry: Json) => entry.code)).toEqual(['COMPANY_LEGAL', 'NO_DELIVERY_ADDRESS'])
+    expect(check.checks.filter((entry: Json) => entry.severity === 'BLOCKS').map((entry: Json) => entry.code)).toEqual(['COMPANY_LEGAL'])
     expect(check.message).not.toContain('token')
     await admin(`UPDATE "Company" SET "vatNumber" = $2, "fiscalCode" = $3, "reaOffice" = 'MI', "reaNumber" = '0000001' WHERE id = $1`, [companyA, `IT${FAKE_VAT}`, FAKE_VAT])
-    await admin(`UPDATE "Site" SET address = '{"line1": "Via Esempio 1", "postalCode": "00000", "city": "Seedville", "country": "IT"}'::jsonb WHERE id = $1`, [siteA1])
+    // A site without an address (the seed gives A1 one) holds the send: the order prints where to deliver.
+    const { address } = await one<{ address: unknown }>('SELECT address FROM "Site" WHERE id = $1', [siteA1])
+    await admin('UPDATE "Site" SET address = NULL WHERE id = $1', [siteA1])
+    expect((await as('GET', `${orderUrl(order.id)}/send-check`)).checks.map((entry: Json) => entry.code)).toEqual(['NO_DELIVERY_ADDRESS'])
+    await admin('UPDATE "Site" SET address = $2::jsonb WHERE id = $1', [siteA1, JSON.stringify(address)])
     // The need dates, moved to 40 days from today (so the send never depends on the calendar).
     for (const line of order.lines as Json[]) order = (await as('PATCH', `${orderUrl(order.id)}/lines/${line.id}`, { version: order.version, needDate: addDays(today(), 40) })).order
     expect((await as('GET', `${orderUrl(order.id)}/send-check`)).ready).toBe(true)
