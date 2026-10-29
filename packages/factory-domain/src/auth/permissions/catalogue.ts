@@ -189,11 +189,18 @@ export const EMAIL_TRIAGE = 'email.triage' satisfies Permission
  * Compliance: the EU type-examination certificate register (apps/factory-api modules/compliance/certificates; QHS-103,
  * QHS-051, PRD-288; Reg. (EU) 2016/425). Checked with can() against the certificate's company and holder party. The
  * constants live in factory-domain/src/compliance/certificates/permissions.ts. Not step-up: a certificate is typed from
- * the notified body's PDF, and registering one needs that PDF on the record.
+ * the notified body's PDF, and registering one needs that PDF on the record. The style compliance tab (B-W1-20,
+ * factory-domain/src/product/compliance/permissions.ts) reads with certificates.view and uploads the signed DoC and
+ * leaflet with declarations.manage (not step-up either: the PDF was signed by hand before it is uploaded).
  */
 export const COMPLIANCE_DEFINITIONS = definePermissions('compliance', {
-  'certificates.view': { risk: 'read', description: 'See the EU type-examination certificates, what they cover and when they expire; ask the certificate gate whether a garment is covered.' },
+  'certificates.view': {
+    risk: 'read',
+    description:
+      "See the EU type-examination certificates, what they cover and when they expire; ask the certificate gate whether a garment is covered; see a style's compliance: its PPE class, coverage per colourway and size, Declarations of Conformity and user information leaflets.",
+  },
   'certificates.manage': { risk: 'write', description: 'Type in certificates, register them with their PDF, suspend, reinstate and withdraw them, and record or end what they cover.' },
+  'declarations.manage': { risk: 'write', description: "Upload a style revision's signed EU Declaration of Conformity and user information leaflet per language, and replace them with a new version (the old one is kept)." },
 })
 
 /**
