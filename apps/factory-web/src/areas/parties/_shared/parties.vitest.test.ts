@@ -8,6 +8,9 @@ import { PARTY_ATTENTION } from '@nexus/factory-domain/parties/contracts'
 import { PARTY_WARNINGS as DOMAIN_WARNINGS } from '@nexus/factory-domain/parties/warnings'
 import type { DesignScreen } from '../../../lib/design/design-screen'
 import { LOCALES } from '../../../lib/i18n/locales'
+import { hasRecordPage, listAddress, recordAddress } from '../../../lib/records/record-links'
+import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
+import { newVerbsFor } from '../../home/today/model'
 import { CATALOGUE, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
 import { designScreen as supplierRecordScreen } from '../../purchasing/suppliers/record/fixtures'
@@ -114,6 +117,14 @@ describe('one party record, two sides (SCR-032, SCR-056)', () => {
     expect(recordTabs(SIDES.customers, can)).toEqual(['overview', 'addresses', 'tax', 'orders', 'documents', 'activity'])
     expect(recordTabs(SIDES.customers, { ...can, quotes: false, orders: false, threads: false })).toEqual(['overview', 'addresses', 'tax'])
     expect(recordTabs(SIDES.suppliers, { ...can, purchaseOrders: false })).toEqual(['overview', 'contacts', 'activity'])
+  })
+
+  it('a party opens on its record page from anywhere (Today, the palette); New party opens New customer', () => {
+    expect(hasRecordPage('Party', OFFICE_PAGES)).toBe(true)
+    expect(recordAddress({ type: 'Party', id: 'p 1' }, OFFICE_PAGES)).toBe('/sales/customers/p%201')
+    expect(recordAddress({ type: 'Party', id: 'p1' }, new Set(['/me']))).toBe('/records/Party/p1')
+    expect(listAddress('/parties', {}, OFFICE_PAGES)).toBe('/sales/customers')
+    expect(newVerbsFor(new Set(['parties.manage']), OFFICE_PAGES, '/w/DEMO')).toEqual([{ id: 'party', labelKey: 'today.new.party', href: '/w/DEMO/sales/customers?new=1' }])
   })
 
   it('every warning the API sends has its next step', () => {

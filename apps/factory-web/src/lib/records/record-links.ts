@@ -7,14 +7,20 @@
  * (shell/nav/office-nav.ts): the opener follows by itself. `[id]` stands for the record's id; a `?…` part is kept.
  */
 
-/** Record type (the API's model name) → its own page. W1 so far: a received mail opens in Mail to sort's review. */
+/**
+ * Record type (the API's model name) → its own page. W1 so far: a received mail opens in Mail to sort's review; a party
+ * (customer or supplier: one record) opens on the Customers record page (the type does not say which side; the Suppliers
+ * record page shows the same party from the buying side).
+ */
 export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   InboundEmail: '/home/mail-to-sort?open=[id]',
+  Party: '/sales/customers/[id]',
 })
 
 /** An API list route → the web page that shows it (with the same query). */
 export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/email/inbound': '/home/mail-to-sort',
+  '/parties': '/sales/customers',
 })
 
 export interface RecordRef {
@@ -28,10 +34,20 @@ export interface RecordRef {
 
 const pathOf = (address: string): string => address.split('?')[0]!
 
+/** An address with every dynamic segment written `[id]`: `/sales/customers/[partyId]` (a page folder) = `/sales/customers/[id]`. */
+const shapeOf = (address: string): string => pathOf(address).replace(/\[[^\]/]+\]/g, '[id]')
+
+/** The page is built: OFFICE_PAGES lists it, whatever its dynamic segment is called there. */
+function isBuilt(page: string, built: ReadonlySet<string>): boolean {
+  const shape = shapeOf(page)
+  for (const address of built) if (shapeOf(address) === shape) return true
+  return false
+}
+
 /** Whether a record has its own page yet (else it opens in its panels). */
 export function hasRecordPage(type: string, built: ReadonlySet<string>): boolean {
   const page = RECORD_PAGES[type]
-  return page !== undefined && built.has(pathOf(page))
+  return page !== undefined && isBuilt(page, built)
 }
 
 /**
@@ -56,7 +72,7 @@ export function recordAddress(record: RecordRef, built: ReadonlySet<string>): st
 export function listAddress(apiList: string | null, query: Readonly<Record<string, string>> | null, built: ReadonlySet<string>): string | null {
   if (apiList === null) return null
   const page = LIST_PAGES[apiList]
-  if (!page || !built.has(pathOf(page))) return null
+  if (!page || !isBuilt(page, built)) return null
   const qs = new URLSearchParams(query ?? {}).toString()
   return `${page}${qs ? `?${qs}` : ''}`
 }
