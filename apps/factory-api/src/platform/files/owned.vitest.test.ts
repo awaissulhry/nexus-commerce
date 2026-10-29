@@ -3,7 +3,7 @@ import { assertGenericPath, MODULE_OWNED_FILES, ownerOf } from './owned'
 
 describe('record types whose files only their module writes (owned.ts)', () => {
   it('lists the compliance document and the parcel (every kind), the certificate (CERTIFICATE) and the DDT (FISCAL_ARCHIVE)', () => {
-    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['Certificate', 'ComplianceDocument', 'Ddt', 'Parcel'])
+    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['Certificate', 'ComplianceDocument', 'Ddt', 'Lot', 'Parcel'])
     expect(ownerOf('Parcel', 'PHOTO')).not.toBeNull()
     expect(ownerOf('Ddt', 'FISCAL_ARCHIVE')).not.toBeNull()
     expect(ownerOf('Ddt', 'PHOTO')).toBeNull()

@@ -30,6 +30,9 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   // The DDT's legal PDF (modules/shipping/ddt): FISCAL_ARCHIVE files only, made at the issue or by a print of a missing
   // one; the first stored is the document. A scan of the signed delivery note (another kind) stays open.
   Ddt: { kinds: ['FISCAL_ARCHIVE'], route: 'POST /shipping/shipments/:shipmentId/ddt, or POST /shipping/ddts/:ddtId/pdf for a missing PDF (made by the API, never uploaded)' },
+  // A lot's chromium VI reports and supplier documents (modules/quality/lab): CERTIFICATE files only, the evidence its
+  // release rests on; photos and attachments of the lot stay open to the generic routes.
+  Lot: { kinds: ['CERTIFICATE'], route: 'POST /quality/lots/:lotId/results/report then POST …/results, or POST /quality/lots/:lotId/documents/upload then POST …/documents' },
 })
 
 /** How a caller of requestUpload / completeUpload reaches them: the generic files routes, or a module's own route. */

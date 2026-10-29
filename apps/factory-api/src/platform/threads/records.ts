@@ -71,6 +71,11 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const shipment = await client.shipment.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
     return shipment ? { companyId: shipment.companyId, siteId: shipment.siteId, partyId: shipment.partyId } : null
   },
+  // modules/quality/lab (SCR-075; B-W1-34 the lot's quality status timeline): the lot's company, site and supplier.
+  Lot: async (client, id) => {
+    const lot = await client.lot.findUnique({ where: { id }, select: { companyId: true, siteId: true, supplierId: true } })
+    return lot ? { companyId: lot.companyId, siteId: lot.siteId, partyId: lot.supplierId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}
