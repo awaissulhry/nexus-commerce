@@ -192,6 +192,9 @@ export const cancelDdtContract = defineContract({
       ddt: ddtSchema,
       /** needsDdt: a SHIPPED shipment travels without a live DDT until its replacement is issued. */
       shipment: shipmentState.extend({ needsDdt: z.boolean() }),
+      /** DRAFT invoices whose lines still name the cancelled DDT (the money guards never issue them so), and the warning. */
+      draftInvoiceIds: z.array(id()),
+      warning: z.string().nullable(),
     }),
   },
 })

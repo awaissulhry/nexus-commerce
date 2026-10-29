@@ -4,7 +4,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import { composeDocument, documentProblems } from '@nexus/factory-domain/documents/compose'
-import { cancelDdtProblems, ddtDocument, draftDdt, issueStateProblems, type DdtDraft, type DdtFacts, type DdtRequest } from '@nexus/factory-domain/shipping/ddt'
+import { cancelDdtProblems, ddtDocument, draftDdt, draftInvoicesWarning, invoicesOfDdt, issueStateProblems, type DdtDraft, type DdtFacts, type DdtRequest, type InvoiceOfDdt } from '@nexus/factory-domain/shipping/ddt'
 import { SHIPPING_DDT_CANCEL, SHIPPING_DDT_ISSUE, SHIPPING_MANAGE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { shipmentMachine, type ShipmentStatus } from '@nexus/factory-domain/shipping/shipments'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
@@ -19,6 +19,7 @@ import { downloadFile, getFile, type Callers } from '../../../platform/files/fil
 import type { FilesRuntime } from '../../../platform/files/service'
 import { allocateNumber } from '../../../platform/numbering/allocate'
 import { assertMay, mayOn, officeContextOf } from '../access'
+import { tenantOf } from '../cells'
 import { shipmentDetail, officeShipment } from '../shipments/shipments'
 import { lockedStatus, readShipment, shipmentFacts, type ShipmentHeader } from '../store'
 import { ddtView, expectedDdtNumber, issuedOf, languageOf, liveDdtOf, pdfFileIdOf, readDdt, readDdtFacts, type DdtRow, type DdtView } from './store'
@@ -388,7 +389,8 @@ export async function shipShipment(caller: CommandCaller, shipmentId: string, bo
 /**
  * shipping.ddt.cancel: cancels a DDT with its reason (an append-only DdtCancellation; the DDT keeps its number). One
  * command on the DDT's shipment (`version` is the shipment's), so one cancellation per DDT holds under its lock. Refused
- * once the transport is over (DELIVERED, RETURNED: no replacement could be issued) and when an invoice refers to it.
+ * once the transport is over (DELIVERED, RETURNED: no replacement could be issued) and while an issued invoice (ISSUED or
+ * later) has a line naming it (409 naming the invoice); DRAFT invoices naming it come back as a warning.
  */
 export async function cancelDdt(caller: CommandCaller, ddtId: string, body: { version?: number | undefined; reason: string }, idempotencyKey?: string) {
   const ddt = await officeDdt(caller, ddtId, SHIPPING_DDT_CANCEL)
@@ -396,21 +398,31 @@ export async function cancelDdt(caller: CommandCaller, ddtId: string, body: { ve
     const shipment = await readShipment(tools.tx, ddt.shipmentId)
     if (!shipment) throw new InvalidStateError('The shipment is gone.')
     const cancelled = (await tools.tx.ddtCancellation.count({ where: { ddtId: ddt.id } })) > 0
-    // No invoice table yet: B-W1-51 passes the numbers of the invoices whose lines name this DDT.
-    const problems = cancelDdtProblems({ cancelled, shipmentStatus: shipment.status, invoiceNumbers: [] })
+    // The invoices whose lines name the DDT, locked: an issue racing this cancel waits, then the money guards refuse
+    // it (a DDT named is not cancelled); a cancel racing an issue waits, then reads it ISSUED and refuses.
+    const invoices = await tools.tx.$queryRaw<InvoiceOfDdt[]>`
+      SELECT i."id"::text AS "id", i."number", i."status"::text AS "status" FROM "Invoice" i
+       WHERE i."tenantId" = ${tenantOf(tools.context)}::uuid
+         AND EXISTS (SELECT 1 FROM "InvoiceLine" l WHERE l."tenantId" = i."tenantId" AND l."invoiceId" = i."id" AND l."ddtId" = ${ddt.id}::uuid)
+       ORDER BY i."id" FOR UPDATE`
+    const { issued, drafts } = invoicesOfDdt(invoices)
+    const problems = cancelDdtProblems({ cancelled, shipmentStatus: shipment.status, invoiceNumbers: issued })
     if (problems.length > 0) throw new InvalidStateError(problems.join(' '))
     const cancellationId = newId()
     await tools.tx.ddtCancellation.create({
       data: { id: cancellationId, siteId: ddt.siteId, partyId: ddt.partyId, ddtId: ddt.id, reason: body.reason, cancelledAt: tools.now, createdById: actorIdOf(tools) },
       select: { id: true },
     })
-    tools.audit({ recordType: 'Ddt', recordId: ddt.id, companyId: ddt.companyId, siteId: ddt.siteId, before: { status: 'LIVE', number: ddt.number }, after: { status: 'CANCELLED', number: ddt.number, cancellationId, shipmentStatus: shipment.status }, reason: body.reason })
+    tools.audit({ recordType: 'Ddt', recordId: ddt.id, companyId: ddt.companyId, siteId: ddt.siteId, before: { status: 'LIVE', number: ddt.number }, after: { status: 'CANCELLED', number: ddt.number, cancellationId, shipmentStatus: shipment.status, draftInvoiceIds: drafts }, reason: body.reason })
     tools.emit({ type: 'ddt.cancelled', subject: shipment.id, companyId: ddt.companyId, siteId: ddt.siteId, payload: { ddtId: ddt.id, shipmentId: shipment.id, number: ddt.number } })
     const state = await shipmentState(tools, shipment.id)
     return {
       ddt: ddtView((await readDdt(tools.tx, ddt.id))!, await pdfFileIdOf(tools.tx, ddt.id)),
       // A SHIPPED shipment travels without a live DDT until its replacement is issued.
       shipment: { ...state, needsDdt: state.status === 'SHIPPED' && shipment.ddtRequired },
+      // DRAFT invoices that still name the cancelled DDT: they are not issued until their lines name the replacement.
+      draftInvoiceIds: drafts,
+      warning: draftInvoicesWarning(drafts),
     }
   })
   return result

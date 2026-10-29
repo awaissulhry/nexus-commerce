@@ -13,7 +13,8 @@ import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
-import { seed as seedShipping, type ShippingSeed } from '../../../../../../packages/factory-db/seed/shipping'
+import { seed as seedMoney, type MoneySeed } from '../../../../../../packages/factory-db/seed/money'
+import type { ShippingSeed } from '../../../../../../packages/factory-db/seed/shipping'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { localFileStore } from '../../../adapters/local-files/local'
 import { buildApp } from '../../../core/app'
@@ -44,6 +45,7 @@ let connection: Redis
 let localRoot: string
 let files: FilesRuntime
 let seedA: ShippingSeed
+let moneyA: MoneySeed
 
 const ns = { a: 'ddt-a', b: 'ddt-b' } as const
 const idOf = (namespace: string, key: string) => seedUuid(namespace, key)
@@ -126,8 +128,10 @@ beforeAll(async () => {
   db = await migratedDatabase('ddt')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 12 } })
   for (const namespace of [ns.a, ns.b]) await seedCore({ db: database, namespace })
-  seedA = await seedShipping({ db: database, namespace: ns.a })
-  await seedShipping({ db: database, namespace: ns.b })
+  // The money seed runs the shipping seed (and those it builds on), then adds invoices: a DRAFT TD24 names DDT 144/2026.
+  moneyA = await seedMoney({ db: database, namespace: ns.a })
+  seedA = moneyA.shipping
+  await seedMoney({ db: database, namespace: ns.b })
   for (const [tenantId, companyId] of [
     [A.tenant, A.companyA],
     [B.tenant, B.companyA],
@@ -138,7 +142,9 @@ beforeAll(async () => {
     await admin(`INSERT INTO "NumberSeries" (id, "tenantId", "companyId", kind, code, "scopeKey", reset, pattern, fiscal) VALUES ($1, $2, $3, 'SHIPMENT', 'MAIN', 'ALL', 'NEVER', 'SH-{N:5}', false)`, [newId(), tenantId, companyId])
     await admin(`INSERT INTO "NumberSeries" (id, "tenantId", "companyId", kind, code, "scopeKey", reset, pattern, fiscal) VALUES ($1, $2, $3, 'DDT', 'MAIN', $4, 'YEARLY', '{N}/{YYYY}', true) ON CONFLICT DO NOTHING`, [newId(), tenantId, companyId, YEAR])
     await admin(`UPDATE "NumberSeries" SET "lastIssuedDate" = NULL WHERE "tenantId" = $1 AND kind = 'DDT'`, [tenantId])
-    await admin(`INSERT INTO "IntegrationAccount" (id, "tenantId", provider, code, label, mode, "rateLimitPerMinute", "rateLimitBurst") VALUES ($1, $2, 'R2', 'files', 'Files', 'FAKE', 6000, 1000)`, [newId(), tenantId])
+    if ((await admin(`SELECT 1 FROM "IntegrationAccount" WHERE "tenantId" = $1 AND provider = 'R2'`, [tenantId])).length === 0) {
+      await admin(`INSERT INTO "IntegrationAccount" (id, "tenantId", provider, code, label, mode, "rateLimitPerMinute", "rateLimitBurst") VALUES ($1, $2, 'R2', 'files', 'Files', 'FAKE', 6000, 1000)`, [newId(), tenantId])
+    }
   }
   redis = testRedis()
   connection = redis.connect()
@@ -306,6 +312,7 @@ describe('cancelling and replacing (a cancelled DDT keeps its number)', () => {
     const cancelled = await ok('warehouse', 'POST', `/shipping/ddts/${S.ddt1}/cancel`, { reason: 'Wrong appearance: two boxes, not a pallet.' })
     expect(cancelled.ddt).toMatchObject({ id: S.ddt1, status: 'CANCELLED', number: numbered(before.next - 1), cancellation: { reason: 'Wrong appearance: two boxes, not a pallet.' } })
     expect(cancelled.shipment).toMatchObject({ id: sh2(), status: 'SHIPPED', needsDdt: true })
+    expect(cancelled).toMatchObject({ draftInvoiceIds: [], warning: null })
     expect((await refused('warehouse', 'POST', `/shipping/ddts/${S.ddt1}/cancel`, { reason: 'again' }, 409)).message).toBe('This DDT is cancelled already.')
     expect(await admin(`SELECT count(*)::int AS n FROM "DdtCancellation" WHERE "ddtId" = $1`, [S.ddt1])).toEqual([{ n: 1 }])
     await expect(admin(`UPDATE "DdtCancellation" SET reason = 'x' WHERE "ddtId" = $1`, [S.ddt1])).rejects.toThrow(/append-only/)
@@ -409,6 +416,74 @@ describe('the PDF', () => {
     expect(printed.file).toMatchObject({ recordId: issued.ddt.id, kind: 'FISCAL_ARCHIVE' })
     expect((await ok('warehouse', 'POST', `/shipping/ddts/${issued.ddt.id}/pdf`, undefined, 200)).file.id).toBe(printed.file.id)
     expect((await ok('viewer', 'GET', `/shipping/ddts/${issued.ddt.id}`)).ddt.fileId).toBe(printed.file.id)
+  })
+})
+
+/**
+ * Issues a TD24 invoice whose one line bills the goods of a DDT, as B-W1-51's issuing command will: DRAFT with its line,
+ * the next number of company A's invoice series (its NumberAllocation row, the counter moved), then ISSUED. Made up.
+ */
+async function issueTd24(ddtId: string): Promise<string> {
+  const invoiceId = newId()
+  const actorId = newId()
+  const seriesId = idOf(ns.a, 'series:A:INVOICE:MAIN:2026')
+  const issueDate = '2026-12-01'
+  const address = { street: 'Via Esempio', streetNumber: '10', postcode: '00000', city: 'Seedville', province: 'MI', country: 'IT' }
+  return database.withScope({ audience: 'office', tenantId: A.tenant, actorId }, (client) =>
+    client.$transaction(async (tx) => {
+      const series = await tx.numberSeries.findUniqueOrThrow({ where: { id: seriesId }, select: { nextValue: true } })
+      const number = `FT-2026-${String(series.nextValue).padStart(5, '0')}`
+      await tx.invoice.create({
+        data: {
+          id: invoiceId,
+          companyId: A.companyA,
+          buyerPartyId: A.brand,
+          docType: 'TD24',
+          billTo: { kind: 'IT_BUSINESS', name: 'Seed Customer One S.r.l.', address },
+          netTotal: 25000,
+          vatTotal: 5500,
+          grossTotal: 30500,
+          vatSummary: [{ rate: '22.00', nature: null, legalRef: null, taxable: 25000, vat: 5500, rounding: 0 }],
+        },
+        select: { id: true },
+      })
+      await tx.invoiceLine.create({
+        data: { id: newId(), invoiceId, buyerPartyId: A.brand, seq: 1, kind: 'GOODS', description: 'Seed jacket, size 52', quantity: '2.0000', uom: 'PZ', unitPrice: '125.000000', netAmount: 25000, vatRatePct: '22.00', ddtId },
+        select: { id: true },
+      })
+      await tx.numberAllocation.create({
+        data: { id: newId(), companyId: A.companyA, seriesId, kind: 'INVOICE', value: series.nextValue, formatted: number, documentDate: new Date(`${issueDate}T00:00:00.000Z`), recordType: 'Invoice', recordId: invoiceId, allocatedAt: new Date(), allocatedById: actorId, requestId: `ddt-test-${run}-invoice` },
+        select: { id: true },
+      })
+      await tx.numberSeries.update({ where: { id: seriesId }, data: { nextValue: series.nextValue + 1, lastIssuedDate: new Date(`${issueDate}T00:00:00.000Z`) }, select: { id: true } })
+      await tx.invoice.update({
+        where: { id: invoiceId },
+        data: { status: 'ISSUED', numberSeriesId: seriesId, number, year: 2026, issueDate: new Date(`${issueDate}T00:00:00.000Z`), issuedAt: new Date(), issuedById: actorId, partyId: A.brand, seller: { name: 'Seed Company A', vatNumber: 'IT12345670009', address } },
+        select: { id: true },
+      })
+      return number
+    }),
+  )
+}
+
+describe('a DDT and its invoices (B-W1-51: the deferred invoice TD24 refers to its DDTs)', () => {
+  it('a DDT that only DRAFT invoices name is cancelled, with those drafts named as a warning (the seeded TD24 of SH-0001)', async () => {
+    const cancelled = await ok('warehouse', 'POST', `/shipping/ddts/${seedA.ddtId}/cancel`, { reason: 'The weight was wrong; reissued.' })
+    expect(cancelled.ddt).toMatchObject({ id: seedA.ddtId, number: '144/2026', status: 'CANCELLED' })
+    expect(cancelled.shipment).toMatchObject({ id: seedA.shipmentId, status: 'SHIPPED', needsDdt: true })
+    expect(cancelled.draftInvoiceIds).toEqual([moneyA.draftInvoiceId])
+    expect(cancelled.warning).toBe('1 draft invoice(s) name this DDT: they cannot be issued until their lines name the DDT that replaces it.')
+    expect(await admin(`SELECT after->'draftInvoiceIds' AS drafts FROM "AuditLog" WHERE "recordId" = $1 AND action = 'shipping.cancelDdt'`, [seedA.ddtId])).toEqual([{ drafts: [moneyA.draftInvoiceId] }])
+    const [live] = await admin<{ id: string }>(`SELECT d.id FROM "Ddt" d WHERE d."shipmentId" = $1 AND NOT EXISTS (SELECT 1 FROM "DdtCancellation" x WHERE x."ddtId" = d.id)`, [sh2()])
+    S.sh2Live = live!.id
+  })
+
+  it('a DDT an ISSUED invoice bills is never cancelled: 409 naming the invoice, and nothing is written', async () => {
+    const number = await issueTd24(S.sh2Live!)
+    const refusal = await refused('warehouse', 'POST', `/shipping/ddts/${S.sh2Live}/cancel`, { reason: 'Wrong carrier.' }, 409)
+    expect(refusal).toMatchObject({ code: 'invalid_state', message: `Invoice ${number} bills the goods of this DDT: an invoiced DDT stays as issued (a credit note corrects the invoice).` })
+    expect(await admin(`SELECT count(*)::int AS n FROM "DdtCancellation" WHERE "ddtId" = $1`, [S.sh2Live])).toEqual([{ n: 0 }])
+    expect((await ok('viewer', 'GET', `/shipping/ddts/${S.sh2Live}`)).ddt.status).toBe('LIVE')
   })
 })
 

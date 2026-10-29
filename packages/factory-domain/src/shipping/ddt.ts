@@ -34,8 +34,9 @@ import { TRANSPORT_BY, type ShipmentStatus, type TransportBy } from './shipments
  *               is when they leave (planned: from the issue on, at most DDT_START_MAX_DAYS later). A SHIPPED shipment
  *               whose DDT was cancelled takes a replacement, which keeps the start of the transport that happened.
  *   one live    a shipment has at most one DDT that no cancellation names (the API, under the shipment's lock).
- *   cancelling  with its reason, while the goods are packed or travelling and nothing invoiced them; the cancelled
- *               DDT keeps its number (no gap) and a new DDT takes a new one.
+ *   cancelling  with its reason, while the goods are packed or travelling and no issued invoice bills them (a DRAFT
+ *               invoice that names it is only a warning: the money guards never issue it while it names a cancelled
+ *               DDT); the cancelled DDT keeps its number (no gap) and a new DDT takes a new one.
  */
 
 /** A start typed a little before the issue (the clock on the wall, a slow click) still counts as "now". */
@@ -193,10 +194,34 @@ export function issueStateProblems(status: ShipmentStatus, liveDdtNumber: string
   return problems
 }
 
+/** An invoice whose lines name a DDT (InvoiceLine.ddtId): its number once issued, and its status. */
+export interface InvoiceOfDdt {
+  readonly id: string
+  readonly number: string | null
+  readonly status: string
+}
+
+/**
+ * The invoices that name a DDT, split: `issued` (ISSUED or later: their numbers; a DDT they bill is never cancelled) and
+ * `drafts` (DRAFT: their ids; cancelling is allowed with a warning, since a draft naming a cancelled DDT is never
+ * issued: the …_money_guards).
+ */
+export function invoicesOfDdt(invoices: readonly InvoiceOfDdt[]): { readonly issued: string[]; readonly drafts: string[] } {
+  const sorted = [...invoices].sort((a, b) => (a.number ?? a.id).localeCompare(b.number ?? b.id))
+  return {
+    issued: sorted.filter((invoice) => invoice.status !== 'DRAFT').map((invoice) => invoice.number ?? invoice.id),
+    drafts: sorted.filter((invoice) => invoice.status === 'DRAFT').map((invoice) => invoice.id),
+  }
+}
+
+/** The warning a cancellation answers with when DRAFT invoices name the DDT (null: none does). */
+export const draftInvoicesWarning = (drafts: readonly string[]): string | null =>
+  drafts.length === 0 ? null : `${drafts.length} draft invoice(s) name this DDT: they cannot be issued until their lines name the DDT that replaces it.`
+
 /**
  * Why a DDT cannot be cancelled (empty: it can): once; while the goods are packed or travelling (a replacement can
- * still be issued: the database takes a DDT only for a PACKED or SHIPPED shipment); not once an invoice names it
- * (B-W1-51: the deferred invoice (TD24) refers to its DDTs).
+ * still be issued: the database takes a DDT only for a PACKED or SHIPPED shipment); never once an issued invoice (ISSUED
+ * or later; B-W1-51's deferred invoice, TD24, refers to its DDTs) bills its goods: `invoiceNumbers`.
  */
 export function cancelDdtProblems(facts: { readonly cancelled: boolean; readonly shipmentStatus: ShipmentStatus; readonly invoiceNumbers: readonly string[] }): string[] {
   if (facts.cancelled) return ['This DDT is cancelled already.']
@@ -204,7 +229,9 @@ export function cancelDdtProblems(facts: { readonly cancelled: boolean; readonly
   if (facts.shipmentStatus !== 'PACKED' && facts.shipmentStatus !== 'SHIPPED') {
     problems.push(`The shipment is ${facts.shipmentStatus}: its transport is over, so its DDT stays as issued.`)
   }
-  if (facts.invoiceNumbers.length > 0) problems.push(`Invoice ${facts.invoiceNumbers.join(', ')} refers to this DDT: credit the invoice first.`)
+  if (facts.invoiceNumbers.length > 0) {
+    problems.push(`Invoice ${facts.invoiceNumbers.join(', ')} bills the goods of this DDT: an invoiced DDT stays as issued (a credit note corrects the invoice).`)
+  }
   return problems
 }
 

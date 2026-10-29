@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { composeDocument } from '../documents/compose'
 import type { CompanyLegal } from '../documents/model'
 import { canTransition } from '../state/machine'
-import { cancelDdtProblems, ddtDocument, draftDdt, goodsDescription, issueStateProblems, SHIPMENT_DDT_REASONS, type DdtFacts, type DdtGoods, type DdtRequest } from './ddt'
+import { cancelDdtProblems, ddtDocument, draftDdt, draftInvoicesWarning, goodsDescription, invoicesOfDdt, issueStateProblems, SHIPMENT_DDT_REASONS, type DdtFacts, type DdtGoods, type DdtRequest } from './ddt'
 import { events } from './events'
 import { SHIPPING_DDT_CANCEL, SHIPPING_DDT_ISSUE, SHIPPING_FLOOR_PERMISSIONS, SHIPPING_PERMISSIONS } from './permissions'
 import { shipmentMachine, shipProblems, type ShipmentFacts } from './shipments'
@@ -194,14 +194,26 @@ describe('when a DDT is issued, a shipment leaves and a DDT is cancelled', () =>
     expect(canTransition(shipmentMachine, 'SHIPPED', 'PACKED', packed({ liveDdts: 1 })).ok).toBe(false)
   })
 
-  it('cancels once, while the goods are packed or travelling, and not once an invoice refers to it', () => {
+  it('cancels once, while the goods are packed or travelling, and never once an issued invoice bills them', () => {
     expect(cancelDdtProblems({ cancelled: false, shipmentStatus: 'PACKED', invoiceNumbers: [] })).toEqual([])
     expect(cancelDdtProblems({ cancelled: false, shipmentStatus: 'SHIPPED', invoiceNumbers: [] })).toEqual([])
     expect(cancelDdtProblems({ cancelled: true, shipmentStatus: 'SHIPPED', invoiceNumbers: [] })).toEqual(['This DDT is cancelled already.'])
     expect(cancelDdtProblems({ cancelled: false, shipmentStatus: 'DELIVERED', invoiceNumbers: ['FT-2026-00003'] })).toEqual([
       'The shipment is DELIVERED: its transport is over, so its DDT stays as issued.',
-      'Invoice FT-2026-00003 refers to this DDT: credit the invoice first.',
+      'Invoice FT-2026-00003 bills the goods of this DDT: an invoiced DDT stays as issued (a credit note corrects the invoice).',
     ])
+  })
+
+  it('splits the invoices naming a DDT: issued ones (any status after DRAFT) refuse, drafts only warn', () => {
+    const split = invoicesOfDdt([
+      { id: 'inv-3', number: null, status: 'DRAFT' },
+      { id: 'inv-2', number: 'FT-2026-00009', status: 'DELIVERED' },
+      { id: 'inv-1', number: 'FT-2026-00004', status: 'ISSUED' },
+      { id: 'inv-4', number: null, status: 'DRAFT' },
+    ])
+    expect(split).toEqual({ issued: ['FT-2026-00004', 'FT-2026-00009'], drafts: ['inv-3', 'inv-4'] })
+    expect(draftInvoicesWarning(split.drafts)).toBe('2 draft invoice(s) name this DDT: they cannot be issued until their lines name the DDT that replaces it.')
+    expect(draftInvoicesWarning([])).toBeNull()
   })
 
   it('declares the DDT permissions (office only) and events', () => {
