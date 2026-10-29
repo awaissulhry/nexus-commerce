@@ -1,0 +1,218 @@
+// Privacy (PLAN §2.8 "Privacy notices, DPIA, processing register, processor contracts" (GDPR arts. 13, 28, 30, 35) and
+// "Limits on monitoring workers" (L. 300/1970 art. 4); B-W1-36; features PLT-208, MES-277, GAP-004, GAP-005, GAP-009,
+// MES-276; A2 SCR-025, SCR-086, SCR-028; Q15, Q16): the privacy notices of each company in their versions and languages,
+// the office staff's acknowledgements of theirs (the floor workers' are production.prisma's WorkerNoticeAck), the
+// data protection impact assessment (DPIA) of each company and its record of processing activities. apps/factory-api's
+// platform/privacy writes them, always through command().
+//
+// A notice has a kind: WORKER_FLOOR (what the floor tools record about workers, shown on the tablet before the first
+// scan: Statuto dei Lavoratori art. 4 c.3, GDPR art. 13), OFFICE_STAFF (what the system keeps about office staff: the
+// audit trail, staff mail kept on record threads) and PRIVACY_PUBLIC (the company's notice for customers, suppliers and
+// contacts, linked from every link page, form and e-mail footer: `/privacy/<company id>`, GDPR arts. 13 and 14). Each
+// version is a DRAFT while it is written, PUBLISHED when it is in force (one per company and kind) and SUPERSEDED when a
+// later version is published. Publishing freezes it: its texts and their fingerprints never change again (the
+// …_privacy_guards triggers, for every login), so an acknowledgement names exactly what the person saw. Each language
+// is a row: the text shown on screens (Italian and English, Q15) and/or a PDF of it (the worker notice in each worker's
+// language, Q15), with the SHA-256 of what is shown. The texts are written by the company's privacy consultant; the
+// seeds hold made-up samples only.
+//
+// A floor record (a scan, a cut log) names a worker only after that worker acknowledged the worker notice IN FORCE at
+// their site's company: once a company has published one, an acknowledgement of an earlier version, or of none,
+// no longer counts (the …_privacy_guards triggers redefine production's subject check). The floor's badge scans also
+// wait for a stored DPIA (apps/factory-api platform/privacy readiness: floorPrivacyReady).
+//
+// Who sees what (ownership/privacy.json): the office reads and writes everything (the API asks privacy.view or
+// privacy.manage over the company); the floor reads the notices and their texts (the API answers only the published
+// worker notice of the device's company) and nothing else here; portal and link sessions read nothing here (their
+// role is scoped by party, and a notice has none): the API reads the PUBLISHED public notice for them and for anyone at
+// `/privacy/<company id>`. Staff acknowledgements are append-only. Nothing published is ever deleted; a DRAFT is.
+
+/// One version of one of a company's privacy notices (GDPR art. 13; Statuto dei Lavoratori art. 4 c.3; SCR-086).
+/// DRAFT → PUBLISHED → SUPERSEDED; one PUBLISHED per company and kind (a partial unique index). Published: frozen.
+model PrivacyNotice {
+  id            String              @id @db.Uuid
+  tenantId      String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The data controller: the company the people work for, or deal with.
+  companyId     String              @db.Uuid
+  kind          PrivacyNoticeKind
+  /// 1, 2, 3 … per company and kind, in the order the versions were made.
+  versionNo     Int
+  /// The version as shown and as acknowledgements name it ("2026-10", "v2"); unique per company and kind.
+  label         String
+  status        PrivacyNoticeStatus @default(DRAFT)
+  /// When it came into force, and who published it (a step-up of the office).
+  publishedAt   DateTime?           @db.Timestamptz(3)
+  publishedById String?             @db.Uuid
+  /// When a later version replaced it.
+  supersededAt  DateTime?           @db.Timestamptz(3)
+  version       Int                 @default(1)
+  createdAt     DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?             @db.Uuid
+
+  company    Company             @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  texts      PrivacyNoticeText[]
+  // production.prisma: the floor workers' acknowledgements of this version.
+  workerAcks WorkerNoticeAck[]
+  staffAcks  StaffNoticeAck[]
+
+  @@unique([tenantId, companyId, kind, versionNo])
+  @@unique([tenantId, companyId, kind, label])
+  // The targets of the tenant-safe references (texts, acknowledgements).
+  @@unique([tenantId, id])
+  @@unique([tenantId, companyId, id])
+}
+
+enum PrivacyNoticeKind {
+  /// What the floor tools record about workers (SCR-025): shown on the tablet before the first scan.
+  WORKER_FLOOR
+  /// What the system keeps about office staff (audit trail, staff mail on record threads): shown once at sign-in.
+  OFFICE_STAFF
+  /// The company's notice for everyone outside it, at `/privacy/<company id>` (GAP-005).
+  PRIVACY_PUBLIC
+}
+
+enum PrivacyNoticeStatus {
+  DRAFT
+  PUBLISHED
+  SUPERSEDED
+}
+
+/// One language of a notice version: the exact text shown on screens and/or the PDF of it in that language, with the
+/// fingerprint of what is shown. Written only while the notice is a DRAFT; never changed after it is published.
+model PrivacyNoticeText {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  noticeId    String   @db.Uuid
+  /// ISO 639-1 ("it", "en", "ro" …).
+  locale      String
+  /// The exact text shown (plain text, paragraphs split by blank lines). Null: this language is a PDF only.
+  body        String?
+  /// The PDF of this language: a StoredFile of the notice (DOCUMENT), handed out on paper or downloaded.
+  fileId      String?  @db.Uuid
+  /// The fingerprint: SHA-256 (lower-case hex) of the body as UTF-8 when there is one, else of the PDF (its file's
+  /// SHA-256). Acknowledgements store it.
+  sha256      String
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  notice PrivacyNotice @relation(fields: [tenantId, noticeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  file   StoredFile?   @relation("PrivacyNoticeTextFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, noticeId, locale])
+}
+
+/// A company's data protection impact assessment of the floor's tracking and of office staff data (GDPR art. 35;
+/// GAP-004, MES-282): DRAFT until its signed PDF is stored (STORED, the floor gate opens), SUPERSEDED by a later one.
+/// One STORED per company (a partial unique index). Stored: frozen.
+model PrivacyDpia {
+  id           String            @id @db.Uuid
+  tenantId     String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId    String            @db.Uuid
+  /// 1, 2, 3 … per company.
+  versionNo    Int
+  /// What it assesses, in words (badge scans and floor sign-ins; office staff data: audit trail, staff mail).
+  scope        String
+  status       PrivacyDpiaStatus @default(DRAFT)
+  /// The signed PDF: a StoredFile of this DPIA, and its SHA-256 as stored.
+  fileId       String?           @db.Uuid
+  fileSha256   String?
+  /// Who signed it for the controller, as the document says (name and role), and on which day.
+  signedByName String?
+  signedOn     DateTime?         @db.Date
+  /// When it is reviewed next (art. 35(11)).
+  reviewDueOn  DateTime?         @db.Date
+  /// When it was stored as signed, and by whom (a step-up of the office).
+  storedAt     DateTime?         @db.Timestamptz(3)
+  storedById   String?           @db.Uuid
+  supersededAt DateTime?         @db.Timestamptz(3)
+  version      Int               @default(1)
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?           @db.Uuid
+
+  company Company     @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  file    StoredFile? @relation("PrivacyDpiaFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, companyId, versionNo])
+  @@unique([tenantId, id])
+}
+
+enum PrivacyDpiaStatus {
+  DRAFT
+  STORED
+  SUPERSEDED
+}
+
+/// One processing activity of a company's record of processing activities (GDPR art. 30(1); GAP-009): what personal
+/// data, of whom, why, on which lawful basis, with whom (processors under art. 28, with their region), how long and how
+/// it is protected. Changed as the processing changes (the audit log keeps every earlier state); archived, never deleted.
+model ProcessingActivity {
+  id             String                   @id @db.Uuid
+  tenantId       String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId      String                   @db.Uuid
+  /// Short key, unique in the company ("FLOOR-SCANS").
+  code           String
+  name           String
+  purpose        String
+  /// The lawful basis (art. 6, and art. 9 for special categories), in words.
+  legalBasis     String
+  /// Categories of data subjects ("floor workers", "customers' contacts").
+  dataSubjects   String[] @default([])
+  /// Categories of personal data.
+  dataCategories String[] @default([])
+  /// Categories of recipients (art. 30(1)(d)).
+  recipients     String[] @default([])
+  /// Processors (art. 28): who, for what, where ("e-mail delivery, EU").
+  processors     String[] @default([])
+  /// Transfers to third countries and their safeguards (art. 46), or that there are none.
+  transfers      String
+  /// The time limits for erasure.
+  retention      String
+  /// The technical and organisational security measures (art. 32), in words.
+  security       String
+  status         ProcessingActivityStatus @default(ACTIVE)
+  version        Int                      @default(1)
+  createdAt      DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?                  @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, companyId, code])
+}
+
+enum ProcessingActivityStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+/// An office person's acknowledgement of their company's OFFICE_STAFF notice in force (GDPR art. 13; B-W1-36): shown
+/// once per version at sign-in, a soft gate (shown, acknowledged, recorded). Which version (its label), in which
+/// language, as shown (its SHA-256), when, in which office session. Never changed or removed (the …_privacy_guards
+/// triggers, for every login); a new version is acknowledged anew.
+/// @append-only
+model StaffNoticeAck {
+  id            String   @id @db.Uuid
+  tenantId      String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String   @db.Uuid
+  noticeId      String   @db.Uuid
+  userId        String   @db.Uuid
+  /// The notice's label as acknowledged.
+  noticeVersion String
+  /// The language it was shown in (ISO 639-1).
+  locale        String
+  /// SHA-256 (hex) of the notice text as shown.
+  noticeSha256  String
+  /// The office session it was given in (no reference: a ledger keeps none to rows that end).
+  sessionId     String?  @db.Uuid
+  serverTime    DateTime @default(now()) @db.Timestamptz(3)
+  createdById   String?  @db.Uuid
+
+  notice PrivacyNotice @relation(fields: [tenantId, companyId, noticeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  user   User          @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, companyId, userId, noticeVersion])
+  @@index([tenantId, noticeId])
+}

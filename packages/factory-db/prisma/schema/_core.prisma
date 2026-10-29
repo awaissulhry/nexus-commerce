@@ -140,6 +140,10 @@ model Company {
   costingSettings      CostingSettings[]
   // sales.prisma: the company's sales settings (its margin floor, discount limit, validity and deposit).
   salesSettings        SalesSettings[]
+  // privacy.prisma: its privacy notices, DPIAs and record of processing activities.
+  privacyNotices       PrivacyNotice[]
+  privacyDpias         PrivacyDpia[]
+  processingActivities ProcessingActivity[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.

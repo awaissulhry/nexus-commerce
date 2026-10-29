@@ -108,7 +108,7 @@ export const noticeAcksContract = defineContract({
   response: {
     200: output({
       site: siteView,
-      /** ACTIVE workers of the site; acknowledged = at least one notice version (the database's rule for naming them). */
+      /** ACTIVE workers of the site; acknowledged = the notice that counts (the database's rule for naming them: the version in force). */
       workers: output({ active: count(), acknowledged: count(), notAcknowledged: count() }),
       /** Per notice version, how many ACTIVE workers acknowledged it. */
       versions: z.array(output({ noticeVersion: z.string(), workers: count() })),

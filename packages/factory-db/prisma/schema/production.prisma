@@ -495,8 +495,12 @@ model WorkerNoticeAck {
   tenantId       String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
   siteId         String           @db.Uuid
   workerId       String           @db.Uuid
-  /// The notice's version as published ("2026-10"); the privacy pack (B-W1-36) keeps the notices.
+  /// The notice's version as published ("2026-10"): the label of `notice` when one is named.
   noticeVersion  String
+  /// The WORKER_FLOOR notice version acknowledged (privacy.prisma, B-W1-36): published, of the worker's site's company,
+  /// and the fingerprint is one of its texts in `locale` (the …_privacy_guards triggers). Null only on rows recorded
+  /// before the company published a notice in Nexus: they count only while it has none.
+  noticeId       String?          @db.Uuid
   /// The language it was shown in (ISO 639-1).
   locale         String
   /// SHA-256 (hex) of the notice text as shown.
@@ -512,8 +516,11 @@ model WorkerNoticeAck {
   worker Worker  @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   device Device? @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  notice PrivacyNotice? @relation(fields: [tenantId, noticeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, workerId, noticeVersion])
+  // The gate's question: has this worker acknowledged the notice in force?
+  @@index([tenantId, noticeId, workerId])
 }
 
 /// How a worker acknowledged the notice.

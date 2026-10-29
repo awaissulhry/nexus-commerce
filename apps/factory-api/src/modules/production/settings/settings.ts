@@ -21,6 +21,7 @@ import {
 import { PRODUCTION_SETTINGS_MANAGE, PRODUCTION_SETTINGS_VIEW } from '@nexus/factory-domain/production/settings/permissions'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf, type FloorContext, type OfficeContext } from '../../../core/context'
+import { countingAcks, workerNoticeRule } from '../../../platform/privacy/read'
 import type { AffectedView, ChangeResult, RulesView, SiteView } from './contract'
 import { hasAcknowledgedNotice, scanSubjectFor } from './subject'
 
@@ -50,7 +51,7 @@ const RULES_SELECT = {
 type RulesRow = Prisma.ProductionSettingsGetPayload<{ select: typeof RULES_SELECT }>
 const SITE_SELECT = { id: true, companyId: true, code: true, name: true } as const satisfies Prisma.SiteSelect
 
-type Reader = Pick<CommandTx, 'productionSettings' | 'user' | 'workOrder' | 'worker' | 'device'>
+type Reader = Pick<CommandTx, 'productionSettings' | 'user' | 'workOrder' | 'worker' | 'device' | 'site' | 'privacyNotice'>
 
 function officeContextOf(caller: CommandCaller): OfficeContext {
   const context = caller.factoryContext
@@ -100,11 +101,15 @@ async function rulesView(db: Pick<CommandTx, 'user'>, row: RulesRow | null): Pro
   }
 }
 
-/** Counts only (one query each, in order: never parallel queries on one transaction client). */
-async function affectedAt(db: Pick<CommandTx, 'workOrder' | 'worker' | 'device'>, siteId: string): Promise<AffectedView> {
+/**
+ * Counts only (one query each, in order: never parallel queries on one transaction client). Acknowledged: of the notice
+ * that counts (B-W1-36: the worker notice in force at the site's company; platform/privacy read.ts).
+ */
+async function affectedAt(db: Pick<CommandTx, 'workOrder' | 'worker' | 'device' | 'site' | 'privacyNotice'>, siteId: string): Promise<AffectedView> {
   const openWorkOrders = await db.workOrder.count({ where: { siteId, status: { in: ['RELEASED', 'IN_PROGRESS'] } } })
   const workersActive = await db.worker.count({ where: { siteId, status: 'ACTIVE' } })
-  const workersAcknowledged = await db.worker.count({ where: { siteId, status: 'ACTIVE', noticeAcks: { some: {} } } })
+  const counting = countingAcks(await workerNoticeRule(db, siteId))
+  const workersAcknowledged = counting === null ? 0 : await db.worker.count({ where: { siteId, status: 'ACTIVE', noticeAcks: { some: counting } } })
   const devicesWithoutStation = await db.device.count({ where: { siteId, status: 'ACTIVE', stationId: null } })
   return { openWorkOrders, workersActive, workersNotAcknowledged: workersActive - workersAcknowledged, devicesWithoutStation }
 }
@@ -340,20 +345,23 @@ export async function recordLegalBasis(caller: CommandCaller, siteId: string, bo
 }
 
 /**
- * production.settings.view: who at the site has acknowledged the information notice. Counts for every viewer; names
- * only with production.settings.manage over the site (they are never even read otherwise). Sorted by name: no order
- * here says anything about what a person did.
+ * production.settings.view: who at the site has acknowledged the information notice (the one that counts: the worker
+ * notice in force, B-W1-36). Counts for every viewer; names only with production.settings.manage over the site (they are
+ * never even read otherwise). Sorted by name: no order here says anything about what a person did.
  */
 export async function listNoticeAcks(caller: CommandCaller, siteId: string) {
   const { context, site } = await siteOf(caller, siteId, PRODUCTION_SETTINGS_VIEW)
   const withNames = mayOn(context, PRODUCTION_SETTINGS_MANAGE, site)
   return caller.withClient(async (client) => {
+    const rule = await workerNoticeRule(client, site.id)
+    const counts = (acks: readonly { noticeId: string | null }[]): boolean =>
+      rule.inForce ? acks.some((ack) => ack.noticeId === rule.inForce!.id) : !rule.everPublished && acks.length > 0
     const workers = await client.worker.findMany({
       where: { siteId: site.id, status: 'ACTIVE' },
-      select: { id: true, displayName: withNames, noticeAcks: { select: { noticeVersion: true, channel: true, serverTime: true }, orderBy: [{ noticeVersion: 'asc' }, { id: 'asc' }] } },
+      select: { id: true, displayName: withNames, noticeAcks: { select: { noticeId: true, noticeVersion: true, channel: true, serverTime: true }, orderBy: [{ noticeVersion: 'asc' }, { id: 'asc' }] } },
       orderBy: withNames ? [{ displayName: 'asc' }, { id: 'asc' }] : [{ id: 'asc' }],
     })
-    const acknowledged = workers.filter((worker) => worker.noticeAcks.length > 0).length
+    const acknowledged = workers.filter((worker) => counts(worker.noticeAcks)).length
     const perVersion = new Map<string, number>()
     for (const worker of workers) for (const version of new Set(worker.noticeAcks.map((ack) => ack.noticeVersion))) perVersion.set(version, (perVersion.get(version) ?? 0) + 1)
     return {
@@ -364,7 +372,7 @@ export async function listNoticeAcks(caller: CommandCaller, siteId: string) {
         ? workers.map((worker) => ({
             workerId: worker.id,
             displayName: (worker as { displayName: string }).displayName,
-            acknowledged: worker.noticeAcks.length > 0,
+            acknowledged: counts(worker.noticeAcks),
             acknowledgements: worker.noticeAcks.map((ack) => ({ noticeVersion: ack.noticeVersion, channel: ack.channel, acknowledgedAt: toUtcIso(ack.serverTime) })),
           }))
         : null,

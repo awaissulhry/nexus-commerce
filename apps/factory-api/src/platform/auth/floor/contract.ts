@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { workerNoticeGateView } from '../../privacy/contract'
 
 /**
  * Floor sign-in (plan A1 §3.10 "Floor"; features PLT-018, PLT-019, PLT-056, PLT-057, PLT-058, PLT-060, PLT-062,
@@ -50,6 +51,8 @@ export const signedIn = output({
   session: sessionTimes,
   /** An administrator reset the PIN: the worker chooses their own (POST /floor/pin) before anything else works. */
   pinMustChange: z.boolean(),
+  /** The worker notice (B-W1-36): open it after sign-in when due; hold the scan tiles while it blocks scans. */
+  notice: workerNoticeGateView,
 })
 
 export const signInContract = defineContract({ body: credentials, response: { 200: signedIn } })
@@ -64,6 +67,7 @@ export const floorMeContract = defineContract({
       site: named,
       session: sessionTimes,
       pinMustChange: z.boolean(),
+      notice: workerNoticeGateView,
       permissions: z.array(z.string()),
     }),
   },
