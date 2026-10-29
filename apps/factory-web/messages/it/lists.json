@@ -1,0 +1,50 @@
+{
+  "selected_one": "{count} selezionata",
+  "selected_other": "{count} selezionate",
+  "clear": "Annulla selezione",
+  "updates_one": "{count} aggiornamento · Mostra",
+  "updates_other": "{count} aggiornamenti · Mostra",
+  "selectAll": "Seleziona tutte le righe caricate",
+  "loading": "Caricamento…",
+  "keys": {
+    "trigger": "Tasti di questo elenco",
+    "title": "Tasti",
+    "all": "Tutte le scorciatoie (?)",
+    "click": "clic",
+    "search": "Cerca nell’elenco",
+    "rows": "Riga successiva / precedente",
+    "cells": "Spostati tra righe e celle",
+    "open": "Apri la riga",
+    "select": "Seleziona la riga (anche Spazio)",
+    "range": "Seleziona tutte le righe fino a questa",
+    "help": "Tutte le scorciatoie"
+  },
+  "lab": {
+    "title": "Cornice degli elenchi",
+    "search": "Cerca nome o codice",
+    "count": "{shown} di {total}",
+    "more": "Mostra altre {count}",
+    "newRecord": "Nuovo record",
+    "archive_one": "Archivia {count}",
+    "archive_other": "Archivia {count}",
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)",
+    "col": {
+      "name": "Nome",
+      "status": "Stato",
+      "country": "Paese",
+      "updated": "Aggiornato"
+    },
+    "status": {
+      "ACTIVE": "Attivo",
+      "PROSPECT": "Potenziale",
+      "BLOCKED": "Bloccato"
+    },
+    "newKey": "Nuovo record",
+    "failed": "Caricamento non riuscito. Nexus Factory non ha risposto: riprova.",
+    "retry": "Riprova",
+    "empty": "Ancora niente qui",
+    "noMatch": "Nessuna riga corrisponde a questi filtri",
+    "clearFilters": "Togli i filtri"
+  }
+}

@@ -1,0 +1,95 @@
+/*
+ * The list frame (Owner rule 2026-10-29) LAYOUT: the grid card fills the page's width (no page max-width), the states
+ * in place of the grid, and the keys panel of the footer's information icon. The grid, its toolbar, the checkboxes and
+ * the popover are the design system's; this file places them with semantic tokens only.
+ */
+.fw-list {
+  min-width: 0;
+}
+
+.fw-list-grid {
+  min-width: 0;
+}
+
+.fw-list-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-16);
+}
+
+.fw-list-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-list-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-list-keys-trigger {
+  display: inline-flex;
+  align-items: center;
+  color: var(--nds-text-2);
+}
+
+.fw-list-keys {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  max-width: 340px;
+}
+
+.fw-list-keys-title {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-list-keymap {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--nds-space-6) var(--nds-space-12);
+  margin: 0;
+}
+
+.fw-list-keymap dt {
+  display: inline-flex;
+  gap: var(--nds-space-2);
+}
+
+.fw-list-keymap dd {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ---- the design lab (made-up rows) ---- */
+.fw-list-lab-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-list-lab-name span {
+  color: var(--nds-text-2);
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-list-lab-help {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
