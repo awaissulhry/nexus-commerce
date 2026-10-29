@@ -13,8 +13,11 @@ import { seed as seedNumbering } from '../../../../../../packages/factory-db/see
 import { seed as seedProduction } from '../../../../../../packages/factory-db/seed/production'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
+import { callerFor } from '../../../core/command'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
+import { systemContext } from '../../../platform/outbox/system'
+import { startOnFirstWork } from './moves'
 
 /**
  * Work orders from order lines with a frozen spec (B-W1-38; MES-001, MES-002, MES-005, MES-007, MES-076, MES-305; A1
@@ -622,6 +625,23 @@ describe('the walls (A1 §2.2): tenant, company, site; the floor reads and never
     expect(await database.withScope(floor(A.siteB1), (client) => client.workOrder.count({ where: { siteId: A.siteA1 } }))).toBe(0)
     await expect(database.withScope(floor(A.siteA1), (client) => client.workOrder.updateMany({ where: { id: A.seededWorkOrder }, data: { priority: 9 } }))).rejects.toThrow(/permission denied/)
     await expect(database.withScope(floor(A.siteA1), (client) => client.workOrderSize.deleteMany({ where: { workOrderId: A.seededWorkOrder } }))).rejects.toThrow(/permission denied/)
+  })
+})
+
+describe('the first work starts the work order once (the worker, B-W1-39)', () => {
+  it('two first works handled at once (two issues in one worker batch): one start, the other answers from its receipt', async () => {
+    const { workOrder } = await draft([{ colour: 'BLK', sizes: { '50': 1 } }])
+    expect((await release(workOrder.id)).statusCode).toBe(200)
+    const system = () => callerFor(database, systemContext(A.tenant, newId()))
+    // Different causes, one start key: neither is refused as a reused Idempotency-Key (the worker would retry it).
+    const answers = await Promise.all([startOnFirstWork(system(), workOrder.id, { what: 'the issue A' }), startOnFirstWork(system(), workOrder.id, { what: 'the issue B' })])
+    expect(answers.every((answer) => typeof answer.started === 'boolean')).toBe(true)
+    expect(answers.some((answer) => answer.started)).toBe(true)
+    expect(await admin(`SELECT status::text AS status FROM "WorkOrder" WHERE id = $1`, [workOrder.id])).toEqual([{ status: 'IN_PROGRESS' }])
+    expect(await admin(`SELECT count(*)::int AS n FROM "AuditLog" WHERE "recordId" = $1 AND action = 'workorders.start'`, [workOrder.id])).toEqual([{ n: 1 }])
+    expect(await admin(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE type = 'workorder.status_changed' AND subject = $1 AND payload->>'to' = 'IN_PROGRESS'`, [workOrder.id])).toEqual([{ n: 1 }])
+    // A later first work (a third issue) changes nothing.
+    expect((await startOnFirstWork(system(), workOrder.id, { what: 'the issue C' })).started).toBe(false)
   })
 })
 

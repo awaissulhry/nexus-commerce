@@ -24,7 +24,8 @@ import { seed as seedShipping, type ShippingSeed } from './shipping'
  *   FT-2026-00001  a TD01 of two sample jackets, issued on 2026-10-28 with the number the numbering seed gave the
  *                  made-up invoice `invoice:A:1`; its first send to the (FAKE) SDI provider FAILED (a timeout), the
  *                  second was delivered (RC).
- *   deposit        SEED-SO-0001's 30% deposit (the sales seed's request) paid by one bank transfer, allocated to the
+ *   deposit        SEED-SO-0001's 30% deposit (the sales seed's request) paid by one bank transfer on 2026-10-29, the day
+ *                  the quote was accepted (so a fresh seed issues today's invoices after it), allocated to the
  *                  request (now PAID), and its deposit invoice TD02 FT-2026-00003 (the series' next number; the
  *                  NumberAllocation row written and the series moved to 4, as allocateNumber does), delivered.
  *   on account     a second transfer of P1 (400.00 EUR) quoting FT-2026-00001: 200.00 is allocated to it, the other 200.00
@@ -51,16 +52,18 @@ const T = {
   sampleFailed: new Date('2026-10-28T09:11:00.000Z'),
   sampleSent: new Date('2026-10-28T09:30:00.000Z'),
   sampleDelivered: new Date('2026-10-28T10:05:00.000Z'),
-  depositRecorded: new Date('2026-11-02T09:00:00.000Z'),
-  depositIssued: new Date('2026-11-02T09:05:00.000Z'),
-  depositSent: new Date('2026-11-02T09:06:00.000Z'),
-  depositDelivered: new Date('2026-11-02T09:40:00.000Z'),
+  // Paid on the day the quote was accepted (seed/sales.ts T.accepted, 2026-10-29 15:00): a deposit invoice dated on
+  // or before the day a fresh seed runs, so the INVOICE series lets today's invoices follow it (DPR 633/1972 art. 21).
+  depositRecorded: new Date('2026-10-29T16:00:00.000Z'),
+  depositIssued: new Date('2026-10-29T16:05:00.000Z'),
+  depositSent: new Date('2026-10-29T16:06:00.000Z'),
+  depositDelivered: new Date('2026-10-29T16:40:00.000Z'),
   onAccount: new Date('2026-11-10T09:00:00.000Z'),
   td24Draft: new Date('2026-11-25T09:00:00.000Z'),
 } as const
 const DAY = {
   sample: new Date('2026-10-28T00:00:00.000Z'),
-  deposit: new Date('2026-11-02T00:00:00.000Z'),
+  deposit: new Date('2026-10-29T00:00:00.000Z'),
   onAccount: new Date('2026-11-10T00:00:00.000Z'),
 } as const
 const TEN_YEARS = (at: Date): Date => new Date(Date.UTC(at.getUTCFullYear() + 10, at.getUTCMonth(), at.getUTCDate()))

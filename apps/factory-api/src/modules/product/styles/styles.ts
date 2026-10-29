@@ -3,15 +3,17 @@ import { ConflictError, InvalidStateError, type Issue } from '@nexus/factory-dom
 import { newId } from '@nexus/factory-domain/core/ids'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { colourwayListProblems, normaliseColourway } from '@nexus/factory-domain/product/styles/colourways'
-import type { CreateStyleBody, ListStylesQuery, StyleRow, StyleView, UpdateStyleBody } from '@nexus/factory-domain/product/styles/contracts'
+import type { CreateStyleBody, GarmentTrackingBody, ListStylesQuery, StyleRow, StyleView, UpdateStyleBody } from '@nexus/factory-domain/product/styles/contracts'
 import { followPlan, generatePlan } from '@nexus/factory-domain/product/styles/matrix'
 import { PRODUCT_STYLES_MANAGE, PRODUCT_STYLES_VIEW } from '@nexus/factory-domain/product/styles/permissions'
 import {
   changeStyle,
+  garmentTrackingRefusal,
   newStyle,
   reactivatedStatus,
   styleChangeRefusals,
   styleMachine,
+  type GarmentTrackingUses,
   type ScaleSizes,
   type StyleFacts,
   type StyleFields,
@@ -260,6 +262,52 @@ export async function updateStyle(caller: CommandCaller, styleId: string, body: 
     throw error
   })
   return result
+}
+
+// ---- garment numbering (Q31) ----------------------------------------------------------------------------------------------
+
+/**
+ * How the style's garments are numbered on their labels (Q31: BATCH or SERIAL, a setting per style;
+ * `PUT /product/styles/:styleId/garment-tracking`, product.styles.manage over the style's company). It changes while the
+ * style's work orders printed no garment label, gave no serial and released no garment: after that the API answers 409
+ * in words (factory-domain `garmentTrackingRefusal`) before the database's factory_style_garment_tracking_guard, which
+ * holds the same rule. One command on the Style: its version is the compare-and-set, the row stays locked to the end.
+ */
+export async function setGarmentTracking(caller: CommandCaller, styleId: string, body: GarmentTrackingBody, idempotencyKey?: string): Promise<StyleView> {
+  const context = contextOf(caller)
+  const seen = await readStyle(caller, styleId)
+  assertMayWrite(context, PRODUCT_STYLES_MANAGE, seen.companyId)
+  openOnly(seen.status)
+  // The same choice again changes nothing (like a PATCH with no change): no command, no version bump.
+  if (seen.garmentTracking === body.tracking) return getStyle(caller, styleId)
+  const { result } = await command(
+    caller,
+    { name: 'product.styles.setGarmentTracking', idempotencyKey, input: { styleId, ...body }, record: { type: 'Style', id: styleId, expectedVersion: body.version } },
+    async (tools) => {
+      const { tx } = tools
+      const row = await tx.style.findUniqueOrThrow({ where: { id: styleId }, select: { code: true, status: true, companyId: true, garmentTracking: true } })
+      openOnly(row.status)
+      const refusal = garmentTrackingRefusal({ code: row.code, tracking: row.garmentTracking }, await trackingUses(tx, styleId))
+      if (refusal) throw new ConflictError(refusal)
+      await tx.style.update({ where: { id: styleId }, data: { garmentTracking: body.tracking }, select: { id: true } })
+      tools.audit({ recordType: 'Style', recordId: styleId, companyId: row.companyId, before: { garmentTracking: row.garmentTracking }, after: { garmentTracking: body.tracking } })
+      tools.emit({ type: 'style.updated', subject: styleId, companyId: row.companyId, payload: { styleId, code: row.code, fields: ['garmentTracking'] } })
+      return styleViewInTx(tx, styleId)
+    },
+  )
+  return result
+}
+
+/** What the style's work orders did with its garment numbering: labels printed, serials given, garments released. */
+async function trackingUses(tx: CommandTx, styleId: string): Promise<GarmentTrackingUses> {
+  const workOrderIds = (await tx.workOrder.findMany({ where: { styleId }, select: { id: true } })).map((row) => row.id)
+  if (workOrderIds.length === 0) return { labels: 0, serials: 0, releases: 0 }
+  const where = { workOrderId: { in: workOrderIds } }
+  // One query after the other: a transaction has one connection.
+  const labels = await tx.garmentLabelPrint.count({ where })
+  const serials = await tx.garmentSerial.count({ where })
+  const releases = await tx.qualityRelease.count({ where })
+  return { labels, serials, releases }
 }
 
 // ---- archive, reactivate -----------------------------------------------------------------------------------------------
