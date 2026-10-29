@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { defineEvent } from '../events/define'
+import { PURCHASE_ORDER_STATUSES } from '../purchasing/orders'
 import { HIDE_STATES } from './issue/rules'
 import { STOCK_MOVE_REASONS } from './ledger/moves'
 
@@ -14,6 +15,10 @@ import { STOCK_MOVE_REASONS } from './ledger/moves'
  * `inventory.startWorkOrderOnIssue` handler moves a RELEASED work order to IN_PROGRESS on it), `inventory.returned` once
  * per return of unused stock from a work order, `inventory.pick_reversed` once per undo or reversal of either. They reach
  * the office's pick and work-order screens and the site's floor devices (the pick list of another tablet refreshes).
+ *
+ * Receipts (B-W1-32, modules/inventory/receipts): `inventory.receipt_posted` once per receipt posted against a purchase
+ * order (its moves also emit `inventory.moved`), `inventory.receipt_reversed` once per reversal. They reach the
+ * receipts, lots, hides and purchase order screens of the office (inventory.stock.view).
  */
 const decimal = () => z.string().regex(/^\d{1,14}\.\d{4}$/)
 
@@ -103,5 +108,39 @@ export const events = [
       postedBy: z.enum(['OFFICE', 'FLOOR', 'SYSTEM']),
     }),
     live: { permission: 'inventory.issue', floor: true, fields: ['workOrderId', 'number', 'reversedId', 'of'] },
+  }),
+  defineEvent({
+    type: 'inventory.receipt_posted',
+    context: 'inventory',
+    description: 'Goods were received against a purchase order: the receipt, its lots and hides, and its moves are in the ledger.',
+    payload: z.strictObject({
+      receiptId: z.uuid(),
+      number: z.string(),
+      purchaseOrderId: z.uuid().nullable(),
+      /** The order's state after the receipt (PARTLY_RECEIVED or RECEIVED). */
+      purchaseOrderStatus: z.enum(PURCHASE_ORDER_STATUSES).nullable(),
+      lotIds: z.array(z.uuid()),
+      /** The lots that start in quarantine (a Cr VI test, a PPE certificate or a hold): not usable until released. */
+      quarantinedLotIds: z.array(z.uuid()),
+      hides: z.number().int().min(0),
+      moveIds: z.array(z.uuid()).min(1),
+      postedBy: z.enum(['OFFICE', 'FLOOR', 'SYSTEM']),
+    }),
+    live: { permission: 'inventory.stock.view', fields: ['receiptId', 'number', 'purchaseOrderId', 'purchaseOrderStatus'] },
+  }),
+  defineEvent({
+    type: 'inventory.receipt_reversed',
+    context: 'inventory',
+    description: 'A posted goods receipt was reversed: one mirror move per receipt move, its lots rejected, the order\'s progress read again.',
+    payload: z.strictObject({
+      receiptId: z.uuid(),
+      number: z.string(),
+      purchaseOrderId: z.uuid().nullable(),
+      purchaseOrderStatus: z.enum(PURCHASE_ORDER_STATUSES).nullable(),
+      lotIds: z.array(z.uuid()),
+      moveIds: z.array(z.uuid()).min(1),
+      postedBy: z.enum(['OFFICE', 'FLOOR', 'SYSTEM']),
+    }),
+    live: { permission: 'inventory.stock.view', fields: ['receiptId', 'number', 'purchaseOrderId', 'purchaseOrderStatus'] },
   }),
 ] as const
