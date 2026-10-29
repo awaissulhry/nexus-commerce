@@ -48,6 +48,11 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),
   `nav/office-nav.ts` (assembles the area manifests). `src/areas/<area>/nav.ts` — one navigation declaration per area.
 - `src/lib/` — shared by every view: `api/` (the client), `session/`, `i18n/`, `theme/`, `pdf/`, `links/`, `design/`.
+- `src/list-frame/` — the ONE list frame of every Office list with actions over many rows (Owner rule 2026-10-29):
+  `<ListFrame rows rowId columns count search tools right selection updates more keys onHelp onOpen state />` — the DS
+  grid (NexusGrid in GridCard), toolbar count/search ⇄ bulk actions while rows are selected, the header select-all box
+  (mixed when some), shift-click range, keys `/` j k x Enter Space ?, a footer with Show more and ONE keys icon
+  (`ListKeysInfo`; never key hints above a table). Its words are `messages/<locale>/lists.json`; lab: `/design/list-frame`.
 - `src/record-panels/` — SCR-006, the panels every record page mounts: `<RecordPanels record={{ type, id, companyId,
   siteId }} title party />` (thread, files, history; live refresh from `/live`). A screen with its own catalogue wraps its
   view in `WithMessages` (record-panels/i18n.tsx): the layouts load `shell` only.
@@ -73,6 +78,8 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - UI text: `messages/<locale>/<area>.json` (it, en), found by themselves; every key in both languages with the same
   `{placeholders}` (`check-i18n`). `useT('<area>')` in client code; plurals as `<key>_one` / `<key>_other` + `count`.
   Times are UTC from the API, shown in the site's zone (`lib/i18n/format.ts`, Europe/Rome by default).
+- A page never sets its own max-width: it fills the shell's main area (`.fw-office-main`, equal gutters). Inner parts (a
+  search field, a text column in a card, a dialog) may; on wide screens use the width (more columns, two-column cards).
 - Design system only: `@nexus/ui` primitives, components, patterns (the narrower `@nexus/ui/patterns/shell/index` for
   the rail); BottomBar, PdfViewer and QrCode from their own entry points (`@nexus/ui/components/<Name>/index`). No
   Tailwind. App CSS is layout only, with semantic `--nds-*` tokens (no raw colours). A server component never imports a
