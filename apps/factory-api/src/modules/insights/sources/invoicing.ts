@@ -92,6 +92,7 @@ export const invoiceToIssue: Source = async ({ caller }) => {
         due: month.deadline.dueBy,
         since: asDay(oldest),
         subKey: `${customer.companyId}:${month.month}`,
+        condition: ddts.map((ddt) => ddt.ddtId),
       })
     }
   }
