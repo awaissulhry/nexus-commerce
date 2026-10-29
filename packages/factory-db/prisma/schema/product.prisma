@@ -90,6 +90,12 @@ model Item {
   defaultSupplierId   String?      @db.Uuid
   /// That supplier's article code.
   supplierArticleCode String?
+  /// The default supplier's terms (PLN-066; planning's suggestion and order-by date): calendar days from the order to
+  /// the goods at the site, 0 or more; the least it sells and the steps it sells in, both above 0, in `purchaseUom`.
+  /// null: none on record (planning orders by the need date and rounds only to whole units).
+  leadTimeDays        Int?
+  minOrderQty         Decimal?     @db.Decimal(18, 4)
+  orderMultiple       Decimal?     @db.Decimal(18, 4)
   /// The standard purchase price per base unit, typed by the office (GAP-006): quotes and the cost sheet use it until
   /// supplier price lists come (W2a). Never shown to the floor, a portal or a link.
   /// @grain cost

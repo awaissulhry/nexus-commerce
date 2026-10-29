@@ -39,6 +39,9 @@ model Party {
   language     String      @default("it")
   /// Payment terms as printed on its quotes, orders and purchase orders (free text; terms with rules are W2a).
   paymentTerms String?
+  /// As a supplier, its usual lead time: calendar days from the order to the goods at our site, 0 or more (PLN-066).
+  /// Planning uses it when the item names none, or the item is bought from it instead of the item's default supplier.
+  leadTimeDays Int?
   /// For the office only: the partner role can neither read nor write it.
   /// @internal
   internalNote String?
