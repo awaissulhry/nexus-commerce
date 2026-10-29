@@ -14,6 +14,7 @@ import { serverClock } from '../../../core/time'
 import { allocateNumber } from '../../../platform/numbering/allocate'
 import { decideTreatment, refreshVersion } from './pricing'
 import { quoteRulesFor } from './rules'
+import { revokeAcceptLinks } from './accept-links'
 import { assertMay, day, dayValue, decimal, grainsOf, officeContextOf, officeQuote, quotePartyOf, readCurrentVersion, readQuote, type QuoteParty, type QuoteRow, type VersionRow } from './store'
 import { forCaller, quoteDetail, type QuoteDetail } from './views'
 
@@ -272,19 +273,36 @@ export async function updateQuote(caller: CommandCaller, quoteId: string, body: 
 // ---- cancel -----------------------------------------------------------------------------------------------------------
 
 /**
- * quotes.manage: the office withdraws a quote before it is sent (DRAFT, waiting for approval or approved → CANCELLED; a
- * waiting approval request is withdrawn with it). A sent quote is withdrawn with its accept link (B-W1-24).
+ * quotes.manage: the office withdraws a quote. Before it is sent (DRAFT, waiting for approval or approved → CANCELLED; a
+ * waiting approval request is withdrawn with it). Once sent (B-W1-24), with a reason: the sent version is CANCELLED and
+ * every accept link of the quote stops working (revoked; their evidence stays); a draft revision and the sent version
+ * it would replace go together. A firm offer is not withdrawn before its last day (c.c. art. 1329).
  */
 export async function cancelQuote(caller: CommandCaller, quoteId: string, body: { version: number; reason?: string | null | undefined }, idempotencyKey?: string): Promise<{ quote: QuoteDetail }> {
   const quote = await officeQuote(caller, quoteId, QUOTES_MANAGE)
   return onQuote(caller, quote, { name: 'quotes.cancel', idempotencyKey, input: { quoteId, ...body }, version: body.version }, async (tools, current, version) => {
-    if (!OPEN_BEFORE_SEND.includes(version.status)) {
-      throw new InvalidStateError(version.status === 'SENT' ? 'The quote was sent: it is withdrawn with its accept link when sending is built (B-W1-24).' : `The quote is ${STATUS_WORDS[version.status]}; it cannot be cancelled.`)
+    if (!OPEN_BEFORE_SEND.includes(version.status) && version.status !== 'SENT') throw new InvalidStateError(`The quote is ${STATUS_WORDS[version.status]}; it cannot be cancelled.`)
+    const sent = await tools.tx.quoteVersion.findMany({ where: { quoteId: current.id, status: 'SENT' }, select: { id: true, revision: true, firmOffer: true, validUntil: true } })
+    const reason = blankToNull(body.reason)
+    if (sent.length > 0) {
+      if (reason === null) throw new ValidationError('Say why the sent quote is withdrawn: the customer is told it was withdrawn.', [{ path: 'body/reason', message: 'A reason is needed once the quote was sent.' }])
+      const today = businessDate(tools.now)
+      const firm = sent.find((row) => row.firmOffer && row.validUntil !== null && day(row.validUntil)! >= today)
+      if (firm) throw new InvalidStateError(`Version ${firm.revision} is a firm offer until ${day(firm.validUntil)} (c.c. art. 1329): it cannot be withdrawn before then.`)
     }
-    const withdrawn = await withdrawPending(tools, version.id)
-    await tools.tx.quoteVersion.update({ where: { id: version.id }, data: { status: 'CANCELLED', closedAt: tools.now, version: { increment: 1 } }, select: { id: true } })
+    const withdrawn = OPEN_BEFORE_SEND.includes(version.status) ? await withdrawPending(tools, version.id) : null
+    const ids = [...new Set([version.id, ...sent.map((row) => row.id)])]
+    await tools.tx.quoteVersion.updateMany({ where: { id: { in: ids } }, data: { status: 'CANCELLED', closedAt: tools.now, version: { increment: 1 } } })
     await tools.tx.quote.update({ where: { id: current.id }, data: { status: 'CANCELLED' }, select: { id: true } })
-    tools.audit({ recordType: 'Quote', recordId: current.id, companyId: current.companyId, before: { status: version.status }, after: { status: 'CANCELLED', withdrawnApprovalId: withdrawn }, ...(blankToNull(body.reason) ? { reason: blankToNull(body.reason)! } : {}) })
+    const revokedLinkIds = sent.length > 0 ? await revokeAcceptLinks(tools, current, actorIdOf(tools)) : []
+    tools.audit({
+      recordType: 'Quote',
+      recordId: current.id,
+      companyId: current.companyId,
+      before: { status: version.status },
+      after: { status: 'CANCELLED', withdrawnApprovalId: withdrawn, cancelledVersionIds: ids, revokedLinkIds },
+      ...(reason ? { reason } : {}),
+    })
     tools.emit({ type: 'quote.cancelled', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id } })
     return detailInCommand(tools, current.id)
   })

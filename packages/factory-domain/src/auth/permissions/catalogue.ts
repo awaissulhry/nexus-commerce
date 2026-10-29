@@ -15,6 +15,7 @@ import { PRODUCT_STYLES_DEFINITIONS, PRODUCT_STYLES_PERMISSIONS } from '../../pr
 import { SHIPPING_LABELS_DEFINITIONS, SHIPPING_LABELS_PERMISSIONS } from '../../shipping/labels/permissions'
 import { WORKORDERS_DEFINITIONS, WORKORDERS_PERMISSIONS } from '../../production/work-orders/permissions'
 import { PRODUCTION_SETTINGS_DEFINITIONS, PRODUCTION_SETTINGS_PERMISSIONS } from '../../production/settings/permissions'
+import { COMPANY_BANK_DEFINITIONS, COMPANY_BANK_PERMISSIONS } from '../../sales/deposits/permissions'
 import { QUOTES_DEFINITIONS, QUOTES_PERMISSIONS, SALES_SETTINGS_DEFINITIONS, SALES_SETTINGS_PERMISSIONS } from '../../sales/quotes/permissions'
 import { SHIPPING_DEFINITIONS, SHIPPING_FLOOR_PERMISSIONS, SHIPPING_PERMISSIONS } from '../../shipping/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
@@ -216,6 +217,8 @@ export const INVENTORY_DEFINITIONS = definePermissions('inventory', {
   transfer: { risk: 'write', description: 'Move stock between two locations of a site (a floor device: at its own site).' },
   scrap: { risk: 'write', description: 'Take stock out as scrap, with the reason.' },
   reverse: { risk: 'write', description: 'Reverse a stock move that was wrong: the same move with its locations swapped, with the reason.' },
+  issue: { risk: 'write', description: "Pick and issue stock to a work order (only usable stock of the work order's materials, up to what it still needs), return what it did not use, and undo one's own last issue (a floor device: at its own site)." },
+  'issue.over': { risk: 'write', description: 'Issue more than a work order still needs, with the reason.' },
 })
 
 /** The money grains as they travel in grants (`../grains/grains`): from Role.grains, never Role.permissions. */
@@ -256,6 +259,7 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   WORKORDERS_DEFINITIONS,
   QUOTES_DEFINITIONS,
   SALES_SETTINGS_DEFINITIONS,
+  COMPANY_BANK_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -266,13 +270,13 @@ export const FLOOR_AREA = 'floor'
  * The office permissions a floor role may hold too: what a floor device does on the same routes as the office, at its
  * own device's site only (can() pins a floor session to it, row-level security too). Printing labels at the site's
  * printer (GAP-007) and seeing its print queue; seeing the site's locations and moving stock between them (SCM-176,
- * SCM-189); packing the site's shipments (LOG-039, SCR-098). Never a money grain; floor roles still hold no other office
- * permission.
+ * SCM-189); picking and issuing to the site's work orders (SCM-215, SCR-093); packing the site's shipments (LOG-039,
+ * SCR-098). Never a money grain; floor roles still hold no other office permission.
  */
 export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS, ...INVENTORY_FLOOR_PERMISSIONS, ...SHIPPING_FLOOR_PERMISSIONS])
 
 // The modules' constants and their declarations name the same permissions.
-for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...PRODUCT_BOM_PERMISSIONS, ...PRODUCT_ROUTING_PERMISSIONS, ...SHIPPING_PERMISSIONS, ...SHIPPING_LABELS_PERMISSIONS, ...PARTIES_PERMISSIONS, ...PLANNING_PERMISSIONS, ...INVOICES_PERMISSIONS, ...PAYMENTS_PERMISSIONS, ...COSTING_PERMISSIONS, ...PRODUCTION_SETTINGS_PERMISSIONS, ...WORKORDERS_PERMISSIONS, ...QUOTES_PERMISSIONS, ...SALES_SETTINGS_PERMISSIONS]) {
+for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...PRODUCT_BOM_PERMISSIONS, ...PRODUCT_ROUTING_PERMISSIONS, ...SHIPPING_PERMISSIONS, ...SHIPPING_LABELS_PERMISSIONS, ...PARTIES_PERMISSIONS, ...PLANNING_PERMISSIONS, ...INVOICES_PERMISSIONS, ...PAYMENTS_PERMISSIONS, ...COSTING_PERMISSIONS, ...PRODUCTION_SETTINGS_PERMISSIONS, ...WORKORDERS_PERMISSIONS, ...QUOTES_PERMISSIONS, ...SALES_SETTINGS_PERMISSIONS, ...COMPANY_BANK_PERMISSIONS]) {
   if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 }
 for (const name of LINK_SESSION_NAMES) {

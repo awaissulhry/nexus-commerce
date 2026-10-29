@@ -48,6 +48,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const invoice = await client.invoice.findUnique({ where: { id }, select: { companyId: true, buyerPartyId: true } })
     return invoice ? { companyId: invoice.companyId, siteId: null, partyId: invoice.buyerPartyId } : null
   },
+  // modules/sales/quotes (SCR-034; B-W1-24 the quote mail with its PDF and the acceptance confirmation): the selling
+  // company and the customer.
+  Quote: async (client, id) => {
+    const quote = await client.quote.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return quote ? { companyId: quote.companyId, siteId: null, partyId: quote.partyId } : null
+  },
   // modules/shipping (SCR-067; B-W1-49 the documents link mail): the shipment's company, site and party (its customer),
   // so its mail and the customer's replies stay with that customer.
   Shipment: async (client, id) => {
@@ -58,13 +64,16 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
 
 let extra: Readonly<Record<string, RecordResolver>> = {}
 
-/** Test only: more record types (a made-up `Quote` with a party). `undefined` removes them again. */
+/**
+ * Test only: more record types, or another resolver for a known one (a made-up `Quote` with a party: these win over the
+ * module's own). `undefined` removes them again.
+ */
 export function useThreadRecords(resolvers: Readonly<Record<string, RecordResolver>> | undefined): void {
   extra = resolvers ?? {}
 }
 
 /** The record's scope, or null when its type has no thread or the record does not exist (for this caller). */
 export async function resolveRecord(client: FactoryClient | CommandTx, recordType: string, recordId: string): Promise<RecordScope | null> {
-  const resolver = Object.hasOwn(THREAD_RECORDS, recordType) ? THREAD_RECORDS[recordType] : Object.hasOwn(extra, recordType) ? extra[recordType] : undefined
+  const resolver = Object.hasOwn(extra, recordType) ? extra[recordType] : Object.hasOwn(THREAD_RECORDS, recordType) ? THREAD_RECORDS[recordType] : undefined
   return resolver ? resolver(client, recordId) : null
 }
