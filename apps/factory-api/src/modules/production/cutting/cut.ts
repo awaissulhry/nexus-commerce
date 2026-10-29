@@ -12,6 +12,7 @@ import {
   correctionRefusal,
   cutDecision,
   cuttableRefusal,
+  floorReadyRefusal,
   partsOf,
   piecesOf,
   undoRefusal,
@@ -23,6 +24,9 @@ import {
 import { Dec, ZERO } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf, type FloorContext, type OfficeContext } from '../../../core/context'
+import { serverClock } from '../../../core/time'
+import { systemContext } from '../../../platform/outbox/system'
+import { floorReadinessFor } from '../../../platform/privacy/read'
 import { issueInCommand, type IssueResult } from '../../inventory/issue/issue'
 import { lockHideCuts, lockWorkOrderIssues } from '../../inventory/issue/store'
 import { LEDGER_SELECT, postMoves, type PostedMove } from '../../inventory/ledger/post-moves'
@@ -69,6 +73,9 @@ import {
  *   undo       the floor: the cutter's own last entry on this device (and the remnant it returned, back to the work
  *              order), by a mirror entry.
  *   correct    the office: a mirror entry of any live entry, with the reason.
+ * Before a cut, the site's floor must be ready (platform/privacy floorReadinessFor: a stored DPIA, a published worker
+ * notice, and a legal basis on record where the site names workers), read as the tenant's system caller (the floor
+ * reads neither the DPIA nor the legal basis); refused in the gate's words (409 FLOOR_NOT_READY).
  * Who an entry names is the site's floor rules' (production/settings subject.ts): the signed-in worker who acknowledged
  * the information notice, or only the device's station; at a station site the entry and its pieces name no creator
  * either (the audit row keeps the actor, office only). Every write records an audit row on the entry, one on the work
@@ -436,12 +443,25 @@ async function recordedBefore(caller: CommandCaller, context: FloorContext, work
   }
 }
 
+/**
+ * The site's floor is ready for real work (B-W1-36, B-W1-37), or a 409 in the gate's words. The gate reads the DPIA and
+ * the legal basis, which the floor role may not: it runs in the tenant's system context, on a view of the request
+ * (`withClient` follows the view's context, as platform/privacy's public notice does).
+ */
+async function assertFloorReady(caller: CommandCaller, context: FloorContext, siteId: string): Promise<void> {
+  const system = Object.create(caller) as CommandCaller & { factoryContext: CommandCaller['factoryContext'] }
+  system.factoryContext = systemContext(context.tenantId, context.requestId)
+  const refusal = floorReadyRefusal(await system.withClient((client) => floorReadinessFor(client, siteId, serverClock.now())))
+  if (refusal) refused(refusal)
+}
+
 /** The floor's cut (and Hide done): one command, offline-safe by the device's client event id. */
 export async function logCut(caller: CommandCaller, workOrderId: string, body: CutInput, idempotencyKey?: string): Promise<CutResult> {
   const context = floorOf(caller)
-  await cuttingWorkOrder(caller, workOrderId, PRODUCTION_CUT)
+  const workOrder = await cuttingWorkOrder(caller, workOrderId, PRODUCTION_CUT)
   const before = await recordedBefore(caller, context, workOrderId, body)
   if (before) return before
+  await assertFloorReady(caller, context, workOrder.siteId)
   const occurredAt = body.occurredAt ? parseInstant(body.occurredAt)! : undefined
   try {
     const { result } = await command(

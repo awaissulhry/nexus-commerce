@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { floorPrivacyStatus, floorReadiness, NO_DPIA_NOTE } from '../../privacy/readiness'
+import { floorRulesStatus } from '../settings/monitoring'
 import {
   cellProgress,
   correctionRefusal,
   cutDecision,
   entryPattern,
+  floorReadyRefusal,
   hideArea,
   partOf,
   partsOf,
@@ -258,5 +261,22 @@ describe("a hide's area for a work order (MES-057): cut + waste + returned + lef
       returned: '0.0000',
       left: '67.3400',
     })
+  })
+})
+
+describe("the floor's readiness (B-W1-36, B-W1-37): no cut is logged before the site's floor is ready", () => {
+  const privacy = (dpia: boolean, notice: boolean) =>
+    floorPrivacyStatus({ dpia: dpia ? { versionNo: 1, reviewDueOn: null } : null, workerNotice: notice ? { label: '2026-10' } : null, today: '2026-11-20' })
+  const rules = (basis: boolean) => floorRulesStatus({ scanSubject: 'WORKER', basisOnRecord: basis })
+
+  it('lets a ready floor cut, and refuses one without a DPIA, a worker notice or a legal basis, in the gate\'s words', () => {
+    expect(floorReadyRefusal(floorReadiness(privacy(true, true), rules(true)))).toBeNull()
+    expect(floorReadyRefusal(floorReadiness(privacy(false, true), rules(true)))).toEqual({ code: 'FLOOR_NOT_READY', message: `Cutting is held at this site until its floor is ready: ${NO_DPIA_NOTE}` })
+    const noNotice = floorReadyRefusal(floorReadiness(privacy(true, false), rules(true)))
+    expect(noNotice).toMatchObject({ code: 'FLOOR_NOT_READY', message: expect.stringContaining('No worker notice is published') })
+    const noBasis = floorReadyRefusal(floorReadiness(privacy(true, true), rules(false)))
+    expect(noBasis).toMatchObject({ code: 'FLOOR_NOT_READY', message: expect.stringContaining('no legal basis is on record') })
+    expect(noBasis!.message).not.toContain('is in force')
+    expect(floorReadyRefusal(null)).toMatchObject({ code: 'FLOOR_NOT_READY' })
   })
 })

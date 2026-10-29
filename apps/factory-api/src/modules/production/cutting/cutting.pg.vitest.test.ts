@@ -9,6 +9,7 @@ import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedNumbering } from '../../../../../../packages/factory-db/seed/numbering'
+import { seed as seedPrivacy } from '../../../../../../packages/factory-db/seed/privacy'
 import { seed as seedProduction } from '../../../../../../packages/factory-db/seed/production'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
@@ -21,8 +22,9 @@ import { lockHideCuts } from '../../inventory/issue/store'
  * on the local stack, with the app's real routes: a throwaway PostgreSQL 17 database from the migrations (the runtime
  * login: row-level security, the column grants and the …_supply_guards and …_production_guards triggers are real), the
  * factory-db seeds of two tenants up to production (SEED-JKT-02 released, its black leather "Outer shell" 43 ft² × 1.12
- * per size-50 garment; plant A1 names workers, its operator acknowledged the notice and its team leader did not; plant B1
- * records the station only; SEED-WO-0001 in progress with a seeded cut of its hide in two bundles), the numbering seed,
+ * per size-50 garment; plant A1 names workers, its operator acknowledged the PUBLISHED worker notice 2026-10 and its
+ * team leader nothing; plant B1 records the station only; SEED-WO-0001 in progress with a seeded cut of its hide in two
+ * bundles), the privacy seed (company A's stored DPIA and published worker notice: its floor is ready), the numbering seed,
  * a made-up certificate, and made-up stock at A1: a lot of twelve black hides of 55 ft² RELEASED and a hide whose lot
  * waits for its chromium VI result. Released work orders of two black jackets in size 50 are made through the
  * work-order routes. Two more tablets at A1 (one at the cutting table, one without a station): the undo tests use them,
@@ -215,6 +217,7 @@ beforeAll(async () => {
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 12 } })
   for (const namespace of [ns.a, ns.b]) {
     await seedCore({ db: database, namespace })
+    await seedPrivacy({ db: database, namespace })
     await seedProduction({ db: database, namespace })
     await seedNumbering({ db: database, namespace })
   }
@@ -496,7 +499,27 @@ describe('two tablets cutting one hide take turns on its cut lock: one waits, no
 // ---- who an entry names ----------------------------------------------------------------------------------------------------------
 
 describe('who an entry names (Statuto dei Lavoratori art. 4; MES-278): the acknowledged worker, or only the station', () => {
-  it('refuses a worker who has not acknowledged the information notice, before anything is issued', async () => {
+  it("holds every cut while the site's floor is not ready (B-W1-36's gate and the floor rules), in the gate's words", async () => {
+    const [basis] = await admin(`SELECT "monitoringBasis", "monitoringReference", "monitoringRecordedAt", "monitoringRecordedById" FROM "ProductionSettings" WHERE id = $1`, [A.siteA1])
+    expect(basis!.monitoringBasis).not.toBeNull()
+    await admin(`UPDATE "ProductionSettings" SET "monitoringBasis" = NULL, "monitoringReference" = NULL, "monitoringRecordedAt" = NULL, "monitoringRecordedById" = NULL WHERE id = $1`, [A.siteA1])
+    try {
+      const error = await refused('floor', 'POST', cutUrl(WO.station.id), { clientEventId: clientEvent(), code: hides.H06!.code, lines: sets(WO.station) }, 409)
+      expect(refusalOf(error)).toBe('refusal/FLOOR_NOT_READY')
+      expect(error.message).toMatch(/^Cutting is held at this site until its floor is ready: Floor records name workers, but no legal basis is on record/)
+      expect(await onHand(A.bin, hides.H06!.id)).toBe('55.0000')
+    } finally {
+      await admin(`UPDATE "ProductionSettings" SET "monitoringBasis" = $2, "monitoringReference" = $3, "monitoringRecordedAt" = $4, "monitoringRecordedById" = $5 WHERE id = $1`, [
+        A.siteA1,
+        basis!.monitoringBasis,
+        basis!.monitoringReference,
+        basis!.monitoringRecordedAt,
+        basis!.monitoringRecordedById,
+      ])
+    }
+  })
+
+  it('refuses a worker who has not acknowledged the published worker notice, before anything is issued', async () => {
     const error = await refused('floorLead', 'POST', cutUrl(WO.station.id), { clientEventId: clientEvent(), code: hides.H06!.code, lines: sets(WO.station) }, 409)
     expect(error.message).toMatch(/acknowledge the information notice first/)
     expect(await onHand(A.bin, hides.H06!.id)).toBe('55.0000')

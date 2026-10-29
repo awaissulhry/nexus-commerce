@@ -1,6 +1,7 @@
 import type { HideState } from '../../inventory/issue/rules'
 import { quantityText } from '../../inventory/ledger/moves'
 import { NOT_COUNTED_WORDS, usabilityOf, type LotQuality, type UnusableReason } from '../../planning/usable'
+import { NO_DPIA_NOTE, NO_WORKER_NOTICE_NOTE, type FloorReadiness } from '../../privacy/readiness'
 import { Dec, ZERO, type Decimal, type DecimalInput } from '../../tax/decimal'
 import type { WorkOrderStatus } from '../work-orders/machine'
 
@@ -28,6 +29,9 @@ import type { WorkOrderStatus } from '../work-orders/machine'
  *   undo       the cutter's own last entry on this device, before the next one, while nothing was made of it.
  *   correction the office reverses any entry once with a reason: a mirror entry (the same work order, hide, unit and
  *              areas, no pieces) that gives its area and pieces back.
+ *   readiness  a floor cut is real floor work: it waits for the site's floor to be ready (B-W1-36's privacy gate: a
+ *              stored DPIA and a published worker notice; B-W1-37's floor rules: a legal basis on record where the site
+ *              names workers), refused in the gate's own words.
  * A CONSUMED or SCRAPPED hide never changes again (the …_supply_guards trigger), and the cut log trigger cuts none: its
  * entries are not undone or corrected here (the area they gave back could never be cut or returned).
  *
@@ -39,6 +43,7 @@ export const CUTTABLE_STATUSES: readonly WorkOrderStatus[] = Object.freeze(['REL
 
 /** Why a cut, an undo or a correction is refused: a stable code (the screens' words) and its sentence. */
 export const CUT_REFUSALS = [
+  'FLOOR_NOT_READY',
   'WORK_ORDER_NOT_OPEN',
   'CR_VI_PENDING',
   'CR_VI_FAILED',
@@ -240,6 +245,19 @@ export type CutDecision =
 /** The words of a lot that is not usable at the cutting table. */
 export function lotWords(lotCode: string, reason: UnusableReason): string {
   return `Lot ${lotCode}: ${NOT_COUNTED_WORDS[reason]}. Do not cut this hide; only released leather is cut (REACH Annex XVII entry 47: chromium VI).`
+}
+
+/**
+ * Whether the site's floor may log cuts (platform/privacy floorReadinessFor's answer; null: the site is not in scope):
+ * the gate's words for what is missing, the privacy gate's first.
+ */
+export function floorReadyRefusal(readiness: FloorReadiness | null): CutRefusal | null {
+  if (readiness?.readyForFloor) return null
+  const missing = readiness
+    ? [...(readiness.privacy.ready ? [] : readiness.privacy.notes.filter((note) => note === NO_DPIA_NOTE || note === NO_WORKER_NOTICE_NOTE)), ...(readiness.rules.readyForFloor ? [] : readiness.rules.notes)]
+    : []
+  const words = missing.length > 0 ? missing : (readiness?.notes ?? ['The floor rules of this site are not set up.'])
+  return { code: 'FLOOR_NOT_READY', message: `Cutting is held at this site until its floor is ready: ${words.join(' ')}` }
 }
 
 /**
