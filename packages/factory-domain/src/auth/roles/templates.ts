@@ -116,14 +116,13 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
   }),
   template('sales', {
     name: 'Sales',
-    // Design question S2 (what sales sees of cost) waits for the Owner: this is answer b (no margin; an approval still
-    // says why, in words). Answer a (margin % and "under the floor", never a cost: the quotes API drops the margin AMOUNT
-    // without the cost grain) is grains ['price', 'margin'] with requireMfa true (A1 §3.10: a role that sees margins
-    // requires two-factor); the email-out and email-in PG tests then enrol two-factor for their sales users.
-    description: 'Customers, quotes and orders; sees selling prices, not costs or margins.',
-    requireMfa: false,
+    // Design question S2 (what sales sees of cost), the Owner's answer a: margin % and "under the floor", never a cost
+    // (the quotes API drops the margin AMOUNT without the cost grain). A role that sees margins requires two-factor
+    // (A1 §3.10).
+    description: 'Customers, quotes and orders; sees selling prices and margin %, not costs.',
+    requireMfa: true,
     permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send', 'orders.view', 'orders.manage'],
-    grains: ['price'],
+    grains: ['price', 'margin'],
   }),
   template('planner', {
     name: 'Planner',

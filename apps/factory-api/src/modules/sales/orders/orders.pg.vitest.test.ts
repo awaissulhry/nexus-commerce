@@ -17,7 +17,7 @@ import { callerFor } from '../../../core/command'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
-import { addUser, Browser, startHarness, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
+import { addUser, Browser, enrolTotp, startHarness, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { systemContext } from '../../../platform/outbox/system'
 import { afterAccept, afterAcceptanceHandler } from '../quotes/after-acceptance'
 import { orderHandlers } from './handlers'
@@ -198,6 +198,7 @@ beforeAll(async () => {
   const salesUser = await addUser(h, tenantA, { email: 'olga.orders@seed-a.example.com', role: 'sales' })
   sales = new Browser(h.app)
   expect((await sales.signIn(NS.a, salesUser.email, salesUser.password)).status).toBe(200)
+  await enrolTotp(h, sales)
   for (const tenant of ['b', 'c', 'd'] as const) await cutDownToShipped(tenant)
   app = await buildApp(
     { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
