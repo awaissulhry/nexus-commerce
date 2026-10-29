@@ -102,3 +102,15 @@ export function ownsKeys(own: number, holding: number | null): boolean {
   return holding === null ? own === 0 : own === holding
 }
 
+
+/** One page of rows (Owner answer L3: 50). */
+export const FIT_ROWS = 50
+
+/**
+ * How the grid takes its height (Owner, 2026-10-29: no dead space). Up to one page of rows it is exactly as tall as its
+ * rows (`fit`: AG's 150 px minimum body, kept for its overlay, is lifted); with more (after "Show N more") it keeps a
+ * bounded height and scrolls inside, its header in view. No row at all keeps AG's minimum for the "no rows" overlay.
+ */
+export function gridLayout(rowCount: number): { domLayout: 'autoHeight' | 'normal'; fit: boolean } {
+  return rowCount <= FIT_ROWS ? { domLayout: 'autoHeight', fit: rowCount > 0 } : { domLayout: 'normal', fit: false }
+}

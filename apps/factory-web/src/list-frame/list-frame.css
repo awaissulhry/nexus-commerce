@@ -11,6 +11,16 @@
   min-width: 0;
 }
 
+/* A short list (one page of rows or fewer, model.ts gridLayout): exactly its rows' height. AG keeps a 150 px body in
+ * auto-height mode for its overlay, which left an empty band under one or two rows (Owner: no dead space). */
+.fw-list-grid.fit .ag-root-wrapper {
+  --ag-auto-height-min-body-height: 0px;
+}
+
+.fw-list-grid.fit .ag-layout-auto-height .ag-grid-scrolling-rows {
+  min-height: 0;
+}
+
 .fw-list-state {
   display: flex;
   flex-direction: column;
