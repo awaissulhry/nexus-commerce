@@ -4,7 +4,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 /**
  * The numbering module's synthetic seed, for each company of seed/_core.ts: a yearly invoice series that issued two
  * numbers (with their NumberAllocation rows, for made-up invoice ids), a yearly DDT series that starts at 143 as if a
- * paper booklet had used 1-142, and a lot series that never resets. Written in the tenant's office scope, as the app
+ * paper booklet had used 1-142, and a lot series and a shipment series that never reset. Written in the tenant's office scope, as the app
  * writes it.
  *
  * NumberAllocation is append-only and a used series' counter never moves back, so the seed only inserts and skips
@@ -29,6 +29,8 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       { id: invoices, companyId, kind: 'INVOICE', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'FT-{YYYY}-{N:5}', fiscal: true, startValue: 1, nextValue: 3, lastIssuedDate: ISSUED_ON, createdById: actorId },
       { id: id(`series:${company}:DDT:MAIN:${YEAR}`), companyId, kind: 'DDT', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: '{N}/{YYYY}', fiscal: true, startValue: 143, nextValue: 143, createdById: actorId },
       { id: id(`series:${company}:LOT:MAIN:ALL`), companyId, kind: 'LOT', code: 'MAIN', scopeKey: 'ALL', reset: 'NEVER', pattern: 'LOT-{N:6}', fiscal: false, createdById: actorId },
+      // Shipments are numbered from it (apps/factory-api modules/shipping): without one, creating a shipment is refused.
+      { id: id(`series:${company}:SHIPMENT:MAIN:ALL`), companyId, kind: 'SHIPMENT', code: 'MAIN', scopeKey: 'ALL', reset: 'NEVER', pattern: 'SH-{N:5}', fiscal: false, createdById: actorId },
     )
     for (const value of [1, 2]) {
       allocations.push({
