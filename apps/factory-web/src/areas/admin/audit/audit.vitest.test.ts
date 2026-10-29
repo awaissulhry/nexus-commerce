@@ -14,7 +14,7 @@ import { WORKERS } from '../shared/fixtures'
 import { AUDIT_SURFACES, AUDIT_VIEWS, listAudit, type AuditEntry } from './api'
 import { AdminPageMessages } from '../kit/messages'
 import { AUDIT_ENTRIES, designScreen } from './fixtures'
-import { EntryDetail } from './view/AuditView'
+import { ActionCell, ChangedCell, EntryDetail, TimeCell } from './view/AuditView'
 import {
   ACTION_AREAS,
   AUDIT_MODES,
@@ -307,9 +307,47 @@ describe('every SCR-018 design case draws in both languages with no key left on 
     expect(html).not.toContain('Role changes')
   })
 
-  it('an action without words says "changed" and shows its code in the table; export is held with its reason', () => {
-    const html = render(designScreen.cases.find((item) => item.id === 'table')!.model, 'en')
+  it('export is held with its reason', () => {
+    expect(render(designScreen.cases.find((item) => item.id === 'table')!.model, 'en')).toContain('Exporting the log comes in a later step.')
+  })
+
+  it('the Table is the list frame: find = its search, Story / Table and the filters = its tools, Show older in its footer, keys in its icon', () => {
+    const html = render(designScreen.cases.find((item) => item.id === 'table')!.model, 'en').replace(/<!-- -->/g, '')
+    expect(html).toContain('class="fw-list-toolbar"')
+    expect(html).toMatch(/class="fw-list-toolbar".*placeholder="Find in the entries shown/s)
+    expect(html).toMatch(/class="fw-list-toolbar".*aria-label="Who"/s)
+    expect(html).toContain('Show older')
+    expect(html).toContain('aria-label="Keyboard keys of this list"')
+    // The Story is a feed: no frame.
+    expect(render(designScreen.cases.find((item) => item.id === 'story')!.model, 'en')).not.toContain('fw-list-toolbar')
+  })
+})
+
+describe('the Table\'s cells (AG Grid draws them only in a browser: each is drawn alone)', () => {
+  const cell = (node: ReturnType<typeof createElement>, locale: (typeof LOCALES)[number] = 'en') =>
+    renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(AdminPageMessages, { namespace: 'admin-audit' }, node))).replace(/<!-- -->/g, '')
+  const tableModel = designScreen.cases.find((item) => item.id === 'table')!.model.model as AuditViewModel
+
+  it('an action without words says "changed" and shows its code', () => {
+    const unknown = AUDIT_ENTRIES.find((entry) => entry.action === 'quotes.update')!
+    const html = cell(createElement(ActionCell, { entry: unknown }))
     expect(html).toContain('quotes.update')
-    expect(html).toContain('Exporting the log comes in a later step.')
+    expect(html).toContain('changed')
+    const known = AUDIT_ENTRIES.find((entry) => entry.action === 'numbering.closeSeries')!
+    expect(cell(createElement(ActionCell, { entry: known }))).not.toContain('<code')
+  })
+
+  it('the time opens the entry (its address keeps the filters); a tablet\'s own time shows under it', () => {
+    const floor = AUDIT_ENTRIES.find((entry) => deviceTimeDiffers(entry))!
+    const html = cell(createElement(TimeCell, { model: tableModel, entry: floor }))
+    expect(html).toContain(`href="${entryHref(tableModel.prefix, tableModel, floor.id).replace(/&/g, '&amp;')}"`)
+    expect(html).toContain('(tablet ')
+  })
+
+  it('what changed: the first field from → to, then how many more', () => {
+    const many = AUDIT_ENTRIES.find((entry) => changedRows(entry.before, entry.after).length > 2)
+    if (many) expect(cell(createElement(ChangedCell, { entry: many }))).toMatch(/\+ \d+ more change/)
+    const close = AUDIT_ENTRIES.find((entry) => entry.action === 'numbering.closeSeries')!
+    expect(cell(createElement(ChangedCell, { entry: close }))).toContain('→')
   })
 })

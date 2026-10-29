@@ -28,7 +28,8 @@ export interface CompaniesViewModel {
   showArchived: boolean
   /** Companies whose sites are folded away. */
   collapsed: readonly string[]
-  page: number
+  /** Pages of 50 rows shown ("Show 50 more" adds one). */
+  pages: number
   notice?: Notice | null
   /** A dialog open at first (design fixtures; `?new=company`). */
   dialog?: OrgDialog | null

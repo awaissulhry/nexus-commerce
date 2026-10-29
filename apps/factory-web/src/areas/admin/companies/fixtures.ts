@@ -16,7 +16,7 @@ type Case = { page: 'list'; model: CompaniesViewModel } | { page: 'company'; mod
 const CAN = { manageCompanies: true, viewSites: true, manageSites: true }
 const list = (over: Partial<CompaniesViewModel> = {}): Case => ({
   page: 'list',
-  model: { prefix: PREFIX, companies: loaded(COMPANIES), asOf: NOW, can: CAN, query: '', showArchived: false, collapsed: [], page: 1, ...over },
+  model: { prefix: PREFIX, companies: loaded(COMPANIES), asOf: NOW, can: CAN, query: '', showArchived: false, collapsed: [], pages: 1, ...over },
 })
 const record = (over: Partial<CompanyRecordModel> = {}, dock = false): Case => ({
   page: 'company',

@@ -1,17 +1,7 @@
 /*
- * Documents & numbering (B-W0-28, SCR-014) LAYOUT: the company picker in the toolbar, the pattern chips, the Fiscal
- * check rows, the new-series builder and its live preview. Controls are the design system's; semantic tokens only.
+ * Documents & numbering (B-W0-28, SCR-014) LAYOUT: the pattern chips, the Fiscal check rows, the new-series builder and
+ * its live preview. The lists are the shared list frame; controls are the design system's; semantic tokens only.
  */
-.fw-adm-docs-company {
-  display: inline-flex;
-  min-width: 0;
-  max-width: 320px;
-}
-
-.fw-adm-docs-keys {
-  margin-left: auto;
-}
-
 .fw-adm-docs-chips {
   display: inline-flex;
   flex-wrap: wrap;
@@ -114,12 +104,4 @@
   .fw-adm-docs-proof {
     grid-template-columns: 1fr;
   }
-
-  .fw-adm-docs-keys {
-    display: none;
-  }
-}
-
-.fw-adm-docs-banner {
-  padding: var(--nds-space-12) var(--nds-space-12) 0;
 }

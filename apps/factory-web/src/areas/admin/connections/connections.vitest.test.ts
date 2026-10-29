@@ -10,12 +10,15 @@ import type { DesignScreen } from '../../../lib/design/design-screen'
 import { LOCALES } from '../../../lib/i18n/locales'
 import { CATALOGUE, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
+import { bulkHeld } from '../kit/bulk-model'
 import { runWithStepUp } from '../shared/step-up'
 import { checkIdentity, INBOUND_STATUSES, INTEGRATION_MODES, INTEGRATION_PROVIDERS, CALL_STATUSES, listAccounts, listCalls, setPaused, DISPLAY_NAME_POLICIES, IDENTITY_KINDS } from './api'
 import { ACCOUNTS, CALLS, CHOICES, designScreen as connectionsScreen, IDENTITY_FAILED, IDENTITY_READY, IDENTITY_WAITING } from './fixtures'
 import { designScreen as mailScreen } from './mail/fixtures'
 import { dnsRows, draftProblems, emptyDraft, fromAddressOf, identityState, recordStateOf, recordsText } from './mail/model'
-import { accountState, CONNECTION_TILES, KNOWN_REASONS, KNOWN_SETTINGS, LATER_SERVICES, residencyRows, sameDay, serviceRows, tileMatch } from './model'
+import { accountState, CONNECTION_TILES, KNOWN_REASONS, KNOWN_SETTINGS, LATER_SERVICES, residencyRows, sameDay, serviceRows, switchReach, tileMatch } from './model'
+import { CallsCell, ServiceCell, StateCell } from './view/ConnectionsView'
+import { ConnectionsMessages } from './view/parts'
 
 /**
  * Connections & API (B-W0-28, SCR-087 and SCR-015): the state words, tiles and "Not connected" rows; what we know of
@@ -83,6 +86,32 @@ describe('the services list', () => {
       ['SENDCLOUD', null],
       ['VIES', null],
     ])
+  })
+})
+
+describe('pausing or resuming several services at once', () => {
+  const rows = serviceRows(ACCOUNTS, CHOICES, null, '', words)
+  const pick = (...ids: string[]) => rows.filter((row) => ids.includes(row.id))
+  const missing = rows.find((row) => row.kind === 'missing')!
+  const [mail, , , carrier, vat] = ACCOUNTS as [(typeof ACCOUNTS)[number], unknown, unknown, (typeof ACCOUNTS)[number], (typeof ACCOUNTS)[number]]
+
+  it('Pause applies to the running services; a paused one and a "Not connected" row are left out with the reason', () => {
+    const reach = switchReach(pick(mail.id, carrier.id, vat.id, missing.id), true)
+    expect(reach.applies.map((row) => row.account.id)).toEqual([mail.id, carrier.id])
+    expect(reach.left.map((entry) => entry.why)).toEqual(['conn.bulk.left.paused', 'conn.bulk.left.notConnected'])
+  })
+
+  it('Resume applies to the paused services only', () => {
+    const reach = switchReach(pick(mail.id, vat.id, missing.id), false)
+    expect(reach.applies.map((row) => row.account.id)).toEqual([vat.id])
+    expect(reach.left.map((entry) => entry.why)).toEqual(['conn.bulk.left.running', 'conn.bulk.left.notConnected'])
+  })
+
+  it('held without the right, and when nothing selected can be switched', () => {
+    expect(bulkHeld(switchReach(pick(mail.id), true), false, { right: 'held.needs', none: 'conn.bulk.noneToPause' })).toBe('held.needs')
+    expect(bulkHeld(switchReach(pick(missing.id), true), true, { right: 'held.needs', none: 'conn.bulk.noneToPause' })).toBe('conn.bulk.noneToPause')
+    expect(bulkHeld(switchReach(pick(vat.id), true), true, { right: 'held.needs', none: 'conn.bulk.noneToPause' })).toBe('conn.bulk.noneToPause')
+    expect(bulkHeld(switchReach(pick(vat.id), false), true, { right: 'held.needs', none: 'conn.bulk.noneToResume' })).toBeNull()
   })
 })
 
@@ -226,6 +255,9 @@ describe('every Connections string exists in it and en', () => {
       ...['found', 'waiting', 'failed', 'retrying', 'notChecked'].map((state) => `mail.record.${state}`),
       ...['dkim', 'spf', 'dmarc', 'mx'].map((purpose) => `mail.purpose.${purpose}`),
       ...['required', 'noAccount', 'domain', 'localPart'].map((problem) => `mail.form.${problem}`),
+      ...['pause', 'resume'].flatMap((verb) => [`conn.bulk.${verb}Title`, `conn.bulk.${verb}Go`, `conn.bulk.${verb}Body`, `conn.bulk.${verb}Undo`]),
+      ...['paused', 'resumed'].flatMap((verb) => ['Done', 'Partial', 'Failed'].map((part) => `conn.bulk.${verb}${part}`)),
+      ...['notConnected', 'paused', 'running'].map((why) => `conn.bulk.left.${why}`),
     ]
     const keys = [...literal, ...built].filter((key) => !/\.$/.test(key))
     expect(keys.length).toBeGreaterThan(180)
@@ -279,9 +311,22 @@ describe('every Connections design case draws in both languages with no key left
     for (const locale of LOCALES) expect(own(locale)['conn.connect.held']).toMatch(/Nexus/)
   })
 
-  it('a "Not connected" row for the company without SDI or a carrier', () => {
+  it('the services list is the list frame: the count and the keys in the footer icon, never a key hint above it', () => {
     const html = draw(CONNECTIONS, 'services')
-    expect(html.match(/Not connected/g)?.length).toBe(2)
+    expect(html).toContain('7 services')
+    expect(html).toContain('aria-label="Keyboard keys of this list"')
+    expect(html).toContain('placeholder="Search services"')
+  })
+
+  it('selected services: Pause and Resume say their reach; the result notice names each refused service with the reason', () => {
+    const selected = draw(CONNECTIONS, 'services-selected')
+    expect(selected).toContain('4 selected')
+    expect(selected).toContain('Pause 2')
+    expect(selected).toContain('Resume 1')
+    const after = draw(CONNECTIONS, 'paused-many').replace(/<!-- -->/g, '')
+    expect(after).toContain('1 of 2 services paused. Not paused:')
+    expect(after).toContain('Carrier Officina Demo (test): You may not do this here.')
+    expect(draw(CONNECTIONS, 'services-selected', 'it')).toContain('Sospendi 2')
   })
 
   it('secrets are write-only: saved or not, when — never a value', () => {
@@ -306,6 +351,22 @@ describe('every Connections design case draws in both languages with no key left
     expect(html).toContain('abcd1234demo._domainkey.notify.officina-demo.example.com')
     expect(draw(MAIL, 'no-manage')).toContain('Needs the right: Manage the companies’ sending addresses')
     expect(draw(MAIL, 'none')).toContain('Connect e-mail first: everything that leaves the factory needs it.')
+  })
+
+  it('the cells: a "Not connected" row for the company without SDI or a carrier; a failing service says the error as data', () => {
+    const cell = (node: ReturnType<typeof createElement>) => renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(ConnectionsMessages, null, node)))
+    const rows = serviceRows(ACCOUNTS, CHOICES, null, '', words)
+    const missing = rows.filter((row) => row.kind === 'missing')
+    expect(missing).toHaveLength(2)
+    for (const row of missing) expect(cell(createElement(ServiceCell, { row, prefix: '/w/DEMO' }))).toContain('Not connected')
+    const carrier = rows.find((row) => row.kind === 'account' && row.account.provider === 'SENDCLOUD')!
+    expect(cell(createElement(ServiceCell, { row: carrier, prefix: '/w/DEMO' }))).toContain(`href="/w/DEMO/admin/connections/${ACCOUNTS[3]!.id}"`)
+    const state = cell(createElement(StateCell, { row: carrier, now: ACCOUNTS[3]!.lastErrorAt! }))
+    expect(state).toContain('Failing since')
+    expect(state).toContain('HTTP 503 from the test system')
+    const calls = cell(createElement(CallsCell, { account: ACCOUNTS[3]! }))
+    expect(calls).toContain('4 failed')
+    expect(calls).toContain('title="9 calls in 24 h"')
   })
 
   it('Italian words on the Italian screen', () => {

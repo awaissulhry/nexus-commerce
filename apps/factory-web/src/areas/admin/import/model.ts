@@ -1,4 +1,5 @@
-import type { Loaded, Notice } from '../shared/model'
+import type { Loaded } from '../shared/model'
+import { reachOf, type BulkNotice, type Reach } from '../kit/bulk-model'
 import { IMPORT_MAX_BYTES, layoutSchema, type ImportJob, type Importer, type ImportRow, type Layout, type NumberFormat } from './api'
 
 /**
@@ -80,6 +81,18 @@ export const applicable = (job: Pick<ImportJob, 'createCount' | 'updateCount'>) 
 
 /** May be cancelled (the API's machine: UPLOADED, PLANNED, APPLYING, FAILED). */
 export const mayCancel = (job: Pick<ImportJob, 'status'>) => job.status !== 'APPLIED' && job.status !== 'CANCELLED'
+
+/**
+ * "Cancel N imports" (bulk) applies to the selected jobs nothing was written from yet: the sheet being read, or the
+ * dry run waiting to be applied. A job being applied, one that stopped (open it: apply again or cancel it alone), and
+ * one applied or cancelled already are left out with the reason. Each is one `POST /imports/:id/cancel` with its version.
+ */
+export function cancelReach(jobs: readonly ImportJob[]): Reach<ImportJob> {
+  return reachOf(jobs, (job) => {
+    const phase = phaseOf(job)
+    return phase === 'reading' || phase === 'planned' ? null : `imp.bulk.left.${phase}`
+  })
+}
 
 export interface ImportRights {
   view: boolean
@@ -220,7 +233,13 @@ export interface ImportViewModel {
   people: Readonly<Record<string, string>>
   asOf: string | null
   wizard: WizardModel | null
-  notice?: Notice | null
+  /** The jobs ticked in Recent imports (ids). */
+  selected?: readonly string[]
+  /** "Cancel N imports" asked for these jobs (the bulk confirm is open). */
+  cancelMany?: readonly string[] | null
+  /** The bulk cancel is running. */
+  bulkBusy?: boolean
+  notice?: BulkNotice | null
 }
 
 export const RECENT_LIMIT = 50

@@ -104,8 +104,3 @@
   gap: var(--nds-space-2);
   min-width: 0;
 }
-
-.fw-adm-conn-more {
-  display: flex;
-  justify-content: center;
-}

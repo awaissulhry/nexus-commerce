@@ -1,13 +1,17 @@
 'use client'
 
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useMemo, type ReactNode } from 'react'
 import Link from 'next/link'
 import { FileClock, Search } from 'lucide-react'
 import { Banner, Card, DetailPopover, EmptyState, KeyValue, MetricStrip, SummaryTable } from '@nexus/ui/components'
+import { IdentityCell, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { DetailModal } from '@nexus/ui/patterns'
 import { Button, Input, SegmentedControl, Select, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
+import { ListFrame } from '../../../../list-frame/ListFrame'
+import type { ListKey } from '../../../../list-frame/model'
+import { ListProblem, useKeysHelp } from '../../kit/list'
 import { AdminPageMessages } from '../../kit/messages'
 import { AUDIT_SURFACES, type AuditEntry } from '../api'
 import {
@@ -57,9 +61,10 @@ export interface AuditActions {
 export const FIND_ID = 'fw-adm-audit-find'
 
 /**
- * SCR-018 — Admin › Audit log (design 02 admin.audit): every write as a sentence (Story) or a row (Table), the saved
- * views as tiles, filters in the address, one entry in a centred DetailModal with every field before → after, its
- * context and the rows its request wrote. Fetches nothing (AuditPage.tsx reads the API).
+ * SCR-018 — Admin › Audit log (design 02 admin.audit): every write as a sentence (Story, a feed) or a row (Table, the
+ * Office's read-only list frame: the find field is its search, the filters its tools, "Show older" its footer, the keys
+ * in its footer icon), the saved views as tiles, filters in the address, one entry in a centred DetailModal with every
+ * field before → after, its context and the rows its request wrote. Fetches nothing (AuditPage.tsx reads the API).
  */
 export function AuditView({ model, actions }: { model: AuditViewModel; actions?: AuditActions }) {
   return (
@@ -100,7 +105,6 @@ function Audit({ model, actions }: { model: AuditViewModel; actions?: AuditActio
   const ta = useT('admin')
   const locale = useLocale()
   const filters = model.filters
-  const narrowed = filterCount(filters) > 0
   const items = model.entries.items
   const shown = items ? findOnPage(items, model.find, (entry) => `${words.who(entry)} ${words.did(entry)} ${words.record(entry)} ${entry.reason ?? ''}`) : []
 
@@ -132,7 +136,20 @@ function Audit({ model, actions }: { model: AuditViewModel; actions?: AuditActio
     )
   }
 
-  const set = (next: Partial<AuditFilters>) => actions?.onFilters?.({ ...filters, ...next })
+  const find = (
+    <Input
+      id={FIND_ID}
+      size="sm"
+      fieldClassName="fw-adm-fill"
+      type="search"
+      leadingIcon={<Search size={14} aria-hidden />}
+      aria-label={t('audit.find.label')}
+      aria-keyshortcuts="/"
+      placeholder={t('audit.find.placeholder')}
+      value={model.find}
+      onChange={(event) => actions?.onFind?.(event.target.value)}
+    />
+  )
   return (
     <div className="fw-adm fw-adm-audit">
       <div className="fw-adm-head">
@@ -155,142 +172,48 @@ function Audit({ model, actions }: { model: AuditViewModel; actions?: AuditActio
           value: model.counts ? String(model.counts[tile]) : '—',
           hint: t(`audit.tileHint.${tile}`),
           active: filters.view === tile,
-          onClick: () => set({ view: filters.view === tile ? null : tile }),
+          onClick: () => actions?.onFilters?.({ ...filters, view: filters.view === tile ? null : tile }),
         }))}
       />
       <p className="fw-adm-hint">{t('audit.tilesWindow')}</p>
 
-      <div className="fw-adm-toolbar fw-adm-audit-toolbar">
-        <SegmentedControl
-          ariaLabel={t('audit.mode.label')}
-          size="sm"
-          value={model.mode}
-          onChange={(value) => actions?.onMode?.(value as AuditMode)}
-          options={[
-            { value: 'story', label: t('audit.mode.story') },
-            { value: 'table', label: t('audit.mode.table') },
-          ]}
-        />
-        <span className="fw-adm-toolbar-search">
-          <Input
-            id={FIND_ID}
-            size="sm"
-            fieldClassName="fw-adm-fill"
-            type="search"
-            leadingIcon={<Search size={14} aria-hidden />}
-            aria-label={t('audit.find.label')}
-            aria-keyshortcuts="/"
-            placeholder={t('audit.find.placeholder')}
-            value={model.find}
-            onChange={(event) => actions?.onFind?.(event.target.value)}
-          />
-        </span>
-      </div>
-
-      <div className="fw-adm-audit-filters" role="group" aria-label={t('audit.filter.label')}>
-        {model.people && (
-          <FilterSelect label={t('audit.filter.who')} value={filters.actorId ?? ''} onChange={(value) => set({ actorId: value || null })} any={t('audit.filter.anyone')}>
-            {model.people.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.name}
-              </option>
-            ))}
-          </FilterSelect>
-        )}
-        <FilterSelect label={t('audit.filter.surface')} value={filters.audience ?? ''} onChange={(value) => set({ audience: (value || null) as AuditFilters['audience'] })} any={t('audit.filter.anySurface')}>
-          {AUDIT_SURFACES.map((surface) => (
-            <option key={surface} value={surface}>
-              {t(`audit.surface.${surface}`)}
-            </option>
-          ))}
-        </FilterSelect>
-        <FilterSelect label={t('audit.filter.type')} value={filters.recordType ?? ''} onChange={(value) => set({ recordType: value || null, recordId: null })} any={t('audit.filter.anyType')}>
-          {[...new Set([...RECORD_TYPES, ...(filters.recordType ? [filters.recordType] : [])])].map((type) => (
-            <option key={type} value={type}>
-              {words.type(type)}
-            </option>
-          ))}
-        </FilterSelect>
-        <FilterSelect label={t('audit.filter.area')} value={filters.area ?? ''} onChange={(value) => set({ area: (value || null) as AuditFilters['area'] })} any={t('audit.filter.anyArea')}>
-          {ACTION_AREAS.map((area) => (
-            <option key={area} value={area}>
-              {t(`audit.area.${area}`)}
-            </option>
-          ))}
-        </FilterSelect>
-        {model.companies.length > 0 && (
-          <FilterSelect label={t('audit.filter.company')} value={filters.companyId ?? ''} onChange={(value) => set({ companyId: value || null })} any={t('audit.filter.anyCompany')}>
-            {model.companies.map((company) => (
-              <option key={company.id} value={company.id}>
-                {company.name}
-              </option>
-            ))}
-          </FilterSelect>
-        )}
-        <FilterSelect label={t('audit.filter.period')} value={filters.period} onChange={(value) => set({ period: value as AuditFilters['period'] })}>
-          {AUDIT_PERIODS.map((period) => (
-            <option key={period} value={period}>
-              {t(`audit.period.${period}`)}
-            </option>
-          ))}
-        </FilterSelect>
-        {narrowed && (
-          <Button size="sm" variant="quiet" onClick={() => actions?.onFilters?.(NO_FILTERS)}>
-            {ta('list.clearFilters')}
-          </Button>
-        )}
-      </div>
-
-      {(filters.view || filters.recordId) && (
-        <span className="fw-adm-tags">
-          {filters.view && <Tag tone="info">{t('audit.showing.view', { view: t(`audit.tile.${filters.view}`) })}</Tag>}
-          {filters.recordId && <Tag tone="info">{t('audit.showing.record', { record: `${filters.recordType ? words.type(filters.recordType) : ''} ${model.recordWords ?? shortId(filters.recordId)}`.trim() })}</Tag>}
-        </span>
-      )}
-      {model.hiddenGrains.length > 0 && <p className="fw-adm-hint">{t('audit.hidden', { grains: model.hiddenGrains.map((grain) => ta(`grains.short.${grain}`)).join(', ') })}</p>}
-
-      {model.entries.problem || items === null ? (
-        <States problem={model.entries.problem} onRetry={actions?.onRetry} />
-      ) : items.length === 0 ? (
-        <Card padded>
-          <EmptyState
-            icon={<FileClock size={24} aria-hidden />}
-            title={narrowed ? t('audit.empty.filteredTitle') : t('audit.empty.title')}
-            description={narrowed ? t('audit.empty.filteredBody') : t('audit.empty.body')}
-            action={
-              narrowed ? (
-                <Button size="sm" onClick={() => actions?.onFilters?.(NO_FILTERS)}>
-                  {ta('list.clearFilters')}
-                </Button>
-              ) : undefined
-            }
-          />
-        </Card>
-      ) : shown.length === 0 ? (
-        <Card padded>
-          <EmptyState
-            title={ta('list.noMatch')}
-            description={t('audit.find.none')}
-            action={
-              <Button size="sm" onClick={() => actions?.onFind?.('')}>
-                {ta('list.clearSearch')}
-              </Button>
-            }
-          />
-        </Card>
-      ) : model.mode === 'story' ? (
-        <Story model={model} entries={shown} total={items.length} />
+      {model.mode === 'table' ? (
+        <>
+          {(filters.view || filters.recordId) && <Showing model={model} />}
+          {model.hiddenGrains.length > 0 && <p className="fw-adm-hint">{t('audit.hidden', { grains: model.hiddenGrains.map((grain) => ta(`grains.short.${grain}`)).join(', ') })}</p>}
+          <Table model={model} entries={shown} actions={actions} find={find} tools={<Filters model={model} actions={actions} compact />} />
+        </>
       ) : (
-        <Table model={model} entries={shown} total={items.length} />
-      )}
-
-      {items && items.length > 0 && (model.nextBefore || model.older?.problem) && (
-        <div className="fw-adm-audit-older">
-          {model.older?.problem && <Banner tone="danger" title={ta(model.older.problem)} />}
-          <Button size="sm" onClick={() => actions?.onOlder?.()} heldReason={model.older?.loading ? t('audit.held.loading') : null}>
-            {model.older?.loading && <Spinner size={14} />} {t('audit.older')}
-          </Button>
-        </div>
+        <>
+          <div className="fw-adm-toolbar fw-adm-audit-toolbar">
+            <ModeSwitch model={model} actions={actions} />
+            <span className="fw-adm-toolbar-search">{find}</span>
+          </div>
+          <Filters model={model} actions={actions} />
+          {(filters.view || filters.recordId) && <Showing model={model} />}
+          {model.hiddenGrains.length > 0 && <p className="fw-adm-hint">{t('audit.hidden', { grains: model.hiddenGrains.map((grain) => ta(`grains.short.${grain}`)).join(', ') })}</p>}
+          {model.entries.problem || items === null ? (
+            <States problem={model.entries.problem} onRetry={actions?.onRetry} />
+          ) : items.length === 0 ? (
+            <Card padded>
+              <NothingYet model={model} actions={actions} />
+            </Card>
+          ) : shown.length === 0 ? (
+            <Card padded>
+              <NoMatch actions={actions} />
+            </Card>
+          ) : (
+            <Story model={model} entries={shown} total={items.length} />
+          )}
+          {items && items.length > 0 && (model.nextBefore || model.older?.problem) && (
+            <div className="fw-adm-audit-older">
+              {model.older?.problem && <Banner tone="danger" title={ta(model.older.problem)} />}
+              <Button size="sm" onClick={() => actions?.onOlder?.()} heldReason={model.older?.loading ? t('audit.held.loading') : null}>
+                {model.older?.loading && <Spinner size={14} />} {t('audit.older')}
+              </Button>
+            </div>
+          )}
+        </>
       )}
       {items && items.length > 0 && !model.nextBefore && !model.older?.problem && <p className="fw-adm-hint">{t('audit.end')}</p>}
       <p className="fw-adm-hint">{t('audit.later')}</p>
@@ -300,7 +223,159 @@ function Audit({ model, actions }: { model: AuditViewModel; actions?: AuditActio
   )
 }
 
-function FilterSelect({ label, value, onChange, any, children }: { label: string; value: string; onChange: (value: string) => void; any?: string; children?: ReactNode }) {
+/** Story or Table (S switches them). */
+function ModeSwitch({ model, actions }: { model: AuditViewModel; actions?: AuditActions }) {
+  const { t } = useWords()
+  return (
+    <SegmentedControl
+      ariaLabel={t('audit.mode.label')}
+      size="sm"
+      value={model.mode}
+      onChange={(value) => actions?.onMode?.(value as AuditMode)}
+      options={[
+        { value: 'story', label: t('audit.mode.story') },
+        { value: 'table', label: t('audit.mode.table') },
+      ]}
+    />
+  )
+}
+
+/**
+ * The filters (who, where it came from, record type, area, company, period) and Clear: under the find field in the
+ * Story; in the Table they are the frame's tools (with Story / Table first), each select named by its label.
+ */
+function Filters({ model, actions, compact = false }: { model: AuditViewModel; actions?: AuditActions; compact?: boolean }) {
+  const words = useWords()
+  const { t } = words
+  const ta = useT('admin')
+  const filters = model.filters
+  const set = (next: Partial<AuditFilters>) => actions?.onFilters?.({ ...filters, ...next })
+  const selects = (
+    <>
+      {model.people && (
+        <FilterSelect compact={compact} label={t('audit.filter.who')} value={filters.actorId ?? ''} onChange={(value) => set({ actorId: value || null })} any={t('audit.filter.anyone')}>
+          {model.people.map((person) => (
+            <option key={person.id} value={person.id}>
+              {person.name}
+            </option>
+          ))}
+        </FilterSelect>
+      )}
+      <FilterSelect compact={compact} label={t('audit.filter.surface')} value={filters.audience ?? ''} onChange={(value) => set({ audience: (value || null) as AuditFilters['audience'] })} any={t('audit.filter.anySurface')}>
+        {AUDIT_SURFACES.map((surface) => (
+          <option key={surface} value={surface}>
+            {t(`audit.surface.${surface}`)}
+          </option>
+        ))}
+      </FilterSelect>
+      <FilterSelect compact={compact} label={t('audit.filter.type')} value={filters.recordType ?? ''} onChange={(value) => set({ recordType: value || null, recordId: null })} any={t('audit.filter.anyType')}>
+        {[...new Set([...RECORD_TYPES, ...(filters.recordType ? [filters.recordType] : [])])].map((type) => (
+          <option key={type} value={type}>
+            {words.type(type)}
+          </option>
+        ))}
+      </FilterSelect>
+      <FilterSelect compact={compact} label={t('audit.filter.area')} value={filters.area ?? ''} onChange={(value) => set({ area: (value || null) as AuditFilters['area'] })} any={t('audit.filter.anyArea')}>
+        {ACTION_AREAS.map((area) => (
+          <option key={area} value={area}>
+            {t(`audit.area.${area}`)}
+          </option>
+        ))}
+      </FilterSelect>
+      {model.companies.length > 0 && (
+        <FilterSelect compact={compact} label={t('audit.filter.company')} value={filters.companyId ?? ''} onChange={(value) => set({ companyId: value || null })} any={t('audit.filter.anyCompany')}>
+          {model.companies.map((company) => (
+            <option key={company.id} value={company.id}>
+              {company.name}
+            </option>
+          ))}
+        </FilterSelect>
+      )}
+      <FilterSelect compact={compact} label={t('audit.filter.period')} value={filters.period} onChange={(value) => set({ period: value as AuditFilters['period'] })}>
+        {AUDIT_PERIODS.map((period) => (
+          <option key={period} value={period}>
+            {t(`audit.period.${period}`)}
+          </option>
+        ))}
+      </FilterSelect>
+      {filterCount(filters) > 0 && (
+        <Button size="sm" variant="quiet" onClick={() => actions?.onFilters?.(NO_FILTERS)}>
+          {ta('list.clearFilters')}
+        </Button>
+      )}
+    </>
+  )
+  if (compact)
+    return (
+      <>
+        <ModeSwitch model={model} actions={actions} />
+        {selects}
+      </>
+    )
+  return (
+    <div className="fw-adm-audit-filters" role="group" aria-label={t('audit.filter.label')}>
+      {selects}
+    </div>
+  )
+}
+
+/** What the list is narrowed to beyond the filters: a saved view, one record's history. */
+function Showing({ model }: { model: AuditViewModel }) {
+  const words = useWords()
+  const { t } = words
+  const filters = model.filters
+  return (
+    <span className="fw-adm-tags">
+      {filters.view && <Tag tone="info">{t('audit.showing.view', { view: t(`audit.tile.${filters.view}`) })}</Tag>}
+      {filters.recordId && <Tag tone="info">{t('audit.showing.record', { record: `${filters.recordType ? words.type(filters.recordType) : ''} ${model.recordWords ?? shortId(filters.recordId)}`.trim() })}</Tag>}
+    </span>
+  )
+}
+
+function NothingYet({ model, actions }: { model: AuditViewModel; actions?: AuditActions }) {
+  const { t } = useWords()
+  const ta = useT('admin')
+  const narrowed = filterCount(model.filters) > 0
+  return (
+    <EmptyState
+      icon={<FileClock size={24} aria-hidden />}
+      title={narrowed ? t('audit.empty.filteredTitle') : t('audit.empty.title')}
+      description={narrowed ? t('audit.empty.filteredBody') : t('audit.empty.body')}
+      action={
+        narrowed ? (
+          <Button size="sm" onClick={() => actions?.onFilters?.(NO_FILTERS)}>
+            {ta('list.clearFilters')}
+          </Button>
+        ) : undefined
+      }
+    />
+  )
+}
+
+function NoMatch({ actions }: { actions?: AuditActions }) {
+  const { t } = useWords()
+  const ta = useT('admin')
+  return (
+    <EmptyState
+      title={ta('list.noMatch')}
+      description={t('audit.find.none')}
+      action={
+        <Button size="sm" onClick={() => actions?.onFind?.('')}>
+          {ta('list.clearSearch')}
+        </Button>
+      }
+    />
+  )
+}
+
+function FilterSelect({ label, value, onChange, any, children, compact = false }: { label: string; value: string; onChange: (value: string) => void; any?: string; children?: ReactNode; compact?: boolean }) {
+  if (compact)
+    return (
+      <Select size="sm" aria-label={label} title={label} value={value} onChange={(event) => onChange(event.target.value)}>
+        {any !== undefined && <option value="">{any}</option>}
+        {children}
+      </Select>
+    )
   return (
     <label className="fw-adm-audit-filter">
       <span className="fw-adm-audit-filter-label">{label}</span>
@@ -424,79 +499,138 @@ function Time({ entry, full = false }: { entry: AuditEntry; full?: boolean }) {
   )
 }
 
-function Changed({ entry }: { entry: AuditEntry }) {
+/** What changed, in a cell of two lines: the first field from → to, then the next one or how many more. */
+export function ChangedCell({ entry }: { entry: AuditEntry }) {
   const words = useWords()
   const rows = changedRows(entry.before, entry.after)
   if (rows.length === 0) return <span className="fw-adm-hint">{words.t('audit.change.none')}</span>
+  const line = (row: (typeof rows)[number]) => words.t('audit.change.row', { field: words.field(row.field), from: row.from ?? '—', to: row.to ?? '—' })
   return (
-    <span className="fw-adm-cell">
-      {rows.slice(0, 2).map((row) => (
-        <span key={row.field} className="fw-adm-audit-change">
-          {words.t('audit.change.row', { field: words.field(row.field), from: row.from ?? '—', to: row.to ?? '—' })}
+    <span className="fw-adm-two">
+      <span className="fw-adm-audit-change" title={line(rows[0]!)}>
+        {line(rows[0]!)}
+      </span>
+      {rows.length === 2 ? (
+        <span className="fw-adm-audit-change" title={line(rows[1]!)}>
+          {line(rows[1]!)}
         </span>
-      ))}
-      {rows.length > 2 && <span className="fw-adm-hint">{words.t('audit.change.more', { count: rows.length - 2 })}</span>}
+      ) : rows.length > 2 ? (
+        <span className="fw-adm-hint">{words.t('audit.change.more', { count: rows.length - 1 })}</span>
+      ) : null}
     </span>
   )
 }
 
-function Table({ model, entries, total }: { model: AuditViewModel; entries: readonly AuditEntry[]; total: number }) {
+/** When (a link that opens the entry; the tablet's own time under it when it differs) and, for a screen reader, what. */
+export function TimeCell({ model, entry }: { model: Pick<AuditViewModel, 'prefix' | 'filters' | 'mode'>; entry: AuditEntry }) {
+  const words = useWords()
+  const locale = useLocale()
+  const when = formatDateTime(entry.at, { locale })
+  return (
+    <IdentityCell
+      noImage
+      href={entryHref(model.prefix, model, entry.id)}
+      title={
+        <>
+          {when}
+          <span className="fw-adm-sr"> — {words.t('audit.openEntry', { what: `${words.who(entry)} ${words.did(entry)}` })}</span>
+        </>
+      }
+      titleAttr={when}
+      sub={deviceTimeDiffers(entry) && entry.deviceTime ? <span>{words.t('audit.deviceTime', { time: formatDateTime(entry.deviceTime, { locale }) })}</span> : undefined}
+    />
+  )
+}
+
+/** The action in words; one this page has no words for says "changed" with its code under it. */
+export function ActionCell({ entry }: { entry: AuditEntry }) {
+  const words = useWords()
+  if (words.knows(entry)) return <>{words.did(entry)}</>
+  return (
+    <span className="fw-adm-two">
+      <span>{words.did(entry)}</span>
+      <code className="fw-adm-code">{entry.action}</code>
+    </span>
+  )
+}
+
+/** The Table's columns (one entry per row, newest first). */
+export function useAuditColumns(model: Pick<AuditViewModel, 'prefix' | 'filters' | 'mode' | 'companies'>): ColDef<AuditEntry>[] {
   const words = useWords()
   const { t } = words
-  const locale = useLocale()
+  const { prefix, filters, mode, companies } = model
+  // The page reads the filters from the address on each render: their content, not their identity, is the dependency.
+  const filtersKey = JSON.stringify(filters)
+  return useMemo<ColDef<AuditEntry>[]>(() => {
+    const at = { prefix, filters, mode }
+    return [
+      { colId: 'time', headerName: t('audit.col.time'), flex: 1.2, minWidth: 160, cellRenderer: ({ data }: ICellRendererParams<AuditEntry>) => (data ? <TimeCell model={at} entry={data} /> : null) },
+      { colId: 'who', headerName: t('audit.col.who'), flex: 1.2, minWidth: 140, valueGetter: ({ data }) => (data ? words.who(data) : ''), tooltipValueGetter: ({ value }) => value as string },
+      { colId: 'where', headerName: t('audit.col.where'), flex: 1.2, minWidth: 140, valueGetter: ({ data }) => (data ? (whereOf(data, companies) ?? '—') : ''), tooltipValueGetter: ({ value }) => value as string },
+      { colId: 'surface', headerName: t('audit.col.surface'), flex: 0.7, minWidth: 90, valueGetter: ({ data }) => (data ? t(`audit.surface.${data.audience}`) : '') },
+      { colId: 'action', headerName: t('audit.col.action'), flex: 1.3, minWidth: 150, cellRenderer: ({ data }: ICellRendererParams<AuditEntry>) => (data ? <ActionCell entry={data} /> : null) },
+      {
+        colId: 'record',
+        headerName: t('audit.col.record'),
+        flex: 1.3,
+        minWidth: 160,
+        cellRenderer: ({ data }: ICellRendererParams<AuditEntry>) => {
+          if (!data) return null
+          const href = recordHref(prefix, data)
+          return href ? (
+            <Link className="fw-adm-name" href={href}>
+              {words.record(data)}
+            </Link>
+          ) : (
+            words.record(data)
+          )
+        },
+      },
+      { colId: 'changed', headerName: t('audit.col.changed'), flex: 1.8, minWidth: 220, cellRenderer: ({ data }: ICellRendererParams<AuditEntry>) => (data ? <ChangedCell entry={data} /> : null) },
+      { colId: 'why', headerName: t('audit.col.why'), flex: 1, minWidth: 120, valueGetter: ({ data }) => (data ? (data.reason ?? '—') : ''), tooltipValueGetter: ({ value }) => value as string },
+    ]
+    // `words` reads `t`; it is rebuilt with it. `filters` changes with `filtersKey`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t, prefix, filtersKey, mode, companies])
+}
+
+/** The Table: the Office's read-only list frame (search = the find field, tools = Story / Table and the filters). */
+function Table({ model, entries, actions, find, tools }: { model: AuditViewModel; entries: readonly AuditEntry[]; actions?: AuditActions; find: ReactNode; tools: ReactNode }) {
+  const words = useWords()
+  const { t } = words
+  const ta = useT('admin')
+  const columns = useAuditColumns(model)
+  const own: ListKey[] = [{ keys: ['s'], does: t('audit.keys.mode') }]
+  const { onHelp, help } = useKeysHelp(own, false)
+  const items = model.entries.items
+  const state: ReactNode = model.entries.problem ? (
+    <ListProblem problem={model.entries.problem} onRetry={actions?.onRetry} />
+  ) : items && items.length === 0 ? (
+    <NothingYet model={model} actions={actions} />
+  ) : items && entries.length === 0 ? (
+    <NoMatch actions={actions} />
+  ) : undefined
+  const older = items && items.length > 0 && (model.nextBefore || model.older?.problem)
   return (
-    <Card className="fw-adm-tablecard">
-      <div className="fw-adm-audit-countline">
-        <p className="fw-adm-count" role="status">
-          {t('audit.count', { shown: entries.length, total })}
-        </p>
-        <TimeHelp />
-      </div>
-      <div className="fw-adm-table">
-        <SummaryTable
-          label={t('audit.tableLabel')}
-          columns={[t('audit.col.time'), t('audit.col.who'), t('audit.col.where'), t('audit.col.surface'), t('audit.col.action'), t('audit.col.record'), t('audit.col.changed'), t('audit.col.why')]}
-          widths={['11%', '13%', '13%', '7%', '15%', '14%', '17%', '10%']}
-          align={['left', 'left', 'left', 'left', 'left', 'left', 'left', 'left']}
-          density="roomy"
-          stackOnPhone
-          rows={entries.map((entry) => {
-            const href = recordHref(model.prefix, entry)
-            return {
-              id: entry.id,
-              cells: [
-                <span key="time" className="fw-adm-cell">
-                  <Link className="fw-adm-name" href={entryHref(model.prefix, model, entry.id)} aria-label={t('audit.openEntry', { what: `${words.who(entry)} ${words.did(entry)}` })}>
-                    {formatDateTime(entry.at, { locale })}
-                  </Link>
-                  {deviceTimeDiffers(entry) && entry.deviceTime && <span className="fw-adm-hint">{t('audit.deviceTime', { time: formatDateTime(entry.deviceTime, { locale }) })}</span>}
-                </span>,
-                words.who(entry),
-                whereOf(entry, model.companies) ?? '—',
-                t(`audit.surface.${entry.audience}`),
-                words.knows(entry) ? (
-                  words.did(entry)
-                ) : (
-                  <span key="action" className="fw-adm-cell">
-                    {words.did(entry)}
-                    <code className="fw-adm-code">{entry.action}</code>
-                  </span>
-                ),
-                href ? (
-                  <Link key="record" href={href}>
-                    {words.record(entry)}
-                  </Link>
-                ) : (
-                  words.record(entry)
-                ),
-                <Changed key="changed" entry={entry} />,
-                entry.reason ?? '—',
-              ],
-            }
-          })}
-        />
-      </div>
-    </Card>
+    <>
+      <ListFrame<AuditEntry>
+        label={t('audit.tableLabel')}
+        rows={model.entries.problem ? [] : items === null ? null : entries}
+        rowId={(entry) => entry.id}
+        columns={columns}
+        count={items ? t('audit.count', { shown: entries.length, total: items.length }) : '—'}
+        search={find}
+        tools={tools}
+        right={<TimeHelp />}
+        more={older ? { label: t('audit.older'), onMore: () => actions?.onOlder?.(), held: model.older?.loading ? t('audit.held.loading') : null } : null}
+        keys={own}
+        onHelp={onHelp}
+        onOpen={(entry) => actions?.onOpen?.(entry.id)}
+        state={state}
+      />
+      {model.older?.problem && <Banner tone="danger" title={ta(model.older.problem)} />}
+      {help}
+    </>
   )
 }
 

@@ -9,14 +9,17 @@ import { LOCALES } from '../../../lib/i18n/locales'
 import { CATALOGUE, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
 import { applyImport, cancelImport, listImports, sheetContentType, uploadSheet, type ImportJob } from './api'
+import { bulkHeld } from '../kit/bulk-model'
 import { AdminPageMessages } from '../kit/messages'
 import { designScreen } from './fixtures'
 import type { ImportViewModel } from './model'
 import { ImportWizardInline } from './view/ImportWizard'
+import { JobCell, rowsWords } from './view/ImportView'
 import {
   applicable,
   applyHeld,
   blankDraft,
+  cancelReach,
   issueGroups,
   KNOWN_IMPORTERS,
   keyText,
@@ -94,6 +97,35 @@ describe('the wizard follows the job', () => {
     const jobs = [base({ id: 'a', createdAt: '2026-10-20T10:00:00.000Z' }), base({ id: 'b', createdAt: '2026-10-29T10:00:00.000Z' }), base({ id: 'c', importerKey: 'parties.parties', createdAt: '2026-10-30T10:00:00.000Z' })]
     expect(lastImportOf(jobs, 'inventory.opening')?.id).toBe('b')
     expect(lastImportOf(jobs, 'product.materials')).toBeNull()
+  })
+})
+
+describe('cancelling several imports at once', () => {
+  const reading = base({ id: 'r', status: 'UPLOADED', plannedAt: null })
+  const planned = base({ id: 'p' })
+  const applying = base({ id: 'a', status: 'APPLYING' })
+  const stopped = base({ id: 's', status: 'FAILED' })
+  const unreadable = base({ id: 'u', status: 'FAILED', plannedAt: null })
+  const applied = base({ id: 'd', status: 'APPLIED' })
+  const cancelled = base({ id: 'c', status: 'CANCELLED' })
+
+  it('applies to jobs nothing was written from yet (being checked, or checked and not applied); the others are left out with the reason', () => {
+    const reach = cancelReach([reading, planned, applying, stopped, unreadable, applied, cancelled])
+    expect(reach.applies.map((job) => job.id)).toEqual(['r', 'p'])
+    expect(reach.left.map((entry) => [entry.item.id, entry.why])).toEqual([
+      ['a', 'imp.bulk.left.applying'],
+      ['s', 'imp.bulk.left.applyFailed'],
+      ['u', 'imp.bulk.left.planFailed'],
+      ['d', 'imp.bulk.left.applied'],
+      ['c', 'imp.bulk.left.cancelled'],
+    ])
+  })
+
+  it('held without the rights to run imports, and when none of the selected can be cancelled', () => {
+    const keys = { right: 'imp.held.noRunRight', none: 'imp.bulk.none' }
+    expect(bulkHeld(cancelReach([planned]), false, keys)).toBe('imp.held.noRunRight')
+    expect(bulkHeld(cancelReach([applied, stopped]), true, keys)).toBe('imp.bulk.none')
+    expect(bulkHeld(cancelReach([applied, planned]), true, keys)).toBeNull()
   })
 })
 
@@ -212,6 +244,7 @@ describe('every Import word exists in it and en', () => {
       ...['CREATE', 'UPDATE'].map((action) => `imp.action.${action}`),
       ...['it', 'en'].map((format) => `imp.numbers.${format}`),
       ...KNOWN_IMPORTERS.flatMap((key) => [`imp.importer.${key.replace(/\./g, '_')}.name`, `imp.importer.${key.replace(/\./g, '_')}.fills`]),
+      ...['applying', 'applyFailed', 'planFailed', 'applied', 'cancelled'].map((phase) => `imp.bulk.left.${phase}`),
     ]
     expect(literal.size).toBeGreaterThan(60)
     for (const locale of LOCALES) {
@@ -266,6 +299,36 @@ describe('SCR-017 draws every case in both languages with no key left on screen'
     expect(draw('checked-no-apply')).toContain('Applying needs the right to apply imports')
     expect(draw('no-access')).toContain('See import jobs and their plans')
     expect(draw('page')).toContain('/api/inventory/opening/template?format=xlsx&amp;numberFormat=en')
+  })
+
+  it('Recent imports is the list frame: the count and the keys in the footer icon', () => {
+    const html = render(designScreen.cases.find((item) => item.id === 'page')!.model, 'en')
+    expect(html).toContain('5 imports')
+    expect(html).toContain('aria-label="Keyboard keys of this list"')
+  })
+
+  it('selected imports: the bulk bar says its reach; the result notice names each refused sheet with the reason', () => {
+    const draw = (id: string, locale: (typeof LOCALES)[number] = 'en') => render(designScreen.cases.find((item) => item.id === id)!.model, locale).replace(/<!-- -->/g, '')
+    expect(draw('recent-selected')).toContain('4 selected')
+    expect(draw('recent-selected')).toContain('Cancel 2 imports')
+    expect(draw('recent-selected', 'it')).toContain('Annulla 2 importazioni')
+    const after = draw('cancelled-many')
+    expect(after).toContain('1 of 2 imports cancelled. Not cancelled:')
+    expect(after).toContain('ubicazioni-demo-nord.csv: Someone else changed this meanwhile.')
+  })
+
+  it('a job\'s cell links to its wizard and offers Apply again when its apply stopped; its rows in words', () => {
+    const cell = (node: ReturnType<typeof createElement>) => renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(AdminPageMessages, { namespace: 'admin-import', children: node })))
+    const stopped = base({ status: 'FAILED', appliedCount: 4 })
+    const html = cell(createElement(JobCell, { job: stopped, href: '/w/DEMO/admin/import?job=x', canApply: true }))
+    expect(html).toContain('href="/w/DEMO/admin/import?job=x"')
+    expect(html).toContain('Opening stock')
+    expect(html).toContain('Apply again')
+    expect(cell(createElement(JobCell, { job: stopped, href: '#', canApply: false }))).not.toContain('Apply again')
+    const t = (key: string, params?: Record<string, string | number>) => `${key}${params ? JSON.stringify(params) : ''}`
+    expect(rowsWords(t, base())).toMatch(/^imp\.recent\.rowsPlanned/)
+    expect(rowsWords(t, base({ status: 'APPLIED' }))).toMatch(/^imp\.recent\.rowsApplied/)
+    expect(rowsWords(t, base({ status: 'UPLOADED', plannedAt: null }))).toBe('—')
   })
 })
 

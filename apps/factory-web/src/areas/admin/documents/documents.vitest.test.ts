@@ -5,16 +5,21 @@ import { createApiClient, type ApiClient } from '../../../lib/api/client'
 import { LOCALES } from '../../../lib/i18n/locales'
 import { messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
+import { bulkHeld } from '../kit/bulk-model'
+import { AdminPageMessages } from '../kit/messages'
 import { COMPANIES } from '../shared/fixtures'
 import { closeSeries, createSeries, listSeries, sampleHref, seriesAllocations, setSeriesStart, type Series } from './api'
 import { designScreen, SERIES } from './fixtures'
+import { NextCell, PreviewCell, SeriesCell, useSeriesColumns } from './view/DocumentsView'
 import {
   chipsPattern,
+  closeReach,
   draftBody,
   draftPreview,
   draftProblems,
   fiscalRows,
   hasOtherActive,
+  leftWithout,
   legalOf,
   newDraft,
   newSeriesHeld,
@@ -126,6 +131,39 @@ describe('the lists', () => {
   })
 })
 
+describe('closing several series at once', () => {
+  const ddt = SERIES.find((row) => row.kind === 'DDT')!
+  const creditNote = SERIES.find((row) => row.kind === 'CREDIT_NOTE')!
+  const closed2025 = SERIES.find((row) => row.status === 'CLOSED')!
+  const quote = SERIES.find((row) => row.kind === 'QUOTE')!
+
+  it('applies to the active series only; a closed one is left out with the reason', () => {
+    const reach = closeReach([ddt, closed2025, creditNote])
+    expect(reach.applies.map((row) => row.id)).toEqual([ddt.id, creditNote.id])
+    expect(reach.left).toEqual([{ item: closed2025, why: 'docs.bulk.left.closed' }])
+    expect(closeReach([closed2025]).applies).toEqual([])
+  })
+
+  it('is held without the right, and when none of the selected is active; never for a reach', () => {
+    const keys = { right: 'docs.held.manage', none: 'docs.bulk.none' }
+    expect(bulkHeld(closeReach([ddt]), false, keys)).toBe('docs.held.manage')
+    expect(bulkHeld(closeReach([closed2025]), true, keys)).toBe('docs.bulk.none')
+    expect(bulkHeld(closeReach([ddt, closed2025]), true, keys)).toBeNull()
+  })
+
+  it('warns for each company and document left without an active series, once each', () => {
+    expect(leftWithout([ddt, creditNote], SERIES)).toEqual([
+      { companyId: ddt.companyId, kind: 'DDT' },
+      { companyId: creditNote.companyId, kind: 'CREDIT_NOTE' },
+    ])
+    // Another active quote series of the same company: closing one leaves the other.
+    const quoteB = { ...quote, id: 'quote-b', code: 'B' }
+    expect(leftWithout([quote], [...SERIES, quoteB])).toEqual([])
+    // Closing both leaves none: one warning, not two.
+    expect(leftWithout([quote, quoteB], [...SERIES, quoteB])).toEqual([{ companyId: quote.companyId, kind: 'QUOTE' }])
+  })
+})
+
 describe('a company\'s documents can be printed only with its legal data (the API\'s own rule)', () => {
   it('ready with the registered office, VAT number, codice fiscale and REA; each missing fact counted', () => {
     expect(legalOf(COMPANIES[0]!)).toEqual({ legalReady: true, legalMissing: 0 })
@@ -211,8 +249,65 @@ describe('SCR-014 draws every case in both languages with no key left on screen'
     expect(draw('numbers')).toContain('not issued by Nexus: 181–188')
     expect(draw('numbers')).toContain('41 numbers issued, FT-2026-00001 to FT-2026-00041, no gaps.')
     expect(draw('read-only')).toContain('Needs the right: Manage number series')
-    expect(draw('documents')).toContain('target="_blank"')
-    expect(draw('documents')).toContain('/api/documents/sample?companyId=')
     expect(render(designScreen.cases.find((item) => item.id === 'numbers')!.model, 'it')).toContain('Controllo fiscale')
+  })
+
+  it('the lists are the list frame: the count, the keys in the footer icon, never a key hint above the table', () => {
+    const draw = (id: string) => render(designScreen.cases.find((item) => item.id === id)!.model, 'en')
+    const numbers = draw('numbers')
+    expect(numbers).toContain('10 series')
+    expect(numbers).toContain('aria-label="Keyboard keys of this list"')
+    expect(numbers).not.toContain('switch list')
+    expect(draw('documents')).toContain('5 layouts')
+  })
+
+  it('selected series: the bulk bar says its reach; the result notice names each refused series with the reason', () => {
+    const draw = (id: string) => render(designScreen.cases.find((item) => item.id === id)!.model, 'en')
+    const selected = draw('numbers-selected')
+    expect(selected).toContain('3 selected')
+    expect(selected).toContain('Close 2 series')
+    const after = draw('closed-many').replace(/<!-- -->/g, '')
+    expect(after).toContain('1 of 2 series closed. Not closed:')
+    expect(after).toContain('DDT 2026 · MAIN: Someone else changed this meanwhile.')
+    expect(render(designScreen.cases.find((item) => item.id === 'numbers-selected')!.model, 'it')).toContain('Chiudi 2 serie')
+  })
+})
+
+/** A cell drawn alone (AG Grid draws its cells only in a browser). */
+function cell(node: ReturnType<typeof createElement>, locale: (typeof LOCALES)[number] = 'en'): string {
+  return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(AdminPageMessages, { namespace: 'admin-documents' }, node)))
+}
+
+describe('the lists\' cells', () => {
+  const model = designScreen.cases[0]!.model as DocumentsViewModel
+  const invoice = SERIES.find((row) => row.kind === 'INVOICE' && row.status === 'ACTIVE')!
+
+  it('a series: its document and period as a link to the series, its code, the fiscal lock', () => {
+    const html = cell(createElement(SeriesCell, { model, series: invoice }))
+    expect(html).toContain('href="/w/DEMO/admin/documents?series=' + invoice.id + '"')
+    expect(html).toContain('Invoice 2026')
+    expect(html).toContain('Series MAIN')
+    expect(html).toContain('Fiscal')
+  })
+
+  it('the Numbers columns in words; the company has a column only while every company is listed', () => {
+    const Probe = ({ companyId }: { companyId: string }) => createElement('i', null, useSeriesColumns({ ...model, companyId }).map((column) => column.headerName).join('|'))
+    expect(cell(createElement(Probe, { companyId: 'all' }))).toContain('Document|Company|Next number|Pattern|Starts again|Started at|Last issued|State')
+    expect(cell(createElement(Probe, { companyId: invoice.companyId }))).toContain('Document|Next number|Pattern')
+    expect(cell(createElement(Probe, { companyId: 'all' }, ), 'it')).toContain('Documento|Società|Prossimo numero')
+  })
+
+  it('the next number as it will print, or Closed', () => {
+    expect(cell(createElement(NextCell, { series: invoice }))).toContain('FT-2026-00042')
+    expect(cell(createElement(NextCell, { series: SERIES.find((row) => row.status === 'CLOSED')! }))).toContain('Closed')
+  })
+
+  it('a layout previews in a new tab through /api; held while the legal data is missing', () => {
+    const ready = model.companies.items!.find((company) => company.legalReady)!
+    const html = cell(createElement(PreviewCell, { company: ready, type: 'QUOTE' }))
+    expect(html).toContain('target="_blank"')
+    expect(html).toContain(`/api/documents/sample?companyId=${ready.id}&amp;type=QUOTE&amp;language=it`)
+    const notReady = model.companies.items!.find((company) => !company.legalReady)!
+    expect(cell(createElement(PreviewCell, { company: notReady, type: 'QUOTE' }))).toContain('Complete the company&#x27;s legal data first')
   })
 })

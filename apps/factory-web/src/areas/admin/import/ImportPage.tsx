@@ -8,7 +8,9 @@ import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { companyPrefix } from '../../../lib/session/session'
 import { StoreError } from '../../../record-panels/store'
 import { listUsers } from '../shared/api'
-import { failed, loaded, loading, problemKey, type Loaded, type Notice } from '../shared/model'
+import { failed, loaded, loading, problemKey, type Loaded } from '../shared/model'
+import { runBulk } from '../kit/bulk'
+import { bulkNotice, type BulkNotice } from '../kit/bulk-model'
 import { applyImport, cancelImport, getImport, listImporters, listImportRows, listImports, uploadSheet, type ImportJob, type Importer, type ImportRow, type NumberFormat } from './api'
 import { applicable, blankDraft, emptyWizard, isMoving, phaseOf, POLL_MS, RECENT_LIMIT, type ImportRights, type UploadDraft, type WizardModel } from './model'
 import { ImportView } from './view/ImportView'
@@ -70,7 +72,10 @@ export function ImportPage() {
   const [people, setPeople] = useState<Record<string, string>>({})
   const [asOf, setAsOf] = useState<string | null>(null)
   const [wizard, setWizard] = useState<WizardModel | null>(null)
-  const [notice, setNotice] = useState<Notice | null>(null)
+  const [notice, setNotice] = useState<BulkNotice | null>(null)
+  const [selected, setSelected] = useState<readonly string[]>([])
+  const [cancelMany, setCancelMany] = useState<readonly string[] | null>(null)
+  const [bulkBusy, setBulkBusy] = useState(false)
   const file = useRef<File | null>(null)
 
   const draftFor = useCallback(
@@ -164,7 +169,7 @@ export function ImportPage() {
 
   return (
     <ImportView
-      model={{ prefix, can, importers, jobs, companies, people, asOf, wizard, notice }}
+      model={{ prefix, can, importers, jobs, companies, people, asOf, wizard, selected, cancelMany, bulkBusy, notice }}
       actions={{
         onNew: (key) => open(key ? `?importer=${encodeURIComponent(key)}` : '?new=1'),
         onRetry: () => {
@@ -173,6 +178,20 @@ export function ImportPage() {
           void load()
         },
         onApplyAgain: (job) => open(`?job=${encodeURIComponent(job.id)}`),
+        onOpenJob: (job) => open(`?job=${encodeURIComponent(job.id)}`),
+        onSelect: setSelected,
+        onCancelMany: setCancelMany,
+        onCancelManyGo: async (chosen) => {
+          setBulkBusy(true)
+          // One call per job (the API cancels one at a time), each with the version read.
+          const result = await runBulk(chosen, (job) => cancelImport(api, job.id, { version: job.version }))
+          const done = new Set(result.done.map((job) => job.id))
+          setSelected((current) => current.filter((id) => !done.has(id)))
+          setNotice(bulkNotice(result, { done: 'imp.bulk.done', partial: 'imp.bulk.partial', failed: 'imp.bulk.failed' }, (job) => job.id))
+          setCancelMany(null)
+          setBulkBusy(false)
+          void loadJobs()
+        },
         onDismissNotice: () => setNotice(null),
         onClose: close,
         onDraft: (next) => setWizard((current) => (current ? { ...current, problem: null, draft: { ...current.draft, ...next } } : current)),

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { isApiError } from '../../../lib/api/errors'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
@@ -35,6 +36,7 @@ import { SiteRecordView } from './view/SiteRecordView'
  */
 export function SiteRecord({ siteId }: { siteId: string }) {
   const api = useOfficeApi()
+  const router = useRouter()
   const session = useOfficeSession()
   const held = useMemo(() => new Set(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
@@ -118,6 +120,7 @@ export function SiteRecord({ siteId }: { siteId: string }) {
           setDialogProblem(null)
         },
         onShowArchived: setShowArchived,
+        onOpen: (path) => router.push(path),
         onCreate: (kind: 'line' | 'station' | 'centre', draft: PartDraft) =>
           change(
             () =>

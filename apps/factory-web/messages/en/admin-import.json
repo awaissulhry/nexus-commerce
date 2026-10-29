@@ -24,7 +24,9 @@
       "emptyBody": "Every sheet you check or apply is listed here, with what it changed.",
       "applyAgain": "Apply again",
       "rowsApplied": "{applied} written · {skipped} skipped · {refused} refused",
-      "rowsPlanned": "{create} new · {update} changed · {unchanged} unchanged · {refused} refused"
+      "rowsPlanned": "{create} new · {update} changed · {unchanged} unchanged · {refused} refused",
+      "count_one": "{count} import",
+      "count_other": "{count} imports"
     },
     "col": {
       "importer": "What",
@@ -221,6 +223,40 @@
         "name": "Opening stock",
         "fills": "The stock on hand before Nexus: lots, hides one by one with their areas, linings, trims and protectors, with their existing chromium VI reports. Lots that need the quality step wait in quarantine."
       }
+    },
+    "keys": {
+      "new": "Import a sheet"
+    },
+    "bulk": {
+      "cancel_one": "Cancel {count} import",
+      "cancel_other": "Cancel {count} imports",
+      "cancelNone": "Cancel imports",
+      "none": "None of the selected imports can be cancelled: only one still being checked, or checked and not applied, can.",
+      "title_one": "Cancel {count} import?",
+      "title_other": "Cancel {count} imports?",
+      "body": "Their planned changes are dropped and nothing is written from these sheets. To load one later, upload it again.",
+      "keep": "Keep them",
+      "go_one": "Cancel {count} import",
+      "go_other": "Cancel {count} imports",
+      "listLabel": "Imports to cancel",
+      "left": {
+        "applying_one": "1 selected import is being applied right now: left out.",
+        "applying_other": "{count} selected imports are being applied right now: left out.",
+        "applyFailed_one": "1 selected import stopped while applying: open it to apply it again or cancel it; left out.",
+        "applyFailed_other": "{count} selected imports stopped while applying: open each to apply it again or cancel it; left out.",
+        "planFailed_one": "1 selected import could not be checked: nothing to cancel; left out.",
+        "planFailed_other": "{count} selected imports could not be checked: nothing to cancel; left out.",
+        "applied_one": "1 selected import is applied already: left out.",
+        "applied_other": "{count} selected imports are applied already: left out.",
+        "cancelled_one": "1 selected import is cancelled already: left out.",
+        "cancelled_other": "{count} selected imports are cancelled already: left out."
+      },
+      "done_one": "1 import cancelled: nothing is written from it.",
+      "done_other": "{count} imports cancelled: nothing is written from them.",
+      "partial_one": "{count} of {total} imports cancelled. Not cancelled:",
+      "partial_other": "{count} of {total} imports cancelled. Not cancelled:",
+      "failed_one": "The import was not cancelled:",
+      "failed_other": "None of the {count} imports was cancelled:"
     }
   }
 }

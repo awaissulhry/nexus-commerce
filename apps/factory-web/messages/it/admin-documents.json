@@ -2,9 +2,12 @@
   "docs": {
     "intro": "Ogni numero di documento che la fabbrica assegna, per società: il prossimo come verrà stampato, e la prova che fatture e DDT non saltano né ripetono mai un numero.",
     "new": "Nuova serie",
+    "count_one": "{count} serie",
+    "count_other": "{count} serie",
     "keys": {
-      "new": "Tasto: c",
-      "hint": "1 · 2 cambiano elenco · c nuova serie"
+      "numbers": "Mostra le serie di numerazione",
+      "documents": "Mostra i modelli dei documenti",
+      "newSeries": "Nuova serie"
     },
     "preview": "Anteprima di un documento",
     "views": {
@@ -105,7 +108,9 @@
         "it": "Italiano",
         "en": "English"
       },
-      "newTab": "(si apre in una nuova scheda)"
+      "newTab": "(si apre in una nuova scheda)",
+      "count_one": "{count} modello",
+      "count_other": "{count} modelli"
     },
     "type": {
       "QUOTE": "Preventivo",
@@ -213,7 +218,9 @@
       "noun": "serie",
       "skippedTitle": "Non emessi da Nexus: {ranges}",
       "skippedBody": "Questi numeri stanno tra il primo e l'ultimo e non sono mai stati emessi qui: la serie è stata spostata oltre numeri usati altrove, oppure mancano numeri. Il registro attività dice quale dei due.",
-      "shown": "Gli ultimi {shown} di {count} numeri."
+      "shown": "Gli ultimi {shown} di {count} numeri.",
+      "count_one": "{count} numero",
+      "count_other": "{count} numeri"
     },
     "done": {
       "created": "Serie creata. Il primo numero è {number}.",
@@ -252,6 +259,31 @@
       "Lot": "Lotto",
       "PpeRegisterEntry": "Voce del registro DPI",
       "Receipt": "Ricevimento merce"
+    },
+    "bulk": {
+      "close_one": "Chiudi {count} serie",
+      "close_other": "Chiudi {count} serie",
+      "closeNone": "Chiudi serie",
+      "none": "Nessuna delle serie selezionate è attiva: non c’è nulla da chiudere.",
+      "title_one": "Chiudere {count} serie?",
+      "title_other": "Chiudere {count} serie?",
+      "go_one": "Chiudi {count} serie",
+      "go_other": "Chiudi {count} serie",
+      "listLabel": "Serie da chiudere",
+      "noMore": "Da queste serie non uscirà più alcun numero.",
+      "stay": "I numeri che hanno già emesso restano, con i loro documenti.",
+      "left": {
+        "closed_one": "1 serie selezionata è già chiusa: esclusa.",
+        "closed_other": "{count} serie selezionate sono già chiuse: escluse."
+      },
+      "alone": "{company} resterebbe senza una serie attiva di {kind}: i nuovi documenti di questo tipo saranno rifiutati finché non ne aggiungi una.",
+      "reasonHint": "Resta nella cronologia di ogni serie.",
+      "done_one": "1 serie chiusa: non emette più numeri.",
+      "done_other": "{count} serie chiuse: non emettono più numeri.",
+      "partial_one": "{count} serie su {total} chiusa. Non chiuse:",
+      "partial_other": "{count} serie su {total} chiuse. Non chiuse:",
+      "failed_one": "La serie non è stata chiusa:",
+      "failed_other": "Nessuna delle {count} serie è stata chiusa:"
     }
   }
 }

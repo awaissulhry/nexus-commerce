@@ -323,6 +323,9 @@
       "isDefault": "predefinito",
       "reset": "riparte",
       "fiscal": "fiscale"
+    },
+    "keys": {
+      "mode": "Passa tra racconto e tabella"
     }
   }
 }

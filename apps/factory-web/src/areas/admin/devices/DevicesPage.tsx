@@ -6,6 +6,8 @@ import { newIdempotencyKey } from '../../../lib/api/client'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { createDevice, createPrinter, failedJobs, getSite, listCompanies, listDevices, listPrinters, renewEnrolment, revokeDevice, updatePrinter, type Device, type Printer } from '../shared/api'
+import { runBulk, type BulkResult } from '../shared/bulk'
+import { bulkNotice } from '../shared/reach'
 import { adminHref, failed, loaded, loading, problemKey, problemNotice, type Loaded, type Notice } from '../shared/model'
 import { printerBody, type DevicesMode, type DeviceTile, type EnrolModel, type PrinterDialog, type SiteChoice } from './model'
 import { DevicesView } from './view/DevicesView'
@@ -56,8 +58,9 @@ export function useEnrolWatch(api: ReturnType<typeof useOfficeApi>, enrol: Enrol
 
 /**
  * `/w/<company>/admin/devices` (SCR-013): the devices (`GET /auth/floor/devices`), the printers (`GET /print/printers`,
- * archived too) and the printers with a failed job (`GET /print/jobs?status=FAILED`). `?mode=printers` opens the
- * printers; `?enrol=1` or `?enrol=<site id>` the enrol dialog; `?new=printer&site=<id>` the printer dialog.
+ * archived too) and the printers with a failed job (`GET /print/jobs?status=FAILED`). Revoke, Pause and Resume over
+ * the ticked rows are one call per row (`POST /auth/floor/devices/:id/revoke`, `PATCH /print/printers/:id` with each
+ * one's version: the API has no bulk route). `?mode=printers` opens the printers; `?enrol=1` or `?enrol=<site id>` the enrol dialog; `?new=printer&site=<id>` the printer dialog.
  */
 export function DevicesPage() {
   const api = useOfficeApi()
@@ -74,13 +77,12 @@ export function DevicesPage() {
   const [sites, setSites] = useState<SiteChoice[]>([])
   const [tile, setTile] = useState<DeviceTile | null>(null)
   const [query, setQuery] = useState('')
-  const [page, setPage] = useState(1)
+  const [pages, setPages] = useState(1)
   const [asOf, setAsOf] = useState<string | null>(null)
   const [now, setNow] = useState(() => new Date().toISOString())
   const asked = params?.get('enrol') ?? null
   const [enrol, setEnrol] = useState<EnrolModel | null>(asked ? { step: 'where', siteId: asked === '1' ? null : asked } : null)
   const [printer, setPrinter] = useState<PrinterDialog | null>(params?.get('new') === 'printer' ? { kind: 'new', siteId: params?.get('site') ?? null } : null)
-  const [revokeId, setRevokeId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [dialogProblem, setDialogProblem] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
@@ -122,24 +124,41 @@ export function DevicesPage() {
     if (params?.get('enrol') || params?.get('new')) router.replace(`${adminHref(prefix, '/devices')}${mode === 'printers' ? '?mode=printers' : ''}`)
   }
 
+  /** A bulk run: one call per row, one after the other (the API acts on one row per call); its ONE notice; read again. */
+  const runRows = async <T,>(rows: readonly T[], call: (row: T) => Promise<unknown>, done: (result: BulkResult<T>) => Notice): Promise<boolean> => {
+    setBusy(true)
+    setDialogProblem(null)
+    try {
+      setNotice(done(await runBulk(rows, call)))
+      return true
+    } catch (error) {
+      setDialogProblem(problemKey(error))
+      return false
+    } finally {
+      setBusy(false)
+      void load()
+    }
+  }
+
   return (
     <DevicesView
-      model={{ prefix, mode, devices, printers, failedPrinters, sites, tile, query, page, asOf, now, can, enrol, printer, revokeId, busy, dialogProblem, notice }}
+      model={{ prefix, mode, devices, printers, failedPrinters, sites, tile, query, pages, asOf, now, can, enrol, printer, busy, dialogProblem, notice }}
       actions={{
         onMode: (next) => {
           setMode(next)
-          setPage(1)
+          setPages(1)
           if (next === 'printers') setTile(null)
         },
         onTile: (next) => {
           setTile(next)
-          setPage(1)
+          setPages(1)
         },
         onQuery: (next) => {
           setQuery(next)
-          setPage(1)
+          setPages(1)
         },
-        onPage: setPage,
+        onMore: () => setPages((current) => current + 1),
+        onOpen: (path) => router.push(path),
         onRetry: () => {
           setDevices(loading())
           setPrinters(loading())
@@ -198,26 +217,19 @@ export function DevicesPage() {
             setBusy(false)
           }
         },
-        onRevoke: (id) => {
-          setDialogProblem(null)
-          setRevokeId(id)
-        },
-        onRevokeConfirm: async (device) => {
-          setBusy(true)
-          setDialogProblem(null)
-          try {
-            await revokeDevice(api, device.id, { version: device.version })
-            setRevokeId(null)
-            setNotice({ key: 'devices.done.revoked', tone: 'success', params: { name: device.name } })
-            void load()
-            return true
-          } catch (error) {
-            setDialogProblem(problemNotice(error).key)
-            return false
-          } finally {
-            setBusy(false)
-          }
-        },
+        onRevokeDevices: (rows, reason) =>
+          runRows(
+            rows,
+            (device) => revokeDevice(api, device.id, { version: device.version, ...(reason ? { reason } : {}) }),
+            (result) => bulkNotice(result, 'devices.bulk.done.revoke', (device) => device.name),
+          ),
+        onPrinterStatus: (action, rows) =>
+          runRows(
+            rows,
+            (item) => updatePrinter(api, item.id, { version: item.version, status: action === 'pause' ? 'PAUSED' : 'ACTIVE' }),
+            (result) => bulkNotice(result, action === 'pause' ? 'printers.bulk.done.pause' : 'printers.bulk.done.resume', (item) => item.name),
+          ),
+        onBulkClose: () => setDialogProblem(null),
         onDismissNotice: () => setNotice(null),
       }}
     />

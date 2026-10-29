@@ -1,21 +1,23 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Banner, Card, SummaryTable } from '@nexus/ui/components'
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
-import { formatDate } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
-import { adminHref, GRAINS, scopeWords } from '../../shared/model'
-import { AdminMessages, GrainChips, ListState, RecordProblem, useRoleWords } from '../../shared/view/parts'
+import { ListFrame } from '../../../../list-frame/ListFrame'
+import { adminHref, GRAINS } from '../../shared/model'
+import { AdminMessages, FrameState, GrainChips, ListKeysHelp, ListState, RecordProblem, useRoleWords } from '../../shared/view/parts'
 import { PermissionMatrix } from '../../shared/view/PermissionMatrix'
 import { RecordFrame } from '../../shared/view/RecordFrame'
-import { ALWAYS_RULES, heldAreas, holdersOf, templateGap, type RoleRecordModel, type RoleTab } from '../model'
-import { RoleMarks } from './RolesView'
+import { ALWAYS_RULES, heldAreas, holdersOf, templateGap, type Holder, type RoleRecordModel, type RoleTab } from '../model'
+import { holderColumns, RoleMarks } from './columns'
 
 export type { RoleRecordModel } from '../model'
 
 export interface RoleRecordActions {
+  /** Enter on a holder's row: open the person's roles. */
+  onOpen?: (href: string) => void
   onDock?: () => void
   onRetry?: () => void
 }
@@ -76,7 +78,11 @@ function RoleRecord({ model, actions, panels }: { model: RoleRecordModel; action
         back={back}
         title={words.name(role)}
         meta={role.system ? t('roles.readyMade') : t('role.copyOf', { key: role.basedOn ? words.name({ key: role.basedOn, name: model.catalogue?.templates.find((template) => template.key === role.basedOn)?.name ?? role.basedOn }) : '—' })}
-        status={<RoleMarks role={role} />}
+        status={
+          <span className="fw-adm-tags">
+            <RoleMarks role={role} t={t} />
+          </span>
+        }
         tabs={tabs}
         active={model.tab}
         tabHref={(tab) => `${href(`/roles/${role.id}`)}?tab=${tab}`}
@@ -93,7 +99,7 @@ function RoleRecord({ model, actions, panels }: { model: RoleRecordModel; action
         {gap?.kind === 'outdated' && <Banner tone="warning" title={t('roles.gap.outdated')} />}
         {model.tab === 'permissions' && <PermissionsTab model={model} />}
         {model.tab === 'rules' && <RulesTab model={model} />}
-        {model.tab === 'users' && <UsersTab model={model} />}
+        {model.tab === 'users' && <UsersTab model={model} actions={actions} />}
         {model.tab === 'activity' && panels}
       </RecordFrame>
     </div>
@@ -154,33 +160,27 @@ function RulesTab({ model }: { model: RoleRecordModel }) {
   )
 }
 
-function UsersTab({ model }: { model: RoleRecordModel }) {
+function UsersTab({ model, actions }: { model: RoleRecordModel; actions?: RoleRecordActions }) {
   const t = useT('admin')
   const locale = useLocale()
+  const [help, setHelp] = useState(false)
   const role = model.role!
-  const href = (path: string) => adminHref(model.prefix, path)
+  const columns = useMemo(() => holderColumns({ t, locale, prefix: model.prefix, companies: model.companies }), [t, locale, model.prefix, model.companies])
   if (role.audience === 'floor') return <Banner tone="info" title={t('role.floorHolders', { count: role.holders })} />
-  if (model.holders.items === null || model.holders.problem) return <ListState loading={model.holders.items === null} problem={model.holders.problem} />
-  const holders = holdersOf(role, model.holders.items)
-  if (holders.length === 0) return <ListState loading={false} empty={{ title: t('role.nobody') }} />
+  const holders = model.holders.items ? holdersOf(role, model.holders.items) : null
   return (
-    <Card>
-      <SummaryTable
+    <>
+      <ListFrame<Holder>
         label={t('role.tab.users')}
-        density="roomy"
-        stackOnPhone
-        columns={[t('users.col.name'), t('users.col.where'), t('user.col.to')]}
-        rows={holders.map(({ user, scope, validTo }) => ({
-          id: `${user.id}-${scopeWords(scope, model.companies, '')}`,
-          cells: [
-            <Link key="name" className="fw-adm-name" href={href(`/users/${user.id}?tab=roles`)}>
-              {user.displayName}
-            </Link>,
-            scopeWords(scope, model.companies, t('scope.all')) || '—',
-            validTo ? formatDate(validTo, { locale }) : t('user.noEnd'),
-          ],
-        }))}
+        rows={holders}
+        rowId={(holder) => holder.id}
+        columns={columns}
+        count={holders ? t('role.holders', { count: holders.length }) : '—'}
+        onOpen={(holder) => actions?.onOpen?.(`${adminHref(model.prefix, `/users/${holder.user.id}`)}?tab=roles`)}
+        onHelp={() => setHelp(true)}
+        state={model.holders.problem ? <FrameState problem={model.holders.problem} onRetry={actions?.onRetry} /> : holders && holders.length === 0 ? <FrameState empty={{ title: t('role.nobody') }} /> : undefined}
       />
-    </Card>
+      <ListKeysHelp open={help} onClose={() => setHelp(false)} keys={[]} selection={false} />
+    </>
   )
 }

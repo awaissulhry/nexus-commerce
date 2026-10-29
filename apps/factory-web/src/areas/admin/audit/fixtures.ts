@@ -203,6 +203,12 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'error', label: 'The API did not answer', model: { model: model({ entries: failed('problem.unavailable'), counts: null, asOf: null, nextBefore: null }) } },
     { id: 'no-access', label: 'Without the right to read the log', model: { model: model({ canRead: false, entries: loading(), counts: null }), permissions: ADMIN_PERMISSIONS } },
     { id: 'when-earlier', label: 'Earlier days in the Story', model: { model: model({ entries: loaded(ENTRIES.slice(6)), nextBefore: null }) } },
+    { id: 'table-older-loading', label: 'Table: reading older entries (the footer)', model: { model: model({ mode: 'table', older: { loading: true, problem: null } }) } },
+    { id: 'table-older-failed', label: 'Table: older entries could not be read', model: { model: model({ mode: 'table', older: { loading: false, problem: 'problem.unavailable' } }) } },
+    { id: 'table-find-none', label: 'Table: find on the page, no match', model: { model: model({ mode: 'table', find: 'fattura 2025' }) } },
+    { id: 'table-empty-filtered', label: 'Table: no change matches the filters', model: { model: model({ mode: 'table', entries: loaded([]), nextBefore: null }, { audience: 'LINK', period: '24h' }) } },
+    { id: 'table-loading', label: 'Table: loading', model: { model: model({ mode: 'table', entries: loading(), counts: null, asOf: null, nextBefore: null }) } },
+    { id: 'table-error', label: 'Table: the API did not answer', model: { model: model({ mode: 'table', entries: failed('problem.unavailable'), counts: null, asOf: null, nextBefore: null }) } },
   ],
 })
 

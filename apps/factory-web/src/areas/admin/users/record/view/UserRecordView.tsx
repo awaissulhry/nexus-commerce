@@ -1,25 +1,31 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Banner, Card, Field, KeyValue, Modal, SummaryTable } from '@nexus/ui/components'
+import { CircleStop } from 'lucide-react'
+import { Banner, Card, Field, KeyValue, Modal } from '@nexus/ui/components'
 import { Button, Input, Pill, Select, Skeleton, Tag, Textarea } from '@nexus/ui/primitives'
-import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
+import { formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
+import { ListFrame } from '../../../../../list-frame/ListFrame'
 import type { Assignment, Role } from '../../../shared/api'
-import { adminHref, EVERYWHERE, grainsOf, scopeWords, STATUS_TONE } from '../../../shared/model'
-import { AdminMessages, GrainChips, ListState, NoticeBanner, RecordProblem, StepUp, useRoleWords } from '../../../shared/view/parts'
+import { namesLine } from '../../../shared/reach'
+import { adminHref, EVERYWHERE, grainsOf, scopeWords, selectedAmong, STATUS_TONE } from '../../../shared/model'
+import { BulkConfirm } from '../../../shared/view/BulkConfirm'
+import { AdminMessages, BulkButton, FrameState, GrainChips, heldText, ListKeysHelp, NoticeBanner, RecordProblem, StepUp, useRoleWords } from '../../../shared/view/parts'
 import { RecordFrame } from '../../../shared/view/RecordFrame'
 import { ScopePicker } from '../../../shared/view/ScopePicker'
-import { giveRoleProblems, lifecycleHeld, raises, type GiveRoleDraft, type UserDialog, type UserRecordModel, type UserTab } from '../model'
+import { endReach, giveRoleProblems, lifecycleHeld, raises, type GiveRoleDraft, type UserDialog, type UserRecordModel, type UserTab } from '../model'
+import { assignmentColumns } from './columns'
 
 export type { UserRecordModel } from '../model'
 
 export interface UserRecordActions {
-  onDialog?: (dialog: UserDialog | null, endId?: string) => void
+  onDialog?: (dialog: UserDialog | null) => void
   /** Each resolves true when done (the dialog then closes). */
   onGiveRole?: (draft: GiveRoleDraft) => Promise<boolean>
-  onEndRole?: (assignment: Assignment, reason: string) => Promise<boolean>
+  /** "End N": one call per live assignment ticked; resolves true when the run finished (its notice says how). */
+  onEndRoles?: (assignments: readonly Assignment[], reason: string) => Promise<boolean>
   onLifecycle?: (action: 'suspend' | 'reactivate' | 'deactivate' | 'password', reason: string) => Promise<boolean>
   onStepUp?: (code: string) => void
   onStepUpClose?: () => void
@@ -30,8 +36,9 @@ export interface UserRecordActions {
 
 /**
  * SCR-011 — an office person's record (design 02 admin.users "Record: User"): Profile (who, status, the danger zone:
- * suspend, reactivate, deactivate, force a new password), Roles & scope (role × where × when, what they can do in plain
- * sentences with what money they see; Give role and End, each after a fresh code when it raises rights) and Activity.
+ * suspend, reactivate, deactivate, force a new password), Roles & scope (what they can do in plain sentences with what
+ * money they see, then role × where × when in the Office list frame; Give role, and End N over the ticked live roles,
+ * each after a fresh code) and Activity.
  * The last administrator is held before the click. Fetches nothing (UserRecord.tsx reads the API).
  */
 export function UserRecordView({ model, actions, panels }: { model: UserRecordModel; actions?: UserRecordActions; panels?: ReactNode }) {
@@ -47,15 +54,12 @@ function UserRecord({ model, actions, panels }: { model: UserRecordModel; action
   const href = (path: string) => adminHref(model.prefix, path)
   const back = { href: href('/users'), label: t('nav.users') }
   const [dialog, setDialog] = useState<UserDialog | null>(model.dialog ?? null)
-  const [endId, setEndId] = useState<string | null>(model.endId ?? null)
-  useEffect(() => {
-    setDialog(model.dialog ?? null)
-    setEndId(model.endId ?? null)
-  }, [model.dialog, model.endId])
-  const open = (next: UserDialog | null, end?: string) => {
+  useEffect(() => setDialog(model.dialog ?? null), [model.dialog])
+  const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
+  useEffect(() => setSelected(model.selected ?? []), [model.selected])
+  const open = (next: UserDialog | null) => {
     setDialog(next)
-    if (end) setEndId(end)
-    actions?.onDialog?.(next, end)
+    actions?.onDialog?.(next)
   }
   const user = model.user
   if (!user) {
@@ -102,7 +106,7 @@ function UserRecord({ model, actions, panels }: { model: UserRecordModel; action
           </span>
         }
         actions={
-          <Button size="sm" variant="primary" onClick={() => open('give-role')} heldReason={heldWords(t, held.assign)}>
+          <Button size="sm" variant="primary" onClick={() => open('give-role')} heldReason={heldText(t, held.assign)}>
             {t('user.giveRole')}
           </Button>
         }
@@ -115,21 +119,15 @@ function UserRecord({ model, actions, panels }: { model: UserRecordModel; action
       >
         <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
         {model.tab === 'profile' && <ProfileTab model={model} open={open} />}
-        {model.tab === 'roles' && <RolesTab model={model} open={open} actions={actions} />}
+        {model.tab === 'roles' && <RolesTab model={model} open={open} selected={selected} onSelect={setSelected} actions={actions} />}
         {model.tab === 'activity' && panels}
       </RecordFrame>
       <GiveRoleModal model={model} open={dialog === 'give-role'} onClose={() => open(null)} actions={actions} />
-      <EndRoleModal model={model} open={dialog === 'end-role'} endId={endId} onClose={() => open(null)} actions={actions} />
+      <EndRolesConfirm model={model} open={dialog === 'end-roles'} selected={selected} onClose={() => open(null)} onDone={() => setSelected([])} actions={actions} />
       {(dialog === 'suspend' || dialog === 'reactivate' || dialog === 'deactivate' || dialog === 'password') && <LifecycleModal model={model} action={dialog} onClose={() => open(null)} actions={actions} />}
       <StepUp model={model.stepUp} onSubmit={actions?.onStepUp} onClose={actions?.onStepUpClose} />
     </div>
   )
-}
-
-/** A held reason as words: a missing right ("Needs: Suspend people"), or the rule's own sentence. */
-function heldWords(t: (key: string, params?: Record<string, string | number>) => string, reason: string | null): string | null {
-  if (!reason) return null
-  return reason.startsWith('right.') ? t('held.needs', { right: t(reason) }) : t(reason)
 }
 
 function ProfileTab({ model, open }: { model: UserRecordModel; open: (dialog: UserDialog) => void }) {
@@ -143,7 +141,7 @@ function ProfileTab({ model, open }: { model: UserRecordModel; open: (dialog: Us
         <strong>{t(`user.${action}.title`)}</strong>
         <span className="fw-adm-hint">{t(`user.${action}.body`)}</span>
       </div>
-      <Button size="sm" variant={tone} heldReason={heldWords(t, held[action])} onClick={() => open(action)}>
+      <Button size="sm" variant={tone} heldReason={heldText(t, held[action])} onClick={() => open(action)}>
         {t(`user.${action}.action`)}
       </Button>
     </div>
@@ -178,76 +176,64 @@ function ProfileTab({ model, open }: { model: UserRecordModel; open: (dialog: Us
   )
 }
 
-function RolesTab({ model, open, actions }: { model: UserRecordModel; open: (dialog: UserDialog, end?: string) => void; actions?: UserRecordActions }) {
+function RolesTab({ model, open, selected, onSelect, actions }: { model: UserRecordModel; open: (dialog: UserDialog) => void; selected: readonly string[]; onSelect: (ids: string[]) => void; actions?: UserRecordActions }) {
   const t = useT('admin')
   const locale = useLocale()
-  const items = model.assignments.items
-  const held = lifecycleHeld(model)
+  const [help, setHelp] = useState(false)
   const words = useRoleWords()
-  if (items === null || model.assignments.problem) return <ListState loading={items === null} problem={model.assignments.problem} onRetry={actions?.onRetry} />
-  const live = items.filter((assignment) => assignment.live)
+  const columns = useMemo(() => assignmentColumns({ t, locale, prefix: model.prefix, companies: model.companies, roleName: words.name }), [t, locale, model.prefix, model.companies, words])
+  const items = model.assignments.items
+  const live = (items ?? []).filter((assignment) => assignment.live)
   const roleOf = (id: string) => model.roles?.find((role) => role.id === id)
   const grains = model.roles ? grainsOf(live.map((assignment) => roleOf(assignment.roleId) ?? { grains: [] })) : null
+  const picked = selectedAmong(items ?? [], selected)
+  const reach = endReach(picked, model)
   return (
     <div className="fw-adm-stack">
-      <Card header={t('user.canDo')} headingLevel={2} padded>
-        {live.length === 0 ? (
-          <p className="fw-adm-intro">{t('user.noRole')}</p>
-        ) : (
-          <ul className="fw-adm-guards">
-            {live.map((assignment) => (
-              <li key={assignment.id}>
-                <strong>{words.name({ key: assignment.roleKey, name: assignment.roleName })}</strong> — {words.description({ key: assignment.roleKey, description: roleOf(assignment.roleId)?.description ?? null }) ?? t('roles.noDescription')} · {scopeWords(assignment, model.companies, t('scope.all'))}
-              </li>
-            ))}
-          </ul>
-        )}
-        {grains && (
-          <p className="fw-adm-cell-row">
-            <span className="fw-adm-hint">{t('user.seesMoney')}</span> <GrainChips grains={grains} />
-          </p>
-        )}
-      </Card>
-      <Card
-        header={t('user.assignments')}
-        headingLevel={2}
-        headerAction={
-          <Button size="sm" onClick={() => open('give-role')} heldReason={heldWords(t, held.assign)}>
-            {t('user.giveRole')}
-          </Button>
-        }
-      >
-        {items.length === 0 ? (
-          <p className="fw-adm-hint">{t('user.noRole')}</p>
-        ) : (
-          <SummaryTable
-            label={t('user.assignments')}
-            density="roomy"
-            stackOnPhone
-            columns={[t('users.col.roles'), t('users.col.where'), t('user.col.from'), t('user.col.to'), t('users.col.status'), t('common.actions')]}
-            align={['left', 'left', 'left', 'left', 'left', 'right']}
-            rows={items.map((assignment) => ({
-              id: assignment.id,
-              cells: [
-                <span key="role" className="fw-adm-name">{words.name({ key: assignment.roleKey, name: assignment.roleName })}</span>,
-                scopeWords(assignment, model.companies, t('scope.all')) || '—',
-                formatDate(assignment.validFrom, { locale }),
-                assignment.endedAt ? formatDate(assignment.endedAt, { locale }) : assignment.validTo ? formatDate(assignment.validTo, { locale }) : t('user.noEnd'),
-                <Pill key="state" tone={assignment.live ? 'success' : 'neutral'}>{t(assignment.live ? 'user.live' : 'user.ended')}</Pill>,
-                assignment.live ? (
-                  <Button key="end" size="sm" variant="quiet" heldReason={heldWords(t, held.assign)} onClick={() => open('end-role', assignment.id)}>
-                    {t('user.end')}
-                    <span className="fw-adm-sr"> {words.name({ key: assignment.roleKey, name: assignment.roleName })}</span>
-                  </Button>
-                ) : (
-                  ''
-                ),
-              ],
-            }))}
-          />
-        )}
-      </Card>
+      {items && (
+        <Card header={t('user.canDo')} headingLevel={2} padded>
+          {live.length === 0 ? (
+            <p className="fw-adm-intro">{t('user.noRole')}</p>
+          ) : (
+            <ul className="fw-adm-guards">
+              {live.map((assignment) => (
+                <li key={assignment.id}>
+                  <strong>{words.name({ key: assignment.roleKey, name: assignment.roleName })}</strong> — {words.description({ key: assignment.roleKey, description: roleOf(assignment.roleId)?.description ?? null }) ?? t('roles.noDescription')} · {scopeWords(assignment, model.companies, t('scope.all'))}
+                </li>
+              ))}
+            </ul>
+          )}
+          {grains && (
+            <p className="fw-adm-cell-row">
+              <span className="fw-adm-hint">{t('user.seesMoney')}</span> <GrainChips grains={grains} />
+            </p>
+          )}
+        </Card>
+      )}
+      <ListFrame<Assignment>
+        label={t('user.assignments')}
+        rows={items}
+        rowId={(assignment) => assignment.id}
+        columns={columns}
+        count={items ? t('user.assignmentsCount', { count: items.length }) : '—'}
+        selection={{
+          selected: picked.map((assignment) => assignment.id),
+          onChange: onSelect,
+          actions: (
+            <BulkButton
+              icon={<CircleStop size={13} aria-hidden />}
+              label={reach.held ? t('user.end') : t('user.bulk.end', { count: reach.items.length })}
+              held={heldText(t, reach.held)}
+              tone="danger-outline"
+              onClick={() => open('end-roles')}
+            />
+          ),
+        }}
+        onHelp={() => setHelp(true)}
+        state={model.assignments.problem ? <FrameState problem={model.assignments.problem} onRetry={actions?.onRetry} /> : items && items.length === 0 ? <FrameState empty={{ title: t('user.noRole') }} /> : undefined}
+      />
       <p className="fw-adm-hint">{t('user.sessionsLater')}</p>
+      <ListKeysHelp open={help} onClose={() => setHelp(false)} keys={[]} selection />
     </div>
   )
 }
@@ -342,39 +328,35 @@ function GiveRoleModal({ model, open, onClose, actions }: { model: UserRecordMod
   )
 }
 
-function EndRoleModal({ model, open, endId, onClose, actions }: { model: UserRecordModel; open: boolean; endId: string | null; onClose: () => void; actions?: UserRecordActions }) {
+/** "End N": the ticked live roles end now, one call each after one fresh code; the ended ones stay listed. */
+function EndRolesConfirm({ model, open, selected, onClose, onDone, actions }: { model: UserRecordModel; open: boolean; selected: readonly string[]; onClose: () => void; onDone: () => void; actions?: UserRecordActions }) {
   const t = useT('admin')
-  const [reason, setReason] = useState('')
-  useEffect(() => {
-    if (open) setReason('')
-  }, [open])
-  const assignment = (model.assignments.items ?? []).find((item) => item.id === endId)
   const words = useRoleWords()
-  if (!assignment) return null
+  const reach = endReach(selectedAmong(model.assignments.items ?? [], selected), model)
+  const count = reach.items.length
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={t('user.endRole.title', { role: words.name({ key: assignment.roleKey, name: assignment.roleName }), name: model.user?.displayName ?? '' })}
-      size="sm"
+    <BulkConfirm
+      open={open && count > 0}
+      title={t('user.bulk.confirm.end', { count, name: model.user?.displayName ?? '' })}
+      lines={[
+        t('user.bulk.endBody', { count }),
+        namesLine(
+          reach.items.map((assignment) => words.name({ key: assignment.roleKey, name: assignment.roleName })),
+          (more) => t('common.bulk.andMore', { count: more }),
+        ),
+        ...(reach.skipped > 0 ? [t('common.bulk.skipped', { count: reach.skipped })] : []),
+      ]}
+      confirmLabel={t('user.bulk.end', { count })}
+      reason
       busy={model.busy}
-      footer={
-        <>
-          <Button onClick={onClose}>{t('common.cancel')}</Button>
-          <Button variant="danger" heldReason={model.busy ? t('common.saving') : null} onClick={() => void actions?.onEndRole?.(assignment, reason.trim())}>
-            {t('user.end')}
-          </Button>
-        </>
+      problem={model.dialogProblem}
+      onConfirm={(reason) =>
+        void actions?.onEndRoles?.(reach.items, reason).then((finished) => {
+          if (finished) onDone()
+        })
       }
-    >
-      <div className="fw-adm-modal-body">
-        {model.dialogProblem && <Banner tone="danger" title={t(model.dialogProblem)} />}
-        <p className="fw-adm-intro">{t('user.endRole.body')}</p>
-        <Field label={t('common.reason')} hint={t('common.reasonHint')}>
-          <Textarea rows={2} limit={500} value={reason} onChange={(event) => setReason(event.target.value)} />
-        </Field>
-      </div>
-    </Modal>
+      onClose={onClose}
+    />
   )
 }
 
@@ -392,7 +374,7 @@ function LifecycleModal({ model, action, onClose, actions }: { model: UserRecord
       footer={
         <>
           <Button onClick={onClose}>{t('common.cancel')}</Button>
-          <Button variant={action === 'reactivate' || action === 'password' ? 'primary' : 'danger'} heldReason={heldWords(t, held) ?? (model.busy ? t('common.saving') : null)} onClick={() => void actions?.onLifecycle?.(action, reason.trim())}>
+          <Button variant={action === 'reactivate' || action === 'password' ? 'primary' : 'danger'} heldReason={heldText(t, held) ?? (model.busy ? t('common.saving') : null)} onClick={() => void actions?.onLifecycle?.(action, reason.trim())}>
             {t(`user.${action}.action`)}
           </Button>
         </>

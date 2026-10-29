@@ -1,9 +1,10 @@
 import { formatNumber, MAX_FISCAL_NUMBER_LENGTH, MAX_PATTERN_LENGTH, parsePattern, type Pattern } from '@nexus/factory-domain/numbering/format'
-import { defaultPattern, isFiscalKind, MAX_NUMBER, NUMBER_KINDS, SERIES_CODE } from '@nexus/factory-domain/numbering/kinds'
+import { defaultPattern, DOCUMENT_KINDS, isFiscalKind, MAX_NUMBER, SERIES_CODE } from '@nexus/factory-domain/numbering/kinds'
 import { legalProblems } from '@nexus/factory-domain/documents/legal'
 import type { CompanyLegal } from '@nexus/factory-domain/documents/model'
 import type { Company } from '../shared/api'
-import type { Loaded, Notice, StepUpModel } from '../shared/model'
+import type { Loaded, StepUpModel } from '../shared/model'
+import { reachOf, type BulkNotice, type Reach } from '../kit/bulk-model'
 import type { Allocation, NumberKind, NumberReset, Series, SeriesProof } from './api'
 
 /**
@@ -57,7 +58,11 @@ export interface DocumentsViewModel {
   dialog?: DocumentsDialog | null
   /** The numbers of the series the "numbers issued" dialog shows. */
   numbers?: { seriesId: string; read: Loaded<Allocation>; proof: SeriesProof | null } | null
-  notice?: Notice | null
+  /** The series ticked in the Numbers list (ids). */
+  selected?: readonly string[]
+  /** "Close N series" asked for these series (the bulk confirm is open). */
+  closeMany?: readonly string[] | null
+  notice?: BulkNotice | null
   busy?: boolean
   dialogProblem?: string | null
   stepUp?: StepUpModel
@@ -234,7 +239,7 @@ export function draftBody(draft: SeriesDraft) {
 
 // ---- the lists ----
 
-const KIND_ORDER = new Map<string, number>(NUMBER_KINDS.map((kind, index) => [kind, index]))
+const KIND_ORDER = new Map<string, number>(DOCUMENT_KINDS.map((kind, index) => [kind, index]))
 
 /** The series a list shows: the chosen company's (or all), by company, document, code and newest period. */
 export function seriesRows(series: readonly Series[], companyId: string, companies: readonly CompanyOption[]): Series[] {
@@ -282,6 +287,32 @@ export function skippedWords(proof: Pick<SeriesProof, 'skipped' | 'moreSkipped'>
 /** Another active series of the same company and document exists (a new document still gets a number after a close). */
 export function hasOtherActive(series: Series, all: readonly Series[]): boolean {
   return all.some((row) => row.id !== series.id && row.companyId === series.companyId && row.kind === series.kind && row.status === 'ACTIVE')
+}
+
+/**
+ * "Close N series" (bulk): it applies to the selected series that are active; a closed one is left out with the reason.
+ * Each is one `POST /numbering/series/:id/close` with its version (no call closes many).
+ */
+export function closeReach(selected: readonly Series[]): Reach<Series> {
+  return reachOf(selected, (series) => (series.status === 'ACTIVE' ? null : 'docs.bulk.left.closed'))
+}
+
+/**
+ * The companies and documents that closing these series would leave without an active series (new documents of that
+ * kind would be refused until one is added): one entry per company and kind, in the list's order.
+ */
+export function leftWithout(closing: readonly Series[], all: readonly Series[]): Array<{ companyId: string; kind: NumberKind }> {
+  const closingIds = new Set(closing.map((series) => series.id))
+  const seen = new Set<string>()
+  const out: Array<{ companyId: string; kind: NumberKind }> = []
+  for (const series of closing) {
+    const key = `${series.companyId}|${series.kind}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    const others = all.some((row) => !closingIds.has(row.id) && row.companyId === series.companyId && row.kind === series.kind && row.status === 'ACTIVE')
+    if (!others) out.push({ companyId: series.companyId, kind: series.kind })
+  }
+  return out
 }
 
 /** Why "New series" is held, or null. */

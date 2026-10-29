@@ -178,10 +178,13 @@ export const CHOICES = COMPANIES.map((company) => ({ id: company.id, code: compa
 
 type Case = { page: 'list'; model: ConnectionsViewModel } | { page: 'record'; model: ConnectionRecordModel; dock?: boolean }
 
+/** Two running services, a paused one and a "Not connected" row (the second company has no SDI). */
+const PICKED = [ACCOUNTS[0]!.id, ACCOUNTS[3]!.id, ACCOUNTS[4]!.id, `missing-SDI-${CHOICES[1]!.id}`]
+
 const MAIL: MailDomainModel = { identities: loaded(IDENTITIES), companies: MAIL_COMPANIES, sesAccounts: ACCOUNTS.filter((item) => item.provider === 'SES'), can: { manage: true } }
 const list = (over: Partial<ConnectionsViewModel> = {}): Case => ({
   page: 'list',
-  model: { prefix: PREFIX, accounts: loaded(ACCOUNTS), companies: CHOICES, tile: null, query: '', page: 1, asOf: NOW, now: NOW, can: { manage: true }, mail: MAIL, ...over },
+  model: { prefix: PREFIX, accounts: loaded(ACCOUNTS), companies: CHOICES, tile: null, query: '', asOf: NOW, now: NOW, can: { manage: true }, mail: MAIL, ...over },
 })
 const ledger = <T,>(items: readonly T[] | null, more: string | null = null, problem: string | null = null): Ledger<T> => ({ items, problem, more })
 const record = (index: number, over: Partial<ConnectionRecordModel> = {}, dock = false): Case => ({
@@ -229,6 +232,28 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'pause-confirm', label: 'Pause a service: confirm', model: list({ confirm: { accountId: ACCOUNTS[3]!.id, pause: true } }) },
     { id: 'resume-confirm', label: 'Resume a paused service', model: list({ confirm: { accountId: ACCOUNTS[4]!.id, pause: false } }) },
     { id: 'pause-refused', label: 'Pause: someone changed it meanwhile', model: list({ confirm: { accountId: ACCOUNTS[3]!.id, pause: true }, dialogProblem: 'problem.conflict' }) },
+    {
+      id: 'services-selected',
+      label: 'Services selected: Pause and Resume say their reach',
+      model: list({ selected: PICKED }),
+      note: 'Pause 2 (the two running ones), Resume 1 (VAT check); the "Not connected" row is ticked but nothing applies to it.',
+    },
+    {
+      id: 'pause-many',
+      label: 'Pause 2 services: one confirm',
+      model: list({ selected: PICKED, bulk: { pause: true, ids: PICKED } }),
+      note: 'What changes once, the services by name, and each one left out with the reason (paused already, not connected).',
+    },
+    {
+      id: 'paused-many',
+      label: 'After pausing several: one notice',
+      model: list({
+        accounts: loaded(ACCOUNTS.map((item) => (item.id === ACCOUNTS[0]!.id ? { ...item, status: 'PAUSED' as const, version: 2 } : item))),
+        selected: [ACCOUNTS[3]!.id],
+        notice: { key: 'conn.bulk.pausedPartial', tone: 'warning', params: { count: 1, done: 1, refused: 1, total: 2 }, refused: [{ id: ACCOUNTS[3]!.id, problem: 'problem.forbidden' }] },
+      }),
+      note: 'Each service is one call: what was paused, and each one refused with the reason.',
+    },
     { id: 'paused-done', label: 'Paused: the receipt', model: list({ notice: { key: 'conn.done.paused', tone: 'success', params: { name: ACCOUNTS[3]!.label } } }) },
     { id: 'viewer', label: 'Someone who only reads', model: list({ can: { manage: false }, mail: { ...MAIL, can: { manage: false } } }), note: 'Pause and resume are held with the right they need; nothing else changes.' },
     { id: 'no-mail-right', label: 'Without the right to send mail', model: list({ mail: null }) },

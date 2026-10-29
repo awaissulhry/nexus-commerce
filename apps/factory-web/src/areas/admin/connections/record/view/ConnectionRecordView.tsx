@@ -1,15 +1,18 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Banner, Card, KeyValue } from '@nexus/ui/components'
-import { Button, Pill, SegmentedControl, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { Banner, Card, EmptyState, KeyValue } from '@nexus/ui/components'
+import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
+import { Button, Pill, SegmentedControl, Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDateTime, formatNumber } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
+import { ListFrame } from '../../../../../list-frame/ListFrame'
+import { ListProblem, useKeysHelp } from '../../../kit/list'
 import { adminHref } from '../../../shared/model'
-import { dash, ListState, ListTable, RecordProblem } from '../../../shared/view/parts'
+import { RecordProblem } from '../../../shared/view/parts'
 import { RecordFrame } from '../../../shared/view/RecordFrame'
-import { INBOUND_STATUSES, type IntegrationAccount } from '../../api'
+import { INBOUND_STATUSES, type InboundDelivery, type IntegrationAccount, type IntegrationCall } from '../../api'
 import { CALL_TONE, FAILED_CALL, INBOUND_TONE, KNOWN_REASONS, KNOWN_SETTINGS, MODE_TONE, isTestMode, nextSwitch, type ConnectionRecordModel, type ConnectionTab, type PauseConfirm } from '../../model'
 import { SwitchConfirm, useStateWords } from '../../view/ConnectionsView'
 import { ConnectionsMessages, ConnNotice, SecretField } from '../../view/parts'
@@ -230,127 +233,167 @@ function SettingsTab({ model, account }: { model: ConnectionRecordModel; account
   )
 }
 
+/** The call ledger's columns (one call per row, newest first). */
+export function useCallColumns(): ColDef<IntegrationCall>[] {
+  const t = useT('admin-connections')
+  const locale = useLocale()
+  return useMemo<ColDef<IntegrationCall>[]>(() => {
+    const reason = (code: string | null) => (code ? ((KNOWN_REASONS as readonly string[]).includes(code) ? t(`conn.reason.${code}`) : code) : null)
+    return [
+      { colId: 'time', headerName: t('conn.calls.col.time'), flex: 1.1, minWidth: 160, valueGetter: ({ data }) => (data ? formatDateTime(data.startedAt, { locale }) : '') },
+      { colId: 'operation', headerName: t('conn.calls.col.operation'), flex: 1.2, minWidth: 170, cellClass: 'fw-adm-code', valueGetter: ({ data }) => data?.operation ?? '' },
+      {
+        colId: 'state',
+        headerName: t('conn.calls.col.state'),
+        flex: 0.9,
+        minWidth: 130,
+        cellRenderer: ({ data }: ICellRendererParams<IntegrationCall>) => (data ? <Pill tone={CALL_TONE[data.status] ?? 'neutral'}>{t(`conn.callState.${data.status}`)}</Pill> : null),
+      },
+      { colId: 'http', headerName: t('conn.calls.col.http'), flex: 0.5, minWidth: 80, valueGetter: ({ data }) => (data ? (data.httpStatus === null ? '—' : String(data.httpStatus)) : '') },
+      { colId: 'duration', headerName: t('conn.calls.col.duration'), flex: 0.7, minWidth: 100, valueGetter: ({ data }) => (data ? t('conn.calls.ms', { ms: formatNumber(data.durationMs, locale) }) : '') },
+      { colId: 'tries', headerName: t('conn.calls.col.tries'), flex: 0.5, minWidth: 80, valueGetter: ({ data }) => (data ? String(data.attempts) : '') },
+      {
+        colId: 'summary',
+        headerName: t('conn.calls.col.summary'),
+        flex: 2,
+        minWidth: 240,
+        cellRenderer: ({ data }: ICellRendererParams<IntegrationCall>) => {
+          if (!data) return null
+          if (!FAILED_CALL.has(data.status)) return '—'
+          const why = reason(data.reason)
+          return (
+            <span className="fw-adm-two">
+              {why && <span>{why}</span>}
+              {data.error && (
+                <q className="fw-adm-conn-error" title={data.error}>
+                  {data.error}
+                </q>
+              )}
+            </span>
+          )
+        },
+      },
+    ]
+  }, [t, locale])
+}
+
 function CallsTab({ model, actions }: { model: ConnectionRecordModel; actions?: ConnectionRecordActions }) {
   const t = useT('admin-connections')
   const tAdmin = useT('admin')
-  const locale = useLocale()
+  const columns = useCallColumns()
+  const { onHelp, help } = useKeysHelp([], false)
   const items = model.calls.items
-  const reason = (code: string | null) => (code ? ((KNOWN_REASONS as readonly string[]).includes(code) ? t(`conn.reason.${code}`) : code) : null)
+  const state: ReactNode = model.calls.problem ? (
+    <ListProblem problem={model.calls.problem} onRetry={actions?.onRetryCalls} />
+  ) : items && items.length === 0 ? (
+    <EmptyState title={t(model.failedOnly ? 'conn.calls.noFailures' : 'conn.calls.empty')} description={t('conn.calls.emptyBody')} />
+  ) : undefined
   return (
     <div className="fw-adm-stack">
-      <div className="fw-adm-toolbar">
-        <SegmentedControl
-          ariaLabel={t('conn.calls.filter')}
-          size="sm"
-          value={model.failedOnly ? 'failed' : 'all'}
-          onChange={(value) => actions?.onFailedOnly?.(value === 'failed')}
-          options={[
-            { value: 'all', label: t('conn.calls.all') },
-            { value: 'failed', label: t('conn.calls.failedOnly') },
-          ]}
-        />
-      </div>
-      {model.calls.problem || items === null ? (
-        <ListState problem={model.calls.problem} loading={items === null} onRetry={actions?.onRetryCalls} />
-      ) : items.length === 0 ? (
-        <ListState loading={false} empty={{ title: t(model.failedOnly ? 'conn.calls.noFailures' : 'conn.calls.empty'), body: t('conn.calls.emptyBody') }} />
-      ) : (
-        <ListTable
-          label={t('conn.calls.tableLabel')}
-          columns={[t('conn.calls.col.time'), t('conn.calls.col.operation'), t('conn.calls.col.state'), t('conn.calls.col.http'), t('conn.calls.col.duration'), t('conn.calls.col.tries'), t('conn.calls.col.summary')]}
-          widths={['16%', '18%', '13%', '8%', '9%', '7%', '29%']}
-          page={1}
-          pageCount={1}
-          count={t('conn.calls.count', { count: items.length })}
-          rows={items.map((call) => ({
-            id: call.id,
-            cells: [
-              formatDateTime(call.startedAt, { locale }),
-              <span key="op" className="fw-adm-code">
-                {call.operation}
-              </span>,
-              <Pill key="state" tone={CALL_TONE[call.status] ?? 'neutral'}>
-                {t(`conn.callState.${call.status}`)}
-              </Pill>,
-              dash(call.httpStatus),
-              t('conn.calls.ms', { ms: formatNumber(call.durationMs, locale) }),
-              String(call.attempts),
-              FAILED_CALL.has(call.status) ? (
-                <span key="why" className="fw-adm-cell">
-                  {reason(call.reason) && <span>{reason(call.reason)}</span>}
-                  {call.error && <q className="fw-adm-conn-error">{call.error}</q>}
-                </span>
-              ) : (
-                '—'
-              ),
-            ],
-          }))}
-        />
-      )}
-      {model.calls.more && (
-        <div className="fw-adm-conn-more">
-          <Button size="sm" onClick={() => actions?.onMoreCalls?.()} heldReason={model.calls.loadingMore ? tAdmin('list.loading') : null}>
-            {model.calls.loadingMore ? <Spinner size={12} /> : null} {t('conn.showOlder')}
-          </Button>
-        </div>
-      )}
+      <ListFrame<IntegrationCall>
+        label={t('conn.calls.tableLabel')}
+        rows={model.calls.problem ? [] : items}
+        rowId={(call) => call.id}
+        columns={columns}
+        count={items ? t('conn.calls.count', { count: items.length }) : '—'}
+        tools={
+          <SegmentedControl
+            ariaLabel={t('conn.calls.filter')}
+            size="sm"
+            value={model.failedOnly ? 'failed' : 'all'}
+            onChange={(value) => actions?.onFailedOnly?.(value === 'failed')}
+            options={[
+              { value: 'all', label: t('conn.calls.all') },
+              { value: 'failed', label: t('conn.calls.failedOnly') },
+            ]}
+          />
+        }
+        more={items && items.length > 0 && model.calls.more ? { label: t('conn.showOlder'), onMore: () => actions?.onMoreCalls?.(), held: model.calls.loadingMore ? tAdmin('list.loading') : null } : null}
+        onHelp={onHelp}
+        state={state}
+      />
+      {help}
       <p className="fw-adm-hint">{t('conn.calls.privacy')}</p>
     </div>
+  )
+}
+
+/** The received messages' columns (one webhook delivery per row, newest first; never its content). */
+export function useInboundColumns(): ColDef<InboundDelivery>[] {
+  const t = useT('admin-connections')
+  const locale = useLocale()
+  return useMemo<ColDef<InboundDelivery>[]>(
+    () => [
+      { colId: 'time', headerName: t('conn.calls.col.time'), flex: 1.1, minWidth: 160, valueGetter: ({ data }) => (data ? formatDateTime(data.receivedAt, { locale }) : '') },
+      { colId: 'event', headerName: t('conn.inbound.col.event'), flex: 1.2, minWidth: 170, cellClass: 'fw-adm-code', valueGetter: ({ data }) => (data ? (data.eventType ?? '—') : '') },
+      {
+        colId: 'verified',
+        headerName: t('conn.inbound.col.verified'),
+        flex: 0.9,
+        minWidth: 150,
+        cellRenderer: ({ data }: ICellRendererParams<InboundDelivery>) =>
+          data ? data.verified ? <Tag tone="success">{t('conn.inbound.verified')}</Tag> : <Tag tone="danger">{t('conn.inbound.notVerified')}</Tag> : null,
+      },
+      {
+        colId: 'state',
+        headerName: t('conn.calls.col.state'),
+        flex: 0.9,
+        minWidth: 120,
+        cellRenderer: ({ data }: ICellRendererParams<InboundDelivery>) => (data ? <Pill tone={INBOUND_TONE[data.status] ?? 'neutral'}>{t(`conn.inboundState.${data.status}`)}</Pill> : null),
+      },
+      { colId: 'tries', headerName: t('conn.calls.col.tries'), flex: 0.5, minWidth: 80, valueGetter: ({ data }) => (data ? String(data.attempts) : '') },
+      { colId: 'processed', headerName: t('conn.inbound.col.processed'), flex: 1.1, minWidth: 160, valueGetter: ({ data }) => (data ? (data.processedAt ? formatDateTime(data.processedAt, { locale }) : '—') : '') },
+      {
+        colId: 'error',
+        headerName: t('conn.inbound.col.error'),
+        flex: 1.6,
+        minWidth: 220,
+        cellRenderer: ({ data }: ICellRendererParams<InboundDelivery>) =>
+          data ? data.error ? (
+            <q className="fw-adm-conn-error fw-adm-ellipsis" title={data.error}>
+              {data.error}
+            </q>
+          ) : '—' : null,
+      },
+    ],
+    [t, locale],
   )
 }
 
 function InboundTab({ model, account, actions }: { model: ConnectionRecordModel; account: IntegrationAccount; actions?: ConnectionRecordActions }) {
   const t = useT('admin-connections')
   const tAdmin = useT('admin')
-  const locale = useLocale()
+  const columns = useInboundColumns()
+  const { onHelp, help } = useKeysHelp([], false)
   const items = model.inbound.items
+  const state: ReactNode = model.inbound.problem ? (
+    <ListProblem problem={model.inbound.problem} onRetry={actions?.onRetryInbound} />
+  ) : items && items.length === 0 ? (
+    <EmptyState title={t('conn.inbound.empty')} description={t('conn.inbound.emptyBody')} />
+  ) : undefined
   return (
     <div className="fw-adm-stack">
-      <div className="fw-adm-toolbar">
-        <SegmentedControl
-          ariaLabel={t('conn.inbound.filter')}
-          size="sm"
-          value={model.inboundStatus ?? 'all'}
-          onChange={(value) => actions?.onInboundStatus?.(value === 'all' ? null : (value as ConnectionRecordModel['inboundStatus']))}
-          options={[{ value: 'all', label: t('conn.calls.all') }, ...INBOUND_STATUSES.map((status) => ({ value: status, label: t(`conn.inboundState.${status}`) }))]}
-        />
-      </div>
       {!account.inboundPath && <Banner tone="info" title={t('conn.inbound.none')} />}
-      {model.inbound.problem || items === null ? (
-        <ListState problem={model.inbound.problem} loading={items === null} onRetry={actions?.onRetryInbound} />
-      ) : items.length === 0 ? (
-        <ListState loading={false} empty={{ title: t('conn.inbound.empty'), body: t('conn.inbound.emptyBody') }} />
-      ) : (
-        <ListTable
-          label={t('conn.inbound.tableLabel')}
-          columns={[t('conn.calls.col.time'), t('conn.inbound.col.event'), t('conn.inbound.col.verified'), t('conn.calls.col.state'), t('conn.calls.col.tries'), t('conn.inbound.col.processed'), t('conn.inbound.col.error')]}
-          widths={['16%', '14%', '11%', '13%', '7%', '16%', '23%']}
-          page={1}
-          pageCount={1}
-          count={t('conn.inbound.count', { count: items.length })}
-          rows={items.map((delivery) => ({
-            id: delivery.id,
-            cells: [
-              formatDateTime(delivery.receivedAt, { locale }),
-              delivery.eventType ? <span className="fw-adm-code">{delivery.eventType}</span> : '—',
-              delivery.verified ? <Tag tone="success">{t('conn.inbound.verified')}</Tag> : <Tag tone="danger">{t('conn.inbound.notVerified')}</Tag>,
-              <Pill key="state" tone={INBOUND_TONE[delivery.status] ?? 'neutral'}>
-                {t(`conn.inboundState.${delivery.status}`)}
-              </Pill>,
-              String(delivery.attempts),
-              delivery.processedAt ? formatDateTime(delivery.processedAt, { locale }) : '—',
-              delivery.error ? <q className="fw-adm-conn-error">{delivery.error}</q> : '—',
-            ],
-          }))}
-        />
-      )}
-      {model.inbound.more && (
-        <div className="fw-adm-conn-more">
-          <Button size="sm" onClick={() => actions?.onMoreInbound?.()} heldReason={model.inbound.loadingMore ? tAdmin('list.loading') : null}>
-            {model.inbound.loadingMore ? <Spinner size={12} /> : null} {t('conn.showOlder')}
-          </Button>
-        </div>
-      )}
+      <ListFrame<InboundDelivery>
+        label={t('conn.inbound.tableLabel')}
+        rows={model.inbound.problem ? [] : items}
+        rowId={(delivery) => delivery.id}
+        columns={columns}
+        count={items ? t('conn.inbound.count', { count: items.length }) : '—'}
+        tools={
+          <SegmentedControl
+            ariaLabel={t('conn.inbound.filter')}
+            size="sm"
+            value={model.inboundStatus ?? 'all'}
+            onChange={(value) => actions?.onInboundStatus?.(value === 'all' ? null : (value as ConnectionRecordModel['inboundStatus']))}
+            options={[{ value: 'all', label: t('conn.calls.all') }, ...INBOUND_STATUSES.map((status) => ({ value: status, label: t(`conn.inboundState.${status}`) }))]}
+          />
+        }
+        more={items && items.length > 0 && model.inbound.more ? { label: t('conn.showOlder'), onMore: () => actions?.onMoreInbound?.(), held: model.inbound.loadingMore ? tAdmin('list.loading') : null } : null}
+        onHelp={onHelp}
+        state={state}
+      />
+      {help}
       <p className="fw-adm-hint">{t('conn.inbound.privacy')}</p>
     </div>
   )

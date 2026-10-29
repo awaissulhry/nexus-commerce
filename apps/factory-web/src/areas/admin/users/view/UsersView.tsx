@@ -1,38 +1,45 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Plus, Search, Trash2, Users } from 'lucide-react'
+import { PauseCircle, PlayCircle, Plus, Trash2, UserX, Users } from 'lucide-react'
 import { Banner, Field, MetricStrip, Modal, SummaryTable } from '@nexus/ui/components'
-import { Button, CheckboxCard, Input, Pill, SegmentedControl, Select, Tag, Textarea } from '@nexus/ui/primitives'
-import { formatDateTime } from '../../../../lib/i18n/format'
+import { Button, CheckboxCard, Input, SegmentedControl, Select, Tag, Textarea } from '@nexus/ui/primitives'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
-import type { Role, Worker } from '../../shared/api'
-import { adminHref, EVERYWHERE, pageOf, scopeReady, STATUS_TONE } from '../../shared/model'
-import { AdminMessages, dash, GrainChips, ListState, ListTable, NoticeBanner, PageHead, StepUp, useRoleWords } from '../../shared/view/parts'
+import { ListFrame } from '../../../../list-frame/ListFrame'
+import type { ListKey } from '../../../../list-frame/model'
+import type { Role, User, Worker } from '../../shared/api'
+import { namesLine, type BulkReach } from '../../shared/reach'
+import { adminHref, EVERYWHERE, scopeReady, selectedAmong, shownOf } from '../../shared/model'
+import { BulkConfirm } from '../../shared/view/BulkConfirm'
+import { AdminMessages, BulkButton, FrameState, GrainChips, heldText, ListKeysHelp, ListSearch, NoticeBanner, PageHead, StepUp, useRoleWords } from '../../shared/view/parts'
 import { ScopePicker } from '../../shared/view/ScopePicker'
 import {
   FLOOR_LOCALES,
   FLOOR_TILES,
+  floorReach,
   floorRows,
   inviteProblems,
   invitees,
   nameFromEmail,
   OFFICE_TILES,
+  officeReach,
   officeRows,
   peopleFromPaste,
   tileCounts,
-  userGrains,
-  whereWords,
   workerProblems,
   type Audience,
+  type FloorAction,
   type FloorTile,
   type InviteDraft,
+  type OfficeAction,
   type OfficeTile,
+  type UsersBulk,
   type UsersDialog,
   type UsersViewModel,
   type WorkerDraft,
 } from '../model'
+import { floorColumns, officeColumns } from './columns'
 
 export type { UsersViewModel } from '../model'
 
@@ -40,12 +47,20 @@ export interface UsersActions {
   onAudience?: (audience: Audience) => void
   onTile?: (tile: OfficeTile | FloorTile | null) => void
   onQuery?: (query: string) => void
-  onPage?: (page: number) => void
+  /** "Show 50 more". */
+  onMore?: () => void
   onRetry?: () => void
+  /** Enter on a row: open its record. */
+  onOpen?: (href: string) => void
   onDialog?: (dialog: UsersDialog | null) => void
   /** Resolve true when every invitation went out. */
   onInvite?: (draft: InviteDraft) => Promise<boolean>
   onAddWorker?: (draft: WorkerDraft) => Promise<boolean>
+  /** A bulk action over the people it reaches, one call each; resolve true when the run finished (its notice says how). */
+  onOfficeBulk?: (action: OfficeAction, users: readonly User[], reason: string) => Promise<boolean>
+  onFloorBulk?: (action: FloorAction, workers: readonly Worker[], reason: string) => Promise<boolean>
+  /** A bulk confirm closed (its refusal goes away). */
+  onBulkClose?: () => void
   onStepUp?: (code: string) => void
   onStepUpClose?: () => void
   onDismissNotice?: () => void
@@ -53,9 +68,11 @@ export interface UsersActions {
 
 /**
  * SCR-010 — Admin › Users (design 02 admin.users; PLT-014, PLT-015, PLT-018): everyone who signs in, by kind — office
- * people and floor workers — with the tiles that need a look (each a saved filter), and the two creates: Invite people
- * (role cards in plain words, where they apply, language; a fresh code first) and Add floor worker (no e-mail: name,
- * site, floor roles; the badge and the first PIN next). Partners (W2b) and agents (W3) come later. Fetches nothing.
+ * people and floor workers — in the Office list frame, with the tiles that need a look (each a saved filter), the two
+ * creates — Invite people (role cards in plain words, where they apply, language; a fresh code first) and Add floor
+ * worker (no e-mail: name, site, floor roles; the badge and the first PIN next) — and the bulk actions over the ticked
+ * rows: Suspend, Reactivate, Deactivate office people; Deactivate, Reactivate floor workers (each says its reach, one
+ * confirm, one notice). Partners (W2b) and agents (W3) come later. Fetches nothing.
  */
 export function UsersView({ model, actions }: { model: UsersViewModel; actions?: UsersActions }) {
   return (
@@ -65,28 +82,48 @@ export function UsersView({ model, actions }: { model: UsersViewModel; actions?:
   )
 }
 
+const OFFICE_ICONS = { suspend: <PauseCircle size={13} aria-hidden />, reactivate: <PlayCircle size={13} aria-hidden />, deactivate: <UserX size={13} aria-hidden /> } as const
+const OFFICE_LABEL = { suspend: 'users.bulk.suspend', reactivate: 'users.bulk.reactivate', deactivate: 'users.bulk.deactivate' } as const
+const OFFICE_VERB = { suspend: 'user.suspend.action', reactivate: 'user.reactivate.action', deactivate: 'user.deactivate.action' } as const
+const OFFICE_TITLE = { suspend: 'users.bulk.confirm.suspend', reactivate: 'users.bulk.confirm.reactivate', deactivate: 'users.bulk.confirm.deactivate' } as const
+const OFFICE_CONSEQUENCE = { suspend: 'user.suspend.consequence', reactivate: 'user.reactivate.consequence', deactivate: 'user.deactivate.consequence' } as const
+const FLOOR_ICONS = { deactivate: <UserX size={13} aria-hidden />, reactivate: <PlayCircle size={13} aria-hidden /> } as const
+const FLOOR_LABEL = { deactivate: 'users.bulk.workerDeactivate', reactivate: 'users.bulk.workerReactivate' } as const
+const FLOOR_VERB = { deactivate: 'worker.deactivate.title', reactivate: 'worker.reactivate.title' } as const
+const FLOOR_TITLE = { deactivate: 'users.bulk.confirm.workerDeactivate', reactivate: 'users.bulk.confirm.workerReactivate' } as const
+const FLOOR_CONSEQUENCE = { deactivate: 'worker.deactivate.body', reactivate: 'worker.reactivate.body' } as const
+
 function UsersList({ model, actions }: { model: UsersViewModel; actions?: UsersActions }) {
   const t = useT('admin')
   const locale = useLocale()
+  const words = useRoleWords()
   const href = (path: string) => adminHref(model.prefix, path)
   const [dialog, setDialog] = useState<UsersDialog | null>(model.dialog ?? null)
   useEffect(() => setDialog(model.dialog ?? null), [model.dialog])
+  const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
+  useEffect(() => setSelected(model.selected ?? []), [model.selected])
+  const [bulk, setBulk] = useState<UsersBulk | null>(model.bulk ?? null)
+  useEffect(() => setBulk(model.bulk ?? null), [model.bulk])
+  const [help, setHelp] = useState(false)
   const open = (next: UsersDialog | null) => {
     setDialog(next)
     actions?.onDialog?.(next)
+  }
+  const closeBulk = () => {
+    setBulk(null)
+    actions?.onBulkClose?.()
   }
   const counts = tileCounts(model)
   const office = model.audience === 'office'
   const tiles = office ? OFFICE_TILES : FLOOR_TILES
   const loaded = office ? model.users : model.workers
   const items = loaded.items
-  const words = useRoleWords()
 
   // c: invite people (office) or add a worker (floor), when no field has the focus (00 §3.17).
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (event.key !== 'c' || event.metaKey || event.ctrlKey || event.altKey || dialog) return
+      if (event.key !== 'c' || event.metaKey || event.ctrlKey || event.altKey || dialog || bulk) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]') || target.isContentEditable)) return
       if (office ? !model.can.invite : !model.can.manageWorkers) return
       event.preventDefault()
@@ -96,68 +133,116 @@ function UsersList({ model, actions }: { model: UsersViewModel; actions?: UsersA
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  const officeTable = () => {
-    const rows = officeRows(model.users.items ?? [], model.tile as OfficeTile | null, model.query)
-    const paged = pageOf(rows, model.page)
-    return {
-      total: rows.length,
-      paged,
-      columns: [t('users.col.name'), t('users.col.roles'), t('users.col.where'), t('users.col.money'), t('users.col.status'), t('users.col.twoFactor'), t('users.col.lastSignIn')],
-      rows: paged.rows.map((user) => {
-        const grains = userGrains(user, model.roles)
-        return {
-          id: user.id,
-          cells: [
-            <span key="name" className="fw-adm-cell">
-              <Link className="fw-adm-name" href={href(`/users/${user.id}`)}>
-                {user.displayName}
-              </Link>
-              <span className="fw-adm-hint">{user.email}</span>
-            </span>,
-            user.roles.length === 0 ? <span key="roles" className="fw-adm-hint">{t('users.noRole')}</span> : <span key="roles" className="fw-adm-tags">{user.roles.map((role) => <Tag key={role.assignmentId}>{words.name({ key: role.roleKey, name: role.roleName })}</Tag>)}</span>,
-            dash(whereWords(user.roles, model.companies, t('scope.all'))),
-            grains ? <GrainChips key="money" grains={grains} label={t('grains.labelOf', { name: user.displayName })} /> : '—',
-            <Pill key="status" tone={STATUS_TONE[user.status] ?? 'neutral'}>{t(`users.status.${user.status}`)}</Pill>,
-            user.status === 'INVITED' || user.status === 'DEACTIVATED' ? '—' : t(user.mfaEnabled ? 'users.mfa.on' : 'users.mfa.off'),
-            user.lastSignInAt ? formatDateTime(user.lastSignInAt, { locale }) : user.status === 'INVITED' && user.invitationExpiresAt ? t('users.invitedUntil', { date: formatDateTime(user.invitationExpiresAt, { locale }) }) : '—',
-          ],
-        }
-      }),
-      widths: ['22%', '18%', '16%', '18%', '9%', '7%', '10%'],
-    }
+  const context = { t, locale, prefix: model.prefix, roleName: words.name, roles: model.roles, companies: model.companies, sites: model.sites }
+  const officeCols = useMemo(() => officeColumns(context), [t, locale, model.prefix, words, model.roles, model.companies, model.sites])
+  const floorCols = useMemo(() => floorColumns(context), [t, locale, model.prefix, words, model.roles, model.companies, model.sites])
+
+  const officeAll = officeRows(model.users.items ?? [], model.tile as OfficeTile | null, model.query)
+  const floorAll = floorRows(model.workers.items ?? [], model.tile as FloorTile | null, model.query, model.sites)
+  const officeShown = shownOf(officeAll, model.pages)
+  const floorShown = shownOf(floorAll, model.pages)
+  const pickedUsers = selectedAmong(officeShown.rows, selected)
+  const pickedWorkers = selectedAmong(floorShown.rows, selected)
+  const officeReachOf = (action: OfficeAction) => officeReach(action, pickedUsers, { me: model.me, can: model.can, users: model.users.items ?? [], roles: model.roles })
+  const floorReachOf = (action: FloorAction) => floorReach(action, pickedWorkers, model.can)
+  const total = office ? officeAll.length : floorAll.length
+  const shown = office ? officeShown : floorShown
+
+  const clearFilters = () => {
+    actions?.onQuery?.('')
+    actions?.onTile?.(null)
   }
-  const floorTable = () => {
-    const rows = floorRows(model.workers.items ?? [], model.tile as FloorTile | null, model.query, model.sites)
-    const paged = pageOf(rows, model.page)
-    const siteName = (worker: Worker) => model.sites.find((site) => site.id === worker.siteId)?.name ?? null
-    return {
-      total: rows.length,
-      paged,
-      columns: [t('users.col.name'), t('users.col.site'), t('users.col.floorRoles'), t('users.col.badge'), t('users.col.pin'), t('users.col.status'), t('users.col.language')],
-      rows: paged.rows.map((worker) => ({
-        id: worker.id,
-        cells: [
-          <span key="name" className="fw-adm-cell">
-            <Link className="fw-adm-name" href={href(`/users/floor/${worker.id}`)}>
-              {worker.displayName}
-            </Link>
-            {worker.employeeCode && <span className="fw-adm-hint">{t('users.employeeNo', { code: worker.employeeCode })}</span>}
-          </span>,
-          dash(siteName(worker)),
-          worker.roles.length === 0 ? <span key="roles" className="fw-adm-hint">{t('users.noFloorRole')}</span> : <span key="roles" className="fw-adm-tags">{worker.roles.map((role) => <Tag key={role.workerRoleId}>{words.name(role)}</Tag>)}</span>,
-          worker.badge ? t('users.badgeHint', { hint: worker.badge.hint }) : <span key="badge" className="fw-adm-hint">{t('users.noBadge')}</span>,
-          t(worker.pinMustChange ? 'users.pin.mustChange' : worker.hasPin ? 'users.pin.set' : 'users.pin.none'),
-          <span key="status" className="fw-adm-tags">
-            <Pill tone={STATUS_TONE[worker.status] ?? 'neutral'}>{t(`users.workerStatus.${worker.status}`)}</Pill>
-            {worker.locked && <Tag tone="warning">{t('users.locked')}</Tag>}
-          </span>,
-          t(`common.language.${worker.locale}`) === `common.language.${worker.locale}` ? worker.locale : t(`common.language.${worker.locale}`),
-        ],
-      })),
-      widths: ['24%', '18%', '18%', '12%', '12%', '10%', '6%'],
-    }
+  const state = loaded.problem ? (
+    <FrameState problem={loaded.problem} onRetry={actions?.onRetry} />
+  ) : items && items.length === 0 ? (
+    <FrameState
+      empty={{
+        icon: <Users size={24} aria-hidden />,
+        title: t(office ? 'users.empty.office' : 'users.empty.floor'),
+        body: t(office ? 'users.empty.officeBody' : 'users.empty.floorBody'),
+        action:
+          office && model.can.invite ? (
+            <Button variant="primary" onClick={() => open('invite')}>
+              {t('users.invite.action')}
+            </Button>
+          ) : !office && model.can.manageWorkers ? (
+            <Button variant="primary" onClick={() => open('add-worker')}>
+              {t('users.addWorker')}
+            </Button>
+          ) : undefined,
+      }}
+    />
+  ) : items && total === 0 ? (
+    <FrameState noMatch={{ onClear: clearFilters }} />
+  ) : undefined
+
+  const own: ListKey[] = office ? (model.can.invite ? [{ keys: ['c'], does: t('users.invite.action') }] : []) : model.can.manageWorkers ? [{ keys: ['c'], does: t('users.addWorker') }] : []
+  const tools = (
+    <>
+      <SegmentedControl
+        ariaLabel={t('users.audience.label')}
+        size="sm"
+        value={model.audience}
+        onChange={(value) => {
+          setSelected([])
+          actions?.onAudience?.(value as Audience)
+        }}
+        options={[
+          ...(model.can.viewUsers ? [{ value: 'office', label: model.users.items ? t('users.audience.officeCount', { count: model.users.items.filter((user) => user.status !== 'DEACTIVATED').length }) : t('users.audience.office') }] : []),
+          ...(model.can.viewWorkers ? [{ value: 'floor', label: model.workers.items ? t('users.audience.floorCount', { count: model.workers.items.filter((worker) => worker.status === 'ACTIVE').length }) : t('users.audience.floor') }] : []),
+        ]}
+      />
+      {model.tile && (
+        <span className="fw-adm-tags">
+          <Tag tone="info">{t('users.filtered', { tile: t(`users.tile.${model.tile}`) })}</Tag>
+          <Button size="sm" variant="quiet" onClick={() => actions?.onTile?.(null)}>
+            {t('list.clearFilter')}
+          </Button>
+        </span>
+      )}
+    </>
+  )
+  const frame = {
+    count: items ? t('list.count', { shown: shown.rows.length, total }) : '—',
+    search: <ListSearch label={t('users.search')} value={model.query} onChange={actions?.onQuery} />,
+    tools,
+    more: shown.more > 0 ? { label: t('list.more', { count: shown.more }), onMore: () => actions?.onMore?.() } : null,
+    keys: own,
+    onHelp: () => setHelp(true),
+    state,
   }
-  const table = office ? officeTable() : floorTable()
+  const button = (reach: BulkReach<unknown>, icon: ReactNode, label: string, verb: string, onClick: () => void, tone?: 'danger-outline') => (
+    <BulkButton icon={icon} label={reach.held ? t(verb) : t(label, { count: reach.items.length })} held={heldText(t, reach.held)} tone={tone} onClick={onClick} />
+  )
+
+  // The open confirm: its reach, its words.
+  const confirm = (() => {
+    if (!bulk) return null
+    const reach = bulk.audience === 'office' ? officeReachOf(bulk.action) : floorReachOf(bulk.action)
+    const names = (reach.items as ReadonlyArray<User | Worker>).map((item) => item.displayName)
+    const count = reach.items.length
+    const lines = [
+      t(bulk.audience === 'office' ? OFFICE_CONSEQUENCE[bulk.action] : FLOOR_CONSEQUENCE[bulk.action]),
+      ...(bulk.audience === 'office' && bulk.action === 'deactivate' ? [t('user.deactivate.handover')] : []),
+      namesLine(names, (more) => t('common.bulk.andMore', { count: more })),
+      ...(reach.skipped > 0 ? [t('common.bulk.skipped', { count: reach.skipped })] : []),
+    ]
+    return {
+      title: t(bulk.audience === 'office' ? OFFICE_TITLE[bulk.action] : FLOOR_TITLE[bulk.action], { count }),
+      lines,
+      confirmLabel: t(bulk.audience === 'office' ? OFFICE_LABEL[bulk.action] : FLOOR_LABEL[bulk.action], { count }),
+      tone: bulk.action === 'reactivate' ? ('primary' as const) : ('danger' as const),
+      run: (reason: string) => {
+        const done = bulk.audience === 'office' ? actions?.onOfficeBulk?.(bulk.action, reach.items as User[], reason) : actions?.onFloorBulk?.(bulk.action, reach.items as Worker[], reason)
+        void done?.then((finished) => {
+          if (!finished) return
+          setBulk(null)
+          setSelected([])
+        })
+      },
+      empty: count === 0,
+    }
+  })()
 
   return (
     <div className="fw-adm">
@@ -180,21 +265,6 @@ function UsersList({ model, actions }: { model: UsersViewModel; actions?: UsersA
         }
       />
       <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
-      <div className="fw-adm-toolbar">
-        <SegmentedControl
-          ariaLabel={t('users.audience.label')}
-          size="sm"
-          value={model.audience}
-          onChange={(value) => actions?.onAudience?.(value as Audience)}
-          options={[
-            ...(model.can.viewUsers ? [{ value: 'office', label: model.users.items ? t('users.audience.officeCount', { count: model.users.items.filter((user) => user.status !== 'DEACTIVATED').length }) : t('users.audience.office') }] : []),
-            ...(model.can.viewWorkers ? [{ value: 'floor', label: model.workers.items ? t('users.audience.floorCount', { count: model.workers.items.filter((worker) => worker.status === 'ACTIVE').length }) : t('users.audience.floor') }] : []),
-          ]}
-        />
-        <span className="fw-adm-toolbar-search">
-          <Input size="sm" fieldClassName="fw-adm-fill" type="search" leadingIcon={<Search size={14} aria-hidden />} aria-label={t('users.search')} placeholder={t('users.search')} value={model.query} onChange={(event) => actions?.onQuery?.(event.target.value)} />
-        </span>
-      </div>
       <MetricStrip
         metrics={tiles.map((tile) => ({
           label: t(`users.tile.${tile}`),
@@ -204,70 +274,64 @@ function UsersList({ model, actions }: { model: UsersViewModel; actions?: UsersA
           onClick: () => actions?.onTile?.(model.tile === tile ? null : tile),
         }))}
       />
-      {model.tile && (
-        <span className="fw-adm-tags">
-          <Tag tone="info">{t('users.filtered', { tile: t(`users.tile.${model.tile}`) })}</Tag>
-          <Button size="sm" variant="quiet" onClick={() => actions?.onTile?.(null)}>
-            {t('list.clearFilter')}
-          </Button>
-        </span>
-      )}
-
-      {loaded.problem || items === null ? (
-        <ListState problem={loaded.problem} loading={items === null} onRetry={actions?.onRetry} />
-      ) : items.length === 0 ? (
-        <ListState
-          loading={false}
-          empty={{
-            icon: <Users size={24} aria-hidden />,
-            title: t(office ? 'users.empty.office' : 'users.empty.floor'),
-            body: t(office ? 'users.empty.officeBody' : 'users.empty.floorBody'),
-            action:
-              office && model.can.invite ? (
-                <Button variant="primary" onClick={() => open('invite')}>
-                  {t('users.invite.action')}
-                </Button>
-              ) : !office && model.can.manageWorkers ? (
-                <Button variant="primary" onClick={() => open('add-worker')}>
-                  {t('users.addWorker')}
-                </Button>
-              ) : undefined,
-          }}
-        />
-      ) : table.total === 0 ? (
-        <ListState
-          loading={false}
-          empty={{
-            title: t('list.noMatch'),
-            action: (
-              <Button
-                size="sm"
-                onClick={() => {
-                  actions?.onQuery?.('')
-                  actions?.onTile?.(null)
-                }}
-              >
-                {t('list.clearFilters')}
-              </Button>
+      {office ? (
+        <ListFrame<User>
+          {...frame}
+          label={t('users.tableOffice')}
+          rows={items === null ? null : officeShown.rows}
+          rowId={(user) => user.id}
+          columns={officeCols}
+          onOpen={(user) => actions?.onOpen?.(href(`/users/${user.id}`))}
+          selection={{
+            selected: pickedUsers.map((user) => user.id),
+            onChange: setSelected,
+            actions: (
+              <>
+                {(['suspend', 'reactivate', 'deactivate'] as const).map((action) => (
+                  <Fragment key={action}>{button(officeReachOf(action), OFFICE_ICONS[action], OFFICE_LABEL[action], OFFICE_VERB[action], () => setBulk({ audience: 'office', action }), action === 'reactivate' ? undefined : 'danger-outline')}</Fragment>
+                ))}
+              </>
             ),
           }}
         />
       ) : (
-        <ListTable
-          label={t(office ? 'users.tableOffice' : 'users.tableFloor')}
-          columns={table.columns}
-          rows={table.rows}
-          widths={table.widths}
-          page={table.paged.page}
-          pageCount={table.paged.pageCount}
-          onPage={actions?.onPage}
-          count={t('list.count', { shown: table.paged.rows.length, total: table.total })}
+        <ListFrame<Worker>
+          {...frame}
+          label={t('users.tableFloor')}
+          rows={items === null ? null : floorShown.rows}
+          rowId={(worker) => worker.id}
+          columns={floorCols}
+          onOpen={(worker) => actions?.onOpen?.(href(`/users/floor/${worker.id}`))}
+          selection={{
+            selected: pickedWorkers.map((worker) => worker.id),
+            onChange: setSelected,
+            actions: (
+              <>
+                {(['deactivate', 'reactivate'] as const).map((action) => (
+                  <Fragment key={action}>{button(floorReachOf(action), FLOOR_ICONS[action], FLOOR_LABEL[action], FLOOR_VERB[action], () => setBulk({ audience: 'floor', action }), action === 'deactivate' ? 'danger-outline' : undefined)}</Fragment>
+                ))}
+              </>
+            ),
+          }}
         />
       )}
       <p className="fw-adm-hint">{t('users.later')}</p>
 
       <InviteModal model={model} open={dialog === 'invite'} onClose={() => open(null)} actions={actions} />
       <AddWorkerModal model={model} open={dialog === 'add-worker'} onClose={() => open(null)} actions={actions} />
+      <BulkConfirm
+        open={!!confirm && !confirm.empty}
+        title={confirm?.title ?? ''}
+        lines={confirm?.lines ?? []}
+        confirmLabel={confirm?.confirmLabel ?? ''}
+        tone={confirm?.tone}
+        reason
+        busy={model.busy}
+        problem={model.dialogProblem}
+        onConfirm={(reason) => confirm?.run(reason)}
+        onClose={closeBulk}
+      />
+      <ListKeysHelp open={help} onClose={() => setHelp(false)} keys={own} selection />
       <StepUp model={model.stepUp} onSubmit={actions?.onStepUp} onClose={actions?.onStepUpClose} />
     </div>
   )

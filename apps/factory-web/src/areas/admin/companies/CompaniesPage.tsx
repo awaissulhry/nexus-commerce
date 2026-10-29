@@ -28,7 +28,7 @@ export function CompaniesPage() {
   const [query, setQuery] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [collapsed, setCollapsed] = useState<string[]>([])
-  const [page, setPage] = useState(1)
+  const [pages, setPages] = useState(1)
   const [notice, setNotice] = useState<Notice | null>(null)
   const [busy, setBusy] = useState(false)
   const [dialogProblem, setDialogProblem] = useState<string | null>(null)
@@ -45,6 +45,9 @@ export function CompaniesPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // Stable: the tree's columns are built with it.
+  const onToggle = useCallback((id: string, expanded: boolean) => setCollapsed((current) => (expanded ? current.filter((item) => item !== id) : [...new Set([...current, id])])), [])
 
   const run = async <T,>(work: () => Promise<T>, open: (value: T) => string): Promise<boolean> => {
     setBusy(true)
@@ -71,7 +74,7 @@ export function CompaniesPage() {
         query,
         showArchived,
         collapsed,
-        page,
+        pages,
         notice,
         dialog,
         dialogCompanyId: askedCompany,
@@ -81,11 +84,12 @@ export function CompaniesPage() {
       actions={{
         onQuery: (next) => {
           setQuery(next)
-          setPage(1)
+          setPages(1)
         },
         onShowArchived: setShowArchived,
-        onToggle: (id, expanded) => setCollapsed((current) => (expanded ? current.filter((item) => item !== id) : [...new Set([...current, id])])),
-        onPage: setPage,
+        onToggle,
+        onMore: () => setPages((current) => current + 1),
+        onOpen: (path) => router.push(path),
         onRetry: () => {
           setCompanies(loading())
           void load()

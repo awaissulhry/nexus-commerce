@@ -3,8 +3,9 @@
 import { Banner } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
 import { useT } from '../../../lib/i18n/provider'
-import type { Notice } from '../shared/model'
+import type { BulkNotice } from './bulk-model'
 import type { AdminPageNamespace } from './messages'
+import './list.css'
 
 /**
  * Words of a B-W0-28 page that may come from two catalogues: the page's own keys (`docs.…`, `langs.…`) from its
@@ -19,11 +20,15 @@ export function useWords(namespace: AdminPageNamespace) {
   }
 }
 
-/** One notice (a receipt or a refusal) of a B-W0-28 page, in the page's words, with a way to put it away. */
-export function PageNotice({ namespace, notice, onDismiss }: { namespace: AdminPageNamespace; notice: Notice | null | undefined; onDismiss?: () => void }) {
+/**
+ * One notice (a receipt or a refusal) of a B-W0-28 page, in the page's words, with a way to put it away. After a bulk
+ * action it lists each refused row by name (`nameOf`) with its problem in words.
+ */
+export function PageNotice({ namespace, notice, onDismiss, nameOf }: { namespace: AdminPageNamespace; notice: BulkNotice | null | undefined; onDismiss?: () => void; nameOf?: (id: string) => string }) {
   const words = useWords(namespace)
   const t = useT('admin')
   if (!notice) return null
+  const refused = notice.refused ?? []
   return (
     <Banner
       tone={notice.tone}
@@ -35,6 +40,16 @@ export function PageNotice({ namespace, notice, onDismiss }: { namespace: AdminP
           </Button>
         ) : undefined
       }
-    />
+    >
+      {refused.length > 0 && (
+        <ul className="fw-adm-bulk-refused">
+          {refused.map((entry) => (
+            <li key={entry.id}>
+              {nameOf?.(entry.id) ?? entry.id}: {words(entry.problem)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Banner>
   )
 }

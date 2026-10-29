@@ -130,6 +130,8 @@
       "body": "Collega prima la posta: tutto ciò che esce dalla fabbrica ne ha bisogno."
     },
     "tableLabel": "Servizi esterni",
+    "count_one": "{count} servizio",
+    "count_other": "{count} servizi",
     "col": {
       "service": "Servizio",
       "for": "A cosa serve",
@@ -276,6 +278,51 @@
       "PROCESSED": "Gestito",
       "FAILED": "Non riuscito",
       "REJECTED": "Respinto"
+    },
+    "keys": {
+      "connect": "Collega un servizio"
+    },
+    "bulk": {
+      "pause_one": "Sospendi {count}",
+      "pause_other": "Sospendi {count}",
+      "resume_one": "Riattiva {count}",
+      "resume_other": "Riattiva {count}",
+      "noneToPause": "Nessuno dei servizi selezionati è attivo: non c’è nulla da sospendere.",
+      "noneToResume": "Nessuno dei servizi selezionati è sospeso: non c’è nulla da riattivare.",
+      "pauseTitle_one": "Sospendere {count} servizio?",
+      "pauseTitle_other": "Sospendere {count} servizi?",
+      "resumeTitle_one": "Riattivare {count} servizio?",
+      "resumeTitle_other": "Riattivare {count} servizi?",
+      "pauseGo_one": "Sospendi {count} servizio",
+      "pauseGo_other": "Sospendi {count} servizi",
+      "resumeGo_one": "Riattiva {count} servizio",
+      "resumeGo_other": "Riattiva {count} servizi",
+      "pauseBody": "Da ora nessuna chiamata arriva a questi servizi: ciò che ne ha bisogno aspetta o viene rifiutato a parole (una fattura resta da inviare, un’etichetta non viene acquistata).",
+      "resumeBody": "Da ora le chiamate arrivano di nuovo a questi servizi, ciascuno nella modalità in cui si trova.",
+      "pauseUndo": "Puoi riattivarli quando vuoi; non si perde nulla.",
+      "resumeUndo": "Puoi sospenderli di nuovo quando vuoi.",
+      "listLabel": "Servizi",
+      "reasonHint": "Resta nella cronologia di ogni servizio.",
+      "left": {
+        "notConnected_one": "1 servizio selezionato non è collegato: non c’è nulla da cambiare, escluso.",
+        "notConnected_other": "{count} servizi selezionati non sono collegati: non c’è nulla da cambiare, esclusi.",
+        "paused_one": "1 servizio selezionato è già sospeso: escluso.",
+        "paused_other": "{count} servizi selezionati sono già sospesi: esclusi.",
+        "running_one": "1 servizio selezionato è già attivo: escluso.",
+        "running_other": "{count} servizi selezionati sono già attivi: esclusi."
+      },
+      "pausedDone_one": "1 servizio sospeso: nessuna chiamata lo raggiunge.",
+      "pausedDone_other": "{count} servizi sospesi: nessuna chiamata li raggiunge.",
+      "pausedPartial_one": "{count} servizio su {total} sospeso. Non sospesi:",
+      "pausedPartial_other": "{count} servizi su {total} sospesi. Non sospesi:",
+      "pausedFailed_one": "Il servizio non è stato sospeso:",
+      "pausedFailed_other": "Nessuno dei {count} servizi è stato sospeso:",
+      "resumedDone_one": "1 servizio è di nuovo attivo.",
+      "resumedDone_other": "{count} servizi sono di nuovo attivi.",
+      "resumedPartial_one": "{count} servizio su {total} riattivato. Non riattivati:",
+      "resumedPartial_other": "{count} servizi su {total} riattivati. Non riattivati:",
+      "resumedFailed_one": "Il servizio non è stato riattivato:",
+      "resumedFailed_other": "Nessuno dei {count} servizi è stato riattivato:"
     }
   },
   "mail": {

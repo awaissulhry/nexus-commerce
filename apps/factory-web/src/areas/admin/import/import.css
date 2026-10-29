@@ -118,8 +118,3 @@
 .fw-adm-imp-before {
   color: var(--nds-text-2);
 }
-
-.fw-adm-imp-filename,
-.fw-adm-imp-rows {
-  overflow-wrap: anywhere;
-}

@@ -18,7 +18,7 @@ const CAN = { manage: true, revoke: true, viewPrinters: true, managePrinters: tr
 const ENROLMENT = { code: 'demo-enrolment-code', url: 'https://factory.example.com/floor/enrol#code=DEMO-ONLY', qrSvg: '', expiresAt: '2026-10-29T09:57:00.000Z' }
 const list = (over: Partial<DevicesViewModel> = {}): Case => ({
   page: 'list',
-  model: { prefix: PREFIX, mode: 'devices', devices: loaded(DEVICES), printers: loaded(PRINTERS), failedPrinters: 1, sites, tile: null, query: '', page: 1, asOf: NOW, now: NOW, can: CAN, ...over },
+  model: { prefix: PREFIX, mode: 'devices', devices: loaded(DEVICES), printers: loaded(PRINTERS), failedPrinters: 1, sites, tile: null, query: '', pages: 1, asOf: NOW, now: NOW, can: CAN, ...over },
 })
 const device = (index: number, over: Partial<DeviceRecordModel> = {}, dock = false): Case => ({
   page: 'device',
@@ -47,7 +47,18 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'enrol-ready', label: 'Enrol 3: ready', model: list({ enrol: { step: 'ready', device: { ...DEVICES[3]!, status: 'ACTIVE' } } }) },
     { id: 'printer-new', label: 'Add a printer', model: list({ mode: 'printers', printer: { kind: 'new', siteId: SITES[0]!.id } }) },
     { id: 'printer-edit', label: 'Change a printer', model: list({ mode: 'printers', printer: { kind: 'edit', printerId: PRINTERS[0]!.id } }) },
-    { id: 'revoke', label: 'Revoke a device: type its name', model: list({ revokeId: DEVICES[0]!.id }) },
+    { id: 'devices-selected', label: 'Devices: three ticked, Revoke 3', model: list({ selected: [DEVICES[0]!.id, DEVICES[1]!.id, DEVICES[3]!.id] }), note: 'An enrolled, a silent and a waiting device: Revoke reaches all three.' },
+    {
+      id: 'devices-bulk-revoke',
+      label: 'Devices: revoke 3, one confirm',
+      model: list({ selected: [DEVICES[0]!.id, DEVICES[1]!.id, DEVICES[3]!.id], bulk: 'revoke' }),
+      note: 'The count, that their sign-ins end at once (one is in use now), an optional reason. One device alone is revoked on its record with its name typed.',
+    },
+    { id: 'devices-revoked-selected', label: 'Devices: a revoked one ticked, Revoke held', model: list({ tile: 'revoked', selected: [DEVICES[4]!.id] }) },
+    { id: 'devices-bulk-result', label: 'Devices: the result notice', model: list({ notice: { key: 'devices.bulk.done.revoke', tone: 'warning', params: { count: 2 }, refused: [{ name: 'Lettore magazzino', problem: 'problem.conflict' }] } }) },
+    { id: 'printers-selected', label: 'Printers: all three ticked, Pause 2, Resume 1', model: list({ mode: 'printers', selected: PRINTERS.map((printer) => printer.id) }), note: 'Two active, one paused: each action says its reach.' },
+    { id: 'printers-bulk-pause', label: 'Printers: pause 2, one confirm', model: list({ mode: 'printers', selected: PRINTERS.map((printer) => printer.id), bulk: 'pause' }) },
+    { id: 'printers-bulk-done', label: 'Printers: the result notice', model: list({ mode: 'printers', notice: { key: 'printers.bulk.done.pause', tone: 'success', params: { count: 2 } } }) },
     { id: 'empty', label: 'No tablets yet', model: list({ devices: loaded([]) }) },
     { id: 'printers-empty', label: 'No printers yet', model: list({ mode: 'printers', printers: loaded([]) }) },
     { id: 'loading', label: 'Loading', model: list({ devices: loading(), printers: loading(), failedPrinters: null, asOf: null }) },

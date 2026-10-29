@@ -24,6 +24,8 @@ export interface Notice {
   key: string
   tone: 'success' | 'info' | 'warning' | 'danger'
   params?: Readonly<Record<string, string | number>>
+  /** A bulk run's refused rows: each one's name and its problem (a message key). */
+  refused?: ReadonlyArray<{ name: string; problem: string }>
 }
 
 /** The step-up dialog (a fresh authenticator code before a change that raises rights, A1 §3.10). */
@@ -36,13 +38,19 @@ export interface StepUpModel {
 }
 export const STEP_UP_CLOSED: StepUpModel = { open: false, busy: false, sentence: 'stepUp.sentence.default', problem: null }
 
-/** Rows per list page (Owner L3: 50 by default, no 500). */
+/** Rows a list shows at first, and adds with each "Show N more" (Owner L3: 50 by default, no 500). */
 export const PAGE_SIZE = 50
 
-export function pageOf<T>(rows: readonly T[], page: number, size = PAGE_SIZE): { rows: readonly T[]; page: number; pageCount: number } {
-  const pageCount = Math.max(1, Math.ceil(rows.length / size))
-  const current = Math.min(Math.max(1, page), pageCount)
-  return { rows: rows.slice((current - 1) * size, current * size), page: current, pageCount }
+/** The rows of the first `pages` pages, and how many the next "Show more" adds (0: every row is shown). */
+export function shownOf<T>(rows: readonly T[], pages: number, size = PAGE_SIZE): { rows: readonly T[]; more: number } {
+  const shown = rows.slice(0, Math.max(1, pages) * size)
+  return { rows: shown, more: Math.min(size, rows.length - shown.length) }
+}
+
+/** The selected ids among the rows shown (a filter or a search that hides a row drops it from the selection). */
+export function selectedAmong<T extends { id: string }>(rows: readonly T[], selected: readonly string[]): T[] {
+  const held = new Set(selected)
+  return rows.filter((row) => held.has(row.id))
 }
 
 /** Case- and accent-blind search over a row's words. */

@@ -1,4 +1,5 @@
 import { matches, type Loaded, type Notice, type StepUpModel } from '../shared/model'
+import { reachOf, type BulkNotice, type Reach } from '../kit/bulk-model'
 import type { AccountStatus, InboundDelivery, InboundStatus, IntegrationAccount, IntegrationCall, IntegrationMode, IntegrationProvider } from './api'
 import type { MailDomainModel } from './mail/model'
 
@@ -108,6 +109,26 @@ export interface PauseConfirm {
   pause: boolean
 }
 
+/** "Pause N" / "Resume N" (bulk) asked for these rows (ids of the services list). */
+export interface BulkSwitch {
+  pause: boolean
+  ids: readonly string[]
+}
+
+/**
+ * Which selected rows "Pause N" (pause: true) or "Resume N" applies to: connected services that are running, or paused;
+ * a "Not connected" row is left out (nothing to pause), and so is one already in the asked state. Each is one
+ * `POST /integrations/accounts/:id/pause|resume` with its version (no call switches many).
+ */
+export function switchReach(rows: readonly ServiceRow[], pause: boolean): Reach<ServiceRow & { kind: 'account' }> {
+  const reach = reachOf(rows, (row) => {
+    if (row.kind === 'missing') return 'conn.bulk.left.notConnected'
+    if (pause) return row.account.status === 'ACTIVE' ? null : 'conn.bulk.left.paused'
+    return row.account.status === 'PAUSED' ? null : 'conn.bulk.left.running'
+  })
+  return reach as Reach<ServiceRow & { kind: 'account' }>
+}
+
 export interface ConnectionsAbilities {
   /** integrations.manage: pause and resume. */
   manage: boolean
@@ -120,7 +141,6 @@ export interface ConnectionsViewModel {
   companies: readonly CompanyChoice[] | null
   tile: ConnectionTile | null
   query: string
-  page: number
   asOf: string | null
   /** "Now", for "last OK 10:41" (today: the time; earlier: the day too). A fixture fixes it. */
   now: string
@@ -128,9 +148,13 @@ export interface ConnectionsViewModel {
   /** The "Connect a service" catalogue is open. */
   connect?: boolean
   confirm?: PauseConfirm | null
+  /** The rows ticked in the services list (ids of `serviceRows`). */
+  selected?: readonly string[]
+  /** The bulk pause or resume confirm, open. */
+  bulk?: BulkSwitch | null
   busy?: boolean
   dialogProblem?: string | null
-  notice?: Notice | null
+  notice?: BulkNotice | null
   /** The mail domain section (SCR-015); null: the person may not read sending identities (email.send). */
   mail: MailDomainModel | null
   stepUp?: StepUpModel

@@ -37,6 +37,16 @@
       "10": "Ottobre",
       "11": "Novembre",
       "12": "Dicembre"
+    },
+    "bulk": {
+      "refused_one": "{count} rifiuto",
+      "refused_other": "{count} rifiuti",
+      "none_one": "Nessuna modifica: {count} rifiuto",
+      "none_other": "Nessuna modifica: {count} rifiuti",
+      "andMore_one": "e {count} altro",
+      "andMore_other": "e altri {count}",
+      "skipped_one": "{count} riga selezionata resta fuori: per lei questa azione non vale.",
+      "skipped_other": "{count} righe selezionate restano fuori: per loro questa azione non vale."
     }
   },
   "nav": {
@@ -99,7 +109,9 @@
     "clearFilters": "Togli i filtri",
     "count": "{shown} di {total}",
     "updated": "Aggiornato alle {time}",
-    "notYet": "Non ancora letto"
+    "notYet": "Non ancora letto",
+    "more_one": "Mostra ancora {count}",
+    "more_other": "Mostra altri {count}"
   },
   "record": {
     "backTo": "Torna a {name}",
@@ -427,6 +439,9 @@
       "postalCode": "CAP",
       "city": "Città",
       "province": "Provincia"
+    },
+    "keys": {
+      "fold": "Chiudi o apri gli stabilimenti della società sulla riga"
     }
   },
   "company": {
@@ -512,7 +527,9 @@
     },
     "sites": {
       "empty": "Ancora nessuno stabilimento",
-      "label": "Stabilimenti di {name}"
+      "label": "Stabilimenti di {name}",
+      "count_one": "1 stabilimento",
+      "count_other": "{count} stabilimenti"
     },
     "defaults": {
       "title": "Valori predefiniti",
@@ -550,14 +567,13 @@
       "empty": "Aggiungi la prima linea, poi le sue postazioni",
       "emptyCentres": "Ogni postazione fa parte di un centro di lavoro: aggiungi anche i centri (Taglio, Cucito, Collaudo…).",
       "hint": "Tablet, persone e avvisi sono legati a queste postazioni.",
-      "tableLabel": "Postazioni di {name}"
+      "label": "Linee e postazioni di {name}"
     },
     "alone": "Postazioni singole",
     "aloneHint": "Postazioni fuori linea: un tavolo di taglio, un banco di collaudo.",
     "line": {
       "stations_one": "1 postazione",
-      "stations_other": "{count} postazioni",
-      "empty": "Ancora nessuna postazione."
+      "stations_other": "{count} postazioni"
     },
     "rename": "Rinomina…",
     "move": "Sposta su un'altra linea…",
@@ -575,7 +591,9 @@
     "centres": {
       "hint": "Gruppi di postazioni che fanno un tipo di lavoro.",
       "empty": "Nessun centro di lavoro",
-      "capacityLater": "La capacità per centro di lavoro si imposta in Pianificazione (W1)."
+      "capacityLater": "La capacità per centro di lavoro si imposta in Pianificazione (W1).",
+      "count_one": "{count} centro di lavoro",
+      "count_other": "{count} centri di lavoro"
     },
     "centreKind": {
       "CUTTING": "Taglio",
@@ -619,7 +637,9 @@
     "devices": {
       "tablets": "Tablet di questo stabilimento",
       "printers": "Stampanti di questo stabilimento",
-      "empty": "Nessun dispositivo. Registra un tablet."
+      "empty": "Nessun dispositivo. Registra un tablet.",
+      "count_one": "{count} dispositivo",
+      "count_other": "{count} dispositivi"
     },
     "dialog": {
       "line": {
@@ -668,6 +688,10 @@
       "moved": "Postazione spostata.",
       "archived": "Archiviato.",
       "floor": "Orari del reparto salvati."
+    },
+    "printers": {
+      "count_one": "{count} stampante",
+      "count_other": "{count} stampanti"
     }
   },
   "users": {
@@ -768,7 +792,6 @@
     },
     "noRole": "Nessun ruolo: non vede nulla",
     "noFloorRole": "Nessun ruolo di reparto",
-    "invitedUntil": "Invito valido fino al {date}",
     "employeeNo": "Matr. {code}",
     "badgeHint": "•••• {hint}",
     "noBadge": "Nessun badge",
@@ -786,7 +809,7 @@
       "floor": "Aggiungi gli operatori di reparto",
       "floorBody": "Nessuna e-mail: nome, stabilimento, badge e PIN."
     },
-    "later": "Gli utenti dei partner arrivano in W2b; gli agenti IA in W3. Le azioni multiple (ruolo a più persone, stampa badge, reinvio inviti) arrivano con gli strumenti comuni degli elenchi.",
+    "later": "Gli utenti dei partner arrivano in W2b; gli agenti IA in W3. Dare un ruolo a più persone, stampare i badge e reinviare gli inviti in una volta arrivano più avanti.",
     "worker": {
       "hint": "Un operatore accede dal tablet con badge e PIN; nessuna e-mail.",
       "minimal": "Solo ciò che serve al lavoro (GDPR art. 5(1)(c)): niente foto, data di nascita o documento.",
@@ -809,7 +832,51 @@
       "pinStep": "Dai un primo PIN",
       "pinHow": "Badge e PIN › Azzera PIN: un PIN temporaneo; l'operatore sceglie il proprio al primo accesso.",
       "next": "Apri Badge e PIN"
-    }
+    },
+    "bulk": {
+      "suspend_one": "Sospendi {count}",
+      "suspend_other": "Sospendi {count}",
+      "reactivate_one": "Riattiva {count}",
+      "reactivate_other": "Riattiva {count}",
+      "deactivate_one": "Disattiva {count}",
+      "deactivate_other": "Disattiva {count}",
+      "workerDeactivate_one": "Disattiva {count}",
+      "workerDeactivate_other": "Disattiva {count}",
+      "workerReactivate_one": "Riattiva {count}",
+      "workerReactivate_other": "Riattiva {count}",
+      "held": {
+        "suspend": "Nessuna delle persone selezionate si può sospendere: solo persone attive, mai sé stessi né l'ultimo amministratore.",
+        "reactivate": "Nessuna delle persone selezionate è sospesa.",
+        "deactivate": "Nessuna delle persone selezionate si può disattivare: mai sé stessi, l'ultimo amministratore o chi è già disattivato.",
+        "workerDeactivate": "Nessuno degli operatori selezionati è attivo.",
+        "workerReactivate": "Nessuno degli operatori selezionati è inattivo."
+      },
+      "confirm": {
+        "suspend_one": "Sospendere {count} persona?",
+        "suspend_other": "Sospendere {count} persone?",
+        "reactivate_one": "Riattivare {count} persona?",
+        "reactivate_other": "Riattivare {count} persone?",
+        "deactivate_one": "Disattivare {count} persona?",
+        "deactivate_other": "Disattivare {count} persone?",
+        "workerDeactivate_one": "Disattivare {count} operatore di reparto?",
+        "workerDeactivate_other": "Disattivare {count} operatori di reparto?",
+        "workerReactivate_one": "Riattivare {count} operatore di reparto?",
+        "workerReactivate_other": "Riattivare {count} operatori di reparto?"
+      },
+      "done": {
+        "suspend_one": "{count} persona sospesa",
+        "suspend_other": "{count} persone sospese",
+        "reactivate_one": "{count} persona riattivata",
+        "reactivate_other": "{count} persone riattivate",
+        "deactivate_one": "{count} persona disattivata",
+        "deactivate_other": "{count} persone disattivate",
+        "workerDeactivate_one": "{count} operatore disattivato",
+        "workerDeactivate_other": "{count} operatori disattivati",
+        "workerReactivate_one": "{count} operatore riattivato",
+        "workerReactivate_other": "{count} operatori riattivati"
+      }
+    },
+    "validUntil": "fino al {date}"
   },
   "user": {
     "tab": {
@@ -836,8 +903,7 @@
       "suspend": "Sospeso: ogni sessione è terminata.",
       "reactivate": "Riattivato.",
       "deactivate": "Disattivato.",
-      "given": "{role} assegnato.",
-      "ended": "{role} chiuso."
+      "given": "{role} assegnato."
     },
     "suspend": {
       "title": "Sospendi",
@@ -892,10 +958,25 @@
       "raises": "Gli dà più di quanto ha ora: viene chiesto un codice nuovo.",
       "noRaise": "Niente di nuovo oltre a quanto ha già."
     },
-    "endRole": {
-      "title": "Chiudere {role} per {name}?",
-      "body": "Il ruolo smette subito di dare accesso. L'assegnazione resta in elenco come chiusa (mai cancellata)."
-    }
+    "bulk": {
+      "end_one": "Chiudi {count} ruolo",
+      "end_other": "Chiudi {count} ruoli",
+      "held": {
+        "end": "Nessuno dei ruoli selezionati è attivo."
+      },
+      "confirm": {
+        "end_one": "Chiudere {count} ruolo di {name}?",
+        "end_other": "Chiudere {count} ruoli di {name}?"
+      },
+      "endBody_one": "Il ruolo smette subito di dare accesso. Resta in elenco come chiuso (mai cancellato).",
+      "endBody_other": "Questi ruoli smettono subito di dare accesso. Ognuno resta in elenco come chiuso (mai cancellato).",
+      "done": {
+        "end_one": "{count} ruolo chiuso",
+        "end_other": "{count} ruoli chiusi"
+      }
+    },
+    "assignmentsCount_one": "{count} ruolo",
+    "assignmentsCount_other": "{count} ruoli"
   },
   "worker": {
     "tab": {
@@ -987,11 +1068,7 @@
     }
   },
   "roles": {
-    "intro": "Cosa può fare ogni ruolo, prima a parole: gli importi che vede (prezzi · costi · margini · paghe) e se chiede il doppio fattore. I ruoli pronti restano uguali ai loro modelli; una copia personalizzata dice cosa ha guadagnato il suo modello.",
-    "compare": "Confronta ruoli",
-    "held": {
-      "compare": "Servono due ruoli per confrontare."
-    },
+    "intro": "Cosa può fare ogni ruolo, prima a parole: gli importi che vede (prezzi · costi · margini · paghe) e se chiede il doppio fattore. I ruoli pronti restano uguali ai loro modelli; una copia personalizzata dice cosa ha guadagnato il suo modello. Seleziona due o tre ruoli per confrontarli.",
     "search": "Cerca ruoli",
     "tableLabel": "Ruoli",
     "audience": {
@@ -1026,9 +1103,7 @@
     },
     "later": "Creare una copia personalizzata di un ruolo pronto e modificarla arriva in W2b.",
     "compareTitle": "Confronta ruoli",
-    "compareHint": "Scegline due o tre: cosa può fare ognuno, per area, con le differenze segnate.",
-    "comparePick": "Ruoli da confrontare",
-    "compareNeedTwo": "Scegli almeno due ruoli.",
+    "compareHint": "Cosa può fare ognuno, per area, con le differenze segnate.",
     "system": {
       "owner": {
         "name": "Titolare",
@@ -1090,6 +1165,14 @@
         "name": "Capo squadra",
         "description": "Guida una squadra in reparto: lavora e vede le schermate del capo squadra dello stabilimento; non vede importi."
       }
+    },
+    "bulk": {
+      "compare_one": "Confronta {count}",
+      "compare_other": "Confronta {count}",
+      "held": {
+        "compareOne": "Seleziona un secondo ruolo da confrontare (due o tre).",
+        "compareMany": "Il confronto prende due o tre ruoli: togli la spunta agli altri."
+      }
     }
   },
   "role": {
@@ -1150,7 +1233,9 @@
       "later": "Cambiarlo per ruolo arriva in W2a (Sicurezza e stato del sistema)."
     },
     "floorHolders": "Un ruolo di reparto è degli operatori ({count} ora); li trovi in Utenti › Reparto.",
-    "nobody": "Nessuno ha questo ruolo."
+    "nobody": "Nessuno ha questo ruolo.",
+    "holders_one": "{count} persona",
+    "holders_other": "{count} persone"
   },
   "devices": {
     "intro": "I tablet e i telefoni registrati sulle postazioni, e le stampanti degli stabilimenti. Un dispositivo dice \"in uso\", mai chi lo usa.",
@@ -1240,6 +1325,25 @@
     },
     "done": {
       "revoked": "{name} è revocato."
+    },
+    "bulk": {
+      "revoke_one": "Revoca {count}",
+      "revoke_other": "Revoca {count}",
+      "held": {
+        "revoke": "Nessuno dei dispositivi selezionati si può revocare: sono già revocati."
+      },
+      "confirm": {
+        "revoke_one": "Revocare {count} dispositivo?",
+        "revoke_other": "Revocare {count} dispositivi?"
+      },
+      "revokeBody_one": "Le sue sessioni finiscono subito; per usarlo va registrato di nuovo.",
+      "revokeBody_other": "Le loro sessioni finiscono subito; per usarli vanno registrati di nuovo.",
+      "inUse_one": "{count} è in uso ora: chi vi è collegato viene scollegato e ciò che deve ancora inviare viene rifiutato.",
+      "inUse_other": "{count} sono in uso ora: chi vi è collegato viene scollegato e ciò che devono ancora inviare viene rifiutato.",
+      "done": {
+        "revoke_one": "{count} dispositivo revocato",
+        "revoke_other": "{count} dispositivi revocati"
+      }
     }
   },
   "printers": {
@@ -1284,6 +1388,34 @@
     "done": {
       "added": "Stampante aggiunta.",
       "saved": "Stampante salvata."
+    },
+    "bulk": {
+      "pause_one": "Metti in pausa {count}",
+      "pause_other": "Metti in pausa {count}",
+      "resume_one": "Riprendi {count}",
+      "resume_other": "Riprendi {count}",
+      "pauseVerb": "Metti in pausa",
+      "resumeVerb": "Riprendi",
+      "held": {
+        "pause": "Nessuna delle stampanti selezionate è attiva.",
+        "resume": "Nessuna delle stampanti selezionate è in pausa."
+      },
+      "confirm": {
+        "pause_one": "Mettere in pausa {count} stampante?",
+        "pause_other": "Mettere in pausa {count} stampanti?",
+        "resume_one": "Riprendere {count} stampante?",
+        "resume_other": "Riprendere {count} stampanti?"
+      },
+      "pauseBody_one": "Una stampante in pausa non accetta nuove etichette né documenti finché non riprende.",
+      "pauseBody_other": "Le stampanti in pausa non accettano nuove etichette né documenti finché non riprendono.",
+      "resumeBody_one": "Torna ad accettare etichette e documenti.",
+      "resumeBody_other": "Tornano ad accettare etichette e documenti.",
+      "done": {
+        "pause_one": "{count} stampante in pausa",
+        "pause_other": "{count} stampanti in pausa",
+        "resume_one": "{count} stampante ripresa",
+        "resume_other": "{count} stampanti riprese"
+      }
     }
   },
   "device": {
@@ -1356,7 +1488,8 @@
     "sales": "Impostazioni vendite",
     "orders": "Ordini clienti",
     "privacy": "Privacy",
-    "quality": "Qualità"
+    "quality": "Qualità",
+    "home": "Home"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",

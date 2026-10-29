@@ -9,7 +9,8 @@ import { Button, Input, Pill, Select, Skeleton, Tag, Textarea, Toggle } from '@n
 import { useT } from '../../../../lib/i18n/provider'
 import type { Company, Site } from '../../shared/api'
 import { adminHref, STATUS_TONE } from '../../shared/model'
-import { AdminMessages, dash, ListState, ListTable, NoticeBanner, RecordProblem } from '../../shared/view/parts'
+import { ListFrame } from '../../../../list-frame/ListFrame'
+import { AdminMessages, dash, FrameState, ListKeysHelp, NoticeBanner, RecordProblem } from '../../shared/view/parts'
 import { RecordFrame } from '../../shared/view/RecordFrame'
 import {
   addressLine,
@@ -25,6 +26,7 @@ import {
   type CompanyRecordModel,
   type CompanyTab,
 } from '../model'
+import { companySiteColumns } from './columns'
 
 export type { CompanyRecordModel } from '../model'
 
@@ -34,6 +36,8 @@ export interface CompanyRecordActions {
   onArchive?: (archive: boolean) => void
   onArchiveConfirm?: () => Promise<boolean>
   onNewSite?: () => void
+  /** Enter on a site's row: open the Site record. */
+  onOpen?: (href: string) => void
   onDock?: () => void
   onRetry?: () => void
   onDismissNotice?: () => void
@@ -342,48 +346,39 @@ function ArchiveConfirm({ model, company, actions }: { model: CompanyRecordModel
 
 function SitesTab({ model, company, actions }: { model: CompanyRecordModel; company: Company; actions?: CompanyRecordActions }) {
   const t = useT('admin')
-  const href = (path: string) => adminHref(model.prefix, path)
+  const [help, setHelp] = useState(false)
   const items = model.sites.items
+  const columns = useMemo(() => companySiteColumns({ t, prefix: model.prefix, companyId: company.id }), [t, model.prefix, company.id])
   if (!model.can.viewSites) return <Banner tone="info" title={t('held.needs', { right: t('right.sites_view') })} />
-  if (items === null || model.sites.problem) return <ListState loading={items === null} problem={model.sites.problem} onRetry={actions?.onRetry} />
-  if (items.length === 0)
-    return (
-      <ListState
-        loading={false}
-        empty={{
-          icon: <MapPin size={24} aria-hidden />,
-          title: t('company.sites.empty'),
-          action: model.can.manageSites ? (
-            <Button variant="primary" onClick={() => actions?.onNewSite?.()}>
-              {t('org.newSite')}
-            </Button>
-          ) : undefined,
-        }}
-      />
-    )
-  const rows = items.map((site: Site) => ({
-    id: site.id,
-    cells: [
-      <span key="code" className="fw-adm-code">{site.code}</span>,
-      <Link key="name" className="fw-adm-name" href={href(`/companies/${company.id}/sites/${site.id}`)}>
-        {site.name}
-      </Link>,
-      t(`org.kind.${site.kind}`),
-      dash(addressLine(site.address)),
-      site.timezone,
-      String(site.counts.lines),
-      String(site.counts.stations),
-      <Pill key="status" tone={STATUS_TONE[site.status] ?? 'neutral'}>{t(`status.${site.status}`)}</Pill>,
-    ],
-  }))
-  return (
-    <ListTable
-      label={t('company.sites.label', { name: company.legalName })}
-      columns={[t('org.col.code'), t('org.col.name'), t('org.col.kind'), t('company.field.address'), t('org.col.timezone'), t('site.col.lines'), t('site.col.stations'), t('org.col.status')]}
-      rows={rows}
-      page={1}
-      pageCount={1}
+  const state = model.sites.problem ? (
+    <FrameState problem={model.sites.problem} onRetry={actions?.onRetry} />
+  ) : items && items.length === 0 ? (
+    <FrameState
+      empty={{
+        icon: <MapPin size={24} aria-hidden />,
+        title: t('company.sites.empty'),
+        action: model.can.manageSites ? (
+          <Button variant="primary" onClick={() => actions?.onNewSite?.()}>
+            {t('org.newSite')}
+          </Button>
+        ) : undefined,
+      }}
     />
+  ) : undefined
+  return (
+    <>
+      <ListFrame<Site>
+        label={t('company.sites.label', { name: company.legalName })}
+        rows={items}
+        rowId={(site) => site.id}
+        columns={columns}
+        count={items ? t('company.sites.count', { count: items.length }) : '—'}
+        onOpen={(site) => actions?.onOpen?.(adminHref(model.prefix, `/companies/${company.id}/sites/${site.id}`))}
+        onHelp={() => setHelp(true)}
+        state={state}
+      />
+      <ListKeysHelp open={help} onClose={() => setHelp(false)} keys={[]} selection={false} />
+    </>
   )
 }
 

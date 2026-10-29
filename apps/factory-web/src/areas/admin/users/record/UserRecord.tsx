@@ -6,6 +6,8 @@ import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { changeUser, endAssignment, giveRole, listAssignments, listCompanies, listRoles, listUsers, type Assignment, type Role, type User } from '../../shared/api'
+import { runBulk } from '../../shared/bulk'
+import { bulkNotice } from '../../shared/reach'
 import { failed, loaded, loading, problemKey, problemNotice, type Loaded, type Notice, type ScopeOption } from '../../shared/model'
 import { useRecordTab, useThreadDock } from '../../shared/record-hooks'
 import { isStepUpCancelled, useStepUp } from '../../shared/step-up'
@@ -17,8 +19,9 @@ const ACTION_PATH = { suspend: 'suspend', reactivate: 'reactivate', deactivate: 
 /**
  * `/w/<company>/admin/users/<id>` (SCR-011 office): the person comes from `GET /auth/users` (the API has no read of one
  * person; the list also says whether they are the last administrator), their roles from `GET /auth/users/:id/roles`.
- * Giving or ending a role and each lifecycle change go through the step-up dialog when the API asks for a fresh code
- * (A1 §3.10), with the version read; a 409 reads the record again.
+ * "End N" ends each ticked role with its own `POST /auth/role-assignments/:id/end` (no bulk route). Giving or ending a
+ * role and each lifecycle change go through the step-up dialog when the API asks for a fresh code (A1 §3.10), with the
+ * version read; a 409 reads the record again.
  */
 export function UserRecord({ userId }: { userId: string }) {
   const api = useOfficeApi()
@@ -33,7 +36,6 @@ export function UserRecord({ userId }: { userId: string }) {
   const [roles, setRoles] = useState<Role[] | null>(null)
   const [companies, setCompanies] = useState<ScopeOption[]>([])
   const [dialog, setDialog] = useState<UserDialog | null>(null)
-  const [endId, setEndId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [dialogProblem, setDialogProblem] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
@@ -100,7 +102,6 @@ export function UserRecord({ userId }: { userId: string }) {
         can: { suspend: held.has('users.suspend'), reactivate: held.has('users.reactivate'), deactivate: held.has('users.deactivate'), resetPassword: held.has('users.resetPassword'), assign: held.has('roles.assign') },
         lastAdmin: !!users && !!roles && isLastAdmin(userId, users, roles),
         dialog,
-        endId,
         busy,
         dialogProblem,
         notice,
@@ -109,9 +110,8 @@ export function UserRecord({ userId }: { userId: string }) {
       }}
       panels={user ? <RecordPanels record={{ type: 'User', id: user.id, companyId: null }} title={user.displayName} /> : null}
       actions={{
-        onDialog: (next, end) => {
+        onDialog: (next) => {
           setDialog(next)
-          if (end) setEndId(end)
           setDialogProblem(null)
         },
         onGiveRole: (draft: GiveRoleDraft) =>
@@ -129,8 +129,23 @@ export function UserRecord({ userId }: { userId: string }) {
             'user.done.given',
             { role: roles?.find((role) => role.id === draft.roleId)?.name ?? '' },
           ),
-        onEndRole: (assignment, reason) =>
-          change('stepUp.sentence.endRole', () => endAssignment(api, assignment.id, { version: assignment.version, ...(reason ? { reason } : {}) }), 'user.done.ended', { role: assignment.roleName }),
+        onEndRoles: async (rows, reason) => {
+          // One call per assignment (the API ends one at a time), one after the other: one fresh code covers them.
+          setBusy(true)
+          setDialogProblem(null)
+          try {
+            const result = await runBulk(rows, (assignment) => guard('stepUp.sentence.endRole', () => endAssignment(api, assignment.id, { version: assignment.version, ...(reason ? { reason } : {}) })))
+            setDialog(null)
+            setNotice(bulkNotice(result, 'user.bulk.done.end', (assignment) => assignment.roleName))
+            return true
+          } catch (error) {
+            if (!isStepUpCancelled(error)) setDialogProblem(problemKey(error))
+            return false
+          } finally {
+            setBusy(false)
+            void load()
+          }
+        },
         onLifecycle: (action, reason) =>
           user ? change(`stepUp.sentence.${action}`, () => changeUser(api, user.id, ACTION_PATH[action], { version: user.version, ...(reason ? { reason } : {}) }), `user.done.${action}`) : Promise.resolve(false),
         onStepUp: (code) => void submitStepUp(code),

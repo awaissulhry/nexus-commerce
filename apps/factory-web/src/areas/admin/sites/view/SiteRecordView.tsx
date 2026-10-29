@@ -3,31 +3,32 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Factory, Plus, Trash2 } from 'lucide-react'
-import { Banner, Card, Field, KeyValue, Menu, Modal, SummaryTable } from '@nexus/ui/components'
+import { Banner, Card, Field, KeyValue, Menu, Modal } from '@nexus/ui/components'
 import { EditModeBar } from '@nexus/ui/patterns'
-import { Button, Input, NumberStepper, Pill, Select, Skeleton, Tag, Toggle } from '@nexus/ui/primitives'
-import { formatDateTime } from '../../../../lib/i18n/format'
+import { Button, Input, NumberStepper, Pill, Select, Skeleton, Toggle } from '@nexus/ui/primitives'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
-import { WORK_CENTRE_KINDS, type SiteStructure, type Station, type WorkCentreKind } from '../../shared/api'
+import { ListFrame } from '../../../../list-frame/ListFrame'
+import { WORK_CENTRE_KINDS, type Device, type Printer, type SiteStructure, type WorkCentre, type WorkCentreKind } from '../../shared/api'
 import { adminHref, STATUS_TONE } from '../../shared/model'
-import { AdminMessages, dash, ListState, NoticeBanner, RecordProblem } from '../../shared/view/parts'
+import { AdminMessages, FrameState, ListKeysHelp, ListState, NoticeBanner, RecordProblem } from '../../shared/view/parts'
 import { RecordFrame } from '../../shared/view/RecordFrame'
 import {
   archiveUses,
-  centreName,
   floorDraft,
   floorProblems,
   IDLE_RANGE,
   partProblems,
   sameFloor,
-  structureGroups,
+  structureRows,
   takenCodes,
   type FloorDraft,
   type PartDraft,
   type SiteDialog,
   type SiteRecordModel,
   type SiteTab,
+  type StructureRow,
 } from '../model'
+import { centreColumns, sitePrinterColumns, structureColumns, tabletColumns } from './columns'
 
 export type { SiteRecordModel } from '../model'
 
@@ -40,6 +41,8 @@ export interface SiteRecordActions {
   onMove?: (stationId: string, lineId: string | null) => Promise<boolean>
   onArchive?: (target: 'line' | 'station' | 'centre' | 'site', id: string) => Promise<boolean>
   onSaveFloor?: (draft: FloorDraft) => Promise<boolean>
+  /** Enter on a tablet's row: open the Device record. */
+  onOpen?: (href: string) => void
   onDock?: () => void
   onRetry?: () => void
   onDismissNotice?: () => void
@@ -148,7 +151,7 @@ function SiteRecord({ model, actions, panels }: { model: SiteRecordModel; action
         {tab === 'structure' && <StructureTab model={model} structure={structure} manage={manage} open={open} actions={actions} />}
         {tab === 'centres' && <CentresTab model={model} structure={structure} manage={manage} open={open} actions={actions} />}
         {tab === 'calendars' && <CalendarsTab model={model} structure={structure} actions={actions} />}
-        {tab === 'devices' && <DevicesTab model={model} structure={structure} />}
+        {tab === 'devices' && <DevicesTab model={model} structure={structure} actions={actions} />}
         {tab === 'activity' && panels}
       </RecordFrame>
       <PartDialog structure={structure} dialog={dialog} busy={!!model.busy} problem={model.dialogProblem ?? null} onClose={() => open(null)} actions={actions} />
@@ -168,160 +171,75 @@ function ShowArchived({ model, actions }: { model: SiteRecordModel; actions?: Si
 
 function StructureTab({ model, structure, manage, open, actions }: { model: SiteRecordModel; structure: SiteStructure; manage: boolean; open: (dialog: SiteDialog) => void; actions?: SiteRecordActions }) {
   const t = useT('admin')
-  const groups = structureGroups(structure, model.showArchived)
+  const [help, setHelp] = useState(false)
+  const columns = useMemo(() => structureColumns({ t, structure, manage, open }), [t, structure, manage]) // `open` only sets the dialog
   const empty = structure.lines.length === 0 && structure.stations.length === 0
-  if (empty)
-    return (
-      <ListState
-        loading={false}
-        empty={{
-          icon: <Factory size={24} aria-hidden />,
-          title: t('site.structure.empty'),
-          body: structure.workCentres.length === 0 ? t('site.structure.emptyCentres') : undefined,
-          action: manage ? (
-            <Button variant="primary" onClick={() => open({ kind: 'line' })}>
-              {t('site.addLine')}
-            </Button>
-          ) : undefined,
-        }}
-      />
-    )
-  const stationMenu = (station: Station) => {
-    const uses = archiveUses(structure, 'station', station.id)
-    return (
-      <Menu
-        label={t('common.more')}
-        align="right"
-        triggerProps={{ 'aria-label': t('common.moreFor', { name: station.name }) }}
-        items={[
-          { id: 'rename', label: t('site.rename'), onSelect: () => open({ kind: 'rename', target: 'station', id: station.id }) },
-          { id: 'move', label: t('site.move'), onSelect: () => open({ kind: 'move', stationId: station.id }) },
-          { id: 'archive', label: t('site.archiveStation'), tone: 'danger', ...(uses.devices ? { disabled: true, description: t('site.held.stationDevices', { count: uses.devices }) } : {}), onSelect: () => open({ kind: 'archive', target: 'station', id: station.id }) },
-        ]}
-      />
-    )
-  }
+  const rows = structureRows(structure, model.showArchived)
+  const lines = rows.filter((row) => row.kind === 'group' && row.line).length
+  const stations = rows.filter((row) => row.kind === 'station').length
   return (
     <div className="fw-adm-stack">
-      <div className="fw-adm-toolbar">
-        <ShowArchived model={model} actions={actions} />
-        <span className="fw-adm-hint">{t('site.structure.hint')}</span>
-      </div>
-      {groups.map((group) => {
-        const line = group.line
-        const lineUses = line ? archiveUses(structure, 'line', line.id) : {}
-        return (
-          <Card
-            key={line?.id ?? 'alone'}
-            header={line ? `${line.code} · ${line.name}` : t('site.alone')}
-            description={line ? t('site.line.stations', { count: group.stations.length }) : t('site.aloneHint')}
-            headingLevel={2}
-            headerAction={
-              manage ? (
-                <span className="fw-adm-actions">
-                  <Button size="sm" variant="quiet" onClick={() => open({ kind: 'station', lineId: line?.id ?? null })}>
-                    <Plus size={14} aria-hidden /> {t('site.addStationHere')}
+      <ListFrame<StructureRow>
+        label={t('site.structure.label', { name: structure.site.name })}
+        rows={rows}
+        rowId={(row) => row.id}
+        columns={columns}
+        count={t('org.structure', { lines, stations })}
+        tools={<ShowArchived model={model} actions={actions} />}
+        onHelp={() => setHelp(true)}
+        state={
+          empty ? (
+            <FrameState
+              empty={{
+                icon: <Factory size={24} aria-hidden />,
+                title: t('site.structure.empty'),
+                body: structure.workCentres.length === 0 ? t('site.structure.emptyCentres') : undefined,
+                action: manage ? (
+                  <Button variant="primary" onClick={() => open({ kind: 'line' })}>
+                    {t('site.addLine')}
                   </Button>
-                  {line && (
-                    <Menu
-                      label={t('common.more')}
-                      align="right"
-                      triggerProps={{ 'aria-label': t('common.moreFor', { name: line.name }) }}
-                      items={[
-                        { id: 'rename', label: t('site.rename'), onSelect: () => open({ kind: 'rename', target: 'line', id: line.id }) },
-                        { id: 'archive', label: t('site.archiveLine'), tone: 'danger', ...(lineUses.stations ? { disabled: true, description: t('site.held.lineStations', { count: lineUses.stations }) } : {}), onSelect: () => open({ kind: 'archive', target: 'line', id: line.id }) },
-                      ]}
-                    />
-                  )}
-                </span>
-              ) : undefined
-            }
-          >
-            {group.stations.length === 0 ? (
-              <p className="fw-adm-hint">{t('site.line.empty')}</p>
-            ) : (
-              <SummaryTable
-                label={t('site.structure.tableLabel', { name: line?.name ?? t('site.alone') })}
-                density="roomy"
-                stackOnPhone
-                columns={[t('org.col.code'), t('org.col.name'), t('site.col.centre'), t('site.col.devices'), t('org.col.status'), t('common.actions')]}
-                widths={['14%', '30%', '22%', '12%', '12%', '10%']}
-                align={['left', 'left', 'left', 'left', 'left', 'right']}
-                rows={group.stations.map((station) => ({
-                  id: station.id,
-                  cells: [
-                    <span key="code" className="fw-adm-code">{station.code}</span>,
-                    station.name,
-                    dash(centreName(structure.workCentres, station.workCentreId)),
-                    station.devices > 0 ? t('site.devicesBound', { count: station.devices }) : '—',
-                    <Pill key="status" tone={STATUS_TONE[station.status] ?? 'neutral'}>{t(`status.${station.status}`)}</Pill>,
-                    manage && station.status === 'ACTIVE' ? stationMenu(station) : '',
-                  ],
-                }))}
-              />
-            )}
-          </Card>
-        )
-      })}
+                ) : undefined,
+              }}
+            />
+          ) : undefined
+        }
+      />
+      <p className="fw-adm-hint">{t('site.structure.hint')}</p>
+      <ListKeysHelp open={help} onClose={() => setHelp(false)} keys={[]} selection={false} />
     </div>
   )
 }
 
 function CentresTab({ model, structure, manage, open, actions }: { model: SiteRecordModel; structure: SiteStructure; manage: boolean; open: (dialog: SiteDialog) => void; actions?: SiteRecordActions }) {
   const t = useT('admin')
+  const [help, setHelp] = useState(false)
+  const columns = useMemo(() => centreColumns({ t, structure, manage, open }), [t, structure, manage]) // `open` only sets the dialog
   const centres = structure.workCentres.filter((centre) => model.showArchived || centre.status === 'ACTIVE')
   return (
     <div className="fw-adm-stack">
-      <div className="fw-adm-toolbar">
-        {manage && (
-          <Button size="sm" onClick={() => open({ kind: 'centre' })}>
-            <Plus size={14} aria-hidden /> {t('site.addCentre')}
-          </Button>
-        )}
-        <ShowArchived model={model} actions={actions} />
-        <span className="fw-adm-hint">{t('site.centres.hint')}</span>
-      </div>
-      {centres.length === 0 ? (
-        <ListState loading={false} empty={{ title: t('site.centres.empty') }} />
-      ) : (
-        <Card>
-          <SummaryTable
-            label={t('site.tab.centres')}
-            density="roomy"
-            stackOnPhone
-            columns={[t('org.col.code'), t('org.col.name'), t('org.col.kind'), t('site.col.stations'), t('org.col.status'), t('common.actions')]}
-            align={['left', 'left', 'left', 'left', 'left', 'right']}
-            rows={centres.map((centre) => {
-              const uses = archiveUses(structure, 'centre', centre.id)
-              return {
-                id: centre.id,
-                cells: [
-                  <span key="code" className="fw-adm-code">{centre.code}</span>,
-                  centre.name,
-                  t(`site.centreKind.${centre.kind}`),
-                  String(structure.stations.filter((station) => station.workCentreId === centre.id && station.status === 'ACTIVE').length),
-                  <Pill key="status" tone={STATUS_TONE[centre.status] ?? 'neutral'}>{t(`status.${centre.status}`)}</Pill>,
-                  manage && centre.status === 'ACTIVE' ? (
-                    <Menu
-                      key="menu"
-                      label={t('common.more')}
-                      align="right"
-                      triggerProps={{ 'aria-label': t('common.moreFor', { name: centre.name }) }}
-                      items={[
-                        { id: 'rename', label: t('site.rename'), onSelect: () => open({ kind: 'rename', target: 'centre', id: centre.id }) },
-                        { id: 'archive', label: t('site.archiveCentre'), tone: 'danger', ...(uses.stations ? { disabled: true, description: t('site.held.centreStations', { count: uses.stations }) } : {}), onSelect: () => open({ kind: 'archive', target: 'centre', id: centre.id }) },
-                      ]}
-                    />
-                  ) : (
-                    ''
-                  ),
-                ],
-              }
-            })}
-          />
-        </Card>
-      )}
-      <p className="fw-adm-hint">{t('site.centres.capacityLater')}</p>
+      <ListFrame<WorkCentre>
+        label={t('site.tab.centres')}
+        rows={centres}
+        rowId={(centre) => centre.id}
+        columns={columns}
+        count={t('site.centres.count', { count: centres.length })}
+        tools={
+          <>
+            {manage && (
+              <Button size="sm" onClick={() => open({ kind: 'centre' })}>
+                <Plus size={14} aria-hidden /> {t('site.addCentre')}
+              </Button>
+            )}
+            <ShowArchived model={model} actions={actions} />
+          </>
+        }
+        onHelp={() => setHelp(true)}
+        state={centres.length === 0 ? <FrameState empty={{ title: t('site.centres.empty') }} /> : undefined}
+      />
+      <p className="fw-adm-hint">
+        {t('site.centres.hint')} {t('site.centres.capacityLater')}
+      </p>
+      <ListKeysHelp open={help} onClose={() => setHelp(false)} keys={[]} selection={false} />
     </div>
   )
 }
@@ -430,84 +348,71 @@ function CalendarsTab({ model, structure, actions }: { model: SiteRecordModel; s
   )
 }
 
-function DevicesTab({ model, structure }: { model: SiteRecordModel; structure: SiteStructure }) {
+function DevicesTab({ model, structure, actions }: { model: SiteRecordModel; structure: SiteStructure; actions?: SiteRecordActions }) {
   const t = useT('admin')
   const locale = useLocale()
+  const [help, setHelp] = useState(false)
   const href = (path: string) => adminHref(model.prefix, path)
   const { site } = structure
   const devices = model.devices.items
   const printers = model.printers.items
-  const station = (id: string | null) => structure.stations.find((item) => item.id === id)?.name ?? null
+  const tablets = useMemo(() => tabletColumns({ t, locale, prefix: model.prefix, structure }), [t, locale, model.prefix, structure])
+  const printerCols = useMemo(() => sitePrinterColumns({ t }), [t])
+  const manage = model.can.manageDevices && site.status === 'ACTIVE'
   return (
     <div className="fw-adm-stack">
-      <Card
-        header={t('site.devices.tablets')}
-        headingLevel={2}
-        headerAction={
-          model.can.manageDevices && site.status === 'ACTIVE' ? (
-            <Button size="sm" variant="primary" asChild>
-              <Link href={`${href('/devices')}?enrol=${site.id}`}>{t('devices.enrol')}</Link>
-            </Button>
-          ) : undefined
-        }
-      >
-        {devices === null || model.devices.problem ? (
-          <ListState loading={devices === null} problem={model.devices.problem} />
-        ) : devices.length === 0 ? (
-          <p className="fw-adm-hint">{t('site.devices.empty')}</p>
-        ) : (
-          <SummaryTable
-            label={t('site.devices.tablets')}
-            density="roomy"
-            stackOnPhone
-            columns={[t('org.col.name'), t('devices.col.station'), t('org.col.status'), t('devices.col.lastSeen')]}
-            rows={devices.map((device) => ({
-              id: device.id,
-              cells: [
-                <Link key="name" className="fw-adm-name" href={href(`/devices/${device.id}`)}>
-                  {device.name}
-                </Link>,
-                dash(station(device.stationId)),
-                <span key="status" className="fw-adm-tags">
-                  <Pill tone={STATUS_TONE[device.status] ?? 'neutral'}>{t(`devices.status.${device.status}`)}</Pill>
-                  {device.inUse && <Tag tone="info">{t('devices.inUse')}</Tag>}
-                </span>,
-                device.lastSeenAt ? formatDateTime(device.lastSeenAt, { locale, timeZone: site.timezone }) : '—',
-              ],
-            }))}
-          />
-        )}
-      </Card>
-      {model.can.viewPrinters && (
-        <Card
-          header={t('site.devices.printers')}
-          headingLevel={2}
-          headerAction={
-            model.can.manageDevices && site.status === 'ACTIVE' ? (
-              <Button size="sm" asChild>
-                <Link href={`${href('/devices')}?mode=printers&new=printer&site=${site.id}`}>{t('printers.add')}</Link>
+      <section className="fw-adm-section" aria-labelledby="site-tablets">
+        <h2 id="site-tablets" className="fw-adm-section-title">
+          {t('site.devices.tablets')}
+        </h2>
+        <ListFrame<Device>
+          label={t('site.devices.tablets')}
+          rows={devices}
+          rowId={(device) => device.id}
+          columns={tablets}
+          count={devices ? t('site.devices.count', { count: devices.length }) : '—'}
+          right={
+            manage ? (
+              <Button size="sm" variant="primary" asChild>
+                <Link href={`${href('/devices')}?enrol=${site.id}`}>{t('devices.enrol')}</Link>
               </Button>
             ) : undefined
           }
-        >
-          {printers === null || model.printers.problem ? (
-            <ListState loading={printers === null} problem={model.printers.problem} />
-          ) : printers.length === 0 ? (
-            <p className="fw-adm-hint">{t('printers.empty.body')}</p>
-          ) : (
-            <SummaryTable
-              label={t('site.devices.printers')}
-              density="roomy"
-              stackOnPhone
-              columns={[t('org.col.code'), t('org.col.name'), t('org.col.kind'), t('org.col.status')]}
-              rows={printers.map((printer) => ({
-                id: printer.id,
-                cells: [<span key="code" className="fw-adm-code">{printer.code}</span>, printer.name, t(`printers.kind.${printer.kind}`), <Pill key="status" tone={STATUS_TONE[printer.status] ?? 'neutral'}>{t(`printers.status.${printer.status}`)}</Pill>],
-              }))}
-            />
-          )}
-        </Card>
+          onOpen={(device) => actions?.onOpen?.(href(`/devices/${device.id}`))}
+          onHelp={() => setHelp(true)}
+          state={model.devices.problem ? <FrameState problem={model.devices.problem} onRetry={actions?.onRetry} /> : devices && devices.length === 0 ? <FrameState empty={{ title: t('site.devices.empty') }} /> : undefined}
+        />
+      </section>
+      {model.can.viewPrinters && (
+        <section className="fw-adm-section" aria-labelledby="site-printers">
+          <h2 id="site-printers" className="fw-adm-section-title">
+            {t('site.devices.printers')}
+          </h2>
+          <ListFrame<Printer>
+            label={t('site.devices.printers')}
+            rows={printers}
+            rowId={(printer) => printer.id}
+            columns={printerCols}
+            count={printers ? t('site.printers.count', { count: printers.length }) : '—'}
+            right={
+              manage ? (
+                <Button size="sm" asChild>
+                  <Link href={`${href('/devices')}?mode=printers&new=printer&site=${site.id}`}>{t('printers.add')}</Link>
+                </Button>
+              ) : undefined
+            }
+            onHelp={() => setHelp(true)}
+            state={
+              model.printers.problem ? (
+                <FrameState problem={model.printers.problem} onRetry={actions?.onRetry} />
+              ) : printers && printers.length === 0 ? (
+                <FrameState empty={{ title: t('printers.empty.title'), body: t('printers.empty.body') }} />
+              ) : undefined
+            }
+          />
+        </section>
       )}
+      <ListKeysHelp open={help} onClose={() => setHelp(false)} keys={[]} selection={false} />
     </div>
   )
 }

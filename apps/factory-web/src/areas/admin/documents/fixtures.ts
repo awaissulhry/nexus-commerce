@@ -48,7 +48,7 @@ export const SERIES: Series[] = [
   series(demo.id, 'LOT', { reset: 'NEVER', pattern: 'LOT-{N:6}', nextValue: 1287, nextNumber: 'LOT-001287', lastIssuedDate: '2026-10-29', version: 1287 }),
   series(esempio.id, 'INVOICE', { pattern: 'E/{N}/{YY}', nextNumber: 'E/1/26' }),
 ]
-const [, , , , ddt, invoice, , creditNote, lot, esempioInvoice] = SERIES as [Series, Series, Series, Series, Series, Series, Series, Series, Series, Series]
+const [, , , , ddt, invoice, invoice2025, creditNote, lot, esempioInvoice] = SERIES as [Series, Series, Series, Series, Series, Series, Series, Series, Series, Series]
 
 const proofOf = (row: Series, count: number, skipped: SeriesProof['skipped'] = []): SeriesProof => ({
   count,
@@ -128,6 +128,28 @@ export const designScreen = defineDesignScreen<DocumentsViewModel>({
     { id: 'read-only', label: 'Without the right to manage series', model: base({ can: { manage: false, documents: true } }), note: 'New series is held with the right it needs.' },
     { id: 'created', label: 'Just created', model: base({ companyId: esempio.id, notice: { key: 'docs.done.created', tone: 'success', params: { number: esempioInvoice.nextNumber ?? '' } } }) },
     { id: 'conflict', label: 'Someone changed the series meanwhile', model: base({ dialog: { kind: 'series', seriesId: creditNote.id }, dialogProblem: 'docs.problem.conflict' }) },
+    {
+      id: 'numbers-selected',
+      label: 'Series selected: the bulk bar says its reach',
+      model: base({ selected: [ddt.id, creditNote.id, invoice2025.id] }),
+      note: 'Close 2 series: the 2025 invoice series is closed already, so it does not count. Shift-click a box for a range; the header box selects every series.',
+    },
+    {
+      id: 'close-many',
+      label: 'Close 2 series: one confirm',
+      model: base({ selected: [ddt.id, creditNote.id, invoice2025.id], closeMany: [ddt.id, creditNote.id, invoice2025.id] }),
+      note: 'The consequences once; the closed one left out with the reason; a warning for each company and document left without an active series.',
+    },
+    {
+      id: 'closed-many',
+      label: 'After closing several: one notice',
+      model: base({
+        series: loaded(SERIES.map((row) => (row.id === creditNote.id ? { ...row, status: 'CLOSED' as const, nextNumber: null } : row))),
+        selected: [ddt.id],
+        notice: { key: 'docs.bulk.partial', tone: 'warning', params: { count: 1, done: 1, refused: 1, total: 2 }, refused: [{ id: ddt.id, problem: 'problem.conflict' }] },
+      }),
+      note: 'Each series is one call: what was closed, and each one refused with the reason.',
+    },
     { id: 'loading', label: 'Loading', model: base({ series: loading(), companies: loading(), asOf: null, proofs: {} }) },
     { id: 'error', label: 'The API did not answer', model: base({ series: failed('problem.unavailable'), asOf: null, proofs: {} }) },
     { id: 'forbidden', label: 'Not the person\'s to read', model: base({ series: failed('problem.forbidden'), asOf: null, proofs: {} }) },

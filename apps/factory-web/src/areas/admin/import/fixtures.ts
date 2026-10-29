@@ -134,6 +134,9 @@ const CANCELLED = job(9, {
 const EARLIER = job(10, { status: 'APPLIED', errorCount: 0, createCount: 24, appliedCount: 24, appliedAt: at(20, 17, 12), createdAt: at(20, 17, 1), fileName: 'giacenze-magazzino-sud-demo.csv' })
 
 const JOBS: ImportJob[] = [APPLIED, PLAN_FAILED, APPLY_FAILED, CANCELLED, EARLIER]
+/** Recent imports with two that can still be cancelled: one being checked, one checked and not applied. */
+const OPEN_JOBS: ImportJob[] = [READING, { ...PLANNED, fileName: 'ubicazioni-demo-nord.csv', importerKey: 'inventory.locations', importerLabel: 'Locations' }, ...JOBS]
+const PICKED = [READING.id, PLANNED.id, APPLIED.id, APPLY_FAILED.id]
 
 const refusedRow = (rowNumber: number, line: string, column: string, message: string): ImportRow => ({
   rowNumber,
@@ -209,6 +212,28 @@ export const designScreen = defineDesignScreen<ImportViewModel>({
     { id: 'page-recent-empty', label: 'No imports yet', model: page({ jobs: loaded([]) }) },
     { id: 'page-none-open', label: 'No importer open to this person', model: page({ importers: loaded([]), jobs: loaded([]) }) },
     { id: 'page-notice', label: 'After a cancel', model: page({ notice: { key: 'imp.notice.cancelled', tone: 'info', params: { file: 'ubicazioni-demo-nord.csv' } } }) },
+    {
+      id: 'recent-selected',
+      label: 'Imports selected: the bulk bar says its reach',
+      model: page({ jobs: loaded(OPEN_JOBS), selected: PICKED }),
+      note: 'Cancel 2 imports: the one being checked and the one waiting to be applied. The applied one and the stopped one do not count.',
+    },
+    {
+      id: 'cancel-many',
+      label: 'Cancel 2 imports: one confirm',
+      model: page({ jobs: loaded(OPEN_JOBS), selected: PICKED, cancelMany: PICKED }),
+      note: 'What happens once, the sheets by name, each one left out with the reason.',
+    },
+    {
+      id: 'cancelled-many',
+      label: 'After cancelling several: one notice',
+      model: page({
+        jobs: loaded(OPEN_JOBS.map((item) => (item.id === READING.id ? { ...item, status: 'CANCELLED' as const } : item))),
+        selected: [PLANNED.id],
+        notice: { key: 'imp.bulk.partial', tone: 'warning', params: { count: 1, done: 1, refused: 1, total: 2 }, refused: [{ id: PLANNED.id, problem: 'problem.conflict' }] },
+      }),
+      note: 'Each import is one call: what was cancelled, and each one refused with the reason.',
+    },
     { id: 'loading', label: 'Loading', model: page({ importers: loading(), jobs: loading(), asOf: null }) },
     { id: 'error', label: 'The API did not answer', model: page({ importers: failed('problem.unavailable'), jobs: failed('problem.unavailable'), asOf: null }) },
     { id: 'no-access', label: 'No right to see imports', model: page({ can: { view: false, run: false, apply: false, people: false } }) },

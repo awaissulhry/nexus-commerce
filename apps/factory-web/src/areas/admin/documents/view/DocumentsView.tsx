@@ -1,21 +1,27 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ExternalLink, FileText, Hash, Lock } from 'lucide-react'
-import { Banner, Card, Disclosure, EmptyState, Field, KeyValue, Modal, SummaryTable } from '@nexus/ui/components'
+import { CircleOff, ExternalLink, FileText, Hash, Lock } from 'lucide-react'
+import { Banner, Card, Disclosure, EmptyState, Field, KeyValue, Modal } from '@nexus/ui/components'
+import { IdentityCell, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { DetailModal } from '@nexus/ui/patterns'
 import { Button, Input, Pill, SegmentedControl, Select, Tag, Textarea, TokenChip } from '@nexus/ui/primitives'
-import { NUMBER_KINDS } from '@nexus/factory-domain/numbering/kinds'
+import { DOCUMENT_KINDS } from '@nexus/factory-domain/numbering/kinds'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
+import { ListFrame } from '../../../../list-frame/ListFrame'
+import type { ListKey } from '../../../../list-frame/model'
+import { bulkHeld, leftCounts } from '../../kit/bulk-model'
+import { BulkButton, BulkReach, ListProblem, useKeysHelp, useSelection } from '../../kit/list'
 import { AdminPageMessages } from '../../kit/messages'
-import { adminHref, pageOf } from '../../shared/model'
-import { dash, ListState, ListTable, PageHead, StepUp } from '../../shared/view/parts'
+import { adminHref } from '../../shared/model'
+import { dash, PageHead, StepUp } from '../../shared/view/parts'
 import { PageNotice, useWords } from '../../kit/parts'
-import { DOCUMENT_LANGUAGES, DOCUMENT_TYPES, sampleHref, type Series } from '../api'
+import { DOCUMENT_LANGUAGES, DOCUMENT_TYPES, sampleHref, type Allocation, type DocumentType, type Series } from '../api'
 import {
   chipsPattern,
+  closeReach,
   draftPattern,
   draftPreview,
   draftProblems,
@@ -23,6 +29,7 @@ import {
   hasIssued,
   hasOtherActive,
   kindKey,
+  leftWithout,
   newDraft,
   newSeriesHeld,
   patternChips,
@@ -36,6 +43,7 @@ import {
   startEditable,
   withKind,
   YEAR_TOKENS,
+  type CompanyOption,
   type DocumentsDialog,
   type DocumentsView as ViewName,
   type DocumentsViewModel,
@@ -53,6 +61,12 @@ export interface DocumentsActions {
   onSetStart?: (series: Series, startValue: number) => Promise<void> | void
   onAdvance?: (series: Series, input: { pastValue: number; reason: string; lastIssuedDate?: string }) => Promise<void> | void
   onCloseSeries?: (series: Series, reason: string) => Promise<void> | void
+  /** The series ticked in the Numbers list. */
+  onSelect?: (ids: string[]) => void
+  /** Opens (ids) or closes (null) the "Close N series" confirm. */
+  onCloseMany?: (seriesIds: readonly string[] | null) => void
+  /** Closes the active series of the confirm, one call each; one notice says what was done. */
+  onCloseManyGo?: (series: readonly Series[], reason: string) => Promise<void> | void
   onDismissNotice?: () => void
   onRetry?: () => void
   onRetryProof?: (seriesId: string) => void
@@ -63,9 +77,10 @@ export interface DocumentsActions {
 /**
  * SCR-014 — Admin › Documents & numbering (design 02 admin.documents; PLT-122, PLT-123, PLT-124): Numbers (each series
  * with its next number as it will print, its pattern as chips, whether it restarts every year, the fiscal lock; a row
- * opens the series) and the Fiscal check (proof that invoices and DDTs have no gaps), Documents (the fixed layouts,
- * each previewed with the company's legal data in a new tab). Keys: 1 / 2 switch the list, c adds a series.
- * Fetches nothing (DocumentsPage.tsx reads the API).
+ * opens the series; tick series to close several at once) and the Fiscal check (proof that invoices and DDTs have no
+ * gaps), Documents (the fixed layouts, each previewed with the company's legal data in a new tab). Both lists are the
+ * Office's list frame (Owner rule 2026-10-29); their keys — 1 / 2 switch the list, c adds a series — sit in the
+ * frame's footer icon. Fetches nothing (DocumentsPage.tsx reads the API).
  */
 export function DocumentsView({ model, actions }: { model: DocumentsViewModel; actions?: DocumentsActions }) {
   return (
@@ -78,9 +93,9 @@ export function DocumentsView({ model, actions }: { model: DocumentsViewModel; a
 function useListKeys(model: DocumentsViewModel, actions?: DocumentsActions) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey || model.dialog) return
+      if (event.metaKey || event.ctrlKey || event.altKey || model.dialog || model.closeMany) return
       const target = event.target as HTMLElement | null
-      if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return
+      if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.closest('[role="dialog"]'))) return
       if (event.key === '1') actions?.onView?.('numbers')
       else if (event.key === '2') actions?.onView?.('documents')
       else if (event.key === 'c' && !newSeriesHeld(model)) actions?.onDialog?.({ kind: 'new' })
@@ -92,12 +107,26 @@ function useListKeys(model: DocumentsViewModel, actions?: DocumentsActions) {
   }, [model, actions])
 }
 
+/** The page's own keys, listed in each list's footer icon (never above the table). */
+function usePageKeys(): ListKey[] {
+  const t = useT('admin-documents')
+  return [
+    { keys: ['1'], does: t('docs.keys.numbers') },
+    { keys: ['2'], does: t('docs.keys.documents') },
+    { keys: ['c'], does: t('docs.keys.newSeries') },
+  ]
+}
+
 function Documents({ model, actions }: { model: DocumentsViewModel; actions?: DocumentsActions }) {
   const t = useT('admin-documents')
   const ta = useT('admin')
   useListKeys(model, actions)
   const held = newSeriesHeld(model)
-  const companies = (model.companies.items ?? []).filter((company) => company.status === 'ACTIVE')
+  const all = model.series.items ?? []
+  const nameOf = (id: string) => {
+    const series = all.find((row) => row.id === id)
+    return series ? seriesName(t, series) : id
+  }
   return (
     <div className="fw-adm fw-adm-docs">
       <PageHead
@@ -105,7 +134,7 @@ function Documents({ model, actions }: { model: DocumentsViewModel; actions?: Do
         asOf={model.asOf}
         actions={
           <>
-            <Button size="sm" heldReason={held ? t(held) : null} onClick={() => actions?.onDialog?.({ kind: 'new' })} title={t('docs.keys.new')}>
+            <Button size="sm" heldReason={held ? t(held) : null} onClick={() => actions?.onDialog?.({ kind: 'new' })}>
               {t('docs.new')}
             </Button>
             <Button size="sm" variant="primary" onClick={() => actions?.onView?.('documents')}>
@@ -114,43 +143,46 @@ function Documents({ model, actions }: { model: DocumentsViewModel; actions?: Do
           </>
         }
       />
-      <PageNotice namespace="admin-documents" notice={model.notice} onDismiss={actions?.onDismissNotice} />
-      <div className="fw-adm-toolbar">
-        <SegmentedControl
-          ariaLabel={t('docs.views.label')}
-          size="sm"
-          value={model.view}
-          onChange={(value) => actions?.onView?.(value as ViewName)}
-          options={[
-            { value: 'numbers', label: t('docs.views.numbers') },
-            { value: 'documents', label: t('docs.views.documents') },
-          ]}
-        />
-        {companies.length > 1 && (
-          <label className="fw-adm-docs-company">
-            <span className="fw-adm-sr">{t('docs.company.label')}</span>
-            <Select size="sm" aria-label={t('docs.company.label')} value={model.companyId} onChange={(event) => actions?.onCompany?.(event.target.value)}>
-              <option value="all">{t('docs.company.all')}</option>
-              {companies.map((company) => (
-                <option key={company.id} value={company.id}>
-                  {company.legalName}
-                </option>
-              ))}
-            </Select>
-          </label>
-        )}
-        <span className="fw-adm-hint fw-adm-docs-keys" aria-hidden>
-          {t('docs.keys.hint')}
-        </span>
-      </div>
-      {model.view === 'numbers' ? <Numbers model={model} actions={actions} /> : <Layouts model={model} />}
+      <PageNotice namespace="admin-documents" notice={model.notice} onDismiss={actions?.onDismissNotice} nameOf={nameOf} />
+      {model.view === 'numbers' ? <Numbers model={model} actions={actions} /> : <Layouts model={model} actions={actions} />}
       <p className="fw-adm-hint">{t('docs.later')}</p>
       <NewSeriesModal model={model} actions={actions} />
       <SeriesModal model={model} actions={actions} />
       <CloseSeriesModal model={model} actions={actions} />
+      <CloseManyModal model={model} actions={actions} />
       <NumbersModal model={model} actions={actions} />
       <StepUp model={model.stepUp} onSubmit={actions?.onSubmitStepUp} onClose={actions?.onCancelStepUp} confirmLabel={ta('stepUp.confirm')} />
     </div>
+  )
+}
+
+/** The frame's tools on both lists: which list, and which company. */
+function ListTools({ model, actions }: { model: DocumentsViewModel; actions?: DocumentsActions }) {
+  const t = useT('admin-documents')
+  const companies = (model.companies.items ?? []).filter((company) => company.status === 'ACTIVE')
+  return (
+    <>
+      <SegmentedControl
+        ariaLabel={t('docs.views.label')}
+        size="sm"
+        value={model.view}
+        onChange={(value) => actions?.onView?.(value as ViewName)}
+        options={[
+          { value: 'numbers', label: t('docs.views.numbers') },
+          { value: 'documents', label: t('docs.views.documents') },
+        ]}
+      />
+      {companies.length > 1 && (
+        <Select size="sm" aria-label={t('docs.company.label')} value={model.companyId} onChange={(event) => actions?.onCompany?.(event.target.value)}>
+          <option value="all">{t('docs.company.all')}</option>
+          {companies.map((company) => (
+            <option key={company.id} value={company.id}>
+              {company.legalName}
+            </option>
+          ))}
+        </Select>
+      )}
+    </>
   )
 }
 
@@ -176,12 +208,17 @@ export function PatternChips({ pattern, year }: { pattern: string; year?: number
   )
 }
 
-function companyName(model: DocumentsViewModel, companyId: string) {
+function companyName(model: Pick<DocumentsViewModel, 'companies'>, companyId: string) {
   return (model.companies.items ?? []).find((company) => company.id === companyId)?.legalName ?? null
 }
 
+/** "Invoice 2026 · MAIN": a series by its document, period and code. */
+export function seriesName(t: (key: string) => string, series: Pick<Series, 'kind' | 'year' | 'scopeKey' | 'code'>): string {
+  return `${t(kindKey(series.kind))} ${periodOf(series) ?? ''} · ${series.code}`.replace(/\s+·/, ' ·')
+}
+
 /** `?series=<id>` (or another dialog) on this page's address, keeping the list and the company. */
-function dialogHref(model: DocumentsViewModel, key: 'series' | 'numbers', id: string) {
+export function dialogHref(model: Pick<DocumentsViewModel, 'prefix' | 'view' | 'companyId'>, key: 'series' | 'numbers', id: string) {
   const query = new URLSearchParams()
   if (model.view !== 'numbers') query.set('view', model.view)
   if (model.companyId !== 'all') query.set('company', model.companyId)
@@ -189,95 +226,122 @@ function dialogHref(model: DocumentsViewModel, key: 'series' | 'numbers', id: st
   return `${adminHref(model.prefix, '/documents')}?${query.toString()}`
 }
 
-function SeriesName({ model, series, actions }: { model: DocumentsViewModel; series: Series; actions?: DocumentsActions }) {
+/** A series in the list: its document and period (a link to the series), its code and the fiscal lock. */
+export function SeriesCell({ model, series }: { model: Pick<DocumentsViewModel, 'prefix' | 'view' | 'companyId'>; series: Series }) {
   const t = useT('admin-documents')
-  const period = periodOf(series)
+  const title = `${t(kindKey(series.kind))} ${periodOf(series) ?? ''}`.trim()
   return (
-    <span className="fw-adm-cell">
-      <Link
-        className="fw-adm-name"
-        href={dialogHref(model, 'series', series.id)}
-        onClick={(event) => {
-          if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return
-          event.preventDefault()
-          actions?.onDialog?.({ kind: 'series', seriesId: series.id })
-        }}
-      >
-        {t(kindKey(series.kind))} {period ?? ''}
-      </Link>
-      <span className="fw-adm-tags">
-        <Tag>{t('docs.code', { code: series.code })}</Tag>
-        {series.fiscal && (
-          <Tag tone="info">
-            <Lock size={11} aria-hidden /> {t('docs.fiscal.tag')}
-          </Tag>
-        )}
-        {model.companyId === 'all' && <span className="fw-adm-hint">{dash(companyName(model, series.companyId))}</span>}
-      </span>
-    </span>
+    <IdentityCell
+      noImage
+      title={title}
+      titleAttr={title}
+      href={dialogHref(model, 'series', series.id)}
+      sub={
+        <>
+          <Tag>{t('docs.code', { code: series.code })}</Tag>
+          {series.fiscal && (
+            <Tag tone="info">
+              <Lock size={11} aria-hidden /> {t('docs.fiscal.tag')}
+            </Tag>
+          )}
+        </>
+      }
+    />
   )
+}
+
+/** The next number as it will print, or "Closed". */
+export function NextCell({ series }: { series: Series }) {
+  const t = useT('admin-documents')
+  return series.status === 'CLOSED' ? <span className="fw-adm-hint">{t('docs.next.closed')}</span> : <code className="fw-adm-code">{dash(series.nextNumber)}</code>
+}
+
+/** The Numbers list's columns (one series per row); the company has a column while every company is listed. */
+export function useSeriesColumns(model: Pick<DocumentsViewModel, 'prefix' | 'view' | 'companyId' | 'companies'>): ColDef<Series>[] {
+  const t = useT('admin-documents')
+  const locale = useLocale()
+  const { prefix, view, companyId, companies } = model
+  return useMemo<ColDef<Series>[]>(() => {
+    const at = { prefix, view, companyId }
+    return [
+      { colId: 'document', headerName: t('docs.col.document'), flex: 1.6, minWidth: 165, cellRenderer: ({ data }: ICellRendererParams<Series>) => (data ? <SeriesCell model={at} series={data} /> : null) },
+      ...(companyId === 'all'
+        ? [{ colId: 'company', headerName: t('docs.company.label'), flex: 1.2, minWidth: 140, valueGetter: ({ data }: { data?: Series }) => (data ? (companyName({ companies }, data.companyId) ?? '—') : '') } satisfies ColDef<Series>]
+        : []),
+      { colId: 'next', headerName: t('docs.col.next'), flex: 1.3, minWidth: 160, cellRenderer: ({ data }: ICellRendererParams<Series>) => (data ? <NextCell series={data} /> : null) },
+      { colId: 'pattern', headerName: t('docs.col.pattern'), flex: 2, minWidth: 275, cellRenderer: ({ data }: ICellRendererParams<Series>) => (data ? <PatternChips pattern={data.pattern} year={data.year} /> : null) },
+      { colId: 'restarts', headerName: t('docs.col.restarts'), flex: 0.8, minWidth: 115, valueGetter: ({ data }) => (data ? t(data.reset === 'YEARLY' ? 'docs.reset.YEARLY' : 'docs.reset.NEVER') : '') },
+      { colId: 'started', headerName: t('docs.col.started'), flex: 0.7, minWidth: 115, valueGetter: ({ data }) => (data ? String(data.startValue) : '') },
+      { colId: 'lastIssued', headerName: t('docs.col.lastIssued'), flex: 1, minWidth: 150, valueGetter: ({ data }) => (data ? (data.lastIssuedDate ? formatDate(data.lastIssuedDate, { locale }) : t('docs.never')) : '') },
+      {
+        colId: 'state',
+        headerName: t('docs.col.state'),
+        flex: 0.7,
+        minWidth: 95,
+        cellRenderer: ({ data }: ICellRendererParams<Series>) =>
+          data ? (
+            <Pill tone={data.status === 'ACTIVE' ? 'success' : 'neutral'}>{t(`docs.status.${data.status}`)}</Pill>
+          ) : null,
+      },
+    ]
+  }, [t, locale, prefix, view, companyId, companies])
 }
 
 function Numbers({ model, actions }: { model: DocumentsViewModel; actions?: DocumentsActions }) {
   const t = useT('admin-documents')
-  const ta = useT('admin')
-  const locale = useLocale()
   const items = model.series.items
-  const rows = items ? seriesRows(items, model.companyId, model.companies.items ?? []) : []
-  const paged = pageOf(rows, 1)
-  if (model.series.problem || items === null) return <ListState problem={model.series.problem} loading={items === null} onRetry={actions?.onRetry} />
-  if (rows.length === 0) {
-    const held = newSeriesHeld(model)
-    return (
-      <ListState
-        loading={false}
-        empty={{
-          icon: <Hash size={24} aria-hidden />,
-          title: t('docs.empty.title'),
-          body: t('docs.empty.body'),
-          action: (
-            <Button size="sm" variant="primary" heldReason={held ? t(held) : null} onClick={() => actions?.onDialog?.({ kind: 'new' })}>
-              {t('docs.new')}
-            </Button>
-          ),
-        }}
-      />
-    )
-  }
+  const rows = useMemo(() => (items ? seriesRows(items, model.companyId, model.companies.items ?? []) : []), [items, model.companyId, model.companies.items])
+  const { selected, onChange } = useSelection(model.selected, actions?.onSelect, rows.map((row) => row.id))
+  const columns = useSeriesColumns(model)
+  const own = usePageKeys()
+  const { onHelp, help } = useKeysHelp(own, true)
+  const reach = closeReach(rows.filter((row) => selected.includes(row.id)))
+  const closeHeld = bulkHeld(reach, model.can.manage, { right: 'docs.held.manage', none: 'docs.bulk.none' })
+  const held = newSeriesHeld(model)
+  const state: ReactNode = model.series.problem ? (
+    <ListProblem problem={model.series.problem} onRetry={actions?.onRetry} />
+  ) : items && rows.length === 0 ? (
+    <EmptyState
+      icon={<Hash size={24} aria-hidden />}
+      title={t('docs.empty.title')}
+      description={t('docs.empty.body')}
+      action={
+        <Button size="sm" variant="primary" heldReason={held ? t(held) : null} onClick={() => actions?.onDialog?.({ kind: 'new' })}>
+          {t('docs.new')}
+        </Button>
+      }
+    />
+  ) : undefined
   const fiscal = fiscalRows(rows)
   return (
     <div className="fw-adm-stack">
-      <ListTable
+      <ListFrame<Series>
         label={t('docs.table.label')}
-        columns={[t('docs.col.document'), t('docs.col.next'), t('docs.col.pattern'), t('docs.col.restarts'), t('docs.col.started'), t('docs.col.lastIssued'), t('docs.col.state')]}
-        widths={['21%', '14%', '26%', '10%', '8%', '11%', '10%']}
-        page={paged.page}
-        pageCount={paged.pageCount}
-        count={ta('list.count', { shown: paged.rows.length, total: rows.length })}
-        rows={paged.rows.map((series) => ({
-          id: series.id,
-          cells: [
-            <SeriesName key="name" model={model} series={series} actions={actions} />,
-            series.status === 'CLOSED' ? (
-              <span key="next" className="fw-adm-hint">
-                {t('docs.next.closed')}
-              </span>
-            ) : (
-              <code key="next" className="fw-adm-code">
-                {dash(series.nextNumber)}
-              </code>
-            ),
-            <PatternChips key="pattern" pattern={series.pattern} year={series.year} />,
-            t(series.reset === 'YEARLY' ? 'docs.reset.YEARLY' : 'docs.reset.NEVER'),
-            String(series.startValue),
-            series.lastIssuedDate ? formatDate(series.lastIssuedDate, { locale }) : t('docs.never'),
-            <Pill key="state" tone={series.status === 'ACTIVE' ? 'success' : 'neutral'}>
-              {t(`docs.status.${series.status}`)}
-            </Pill>,
-          ],
-        }))}
+        rows={model.series.problem ? [] : items === null ? null : rows}
+        rowId={(row) => row.id}
+        columns={columns}
+        count={items ? t('docs.count', { count: rows.length }) : '—'}
+        tools={<ListTools model={model} actions={actions} />}
+        selection={{
+          selected,
+          onChange,
+          actions: (
+            <BulkButton
+              icon={<CircleOff size={13} aria-hidden />}
+              label={reach.applies.length > 0 ? t('docs.bulk.close', { count: reach.applies.length }) : t('docs.bulk.closeNone')}
+              held={closeHeld ? t(closeHeld) : null}
+              variant="danger-outline"
+              onClick={() => actions?.onCloseMany?.(selected)}
+            />
+          ),
+        }}
+        keys={own}
+        onHelp={onHelp}
+        onOpen={(row) => actions?.onDialog?.({ kind: 'series', seriesId: row.id })}
+        state={state}
       />
-      <FiscalCheck model={model} rows={fiscal} actions={actions} />
+      {items && rows.length > 0 && <FiscalCheck model={model} rows={fiscal} actions={actions} />}
+      {help}
     </div>
   )
 }
@@ -340,70 +404,86 @@ function FiscalCheck({ model, rows, actions }: { model: DocumentsViewModel; rows
   )
 }
 
-function Layouts({ model }: { model: DocumentsViewModel }) {
+/** A layout's previews: one link per language (a PDF in a new tab), held while the company's legal data is missing. */
+export function PreviewCell({ company, type }: { company: CompanyOption; type: DocumentType }) {
+  const t = useT('admin-documents')
+  return (
+    <span className="fw-adm-actions">
+      {DOCUMENT_LANGUAGES.map((language) =>
+        company.legalReady ? (
+          <a key={language} className="fw-adm-docs-link" href={sampleHref(company.id, type, language)} target="_blank" rel="noopener noreferrer">
+            {t(`docs.layouts.previewIn.${language}`)} <ExternalLink size={12} aria-hidden />
+            <span className="fw-adm-sr">{t('docs.layouts.newTab')}</span>
+          </a>
+        ) : (
+          <Button key={language} size="sm" variant="quiet" heldReason={t('docs.layouts.heldLegal')}>
+            {t(`docs.layouts.previewIn.${language}`)}
+          </Button>
+        ),
+      )}
+    </span>
+  )
+}
+
+/** The layouts list's columns (one fixed layout per row, previewed with `company`'s data). */
+export function useLayoutColumns(company: CompanyOption | null): ColDef<DocumentType>[] {
+  const t = useT('admin-documents')
+  return useMemo<ColDef<DocumentType>[]>(
+    () => [
+      { colId: 'document', headerName: t('docs.layouts.col.document'), flex: 1.2, minWidth: 180, cellClass: 'fw-adm-name', valueGetter: ({ data }) => (data ? t(`docs.type.${data}`) : '') },
+      { colId: 'layout', headerName: t('docs.layouts.col.layout'), flex: 1.6, minWidth: 220, cellClass: 'fw-adm-hint', valueGetter: () => t('docs.layouts.fixed') },
+      {
+        colId: 'preview',
+        headerName: t('docs.layouts.col.preview'),
+        flex: 1.2,
+        minWidth: 220,
+        cellRenderer: ({ data }: ICellRendererParams<DocumentType>) => (data && company ? <PreviewCell company={company} type={data} /> : null),
+      },
+    ],
+    [t, company],
+  )
+}
+
+function Layouts({ model, actions }: { model: DocumentsViewModel; actions?: DocumentsActions }) {
   const t = useT('admin-documents')
   const company = sampleCompany(model)
-  if (!model.can.documents) {
-    return (
-      <Card padded>
-        <EmptyState icon={<FileText size={24} aria-hidden />} title={t('docs.layouts.noRightTitle')} description={t('docs.layouts.noRight')} />
-      </Card>
-    )
-  }
-  if (model.companies.problem || model.companies.items === null) return <ListState problem={model.companies.problem} loading={model.companies.items === null} />
-  if (!company) return <ListState loading={false} empty={{ title: t('docs.layouts.noCompanyTitle'), body: t('docs.layouts.noCompany') }} />
+  const columns = useLayoutColumns(company)
+  const own = usePageKeys()
+  const { onHelp, help } = useKeysHelp(own, false)
+  const state: ReactNode = !model.can.documents ? (
+    <EmptyState icon={<FileText size={24} aria-hidden />} title={t('docs.layouts.noRightTitle')} description={t('docs.layouts.noRight')} />
+  ) : model.companies.problem ? (
+    <ListProblem problem={model.companies.problem} onRetry={actions?.onRetry} />
+  ) : model.companies.items !== null && !company ? (
+    <EmptyState title={t('docs.layouts.noCompanyTitle')} description={t('docs.layouts.noCompany')} />
+  ) : undefined
   return (
-    <Card className="fw-adm-tablecard">
-      {!company.legalReady && (
-        <div className="fw-adm-docs-banner">
-          <Banner
-            tone="warning"
-            title={t('docs.layouts.notReady', { name: company.legalName, count: company.legalMissing })}
-            action={
-              <Link className="fw-adm-docs-link" href={adminHref(model.prefix, `/companies/${company.id}?tab=legal`)}>
-                {t('docs.layouts.fixLegal')}
-              </Link>
-            }
-          />
-        </div>
-      )}
-      <p className="fw-adm-count">{t('docs.layouts.with', { name: company.legalName })}</p>
-      <div className="fw-adm-table">
-        <SummaryTable
-          label={t('docs.layouts.label')}
-          density="roomy"
-          stackOnPhone
-          columns={[t('docs.layouts.col.document'), t('docs.layouts.col.layout'), t('docs.layouts.col.preview')]}
-          widths={['30%', '40%', '30%']}
-          align={['left', 'left', 'left']}
-          rows={DOCUMENT_TYPES.map((type) => ({
-            id: type,
-            cells: [
-              <span key="name" className="fw-adm-name">
-                {t(`docs.type.${type}`)}
-              </span>,
-              <span key="layout" className="fw-adm-hint">
-                {t('docs.layouts.fixed')}
-              </span>,
-              <span key="preview" className="fw-adm-actions">
-                {DOCUMENT_LANGUAGES.map((language) =>
-                  company.legalReady ? (
-                    <a key={language} className="fw-adm-docs-link" href={sampleHref(company.id, type, language)} target="_blank" rel="noopener noreferrer">
-                      {t(`docs.layouts.previewIn.${language}`)} <ExternalLink size={12} aria-hidden />
-                      <span className="fw-adm-sr">{t('docs.layouts.newTab')}</span>
-                    </a>
-                  ) : (
-                    <Button key={language} size="sm" variant="quiet" heldReason={t('docs.layouts.heldLegal')}>
-                      {t(`docs.layouts.previewIn.${language}`)}
-                    </Button>
-                  ),
-                )}
-              </span>,
-            ],
-          }))}
+    <div className="fw-adm-stack">
+      {model.can.documents && company && !company.legalReady && (
+        <Banner
+          tone="warning"
+          title={t('docs.layouts.notReady', { name: company.legalName, count: company.legalMissing })}
+          action={
+            <Link className="fw-adm-docs-link" href={adminHref(model.prefix, `/companies/${company.id}?tab=legal`)}>
+              {t('docs.layouts.fixLegal')}
+            </Link>
+          }
         />
-      </div>
-    </Card>
+      )}
+      {model.can.documents && company && <p className="fw-adm-hint">{t('docs.layouts.with', { name: company.legalName })}</p>}
+      <ListFrame<DocumentType>
+        label={t('docs.layouts.label')}
+        rows={state ? [] : model.companies.items === null ? null : DOCUMENT_TYPES}
+        rowId={(type) => type}
+        columns={columns}
+        count={t('docs.layouts.count', { count: DOCUMENT_TYPES.length })}
+        tools={<ListTools model={model} actions={actions} />}
+        keys={own}
+        onHelp={onHelp}
+        state={state}
+      />
+      {help}
+    </div>
   )
 }
 
@@ -480,7 +560,7 @@ function NewSeriesModal({ model, actions }: { model: DocumentsViewModel; actions
           </Field>
           <Field label={t('docs.field.kind')} required>
             <Select value={draft.kind} onChange={(event) => setDraft(withKind(draft, event.target.value as SeriesDraft['kind'], 2026))}>
-              {NUMBER_KINDS.map((kind) => (
+              {DOCUMENT_KINDS.map((kind) => (
                 <option key={kind} value={kind}>
                   {t(kindKey(kind))}
                 </option>
@@ -751,16 +831,98 @@ function CloseSeriesModal({ model, actions }: { model: DocumentsViewModel; actio
 }
 
 /** A record type in words; a type without words of its own is shown as the API names it. */
+
+/**
+ * "Close N series" (bulk; each series is one `POST /numbering/series/:id/close` with its version): the same consequences
+ * as closing one, the series it applies to, the selected ones it leaves out and why, and — for each company and
+ * document that would be left without an active series — the warning before the click.
+ */
+function CloseManyModal({ model, actions }: { model: DocumentsViewModel; actions?: DocumentsActions }) {
+  const t = useT('admin-documents')
+  const words = useWords('admin-documents')
+  const ta = useT('admin')
+  const [reason, setReason] = useState('')
+  const ids = model.closeMany ?? null
+  const key = ids?.join('|') ?? ''
+  useEffect(() => setReason(''), [key])
+  if (!ids) return null
+  const all = model.series.items ?? []
+  const chosen = ids.flatMap((id) => all.filter((row) => row.id === id))
+  const reach = closeReach(chosen)
+  const alone = leftWithout(reach.applies, all)
+  const count = reach.applies.length
+  const held = bulkHeld(reach, model.can.manage, { right: 'docs.held.manage', none: 'docs.bulk.none' })
+  const close = () => actions?.onCloseMany?.(null)
+  return (
+    <Modal
+      open
+      onClose={close}
+      title={t('docs.bulk.title', { count })}
+      size="md"
+      busy={model.busy}
+      footer={
+        <>
+          <Button onClick={close}>{ta('common.cancel')}</Button>
+          <Button variant="danger" heldReason={held ? t(held) : model.busy ? ta('common.saving') : null} onClick={() => void actions?.onCloseManyGo?.(reach.applies, reason.trim())}>
+            {t('docs.bulk.go', { count })}
+          </Button>
+        </>
+      }
+    >
+      <div className="fw-adm-modal-body">
+        {model.dialogProblem && <Banner tone="danger" title={words(model.dialogProblem)} />}
+        <BulkReach
+          label={t('docs.bulk.listLabel')}
+          names={reach.applies.map((series) => {
+            const company = model.companyId === 'all' ? companyName(model, series.companyId) : null
+            return company ? `${seriesName(t, series)} — ${company}` : seriesName(t, series)
+          })}
+          left={leftCounts(reach).map((entry) => ({ ...entry, words: t(entry.why, { count: entry.count }) }))}
+        />
+        <ul className="fw-adm-docs-consequences">
+          <li>{t('docs.bulk.noMore')}</li>
+          <li>{t('docs.bulk.stay')}</li>
+          <li>{t('docs.close.final')}</li>
+        </ul>
+        {alone.map((entry) => (
+          <Banner key={`${entry.companyId}-${entry.kind}`} tone="warning" title={t('docs.bulk.alone', { company: companyName(model, entry.companyId) ?? '—', kind: t(kindKey(entry.kind)) })} />
+        ))}
+        <Field label={ta('common.reason')} hint={t('docs.bulk.reasonHint')}>
+          <Textarea rows={2} limit={500} value={reason} onChange={(event) => setReason(event.target.value)} />
+        </Field>
+      </div>
+    </Modal>
+  )
+}
+
+/** A record type in words; a type without words of its own is shown as the API names it. */
 function recordWord(t: (key: string) => string, recordType: string): string {
   const key = `docs.record.${recordType}`
   const words = t(key)
   return words === key ? recordType : words
 }
 
+/** The "numbers issued" list's columns (one number per row, newest first). */
+export function useNumberColumns(): ColDef<Allocation>[] {
+  const t = useT('admin-documents')
+  const locale = useLocale()
+  return useMemo<ColDef<Allocation>[]>(
+    () => [
+      { colId: 'number', headerName: t('docs.numbers.col.number'), flex: 1.2, minWidth: 160, cellClass: 'fw-adm-code', valueGetter: ({ data }) => data?.formatted ?? '' },
+      { colId: 'date', headerName: t('docs.numbers.col.date'), flex: 1, minWidth: 130, valueGetter: ({ data }) => (data ? formatDate(data.documentDate, { locale }) : '') },
+      { colId: 'record', headerName: t('docs.numbers.col.record'), flex: 1, minWidth: 120, valueGetter: ({ data }) => (data ? recordWord(t, data.recordType) : '') },
+      { colId: 'who', headerName: t('docs.numbers.col.who'), flex: 1, minWidth: 140, valueGetter: ({ data }) => (data ? (data.allocatedByName ?? t('docs.numbers.system')) : '') },
+      { colId: 'when', headerName: t('docs.numbers.col.when'), flex: 1.2, minWidth: 170, valueGetter: ({ data }) => (data ? formatDateTime(data.allocatedAt, { locale }) : '') },
+    ],
+    [t, locale],
+  )
+}
+
 function NumbersModal({ model, actions }: { model: DocumentsViewModel; actions?: DocumentsActions }) {
   const t = useT('admin-documents')
   const ta = useT('admin')
-  const locale = useLocale()
+  const columns = useNumberColumns()
+  const { onHelp, help } = useKeysHelp([], false)
   const dialog = model.dialog?.kind === 'numbers' ? model.dialog : null
   const all = model.series.items ?? []
   const series = dialog ? all.find((row) => row.id === dialog.seriesId) : undefined
@@ -769,32 +931,8 @@ function NumbersModal({ model, actions }: { model: DocumentsViewModel; actions?:
   const numbers = model.numbers?.seriesId === dialog.seriesId ? model.numbers : null
   const read = numbers?.read
   const proof = numbers?.proof ?? null
+  const items = read?.items ?? null
   const title = series ? t('docs.numbers.title', { kind: t(kindKey(series.kind)), period: periodOf(series) ?? '' }) : t('docs.seriesDialog.missing')
-  const body: ReactNode = !read || read.items === null ? null : read.items.length === 0 ? (
-    <EmptyState title={t('docs.numbers.emptyTitle')} description={t('docs.numbers.empty')} />
-  ) : (
-    <div className="fw-adm-table">
-      <SummaryTable
-        label={t('docs.numbers.label')}
-        density="roomy"
-        stackOnPhone
-        columns={[t('docs.numbers.col.number'), t('docs.numbers.col.date'), t('docs.numbers.col.record'), t('docs.numbers.col.who'), t('docs.numbers.col.when')]}
-        align={['left', 'left', 'left', 'left', 'left']}
-        rows={read.items.map((item) => ({
-          id: item.formatted,
-          cells: [
-            <code key="n" className="fw-adm-code">
-              {item.formatted}
-            </code>,
-            formatDate(item.documentDate, { locale }),
-            recordWord(t, item.recordType),
-            item.allocatedByName ?? t('docs.numbers.system'),
-            formatDateTime(item.allocatedAt, { locale }),
-          ],
-        }))}
-      />
-    </div>
-  )
   return (
     <DetailModal
       open
@@ -807,17 +945,24 @@ function NumbersModal({ model, actions }: { model: DocumentsViewModel; actions?:
       nav={nav.length > 1 && nav.some((row) => row.id === dialog.seriesId) ? { ids: nav.map((row) => row.id), current: dialog.seriesId, onGo: (id) => actions?.onDialog?.({ kind: 'numbers', seriesId: id }), noun: t('docs.numbers.noun') } : undefined}
     >
       <div className="fw-adm-modal-body">
-        {proof && series && (
-          <>
-            {proof.skipped.length > 0 ? (
-              <Banner tone="warning" title={t('docs.numbers.skippedTitle', { ranges: skippedWords(proof) })}>{t('docs.numbers.skippedBody')}</Banner>
-            ) : proof.count > 0 ? (
-              <Banner tone="success" title={t('docs.fiscal.noGaps', { first: proof.firstFormatted ?? '', last: proof.lastFormatted ?? '', count: proof.count })} />
-            ) : null}
-            <p className="fw-adm-hint">{t('docs.numbers.shown', { shown: read?.items?.length ?? 0, count: proof.count })}</p>
-          </>
+        {proof && series && proof.skipped.length > 0 ? (
+          <Banner tone="warning" title={t('docs.numbers.skippedTitle', { ranges: skippedWords(proof) })}>{t('docs.numbers.skippedBody')}</Banner>
+        ) : proof && series && proof.count > 0 ? (
+          <Banner tone="success" title={t('docs.fiscal.noGaps', { first: proof.firstFormatted ?? '', last: proof.lastFormatted ?? '', count: proof.count })} />
+        ) : null}
+        {items && (
+          <ListFrame<Allocation>
+            label={t('docs.numbers.label')}
+            rows={items}
+            rowId={(item) => item.formatted}
+            columns={columns}
+            count={proof ? t('docs.numbers.shown', { shown: items.length, count: proof.count }) : t('docs.numbers.count', { count: items.length })}
+            onHelp={onHelp}
+            rowKind="text"
+            state={items.length === 0 ? <EmptyState title={t('docs.numbers.emptyTitle')} description={t('docs.numbers.empty')} /> : undefined}
+          />
         )}
-        {body}
+        {help}
       </div>
     </DetailModal>
   )

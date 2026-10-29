@@ -323,6 +323,9 @@
       "isDefault": "default",
       "reset": "starts again",
       "fiscal": "fiscal"
+    },
+    "keys": {
+      "mode": "Switch between story and table"
     }
   }
 }

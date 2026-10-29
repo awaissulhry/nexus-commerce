@@ -6,8 +6,10 @@ import { newIdempotencyKey } from '../../../lib/api/client'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { listCompanies } from '../shared/api'
-import { failed, loaded, loading, problemKey, problemNotice, type Loaded, type Notice } from '../shared/model'
+import { failed, loaded, loading, problemKey, problemNotice, type Loaded } from '../shared/model'
 import { isStepUpCancelled, useStepUp } from '../shared/step-up'
+import { runBulk } from '../kit/bulk'
+import { bulkNotice, type BulkNotice } from '../kit/bulk-model'
 import { advanceSeries, closeSeries, createSeries, listSeries, seriesAllocations, setSeriesStart, type Allocation, type Series, type SeriesProof } from './api'
 import { draftBody, fiscalRows, hasIssued, legalOf, type CompanyOption, type DocumentsDialog, type DocumentsView as ViewName, type ProofRead, type SeriesDraft } from './model'
 import { DocumentsView } from './view/DocumentsView'
@@ -51,7 +53,9 @@ export function DocumentsPage() {
   const [asOf, setAsOf] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [dialogProblem, setDialogProblem] = useState<string | null>(null)
-  const [notice, setNotice] = useState<Notice | null>(null)
+  const [notice, setNotice] = useState<BulkNotice | null>(null)
+  const [selected, setSelected] = useState<readonly string[]>([])
+  const [closeMany, setCloseMany] = useState<readonly string[] | null>(null)
   const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
   const createKey = useRef<string | null>(null)
 
@@ -161,7 +165,7 @@ export function DocumentsPage() {
 
   return (
     <DocumentsView
-      model={{ prefix, view, companies, companyId, series, proofs, asOf, can, dialog, numbers, notice, busy, dialogProblem, stepUp }}
+      model={{ prefix, view, companies, companyId, series, proofs, asOf, can, dialog, numbers, selected, closeMany, notice, busy, dialogProblem, stepUp }}
       actions={{
         onView: (next) => go({ view: next }),
         onCompany: (next) => go({ company: next }),
@@ -203,6 +207,30 @@ export function DocumentsPage() {
             setNotice({ key: 'docs.done.closed', tone: 'success', params: { code: row.code } })
             go({ dialog: null })
           }),
+        onSelect: setSelected,
+        onCloseMany: (ids) => {
+          setDialogProblem(null)
+          setCloseMany(ids)
+        },
+        onCloseManyGo: async (rows, reason) => {
+          setBusy(true)
+          setDialogProblem(null)
+          try {
+            // One call per series (the API closes one at a time), each with the version read; a code asked once covers the rest.
+            const result = await runBulk(rows, async (row) => replaceRow(await guard('stepUp.sentence.default', () => closeSeries(api, row.id, { version: row.version, ...(reason ? { reason } : {}) }))))
+            const done = new Set(result.done.map((row) => row.id))
+            setSelected((current) => current.filter((id) => !done.has(id)))
+            setNotice(bulkNotice(result, { done: 'docs.bulk.done', partial: 'docs.bulk.partial', failed: 'docs.bulk.failed' }, (row) => row.id))
+            setCloseMany(null)
+            if (result.refused.some((entry) => entry.problem === 'problem.conflict')) void load()
+          } catch (error) {
+            // The code dialog was closed: the rest was not tried; read again what was done.
+            if (!isStepUpCancelled(error)) setDialogProblem(problemKey(error))
+            void load()
+          } finally {
+            setBusy(false)
+          }
+        },
         onSubmitStepUp: (code) => void submitStepUp(code),
         onCancelStepUp: cancelStepUp,
       }}

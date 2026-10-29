@@ -1,14 +1,19 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
-import Link from 'next/link'
-import { MoreHorizontal, Search } from 'lucide-react'
-import { Banner, Card, Field, Menu, MetricStrip, Modal, SummaryTable } from '@nexus/ui/components'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { MoreHorizontal, Pause, Play, Search } from 'lucide-react'
+import { Banner, EmptyState, Field, Menu, MetricStrip, Modal } from '@nexus/ui/components'
+import { IdentityCell, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, Tag, Textarea } from '@nexus/ui/primitives'
-import { formatDateTime, formatTime } from '../../../../lib/i18n/format'
+import { formatDateTime, formatNumber, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
-import { adminHref, pageOf } from '../../shared/model'
-import { dash, ListState, ListTable, PageHead } from '../../shared/view/parts'
+import { ListFrame } from '../../../../list-frame/ListFrame'
+import type { ListKey } from '../../../../list-frame/model'
+import { bulkHeld, leftCounts } from '../../kit/bulk-model'
+import { BulkButton, BulkReach, ListProblem, useKeysHelp, useLatest, useSelection } from '../../kit/list'
+import { PageNotice } from '../../kit/parts'
+import { adminHref } from '../../shared/model'
+import { PageHead } from '../../shared/view/parts'
 import type { IntegrationAccount, IntegrationProvider } from '../api'
 import { MailDomainSection, type MailDomainActions } from '../mail/view/MailDomainSection'
 import {
@@ -21,23 +26,34 @@ import {
   residencyRows,
   sameDay,
   serviceRows,
+  switchReach,
   tileMatch,
+  type BulkSwitch,
+  type CompanyChoice,
   type ConnectionsViewModel,
   type ConnectionTile,
   type PauseConfirm,
+  type ServiceRow,
 } from '../model'
-import { ConnectionsMessages, ConnNotice, ConnStepUp } from './parts'
+import { ConnectionsMessages, ConnStepUp } from './parts'
 
 export type { ConnectionsViewModel } from '../model'
 
 export interface ConnectionsActions {
   onTile?: (tile: ConnectionTile | null) => void
   onQuery?: (query: string) => void
-  onPage?: (page: number) => void
   onRetry?: () => void
   onConnect?: (open: boolean) => void
   onConfirm?: (confirm: PauseConfirm | null) => void
   onSwitch?: (account: IntegrationAccount, pause: boolean, reason: string) => Promise<boolean>
+  /** Enter on a connected service: its record. */
+  onOpen?: (account: IntegrationAccount) => void
+  /** The rows ticked in the services list. */
+  onSelect?: (ids: string[]) => void
+  /** Opens (rows) or closes (null) the bulk pause or resume confirm. */
+  onBulk?: (bulk: BulkSwitch | null) => void
+  /** Pauses or resumes these accounts, one call each; one notice says what was done. */
+  onBulkGo?: (accounts: readonly IntegrationAccount[], pause: boolean, reason: string) => Promise<void> | void
   onDismissNotice?: () => void
   onStepUp?: (code: string) => void
   onStepUpClose?: () => void
@@ -47,9 +63,10 @@ export interface ConnectionsActions {
 /**
  * SCR-087 — Admin › Connections & API (design 02 admin.connections; PLT-139, PLT-195, PLT-197, PLT-011): every rented
  * service in one list, said for an owner — what it is for, whether it works, in which mode (Fake and Test reach nobody:
- * the page says so on top) — with a "Not connected" row for each service nobody connected; the mail domain (SCR-015,
- * `#mail`); where the data lives, from what the connections themselves say. Pause and resume after a confirm. Connecting
- * a service is held in words (no route adds one yet). `c` opens the catalogue. Fetches nothing (ConnectionsPage.tsx).
+ * the page says so on top) — with a "Not connected" row for each service nobody connected; tick services to pause or
+ * resume several at once (after one confirm); the mail domain (SCR-015, `#mail`); where the data lives, from what the
+ * connections themselves say. Both lists are the Office's list frame (Owner rule 2026-10-29). Connecting a service is
+ * held in words (no route adds one yet). `c` opens the catalogue. Fetches nothing (ConnectionsPage.tsx).
  */
 export function ConnectionsView({ model, actions }: { model: ConnectionsViewModel; actions?: ConnectionsActions }) {
   return (
@@ -70,19 +87,157 @@ export function useStateWords(now: string) {
   }
 }
 
+/** A row of the services list: the service (a link to its record) with its label and code, or "Not connected". */
+export function ServiceCell({ row, prefix }: { row: ServiceRow; prefix: string }) {
+  const t = useT('admin-connections')
+  const name = t(`conn.provider.${row.kind === 'account' ? row.account.provider : row.provider}.name`)
+  if (row.kind === 'missing') return <IdentityCell noImage title={name} titleAttr={name} sub={<Tag>{t('conn.notConnected')}</Tag>} />
+  return (
+    <IdentityCell
+      noImage
+      title={name}
+      titleAttr={name}
+      href={adminHref(prefix, `/connections/${row.account.id}`)}
+      sub={
+        <span className="fw-adm-ellipsis">
+          {row.account.label} · <span className="fw-adm-code">{row.account.code}</span>
+        </span>
+      }
+    />
+  )
+}
+
+/** Whether a service works: its state in words, and the last error as the service said it (data, quoted). */
+export function StateCell({ row, now }: { row: ServiceRow; now: string }) {
+  const t = useT('admin-connections')
+  const stateWords = useStateWords(now)
+  if (row.kind === 'missing') return <span className="fw-adm-hint">{t('conn.notConnectedHint')}</span>
+  const account = row.account
+  const state = stateWords(account)
+  return (
+    <span className="fw-adm-two">
+      <span>
+        <Pill tone={state.tone}>{state.words}</Pill>
+      </span>
+      {state.key === 'failing' && account.lastError && (
+        <q className="fw-adm-conn-error" title={account.lastError}>
+          {account.lastError}
+        </q>
+      )}
+    </span>
+  )
+}
+
+/** Calls in the last 24 hours (the column says so: the number alone), how many failed, the received messages waiting. */
+export function CallsCell({ account }: { account: IntegrationAccount }) {
+  const t = useT('admin-connections')
+  const locale = useLocale()
+  return (
+    <span className="fw-adm-inline" title={t('conn.callCount', { count: account.calls24h.total })}>
+      <span>{formatNumber(account.calls24h.total, locale)}</span>
+      {account.calls24h.failed > 0 && <Tag tone="danger">{t('conn.callsFailed', { count: account.calls24h.failed })}</Tag>}
+      {account.inboundWaiting > 0 && <Tag tone="info">{t('conn.waiting', { count: account.inboundWaiting })}</Tag>}
+    </span>
+  )
+}
+
+/** The services list's columns. `onConnect` opens the catalogue from a "Not connected" row; `onConfirm` asks to pause or resume one. */
+export function useServiceColumns(model: Pick<ConnectionsViewModel, 'prefix' | 'now' | 'companies' | 'can'>, actions?: Pick<ConnectionsActions, 'onConnect' | 'onConfirm'>): ColDef<ServiceRow>[] {
+  const t = useT('admin-connections')
+  const tAdmin = useT('admin')
+  const { prefix, now, companies, can } = model
+  const latest = useLatest(actions)
+  return useMemo<ColDef<ServiceRow>[]>(() => {
+    const onConnect = (open: boolean) => latest.current?.onConnect?.(open)
+    const onConfirm = (confirm: PauseConfirm) => latest.current?.onConfirm?.(confirm)
+    const companyName = (id: string | null) => (id === null ? t('conn.everyCompany') : (companies?.find((company: CompanyChoice) => company.id === id)?.name ?? '—'))
+    const provider = (row: ServiceRow): IntegrationProvider => (row.kind === 'account' ? row.account.provider : row.provider)
+    const manageHeld = can.manage ? null : tAdmin('held.needs', { right: t('conn.right.manage') })
+    const href = (path: string) => adminHref(prefix, path)
+    return [
+      { colId: 'service', headerName: t('conn.col.service'), flex: 1.6, minWidth: 180, cellRenderer: ({ data }: ICellRendererParams<ServiceRow>) => (data ? <ServiceCell row={data} prefix={prefix} /> : null) },
+      { colId: 'for', headerName: t('conn.col.for'), flex: 1.8, minWidth: 165, valueGetter: ({ data }) => (data ? t(`conn.provider.${provider(data)}.for`) : ''), tooltipValueGetter: ({ value }) => value as string },
+      { colId: 'company', headerName: t('conn.col.company'), flex: 1.2, minWidth: 140, valueGetter: ({ data }) => (data ? companyName(data.kind === 'account' ? data.account.companyId : data.companyId) : '') },
+      {
+        colId: 'mode',
+        headerName: t('conn.col.mode'),
+        flex: 0.8,
+        minWidth: 120,
+        cellRenderer: ({ data }: ICellRendererParams<ServiceRow>) =>
+          data?.kind === 'account' ? <Pill tone={MODE_TONE[data.account.mode]}>{t(`conn.mode.${data.account.mode}`)}</Pill> : data ? '—' : null,
+      },
+      { colId: 'state', headerName: t('conn.col.state'), flex: 1.6, minWidth: 185, cellRenderer: ({ data }: ICellRendererParams<ServiceRow>) => (data ? <StateCell row={data} now={now} /> : null) },
+      { colId: 'calls', headerName: t('conn.col.calls'), flex: 1, minWidth: 150, cellRenderer: ({ data }: ICellRendererParams<ServiceRow>) => (data?.kind === 'account' ? <CallsCell account={data.account} /> : data ? '—' : null) },
+      {
+        colId: 'region',
+        headerName: t('conn.col.region'),
+        flex: 0.8,
+        minWidth: 115,
+        cellRenderer: ({ data }: ICellRendererParams<ServiceRow>) => {
+          if (!data) return null
+          const region = data.kind === 'account' ? data.account.settings.region : null
+          return typeof region === 'string' && region ? <span className="fw-adm-code">{region}</span> : '—'
+        },
+      },
+      {
+        colId: 'actions',
+        headerName: tAdmin('common.actions'),
+        flex: 0.9,
+        minWidth: 150,
+        sortable: false,
+        cellRenderer: ({ data }: ICellRendererParams<ServiceRow>) => {
+          if (!data) return null
+          if (data.kind === 'missing')
+            return (
+              <Button size="sm" variant="quiet" onClick={() => onConnect(true)}>
+                {t('conn.connect.row')}
+              </Button>
+            )
+          const account = data.account
+          return (
+            <Menu
+              align="right"
+              label={<MoreHorizontal size={16} aria-hidden />}
+              triggerProps={{ 'aria-label': tAdmin('common.moreFor', { name: account.label }) }}
+              items={[
+                { id: 'open', label: t('conn.open'), href: href(`/connections/${account.id}`) },
+                { id: 'calls', label: t('conn.tab.calls'), href: `${href(`/connections/${account.id}`)}?tab=calls` },
+                ...(account.status === 'ACTIVE' || account.status === 'PAUSED'
+                  ? [
+                      {
+                        id: 'switch',
+                        label: account.status === 'ACTIVE' ? t('conn.pause.action') : t('conn.resume.action'),
+                        disabled: !can.manage,
+                        description: manageHeld ?? undefined,
+                        onSelect: () => onConfirm({ accountId: account.id, pause: account.status === 'ACTIVE' }),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          )
+        },
+      },
+    ]
+  }, [t, tAdmin, prefix, now, companies, can.manage, latest])
+}
+
+/** The page's own key, listed in the list's footer icon. */
+function usePageKeys(): ListKey[] {
+  const t = useT('admin-connections')
+  return [{ keys: ['c'], does: t('conn.keys.connect') }]
+}
+
 function Connections({ model, actions }: { model: ConnectionsViewModel; actions?: ConnectionsActions }) {
   const t = useT('admin-connections')
   const tAdmin = useT('admin')
-  const href = (path: string) => adminHref(model.prefix, path)
-  const stateWords = useStateWords(model.now)
   const providerName = (provider: IntegrationProvider) => t(`conn.provider.${provider}.name`)
-  const companyName = (id: string | null) => (id === null ? t('conn.everyCompany') : (model.companies?.find((company) => company.id === id)?.name ?? null))
 
   // c: connect a service (when no field has the focus and no dialog is open), as the design's keyboard says.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (event.metaKey || event.ctrlKey || event.altKey || model.connect || model.confirm || model.mail?.add) return
+      if (event.metaKey || event.ctrlKey || event.altKey || model.connect || model.confirm || model.bulk || model.mail?.add) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]') || target.isContentEditable)) return
       if (event.key !== 'c') return
       event.preventDefault()
@@ -95,92 +250,39 @@ function Connections({ model, actions }: { model: ConnectionsViewModel; actions?
   const accounts = model.accounts.items
   const live = (accounts ?? []).filter((account) => account.status !== 'DISABLED')
   const testing = live.filter((account) => isTestMode(account.mode))
-  const rows = accounts ? serviceRows(accounts, model.companies, model.tile, model.query, providerName) : []
-  const paged = pageOf(rows, model.page)
+  // serviceRows reads the provider names through `t`; the rows change with the accounts, companies and filters.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const rows = useMemo(() => (accounts ? serviceRows(accounts, model.companies, model.tile, model.query, providerName) : []), [accounts, model.companies, model.tile, model.query, t])
+  const { selected, onChange } = useSelection(model.selected, actions?.onSelect, rows.map((row) => row.id))
+  const columns = useServiceColumns(model, actions)
+  const own = usePageKeys()
+  const { onHelp, help } = useKeysHelp(own, true)
   const confirming = model.confirm ? (accounts ?? []).find((account) => account.id === model.confirm!.accountId) ?? null : null
-  const manageHeld = model.can.manage ? null : tAdmin('held.needs', { right: t('conn.right.manage') })
+  const picked = rows.filter((row) => selected.includes(row.id))
+  const pauseReach = switchReach(picked, true)
+  const resumeReach = switchReach(picked, false)
+  const pauseHeld = bulkHeld(pauseReach, model.can.manage, { right: 'held.needs', none: 'conn.bulk.noneToPause' })
+  const resumeHeld = bulkHeld(resumeReach, model.can.manage, { right: 'held.needs', none: 'conn.bulk.noneToResume' })
+  const heldWords = (key: string | null) => (key === null ? null : key === 'held.needs' ? tAdmin('held.needs', { right: t('conn.right.manage') }) : t(key))
 
-  const table: Array<{ id: string; cells: ReactNode[] }> = paged.rows.map((row) => {
-    if (row.kind === 'missing') {
-      return {
-        id: row.id,
-        cells: [
-          <span key="service" className="fw-adm-cell">
-            <span className="fw-adm-name">{providerName(row.provider)}</span>
-            <Tag>{t('conn.notConnected')}</Tag>
-          </span>,
-          t(`conn.provider.${row.provider}.for`),
-          dash(companyName(row.companyId)),
-          '—',
-          <span key="state" className="fw-adm-hint">
-            {t('conn.notConnectedHint')}
-          </span>,
-          '—',
-          '—',
-          <Button key="connect" size="sm" variant="quiet" onClick={() => actions?.onConnect?.(true)}>
-            {t('conn.connect.row')}
-          </Button>,
-        ],
+  const state: ReactNode = model.accounts.problem ? (
+    <ListProblem problem={model.accounts.problem} onRetry={actions?.onRetry} />
+  ) : accounts && rows.length === 0 ? (
+    <EmptyState
+      title={tAdmin('list.noMatch')}
+      action={
+        <Button
+          size="sm"
+          onClick={() => {
+            actions?.onQuery?.('')
+            actions?.onTile?.(null)
+          }}
+        >
+          {tAdmin('list.clearFilters')}
+        </Button>
       }
-    }
-    const account = row.account
-    const state = stateWords(account)
-    const region = account.settings.region
-    return {
-      id: row.id,
-      cells: [
-        <span key="service" className="fw-adm-cell">
-          <Link className="fw-adm-name" href={href(`/connections/${account.id}`)}>
-            {providerName(account.provider)}
-          </Link>
-          <span className="fw-adm-hint">
-            {account.label} · <span className="fw-adm-code">{account.code}</span>
-          </span>
-        </span>,
-        t(`conn.provider.${account.provider}.for`),
-        dash(companyName(account.companyId)),
-        <Pill key="mode" tone={MODE_TONE[account.mode]}>
-          {t(`conn.mode.${account.mode}`)}
-        </Pill>,
-        <span key="state" className="fw-adm-cell">
-          <Pill tone={state.tone}>{state.words}</Pill>
-          {state.key === 'failing' && account.lastError && (
-            <>
-              <span className="fw-adm-hint">{t('conn.lastErrorSaid')}</span>
-              <q className="fw-adm-conn-error">{account.lastError}</q>
-            </>
-          )}
-        </span>,
-        <span key="calls" className="fw-adm-cell">
-          <span>{t('conn.callCount', { count: account.calls24h.total })}</span>
-          {account.calls24h.failed > 0 && <Tag tone="danger">{t('conn.callsFailed', { count: account.calls24h.failed })}</Tag>}
-          {account.inboundWaiting > 0 && <Tag tone="info">{t('conn.waiting', { count: account.inboundWaiting })}</Tag>}
-        </span>,
-        typeof region === 'string' && region ? <span className="fw-adm-code">{region}</span> : '—',
-        <Menu
-          key="more"
-          align="right"
-          label={<MoreHorizontal size={16} aria-hidden />}
-          triggerProps={{ 'aria-label': tAdmin('common.moreFor', { name: account.label }) }}
-          items={[
-            { id: 'open', label: t('conn.open'), href: href(`/connections/${account.id}`) },
-            { id: 'calls', label: t('conn.tab.calls'), href: `${href(`/connections/${account.id}`)}?tab=calls` },
-            ...(account.status === 'ACTIVE' || account.status === 'PAUSED'
-              ? [
-                  {
-                    id: 'switch',
-                    label: account.status === 'ACTIVE' ? t('conn.pause.action') : t('conn.resume.action'),
-                    disabled: !model.can.manage,
-                    description: manageHeld ?? undefined,
-                    onSelect: () => actions?.onConfirm?.({ accountId: account.id, pause: account.status === 'ACTIVE' }),
-                  },
-                ]
-              : []),
-          ]}
-        />,
-      ],
-    }
-  })
+    />
+  ) : undefined
 
   return (
     <div className="fw-adm">
@@ -198,7 +300,7 @@ function Connections({ model, actions }: { model: ConnectionsViewModel; actions?
           {t('conn.testMode.body', { services: testing.map((account) => account.label).join(', ') })}
         </Banner>
       )}
-      <ConnNotice notice={model.notice} onDismiss={actions?.onDismissNotice} />
+      <PageNotice namespace="admin-connections" notice={model.notice} onDismiss={actions?.onDismissNotice} nameOf={(id) => (accounts ?? []).find((account) => account.id === id)?.label ?? id} />
       <MetricStrip
         metrics={CONNECTION_TILES.map((tile) => ({
           label: t(`conn.tile.${tile}`),
@@ -208,90 +310,175 @@ function Connections({ model, actions }: { model: ConnectionsViewModel; actions?
           onClick: () => actions?.onTile?.(model.tile === tile ? null : tile),
         }))}
       />
-      <div className="fw-adm-toolbar">
-        <span className="fw-adm-toolbar-search">
-          <Input size="sm" fieldClassName="fw-adm-fill" type="search" leadingIcon={<Search size={14} aria-hidden />} aria-label={t('conn.search')} placeholder={t('conn.search')} value={model.query} onChange={(event) => actions?.onQuery?.(event.target.value)} />
-        </span>
-        {model.tile && (
-          <span className="fw-adm-tags">
-            <Tag tone="info">{t('conn.filtered', { tile: t(`conn.tile.${model.tile}`) })}</Tag>
-            <Button size="sm" variant="quiet" onClick={() => actions?.onTile?.(null)}>
-              {tAdmin('list.clearFilter')}
-            </Button>
-          </span>
-        )}
-      </div>
-      {model.accounts.problem || accounts === null ? (
-        <ListState problem={model.accounts.problem} loading={accounts === null} onRetry={actions?.onRetry} />
-      ) : rows.length === 0 && live.length > 0 ? (
-        <ListState
-          loading={false}
-          empty={{
-            title: tAdmin('list.noMatch'),
-            action: (
-              <Button
-                size="sm"
-                onClick={() => {
-                  actions?.onQuery?.('')
-                  actions?.onTile?.(null)
-                }}
-              >
-                {tAdmin('list.clearFilters')}
+      {accounts && live.length === 0 && <Banner tone="info" title={t('conn.empty.title')}>{t('conn.empty.body')}</Banner>}
+      <ListFrame<ServiceRow>
+        label={t('conn.tableLabel')}
+        rows={model.accounts.problem ? [] : accounts === null ? null : rows}
+        rowId={(row) => row.id}
+        columns={columns}
+        count={accounts ? t('conn.count', { count: rows.length }) : '—'}
+        search={
+          <Input
+            size="sm"
+            type="search"
+            leadingIcon={<Search size={14} aria-hidden />}
+            aria-label={t('conn.search')}
+            placeholder={t('conn.search')}
+            value={model.query}
+            onChange={(event) => actions?.onQuery?.(event.target.value)}
+          />
+        }
+        tools={
+          model.tile ? (
+            <>
+              <Tag tone="info">{t('conn.filtered', { tile: t(`conn.tile.${model.tile}`) })}</Tag>
+              <Button size="sm" variant="quiet" onClick={() => actions?.onTile?.(null)}>
+                {tAdmin('list.clearFilter')}
               </Button>
-            ),
-          }}
-        />
-      ) : (
-        <>
-          {live.length === 0 && <Banner tone="info" title={t('conn.empty.title')}>{t('conn.empty.body')}</Banner>}
-          {rows.length > 0 && (
-            <ListTable
-              label={t('conn.tableLabel')}
-              columns={[t('conn.col.service'), t('conn.col.for'), t('conn.col.company'), t('conn.col.mode'), t('conn.col.state'), t('conn.col.calls'), t('conn.col.region'), tAdmin('common.actions')]}
-              widths={['15%', '19%', '12%', '7%', '17%', '11%', '8%', '11%']}
-              rows={table}
-              page={paged.page}
-              pageCount={paged.pageCount}
-              onPage={actions?.onPage}
-              count={tAdmin('list.count', { shown: paged.rows.length, total: rows.length })}
-            />
-          )}
-        </>
-      )}
+            </>
+          ) : undefined
+        }
+        selection={{
+          selected,
+          onChange,
+          actions: (
+            <>
+              <BulkButton
+                icon={<Pause size={13} aria-hidden />}
+                label={t('conn.bulk.pause', { count: pauseReach.applies.length })}
+                held={heldWords(pauseHeld)}
+                variant="danger-outline"
+                onClick={() => actions?.onBulk?.({ pause: true, ids: selected })}
+              />
+              <BulkButton
+                icon={<Play size={13} aria-hidden />}
+                label={t('conn.bulk.resume', { count: resumeReach.applies.length })}
+                held={heldWords(resumeHeld)}
+                onClick={() => actions?.onBulk?.({ pause: false, ids: selected })}
+              />
+            </>
+          ),
+        }}
+        keys={own}
+        onHelp={onHelp}
+        onOpen={(row) => (row.kind === 'account' ? actions?.onOpen?.(row.account) : actions?.onConnect?.(true))}
+        state={state}
+      />
+      {help}
       {model.mail ? <MailDomainSection model={model.mail} actions={actions?.mail} prefix={model.prefix} /> : <Banner tone="info" title={t('mail.noRight')} />}
       <Residency model={model} />
       <p className="fw-adm-hint">{t('conn.later')}</p>
       <ConnectModal open={!!model.connect} accounts={live} onClose={() => actions?.onConnect?.(false)} />
       <SwitchConfirm confirm={model.confirm ?? null} account={confirming} busy={!!model.busy} problem={model.dialogProblem ?? null} onClose={() => actions?.onConfirm?.(null)} onSwitch={actions?.onSwitch} />
+      <BulkSwitchConfirm model={model} rows={rows} actions={actions} />
       <ConnStepUp model={model.stepUp} onSubmit={actions?.onStepUp} onClose={actions?.onStepUpClose} />
     </div>
   )
 }
 
-/** Where your data lives: only what the connections' own settings name (never a guessed region). */
+type ResidencyRow = ReturnType<typeof residencyRows>[number]
+
+/** "Where your data lives" columns: the service, the connection, the region its settings name (never a guessed one), the mode. */
+export function useResidencyColumns(): ColDef<ResidencyRow>[] {
+  const t = useT('admin-connections')
+  return useMemo<ColDef<ResidencyRow>[]>(
+    () => [
+      { colId: 'service', headerName: t('conn.col.service'), flex: 1, minWidth: 160, cellClass: 'fw-adm-name', valueGetter: ({ data }) => (data ? t(`conn.provider.${data.provider}.name`) : '') },
+      { colId: 'account', headerName: t('conn.residency.account'), flex: 1.4, minWidth: 200, valueGetter: ({ data }) => data?.label ?? '' },
+      {
+        colId: 'region',
+        headerName: t('conn.col.region'),
+        flex: 1,
+        minWidth: 140,
+        cellRenderer: ({ data }: ICellRendererParams<ResidencyRow>) => (data ? data.region ? <span className="fw-adm-code">{data.region}</span> : <span className="fw-adm-hint">{t('conn.residency.unknown')}</span> : null),
+      },
+      { colId: 'mode', headerName: t('conn.col.mode'), flex: 0.8, minWidth: 120, valueGetter: ({ data }) => (data ? t(`conn.mode.${data.mode}`) : '') },
+    ],
+    [t],
+  )
+}
+
+/** Where your data lives: only what the connections' own settings name (never a guessed region). A read-only list. */
 function Residency({ model }: { model: ConnectionsViewModel }) {
   const t = useT('admin-connections')
+  const columns = useResidencyColumns()
+  const { onHelp, help } = useKeysHelp([], false)
   const accounts = model.accounts.items
   if (!accounts) return null
   const rows = residencyRows(accounts)
   return (
-    <Card header={t('conn.residency.title')} description={t('conn.residency.intro')} headingLevel={2} padded>
-      {rows.length === 0 ? (
-        <p className="fw-adm-hint">{t('conn.residency.none')}</p>
-      ) : (
-        <SummaryTable
-          label={t('conn.residency.title')}
-          columns={[t('conn.col.service'), t('conn.residency.account'), t('conn.col.region'), t('conn.col.mode')]}
-          align={['left', 'left', 'left', 'left']}
-          stackOnPhone
-          rows={rows.map((row) => ({
-            id: row.id,
-            cells: [t(`conn.provider.${row.provider}.name`), row.label, row.region ? <span className="fw-adm-code">{row.region}</span> : t('conn.residency.unknown'), t(`conn.mode.${row.mode}`)],
-          }))}
-        />
-      )}
+    <section className="fw-adm-list-section" aria-labelledby="conn-residency">
+      <div className="fw-adm-head-text">
+        <h2 id="conn-residency" className="fw-adm-list-h2">
+          {t('conn.residency.title')}
+        </h2>
+        <p className="fw-adm-intro">{t('conn.residency.intro')}</p>
+      </div>
+      <ListFrame<ResidencyRow>
+        label={t('conn.residency.title')}
+        rows={rows}
+        rowId={(row) => row.id}
+        columns={columns}
+        count={t('conn.count', { count: rows.length })}
+        onHelp={onHelp}
+        rowKind="text"
+        state={rows.length === 0 ? <EmptyState title={t('conn.residency.none')} /> : undefined}
+      />
+      {help}
       <p className="fw-adm-hint">{t('conn.residency.later')}</p>
-    </Card>
+    </section>
+  )
+}
+
+/**
+ * Pause or resume several services after ONE confirm (bulk; each is one call with its version): what changes, the
+ * services it applies to, the selected ones it leaves out and why, and a reason kept with each change.
+ */
+function BulkSwitchConfirm({ model, rows, actions }: { model: ConnectionsViewModel; rows: readonly ServiceRow[]; actions?: ConnectionsActions }) {
+  const t = useT('admin-connections')
+  const tAdmin = useT('admin')
+  const [reason, setReason] = useState('')
+  const bulk = model.bulk ?? null
+  const key = bulk ? `${bulk.pause}|${bulk.ids.join('|')}` : ''
+  useEffect(() => setReason(''), [key])
+  if (!bulk) return null
+  const verb = bulk.pause ? 'pause' : 'resume'
+  const chosen = bulk.ids.flatMap((id) => rows.filter((row) => row.id === id))
+  const reach = switchReach(chosen, bulk.pause)
+  const count = reach.applies.length
+  const short = reason.trim().length > 0 && reason.trim().length < 3
+  const held = !model.can.manage ? tAdmin('held.needs', { right: t('conn.right.manage') }) : count === 0 ? t(bulk.pause ? 'conn.bulk.noneToPause' : 'conn.bulk.noneToResume') : model.busy ? tAdmin('common.saving') : short ? t('conn.reasonShort') : null
+  const close = () => actions?.onBulk?.(null)
+  return (
+    <Modal
+      open
+      onClose={close}
+      title={t(`conn.bulk.${verb}Title`, { count })}
+      size="md"
+      busy={model.busy}
+      footer={
+        <>
+          <Button onClick={close}>{tAdmin('common.cancel')}</Button>
+          <Button variant={bulk.pause ? 'danger' : 'primary'} heldReason={held} onClick={() => void actions?.onBulkGo?.(reach.applies.map((row) => row.account), bulk.pause, reason.trim())}>
+            {t(`conn.bulk.${verb}Go`, { count })}
+          </Button>
+        </>
+      }
+    >
+      <div className="fw-adm-modal-body">
+        {model.dialogProblem && <Banner tone="danger" title={tAdmin(model.dialogProblem)} />}
+        <p className="fw-adm-intro">{t(`conn.bulk.${verb}Body`)}</p>
+        <BulkReach
+          label={t('conn.bulk.listLabel')}
+          names={reach.applies.map((row) => `${t(`conn.provider.${row.account.provider}.name`)} — ${row.account.label}`)}
+          left={leftCounts(reach).map((entry) => ({ ...entry, words: t(entry.why, { count: entry.count }) }))}
+        />
+        <p className="fw-adm-hint">{t(`conn.bulk.${verb}Undo`)}</p>
+        <Field label={tAdmin('common.reason')} hint={t('conn.bulk.reasonHint')} error={short ? t('conn.reasonShort') : undefined}>
+          <Textarea rows={2} value={reason} onChange={(event) => setReason(event.target.value)} />
+        </Field>
+      </div>
+    </Modal>
   )
 }
 

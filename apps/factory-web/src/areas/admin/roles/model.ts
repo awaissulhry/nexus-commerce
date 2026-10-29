@@ -18,8 +18,18 @@ export interface RolesViewModel {
   asOf: string | null
   query: string
   audience: 'all' | 'office' | 'floor'
-  /** The compare dialog is open, with these roles ticked. */
+  /** Pages of 50 rows shown ("Show 50 more" adds one). */
+  pages: number
+  /** Rows ticked at first (design fixtures); the view keeps the ticks. Compare reads them. */
+  selected?: readonly string[]
+  /** The compare dialog is open at first, with these roles (design fixtures). */
   compare?: readonly string[] | null
+}
+
+/** Compare puts two or three roles side by side: the ticked rows are the pick, held with its reason otherwise. */
+export const COMPARE_MAX = 3
+export function compareHeld(count: number): string | null {
+  return count < 2 ? 'roles.bulk.held.compareOne' : count > COMPARE_MAX ? 'roles.bulk.held.compareMany' : null
 }
 
 export function roleRows(roles: readonly Role[], query: string, audience: RolesViewModel['audience']): Role[] {
@@ -67,11 +77,20 @@ export function heldAreas(role: Role, catalogue: PermissionCatalogue | null): Ar
   return areas.filter((row) => row.count > 0)
 }
 
+/** One holder of a role: the person, and where and until when their assignment gives it. */
+export interface Holder {
+  /** The assignment's id (a person may hold a role twice, in two places). */
+  id: string
+  user: User
+  scope: { allCompanies: boolean; companyIds: string[]; siteIds: string[] }
+  validTo: string | null
+}
+
 /** The users who hold the role (a live assignment), with the assignment's scope. */
-export function holdersOf(role: Role, users: readonly User[]): Array<{ user: User; scope: { allCompanies: boolean; companyIds: string[]; siteIds: string[] }; validTo: string | null }> {
+export function holdersOf(role: Role, users: readonly User[]): Holder[] {
   return users.flatMap((user) =>
     user.roles
       .filter((held) => held.roleId === role.id)
-      .map((held) => ({ user, scope: { allCompanies: held.allCompanies, companyIds: held.companyIds, siteIds: held.siteIds }, validTo: held.validTo })),
+      .map((held) => ({ id: held.assignmentId, user, scope: { allCompanies: held.allCompanies, companyIds: held.companyIds, siteIds: held.siteIds }, validTo: held.validTo })),
   )
 }

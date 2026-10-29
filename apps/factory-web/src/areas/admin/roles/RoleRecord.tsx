@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { RecordPanels } from '../../../record-panels/RecordPanels'
@@ -18,6 +19,7 @@ import { RoleRecordView } from './view/RoleRecordView'
 export function RoleRecord({ roleId }: { roleId: string }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
+  const router = useRouter()
   const held = useMemo(() => new Set(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
   const tab = useRecordTab(ROLE_TABS)
@@ -58,6 +60,7 @@ export function RoleRecord({ roleId }: { roleId: string }) {
       model={{ prefix, tab, role, problem: role ? null : problem, catalogue, holders, companies, dockOpen }}
       panels={role ? <RecordPanels record={{ type: 'Role', id: role.id, companyId: null }} title={role.name} /> : null}
       actions={{
+        onOpen: (path) => router.push(path),
         onDock: toggleDock,
         onRetry: () => {
           setProblem(null)

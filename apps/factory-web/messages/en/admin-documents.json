@@ -2,9 +2,12 @@
   "docs": {
     "intro": "Every document number the factory gives, per company: the next one as it will print, and proof that invoices and DDTs never skip or repeat a number.",
     "new": "New series",
+    "count_one": "{count} series",
+    "count_other": "{count} series",
     "keys": {
-      "new": "Key: c",
-      "hint": "1 · 2 switch list · c new series"
+      "numbers": "Show the number series",
+      "documents": "Show the document layouts",
+      "newSeries": "New series"
     },
     "preview": "Preview a document",
     "views": {
@@ -105,7 +108,9 @@
         "it": "Italiano",
         "en": "English"
       },
-      "newTab": "(opens in a new tab)"
+      "newTab": "(opens in a new tab)",
+      "count_one": "{count} layout",
+      "count_other": "{count} layouts"
     },
     "type": {
       "QUOTE": "Quote",
@@ -213,7 +218,9 @@
       "noun": "series",
       "skippedTitle": "Not issued by Nexus: {ranges}",
       "skippedBody": "These numbers lie between the first and the last and were never issued here: the series was moved past numbers used elsewhere, or numbers are missing. The audit log says which.",
-      "shown": "The last {shown} of {count} numbers."
+      "shown": "The last {shown} of {count} numbers.",
+      "count_one": "{count} number",
+      "count_other": "{count} numbers"
     },
     "done": {
       "created": "Series created. Its first number is {number}.",
@@ -252,6 +259,31 @@
       "Lot": "Lot",
       "PpeRegisterEntry": "PPE register entry",
       "Receipt": "Goods receipt"
+    },
+    "bulk": {
+      "close_one": "Close {count} series",
+      "close_other": "Close {count} series",
+      "closeNone": "Close series",
+      "none": "None of the selected series is active: nothing to close.",
+      "title_one": "Close {count} series?",
+      "title_other": "Close {count} series?",
+      "go_one": "Close {count} series",
+      "go_other": "Close {count} series",
+      "listLabel": "Series to close",
+      "noMore": "No more numbers come from them.",
+      "stay": "The numbers they issued stay, with their documents.",
+      "left": {
+        "closed_one": "1 selected series is closed already: left out.",
+        "closed_other": "{count} selected series are closed already: left out."
+      },
+      "alone": "{company} would have no active {kind} series left: new documents of this kind will be refused until you add one.",
+      "reasonHint": "Kept in the history of each series.",
+      "done_one": "1 series closed: it issues no more numbers.",
+      "done_other": "{count} series closed: they issue no more numbers.",
+      "partial_one": "{count} of {total} series closed. Not closed:",
+      "partial_other": "{count} of {total} series closed. Not closed:",
+      "failed_one": "The series was not closed:",
+      "failed_other": "None of the {count} series was closed:"
     }
   }
 }

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { NUMBER_KINDS, NUMBER_RESETS } from '@nexus/factory-domain/numbering/kinds'
+import { DOCUMENT_KINDS, NUMBER_RESETS } from '@nexus/factory-domain/numbering/kinds'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 
 /**
@@ -11,13 +11,14 @@ import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 
 export const SERIES_STATUSES = ['ACTIVE', 'CLOSED'] as const
 export type SeriesStatus = (typeof SERIES_STATUSES)[number]
-export type NumberKind = (typeof NUMBER_KINDS)[number]
+/** A series numbers a document (the scan-id kinds have no series: platform/numbering contract.ts). */
+export type NumberKind = (typeof DOCUMENT_KINDS)[number]
 export type NumberReset = (typeof NUMBER_RESETS)[number]
 
 export const seriesSchema = z.object({
   id: z.string(),
   companyId: z.string(),
-  kind: z.enum(NUMBER_KINDS),
+  kind: z.enum(DOCUMENT_KINDS),
   code: z.string(),
   scopeKey: z.string(),
   year: z.number().nullable(),

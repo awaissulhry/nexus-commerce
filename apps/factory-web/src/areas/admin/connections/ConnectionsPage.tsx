@@ -1,16 +1,19 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { isApiError } from '../../../lib/api/errors'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { listCompanies } from '../shared/api'
-import { failed, loaded, loading, problemKey, problemNotice, type Loaded, type Notice } from '../shared/model'
+import { adminHref, failed, loaded, loading, problemKey, problemNotice, type Loaded, type Notice } from '../shared/model'
 import { isStepUpCancelled, useStepUp } from '../shared/step-up'
+import { runBulk } from '../kit/bulk'
+import { bulkNotice, type BulkNotice } from '../kit/bulk-model'
 import { checkIdentity, createIdentity, listAccounts, listIdentities, setPaused, type IntegrationAccount, type SendingIdentity } from './api'
 import { identityState, type AddDomainDraft } from './mail/model'
-import type { CompanyChoice, ConnectionTile, PauseConfirm } from './model'
+import type { BulkSwitch, CompanyChoice, ConnectionTile, PauseConfirm } from './model'
 import { ConnectionsView } from './view/ConnectionsView'
 
 /**
@@ -23,6 +26,7 @@ import { ConnectionsView } from './view/ConnectionsView'
 export function ConnectionsPage() {
   const api = useOfficeApi()
   const session = useOfficeSession()
+  const router = useRouter()
   const held = useMemo(() => new Set(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
   const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
@@ -33,12 +37,13 @@ export function ConnectionsPage() {
   const [now, setNow] = useState(() => new Date().toISOString())
   const [tile, setTile] = useState<ConnectionTile | null>(null)
   const [query, setQuery] = useState('')
-  const [page, setPage] = useState(1)
   const [connect, setConnect] = useState(false)
   const [confirm, setConfirm] = useState<PauseConfirm | null>(null)
+  const [selected, setSelected] = useState<readonly string[]>([])
+  const [bulk, setBulk] = useState<BulkSwitch | null>(null)
   const [busy, setBusy] = useState(false)
   const [dialogProblem, setDialogProblem] = useState<string | null>(null)
-  const [notice, setNotice] = useState<Notice | null>(null)
+  const [notice, setNotice] = useState<BulkNotice | null>(null)
   const [add, setAdd] = useState(false)
   const [mailBusy, setMailBusy] = useState(false)
   const [mailProblem, setMailProblem] = useState<string | null>(null)
@@ -94,12 +99,13 @@ export function ConnectionsPage() {
         companies,
         tile,
         query,
-        page,
         asOf,
         now,
         can: { manage: held.has('integrations.manage') },
         connect,
         confirm,
+        selected,
+        bulk,
         busy,
         dialogProblem,
         notice,
@@ -119,15 +125,8 @@ export function ConnectionsPage() {
           : null,
       }}
       actions={{
-        onTile: (next) => {
-          setTile(next)
-          setPage(1)
-        },
-        onQuery: (next) => {
-          setQuery(next)
-          setPage(1)
-        },
-        onPage: setPage,
+        onTile: setTile,
+        onQuery: setQuery,
         onRetry: () => {
           setAccounts(loading())
           void load()
@@ -150,6 +149,34 @@ export function ConnectionsPage() {
             setDialogProblem(problemNotice(error).key)
             if (isApiError(error) && error.kind === 'conflict') void load()
             return false
+          } finally {
+            setBusy(false)
+          }
+        },
+        onOpen: (account) => router.push(adminHref(prefix, `/connections/${account.id}`)),
+        onSelect: setSelected,
+        onBulk: (next) => {
+          setDialogProblem(null)
+          setBulk(next)
+        },
+        onBulkGo: async (chosen, pause, reason) => {
+          setBusy(true)
+          setDialogProblem(null)
+          try {
+            // One call per account (the API switches one at a time), each with the version read.
+            const result = await runBulk(chosen, async (account) => {
+              const next = await setPaused(api, account.id, pause, { version: account.version, ...(reason ? { reason } : {}) })
+              setAccounts((current) => loaded((current.items ?? []).map((item) => (item.id === next.id ? next : item))))
+            })
+            const done = new Set(result.done.map((account) => account.id))
+            setSelected((current) => current.filter((id) => !done.has(id)))
+            const keys = pause ? { done: 'conn.bulk.pausedDone', partial: 'conn.bulk.pausedPartial', failed: 'conn.bulk.pausedFailed' } : { done: 'conn.bulk.resumedDone', partial: 'conn.bulk.resumedPartial', failed: 'conn.bulk.resumedFailed' }
+            setNotice(bulkNotice(result, keys, (account) => account.id))
+            setBulk(null)
+            if (result.refused.some((entry) => entry.problem === 'problem.conflict')) void load()
+          } catch (error) {
+            setDialogProblem(problemKey(error))
+            void load()
           } finally {
             setBusy(false)
           }

@@ -130,6 +130,8 @@
       "body": "Connect e-mail first: everything that leaves the factory needs it."
     },
     "tableLabel": "Outside services",
+    "count_one": "{count} service",
+    "count_other": "{count} services",
     "col": {
       "service": "Service",
       "for": "What it is for",
@@ -276,6 +278,51 @@
       "PROCESSED": "Handled",
       "FAILED": "Failed",
       "REJECTED": "Rejected"
+    },
+    "keys": {
+      "connect": "Connect a service"
+    },
+    "bulk": {
+      "pause_one": "Pause {count}",
+      "pause_other": "Pause {count}",
+      "resume_one": "Resume {count}",
+      "resume_other": "Resume {count}",
+      "noneToPause": "None of the selected services is running: nothing to pause.",
+      "noneToResume": "None of the selected services is paused: nothing to resume.",
+      "pauseTitle_one": "Pause {count} service?",
+      "pauseTitle_other": "Pause {count} services?",
+      "resumeTitle_one": "Resume {count} service?",
+      "resumeTitle_other": "Resume {count} services?",
+      "pauseGo_one": "Pause {count} service",
+      "pauseGo_other": "Pause {count} services",
+      "resumeGo_one": "Resume {count} service",
+      "resumeGo_other": "Resume {count} services",
+      "pauseBody": "From now on no call reaches these services: what needs them waits or is refused in words (an invoice stays unsent, a label is not bought).",
+      "resumeBody": "Calls reach these services again from now on, each in the mode it is in.",
+      "pauseUndo": "You can resume them at any time; nothing is lost.",
+      "resumeUndo": "You can pause them again at any time.",
+      "listLabel": "Services",
+      "reasonHint": "Kept in the history of each service.",
+      "left": {
+        "notConnected_one": "1 selected service is not connected: nothing to switch, left out.",
+        "notConnected_other": "{count} selected services are not connected: nothing to switch, left out.",
+        "paused_one": "1 selected service is paused already: left out.",
+        "paused_other": "{count} selected services are paused already: left out.",
+        "running_one": "1 selected service is running: left out.",
+        "running_other": "{count} selected services are running: left out."
+      },
+      "pausedDone_one": "1 service paused: no call reaches it.",
+      "pausedDone_other": "{count} services paused: no call reaches them.",
+      "pausedPartial_one": "{count} of {total} services paused. Not paused:",
+      "pausedPartial_other": "{count} of {total} services paused. Not paused:",
+      "pausedFailed_one": "The service was not paused:",
+      "pausedFailed_other": "None of the {count} services was paused:",
+      "resumedDone_one": "1 service is working again.",
+      "resumedDone_other": "{count} services are working again.",
+      "resumedPartial_one": "{count} of {total} services resumed. Not resumed:",
+      "resumedPartial_other": "{count} of {total} services resumed. Not resumed:",
+      "resumedFailed_one": "The service was not resumed:",
+      "resumedFailed_other": "None of the {count} services was resumed:"
     }
   },
   "mail": {

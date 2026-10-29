@@ -11,7 +11,7 @@ import { RolesView } from './view/RolesView'
 type Case = { page: 'list'; model: RolesViewModel } | { page: 'role'; model: RoleRecordModel; dock?: boolean }
 
 const companies = COMPANIES.map((company) => ({ id: company.id, name: company.legalName, sites: company.sites.map((site) => ({ id: site.id, name: site.name })) }))
-const list = (over: Partial<RolesViewModel> = {}): Case => ({ page: 'list', model: { prefix: PREFIX, roles: loaded(ROLES), catalogue: CATALOGUE, asOf: NOW, query: '', audience: 'all', ...over } })
+const list = (over: Partial<RolesViewModel> = {}): Case => ({ page: 'list', model: { prefix: PREFIX, roles: loaded(ROLES), catalogue: CATALOGUE, asOf: NOW, query: '', audience: 'all', pages: 1, ...over } })
 const role = (index: number, over: Partial<RoleRecordModel> = {}, dock = false): Case => ({
   page: 'role',
   dock,
@@ -32,8 +32,10 @@ export const designScreen = defineDesignScreen<Case>({
   cases: [
     { id: 'list', label: 'Every role, in plain words', model: list(), note: 'What each role does, its people, its money sight, two-factor; Finance is out of date (a sync updates it), the copy lacks one permission its template gained.' },
     { id: 'floor', label: 'Floor roles only', model: list({ audience: 'floor' }) },
-    { id: 'compare', label: 'Compare two roles', model: list({ compare: [ROLES[2]!.id, ROLES[5]!.id] }), note: 'Rows where they differ are marked.' },
-    { id: 'compare-pick', label: 'Compare: pick roles', model: list({ compare: [] }) },
+    { id: 'compare-selected', label: 'Two roles ticked: Compare 2', model: list({ selected: [ROLES[2]!.id, ROLES[5]!.id] }), note: 'The ticks are the pick: two or three roles.' },
+    { id: 'compare-one', label: 'One role ticked: Compare held', model: list({ selected: [ROLES[2]!.id] }), note: 'Held with its reason until a second role is ticked; more than three is held too.' },
+    { id: 'compare', label: 'Compare two roles', model: list({ selected: [ROLES[2]!.id, ROLES[5]!.id], compare: [ROLES[2]!.id, ROLES[5]!.id] }), note: 'Rows where they differ are marked.' },
+    { id: 'compare-three', label: 'Compare three roles', model: list({ selected: [ROLES[1]!.id, ROLES[2]!.id, ROLES[4]!.id], compare: [ROLES[1]!.id, ROLES[2]!.id, ROLES[4]!.id] }) },
     { id: 'loading', label: 'Loading', model: list({ roles: loading(), asOf: null }) },
     { id: 'error', label: 'The API did not answer', model: list({ roles: failed('problem.unavailable'), asOf: null }) },
     { id: 'role-permissions', label: 'Role: what it can do', model: role(3), note: 'Sentences first, then every permission by area with its risk mark; ready-made roles are read-only.' },

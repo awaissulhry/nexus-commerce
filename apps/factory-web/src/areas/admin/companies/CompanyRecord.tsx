@@ -88,6 +88,7 @@ export function CompanyRecord({ companyId }: { companyId: string }) {
           return ok
         },
         onNewSite: () => router.push(`${adminHref(prefix, '/companies')}?new=site&company=${encodeURIComponent(companyId)}`),
+        onOpen: (path) => router.push(path),
         onDock: toggleDock,
         onRetry: () => {
           setProblem(null)
