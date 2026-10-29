@@ -1,5 +1,13 @@
+import { RENEW_ANSWER } from '@nexus/factory-domain/purchasing/confirm/renew'
 import { idempotencyKeyFrom } from '../../core/command'
 import { defineRoutes } from '../../core/manifest'
+import { AUTH_RATE_LIMITS, officeAuthOf } from '../../platform/auth/sessions/office-auth'
+import { processEmail } from '../../platform/email-out/service'
+import { confirmByLink, declineByLink } from './confirm/answer'
+import { confirmLinkOrderContract, declineLinkOrderContract, openLinkOrderContract, orderAnswerContract, renewLinkOrderContract } from './confirm/contract'
+import { orderAnswer } from './confirm/office'
+import { linkView } from './confirm/read'
+import { linkTokenOf, renewConfirmLink } from './confirm/renew'
 import {
   addLineContract,
   cancelContract,
@@ -29,7 +37,13 @@ import { previewSupplierView } from './supplier-view'
  * Purchase orders, part 1 (B-W1-30): the list ("Where POs stand") and the record, a new draft, its header, its lines (with
  * the leather specs), "Draft PO" from the plan's lines to buy and its Undo, the send (PDF, one-off confirm link, mail on
  * the order's thread), a new link, the cancellation, the documents and sends, and the office's preview of what the
- * supplier sees (no price). The supplier's answer through the link is B-W1-31; receipts against the order B-W1-32.
+ * supplier sees (no price). Receipts against the order are B-W1-32's.
+ *
+ * B-W1-31, the supplier's answer (./confirm): office GET …/answer (where the answer stands, asked against confirmed per
+ * line, the link evidence); the PO_CONFIRM link: GET /link/purchase-order (the order, price-free), POST
+ * /link/purchase-order/confirm (all as asked, or line by line) | decline, and the public POST /link/purchase-order/renew
+ * ("ask for a new link": one answer whatever the token; a new link only to the address on file). Link routes are rate
+ * limited like every link route.
  */
 export default defineRoutes('purchasing', manifest, async (app) => {
   app.get('/purchasing/orders', { schema: listOrdersContract }, async (request) => listOrders(request, request.query))
@@ -61,4 +75,26 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.get('/purchasing/orders/:purchaseOrderId/documents', { schema: documentsContract }, async (request) => listDocuments(request, request.params.purchaseOrderId))
 
   app.get('/purchasing/orders/:purchaseOrderId/supplier-view', { schema: supplierViewContract }, async (request) => previewSupplierView(request, request.params.purchaseOrderId))
+
+  app.get('/purchasing/orders/:purchaseOrderId/answer', { schema: orderAnswerContract }, async (request) => orderAnswer(request, request.params.purchaseOrderId))
+
+  const linkUse = app.officeAuth?.rateLimits.linkUse ?? AUTH_RATE_LIMITS.linkUse
+  const limited = { rateLimit: { max: linkUse.max, timeWindow: linkUse.timeWindowMs } }
+
+  app.get('/link/purchase-order', { schema: openLinkOrderContract, config: limited }, async (request) => linkView(request))
+
+  app.post('/link/purchase-order/confirm', { schema: confirmLinkOrderContract, config: limited }, async (request) => confirmByLink(request, request.body))
+
+  app.post('/link/purchase-order/decline', { schema: declineLinkOrderContract, config: limited }, async (request) => declineByLink(request, request.body))
+
+  app.post('/link/purchase-order/renew', { schema: renewLinkOrderContract, config: limited }, async (request, reply) => {
+    const auth = officeAuthOf(app)
+    const token = linkTokenOf(request)
+    // The work runs after the answer: neither what it says nor when it comes tells anything about the token.
+    auth.afterAnswer(async () => {
+      const outcome = await renewConfirmLink(processEmail(), request, token)
+      request.log.info({ outcome }, 'a new confirm link was asked for')
+    }, request.log)
+    return reply.code(202).send({ status: 'requested' as const, message: RENEW_ANSWER })
+  })
 })
