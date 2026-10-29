@@ -72,12 +72,74 @@ export function isLatin1Text(value: string): boolean {
   return true
 }
 
-/** The first character a Latin-1 field cannot carry, for the error message. */
-export function firstNonLatin1(value: string): string | null {
-  for (const char of value) {
-    if (!isLatin1Text(char)) return char
+/**
+ * What FatturaPA carries of typed text, at XML build: every free-text field passes here (validate.ts `text`), so the
+ * file holds the same words in the schema's character set instead of being refused for a typographic character.
+ *
+ *   1. Unicode NFC (an "e" + combining accent is one "é").
+ *   2. Typographic forms to their plain ones: dashes and the minus sign "-", curly and prime quotes straight quotes,
+ *      the ellipsis "...", every no-break, narrow or wide space a space, line breaks and tabs a space, invisible
+ *      characters (zero-width, BOM) nothing, the bullet "-", "€" "EUR", "™" "(TM)", "Œ"/"œ" "OE"/"oe".
+ *   3. Any other character outside the field's set: its compatibility form without accents (NFKD less the combining
+ *      marks: full-width letters, ligatures, "ő" → "o"), or a letter of the short list below ("ł" → "l"); for a
+ *      basic-Latin field, Latin-1 letters lose their accent the same way ("à" → "a").
+ *   4. A character with none of these is NOT guessed: the answer names it, and the caller refuses the field.
+ *
+ * Charsets: LATIN1 = the schema's *LatinType (printable ISO 8859-1), ASCII = its \p{IsBasicLatin} types.
+ */
+export type FatturaPaCharset = 'LATIN1' | 'ASCII'
+
+const SPACES = /[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\t\n\r\f\v]/g
+const INVISIBLE = /[\u200b-\u200d\u2060\ufeff]/g
+const COMBINING = /[\u0300-\u036f]/g
+const TYPOGRAPHIC: Readonly<Record<string, string>> = Object.freeze({
+  '\u2010': '-', '\u2011': '-', '\u2012': '-', '\u2013': '-', '\u2014': '-', '\u2015': '-', '\u2212': '-', '\ufe58': '-', '\ufe63': '-',
+  '\u2018': "'", '\u2019': "'", '\u201a': "'", '\u201b': "'", '\u2032': "'", '\u2035': "'", '\u2039': "'", '\u203a': "'",
+  '\u201c': '"', '\u201d': '"', '\u201e': '"', '\u201f': '"', '\u2033': '"', '\u2036': '"',
+  '\u2026': '...', '\u2022': '-', '\u2023': '-', '\u2043': '-',
+  '\u20ac': 'EUR', '\u2122': '(TM)', '\u0152': 'OE', '\u0153': 'oe',
+})
+/** Letters with no decomposition, to their closest base letter. */
+const LETTERS: Readonly<Record<string, string>> = Object.freeze({
+  '\u0141': 'L', '\u0142': 'l', '\u0110': 'D', '\u0111': 'd', '\u0126': 'H', '\u0127': 'h', '\u0131': 'i', '\u0166': 'T', '\u0167': 't',
+})
+/** Latin-1 letters a basic-Latin field cannot hold and NFKD does not split. */
+const ASCII_LETTERS: Readonly<Record<string, string>> = Object.freeze({
+  '\u00df': 'ss', '\u00c6': 'AE', '\u00e6': 'ae', '\u00d8': 'O', '\u00f8': 'o', '\u00de': 'TH', '\u00fe': 'th', '\u00d0': 'D', '\u00f0': 'd',
+  '\u00ab': '"', '\u00bb': '"', '\u00b7': '-', '\u00ad': '',
+})
+
+const fits = (char: string, charset: FatturaPaCharset): boolean => (charset === 'ASCII' ? isBasicLatinText(char) : isLatin1Text(char))
+
+export type FatturaPaTextResult = { readonly ok: true; readonly text: string } | { readonly ok: false; readonly character: string; readonly codePoint: string }
+
+/** The text as FatturaPA carries it in a field of `charset`, or the first character that has no close form there. */
+export function fatturaPaText(value: string, charset: FatturaPaCharset = 'LATIN1'): FatturaPaTextResult {
+  const plain = value.normalize('NFC').replace(INVISIBLE, '').replace(SPACES, ' ')
+  let out = ''
+  for (const char of plain) {
+    if (fits(char, charset)) {
+      out += char
+      continue
+    }
+    const mapped = TYPOGRAPHIC[char] ?? LETTERS[char] ?? (charset === 'ASCII' ? ASCII_LETTERS[char] : undefined)
+    if (mapped !== undefined && [...mapped].every((piece) => fits(piece, charset))) {
+      out += mapped
+      continue
+    }
+    const decomposed = char.normalize('NFKD').replace(COMBINING, '')
+    if (decomposed !== '' && [...decomposed].every((piece) => fits(piece, charset))) {
+      out += decomposed
+      continue
+    }
+    if (char.codePointAt(0)! < 0x20 || (char.codePointAt(0)! >= 0x7f && char.codePointAt(0)! < 0xa0)) {
+      // A stray control character (C0 or C1): a space, as a line break is.
+      out += ' '
+      continue
+    }
+    return { ok: false, character: char, codePoint: `U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}` }
   }
-  return null
+  return { ok: true, text: out }
 }
 
 /** Splits text into pieces of at most `size` characters (Causale is repeated per 200 characters). */

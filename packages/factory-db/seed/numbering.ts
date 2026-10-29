@@ -4,9 +4,9 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 /**
  * The numbering module's synthetic seed, for each company of seed/_core.ts: a yearly invoice series that issued two
  * numbers (with their NumberAllocation rows, for made-up invoice ids), a yearly DDT series that starts at 143 as if a
- * paper booklet had used 1-142, yearly sales order, purchase order, goods receipt, PPE register, inspection and release
- * series, and lot, shipment, work order and batch series that never reset. Company A's inspection series issued one
- * number (for a made-up inspection id), so the ledger holds a number of a floor document kind (the floor's policies
+ * paper booklet had used 1-142, yearly quote, sales order, purchase order, goods receipt, PPE register, inspection and
+ * release series, and lot, shipment, work order and batch series that never reset. Company A's inspection series issued
+ * one number (for a made-up inspection id), so the ledger holds a number of a floor document kind (the floor's policies
  * see only those: the generated isolation tests read and copy it). Written in the tenant's office scope, as the app
  * writes it.
  *
@@ -61,6 +61,9 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // kinds, of the floor's company (plant A1) and unused (a tablet adds only a fresh year of a series).
       { id: inspections, companyId, kind: 'INSPECTION', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: `INS-${company}-{YYYY}-{N:4}`, fiscal: false, nextValue: company === 'A' ? 2 : 1, lastIssuedDate: company === 'A' ? ISSUED_ON : null, createdById: actorId },
       { id: company === 'A' ? `00000000${id(`series:${company}:RELEASE:MAIN:${YEAR}`).slice(8)}` : id(`series:${company}:RELEASE:MAIN:${YEAR}`), companyId, kind: 'RELEASE', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: `REL-${company}-{YYYY}-{N:4}`, fiscal: false, createdById: actorId },
+      // Quotes are numbered from it (apps/factory-api modules/sales/quotes): without one, a new quote is refused. The
+      // kind's own pattern, as POST /numbering/series makes it. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:QUOTE:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'QUOTE', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'QT-{YYYY}-{N:5}', fiscal: false, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({

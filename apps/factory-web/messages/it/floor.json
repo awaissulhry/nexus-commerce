@@ -1,0 +1,434 @@
+{
+  "brand": "Nexus Factory",
+  "frame": {
+    "home": "Home",
+    "help": "Aiuto",
+    "close": "Chiudi",
+    "where": "{station} · {site}",
+    "noStation": "Nessuna postazione",
+    "operatorLabel": "{name}: esci, cambia persona o lingua",
+    "offline": "Offline: il lavoro resta sul tablet",
+    "sending": "Invio in corso",
+    "pending_one": "in attesa di invio",
+    "pending_other": "in attesa di invio",
+    "menu": {
+      "switch": "Per cambiare persona, chi arriva scansiona il suo badge.",
+      "language": "Lingua per questo accesso",
+      "signOut": "Esci"
+    },
+    "helpDialog": {
+      "title": "Aiuto",
+      "body": "Chiedi al tuo capoturno, o all'ufficio.",
+      "later": "La chiamata di aiuto dal tablet arriva più avanti."
+    },
+    "languageDialog": {
+      "title": "Lingua",
+      "body": "Solo per questa schermata. Dopo l'accesso la schermata parla la tua lingua."
+    },
+    "idle": {
+      "title": "Ci sei ancora?",
+      "message": "Tra poco esci da questo tablet. Il lavoro salvato resta.",
+      "seconds_one": "{count} secondo",
+      "seconds_other": "{count} secondi",
+      "stay": "Sono qui",
+      "signOut": "Esci ora"
+    }
+  },
+  "mode": {
+    "cutting": "Taglio",
+    "sewing": "Cucitura",
+    "packing": "Imballaggio",
+    "inspection": "Controllo",
+    "warehouse": "Magazzino",
+    "none": "Nessuna modalità (solo scansione)"
+  },
+  "start": {
+    "title": "Reparto",
+    "loading": "Apertura…",
+    "retry": "Riprova",
+    "unavailable": {
+      "title": "Il server della fabbrica non risponde",
+      "body": "Controlla il Wi-Fi della fabbrica, poi riprova."
+    }
+  },
+  "enrol": {
+    "title": "Configura il tablet",
+    "step": "Passo {n} di {total}",
+    "continue": "Continua",
+    "scanAgain": "Scansiona di nuovo",
+    "checking": "Controllo del codice…",
+    "scan": {
+      "title": "Scansiona il codice di configurazione",
+      "where": "In ufficio: Amministrazione › Dispositivi e stampanti › il dispositivo › Codice di configurazione. Avvicina il tablet al codice QR.",
+      "label": "Codice di configurazione",
+      "hint": "Il codice vale una volta, per 15 minuti.",
+      "read": "Codice letto",
+      "type": "Digita il codice",
+      "cameraHelp": "Ancora senza lettore? Usa la fotocamera. Se Android lo chiede, consenti la fotocamera a questa app."
+    },
+    "problem": {
+      "codeInvalid": {
+        "title": "Questo codice non funziona",
+        "body": "È già stato usato, è scaduto dopo 15 minuti, o è di un'altra fabbrica. Creane uno nuovo in ufficio."
+      },
+      "offline": {
+        "title": "La configurazione richiede la rete",
+        "body": "Collega il tablet al Wi-Fi della fabbrica, poi scansiona di nuovo."
+      },
+      "unavailable": {
+        "title": "Il server della fabbrica non risponde",
+        "body": "Riprova tra un minuto. Il codice resta valido per 15 minuti."
+      },
+      "rateLimited": {
+        "title": "Troppi tentativi",
+        "body": "Attendi qualche minuto, poi scansiona un codice nuovo."
+      }
+    },
+    "replace": {
+      "title": "Sostituire la configurazione del tablet?",
+      "now": "Ora",
+      "after": "Dopo",
+      "afterValue": "Il nuovo codice decide cosa diventa. La vecchia configurazione smette di funzionare su questo tablet.",
+      "keep": "Mantieni",
+      "confirm": "Cambia"
+    },
+    "binding": {
+      "title": "Questo tablet ora è",
+      "device": "Dispositivo",
+      "site": "Sede",
+      "station": "Postazione",
+      "mode": "Modalità",
+      "language": "Lingua prima dell'accesso",
+      "office": "Si cambia in ufficio: Amministrazione › Dispositivi e stampanti."
+    },
+    "install": {
+      "title": "Installa come app",
+      "app": {
+        "title": "App nella schermata Home",
+        "available": "Pronta da installare",
+        "installed": "Installata",
+        "manual": "Dal menu del browser",
+        "button": "Installa",
+        "manualSteps": "Apri il menu del browser (⋮) e scegli Installa app o Aggiungi a schermata Home."
+      },
+      "storage": {
+        "title": "Conserva i dati sul tablet",
+        "kept": "Conservati",
+        "notKept": "Non conservati",
+        "unknown": "Non ancora chiesto",
+        "notKeptWhy": "Android può cancellare ciò che resta sul tablet. Installa l'app, poi chiedi di nuovo.",
+        "button": "Conserva i dati"
+      }
+    },
+    "checks": {
+      "title": "Controlla le parti",
+      "camera": "Fotocamera",
+      "scanner": "Lettore",
+      "scannerHint": "Scansiona un'etichetta qualsiasi per provarlo.",
+      "sound": "Suono (tocca per sentirlo)",
+      "vibration": "Vibrazione",
+      "printer": "La prova della stampante arriva con la stampante della postazione, dopo l'accesso.",
+      "status": {
+        "ok": "Funziona",
+        "missing": "Non presente",
+        "waiting": "In attesa di una scansione",
+        "untested": "Non provato"
+      }
+    },
+    "kiosk": {
+      "title": "Blocca il tablet sull'app",
+      "step1": "Apri l'app dalla schermata Home.",
+      "step2": "Impostazioni di Android › Sicurezza › Blocco app su schermo: attivalo.",
+      "step3": "Apri le app recenti, tocca l'icona dell'app, poi Blocca.",
+      "step4": "Per sbloccare: tieni premuti Indietro e App recenti insieme (l'ufficio conosce il PIN).",
+      "honest": "Android non dice a un'app se è bloccata: premi Home per provarlo."
+    },
+    "done": {
+      "title": "Pronto",
+      "body": "Questo tablet è {station} presso {site}.",
+      "bodyNoStation": "Questo tablet è configurato presso {site}, senza postazione.",
+      "signIn": "Vai all'accesso"
+    }
+  },
+  "signIn": {
+    "title": "Accesso",
+    "badge": {
+      "title": "Scansiona il tuo badge",
+      "alone": "Il badge ti fa entrare.",
+      "withPin": "Poi digita il tuo PIN.",
+      "label": "Badge",
+      "read": "Badge letto",
+      "scanOnly": "Scansionalo: un badge digitato a mano non vale.",
+      "noBadge": "Senza badge? Scegli il tuo nome"
+    },
+    "names": {
+      "title": "Scegli il tuo nome",
+      "pinAfter": "Poi digita il tuo PIN.",
+      "letters": "Vai a una lettera",
+      "all": "Tutti",
+      "emptyTitle": "Nessun nome",
+      "empty": "Nessuno è ancora configurato per questa sede. Chiedi all'ufficio.",
+      "back": "Torna al badge"
+    },
+    "pin": {
+      "title": "Digita il tuo PIN",
+      "forName": "Per {name}",
+      "forBadge": "Per il badge scansionato",
+      "label": "PIN",
+      "entered": "{entered} di {total}",
+      "clear": "Cancella",
+      "backspace": "Indietro",
+      "notYou": "Non sei tu?",
+      "forgot": "Hai dimenticato il PIN?"
+    },
+    "forgot": {
+      "title": "Hai dimenticato il PIN?",
+      "body": "Lo azzera il tuo capoturno o l'ufficio. Ne scegli uno nuovo al prossimo accesso."
+    },
+    "problem": {
+      "wrong": "Questo badge o PIN non apre questo tablet. Dopo 5 PIN sbagliati la persona è bloccata per qualche minuto. Chiedi al tuo capoturno.",
+      "rateLimited": "Troppi tentativi su questo tablet. Attendi un minuto.",
+      "unavailable": "Il server della fabbrica non risponde. Riprova.",
+      "operatorActive": "Un'altra persona è entrata su questo tablet. Chiedile di uscire.",
+      "pinNeeded": "In questa sede si entra con badge e PIN."
+    },
+    "signedOut": {
+      "idle": "Sei uscito dopo un periodo senza uso.",
+      "self": "Uscito.",
+      "ended": "Il tuo accesso è finito (fine turno, o l'ufficio). Entra di nuovo."
+    },
+    "switch": {
+      "frameTitle": "Cambia persona",
+      "title": "Cambia persona",
+      "body": "{name} è dentro. Chi arriva digita il suo PIN.",
+      "cancel": "Resta dentro chi c'è"
+    },
+    "change": {
+      "title": "Scegli un nuovo PIN",
+      "current": "Digita il PIN che ti ha dato l'ufficio",
+      "new": "Digita un nuovo PIN",
+      "repeat": "Digita di nuovo il nuovo PIN",
+      "rules": "Sei cifre. Non la stessa cifra sei volte, non cifre in fila (come 123456), non il tuo numero di matricola.",
+      "problem": {
+        "mismatch": "I due PIN non erano uguali. Ricomincia.",
+        "refused": "Scegli un altro PIN: questo è troppo facile da indovinare.",
+        "wrong": "Non è il PIN che ti ha dato l'ufficio. Digitalo di nuovo.",
+        "repeat": "Non la stessa cifra sei volte. Scegline un altro.",
+        "run": "Non cifre in fila. Scegline un altro."
+      }
+    }
+  },
+  "notice": {
+    "title": "Informativa ai lavoratori",
+    "heading": "Informativa ai lavoratori",
+    "loading": "Apertura dell'informativa…",
+    "version": "Versione {label}",
+    "page": "Pagina {n} di {total}",
+    "next": "Avanti",
+    "previous": "Indietro",
+    "firstPage": "Questa è la prima pagina.",
+    "acknowledge": "L'ho letta",
+    "sending": "Invio…",
+    "means": "Registra che hai visto questa informativa. Non firma nient'altro.",
+    "blocks": "Le scansioni attendono finché non l'hai letta.",
+    "languageNotReady": "La tua lingua non è ancora pronta sullo schermo: il personale ti dà una copia su carta nella tua lingua.",
+    "otherLanguage": "Mostra in un'altra lingua",
+    "home": "Vai alla Home",
+    "reload": "Riprova",
+    "done": {
+      "title": "Grazie",
+      "body": "Registrato: hai visto la versione {label}."
+    },
+    "none": {
+      "title": "Nessuna informativa da leggere",
+      "body": "Per questa azienda non è in vigore un'informativa ai lavoratori."
+    },
+    "newer": {
+      "title": "È in vigore una versione più nuova",
+      "body": "Leggi la nuova versione: si apre ora.",
+      "open": "Apri la nuova versione"
+    },
+    "unavailable": {
+      "title": "L'informativa non si è aperta",
+      "body": "Il server della fabbrica non risponde. Riprova."
+    }
+  },
+  "home": {
+    "title": "Home",
+    "tiles": "Cosa puoi fare qui",
+    "scan": {
+      "label": "Scansiona un'etichetta per iniziare",
+      "hint": {
+        "cutting": "Scansiona una pelle o un ordine di lavoro per aprirlo.",
+        "sewing": "Scansiona un fascio o un ordine di lavoro per aprirlo.",
+        "packing": "Scansiona un collo, un lotto o un ordine di lavoro per aprirlo.",
+        "inspection": "Scansiona un lotto, un fascio o un ordine di lavoro per aprirlo.",
+        "warehouse": "Scansiona un'ubicazione, un lotto o una pelle per aprirla.",
+        "none": "Scansiona un'etichetta qualsiasi per aprirla."
+      }
+    },
+    "empty": {
+      "title": "Niente da fare qui",
+      "body": "Con il tuo ruolo non c'è niente da fare a questa postazione. Chiedi al tuo capoturno."
+    },
+    "notice": {
+      "title": "Nuova informativa ai lavoratori",
+      "body": "Leggila quando hai un minuto.",
+      "blocks": "Leggila prima della prima scansione.",
+      "open": "Leggila"
+    },
+    "switched": "{from} è uscito · {to} è entrato",
+    "badgeRefused": "Questo badge non apre questo tablet. Chiedi al tuo capoturno."
+  },
+  "tile": {
+    "operation": "Operazione",
+    "cut": "Taglia una pelle",
+    "bundles": "Fasci",
+    "receive": "Ricevi",
+    "pick": "Preleva e consegna",
+    "labels": "Etichette capo",
+    "pack": "Imballa",
+    "final": "Collaudo finale",
+    "scan": "Scansiona",
+    "hint": {
+      "scan": "Qualsiasi etichetta della fabbrica"
+    },
+    "held": {
+      "notice": "Prima leggi l'informativa",
+      "coming": "In arrivo"
+    }
+  },
+  "scan": {
+    "title": "Scansiona",
+    "label": "Scansiona un'etichetta qualsiasi",
+    "hint": "Fascio, pelle, lotto, ordine di lavoro o ubicazione.",
+    "read": "Letto {code}",
+    "type": "Digita un codice",
+    "camera": {
+      "start": "Fotocamera",
+      "stop": "Chiudi fotocamera",
+      "error": "La fotocamera non è partita. Consentila in Android, o usa il lettore."
+    },
+    "empty": "Scansiona un'etichetta: la sua scheda si apre qui.",
+    "loading": "Ricerca…",
+    "recent": "Le tue scansioni",
+    "recentNothing": "Niente trovato",
+    "another": "Nuova lettura",
+    "action": {
+      "cut": "Taglia questa pelle",
+      "workOrder": "Apri al taglio",
+      "move": "Sposta qui"
+    },
+    "hide": {
+      "notUsable": "Non tagliare questa pelle: il suo lotto non è rilasciato."
+    },
+    "notOnFloor": {
+      "title": "Etichetta {type} letta",
+      "body": "La sua scheda non è ancora sul tablet. Chiedi all'ufficio."
+    },
+    "noPermission": "Qui non puoi aprire {type}.",
+    "noPermissionBody": "Il tuo ruolo a questa postazione non le apre. Chiedi al tuo capoturno.",
+    "unknown": {
+      "otherFactory": {
+        "title": "Questa etichetta non è di questa fabbrica",
+        "body": "Controlla l'etichetta, o chiedi al tuo capoturno."
+      },
+      "typo": {
+        "title": "Questo codice ha un errore",
+        "body": "È stato letto o digitato male. Scansionalo di nuovo."
+      },
+      "notFound": {
+        "title": "Niente trovato",
+        "body": "Niente di ciò che puoi aprire su questo tablet ha questo codice."
+      },
+      "badge": {
+        "title": "Questo badge non apre questo tablet",
+        "body": "La persona dentro resta. Chiedi al tuo capoturno."
+      }
+    },
+    "unavailable": {
+      "title": "Il server della fabbrica non risponde",
+      "body": "Scansiona di nuovo l'etichetta tra un minuto."
+    },
+    "fact": {
+      "item": "Materiale",
+      "area": "Superficie",
+      "grade": "Scelta",
+      "thickness": "Spessore",
+      "shade": "Tonalità",
+      "lot": "Lotto",
+      "crVi": "Cromo VI",
+      "where": "Dove",
+      "nowhere": "Non a magazzino",
+      "forWorkOrders": "Da tagliare per",
+      "none": "Nessuno",
+      "style": "Modello",
+      "batch": "Partita",
+      "due": "Scadenza",
+      "colourways": "Colori",
+      "pieces": "Pezzi",
+      "toCut": "Ancora da tagliare",
+      "sizesLeft": "Taglie rimaste",
+      "name": "Nome",
+      "path": "Dove si trova"
+    }
+  },
+  "label": {
+    "hide": "Pelle",
+    "bundle": "Fascio",
+    "lot": "Lotto",
+    "batch": "Partita",
+    "serial": "Matricola",
+    "carton": "Collo",
+    "location": "Ubicazione",
+    "workOrder": "Ordine di lavoro"
+  },
+  "labelPlural": {
+    "hide": "le pelli",
+    "bundle": "i fasci",
+    "lot": "i lotti",
+    "batch": "le partite",
+    "serial": "le matricole",
+    "carton": "i colli",
+    "location": "le ubicazioni",
+    "workOrder": "gli ordini di lavoro"
+  },
+  "status": {
+    "hide": {
+      "FULL": "Intera",
+      "PARTLY_CUT": "Tagliata in parte",
+      "REMNANT": "Ritaglio",
+      "CONSUMED": "Consumata",
+      "SCRAPPED": "Scartata"
+    },
+    "lot": {
+      "QUARANTINE": "In quarantena",
+      "RELEASED": "Rilasciato",
+      "REJECTED": "Respinto",
+      "BLOCKED": "Bloccato"
+    },
+    "crVi": {
+      "NOT_REQUIRED": "Non richiesto",
+      "PENDING": "Prova in attesa",
+      "PASS": "Superato",
+      "FAIL": "Non superato"
+    },
+    "workOrder": {
+      "DRAFT": "Bozza",
+      "RELEASED": "Rilasciato",
+      "IN_PROGRESS": "In corso",
+      "COMPLETED": "Completato",
+      "CLOSED": "Chiuso",
+      "CANCELLED": "Annullato"
+    },
+    "location": {
+      "WAREHOUSE": "Magazzino",
+      "ZONE": "Zona",
+      "BIN": "Cella",
+      "RECEIVING": "Ricevimento",
+      "QUARANTINE": "Quarantena",
+      "PRODUCTION": "Produzione",
+      "SHIPPING": "Spedizione"
+    }
+  }
+}

@@ -12,6 +12,7 @@ import {
   changeStyle,
   classOfStandard,
   garmentTracking,
+  garmentTrackingRefusal,
   newStyle,
   ppeProblems,
   reactivatedStatus,
@@ -302,5 +303,17 @@ describe('contracts, permissions and events', () => {
     for (const type of ['style.created', 'style.updated', 'style.status_changed', 'style.colourways_changed', 'style.skus_changed', 'style.revision_created', 'size_scale.created', 'size_scale.changed']) {
       expect(EVENT_CATALOGUE.find(type, 1)?.live?.permission).toBe(PRODUCT_STYLES_VIEW)
     }
+  })
+})
+
+describe('garment numbering per style (Q31)', () => {
+  it('changes while nothing was numbered; then says what fixed it', () => {
+    expect(garmentTrackingRefusal({ code: 'GF-JKT-01', tracking: 'BATCH' }, { labels: 0, serials: 0, releases: 0 })).toBeNull()
+    expect(garmentTrackingRefusal({ code: 'GF-JKT-01', tracking: 'BATCH' }, { labels: 2, serials: 0, releases: 0 })).toBe(
+      'Style GF-JKT-01 has work orders with garment labels printed: its garments stay numbered by batch (Q31). Another numbering is a new style.',
+    )
+    expect(garmentTrackingRefusal({ code: 'GF-JKT-01', tracking: 'SERIAL' }, { labels: 1, serials: 4, releases: 1 })).toBe(
+      'Style GF-JKT-01 has work orders with garment labels printed, serials given and garments released: its garments stay numbered by serial (Q31). Another numbering is a new style.',
+    )
   })
 })
