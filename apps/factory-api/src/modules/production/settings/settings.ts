@@ -19,18 +19,21 @@ import {
   type ScanSubject,
 } from '@nexus/factory-domain/production/settings/monitoring'
 import { PRODUCTION_SETTINGS_MANAGE, PRODUCTION_SETTINGS_VIEW } from '@nexus/factory-domain/production/settings/permissions'
+import { standardBundleSizeOf } from '@nexus/factory-domain/production/bundles/rules'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf, type FloorContext, type OfficeContext } from '../../../core/context'
 import { countingAcks, workerNoticeRule } from '../../../platform/privacy/read'
 import type { AffectedView, ChangeResult, RulesView, SiteView } from './contract'
+import { standardBundleSizeFor } from './bundle-size'
 import { hasAcknowledgedNotice, scanSubjectFor } from './subject'
 
 /**
- * A site's floor rules (B-W1-37; A2 SCR-074; MES-278, PLT-208): the monitoring switch and its legal basis, read and
- * changed by the office (production.settings.view | manage over the site's company and the site). The row has the
- * site's own id; a site without one names workers (the default). Every change is ONE command on the row (its version
- * bump locks it): an audit row with the reason, and the event production.monitoring_changed. Nothing here touches a
- * scan or a cut log: they keep what they recorded. The floor reads its own site's scan subject (`floorRules`).
+ * A site's floor rules (B-W1-37; A2 SCR-074; MES-278, PLT-208): the monitoring switch and its legal basis, and the
+ * standard bundle size of its cutting room (MES-065), read and changed by the office (production.settings.view | manage
+ * over the site's company and the site). The row has the site's own id; a site without one names workers and bundles by
+ * 10 (the defaults). Every change is ONE command on the row (its version bump locks it): an audit row (with the reason),
+ * and for the switch the event production.monitoring_changed. Nothing here touches a scan, a cut log or a bundle: they
+ * keep what they recorded. The floor reads its own site's scan subject and bundle size (`floorRules`).
  */
 
 type Change = (typeof MONITORING_CHANGES)[number]
@@ -44,6 +47,7 @@ const RULES_SELECT = {
   monitoringReference: true,
   monitoringRecordedAt: true,
   monitoringRecordedById: true,
+  standardBundleSize: true,
   version: true,
   updatedAt: true,
 } as const satisfies Prisma.ProductionSettingsSelect
@@ -96,6 +100,7 @@ async function rulesView(db: Pick<CommandTx, 'user'>, row: RulesRow | null): Pro
     scanSubject: scanSubjectOf(row as { scanSubject: ScanSubject } | null),
     isDefault: row === null,
     legalBasis,
+    standardBundleSize: standardBundleSizeOf(row),
     version: row?.version ?? null,
     updatedAt: row ? toUtcIso(row.updatedAt) : null,
   }
@@ -379,12 +384,73 @@ export async function listNoticeAcks(caller: CommandCaller, siteId: string) {
   })
 }
 
-/** floor.work: the device's own site's scan subject, and whether the signed-in worker acknowledged the notice. Never the legal basis. */
+export interface ChangeBundleSizeInput {
+  readonly standardBundleSize: number
+  readonly version?: number | undefined
+}
+
+const bundleSizeWords = (size: number): string[] => [
+  `From now on bundles at this site hold ${size} garment${size === 1 ? '' : 's'} when the cutter names no other size; a made-to-measure unit stays one garment per bundle. Bundles already made keep theirs.`,
+]
+
+/**
+ * production.settings.manage: the site's standard bundle size (MES-065), the garments per bundle when a make names no
+ * size. ONE command on the site's row (made the first time with the other defaults: floor records still name workers),
+ * audited before and after; the same size again changes nothing (no row, no audit). No event: the bundles step reads
+ * the size when it proposes or makes bundles.
+ */
+export async function changeBundleSize(caller: CommandCaller, siteId: string, body: ChangeBundleSizeInput, idempotencyKey?: string): Promise<ChangeResult> {
+  const { context, site } = await siteOf(caller, siteId, PRODUCTION_SETTINGS_MANAGE)
+  const existing = await caller.withClient((client) => readRow(client, site.id))
+  if (!existing && body.version !== undefined) throw new NotFoundError('This site has no floor rules yet; apply without a version.')
+  if (standardBundleSizeOf(existing) === body.standardBundleSize) return unchanged(caller, site)
+  const { result } = await command(
+    caller,
+    {
+      name: 'production.changeBundleSize',
+      idempotencyKey,
+      input: { siteId: site.id, ...body },
+      ...(existing ? { record: { type: 'ProductionSettings' as const, id: site.id, expectedVersion: body.version } } : {}),
+    },
+    async (tools) => {
+      // The row is locked by the version bump (when it existed); a change made since the read is never overwritten.
+      const before = existing ? await readRow(tools.tx, site.id) : null
+      if (before) {
+        await tools.tx.productionSettings.update({ where: { id: site.id }, data: { standardBundleSize: body.standardBundleSize }, select: { id: true } })
+      } else {
+        const { count } = await tools.tx.productionSettings.createMany({
+          data: [{ id: site.id, companyId: site.companyId, siteId: site.id, standardBundleSize: body.standardBundleSize, createdById: context.actorId }],
+          skipDuplicates: true,
+        })
+        if (count !== 1) throw new ConflictError('The floor rules of this site were just saved by someone else; reload them and apply again.')
+      }
+      const after = (await readRow(tools.tx, site.id))!
+      tools.audit({
+        action: 'production.changeBundleSize',
+        recordType: 'ProductionSettings',
+        recordId: site.id,
+        companyId: site.companyId,
+        siteId: site.id,
+        before: { standardBundleSize: standardBundleSizeOf(before) },
+        after: { standardBundleSize: after.standardBundleSize },
+      })
+      const detail = await detailOf(tools.tx, site, after)
+      return { ...detail, changed: true, change: null, words: bundleSizeWords(after.standardBundleSize) }
+    },
+  )
+  return result
+}
+
+/**
+ * floor.work: the device's own site's scan subject and standard bundle size, and whether the signed-in worker
+ * acknowledged the notice. Never the legal basis (the floor role reads only some columns of the row).
+ */
 export async function floorRules(caller: CommandCaller) {
   const context = floorContextOf(caller)
   return caller.withClient(async (client) => ({
     siteId: context.siteId,
     scanSubject: await scanSubjectFor(client, context.siteId),
     workerAcknowledged: await hasAcknowledgedNotice(client, context.siteId, context.actorId),
+    standardBundleSize: await standardBundleSizeFor(client, context.siteId),
   }))
 }

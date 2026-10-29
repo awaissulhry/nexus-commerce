@@ -49,7 +49,8 @@ import { seedWorkerNotice } from './privacy'
  *   WO-0002      a DRAFT work order of one cell (BLK 52), with its operations and planned materials.
  *   floor        the operator's acknowledgement of the worker notice 2026-10 in force (both made by seed/privacy.ts
  *                seedWorkerNotice, run first); one cut of the issued hide
- *                (20 ft² for sleeves of BLK 50 and 52, so the hide stays PARTLY_CUT); two bundles of sleeves from it;
+ *                (20 ft² for sleeves of BLK 50 and 52, so the hide stays PARTLY_CUT); two bundles of sleeves from it,
+ *                one of them on its second ticket (its first came off: a BundleReprint with the reason);
  *                three scans at sewing: a report of the first bundle undone at once (a mis-scan) and a report of the
  *                second; the operator's correction request of that report (one of its two sleeve sets stained: 1 good,
  *                1 scrapped, its line STAIN 1), still PENDING; a scan the cutting tablet's queue sent that was refused
@@ -77,6 +78,7 @@ const T = {
   issued: new Date('2026-11-16T07:30:00.000Z'),
   cut: new Date('2026-11-16T09:00:00.000Z'),
   bundled: new Date('2026-11-16T10:00:00.000Z'),
+  reprinted: new Date('2026-11-16T10:20:00.000Z'),
   scanned: new Date('2026-11-17T08:00:00.000Z'),
   undone: new Date('2026-11-17T08:00:20.000Z'),
   rescanned: new Date('2026-11-17T09:30:00.000Z'),
@@ -535,14 +537,19 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
         ],
       })
       await tx.hide.update({ where: { id: hide1 }, data: { state: HideState.PARTLY_CUT, updatedAt: T.cut }, select: { id: true } })
+      // The bundle whose id sorts last lost its first ticket (SEED-BN-001n) and was reprinted as SEED-BN-000n: the
+      // generated isolation tests copy the FIRST bundle by id, which must still be on its first ticket.
+      const reprinted = [...bundleIds].sort().at(-1)!
       for (const [index, cell] of (['BLK-50', 'BLK-52'] as const).entries()) {
+        const code = `SEED-BN-000${index + 1}`
+        const first = bundleIds[index] === reprinted ? `SEED-BN-001${index + 1}` : code
         await tx.bundle.create({
           data: {
             id: bundleIds[index]!,
             siteId: siteA,
             workOrderId,
             workOrderSizeId: cellIds[cell],
-            code: `SEED-BN-000${index + 1}`,
+            code: first,
             quantity: cell === 'BLK-50' ? 1 : 2,
             part: 'SLEEVES',
             cutLogIds: [cutLogId],
@@ -552,6 +559,25 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
           },
           select: { id: true },
         })
+        if (first === code) continue
+        // The reprint's row (with its reason) first, then the bundle's new code (the Bundle trigger checks the row).
+        await tx.bundleReprint.create({
+          data: {
+            id: id(`production:bundle-reprint:WO-0001:${index + 1}`),
+            companyId: companyA,
+            siteId: siteA,
+            workOrderId,
+            bundleId: bundleIds[index]!,
+            code,
+            replacedCode: first,
+            reason: 'The first ticket came off in the cutting room.',
+            deviceId,
+            createdAt: T.reprinted,
+            createdById: operatorId,
+          },
+          select: { id: true },
+        })
+        await tx.bundle.update({ where: { id: bundleIds[index]! }, data: { code, replacedCodes: [first], version: 2, updatedAt: T.reprinted }, select: { id: true } })
       }
     }),
   )

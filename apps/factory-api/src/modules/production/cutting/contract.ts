@@ -289,6 +289,8 @@ export const cutLogContract = defineContract({
           pattern: decimal.nullable(),
           reversedById: id().nullable(),
           live: z.boolean(),
+          /** The closing entry of its used-up hide: the one cut of that hide the office may still correct (it opens the hide again). */
+          closing: z.boolean(),
           worker: output({ id: id(), name: z.string() }).nullable(),
           station: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
           cells: z.array(output({ workOrderSizeId: id(), colourwayCode: z.string(), size: z.string() })),
