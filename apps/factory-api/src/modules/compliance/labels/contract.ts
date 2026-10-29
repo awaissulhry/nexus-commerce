@@ -88,6 +88,7 @@ const graphicView = z
     output({ kind: z.literal('CE'), notifiedBodyNumber: z.string().nullable() }),
     output({ kind: z.literal('PICTOGRAM'), pictogram: z.enum(['MOTORCYCLIST', 'GLOVE', 'NONE']), standardCode: z.string().nullable(), ppeClass: z.string().nullable() }),
     output({ kind: z.literal('CARE'), symbols: z.array(output({ code: z.string(), mark: z.string(), words: z.string() })) }),
+    output({ kind: z.literal('BARCODE'), value: z.string().nullable() }),
   ])
   .nullable()
 

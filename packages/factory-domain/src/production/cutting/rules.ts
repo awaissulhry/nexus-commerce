@@ -29,11 +29,15 @@ import type { WorkOrderStatus } from '../work-orders/machine'
  *   undo       the cutter's own last entry on this device, before the next one, while nothing was made of it.
  *   correction the office reverses any entry once with a reason: a mirror entry (the same work order, hide, unit and
  *              areas, no pieces) that gives its area and pieces back.
+ *   closing    a used-up (CONSUMED) hide names its closing entry: the Hide done's entry, or the last cut when Hide done
+ *              used nothing more. Its cuts are final but that one: undoing or correcting the closing entry opens the
+ *              hide again (PARTLY_CUT; its area is at the work order again), so a wrong closing cut is put right.
  *   readiness  a floor cut is real floor work: it waits for the site's floor to be ready (B-W1-36's privacy gate: a
  *              stored DPIA and a published worker notice; B-W1-37's floor rules: a legal basis on record where the site
  *              names workers), refused in the gate's own words.
- * A CONSUMED or SCRAPPED hide never changes again (the …_supply_guards trigger), and the cut log trigger cuts none: its
- * entries are not undone or corrected here (the area they gave back could never be cut or returned).
+ * A SCRAPPED hide never changes again, nor does a CONSUMED one but for the reversal of its closing entry (the
+ * …_production_leftovers_guards triggers), and the cut log trigger cuts neither: their other entries are not undone or
+ * corrected here (the area they gave back could never be cut or returned).
  *
  * Areas are decimals (decimal.js) in the hide's material's base unit (an area unit: m², dm² or ft²), never floats.
  */
@@ -359,11 +363,25 @@ export function cutDecision(facts: CutFacts): CutDecision {
 // ---- undo and correction -------------------------------------------------------------------------------------------------------
 
 export interface ReversalFacts {
-  readonly entry: { readonly reversalOfId: string | null; readonly reversed: boolean }
+  readonly entry: { readonly id: string; readonly reversalOfId: string | null; readonly reversed: boolean }
   readonly workOrder: { readonly number: string; readonly status: WorkOrderStatus }
-  readonly hide: { readonly code: string; readonly state: HideState }
+  /** The entry's hide; `closingCutLogId`: a CONSUMED hide's closing entry (Hide.closingCutLogId), else null. */
+  readonly hide: { readonly code: string; readonly state: HideState; readonly closingCutLogId: string | null }
   /** The ACTIVE bundles that carry the entry's pieces (B-W1-41), by code. */
   readonly bundles: readonly string[]
+}
+
+/** The entry is its CONSUMED hide's closing entry: reversing it opens the hide again. */
+export const closesHide = (facts: Pick<ReversalFacts, 'entry' | 'hide'>): boolean => facts.hide.state === 'CONSUMED' && facts.hide.closingCutLogId === facts.entry.id
+
+/**
+ * The hide's state after a reversal of one of its entries: a used-up hide whose closing entry is reversed is open again
+ * (PARTLY_CUT); a remnant whose RETURN the undo took back to the work order is cut on (PARTLY_CUT); else as it was.
+ */
+export function stateAfterReversal(facts: { readonly state: HideState; readonly reopens: boolean; readonly remnantReturnReversed: boolean }): HideState {
+  if (facts.state === 'CONSUMED') return facts.reopens ? 'PARTLY_CUT' : 'CONSUMED'
+  if (facts.state === 'REMNANT' && facts.remnantReturnReversed) return 'PARTLY_CUT'
+  return facts.state
 }
 
 /** Why the office may not correct (reverse) this entry, or null. */
@@ -373,10 +391,13 @@ export function correctionRefusal(facts: ReversalFacts): CutRefusal | null {
   if (!CUTTABLE_STATUSES.includes(facts.workOrder.status)) {
     return { code: 'WORK_ORDER_NOT_OPEN', message: `Work order ${facts.workOrder.number} is ${facts.workOrder.status}; its cut log changes only while it is RELEASED or IN_PROGRESS.` }
   }
-  if (facts.hide.state === 'CONSUMED' || facts.hide.state === 'SCRAPPED') {
+  if (facts.hide.state === 'SCRAPPED') {
+    return { code: 'HIDE_USED_UP', message: `Hide ${facts.hide.code} is scrapped: its cuts are final. The area a reversal gave back could never be cut or returned.` }
+  }
+  if (facts.hide.state === 'CONSUMED' && !closesHide(facts)) {
     return {
       code: 'HIDE_USED_UP',
-      message: `Hide ${facts.hide.code} is ${facts.hide.state === 'CONSUMED' ? 'used up' : 'scrapped'}: its cuts are final. The area a reversal gave back could never be cut or returned.`,
+      message: `Hide ${facts.hide.code} is used up: its cuts are final but its closing cut. Correct the closing cut first (that opens the hide again), then this one.`,
     }
   }
   if (facts.bundles.length > 0) {

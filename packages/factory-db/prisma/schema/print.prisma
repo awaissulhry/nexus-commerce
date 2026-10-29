@@ -41,6 +41,11 @@ model Printer {
   // shipping.prisma: the sites' shipping settings that print carrier labels and documents on it.
   shippingLabelSettings    ShippingSettings[] @relation("ShippingLabelPrinter")
   shippingDocumentSettings ShippingSettings[] @relation("ShippingDocumentPrinter")
+  // production.prisma: the garment labels sent to it (B-W1-44) and the bundle tickets printed again on it.
+  garmentLabelPrints       GarmentLabelPrint[]
+  bundleReprints           BundleReprint[]
+  // _core.prisma: the stations whose label printer it is (MES-184).
+  stations                 Station[]
 
   @@unique([tenantId, siteId, code])
   // The target of a job's reference: a job is on its printer's company and site.

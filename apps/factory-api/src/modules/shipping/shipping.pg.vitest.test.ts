@@ -486,8 +486,8 @@ describe('a reversal reduces what can ship (Reg. (EU) 2016/425 art. 8(8); tenant
     expect((await readyCell('otherTenant', blk52))).toMatchObject({ released: 2, reversed: 1, shippable: 1 })
     const release = seedB.quality.releaseIds['BLK-52']
     await admin(
-      `INSERT INTO "QualityReleaseReversal" (id, "tenantId", "companyId", "siteId", "workOrderId", "workOrderSizeId", "releaseId", quantity, reason, "reversedById", "reversedAt")
-       SELECT $1, r."tenantId", r."companyId", r."siteId", r."workOrderId", r."workOrderSizeId", r.id, 1, 'A seam opened after release.', $2, now() FROM "QualityRelease" r WHERE r.id = $3`,
+      `INSERT INTO "QualityReleaseReversal" (id, "tenantId", "companyId", "siteId", "workOrderId", "workOrderSizeId", "releaseId", quantity, "reasonCode", reason, "reversedById", "reversedAt")
+       SELECT $1, r."tenantId", r."companyId", r."siteId", r."workOrderId", r."workOrderSizeId", r.id, 1, 'DEFECT_FOUND_LATER', 'A seam opened after release.', $2, now() FROM "QualityRelease" r WHERE r.id = $3`,
       [newId(), newId(), release],
     )
     expect(await readyCell('otherTenant', blk52)).toBeUndefined()

@@ -1,14 +1,15 @@
 import PDFDocument from 'pdfkit'
 import type { RenderedLabel } from '@nexus/factory-domain/compliance/labels/render'
 import { hundredthsOf, LAYOUT_PRESETS } from '@nexus/factory-domain/compliance/labels/rules'
-import { blockPositions, graphicHeight } from '@nexus/factory-domain/compliance/labels/zpl'
+import { barHeight, blockPositions, graphicHeight } from '@nexus/factory-domain/compliance/labels/zpl'
+import { code128Bars } from '@nexus/factory-domain/labels/code128'
 import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
 
 /**
  * The garment label as a PDF page of the label's size (B-W1-19; the browser's fallback and the proof on paper, design 02
  * `lb-sheet`), in the geometry of factory-domain compliance/labels/zpl.ts (hundredths of a millimetre): the CE mark, the
  * pictogram's box with the standard and the class, the care symbols' boxes (stand-ins until the licensed artwork, W2b),
- * the text lines, and a sample's black SAMPLE band across the middle. pdfkit's standard fonts, a fixed creation date:
+ * the batch number or serial as Code 128 bars (a preview's empty bar row as a box), the text lines, and a sample's black SAMPLE band across the middle. pdfkit's standard fonts, a fixed creation date:
  * the same label gives the same bytes. Stored nowhere.
  */
 
@@ -62,6 +63,15 @@ export async function renderGarmentLabelPdf(label: RenderedLabel): Promise<Buffe
         pdf.lineWidth(pt(20)).rect(pt(left), pt(y), pt(side), pt(side)).stroke('#000000')
         write(symbol.mark, left + 40, y + Math.round(side * 0.3), Math.round(side * 0.4), { width: pt(side - 60) })
       })
+    } else if (graphic?.kind === 'BARCODE') {
+      const span = width - 2 * preset.margin
+      if (graphic.value === null) pdf.lineWidth(pt(20)).rect(pt(x), pt(y), pt(span), pt(barHeight(preset))).stroke('#000000')
+      else {
+        // 0.25 mm modules, narrower when the symbol would not fit between the margins (as the scan labels' PDF).
+        const symbol = code128Bars(graphic.value)
+        const module = Math.min(pt(25), pt(span) / symbol.modules)
+        for (const bar of symbol.bars) pdf.rect(pt(x) + bar.x * module, pt(y), bar.width * module, pt(barHeight(preset))).fill('#000000')
+      }
     }
     let lineY = y + graphicHeight(block, preset)
     for (const line of block.lines) {

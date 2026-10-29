@@ -51,6 +51,8 @@ const bundle = output({
   /** The cut log entries its pieces come from (genealogy). */
   cutLogIds: z.array(id()),
   deviceId: id().nullable(),
+  /** The floor queue's id of the event that made it (A1 §3.8), or null. */
+  clientEventId: z.string().nullable(),
   version: z.number().int(),
   createdAt: instant(),
 })
@@ -82,7 +84,7 @@ const ticketAnswer = output({
 })
 
 const printing = {
-  /** The label printer; null: the tickets print as PDF; absent: the site's only ACTIVE label printer. */
+  /** The label printer; null: the tickets print as PDF; absent: the station's (MES-184), else the site's only ACTIVE one. */
   printerId: id().nullable().optional(),
   language: z.enum(LABEL_LANGUAGES).optional(),
 }
@@ -123,14 +125,20 @@ export const bundlesViewContract = defineContract({
   response: {
     200: output({
       workOrder: output({ id: id(), number: z.string(), batchNumber: z.string().nullable(), status, kind: z.enum(WORK_ORDER_KINDS), companyId: id(), siteId: id(), dueDate: businessDate().nullable(), open: z.boolean(), style }),
-      /** The target size of the proposal (asked, else the default; 1 for a made-to-measure unit). */
+      /** The target size of the proposal (asked, else the site's standard bundle size; 1 for a made-to-measure unit). */
       bundleSize: z.number().int(),
+      /** The site's standard bundle size (production settings; MES-065). */
+      standardBundleSize: z.number().int(),
       singlePiece: z.boolean(),
       /** With the proposed bundles of what each cell still has to bundle. */
       cells: z.array(cell.extend({ proposal: z.array(z.number().int()) })),
       bundles: z.array(bundle.extend({ scans: z.number().int() })),
       operations: z.array(operation.extend({ id: id(), scanRequired: z.boolean() })),
       printers: z.array(output({ id: id(), code: z.string(), name: z.string() })),
+      /** The floor device's station's label printer (MES-184), or null. */
+      stationPrinterId: id().nullable(),
+      /** Where the tickets go when the make names no printer (the station's, else the site's only one); null: name one. */
+      defaultPrinterId: id().nullable(),
     }),
   },
 })
@@ -162,8 +170,13 @@ export const makeBundlesContract = defineContract({
   body: input({
     /** Per cell (and part); absent: every cell's whole garments cut and not yet in bundles ("all cut, not bundled"). */
     cells: z.array(ask).min(1).max(60).optional(),
-    /** The target size (default 10; a made-to-measure work order: 1). */
+    /** The target size (default: the site's standard bundle size; a made-to-measure work order: 1). */
     bundleSize: size().optional(),
+    /**
+     * The floor queue's id for this event (A1 §3.8; unique in the tenant): the make is then ONE bundle, and a resend
+     * under any key answers the bundle it made (200, replayed).
+     */
+    clientEventId: z.string().trim().min(1).max(80).optional(),
     ...printing,
   }),
   response: { 200: makeAnswer, 201: makeAnswer },
@@ -190,7 +203,7 @@ const reprintAnswer = output({ bundle, replacedCode: z.string(), ticket: ticketA
 export const reprintBundleContract = defineContract({
   params: bundleParams,
   body: input({
-    /** Why: lost, damaged, unreadable … (kept in the audit row). */
+    /** Why: lost, damaged, unreadable … (the reprint's row keeps it: BundleReprint.reason). */
     reason: z.string().trim().min(3).max(200),
     ...printing,
   }),
@@ -224,6 +237,10 @@ export const workOrderBundlesContract = defineContract({
           tickets: z
             .array(output({ jobId: id(), printerId: id(), scanId: z.string().nullable(), status: z.enum(['QUEUED', 'SENT', 'PRINTED', 'FAILED']), lastError: z.string().nullable(), createdAt: instant() }))
             .nullable(),
+          /** Its tickets printed again, oldest first: the new code, the one it replaced, why, where (never who). */
+          reprints: z.array(
+            output({ code: z.string(), replacedCode: z.string(), reason: z.string(), printerId: id().nullable(), postedBy: z.enum(['FLOOR', 'OFFICE']), at: instant() }),
+          ),
         }),
       ),
     }),

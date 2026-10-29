@@ -59,6 +59,7 @@ const A = {
   deviceA1: idOf(ns.a, 'device:A1:cutting'),
   deviceB1: idOf(ns.a, 'device:B1:cutting'),
   tablet2: newId(),
+  tablet3: newId(),
   roaming: newId(),
   operatorA1: idOf(ns.a, 'worker:A1:operator'),
   leadA1: idOf(ns.a, 'worker:A1:lead'),
@@ -90,6 +91,8 @@ const SESSIONS: Record<string, SessionContext> = {
   floor: floor(A.siteA1, A.deviceA1, A.operatorA1, A.companyA),
   /** The same operator on a second tablet at the cutting table. */
   tablet2: floor(A.siteA1, A.tablet2, A.operatorA1, A.companyA),
+  /** And on a third one (the closing cut's tests: its last entry is its own). */
+  tablet3: floor(A.siteA1, A.tablet3, A.operatorA1, A.companyA),
   /** A tablet without a station, and the team leader on it. */
   roaming: floor(A.siteA1, A.roaming, A.operatorA1, A.companyA),
   roamingLead: floor(A.siteA1, A.roaming, A.leadA1, A.companyA),
@@ -136,6 +139,14 @@ async function onHand(locationId: string, hideId: string): Promise<string> {
   return row!.n
 }
 const hideState = async (hideId: string) => (await admin<{ state: string }>(`SELECT state FROM "Hide" WHERE id = $1`, [hideId]))[0]!.state
+const hideRow = async (hideId: string) => (await admin<{ state: string; closingCutLogId: string | null }>(`SELECT state::text AS state, "closingCutLogId" FROM "Hide" WHERE id = $1`, [hideId]))[0]
+/** An admin INSERT of an entry's mirror (its reversal), as a login that skips the API but not the triggers. */
+const mirrorSql = (cutLogId: string): [string, unknown[]] => [
+  `INSERT INTO "CutLog" (id, "tenantId", "siteId", "workOrderId", "lotId", "hideId", uom, "areaUsed", "baseAreaUsed", "remnantArea", "baseRemnantArea", "reversalOfId", note, "workerId", "stationId", "clientEventId", "createdById")
+   SELECT gen_random_uuid(), "tenantId", "siteId", "workOrderId", "lotId", "hideId", uom, "areaUsed", "baseAreaUsed", "remnantArea", "baseRemnantArea", id, 'A mirror typed in by hand.', "workerId", "stationId", 'mirror:' || id, "createdById"
+     FROM "CutLog" WHERE id = $1`,
+  [cutLogId],
+]
 
 // ---- made-up stock and work orders ----------------------------------------------------------------------------------------
 
@@ -209,7 +220,7 @@ async function releasedWorkOrder(lineId: string): Promise<Json> {
   return released.workOrder
 }
 
-type Orders = 'main' | 'replay' | 'race' | 'raceA' | 'raceB' | 'station' | 'remnant' | 'consume' | 'undo' | 'correct'
+type Orders = 'main' | 'replay' | 'race' | 'raceA' | 'raceB' | 'station' | 'remnant' | 'consume' | 'consumeTwo' | 'closeLast' | 'undo' | 'correct'
 const WO = {} as Record<Orders, Json>
 
 beforeAll(async () => {
@@ -247,6 +258,7 @@ beforeAll(async () => {
   // Two more tablets at A1: one at the cutting table, one without a station.
   for (const [deviceId, stationId, name] of [
     [A.tablet2, A.station, 'Second cutting tablet'],
+    [A.tablet3, A.station, 'Third cutting tablet'],
     [A.roaming, null, 'Roaming tablet'],
   ] as const) {
     await admin(`INSERT INTO "Device" (id, "tenantId", "companyId", "siteId", "stationId", name, kind, status, "enrolledAt") VALUES ($1, $2, $3, $4, $5, $6, 'TABLET', 'ACTIVE', now())`, [deviceId, A.tenant, A.companyA, A.siteA1, stationId, name])
@@ -257,7 +269,7 @@ beforeAll(async () => {
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   const line = await salesOrder(40)
-  for (const name of ['main', 'replay', 'race', 'raceA', 'raceB', 'station', 'remnant', 'consume', 'undo', 'correct'] as const) WO[name] = await releasedWorkOrder(line)
+  for (const name of ['main', 'replay', 'race', 'raceA', 'raceB', 'station', 'remnant', 'consume', 'consumeTwo', 'closeLast', 'undo', 'correct'] as const) WO[name] = await releasedWorkOrder(line)
 }, 300_000)
 
 afterAll(async () => {
@@ -582,18 +594,91 @@ describe('Hide done (MES-058, SCM-253): the remnant back to stock as a REMNANT, 
     expect(await hideState(hides.H07!.id)).toBe('PARTLY_CUT')
   })
 
-  it('closes a hide with the last set and no remnant in one tap: the rest is used, the hide is used up and its cuts are final', async () => {
+  let closing: Json
+
+  it('closes a hide with the last set and no remnant in one tap: the rest is used, the hide is used up and names that entry as its closing one', async () => {
     const response = await cut(WO.consume.id, { code: hides.H08!.code, lines: sets(WO.consume), done: { remnant: null } })
     expect(response.statusCode, response.body).toBe(201)
     const answer = response.json()
+    closing = answer.cut
     expect(answer.cut).toMatchObject({ areaUsed: '55.0000', remnantArea: '0.0000', pieces: [{ part: 'Outer shell', pieces: 1 }] })
     expect(answer).toMatchObject({ remnant: null, hide: { state: 'CONSUMED', left: '0.0000', closed: true } })
-    expect(await hideState(hides.H08!.id)).toBe('CONSUMED')
+    expect(await hideRow(hides.H08!.id)).toEqual({ state: 'CONSUMED', closingCutLogId: answer.cut.id })
+    // Nothing more is cut from it.
     expect(refusalOf(await refused('floor', 'POST', cutUrl(WO.consume.id), { clientEventId: clientEvent(), code: hides.H08!.code, lines: sets(WO.consume) }, 409))).toBe('refusal/HIDE_USED_UP')
-    expect(refusalOf(await refused('floor', 'POST', `/production/cutting/cuts/${answer.cut.id}/undo`, undefined, 409))).toBe('refusal/HIDE_USED_UP')
-    expect(refusalOf(await refused('manager', 'POST', `/production/cutting/cuts/${answer.cut.id}/correct`, { reason: 'Wrong size logged' }, 409))).toBe('refusal/HIDE_USED_UP')
     const log = await ok('manager', 'GET', `/production/cutting/work-orders/${WO.consume.id}/cut-log`)
     expect(log.hides).toEqual([expect.objectContaining({ issued: '55.0000', cut: '48.1600', waste: '6.8400', returned: '0.0000', left: '0.0000', state: 'CONSUMED' })])
+    expect(log.entries.map((row: Json) => [row.id, row.closing])).toEqual([[answer.cut.id, true]])
+  })
+
+  it("corrects a wrong closing cut (B-W1-40's gap): the office's reversal opens the used-up hide again, and it closes again with the right remnant", async () => {
+    const corrected = await ok('manager', 'POST', `/production/cutting/cuts/${closing.id}/correct`, { reason: 'A usable offcut was set aside, not wasted' }, 201)
+    expect(corrected).toMatchObject({ reversedId: closing.id, hide: { id: hides.H08!.id, state: 'PARTLY_CUT', left: '55.0000' }, cells: [expect.objectContaining({ cut: 0, toCut: 2 })] })
+    expect(await hideRow(hides.H08!.id)).toEqual({ state: 'PARTLY_CUT', closingCutLogId: null })
+    const [audit] = await admin(`SELECT before, after FROM "AuditLog" WHERE action = 'production.hideState' AND "recordId" = $1 ORDER BY at DESC, id DESC LIMIT 1`, [hides.H08!.id])
+    expect(audit).toEqual({ before: { state: 'CONSUMED', closingCutLogId: closing.id }, after: { state: 'PARTLY_CUT' } })
+    const [reversed] = await admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'production.cut_reversed' AND payload->>'reversedId' = $1`, [closing.id])
+    expect(reversed!.payload).toMatchObject({ undo: false, postedBy: 'OFFICE', hideState: 'PARTLY_CUT' })
+    // The cutter logs the set again and closes the hide with the offcut set aside: a REMNANT now, nothing closing.
+    const again = await cut(WO.consume.id, { code: hides.H08!.code, lines: sets(WO.consume), done: { remnant: { area: '6', uom: 'FT2', toLocationId: A.cutRack } } })
+    expect(again.statusCode, again.body).toBe(201)
+    expect(again.json().hide).toMatchObject({ state: 'REMNANT', left: '0.0000', closed: true })
+    expect(await hideRow(hides.H08!.id)).toEqual({ state: 'REMNANT', closingCutLogId: null })
+    expect(await onHand(A.cutRack, hides.H08!.id)).toBe('6.0000')
+    expect(refusalOf(await refused('manager', 'POST', `/production/cutting/cuts/${closing.id}/correct`, { reason: 'Again' }, 409))).toBe('refusal/REVERSED_ALREADY')
+    const log = await ok('manager', 'GET', `/production/cutting/work-orders/${WO.consume.id}/cut-log`)
+    expect(log.hides).toEqual([expect.objectContaining({ issued: '55.0000', cut: '48.1600', waste: '0.8400', returned: '6.0000', left: '0.0000', state: 'REMNANT' })])
+    expect(log.entries.every((row: Json) => row.closing === false)).toBe(true)
+  })
+
+  it("keeps a used-up hide's other cuts final, in words and in the database; the cutter's undo of the closing cut opens it too", async () => {
+    const first = (await cut(WO.consumeTwo.id, { code: hides.H13!.code, lines: sets(WO.consumeTwo) }, 'tablet3')).json().cut
+    const done = await call('tablet3', 'POST', `/production/cutting/work-orders/${WO.consumeTwo.id}/hides/${hides.H13!.id}/remnant`, { clientEventId: clientEvent(), remnant: null }, freshKey())
+    expect(done.statusCode, done.body).toBe(201)
+    const last = done.json().cut
+    expect(last).toMatchObject({ areaUsed: '6.8400', pieces: [] })
+    expect(await hideRow(hides.H13!.id)).toEqual({ state: 'CONSUMED', closingCutLogId: last.id })
+    // The first cut of the used-up hide is final: in words, and in the database (a hand-made reversal of it).
+    const error = await refused('manager', 'POST', `/production/cutting/cuts/${first.id}/correct`, { reason: 'Logged on the wrong order' }, 409)
+    expect(error).toMatchObject({
+      issues: [{ path: 'refusal/HIDE_USED_UP' }],
+      message: `Hide ${hides.H13!.code} is used up: its cuts are final but its closing cut. Correct the closing cut first (that opens the hide again), then this one.`,
+    })
+    await expect(admin(...mirrorSql(first.id))).rejects.toThrow(/is used up; its cuts are final but its closing entry/)
+    // The hide never leaves CONSUMED by itself: not to PARTLY_CUT while its closing entry stands, never to another state.
+    await expect(admin(`UPDATE "Hide" SET state = 'PARTLY_CUT', "closingCutLogId" = NULL WHERE id = $1`, [hides.H13!.id])).rejects.toThrow(/opens again \(PARTLY_CUT\) only when its closing cut log entry .* is reversed/)
+    await expect(admin(`UPDATE "Hide" SET state = 'REMNANT', "closingCutLogId" = NULL WHERE id = $1`, [hides.H13!.id])).rejects.toThrow(/it never changes, but back to PARTLY_CUT/)
+    await expect(admin(`UPDATE "Hide" SET grade = 'B' WHERE id = $1`, [hides.H13!.id])).rejects.toThrow(/it never changes, but back to PARTLY_CUT/)
+    // A reversal of the closing entry that leaves the hide used up is refused when its transaction commits.
+    await admin('BEGIN')
+    try {
+      await admin(...mirrorSql(last.id))
+      await expect(admin('COMMIT')).rejects.toThrow(/opens again \(PARTLY_CUT\) in the same transaction/)
+    } finally {
+      await admin('ROLLBACK').catch(() => undefined)
+    }
+    expect(await counts(`SELECT count(*)::int AS n FROM "CutLog" WHERE "reversalOfId" = $1`, [last.id])).toBe(0)
+    // The cutter's own last entry, the closing one (a Hide done tapped too early), is undone on the tablet: open again.
+    const undone = await call('tablet3', 'POST', `/production/cutting/cuts/${last.id}/undo`, undefined, freshKey())
+    expect(undone.statusCode, undone.body).toBe(201)
+    expect(undone.json()).toMatchObject({ reversedId: last.id, hide: { state: 'PARTLY_CUT', left: '6.8400' } })
+    expect(await hideRow(hides.H13!.id)).toEqual({ state: 'PARTLY_CUT', closingCutLogId: null })
+    // Open again, the first cut is corrected like any other.
+    expect((await ok('manager', 'POST', `/production/cutting/cuts/${first.id}/correct`, { reason: 'Logged on the wrong order' }, 201)).hide).toMatchObject({ state: 'PARTLY_CUT', left: '55.0000' })
+  })
+
+  it('names the last cut as the closing one when Hide done used nothing more; correcting it opens the hide again', async () => {
+    const all = await cut(WO.closeLast.id, { code: hides.H14!.code, lines: [{ workOrderSizeId: WO.closeLast.cells[0].id, parts: [{ part: 'Outer shell', pieces: 1 }] }], area: { area: '55', uom: 'FT2' } }, 'tablet3')
+    expect(all.statusCode, all.body).toBe(201)
+    const entry = all.json().cut
+    expect(all.json().hide).toMatchObject({ state: 'PARTLY_CUT', left: '0.0000' })
+    const done = await call('tablet3', 'POST', `/production/cutting/work-orders/${WO.closeLast.id}/hides/${hides.H14!.id}/remnant`, { clientEventId: clientEvent(), remnant: null }, freshKey())
+    expect(done.statusCode, done.body).toBe(201)
+    expect(done.json()).toMatchObject({ cut: null, hide: { state: 'CONSUMED', closed: true } })
+    expect(await hideRow(hides.H14!.id)).toEqual({ state: 'CONSUMED', closingCutLogId: entry.id })
+    const corrected = await ok('manager', 'POST', `/production/cutting/cuts/${entry.id}/correct`, { reason: 'A single part logged on the wrong hide' }, 201)
+    expect(corrected.hide).toMatchObject({ state: 'PARTLY_CUT', left: '55.0000' })
+    expect(await hideRow(hides.H14!.id)).toEqual({ state: 'PARTLY_CUT', closingCutLogId: null })
   })
 })
 
@@ -656,7 +741,7 @@ describe('the work order record counts its cut garments; the walls hold', () => 
   it("replaces the record's null cut count with the cut log's, per cell", async () => {
     const { workOrder } = await ok('planner', 'GET', `/production/work-orders/${WO.main.id}`)
     // Sewn and finished are counted from the floor's scans (B-W1-42): none yet.
-    expect(workOrder.cells.map((cell: Json) => cell.progress)).toEqual([{ cut: 1, sewn: 0, finished: 0 }])
+    expect(workOrder.cells.map((cell: Json) => cell.progress)).toEqual([{ cut: 1, bundled: 0, sewn: 0, finished: 0 }])
     // The seeded work order: its cut is sleeves only, so no garment of it is cut yet.
     const seeded = await ok('planner', 'GET', `/production/work-orders/${A.seededWorkOrder}`)
     expect(seeded.workOrder.cells.every((cell: Json) => cell.progress.cut === 0)).toBe(true)

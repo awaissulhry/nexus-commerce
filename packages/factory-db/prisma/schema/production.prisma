@@ -42,8 +42,9 @@
 // a cut log, a scan or an acknowledgement; the office deletes only a DRAFT work order's parts.
 
 /// A site's floor rules (SCR-074, B-W1-37): who a floor record names (MES-278: the monitoring switch with its legal
-/// reference). The site's row has the site's own id; a site without one names workers. Undo window, scrap limit and
-/// sequence rules per site are W2b (MES-294): W1 uses fixed defaults.
+/// reference), and the standard bundle size of its cutting room (MES-065). The site's row has the site's own id; a site
+/// without one names workers and bundles by 10. Undo window, scrap limit and sequence rules per site are W2b (MES-294):
+/// W1 uses fixed defaults.
 model ProductionSettings {
   /// The site's own id (`siteId`): a site has at most one row, and it is read by the site's id.
   id                     String             @id @db.Uuid
@@ -59,6 +60,9 @@ model ProductionSettings {
   monitoringReference    String?
   monitoringRecordedAt   DateTime?          @db.Timestamptz(3)
   monitoringRecordedById String?            @db.Uuid
+  /// Garments per bundle when a make names no size (MES-065: 10-20 in a cutting room; one garment for a made-to-measure
+  /// unit whatever this says), from 1 to 500. The office sets it; the floor reads it.
+  standardBundleSize     Int                @default(10)
   version                Int                @default(1)
   createdAt              DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
@@ -213,6 +217,8 @@ model WorkOrderSize {
   garmentSerials     GarmentSerial[]
   // shipping.prisma: the shipment lines that ship it.
   shipmentLines      ShipmentLine[]
+  // The garment labels printed for it (B-W1-44).
+  garmentLabelPrints GarmentLabelPrint[]
 
   @@unique([tenantId, workOrderId, colourwayId, size])
   // The target of the materials', cut pieces' and bundles' references: a cell of the same site and work order.
@@ -333,7 +339,7 @@ model CutLog {
   createdById     String?   @db.Uuid
 
   workOrder  WorkOrder     @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
-  hide       Hide          @relation(fields: [tenantId, siteId, lotId, hideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+  hide       Hide          @relation("HideCutLogs", fields: [tenantId, siteId, lotId, hideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   reversalOf CutLog?       @relation("CutLogReversal", fields: [tenantId, siteId, reversalOfId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   reversals  CutLog[]      @relation("CutLogReversal")
@@ -341,6 +347,8 @@ model CutLog {
   station    Station?      @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   device     Device?       @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   pieces     CutLogPiece[]
+  // inventory.prisma: the used-up hide whose closing entry this is (Hide.closingCutLogId).
+  closedHides Hide[]       @relation("HideClosingCutLog")
 
   @@unique([tenantId, deviceId, clientEventId])
   // The target of the reversals' reference: on the entry's own site.
@@ -375,8 +383,8 @@ model CutLogPiece {
 /// A bundle (MES-065, MES-068; A1 §2.4 E): cut pieces of one cell (colourway and size) of a work order travelling
 /// together through the operations, as garments (`quantity`), for the whole garment or one part or operation group;
 /// one garment for a made-to-measure unit. Its ticket carries its scannable id (`code`); reprinting a lost ticket gives a
-/// new code and voids the old one (MES-073: scanning it says "replaced"). A bundle made by mistake is VOID, never
-/// deleted.
+/// new code and voids the old one (MES-073: scanning it says "replaced"), each reprint with its reason (BundleReprint).
+/// A bundle made by mistake is VOID, never deleted.
 model Bundle {
   id              String       @id @db.Uuid
   tenantId        String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -398,6 +406,9 @@ model Bundle {
   voidReason      String?
   /// The floor device it was made on (null: made in the office).
   deviceId        String?      @db.Uuid
+  /// The device's id for the event that made it (A1 §3.8; the offline floor queue), unique in the tenant: a bundle sent
+  /// twice under the same id is made once (the second answer is the first bundle). Null: made online without one.
+  clientEventId   String?
   version         Int          @default(1)
   createdAt       DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
@@ -409,9 +420,14 @@ model Bundle {
   device        Device?         @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   scans         OperationScan[]
   correctionRequests ScanCorrectionRequest[]
+  // quality.prisma: the serials of the garments it carried to the final operation (B-W1-44).
+  garmentSerials GarmentSerial[]
+  // Its tickets printed again, each with the reason.
+  reprints      BundleReprint[]
 
   @@unique([tenantId, code])
-  // The target of the scans' reference: a bundle of the scan's site and work order.
+  @@unique([tenantId, clientEventId])
+  // The target of the scans' and serials' references: a bundle of the same site and work order.
   @@unique([tenantId, siteId, workOrderId, id])
 }
 
@@ -420,6 +436,44 @@ enum BundleStatus {
   ACTIVE
   /// Made by mistake: no scan takes it any more.
   VOID
+}
+
+/// One reprint of a bundle's ticket (MES-073; B-W1-41's reprint): the new code it printed, the code it replaced (voided
+/// from then on), why (lost, damaged, unreadable …), the label printer and the floor device, who and when. Written in
+/// the command that gives the bundle its new code, before the bundle row changes: the Bundle trigger refuses a new code
+/// without this row. Never changed or removed (the triggers, for every login).
+/// @append-only
+model BundleReprint {
+  id           String   @id @db.Uuid
+  tenantId     String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The work order's company and site.
+  companyId    String   @db.Uuid
+  siteId       String   @db.Uuid
+  workOrderId  String   @db.Uuid
+  bundleId     String   @db.Uuid
+  /// The ticket's new code (a BUNDLE scannable id) and the one it replaced.
+  code         String
+  replacedCode String
+  /// Why the ticket was printed again: required.
+  reason       String
+  /// The label printer the new ticket was sent to (null: printed as a PDF).
+  printerId    String?  @db.Uuid
+  /// The floor device it was reprinted from (null: the office).
+  deviceId     String?  @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  /// The office user, or the worker at a site that names workers (production settings); null at a site that records
+  /// the station only.
+  createdById  String?  @db.Uuid
+
+  site    Site     @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  bundle  Bundle   @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId, siteId.
+  printer Printer? @relation(fields: [tenantId, companyId, siteId, printerId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device  Device?  @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A bundle's reprints; a work order's.
+  @@index([tenantId, bundleId])
+  @@index([tenantId, workOrderId])
 }
 
 /// One operation scan (MES-069, MES-090, MES-095, MES-096; A1 §2.5 "Operation scan", §3.8): a bundle reported done at an
@@ -735,4 +789,56 @@ model FloorScanRefusal {
   @@unique([tenantId, deviceId, clientScanId, code])
   // The refused list: open ones per site.
   @@index([tenantId, siteId, discardedAt])
+}
+
+/// One print or reprint of garment labels at the final operation (PRD-348: every print and reprint is logged, a reprint
+/// with its reason; MES-076; Q31; B-W1-44): N labels of one cell of a work order, with the work order's batch number
+/// (a BATCH style), or the serials given or printed again (a SERIAL style: one label each). Written in the command that
+/// gives the labels, before their print jobs are queued (a PrintJob names the cell or the serial). Never changed or
+/// removed (the triggers, for every login). The cell's PRINT entries are the labels its finished garments have (a BATCH
+/// style); the API never gives more than the garments finished at the final operation, under the cell's label lock.
+/// @append-only
+model GarmentLabelPrint {
+  id              String                 @id @db.Uuid
+  tenantId        String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The work order's company and site.
+  companyId       String                 @db.Uuid
+  siteId          String                 @db.Uuid
+  workOrderId     String                 @db.Uuid
+  workOrderSizeId String                 @db.Uuid
+  kind            GarmentLabelPrintKind
+  /// How the style traced its garments when printed (Style.garmentTracking, Q31).
+  tracking        GarmentTracking
+  /// Labels printed, from 1 (a SERIAL style: as many as serials named).
+  quantity        Int
+  /// The work order's batch number, printed on every label of it.
+  batchNumber     String
+  /// A SERIAL style: the serials printed (GarmentSerial ids of the cell, each once); empty for a BATCH style.
+  serialIds       String[]               @default([]) @db.Uuid
+  /// Why a REPRINT (required then: damaged, lost, unreadable …); null for a PRINT.
+  reason          String?
+  /// The label printer the labels were sent to (null: printed without a registered printer, which W1 does not do).
+  printerId       String?                @db.Uuid
+  /// The floor device it was printed from (null: the office).
+  deviceId        String?                @db.Uuid
+  createdAt       DateTime               @default(now()) @db.Timestamptz(3)
+  /// The office user, or the worker at a site that names workers (production settings); null at a site that records
+  /// the station only.
+  createdById     String?                @db.Uuid
+
+  site          Site          @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrderSize WorkOrderSize @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId, siteId.
+  printer       Printer?      @relation(fields: [tenantId, companyId, siteId, printerId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device        Device?       @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A work order's label log; a cell's labels.
+  @@index([tenantId, workOrderId])
+  @@index([tenantId, workOrderSizeId])
+}
+
+/// A first print of a cell's labels, or a print again of labels already given (the same batch or serials).
+enum GarmentLabelPrintKind {
+  PRINT
+  REPRINT
 }

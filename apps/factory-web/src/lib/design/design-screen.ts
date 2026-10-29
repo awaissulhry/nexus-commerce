@@ -9,7 +9,8 @@ import type { ComponentType, ReactNode } from 'react'
  * adds files and never edits the index. Fixture data is made up: never a real customer, supplier, person or number.
  */
 
-export type ScreenId = `SCR-${string}`
+/** A screen by its SCR id; a shared part every list uses has its own lab (`list-frame`). */
+export type ScreenId = `SCR-${string}` | 'list-frame'
 
 export interface DesignCase<M> {
   /** Unique in the screen; part of the frame's address (`/design/SCR-003/normal`). */
