@@ -287,6 +287,21 @@ export async function closeBlock(caller: CommandCaller, blockId: string, input: 
   return result
 }
 
+/**
+ * Inside the command that revokes a tablet (platform/auth/floor revokeDevice): its open DEVICE blocks are closed, so a
+ * label it printed and never sent is refused (BLOCK_CLOSED) and its numbers left are never used. One audit row per block.
+ * Answers how many it closed.
+ */
+export async function closeDeviceBlocks(tools: Pick<CommandTools, 'tx' | 'now' | 'audit'>, device: { readonly id: string; readonly companyId: string; readonly siteId: string }, reason: string): Promise<number> {
+  const open = await tools.tx.numberBlock.findMany({ where: { purpose: 'DEVICE', deviceId: device.id, status: 'ACTIVE' }, select: { id: true }, orderBy: { id: 'asc' } })
+  if (open.length === 0) return 0
+  await tools.tx.numberBlock.updateMany({ where: { id: { in: open.map((block) => block.id) } }, data: { status: 'CLOSED', closedAt: tools.now, closedReason: reason, version: { increment: 1 } } })
+  for (const block of open) {
+    tools.audit({ action: 'numbering.closeBlock', recordType: 'NumberBlock', recordId: block.id, companyId: device.companyId, siteId: device.siteId, before: { status: 'ACTIVE' }, after: { status: 'CLOSED' }, reason })
+  }
+  return open.length
+}
+
 // ---- the tablet's side ------------------------------------------------------------------------------------------------------
 
 function floorOf(caller: Pick<CommandCaller, 'factoryContext'>): FloorContext {

@@ -9,6 +9,7 @@ import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/per
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { idempotencyKeyFrom, type CommandTx } from '../../../core/command'
 import { actorOf, requireContext, type OfficeContext } from '../../../core/context'
+import { closeDeviceBlocks } from '../../numbering/scan-ids'
 import type { OfficeAuth } from '../sessions/office-auth'
 import type { CreateDeviceBody, DeviceView, EditDeviceBody, PutSettingsBody, RevokeDeviceBody } from './contract'
 import { endSessions, isLiveSession } from './store'
@@ -213,13 +214,15 @@ export async function revokeDevice(auth: OfficeAuth, request: FastifyRequest, de
       const ended = await endSessions(tx, { deviceId }, 'DEVICE_REVOKED', now)
       await tx.device.updateMany({ where: { id: deviceId }, data: { tokenHash: null, currentSessionId: null, revokedAt: now, revokedById: context.actorId } })
       const retired = await tx.deviceEnrolment.updateMany({ where: { deviceId, usedAt: null, revokedAt: null }, data: { revokedAt: now } })
+      // Its scan-id blocks close with it: a label it printed and never sent is refused, its numbers left never used.
+      const blocksClosed = await closeDeviceBlocks({ tx, now, audit }, { id: deviceId, companyId: before.companyId, siteId: before.siteId }, `Tablet revoked${body.reason ? `: ${body.reason}` : ''}`)
       audit({
         recordType: 'Device',
         recordId: deviceId,
         companyId: before.companyId,
         siteId: before.siteId,
         before: { status: before.status },
-        after: { status: 'REVOKED', sessionsEnded: ended.length, codesRetired: retired.count },
+        after: { status: 'REVOKED', sessionsEnded: ended.length, codesRetired: retired.count, blocksClosed },
         ...(body.reason ? { reason: body.reason } : {}),
       })
       return deviceViewOf(await deviceRow(tx, deviceId), now)
