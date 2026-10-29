@@ -117,6 +117,9 @@ const FAILED_DETAIL: MailDetail = { ...MAILS[5], to: ['ordini@officina-demo.exam
 const SPAM_DETAIL: MailDetail = { ...MAILS[3], to: ['ordini@officina-demo.example.com'], cc: [], bodyText: 'Approfitta subito di questa offerta irripetibile: macchine da cucire al 70%.', bodyHtml: null, attachments: [], thread: null, attempts: 1, fetchedAt: at(28, 14, 1) }
 
 const CANDIDATES: RecordCandidate[] = [
+  { type: 'Quote', id: '0190f0e2-dddd-7000-8000-000000000001', number: 'OF-2026/0042', title: 'Negozio Esempio', hasParty: true },
+  { type: 'SalesOrder', id: '0190f0e2-dddd-7000-8000-000000000002', number: 'OV-2026/0017', title: 'Negozio Esempio', hasParty: true },
+  { type: 'PurchaseOrder', id: '0190f0e2-dddd-7000-8000-000000000003', number: 'OA-2026/0103', title: 'Conceria Demo', hasParty: true },
   { type: 'Certificate', id: '0190f0e2-5555-7000-8000-000000000001', number: '0000-17092-A', title: 'EN 17092-3:2020 · A', hasParty: true },
   { type: 'Certificate', id: '0190f0e2-5555-7000-8000-000000000002', number: '0000-17092-AA', title: 'EN 17092-2:2020 · AA', hasParty: true },
   { type: 'Certificate', id: '0190f0e2-5555-7000-8000-000000000003', number: '0000-1621-2', title: 'EN 1621-1:2012 · 2', hasParty: false },

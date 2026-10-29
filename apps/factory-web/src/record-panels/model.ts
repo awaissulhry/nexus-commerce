@@ -421,9 +421,32 @@ export function canPreview(file: Pick<PanelFile, 'status' | 'contentType'>): boo
   return file.status === 'AVAILABLE' && file.contentType.split(';')[0].trim().toLowerCase() === PDF
 }
 
-/** The kinds a person may choose at upload, and the audiences, for this record and person. */
-export function uploadChoices(input: { can: Pick<PanelAbilities, 'share'>; party: PanelParty | null; record: Pick<PanelRecord, 'siteId' | 'companyId'> }): {
+/**
+ * Record types whose files (all, or some kinds) only their own module uploads (apps/factory-api platform/files/owned.ts
+ * MODULE_OWNED_FILES): the generic upload answers 409 for them, so the panel does not offer those kinds. `all`: every kind.
+ */
+export const MODULE_OWNED_KINDS: Readonly<Record<string, readonly FileKind[] | 'all'>> = {
+  ComplianceDocument: 'all',
+  Certificate: ['CERTIFICATE'],
+  Parcel: 'all',
+  Ddt: ['FISCAL_ARCHIVE'],
+  PrivacyNotice: 'all',
+  PrivacyDpia: 'all',
+}
+
+/** The kinds of this record type's files that only its module uploads. */
+export function ownedKinds(recordType: string): readonly FileKind[] {
+  const owned = Object.hasOwn(MODULE_OWNED_KINDS, recordType) ? MODULE_OWNED_KINDS[recordType] : undefined
+  return owned === undefined ? [] : owned === 'all' ? FILE_KINDS : owned
+}
+
+/**
+ * The kinds a person may choose at upload (those the record's module does not own: `owned` lists the others, which
+ * are added on the record's own page), and the audiences, for this record and person.
+ */
+export function uploadChoices(input: { can: Pick<PanelAbilities, 'share'>; party: PanelParty | null; record: Pick<PanelRecord, 'type' | 'siteId' | 'companyId'> }): {
   kinds: readonly FileKind[]
+  owned: readonly FileKind[]
   audiences: FileAudience[]
 } {
   const audiences: FileAudience[] = ['OFFICE']
@@ -431,7 +454,8 @@ export function uploadChoices(input: { can: Pick<PanelAbilities, 'share'>; party
     if (input.record.siteId && input.record.companyId) audiences.push('FLOOR')
     if (input.party) audiences.push('PARTNER', 'LINK')
   }
-  return { kinds: FILE_KINDS, audiences }
+  const owned = ownedKinds(input.record.type)
+  return { kinds: FILE_KINDS.filter((kind) => !owned.includes(kind)), owned, audiences }
 }
 
 /** The problem with a picked file before it is announced (a message key and parameters), or null. */

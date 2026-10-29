@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { isApiError } from '../lib/api/errors'
+import { isApiError, issuePath, type ApiError } from '../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../lib/session/context'
 import {
   completeUpload,
@@ -73,9 +73,8 @@ function readProblem(error: unknown): string {
   return 'panels.problem.read'
 }
 
-/** Where a refusal's issue points (`body/identityId`); the API sends the path as text. */
-const issuePaths = (error: { issues: readonly { path?: unknown }[] }): string[] =>
-  error.issues.map((issue) => (Array.isArray(issue.path) ? issue.path.join('/') : String(issue.path ?? '')))
+/** Where a refusal's issues point, as `body/identityId` (the API writes `/`; a list's parts are joined with `.`). */
+const issuePaths = (error: ApiError): string[] => error.issues.map((issue) => issuePath(issue).replace(/\./g, '/'))
 
 /** The notice for a refused mail or note: what the API pointed at, in this app's words. */
 export function sendNotice(error: unknown): Notice {
@@ -330,6 +329,9 @@ export function RecordPanels({ record, title, party: givenParty = null }: Record
           ? 'files.problem.store'
           : isApiError(error) && error.kind === 'invalid'
             ? 'files.problem.refused'
+            : // 409: a kind of file only the record's own module uploads (platform/files/owned.ts).
+              isApiError(error) && error.kind === 'conflict'
+              ? 'files.problem.moduleOwned'
             : isApiError(error) && (error.kind === 'forbidden' || error.kind === 'step_up')
               ? 'files.problem.forbidden'
               : 'files.problem.failed'

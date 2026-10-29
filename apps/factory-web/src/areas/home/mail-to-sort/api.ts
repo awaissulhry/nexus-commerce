@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
-import { isApiError } from '../../../lib/api/errors'
+import { isApiError, issuePath, type ApiError } from '../../../lib/api/errors'
 import {
   HELD_REASONS,
   INBOUND_STATUSES,
@@ -154,23 +154,42 @@ export async function rejectMail(api: ApiClient, mail: Pick<MailSummary, 'id' | 
 }
 
 /**
- * The records a mail can be assigned to, found by number. The API has no record search yet, so each record type that
- * has a thread brings its own finder here, from its module's list (W0: certificates, `GET /compliance/certificates`;
- * W1 adds quotes, orders, purchase orders …). A finder the person may not use (403) finds nothing.
+ * The records a mail can be assigned to, found by number. The API has no cross-record search, so each record type that
+ * has a thread brings its own finder here, from its module's list: quotes, sales orders and purchase orders search their
+ * numbers on the server (`q`); certificates have no search, so their list is matched here. A finder the person may not
+ * use (403) finds nothing. Later (their lists take no `q` yet): invoices, shipments, styles, PPE register entries.
  */
 export interface RecordFinder {
   type: string
-  find: (api: ApiClient, signal?: AbortSignal) => Promise<RecordCandidate[]>
+  find: (api: ApiClient, query: string, signal?: AbortSignal) => Promise<RecordCandidate[]>
 }
 
 const certificatesSchema = z.object({
   certificates: z.array(z.object({ id: z.string(), holderPartyId: z.string().nullable(), standard: z.string(), ppeClass: z.string().nullable(), number: z.string() })),
 })
+const partyRows = (key: string, name: string) => z.object({ [key]: z.array(z.object({ id: z.string(), number: z.string(), [name]: z.string() })) })
+/** The server's number search: the typed text (a list without it is the newest first). */
+const search = (query: string) => ({ q: query.trim() === '' ? undefined : query.trim().slice(0, 60), limit: 20 })
+
+/** A module list with a number search whose rows name their party: one finder, one line each below. */
+function numberFinder(type: string, path: string, key: string, name: string): RecordFinder {
+  return {
+    type,
+    find: async (api, query, signal) => {
+      const answer = (await api.get(path, { query: search(query), schema: partyRows(key, name), signal })) as Record<string, Array<Record<string, string>>>
+      // Every one of these records has its customer or supplier: its thread takes mail.
+      return answer[key].map((row) => ({ type, id: row.id, number: row.number, title: row[name], hasParty: true }))
+    },
+  }
+}
 
 export const RECORD_FINDERS: readonly RecordFinder[] = [
+  numberFinder('Quote', '/sales/quotes', 'quotes', 'partyName'),
+  numberFinder('SalesOrder', '/sales/orders', 'orders', 'partyName'),
+  numberFinder('PurchaseOrder', '/purchasing/orders', 'orders', 'supplierName'),
   {
     type: 'Certificate',
-    find: async (api, signal) =>
+    find: async (api, _query, signal) =>
       (await api.get('/compliance/certificates', { schema: certificatesSchema, signal })).certificates.map((certificate) => ({
         type: 'Certificate',
         id: certificate.id,
@@ -182,12 +201,12 @@ export const RECORD_FINDERS: readonly RecordFinder[] = [
   },
 ]
 
-/** Every finder's records; one that is refused or fails adds nothing, the others still answer. */
-export async function findRecords(api: ApiClient, finders: readonly RecordFinder[] = RECORD_FINDERS, signal?: AbortSignal): Promise<RecordCandidate[]> {
+/** Every finder's records for what was typed; one that is refused or fails adds nothing, the others still answer. */
+export async function findRecords(api: ApiClient, query = '', finders: readonly RecordFinder[] = RECORD_FINDERS, signal?: AbortSignal): Promise<RecordCandidate[]> {
   const found = await Promise.all(
     finders.map(async (finder) => {
       try {
-        return await finder.find(api, signal)
+        return await finder.find(api, query, signal)
       } catch (error) {
         if (isApiError(error) && (error.kind === 'forbidden' || error.kind === 'not_found')) return []
         throw error
@@ -198,9 +217,9 @@ export async function findRecords(api: ApiClient, finders: readonly RecordFinder
 }
 
 /** Whether an answer says the mail changed since it was read (COL-078: its version, or its place, moved meanwhile). */
-function movedMeanwhile(error: { code: string; issues: readonly { path?: unknown }[] }): boolean {
+function movedMeanwhile(error: ApiError): boolean {
   if (error.code === 'invalid_state') return true
-  return error.issues.some((issue) => (Array.isArray(issue.path) ? issue.path[0] : issue.path) === 'version')
+  return error.issues.some((issue) => issuePath(issue).split(/[./]/)[0] === 'version')
 }
 
 /**

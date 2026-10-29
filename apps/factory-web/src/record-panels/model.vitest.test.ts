@@ -146,10 +146,17 @@ describe('files: audience badges, versions, retention (COL-045, COL-050)', () =>
     expect(canPreview(file('c', { status: 'QUARANTINED' }))).toBe(false)
   })
 
+  it('does not offer the kinds of file only the record\'s module uploads (platform/files/owned.ts)', () => {
+    const base = { can: { share: false }, party: null }
+    expect(uploadChoices({ ...base, record: { type: 'Certificate', siteId: null, companyId: 'c' } })).toMatchObject({ owned: ['CERTIFICATE'], kinds: ['ATTACHMENT', 'DOCUMENT', 'PHOTO', 'FISCAL_ARCHIVE'] })
+    expect(uploadChoices({ ...base, record: { type: 'ComplianceDocument', siteId: null, companyId: 'c' } }).kinds).toEqual([])
+    expect(uploadChoices({ ...base, record: { type: 'Quote', siteId: null, companyId: 'c' } }).owned).toEqual([])
+  })
+
   it('offers sharing beyond the office only to files.manage, and only where there is a site or a party', () => {
-    const record = { siteId: 'site-1', companyId: 'company-1' }
+    const record = { type: 'Quote', siteId: 'site-1', companyId: 'company-1' }
     expect(uploadChoices({ can: { share: true }, party: PARTY, record }).audiences).toEqual(['OFFICE', 'FLOOR', 'PARTNER', 'LINK'])
-    expect(uploadChoices({ can: { share: true }, party: null, record: { siteId: null, companyId: 'company-1' } }).audiences).toEqual(['OFFICE'])
+    expect(uploadChoices({ can: { share: true }, party: null, record: { type: 'Quote', siteId: null, companyId: 'company-1' } }).audiences).toEqual(['OFFICE'])
     expect(uploadChoices({ can: { share: false }, party: PARTY, record }).audiences).toEqual(['OFFICE'])
   })
 

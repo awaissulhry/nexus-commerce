@@ -100,6 +100,20 @@ export function MailToSort() {
     }
   }
 
+  // The records an assign may go to, for what was typed; the newest search wins (an older answer is dropped).
+  const searchSeq = useRef(0)
+  const searchRecords = (query: string) => {
+    const mine = ++searchSeq.current
+    setCandidatesProblem(null)
+    findRecords(api, query)
+      .then((found) => {
+        if (mine === searchSeq.current) setCandidates(found)
+      })
+      .catch((error: unknown) => {
+        if (mine === searchSeq.current) setCandidatesProblem(readProblem(error))
+      })
+  }
+
   const model: MailToSortViewModel = {
     filter,
     mails: { items: mails.items, more: mails.cursor !== null, problem: mails.problem },
@@ -132,12 +146,10 @@ export function MailToSort() {
           void loadList()
         },
         onAssignOpen: () => {
-          setCandidatesProblem(null)
           setCandidates(null)
-          findRecords(api)
-            .then(setCandidates)
-            .catch((error: unknown) => setCandidatesProblem(readProblem(error)))
+          searchRecords('')
         },
+        onAssignSearch: searchRecords,
         onAssign: (mail, record) => answer(mail, () => assignMail(api, mail, record), () => ({ key: 'mailToSort.notice.assigned', tone: 'success' })),
         onRelease: (mail, reason) =>
           answer(

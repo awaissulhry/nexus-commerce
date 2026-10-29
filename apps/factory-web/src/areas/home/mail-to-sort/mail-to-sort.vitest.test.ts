@@ -124,16 +124,29 @@ describe('mail to sort calls the API through its one client (SCR-019)', () => {
         today: '2026-10-28',
       }),
     )
-    expect(await findRecords(api)).toEqual([
+    expect(await findRecords(api, '', [findRecordsFinder()])).toEqual([
       { type: 'Certificate', id: 'r1', number: '0000-17092-A', title: 'EN 17092-3:2020 · A', hasParty: true },
       { type: 'Certificate', id: 'r2', number: '0000-1621', title: 'EN 1621-1:2012', hasParty: false },
     ])
     const refused = client(() => json(403, { error: { code: 'forbidden', message: 'm' } }))
     const quote = { type: 'Quote', id: 'q1', number: 'Q-1', title: 'Made-up quote', hasParty: true }
     const extra: RecordFinder = { type: 'Quote', find: async () => [quote] }
-    expect(await findRecords(refused.api, [findRecordsFinder(), extra])).toEqual([quote])
+    expect(await findRecords(refused.api, '', [findRecordsFinder(), extra])).toEqual([quote])
     // Any other failure is the screen's to show.
-    await expect(findRecords(client(() => json(500, { error: { code: 'internal_error', message: 'm' } })).api)).rejects.toMatchObject({ kind: 'internal' })
+    await expect(findRecords(client(() => json(500, { error: { code: 'internal_error', message: 'm' } })).api, '', [findRecordsFinder()])).rejects.toMatchObject({ kind: 'internal' })
+  })
+
+  it('quotes, orders and purchase orders are searched by number on the server, with their party', async () => {
+    const finder = (type: string) => RECORD_FINDERS.find((entry) => entry.type === type)!
+    const quotes = client(() => json(200, { quotes: [{ id: 'q1', number: 'OF-2026/0042', partyName: 'Negozio Esempio', netAmount: 1 }] }))
+    expect(await finder('Quote').find(quotes.api, ' 0042 ')).toEqual([{ type: 'Quote', id: 'q1', number: 'OF-2026/0042', title: 'Negozio Esempio', hasParty: true }])
+    expect(quotes.sent().url).toBe('/api/sales/quotes?q=0042&limit=20')
+    const orders = client(() => json(200, { orders: [{ id: 'o1', number: 'OV-2026/0017', partyName: 'Negozio Esempio' }] }))
+    expect((await finder('SalesOrder').find(orders.api, ''))[0]?.type).toBe('SalesOrder')
+    expect(orders.sent().url).toBe('/api/sales/orders?limit=20')
+    const purchases = client(() => json(200, { summary: {}, orders: [{ id: 'p1', number: 'OA-2026/0103', supplierName: 'Conceria Demo' }] }))
+    expect(await finder('PurchaseOrder').find(purchases.api, 'OA')).toEqual([{ type: 'PurchaseOrder', id: 'p1', number: 'OA-2026/0103', title: 'Conceria Demo', hasParty: true }])
+    expect(purchases.sent().url).toBe('/api/purchasing/orders?q=OA&limit=20')
   })
 })
 

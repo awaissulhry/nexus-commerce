@@ -148,7 +148,10 @@
     },
     "cancel": "Cancel",
     "recordKind": {
-      "Certificate": "Certificate"
+      "Certificate": "Certificate",
+      "Quote": "Quote",
+      "SalesOrder": "Order",
+      "PurchaseOrder": "Purchase order"
     },
     "assign": {
       "title": "Assign to a record",

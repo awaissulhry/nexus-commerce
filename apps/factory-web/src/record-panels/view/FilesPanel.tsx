@@ -34,7 +34,11 @@ export function FilesPanel({ model, actions, now }: { model: RecordPanelsViewMod
 
   return (
     <div className="fw-rp-files">
-      {model.can.upload && <UploadBar model={model} actions={actions} />}
+      {model.can.upload && (uploadChoices(model).kinds.length > 0 ? (
+        <UploadBar model={model} actions={actions} />
+      ) : (
+        <p className="fw-rp-muted fw-rp-small">{t('files.upload.ownedAll')}</p>
+      ))}
 
       {model.uploads.length > 0 && (
         <ul className="fw-rp-filelist" aria-label={t('files.uploadsLabel')}>
@@ -158,7 +162,7 @@ function UploadBar({ model, actions }: { model: RecordPanelsViewModel; actions?:
   const t = useT('records')
   const input = useRef<HTMLInputElement>(null)
   const choices = uploadChoices(model)
-  const [kind, setKind] = useState<FileKind>('ATTACHMENT')
+  const [kind, setKind] = useState<FileKind>(choices.kinds.includes('ATTACHMENT') ? 'ATTACHMENT' : choices.kinds[0])
   const [shared, setShared] = useState<FileAudience[]>([])
   const partyName = model.party?.name || t('message.theParty')
   const pick = (files: FileList | null) => {
@@ -197,6 +201,9 @@ function UploadBar({ model, actions }: { model: RecordPanelsViewModel; actions?:
           <Upload size={14} aria-hidden /> {t('files.upload.choose')}
         </Button>
         {kind === 'FISCAL_ARCHIVE' && <span className="fw-rp-muted fw-rp-small">{t('files.upload.fiscalNote')}</span>}
+        {choices.owned.length > 0 && (
+          <span className="fw-rp-muted fw-rp-small">{t('files.upload.ownedSome', { kinds: choices.owned.map((owned) => t(`files.kind.${owned}`)).join(', ') })}</span>
+        )}
         <input
           ref={input}
           type="file"

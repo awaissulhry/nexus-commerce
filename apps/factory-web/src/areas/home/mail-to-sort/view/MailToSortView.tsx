@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Download, Image as ImageIcon, Inbox, MailQuestion, Paperclip, ShieldAlert } from 'lucide-react'
 import { Banner, EmptyState, Field, KeyValue, Modal, PressableRow } from '@nexus/ui/components'
 import { DetailModal } from '@nexus/ui/patterns'
@@ -40,6 +40,8 @@ export interface MailToSortActions {
   onRetry?: () => void
   /** The assign dialog opened: read the records it offers. */
   onAssignOpen?: () => void
+  /** The person typed a number in the assign dialog: read the records that match (debounced). */
+  onAssignSearch?: (query: string) => void
   /** Each answer resolves true when it was done (the dialog then closes). */
   onAssign?: (mail: MailDetail, record: RecordCandidate) => Promise<boolean>
   onRelease?: (mail: MailDetail, reason: string) => Promise<boolean>
@@ -341,13 +343,21 @@ interface DialogProps {
 function AssignDialog({ detail, model, actions, onClose }: DialogProps) {
   const t = useT('home')
   const [query, setQuery] = useState('')
-  const [choice, setChoice] = useState<string | null>(null)
+  const [chosen, setChosen] = useState<RecordCandidate | null>(null)
   const candidates = model.assign.candidates
   const matches = useMemo(() => matchCandidates(candidates ?? [], query), [candidates, query])
-  const chosen = candidates?.find((candidate) => `${candidate.type}:${candidate.id}` === choice) ?? null
-  const withParty = (candidates ?? []).filter((candidate) => candidate.hasParty).length
-  const withoutParty = (candidates ?? []).length - withParty
+  const withoutParty = (candidates ?? []).filter((candidate) => !candidate.hasParty).length
   const held = model.busy ? t('mailToSort.held.busy') : !chosen ? t('mailToSort.assign.held') : null
+  const keyOf = (candidate: RecordCandidate) => `${candidate.type}:${candidate.id}`
+  // The modules search their numbers on the server: ask again a moment after the typing stops (the list opened with '').
+  const searchRef = useRef(actions?.onAssignSearch)
+  searchRef.current = actions?.onAssignSearch
+  const typed = useRef(false)
+  useEffect(() => {
+    if (!typed.current) return
+    const timer = setTimeout(() => searchRef.current?.(query), 250)
+    return () => clearTimeout(timer)
+  }, [query])
   const go = () => {
     if (!chosen || held) return
     void actions?.onAssign?.(detail, chosen).then((done) => done && onClose())
@@ -371,32 +381,40 @@ function AssignDialog({ detail, model, actions, onClose }: DialogProps) {
         <p className="fw-mts-hint">{t('mailToSort.assign.body')}</p>
         {model.assign.problem ? (
           <Banner tone="danger" title={t(model.assign.problem)} />
-        ) : candidates === null ? (
-          <p className="fw-mts-loading" role="status">
-            <Spinner size={14} /> {t('mailToSort.assign.loading')}
-          </p>
-        ) : withParty === 0 ? (
-          <Banner tone="info" title={t('mailToSort.assign.none')} />
         ) : (
           <>
             <Field label={t('mailToSort.assign.number')} hint={t('mailToSort.assign.numberHint')}>
-              <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('mailToSort.assign.placeholder')} inputMode="search" autoComplete="off" />
+              <Input
+                value={query}
+                onChange={(event) => {
+                  typed.current = true
+                  setQuery(event.target.value)
+                }}
+                placeholder={t('mailToSort.assign.placeholder')}
+                inputMode="search"
+                autoComplete="off"
+              />
             </Field>
             <fieldset className="fw-mts-choices">
               <legend className="fw-mts-legend" aria-live="polite">
-                {matches.total === 0 ? t('mailToSort.assign.noMatch') : t('mailToSort.assign.matches', { count: matches.total })}
+                {candidates === null
+                  ? t('mailToSort.assign.loading')
+                  : matches.total === 0
+                    ? t(query.trim() === '' ? 'mailToSort.assign.none' : 'mailToSort.assign.noMatch')
+                    : t('mailToSort.assign.matches', { count: matches.total })}
               </legend>
+              {candidates === null && <Spinner size={14} />}
               {matches.shown.map((candidate) => {
-                const value = `${candidate.type}:${candidate.id}`
+                const value = keyOf(candidate)
                 return (
                   <RadioCard
                     key={value}
                     variant="row"
                     name="fw-mts-assign"
                     value={value}
-                    checked={choice === value}
-                    selected={choice === value}
-                    onChange={() => setChoice(value)}
+                    checked={chosen !== null && keyOf(chosen) === value}
+                    selected={chosen !== null && keyOf(chosen) === value}
+                    onChange={() => setChosen(candidate)}
                     title={`${t(`mailToSort.recordKind.${candidate.type}`)} ${candidate.number}`}
                     description={candidate.title}
                   />

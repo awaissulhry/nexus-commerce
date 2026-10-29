@@ -160,7 +160,8 @@
       "size": "Il file è troppo grande per questo tipo.",
       "store": "L'archivio dei file non ha accettato il file. Riprova.",
       "refused": "La fabbrica ha rifiutato il file così com'è (formato, dimensione o condivisione).",
-      "forbidden": "Non puoi caricare o condividere file su questo record."
+      "forbidden": "Non puoi caricare o condividere file su questo record.",
+      "moduleOwned": "Questo tipo di file di questo record si aggiunge dalla pagina del record, non da qui."
     },
     "notice": {
       "uploaded": "File caricato. Compare nell'elenco e nella cronologia.",
@@ -225,7 +226,9 @@
       "officeOnly": "Ciò che carichi lo vede solo l'ufficio. Per condividere un file serve un altro ruolo.",
       "officeOnlyNoParty": "Lo vede solo l'ufficio: questo record non ha cliente, fornitore o stabilimento con cui condividerlo.",
       "choose": "Scegli i file…",
-      "fiscalNote": "Un file dell'archivio fiscale si conserva dieci anni e non si può cancellare prima."
+      "fiscalNote": "Un file dell'archivio fiscale si conserva dieci anni e non si può cancellare prima.",
+      "ownedAll": "I file di questo record si aggiungono dalla pagina del record.",
+      "ownedSome": "{kinds}: si aggiunge dalla pagina del record."
     }
   },
   "history": {

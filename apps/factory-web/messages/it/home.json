@@ -148,7 +148,10 @@
     },
     "cancel": "Annulla",
     "recordKind": {
-      "Certificate": "Certificato"
+      "Certificate": "Certificato",
+      "Quote": "Offerta",
+      "SalesOrder": "Ordine",
+      "PurchaseOrder": "Ordine di acquisto"
     },
     "assign": {
       "title": "Assegna a un record",

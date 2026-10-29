@@ -160,7 +160,8 @@
       "size": "The file is too large for this kind.",
       "store": "The file store did not take the file. Try again.",
       "refused": "The factory refused the file as it is (its type, size or sharing).",
-      "forbidden": "You may not upload or share files on this record."
+      "forbidden": "You may not upload or share files on this record.",
+      "moduleOwned": "This kind of file of this record is added on the record's own page, not here."
     },
     "notice": {
       "uploaded": "File uploaded. It shows in the list and the history.",
@@ -225,7 +226,9 @@
       "officeOnly": "Only the office sees what you upload. Sharing a file needs another role.",
       "officeOnlyNoParty": "Only the office sees it: this record has no customer, supplier or site to share it with.",
       "choose": "Choose files…",
-      "fiscalNote": "A fiscal archive file is kept ten years and cannot be deleted before."
+      "fiscalNote": "A fiscal archive file is kept ten years and cannot be deleted before.",
+      "ownedAll": "The files of this record are added on the record's own page.",
+      "ownedSome": "{kinds}: added on the record's own page."
     }
   },
   "history": {
