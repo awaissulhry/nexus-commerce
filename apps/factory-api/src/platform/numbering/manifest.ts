@@ -10,6 +10,8 @@ export const manifest = defineManifest({
   'POST /numbering/series': { audiences: ['office'], permission: 'numbering.manage', scope: 'record' },
   'PUT /numbering/series/:seriesId/start': { audiences: ['office'], permission: 'numbering.manage', scope: 'record' },
   'POST /numbering/series/:seriesId/advance': { audiences: ['office'], permission: 'numbering.manage', scope: 'record' },
+  'GET /numbering/series/:seriesId/allocations': { audiences: ['office'], permission: 'numbering.view', scope: 'record' },
+  'POST /numbering/series/:seriesId/close': { audiences: ['office'], permission: 'numbering.manage', scope: 'record' },
   'GET /numbering/blocks': { audiences: ['office'], permission: 'numbering.view', scope: 'record' },
   'POST /numbering/blocks': { audiences: ['office'], permission: 'numbering.manage', scope: 'record' },
   'POST /numbering/blocks/:blockId/close': { audiences: ['office'], permission: 'numbering.manage', scope: 'record' },

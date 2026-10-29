@@ -20,7 +20,7 @@ describe('the Office navigation (PLT-160: one declaration per area)', () => {
     expect(OFFICE_NAV.view).toBe('office')
   })
 
-  it('names only declared permissions, or the four a later W0 step declares (a typo fails here)', () => {
+  it('names only declared permissions, or the two a later W0 step declares (a typo fails here)', () => {
     const declared = new Set<string>(FACTORY_PERMISSIONS.assignable.map((definition) => definition.name))
     const unknown = navPermissions().filter((name) => !declared.has(name) && !PENDING_PERMISSIONS.has(name))
     expect(unknown).toEqual([])
@@ -37,7 +37,7 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
       ['purchasing', ['purchasing-suppliers']],
       [
         'admin',
-        ['admin-companies', 'admin-sites', 'admin-devices', 'admin-users', 'admin-roles', 'admin-numbering', 'admin-email', 'admin-languages', 'admin-imports', 'admin-audit', 'admin-connections'],
+        ['admin-overview', 'admin-companies', 'admin-devices', 'admin-users', 'admin-roles', 'admin-documents', 'admin-languages', 'admin-connections', 'admin-import', 'admin-audit'],
       ],
     ])
   })
@@ -46,11 +46,11 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
     expect(ids(officeNavFor(permissionCheck(SALES_PERMISSIONS)))).toEqual([['home', ['home-today', 'home-mail-to-sort']]])
   })
 
-  it('the administrator template today: the rows whose permission exists, never a pending one', () => {
-    const admin = ['users.view', 'roles.view', 'audit.read', 'numbering.view', 'devices.view', 'imports.view', 'email.manage', 'email.triage']
+  it('the administrator template today: every Admin row (B-W0-28 declared integrations.view)', () => {
+    const admin = ['companies.view', 'sites.view', 'users.view', 'roles.view', 'audit.read', 'numbering.view', 'devices.view', 'imports.view', 'email.manage', 'email.triage', 'integrations.view']
     expect(ids(officeNavFor(permissionCheck(admin)))).toEqual([
       ['home', ['home-mail-to-sort']],
-      ['admin', ['admin-devices', 'admin-users', 'admin-roles', 'admin-numbering', 'admin-email', 'admin-imports', 'admin-audit']],
+      ['admin', ['admin-overview', 'admin-companies', 'admin-devices', 'admin-users', 'admin-roles', 'admin-documents', 'admin-languages', 'admin-connections', 'admin-import', 'admin-audit']],
     ])
   })
 
@@ -68,7 +68,7 @@ describe('labels, crumbs, palette pages and the phone bar come from the same man
 
   it('draws every label in the language (keys never reach the screen)', () => {
     expect(nav.areas.map((area) => area.label)).toEqual(['Home', 'Sales', 'Purchasing', 'Admin'])
-    expect(nav.areas[3]?.sections?.map((s) => s.label)).toEqual(['Organisation', 'Access', 'Platform'])
+    expect(nav.areas[3]?.sections?.map((s) => s.label)).toEqual(['Admin', 'Organisation', 'Access', 'Platform', 'Data'])
     const it = translateNav(OFFICE_NAV, createScopedTranslator('it', messagesFor('it', ['shell']), 'shell'))
     expect(it.areas.map((area) => area.label)).toEqual(['Home', 'Vendite', 'Acquisti', 'Amministrazione'])
     expect(JSON.stringify(nav)).not.toContain('shell:')
@@ -91,7 +91,7 @@ describe('labels, crumbs, palette pages and the phone bar come from the same man
 
   it('the palette jumps to every page the person may open', () => {
     expect(navPages(officeNavFor(permissionCheck(SALES_PERMISSIONS))).map((page) => page.href)).toEqual(['/home/today', '/home/mail-to-sort'])
-    expect(navPages(nav)).toHaveLength(15)
+    expect(navPages(nav)).toHaveLength(14)
   })
 
   it('on a phone: Home and Sales as tabs, Purchasing and Admin under More (then More is current), Sales current on its records', () => {

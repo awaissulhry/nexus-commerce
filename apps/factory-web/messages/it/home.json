@@ -34,7 +34,8 @@
     },
     "more": {
       "label": "Altre azioni",
-      "print": "Stampa il mio elenco"
+      "print": "Stampa il mio elenco",
+      "arrange": "Disponi questa pagina"
     },
     "tiles": {
       "all": "Aspetta me ora",
@@ -68,7 +69,8 @@
     },
     "keys": {
       "approve": "Approva il preventivo (nella sua revisione)",
-      "reject": "Respingi il preventivo, con un motivo (nella sua revisione)"
+      "reject": "Respingi il preventivo, con un motivo (nella sua revisione)",
+      "acknowledge": "Prendi visione dell'avviso (nell'elenco o nella sua revisione)"
     },
     "group": {
       "NOW": "Ora",
@@ -281,7 +283,9 @@
         "stepUp": "Prima conferma che sei tu (un nuovo codice dell'autenticatore), poi decidi di nuovo.",
         "failed": "Non è stato possibile inviare la decisione. Riprova."
       },
-      "onRecord": "Si fa sul suo record."
+      "onRecord": "Si fa sul suo record.",
+      "assigned": "Assegnata",
+      "acknowledged": "Presa visione"
     },
     "review": {
       "customer": "Cliente",
@@ -464,6 +468,108 @@
           "THREAD_CLOSED": "il thread a cui risponde è chiuso"
         }
       }
+    },
+    "actions": {
+      "menu": "Azioni su {record}",
+      "acknowledge": "Presa visione",
+      "assign": "Assegna a…",
+      "resolve": "Risolvi…",
+      "held": {
+        "review": "Questa riga si decide nella sua revisione, non qui.",
+        "offline": "Non in linea — decidi quando torna la connessione.",
+        "busy": "Una decisione è in invio.",
+        "acknowledged": "Presa visione da {name}."
+      },
+      "acknowledged": "Presa visione registrata. La riga resta, segnata, finché non cambia.",
+      "assigned": "Assegnata a {name}. È nel suo Oggi.",
+      "takenBack": "Ripresa: la riga non è più assegnata a nessuno in particolare.",
+      "resolved": "{record} risolto. Esce da Oggi per tutti finché la sua condizione non cambia.",
+      "problem": {
+        "changed": "Questa riga è cambiata da quando è stata letta. Oggi è stato riletto: guarda prima di decidere.",
+        "gone": "Questa riga non è più nel tuo Oggi (qualcuno l'ha gestita, o è cambiata). Oggi è stato riletto.",
+        "invalid": "Non è stato possibile farlo così (la persona non può agire su questa riga, o la nota è troppo corta). Oggi è stato riletto.",
+        "forbidden": "Non puoi farlo su questa riga.",
+        "failed": "Non è stato possibile inviarlo. Riprova."
+      }
+    },
+    "marks": {
+      "assigned": "Assegnata a {name}",
+      "assignedYou": "Assegnata a te da {by}",
+      "acknowledged": "Presa visione da {name} · {time}",
+      "acknowledgedYou": "Presa visione da te · {time}"
+    },
+    "assign": {
+      "title": "Assegna {record} a",
+      "person": "Persona",
+      "search": "Scrivi un nome…",
+      "hint": "Compaiono solo le persone che possono agire su questa riga: la sua azienda, il diritto di agire, i quattro occhi. Prima i responsabili.",
+      "you": "tu",
+      "suggested": "responsabile qui",
+      "now": "Ora assegnata a {name}.",
+      "nowYou": "Ora assegnata a te.",
+      "nobody": "Nessun altro può agire su questa riga.",
+      "pickFirst": "Scegli prima una persona.",
+      "already": "È già assegnata a questa persona.",
+      "takeBack": "Riprendila",
+      "cancel": "Annulla",
+      "confirm": "Assegna"
+    },
+    "resolve": {
+      "title": "Risolvi {record}",
+      "note": "Cosa è stato fatto",
+      "hint": "Resta nella cronologia del record. L'avviso si chiude per tutti quelli a cui è arrivato, e torna se la sua condizione cambia.",
+      "noteNeeded": "Scrivi cosa è stato fatto.",
+      "noteShort": "Scrivi qualche parola in più.",
+      "noteLong": "Al massimo 1.000 caratteri.",
+      "cancel": "Annulla",
+      "confirm": "Risolvi"
+    },
+    "handled": {
+      "footer_one": "Gestite oggi: {count} · Mostra",
+      "footer_other": "Gestite oggi: {count} · Mostra",
+      "title_one": "Gestite oggi: {count}",
+      "title_other": "Gestite oggi: {count}",
+      "titlePlain": "Gestite oggi",
+      "close": "Chiudi",
+      "empty": {
+        "title": "Ancora nulla gestito oggi.",
+        "body": "Ciò di cui prendi visione, che assegni, risolvi o approvi da Oggi compare qui, per tua memoria."
+      },
+      "verb": {
+        "ASSIGNED": "Assegnata a {name}",
+        "UNASSIGNED": "Ripresa da {name}",
+        "RESOLVED": "Risolta",
+        "ACKNOWLEDGED": "Presa visione",
+        "APPROVED": "Approvato",
+        "REJECTED": "Rifiutato"
+      }
+    },
+    "arrange": {
+      "title": "Disponi Oggi",
+      "list": "Sezioni ed elenchi",
+      "listHint": "Quelle spuntate si vedono, in quest'ordine. «Aspetta me ora» si vede sempre.",
+      "apply": "Applica",
+      "groupSections": "Sezioni della pagina",
+      "groupPanels": "I miei elenchi",
+      "section": {
+        "focusStrip": "La tua giornata (i riquadri)",
+        "needsMe": "Aspetta me ora",
+        "flow": "Dov'è il lavoro",
+        "rolePanels": "I miei elenchi"
+      },
+      "mainLens": "Il mio ruolo principale",
+      "mainLensNone": "Il primo che ho",
+      "mainLensHint": "Su quali record si aprono la striscia del flusso e I miei elenchi.",
+      "widths": "Larghezza di ogni elenco",
+      "widthsHint": "Valgono dove I miei elenchi occupa tutta la pagina: sopra «Aspetta me ora», o su schermi sotto i 1440 pixel. Accanto al lavoro, ogni elenco occupa la colonna.",
+      "widthOf": "Larghezza di {panel}",
+      "width": {
+        "HALF": "Metà",
+        "TWO_THIRDS": "Due terzi",
+        "FULL": "Riga intera"
+      },
+      "saved": "Oggi è disposto a modo tuo. È salvato per te su ogni dispositivo.",
+      "changed": "La disposizione è stata cambiata da un'altra finestra. È stata riletta: disponila di nuovo."
     }
   },
   "mailToSort": {

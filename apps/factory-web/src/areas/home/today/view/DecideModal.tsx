@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, ExternalLink, X } from 'lucide-react'
+import { Check, CheckCircle2, ExternalLink, Eye, UserRound, X } from 'lucide-react'
 import { Banner, Field, KeyValue, Modal, type KeyValueItem } from '@nexus/ui/components'
 import { DetailModal } from '@nexus/ui/patterns'
 import { Button, Kbd, Tag, Textarea } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime, formatNumber } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
-import { decideKey, DECIDED_HERE, dueWords, rejectReasonProblem, type Notice, type QueueItem, type QuoteReview, type ReviewState } from '../model'
+import { decideKey, DECIDED_HERE, dueWords, rejectReasonProblem, verbHeld, verbKey, type LiveState, type Notice, type QueueItem, type QuoteReview, type ReviewState, type RowVerb } from '../model'
 import { phraseText, sentenceText } from '../words'
 
 /** What the decide modal asks of the container: the quotes module's own approve and reject (each resolves true when done). */
@@ -15,7 +15,12 @@ export interface DecideActions {
   onApprove?: (key: string, note: string | null) => Promise<boolean>
   onReject?: (key: string, reason: string) => Promise<boolean>
   onRetryReview?: (key: string) => void
+  /** Acknowledge an alert in its present condition (e). */
+  onAcknowledge?: (key: string) => Promise<boolean>
 }
+
+/** The alert verbs' dialogs the modal opens (the page owns them). */
+type VerbDialog = { readonly kind: 'assign'; readonly key: string } | { readonly kind: 'resolve'; readonly key: string }
 
 const SEVERITY_TONE = { HIGH: 'danger', MEDIUM: 'warning', LOW: 'neutral' } as const
 
@@ -28,7 +33,8 @@ const money = (minor: number, currency: string, locale: 'it' | 'en') => formatNu
  * approval is decided here with the quotes module's approve and reject (a reject needs a reason): its review shows the
  * rules it breaks, the request and the money the person's grains reach. No W1 row is a one-field change, so nothing is
  * approved from the list itself. Any other row says why it is the person's and what waits on it, and opens its own
- * review (mail to sort) or its record. Keys: a approves, r rejects.
+ * review (mail to sort) or its record. An alert also takes the alert verbs here: Acknowledge (e), Assign to…, Resolve…,
+ * each held with its reason when the person cannot use it now. Keys: a approves, r rejects, e acknowledges.
  */
 export function DecideModal({
   items,
@@ -37,9 +43,12 @@ export function DecideModal({
   total,
   reviews,
   busy,
+  live,
   notice,
   onGo,
   onClose,
+  onDialog,
+  paused,
   actions,
 }: {
   items: readonly QueueItem[]
@@ -48,9 +57,13 @@ export function DecideModal({
   total: number | null
   reviews: Readonly<Record<string, ReviewState>>
   busy: boolean
+  live: LiveState
   notice: Notice | null
   onGo: (key: string) => void
   onClose: () => void
+  onDialog: (dialog: VerbDialog) => void
+  /** Another dialog (assign, resolve) is open over the modal: its keys wait. */
+  paused: boolean
   actions?: DecideActions
 }) {
   const t = useT('home')
@@ -77,9 +90,32 @@ export function DecideModal({
     if (canDecide) setRejecting(true)
   }
 
+  const heldOf = (verb: RowVerb) => {
+    if (!item) return null
+    const held = verbHeld(item, verb, { live, busy })
+    return held === null ? null : t(held, { name: item.actions.acknowledged?.by.name ?? '' })
+  }
+  const acknowledge = () => {
+    if (item && heldOf('ACKNOWLEDGE') === null) void actions?.onAcknowledge?.(item.key)
+  }
+
+  // e acknowledges an alert (never in a text field, never with a modifier, never under another dialog).
+  useEffect(() => {
+    if (!item || decidedHere || item.category !== 'ALERT' || paused) return
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const inField = target?.closest('input, textarea, select, [contenteditable="true"]') != null
+      if (verbKey(event.key, { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, inField }) !== 'acknowledge') return
+      event.preventDefault()
+      acknowledge()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   // a approves, r rejects (never in a text field, never with a modifier; the DetailModal keeps J / K).
   useEffect(() => {
-    if (!item || !decidedHere || rejecting) return
+    if (!item || !decidedHere || rejecting || paused) return
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const inField = target?.closest('input, textarea, select, [contenteditable="true"]') != null
@@ -106,6 +142,12 @@ export function DecideModal({
     // A quote's review shows its money itself; any other row shows what the person's grains reach.
     ...(!decidedHere && item.figures?.netAmount !== undefined ? [{ label: t('today.decide.value'), value: money(item.figures.netAmount, item.figures.currency, locale) }] : []),
     ...(!decidedHere && item.figures?.purchaseAmount !== undefined ? [{ label: t('today.decide.purchaseValue'), value: money(item.figures.purchaseAmount, item.figures.currency, locale) }] : []),
+    ...(item.actions.assigned
+      ? [{ label: t('today.decide.assigned'), value: t(item.actions.assigned.to.me ? 'today.marks.assignedYou' : 'today.marks.assigned', { name: item.actions.assigned.to.name, by: item.actions.assigned.by.name }) }]
+      : []),
+    ...(item.actions.acknowledged
+      ? [{ label: t('today.decide.acknowledged'), value: t(item.actions.acknowledged.by.me ? 'today.marks.acknowledgedYou' : 'today.marks.acknowledged', { name: item.actions.acknowledged.by.name, time: formatDateTime(item.actions.acknowledged.at, { locale }) }) }]
+      : []),
   ]
 
   const footer = decidedHere ? (
@@ -119,6 +161,24 @@ export function DecideModal({
         </Button>
         <Button variant="primary" onClick={approve} heldReason={canDecide ? undefined : (busy ? t('today.decide.busy') : held)}>
           <Check size={14} aria-hidden /> {t('today.decide.approve')} <Kbd>A</Kbd>
+        </Button>
+      </span>
+    </div>
+  ) : item.category === 'ALERT' ? (
+    // An alert: its verbs here (the primary is Acknowledge, design: "the kind's main verb"), and its record.
+    <div className="fw-today-decide-foot">
+      <a className="fw-today-record" href={item.href}>
+        {t('today.decide.openRecord', { record: item.record.label })} <ExternalLink size={12} aria-hidden />
+      </a>
+      <span className="fw-today-decide-buttons">
+        <Button variant="secondary" onClick={() => onDialog({ kind: 'assign', key: item.key })} heldReason={heldOf('ASSIGN') ?? undefined}>
+          <UserRound size={14} aria-hidden /> {t('today.actions.assign')}
+        </Button>
+        <Button variant="secondary" onClick={() => onDialog({ kind: 'resolve', key: item.key })} heldReason={heldOf('RESOLVE') ?? undefined}>
+          <CheckCircle2 size={14} aria-hidden /> {t('today.actions.resolve')}
+        </Button>
+        <Button variant="primary" onClick={acknowledge} heldReason={heldOf('ACKNOWLEDGE') ?? undefined}>
+          <Eye size={14} aria-hidden /> {t('today.actions.acknowledge')} <Kbd>E</Kbd>
         </Button>
       </span>
     </div>

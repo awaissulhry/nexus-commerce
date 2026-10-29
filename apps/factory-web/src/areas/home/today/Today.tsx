@@ -6,11 +6,29 @@ import { listAddress } from '../../../lib/records/record-links'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { companyPrefix } from '../../../lib/session/session'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
-import { approveQuote, decisionProblem, fetchFlow, fetchPanel, fetchQuoteReview, fetchToday, readProblem, rejectQuote } from './api'
-import { panelRow, queueItem } from './links'
+import {
+  acknowledgeRow,
+  actionProblem,
+  approveQuote,
+  assignRow,
+  decisionProblem,
+  fetchAssignees,
+  fetchFlow,
+  fetchHandled,
+  fetchLayout,
+  fetchPanel,
+  fetchQuoteReview,
+  fetchToday,
+  readProblem,
+  rejectQuote,
+  resolveRow,
+  saveLayout,
+} from './api'
+import { handledView, panelRow, queueItem } from './links'
 import { useTodayLive } from './live'
 import {
   DECIDED_HERE,
+  DEFAULT_LAYOUT,
   freshCount,
   newVerbsFor,
   nextAfter,
@@ -23,11 +41,13 @@ import {
   type ReviewState,
   type TodayAnswer,
   type Category,
+  type TodayDialog,
   type TodayItem,
+  type TodayLayout,
   type TodayViewModel,
 } from './model'
-import { panelsFor } from './panels'
-import { TodayView } from './view/TodayView'
+import { PANELS, panelsFor } from './panels'
+import { TodayView, type DialogRequest } from './view/TodayView'
 
 interface QueueState {
   readonly answer: TodayAnswer
@@ -44,6 +64,10 @@ interface QueueState {
  * panel's own list route) — keeps `?kind=` and `?open=` in the address, reads a section again when the live stream
  * names one of its events (new rows wait behind "N new · Show"; rows never move while the decide modal is open), and
  * decides a quote approval with the quotes module's own approve and reject (the quote's version as read).
+ *
+ * The alert verbs (API insights/actions): Acknowledge, Assign to (the people GET …/assignees names), Resolve with a note —
+ * each with the row's condition and version as read; a refusal says why and the list is read again. "Handled today"
+ * (GET /home/today/handled) and "Arrange Today" (GET|PUT /home/today/layout: the person's own, its version as read).
  */
 export function Today() {
   const api = useOfficeApi()
@@ -68,6 +92,10 @@ export function Today() {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
   const [now, setNow] = useState(() => Date.now())
+  const [layout, setLayout] = useState<{ readonly layout: TodayLayout; readonly version: number }>({ layout: DEFAULT_LAYOUT, version: 0 })
+  const [dialog, setDialog] = useState<TodayDialog | null>(null)
+  const layoutRef = useRef(layout)
+  layoutRef.current = layout
 
   const openRef = useRef(open)
   openRef.current = open
@@ -76,6 +104,7 @@ export function Today() {
   const tileRef = useRef(tile)
   tileRef.current = tile
   const queueSeq = useRef(0)
+  const lensPicked = useRef(false)
 
   const setParams = useCallback(
     (changes: Readonly<Record<string, string | null>>) => {
@@ -155,7 +184,9 @@ export function Today() {
           }),
         })),
       })
-      setLens((current) => current ?? answer.lenses[0]?.lens ?? null)
+      // The person's main lens first ("My main role"), else the first they have.
+      const main = layoutRef.current.layout.mainLens
+      setLens((current) => current ?? (answer.lenses.some((entry) => entry.lens === main) ? main : (answer.lenses[0]?.lens ?? null)))
     } catch (error) {
       setFlow({ status: 'error', problem: readProblem(error) })
     }
@@ -199,6 +230,20 @@ export function Today() {
   useEffect(() => {
     if (allowed) void loadPanels()
   }, [allowed, loadPanels])
+
+  const loadLayout = useCallback(async () => {
+    try {
+      const answer = await fetchLayout(api)
+      setLayout({ layout: answer.layout, version: answer.version })
+      // A main lens saved earlier picks the lens once the layout is known, unless the person picked one meanwhile.
+      if (answer.layout.mainLens && !lensPicked.current) setLens(answer.layout.mainLens)
+    } catch {
+      // Unreadable: the design's order is drawn; Arrange saves over it (a stale version is refused and read again).
+    }
+  }, [api])
+  useEffect(() => {
+    if (allowed) void loadLayout()
+  }, [allowed, loadLayout])
 
   const items = queue.status === 'ready' ? queue.data.items : []
   const openItem = open ? (items.find((item) => item.key === open) ?? null) : null
@@ -252,6 +297,55 @@ export function Today() {
     }
   }
 
+  // ---- the alert verbs, Handled today, Arrange Today ---------------------------------------------------------------------
+  const loadDialog = useCallback(
+    async (request: DialogRequest) => {
+      if (request.kind === 'assign') {
+        setDialog({ kind: 'assign', key: request.key, people: { status: 'loading' } })
+        try {
+          const people = await fetchAssignees(api, request.key)
+          setDialog((current) => (current?.kind === 'assign' && current.key === request.key ? { ...current, people: { status: 'ready', data: people } } : current))
+        } catch (error) {
+          setDialog((current) => (current?.kind === 'assign' && current.key === request.key ? { ...current, people: { status: 'error', problem: readProblem(error) } } : current))
+        }
+      } else if (request.kind === 'handled') {
+        setDialog({ kind: 'handled', list: { status: 'loading' } })
+        try {
+          const list = handledView(await fetchHandled(api), prefix)
+          setDialog((current) => (current?.kind === 'handled' ? { kind: 'handled', list: { status: 'ready', data: list } } : current))
+        } catch (error) {
+          setDialog((current) => (current?.kind === 'handled' ? { kind: 'handled', list: { status: 'error', problem: readProblem(error) } } : current))
+        }
+      } else setDialog(request)
+    },
+    [api, prefix],
+  )
+
+  /** One alert verb: the row as read, a notice, the list read again (a resolved row leaves; the next row opens). */
+  const act = async (key: string, run: (item: TodayItem) => Promise<{ resolved: boolean }>, done: (item: TodayItem) => Notice): Promise<boolean> => {
+    const item = items.find((entry) => entry.key === key)
+    if (!item) return false
+    const keys = items.map((entry) => entry.key)
+    setBusy(true)
+    setNotice(null)
+    try {
+      const answer = await run(item)
+      setNotice(done(item))
+      setDialog(null)
+      if (answer.resolved && openRef.current === key) setParam('open', nextAfter(keys, key))
+      await loadQueue()
+      return true
+    } catch (error) {
+      const problem = actionProblem(error)
+      setNotice({ key: problem.key, tone: problem.tone })
+      setDialog(null)
+      if (problem.reload) void loadQueue()
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }
+
   // ---- the view model --------------------------------------------------------------------------------------------------
   const model: TodayViewModel = {
     access: allowed ? 'open' : 'refused',
@@ -274,6 +368,7 @@ export function Today() {
               more: queue.data.cursor !== null,
               loadingMore: queue.data.loadingMore,
               fresh: queue.data.pending ? Math.max(1, freshCount(queue.data.items, queue.data.pending.items)) : 0,
+              handledToday: queue.data.answer.handled.today,
             },
           }
         : queue,
@@ -292,6 +387,12 @@ export function Today() {
     reviews,
     busy,
     notice,
+    layout: layout.layout,
+    dialog,
+    arrangeable: {
+      panels: PANELS.filter((panel) => permissions.has(panel.permission)).map((panel) => ({ id: panel.id })),
+      lenses: flow?.status === 'ready' ? flow.data.map((entry) => ({ lens: entry.lens, label: entry.label })) : [],
+    },
   }
 
   return (
@@ -323,6 +424,7 @@ export function Today() {
           setParam('open', key)
         },
         onLens: (next) => {
+          lensPicked.current = true
           setPanels({})
           setLens(next)
         },
@@ -332,6 +434,37 @@ export function Today() {
         onRetryReview: (key) => {
           const item = items.find((entry) => entry.key === key)
           if (item) void loadReview(item)
+        },
+        onDialog: (request) => {
+          setNotice(null)
+          if (request === null) setDialog(null)
+          else void loadDialog(request)
+        },
+        onRetryDialog: () => {
+          if (dialog?.kind === 'assign') void loadDialog({ kind: 'assign', key: dialog.key })
+          else if (dialog?.kind === 'handled') void loadDialog({ kind: 'handled' })
+        },
+        onAcknowledge: (key) => act(key, (item) => acknowledgeRow(api, item), () => ({ key: 'today.actions.acknowledged', tone: 'success' })),
+        onAssign: (key, assigneeId) => {
+          const name = dialog?.kind === 'assign' && dialog.people.status === 'ready' ? (dialog.people.data.find((person) => person.id === assigneeId)?.name ?? '') : ''
+          return act(key, (item) => assignRow(api, item, assigneeId), () => (assigneeId === null ? { key: 'today.actions.takenBack', tone: 'success' } : { key: 'today.actions.assigned', tone: 'success', params: { name } }))
+        },
+        onResolve: (key, note) => act(key, (item) => resolveRow(api, item, note), (item) => ({ key: 'today.actions.resolved', tone: 'success', params: { record: item.record.label } })),
+        onArrange: async (next) => {
+          setNotice(null)
+          try {
+            const answer = await saveLayout(api, next, layoutRef.current.version)
+            setLayout({ layout: answer.layout, version: answer.version })
+            if (answer.layout.mainLens) setLens(answer.layout.mainLens)
+            setDialog(null)
+            setPanels({})
+            setNotice({ key: 'today.arrange.saved', tone: 'success' })
+          } catch (error) {
+            const problem = actionProblem(error)
+            setDialog(null)
+            setNotice({ key: problem.reload ? 'today.arrange.changed' : problem.key, tone: problem.tone })
+            if (problem.reload) void loadLayout()
+          }
         },
       }}
     />

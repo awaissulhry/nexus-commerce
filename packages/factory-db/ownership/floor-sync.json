@@ -1,0 +1,23 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/floor-sync.prisma (rules: src/ownership.ts; roles: src/roles.ts). A floor tablet's own sync (apps/factory-api platform/floor-sync, as factory_floor_runtime in the device's site) records the events of its queue that the server recorded and keeps the ones it refused; it discards its own refused actions and marks them resolved when the same event passes later. The office (factory_runtime) reads both and discards refused actions of the sites its grants reach. The ledger is append-only (no update, no delete for anyone); a refused action is closed, never deleted. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "FloorSyncEvent": {
+      "about": "The per-device sync ledger: the floor tablet's sync inserts one row per recorded event and reads its own site's rows to answer a resend; the office reads them (a device's activity). Never changed or removed.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    },
+    "FloorRefusedAction": {
+      "about": "The floor tablets' refused queued actions: the tablet keeps its own (insert), closes them (update: resolved when the same event passes, discarded by the tablet); the office reads them and discards them with a reason (update). What was sent never changes; nobody deletes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}
