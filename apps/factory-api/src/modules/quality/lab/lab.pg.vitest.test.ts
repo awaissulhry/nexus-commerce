@@ -331,6 +331,12 @@ describe('who releases, and what is never released', () => {
     expect(later.trace.workOrders).toEqual([expect.objectContaining({ workOrderId: A.workOrder, number: 'SEED-WO-0001', hideIds: [A.seedHide], returned: '0.0000' })])
     expect(later.lot.qualityNote).toBe('Chromium VI FAIL on later evidence (Test Lab Two, report TL2-1): FAIL: 3.5 mg/kg is at or above the limit of 3 mg/kg: this lot cannot be used (REACH Annex XVII entry 47).')
     expect(await eventsOf('lot.blocked', A.seedLot)).toMatchObject([{ payload: { cause: 'CR_VI_FAIL', workOrderIds: [A.workOrder] } }])
+    // The garments made from it go to the PPE register (B-W1-43's hook), sourced from this result, in the same command.
+    expect(later.trace.register).toMatchObject({ opened: true, reference: expect.stringMatching(/^REG-\d{4}-\d{4}$/), words: expect.stringContaining('SEED-WO-0001') })
+    expect(await admin('SELECT kind::text AS kind, risk::text AS risk, "sourceType", "sourceId", "workOrderIds" FROM "PpeRegisterEntry" WHERE id = $1', [later.trace.register.entryId])).toEqual([
+      { kind: 'NON_CONFORMITY', risk: 'ASSESSING', sourceType: 'LabResult', sourceId: later.result.id, workOrderIds: [A.workOrder] },
+    ])
+    expect(await eventsOf('compliance.register_entry_opened', later.trace.register.entryId)).toMatchObject([{ payload: { sourceType: 'LabResult', sourceId: later.result.id } }])
     expect(await eventsOf('lot.test_recorded', A.seedLot)).toMatchObject([{ payload: { verdict: 'FAIL', laterFail: true, qualityStatus: 'BLOCKED' } }])
     expect(await unusable(A.seedLot)).toEqual(['CR_VI_FAILED'])
     // Never released again: a Cr VI FAIL has no override.
@@ -449,8 +455,40 @@ describe('the Cr VI evidence rule is a setting (Q14)', () => {
     const loosened = await put({ crViEvidenceRule: 'SUPPLIER_REPORT_ACCEPTED', version: 1, reason: 'The tanneries send yearly reports (Q14 a).' })
     expect(loosened.status, JSON.stringify(loosened.body)).toBe(200)
     expect(loosened.body).toMatchObject({ previousRule: 'LOT_REPORT_REQUIRED', settings: { crViEvidenceRule: 'SUPPLIER_REPORT_ACCEPTED', version: 2 } })
-    expect(await admin('SELECT reason FROM "AuditLog" WHERE action = \'quality.settingsSaved\' AND "recordId" = $1 ORDER BY at', [A.tenant])).toEqual([{ reason: null }, { reason: 'The tanneries send yearly reports (Q14 a).' }])
+    expect(await admin('SELECT reason, before, after FROM "AuditLog" WHERE "recordType" = \'QualitySettings\' AND "recordId" = $1 ORDER BY at', [A.tenant])).toMatchObject([
+      { reason: null, before: null, after: { crViEvidenceRule: 'LOT_REPORT_REQUIRED', version: 1 } },
+      { reason: 'The tanneries send yearly reports (Q14 a).', before: { crViEvidenceRule: 'LOT_REPORT_REQUIRED' }, after: { crViEvidenceRule: 'SUPPLIER_REPORT_ACCEPTED', version: 2 } },
+    ])
+    expect(await admin('SELECT "crViEvidenceRule"::text AS rule, version, "companyId" FROM "QualitySettings" WHERE id = $1', [A.tenant])).toEqual([{ rule: 'SUPPLIER_REPORT_ACCEPTED', version: 2, companyId: null }])
     expect((await ok('inspector', 'GET', `/quality/lots/${supplierLot}/release-check`)).checklist.ready).toBe(true)
+  })
+})
+
+describe('the tables hold the rules too (…_quality_lab_guards)', () => {
+  it('a lab result is append-only and its verdict is the value against the lot\'s limit; a lot document changes only its status', async () => {
+    const { lotId } = await leatherLot()
+    const answer = await passed(lotId)
+    const [row] = await admin<Json>('SELECT verdict::text AS verdict, "valueMgKg"::text AS value, "limitMgKg"::text AS "limit", "fileId" FROM "LabResult" WHERE "lotId" = $1', [lotId])
+    expect(row).toEqual({ verdict: 'PASS', value: '1.200', limit: '3.000', fileId: answer.result.fileId })
+    await expect(admin('UPDATE "LabResult" SET note = \'x\' WHERE "lotId" = $1', [lotId])).rejects.toThrow(/append-only/)
+    await expect(admin('DELETE FROM "LabResult" WHERE "lotId" = $1', [lotId])).rejects.toThrow(/append-only/)
+    const copy = (verdict: string, value: string) =>
+      admin(
+        `INSERT INTO "LabResult" (id, "tenantId", "companyId", "siteId", "itemId", "lotId", test, method, "valueMgKg", unit, "limitMgKg", verdict, lab, "testedOn", evidence, "fileId")
+         SELECT $2, "tenantId", "companyId", "siteId", "itemId", "lotId", test, method, $3::numeric, unit, "limitMgKg", $4::"LabVerdict", lab, "testedOn", evidence, "fileId" FROM "LabResult" WHERE "lotId" = $1`,
+        [lotId, newId(), value, verdict],
+      )
+    await expect(copy('PASS', '3.000')).rejects.toThrow(/the value against the limit/)
+    await expect(copy('FAIL', '2.999')).rejects.toThrow(/the value against the limit/)
+
+    const ppe = await lotOf(A.protector, null, '12', 'PCS')
+    const fileId = await uploaded('buyer', ppe, 'documents/upload')
+    const attached = await ok('buyer', 'POST', `/quality/lots/${ppe}/documents`, { fileId, kind: 'OTHER', note: 'Packing list of the protectors.' }, 201)
+    await expect(admin('UPDATE "LotDocument" SET kind = \'PPE_CERTIFICATE\' WHERE id = $1', [attached.document.id])).rejects.toThrow(/never changes but its status/)
+    await admin('UPDATE "LotDocument" SET status = \'ARCHIVED\' WHERE id = $1', [attached.document.id])
+    await expect(admin('UPDATE "LotDocument" SET status = \'ACTIVE\' WHERE id = $1', [attached.document.id])).rejects.toThrow(/cannot move from ARCHIVED to ACTIVE/)
+    await expect(admin('DELETE FROM "LotDocument" WHERE id = $1', [attached.document.id])).rejects.toThrow(/never deleted/)
+    expect((await ok('viewer', 'GET', `/quality/lots/${ppe}/documents`)).documents).toMatchObject([{ kind: 'OTHER', status: 'ARCHIVED', inForce: false }])
   })
 })
 

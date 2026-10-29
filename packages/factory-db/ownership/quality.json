@@ -1,5 +1,5 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/quality.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context) records final inspections, signs quality releases, keeps garment serials and the PPE register through apps/factory-api's modules (B-W1-43, B-W1-44, B-W1-45), always through command(); the API keeps staff to the companies and sites their grants reach. The floor (factory_floor_runtime) works on its OWN site only (every table here but the register has a site key): it reads the site's inspections, defects, releases, release reversals and serials, records a final inspection with its defects and decides it (a floor inspector, signed in: the …_quality_shipping_guards triggers refuse a floor inspection that names an office user), and gives serials at the final operation (and packs or voids them); it never releases goods nor reverses a release. No table here has a cost, price, margin or wages column. Portal and link sessions read nothing here. QualityRelease and QualityReleaseReversal are append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes it. Nobody deletes an inspection (cancelled), a serial (voided) or a register entry (closed); defects are removed only while their inspection is OPEN. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/quality.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context) records final inspections, signs quality releases, keeps garment serials and the PPE register, and records lab results, lot documents and the Cr VI evidence rule through apps/factory-api's modules (B-W1-34, B-W1-43, B-W1-44, B-W1-45), always through command(); the API keeps staff to the companies and sites their grants reach. The floor (factory_floor_runtime) works on its OWN site only (every table here but the register has a site key): it reads the site's inspections, defects, releases, release reversals and serials, records a final inspection with its defects and decides it (a floor inspector, signed in: the …_quality_shipping_guards triggers refuse a floor inspection that names an office user), and gives serials at the final operation (and packs or voids them); it never releases goods nor reverses a release. No table here has a cost, price, margin or wages column. Portal and link sessions read nothing here. QualityRelease, QualityReleaseReversal and LabResult are append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes it. Nobody deletes an inspection (cancelled), a serial (voided) or a register entry (closed); defects are removed only while their inspection is OPEN. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "Inspection": {
       "about": "The office (a quality inspector) or the site's floor (a floor inspector, signed in) opens a final inspection of a work order, records its sample and checklist, and decides it (PASSED or FAILED, then frozen) or cancels it; both read the site's inspections.",
@@ -52,6 +52,32 @@
       "keyColumns": { "tenant": "tenantId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "QualitySettings": {
+      "about": "The office keeps what counts as chromium VI evidence (Q14, B-W1-34): a row per company or the tenant-wide one (its id is the company's or the tenant's). Office only; nobody deletes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "LabResult": {
+      "about": "The office (a quality inspector) records a lot's lab results with their reports (B-W1-34); a later FAIL is a new row that supersedes the PASS. The floor reads its site's results (why a lot is held). Nobody changes or removes a result.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    },
+    "LotDocument": {
+      "about": "The office attaches a lot's supplier documents (QHS-030, B-W1-34) and archives one no longer in force. The floor reads its site's documents. Nobody deletes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
       }
     }
   }

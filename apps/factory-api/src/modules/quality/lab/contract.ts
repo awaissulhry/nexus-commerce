@@ -77,6 +77,7 @@ const resultView = output({
   lotId: id(),
   companyId: id(),
   siteId: id(),
+  itemId: id(),
   test: z.enum(LAB_TESTS),
   method: z.enum(CR_VI_METHODS),
   valueMgKg: z.string().nullable(),
@@ -107,6 +108,7 @@ const documentView = output({
   lotId: id(),
   companyId: id(),
   siteId: id(),
+  itemId: id(),
   kind: z.enum(LOT_DOCUMENT_KINDS),
   fileId: id(),
   validTo: businessDate().nullable(),
@@ -172,7 +174,12 @@ export const recordResultContract = defineContract({
       lot: lotView,
       checklist: checklistView,
       /** A later FAIL that blocked a released lot: the work orders it went to. */
-      trace: output({ law: z.string(), workOrders: z.array(workOrderUse) }).nullable(),
+      trace: output({
+        law: z.string(),
+        workOrders: z.array(workOrderUse),
+        /** The PPE register entry of the garments made from it (when its stock went to work orders), or why none. */
+        register: output({ opened: z.boolean(), entryId: id().nullable(), reference: z.string().nullable(), shippedGoods: z.boolean().nullable(), words: z.string() }).nullable(),
+      }).nullable(),
     }),
   },
 })

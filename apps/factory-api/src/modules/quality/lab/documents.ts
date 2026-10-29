@@ -73,6 +73,7 @@ export async function attachDocument(caller: CommandCaller, lotId: string, body:
       lotId: current.id,
       companyId: current.companyId,
       siteId: current.siteId,
+      itemId: current.itemId,
       kind: body.kind,
       fileId: file.id,
       validTo: body.validTo ?? null,

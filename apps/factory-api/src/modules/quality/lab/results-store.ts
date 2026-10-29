@@ -1,16 +1,15 @@
-import type { CommandTools } from '../../../core/command'
+import type { Prisma } from '@nexus/factory-db'
+import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { CrViEvidence, CrViMethod, LabTest, Verdict } from '@nexus/factory-domain/quality/lab/rules'
-import type { Reader } from './store'
+import type { CommandTools } from '../../../core/command'
+import { dayOf, decimalOrNull, type Reader } from './store'
 
 /**
- * THE SEAM for a lot's lab results (B-W1-34). The lab step writes and reads results only through `processLabResults()`,
- * so the store is one file to swap.
- *
- * INTERIM (lead 10-29): there is no LabResult table yet. Until the schema step (approved: `LabResult` @append-only in
- * quality.prisma with `supersedesId`), a result is ONE audit row on its Lot (action `quality.labResultRecorded`,
- * `after.labResult` = the row below), written in the recording command's transaction like every audit row. The lot's
- * own Cr VI columns (status, value, evidence, test day; trigger-checked) stay the gate for release, issue and planning;
- * this store is the history behind them. NOT to be merged: the schema step replaces `AUDIT_LAB_RESULTS` with the table.
+ * THE SEAM for a lot's lab results (B-W1-34; QHS-029): the lab step writes and reads results only through
+ * `processLabResults()`. The default is the table (factory-db quality.prisma `LabResult`, append-only: a later FAIL is a
+ * new row that supersedes the PASS; the …_quality_lab_guards trigger checks the verdict against the lot's limit again).
+ * The lot's own Cr VI columns (status, value, evidence, test day; the Lot trigger) stay the gate for release, issue and
+ * planning; this is the history behind them. Tests may swap the store with `useLabResults`.
  */
 
 export interface LabResultRow {
@@ -18,6 +17,7 @@ export interface LabResultRow {
   readonly lotId: string
   readonly companyId: string
   readonly siteId: string
+  readonly itemId: string
   readonly test: LabTest
   readonly method: CrViMethod
   /** Three decimals; null below the detection limit. */
@@ -45,43 +45,86 @@ export interface LabResultRow {
 }
 
 export interface LabResultStore {
-  /** Inside the recording command. */
-  record(tools: Pick<CommandTools, 'audit'>, row: LabResultRow): Promise<void>
+  /** Inside the recording command (its audit row too). */
+  record(tools: Pick<CommandTools, 'tx' | 'audit'>, row: LabResultRow): Promise<void>
   /** A lot's results, newest first. */
   list(client: Reader, lotId: string): Promise<LabResultRow[]>
   /** The results that rest on this report file (a supplier report reused for another lot of the article). */
   byFile(client: Reader, fileId: string): Promise<LabResultRow[]>
 }
 
-export const LAB_RESULT_ACTION = 'quality.labResultRecorded'
+const COLUMNS = {
+  id: true,
+  lotId: true,
+  companyId: true,
+  siteId: true,
+  itemId: true,
+  test: true,
+  method: true,
+  valueMgKg: true,
+  belowDetectionLimit: true,
+  detectionLimitMgKg: true,
+  unit: true,
+  limitMgKg: true,
+  verdict: true,
+  lab: true,
+  reportNumber: true,
+  testedOn: true,
+  evidence: true,
+  article: true,
+  periodFrom: true,
+  periodTo: true,
+  fileId: true,
+  supersedesId: true,
+  note: true,
+  createdAt: true,
+  createdById: true,
+} as const satisfies Prisma.LabResultSelect
+type Row = Prisma.LabResultGetPayload<{ select: typeof COLUMNS }>
 
-const rowOf = (after: unknown): LabResultRow | null => {
-  const value = (after as { labResult?: LabResultRow } | null)?.labResult
-  return value && typeof value === 'object' && typeof value.id === 'string' ? value : null
-}
+const rowOf = (row: Row): LabResultRow => ({
+  ...row,
+  method: row.method as CrViMethod,
+  valueMgKg: decimalOrNull(row.valueMgKg),
+  detectionLimitMgKg: decimalOrNull(row.detectionLimitMgKg),
+  unit: 'mg/kg',
+  limitMgKg: decimalOrNull(row.limitMgKg)!,
+  testedOn: dayOf(row.testedOn),
+  periodFrom: row.periodFrom ? dayOf(row.periodFrom) : null,
+  periodTo: row.periodTo ? dayOf(row.periodTo) : null,
+  createdAt: toUtcIso(row.createdAt),
+})
 
-/** Interim: one audit row per result (see above). */
-export const AUDIT_LAB_RESULTS: LabResultStore = Object.freeze({
-  record: async (tools: Pick<CommandTools, 'audit'>, row: LabResultRow) => {
-    tools.audit({ action: LAB_RESULT_ACTION, recordType: 'Lot', recordId: row.lotId, companyId: row.companyId, siteId: row.siteId, after: { labResult: row } })
+const day = (value: string | null): Date | null => (value === null ? null : new Date(`${value}T00:00:00.000Z`))
+const NEWEST_FIRST = [{ createdAt: 'desc' as const }, { id: 'desc' as const }]
+
+/** The table. */
+export const TABLE_LAB_RESULTS: LabResultStore = Object.freeze({
+  record: async (tools: Pick<CommandTools, 'tx' | 'audit'>, row: LabResultRow) => {
+    await tools.tx.labResult.create({
+      data: { ...row, testedOn: day(row.testedOn)!, periodFrom: day(row.periodFrom), periodTo: day(row.periodTo), createdAt: new Date(row.createdAt) },
+      select: { id: true },
+    })
+    tools.audit({
+      action: 'quality.labResultRecorded',
+      recordType: 'LabResult',
+      recordId: row.id,
+      companyId: row.companyId,
+      siteId: row.siteId,
+      after: { lotId: row.lotId, test: row.test, method: row.method, valueMgKg: row.valueMgKg, belowDetectionLimit: row.belowDetectionLimit, detectionLimitMgKg: row.detectionLimitMgKg, limitMgKg: row.limitMgKg, verdict: row.verdict, lab: row.lab, reportNumber: row.reportNumber, testedOn: row.testedOn, evidence: row.evidence, article: row.article, periodFrom: row.periodFrom, periodTo: row.periodTo, fileId: row.fileId, supersedesId: row.supersedesId },
+    })
   },
-  list: async (client: Reader, lotId: string) =>
-    (await client.auditLog.findMany({ where: { recordType: 'Lot', recordId: lotId, action: LAB_RESULT_ACTION }, select: { after: true }, orderBy: [{ at: 'desc' }, { id: 'desc' }] }))
-      .map((entry) => rowOf(entry.after))
-      .filter((row): row is LabResultRow => row !== null),
-  byFile: async (client: Reader, fileId: string) =>
-    (await client.auditLog.findMany({ where: { recordType: 'Lot', action: LAB_RESULT_ACTION, after: { path: ['labResult', 'fileId'], equals: fileId } }, select: { after: true }, orderBy: [{ at: 'asc' }, { id: 'asc' }] }))
-      .map((entry) => rowOf(entry.after))
-      .filter((row): row is LabResultRow => row !== null),
+  list: async (client: Reader, lotId: string) => (await client.labResult.findMany({ where: { lotId }, select: COLUMNS, orderBy: NEWEST_FIRST })).map(rowOf),
+  byFile: async (client: Reader, fileId: string) => (await client.labResult.findMany({ where: { fileId }, select: COLUMNS, orderBy: NEWEST_FIRST })).map(rowOf),
 })
 
 let configured: LabResultStore | undefined
 
-/** Tests (and the schema step) swap the store; `undefined` puts the default back. */
+/** Tests may swap the store; `undefined` puts the table back. */
 export function useLabResults(store: LabResultStore | undefined): void {
   configured = store
 }
 
 export function processLabResults(): LabResultStore {
-  return configured ?? AUDIT_LAB_RESULTS
+  return configured ?? TABLE_LAB_RESULTS
 }

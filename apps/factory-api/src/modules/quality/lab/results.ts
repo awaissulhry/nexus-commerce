@@ -1,9 +1,10 @@
-import { ConflictError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { ConflictError, InvalidStateError, isDomainError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { QUALITY_LOTS_TEST } from '@nexus/factory-domain/quality/lab/permissions'
 import { CR_VI_UNIT, LAB_LAW, resultEffect, resultProblems, type CrViMethod, type CrViResultInput, type LabTest } from '@nexus/factory-domain/quality/lab/rules'
-import { command, type CommandCaller } from '../../../core/command'
+import { command, type CommandCaller, type CommandTools } from '../../../core/command'
+import { openRegisterEntryFor } from '../../compliance/register/hook'
 import { addYears } from '../../../platform/files/rules'
 import { completeUpload, requestUpload, retainFilesInCommand } from '../../../platform/files/files'
 import { processFiles } from '../../../platform/files/service'
@@ -27,7 +28,8 @@ import { workOrdersOf } from './trace'
  *             row): the verdict computed against the lot's limit, the lot's Cr VI columns (the trigger checks the
  *             verdict again), the result (the results seam), the report kept ten years (REACH art. 36), the event.
  *             A later FAIL on a PASS supersedes it; a RELEASED lot is BLOCKED under its stock locks and the work
- *             orders it went to come back (and in `lot.blocked`).
+ *             orders it went to come back (and in `lot.blocked`); when its stock went to work orders, the PPE register
+ *             entry of their garments is opened in the same command (B-W1-43's hook, source LabResult).
  */
 
 const REPORT_RETENTION_YEARS = 10
@@ -145,6 +147,7 @@ export async function recordResult(caller: CommandCaller, lotId: string, body: R
         lotId: current.id,
         companyId: current.companyId,
         siteId: current.siteId,
+        itemId: current.itemId,
         test: body.test,
         method: body.method as CrViMethod,
         valueMgKg: verdict.valueMgKg,
@@ -167,6 +170,8 @@ export async function recordResult(caller: CommandCaller, lotId: string, body: R
         createdById: context.actorId,
       }
       await processLabResults().record(tools, row)
+      // The garments made from it: a register entry (Reg. 2016/425 art. 8(4)) when its stock went to work orders.
+      const register = trace && trace.length > 0 ? await registerEntryFor(tools, current, row, verdict.words, trace) : null
       if (!file.reused) await retainFilesInCommand(tools, [file.id], addYears(now, REPORT_RETENTION_YEARS), RETENTION_WHY)
       tools.audit({
         recordType: 'Lot',
@@ -199,9 +204,41 @@ export async function recordResult(caller: CommandCaller, lotId: string, body: R
         effect: change.words,
         lot: await lotView(tx, updated),
         checklist: await checklistOf(tx, context.tenantId, updated, businessDate(now), context.actorId),
-        trace: trace && { law: LAB_LAW, workOrders: trace },
+        trace: trace && { law: LAB_LAW, workOrders: trace, register },
       }
     },
   )
   return result
+}
+
+/**
+ * A later FAIL on a released lot whose stock went to work orders: the PPE register entry of the garments made from it
+ * (modules/compliance/register `openRegisterEntryFor`, B-W1-43), NON_CONFORMITY, risk being assessed, its source this
+ * lab result, in the same command. One entry concerns one style: when the lot went to work orders of several styles,
+ * no entry is opened and the answer says so (one per style is opened by hand). A register that cannot number the entry
+ * (no PPE_REGISTER series) never stops the FAIL from being recorded and the lot blocked: the answer says why.
+ */
+async function registerEntryFor(tools: CommandTools, lot: LotRow, result: LabResultRow, words: string, trace: Awaited<ReturnType<typeof workOrdersOf>>) {
+  const workOrderIds = trace.map((use) => use.workOrderId)
+  const styles = new Set((await tools.tx.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: { styleId: true } })).map((order) => order.styleId))
+  const numbers = trace.map((use) => use.number ?? use.workOrderId).join(', ')
+  if (styles.size !== 1) {
+    return { opened: false, entryId: null, reference: null, shippedGoods: null, words: `Lot ${lot.code} went to work orders of ${styles.size} styles (${numbers}): open one PPE register entry per style by hand.` }
+  }
+  try {
+    const entry = await openRegisterEntryFor(tools, {
+      companyId: lot.companyId,
+      kind: 'NON_CONFORMITY',
+      workOrderIds,
+      description: `Material lot ${lot.code}: chromium VI FAIL on later evidence (${result.lab}${result.reportNumber ? `, report ${result.reportNumber}` : ''}): ${words} Its stock went to work orders ${numbers}.`,
+      risk: 'ASSESSING',
+      source: { type: 'LabResult', id: result.id },
+    })
+    return { ...entry, words: `PPE register entry ${entry.reference} ${entry.opened ? 'opened' : 'already open'} for the garments of work orders ${numbers}.` }
+  } catch (error) {
+    if (isDomainError(error) && ['not_found', 'invalid_state', 'conflict', 'validation_failed'].includes(error.code)) {
+      return { opened: false, entryId: null, reference: null, shippedGoods: null, words: `No PPE register entry was opened (${error.message}): open it by hand for work orders ${numbers}.` }
+    }
+    throw error
+  }
 }
