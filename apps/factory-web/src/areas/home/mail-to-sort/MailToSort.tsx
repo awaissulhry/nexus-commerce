@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { downloadLink } from '../../../record-panels/api'
 import { useLiveChanges } from '../../../record-panels/live'
@@ -15,7 +16,8 @@ type Notice = NonNullable<MailToSortViewModel['notice']>
  * `/w/<company>/home/mail-to-sort` (SCR-019): loads the mail to sort through the API client (email.triage over the
  * mail's company; the API filters), opens one, and sends the person's answer with the mail's version as read. The list
  * and the open mail are read again when the live stream says a mail was sorted (`email.inbound_sorted`), and after every
- * answer; an answer that met a mail moved meanwhile reads it again and says so (COL-078).
+ * answer; an answer that met a mail moved meanwhile reads it again and says so (COL-078). `?open=<id>` opens one mail
+ * (Today's mail rows link here).
  */
 export function MailToSort() {
   const api = useOfficeApi()
@@ -63,6 +65,14 @@ export function MailToSort() {
     setMails({ items: null, cursor: null, problem: null })
     void loadList()
   }, [filter, loadList])
+
+  // `?open=<mail id>` (Today opens a mail to sort here): that mail's review opens at once.
+  const askedOpen = useSearchParams()?.get('open') ?? null
+  useEffect(() => {
+    if (!askedOpen) return
+    setOpen({ id: askedOpen, detail: null, problem: null })
+    void loadDetail(askedOpen)
+  }, [askedOpen, loadDetail])
 
   useLiveChanges({
     onChange: (change) => {

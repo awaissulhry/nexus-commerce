@@ -25,9 +25,9 @@ import {
   type Viewer,
 } from './attention'
 import { FLOW_LENSES, LENS_RULES, lensesFor, orderStageOf, stagesOf, invoiceStageOf } from './flow'
-import { complianceActs, deadlineSeverity, heldWorkOrderSeverity, hoursUnconfirmed, openDuties, orderPromiseState, privacySeverity, registerSeverity } from './states'
+import { complianceActs, deadlineSeverity, heldWorkOrderSeverity, hoursUnconfirmed, mailSeverity, openDuties, orderPromiseState, privacySeverity, registerSeverity } from './states'
 import { WAITING_RULES, waitingFor, type WaitingCandidate } from './waiting'
-import { styleComplianceWords, workOrderHeldWords } from './words'
+import { CODE_WORDS, EN_TEMPLATES, invoiceToIssueWords, mailToSortWords, orderPromiseWords, phrase, render, styleComplianceWords, whyKey, workOrderHeldWords, type Phrase } from './words'
 
 const TENANT = '01900000-0000-7000-8000-000000000001'
 const A = '01900000-0000-7000-8000-00000000000a'
@@ -47,6 +47,8 @@ function roleActor(key: string, companies: Grant['companies'] = 'all'): Actor {
 const viewerOf = (actor: Actor, personId = ME): Viewer => ({ actor, personId, today: TODAY, now: NOW })
 
 let serial = 0
+/** A made-up phrase (its English is the text). */
+const says = (text: string): Phrase => ({ key: 'test', params: {}, text })
 function candidate(kind: AttentionKind, extra: Partial<AttentionCandidate> = {}): AttentionCandidate {
   serial += 1
   const id = `01900000-0000-7000-8000-${String(serial).padStart(12, '0')}`
@@ -56,7 +58,7 @@ function candidate(kind: AttentionKind, extra: Partial<AttentionCandidate> = {})
     severity: 'MEDIUM',
     record: { type: 'Thing', id, label: `T-${serial}` },
     scope: { companyId: A, siteId: SITE_A, partyId: P1 },
-    sentence: `Row ${serial}.`,
+    sentence: says(`Row ${serial}.`),
     blocks: null,
     due: null,
     since: new Date('2026-10-20T09:00:00.000Z'),
@@ -67,22 +69,22 @@ function candidate(kind: AttentionKind, extra: Partial<AttentionCandidate> = {})
 describe('who a row is for (whyMine: the right to act, four eyes, the grain, the company wall)', () => {
   it('the kind’s view AND one of its act permissions over the record; else not shown', () => {
     const lot = candidate('LOT_HOLD', { act: ['quality.lots.release'] })
-    expect(whyMine(viewerOf(roleActor('quality_inspector')), lot)).toBe('You release lots at this site.')
+    expect(whyMine(viewerOf(roleActor('quality_inspector')), lot)?.text).toBe('You release lots at this site.')
     // The buyer sees lots (quality.lots.view) but may not release them: not theirs.
     expect(whyMine(viewerOf(roleActor('buyer')), lot)).toBeNull()
     // Sales sees work orders but does not release them; the planner does.
     const held = candidate('WORK_ORDER_HELD')
     expect(whyMine(viewerOf(roleActor('sales')), held)).toBeNull()
-    expect(whyMine(viewerOf(roleActor('planner')), held)).toBe('You release work orders at this site.')
+    expect(whyMine(viewerOf(roleActor('planner')), held)?.text).toBe('You release work orders at this site.')
   })
 
   it('never the person who asked (four eyes), and a margin-floor approval only with the margin grain', () => {
     const asked = candidate('QUOTE_APPROVAL', { notBy: [ME], needsGrain: 'margin' })
     expect(whyMine(viewerOf(roleActor('finance')), asked)).toBeNull()
-    expect(whyMine(viewerOf(roleActor('finance'), OTHER), asked)).toMatch(/approve/)
+    expect(whyMine(viewerOf(roleActor('finance'), OTHER), asked)?.text).toMatch(/approve/)
     const noMargin: Actor = { audience: 'office', tenantId: TENANT, grants: [{ permissions: ['quotes.view', 'quotes.approve', 'money.price'], companies: 'all', sites: 'all', parties: 'all' }] }
     expect(whyMine(viewerOf(noMargin, OTHER), asked)).toBeNull()
-    expect(whyMine(viewerOf(noMargin, OTHER), candidate('QUOTE_APPROVAL', { notBy: [ME] }))).toMatch(/approve/)
+    expect(whyMine(viewerOf(noMargin, OTHER), candidate('QUOTE_APPROVAL', { notBy: [ME] }))?.text).toMatch(/approve/)
     // The buyer approves no quote at all.
     expect(whyMine(viewerOf(roleActor('buyer'), OTHER), asked)).toBeNull()
   })
@@ -90,43 +92,43 @@ describe('who a row is for (whyMine: the right to act, four eyes, the grain, the
   it('a person limited to company A never gets a row of company B', () => {
     const late = candidate('ORDER_PROMISE', { scope: { companyId: B, siteId: null, partyId: P1 } })
     expect(whyMine(viewerOf(roleActor('sales', [A])), late)).toBeNull()
-    expect(whyMine(viewerOf(roleActor('sales', [B])), late)).toMatch(/orders/)
+    expect(whyMine(viewerOf(roleActor('sales', [B])), late)?.text).toMatch(/orders/)
   })
 
   it('a row may name the permissions that act on it (a style: only its blockers’ fixers), and a reason of its own', () => {
     const style = candidate('STYLE_COMPLIANCE', { act: complianceActs(['DECLARATION_OF_CONFORMITY'], KIND_RULES.STYLE_COMPLIANCE.act), scope: { companyId: null, siteId: null, partyId: null } })
-    expect(whyMine(viewerOf(roleActor('quality_inspector')), style)).toMatch(/Declarations of Conformity/)
+    expect(whyMine(viewerOf(roleActor('quality_inspector')), style)?.text).toMatch(/Declarations of Conformity/)
     expect(whyMine(viewerOf(roleActor('production_manager')), style)).toBeNull()
-    const entry = candidate('REGISTER_DUTY', { why: (personId) => (personId === ME ? 'You follow this entry up.' : null) })
-    expect(whyMine(viewerOf(roleActor('quality_inspector')), entry)).toBe('You follow this entry up.')
-    expect(whyMine(viewerOf(roleActor('quality_inspector'), OTHER), entry)).toBe("You keep this company's PPE register.")
+    const entry = candidate('REGISTER_DUTY', { why: (personId) => (personId === ME ? phrase('why.REGISTER_DUTY.follow') : null) })
+    expect(whyMine(viewerOf(roleActor('quality_inspector')), entry)?.text).toBe('You follow this entry up.')
+    expect(whyMine(viewerOf(roleActor('quality_inspector'), OTHER), entry)?.text).toBe("You keep this company's PPE register.")
   })
 
   it('the sources a role reads and the tiles it gets', () => {
     expect(tileKindsFor(roleActor('owner'))).toEqual([...ATTENTION_KINDS])
-    expect(tileKindsFor(roleActor('buyer'))).toEqual(['PO_PROPOSAL', 'PO_NOT_CONFIRMED'])
+    expect(tileKindsFor(roleActor('buyer'))).toEqual(['PO_PROPOSAL', 'PO_NOT_CONFIRMED', 'MAIL_TO_SORT'])
     expect(sourcesFor(roleActor('buyer'))).toContain('LOT_HOLD') // seen, never acted on
     expect(tileKindsFor(roleActor('quality_inspector'))).toEqual(['LOT_HOLD', 'REGISTER_DUTY', 'STYLE_COMPLIANCE'])
-    expect(tileKindsFor(roleActor('sales'))).toEqual(['ORDER_PROMISE'])
+    expect(tileKindsFor(roleActor('sales'))).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT'])
     expect(tileKindsFor(roleActor('finance'))).toEqual(['INVOICE_SDI', 'QUOTE_APPROVAL', 'INVOICE_TO_ISSUE'])
     expect(tileKindsFor(roleActor('read_only'))).toEqual([])
   })
 })
 
 describe('amounts only with their grain (the row and its sentence)', () => {
-  const quote = candidate('QUOTE_APPROVAL', { amounts: { currency: 'EUR', netAmount: 624000, marginPct: '18.2500', marginAmount: 113880, inSentence: 'marginPct' }, sentence: 'Quote Q-1 waits.' })
-  const po = candidate('PO_NOT_CONFIRMED', { amounts: { currency: 'EUR', purchaseAmount: 120000, inSentence: 'purchaseAmount' }, sentence: 'Purchase order PO-1 is not confirmed.' })
+  const quote = candidate('QUOTE_APPROVAL', { amounts: { currency: 'EUR', netAmount: 624000, marginPct: '18.2500', marginAmount: 113880, inSentence: 'marginPct' }, sentence: says('Quote Q-1 waits.') })
+  const po = candidate('PO_NOT_CONFIRMED', { amounts: { currency: 'EUR', purchaseAmount: 120000, inSentence: 'purchaseAmount' }, sentence: says('Purchase order PO-1 is not confirmed.') })
 
   it('sales (price, margin) sees the margin % and the value, never the margin amount (cost)', () => {
-    const item = presentItem(viewerOf(roleActor('sales')), quote, 'why')
+    const item = presentItem(viewerOf(roleActor('sales')), quote, says('why'))
     expect(item.amounts).toEqual({ currency: 'EUR', netAmount: 624000, marginPct: '18.2500' })
     expect(item.sentence).toBe('Quote Q-1 waits (margin 18.3 %).')
     expect(JSON.stringify(item)).not.toContain('113880')
   })
 
   it('the buyer (cost) sees a purchase order’s value in the row and the sentence; a role without the grain sees neither', () => {
-    expect(presentItem(viewerOf(roleActor('buyer')), po, 'why')).toMatchObject({ amounts: { currency: 'EUR', purchaseAmount: 120000 }, sentence: 'Purchase order PO-1 is not confirmed (EUR 1200.00).' })
-    const planner = presentItem(viewerOf(roleActor('planner')), po, 'why')
+    expect(presentItem(viewerOf(roleActor('buyer')), po, says('why'))).toMatchObject({ amounts: { currency: 'EUR', purchaseAmount: 120000 }, sentence: 'Purchase order PO-1 is not confirmed (EUR 1200.00).' })
+    const planner = presentItem(viewerOf(roleActor('planner')), po, says('why'))
     expect(planner.amounts).toBeNull()
     expect(planner.sentence).toBe('Purchase order PO-1 is not confirmed.')
     expect(visibleAmounts(po.amounts, new Set())).toBeNull()
@@ -189,9 +191,9 @@ describe('rank, groups, pages and tiles', () => {
     expect(counts.byKind.reduce((sum, tile) => sum + tile.count, 0)).toBe(counts.total)
     expect(counts.byKind.find((tile) => tile.kind === 'ORDER_PROMISE')!.count).toBe(3)
     expect(counts.byKind.find((tile) => tile.kind === 'PRIVACY_DUTY')!.count).toBe(0)
-    expect(counts.byCategory).toEqual({ APPROVAL: 1, ALERT: 5, TASK: 1 })
+    expect(counts.byCategory).toEqual({ APPROVAL: 1, ALERT: 6 })
     expect(counts.now).toBe(ranked.filter((item) => item.group === 'NOW').length)
-    expect(countsOf([], [])).toEqual({ total: 0, now: 0, byCategory: { APPROVAL: 0, ALERT: 0, TASK: 0 }, byKind: [] })
+    expect(countsOf([], [])).toEqual({ total: 0, now: 0, byCategory: { APPROVAL: 0, ALERT: 0 }, byKind: [] })
   })
 
   it('the company and site filters (a site keeps its company’s rows without a site; a shared style belongs to every company)', () => {
@@ -238,12 +240,31 @@ describe('the states that put a record on Today', () => {
     expect(complianceActs(['USER_INFORMATION', 'DECLARATION_OF_CONFORMITY', 'CERTIFICATE'], KIND_RULES.STYLE_COMPLIANCE.act)).toEqual(['compliance.declarations.manage', 'compliance.certificates.manage'])
   })
 
+  it('mail to sort: whoever sorts the company’s mail (a mail of no company: every company), never another company’s', () => {
+    const mail = candidate('MAIL_TO_SORT', { scope: { companyId: A, siteId: null, partyId: null } })
+    expect(whyMine(viewerOf(roleActor('sales')), mail)?.text).toBe("You sort this company's received mail.")
+    expect(whyMine(viewerOf(roleActor('sales', [B])), mail)).toBeNull()
+    expect(whyMine(viewerOf(roleActor('sales', [B])), candidate('MAIL_TO_SORT', { scope: { companyId: null, siteId: null, partyId: null } }))).not.toBeNull()
+    expect(whyMine(viewerOf(roleActor('quality_inspector')), mail)).toBeNull()
+    expect([mailSeverity('TRIAGE'), mailSeverity('HELD'), mailSeverity('FAILED')]).toEqual(['MEDIUM', 'MEDIUM', 'LOW'])
+    expect(mailToSortWords({ sender: 'Anna Demo', subject: 'Order 200 jackets', state: 'HELD', heldReason: 'DMARC_FAIL' }).sentence.text).toBe(
+      '"Order 200 jackets" from Anna Demo is held: its sender\'s address failed the DMARC check.',
+    )
+    expect(mailToSortWords({ sender: 'a@example.com', subject: null, state: 'TRIAGE', heldReason: null }).sentence).toMatchObject({ key: 'MAIL_TO_SORT.TRIAGE_NO_SUBJECT', params: { sender: 'a@example.com' }, text: 'Mail from a@example.com reached no record: sort it.' })
+  })
+
   it('words name what is held and what waits', () => {
-    expect(workOrderHeldWords({ number: 'WO-1', style: 'JKT', checks: ['DEPOSIT', 'MATERIAL'], orders: ['SO-1'] })).toEqual({
-      sentence: 'Work order WO-1 (JKT) cannot be released: 2 checks open (deposit, material).',
-      blocks: 'Production of SO-1 waits for it.',
+    const held = workOrderHeldWords({ number: 'WO-1', style: 'JKT', checks: ['DEPOSIT', 'MATERIAL'], orders: ['SO-1'] })
+    expect(held.sentence).toEqual({ key: 'WORK_ORDER_HELD.HELD', params: { number: 'WO-1', style: 'JKT', count: 2, checks: ['DEPOSIT', 'MATERIAL'] }, text: 'Work order WO-1 (JKT) cannot be released: 2 checks open (deposit, material).' })
+    expect(held.blocks).toMatchObject({ key: 'WORK_ORDER_HELD.blocks', text: 'Production of SO-1 waits for it.' })
+    expect(styleComplianceWords({ style: 'JKT', checks: ['DECLARATION_OF_CONFORMITY'], steps: ['SHIPPING'], orders: 1, workOrders: 0 }).blocks?.text).toBe('It holds up the shipping of open orders (sales orders: 1, work orders: 0).')
+    expect(orderPromiseWords({ number: 'SO-1', customer: 'Shop', state: 'AT_RISK', days: 1, promiseDate: '2026-10-30', toShip: 1 })).toMatchObject({
+      sentence: { key: 'ORDER_PROMISE.AT_RISK', params: { count: 1, promiseDate: '2026-10-30' }, text: 'Order SO-1 for Shop is promised for tomorrow (2026-10-30) and is not ready yet.' },
+      blocks: { key: 'ORDER_PROMISE.waitsPieces', text: 'Shop waits for 1 piece.' },
     })
-    expect(styleComplianceWords({ style: 'JKT', checks: ['DECLARATION_OF_CONFORMITY'], steps: ['SHIPPING'], demand: ['1 open sales order'] }).blocks).toBe('It holds up the shipping of 1 open sales order.')
+    expect(invoiceToIssueWords({ customer: 'Shop', month: '2026-10', ddts: ['1/2026', '2/2026'], docType: 'TD24', dueBy: '2026-11-15', daysLeft: -2 }).blocks).toMatchObject({ key: 'INVOICE_TO_ISSUE.dueLate', params: { count: 2, dueDate: '2026-11-15' } })
+    expect(render('listMore', { shown: 'a', count: 3 })).toBe('a and 3 more')
+    expect(() => render('NO_SUCH_KEY', {})).toThrow(/no template/)
   })
 })
 
@@ -311,7 +332,10 @@ describe('the catalogue', () => {
     const events = [...liveEventsOf([...ATTENTION_KINDS]), ...FLOW_LENSES.flatMap((lens) => LENS_RULES[lens].live), ...Object.values(WAITING_RULES).flatMap((rule) => rule.live)]
     // Declared, and streamed to live screens (GET /live): the web refreshes on them.
     expect(events.filter((type) => !EVENT_CATALOGUE.find(type, 1)?.live)).toEqual([])
-    for (const kind of ATTENTION_KINDS) for (const permission of KIND_RULES[kind].act) expect(KIND_RULES[kind].why[permission], `${kind} ${permission}`).toBeTruthy()
+    for (const kind of ATTENTION_KINDS) for (const permission of KIND_RULES[kind].act) expect(EN_TEMPLATES[whyKey(kind, permission)], `${kind} ${permission}`).toBeTruthy()
+    // The design's tiles: Approvals are exactly the decisions a person reviews; everything else is an alert.
+    for (const kind of ATTENTION_KINDS) expect(KIND_RULES[kind].category, kind).toBe(KIND_RULES[kind].decide === 'REVIEW' ? 'APPROVAL' : 'ALERT')
+    expect(Object.keys(CODE_WORDS).sort()).toEqual(['checks', 'complianceChecks', 'duties', 'entryKind', 'heldReason', 'privacyDuties', 'reasons', 'steps'])
   })
 
   it('every office template that works on records has home.view; floor roles never do', () => {

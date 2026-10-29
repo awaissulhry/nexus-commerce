@@ -5,6 +5,7 @@
   "nav": {
     "home": {
       "area": "Home",
+      "today": "Oggi",
       "mailToSort": "Posta da smistare"
     },
     "sales": {

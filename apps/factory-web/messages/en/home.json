@@ -1,4 +1,471 @@
 {
+  "today": {
+    "refused": {
+      "title": "Today is not open to you",
+      "body": "Your roles do not include Today (home.view). Ask an administrator if you need it."
+    },
+    "band": {
+      "label": "Today's status and actions",
+      "reading": "Reading…",
+      "needYou_one": "{count} needs you",
+      "needYou_other": "{count} need you"
+    },
+    "live": {
+      "connecting": "Connecting…",
+      "live": "Live",
+      "offline": "Offline — rows update when back"
+    },
+    "new": {
+      "menu": "New",
+      "notBuilt": "Its page is not built yet.",
+      "quote": "New quote",
+      "purchaseOrder": "New purchase order",
+      "workOrder": "New work order",
+      "party": "New customer or supplier",
+      "style": "New style",
+      "material": "New material",
+      "registerEntry": "New PPE register entry",
+      "certificate": "New certificate"
+    },
+    "workThrough": {
+      "label_one": "Work through {count}",
+      "label_other": "Work through {count}",
+      "none": "Nothing waits for you now."
+    },
+    "more": {
+      "label": "More actions",
+      "print": "Print my list"
+    },
+    "tiles": {
+      "all": "Needs me now",
+      "count": "{count}",
+      "atLeast": "at least {count}",
+      "partial": "A source stopped at its limit: there may be more.",
+      "unknown": "This count could not be read now."
+    },
+    "dismiss": "Dismiss",
+    "retry": "Try again",
+    "day": {
+      "title": "Your day"
+    },
+    "queue": {
+      "title": "Needs me now",
+      "clearFilter": "Show every row again (now: {kind})",
+      "fresh_one": "{count} new · Show",
+      "fresh_other": "{count} new · Show",
+      "loading": "Reading what needs you…",
+      "error": "Couldn't load what needs you.",
+      "empty": {
+        "title": "Nothing needs you now.",
+        "body": "When an order runs late, a lot waits for release or an approval is asked of you, it shows here."
+      },
+      "emptyKind": {
+        "title": "Nothing of this kind needs you.",
+        "body": "Press the tile again to see every row."
+      },
+      "more": "Show more",
+      "loadingMore": "Reading more…"
+    },
+    "keys": {
+      "approve": "Approve the quote (in its review)",
+      "reject": "Reject the quote, with a reason (in its review)"
+    },
+    "group": {
+      "NOW": "Now",
+      "TODAY": "Today",
+      "THIS_WEEK": "This week",
+      "LATER": "Later",
+      "count_one": "{count} row",
+      "count_other": "{count} rows"
+    },
+    "kind": {
+      "ORDER_PROMISE": "Orders late or at risk",
+      "WORK_ORDER_HELD": "Work orders held at release",
+      "LOT_HOLD": "Lots on hold",
+      "INVOICE_SDI": "Invoices at SDI",
+      "QUOTE_APPROVAL": "Quote approvals",
+      "PO_PROPOSAL": "Supplier changes",
+      "PO_NOT_CONFIRMED": "POs not confirmed",
+      "SCAN_CORRECTION": "Scan corrections",
+      "SCAN_REFUSAL": "Refused scans",
+      "INVOICE_TO_ISSUE": "Goods to invoice",
+      "REGISTER_DUTY": "PPE register duties",
+      "PRIVACY_DUTY": "Privacy duties",
+      "STYLE_COMPLIANCE": "Styles held by compliance",
+      "MAIL_TO_SORT": "Mail to sort"
+    },
+    "severity": {
+      "HIGH": "Urgent",
+      "MEDIUM": "Needs action",
+      "LOW": "When you can"
+    },
+    "due": {
+      "overdue_one": "Overdue {count} day",
+      "overdue_other": "Overdue {count} days",
+      "today": "Due today",
+      "soon_one": "Due tomorrow",
+      "soon_other": "Due in {count} days",
+      "on": "Due {date}"
+    },
+    "row": {
+      "openRecord": "Open {record} (⌘-click: a new tab)",
+      "ageToday": "Waiting since today",
+      "age_one": "Waiting {count} day",
+      "age_other": "Waiting {count} days"
+    },
+    "flow": {
+      "title": "Where the work is",
+      "lensLabel": "Records of",
+      "loading": "Reading the stages…",
+      "error": "Couldn't read where the work is.",
+      "late_one": "{count} late",
+      "late_other": "{count} late",
+      "noneLate": "none late",
+      "noDate": "no date to keep",
+      "oldest_one": "oldest {count} day",
+      "oldest_other": "oldest {count} days",
+      "inexact": "its list shows more",
+      "noLists": "The stages open their lists once those list pages are built.",
+      "partial": "Very many records: the counts are of the first 5,000.",
+      "lens": {
+        "ORDERS": "Sales orders",
+        "WORK_ORDERS": "Work orders",
+        "PURCHASE_ORDERS": "Purchase orders",
+        "INVOICES": "Invoices",
+        "LOTS": "Lots"
+      },
+      "stage": {
+        "ORDERS": {
+          "WAITING_FOR_DEPOSIT": "Waiting for deposit",
+          "PLANNED": "Planned",
+          "IN_PRODUCTION": "In production",
+          "READY": "Ready to ship",
+          "PARTLY_SHIPPED": "Partly shipped",
+          "SHIPPED": "Shipped, to close"
+        },
+        "WORK_ORDERS": {
+          "DRAFT": "Draft",
+          "RELEASED": "Released",
+          "IN_PROGRESS": "In progress",
+          "COMPLETED": "Completed"
+        },
+        "PURCHASE_ORDERS": {
+          "DRAFT": "Draft",
+          "SENT": "Sent",
+          "CHANGES_PROPOSED": "Changes proposed",
+          "CONFIRMED": "Confirmed",
+          "PARTLY_RECEIVED": "Partly received",
+          "RECEIVED": "Received"
+        },
+        "INVOICES": {
+          "DRAFT": "Draft",
+          "TO_SEND": "To send to SDI",
+          "AT_SDI": "At SDI",
+          "DELIVERED": "Delivered, not paid",
+          "PAID": "Paid"
+        },
+        "LOTS": {
+          "QUARANTINE": "In quarantine",
+          "BLOCKED": "Blocked",
+          "RELEASED": "Released (30 days)",
+          "REJECTED": "Rejected (30 days)"
+        }
+      }
+    },
+    "panels": {
+      "title": "My lists",
+      "seeAll": "See all {count}",
+      "seeAllMore": "See all",
+      "moreNoList": "More in the list (its page is not built yet)",
+      "allShown": "{count} in all",
+      "quotesToApprove": {
+        "title": "Which quotes wait for an approval?",
+        "empty": "No quote waits for an approval."
+      },
+      "lateOrders": {
+        "title": "Which orders are late?",
+        "empty": "No order is late."
+      },
+      "ordersWaitingDeposit": {
+        "title": "Which orders wait for their deposit?",
+        "empty": "No order waits for its deposit."
+      },
+      "draftWorkOrders": {
+        "title": "Which work orders wait for release?",
+        "empty": "No draft work order."
+      },
+      "lateWorkOrders": {
+        "title": "Which work orders are late?",
+        "empty": "No work order is late."
+      },
+      "scanCorrections": {
+        "title": "Which scan corrections wait?",
+        "empty": "No scan correction waits."
+      },
+      "posAwaitingSupplier": {
+        "title": "Which purchase orders wait for the supplier?",
+        "empty": "No purchase order waits for its supplier."
+      },
+      "supplierChanges": {
+        "title": "Which supplier changes wait for you?",
+        "empty": "No supplier proposed changes."
+      },
+      "sdiRefused": {
+        "title": "Which invoices did SDI refuse?",
+        "empty": "SDI refused no invoice."
+      },
+      "registerOpen": {
+        "title": "Which PPE register entries are open?",
+        "empty": "No open register entry."
+      },
+      "certificatesExpiring": {
+        "title": "Which certificates expire in 90 days?",
+        "empty": "No certificate expires in 90 days."
+      },
+      "mailToSort": {
+        "title": "Which mail waits to be sorted?",
+        "empty": "No mail waits to be sorted."
+      },
+      "word": {
+        "waitsApproval": "awaits approval",
+        "daysLate_one": "{count} day late",
+        "daysLate_other": "{count} days late",
+        "depositOpen": "deposit open",
+        "draft": "draft",
+        "waitsDecision": "awaits decision",
+        "notConfirmed": "not confirmed",
+        "changesProposed": "changes proposed",
+        "sdiRejected": "rejected",
+        "open": "open",
+        "expiresIn_one": "expires in {count} day",
+        "expiresIn_other": "expires in {count} days",
+        "mail": {
+          "TRIAGE": "no record",
+          "HELD": "held",
+          "FAILED": "unreadable"
+        }
+      }
+    },
+    "decide": {
+      "noun": "row",
+      "reading": "The quote is being read.",
+      "notWaiting": "No approval request waits on this quote any more.",
+      "busy": "The decision is being sent.",
+      "why": "Why it is yours",
+      "blocks": "What waits on it",
+      "due": "Due",
+      "since": "Waiting since",
+      "value": "Value",
+      "purchaseValue": "Purchase value",
+      "openRecord": "Open {record}",
+      "openReview": "Open its review",
+      "ownReview": "It is decided in its own review.",
+      "ownPage": "Its review comes with its area's screens: open the record.",
+      "approve": "Approve",
+      "approved": "Approved. The quote can be sent.",
+      "rejected": "Rejected. The quote is a draft again; the requester sees why.",
+      "reject": {
+        "button": "Reject",
+        "title": "Reject {record}: tell the requester why",
+        "reason": "Reason",
+        "hint": "Shown to the requester and kept on the quote's history.",
+        "cancel": "Cancel",
+        "confirm": "Reject",
+        "reasonNeeded": "Write why the approval is refused.",
+        "reasonShort": "Write a few words more.",
+        "reasonLong": "At most 1,000 characters."
+      },
+      "problem": {
+        "changed": "The quote changed since it was read. It was read again: look before you decide.",
+        "forbidden": "You may not decide this request (you asked for it, or it needs the margin rights).",
+        "stepUp": "Confirm it's you first (a fresh authenticator code), then decide again.",
+        "failed": "The decision could not be sent. Try again."
+      },
+      "onRecord": "It is done on its record."
+    },
+    "review": {
+      "customer": "Customer",
+      "revision": "Revision",
+      "revisionValue": "Revision {revision}",
+      "value": "Value",
+      "margin": "Margin",
+      "floor": "Floor {floor} %",
+      "validUntil": "Valid until",
+      "rules": "Rules it breaks",
+      "asked": "Asked on {at}"
+    },
+    "problem": {
+      "read": "It could not be read. Try again.",
+      "forbidden": "You may not see this.",
+      "notFound": "It is not there any more.",
+      "offline": "The factory could not be reached. Try again in a moment.",
+      "shape": "This list answered in a shape this page does not know yet."
+    },
+    "print": {
+      "title": "What needs me",
+      "meta": "{at} · {person}",
+      "filter": "Only: {filter}",
+      "all": "Every row",
+      "button": "Print",
+      "empty": "Nothing to print.",
+      "cut": "{shown} of {total} rows printed."
+    },
+    "tile": {
+      "ALL": {
+        "label": "Needs me now",
+        "hint": "every row that waits for you"
+      },
+      "APPROVAL": {
+        "label": "Approvals",
+        "hint": "decisions you review"
+      },
+      "ALERT": {
+        "label": "Alerts on my records",
+        "hint": "late, on hold, rejected or a duty open"
+      }
+    },
+    "w": {
+      "withFigure": "{text} ({figure}).",
+      "marginFigure": "margin {value} %",
+      "listMore": "{shown} and {count} more",
+      "ORDER_PROMISE.LATE_one": "Order {number} for {customer} is {count} day late: it was promised for {promiseDate}.",
+      "ORDER_PROMISE.LATE_other": "Order {number} for {customer} is {count} days late: it was promised for {promiseDate}.",
+      "ORDER_PROMISE.AT_RISK_TODAY": "Order {number} for {customer} is promised for today ({promiseDate}) and is not ready yet.",
+      "ORDER_PROMISE.AT_RISK_one": "Order {number} for {customer} is promised for tomorrow ({promiseDate}) and is not ready yet.",
+      "ORDER_PROMISE.AT_RISK_other": "Order {number} for {customer} is promised for {promiseDate} (in {count} days) and is not ready yet.",
+      "ORDER_PROMISE.waitsPieces_one": "{customer} waits for {count} piece.",
+      "ORDER_PROMISE.waitsPieces_other": "{customer} waits for {count} pieces.",
+      "ORDER_PROMISE.waitsOrder": "{customer} waits for the order.",
+      "WORK_ORDER_HELD.HELD_one": "Work order {number} ({style}) cannot be released: {count} check open ({checks}).",
+      "WORK_ORDER_HELD.HELD_other": "Work order {number} ({style}) cannot be released: {count} checks open ({checks}).",
+      "WORK_ORDER_HELD.blocks": "Production of {orders} waits for it.",
+      "LOT_HOLD.QUARANTINE": "Lot {code} ({item}) waits in quarantine for its release.",
+      "LOT_HOLD.QUARANTINE.blocks": "Its stock cannot be issued to work orders until it is released.",
+      "LOT_HOLD.BLOCKED": "Lot {code} ({item}) is blocked.",
+      "LOT_HOLD.BLOCKED_CR_VI": "Lot {code} ({item}) is blocked: its chromium VI result failed.",
+      "LOT_HOLD.BLOCKED.blocks": "Its stock stays held: reject the lot, or release it again with new evidence.",
+      "INVOICE_SDI.REJECTED": "Invoice {number} for {customer} was rejected by SDI: correct it and send it again by {deadlineDate}.",
+      "INVOICE_SDI.REJECTED_NO_DATE": "Invoice {number} for {customer} was rejected by SDI: correct it and send it again.",
+      "INVOICE_SDI.REJECTED.blocks": "Until it is sent again it counts as never issued.",
+      "INVOICE_SDI.ERROR": "Invoice {number} for {customer} did not reach SDI: send it again.",
+      "INVOICE_SDI.ERROR.blocks": "The customer has no valid invoice yet.",
+      "INVOICE_SDI.NOT_DELIVERABLE": "SDI could not deliver invoice {number} to {customer}, and no courtesy copy went out.",
+      "INVOICE_SDI.NOT_DELIVERABLE.blocks": "The customer finds it only in their tax area until they get a copy.",
+      "INVOICE_SDI.FILES_PENDING": "Invoice {number} for {customer} is issued, but its XML or PDF is not stored yet.",
+      "INVOICE_SDI.FILES_PENDING.blocks": "It cannot go to SDI without its XML.",
+      "QUOTE_APPROVAL.PENDING": "Quote {number} for {customer} waits for an approval: {reasons}.",
+      "QUOTE_APPROVAL.blocks": "It cannot be sent to the customer until it is decided.",
+      "PO_PROPOSAL.CHANGES_PROPOSED": "{supplier} proposed changes to purchase order {number}: accept or refuse them.",
+      "PO_PROPOSAL.blocks": "Receiving and a new link wait for your answer.",
+      "PO_NOT_CONFIRMED.DAYS_one": "Purchase order {number} to {supplier} is not confirmed {count} day after it was sent.",
+      "PO_NOT_CONFIRMED.DAYS_other": "Purchase order {number} to {supplier} is not confirmed {count} days after it was sent.",
+      "PO_NOT_CONFIRMED.HOURS_one": "Purchase order {number} to {supplier} is not confirmed {count} hour after it was sent.",
+      "PO_NOT_CONFIRMED.HOURS_other": "Purchase order {number} to {supplier} is not confirmed {count} hours after it was sent.",
+      "PO_NOT_CONFIRMED.blocks": "The goods are needed by {neededDate}.",
+      "SCAN_CORRECTION.PENDING": "A correction of the scan of bundle {bundle} at {operation} ({workOrder}) waits for a decision.",
+      "SCAN_CORRECTION.blocks": "{workOrder}'s progress counts the report as it was until the correction is decided.",
+      "SCAN_REFUSAL.REFUSED": "A scan sent from {device} was refused: {message}",
+      "SCAN_REFUSAL.blocks": "{workOrder}'s progress misses it until it is scanned again or discarded.",
+      "INVOICE_TO_ISSUE.OPEN_one": "{customer}: {count} DDT of {ddtMonth} not invoiced yet ({ddts}).",
+      "INVOICE_TO_ISSUE.OPEN_other": "{customer}: {count} DDTs of {ddtMonth} not invoiced yet ({ddts}).",
+      "INVOICE_TO_ISSUE.dueLeft_one": "The goods left: invoice them ({docType}) by {dueDate}, {count} day left.",
+      "INVOICE_TO_ISSUE.dueLeft_other": "The goods left: invoice them ({docType}) by {dueDate}, {count} days left.",
+      "INVOICE_TO_ISSUE.dueToday": "The goods left: invoice them ({docType}) today, {dueDate}.",
+      "INVOICE_TO_ISSUE.dueLate_one": "The goods left: the invoice ({docType}) was due by {dueDate}, {count} day ago.",
+      "INVOICE_TO_ISSUE.dueLate_other": "The goods left: the invoice ({docType}) was due by {dueDate}, {count} days ago.",
+      "REGISTER_DUTY.OPEN": "PPE register {entryKind} {reference} ({style}): {duties}.",
+      "REGISTER_DUTY.blocks": "The entry cannot close until these duties are done (Reg. (EU) 2016/425 art. 8).",
+      "PRIVACY_DUTY.OPEN_one": "{company}: {count} privacy duty open ({privacyDuties}).",
+      "PRIVACY_DUTY.OPEN_other": "{company}: {count} privacy duties open ({privacyDuties}).",
+      "PRIVACY_DUTY.blocksFloor": "Floor work that records workers stays off until the worker notice and the DPIA are in place.",
+      "PRIVACY_DUTY.blocksPeople": "People are not told what the system keeps about them.",
+      "STYLE_COMPLIANCE.BLOCKED": "Style {style} is held by its compliance: {complianceChecks}.",
+      "STYLE_COMPLIANCE.blocks": "It holds up the {steps} of open orders (sales orders: {orders}, work orders: {workOrders}).",
+      "MAIL_TO_SORT.TRIAGE": "\"{subject}\" from {sender} reached no record: sort it.",
+      "MAIL_TO_SORT.TRIAGE_NO_SUBJECT": "Mail from {sender} reached no record: sort it.",
+      "MAIL_TO_SORT.TRIAGE.blocks": "Its sender waits: nobody sees it on a record until it is sorted.",
+      "MAIL_TO_SORT.HELD": "\"{subject}\" from {sender} is held: {heldReason}.",
+      "MAIL_TO_SORT.HELD_NO_SUBJECT": "Mail from {sender} is held: {heldReason}.",
+      "MAIL_TO_SORT.HELD.blocks": "It reaches no thread until a person releases it or throws it away.",
+      "MAIL_TO_SORT.FAILED": "\"{subject}\" from {sender} could not be read.",
+      "MAIL_TO_SORT.FAILED_NO_SUBJECT": "Mail from {sender} could not be read.",
+      "MAIL_TO_SORT.FAILED.blocks": "Throw it away, or ask the sender to send it again.",
+      "why.ORDER_PROMISE.orders_manage": "You manage this customer's orders and their promise dates.",
+      "why.WORK_ORDER_HELD.workorders_release": "You release work orders at this site.",
+      "why.LOT_HOLD.quality_lots_release": "You release lots at this site.",
+      "why.LOT_HOLD.quality_lots_reject": "You reject or block lots at this site.",
+      "why.INVOICE_SDI.invoices_issue": "You issue and send this customer's invoices.",
+      "why.QUOTE_APPROVAL.quotes_approve": "You approve this customer's quotes, and someone else asked.",
+      "why.PO_PROPOSAL.purchasing_send": "You send purchase orders to this supplier.",
+      "why.PO_NOT_CONFIRMED.purchasing_send": "You send purchase orders to this supplier.",
+      "why.SCAN_CORRECTION.production_scan_correct": "You decide the floor's scan corrections at this site, and you neither scanned nor asked.",
+      "why.SCAN_REFUSAL.production_scan_correct": "You look after this site's floor scans.",
+      "why.INVOICE_TO_ISSUE.invoices_manage": "You invoice this customer's shipped goods.",
+      "why.REGISTER_DUTY.compliance_register_manage": "You keep this company's PPE register.",
+      "why.REGISTER_DUTY.follow": "You follow this entry up.",
+      "why.PRIVACY_DUTY.privacy_manage": "You keep this company's privacy paperwork.",
+      "why.STYLE_COMPLIANCE.compliance_declarations_manage": "You file the styles' Declarations of Conformity and leaflets.",
+      "why.STYLE_COMPLIANCE.compliance_certificates_manage": "You keep the type-examination certificates.",
+      "why.STYLE_COMPLIANCE.compliance_labels_manage": "You keep the garment label templates.",
+      "why.STYLE_COMPLIANCE.product_bom_release": "You release style revisions.",
+      "why.MAIL_TO_SORT.email_triage": "You sort this company's received mail.",
+      "code": {
+        "checks": {
+          "REVISION": "revision",
+          "LABEL_TEMPLATE": "garment label",
+          "CERTIFICATE": "certificate",
+          "WORK_CENTRES": "work centres",
+          "BOM": "bill of materials",
+          "CELLS": "cells",
+          "DEPOSIT": "deposit",
+          "MATERIAL": "material",
+          "BATCH_NUMBER": "batch number series"
+        },
+        "reasons": {
+          "MARGIN_FLOOR": "margin under the floor",
+          "DISCOUNT_LIMIT": "discount over the limit",
+          "AMOUNT_LIMIT": "amount over the limit",
+          "SPECIAL_ITEM": "a special item"
+        },
+        "duties": {
+          "RISK_ASSESSMENT": "the risk to decide",
+          "CORRECTIVE_ACTION": "the corrective action",
+          "DISTRIBUTORS": "the distributors to inform",
+          "AUTHORITY": "the authority to notify"
+        },
+        "entryKind": {
+          "COMPLAINT": "complaint",
+          "NON_CONFORMITY": "non-conformity",
+          "RECALL": "recall"
+        },
+        "privacyDuties": {
+          "register": "the record of processing activities",
+          "publicNotice": "the public privacy notice",
+          "staffNotice": "the staff notice",
+          "workerNotice": "the worker notice",
+          "dpia": "the signed DPIA"
+        },
+        "complianceChecks": {
+          "REVISION": "no released revision",
+          "LABEL_TEMPLATE": "garment label",
+          "CERTIFICATE": "certificate coverage",
+          "DECLARATION_OF_CONFORMITY": "Declaration of Conformity",
+          "USER_INFORMATION": "user information leaflet"
+        },
+        "steps": {
+          "PRODUCTION": "production",
+          "LABELS": "garment labels",
+          "SHIPPING": "shipping"
+        },
+        "heldReason": {
+          "DMARC_FAIL": "its sender's address failed the DMARC check",
+          "SPAM": "it looks like spam",
+          "UNKNOWN_SENDER": "its sender is not a contact of the record",
+          "THREAD_CLOSED": "the thread it answers is closed"
+        }
+      }
+    }
+  },
   "mailToSort": {
     "intro": "Mail that reached the company's addresses but found no record, mail held until someone looks at it, and mail that could not be read. Assign each one to a record, release it, or throw it away.",
     "filterLabel": "Show",

@@ -9,8 +9,10 @@ import {
   parseCursor,
   sourcesFor,
   tileKindsFor,
+  KIND_RULES,
   type AttentionItem,
   type AttentionKind,
+  type Category,
   type ItemAmounts,
 } from '@nexus/factory-domain/insights/attention'
 import { asMoney } from '@nexus/factory-domain/money/marked'
@@ -29,6 +31,8 @@ import { scopeFilterOf, viewerOf } from './viewer'
 
 export interface TodayQuery {
   readonly kind?: AttentionKind | undefined
+  /** One of the design's tiles: Approvals or Alerts on my records. */
+  readonly category?: Category | undefined
   readonly companyId?: string | undefined
   readonly siteId?: string | undefined
   readonly cursor?: string | undefined
@@ -51,6 +55,8 @@ export function itemView(item: AttentionItem) {
     sentence: item.sentence,
     why: item.why,
     blocks: item.blocks,
+    words: item.words,
+    sentenceFigure: item.sentenceFigure,
     due: item.due,
     since: toUtcIso(item.since),
     ageDays: item.ageDays,
@@ -85,7 +91,9 @@ export async function today(caller: CommandCaller, query: TodayQuery) {
   ).filter((item) => matchesScope(item, filter))
   const tiles = tileKindsFor(viewer.actor)
   const counts = countsOf(mine, tiles)
-  const shown = query.kind ? mine.filter((item) => item.kind === query.kind) : mine
+  const shown = mine.filter((item) => (!query.kind || item.kind === query.kind) && (!query.category || item.category === query.category))
+  // A tile's count is a lower bound when a source of one of its kinds stopped at its limit.
+  const completeFor = (category: Category | null) => answers.every((answer) => answer.complete || (category !== null && KIND_RULES[answer.kind].category !== category))
   const page = pageOf(shown, cursor, query.limit)
   return {
     asOf: toUtcIso(viewer.now),
@@ -93,8 +101,13 @@ export async function today(caller: CommandCaller, query: TodayQuery) {
     counts: {
       total: counts.total,
       now: counts.now,
-      byCategory: counts.byCategory,
-      tiles: counts.byKind.map((tile) => ({ ...tile, complete: answers.find((answer) => answer.kind === tile.kind)?.complete ?? true, filter: { kind: tile.kind } })),
+      // The design's three tiles (home.today focus-strip, W1): every row, the approvals, the alerts. Always all three.
+      tiles: [
+        { tile: 'ALL' as const, count: counts.total, complete: completeFor(null) },
+        { tile: 'APPROVAL' as const, count: counts.byCategory.APPROVAL, complete: completeFor('APPROVAL') },
+        { tile: 'ALERT' as const, count: counts.byCategory.ALERT, complete: completeFor('ALERT') },
+      ],
+      byKind: counts.byKind.map((entry) => ({ ...entry, complete: answers.find((answer) => answer.kind === entry.kind)?.complete ?? true })),
     },
     total: shown.length,
     items: page.items.map(itemView),
