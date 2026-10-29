@@ -201,6 +201,8 @@ export interface ShipmentFacts {
   readonly parcels: readonly PackParcel[]
   /** DDTs of the shipment that no cancellation names (B-W1-47). */
   readonly liveDdts: number
+  /** False only when an immediate invoice travels with the goods instead of a DDT (DPR 633/1972 art. 21 c. 4). */
+  readonly ddtRequired?: boolean
 }
 
 /**
@@ -241,9 +243,16 @@ export const unpackProblems = (facts: Pick<ShipmentFacts, 'parcels' | 'liveDdts'
 export const cancelProblems = (facts: Pick<ShipmentFacts, 'parcels' | 'liveDdts'>): string[] => declaredProblems(facts)
 
 /**
+ * What leaving (PACKED → SHIPPED, B-W1-47) needs: a live DDT (DPR 472/1996), unless an immediate invoice travels with
+ * the goods instead (ddtRequired false). The …_quality_shipping_guards trigger checks the same at commit.
+ */
+export const shipProblems = (facts: Pick<ShipmentFacts, 'liveDdts' | 'ddtRequired'>): string[] =>
+  facts.ddtRequired !== false && facts.liveDdts === 0 ? ['a live DDT (DPR 472/1996: issue the DDT first)'] : []
+
+/**
  * The shipment's state machine (A1 §2.5; the …_quality_shipping_guards trigger holds the same moves). Guards: PACKED
- * (packing complete), DRAFT from PACKED (unpacking), CANCELLED. SHIPPED (with its DDT, B-W1-47), DELIVERED and RETURNED
- * (tracking, B-W1-48) get their guards with their steps.
+ * (packing complete), DRAFT from PACKED (unpacking), CANCELLED, SHIPPED (a live DDT, B-W1-47). DELIVERED and RETURNED
+ * (tracking, B-W1-48) get their guards with their step.
  */
 export const shipmentMachine = defineMachine<ShipmentStatus, ShipmentFacts>({
   name: 'shipment',
@@ -257,6 +266,7 @@ export const shipmentMachine = defineMachine<ShipmentStatus, ShipmentFacts>({
     PACKED: (facts) => packingProblems(facts),
     DRAFT: (facts) => unpackProblems(facts),
     CANCELLED: (facts) => cancelProblems(facts),
+    SHIPPED: (facts) => shipProblems(facts),
   },
 })
 

@@ -1,0 +1,68 @@
+// Costing (plan §2.4 B-W1-16, A1 §2.6; features FIN-001, FIN-004, FIN-005, PRD-125): what the style cost sheet prices a
+// routing's standard minutes with, and its overhead rule. The sheet itself is computed when it is asked for, from a
+// revision's BOM and routing (apps/factory-api's modules/costing, factory-domain costing): nothing here stores a cost
+// sheet (a quote keeps its own snapshot, QuoteLine.costSnapshot). apps/factory-api's modules/costing writes these rows,
+// always through command().
+//
+// Tenant-wide (companyId null) or one company's: a company's own row wins for that company's sheets (A1 §2.1).
+//
+// Who sees what (ownership/costing.json): the office reads and writes; the floor, portal and link sessions read none of
+// it (a cost per minute is a cost: A1 §2.6; and no floor or portal screen needs it). Rates are archived, never deleted.
+
+/// The cost of one standard minute at a kind of work centre (FIN-004, FIN-005, PRD-125): labour = minutes × cost per
+/// minute ÷ (planned efficiency ÷ 100). A new rate is a new row from a day (validFrom); the sheet uses the newest ACTIVE
+/// one in force, the company's own before the tenant-wide one. The hand-written …_costing_guards migration keeps one
+/// tenant-wide rate per kind and day (a partial unique index Prisma cannot express) and the figures in range.
+model LabourRate {
+  id                   String         @id @db.Uuid
+  tenantId             String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it belongs to; null: tenant-wide, for every company of the tenant (A1 §2.1).
+  companyId            String?        @db.Uuid
+  /// The department: the kind of work centre a routing step names.
+  workCentreKind       WorkCentreKind
+  /// The cost of one standard minute, in `currency`; 0 or more. Never shown to the floor, a portal or a link.
+  /// @grain cost
+  costPerMinute        Decimal        @db.Decimal(18, 6)
+  /// ISO 4217; the cost sheet is in its company's currency, and a rate in another one is listed as missing.
+  currency             String         @default("EUR")
+  /// The share of the standard minutes the work centre is planned to achieve, percent: above 0, at most 200.
+  plannedEfficiencyPct Decimal        @default(100) @db.Decimal(7, 4)
+  /// The first day (Europe/Rome) the rate is in force.
+  validFrom            DateTime       @db.Date
+  /// Where the figure comes from (a payroll month, an accountant's sheet), as the office writes it.
+  note                 String?
+  status               MasterStatus   @default(ACTIVE)
+  version              Int            @default(1)
+  createdAt            DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?        @db.Uuid
+
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One company rate per kind and day (a tenant-wide one: the …_costing_guards partial unique index).
+  @@unique([tenantId, companyId, workCentreKind, validFrom])
+  // The sheet's read: the rates of a kind for a company and the tenant-wide ones.
+  @@index([tenantId, workCentreKind, validFrom])
+}
+
+/// The costing settings of a company, or the tenant-wide ones (FIN-001; the design's "overhead rule from Finance
+/// settings"): the overhead percentage the cost sheet adds on material + labour. The row's id is the company's id, or
+/// the tenant's own id for the tenant-wide row, so there is at most one of each (as ShippingSettings is keyed by its
+/// site). No row: the sheet has no overhead line.
+model CostingSettings {
+  /// The company's id; the tenant's id for the tenant-wide row (companyId null).
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: the tenant-wide settings.
+  companyId   String?  @db.Uuid
+  /// Percent on material + labour, 0 to 100.
+  overheadPct Decimal  @default(0) @db.Decimal(7, 4)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId])
+}
