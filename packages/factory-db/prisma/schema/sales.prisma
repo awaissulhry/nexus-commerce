@@ -676,3 +676,34 @@ model SalesOrderLineSize {
 
   @@unique([tenantId, lineId, size])
 }
+
+/// The sales settings of a company, or the tenant-wide ones (SAL-184, FIN-023; the design's Sales settings): the margin
+/// floor and the discount limit a quote is checked against (breaking either asks for an approval), how long a new quote
+/// stands and the deposit it asks by default. The row's id is the company's id, or the tenant's own id for the tenant-wide
+/// row, as CostingSettings: a company's own row wins for its quotes; no row at all: the domain's defaults
+/// (factory-domain sales/quotes/rules QUOTE_RULE_DEFAULTS). A quote version keeps the floor it was checked against
+/// (QuoteVersion.marginFloorPct), so a later change never rewrites an old quote.
+model SalesSettings {
+  /// The company's id; the tenant's id for the tenant-wide row (companyId null).
+  id                  String   @id @db.Uuid
+  tenantId            String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: the tenant-wide settings.
+  companyId           String?  @db.Uuid
+  /// The lowest margin, percent of the net amount, a quote is sent with without an approval: 0 to 100.
+  /// @grain margin
+  marginFloorPct      Decimal  @db.Decimal(7, 4)
+  /// The largest discount off the list price, percent, a line is sent with without an approval: 0 to 100.
+  discountLimitPct    Decimal  @db.Decimal(7, 4)
+  /// A new quote stands this many days (its validUntil): 1 to 365.
+  defaultValidityDays Int
+  /// The deposit asked at acceptance, percent of the gross total, above 0 and at most 100; null: none by default.
+  defaultDepositPct   Decimal? @db.Decimal(7, 4)
+  version             Int      @default(1)
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?  @db.Uuid
+
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId])
+}

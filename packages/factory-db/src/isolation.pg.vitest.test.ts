@@ -244,6 +244,7 @@ it('covers every classified table and every runtime role', () => {
     'SalesOrder',
     'SalesOrderLine',
     'SalesOrderLineSize',
+    'SalesSettings',
     'SdiNotification',
     'SdiSubmission',
     'SecretValue',
