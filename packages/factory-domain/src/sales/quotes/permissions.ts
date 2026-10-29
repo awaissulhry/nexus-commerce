@@ -13,17 +13,21 @@ import { definePermissions } from '../../auth/permissions/registry'
  *            the request, cancel it
  *   approve  decide an approval request: approve or reject (with a reason). Apart from editing: the person who asked
  *            never decides their own request, and a request that names the margin floor needs the margin grain
+ *   send     send a quote to its customer (B-W1-24): freeze the version, its PDF, the one-off accept link and the mail on
+ *            the quote's thread; send a new link. No step-up (A1 §3.10 keeps it for bank details, invoices, people)
  */
 export const QUOTES_DEFINITIONS = definePermissions('quotes', {
   view: { risk: 'read', description: 'See quotes: lines and size grids, totals and VAT, approval rules and requests, what stops a quote (prices, costs and margins only with their grains).' },
   manage: { risk: 'write', description: 'Make and edit quotes: header, lines and size grids; recompute them, ask for an approval, withdraw it, cancel a quote.' },
   approve: { risk: 'write', description: "Approve or reject a quote's approval request (never one you asked for yourself)." },
+  send: { risk: 'write', description: 'Send a quote to its customer: the version is frozen, its PDF stored, a one-off accept link mailed; send a new link.' },
 })
 
 export const QUOTES_VIEW = 'quotes.view' satisfies Permission
 export const QUOTES_MANAGE = 'quotes.manage' satisfies Permission
 export const QUOTES_APPROVE = 'quotes.approve' satisfies Permission
-export const QUOTES_PERMISSIONS: readonly Permission[] = Object.freeze([QUOTES_VIEW, QUOTES_MANAGE, QUOTES_APPROVE])
+export const QUOTES_SEND = 'quotes.send' satisfies Permission
+export const QUOTES_PERMISSIONS: readonly Permission[] = Object.freeze([QUOTES_VIEW, QUOTES_MANAGE, QUOTES_APPROVE, QUOTES_SEND])
 
 /**
  * The sales settings (B-W1-21; SAL-184, FIN-023; the design's Sales settings), in the sales area: the margin floor and

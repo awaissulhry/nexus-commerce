@@ -40,8 +40,8 @@ describe('the permission registry', () => {
     }
     expect(FACTORY_PERMISSIONS.get('roles.assign')?.risk).toBe('stepUp')
     expect(FACTORY_PERMISSIONS.assignable.some((definition) => definition.area === 'money')).toBe(false)
-    expect(FACTORY_PERMISSIONS.undeclared(['users.view', 'quotes.send', 'quotes.send'])).toEqual(['quotes.send'])
-    expect([...FACTORY_PERMISSIONS.byArea().keys()]).toEqual(['users', 'roles', 'audit', 'numbering', 'files', 'links', 'devices', 'workers', 'floor', 'threads', 'imports', 'documents', 'print', 'email', 'compliance', 'product', 'inventory', 'shipping', 'parties', 'planning', 'invoices', 'payments', 'costing', 'production', 'workorders', 'quotes', 'sales', 'money'])
+    expect(FACTORY_PERMISSIONS.undeclared(['users.view', 'quotes.export', 'quotes.export'])).toEqual(['quotes.export'])
+    expect([...FACTORY_PERMISSIONS.byArea().keys()]).toEqual(['users', 'roles', 'audit', 'numbering', 'files', 'links', 'devices', 'workers', 'floor', 'threads', 'imports', 'documents', 'print', 'email', 'compliance', 'product', 'inventory', 'shipping', 'parties', 'planning', 'invoices', 'payments', 'costing', 'production', 'workorders', 'quotes', 'sales', 'companies', 'money'])
   })
 
   it('refuses a name declared twice, a bad area, a bad risk, an empty description', () => {
@@ -72,7 +72,7 @@ describe('role templates', () => {
 
   it('finds a template naming an unknown permission, a grain as a permission, or cost without two-factor', () => {
     const owner = templateOf('owner')!
-    expect(templateProblems([{ ...owner, permissions: ['quotes.send'] }])).toEqual(['owner: quotes.send is not declared'])
+    expect(templateProblems([{ ...owner, permissions: ['quotes.export'] }])).toEqual(['owner: quotes.export is not declared'])
     expect(templateProblems([{ ...owner, permissions: ['money.cost'] }])).toEqual(['owner: money.cost is a grain; list it in grains'])
     expect(templateProblems([{ ...owner, requireMfa: false }])).toEqual(['owner: a role that sees cost and margin requires two-factor'])
     expect(templateProblems([{ ...owner, key: 'sales' }])).toEqual(['the owner template is missing'])
@@ -82,9 +82,9 @@ describe('role templates', () => {
 describe('custom roles', () => {
   it('checks the content and the key', () => {
     expect(roleProblems({ name: 'Night lead', requireMfa: false, permissions: ['users.view'], grains: ['price'] })).toEqual([])
-    expect(roleProblems({ name: '', requireMfa: false, permissions: ['quotes.send', 'money.price'], grains: ['salary' as never, 'cost'] })).toEqual([
+    expect(roleProblems({ name: '', requireMfa: false, permissions: ['quotes.export', 'money.price'], grains: ['salary' as never, 'cost'] })).toEqual([
       { path: 'name', message: 'Expected 1 to 100 characters.' },
-      { path: 'permissions/0', message: 'quotes.send is not a permission of the factory.' },
+      { path: 'permissions/0', message: 'quotes.export is not a permission of the factory.' },
       { path: 'permissions/1', message: 'money.price is a money grain: list it in grains.' },
       { path: 'grains/0', message: 'salary is not a money grain (price, cost, margin, wages).' },
       { path: 'requireMfa', message: 'A role that sees cost requires two-factor.' },

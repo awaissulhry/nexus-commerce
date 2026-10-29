@@ -77,6 +77,15 @@ model Company {
   documentFooter       String?
   /// The logo file (FileObject, which comes with files on R2).
   logoFileId           String?      @db.Uuid
+  /// The bank account the company's customers pay to (Q12: deposits by bank transfer; FatturaPA DatiPagamento MP05):
+  /// the account holder, the IBAN (country, check digits, ISO 7064 mod 97-10; upper case, no spaces), the BIC and the
+  /// bank's name. All four null, or the holder and the IBAN set. Written only by the office with a step-up and audited
+  /// from → to (a changed IBAN is a fraud vector); the floor and the partner role never select them: a deposit page or a
+  /// document shows them read in the tenant's system scope (modules/sales/deposits companyBankDetails).
+  bankAccountHolder    String?
+  iban                 String?
+  bic                  String?
+  bankName             String?
   status               MasterStatus @default(ACTIVE)
   version              Int          @default(1)
   createdAt            DateTime     @default(now()) @db.Timestamptz(3)

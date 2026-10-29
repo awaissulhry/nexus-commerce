@@ -10,6 +10,7 @@ import { command, type CommandCaller, type CommandTools } from '../../core/comma
 import { actorOf } from '../../core/context'
 import { serverClock } from '../../core/time'
 import { ordersOfInvoices, ordersOfRequests, settleOrders } from '../invoicing/from-shipment/settlement'
+import { markDepositPaid } from '../sales/deposits/deposits'
 import { lockAll, lockMoney } from './locks'
 import { allocatedOf, assertMay, officeContextOf, officePayment, paymentDetail, readPayment, type PaymentDetail, type PaymentRow, type Reader } from './store'
 
@@ -18,7 +19,7 @@ import { allocatedOf, assertMay, officeContextOf, officePayment, paymentDetail, 
  * unique in the company: a transfer counts once), allocate it to deposit requests and issued TD01/TD24 invoices (never
  * past what it has left, nor past what a target is open for: the rest stays unallocated, on account), take an
  * allocation back (a reversal row: the ledger is append-only), void a payment typed by mistake once nothing is
- * allocated. A deposit request whose allocations cover it becomes PAID in the same command (markDepositPaid).
+ * allocated. A deposit request whose allocations cover it becomes PAID in the same command (markDepositPaid, sales/deposits).
  *
  * Locks (payments/locks.ts, the …_money_guards triggers' order): the payment (a new row, or command()'s version bump on
  * it, then its money lock), then its targets in id order (deposit requests, then invoices); every sum is read under them.
@@ -139,18 +140,6 @@ export async function allocateInCommand(tools: CommandTools, payment: Pick<Payme
     ])
   }
   return written
-}
-
-/**
- * The deposit request is PAID (its allocations cover it): sales' column, written here because the sales module (B-W1-24)
- * has no command for it yet. Inside the command that allocated, under the request's money lock; the request's own
- * version moves (an open edit of it sees the change). The …_sales_guards trigger allows OPEN → PAID with its paidAt.
- */
-export async function markDepositPaid(tools: CommandTools, request: { id: string; companyId: string; partyId: string; orderId: string | null }): Promise<void> {
-  const { count } = await tools.tx.depositRequest.updateMany({ where: { id: request.id, status: 'OPEN' }, data: { status: 'PAID', paidAt: tools.now, version: { increment: 1 } } })
-  if (count !== 1) return
-  tools.audit({ action: 'payments.depositPaid', recordType: 'DepositRequest', recordId: request.id, companyId: request.companyId, before: { status: 'OPEN' }, after: { status: 'PAID', paidAt: toUtcIso(tools.now) } })
-  tools.emit({ type: 'payment.deposit_paid', subject: request.id, companyId: request.companyId, payload: { depositRequestId: request.id, partyId: request.partyId, orderId: request.orderId } })
 }
 
 // ---- record -----------------------------------------------------------------------------------------------------------

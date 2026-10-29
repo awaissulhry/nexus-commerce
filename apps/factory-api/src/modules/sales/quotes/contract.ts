@@ -359,3 +359,273 @@ export const saveSettingsContract = defineContract({
   }),
   response: { 200: output({ settings: settingsView }) },
 })
+
+// ---- B-W1-24: send, a new link, revise, versions; the customer's link ---------------------------------------------------
+
+const email = z.string().trim().min(3).max(254)
+
+const checkView = output({
+  code: z.string(),
+  /** BLOCKS stops the send; WARNING is said and never stops it. */
+  severity: z.enum(['BLOCKS', 'WARNING']),
+  path: z.string(),
+  message: z.string(),
+  lineId: id().nullable(),
+  size: z.string().nullable(),
+})
+
+export const sendCheckContract = defineContract({
+  params: quoteParams,
+  response: {
+    200: output({
+      ready: z.boolean(),
+      checks: z.array(checkView),
+      /** The quote's contact: the mail and its accept link go to them. */
+      recipient: output({ contactId: id().nullable(), name: z.string(), email: z.string().nullable() }).nullable(),
+      /** The number the PDF prints (`Q-2026-0001 v2`). */
+      documentNumber: z.string(),
+      language: z.enum(['it', 'en']),
+      validUntil: z.string().nullable(),
+      /** When the link would stop opening (the offer's last day plus the grace). */
+      linkExpiresAt: instant().nullable(),
+      subject: z.string().nullable(),
+      /** The mail's standard text as the thread keeps it (the link itself is only in the mail sent). */
+      message: z.string().nullable(),
+    }),
+  },
+})
+
+/** Where the mail is: sent, failed (FAILED, with why: send a new link), or null on a repeated request. */
+const delivery = z.enum(['sent', 'failed', 'retry', 'settled']).nullable()
+
+export const sendContract = defineContract({
+  params: quoteParams,
+  body: input({
+    version,
+    cc: z.array(email).max(10).optional(),
+    subject: text(200).nullish(),
+    /** Your own words above the link paragraph; none: the standard text. */
+    message: text(4000).nullish(),
+  }),
+  response: {
+    200: output({
+      quote: quoteView,
+      sent: output({
+        versionId: id(),
+        revision: z.number().int(),
+        sentAt: instant(),
+        documentFileId: id(),
+        documentSha256: z.string(),
+        termsVersion: z.string(),
+        to: z.string(),
+        /** The accept link (never its address: only the mail holds it). */
+        link: output({ id: id(), expiresAt: instant() }),
+        emailId: id(),
+        supersededVersionIds: z.array(id()),
+      }),
+      delivery,
+    }),
+  },
+})
+
+export const sendLinkContract = defineContract({
+  params: quoteParams,
+  body: input({ version, cc: z.array(email).max(10).optional(), message: text(4000).nullish() }),
+  response: {
+    200: output({
+      quote: quoteView,
+      link: output({ id: id(), expiresAt: instant(), to: z.string(), revokedLinkIds: z.array(id()), emailId: id() }),
+      delivery,
+    }),
+  },
+})
+
+export const reviseContract = defineContract({ params: quoteParams, body: input({ version, changeNote: text(MAX_TEXT.changeNote).nullish() }), response: { 200: one } })
+
+const linkStateView = output({
+  id: id(),
+  email: z.string().nullable(),
+  state: z.enum(['LIVE', 'REVOKED', 'USED_UP', 'EXPIRED']),
+  expiresAt: instant(),
+  uses: z.number().int(),
+  maxUses: z.number().int(),
+  lastUsedAt: instant().nullable(),
+  revokedAt: instant().nullable(),
+  createdAt: instant(),
+})
+
+const depositView = output({
+  id: id(),
+  quoteVersionId: id().nullable(),
+  orderId: id().nullable(),
+  kind: z.enum(DEPOSIT_KINDS),
+  depositPct: z.string().nullable(),
+  currency: z.string(),
+  amount: money.price(z.number().int()),
+  dueDate: z.string(),
+  /** TD02: a deposit invoice is issued when it is paid; NONE: none (the rule says why). */
+  fiscalDocument: z.enum(['TD02', 'NONE']),
+  fiscalRule: z.string(),
+  status: z.enum(['OPEN', 'PAID', 'WAIVED', 'CANCELLED']),
+  paidAt: instant().nullable(),
+  createdAt: instant(),
+})
+
+export const versionsContract = defineContract({
+  params: quoteParams,
+  response: {
+    200: output({
+      versions: z.array(
+        output({
+          id: id(),
+          revision: z.number().int(),
+          documentNumber: z.string(),
+          status: z.enum(QUOTE_VERSION_STATUSES),
+          currency: z.string(),
+          netAmount: money.price(z.number().int()),
+          grossAmount: money.price(z.number().int()),
+          depositAmount: money.price(z.number().int().nullable()),
+          validUntil: z.string().nullable(),
+          firmOffer: z.boolean(),
+          changeNote: z.string().nullable(),
+          createdAt: instant(),
+          createdById: id().nullable(),
+          sentAt: instant().nullable(),
+          sentById: id().nullable(),
+          closedAt: instant().nullable(),
+          decisionNote: z.string().nullable(),
+          documentSha256: z.string().nullable(),
+          termsVersion: z.string().nullable(),
+          /** The PDF the customer received (download it through /files/:fileId/download). */
+          document: output({ fileId: id(), name: z.string(), sha256: z.string(), sizeBytes: z.number().int(), status: z.string() }).nullable(),
+          /** The accept links made for this version (their state; never an address with a token). */
+          links: z.array(linkStateView),
+          /** The evidence pack of the acceptance (CAD art. 20): the name typed, the email check, the PDF's SHA-256, the
+           * terms version, the no-withdrawal statement, the time, and the link's evidence (hashed address, browser). */
+          acceptance: output({
+            id: id(),
+            channel: z.enum(['LINK', 'OFFICE']),
+            linkId: id().nullable(),
+            signerName: z.string(),
+            emailCheck: z.enum(['MATCHED', 'NOT_KNOWN', 'NOT_ASKED']).nullable(),
+            documentSha256: z.string(),
+            documentMatches: z.boolean(),
+            termsVersion: z.string().nullable(),
+            noWithdrawalAccepted: z.boolean(),
+            acceptedAt: instant(),
+            requestId: z.string(),
+            evidence: output({ action: z.string(), useNumber: z.number().int().nullable(), ipHash: z.string().nullable(), userAgent: z.string().nullable(), at: instant() }).nullable(),
+          }).nullable(),
+          deposit: depositView.nullable(),
+        }),
+      ),
+    }),
+  },
+})
+
+// ---- the customer's link (audience link, QUOTE_ACCEPT) -----------------------------------------------------------------
+
+const customerLineView = output({
+  seq: z.number().int(),
+  code: z.string(),
+  description: z.string(),
+  note: z.string().nullable(),
+  quantity: z.number().int(),
+  /** On the version's basis: VAT included for a consumer. */
+  unitPrice: money.price(z.string()),
+  discountPct: z.string().nullable(),
+  netAmount: money.price(z.number().int()),
+  vatAmount: money.price(z.number().int()),
+  vatRatePct: z.string(),
+  vatNature: z.string().nullable(),
+  sizes: z.array(output({ size: z.string(), quantity: z.number().int(), unitPrice: money.price(z.string().nullable()) })),
+  /** The size grid as the PDF prints it ("50×2 · 52×4"). */
+  sizesText: z.string(),
+})
+
+const postal = output({ line1: z.string(), line2: z.string().optional(), postalCode: z.string(), city: z.string(), province: z.string().optional(), country: z.string() })
+
+const instructionsView = output({
+  method: z.literal('BANK_TRANSFER'),
+  amount: money.price(z.number().int()),
+  currency: z.string(),
+  dueDate: z.string(),
+  /** What the customer writes on the transfer (causale). */
+  reference: z.string(),
+  /** Null while the company has no bank details on record. */
+  bank: output({ accountHolder: z.string(), iban: z.string(), bic: z.string().nullable(), bankName: z.string().nullable() }).nullable(),
+  text: z.string(),
+})
+
+export const linkQuoteView = output({
+  quote: output({
+    number: z.string(),
+    quoteNumber: z.string(),
+    versionId: id(),
+    revision: z.number().int(),
+    seller: output({ legalName: z.string(), tradeName: z.string().nullable() }),
+    customerRef: z.string().nullable(),
+    date: z.string(),
+    language: z.enum(['it', 'en']),
+    currency: z.string(),
+    priceBasis: notMoney(z.enum(['NET', 'GROSS'])),
+    validUntil: z.string(),
+    firmOffer: z.boolean(),
+    promiseDate: z.string().nullable(),
+    paymentTerms: z.string().nullable(),
+    billTo: output({ legalName: z.string(), address: postal }),
+    shipTo: output({ name: z.string().optional(), line1: z.string(), line2: z.string().optional(), postalCode: z.string(), city: z.string(), province: z.string().optional(), country: z.string() }),
+    lines: z.array(customerLineView),
+    totals: money.price(output({ net: z.number().int(), vat: z.array(output({ rate: z.string().nullable(), nature: z.string().nullable(), taxable: z.number().int(), vat: z.number().int() })), gross: z.number().int() })),
+    deposit: output({ pct: z.string(), kind: z.enum(DEPOSIT_KINDS), amount: money.price(z.number().int()) }).nullable(),
+    /** A made-to-measure unit for a consumer: no right of withdrawal (Codice del Consumo art. 59(c)). */
+    noWithdrawal: z.boolean(),
+    terms: output({ termsVersion: z.string(), clauses: z.array(output({ code: z.string(), text: z.string() })) }),
+    /** The PDF (its SHA-256 is what an acceptance records); the link downloads it through /files/:fileId/download. */
+    document: output({ fileId: id(), name: z.string(), sha256: z.string(), sizeBytes: z.number().int() }).nullable(),
+  }),
+  state: z.enum(['OPEN', 'EXPIRED', 'REVISING', 'SUPERSEDED', 'ACCEPTED', 'DECLINED', 'CANCELLED']),
+  message: z.string(),
+  /** What the page may offer now, and what it must ask first. */
+  answers: z.array(output({ action: z.enum(['accept', 'decline']), typedName: z.enum(['required', 'optional', 'none']), email: z.boolean(), noWithdrawal: z.boolean() })),
+  acceptance: output({ signerName: z.string(), acceptedAt: instant(), documentSha256: z.string(), termsVersion: z.string().nullable() }).nullable(),
+  deposit: output({
+    id: id(),
+    kind: z.enum(DEPOSIT_KINDS),
+    depositPct: z.string().nullable(),
+    currency: z.string(),
+    amount: money.price(z.number().int()),
+    dueDate: z.string(),
+    fiscalDocument: z.enum(['TD02', 'NONE']),
+    status: z.enum(['OPEN', 'PAID', 'WAIVED', 'CANCELLED']),
+    instructions: instructionsView,
+  }).nullable(),
+  /** The link stops opening then. */
+  expiresAt: instant(),
+  /** The company's privacy notice and what the acceptance keeps (GDPR art. 13; GAP-005). */
+  privacy: output({ url: z.string(), retention: z.string() }),
+})
+
+export const openLinkQuoteContract = defineContract({ response: { 200: linkQuoteView } })
+
+const answerFields = {
+  /** The version the page showed: the answer is for it only. */
+  versionId: id(),
+  /** "Nome e cognome" as typed: required to accept, optional to decline. */
+  typedName: z.string().max(400).nullish(),
+  /** The address the link was sent to, when the page asks it. */
+  email: z.string().max(254).nullish(),
+  note: text(MAX_TEXT.reason).nullish(),
+}
+
+export const acceptLinkQuoteContract = defineContract({
+  body: input({ ...answerFields, noWithdrawalAccepted: z.boolean().optional() }),
+  response: { 200: linkQuoteView },
+})
+
+export const declineLinkQuoteContract = defineContract({ body: input(answerFields), response: { 200: linkQuoteView } })
+
+export const newLinkQuoteContract = defineContract({
+  body: input({ note: text(MAX_TEXT.reason).nullish() }),
+  response: { 200: output({ asked: z.boolean(), message: z.string() }) },
+})

@@ -14,7 +14,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedSupply, type SupplySeed } from './supply'
 
 /**
- * The inventory seed, per tenant of seed/_core.ts: the golden flow's stages 09a-receive, 09b-cr6 and 11a-issue for the
+ * The inventory seed, per tenant of seed/_core.ts: the golden flow's stages 09a-receive and 09b-cr6 for the
  * supply seed's PO1, written in the tenant's office scope, as the app does (the CLI runs this file before
  * seed/supply.ts, so it runs that seed first).
  *
@@ -26,8 +26,8 @@ import { seed as seedSupply, type SupplySeed } from './supply'
  *              with hides SEED-HIDE-0001 (53.2 ft²) and SEED-HIDE-0002 (51.8 ft²) into A1-STORE-01, POSTED and valued at
  *              the order's price; PO1 becomes PARTLY_RECEIVED.
  *   Cr VI      the lot's lab report: 1.2 mg/kg, below the 3 mg/kg limit: PASS, and the lot is RELEASED.
- *   issue      hide SEED-HIDE-0001, whole, issued to the made-up work order SEED-WO-0001 (the production schema brings
- *              work orders), valued at the lot's cost.
+ *   (11a-issue: seed/production.ts issues hide SEED-HIDE-0001 to SEED-WO-0001 once that work order is released: a
+ *   stock move to a work order names one of its site, RELEASED or IN_PROGRESS, …_inventory_issue_work_order_guards.)
  *   R2         goods receipt SEED-GR-0002, OPEN: PO1's 24 protectors at the dock, not posted yet.
  *
  * The generated isolation tests copy the FIRST row of each table by id and insert the copy: an OPEN receipt's line can
@@ -45,7 +45,6 @@ const T = {
   received: new Date('2026-11-12T09:00:00.000Z'),
   posted: new Date('2026-11-12T10:00:00.000Z'),
   released: new Date('2026-11-14T15:00:00.000Z'),
-  issued: new Date('2026-11-16T07:30:00.000Z'),
   docked: new Date('2026-11-17T09:00:00.000Z'),
 } as const
 const DAY = { ddt: new Date('2026-11-11T00:00:00.000Z'), tested: new Date('2026-11-13T00:00:00.000Z'), ddt2: new Date('2026-11-16T00:00:00.000Z') } as const
@@ -67,8 +66,6 @@ export interface InventorySeed {
   readonly receiptLineId: string
   readonly leatherLotId: string
   readonly hideIds: readonly [string, string]
-  /** The issue of the first hide. */
-  readonly issueMoveId: string
   /** R2: the open receipt and its line. */
   readonly openReceiptId: string
   readonly openReceiptLineId: string
@@ -116,7 +113,6 @@ export async function seed(context: SeedContext): Promise<InventorySeed> {
     moves: [id('inventory:move:R1:H1'), id('inventory:move:R1:H2')] as const,
     values: [id('inventory:value:R1:H1'), id('inventory:value:R1:H2')] as const,
   }
-  const issue = { move: id('inventory:move:issue:H1'), value: id('inventory:value:issue:H1'), workOrderId: id('production:work-order:WO-0001') }
   const r2 = { receipt: firstId('inventory:receipt:R2'), line: firstId('inventory:receipt:R2:10') }
   const office = { audience: 'office' as const, tenantId, actorId }
 
@@ -348,52 +344,6 @@ export async function seed(context: SeedContext): Promise<InventorySeed> {
     }),
   )
 
-  // The first hide, whole, issued to a work order and valued at the lot's cost (once).
-  await db.withScope(office, (client) =>
-    client.$transaction(async (tx) => {
-      if (await tx.stockMove.findUnique({ where: { id: issue.move }, select: { id: true } })) return
-      await tx.stockMove.create({
-        data: {
-          id: issue.move,
-          companyId: companyA,
-          siteId: siteA,
-          reason: StockMoveReason.ISSUE,
-          itemId: item.leather,
-          itemColourId: colour.leatherBLK,
-          lotId: r1.lot,
-          hideId: r1.hides[0],
-          fromLocationId: location.bin,
-          quantity: HIDES[0].area,
-          uom: Uom.FT2,
-          baseQuantity: HIDES[0].area,
-          workOrderId: issue.workOrderId,
-          reference: 'SEED-WO-0001',
-          idempotencyKey: 'seed-issue-H1',
-          occurredAt: T.issued,
-          ...stamp(T.issued),
-        },
-        select: { id: true },
-      })
-      await tx.stockValuation.create({
-        data: {
-          id: issue.value,
-          companyId: companyA,
-          siteId: siteA,
-          moveId: issue.move,
-          itemId: item.leather,
-          lotId: r1.lot,
-          quantity: `-${HIDES[0].area}`,
-          unitCost: '4.200000',
-          valueAmount: -22_344,
-          method: StockValuationMethod.LOT_COST,
-          idempotencyKey: `move:${issue.move}`,
-          ...stamp(T.issued),
-        },
-        select: { id: true },
-      })
-    }),
-  )
-
   // R2: the protectors at the dock, still OPEN (once).
   await db.withScope(office, (client) =>
     client.$transaction(async (tx) => {
@@ -443,7 +393,6 @@ export async function seed(context: SeedContext): Promise<InventorySeed> {
     receiptLineId: r1.line,
     leatherLotId: r1.lot,
     hideIds: r1.hides,
-    issueMoveId: issue.move,
     openReceiptId: r2.receipt,
     openReceiptLineId: r2.line,
   }

@@ -128,13 +128,21 @@ export async function scrap(caller: CommandCaller, body: ScrapInput, idempotency
 
 /**
  * inventory.reverse: the reversal of a move, with the reason: the same move with its locations swapped (at most one per
- * move; never of a reversal; a receipt's moves are reversed with their goods receipt). Reversing a move that put stock
- * in takes it out again: refused (409) when that stock is gone.
+ * move; never of a reversal; a receipt's moves are reversed with their goods receipt; an issue to a work order and a
+ * return from it from the work order's pick list, B-W1-39). Reversing a move that put stock in takes it out again:
+ * refused (409) when that stock is gone.
  */
 export async function reverse(caller: CommandCaller, moveId: string, body: { readonly note: string }, idempotencyKey?: string): Promise<{ move: MoveView; reversed: string }> {
   const context = officeContextOf(caller)
   const original = isUuid(moveId) ? await caller.withClient((client) => client.stockMove.findUnique({ where: { id: moveId }, select: { ...LEDGER_SELECT, reversals: { select: { id: true } } } })) : null
   if (!original || !mayAt(context, INVENTORY_REVERSE, original)) throw new NotFoundError('Stock move not found.')
+  if (original.reason === 'ISSUE' || original.reason === 'RETURN') {
+    // Giving an issued hide back to stock must leave what was already cut of it (the cut log's area check runs only when a
+    // cut is logged): the pick list's reversal checks it under the cut log's own lock (modules/inventory/issue).
+    throw new InvalidStateError(
+      `An ${original.reason} of a work order is reversed from its pick list (POST /inventory/picking/moves/${original.id}/reverse), which checks what was already cut from a hide.`,
+    )
+  }
   const problems = reversalProblems(original, original.reversals[0]?.id ?? null)
   if (problems.length > 0) throw new InvalidStateError(problems.join(' '))
   const draft: MoveDraft = { ...reversalOf({ ...original, quantity: original.quantity.toString(), baseQuantity: original.baseQuantity.toString() }, body.note), uom: original.uom }

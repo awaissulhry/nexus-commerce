@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed as seedCore, type CoreSeed } from '../seed/_core'
 import { seed as seedInventory, type InventorySeed } from '../seed/inventory'
 import { seed as seedLinks } from '../seed/links'
+import { seed as seedProduction } from '../seed/production'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels, partnerWalledColumns } from './ownership'
 import { FLOOR_ROLE, PARTNER_ROLE, RUNTIME_LOGIN } from './roles'
@@ -41,6 +42,8 @@ let factory: FactoryDatabase
 let a: CoreSeed
 let b: CoreSeed
 let seeded: InventorySeed
+/** The production seed's WO-0001 at A1 (IN_PROGRESS): what the ISSUE rows name (a move to a work order names a real one). */
+let workOrderId: string
 
 const key = (namespace: string, name: string): string => seedUuid(namespace, name)
 const A = {
@@ -80,7 +83,10 @@ beforeAll(async () => {
   a = await seedCore({ db: factory, namespace: 'supply-a' })
   b = await seedCore({ db: factory, namespace: 'supply-b' })
   await seedLinks({ db: factory, namespace: 'supply-a' })
-  seeded = await seedInventory({ db: factory, namespace: 'supply-a' })
+  // Tenant A's stock comes with the production seed (it runs the inventory seed first), so issues have a work order.
+  const production = await seedProduction({ db: factory, namespace: 'supply-a' })
+  seeded = production.inventory
+  workOrderId = production.workOrderId
   await seedInventory({ db: factory, namespace: 'supply-b' })
 }, 60_000)
 
@@ -196,9 +202,9 @@ const release = (lotId: string, mgKg = '0.800') =>
     mgKg,
   )
 
-/** An ISSUE of a whole hide to a made-up work order, from the bin. */
+/** An ISSUE of a whole hide to the seeded work order WO-0001, from the bin. */
 const issueRow = (received: Received, index: number, area: string) =>
-  moveRow({ reason: 'ISSUE', lotId: received.lotId, hideId: received.hideIds[index], fromLocationId: seeded.locations.bin, quantity: area, baseQuantity: area, workOrderId: randomUUID() })
+  moveRow({ reason: 'ISSUE', lotId: received.lotId, hideId: received.hideIds[index], fromLocationId: seeded.locations.bin, quantity: area, baseQuantity: area, workOrderId })
 
 interface DraftOrder {
   readonly orderId: string
@@ -484,7 +490,7 @@ describe('a purchase order', () => {
 
 describe('the stock ledger', () => {
   it('is append-only, for every login, and so is its valuation', async () => {
-    const move = seeded.issueMoveId
+    const move = seeded.openingMoveId
     await expect(run(office(), `UPDATE "StockMove" SET note = 'x' WHERE id = $1::uuid`, move)).rejects.toThrow(DENIED)
     await expect(run(office(), 'DELETE FROM "StockMove" WHERE id = $1::uuid', move)).rejects.toThrow(DENIED)
     await expect(admin(`UPDATE "StockMove" SET note = 'x' WHERE id = $1`, [move])).rejects.toThrow(/append-only: UPDATE on "StockMove" is refused/)
@@ -578,7 +584,7 @@ describe('the stock ledger', () => {
     const [, hide2] = seeded.hideIds
     const base = { lotId: seeded.leatherLotId, hideId: hide2, quantity: '1.0000', baseQuantity: '1.0000' }
     await expect(insert(office(), 'StockMove', moveRow({ ...base, reason: 'ADJUSTMENT', toLocationId: seeded.locations.bin }))).rejects.toThrow(/says why \(SCM-192\)/)
-    await expect(insert(office(), 'StockMove', moveRow({ ...base, reason: 'ISSUE', fromLocationId: seeded.locations.bin, toLocationId: seeded.locations.cutting, workOrderId: randomUUID() }))).rejects.toThrow(
+    await expect(insert(office(), 'StockMove', moveRow({ ...base, reason: 'ISSUE', fromLocationId: seeded.locations.bin, toLocationId: seeded.locations.cutting, workOrderId }))).rejects.toThrow(
       /with the wrong locations/,
     )
     await expect(insert(office(), 'StockMove', moveRow({ ...base, reason: 'RECEIPT', toLocationId: seeded.locations.bin }))).rejects.toThrow(/names its goods receipt line/)
