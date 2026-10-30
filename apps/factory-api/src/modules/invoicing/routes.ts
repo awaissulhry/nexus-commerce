@@ -25,7 +25,9 @@ import { manifest } from './manifest'
 import { invoiceRelated } from './related'
 import { financeSettings } from './settings'
 import { createCreditNote } from './credit-note/credit-note'
-import { creditNoteContract, fromDdtsContract, removeDeductionContract, settlementContract, shippedNotInvoicedContract } from './from-shipment/contract'
+import { createDeferredContract, creditNoteContract, deferredContract, fromDdtsContract, fromMilestoneContract, removeDeductionContract, settlementContract, shippedNotInvoicedContract } from './from-shipment/contract'
+import { createDeferred, deferredDue } from './from-shipment/deferred'
+import { createFromMilestone } from './milestones'
 import { removeDeduction } from './from-shipment/deductions'
 import { createFromDdts } from './from-shipment/draft'
 import { shippedNotInvoiced } from './from-shipment/queue'
@@ -44,6 +46,9 @@ import { getSdiStatus } from './sdi/view'
  * Invoices of shipped goods (B-W1-51, handlers in ./from-shipment): the shipped-not-invoiced list, a TD01/TD24 draft
  * from DDTs with the deposits deducted, removing a deduction, the order's settlement; a credit note draft (./credit-note).
  * They are issued and sent through the routes above.
+ * Invoicing every day (B-W2a-54): the deferred invoices due and one TD24 of a customer's month (./from-shipment/deferred),
+ * a part of the DDTs' goods and their freight (from-ddts `lines`, `freight`), charge lines (PUT …/lines kind CHARGE), the
+ * invoice of a payment schedule step (./milestones), the deadlines by the customer's preset.
  */
 export default defineRoutes('invoicing', manifest, async (app) => {
   app.get('/invoicing/invoices', { schema: listInvoicesContract }, async (request) => listInvoices(request, request.query))
@@ -87,6 +92,12 @@ export default defineRoutes('invoicing', manifest, async (app) => {
   app.delete('/invoicing/invoices/:invoiceId/deductions/:lineId', { schema: removeDeductionContract }, async (request) => removeDeduction(request, request.params.invoiceId, request.params.lineId, request.query, idempotencyKeyFrom(request)))
 
   app.post('/invoicing/invoices/:invoiceId/credit-note', { schema: creditNoteContract }, async (request, reply) => reply.code(201).send(await createCreditNote(request, request.params.invoiceId, request.body, idempotencyKeyFrom(request))))
+
+  app.get('/invoicing/deferred', { schema: deferredContract }, async (request) => deferredDue(request, request.query))
+
+  app.post('/invoicing/invoices/deferred', { schema: createDeferredContract }, async (request, reply) => reply.code(201).send(await createDeferred(request, request.body, idempotencyKeyFrom(request))))
+
+  app.post('/invoicing/invoices/from-milestone', { schema: fromMilestoneContract }, async (request, reply) => reply.code(201).send(await createFromMilestone(request, request.body, idempotencyKeyFrom(request))))
 
   app.get('/invoicing/settings', { schema: settingsContract }, async (request) => financeSettings(request))
 

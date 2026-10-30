@@ -88,6 +88,43 @@ export function notInvoiced(shipped: readonly ShippedQuantity[], invoiced: reado
   }))
 }
 
+// ---- part of a shipment (B-W2a-54; FIN-058) -------------------------------------------------------------------------
+
+/** A part the office asks to invoice now: so many garments of a DDT's order line and size. */
+export interface AskedPart {
+  readonly ddtId: string
+  readonly salesOrderLineId: string
+  readonly size: string
+  /** Whole garments, above 0. */
+  readonly quantity: number
+}
+
+/**
+ * Partial invoicing per shipment (FIN-058): of what is left to invoice (`rows`, notInvoiced), only the parts asked, each
+ * at most what is left of it (neither issued invoices nor other drafts hold it). The rest stays shipped, not invoiced,
+ * with its deadline. Problems (paths `body/lines/<i>`): a part the DDTs did not carry, asked twice, or above what is left.
+ */
+export function pickPart(rows: readonly NotInvoicedRow[], asked: readonly AskedPart[], ddtNumbers: ReadonlyMap<string, string>): { readonly rows: NotInvoicedRow[]; readonly problems: Issue[] } {
+  const problems: Issue[] = []
+  const byKey = new Map(rows.map((row) => [shippedKey(row.ddtId, row.salesOrderLineId, row.size), row]))
+  const seen = new Set<string>()
+  const picked: NotInvoicedRow[] = []
+  asked.forEach((part, index) => {
+    const at = `body/lines/${index}`
+    const key = shippedKey(part.ddtId, part.salesOrderLineId, part.size)
+    const label = `DDT ${ddtNumbers.get(part.ddtId) ?? '?'} size ${part.size}`
+    const row = byKey.get(key)
+    if (!Number.isInteger(part.quantity) || part.quantity <= 0) problems.push({ path: `${at}/quantity`, message: 'Whole garments, 1 or more.' })
+    else if (seen.has(key)) problems.push({ path: at, message: `${label} of this order line is asked twice: ask it once, with the garments to invoice.` })
+    else if (!row) problems.push({ path: at, message: `${label}: the DDTs chosen did not carry this order line and size.` })
+    else if (row.toInvoice.lt(part.quantity)) {
+      problems.push({ path: `${at}/quantity`, message: `${label}: ${row.toInvoice.toString()} left to invoice (shipped ${row.shipped.toString()}, invoiced ${row.invoiced.toString()}, in drafts ${row.inDraft.toString()}); asked ${part.quantity}.` })
+    } else picked.push({ ...row, toInvoice: new Dec(part.quantity) })
+    seen.add(key)
+  })
+  return { rows: picked, problems }
+}
+
 // ---- the goods lines of a draft from DDTs --------------------------------------------------------------------------
 
 /** An order line's price as the order holds it (net, Decimal(18,6)), and the size's own price when it has one. */
