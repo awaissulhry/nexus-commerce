@@ -64,6 +64,15 @@ const USAGE: Partial<Record<ReasonCodeList, (client: Client, used: Map<string, n
        GROUP BY 1`
     for (const row of rows) add(used, row.code.trim(), Number(row.n))
   },
+  // Receiving discrepancies (B-W2a-31): no column yet; the code leads the note (`DAMAGED: …`).
+  async DISCREPANCY(client, used) {
+    const rows = await client.$queryRaw<{ code: string; n: bigint }[]>`
+      SELECT substring(d."note" from '^([A-Z][A-Z0-9_]{1,39})(?::|$)') AS code, count(*) AS n
+        FROM "ReceiptDiscrepancy" d
+       WHERE d."note" ~ '^[A-Z][A-Z0-9_]{1,39}(:|$)'
+       GROUP BY 1`
+    for (const row of rows) add(used, row.code, Number(row.n))
+  },
 }
 
 export const reasonCodeStore: ReasonStore = {

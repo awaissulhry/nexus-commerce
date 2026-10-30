@@ -7,6 +7,9 @@ import { money } from '@nexus/factory-domain/money/marked'
 import { CR_VI_STATUSES } from '@nexus/factory-domain/planning/usable'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { PURCHASE_ORDER_STATUSES } from '@nexus/factory-domain/purchasing/orders'
+import { DISCREPANCY_KINDS, DISCREPANCY_LIMITS, DISCREPANCY_STATUSES, SETTLE_STATUSES } from '@nexus/factory-domain/inventory/receipts/discrepancies'
+import { IMPORT_STATUSES } from '@nexus/factory-domain/imports/job'
+import { fileView, presignedView } from '../../../platform/files/contract'
 import { moveView } from '../ledger/contract'
 
 /**
@@ -60,6 +63,16 @@ export const lineInput = input({
   /** Default the order line's unit. Not for leather (its hides' unit). */
   uom: uom.optional(),
   baseQuantity: quantity().optional(),
+  /**
+   * B-W2a-31 (SCM-123): received in the supplier's unit. An untracked line: how many came in `receivedUom` (instead of
+   * quantity); a lot-tracked line: its lots' quantities are in `receivedUom`. Not for leather. The base quantity is
+   * round(quantity × factor, 4).
+   */
+  receivedQuantity: quantity().optional(),
+  /** The supplier's unit. The office may leave it out: the approved source's purchase unit. */
+  receivedUom: uom.optional(),
+  /** Base units in one received unit (a roll that measures 48.5 m); default the material's own factor for that unit. */
+  receivedFactor: z.string().trim().min(1).max(24).optional(),
   lots: z.array(lotInput).max(RECEIPT_LIMITS.lotsPerLine).optional(),
   /** More than the order line's tolerance allows came: why it is taken. */
   differenceReason: text().optional(),
@@ -127,6 +140,8 @@ const lineView = output({
   baseQuantity: decimal,
   hideCount: z.number().int().nullable(),
   note: z.string().nullable(),
+  /** B-W2a-31: what came in the supplier's unit and its factor (base units per unit), or null. */
+  received: output({ quantity: decimal, uom, factor: z.string() }).nullable(),
   /** The order line: ordered, expected (confirmed), received by every posted receipt, still open. */
   orderLine: output({
     seq: z.number().int(),
@@ -191,6 +206,10 @@ export const receiptView = output({
     quantities: z.array(output({ uom, baseQuantity: decimal })),
   }),
   lines: z.array(lineView),
+  /** B-W2a-31 (SCM-115): the photos of the supplier's delivery note. */
+  ddtPhotos: z.array(output({ id: id(), originalName: z.string(), contentType: z.string(), sizeBytes: z.number().int(), status: z.string(), createdAt: instant() })),
+  /** B-W2a-31 (SCM-118): its discrepancies — every one, not closed yet, not reported yet. */
+  discrepancies: output({ count: z.number().int(), open: z.number().int(), unsent: z.number().int() }),
   /** POSTED: may it be reversed now, and if not what used its stock (in words). */
   reversal: output({ possible: z.boolean(), /** The goods-in location the stock must lie at (its code). */ location: z.string().nullable(), blockers: z.array(blockerView) }).nullable(),
   value,
@@ -232,6 +251,8 @@ export const listReceiptsContract = defineContract({
     postedFrom: instant().optional(),
     /** Only posted receipts with a lot still in quarantine. */
     waiting: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+    /** B-W2a-31: `open` — only receipts with a discrepancy not closed yet. */
+    discrepancies: z.enum(['open']).optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
@@ -256,6 +277,8 @@ export const listReceiptsContract = defineContract({
           quantities: z.array(output({ uom, baseQuantity: decimal })),
           postedAt: instant().nullable(),
           postedById: id().nullable(),
+          /** B-W2a-31: its discrepancies — every one, not closed yet, not reported yet. */
+          discrepancies: output({ count: z.number().int(), open: z.number().int(), unsent: z.number().int() }),
           value,
         }),
       ),
@@ -269,7 +292,14 @@ export const countReceiptsContract = defineContract({
   response: {
     200: output({
       /** The Receipts tiles: posted, reversed, posted with a lot still in quarantine, and posted since `postedFrom` (null without it). */
-      counts: output({ posted: z.number().int(), reversed: z.number().int(), waiting: z.number().int(), postedSince: z.number().int().nullable() }),
+      counts: output({
+        posted: z.number().int(),
+        reversed: z.number().int(),
+        waiting: z.number().int(),
+        postedSince: z.number().int().nullable(),
+        /** B-W2a-31: discrepancies not closed yet on these receipts (the "Discrepancies open" tile). */
+        discrepanciesOpen: z.number().int(),
+      }),
     }),
   },
 })
@@ -338,4 +368,181 @@ export const reverseReceiptContract = defineContract({
   params: receiptParams,
   body: input({ version, reason: z.string().trim().min(3).max(500) }),
   response: { 201: output({ receipt: receiptView, moves: z.array(moveView) }) },
+})
+
+// ---- B-W2a-31: receiving every day -----------------------------------------------------------------------------------------------
+
+const photoBody = input({
+  originalName: z.string().min(1).max(500),
+  /** A picture: the PHOTO kind's types (JPEG, PNG, WebP, HEIC). */
+  contentType: z.string().min(1).max(200),
+  sizeBytes: z.number().int().min(1),
+  sha256: z.string(),
+})
+const uploadAnswer = { 201: output({ file: fileView, upload: presignedView }) }
+
+/** The supplier's delivery note photo (SCM-115): office and floor. */
+export const announceDdtPhotoContract = defineContract({ params: receiptParams, body: photoBody, response: uploadAnswer })
+export const completeDdtPhotoContract = defineContract({ params: input({ receiptId: id(), fileId: id() }), response: { 200: output({ file: fileView }) } })
+
+const discrepancyView = output({
+  id: id(),
+  receiptId: id(),
+  seq: z.number().int(),
+  status: z.enum(DISCREPANCY_STATUSES),
+  kind: z.enum(DISCREPANCY_KINDS),
+  /** A code of the DISCREPANCY reason list, with its words. */
+  reasonCode: z.string().nullable(),
+  reason: output({ code: z.string(), labelIt: z.string(), labelEn: z.string(), active: z.boolean() }).nullable(),
+  /** The receipt line it is about (null: the delivery as a whole). */
+  receiptLine: output({
+    id: id(),
+    seq: z.number().int(),
+    purchaseOrderLineId: id().nullable(),
+    item: output({ id: id(), code: z.string(), name: z.string(), baseUom: uom }),
+    colour: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
+  }).nullable(),
+  quantity: decimal.nullable(),
+  uom: uom.nullable(),
+  note: z.string().nullable(),
+  sentAt: instant().nullable(),
+  sentById: id().nullable(),
+  closedAt: instant().nullable(),
+  resolutionNote: z.string().nullable(),
+  photos: z.array(output({ id: id(), originalName: z.string(), contentType: z.string(), sizeBytes: z.number().int(), status: z.string(), createdAt: instant() })),
+  /** The supplier claims (B-W2a-44) that pursue it. */
+  claims: z.array(output({ id: id(), number: z.string(), status: z.string() })),
+  version: z.number().int(),
+  createdAt: instant(),
+  createdById: id().nullable(),
+})
+
+const discrepancyParams = input({ receiptId: id(), discrepancyId: id() })
+const discrepancyFields = {
+  /** What was wrong. May be left out when the reason code is itself a kind (SHORT, OVER, WRONG_ITEM, DAMAGED). */
+  kind: z.enum(DISCREPANCY_KINDS).optional(),
+  /** A code of the DISCREPANCY reason list (GET /reasons?list=DISCREPANCY); default the kind's own code. */
+  reasonCode: z.string().trim().max(40).nullish(),
+  /** The receipt line it is about; null: the delivery as a whole. */
+  receiptLineId: id().nullish(),
+  /** How much, above 0, with its unit (both or neither). */
+  quantity: z.string().trim().max(24).nullish(),
+  uom: uom.nullish(),
+  note: z.string().trim().max(DISCREPANCY_LIMITS.note).nullish(),
+}
+
+export const listDiscrepanciesContract = defineContract({
+  params: receiptParams,
+  response: { 200: output({ receiptId: id(), number: z.string(), status: z.enum(GOODS_RECEIPT_STATUSES), open: z.boolean(), discrepancies: z.array(discrepancyView) }) },
+})
+export const recordDiscrepancyContract = defineContract({ params: receiptParams, body: input(discrepancyFields), response: { 201: output({ discrepancy: discrepancyView }) } })
+export const changeDiscrepancyContract = defineContract({ params: discrepancyParams, body: input({ version, ...discrepancyFields }), response: { 200: output({ discrepancy: discrepancyView }) } })
+export const removeDiscrepancyContract = defineContract({
+  params: discrepancyParams,
+  querystring: input({ version: z.coerce.number().int().min(1) }),
+  response: { 200: output({ removed: output({ id: id(), seq: z.number().int() }) }) },
+})
+export const settleDiscrepancyContract = defineContract({
+  params: discrepancyParams,
+  body: input({ version, to: z.enum(SETTLE_STATUSES), note: z.string().trim().max(DISCREPANCY_LIMITS.resolution).nullish() }),
+  response: { 200: output({ discrepancy: discrepancyView }) },
+})
+export const announceDiscrepancyPhotoContract = defineContract({ params: discrepancyParams, body: photoBody, response: uploadAnswer })
+export const completeDiscrepancyPhotoContract = defineContract({ params: input({ receiptId: id(), discrepancyId: id(), fileId: id() }), response: { 200: output({ file: fileView }) } })
+
+const reportIds = z
+  .string()
+  .trim()
+  .max(4000)
+  .transform((value) => value.split(',').map((part) => part.trim()).filter((part) => part !== ''))
+  .pipe(z.array(id()).max(DISCREPANCY_LIMITS.perReceipt))
+
+/** The PDF (application/pdf, inline): the response is not a JSON body. */
+export const previewReportContract = defineContract({
+  params: receiptParams,
+  querystring: input({ ids: reportIds.optional(), language: z.enum(['it', 'en']).optional() }),
+  response: {},
+})
+export const reportCheckContract = defineContract({
+  params: receiptParams,
+  querystring: input({ ids: reportIds.optional() }),
+  response: {
+    200: output({
+      ready: z.boolean(),
+      problems: z.array(output({ path: z.string(), message: z.string() })),
+      discrepancyIds: z.array(id()),
+      sendsIds: z.array(id()),
+      recipients: z.array(output({ contactId: id(), name: z.string(), email: z.string(), roles: z.array(z.string()), language: z.string().nullable(), suggested: z.boolean() })),
+      language: z.enum(['it', 'en']),
+      subject: z.string(),
+      message: z.string(),
+    }),
+  },
+})
+export const sendReportContract = defineContract({
+  params: receiptParams,
+  body: input({
+    /** The discrepancies to report (OPEN ones become SENT; SENT ones go again as a reminder); default every OPEN one. */
+    discrepancyIds: z.array(id()).min(1).max(DISCREPANCY_LIMITS.perReceipt).optional(),
+    /** The supplier's contacts that get it (active, with an e-mail). */
+    contactIds: z.array(id()).min(1).max(DISCREPANCY_LIMITS.reportRecipients),
+    cc: z.array(z.string().trim().email().max(254)).max(DISCREPANCY_LIMITS.reportRecipients).optional(),
+    subject: z.string().trim().max(200).nullish(),
+    /** Your own words in place of the standard text. */
+    message: z.string().trim().max(DISCREPANCY_LIMITS.message).nullish(),
+    language: z.enum(['it', 'en']).optional(),
+  }),
+  response: {
+    201: output({
+      report: output({
+        documentFileId: id(),
+        fileName: z.string(),
+        emailId: id(),
+        threadId: id(),
+        to: z.array(z.string()),
+        cc: z.array(z.string()),
+        language: z.enum(['it', 'en']),
+        sentAt: instant(),
+        discrepancyIds: z.array(id()),
+        sentIds: z.array(id()),
+      }),
+      discrepancies: z.array(discrepancyView),
+    }),
+  },
+})
+
+/** A tannery hide list's totals against its order (SCM-248). */
+export const hideListSummaryContract = defineContract({
+  params: input({ importId: id() }),
+  response: {
+    200: output({
+      importId: id(),
+      status: z.enum(IMPORT_STATUSES),
+      counts: output({ rows: z.number().int(), toReceive: z.number().int(), receivedBefore: z.number().int(), errors: z.number().int() }),
+      order: output({ id: id(), number: z.string(), status: z.enum(PURCHASE_ORDER_STATUSES), siteId: id() }).nullable(),
+      lines: z.array(
+        output({
+          purchaseOrderLineId: id(),
+          seq: z.number().int(),
+          itemCode: z.string(),
+          baseUom: uom,
+          hides: z.number().int(),
+          lots: z.number().int(),
+          /** What the list brings, in the base unit. */
+          baseArea: decimal,
+          expected: decimal,
+          receivedBefore: decimal,
+          after: decimal,
+          difference: decimal,
+          tolerancePct: z.string(),
+          upTo: decimal,
+          kind: z.enum(DIFFERENCES),
+          /** Beyond the tolerance over: the rows must give the reason. */
+          needsReason: z.boolean(),
+        }),
+      ),
+      /** The receipt the apply made. */
+      receipt: output({ id: id(), number: z.string(), status: z.enum(GOODS_RECEIPT_STATUSES) }).nullable(),
+    }),
+  },
 })
