@@ -21,6 +21,7 @@ import { creditedInvoiceOf } from './from-shipment/store'
 import { reviewIssue } from './facts'
 import { makeInvoiceFiles } from './invoice-files'
 import { invoiceDetail, officeInvoice, readInvoice, readLines, type InvoiceDetail, type Reader } from './store'
+import { storedSourceOf, termsJsonOf } from './terms'
 
 /**
  * Issuing an invoice (B-W1-28 invoice core; A2 SCR-081 "Check and issue"; FIN-057, FIN-061, FIN-085; DPR 633/1972
@@ -93,6 +94,9 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string): Pr
   const credited = invoice.docType === 'TD04' && invoice.creditOfId ? await creditedInvoiceOf(tx, invoice.creditOfId, invoice.id) : null
   const refundDue = credited ? refundDueAfter(credited, invoice.grossTotal) : 0
   const number = await allocateNumber(tools, { companyId: invoice.companyId, kind }, { type: 'Invoice', id: invoice.id, date })
+  // B-W2a-54: library terms count from the invoice's date: made again for the day it is issued (terms.ts).
+  const source = storedSourceOf(invoice.paymentTerms)
+  const terms = source?.kind === 'TERMS' ? await termsJsonOf(tx, invoice.companyId, source, invoice.grossTotal, number.documentDate) : null
   await tx.invoice.update({
     where: { id: invoice.id },
     data: {
@@ -106,6 +110,7 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string): Pr
       seller: review.seller as unknown as Prisma.InputJsonValue,
       billTo: review.billTo as unknown as Prisma.InputJsonValue,
       partyId: invoice.buyerPartyId,
+      ...(terms === null ? {} : { paymentTerms: terms }),
     },
     select: { id: true },
   })

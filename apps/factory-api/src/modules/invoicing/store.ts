@@ -2,12 +2,14 @@ import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { ForbiddenError, NotFoundError, UnauthenticatedError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can, type Permission } from '@nexus/factory-domain/core/permissions'
-import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
+import { draftDeadline } from '@nexus/factory-domain/invoicing/from-shipment/deadlines'
 import type { VatSummaryEntry } from '@nexus/factory-domain/invoicing/invoices'
 import { INVOICES_VIEW } from '@nexus/factory-domain/invoicing/permissions'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { CommandCaller, CommandTx } from '../../core/command'
 import { actorOf, type OfficeContext } from '../../core/context'
+import { serverClock } from '../../core/time'
 
 /**
  * The invoicing module's reads (factory-db money.prisma Invoice, InvoiceLine): the columns every read names, the views
@@ -97,6 +99,9 @@ export const LINE_COLUMNS = {
   size: true,
   ddtId: true,
   depositInvoiceId: true,
+  // B-W2a-54 (wave 7/7): what a charge bills; the schedule step a line bills.
+  chargeKind: true,
+  milestoneId: true,
 } as const satisfies Prisma.InvoiceLineSelect
 export type LineRow = Prisma.InvoiceLineGetPayload<{ select: typeof LINE_COLUMNS }>
 
@@ -139,6 +144,8 @@ export const lineView = (line: LineRow) => ({
   size: line.size,
   ddtId: line.ddtId,
   depositInvoiceId: line.depositInvoiceId,
+  chargeKind: line.chargeKind,
+  milestoneId: line.milestoneId,
 })
 
 /** An issued invoice whose XML or PDF is not stored yet (the worker makes them, or POST …/files). */
@@ -195,6 +202,18 @@ export function balanceOf(invoice: Pick<InvoiceRow, 'docType' | 'status' | 'gros
   return { open: Math.max(0, rest), refundDue: Math.max(0, -rest) }
 }
 
+/**
+ * A DRAFT TD01/TD24 of shipped goods: its legal deadline (B-W2a-54, FIN-065; the record's countdown), from the DDTs its
+ * lines name. Null for an issued invoice, another type, or a draft without a DDT.
+ */
+async function draftDeadlineOf(db: Reader, invoice: Pick<InvoiceRow, 'status' | 'docType'>, lines: readonly LineRow[]) {
+  if (invoice.status !== 'DRAFT' || (invoice.docType !== 'TD01' && invoice.docType !== 'TD24')) return null
+  const ids = [...new Set(lines.flatMap((line) => (line.ddtId ? [line.ddtId] : [])))]
+  if (ids.length === 0) return null
+  const ddts = await db.ddt.findMany({ where: { id: { in: ids } }, select: { number: true, documentDate: true } })
+  return draftDeadline(invoice.docType, ddts.map((ddt) => ({ number: ddt.number, date: ddt.documentDate.toISOString().slice(0, 10) })), businessDate(serverClock.now()))
+}
+
 /** The invoice record: header, buyer's name, lines, what is paid and credited on it and its balance. */
 export async function invoiceDetail(db: Reader, invoice: InvoiceRow) {
   const lines = await readLines(db, invoice.id)
@@ -210,6 +229,7 @@ export async function invoiceDetail(db: Reader, invoice: InvoiceRow) {
     creditedAmount: asMoney('price', credited),
     openAmount: asMoney('price', balance.open),
     refundDueAmount: asMoney('price', balance.refundDue),
+    deadline: await draftDeadlineOf(db, invoice, lines),
   }
 }
 
