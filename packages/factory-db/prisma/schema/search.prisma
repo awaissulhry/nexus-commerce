@@ -1,0 +1,44 @@
+// Global search (W2a schema wave 1/7; B-W2a-32; feature PLT-153; design shell.search "All results" and the palette's
+// Records group): one entry per record, written by the outbox handlers (one indexer file per record type in a registry
+// folder of the API), found by number and name with typos forgiven: a trigram index (pg_trgm, created by
+// …_platform_w2a_extensions) over searchText.
+//
+// Results are filtered for the reader by the entry's view permission and its company, site and party (the reader's
+// role scopes), so an entry never shows a record its reader may not open. An entry holds no money and no worker's name
+// (Statuto dei Lavoratori art. 4: a person is found only through their own record, never by what they did).
+
+/// The search entry of one record. Rewritten by its indexer whenever the record changes; removed with it.
+model SearchEntry {
+  id             String   @id @db.Uuid
+  tenantId       String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The record's company, site and party (null: none): the reader's scopes filter on them.
+  companyId      String?  @db.Uuid
+  siteId         String?  @db.Uuid
+  partyId        String?  @db.Uuid
+  /// The record. Never changes.
+  recordType     String
+  recordId       String   @db.Uuid
+  /// Its number or code as people type it ("ORD-2026-0042", "SEED-S1"); null: a record without one.
+  number         String?
+  /// Its name ("Pista Racing", a style's name), and one more line under it (the order's customer, a lot's item).
+  title          String
+  subtitle       String?
+  /// Its status word at the last index (a factory-domain code), for the result row.
+  status         String?
+  /// The area it opens in (`sales`, `warehouse`) and the permission a reader needs to see it (`sales.orders.view`).
+  area           String
+  viewPermission String
+  /// What the trigram index searches: number, title, subtitle and the indexer's extra words, in lower case without
+  /// accents (the indexer builds it).
+  searchText     String
+  /// When its indexer last wrote it (the results' AsOf).
+  indexedAt      DateTime @db.Timestamptz(3)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@unique([tenantId, recordType, recordId])
+  // Typo-tolerant search by number and name (pg_trgm: similarity and ILIKE).
+  @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)
+  // A number typed whole (a scan, a pasted number).
+  @@index([tenantId, number])
+}

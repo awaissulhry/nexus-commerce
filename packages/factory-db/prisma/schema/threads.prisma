@@ -54,6 +54,8 @@ model Thread {
   emailOutbound  EmailOutbound[]
   // email-in.prisma: the mail received for this thread (joined, or waiting for a person).
   inboundEmails  InboundEmail[]
+  // collab.prisma: the @mentions in its notes.
+  mentions       MessageMention[]
 
   @@unique([tenantId, recordType, recordId])
   @@unique([replyToken])
@@ -109,8 +111,12 @@ model Message {
   thread       Thread  @relation("ThreadMessages", fields: [tenantId, threadId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // A shared message names its thread's own party: the reference is checked whenever partyId is set.
   sharedThread Thread? @relation("ThreadSharedMessages", fields: [tenantId, threadId, partyId], references: [tenantId, id, partyId], onDelete: Restrict, onUpdate: Restrict)
+  // collab.prisma: one row per office user the note mentions.
+  mentions     MessageMention[]
 
   @@unique([tenantId, emailMessageId])
+  // The target of the mentions' tenant-safe reference.
+  @@unique([tenantId, id])
   // A thread's messages, newest first (the record panel and the timeline).
   @@index([tenantId, threadId, at])
   @@index([tenantId, partyId])

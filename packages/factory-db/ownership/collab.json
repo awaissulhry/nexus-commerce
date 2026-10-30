@@ -1,0 +1,45 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/collab.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office only: apps/factory-api's notifications, followers, mentions and tasks (B-W2a-20) write them through command(), the fan-out in the worker in the tenant's system context; the API keeps each person to their own notifications and checks the record's view permission on every task and follow. The floor and portal/link sessions read and write nothing here in W2a (no floor inbox, no portal). NotificationDelivery and MessageMention are append-only (`@append-only`; the …_platform_w2a_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login). A notification is kept (its deliveries name it), a task is cancelled, never deleted; a follower row is removed when its person unfollows. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Notification": {
+      "about": "The fan-out writes one row per person per event; the office reads a person's own and marks them read, done or snoozed.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "NotificationDelivery": {
+      "about": "The worker logs each attempt to bring a notification outside the app (e-mail now, push in W2b) and reads the log; nobody changes or removes an entry.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "RecordFollower": {
+      "about": "The office adds followers (the creator, an assignee, a person mentioned, or by choice), mutes and removes them (unfollow), and the fan-out reads them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "MessageMention": {
+      "about": "The office writes one row per person an internal note mentions, with the note, and reads a person's mentions; nobody changes or removes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "Task": {
+      "about": "The office makes, assigns, completes, reopens, snoozes and cancels tasks on records or of their own, and reads them (My tasks, a record's side panel, Today).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

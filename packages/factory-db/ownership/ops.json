@@ -1,0 +1,13 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/ops.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office only: apps/factory-api's Security & health (B-W2a-36) records restore drills through command() and reads them (the panel, the due reminder). The floor and portal/link sessions read and write nothing here. RestoreDrill is append-only (`@append-only`; the …_platform_w2a_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login): a mistake is a new drill. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "RestoreDrill": {
+      "about": "The office records a restore drill with its checksums, result and evidence, and reads them; nobody changes or removes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    }
+  }
+}

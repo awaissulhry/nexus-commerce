@@ -1,0 +1,241 @@
+// Exception rules, stored alerts and date timers (W2a schema wave 1/7; B-W2a-33; features ANA-036, ANA-041, ANA-040,
+// PLT-100; design home.alerts with its popups alert and rule, admin.automation "Reminders & timers"). They replace the
+// W1 fixed checks computed per request (Today's attention rows) once there are many orders:
+//
+//   AlertRule   a rule: what it watches (a rule kind of factory-domain), its numbers, where (company, site), whom it
+//               tells (the holders of a role there: "Quality at Plant 1"), how (the bell, e-mail), how often at most,
+//               on or off. CONDITION rules are evaluated by the clustered scheduler; DATE rules fire relative to a
+//               record's date through DueTimer.
+//   Alert       one firing of a rule for one record: what and why (its facts), then acknowledged, assigned, snoozed and
+//               resolved (with a note, or by the system when the condition cleared). One unresolved alert per
+//               condition (its dedupeKey); the next occurrence is a new alert.
+//   AlertEvent  the alert's history: raised, acknowledged, assigned, unassigned, snoozed, resolved. Append-only.
+//   DueTimer    one scheduled firing relative to a record's date (30 days before a certificate expires, the PO's
+//               confirm-by date, an invoice deadline): one PENDING timer per record and timer key; a moved date cancels
+//               it and sets a new one. Certificates, POs, invoices and reminders reuse it.
+//
+// Records are named by recordType + recordId. People are office users named by id, never a floor worker, and no total
+// per person is kept (Statuto dei Lavoratori art. 4). The hand-written migration …_platform_w2a_guards holds the rules
+// Prisma does not model.
+
+/// One exception or timer rule. Switched off, never deleted (its alerts and timers name it).
+model AlertRule {
+  id              String         @id @db.Uuid
+  tenantId        String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// What it watches: a rule kind of factory-domain (`ORDER_LATE_RISK`, `HOLD_TOO_LONG`, `MATERIAL_SHORT`,
+  /// `CERTIFICATE_EXPIRING`, `APPROVAL_OVERDUE`, `INTEGRATION_FAILING`, `PO_NOT_CONFIRMED`, `INVOICE_DEADLINE`):
+  /// upper case, so a new kind needs no migration. Never changes.
+  ruleKind        String
+  /// CONDITION (evaluated on a schedule) or DATE (fires relative to a record's date). Never changes.
+  trigger         AlertTrigger
+  /// The rule's title in the rules list.
+  name            String
+  /// Its numbers as its kind reads them ({ "hours": 24 }, { "daysBefore": 30 }): factory-domain checks them.
+  threshold       Json           @default("{}")
+  severity        AlertSeverity  @default(WARNING)
+  /// Where it looks: a company and a site of it; null: every company, every site.
+  companyId       String?        @db.Uuid
+  siteId          String?        @db.Uuid
+  /// Whom it tells: the holders of this office role at the rule's place; null: the people the record names (its
+  /// owner, its assignee).
+  recipientRoleId String?        @db.Uuid
+  /// How: the bell, e-mail; at least one.
+  channels        AlertChannel[] @default([IN_APP])
+  /// At most once in this many minutes per record (0: every evaluation that finds it).
+  cooldownMinutes Int            @default(1440)
+  enabled         Boolean        @default(true)
+  /// Shipped with the product (the built-in rules): edited and switched off, never removed. Never changes.
+  builtIn         Boolean        @default(false)
+  version         Int            @default(1)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?        @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  company       Company?   @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  site          Site?      @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  recipientRole Role?      @relation(fields: [tenantId, recipientRoleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  alerts        Alert[]
+  timers        DueTimer[]
+
+  // The target of the alerts' and timers' tenant-safe references.
+  @@unique([tenantId, id])
+  @@index([tenantId, ruleKind])
+}
+
+enum AlertTrigger {
+  /// Evaluated by the clustered scheduler (home.alerts › Rules).
+  CONDITION
+  /// Fires relative to a record's date through DueTimer (admin.automation › Reminders & timers).
+  DATE
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertChannel {
+  /// The bell (Notification) and Today.
+  IN_APP
+  EMAIL
+}
+
+/// One firing of a rule for one record: OPEN → ACKNOWLEDGED → RESOLVED, or OPEN → RESOLVED. Born OPEN with nothing
+/// set; resolved, it changes no more. Never deleted.
+model Alert {
+  id                String           @id @db.Uuid
+  tenantId          String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  ruleId            String           @db.Uuid
+  /// The rule's kind (equal to it).
+  ruleKind          String
+  severity          AlertSeverity
+  /// The record's company, site and party (the lists' scopes).
+  companyId         String?          @db.Uuid
+  siteId            String?          @db.Uuid
+  partyId           String?          @db.Uuid
+  /// The record, and its label when it fired.
+  recordType        String
+  recordId          String           @db.Uuid
+  recordLabel       String
+  /// The condition it is about: `<ruleKind>:<record id>[:<sub key>]`. One unresolved alert per key; occurrence counts
+  /// the alerts of a key (1, 2, …), so the next one after a resolution is a new row.
+  dedupeKey         String
+  occurrence        Int              @default(1)
+  /// Why it fired: the rule's numbers and what was found, as factory-domain wrote them.
+  facts             Json             @default("{}")
+  state             AlertState       @default(OPEN)
+  raisedAt          DateTime         @db.Timestamptz(3)
+  /// Acknowledged: by whom and when (both or neither).
+  acknowledgedAt    DateTime?        @db.Timestamptz(3)
+  acknowledgedById  String?          @db.Uuid
+  /// The office user it is assigned to, who assigned it and when; all three or none.
+  assignedToId      String?          @db.Uuid
+  assignedById      String?          @db.Uuid
+  assignedAt        DateTime?        @db.Timestamptz(3)
+  /// Snoozed until then, by whom, when; all three or none.
+  snoozedUntil      DateTime?        @db.Timestamptz(3)
+  snoozedById       String?          @db.Uuid
+  snoozedAt         DateTime?        @db.Timestamptz(3)
+  /// RESOLVED: when, how, by whom (HANDLED: a person, with a note saying what was done; CLEARED: the system, when the
+  /// condition no longer held).
+  resolvedAt        DateTime?        @db.Timestamptz(3)
+  resolution        AlertResolution?
+  resolvedById      String?          @db.Uuid
+  resolveNote       String?
+  version           Int              @default(1)
+  createdAt         DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+
+  rule       AlertRule    @relation(fields: [tenantId, ruleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  assignedTo User?        @relation(fields: [tenantId, assignedToId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  events     AlertEvent[]
+
+  @@unique([tenantId, dedupeKey, occurrence])
+  // The target of the history's tenant-safe reference.
+  @@unique([tenantId, id])
+  // The open alerts, oldest first.
+  @@index([tenantId, state, raisedAt])
+  @@index([tenantId, recordType, recordId])
+  // What is assigned to a person.
+  @@index([tenantId, assignedToId])
+}
+
+enum AlertState {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum AlertResolution {
+  /// A person resolved it, with a note.
+  HANDLED
+  /// The system resolved it: the condition no longer held.
+  CLEARED
+}
+
+/// One thing that happened to an alert. Never changed or removed (the triggers, for every login).
+/// @append-only
+model AlertEvent {
+  id           String    @id @db.Uuid
+  tenantId     String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  alertId      String    @db.Uuid
+  verb         AlertVerb
+  /// The office user who did it; null: the system (it raised the alert, or resolved it when the condition cleared).
+  actorId      String?   @db.Uuid
+  /// ASSIGNED: the person it was assigned to; UNASSIGNED: the person it was taken from.
+  assigneeId   String?   @db.Uuid
+  /// SNOOZED: until when.
+  snoozedUntil DateTime? @db.Timestamptz(3)
+  /// RESOLVED by a person: what was done (required).
+  note         String?
+  /// RAISED: the values it fired on (the alert's facts then).
+  facts        Json?
+  at           DateTime  @db.Timestamptz(3)
+  requestId    String
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+
+  alert Alert @relation(fields: [tenantId, alertId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // An alert's history.
+  @@index([tenantId, alertId, at])
+}
+
+enum AlertVerb {
+  RAISED
+  ACKNOWLEDGED
+  ASSIGNED
+  UNASSIGNED
+  SNOOZED
+  RESOLVED
+}
+
+/// One scheduled firing relative to a record's date: PENDING → FIRED | CANCELLED. A moved date cancels the timer and
+/// sets a new one; one PENDING timer per record and timer key. Never deleted.
+model DueTimer {
+  id           String         @id @db.Uuid
+  tenantId     String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// What date it watches and how far from it: a timer kind of factory-domain, with its offset in minutes, hours or
+  /// days (`CERTIFICATE_EXPIRY:-30d`, `PO_CONFIRM_BY`, `INVOICE_DEADLINE:-2d`). Never changes.
+  timerKey     String
+  /// The DATE rule that asked for it; null: a module's own timer (a reminder's next step).
+  ruleId       String?        @db.Uuid
+  /// The record's company, site and party.
+  companyId    String?        @db.Uuid
+  siteId       String?        @db.Uuid
+  partyId      String?        @db.Uuid
+  /// The record, and its label when the timer was set.
+  recordType   String
+  recordId     String         @db.Uuid
+  recordLabel  String?
+  /// The record's date it is relative to, and when it fires. Never change: a moved date is a new timer.
+  dueAt        DateTime       @db.Timestamptz(3)
+  fireAt       DateTime       @db.Timestamptz(3)
+  status       DueTimerStatus @default(PENDING)
+  firedAt      DateTime?      @db.Timestamptz(3)
+  /// CANCELLED: when and why (the date moved, the record closed, the rule switched off).
+  cancelledAt  DateTime?      @db.Timestamptz(3)
+  cancelReason String?
+  /// What its handler needs when it fires, as the module wrote it. Never changes.
+  payload      Json           @default("{}")
+  version      Int            @default(1)
+  createdAt    DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?        @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  rule AlertRule? @relation(fields: [tenantId, ruleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The scheduler's pass: what is due.
+  @@index([tenantId, status, fireAt])
+  // A record's timers.
+  @@index([tenantId, recordType, recordId])
+}
+
+enum DueTimerStatus {
+  PENDING
+  FIRED
+  CANCELLED
+}
