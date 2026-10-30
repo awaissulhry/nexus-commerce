@@ -53,6 +53,9 @@ model Location {
   code        String
   name        String
   kind        LocationKind
+  /// W2a (SCM-141): the workshop that holds it, exactly for a SUBCONTRACTOR location (a party with the SUBCONTRACTOR
+  /// role); set when it is made and never changed (the …_supply_w2a_guards trigger). Its stock stays the company's.
+  partyId     String?      @db.Uuid
   status      MasterStatus @default(ACTIVE)
   version     Int          @default(1)
   createdAt   DateTime     @default(now()) @db.Timestamptz(3)
@@ -65,6 +68,10 @@ model Location {
   children Location[]  @relation("LocationTree")
   movesOut StockMove[] @relation("StockMoveFrom")
   movesIn  StockMove[] @relation("StockMoveTo")
+  // W2a: the workshop of a SUBCONTRACTOR location, and the subcontract orders sent to it (subcontract.prisma).
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  party             Party?             @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  subcontractOrders SubcontractOrder[]
 
   @@unique([tenantId, siteId, code])
   // The target of the tenant- and site-safe references from the moves and the child locations.
@@ -82,6 +89,8 @@ enum LocationKind {
   /// A line-side supply point (the cutting room's leather rack).
   PRODUCTION
   SHIPPING
+  /// W2a (SCM-141): our stock at an outside workshop (a terzista), owned by its party (Location.partyId).
+  SUBCONTRACTOR
 }
 
 /// Goods received from a supplier at a site (SCM-113), usually against a purchase order, with the supplier's DDT. OPEN
@@ -122,6 +131,9 @@ model GoodsReceipt {
   supplier      Party              @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   purchaseOrder PurchaseOrder?     @relation(fields: [tenantId, siteId, purchaseOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   lines         GoodsReceiptLine[]
+  // W2a claims.prisma: what was wrong with the delivery, and the claims about its goods.
+  discrepancies  ReceiptDiscrepancy[]
+  supplierClaims SupplierClaim[]
 
   @@unique([tenantId, companyId, number])
   // The target of the lines' reference: on the receipt's own site.
@@ -156,6 +168,13 @@ model GoodsReceiptLine {
   baseQuantity        Decimal  @db.Decimal(18, 4)
   /// Leather: how many hides came (each a Hide of the line's lots).
   hideCount           Int?
+  /// W2a (SCM-123): when the goods came counted in a unit whose size varies by delivery (rolls of different lengths, a
+  /// box, the supplier's DDT unit): how many came in it (above 0), which unit, and how many of the item's base units one
+  /// of it held at this receipt (above 0). Then baseQuantity = receivedQuantity × receivedFactor, rounded to 4 decimals
+  /// (the …_supply_w2a_guards trigger); all three or none. quantity and uom stay the line's figure against the order.
+  receivedQuantity    Decimal? @db.Decimal(18, 4)
+  receivedUom         Uom?
+  receivedFactor      Decimal? @db.Decimal(18, 8)
   note                String?
   version             Int      @default(1)
   createdAt           DateTime @default(now()) @db.Timestamptz(3)
@@ -168,6 +187,9 @@ model GoodsReceiptLine {
   itemColour        ItemColour?        @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
   lots              Lot[]
   moves             StockMove[]
+  // W2a claims.prisma: the discrepancies and claim lines about it.
+  discrepancies     ReceiptDiscrepancy[]
+  claimLines        SupplierClaimLine[]
 
   @@unique([tenantId, receiptId, seq])
   // The target of the lots' and moves' references: on the line's own site.
@@ -230,6 +252,9 @@ model Lot {
   // quality.prisma: its lab results (the Cr VI result's history) and supplier documents (B-W1-34).
   labResults  LabResult[]
   documents   LotDocument[]
+  // W2a claims.prisma, subcontract.prisma: the claim lines and kit lines that name it.
+  claimLines  SupplierClaimLine[]
+  kitLines    SubcontractKitLine[]
 
   @@unique([tenantId, code])
   // The target of the hides', moves' and valuations' references: a lot of the same site and item.
@@ -302,6 +327,9 @@ model Hide {
   cutLogs CutLog[] @relation("HideCutLogs")
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   closingCutLog CutLog? @relation("HideClosingCutLog", fields: [tenantId, siteId, closingCutLogId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2a claims.prisma, subcontract.prisma: the claim lines and kit lines that name it.
+  claimLines    SupplierClaimLine[]
+  kitLines      SubcontractKitLine[]
 
   @@unique([tenantId, code])
   // The target of the moves' reference: a hide of the move's own site and lot.
@@ -377,6 +405,9 @@ model StockMove {
   reversals    StockMove[]       @relation("StockMoveReversal")
   device       Device?           @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   valuations   StockValuation[]
+  // W2a claims.prisma, subcontract.prisma: the claim line it returned, the kit line it sent.
+  claimLines   SupplierClaimLine[]
+  kitLines     SubcontractKitLine[]
 
   @@unique([tenantId, idempotencyKey])
   // The target of the reversals' and valuations' references: on the move's own site.

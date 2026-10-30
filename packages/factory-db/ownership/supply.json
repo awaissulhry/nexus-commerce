@@ -22,7 +22,7 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
         "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["unitPrice", "netAmount"] },
-        "factory_partner_runtime": { "privileges": ["select", "update"], "scopedBy": ["party"], "hiddenColumns": ["unitPrice", "netAmount", "createdById"] }
+        "factory_partner_runtime": { "privileges": ["select", "update"], "scopedBy": ["party"], "hiddenColumns": ["unitPrice", "netAmount", "createdById", "cancelledById", "closedShortById"] }
       }
     },
     "PlanningRun": {

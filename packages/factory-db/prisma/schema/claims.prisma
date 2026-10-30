@@ -1,0 +1,236 @@
+// Receiving problems and supplier claims (W2a schema wave 3/7; plan W2A §5; features SCM-118, SCM-134, SCM-135): what
+// was wrong with a delivery (short, over, damaged, the wrong item or colour), reported to the supplier, and the claims
+// for credit or replacement with the goods returned. apps/factory-api's modules write them (B-W2a-31 discrepancies at
+// receiving, B-W2a-44 returns to the supplier and claims), always through command().
+//
+// A discrepancy belongs to a goods receipt (and one of its lines): OPEN while recorded, SENT once reported to the
+// supplier (the report's PDF in the supplier's thread), AGREED when the supplier accepts it, CREDITED when its credit
+// arrived, CLOSED at the end (or at once, when it is not pursued). Its photos are its files (StoredFile recordType
+// "ReceiptDiscrepancy").
+//
+// A claim (CLM-… from the company's CLAIM series) asks a supplier for a credit or a replacement: a RETURN sends goods
+// back (each line's stock move out and the return DDT, B-W2a-17), a CLAIM keeps them (an area of leather found bad at
+// cutting). DRAFT while prepared → SENT (waiting for the supplier) → ACCEPTED (credit or replacement coming) or
+// REJECTED → CLOSED (settled, or given up); a DRAFT is CANCELLED. Its lines name the lot, hide or receipt line and the
+// discrepancy they pursue. The credit note that settles it is matched in Finance (B-W2a-62, by recordType + recordId).
+//
+// Money (A1 §2.6): what the supplier is asked to credit is a cost (`@grain cost`), office only.
+//
+// Who sees what (ownership/claims.json): the office reads and writes; the floor and portal or link sessions read none
+// of it (no W2a step needs them: the report goes to the supplier as a PDF by mail). Nobody deletes a claim or a sent
+// discrepancy (cancelled or closed instead); the office deletes an OPEN discrepancy and the lines of a DRAFT claim.
+//
+// Every child row carries its parent's siteId in its reference, so a line can never belong to another site's claim.
+
+/// A problem found with a delivery (SCM-118): what was wrong, how much, with its photos, tracked to its resolution.
+model ReceiptDiscrepancy {
+  id             String                   @id @db.Uuid
+  tenantId       String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The receipt's site.
+  siteId         String                   @db.Uuid
+  receiptId      String                   @db.Uuid
+  /// Its place on the receipt's list: 10, 20, 30 …
+  seq            Int
+  /// The receipt line it is about (a line of the receipt); null: the delivery as a whole (a missing document, a line
+  /// the order had and the delivery did not).
+  receiptLineId  String?                  @db.Uuid
+  /// The receipt's supplier.
+  supplierId     String                   @db.Uuid
+  kind           ReceiptDiscrepancyKind
+  /// How much is short, over, damaged or wrong, above 0, with its unit (ft² of leather, pieces); both or neither.
+  quantity       Decimal?                 @db.Decimal(18, 4)
+  uom            Uom?
+  /// What was found, as the receiver wrote it.
+  note           String?
+  status         ReceiptDiscrepancyStatus @default(OPEN)
+  /// When the report went to the supplier, and who sent it: set in the move to SENT, kept after.
+  sentAt         DateTime?                @db.Timestamptz(3)
+  sentById       String?                  @db.Uuid
+  /// Set exactly while CLOSED, with what settled it.
+  closedAt       DateTime?                @db.Timestamptz(3)
+  resolutionNote String?
+  version        Int                      @default(1)
+  createdAt      DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?                  @db.Uuid
+
+  receipt     GoodsReceipt      @relation(fields: [tenantId, siteId, receiptId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  receiptLine GoodsReceiptLine? @relation(fields: [tenantId, siteId, receiptLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplier    Party             @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  claimLines  SupplierClaimLine[]
+
+  @@unique([tenantId, receiptId, seq])
+  // The target of the claim lines' reference: a discrepancy of the claim's own site.
+  @@unique([tenantId, siteId, id])
+}
+
+enum ReceiptDiscrepancyKind {
+  /// Less than the delivery note or the order says.
+  SHORT
+  /// More than ordered, beyond the line's tolerance.
+  OVER
+  /// Damaged in transit or by the supplier (holes, stains, crushed boxes).
+  DAMAGED
+  WRONG_ITEM
+  WRONG_COLOUR
+  /// A document the goods need is missing (the Cr VI report, a certificate, the DDT).
+  MISSING_DOCUMENT
+  OTHER
+}
+
+/// OPEN → SENT → AGREED → CREDITED → CLOSED; CLOSED from any other state (settled, or not pursued). CLOSED is final.
+enum ReceiptDiscrepancyStatus {
+  OPEN
+  SENT
+  AGREED
+  CREDITED
+  CLOSED
+}
+
+/// A claim to a supplier (SCM-134, SCM-135): goods returned or kept, the reason, the remedy asked and the supplier's
+/// answer. Numbered from the company's CLAIM series when it is created.
+model SupplierClaim {
+  id                   String               @id @db.Uuid
+  tenantId             String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId            String               @db.Uuid
+  /// The site the goods were received at or found at (the lots' site).
+  siteId               String               @db.Uuid
+  /// The number from the company's CLAIM series, unique in the company.
+  number               String
+  /// The supplier.
+  partyId              String               @db.Uuid
+  kind                 SupplierClaimKind
+  /// The receipt the goods came with, when known (its supplier is the claim's); and the purchase order they were bought
+  /// on (the receipt's, when both).
+  goodsReceiptId       String?              @db.Uuid
+  purchaseOrderId      String?              @db.Uuid
+  /// Where the problem was found.
+  foundAt              ClaimFoundAt
+  /// What is wrong, in words (required).
+  reason               String
+  /// What we ask for: required from SENT on; may change until CLOSED (the supplier offers the other).
+  remedy               ClaimRemedy?
+  status               SupplierClaimStatus  @default(DRAFT)
+  /// ISO 4217: the currency of the credit asked.
+  currency             String               @default("EUR")
+  /// The credit asked, in minor units: the lines' sum, or the amount agreed with the supplier.
+  /// @grain cost
+  expectedCreditAmount Int?
+  /// When it was sent and by whom: set in the move to SENT, kept after.
+  sentAt               DateTime?            @db.Timestamptz(3)
+  sentById             String?              @db.Uuid
+  /// The supplier's answer and when it came: set when the claim moves to ACCEPTED or REJECTED.
+  supplierAnswer       String?
+  answeredAt           DateTime?            @db.Timestamptz(3)
+  /// Set exactly while CLOSED, with how it was settled.
+  closedAt             DateTime?            @db.Timestamptz(3)
+  closeNote            String?
+  /// Set exactly while CANCELLED, with the reason.
+  cancelledAt          DateTime?            @db.Timestamptz(3)
+  cancelReason         String?
+  /// For the office only.
+  /// @internal
+  internalNote         String?
+  version              Int                  @default(1)
+  createdAt            DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?              @db.Uuid
+
+  site          Site                @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  party         Party               @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  goodsReceipt  GoodsReceipt?       @relation(fields: [tenantId, siteId, goodsReceiptId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  purchaseOrder PurchaseOrder?      @relation(fields: [tenantId, siteId, purchaseOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines         SupplierClaimLine[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the lines' reference: a line names its claim's site and supplier.
+  @@unique([tenantId, siteId, partyId, id])
+}
+
+enum SupplierClaimKind {
+  /// Goods go back to the supplier (stock out, a return DDT).
+  RETURN
+  /// The goods stay (used, or unusable here): a credit or a replacement is asked.
+  CLAIM
+}
+
+enum ClaimFoundAt {
+  RECEIPT
+  /// In the warehouse, before use.
+  STOCK
+  CUTTING
+  PRODUCTION
+  INSPECTION
+}
+
+enum ClaimRemedy {
+  CREDIT
+  REPLACEMENT
+}
+
+/// DRAFT → SENT | CANCELLED; SENT → ACCEPTED | REJECTED | CLOSED; ACCEPTED → CLOSED; REJECTED → SENT (sent again with
+/// more evidence) | CLOSED. CLOSED and CANCELLED are final.
+enum SupplierClaimStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  CLOSED
+  CANCELLED
+}
+
+/// One thing a claim is about: a lot, a hide or a receipt line, how much (an area of leather, pieces), the
+/// discrepancy it pursues, and for goods sent back the stock move that took them out and the return DDT.
+model SupplierClaimLine {
+  id            String   @id @db.Uuid
+  tenantId      String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The claim's site and supplier.
+  siteId        String   @db.Uuid
+  partyId       String   @db.Uuid
+  claimId       String   @db.Uuid
+  /// Its place on the claim: 10, 20, 30 …
+  seq           Int
+  /// The discrepancy it pursues and the receipt line the goods came on, when known.
+  discrepancyId String?  @db.Uuid
+  receiptLineId String?  @db.Uuid
+  itemId        String   @db.Uuid
+  itemColourId  String?  @db.Uuid
+  /// The lot (and hide) of the goods, when they are tracked: of the line's item, on the claim's site.
+  lotId         String?  @db.Uuid
+  hideId        String?  @db.Uuid
+  /// Above 0, in `uom`, and in the item's base unit: the area affected or the goods returned.
+  quantity      Decimal  @db.Decimal(18, 4)
+  uom           Uom
+  baseQuantity  Decimal  @db.Decimal(18, 4)
+  /// What is wrong with this line, when more than the claim's reason.
+  reason        String?
+  /// The cost per base unit the credit is asked at, and the credit asked for the line, in the claim's currency.
+  /// @grain cost
+  unitCost      Decimal? @db.Decimal(18, 6)
+  /// @grain cost
+  creditAmount  Int?
+  /// A RETURN line, once sent back: the stock move that took the goods out (of the line's item, lot and hide) and the
+  /// return DDT they travelled with; each set once.
+  moveId        String?  @db.Uuid
+  ddtId         String?  @db.Uuid
+  note          String?
+  version       Int      @default(1)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?  @db.Uuid
+
+  claim       SupplierClaim       @relation(fields: [tenantId, siteId, partyId, claimId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and itemId.
+  discrepancy ReceiptDiscrepancy? @relation(fields: [tenantId, siteId, discrepancyId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  receiptLine GoodsReceiptLine?   @relation(fields: [tenantId, siteId, receiptLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  item        Item                @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour  ItemColour?         @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot         Lot?                @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  hide        Hide?               @relation(fields: [tenantId, siteId, lotId, hideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+  move        StockMove?          @relation(fields: [tenantId, siteId, moveId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  ddt         Ddt?                @relation(fields: [tenantId, siteId, partyId, ddtId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, claimId, seq])
+}

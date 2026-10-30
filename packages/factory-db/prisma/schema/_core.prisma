@@ -158,6 +158,8 @@ model Company {
   reportSubscriptions  ReportSubscription[]
   // alerts.prisma: the alert rules that look at it.
   alertRules           AlertRule[]
+  // W2a sourcing.prisma: the approved sources held for the company only.
+  supplierItems        SupplierItem[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.
@@ -236,6 +238,9 @@ model Site {
   workCalendars       WorkCalendar[]
   reportSubscriptions ReportSubscription[]
   alertRules          AlertRule[]
+  // W2a claims.prisma, subcontract.prisma: the claims about goods at the site, the work it sends to workshops.
+  supplierClaims     SupplierClaim[]
+  subcontractOrders  SubcontractOrder[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])

@@ -300,6 +300,9 @@ model Ddt {
   cancellations DdtCancellation[]
   // money.prisma: the invoice lines of the goods it carried (TD24).
   invoiceLines  InvoiceLine[]
+  // W2a claims.prisma, subcontract.prisma: the goods returned to a supplier and the kit sent to a workshop with it.
+  claimLines    SupplierClaimLine[]
+  kitLines      SubcontractKitLine[]
 
   // Never the same number twice in a series period.
   @@unique([tenantId, numberSeriesId, number])

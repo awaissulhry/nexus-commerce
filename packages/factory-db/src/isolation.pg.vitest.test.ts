@@ -37,6 +37,8 @@ import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
 import { seed as seedSearch } from '../seed/search'
 import { seed as seedShipping } from '../seed/shipping'
+import { seed as seedSourcing } from '../seed/sourcing'
+import { seed as seedSubcontract } from '../seed/subcontract'
 import { seed as seedSupply } from '../seed/supply'
 import { seed as seedThreads } from '../seed/threads'
 import { seed as seedViews } from '../seed/views'
@@ -181,7 +183,12 @@ beforeAll(async () => {
     await seedPlatform({ db: factory, namespace: 'iso-a' })
     await seedPlatform({ db: factory, namespace: 'iso-b' })
   }
-}, 60_000)
+  await seedSourcing({ db: factory, namespace: 'iso-a' })
+  await seedSourcing({ db: factory, namespace: 'iso-b' })
+  await seedSubcontract({ db: factory, namespace: 'iso-a' })
+  await seedSubcontract({ db: factory, namespace: 'iso-b' })
+  // Every seed of both tenants: under a full parallel run this takes more than a minute.
+}, 120_000)
 
 afterAll(async () => {
   await factory?.close()
@@ -294,6 +301,8 @@ it('covers every classified table and every runtime role', () => {
     'ProductionSettings',
     'PurchaseOrder',
     'PurchaseOrderLine',
+    'PurchaseOrderReminder',
+    'PurchaseOrderRevision',
     'QualityRelease',
     'QualityReleaseReversal',
     'QualitySettings',
@@ -304,6 +313,7 @@ it('covers every classified table and every runtime role', () => {
     'QuoteLineSize',
     'QuoteVersion',
     'ReasonCode',
+    'ReceiptDiscrepancy',
     'RecordFollower',
     'RepairOrder',
     'RepairStageEvent',
@@ -344,12 +354,19 @@ it('covers every classified table and every runtime role', () => {
     'StoredFile',
     'Style',
     'StyleRevision',
+    'SubcontractKitLine',
+    'SubcontractOperation',
+    'SubcontractOrder',
+    'SupplierClaim',
+    'SupplierClaimLine',
+    'SupplierItem',
     'Suppression',
     'Task',
     'Tenant',
     'Thread',
     'TodayLayout',
     'TrackingEvent',
+    'TypeChangeReview',
     'User',
     'Variant',
     'ViesCheck',

@@ -59,7 +59,9 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    (the snooze)), `…_sales_w2a_guards` (W2a wave 2/7: terms, price lists, amendments, schedules, returns, repairs,
    complaints; it redefines sales' `factory_sales_order_line_guard` (closing short), the sales settings'
    `factory_sales_settings_guard` (return policy) and the register's `factory_ppe_register_entry_guard` (source type
-   Complaint)): triggers, partial unique indexes and deferred constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
+   Complaint)), `…_supply_w2a_guards` (W2a wave 3/7: PO revisions and reminders append-only, claims, discrepancies,
+   subcontract orders, type-change reviews; it redefines the two purchase order functions of
+   `…_supply_po_proposals_guards`): triggers, partial unique indexes and deferred constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written
    too but goes the other way: keep it IN `prisma/migrations`, under a timestamp before its schema folder, while

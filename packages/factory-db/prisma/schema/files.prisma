@@ -99,6 +99,8 @@ model StoredFile {
   // views.prisma, ops.prisma: the export whose file it is, the restore drill it is the evidence of.
   exportJobs         ExportJob[]
   restoreDrills      RestoreDrill[]
+  // W2a sourcing.prisma: the purchase order revisions whose PDF it is.
+  purchaseOrderRevisions PurchaseOrderRevision[] @relation("PurchaseOrderRevisionDocument")
 
   @@unique([tenantId, storageKey])
   // The target of the tenant-safe references from other rows (a company's logo, a document's PDF).

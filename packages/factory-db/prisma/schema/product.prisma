@@ -150,6 +150,10 @@ model Item {
   lots                 Lot[]
   stockMoves           StockMove[]
   stockValuations      StockValuation[]
+  // W2a sourcing.prisma, claims.prisma, subcontract.prisma: its approved sources, claim lines and kit lines.
+  supplierItems        SupplierItem[]
+  supplierClaimLines   SupplierClaimLine[]
+  subcontractKitLines  SubcontractKitLine[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from BOM lines and the item's colours.
@@ -254,6 +258,10 @@ model ItemColour {
   stockMoves           StockMove[]
   // production.prisma: the work orders' planned materials in this colour.
   workOrderMaterials   WorkOrderMaterial[]
+  // W2a sourcing.prisma, claims.prisma, subcontract.prisma: its approved sources, claim lines and kit lines.
+  supplierItems        SupplierItem[]
+  supplierClaimLines   SupplierClaimLine[]
+  subcontractKitLines  SubcontractKitLine[]
 
   @@unique([tenantId, itemId, code])
   // The target of the references from BOM lines and grid cells: a colour of the line's own material.
@@ -347,6 +355,12 @@ model Style {
   garmentTracking       GarmentTracking @default(BATCH)
   /// The measurement template a made-to-measure unit is measured with (PRD-200).
   measurementTemplateId String?     @db.Uuid
+  /// W2a customs and origin data (PRD-018; exports and Intrastat, Reg. (EU) 2019/2152): the commodity code (HS 6,
+  /// CN 8 or TARIC 10 digits), the country of origin (ISO 3166-1 alpha-2) and the net mass of one garment in kilograms
+  /// (above 0); null: not on record.
+  hsCode                String?
+  originCountry         String?
+  netMassKg             Decimal?    @db.Decimal(10, 3)
   status                StyleStatus @default(DRAFT)
   version               Int         @default(1)
   createdAt             DateTime    @default(now()) @db.Timestamptz(3)
@@ -375,6 +389,8 @@ model Style {
   priceListEntries    PriceListEntry[]
   repairOrders        RepairOrder[]
   complaints          Complaint[]
+  // W2a compliance.prisma: the changes to its approved type under review.
+  typeChangeReviews   TypeChangeReview[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the style's rows.
@@ -509,6 +525,9 @@ model StyleRevision {
   workOrders      WorkOrder[]
   // quality.prisma: the PPE register entries about garments made to it.
   ppeRegisterEntries PpeRegisterEntry[]
+  // W2a compliance.prisma: the type-change reviews of this revision, and those that compare a revision with it.
+  typeChangeReviews         TypeChangeReview[] @relation("TypeChangeReviewRevision")
+  comparedTypeChangeReviews TypeChangeReview[] @relation("TypeChangeReviewComparedRevision")
 
   @@unique([tenantId, styleId, revision])
   // The target of the references from the revision's parts: a revision of the same style.
@@ -673,6 +692,14 @@ model RoutingOperation {
   /// Every bundle is scanned at it (floor scans, B-W1-42).
   scanRequired    Boolean        @default(true)
   instructions    String?
+  /// W2a subcontracted operation (PRD-120): the workshop that does it (a party with the SUBCONTRACTOR role; the product
+  /// module checks the role), its fee per piece in euros (a subcontract order copies it in its own currency) and the
+  /// days the pieces travel there and back; null: done in-house. The fee and the days go with the workshop: neither
+  /// without it.
+  supplierId      String?        @db.Uuid
+  /// @grain cost
+  pricePerPiece   Decimal?       @db.Decimal(18, 6)
+  transitDays     Int?
   version         Int            @default(1)
   createdAt       DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -680,6 +707,8 @@ model RoutingOperation {
 
   revision  StyleRevision @relation(fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
   operation Operation     @relation(fields: [tenantId, operationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2a: the workshop of a subcontracted step. Restrict, not Prisma's SetNull default: that would also clear tenantId.
+  supplier  Party?        @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // production.prisma: the work order operations made from the step.
   workOrderOperations WorkOrderOperation[]
 

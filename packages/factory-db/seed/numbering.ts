@@ -70,6 +70,10 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       { id: `ffffffff${id(`series:${company}:RETURN:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'RETURN', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'RMA-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
       { id: `ffffffff${id(`series:${company}:REPAIR:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'REPAIR', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'REP-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
       { id: `ffffffff${id(`series:${company}:COMPLAINT:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'COMPLAINT', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'CMP-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // W2a wave 3: supplier claims and subcontract orders are numbered from these (apps/factory-api modules/purchasing
+      // claims and subcontracting): without them, opening one is refused. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:CLAIM:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'CLAIM', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'CLM-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      { id: `ffffffff${id(`series:${company}:SUBCONTRACT:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'SUBCONTRACT', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'SC-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({
