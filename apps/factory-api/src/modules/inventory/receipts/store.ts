@@ -1,5 +1,6 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
+import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTx } from '../../../core/command'
 
@@ -53,6 +54,10 @@ export const RECEIPT_LINE_COLUMNS = {
   baseQuantity: true,
   hideCount: true,
   note: true,
+  // B-W2a-31: received in the supplier's unit.
+  receivedQuantity: true,
+  receivedUom: true,
+  receivedFactor: true,
 } as const satisfies Prisma.GoodsReceiptLineSelect
 export type ReceiptLineRow = Prisma.GoodsReceiptLineGetPayload<{ select: typeof RECEIPT_LINE_COLUMNS }>
 
@@ -132,6 +137,9 @@ export const ORDER_LINE_COLUMNS = {
   requiresCrViTest: true,
   confirmedQuantity: true,
   confirmedDate: true,
+  // B-W2a-31: an ended line receives nothing more (said in words before the trigger refuses it).
+  cancelledAt: true,
+  closedShortAt: true,
 } as const satisfies Prisma.PurchaseOrderLineSelect
 export type OrderLineRow = Prisma.PurchaseOrderLineGetPayload<{ select: typeof ORDER_LINE_COLUMNS }>
 
@@ -196,3 +204,28 @@ export async function readReceiptMoves(db: Reader, receiptId: string) {
   })
 }
 export type ReceiptMoveRow = Awaited<ReturnType<typeof readReceiptMoves>>[number]
+
+/** B-W2a-31 (SCM-115): the photos of the supplier's delivery note — the receipt's PHOTO files (modules/inventory/receipts/photos.ts). */
+export async function ddtPhotosOf(db: Reader, receiptId: string) {
+  const rows = await db.storedFile.findMany({
+    where: { recordType: 'GoodsReceipt', recordId: receiptId, kind: 'PHOTO', status: { not: 'DELETED' } },
+    select: { id: true, originalName: true, contentType: true, sizeBytes: true, status: true, createdAt: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  })
+  return rows.map((row) => ({ id: row.id, originalName: row.originalName, contentType: row.contentType, sizeBytes: row.sizeBytes, status: row.status, createdAt: toUtcIso(row.createdAt) }))
+}
+
+/** B-W2a-31 (SCM-118): a receipt's discrepancies by state (open = not closed; unsent = OPEN). */
+export async function discrepancyCounts(db: Reader, receiptIds: readonly string[]): Promise<Map<string, { count: number; open: number; unsent: number }>> {
+  const counts = new Map<string, { count: number; open: number; unsent: number }>()
+  if (receiptIds.length === 0) return counts
+  const rows = await db.receiptDiscrepancy.groupBy({ by: ['receiptId', 'status'], where: { receiptId: { in: [...receiptIds] } }, _count: { _all: true } })
+  for (const row of rows) {
+    const entry = counts.get(row.receiptId) ?? { count: 0, open: 0, unsent: 0 }
+    entry.count += row._count._all
+    if (row.status !== 'CLOSED') entry.open += row._count._all
+    if (row.status === 'OPEN') entry.unsent += row._count._all
+    counts.set(row.receiptId, entry)
+  }
+  return counts
+}
