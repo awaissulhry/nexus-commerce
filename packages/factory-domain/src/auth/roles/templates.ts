@@ -141,6 +141,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'reasons.manage',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.manage', 'views.export',
+      // B-W2a-32: rebuild the search index.
+      'search.rebuild',
     ],
     grains: [],
   }),
@@ -184,6 +186,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'production.scrap.view', 'production.scrap.approve',
       // B-W2a-22: firm planned orders and the exception list of the runs.
       'planning.firm', 'planning.exceptions.manage',
+      // B-W2a-34: the planning board (moves into the shared working plan, allocation) and publishing it to the floor.
+      'planning.schedule.manage', 'planning.schedule.publish',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export'],
     grains: [],
@@ -237,6 +241,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'purchasing.sources.manage',
       // B-W2a-25: subcontract orders to the workshops (operations, fees, kit plan, issue, cancel, close).
       'purchasing.subcontract.manage',
+      // B-W2a-31: what was wrong with a delivery, its report to the supplier and its answer.
+      'inventory.discrepancies.manage',
+      'inventory.discrepancies.report',
       // W2a B-W2a-13 (MES-057): the hide yield per supplier lot feeds the supplier's rating.
       'production.cutting.view',
       // B-W2a-23: save views of a list; export a list.
@@ -300,6 +307,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'home.view',
       // B-W2a-26: sees what is on hold (design quality.holds: warehouse and supervisors read).
       'quality.holds.view',
+      // B-W2a-31: records what was wrong with a delivery at receiving and reports it to the supplier.
+      'inventory.discrepancies.manage',
+      'inventory.discrepancies.report',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export',
     ],

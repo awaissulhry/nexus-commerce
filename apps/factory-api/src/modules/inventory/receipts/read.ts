@@ -21,7 +21,9 @@ import { actorOf, type OfficeContext, type RequestContext } from '../../../core/
 import { mayAt, officeContextOf, seesCost, type StockContext } from '../ledger/access'
 import {
   byId,
+  ddtPhotosOf,
   dec,
+  discrepancyCounts,
   HIDE_COLUMNS,
   ids,
   LOT_COLUMNS,
@@ -190,6 +192,9 @@ export async function receiptDetail(db: Reader, context: RequestContext, receipt
   const location = locationId ? await db.location.findUnique({ where: { id: locationId }, select: { id: true, code: true, name: true } }) : null
   const values = withCost ? await valueOf(db, moves.map((move) => move.id)) : new Map()
   const blockers = receipt.status === 'POSTED' ? await blockersOf(db, moves) : null
+  // B-W2a-31: the delivery note's photos and the discrepancies by state.
+  const ddtPhotos = await ddtPhotosOf(db, receipt.id)
+  const discrepancies = (await discrepancyCounts(db, [receipt.id])).get(receipt.id) ?? { count: 0, open: 0, unsent: 0 }
 
   const lotBase = (lotId: string) => sumOf(moves.filter((move) => move.lotId === lotId).map((move) => dec(move.baseQuantity)))
   const quantities = new Map<Uom, Decimal>()
@@ -217,6 +222,10 @@ export async function receiptDetail(db: Reader, context: RequestContext, receipt
       baseQuantity: quantityText(line.baseQuantity.toString()),
       hideCount: line.hideCount,
       note: line.note,
+      received:
+        line.receivedQuantity !== null && line.receivedUom !== null && line.receivedFactor !== null
+          ? { quantity: quantityText(line.receivedQuantity.toString()), uom: line.receivedUom, factor: line.receivedFactor.toFixed(8) }
+          : null,
       orderLine: orderLine
         ? {
             seq: orderLine.seq,
@@ -273,6 +282,8 @@ export async function receiptDetail(db: Reader, context: RequestContext, receipt
       quantities: [...quantities].map(([uom, baseQuantity]) => ({ uom, baseQuantity: quantityText(baseQuantity) })),
     },
     lines: viewLines,
+    ddtPhotos,
+    discrepancies,
     reversal: blockers ? { possible: blockers.blockers.length === 0, location: blockers.receiptLocation || null, blockers: blockers.blockers } : null,
     ...(withCost ? { value: asMoney('cost', total(moves.map((move) => values.get(move.id)))) } : {}),
   }
@@ -296,6 +307,8 @@ export interface ListReceiptsQuery {
   readonly postedFrom?: string | undefined
   /** Posted receipts with a lot still in quarantine (waiting for its test, certificate or quality check). */
   readonly waiting?: boolean | undefined
+  /** B-W2a-31: `open` — only receipts with a discrepancy not closed yet. */
+  readonly discrepancies?: 'open' | undefined
   readonly cursor?: string | undefined
   readonly limit: number
 }
@@ -314,6 +327,8 @@ function receiptsWhere(context: OfficeContext, query: Omit<ListReceiptsQuery, 'l
     query.q ? { OR: [{ number: { contains: query.q, mode: 'insensitive' } }, { supplierDdtNumber: { contains: query.q, mode: 'insensitive' } }] } : {},
     query.postedFrom ? { postedAt: { gte: new Date(query.postedFrom) } } : {},
     query.waiting ? WAITING : {},
+    // B-W2a-31: receipts with a discrepancy not closed yet.
+    query.discrepancies === 'open' ? { discrepancies: { some: { status: { not: 'CLOSED' } } } } : {},
   ]
 }
 
@@ -332,7 +347,9 @@ export async function countReceipts(caller: CommandCaller, query: { readonly sit
       count(WAITING),
       query.postedFrom ? count({ postedAt: { gte: new Date(query.postedFrom) } }) : Promise.resolve(null),
     ])
-    return { counts: { posted, reversed, waiting, postedSince } }
+    // B-W2a-31: the discrepancies not closed yet, on the receipts in the list's walls (the "Discrepancies open" tile).
+    const discrepanciesOpen = await client.receiptDiscrepancy.count({ where: { status: { not: 'CLOSED' }, receipt: { AND: walls } } })
+    return { counts: { posted, reversed, waiting, postedSince, discrepanciesOpen } }
   })
 }
 
@@ -353,6 +370,7 @@ export async function listReceipts(caller: CommandCaller, query: ListReceiptsQue
     const withCost = seesCost(context)
     const moves = withCost ? await client.stockMove.findMany({ where: { reason: 'RECEIPT', reversalOfId: null, receiptLineId: { in: lines.map((line) => line.id) } }, select: { id: true, receiptLineId: true } }) : []
     const values = withCost ? await valueOf(client, moves.map((move) => move.id)) : new Map()
+    const discrepancies = await discrepancyCounts(client, receiptIds)
     return {
       receipts: page.map((row) => {
         const own = lines.filter((line) => line.receiptId === row.id)
@@ -381,6 +399,7 @@ export async function listReceipts(caller: CommandCaller, query: ListReceiptsQue
           quantities: [...quantities].map(([uom, baseQuantity]) => ({ uom, baseQuantity: quantityText(baseQuantity) })),
           postedAt: iso(row.postedAt),
           postedById: row.postedById,
+          discrepancies: discrepancies.get(row.id) ?? { count: 0, open: 0, unsent: 0 },
           ...(withCost ? { value: asMoney('cost', total(ownMoves.map((move) => values.get(move.id)))) } : {}),
         }
       }),
@@ -478,6 +497,8 @@ export async function expectedLines(caller: CommandCaller, query: { readonly sit
       const items = await readItems(client, lines.map((line) => line.itemId))
       const colours = await readColours(client, lines.map((line) => line.itemColourId))
       for (const line of lines) {
+        // B-W2a-31: a cancelled or closed-short line is no longer expected.
+        if (line.cancelledAt || line.closedShortAt) continue
         const expected = expectedBaseOf({ quantity: line.quantity.toString(), baseQuantity: line.baseQuantity.toString(), confirmedQuantity: line.confirmedQuantity?.toString() ?? null })
         const got = received.get(line.id) ?? ZERO
         if (lineDifference({ expected, receivedBefore: got, receiving: '0', tolerancePct: line.areaTolerancePct?.toString() ?? null }).complete && got.greaterThan(0)) continue

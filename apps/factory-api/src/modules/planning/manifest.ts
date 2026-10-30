@@ -12,6 +12,11 @@ import { defineManifest } from '../../core/manifest'
  * B-W2a-22: MRP every day, office only, checked per site (a line's, run's, work order's or exception's: its site) with
  * can() (`record`): read with planning.view; firm planned orders with planning.firm; the exception list worked with
  * planning.exceptions.manage.
+ *
+ * B-W2a-34: the planning board, office only, checked per site (a work order's, slot's or version's: its site) with
+ * can() (`record`): read with planning.view (a production manager sees it read-only); the working plan changed with
+ * planning.schedule.manage (a preview of the placement by due date only needs planning.view: the handler asks manage
+ * when it applies); published with planning.schedule.publish.
  */
 export const manifest = defineManifest({
   'POST /planning/runs': { audiences: ['office'], permission: 'planning.run', scope: 'record' },
@@ -49,4 +54,17 @@ export const manifest = defineManifest({
   'GET /planning/exceptions/:exceptionId': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'POST /planning/exceptions/:exceptionId/snooze': { audiences: ['office'], permission: 'planning.exceptions.manage', scope: 'record' },
   'POST /planning/exceptions/:exceptionId/resolve': { audiences: ['office'], permission: 'planning.exceptions.manage', scope: 'record' },
+  // B-W2a-34: the planning board.
+  'GET /planning/schedule': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/schedule/work-orders/:workOrderId': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/schedule/slots': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
+  'PATCH /planning/schedule/slots/:slotId': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
+  'POST /planning/schedule/slots/:slotId/remove': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
+  'POST /planning/schedule/place-by-due-date': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/schedule/publish': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/schedule/publish': { audiences: ['office'], permission: 'planning.schedule.publish', scope: 'record' },
+  'GET /planning/schedule/versions': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/schedule/versions/:versionId': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/allocation': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'PUT /planning/allocation/work-orders/:workOrderId': { audiences: ['office'], permission: 'planning.schedule.manage', scope: 'record' },
 })
