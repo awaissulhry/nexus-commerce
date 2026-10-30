@@ -90,7 +90,9 @@
       "deactivate": "Disattivare una persona richiede un codice nuovo dall'app di autenticazione.",
       "password": "Imporre una nuova password richiede un codice nuovo dall'app di autenticazione.",
       "badge": "Il badge di un operatore richiede un codice nuovo dall'app di autenticazione.",
-      "pin": "Azzerare il PIN di un operatore richiede un codice nuovo dall'app di autenticazione."
+      "pin": "Azzerare il PIN di un operatore richiede un codice nuovo dall'app di autenticazione.",
+      "twoFactorAsk": "Chiedere il doppio fattore a un ruolo richiede un codice nuovo dalla tua app di autenticazione.",
+      "twoFactorStop": "Non chiedere più il doppio fattore a un ruolo richiede un codice nuovo dalla tua app di autenticazione."
     },
     "problem": {
       "wrong": "Il codice è sbagliato o è già stato usato. Inserisci il prossimo.",
@@ -1237,8 +1239,7 @@
     "mfa": {
       "title": "Doppio fattore",
       "on": "Richiesto: il ruolo non dà nulla finché nella sessione non è provato il doppio fattore.",
-      "off": "Non richiesto da questo ruolo.",
-      "later": "Cambiarlo per ruolo arriva in W2a (Sicurezza e stato del sistema)."
+      "off": "Non richiesto da questo ruolo."
     },
     "floorHolders": "Un ruolo di reparto è degli operatori ({count} ora); li trovi in Utenti › Reparto.",
     "nobody": "Nessuno ha questo ruolo.",
@@ -1507,7 +1508,9 @@
     "views": "Viste ed esportazioni",
     "search": "Ricerca",
     "plant": "Stabilimento",
-    "alerts": "Avvisi e regole di eccezione"
+    "alerts": "Avvisi e regole di eccezione",
+    "accounting": "Contabilità",
+    "security": "Sicurezza e stato del sistema"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1608,6 +1611,8 @@
     "purchasing_subcontract_manage": "Preparare, emettere, annullare e chiudere gli ordini ai terzisti",
     "purchasing_subcontract_kit": "Inviare il kit di un ordine al terzista con il suo DDT",
     "purchasing_subcontract_receive": "Ricevere la merce di ritorno da un terzista",
+    "purchasing_claims_manage": "Preparare, inviare, registrare la risposta e chiudere i reclami ai fornitori",
+    "purchasing_claims_return": "Rendere al fornitore la merce di un reso con il DDT di reso",
     "invoices_view": "Vedere fatture e note di credito",
     "invoices_manage": "Preparare fatture in bozza",
     "invoices_issue": "Emettere una fattura (non potrà più cambiare)",
@@ -1697,6 +1702,17 @@
     "planning_schedule_publish": "Pubblicare il programma al reparto",
     "alerts_view": "Vedere gli avvisi dei record che vedi e le regole di eccezione",
     "alerts_handle": "Prendere in carico, assegnare, posticipare e risolvere gli avvisi",
-    "alerts_rules_manage": "Modificare e aggiungere regole di eccezione"
+    "alerts_rules_manage": "Modificare e aggiungere regole di eccezione",
+    "accounting_view": "Vedere le esportazioni contabili, i controlli del mese, le righe Intrastat e le chiusure di periodo",
+    "accounting_export": "Creare e riesportare il lotto contabile numerato di un mese",
+    "accounting_lock": "Chiudere un mese (provvisoria o definitiva) e riaprire una chiusura provvisoria",
+    "accounting_unlock": "Riaprire una chiusura definitiva (d'accordo con il commercialista)",
+    "security_view": "Vedere se ogni parte funziona, le regole di accesso, backup e prove di ripristino",
+    "security_drills_record": "Registrare una prova di ripristino",
+    "sales_returns_view": "Vedere i resi dei clienti",
+    "sales_returns_manage": "Aprire e modificare i resi dei clienti",
+    "sales_returns_receive": "Ricevere la merce resa al magazzino",
+    "sales_returns_inspect": "Valutare la merce resa",
+    "sales_returns_decide": "Decidere l'esito della merce resa"
   }
 }

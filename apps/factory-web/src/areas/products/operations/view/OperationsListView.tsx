@@ -2,13 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Archive, Download, MoreHorizontal, Plus, RotateCcw, Search } from 'lucide-react'
+import { Archive, Download, MoreHorizontal, Plus, RotateCcw, Search, Upload } from 'lucide-react'
 import { Field, Menu, MetricStrip, Modal } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, Select, Textarea, TokenChip } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
+import type { WizardActions } from '../../../admin/import/view/ImportWizard'
+import type { SheetImport } from '../../styles/import/sheet-import'
+import { SheetImportDialog } from '../../styles/import/view/SheetImportDialog'
 import { minutesText } from '../../styles/model'
 import { isPageKey, keepLoaded, type LibraryCan, type Notice } from '../../library/model'
 import { Freshness, KeysDialog, LibraryMessages, listState, NoticeBanner, PageHead, showsState } from '../../library/parts'
@@ -34,6 +37,9 @@ export interface OperationsListViewModel {
   newOperation: NewOperationModel | null
   busy: boolean
   notice: Notice | null
+  /** W2a: Import (importer product.operations): why it is held (a `library` key), or null. */
+  importHeld: string | null
+  sheetImport: SheetImport | null
   selected?: string[]
   focusRow?: number
   dialog?: 'archive' | 'help' | null
@@ -51,6 +57,8 @@ export interface OperationsListActions {
   onDraft?: (draft: OperationDraft) => void
   onCreate?: () => void
   onDismissNotice?: () => void
+  onImport?: () => void
+  sheetImport?: WizardActions
 }
 
 /**
@@ -90,7 +98,7 @@ function OperationsList({ model, actions }: { model: OperationsListViewModel; ac
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!isPageKey(event) || model.newOperation || dialog) return
+      if (!isPageKey(event) || model.newOperation || model.sheetImport || dialog) return
       if (event.key === 'c' && model.can.operationsManage) {
         event.preventDefault()
         actions?.onNew?.(true)
@@ -189,9 +197,14 @@ function OperationsList({ model, actions }: { model: OperationsListViewModel; ac
         intro={t('operations.list.intro')}
         status={<Freshness asOf={model.asOf} />}
         actions={
-          <Button size="sm" variant="primary" heldReason={model.can.operationsManage ? null : t('held.noManage')} onClick={() => actions?.onNew?.(true)} aria-keyshortcuts="c">
-            <Plus size={14} aria-hidden /> {t('operations.list.new')}
-          </Button>
+          <>
+            <Button size="sm" heldReason={model.importHeld ? t(model.importHeld) : null} onClick={() => actions?.onImport?.()}>
+              <Upload size={14} aria-hidden /> {t('operations.list.import')}
+            </Button>
+            <Button size="sm" variant="primary" heldReason={model.can.operationsManage ? null : t('held.noManage')} onClick={() => actions?.onNew?.(true)} aria-keyshortcuts="c">
+              <Plus size={14} aria-hidden /> {t('operations.list.new')}
+            </Button>
+          </>
         }
       />
       <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
@@ -297,6 +310,7 @@ function OperationsList({ model, actions }: { model: OperationsListViewModel; ac
         focusRow={model.focusRow}
       />
       {model.newOperation && <NewOperationDialog model={model.newOperation} actions={actions} />}
+      {model.sheetImport && <SheetImportDialog model={model.sheetImport} actions={actions?.sheetImport} />}
       {dialog === 'archive' && <ArchiveDialog rows={picked} busy={model.busy} actions={actions} onDone={() => setSelected([])} onClose={() => setDialog(null)} />}
       {dialog === 'help' && <KeysDialog keys={listKeys(ownKeys, true)} onClose={() => setDialog(null)} />}
     </div>

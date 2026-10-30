@@ -28,6 +28,7 @@ import type { PrintJobView } from '../../../platform/print/contract'
 import { queueModuleLabel } from '../../../platform/print/jobs'
 import { readPrinter, type PrinterRow } from '../../../platform/print/printers'
 import { lockWorkOrderIssues } from '../../inventory/issue/store'
+import { holdOnBundles } from '../../quality/holds/checks'
 import { cutForBundles } from '../cutting/views'
 import { standardBundleSizeFor } from '../settings/bundle-size'
 import { floorRecordSubjectFor } from '../settings/subject'
@@ -317,6 +318,10 @@ async function makeInCommand(tools: CommandTools, workOrderId: string, body: Mak
   await lockWorkOrderIssues(tx, context.tenantId, workOrderId)
   const workOrder = await readHeader(tx, workOrderId)
   if (!workOrder || !mayBundle(context, PRODUCTION_BUNDLES, workOrder)) throw new NotFoundError('Work order not found.')
+  // B-W2a-F1 hook (quality/holds checks.ts): a work order ON_HOLD makes no bundle, in the hold's words (wave 5's
+  // Bundle_awaits_hold refuses the same).
+  const held = await holdOnBundles(tx, context, { workOrderId: workOrder.id })
+  if (held) refused({ code: 'WORK_ORDER_ON_HOLD', message: held })
   const labels = await readCellLabels(tx, workOrder.id)
   const asks: BundleAsk[] | null = body.cells ? body.cells.map((cell) => ({ cellId: cell.workOrderSizeId, part: cell.part, quantity: cell.quantity, quantities: cell.quantities, bundleSize: cell.bundleSize })) : null
   await lockCells(tx, context.tenantId, workOrder.siteId, asks ? asks.map((ask) => ask.cellId).filter((id) => labels.has(id)) : [...labels.keys()])

@@ -455,6 +455,46 @@ describe('the release gate (QHS-051, QHS-058, PLT-097)', () => {
     expect(final.maker).toEqual({ made: false, words: expect.stringMatching(/^Made by \(from the floor's records\): 1 person\. You are not among them\.$/) })
   })
 
+  it('a held work order moves on nowhere, in words before the database (B-W2a-F1 hooks): no inspection, no bundle, no label, no release', async () => {
+    const workOrder = WO.main
+    const from = (await admin<{ status: string }>('SELECT status::text AS status FROM "WorkOrder" WHERE id = $1', [workOrder.id]))[0]!.status
+    expect(from).toBe('IN_PROGRESS')
+    // ON_HOLD as a hold puts it (wave 5's columns): the gate of every insert below (…_awaits_hold).
+    await admin(`UPDATE "WorkOrder" SET status = 'ON_HOLD', "heldFromStatus" = $2::"WorkOrderStatus", "heldAt" = now(), "holdReason" = 'Stain on a sleeve (made up)' WHERE id = $1`, [workOrder.id, from])
+    const held = (what: string) => `Work order ${workOrder.number} is on hold (Stain on a sleeve (made up)): ${what} until the hold is lifted.`
+    try {
+      const opened = await inspector2.browser.post('/quality/inspections', { workOrderId: workOrder.id, lotSize: 1, sampleSize: 1, ...PLAN })
+      expect(opened.status, JSON.stringify(opened.body)).toBe(409)
+      expect(opened.body.error.message).toBe(held('its garments are not inspected'))
+      const bundles = await refused('cutter', 'POST', `/production/bundles/work-orders/${workOrder.id}/bundles`, { bundleSize: 10, printerId: null }, 409)
+      expect(bundles.issues).toEqual([{ path: 'refusal/WORK_ORDER_ON_HOLD', message: held('no bundle is made for it') }])
+      const labels = await refused('pack', 'POST', `/production/serials/work-orders/${workOrder.id}/labels`, { cells: [{ workOrderSizeId: cellOf('main'), count: 1 }], printerId: A.printer }, 409)
+      expect(labels.message).toBe(held('its garment labels are not printed'))
+      expect(pathsOf(labels)).toContain('refusal/WORK_ORDER_NOT_OPEN')
+    } finally {
+      await admin(`UPDATE "WorkOrder" SET status = "heldFromStatus", "heldFromStatus" = NULL, "heldAt" = NULL, "heldById" = NULL, "holdReason" = NULL, "holdRecordType" = NULL, "holdRecordId" = NULL WHERE id = $1`, [workOrder.id])
+    }
+    // An ACTIVE quality hold of the work order (its status kept, as for a COMPLETED one): the release is refused in the
+    // gate's shape (checks/WORK_ORDER), after the signature and before the database's QualityRelease_awaits_quality_hold.
+    const holdId = newId()
+    await admin(
+      `INSERT INTO "QualityHold" (id, "tenantId", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "reasonNote", "placedAt", "placedById", "createdById")
+       VALUES ($1, $2, $3, $4, 'WorkOrder', ARRAY[$5]::uuid[], 'QUALITY_CHECK', 'A stain found at packing (made up).', '2026-11-21T09:00:00Z', $6, $6)`,
+      [holdId, A.tenant, A.companyA, A.siteA1, workOrder.id, owner.id],
+    )
+    try {
+      const before = (await releasesOf(workOrder.id)).length
+      await stepped(inspector1)
+      const answer = await inspector1.browser.post('/quality/releases', { inspectionId: mainInspection.id, workOrderSizeId: cellOf('main'), quantity: 3 })
+      expect(answer.status, JSON.stringify(answer.body)).toBe(409)
+      expect(checksOf(answer.body.error)).toEqual(['WORK_ORDER'])
+      expect(answer.body.error.message).toMatch(new RegExp(`^Work order ${workOrder.number} is on hold \\(.+, since 21 Nov 2026\\): its garments are not released until quality releases the hold\\.$`))
+      expect((await releasesOf(workOrder.id)).length).toBe(before)
+    } finally {
+      await admin(`UPDATE "QualityHold" SET status = 'RELEASED', "releasedAt" = now(), "releasedById" = $2, "releaseSignatureSha256" = $3, "releaseNote" = 'The test is over.' WHERE id = $1`, [holdId, inspector2.id, 'f'.repeat(64)])
+    }
+  })
+
   it('the inspector who made none of the garments releases alone, with a fresh code', async () => {
     h.clock.advance(6 * 60_000)
     const noCode = await inspector1.browser.post('/quality/releases', { inspectionId: mainInspection.id, workOrderSizeId: cellOf('main'), quantity: 3 })

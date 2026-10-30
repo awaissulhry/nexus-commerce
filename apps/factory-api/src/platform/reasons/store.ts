@@ -73,6 +73,15 @@ const USAGE: Partial<Record<ReasonCodeList, (client: Client, used: Map<string, n
        GROUP BY 1`
     for (const row of rows) add(used, row.code, Number(row.n))
   },
+  // Supplier claims (B-W2a-44): no column yet; the code leads the claim's reason (`QUALITY: …`).
+  async CLAIM(client, used) {
+    const rows = await client.$queryRaw<{ code: string; n: bigint }[]>`
+      SELECT substring(c."reason" from '^([A-Z][A-Z0-9_]{1,39})(?::|$)') AS code, count(*) AS n
+        FROM "SupplierClaim" c
+       WHERE c."reason" ~ '^[A-Z][A-Z0-9_]{1,39}(:|$)'
+       GROUP BY 1`
+    for (const row of rows) add(used, row.code, Number(row.n))
+  },
 }
 
 export const reasonCodeStore: ReasonStore = {

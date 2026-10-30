@@ -133,7 +133,8 @@
     "archive": "Archive style…",
     "reactivate": "Reactivate style",
     "copyCode": "Copy code",
-    "keys": "Keyboard shortcuts"
+    "keys": "Keyboard shortcuts",
+    "duplicate": "Duplicate…"
   },
   "save": {
     "saving": "Saving…",
@@ -202,7 +203,9 @@
     "stepRemoved": "Operation removed from the draft routing.",
     "uploaded": "The signed file is uploaded and in force for the revision.",
     "trackingSaved": "The garment numbering is saved.",
-    "labelNamed": "The revision names its garment label."
+    "labelNamed": "The revision names its garment label.",
+    "subcontractSaved": "Subcontract details saved.",
+    "inHouse": "The step is done in-house again."
   },
   "identity": {
     "title": "Identity",
@@ -616,7 +619,9 @@
       "ppe": "PPE",
       "ready": "Complete",
       "updated": "Updated",
-      "more": "Actions"
+      "more": "Actions",
+      "price": "List price",
+      "margin": "Margin %"
     },
     "rev": {
       "released": "Rev {revision} released",
@@ -641,6 +646,22 @@
       "archiveHeld_other": "{count} of them are archived already: take them out of the selection.",
       "archiveTitle_one": "Archive {count} style?",
       "archiveTitle_other": "Archive {count} styles?"
+    },
+    "duplicate": "Duplicate…",
+    "price": {
+      "from": "from {price}",
+      "fromShort": "by colourway",
+      "is": "{price}",
+      "none": "Not priced",
+      "list": "List prices: {code} · {name}",
+      "noList": "No base price list is in force: list prices are blank until one is.",
+      "failed": "The list prices could not be read."
+    },
+    "margin": {
+      "pct": "{pct} %",
+      "unknown": "Unknown",
+      "unknownHint": "The standard cost of the base size is not known yet.",
+      "belowFloor": "Under the floor"
     }
   },
   "completeness": {
@@ -680,6 +701,23 @@
       "code": "Type a code: 1 to 24 capital letters or digits, with . _ - inside.",
       "name": "Type a name.",
       "scale": "Choose a size scale."
+    },
+    "startFrom": "Start from",
+    "from": {
+      "blank": "Blank",
+      "copy": "Copy of a style",
+      "template": "Template",
+      "commerce": "Nexus Commerce product"
+    },
+    "fromWhen": {
+      "template": "Later",
+      "commerce": "W2b"
+    },
+    "fromHint": {
+      "blank": "Type the style here; colourways, BOM and routing follow in its studio.",
+      "copy": "Pick a style and the parts to copy: BOM, measurements, routing, label.",
+      "template": "Style templates come later.",
+      "commerce": "Starting from a Nexus Commerce product comes in W2b."
     }
   },
   "compliance": {
@@ -1054,6 +1092,25 @@
         "qty": "Type a quantity above 0.",
         "wastage": "Wastage is 0 to 60 %."
       }
+    },
+    "import": {
+      "open": "Import BOM",
+      "held": {
+        "noImports": "Your role cannot load sheets.",
+        "goToDraft": "Rows go into a draft: go to revision {revision} (draft) to import.",
+        "startFirst": "Rows go into a draft: start revision {revision} first."
+      }
+    },
+    "export": {
+      "title": "Export",
+      "making": "Making the file…",
+      "label": "Export the BOM of revision {revision}",
+      "xlsx": "Excel (XLSX)",
+      "csv": "CSV",
+      "pdf": "BOM sheet (PDF)",
+      "xlsxHint": "The import’s columns: edit it and import it back.",
+      "csvHint": "The same columns as a CSV file.",
+      "pdfHint": "An internal paper to print (no prices)."
     }
   },
   "routing": {
@@ -1069,7 +1126,10 @@
       "scansHint_one": "of {count} operation",
       "scansHint_other": "of {count} operations",
       "labour": "Labour per garment",
-      "labourHint": "Minutes × cost per minute ÷ efficiency"
+      "labourHint": "Minutes × cost per minute ÷ efficiency",
+      "subcontracted": "Subcontracted operations",
+      "subcontractedHint_one": "of {count} operation, done by a workshop",
+      "subcontractedHint_other": "of {count} operations, done by workshops"
     },
     "issuesTitle_one": "{count} thing to fix in the routing",
     "issuesTitle_other": "{count} things to fix in the routing",
@@ -1093,7 +1153,8 @@
       "machine": "Machine · skill",
       "minutes": "Standard minutes",
       "scanned": "Scanned",
-      "actions": "Actions"
+      "actions": "Actions",
+      "subcontracted": "Subcontracted"
     },
     "final": "final",
     "archivedOp": "archived in the library",
@@ -1217,5 +1278,192 @@
     "BATCH_why": "The work order’s batch number on every label of the batch.",
     "SERIAL": "One serial per garment",
     "SERIAL_why": "Each garment gets its own serial at the final operation; recalls and the evidence trail follow each one."
+  },
+  "phone": {
+    "selectAll": "Select every loaded style",
+    "selected_one": "{count} selected",
+    "selected_other": "{count} selected",
+    "done": "Done",
+    "filters": "Filters",
+    "filtersN": "Filters ({count})",
+    "select": "Select",
+    "nothingToSelect": "There is no style to select.",
+    "selectOne": "Select {code}",
+    "skus_one": "{count} SKU",
+    "skus_other": "{count} SKUs",
+    "filtersTitle": "Filter the styles",
+    "showResults": "Show the styles"
+  },
+  "duplicate": {
+    "title": "Duplicate {code}",
+    "pickTitle": "New style: copy of a style",
+    "doneTitle": "{code} is made",
+    "subtitle": "A new draft style with its own code and name.",
+    "openCopy": "Open {code}",
+    "go": "Duplicate",
+    "pickIntro": "Pick the style to copy: its identity, range, PPE, customs data and colourways come with it, and the parts you tick next.",
+    "pickSearch": "Search a style (code, name or season)",
+    "pickSearching": "Searching…",
+    "pickNone": "No style matches.",
+    "pickList": "Styles to copy",
+    "after": "The copy opens as a draft (revision 1); it is released by its own check.",
+    "source": "Copy of",
+    "repick": "Another style",
+    "partsFrom": "Parts from",
+    "revision": "revision {revision} ({status})",
+    "noRevision": "no revision yet",
+    "code": "New code",
+    "refusedCode": "This code is taken or not valid: choose another.",
+    "name": "Name",
+    "seasonHint": "Blank keeps the season of the style copied.",
+    "parts": "Parts to copy",
+    "reading": "Reading what the copy can take…",
+    "offerFailed": "What the copy can take could not be read.",
+    "later": "W2b",
+    "notNow": "Not now",
+    "refusedPart": "Refused",
+    "always": "Always copied: identity, size range, PPE, customs data, garment tracking and the active colourways. Not copied: SKUs (made on request), names per language, pictures.",
+    "linked": "The copy starts as a draft linked to its source: its revision 1 and its history say \"copied from\" it.",
+    "skus": "Make its SKUs now",
+    "skusHint_one": "One SKU per size of its {count} colourway; else later from Colourways & sizes.",
+    "skusHint_other": "One SKU per size of each of its {count} colourways; else later from Colourways & sizes.",
+    "done": "{code} is a new draft style, copied from {from}.",
+    "doneRevision": "Its parts came from revision {revision} and are in its revision 1 (draft).",
+    "doneNoRevision": "No part needed a revision: start revision 1 in its studio.",
+    "copied": {
+      "parts": "Parts copied",
+      "identityOnly": "Identity and colourways only",
+      "colourways": "Colourways",
+      "bomLines": "BOM lines",
+      "routingSteps": "Routing steps",
+      "label": "Garment label",
+      "skus": "SKUs made"
+    },
+    "notesTitle_one": "{count} thing was left out",
+    "notesTitle_other": "{count} things were left out",
+    "doneNext": "Next: check the copy, change what differs, release its revision 1.",
+    "part": {
+      "BOM": "BOM",
+      "MEASUREMENTS": "Measurements (made to measure)",
+      "ROUTING": "Routing",
+      "LABELS": "Garment label",
+      "PICTURES": "Pictures and sketches",
+      "OPTIONS": "Options"
+    },
+    "holds": {
+      "bom_one": "{count} line of revision {revision}, with its sizes and colours",
+      "bom_other": "{count} lines of revision {revision}, with their sizes and colours",
+      "bomHidden": "The BOM lines of the revision (your role does not read their count)",
+      "routing_one": "{count} step of revision {revision}, with minutes, scan points and workshops",
+      "routing_other": "{count} steps of revision {revision}, with minutes, scan points and workshops",
+      "routingHidden": "The routing steps of the revision (your role does not read their count)",
+      "label": "The shared garment label of revision {revision}",
+      "measurements": "Made to measure allowed, with its measurement template"
+    },
+    "reason": {
+      "PICTURES": "The style’s sketches and pictures are copied once the gallery arrives (W2b).",
+      "OPTIONS": "Style options are copied once option groups arrive (W2b).",
+      "noRight": {
+        "BOM": "Copying the BOM needs the right to change BOMs: not in your role.",
+        "ROUTING": "Copying the routing needs the right to change routings: not in your role.",
+        "LABELS": "Copying the label needs the right to manage labels: not in your role.",
+        "MEASUREMENTS": "Not in your role."
+      },
+      "notMtm": "{code} is not made to measure.",
+      "noRevision": "{code} has no revision yet: nothing to copy from.",
+      "noLines": "Revision {revision} has no BOM lines.",
+      "noSteps": "Revision {revision} has no routing steps.",
+      "ownLabel": "Label {label} is {code}’s own: make one for the copy in Compliance › Labels & marking.",
+      "retiredLabel": "Label {label} is retired.",
+      "noLabel": "Revision {revision} names no garment label.",
+      "other": "It cannot be copied now."
+    },
+    "note": {
+      "sizes": "Sizes {sizes} are archived in the scale: the copy’s range leaves them out.",
+      "colourways_one": "{count} archived colourway was not copied.",
+      "colourways_other": "{count} archived colourways were not copied.",
+      "colour": "Colourway {code}: its library colour is archived or another company’s, so the copy has none.",
+      "lines_one": "{count} BOM line of an archived colourway was not copied.",
+      "lines_other": "{count} BOM lines of archived colourways were not copied.",
+      "other": "Something more was left out: the copy’s history says what."
+    },
+    "held": {
+      "source": "Pick the style to copy first.",
+      "reading": "Reading what the copy can take.",
+      "offer": "What the copy can take could not be read: try again.",
+      "code": "Type a new code: 1 to 24 capital letters or digits, with . _ - inside.",
+      "sameCode": "The copy needs a code of its own.",
+      "name": "Type a name."
+    },
+    "problem": {
+      "part": "A part cannot be copied any more (it changed meanwhile): the parts were read again."
+    }
+  },
+  "customs": {
+    "title": "Customs and origin",
+    "intro": "What export papers and the Intrastat return read for every garment of the style.",
+    "hsCode": "Commodity code (HS / CN)",
+    "hsCodeHint": "6 digits (HS), 8 (CN, what Intrastat asks) or 10 (TARIC); dots and spaces are fine.",
+    "origin": "Country of origin",
+    "originHint": "Where the garment is made (non-preferential origin), never \"EU\".",
+    "notOnRecord": "Not on record",
+    "netMass": "Net mass per garment",
+    "netMassHint": "Kilograms of one garment without packaging, up to 3 decimals.",
+    "kg": "{kg} kg",
+    "problem": {
+      "hsCode": "Write 6, 8 or 10 digits.",
+      "chapter": "Its first two digits are not a chapter of the Harmonized System (01 to 97, without 77).",
+      "eu": "Name the country, not the EU.",
+      "origin": "Choose a country from the list.",
+      "netMass": "Write kilograms above 0, with at most 3 decimals."
+    },
+    "held_one": "{count} customs field to fix first",
+    "held_other": "{count} customs fields to fix first",
+    "refused": "The server refused this value: check it and save again."
+  },
+  "subcontract": {
+    "inHouse": "In-house",
+    "make": "Subcontract…",
+    "change": "Change…",
+    "details": "Details",
+    "feeNotInRole": "fee: not in your role",
+    "feeIs": "{fee} per piece",
+    "feePerOrder": "fee agreed per order",
+    "noDays": "transit days not set",
+    "days_one": "{count} day there and back",
+    "days_other": "{count} days there and back",
+    "title": "Subcontract details · {step}",
+    "who": "Who does it",
+    "mode": {
+      "in": "In-house",
+      "inHint": "Our own lines do the step.",
+      "out": "A workshop (subcontracted)",
+      "outHint": "An outside workshop does it; the pieces travel there and back."
+    },
+    "workshop": "Workshop",
+    "workshopHint": "A subcontractor of this style’s company or of every company.",
+    "workshopHintAll": "This style is made by every company: only a workshop of every company.",
+    "noParties": "Choosing another workshop needs the customers and suppliers list: not in your role.",
+    "loading": "Reading the workshops…",
+    "pick": "Choose a workshop",
+    "noneYet": "No workshop may do this style’s work yet: add a subcontractor in Customers & suppliers.",
+    "fee": "Fee per piece",
+    "feeHint": "In euros, per piece; blank when it is agreed on each order.",
+    "transit": "Transit days",
+    "transitHint": "Days the pieces travel there and back (0 to 365).",
+    "daysUnit": "days",
+    "otherStarts": "Another workshop starts with no fee and no transit days unless you give them.",
+    "backInHouse": "Saving takes the step back from {code}: its fee and days go with it.",
+    "floor": "The floor sees the workshop, never the fee.",
+    "held": {
+      "fix_one": "{count} field to fix first",
+      "fix_other": "{count} fields to fix first",
+      "same": "Nothing changed yet."
+    },
+    "problem": {
+      "workshop": "Choose the workshop.",
+      "fee": "Write a fee of 0 or more, with at most 6 decimals.",
+      "days": "Write whole days from 0 to 365."
+    }
   }
 }

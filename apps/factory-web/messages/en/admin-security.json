@@ -1,0 +1,402 @@
+{
+  "sec": {
+    "intro": "Whether every part of the factory works, how people sign in, and the proof that the data can come back. Facts read now, not settings.",
+    "recheck": "Check again",
+    "checkingHeld": "Checking…",
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "open": "Open",
+    "stillLoading": "Still loading…",
+    "later": "Coming later: jobs and integrations with their runs, session lengths, the actions that ask for a fresh code, security events, and sign-in with Microsoft or Google.",
+    "noAccess": {
+      "title": "Not yours to open",
+      "body": "Security & health needs the right to see it (security.view). Ask an administrator of your company."
+    },
+    "failed": {
+      "title": "This could not be read",
+      "body": "The answer did not arrive. The other sections keep working."
+    },
+    "overall": {
+      "all": "Every part is working",
+      "partly": "{ok} parts working · {unknown} not watched by Nexus yet",
+      "attention_one": "1 part needs you",
+      "attention_other": "{count} parts need you",
+      "failing_one": "1 part is failing",
+      "failing_other": "{count} parts are failing",
+      "checking": "Checking every part…",
+      "unavailable": "Status not available: nothing here says it all works."
+    },
+    "state": {
+      "ok": "Working",
+      "warning": "Needs a look",
+      "failing": "Failing",
+      "needs": "Needs you",
+      "unknown": "Not watched yet"
+    },
+    "part": {
+      "api": "Web and API",
+      "database": "Database",
+      "jobs": "Background jobs",
+      "scheduled": "Scheduled jobs",
+      "files": "Files",
+      "backups": "Backups",
+      "drill": "Restore drill"
+    },
+    "status": {
+      "title": "Is everything working?",
+      "hint": "A plain line per part, read now.",
+      "unavailable": "Status not available",
+      "unavailableBody": "The status could not be read, so nothing is shown as working. Try again in a moment.",
+      "api": {
+        "ok": "This page reached the API: it answers."
+      },
+      "database": {
+        "ok": "The API read this page from the database."
+      },
+      "scheduled": {
+        "unknown": "Nexus keeps no record of each scheduled run yet: a missed one is not shown here (the jobs list comes later)."
+      },
+      "backups": {
+        "unknown": "Backups are kept by the database provider; Nexus cannot read them yet. The second copy at another EU provider waits for the Owner's yes."
+      },
+      "jobs": {
+        "ok_one": "1 event waiting to be handled; none failed.",
+        "ok_other": "{count} events waiting to be handled; none failed.",
+        "late_one": "1 event has waited {minutes} minutes: the worker may be stopped.",
+        "late_other": "{count} events waiting, the oldest for {minutes} minutes: the worker may be stopped.",
+        "failing_one": "1 event failed for good: what it should have done did not happen.",
+        "failing_other": "{count} events failed for good: what they should have done did not happen."
+      },
+      "files": {
+        "none": "No file store is set up: uploads and documents cannot be kept.",
+        "paused": "The file store is paused: no file can be read or kept.",
+        "live_one": "The file store works; 1 file was held back in the last 30 days.",
+        "live_other": "The file store works; {count} files were held back in the last 30 days.",
+        "test_one": "Test mode: files stay on this machine; 1 file was held back in the last 30 days.",
+        "test_other": "Test mode: files stay on this machine; {count} files were held back in the last 30 days.",
+        "liveClean": "The file store works; no file was held back in the last 30 days.",
+        "testClean": "Test mode: files stay on this machine; no file was held back in the last 30 days."
+      }
+    },
+    "protection": {
+      "title": "Protection in place",
+      "intro": "Facts, not settings.",
+      "label": {
+        "inTransit": "Encryption in transit",
+        "atRest": "Encryption at rest",
+        "secrets": "Secrets sealed per field",
+        "bank": "Bank details",
+        "headers": "Web security headers",
+        "virusScan": "Virus scan on uploads"
+      },
+      "hint": {
+        "inTransit": "Every answer of the API tells browsers to use HTTPS only (HSTS).",
+        "atRest": "Done by the database and file providers; Nexus does not check it itself.",
+        "secrets": "Passwords of outside services and webhook keys are sealed one by one; {count} sealed now.",
+        "bank": "IBANs change only with a fresh code and are hidden from the floor and from customers; they are not sealed per field yet.",
+        "headers": "Strict headers on every answer: no framing, no guessing of content, same-origin isolation.",
+        "virusScan": "Uploads are not scanned yet: the scanner comes with the Owner's yes."
+      },
+      "state": {
+        "on": "On",
+        "off": "Not yet",
+        "provider": "By the provider",
+        "partly": "Partly"
+      },
+      "quarantined_one": "1 file held back this month",
+      "quarantined_other": "{count} files held back this month"
+    },
+    "signIn": {
+      "title": "Sign-in rules",
+      "hint": "Passwords, lockout and two-factor.",
+      "fixed": "Fixed for every office user.",
+      "password": "Passwords",
+      "passwordRule": "{min} to {max} characters, not a common one, not your name or email",
+      "lockout": "Lockout",
+      "lockoutRule": "After {count} wrong tries in a row: locked {first} minute, doubling up to {max} minutes",
+      "sessions": "Sessions",
+      "sessionsRule": "End after {idle} hours unused, at the latest after {days} days",
+      "stepUp": "Fresh code",
+      "stepUpRule": "Risky changes ask for an authenticator code; it counts for {minutes} minutes",
+      "twoFactor": "Two-factor",
+      "twoFactorRule": "{asking} of {total} office roles ask for it",
+      "twoFactorWithout_one": "1 person whose role asks for it has not set it up yet: asked at their next sign-in.",
+      "twoFactorWithout_other": "{count} people whose role asks for it have not set it up yet: asked at their next sign-in.",
+      "twoFactorAll": "Everyone whose role asks for it has set it up."
+    },
+    "tf": {
+      "title": "Two-factor per role",
+      "hint": "Tick roles, then ask for two-factor or stop asking. Tick every role to ask it of every office user.",
+      "count_one": "1 office role",
+      "count_other": "{count} office roles",
+      "readyMade": "Ready-made",
+      "custom": "Custom",
+      "col": {
+        "role": "Role",
+        "asks": "Two-factor",
+        "holders": "People",
+        "without": "Without two-factor",
+        "fixed": "Why it stays"
+      },
+      "asks": {
+        "yes": "Asked",
+        "no": "Not asked"
+      },
+      "without": {
+        "none": "Everyone has it",
+        "count_one": "1 person",
+        "count_other": "{count} people"
+      },
+      "lock": {
+        "none": "Can be changed",
+        "floor": "A floor role: the tablet and the PIN are its factors",
+        "money": "Sees costs or margins: always asked",
+        "template": "The ready-made role always asks for it"
+      },
+      "held": {
+        "right": "Changing it needs the right to edit roles",
+        "mine": "You hold this role: another administrator changes it"
+      },
+      "bulk": {
+        "ask_one": "Ask two-factor of 1 role",
+        "ask_other": "Ask two-factor of {count} roles",
+        "stop_one": "Stop asking 1 role",
+        "stop_other": "Stop asking {count} roles",
+        "held": {
+          "ask": "Every ticked role asks for it already",
+          "stop": "None of the ticked roles can stop asking"
+        }
+      },
+      "nextSignIn": "A change applies at each person's next sign-in, never in the middle of their work.",
+      "toRoles": "Roles & permissions",
+      "refusal": {
+        "floor": "A floor role never asks for two-factor: the tablet and the PIN are the floor's factors.",
+        "money": "A role that sees costs or margins always asks for two-factor.",
+        "template": "This ready-made role always asks for two-factor.",
+        "already": "This role asks for two-factor already.",
+        "notAsked": "This role does not ask for two-factor.",
+        "held": "You hold this role: ask another administrator to change it.",
+        "stale": "This role changed meanwhile: close and read the page again.",
+        "lockOut": "Nobody could manage people and roles until they set up two-factor. First one administrator sets up two-factor on My profile, then ask it of this role."
+      },
+      "dialog": {
+        "askTitle_one": "Ask two-factor of 1 role?",
+        "askTitle_other": "Ask two-factor of {count} roles?",
+        "stopTitle_one": "Stop asking two-factor of 1 role?",
+        "stopTitle_other": "Stop asking two-factor of {count} roles?",
+        "askBody_one": "1 person has not set up two-factor yet: at their next sign-in they are asked to, before they can use the role.",
+        "askBody_other": "{count} people have not set up two-factor yet: at their next sign-in they are asked to, before they can use the role.",
+        "stopBody_one": "1 person will no longer be asked for a code by this role.",
+        "stopBody_other": "{count} people will no longer be asked for a code by these roles.",
+        "openSessions_one": "1 session open now keeps the role until it ends (at most 7 days); suspend the person to stop it at once.",
+        "openSessions_other": "{count} sessions open now keep the role until they end (at most 7 days); suspend a person to stop theirs at once.",
+        "stopWarn": "Someone who steals a password could then use these roles without the phone.",
+        "notSetUp": "Not set up yet",
+        "someone": "A person (names need the right to see users)",
+        "refusalOf": "Not possible for {role}",
+        "refusalAll": "Not possible",
+        "reason": "Why (optional)",
+        "reasonHint": "Kept in the audit log with the change.",
+        "code": "Saving asks for a fresh code from your authenticator.",
+        "ask": "Ask two-factor",
+        "stop": "Stop asking",
+        "waiting": "Reading who it affects…",
+        "refused": "Fix what is not possible first",
+        "saving": "Saving…",
+        "previewFailed": "Who it affects could not be read. Close and try again."
+      }
+    },
+    "backups": {
+      "title": "Backups and restore drills",
+      "hint": "Proof the data can come back.",
+      "recovery": "Continuous recovery",
+      "recoveryValue": "Kept by the database provider",
+      "recoveryHint": "Any minute of the last days can be restored by the provider; Nexus does not read its window yet.",
+      "secondCopy": "Daily copy at a second EU provider",
+      "secondCopyValue": "Not set up yet",
+      "secondCopyHint": "Waits for the Owner's yes to the off-site storage.",
+      "files": "File versions",
+      "filesValue": "Comes later",
+      "filesHint": "A second copy of every file comes in a later wave.",
+      "lastDrill": "Last restore drill"
+    },
+    "drill": {
+      "record": "Record a restore drill",
+      "recordHeld": "Recording a drill needs the right to record restore drills.",
+      "none": "None recorded yet",
+      "lastLine": "{day} · {matched} of {of} checks matched",
+      "history": "Restore drills",
+      "count_one": "1 drill",
+      "count_other": "{count} drills",
+      "emptyTitle": "No restore drill recorded yet",
+      "emptyBody": "Restore a backup somewhere other than production, then record what it showed with Record a restore drill.",
+      "lastChecks": "What the last drill compared",
+      "matched": "{matched} of {of} matched",
+      "minutes_one": "1 minute",
+      "minutes_other": "{count} minutes",
+      "state": {
+        "none": "No restore drill recorded yet: nobody has proved a backup comes back.",
+        "ok": "Last drill {ago} days ago — due in {left} days.",
+        "dueSoon": "Last drill {ago} days ago — due in {left} days.",
+        "overdue": "Overdue by {left} days: the last drill passed {ago} days ago.",
+        "failed": "The last drill failed ({day}): find out why, then drill again."
+      },
+      "result": {
+        "PASSED": "Passed",
+        "FAILED": "Failed"
+      },
+      "would": {
+        "PASSED": "Would pass: every key matches",
+        "FAILED": "Would fail: a key differs"
+      },
+      "check": {
+        "match": "{key}: same",
+        "differs": "{key}: differs"
+      },
+      "key": {
+        "orders": "Sales orders",
+        "invoices": "Invoices",
+        "stockMoves": "Stock moves",
+        "parties": "Customers and suppliers",
+        "files": "Files"
+      },
+      "evidence": {
+        "yes": "Attached",
+        "no": "None"
+      },
+      "col": {
+        "day": "Day",
+        "result": "Result",
+        "checks": "Checks",
+        "environment": "Restored on",
+        "backup": "Backup of",
+        "took": "Took",
+        "by": "Done by",
+        "evidence": "Evidence"
+      },
+      "dialog": {
+        "title": "Record a restore drill",
+        "hint": "A backup you restored somewhere other than production, and what its records showed."
+      },
+      "field": {
+        "day": "Day of the drill",
+        "environment": "Restored on",
+        "environmentHint": "Where you restored it: a local copy, staging. Never production.",
+        "environmentPlaceholder": "a local copy",
+        "backupAt": "Backup restored",
+        "backupAtHint": "The time of the backup you restored.",
+        "duration": "Minutes it took",
+        "durationHint": "How long the restore took: the recovery time it proves.",
+        "restored": "Fingerprint of the restored copy",
+        "restoredHint": "On the restored copy open Security & health, read its fingerprint at the backup's time and paste the line here.",
+        "notes": "Notes",
+        "evidence": "Evidence (optional)",
+        "evidenceHint": "The restore log or a screenshot; kept with the drill.",
+        "evidenceTypes": "PDF, image, text or CSV, up to 25 MB",
+        "evidenceRemove": "Remove"
+      },
+      "compare": {
+        "title": "This database beside the restored copy",
+        "needBackup": "Choose the backup's time to compare.",
+        "needLine": "Paste the restored copy's fingerprint line to compare.",
+        "failed": "This database's fingerprint could not be read. Close and try again.",
+        "asOf": "This database as of {time}",
+        "key": "Records",
+        "here": "This database",
+        "copy": "Restored copy",
+        "match": "Same?",
+        "same": "Same",
+        "differs": "Differs"
+      },
+      "error": {
+        "environment": "Say where the backup was restored.",
+        "production": "A drill restores somewhere other than production, never over it.",
+        "backupAt": "Choose the backup's time.",
+        "backupLater": "The backup is from before the day of the drill, and not from the future.",
+        "future": "The day of the drill cannot be in the future.",
+        "restoredEmpty": "Paste the restored copy's fingerprint line.",
+        "restored": "This is not a whole fingerprint line: copy it again from the restored copy.",
+        "duration": "Whole minutes, 0 or more.",
+        "notes": "At most 2000 characters."
+      },
+      "heldFix": "Fix the fields marked first",
+      "save": "Save drill",
+      "saving": "Saving…"
+    },
+    "print": {
+      "title": "This database's fingerprint",
+      "hint": "On a restored copy, read the fingerprint at the backup's time and copy the line into Record a restore drill on the real system. Checksums of record ids only: no money, no names.",
+      "asOf": "As of",
+      "read": "Read the fingerprint",
+      "copy": "Copy the line",
+      "failed": "The fingerprint could not be read.",
+      "asOfLine": "As of {time}"
+    },
+    "notice": {
+      "drillPassed": "Restore drill recorded: it passed. The next one is due in 90 days.",
+      "drillFailed": "Restore drill recorded: it failed. Find out why, then drill again.",
+      "asked_one": "Two-factor is asked of 1 role from each person's next sign-in.",
+      "asked_other": "Two-factor is asked of {count} roles from each person's next sign-in.",
+      "stopped_one": "1 role no longer asks for two-factor.",
+      "stopped_other": "{count} roles no longer ask for two-factor.",
+      "copied": "The fingerprint line is copied.",
+      "copyFailed": "The line could not be copied: select it and copy it by hand."
+    },
+    "problem": {
+      "invalid": "Something in the drill is not right: check the fields.",
+      "conflict": "Something changed meanwhile: close and read the page again.",
+      "forbidden": "You may not do this here.",
+      "failed": "It could not be saved. Try again."
+    },
+    "attention": {
+      "title": "Needs attention",
+      "hint": "Set-up facts that went wrong since, in one place.",
+      "empty": "Nothing needs attention.",
+      "unread_one": "1 kind of fact is not yours to read and is left out.",
+      "unread_other": "{count} kinds of facts are not yours to read and are left out.",
+      "col": {
+        "what": "What",
+        "since": "Since"
+      },
+      "fix": "Fix it",
+      "kind": {
+        "integrationFailing": "{subject}: failing since {since}",
+        "integrationFailingNoTime": "{subject}: failing",
+        "mailDomain": "Mail domain {subject}: its records are not confirmed yet",
+        "tabletUnseen": "Tablet {subject} not seen for {days} days",
+        "tabletNever": "Tablet {subject} never seen since it was enrolled",
+        "jobsFailed_one": "1 background event failed for good",
+        "jobsFailed_other": "{count} background events failed for good",
+        "twoFactorMissing_one": "1 person whose role asks for two-factor has not set it up",
+        "twoFactorMissing_other": "{count} people whose role asks for two-factor have not set it up"
+      },
+      "drill": {
+        "none": "No restore drill recorded yet",
+        "failed": "The last restore drill failed",
+        "overdue": "Restore drill overdue by {days} days",
+        "due_soon": "Restore drill due in {days} days"
+      },
+      "count_one": "1 fact",
+      "count_other": "{count} facts"
+    },
+    "role": {
+      "title": "Two-factor",
+      "hint": "Ask for two-factor of this role: its people give a code from their phone when they sign in.",
+      "toggle": "Ask for two-factor",
+      "save": "Save",
+      "saved": "Saved",
+      "members": "People without two-factor",
+      "membersNone": "Everyone who holds this role has set up two-factor.",
+      "membersHidden_one": "1 person has not set it up (names need the right to see users).",
+      "membersHidden_other": "{count} people have not set it up (names need the right to see users).",
+      "changeHeld": "Changing it needs the right to edit roles",
+      "noChange": "Nothing changed yet",
+      "readFailed": "This role's two-factor rule could not be read."
+    },
+    "moment": {
+      "day": "{label}: day",
+      "time": "{label}: time",
+      "pickDay": "Choose a day"
+    }
+  }
+}

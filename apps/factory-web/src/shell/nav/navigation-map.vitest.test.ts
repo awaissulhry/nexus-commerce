@@ -127,6 +127,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/admin/devices': 'devices.view',
       '/admin/users': 'users.view',
       '/admin/roles': 'roles.view',
+      '/admin/security': 'security.view', // GET /admin/security (B-W2a-36)
       '/admin/documents': 'numbering.view', // GET /numbering/series
       '/admin/languages': 'companies.view',
       '/admin/connections': 'integrations.view', // GET /integrations/accounts

@@ -39,6 +39,13 @@ export interface StyleAbilities {
   materials: boolean
   brands: boolean
   thread: boolean
+  /** W2a: name a routing step's workshop (the parties list, parties.view). */
+  workshops: boolean
+  /** W2a: load a sheet through the imports (imports.run and files.upload; applying needs imports.apply). */
+  imports: boolean
+  importsApply: boolean
+  /** W2a: the base price list's prices beside the styles (pricelists.view; the figures still need their grain). */
+  prices: boolean
 }
 
 export function abilitiesOf(permissions: readonly string[]): StyleAbilities {
@@ -59,6 +66,10 @@ export function abilitiesOf(permissions: readonly string[]): StyleAbilities {
     materials: has('product.materials.view'),
     brands: has('parties.view'),
     thread: has('threads.read'),
+    workshops: has('parties.view'),
+    imports: has('imports.run') && has('files.upload'),
+    importsApply: has('imports.apply'),
+    prices: has('pricelists.view'),
   }
 }
 

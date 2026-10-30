@@ -64,7 +64,23 @@ const PLANT_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freez
   floor_inspector: ['plant.report'],
   team_leader: ['plant.report'],
 })
-const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? [])]
+/**
+ * B-W2a-43 (customer returns; design sales.returns, floor.returnsin): sales makes the RMA and decides what the customer
+ * gets (credit values with its price grain); the warehouse receives at the dock and grades with the quality inspector;
+ * finance and production read them (finance makes the credit note, B-W2a-61). On the floor the dock's operator and team
+ * leader receive, the floor inspector receives and grades. Owner and read-only take theirs from every().
+ */
+const RETURNS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  sales: ['sales.returns.view', 'sales.returns.manage', 'sales.returns.decide'],
+  finance: ['sales.returns.view'],
+  warehouse: ['sales.returns.view', 'sales.returns.receive', 'sales.returns.inspect'],
+  quality_inspector: ['sales.returns.view', 'sales.returns.inspect'],
+  production_manager: ['sales.returns.view'],
+  operator: ['sales.returns.receive'],
+  team_leader: ['sales.returns.receive'],
+  floor_inspector: ['sales.returns.receive', 'sales.returns.inspect'],
+})
+const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -172,6 +188,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'views.save', 'views.manage', 'views.export',
       // B-W2a-32: rebuild the search index.
       'search.rebuild',
+      // B-W2a-36: Security & health; record a restore drill.
+      'security.view', 'security.drills.record',
     ],
     grains: [],
   }),
@@ -187,7 +205,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       // B-W2a-19: the payment terms library (Finance settings) and the price lists (read).
       'paymentterms.view', 'paymentterms.manage', 'pricelists.view',
       // B-W2a-23: save views of a list; export a list.
-      'views.save', 'views.export'],
+      'views.save', 'views.export',
+      // B-W2a-39: the accounting exports and the period locks (lifting a hard lock, accounting.unlock, stays the owner's).
+      'accounting.view', 'accounting.export', 'accounting.lock'],
     grains: ['price', 'cost', 'margin', 'wages'],
   }),
   template('sales', {
@@ -270,6 +290,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'purchasing.sources.manage',
       // B-W2a-25: subcontract orders to the workshops (operations, fees, kit plan, issue, cancel, close).
       'purchasing.subcontract.manage',
+      // B-W2a-44: claims to suppliers (from discrepancies, lots or typed), sent by e-mail, answered, closed.
+      'purchasing.claims.manage',
       // B-W2a-31: what was wrong with a delivery, its report to the supplier and its answer.
       'inventory.discrepancies.manage',
       'inventory.discrepancies.report',
@@ -328,6 +350,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       // B-W2a-25: send a subcontract order's kit with its DDT, receive the goods back by bundle.
       'purchasing.subcontract.kit',
       'purchasing.subcontract.receive',
+      // B-W2a-44: claims to suppliers, and the goods of a return sent back with the return DDT (Return to supplier).
+      'purchasing.claims.manage',
+      'purchasing.claims.return',
       'workorders.view',
       'orders.view',
       'quality.lots.view',

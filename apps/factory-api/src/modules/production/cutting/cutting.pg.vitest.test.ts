@@ -9,6 +9,7 @@ import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedNumbering } from '../../../../../../packages/factory-db/seed/numbering'
+import { seed as seedPlant } from '../../../../../../packages/factory-db/seed/plant'
 import { seed as seedPrivacy } from '../../../../../../packages/factory-db/seed/privacy'
 import { seed as seedProduction } from '../../../../../../packages/factory-db/seed/production'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
@@ -25,7 +26,8 @@ import { lockHideCuts } from '../../inventory/issue/store'
  * per size-50 garment; plant A1 names workers, its operator acknowledged the PUBLISHED worker notice 2026-10 and its
  * team leader nothing; plant B1 records the station only; SEED-WO-0001 in progress with a seeded cut of its hide in two
  * bundles), the privacy seed (company A's stored DPIA and published worker notice: its floor is ready), the numbering seed,
- * a made-up certificate, and made-up stock at A1: a lot of twelve black hides of 55 ft² RELEASED and a hide whose lot
+ * the plant seed of tenant A (at the cutting table the press SEED-CP-01 locked as unsafe, the cutting table SEED-CT-01
+ * running: the station cuts; B-W2a-35b), a made-up certificate, and made-up stock at A1: a lot of twelve black hides of 55 ft² RELEASED and a hide whose lot
  * waits for its chromium VI result. Released work orders of two black jackets in size 50 are made through the
  * work-order routes. Two more tablets at A1 (one at the cutting table, one without a station): the undo tests use them,
  * because the seeded cut of the A1 tablet carries a later server time than anything a test writes (serverTime orders the
@@ -66,6 +68,8 @@ const A = {
   operatorB1: idOf(ns.a, 'worker:B1:operator'),
   seededWorkOrder: idOf(ns.a, 'production:work-order:WO-0001'),
   seededCut: idOf(ns.a, 'production:cut:H1:1'),
+  /** The plant seed's cutting table SEED-CT-01 at CUT-01 (RUNNING; the press beside it is locked as unsafe). */
+  cuttingTable: idOf(ns.a, 'plant:machine:SEED-CT-01'),
 }
 const B = { tenant: idOf(ns.b, 'tenant') }
 
@@ -220,7 +224,7 @@ async function releasedWorkOrder(lineId: string): Promise<Json> {
   return released.workOrder
 }
 
-type Orders = 'main' | 'replay' | 'race' | 'raceA' | 'raceB' | 'station' | 'remnant' | 'consume' | 'consumeTwo' | 'closeLast' | 'undo' | 'correct'
+type Orders = 'main' | 'replay' | 'race' | 'raceA' | 'raceB' | 'station' | 'remnant' | 'consume' | 'consumeTwo' | 'closeLast' | 'undo' | 'correct' | 'held'
 const WO = {} as Record<Orders, Json>
 
 beforeAll(async () => {
@@ -232,6 +236,7 @@ beforeAll(async () => {
     await seedProduction({ db: database, namespace })
     await seedNumbering({ db: database, namespace })
   }
+  await seedPlant({ db: database, namespace: ns.a })
   await asOffice(async (tx) => {
     const certificateId = newId()
     await tx.certificate.create({
@@ -269,7 +274,7 @@ beforeAll(async () => {
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   const line = await salesOrder(40)
-  for (const name of ['main', 'replay', 'race', 'raceA', 'raceB', 'station', 'remnant', 'consume', 'consumeTwo', 'closeLast', 'undo', 'correct'] as const) WO[name] = await releasedWorkOrder(line)
+  for (const name of ['main', 'replay', 'race', 'raceA', 'raceB', 'station', 'remnant', 'consume', 'consumeTwo', 'closeLast', 'undo', 'correct', 'held'] as const) WO[name] = await releasedWorkOrder(line)
 }, 300_000)
 
 afterAll(async () => {
@@ -537,6 +542,20 @@ describe('who an entry names (Statuto dei Lavoratori art. 4; MES-278): the ackno
     expect(await onHand(A.bin, hides.H06!.id)).toBe('55.0000')
   })
 
+  it('B-W2a-35b: cuts nothing at a cutting station whose machines are all do-not-use (Owner answer H1), before anything is issued', async () => {
+    // The press is locked as unsafe; the office sets the cutting table beside it do-not-use too: no machine is left there.
+    await admin(`UPDATE "Machine" SET status = 'DO_NOT_USE', "statusSince" = now(), "statusReason" = 'Blade guard cracked.' WHERE id = $1`, [A.cuttingTable])
+    try {
+      const error = await refused('floor', 'POST', cutUrl(WO.station.id), { clientEventId: clientEvent(), code: hides.H06!.code, lines: sets(WO.station) }, 409)
+      expect(refusalOf(error)).toBe('refusal/MACHINE_UNSAFE')
+      expect(error.message).toBe('Machines SEED-CP-01, SEED-CT-01 are marked do not use (unsafe): do not work on them. A technician checks the machine and signs it safe first (Owner answer H1; D.Lgs. 81/2008 art. 71).')
+      expect(await onHand(A.bin, hides.H06!.id)).toBe('55.0000')
+    } finally {
+      // Running again: the next test cuts at the same station (tablet2).
+      await admin(`UPDATE "Machine" SET status = 'RUNNING', "statusSince" = now(), "statusReason" = NULL WHERE id = $1`, [A.cuttingTable])
+    }
+  })
+
   it('at a site that records the station, names the station only (no worker, no creator), and needs a tablet with a station', async () => {
     await admin(`UPDATE "ProductionSettings" SET "scanSubject" = 'STATION' WHERE id = $1`, [A.siteA1])
     try {
@@ -757,5 +776,46 @@ describe('the work order record counts its cut garments; the walls hold', () => 
     expect((await call('floor', 'GET', `/production/cutting/work-orders/${WO.main.id}/cut-log`)).statusCode).toBe(403)
     expect((await call('manager', 'POST', cutUrl(WO.main.id), { clientEventId: clientEvent(), code: hides.H12!.code, lines: sets(WO.main) }, freshKey())).statusCode).toBe(403)
     expect(await onHand(A.bin, hides.H12!.id)).toBe('55.0000')
+  })
+})
+
+// ---- quality holds (B-W2a-F1) ------------------------------------------------------------------------------------------------------
+
+describe('a cut of a held hide, or of a hide of a held lot, is refused in words before the database (holdOnCut; B-W2a-F1)', () => {
+  beforeAll(async () => {
+    await addLot('HOLD', 'RELEASED', 'PASS', ['HOLD-H1', 'HOLD-H2'])
+  })
+  /** An ACTIVE hold placed by the office, as POST /quality/holds writes it (the …_quality_plant_w2a_guards are real). */
+  const placeHold = (subjectType: 'Hide' | 'Lot', subjectId: string) =>
+    admin(
+      `INSERT INTO "QualityHold" (id, "tenantId", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "reasonNote", "placedAt", "placedById", "createdById")
+       VALUES ($1, $2, $3, $4, $5, ARRAY[$6]::uuid[], 'QUALITY_CHECK', 'A grain crack seen at the table (made up).', '2026-11-21T09:00:00Z', $7, $7)`,
+      [newId(), A.tenant, A.companyA, A.siteA1, subjectType, subjectId, A.actor],
+    )
+  const collar = (code: string) => ({ clientEventId: clientEvent(), code, lines: [{ workOrderSizeId: WO.held.cells[0].id, parts: [{ part: 'Collar', pieces: 1 }] }], area: { area: '2.5', uom: 'FT2' } })
+  const entries = () => counts(`SELECT count(*)::int AS n FROM "CutLog"`, [])
+
+  it("a hide at the work order, held after its first cut: 409 QUALITY_HOLD in the hold's words, nothing logged", async () => {
+    const hide = hides['HOLD-H1']!
+    const first = await cut(WO.held.id, { code: hide.code, lines: sets(WO.held) })
+    expect(first.statusCode, first.body).toBe(201)
+    await placeHold('Hide', hide.id)
+    const before = await entries()
+    const error = await refused('floor', 'POST', cutUrl(WO.held.id), collar(hide.code), 409)
+    expect(refusalOf(error)).toBe('refusal/QUALITY_HOLD')
+    expect(error.message).toMatch(new RegExp(`^Hide ${hide.code} is on hold \\(.+, since 21 Nov 2026\\): it is not cut until quality releases the hold\\.$`))
+    expect(await entries()).toBe(before)
+  })
+
+  it("a hide at the work order whose lot is held: 409 in the lot's words, nothing logged", async () => {
+    const hide = hides['HOLD-H2']!
+    const first = await cut(WO.held.id, { code: hide.code, lines: sets(WO.held) })
+    expect(first.statusCode, first.body).toBe(201)
+    await placeHold('Lot', lots.HOLD!.id)
+    const before = await entries()
+    const error = await refused('floor', 'POST', cutUrl(WO.held.id), collar(hide.code), 409)
+    expect(refusalOf(error)).toBe('refusal/QUALITY_HOLD')
+    expect(error.message).toMatch(new RegExp(`^Lot ${lots.HOLD!.code} is on hold \\(.+, since 21 Nov 2026\\): its hides are not cut until quality releases the hold\\.$`))
+    expect(await entries()).toBe(before)
   })
 })

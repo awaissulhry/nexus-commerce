@@ -1,6 +1,7 @@
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { BRANDS, CAN, COMPANY_ID, PREFIX, ROWS, SCALES, SIZES } from '../demo/fixtures'
-import type { NewStyleDraft, StylesListViewModel } from './list-model'
+import { BRANDS, CAN, COMPANY_ID, DEMO_PRICES, demoDuplicated, demoOffer, GRAINS, PREFIX, ROWS, SCALES, SIZES } from '../demo/fixtures'
+import { blankDraft, draftFor, type DuplicateModel } from '../duplicate/duplicate-model'
+import { pricesByStyle, type ListPrices, type NewStyleDraft, type StylesListViewModel } from './list-model'
 import { StylesListView } from './view/StylesListView'
 
 /**
@@ -10,9 +11,13 @@ import { StylesListView } from './view/StylesListView'
  */
 
 const open = ROWS.filter((row) => row.status !== 'ARCHIVED')
+const PRICES: ListPrices = { state: 'ready', list: DEMO_PRICES.list, byStyle: pricesByStyle(DEMO_PRICES.entries) }
 const base: StylesListViewModel = {
   prefix: PREFIX,
   can: CAN.owner,
+  grains: GRAINS.owner,
+  prices: PRICES,
+  duplicate: null,
   filters: { view: 'open', q: '', type: '', ppe: '' },
   rows: { items: open, more: false, count: open.length, problem: null },
   tiles: { drafts: 2, waiting: 2, active: 6, archived: 1 },
@@ -57,15 +62,45 @@ const newStyle = (value: NewStyleDraft, extra: Partial<NonNullable<StylesListVie
   ...extra,
 })
 
+const SOURCE = { id: ROWS[0]!.id, code: 'DEMO-JKT-01', name: 'Giacca Touring Demo' }
+const offer = demoOffer()
+const duplicate = (extra: Partial<DuplicateModel> = {}): DuplicateModel => ({
+  source: SOURCE,
+  pick: null,
+  offer: { status: 'ready', value: offer },
+  draft: { ...draftFor(offer), code: 'DEMO-JKT-01-SS', name: 'Giacca Touring Demo Estiva', season: 'SS28' },
+  busy: false,
+  problem: null,
+  refused: [],
+  done: null,
+  ...extra,
+})
+const heldOffer = demoOffer({ held: true, dropped: ['58'] })
+
 export const designScreen = defineDesignScreen<StylesListViewModel>({
   screen: 'SCR-040',
   title: 'Styles',
   view: StylesListView,
   cases: [
     { id: 'owner', label: 'Owner: the open styles', model: base, note: 'Tiles = saved filters; the code is a real link; Revision shows "Rev 2 released · Rev 3 draft"; "Ready to make" counts what each style still lacks.' },
-    { id: 'product', label: 'Product office', model: { ...base, can: CAN.product }, note: 'The same list: creates, archives, exports.' },
-    { id: 'production', label: 'Production manager', model: { ...base, can: CAN.production }, note: 'No money anywhere on the list; the same columns.' },
-    { id: 'sales', label: 'Sales (reads)', model: { ...base, can: CAN.sales }, note: 'New style held with its reason; Archive N held in the selection bar.' },
+    { id: 'product', label: 'Product office', model: { ...base, can: CAN.product, grains: GRAINS.product, prices: { state: 'hidden' } }, note: 'The same list: creates, archives, exports. No price list right: no list price column.' },
+    { id: 'production', label: 'Production manager', model: { ...base, can: CAN.production, grains: GRAINS.production, prices: { state: 'hidden' } }, note: 'No money anywhere on the list; the same columns.' },
+    { id: 'sales', label: 'Sales (reads)', model: { ...base, can: CAN.sales, grains: GRAINS.sales }, note: 'New style held with its reason; Archive N held in the selection bar. List price and margin % (S2: never cost).' },
+    { id: 'prices', label: 'W2a: list price and margin %', model: base, note: 'From the base price list in force (DEMO-LISTINO-27): "from" when only colourways are priced; "under the floor" below the sales margin floor; "Not priced" when the list has no row.' },
+    { id: 'prices-none', label: 'W2a: no base price list in force', model: { ...base, prices: { state: 'none' } }, note: 'The columns stay; the head says no base list is in force.' },
+    { id: 'prices-loading', label: 'W2a: prices being read', model: { ...base, prices: { state: 'loading' } } },
+    { id: 'duplicate', label: 'W2a: Duplicate style', model: { ...base, duplicate: duplicate() }, note: 'New code and name, parts with what each holds (8 BOM lines and 9 steps of revision 2), labels from a shared label; pictures and options held (W2b); ⌘↵ duplicates.' },
+    { id: 'duplicate-held', label: 'W2a: Duplicate: parts held', model: { ...base, duplicate: duplicate({ offer: { status: 'ready', value: heldOffer }, draft: { ...draftFor(heldOffer), code: 'DEMO-JKT-01-SS', name: 'Giacca Touring Demo Estiva', season: '' } }) }, note: 'Not made to measure; the label is the style\'s own (make one in Compliance); size 58 is archived in the scale: the copy leaves it out.' },
+    { id: 'duplicate-loading', label: 'W2a: Duplicate: reading the offer', model: { ...base, duplicate: duplicate({ offer: { status: 'loading' }, draft: blankDraft() }) }, note: 'Duplicate held: "Reading what the copy can take".' },
+    { id: 'duplicate-refused', label: 'W2a: Duplicate: code taken', model: { ...base, duplicate: duplicate({ draft: { ...draftFor(offer), code: 'DEMO-JKT-02', name: 'Giacca Touring Demo Estiva', season: '' }, problem: 'problem.write.codeTaken', refused: ['code'] }) } },
+    { id: 'duplicate-done', label: 'W2a: Duplicate: the copy is made', model: { ...base, duplicate: duplicate({ done: demoDuplicated() }) }, note: 'What it took, what it left out in our words; Open the copy (a draft, revision 1 "Copied from DEMO-JKT-01 revision 2").' },
+    { id: 'duplicate-pick', label: 'W2a: New style › Copy of a style', model: { ...base, duplicate: { source: null, pick: { query: 'giacca', results: ROWS.slice(0, 3), problem: null }, offer: null, draft: blankDraft(), busy: false, problem: null, refused: [], done: null } }, note: 'Start from: Copy of a style opens the picker; picking a style shows its parts.' },
+    { id: 'duplicate-sales', label: 'W2a: Duplicate held (sales)', model: { ...base, can: CAN.sales, grains: GRAINS.sales, duplicate: duplicate() }, note: 'Duplicate held: "Not in your role".' },
+    { id: 'phone', label: 'W2a: phone card list', model: { ...base, phone: true }, note: 'Below 720 px: a card per style (type sign, code and name, status, revision, range and SKUs, list price), Filters (n) and Select.' },
+    { id: 'phone-select', label: 'W2a: phone select mode', model: { ...base, phone: true, phoneSelect: true, selected: [ROWS[1]!.id, ROWS[3]!.id] }, note: 'A box on each card, Select all (mixed), and the bulk actions: Export 2, Archive 2….' },
+    { id: 'phone-filters', label: 'W2a: phone filters sheet', model: { ...base, phone: true, phoneFilters: true, filters: { view: 'waiting', q: '', type: 'JACKET', ppe: '' } }, note: 'Filters (2) opens the sheet: saved view, type, PPE; Clear all.' },
+    { id: 'phone-empty', label: 'W2a: phone, nothing matches', model: { ...base, phone: true, filters: { view: 'open', q: 'zzz', type: '', ppe: '' }, rows: { items: [], more: false, count: 0, problem: null } } },
+    { id: 'phone-error', label: 'W2a: phone, could not load', model: { ...base, phone: true, rows: { items: null, more: false, count: null, problem: 'problem.read.unavailable' } } },
     { id: 'selected', label: 'Two rows selected', model: { ...base, selected: [ROWS[1]!.id, ROWS[3]!.id] }, note: 'The toolbar swaps to the bulk actions: Export 2 (CSV), Archive 2…; the header box is mixed.' },
     { id: 'selected-held', label: 'Selection with an archived style', model: { ...base, filters: { ...base.filters, view: 'all' }, rows: { items: ROWS, more: false, count: ROWS.length, problem: null }, selected: [ROWS[2]!.id, ROWS[8]!.id] }, note: 'Archive is held: one of them is archived already.' },
     { id: 'tile-waiting', label: 'Tile: waiting for release', model: { ...base, filters: { ...base.filters, view: 'waiting' }, rows: { items: ROWS.filter((row) => row.draftRevision !== null && row.status !== 'ARCHIVED'), more: false, count: 3, problem: null } }, note: 'The pressed tile is the saved filter; its chip shows in the filter row.' },

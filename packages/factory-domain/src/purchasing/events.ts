@@ -3,6 +3,7 @@ import { defineEvent } from '../events/define'
 import { PURCHASE_ORDER_STATUSES } from './orders'
 import { SOURCE_PREFERENCES } from './sources/sources'
 import { SUBCONTRACT_ORDER_STATUSES } from './subcontracting/rules'
+import { CLAIM_KINDS, CLAIM_STATUSES } from './claims/rules'
 
 /**
  * The purchasing module's events (plan A1 §3.4, §3.5; SCM-050, SCM-053, SCM-055; design 02 "Purchase orders", Live).
@@ -28,6 +29,11 @@ import { SUBCONTRACT_ORDER_STATUSES } from './subcontracting/rules'
  *                                  work sent to a workshop (B-W2a-25; modules/purchasing/subcontracting): made, changed
  *                                  (header, operations, kit plan), issued, back to draft, cancelled, kit and pieces out,
  *                                  a kit line back unsent, goods back, closed. Ids, numbers, counts and states: no fee.
+ *   supplier_claim.created | updated | sent | answered | goods_returned | closed | cancelled
+ *                                  a claim to a supplier (B-W2a-44; modules/purchasing/claims): made (by hand, from
+ *                                  discrepancies, from a lot, or as a Return to supplier), changed (header, lines), sent
+ *                                  to the supplier, its answer recorded, goods of a return sent back with the return DDT,
+ *                                  closed, cancelled. Ids, numbers, counts and states: no value, no credit amount.
  */
 const live = { permission: 'purchasing.view', fields: ['purchaseOrderId', 'number'] } as const
 const sourceLive = { permission: 'purchasing.view', fields: ['supplierItemId', 'partyId', 'itemId'] } as const
@@ -37,6 +43,9 @@ const subcontractLive = { permission: 'purchasing.view', fields: ['subcontractOr
 const subcontract = { subcontractOrderId: z.uuid(), number: z.string().min(1).max(40) }
 const subcontractStatus = z.enum(SUBCONTRACT_ORDER_STATUSES)
 const pieces = z.number().int().min(0)
+// B-W2a-44: supplier claims (the office's Returns & claims list and record refresh; B-W2a-62's credit note matching reads them).
+const claimLive = { permission: 'purchasing.view', fields: ['supplierClaimId', 'number', 'status'] } as const
+const claim = { supplierClaimId: z.uuid(), number: z.string().min(1).max(40), status: z.enum(CLAIM_STATUSES) }
 
 export const events = [
   defineEvent({
@@ -201,5 +210,55 @@ export const events = [
     description: 'A subcontract order whose goods are all back was closed.',
     payload: z.strictObject({ ...subcontract, status: subcontractStatus }),
     live: subcontractLive,
+  }),
+  // B-W2a-44: supplier claims and returns to the supplier.
+  defineEvent({
+    type: 'supplier_claim.created',
+    context: 'purchasing',
+    description: 'A claim to a supplier was made: typed, from the discrepancies of a receipt, from a lot, or as a Return to supplier.',
+    payload: z.strictObject({ ...claim, kind: z.enum(CLAIM_KINDS), partyId: z.uuid(), siteId: z.uuid(), lines: z.number().int().min(0), source: z.enum(['OFFICE', 'DISCREPANCIES', 'LOT', 'RETURN']) }),
+    live: claimLive,
+  }),
+  defineEvent({
+    type: 'supplier_claim.updated',
+    context: 'purchasing',
+    description: "A supplier claim changed: its header (reason, remedy, credit asked, notes) or a draft's lines.",
+    payload: z.strictObject({ ...claim, fields: z.array(z.string().min(1).max(40)).max(20) }),
+    live: claimLive,
+  }),
+  defineEvent({
+    type: 'supplier_claim.sent',
+    context: 'purchasing',
+    description: "A supplier claim was sent: by e-mail on the claim's thread (the mail queued), or told to the supplier another way.",
+    payload: z.strictObject({ ...claim, again: z.boolean(), outboundId: z.uuid().nullable(), recipients: z.number().int().min(0) }),
+    live: claimLive,
+  }),
+  defineEvent({
+    type: 'supplier_claim.answered',
+    context: 'purchasing',
+    description: "The supplier's answer to a claim was recorded: accepted (a credit or a replacement comes) or rejected.",
+    payload: z.strictObject({ ...claim, remedy: z.enum(['CREDIT', 'REPLACEMENT']).nullable() }),
+    live: claimLive,
+  }),
+  defineEvent({
+    type: 'supplier_claim.goods_returned',
+    context: 'purchasing',
+    description: 'Goods of a return claim went back to the supplier: their stock left the site, with the return DDT.',
+    payload: z.strictObject({ ...claim, lineIds: z.array(z.uuid()).max(200), moveIds: z.array(z.uuid()).max(200), ddtId: z.uuid().nullable() }),
+    live: claimLive,
+  }),
+  defineEvent({
+    type: 'supplier_claim.closed',
+    context: 'purchasing',
+    description: 'A supplier claim was closed: settled (credit or replacement received) or given up.',
+    payload: z.strictObject({ ...claim, discrepanciesClosed: z.number().int().min(0) }),
+    live: claimLive,
+  }),
+  defineEvent({
+    type: 'supplier_claim.cancelled',
+    context: 'purchasing',
+    description: 'A draft supplier claim was cancelled.',
+    payload: z.strictObject(claim),
+    live: claimLive,
   }),
 ] as const

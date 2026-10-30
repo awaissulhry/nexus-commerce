@@ -76,4 +76,22 @@ export const manifest = defineManifest({
   'POST /purchasing/subcontracting/orders/:subcontractOrderId/kit/send': { audiences: ['office'], permission: 'purchasing.subcontract.kit', scope: 'record' },
   'POST /purchasing/subcontracting/orders/:subcontractOrderId/kit/:lineId/return': { audiences: ['office'], permission: 'purchasing.subcontract.kit', scope: 'record' },
   'POST /purchasing/subcontracting/orders/:subcontractOrderId/receive': { audiences: ['office'], permission: 'purchasing.subcontract.receive', scope: 'record' },
+  // B-W2a-44 (SCM-134): supplier claims and returns to the supplier; read with purchasing.view, kept with
+  // purchasing.claims.manage, the goods back with purchasing.claims.return (the return DDT also needs shipping.ddt.issue,
+  // and "Return to supplier" in one go claims.manage too: both checked in the handler) (./claims).
+  'GET /purchasing/claims': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/claims/counts': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/claims/:claimId': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/claims': { audiences: ['office'], permission: 'purchasing.claims.manage', scope: 'record' },
+  'PATCH /purchasing/claims/:claimId': { audiences: ['office'], permission: 'purchasing.claims.manage', scope: 'record' },
+  'POST /purchasing/claims/:claimId/lines': { audiences: ['office'], permission: 'purchasing.claims.manage', scope: 'record' },
+  'PATCH /purchasing/claims/:claimId/lines/:lineId': { audiences: ['office'], permission: 'purchasing.claims.manage', scope: 'record' },
+  'DELETE /purchasing/claims/:claimId/lines/:lineId': { audiences: ['office'], permission: 'purchasing.claims.manage', scope: 'record' },
+  'GET /purchasing/claims/:claimId/send-check': { audiences: ['office'], permission: 'purchasing.claims.manage', scope: 'record' },
+  'POST /purchasing/claims/:claimId/send': { audiences: ['office'], permission: 'purchasing.claims.manage', scope: 'record' },
+  'POST /purchasing/claims/:claimId/answer': { audiences: ['office'], permission: 'purchasing.claims.manage', scope: 'record' },
+  'POST /purchasing/claims/:claimId/close': { audiences: ['office'], permission: 'purchasing.claims.manage', scope: 'record' },
+  'POST /purchasing/claims/:claimId/cancel': { audiences: ['office'], permission: 'purchasing.claims.manage', scope: 'record' },
+  'POST /purchasing/claims/:claimId/return': { audiences: ['office'], permission: 'purchasing.claims.return', scope: 'record' },
+  'POST /purchasing/claims/returns': { audiences: ['office'], permission: 'purchasing.claims.return', scope: 'record' },
 })

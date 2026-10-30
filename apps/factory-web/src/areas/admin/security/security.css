@@ -1,0 +1,170 @@
+/*
+ * Admin › Security & health (SCR-166) LAYOUT: the two cards side by side on a wide screen (status and protection), the
+ * status lines, the fingerprint line. Controls are the design system's; semantic tokens only.
+ */
+.fw-sec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr));
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+.fw-sec-section {
+  min-width: 0;
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-sec-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fw-sec-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-10) var(--nds-space-14);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-sec-line:first-child {
+  border-top: 0;
+}
+
+.fw-sec-line-icon {
+  display: inline-flex;
+  color: var(--nds-text-3);
+}
+
+.fw-sec-line.is-ok .fw-sec-line-icon {
+  color: var(--nds-success-text);
+}
+
+.fw-sec-line.is-warning .fw-sec-line-icon,
+.fw-sec-line.is-needs .fw-sec-line-icon {
+  color: var(--nds-warning-text);
+}
+
+.fw-sec-line.is-failing .fw-sec-line-icon {
+  color: var(--nds-danger-text);
+}
+
+.fw-sec-line-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-sec-line-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-sec-line-name {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text);
+}
+
+.fw-sec-line-detail {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.fw-sec-fact {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-sec-sub {
+  margin: var(--nds-space-4) 0 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+.fw-sec-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+
+.fw-sec-print {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-sec-print-row,
+.fw-sec-print-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-sec-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+  overflow-wrap: anywhere;
+}
+
+.fw-sec-print-keys {
+  flex-basis: 100%;
+  color: var(--nds-text-2);
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.fw-sec-compare {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-sec-people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-sec-people li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+@media (max-width: 640px) {
+  .fw-sec-line {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .fw-sec-line > :last-child:not(.fw-sec-line-body) {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+.fw-sec-moment {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}

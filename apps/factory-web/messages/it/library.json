@@ -658,7 +658,8 @@
       "differing_other": "{count} con minuti diversi",
       "allSame": "Stessi minuti ovunque",
       "unused": "Ancora in nessun ciclo",
-      "openUsed": "Dove è usata"
+      "openUsed": "Dove è usata",
+      "import": "Importa"
     },
     "col": {
       "operation": "Operazione",
@@ -705,6 +706,10 @@
       "archived_other": "{count} operazioni archiviate.",
       "reactivated_one": "{count} operazione riattivata.",
       "reactivated_other": "{count} operazioni riattivate."
+    },
+    "import": {
+      "held": "Il tuo ruolo non può caricare fogli.",
+      "everyCompany": "Ogni azienda"
     }
   },
   "newOperation": {

@@ -658,7 +658,8 @@
       "differing_other": "{count} with other minutes",
       "allSame": "Same minutes everywhere",
       "unused": "In no routing yet",
-      "openUsed": "Where used"
+      "openUsed": "Where used",
+      "import": "Import"
     },
     "col": {
       "operation": "Operation",
@@ -705,6 +706,10 @@
       "archived_other": "{count} operations archived.",
       "reactivated_one": "{count} operation reactivated.",
       "reactivated_other": "{count} operations reactivated."
+    },
+    "import": {
+      "held": "Your role cannot load sheets.",
+      "everyCompany": "Every company"
     }
   },
   "newOperation": {

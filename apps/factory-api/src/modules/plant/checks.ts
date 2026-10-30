@@ -12,10 +12,17 @@ import { locksOf } from './store'
  *                                                   screens answer it with every read and every report.
  *   stationBlock(tx, stationId)                     the hook for the floor's work modules: null, or the refusal's words
  *                                                   when the station is blocked. ONE line in a module's command, after its
- *                                                   own locks, e.g. in modules/production/scans/scans.ts reportInCommand
- *                                                   after refuseIfHeld:
- *                                                     const blocked = await stationBlock(tx, work.stationId); if (blocked) refuse({ code: 'MACHINE_UNSAFE', ...blocked, final: false })
- *                                                   (with 'MACHINE_UNSAFE' in factory-domain production/scans/rules SCAN_REFUSALS).
+ *                                                   own locks. Wired (B-W2a-35b) where a station works a machine:
+ *                                                     - modules/production/scans/scans.ts reportInCommand, after
+ *                                                       refuseIfHeld: refused as refusal/MACHINE_UNSAFE (factory-domain
+ *                                                       production/scans/rules SCAN_REFUSALS), not final: a queued scan
+ *                                                       passes once a technician signs the machine safe;
+ *                                                     - modules/production/cutting/cut.ts cutInCommand, before anything is
+ *                                                       issued or cut: refusal/MACHINE_UNSAFE (production/cutting/rules
+ *                                                       CUT_REFUSALS).
+ *                                                   Not wired where no machine works: an undo or correction of a scan or a
+ *                                                   cut (it puts a record right), bundles and their tickets (paper at the
+ *                                                   table), pick and issue (the stores move stock to the work order).
  */
 
 type Reader = Pick<CommandTx, 'machine' | 'maintenanceRequest'>

@@ -67,6 +67,8 @@ export const CUT_REFUSALS = [
   'REVERSED_ALREADY',
   'NOT_LAST_ACTION',
   'IN_BUNDLE',
+  // B-W2a-35b (Owner answer H1): every machine at the cutting station is do-not-use (apps/factory-api modules/plant/checks.ts stationBlock).
+  'MACHINE_UNSAFE',
 ] as const
 export type CutRefusalCode = (typeof CUT_REFUSALS)[number]
 

@@ -222,6 +222,14 @@
       "inventory_opening": {
         "name": "Giacenze iniziali",
         "fills": "Le giacenze presenti prima di Nexus: lotti, pelli una per una con le loro superfici, fodere, accessori e protezioni, con i rapporti sul cromo VI già esistenti. I lotti che richiedono il controllo qualità restano in quarantena."
+      },
+      "product_bom": {
+        "name": "Righe di distinta",
+        "fills": "Righe di distinta delle revisioni in bozza dei modelli: ogni riga indica il modello e la posizione (esporta una distinta per partire); quantità per taglia e colori per variante in una cella, come 50=43,5; 52=45."
+      },
+      "product_operations": {
+        "name": "Operazioni",
+        "fills": "La libreria delle operazioni per codice: nome (italiano e inglese), reparto, minuti standard, macchina, competenza e istruzioni. I cicli mantengono i minuti copiati."
       }
     },
     "keys": {

@@ -11,6 +11,7 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
 import type { BomView, StyleView } from '../../api'
+import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
 import { draftOf, editableRevision, nextRevisionNumber, releaseHeld, releasedOf, revisionInView, startRevisionHeld, STATUS_TONE, stepRevision, tabsFor, type StyleTab } from '../../model'
 import type { StyleRecordActions, StyleRecordViewModel } from '../record-model'
 import { StyleDialogs } from './Dialogs'
@@ -112,7 +113,7 @@ function ReadyRecord({ style, model, actions, panels }: { style: StyleView; mode
         actions?.onDock?.()
         return
       }
-      if (typing || inDialog || model.dialog || event.metaKey || event.ctrlKey || event.altKey) return
+      if (typing || inDialog || model.dialog || model.duplicate || model.bomImport || event.metaKey || event.ctrlKey || event.altKey) return
       if (event.key === 'r' && revision?.status === 'DRAFT') {
         event.preventDefault()
         actions?.onDialog?.({ kind: 'release' })
@@ -166,6 +167,7 @@ function ReadyRecord({ style, model, actions, panels }: { style: StyleView; mode
     ...(style.status === 'ARCHIVED'
       ? [{ id: 'reactivate', label: t('action.reactivate'), disabled: !model.can.manage, description: model.can.manage ? undefined : t('held.noManage'), onSelect: () => actions?.onReactivate?.() }]
       : [{ id: 'archive', label: t('action.archive'), tone: 'danger' as const, disabled: !model.can.manage, description: model.can.manage ? undefined : t('held.noManage'), onSelect: () => actions?.onDialog?.({ kind: 'archive' }) }]),
+    { id: 'duplicate', label: t('action.duplicate'), disabled: !model.can.manage, description: model.can.manage ? undefined : t('held.noManage'), onSelect: () => actions?.onDuplicate?.() },
     {
       id: 'copy',
       label: t('action.copyCode'),
@@ -318,6 +320,7 @@ function ReadyRecord({ style, model, actions, panels }: { style: StyleView; mode
       </div>
 
       <StyleDialogs style={style} model={model} actions={actions} />
+      {model.duplicate && <DuplicateDialog model={model.duplicate} can={model.can} prefix={model.prefix} actions={actions?.duplicate} />}
       {model.dialog?.kind === 'help' && <KeysDialog onClose={() => actions?.onDialog?.(null)} />}
     </div>
   )
