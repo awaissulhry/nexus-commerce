@@ -1,9 +1,29 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
-import { boardContract, cancelContract, closeContract, getOrderContract, listOrdersContract, makeOrderContract, promiseContract, readyContract } from './contract'
+import { copyOrderAsQuoteContract } from '../quotes/contract'
+import { copyOrderAsQuote } from '../quotes/duplicate'
+import { applyAmendment, listAmendments, previewAmendment } from './amend'
+import { closeLines, reopenLines } from './close-lines'
+import { boardContract, closeContract, getOrderContract, listOrdersContract, makeOrderContract, promiseContract, readyContract } from './contract'
+import {
+  applyAmendmentContract,
+  cancelCheckContract,
+  cancelContract,
+  closeLinesContract,
+  createManualContract,
+  listAmendmentsContract,
+  nextOrderNumberContract,
+  previewAmendmentContract,
+  previewManualContract,
+  reopenLinesContract,
+  scheduleContract,
+} from './daily-contract'
+import { cancelCheck } from './impact'
 import { manifest } from './manifest'
-import { cancelOrder, changePromise, closeOrder, markReady } from './moves'
+import { createManualOrder, nextOrderNumber, previewManualOrder } from './manual'
+import { cancelOrder, changePromise, closeOrder, markReady, officeOrder } from './moves'
 import { getOrder, listOrders, makeOrder, orderBoard } from './orders'
+import { getSchedule } from './schedule'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A2 SCR-038, SCR-039): the
@@ -12,6 +32,11 @@ import { getOrder, listOrders, makeOrder, orderBoard } from './orders'
  * person makes: a new promise date, ready by hand, cancel, close. The order itself is made at acceptance
  * (quotes/after-acceptance); production, shipments and the settlement move it through the worker's handlers
  * (./handlers).
+ *
+ * B-W2a-30 (orders every day; SAL-202, SAL-155, SAL-209, SAL-210, SAL-211, SAL-216, SAL-217): an order typed by the
+ * office (./manual: the next number, a priced preview, Confirm order), its amendments (./amend: preview, apply, the
+ * Changes tab), close and reopen lines (./close-lines), the cancel's impact check (./impact; the cancel itself is
+ * moves.ts), the payment schedule (./schedule) and the order copied as a new quote (quotes/duplicate).
  */
 export default defineRoutes('sales.orders', manifest, async (app) => {
   app.get('/sales/orders', { schema: listOrdersContract }, async (request) => listOrders(request, request.query))
@@ -32,4 +57,30 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
   app.post('/sales/orders/:orderId/cancel', { schema: cancelContract }, async (request) => cancelOrder(request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
 
   app.post('/sales/orders/:orderId/close', { schema: closeContract }, async (request) => closeOrder(request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2a-30: orders every day.
+  app.get('/sales/order-numbers/next', { schema: nextOrderNumberContract }, async (request) => nextOrderNumber(request, request.query.companyId))
+
+  app.post('/sales/orders/manual/preview', { schema: previewManualContract }, async (request) => previewManualOrder(request, request.body))
+
+  app.post('/sales/orders/manual', { schema: createManualContract }, async (request, reply) => reply.code(201).send(await createManualOrder(request, request.body, idempotencyKeyFrom(request))))
+
+  app.get('/sales/orders/:orderId/amendments', { schema: listAmendmentsContract }, async (request) => listAmendments(request, request.params.orderId))
+
+  app.post('/sales/orders/:orderId/amendments/preview', { schema: previewAmendmentContract }, async (request) => previewAmendment(request, request.params.orderId, request.body))
+
+  app.post('/sales/orders/:orderId/amendments', { schema: applyAmendmentContract }, async (request, reply) => reply.code(201).send(await applyAmendment(request, request.params.orderId, request.body, idempotencyKeyFrom(request))))
+
+  app.post('/sales/orders/:orderId/close-lines', { schema: closeLinesContract }, async (request) => closeLines(request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/sales/orders/:orderId/reopen-lines', { schema: reopenLinesContract }, async (request) => reopenLines(request, request.params.orderId, request.body, idempotencyKeyFrom(request)))
+
+  app.get('/sales/orders/:orderId/cancel-check', { schema: cancelCheckContract }, async (request) => cancelCheck(request, request.params.orderId))
+
+  app.get('/sales/orders/:orderId/schedule', { schema: scheduleContract }, async (request) => getSchedule(request, request.params.orderId))
+
+  app.post('/sales/orders/:orderId/copy-as-quote', { schema: copyOrderAsQuoteContract }, async (request, reply) => {
+    const order = await officeOrder(request, request.params.orderId)
+    return reply.code(201).send(await copyOrderAsQuote(request, order, request.body, idempotencyKeyFrom(request)))
+  })
 })

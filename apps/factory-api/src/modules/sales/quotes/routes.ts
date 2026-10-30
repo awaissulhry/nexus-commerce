@@ -26,6 +26,7 @@ import {
   newLinkQuoteContract,
   openLinkQuoteContract,
   reviseContract,
+  duplicateQuoteContract,
   sendCheckContract,
   sendContract,
   sendLinkContract,
@@ -37,6 +38,7 @@ import { addLine, editLine, recompute, removeLine } from './lines'
 import { manifest } from './manifest'
 import { cancelQuote, createQuote, getQuote, listQuotes, updateQuote } from './quotes'
 import { reviseQuote, sendCheck, sendNewLink, sendQuote } from './send'
+import { duplicateQuote } from './duplicate'
 import { getSalesSettings, saveSalesSettings } from './settings'
 import { listVersions } from './versions'
 import { listQuoteApprovals, nextQuoteNumber } from './approvals'
@@ -97,6 +99,9 @@ export default defineRoutes('sales.quotes', manifest, async (app) => {
   app.post('/sales/quotes/:quoteId/send-link', { schema: sendLinkContract }, async (request) => sendNewLink(request, request.params.quoteId, request.body, idempotencyKeyFrom(request)))
 
   app.post('/sales/quotes/:quoteId/revise', { schema: reviseContract }, async (request) => reviseQuote(request, request.params.quoteId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2a-30 (SAL-155): duplicate a quote.
+  app.post('/sales/quotes/:quoteId/duplicate', { schema: duplicateQuoteContract }, async (request, reply) => reply.code(201).send(await duplicateQuote(request, request.params.quoteId, request.body, idempotencyKeyFrom(request))))
 
   app.get('/sales/quotes/:quoteId/versions', { schema: versionsContract }, async (request) => listVersions(request, request.params.quoteId))
 
