@@ -67,7 +67,7 @@ export const TILE_RULES: readonly TileRule[] = [
   { key: 'receive', permission: 'inventory.receive', modes: ['warehouse'], built: true, takesScans: true },
   { key: 'pick', permission: 'inventory.issue', modes: ['warehouse'], built: true, takesScans: true },
   { key: 'labels', permission: 'print.labels', modes: ['packing'], built: false, takesScans: true },
-  { key: 'pack', permission: 'shipping.pack', modes: ['packing'], built: false, takesScans: true },
+  { key: 'pack', permission: 'shipping.pack', modes: ['packing'], built: true, takesScans: true },
   { key: 'final', permission: 'quality.inspections.view', modes: ['inspection'], built: true, takesScans: true },
   { key: 'scan', permission: 'floor.work', modes: 'all', built: true, takesScans: true },
 ]

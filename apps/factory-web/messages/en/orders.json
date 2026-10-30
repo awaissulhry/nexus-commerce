@@ -234,7 +234,8 @@
     "promise": "Change promise date…",
     "ready": "Mark ready…",
     "openQuote": "Open quote {number}",
-    "copyNumber": "Copy the number"
+    "copyNumber": "Copy the number",
+    "createShipment": "Create shipment"
   },
   "record": {
     "back": "Orders",

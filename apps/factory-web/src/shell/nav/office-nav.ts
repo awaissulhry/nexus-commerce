@@ -121,6 +121,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/warehouse/receipts/[id]',
   '/products/styles',
   '/products/styles/[id]',
+  // B-W1-46 … 49 part 2 Warehouse: Shipments (SCR-066), a shipment (SCR-067), Carriers & shipping (SCR-068).
+  '/warehouse/shipments',
+  '/warehouse/shipments/[id]',
+  '/warehouse/shipping',
   '/production/floor',
   '/production/work-orders',
   '/production/work-orders/[id]',

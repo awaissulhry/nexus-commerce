@@ -1,0 +1,516 @@
+/*
+ * Warehouse › Shipments (SCR-066 the list, SCR-067 a shipment) LAYOUT: the page head, the carrier cut-off cards, list
+ * cells, the record's band and tabs, the body with the optional thread beside it, the Lines tab with its "Ready to ship"
+ * rail, card grids, the DDT's frozen line, file rows, the tracking timeline, dialogs. The controls are the design
+ * system's; this file only places them, with semantic tokens (no colours of its own). No page max-width (Owner rule
+ * 2026-10-29): pages fill the shell's main area; wide screens get more columns.
+ */
+.fw-sh {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-sh-head,
+.fw-sh-meta-row,
+.fw-sh-card-head,
+.fw-sh-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-sh-card-foot {
+  margin-top: var(--nds-space-12);
+}
+
+.fw-sh-inline,
+.fw-sh-actions,
+.fw-sh-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-sh-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-sh-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-sh-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-sh-muted {
+  color: var(--nds-text-muted);
+}
+
+.fw-sh-mono {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.fw-sh-list {
+  margin: 0;
+  padding: 0 0 0 var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+/* ---- list cells ---- */
+.fw-sh-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-sh-cell-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.fw-sh-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.fw-sh-link {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+
+.fw-sh-link:hover,
+.fw-sh-link:focus-visible {
+  text-decoration: underline;
+}
+
+/* ---- the carrier cut-off cards (a card per carrier; as many side by side as the width takes) ---- */
+.fw-sh-cutoffs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-sh-cutoff {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+  text-align: left;
+  min-width: 0;
+}
+
+.fw-sh-cutoff-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-sh-cutoff-time {
+  font-size: var(--nds-font-size-md);
+  color: var(--nds-text-strong);
+}
+
+.fw-sh-cutoff-counts {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-sh-cutoff-none {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+/* ---- the record's band ---- */
+.fw-sh-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-sh-title {
+  overflow-wrap: anywhere;
+}
+
+.fw-sh-title-sub {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-muted);
+}
+
+.fw-sh-keys {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: var(--nds-space-4);
+}
+
+@media (max-width: 899px) {
+  .fw-sh-keys {
+    display: none;
+  }
+}
+
+.fw-sh-tablabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-sh-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--nds-warning);
+  flex: none;
+}
+
+/* ---- the body, with the thread beside any tab on a wide screen (Owner O1) ---- */
+.fw-sh-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-sh-body.has-dock {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+}
+
+@media (max-width: 1279px) {
+  .fw-sh-body.has-dock {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-sh-dock {
+    display: none;
+  }
+}
+
+.fw-sh-main,
+.fw-sh-stack,
+.fw-sh-dialog,
+.fw-sh-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+/* Lines & cartons: the lines and cartons, with "Ready to ship" beside them on a wide screen (RecordLayout's aside). */
+.fw-sh-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .fw-sh-split {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  }
+
+  .fw-sh-rail {
+    position: sticky;
+    top: var(--nds-space-12);
+  }
+}
+
+/* Cards side by side on a wide screen (the width is used), one column below. */
+.fw-sh-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-sh-cards--wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1400px) {
+  .fw-sh-cards--wide {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
+.fw-sh-h2,
+.fw-sh-h3 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-sh-h2 {
+  font-size: var(--nds-font-size-md, var(--nds-font-size-sm));
+}
+
+.fw-sh-h3 {
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ---- "Ready to ship": each check with its icon and words (never colour alone) ---- */
+.fw-sh-checks {
+  list-style: none;
+  margin: var(--nds-space-8) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+
+.fw-sh-check {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: var(--nds-space-8);
+  align-items: start;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.4;
+}
+
+.fw-sh-check-icon {
+  margin-top: 2px;
+  color: var(--nds-text-muted);
+}
+
+.fw-sh-check[data-state='ok'] .fw-sh-check-icon {
+  color: var(--nds-success);
+}
+
+.fw-sh-check[data-state='open'] .fw-sh-check-icon {
+  color: var(--nds-danger);
+}
+
+.fw-sh-check[data-state='warn'] .fw-sh-check-icon {
+  color: var(--nds-warning);
+}
+
+.fw-sh-check-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fw-sh-check-text strong {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-sh-ready-all {
+  margin: var(--nds-space-12) 0 0;
+  color: var(--nds-success-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-sh-details {
+  margin-top: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-sh-details summary {
+  cursor: pointer;
+  color: var(--nds-text-link);
+  margin-bottom: var(--nds-space-6);
+}
+
+/* ---- the DDT ---- */
+.fw-sh-frozen,
+.fw-sh-done {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+  color: var(--nds-text-strong);
+}
+
+.fw-sh-frozen svg,
+.fw-sh-done svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.fw-sh-pdf {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-12);
+  min-width: 0;
+}
+
+/* ---- file rows (DoC, user information, parcels' tracking) ---- */
+.fw-sh-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-sh-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-10) 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+
+.fw-sh-file-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ---- the tracking timeline (newest first) ---- */
+.fw-sh-timeline {
+  list-style: none;
+  margin: var(--nds-space-12) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fw-sh-event {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: var(--nds-space-10);
+  padding-bottom: var(--nds-space-12);
+  position: relative;
+}
+
+.fw-sh-event:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 14px;
+  bottom: 0;
+  width: 2px;
+  background: var(--nds-border-subtle);
+}
+
+.fw-sh-event-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--nds-border-strong);
+  background: var(--nds-surface);
+  margin-top: 2px;
+}
+
+.fw-sh-event[data-tone='success'] .fw-sh-event-dot {
+  border-color: var(--nds-success);
+}
+
+.fw-sh-event[data-tone='danger'] .fw-sh-event-dot {
+  border-color: var(--nds-danger);
+}
+
+.fw-sh-event[data-tone='warning'] .fw-sh-event-dot {
+  border-color: var(--nds-warning);
+}
+
+.fw-sh-event[data-tone='info'] .fw-sh-event-dot {
+  border-color: var(--nds-primary);
+}
+
+.fw-sh-event-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ---- dialogs ---- */
+.fw-sh-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-sh-fields--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fw-sh-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.fw-sh-sizes,
+.fw-sh-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-sh-size-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+@media (max-width: 599px) {
+  .fw-sh-fields--three {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

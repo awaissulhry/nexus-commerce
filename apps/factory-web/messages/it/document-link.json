@@ -1,0 +1,87 @@
+{
+  "title": "Documenti della spedizione {number}",
+  "status": {
+    "works": "Valido fino al {date}",
+    "opensLeft_one": "{count} apertura rimasta",
+    "opensLeft_other": "{count} aperture rimaste"
+  },
+  "list": {
+    "title_one": "{count} documento per questa spedizione",
+    "title_other": "{count} documenti per questa spedizione",
+    "for": "Spedizione {number} · {sent}. Scegli un documento per leggerlo qui."
+  },
+  "shipment": {
+    "shipped": "spedita il {date}",
+    "delivered": "consegnata il {date}",
+    "notShipped": "non ancora spedita"
+  },
+  "kind": {
+    "DDT": "Documento di trasporto (DDT)",
+    "DECLARATION_OF_CONFORMITY": "Dichiarazione UE di conformità",
+    "USER_INFORMATION": "Nota informativa del fabbricante",
+    "OTHER": "Documento"
+  },
+  "row": {
+    "ddt": "DDT {number}",
+    "styled": "{kind} · {style}",
+    "revision": "{name} · revisione {revision}",
+    "file": "File condiviso dal mittente"
+  },
+  "fact": {
+    "file": "File",
+    "shipment": "Spedizione",
+    "style": "Prodotto",
+    "styleRevision": "{code} · {name} · revisione {revision}",
+    "number": "Numero",
+    "date": "Data",
+    "language": "Lingua"
+  },
+  "languages": {
+    "label": "Altre lingue",
+    "only": "Disponibile solo in {language}."
+  },
+  "download": "Scarica",
+  "logged": "Ogni apertura o download di un documento da questa pagina viene registrato per il mittente.",
+  "pdf": {
+    "loading": "Apertura del documento…",
+    "failed": {
+      "title": "Non è stato possibile mostrare il documento",
+      "body": "Qualcosa non è andato durante la lettura. Riprova, oppure scaricalo."
+    },
+    "notPdf": "Questo file non si può mostrare nella pagina: scaricalo per aprirlo."
+  },
+  "empty": {
+    "title": "Nessun documento condiviso",
+    "body": "Il mittente non ha ancora condiviso documenti della spedizione {number} su questo link."
+  },
+  "loading": {
+    "label": "Lettura dei documenti…",
+    "slow": "Caricamento in corso…"
+  },
+  "state": {
+    "expired": {
+      "title": "Questo link è scaduto",
+      "body": "Questo link è scaduto il {time}. Puoi chiederne uno nuovo.",
+      "bodyNoTime": "Questo link è scaduto. Puoi chiederne uno nuovo."
+    },
+    "withdrawn": {
+      "title": "Questo link non si apre più",
+      "body": "Il mittente potrebbe averlo ritirato, oppure le aperture sono esaurite. Puoi chiederne uno nuovo."
+    },
+    "error": {
+      "title": "Si è verificato un problema da parte nostra",
+      "body": "Non è stato possibile leggere i documenti. Riprova."
+    }
+  },
+  "ask": {
+    "label": "Chiedi un nuovo link",
+    "again": "Chiedi di nuovo",
+    "busy": "Invio della richiesta…",
+    "asked": "Richiesto",
+    "held": "Richiesto: lo abbiamo inoltrato",
+    "done": "Abbiamo inoltrato la richiesta. Se il link era nostro, il mittente scriverà all'indirizzo a cui era stato inviato.",
+    "failed": "La richiesta non ci è arrivata. Controlla la connessione e chiedi di nuovo.",
+    "onlyOnFile": "Un nuovo link va solo all'indirizzo a cui erano stati inviati i documenti, mai a uno scritto qui."
+  },
+  "retry": "Riprova"
+}

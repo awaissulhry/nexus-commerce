@@ -11,7 +11,7 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
 import type { Order } from '../../api'
-import { dayInstant, depositGate, isFinal, nextStep, promiseHeld, readyHeld, RECORD_TABS, STATUS_TONE, type RecordTab } from '../../model'
+import { createShipmentHref, dayInstant, depositGate, isFinal, mayCreateShipment, nextStep, promiseHeld, readyHeld, RECORD_TABS, STATUS_TONE, type RecordTab } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { OrderDialogs } from './Dialogs'
 import { DatesTab } from './DatesTab'
@@ -167,6 +167,7 @@ function ReadyRecord({ order, model, actions, panels }: { order: Order; model: O
   const more = [
     ...(!isFinal(order) && step.kind !== 'changePromise' ? [{ id: 'promise', label: t('action.promise'), disabled: !!promiseWait, description: held(promiseWait), onSelect: () => actions?.onDialog?.({ kind: 'promise' }) }] : []),
     ...(order.status === 'IN_PRODUCTION' ? [{ id: 'ready', label: t('action.ready'), disabled: !!readyWait, description: held(readyWait), onSelect: () => actions?.onDialog?.({ kind: 'ready' }) }] : []),
+    ...(mayCreateShipment(order, model.can) ? [{ id: 'ship', label: t('action.createShipment'), href: createShipmentHref(model.prefix, order.id) }] : []),
     ...(order.chain.quote && model.can.viewQuotes ? [{ id: 'quote', label: t('action.openQuote', { number: order.chain.quote.number }), href: `${model.prefix}/sales/quotes/${order.chain.quote.id}` }] : []),
     {
       id: 'copy',

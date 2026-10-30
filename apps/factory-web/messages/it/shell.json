@@ -70,7 +70,11 @@
     "warehouse": {
       "area": "Magazzino",
       "inbound": "In entrata",
-      "receipts": "Ricevimenti"
+      "receipts": "Ricevimenti",
+      "outbound": "In uscita",
+      "shipments": "Spedizioni",
+      "settings": "Impostazioni",
+      "shipping": "Corrieri e spedizioni"
     }
   },
   "topbar": {

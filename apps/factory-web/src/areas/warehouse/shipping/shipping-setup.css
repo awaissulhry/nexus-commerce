@@ -1,0 +1,154 @@
+/*
+ * Carriers & shipping (SCR-068) LAYOUT: the page head, the card grid (one column on a phone, two or more on wide
+ * screens: the page fills the shell's main area, no page max-width — Owner rule 2026-10-29), the fields inside a card,
+ * and the save bar while there are unsaved changes (a stand-in for the DS EditModeBar, whose words are English only).
+ * The controls are the design system's; this file only places them, with semantic tokens.
+ */
+.fw-shipset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-shipset-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-shipset-head-text,
+.fw-shipset-stack,
+.fw-shipset-section,
+.fw-shipset-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-shipset-section {
+  gap: var(--nds-space-12);
+}
+
+.fw-shipset-section-head {
+  gap: var(--nds-space-4);
+}
+
+.fw-shipset-intro,
+.fw-shipset-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-shipset-intro {
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-shipset-status,
+.fw-shipset-pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+.fw-shipset-site {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-shipset-site-label {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+/*
+ * The cards: as many columns of at least 26rem as the main area holds (three at 1440, four at 1920), each card flowing
+ * into the shortest column (CSS columns), so cards of different heights leave no empty band (Owner rule 2026-10-29).
+ */
+.fw-shipset-grid {
+  columns: 26rem;
+  column-gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-shipset-card {
+  min-width: 0;
+  break-inside: avoid;
+  margin: 0 0 var(--nds-space-14);
+}
+
+.fw-shipset-h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+/* Fields two by two inside a card; a long one (name, street) takes the row. One column on a narrow card. */
+.fw-shipset-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-shipset-wide {
+  column-span: all;
+}
+
+.fw-shipset-grid > .nds-card {
+  break-inside: avoid;
+  margin: 0 0 var(--nds-space-14);
+}
+
+.fw-shipset-lines {
+  white-space: pre-line;
+}
+
+.fw-shipset-link {
+  color: var(--nds-text-link);
+}
+
+/* The save bar: sticky at the bottom of the main area while there are unsaved changes. */
+.fw-shipset-savebar {
+  position: sticky;
+  bottom: var(--nds-space-12);
+  z-index: var(--nds-z-actionbar);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  padding: var(--nds-space-10) var(--nds-space-14);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-raised);
+  box-shadow: var(--nds-shadow-pop);
+  min-width: 0;
+}
+
+.fw-shipset-savebar-text {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-strong);
+}
+
+.fw-shipset-savebar-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
