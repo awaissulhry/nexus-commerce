@@ -22,6 +22,8 @@ import {
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { scrapFactsOf, scrapMaterials } from '../../production/scrap/store'
+// B-W2a-25: the subcontract source (a workshop's fee for the pieces back good).
+import { subcontractCostPlan } from '../../purchasing/subcontracting/cost-source'
 import { lockMethodInCommand, methodInForce } from '../method/method'
 import {
   entryFacts,
@@ -68,6 +70,8 @@ export interface PostScope {
   readonly moveIds?: readonly string[]
   readonly scanIds?: readonly string[]
   readonly reworkIds?: readonly string[]
+  /** B-W2a-25: subcontract orders whose pieces came back (purchasing/subcontracting/cost-source.ts). */
+  readonly subcontractOrderIds?: readonly string[]
 }
 
 export interface Plan {
@@ -247,6 +251,13 @@ export async function planCosts(db: Reader, workOrder: CostedWorkOrder, scope: P
         add(draft)
       }
     }
+  }
+
+  // ---- subcontract work (B-W2a-25): a workshop's fee for the pieces back good -------------------------------------------
+  if (scope === undefined || scope.subcontractOrderIds !== undefined) {
+    const planned = await subcontractCostPlan(db, workOrder, scope?.subcontractOrderIds ?? null, [...byKey.values()], ids)
+    for (const draft of planned.drafts) if (!byKey.has(draft.idempotencyKey)) add(draft)
+    waiting.push(...planned.waiting)
   }
 
   // ---- overhead, applied with what posts now (and reversed with it) -----------------------------------------------------
