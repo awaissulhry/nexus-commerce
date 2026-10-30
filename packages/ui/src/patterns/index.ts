@@ -73,3 +73,6 @@ export { lightboxCounter, lightboxStep, lightboxHeld, lightboxKey, photoAlt, lig
 // The app shell (2026-10-28): the main-sidebar rail, moved from the web (the app passes its `LinkComponent` and
 // `pathname`; it loads `shell/app-rail.css`), and the area-navigation manifest type with its helpers.
 export * from './shell'
+// Planning board + load bar (gap D18, 2026-10-30) — NOT re-exported here: the web pulls this barrel into its pages, so a
+// part in it reaches pages that never draw a board (with `@dnd-kit/core` and its stylesheet). Its own entry point:
+// `patterns/planning-board` (`@nexus/ui/patterns/planning-board/index` by package path).
