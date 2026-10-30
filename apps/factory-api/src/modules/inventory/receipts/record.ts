@@ -26,11 +26,12 @@ import {
   type LotStart,
   type ReceiptNote,
 } from '@nexus/factory-domain/inventory/receipts/rules'
+import type { PurchaseOrderStatus } from '@nexus/factory-domain/purchasing/orders'
 import { Dec, parseDecimal, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { allocateScanIds } from '../../../platform/numbering/scan-ids'
-import { lockOrderForReceipt, setOrderReceiptProgress } from '../../purchasing/receiving'
+import { lockOrderForReceipt, readOrderForFloorReceipt, setOrderReceiptProgress, type OrderForReceipt } from '../../purchasing/receiving'
 import { officeContextOf, postedBy, stockContextOf } from '../ledger/access'
 import { postMoves, type MoveDraft, type PostedMove } from '../ledger/post-moves'
 import { lotNumber, receiptNumber } from './numbers'
@@ -51,10 +52,12 @@ import { readColours, readEarlierLots, readItems, readOrderLines, RECEIPT_COLUMN
  * (allocateScanIds, its `factory.scan-ids` lock) → the ledger (postMoves; a receipt only puts stock in, so it waits for
  * no stock lock).
  *
- * The office records it in W1 (inventory.receive over the order's company and site). `recordReceiptInCommand` is the
- * command's work, for the floor's receiving screen (B-W1-33) once the floor may move the order (its role reads the
- * order only): the floor numbers receipts and lots already (numbers.ts `numberReceipt`); see apps/factory-api/CLAUDE.md
- * and the step notes.
+ * The office records it here (inventory.receive over the order's company and site); a goods-in tablet through
+ * modules/inventory/receiving (B-W1-33), whose floor command runs the same work (`recordReceiptInCommand`). The floor's
+ * role reads the order but may not lock or change it: its command takes the order's receiving lock and reads the order
+ * under it (purchasing/receiving.ts readOrderForFloorReceipt), never reads a price (its moves are valued by the worker
+ * at the order line's price), and leaves the order's move (PARTLY_RECEIVED, RECEIVED) to the system command that follows
+ * it (receiving/progress.ts). Its numbers come from the same series and counter.
  */
 
 export interface HideBody {
@@ -134,6 +137,25 @@ export interface RecordResult {
   readonly moves: PostedMove[]
 }
 
+/** What the receipt's work did, for the caller's answer. */
+export interface RecordedReceipt {
+  readonly receiptId: string
+  readonly number: string
+  /** The order as it was read (office: under its row lock, after the version bump). */
+  readonly order: OrderForReceipt
+  /** The order's state after this receipt (orderStatusAfter); the office command moved it, the floor's follow-up does. */
+  readonly orderStatus: PurchaseOrderStatus
+  readonly notes: ReceiptNote[]
+  readonly moves: PostedMove[]
+}
+
+export interface RecordOptions {
+  /** The floor: the order's version as the screen read it (a newer one is a 409: the buyer or another receipt changed it). */
+  readonly expectedVersion?: number
+  /** The floor: where lots that start in quarantine go (the site's quality-hold place), instead of the dock. */
+  readonly heldLocation?: { readonly id: string; readonly code: string } | null
+}
+
 /** POST /inventory/receipts (inventory.receive over the order's company and site; office in W1). */
 export async function recordReceipt(caller: CommandCaller, body: ReceiptBody, idempotencyKey?: string): Promise<RecordResult> {
   const context = officeContextOf(caller)
@@ -146,31 +168,35 @@ export async function recordReceipt(caller: CommandCaller, body: ReceiptBody, id
     throw new NotFoundError('Purchase order not found.')
   }
   if (!can(actor, INVENTORY_RECEIVE, scope)) throw new ForbiddenError('Receiving goods at this site needs inventory.receive.')
-  const { result } = await command(caller, { name: 'inventory.receive', idempotencyKey, input: body }, (tools) => recordReceiptInCommand(tools, body, keyFor(idempotencyKey)))
+  const { result } = await command(caller, { name: 'inventory.receive', idempotencyKey, input: body }, async (tools) => {
+    const recorded = await recordReceiptInCommand(tools, body, keyFor(idempotencyKey))
+    const receipt = (await tools.tx.goodsReceipt.findUnique({ where: { id: recorded.receiptId }, select: RECEIPT_COLUMNS }))!
+    return { receipt: await receiptDetail(tools.tx, tools.context, receipt), notes: recorded.notes, moves: recorded.moves }
+  })
   return result
 }
 
 /**
  * The receipt's work, INSIDE the caller's command: the order locked, the lines checked against it, the receipt with its
- * lines, lots and hides written, its moves posted and valued, the receipt POSTED, the order moved on, the audit rows and
- * `inventory.receipt_posted`. `key` is the command's (its moves' keys are `<key>:<n>`).
+ * lines, lots and hides written, its moves posted (and valued, office and system), the receipt POSTED, the order moved
+ * on (office and system; the floor's follow-up command moves it), the audit rows and `inventory.receipt_posted`. `key`
+ * is the command's (its moves' keys are `<key>:<n>`).
  */
-export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptBody, key: string): Promise<RecordResult> {
+export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptBody, key: string, options: RecordOptions = {}): Promise<RecordedReceipt> {
   const context = stockContextOf({ factoryContext: tools.context, withClient: () => Promise.reject(new Error('inside a command')) })
-  if (context.audience === 'floor') {
-    // B-W1-33: the floor's role reads the order only (see the step notes). Its numbers are ready: the receipt's and the
-    // lots' through numbers.ts (allocateNumber serves a floor command for these kinds), hide tags from the HIDE counter
-    // (allocateScanIds online, useScanIds for tags printed offline).
-    throw new ForbiddenError('Goods are received on the floor through the floor\'s receiving screen.')
-  }
+  const floor = context.audience === 'floor'
   const { tx, now } = tools
   const by = postedBy(context)
 
-  // 1. The order, locked; may it receive goods now?
-  const order = await lockOrderForReceipt(tools, body.purchaseOrderId)
+  // 1. The order, locked (the floor: its receiving lock, then the order read under it); may it receive goods now?
+  const order = floor ? await readOrderForFloorReceipt(tools, body.purchaseOrderId) : await lockOrderForReceipt(tools, body.purchaseOrderId)
   if (!order) throw new NotFoundError('Purchase order not found.')
+  if (floor && order.siteId !== context.siteId) throw new NotFoundError('Purchase order not found.')
   const problem = receivingProblem(order.status)
   if (problem) throw new InvalidStateError(problem)
+  if (options.expectedVersion !== undefined && order.version !== options.expectedVersion) {
+    throw new DomainError('conflict', `Purchase order ${order.number} changed since it was read (version ${order.version}, not ${options.expectedVersion}): read it again.`, [{ path: 'body/version', message: 'Read the order again.' }])
+  }
 
   // 2. When, and where the goods go.
   const receivedAt = body.receivedAt ? parseInstant(body.receivedAt)! : now
@@ -179,7 +205,9 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
 
   // 3. The lines against the order's lines, with each material's rules.
   const { lines: orderLines, received } = await readOrderLines(tx, order.id)
-  const prices = new Map((await tx.purchaseOrderLine.findMany({ where: { purchaseOrderId: order.id }, select: { id: true, unitPrice: true } })).map((row) => [row.id, row.unitPrice.toString()]))
+  // The office values its moves at the order's price in the command; the floor never reads a price (its column grants
+  // hide it): the worker values its moves after their event, at the same price (ledger/valuation.ts).
+  const prices = floor ? new Map<string, string>() : new Map((await tx.purchaseOrderLine.findMany({ where: { purchaseOrderId: order.id }, select: { id: true, unitPrice: true } })).map((row) => [row.id, row.unitPrice.toString()]))
   const items = await readItems(tx, orderLines.map((line) => line.itemId))
   const colours = await readColours(tx, orderLines.map((line) => line.itemColourId))
   const planned = planLines(body, orderLines, items, colours)
@@ -215,7 +243,7 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
     }
     const batches = dyeBatchNote(line.label, line.orderLine.oneDyeBatch, [...(before?.dyeBatches ?? []), ...line.lots.map((lot) => lot.body.dyeBatch ?? null)])
     if (batches) notes.push({ code: 'ONE_DYE_BATCH', seq: line.seq, message: batches })
-    if (order.currency !== line.item.currency) {
+    if (!floor && order.currency !== line.item.currency) {
       notes.push({ code: 'NOT_AT_ORDER_PRICE', seq: line.seq, message: `${line.label}: the order is in ${order.currency} and the material is kept in ${line.item.currency}; its stock is valued at the material's own cost, not the order's price.` })
     }
   }
@@ -286,13 +314,13 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   let hideTotal = 0
   for (const [lineIndex, line] of planned.entries()) {
     const lineId = lineIds.get(line.index)!
-    const unitCost = order.currency === line.item.currency ? unitCostPerBase({ unitPrice: prices.get(line.orderLine.id) ?? '0', quantity: line.orderLine.quantity.toString(), baseQuantity: line.orderLine.baseQuantity.toString() }) : null
-    const move = (fields: Pick<MoveDraft, 'lotId' | 'hideId' | 'quantity' | 'uom' | 'baseQuantity'>): MoveDraft => ({
+    const unitCost = !floor && order.currency === line.item.currency ? unitCostPerBase({ unitPrice: prices.get(line.orderLine.id) ?? '0', quantity: line.orderLine.quantity.toString(), baseQuantity: line.orderLine.baseQuantity.toString() }) : null
+    const move = (fields: Pick<MoveDraft, 'lotId' | 'hideId' | 'quantity' | 'uom' | 'baseQuantity'>, to: { readonly id: string } = location): MoveDraft => ({
       siteId: order.siteId,
       reason: 'RECEIPT',
       itemId: line.item.id,
       itemColourId: line.orderLine.itemColourId,
-      toLocationId: location.id,
+      toLocationId: to.id,
       receiptLineId: lineId,
       reference: blank(body.supplierDdtNumber) ?? number,
       occurredAt: receivedAt,
@@ -309,6 +337,8 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
       const shade = blank(lot.body.shade)
       const hold = blank(lot.body.holdReason)
       const released = lot.start.qualityStatus === 'RELEASED'
+      // A lot in quarantine goes to the quality-hold place when the caller names one (the floor: the site's).
+      const lotPlace = !released && options.heldLocation ? options.heldLocation : location
       await tx.lot.create({
         data: {
           id: lotId,
@@ -348,7 +378,7 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
         ...(hold ? { reason: hold } : {}),
       })
       if (lot.hides.length === 0) {
-        drafts.push(move({ lotId, hideId: null, quantity: lot.quantity!, uom: line.uom, baseQuantity: lot.baseQuantity }))
+        drafts.push(move({ lotId, hideId: null, quantity: lot.quantity!, uom: line.uom, baseQuantity: lot.baseQuantity }, lotPlace))
         continue
       }
       for (const hide of lot.hides) {
@@ -384,13 +414,14 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
           siteId: order.siteId,
           after: { code: tag, lotId, supplierCode: blank(hide.body.supplierCode), area: hide.area, areaUom: hide.areaUom, baseArea: hide.baseArea, grade: blank(hide.body.grade), thicknessMm: hide.thicknessMm },
         })
-        drafts.push(move({ lotId, hideId, quantity: hide.area, uom: hide.areaUom, baseQuantity: hide.baseArea }))
+        drafts.push(move({ lotId, hideId, quantity: hide.area, uom: hide.areaUom, baseQuantity: hide.baseArea }, lotPlace))
       }
     }
   }
   const moves = await postMoves(tools, drafts, { key, issuePath: (index) => `body/moves/${index}` })
 
-  // 7. Posted: the ledger now holds exactly its lines (the deferred check at commit); the order moves on.
+  // 7. Posted: the ledger now holds exactly its lines (the deferred check at commit); the order moves on (the floor's in
+  // the system command after this one: its role may not change the order).
   await tx.goodsReceipt.update({ where: { id: receiptId }, data: { status: 'POSTED', postedAt: now, postedById: by.createdById }, select: { id: true } })
   const after = await readOrderLines(tx, order.id)
   const to = orderStatusAfter(
@@ -401,7 +432,7 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
       tolerancePct: line.areaTolerancePct?.toString() ?? null,
     })),
   )
-  await setOrderReceiptProgress(tools, order, to, { id: receiptId, number, reversed: false })
+  if (!floor) await setOrderReceiptProgress(tools, order, to, { id: receiptId, number, reversed: false })
   for (const lot of lotRows.filter((entry) => entry.quarantined)) notes.push({ code: 'QUARANTINE', seq: lot.seq, message: `Lot ${lot.code}: ${lot.words}` })
 
   tools.audit({
@@ -418,6 +449,7 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
       supplierDdtNumber: blank(body.supplierDdtNumber),
       receivedAt: receivedAt.toISOString(),
       locationId: location.id,
+      ...(options.heldLocation && lotRows.some((lot) => lot.quarantined) ? { heldLocationId: options.heldLocation.id } : {}),
       lines: planned.map((line) => ({ seq: line.seq, purchaseOrderLineId: line.orderLine.id, quantity: line.quantity, uom: line.uom, baseQuantity: line.baseQuantity })),
       lotIds: lotRows.map((lot) => lot.id),
       hides: hideTotal,
@@ -441,8 +473,7 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
       postedBy: by.audience,
     },
   })
-  const receipt = (await tx.goodsReceipt.findUnique({ where: { id: receiptId }, select: RECEIPT_COLUMNS }))!
-  return { receipt: await receiptDetail(tx, tools.context, receipt), notes, moves }
+  return { receiptId, number, order, orderStatus: to, notes, moves }
 }
 
 /** The location the goods go to: the one named (of the order's site, active), else the site's one goods-in dock. */

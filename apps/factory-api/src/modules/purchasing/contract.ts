@@ -64,6 +64,8 @@ const lineView = output({
   note: z.string().nullable(),
   confirmedQuantity: z.string().nullable(),
   confirmedDate: z.string().nullable(),
+  /** Received so far by the posted goods receipts, in the material's base unit. */
+  receivedBaseQuantity: z.string(),
   /** The plan lines this line buys (What to buy & make), with their run's state and decision. */
   plan: z.array(output({ requirementId: id(), runId: id(), runStatus: z.string(), decision: z.string() })),
   version: z.number().int(),
@@ -127,13 +129,15 @@ export const listOrdersContract = defineContract({
     partyId: id().optional(),
     /** The number, case-insensitive. */
     q: z.string().trim().min(1).max(60).optional(),
+    /** Only orders sent more than 48 hours ago that the supplier has not answered (the "Not confirmed after 48 h" tile). */
+    waitingOver48h: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
   response: {
     200: output({
       /** "Where POs stand": drafts to send, waiting for the supplier, not confirmed 48 hours after the send, declined. */
-      summary: output({ drafts: z.number().int(), waiting: z.number().int(), notConfirmedAfter48h: z.number().int(), declined: z.number().int() }),
+      summary: output({ drafts: z.number().int(), waiting: z.number().int(), notConfirmedAfter48h: z.number().int(), changesProposed: z.number().int(), declined: z.number().int() }),
       orders: z.array(
         output({
           id: id(),
@@ -250,6 +254,13 @@ export const undoDraftContract = defineContract({
 })
 
 // ---- send, a new link, cancel ---------------------------------------------------------------------------------------------
+
+/** The order's PDF before it is sent (the cost grain: it prints the prices); stored nowhere. */
+export const previewContract = defineContract({
+  params: orderParams,
+  querystring: input({ language: z.enum(['it', 'en']).optional() }),
+  response: {},
+})
 
 export const sendCheckContract = defineContract({
   params: orderParams,

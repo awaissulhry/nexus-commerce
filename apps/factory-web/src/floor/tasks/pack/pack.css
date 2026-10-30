@@ -1,0 +1,103 @@
+/*
+ * SCR-098 — the packing bench: layout only, inside the DS FloorFrame. Sizes read the floor tier's `--nds-density-*`
+ * tokens; colours are semantic `--nds-*` roles (a size's state in its tone's text colour, always with its numbers). No
+ * raw colour. The one-job screen stays centred on the tablet (the frame's own column).
+ */
+
+/* ── the shipment's line on top: number · state · carrier · cartons ────────────────────────────────────────────────── */
+.fw-pack-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.fw-pack-code {
+  font-family: var(--nds-font-mono);
+  overflow-wrap: anywhere;
+}
+
+/* ── a carton card: the current one carries the primary edge ─────────────────────────────────────────────────────── */
+.fw-pack-carton[data-current='true'] {
+  border-inline-start: 6px solid var(--nds-primary);
+}
+.fw-pack-carton-actions {
+  justify-content: flex-end;
+}
+
+/* ── "Put the rest" buttons: one per size still out of a carton ──────────────────────────────────────────────────── */
+.fw-pack-rest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-10);
+}
+
+/* ── what packing still needs ────────────────────────────────────────────────────────────────────────────────────── */
+.fw-pack-left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding-inline-start: 1.2em;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-body);
+}
+
+/* ── the size grid: planned vs packed (stand-in for SizeGridView at floor density) ─────────────────────────────────── */
+.fw-pack-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--nds-density-font-body);
+  font-variant-numeric: tabular-nums;
+}
+.fw-pack-grid th,
+.fw-pack-grid td {
+  padding: var(--nds-space-6) var(--nds-space-10);
+  border-bottom: 1px solid var(--nds-border);
+  text-align: center;
+}
+.fw-pack-grid th[scope='row'],
+.fw-pack-grid thead th:first-child {
+  text-align: start;
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-pack-grid thead th {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+}
+.fw-pack-grid td[data-state='done'] {
+  color: var(--nds-success-text);
+  font-weight: var(--nds-font-weight-bold);
+}
+.fw-pack-grid td[data-state='part'] {
+  color: var(--nds-warning-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-pack-grid td[data-state='none'] {
+  color: var(--nds-text-muted);
+}
+
+.fw-pack-job {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.fw-pack-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The scan step needs the room (the scan field, Type a code and Camera side by side): the carton column is the wider. */
+@container nds-floor-frame (min-width: 900px) {
+  .fw-pack-split {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}

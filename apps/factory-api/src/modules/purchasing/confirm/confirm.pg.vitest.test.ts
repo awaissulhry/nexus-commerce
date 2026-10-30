@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -523,6 +524,66 @@ describe('refusals, races and walls', () => {
       expect((await wall(session, 'GET', `${orderUrl(order.id)}/answer`)).statusCode, session).toBe(403)
       expect((await wall(session, 'GET', '/link/purchase-order')).statusCode, session).toBe(403)
     }
+  })
+})
+
+describe("the supplier's confirmation PDF goes with its answer (B-W1-33 for SCR-100; SCM-090)", () => {
+  const pdf = (text: string) => Buffer.from(`%PDF-1.4\n% made-up confirmation: ${text}\n%%EOF\n`)
+  const announce = (token: string, bytes: Buffer, extra: Json = {}) =>
+    viaLink(token, 'POST', '/link/purchase-order/confirmation', { originalName: 'conferma-ordine.pdf', contentType: 'application/pdf', sizeBytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), ...extra })
+  const putBytes = (upload: Json, bytes: Buffer) => h.app.inject({ method: 'PUT', url: upload.url, headers: upload.headers, payload: bytes })
+
+  it('announce, send the bytes, complete, confirm with it: the order\'s PDF, shared with the office and this supplier, named in the answer', async () => {
+    const { order, token } = await sent()
+    const bytes = pdf('OC-77')
+    const announced = await announce(token, bytes)
+    expect(announced.statusCode, announced.body).toBe(201)
+    const { file, upload } = announced.json()
+    expect(file).toMatchObject({ originalName: 'conferma-ordine.pdf', sizeBytes: bytes.length, status: 'PENDING_UPLOAD' })
+    expect(upload).toMatchObject({ method: 'PUT' })
+    expect((await putBytes(upload, bytes)).statusCode).toBeLessThan(300)
+    const completed = await viaLink(token, 'POST', `/link/purchase-order/confirmation/${file.id}/complete`)
+    expect(completed.statusCode, completed.body).toBe(200)
+    expect(completed.json().file).toMatchObject({ id: file.id, status: 'AVAILABLE' })
+    expect(await one('SELECT "recordType", "recordId"::text AS "recordId", kind::text AS kind, visibility::text[] AS visibility, "partyId"::text AS "partyId", "createdById" FROM "StoredFile" WHERE id = $1', [file.id])).toEqual({
+      recordType: 'PurchaseOrder',
+      recordId: order.id,
+      kind: 'DOCUMENT',
+      visibility: ['OFFICE', 'LINK'],
+      partyId: P2,
+      createdById: null,
+    })
+    // Uploading used nothing of the link.
+    expect(await one('SELECT uses FROM "OneOffLink" WHERE "recordId" = $1', [order.id])).toEqual({ uses: 0 })
+
+    const view = await page(token)
+    const answer = await viaLink(token, 'POST', '/link/purchase-order/confirm', { version: view.order.version, mode: 'ALL_AS_ASKED', supplierRef: 'OC-77', confirmationFileId: file.id })
+    expect(answer.statusCode, answer.body).toBe(200)
+    expect(answer.json()).toMatchObject({ outcome: 'CONFIRMED', confirmationFile: { id: file.id, originalName: 'conferma-ordine.pdf', status: 'AVAILABLE' } })
+    expect(priceTraces(answer.json())).toEqual([])
+    expect(await admin(`SELECT after->>'fileId' AS file, after->>'outcome' AS outcome FROM "AuditLog" WHERE action = 'purchasing.supplierConfirmationFile' AND "recordId" = $1`, [order.id])).toEqual([{ file: file.id, outcome: 'CONFIRMED' }])
+    // The buyer finds it among the order's files; the used link uploads nothing more.
+    expect((await as('GET', `/files?recordType=PurchaseOrder&recordId=${order.id}`)).files.map((entry: Json) => entry.id)).toContain(file.id)
+    expect((await announce(token, pdf('again'))).statusCode).toBe(404)
+  })
+
+  it('refuses what is no PDF, a file not ready or of another order, and a file another link would confirm', async () => {
+    const first = await sent()
+    const second = await sent()
+    const notPdf = await announce(first.token, pdf('x'), { contentType: 'image/png', originalName: 'photo.png' })
+    expect(notPdf.statusCode, notPdf.body).toBe(400)
+    expect(notPdf.json().error.issues).toEqual([{ path: 'body/contentType', message: 'Your confirmation is a PDF (application/pdf).' }])
+    const pending = (await announce(first.token, pdf('pending'))).json().file
+    // Not sent to the store yet: the answer refuses it, nothing is confirmed.
+    const early = await viaLink(first.token, 'POST', '/link/purchase-order/confirm', { version: (await page(first.token)).order.version, mode: 'ALL_AS_ASKED', confirmationFileId: pending.id })
+    expect(early.statusCode, early.body).toBe(400)
+    expect(early.json().error.issues[0].path).toBe('body/confirmationFileId')
+    expect((await page(first.token)).order.status).toBe('SENT')
+    // Another order's link neither completes nor names it.
+    expect((await viaLink(second.token, 'POST', `/link/purchase-order/confirmation/${pending.id}/complete`)).statusCode).toBe(404)
+    const crossed = await viaLink(second.token, 'POST', '/link/purchase-order/confirm', { version: (await page(second.token)).order.version, mode: 'ALL_AS_ASKED', confirmationFileId: pending.id })
+    expect(crossed.statusCode, crossed.body).toBe(400)
+    expect(await count(`SELECT count(*)::int AS n FROM "StoredFile" WHERE "recordId" = $1`, [second.order.id])).toBe(1)
   })
 })
 

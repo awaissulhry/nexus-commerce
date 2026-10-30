@@ -67,6 +67,16 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/areas/products/styles/` — Products › Styles (SCR-040 list, SCR-041 … SCR-045 the Style studio): `api.ts` (every call, checked
   against factory-domain's own contracts), `model.ts` (pure rules), `list/`, `record/` (studio shell, Overview, Colourways &
   sizes), `bom/`, `routing/`, `cost/`, `compliance/` (the revision tabs), `demo/fixtures.ts` (made-up data for the design cases).
+- `src/areas/products/{materials,operations,sizes}/` — the product libraries: Materials & trims (SCR-047 list, SCR-048
+  the record: Overview with the units converter, Colours, Properties & grades, Suppliers & prices (cost grain only),
+  Compliance, Stock), Operations (SCR-049, the record with Where used → "Update N to the library value" on draft
+  routings), Sizes & measurements (size scales; the scale record with its sizes' body measures). Shared parts, rules,
+  role cases and the `library` catalogue's test in `products/library/`. Each folder: `api.ts`, `model.ts`, the page
+  container, `view/`, `record/`, `fixtures.ts` (made-up data).
+- `src/areas/compliance/certificates/` (SCR-050 register, SCR-051 the record with coverage and the lapse check) and
+  `src/areas/compliance/labels/` (SCR-053 list, `SCR-053-label` the PPE label builder: the preview re-rendered as you
+  type with factory-domain's `renderLabel` over the values the API's preview answers; CE mark, pictogram and care
+  symbols are named stand-ins). Catalogues `certificates`, `labels`.
 - `src/links/<task>/` — a one-off link's task page, in the Links view (`links/quote-accept`, SCR-099: the link landing
   opens it for a QUOTE_ACCEPT link with the same client; the token stays in its header; `links/deposit-pay`, SCR-199:
   a DEPOSIT_INFO link's deposit to pay by bank transfer, each field with Copy). `src/areas/_shared/` — Office
@@ -107,6 +117,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   operations|quality|activity`, `?at=<seq>`; tabs in `cutting/`, `bundles/`, `progress/`), `wip/` Floor now
   (`/production/floor`); `_shared/` api, rules (`model.ts`), hooks, made-up fixtures. Totals per work order, operation
   and line only: no person's output and no station anywhere (Statuto art. 4, Owner F2); worker names only inside one record.
+- The buying office (one catalogue `buying`; shared parts `areas/_shared/buying/`: abilities with the cost grain, words for
+  problems and quantities, live hook, sites from `/inventory/locations`, layout CSS, made-up fixtures): `areas/planning/mrp/`
+  What to buy & make (SCR-055: `?site=` `?view=` `?q=` `?line=` the Why detail; one-click Draft PO with Undo, Draft POs per
+  supplier, Set aside), `areas/purchasing/orders/` (SCR-058 list `?view=`/`?status=`/`?waitingOver48h=true`/`?new=1`; SCR-059
+  studio `?tab=lines|answer|receipts|documents|activity`, the shared send dialog through `model.ts sendModelOf` with the PDF from `…/preview` (cost grain), the
+  supplier's answer and the buyer's accept/refuse), `areas/warehouse/receipts/` (SCR-063 list `?view=expected|posted|today|
+  waiting|reversed|all`, the receiving page `/warehouse/receipts/new?order=&lines=` posting the whole receipt at once with the
+  hide entry sheet (SCR-061), the receipt `?tab=lines|lots|activity` with its lots and quality state (SCR-062) and Reverse).
 
 ## Rules
 - `FACTORY_API_URL` has NO fallback: without it `next dev`, `next build` and `next start` refuse to start

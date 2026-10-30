@@ -211,13 +211,14 @@ describe('the rules of the screen', () => {
 describe('where a row opens (one detail rule; lib/records/record-links.ts)', () => {
   it('its own page when built, else its panels with what they show; real addresses for ⌘-click', () => {
     expect(recordAddress({ type: 'SalesOrder', id: 'o1', label: 'SO-1', companyId: 'c1' }, OFFICE_PAGES)).toBe('/sales/orders/o1')
-    expect(recordAddress({ type: 'Shipment', id: 's1', label: 'SH-1', companyId: 'c1' }, OFFICE_PAGES)).toBe('/records/Shipment/s1?label=SH-1&company=c1')
+    expect(recordAddress({ type: 'Shipment', id: 's1', label: 'SH-1', companyId: 'c1' }, OFFICE_PAGES)).toBe('/warehouse/shipments/s1')
+    expect(recordAddress({ type: 'Invoice', id: 'i1', label: 'FT-1', companyId: 'c1' }, OFFICE_PAGES)).toBe('/finance/invoices/i1')
     expect(recordAddress({ type: 'InboundEmail', id: 'm1' }, OFFICE_PAGES)).toBe('/home/mail-to-sort?open=m1')
     expect(recordAddress({ type: 'InboundEmail', id: 'm1' }, new Set())).toBe('/records/InboundEmail/m1')
     expect(OFFICE_PAGES.has('/records/[type]/[id]')).toBe(true)
     expect(listAddress('/email/inbound', {}, OFFICE_PAGES)).toBe('/home/mail-to-sort')
     expect(listAddress('/sales/orders', { late: 'true' }, OFFICE_PAGES)).toBe('/sales/orders?late=true')
-    expect(listAddress('/purchasing/orders', { status: 'SENT' }, OFFICE_PAGES)).toBeNull()
+    expect(listAddress('/purchasing/orders', { status: 'SENT' }, OFFICE_PAGES)).toBe('/purchasing/orders?status=SENT')
     expect(listAddress(null, null, OFFICE_PAGES)).toBeNull()
     expect(recordAddress({ type: 'Quote', id: 'q1', label: 'Q-1', companyId: 'c1' }, OFFICE_PAGES)).toBe('/sales/quotes/q1')
     expect(listAddress('/sales/quotes', { status: 'PENDING_APPROVAL' }, OFFICE_PAGES)).toBe('/sales/quotes?status=PENDING_APPROVAL')
@@ -231,7 +232,8 @@ describe('where a row opens (one detail rule; lib/records/record-links.ts)', () 
     const quote = queueItem(item('q', { kind: 'QUOTE_APPROVAL', decide: 'REVIEW', record: { type: 'Quote', id: 'q1', label: 'Q-1' } }), '/w/DEMO')
     expect(quote).toMatchObject({ href: '/w/DEMO/sales/quotes/q1', reviewHref: null })
     const proposal = queueItem(item('p', { kind: 'PO_PROPOSAL', decide: 'REVIEW', siteId: 's1', record: { type: 'PurchaseOrder', id: 'po1', label: 'PO-1' } }), '/w/DEMO')
-    expect(proposal).toMatchObject({ href: '/w/DEMO/records/PurchaseOrder/po1?label=PO-1&company=c1&site=s1', reviewHref: null })
+    // The PO studio is built (SCR-059): a supplier's proposal opens there, and is reviewed there by the buyer.
+    expect(proposal).toMatchObject({ href: '/w/DEMO/purchasing/orders/po1', reviewHref: '/w/DEMO/purchasing/orders/po1' })
   })
 })
 

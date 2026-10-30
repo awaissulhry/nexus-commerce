@@ -6,12 +6,12 @@ import { HomeView, type HomeViewModel } from './view/HomeView'
 /**
  * SCR-022's cases: the floor frame (operator chip, offline banner with the queue's counts, Help, operator menu, idle
  * sign-out) around the tile home, per station mode and per person's floor permissions, and the offline queue's states. Made-up people and places only. The tiles come from the
- * same rule as the live page (model.ts `homeTiles`): Scan anything and the floor tasks open; Receive, Garment labels and
- * Pack say "Coming soon".
+ * same rule as the live page (model.ts `homeTiles`): Scan anything and the floor tasks open; Garment labels and Pack say
+ * "Coming soon".
  */
 
 // The floor role templates' permissions (factory-domain auth/roles/templates: operator, floor_inspector).
-const OPERATOR = ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'inventory.issue', 'production.cut', 'production.bundles', 'production.scan', 'production.serials', 'shipping.pack']
+const OPERATOR = ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'inventory.issue', 'inventory.receive', 'production.cut', 'production.bundles', 'production.scan', 'production.serials', 'shipping.pack']
 const INSPECTOR = ['floor.work', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'production.scan', 'quality.inspections.view', 'quality.inspections.record', 'quality.garments.release']
 
 const home = (mode: FloorMode | null, extra: Partial<HomeViewModel> = {}, permissions = OPERATOR, blocks = false): HomeViewModel => ({
@@ -35,7 +35,7 @@ export const designScreen = defineDesignScreen<HomeViewModel>({
       id: 'warehouse',
       label: 'Warehouse device (no station)',
       model: home('warehouse', { frame: signedInFrame('home.title', { showHome: false, station: { name: null, site: 'Stabilimento Demo Nord' } }) }),
-      note: 'A device with no station is a warehouse device: Pick & issue opens. Receive needs an office permission no floor role holds yet: the tile is not shown (fail closed).',
+      note: 'A device with no station is a warehouse device: Receive (inventory.receive, the operator\'s since B-W1-33) and Pick & issue open.',
     },
     {
       id: 'notice-blocks',

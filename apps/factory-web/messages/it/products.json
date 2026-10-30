@@ -784,7 +784,9 @@
       "noTemplates": "Nessun modello di etichetta attivo: creane uno in Conformità › Etichette e marcature.",
       "noneChosen": "Nessuna etichetta",
       "save": "Indica questa etichetta",
-      "where": "I modelli si creano e si approvano in Conformità › Etichette e marcature."
+      "where": "I modelli si creano e si approvano in Conformità › Etichette e marcature.",
+      "open": "Vedi le etichette di questo modello",
+      "new": "Nuova etichetta per questo modello"
     },
     "tracking": {
       "title": "Tracciabilità del capo",

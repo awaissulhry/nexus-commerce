@@ -35,11 +35,11 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
       { key: 'final', held: null },
       { key: 'scan', held: null },
     ])
-    // Packing's pages are later steps: said on the tile, never a dead tile.
+    // Garment labels at the packing station are a later step: said on the tile, never a dead tile. Pack is built (SCR-098).
     expect(homeTiles('packing', OPERATOR, false)).toEqual([
       { key: 'operation', held: null },
       { key: 'labels', held: 'coming' },
-      { key: 'pack', held: 'coming' },
+      { key: 'pack', held: null },
       { key: 'scan', held: null },
     ])
   })
@@ -61,8 +61,8 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
     expect(homeTiles('cutting', OPERATOR, true).map((tile) => tile.held)).toEqual(['notice', 'notice', 'notice', 'notice'])
   })
 
-  it('the floor tasks are built; receive, labels and pack are later steps', () => {
-    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['operation', 'cut', 'bundles', 'pick', 'final', 'scan'])
+  it('the floor tasks are built; garment labels are a later step', () => {
+    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['operation', 'cut', 'bundles', 'receive', 'pick', 'pack', 'final', 'scan'])
   })
 })
 

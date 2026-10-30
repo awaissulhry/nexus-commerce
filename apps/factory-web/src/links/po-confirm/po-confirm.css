@@ -1,0 +1,255 @@
+/*
+ * The confirm-a-PO page (SCR-100) LAYOUT inside the link frame (comfortable density, phone first). Controls are the
+ * design system's; semantic tokens only.
+ */
+.fw-poc-card,
+.fw-poc-form,
+.fw-poc-sheet,
+.fw-poc-file {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-poc-h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-poc-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+
+.fw-poc-pdf {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+}
+
+.fw-poc-label {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-density-font-label, var(--nds-font-size-sm));
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-poc-sub {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.fw-poc-strong {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-poc-address {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* The lines: what is ordered on the left, how much and when on the right, the supplier's answer below. */
+.fw-poc-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.fw-poc-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  padding: var(--nds-space-12) 0;
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-poc-line:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.fw-poc-line-what,
+.fw-poc-line-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fw-poc-line-ask {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.fw-poc-seq {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-poc-article {
+  color: var(--nds-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.fw-poc-qty {
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fw-poc-line-answer {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-poc-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.fw-poc-tags,
+.fw-poc-line-actions,
+.fw-poc-actions,
+.fw-poc-file-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-poc-line-actions {
+  margin-left: auto;
+}
+
+/* The answer */
+.fw-poc-review {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-12);
+  border-left: 3px solid var(--nds-primary);
+  background: var(--nds-surface-sunken);
+  line-height: 1.5;
+}
+
+.fw-poc-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+}
+
+.fw-poc-actions {
+  padding-top: var(--nds-space-4);
+}
+
+.fw-poc-file .fw-poc-hint,
+.fw-poc-file-state {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-poc-file-state {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+  overflow-wrap: anywhere;
+}
+
+.fw-poc-ok {
+  color: var(--nds-success);
+}
+
+.fw-poc-bad {
+  color: var(--nds-danger);
+}
+
+.fw-poc-info {
+  color: var(--nds-info);
+}
+
+.fw-poc-muted {
+  color: var(--nds-text-muted);
+}
+
+/* A line's sheet */
+.fw-poc-kinds {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-poc-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-poc-delivery {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+/* End states */
+.fw-poc-done {
+  border-top: 3px solid var(--nds-border);
+}
+
+.fw-poc-done.tone-CONFIRMED {
+  border-top-color: var(--nds-success);
+}
+
+.fw-poc-done.tone-PROPOSED,
+.fw-poc-done.tone-answered {
+  border-top-color: var(--nds-info);
+}
+
+.fw-poc-done.tone-DECLINED {
+  border-top-color: var(--nds-text-muted);
+}
+
+.fw-poc-dead {
+  border-top: 3px solid var(--nds-warning);
+}
+
+@media (max-width: 480px) {
+  .fw-poc-line {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-poc-line-ask {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .fw-poc-line-actions {
+    margin-left: 0;
+  }
+}

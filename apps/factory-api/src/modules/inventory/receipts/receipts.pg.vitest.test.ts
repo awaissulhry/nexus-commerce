@@ -372,7 +372,7 @@ describe('reversing a receipt', () => {
     const { order, receipt, hides } = await twoHides()
     // 198 of 200 ft² ± 5%: received.
     expect(receipt.purchaseOrder.status).toBe('RECEIVED')
-    expect(receipt.reversal).toEqual({ possible: true, blockers: [] })
+    expect(receipt.reversal).toEqual({ possible: true, location: 'A1-RCV', blockers: [] })
     expect(await refused('warehouse', 'POST', `/inventory/receipts/${receipt.id}/reverse`, { version: receipt.version, reason: 'no' }, 400)).toMatchObject({ code: 'validation_failed' })
     expect(await refused('viewer', 'POST', `/inventory/receipts/${receipt.id}/reverse`, { version: receipt.version, reason: 'Booked against the wrong order' }, 403)).toBeTruthy()
 
@@ -407,7 +407,12 @@ describe('reversing a receipt', () => {
 
     const view = (await ok('manager', 'GET', `/inventory/receipts/${receipt.id}`)).receipt
     const words = `hide ${hides[0]!.code} is issued to work order SEED-WO-0001: return it to A1-RCV or reverse the issue first, then reverse the receipt.`
-    expect(view.reversal).toEqual({ possible: false, blockers: [{ code: 'ISSUED', path: 'blockers/ISSUED', message: words }] })
+    expect(view.reversal).toEqual({
+      possible: false,
+      location: 'A1-RCV',
+      // The screen's own words name the hide and the work order from these (never the English message).
+      blockers: [{ code: 'ISSUED', path: 'blockers/ISSUED', message: words, where: 'SEED-WO-0001', items: [{ kind: 'HIDE', code: hides[0]!.code }] }],
+    })
     const error = await refused('manager', 'POST', `/inventory/receipts/${receipt.id}/reverse`, { version: view.version, reason: 'Wrong supplier' }, 409)
     expect(error).toMatchObject({ code: 'conflict', message: `The receipt's stock was used since it was posted. ${words}`, issues: [{ path: 'blockers/ISSUED', message: words }] })
     expect((await ok('viewer', 'GET', `/inventory/receipts/${receipt.id}`)).receipt).toMatchObject({ status: 'POSTED', version: view.version })
@@ -419,6 +424,27 @@ describe('reversing a receipt', () => {
     expect(answer.receipt.status).toBe('REVERSED')
     expect(answer.receipt.lines[0].lots[0].qualityStatus).toBe('REJECTED')
     for (const hide of hides) expect(await onHand(A.dock, { hideId: hide.id })).toBe('0.0000')
+  })
+
+  it('the tiles count what the list shows: posted, posted since the start of the day, waiting for quality, reversed', async () => {
+    const before = (await ok('manager', 'GET', '/inventory/receipts/counts')).counts
+    const walled = { companyB: (await ok('companyB', 'GET', '/inventory/receipts/counts')).counts, otherTenant: (await ok('otherTenant', 'GET', '/inventory/receipts/counts')).counts }
+    const { receipt } = await twoHides()
+    const startOfDay = new Date(Date.now() - 60_000).toISOString()
+    const after = (await ok('manager', 'GET', `/inventory/receipts/counts?postedFrom=${encodeURIComponent(startOfDay)}`)).counts
+    expect(after).toMatchObject({ posted: before.posted + 1, reversed: before.reversed })
+    expect(after.postedSince).toBeGreaterThanOrEqual(1)
+    expect(before.postedSince).toBeNull()
+    const since = (await ok('manager', 'GET', `/inventory/receipts?postedFrom=${encodeURIComponent(startOfDay)}&limit=200`)).receipts as Json[]
+    expect(since.map((row) => row.id)).toContain(receipt.id)
+    expect(since).toHaveLength(after.postedSince)
+    // Its lot waits for its Cr VI result: "waiting" lists it, and only posted receipts with a lot in quarantine.
+    const waiting = (await ok('manager', 'GET', '/inventory/receipts?waiting=true&limit=200')).receipts as Json[]
+    expect(waiting.map((row) => row.id)).toContain(receipt.id)
+    expect(waiting).toHaveLength(after.waiting)
+    expect(waiting.every((row) => row.status === 'POSTED' && row.lotsReleased < row.lots)).toBe(true)
+    // Another company's office and another tenant count none of it.
+    for (const session of ['companyB', 'otherTenant'] as const) expect((await ok(session, 'GET', '/inventory/receipts/counts')).counts).toEqual(walled[session])
   })
 
   it('is refused while some of it lies at another location (move it back first)', async () => {
@@ -505,7 +531,7 @@ describe('a cancel and a receipt of one order: exactly one wins', () => {
 
 // ---- who may ------------------------------------------------------------------------------------------------------------------------
 
-describe('the walls: office only in W1, the caller\'s companies and sites, its tenant', () => {
+describe('the walls: office only, the caller\'s companies and sites, its tenant', () => {
   let receipt: Json
   let order: Awaited<ReturnType<typeof makeOrder>>
   beforeAll(async () => {
@@ -514,7 +540,7 @@ describe('the walls: office only in W1, the caller\'s companies and sites, its t
   })
   const body = () => ({ purchaseOrderId: order.id, lines: [{ purchaseOrderLineId: order.lines[0], lots: [{ quantity: '5' }] }] })
 
-  it('a floor device reads and records nothing here yet (its receiving screen is B-W1-33)', async () => {
+  it('a floor device reads and records nothing here (it receives through /inventory/receiving, B-W1-33)', async () => {
     expect((await call('floor', 'GET', '/inventory/receipts')).statusCode).toBe(403)
     expect((await call('floor', 'GET', `/inventory/receipts/${receipt.id}`)).statusCode).toBe(403)
     expect((await call('floor', 'POST', '/inventory/receipts', body(), freshKey())).statusCode).toBe(403)

@@ -308,8 +308,10 @@
       "operation": "Report a bundle at your operation",
       "cut": "Check a hide and log what you cut",
       "bundles": "Make bundles and print their tickets",
+      "receive": "Receive goods and print the hide tags",
       "pick": "Issue materials to a work order",
-      "final": "Check, sign and release garments"
+      "final": "Check, sign and release garments",
+      "pack": "Scan garments into cartons, print labels and the DDT"
     },
     "held": {
       "notice": "Read the notice first",

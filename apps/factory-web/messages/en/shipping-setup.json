@@ -1,0 +1,223 @@
+{
+  "intro": "What a shipment from this site starts with: the carrier account behind the labels, where the goods leave from and where returns go, the defaults, and the packing station's printers.",
+  "common": {
+    "retry": "Try again",
+    "dismiss": "Dismiss"
+  },
+  "read": {
+    "loading": "Reading the shipping settings…",
+    "failed": "The shipping settings could not be read",
+    "forbidden": {
+      "title": "You cannot see the shipping settings",
+      "body": "Seeing them needs the right to see the shipping settings (shipping.settings.view). Ask an administrator."
+    },
+    "problem": {
+      "signed_out": "You are signed out: sign in again.",
+      "forbidden": "You may not see these settings.",
+      "not_found": "Nothing is here any more.",
+      "unavailable": "The factory server did not answer. Try again in a moment.",
+      "rate_limited": "Too many tries: wait a moment and try again.",
+      "internal": "Something went wrong on our side. Try again."
+    }
+  },
+  "noSites": {
+    "title": "No site to set up",
+    "body": "None of this company's sites is within your access. An administrator gives access to a site."
+  },
+  "status": {
+    "unsaved_one": "{count} unsaved change",
+    "unsaved_other": "{count} unsaved changes",
+    "saved": "All changes saved · {time}",
+    "lastSaved": "Last saved {when}",
+    "notSetUp": "Not set up yet"
+  },
+  "test": {
+    "pill": "TEST",
+    "FAKE": "Test account: labels say TEST, nothing is bought and nothing reaches a carrier.",
+    "SANDBOX": "Sendcloud test use: labels are for trying things out; never hand one to a driver.",
+    "bannerTitle": "Test labels"
+  },
+  "site": {
+    "label": "Site",
+    "option": "{code} · {name}",
+    "notSetUp": "not set up"
+  },
+  "conflict": {
+    "title": "Someone else changed these settings meanwhile",
+    "body": "Your changes are still here and nothing was saved. Reload shows the settings as they are now (your changes here go).",
+    "reload": "Reload"
+  },
+  "save": {
+    "region": "Unsaved changes",
+    "problems_one": "fix {count} problem first",
+    "problems_other": "fix {count} problems first",
+    "discard": "Discard",
+    "busy": "Saving…",
+    "save": "Save",
+    "create": "Save settings",
+    "problem": {
+      "conflict": "Someone else changed these settings meanwhile.",
+      "notFound": "This site's settings are not where they were: reload them.",
+      "invalid": "Some fields are not right: they say why.",
+      "forbidden": "You may not change these settings.",
+      "signed_out": "You are signed out: sign in again, your changes stay here.",
+      "rate_limited": "Too many tries: wait a moment and save again.",
+      "unavailable": "The factory server did not answer: nothing was saved. Save again.",
+      "internal": "Something went wrong on our side: nothing was saved. Save again."
+    }
+  },
+  "discard": {
+    "title": "Discard your changes?",
+    "body_one": "{count} change to these settings is not saved. Discarding brings back the settings as they were saved.",
+    "body_other": "{count} changes to these settings are not saved. Discarding brings back the settings as they were saved.",
+    "keep": "Keep editing",
+    "confirm_one": "Discard {count} change",
+    "confirm_other": "Discard {count} changes"
+  },
+  "new": {
+    "title": "This site has no shipping settings yet",
+    "body": "Add the address labels are sent from; Save creates the settings. Shipments from this site use them from then on.",
+    "titleReadOnly": "This site has no shipping settings yet",
+    "bodyReadOnly": "Someone who may change the shipping settings adds them."
+  },
+  "readOnly": {
+    "title": "You can read these settings",
+    "body": "Changing them needs the right to change the shipping settings (shipping.settings.manage)."
+  },
+  "connection": {
+    "title": "Carrier connection",
+    "intro": "The Sendcloud account the labels of {site} are bought through: the company's own account.",
+    "account": "Carrier account",
+    "accountHint": "The company's own Sendcloud accounts. A test account makes labels marked TEST.",
+    "none": "None: labels cannot be bought",
+    "option": "{label} · {mode}",
+    "missingOption": "An account that is no longer the company's",
+    "name": "Account",
+    "mode": "Mode",
+    "keys": "Keys",
+    "keysSaved": "Stored sealed (never shown)",
+    "keysMissing": "Not stored yet",
+    "lastOk": "Last call that worked",
+    "lastError": "Last call that failed",
+    "never": "None yet",
+    "missing": "The account set for this site is not one of the company's carrier accounts any more: choose another one.",
+    "noneSet": "No carrier account is named for this site: labels use the company's only Sendcloud account, when it has exactly one. Choose one to be sure.",
+    "setHidden": "A carrier account is set for this site. Only an administrator sees and chooses the carrier accounts.",
+    "noneHidden": "No carrier account is named for this site: labels use the company's only Sendcloud account, when it has exactly one. An administrator names it.",
+    "readFailed": "The carrier accounts could not be read: {problem}",
+    "loading": "Reading the carrier accounts…",
+    "empty": {
+      "title": "Connect a carrier account to buy labels",
+      "body": "The company has no Sendcloud account yet. It is connected in Admin › Connections & API."
+    },
+    "where": "The account is connected, its keys replaced and disconnected in Admin › Connections & API.",
+    "manage": "Open in Admin › Connections & API",
+    "askAdmin": "Ask an administrator."
+  },
+  "state": {
+    "none": "Not named",
+    "unknown": "Set",
+    "missing": "Not the company's",
+    "test": "Test",
+    "paused": "Paused",
+    "disabled": "Disabled",
+    "noCredentials": "Keys missing",
+    "connected": "Connected",
+    "pausedBody": "This account is paused: no label can be bought until an administrator resumes it.",
+    "noCredentialsBody": "This account has no keys stored: no label can be bought until an administrator stores them."
+  },
+  "mode": {
+    "LIVE": "Live",
+    "SANDBOX": "Sendcloud test",
+    "FAKE": "Test (fake carrier)"
+  },
+  "sender": {
+    "title": "Ship-from address",
+    "intro": "Printed on every carrier label and DDT as the sender."
+  },
+  "returns": {
+    "title": "Return address",
+    "intro": "Where a parcel the carrier cannot deliver comes back to.",
+    "different": "Returns go to another address",
+    "same": "Returns go to the ship-from address."
+  },
+  "address": {
+    "label": "Address",
+    "name": "Name",
+    "nameHint": "Who sends the goods, as the label prints it.",
+    "line1": "Street and number",
+    "line2": "Address line 2",
+    "postalCode": "Postal code",
+    "city": "City",
+    "province": "Province",
+    "country": "Country",
+    "countryHint": "Two letters, as IT",
+    "phone": "Phone",
+    "email": "E-mail"
+  },
+  "defaults": {
+    "title": "Defaults for new shipments",
+    "intro": "What a new shipment from this site starts with; each shipment can change them.",
+    "transportBy": "Who carries the goods",
+    "transportHint": {
+      "SENDER": "Our own van: the DDT says the sender carries them; no label is bought.",
+      "RECIPIENT": "The customer collects: the DDT says the recipient carries them; no label is bought.",
+      "CARRIER": "A carrier: labels are bought through the carrier account."
+    },
+    "carrier": "Default carrier",
+    "carrierHint": "Sendcloud's carrier code, as brt, gls or poste_italiane.",
+    "service": "Default service",
+    "serviceHint": "Sendcloud's shipping option code for that carrier.",
+    "appearance": "Goods' appearance on the DDT",
+    "appearanceHint": "The DDT's external appearance of the goods.",
+    "appearancePlaceholder": "Cardboard boxes",
+    "cutOff": "Daily cut-off",
+    "cutOffHint": "HH:MM, Italian time. After it, parcels leave the next working day.",
+    "noCutOff": "None set"
+  },
+  "transportBy": {
+    "SENDER": "Our van",
+    "RECIPIENT": "Customer collects",
+    "CARRIER": "Carrier"
+  },
+  "printers": {
+    "title": "Packing station printers",
+    "intro": "Where the packing station prints: carrier labels on a label printer, the DDT and the packing list on an A4 printer.",
+    "labelPrinterId": "Label printer",
+    "documentPrinterId": "Document printer",
+    "hint": {
+      "labelPrinterId": "A label printer (ZPL) of this site.",
+      "documentPrinterId": "An A4 printer of this site."
+    },
+    "noneAtSite": {
+      "labelPrinterId": "This site has no label printer yet: it is added in Admin › Devices & printers.",
+      "documentPrinterId": "This site has no A4 printer yet: it is added in Admin › Devices & printers."
+    },
+    "none": {
+      "labelPrinterId": "None: labels print as PDFs from the browser",
+      "documentPrinterId": "None: the office prints the DDT and packing list"
+    },
+    "option": "{code} · {name}",
+    "paused": "paused",
+    "unknown": "A printer that is no longer at this site",
+    "set": "Set",
+    "hidden": "You cannot see this site's printers (it needs the right to see printers); the ones set stay as they are.",
+    "readFailed": "The site's printers could not be read: {problem}",
+    "loading": "Reading the site's printers…",
+    "manage": "Printers in Admin › Devices & printers"
+  },
+  "problem": {
+    "name": "Name who sends (or receives) the goods.",
+    "required": "Required.",
+    "country": "Two capital letters, as IT.",
+    "email": "This is not an e-mail address.",
+    "carrierCode": "Lower-case letters, digits, _ . - only, as Sendcloud names the carrier.",
+    "serviceCode": "Letters, digits, _ . : - only, as Sendcloud names the option.",
+    "serviceNeedsCarrier": "A default service belongs to a default carrier: name the carrier too.",
+    "cutOff": "A time of day as HH:MM, as 17:00.",
+    "labelPrinter": "Carrier labels print on a label printer (ZPL) of this site.",
+    "documentPrinter": "The DDT and the packing list print on an A4 printer of this site.",
+    "account": "Not a Sendcloud account of this site's company.",
+    "invalid": "This value is not taken."
+  }
+}

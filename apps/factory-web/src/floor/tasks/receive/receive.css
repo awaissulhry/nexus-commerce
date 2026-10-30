@@ -1,0 +1,162 @@
+/*
+ * Receive goods (SCR-092): layout only, inside the DS FloorFrame; sizes from the floor tier's `--nds-density-*` tokens,
+ * colours from semantic `--nds-*` roles (a tone painted as the floor kit paints one: `--nds-<tone>-text` on
+ * `--nds-<tone>-soft`). The shared parts' layout is in ../shared/view/tasks.css.
+ */
+
+/* A row of tiles that wrap (the text targets, the defects, the hold toggle). */
+.fw-receive-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-density-target-gap);
+}
+
+/* The grade tiles: four big squares side by side. */
+.fw-receive-grades {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--nds-density-target-gap);
+}
+
+/* The running totals as big numbers: area so far, still open, the most taken without a reason. */
+.fw-receive-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9em), 1fr));
+  gap: var(--nds-density-gap);
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-receive-total {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: 'value unit' 'label label';
+  align-items: baseline;
+  column-gap: var(--nds-space-6);
+  line-height: 1.1;
+  min-width: 0;
+}
+.fw-receive-total > .fw-task-big-value {
+  grid-area: value;
+}
+.fw-receive-total-unit {
+  grid-area: unit;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-receive-total > .fw-task-big-label {
+  grid-area: label;
+}
+
+/* The pad's step: its heading with the area / thickness switch, the pad centred under it. */
+.fw-receive-pad {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-receive-pad-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+}
+.fw-receive-pad-sum {
+  flex: 1 1 14em;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The summary before posting: one block per line, its difference in its tone on the start edge. */
+.fw-receive-summary,
+.fw-receive-lots {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-receive-summary-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-inline-start: 6px solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-receive-summary-line[data-tone='success'] {
+  border-inline-start-color: var(--nds-success);
+}
+.fw-receive-summary-line[data-tone='info'] {
+  border-inline-start-color: var(--nds-info);
+}
+.fw-receive-summary-line[data-tone='warning'] {
+  border-inline-start-color: var(--nds-warning);
+}
+.fw-receive-summary-line[data-tone='danger'] {
+  border-inline-start-color: var(--nds-danger);
+}
+.fw-receive-summary-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-density-gap);
+}
+
+/* The receipt card's two ticks. */
+.fw-receive-ticks {
+  margin: 0;
+}
+
+/* The reprint's reason tiles in a framed block. */
+.fw-receive-reprint {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+
+/* The tag's preview: to scale, never wider than its column. */
+.fw-receive-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/*
+ * A line's step: the pad first and full width (the DS pad then sets the number beside its keys, so every digit is in
+ * view on a landscape tablet without a scroll), then the line and its running totals side by side, then what stays from
+ * the last hide in two columns. One column on a phone.
+ */
+.fw-receive-head,
+.fw-receive-more {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-density-gap);
+  align-items: start;
+}
+@container nds-floor-frame (min-width: 900px) {
+  .fw-receive-head {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: stretch;
+  }
+  .fw-receive-more {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}

@@ -12,7 +12,11 @@
     "products": {
       "area": "Prodotti",
       "main": "Principali",
-      "styles": "Modelli"
+      "styles": "Modelli",
+      "materials": "Materiali e accessori",
+      "libraries": "Librerie",
+      "operations": "Operazioni",
+      "sizes": "Taglie e misure"
     },
     "sales": {
       "area": "Vendite",
@@ -24,7 +28,8 @@
     "purchasing": {
       "area": "Acquisti",
       "main": "Principali",
-      "suppliers": "Fornitori"
+      "suppliers": "Fornitori",
+      "orders": "Ordini d'acquisto"
     },
     "admin": {
       "area": "Amministrazione",
@@ -59,7 +64,9 @@
       "main": "Principali",
       "tests": "Test e sostanze",
       "safety": "Sicurezza prodotto",
-      "register": "Registro DPI e richiami"
+      "register": "Registro DPI e richiami",
+      "certificates": "Certificati",
+      "labels": "Etichette e marcature"
     },
     "finance": {
       "area": "Contabilità",
@@ -68,6 +75,20 @@
       "payments": "Incassi",
       "settingsGroup": "Impostazioni",
       "settings": "Impostazioni contabilità"
+    },
+    "planning": {
+      "area": "Pianificazione",
+      "main": "Principali",
+      "mrp": "Cosa comprare e produrre"
+    },
+    "warehouse": {
+      "area": "Magazzino",
+      "inbound": "In entrata",
+      "receipts": "Ricevimenti",
+      "outbound": "In uscita",
+      "shipments": "Spedizioni",
+      "settings": "Impostazioni",
+      "shipping": "Corrieri e spedizioni"
     }
   },
   "topbar": {

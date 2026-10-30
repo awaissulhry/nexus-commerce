@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { ArrowDown, ArrowUp, CircleAlert, CircleX, Flag, Plus, Search, Trash2 } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, MetricStrip, Modal } from '@nexus/ui/components'
 import { Button, Checkbox, Input, Select, Spinner, Tag, Textarea, Toggle } from '@nexus/ui/primitives'
@@ -155,7 +156,7 @@ export function RoutingTab({ style, model, actions }: { style: StyleView; model:
               </thead>
               <tbody>
                 {shown.map((step) => (
-                  <StepRow key={step.id} step={step} routing={routing} editable={editable} heldWhy={heldWhy} actions={actions} onInstructions={() => setInstructions(step.id)} />
+                  <StepRow key={step.id} step={step} routing={routing} editable={editable} heldWhy={heldWhy} actions={actions} prefix={model.prefix} onInstructions={() => setInstructions(step.id)} />
                 ))}
               </tbody>
             </table>
@@ -170,7 +171,7 @@ export function RoutingTab({ style, model, actions }: { style: StyleView; model:
   )
 }
 
-function StepRow({ step, routing, editable, heldWhy, actions, onInstructions }: { step: RoutingStep; routing: RoutingView; editable: boolean; heldWhy: string | null; actions?: StyleRecordActions; onInstructions: () => void }) {
+function StepRow({ step, routing, editable, heldWhy, actions, prefix, onInstructions }: { step: RoutingStep; routing: RoutingView; editable: boolean; heldWhy: string | null; actions?: StyleRecordActions; prefix: string; onInstructions: () => void }) {
   const t = useT('products')
   const locale = useLocale()
   const [minutes, setMinutes] = useState(editText(step.standardMinutes, locale))
@@ -192,7 +193,11 @@ function StepRow({ step, routing, editable, heldWhy, actions, onInstructions }: 
       <th scope="row" className="fw-st-grid-first">
         <span className="fw-st-cellstack">
           <span className="fw-st-inline">
-            <b>{step.code}</b> {step.name}
+            {/* The operation record (Products › Operations, SCR-049). */}
+            <Link className="fw-st-link" href={`${prefix}/products/operations/${step.operation.id}`}>
+              <b>{step.code}</b>
+            </Link>{' '}
+            {step.name}
             {step.final && (
               <Tag tone="info">
                 <Flag size={11} aria-hidden /> {t('routing.final')}

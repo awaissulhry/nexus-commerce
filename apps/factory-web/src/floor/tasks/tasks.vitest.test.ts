@@ -35,6 +35,18 @@ describe('Home\'s scan router: the job for this station, with the label loaded',
     expect(taskForScan('inspection', readScan(BUNDLE, TAG), homeTiles('inspection', ALL, false))).toBe('operation')
   })
 
+  it('at a packing station a garment\'s serial or a pack slip opens the packing bench; a bundle still opens Operation', () => {
+    const SERIAL = formatScanId({ type: 'SERIAL', tenantTag: TAG, ref: 77 })
+    const PACKER = [...ALL, 'shipping.pack']
+    expect(taskForScan('packing', readScan(SERIAL, TAG), homeTiles('packing', PACKER, false))).toBe('pack')
+    expect(taskForScan('packing', readScan('SH-0012', TAG), homeTiles('packing', PACKER, false))).toBe('pack')
+    expect(taskForScan('packing', readScan(BUNDLE, TAG), homeTiles('packing', PACKER, false))).toBe('operation')
+    expect(taskForScan('packing', readScan(HIDE, TAG), homeTiles('packing', PACKER, false))).toBeNull()
+    // Without the Pack tile (no shipping.pack): Scan anything.
+    expect(taskForScan('packing', readScan(SERIAL, TAG), homeTiles('packing', ALL, false))).toBeNull()
+    expect(taskOfTile('pack')).toBe('pack')
+  })
+
   it('a work order number opens Pick & issue at the warehouse and Final inspection at the bench', () => {
     expect(taskForScan('warehouse', readScan('WO-0042', TAG), homeTiles('warehouse', ALL, false))).toBe('pick')
     expect(taskForScan('inspection', readScan('WO-0042', TAG), homeTiles('inspection', ALL, false))).toBe('final')
@@ -49,7 +61,8 @@ describe('Home\'s scan router: the job for this station, with the label loaded',
   it('maps each task tile to its page', () => {
     expect(taskOfTile('operation')).toBe('operation')
     expect(taskOfTile('scan')).toBeNull()
-    expect(taskOfTile('receive')).toBeNull()
+    expect(taskOfTile('receive')).toBe('receive')
+    expect(taskOfTile('labels')).toBeNull()
     expect(Object.values(TASK_ROUTES).every((path) => path.startsWith('/floor/'))).toBe(true)
   })
 })

@@ -1,0 +1,232 @@
+{
+  "bar": "Packing actions",
+  "busy": "Sending to the office…",
+  "loading": "Reading the shipment…",
+  "noPermission": {
+    "title": "Packing is not for your role",
+    "body": "Your role does not pack shipments at this station. Ask your team leader."
+  },
+  "offline": {
+    "held": "Needs the network: the office records packing at once. Wait until it is back."
+  },
+  "scan": {
+    "read": "Read {code}",
+    "type": "Type a code",
+    "camera": {
+      "start": "Camera",
+      "stop": "Stop the camera",
+      "error": "The camera cannot read here: type the code."
+    }
+  },
+  "list": {
+    "scan": "Scan the pack slip",
+    "hint": "Or pick a shipment below. Only shipments of released garments are here.",
+    "title": "Shipments to pack",
+    "carrier": "{carrier}",
+    "noCarrier": "No carrier",
+    "cartons_one": "{count} carton",
+    "cartons_other": "{count} cartons",
+    "garments": "garments",
+    "toPack": "To pack",
+    "waiting": "Packed · documents",
+    "count_one": "{count} shipment",
+    "count_other": "{count} shipments",
+    "notFound": "{code} is no shipment of this station. Scan its pack slip again or ask the office.",
+    "serialFirst": "{code} is a garment: open its shipment first (scan the pack slip).",
+    "empty": {
+      "title": "Nothing released to pack.",
+      "body": "The office plans a shipment once quality has released the garments."
+    }
+  },
+  "status": {
+    "DRAFT": "To pack",
+    "PACKED": "Packed",
+    "SHIPPED": "Shipped",
+    "DELIVERED": "Delivered",
+    "RETURNED": "Returned",
+    "CANCELLED": "Cancelled"
+  },
+  "transport": {
+    "SENDER": "Our own van",
+    "RECIPIENT": "The customer collects",
+    "CARRIER": "By carrier"
+  },
+  "strip": {
+    "cartons_one": "{count} carton",
+    "cartons_other": "{count} cartons"
+  },
+  "released": {
+    "batches": "Released by quality: only released garments are on this shipment (batch {batches}).",
+    "plain": "Released by quality: only released garments are on this shipment."
+  },
+  "pack": {
+    "alreadyPacked": "This shipment is packed. Unpack it to change the cartons.",
+    "scan": "Scan a garment",
+    "hint": "Its label goes into carton {seq}.",
+    "hintNew": "The first scan starts a new carton.",
+    "done": "Packing done",
+    "unpack": "Unpack"
+  },
+  "carton": {
+    "current": "Carton {seq} of {count}",
+    "none": "No carton open",
+    "noneLead": "Scan a garment: a new carton starts by itself. Or start one with New carton.",
+    "noneDone": "Every carton is closed.",
+    "thisOne": "Current carton",
+    "type": "Carton",
+    "seq": "Carton {seq}",
+    "open": "Open",
+    "closed": "Closed · weighed",
+    "labelled": "Label on it",
+    "line": "{cell} × {count}",
+    "lineSerials": "{cell} × {count} ({serials} serials)",
+    "empty": "Empty",
+    "notWeighed": "Not weighed",
+    "kg": "{weight} kg",
+    "pick": "Pack into this one",
+    "remove": "Remove empty carton",
+    "add": "New carton",
+    "close": "Close carton",
+    "held": {
+      "empty": "Put a garment in first",
+      "none": "No carton open"
+    }
+  },
+  "cartons": {
+    "title_one": "{count} carton",
+    "title_other": "{count} cartons",
+    "empty": "No carton yet."
+  },
+  "weigh": {
+    "label": "Weight of carton {seq}",
+    "unit": "kg",
+    "separator": "Decimal point",
+    "empty": "Type the weight",
+    "range": "From 0.01 kg",
+    "save": "Save weight · close carton",
+    "cancel": "Back to the carton"
+  },
+  "pad": {
+    "minus": "Less",
+    "plus": "More",
+    "clear": "Clear",
+    "back": "Delete a digit"
+  },
+  "rest": {
+    "title": "Put the rest in this carton",
+    "put_one": "Put {count} {cell} in this carton",
+    "put_other": "Put the {count} {cell} in this carton",
+    "serials_one": "{cell}: {count} left. Scan each garment's serial label.",
+    "serials_other": "{cell}: {count} left. Scan each garment's serial label."
+  },
+  "grid": {
+    "title": "Packed {packed} of {garments}",
+    "caption": "Garments per style, colour and size: packed of planned",
+    "style": "Style · colour",
+    "cell": "{packed}/{planned}"
+  },
+  "left": {
+    "title": "Still to do",
+    "noLines": "No garments on this shipment: the office adds them.",
+    "loose_one": "{count} garment not in a carton",
+    "loose_other": "{count} garments not in a carton",
+    "noCartons": "No carton yet",
+    "unweighed": "Weigh carton {cartons}",
+    "empty": "Carton {cartons} is empty: remove it",
+    "serials_one": "{count} serial still to scan",
+    "serials_other": "{count} serials still to scan",
+    "none": "Everything is in weighed cartons: packing is done."
+  },
+  "note": {
+    "packed": "{code}: {cell} in carton {seq}",
+    "rest_one": "{count} {cell} in carton {seq}",
+    "rest_other": "{count} × {cell} in carton {seq}"
+  },
+  "refused": {
+    "notReleased": "Not released by quality yet: it stays out of the carton.",
+    "otherShipment": "Packed in another shipment already.",
+    "already": "Already in this shipment.",
+    "notThisShipment": "Not on this shipment: put it aside and tell the office.",
+    "void": "This serial is void: put the garment aside and tell the team leader.",
+    "shipped": "This garment has left already.",
+    "noRoom": "No more of this size on this shipment: an extra piece. Put it aside.",
+    "serialTracked": "{cell} is traced by serial: scan each garment's serial label.",
+    "batchDone": "Every garment of this batch is in a carton already.",
+    "unknown": "Not on this shipment: check the label.",
+    "notDraft": "This shipment is packed: unpack it first to change the cartons.",
+    "offline": "Needs the network: scan it again when the network is back."
+  },
+  "notice": {
+    "refused": "Refused by the office: {words}"
+  },
+  "documents": {
+    "open": "Labels and documents",
+    "title": "DDT and packing list",
+    "ddt": "DDT",
+    "date": "Date",
+    "cartons": "Cartons",
+    "packingList": "Packing list",
+    "yes": "Yes",
+    "no": "Not made",
+    "readyBoth": "The DDT and the packing list print on the station's printer.",
+    "readyDdt": "The DDT prints on the station's printer.",
+    "noPreview": "The documents are read in the office; the tablet prints them.",
+    "print": "Print documents",
+    "finish": "Done",
+    "held": {
+      "officeIssues": "The office issues the DDT: it shows here as soon as it is issued.",
+      "pdfMissing": "The DDT's PDF is not stored yet: the office prints it again.",
+      "noPrinter": "No document printer at this station: the office prints the DDT.",
+      "nothing": "Nothing to print yet: the office issues the DDT and buys the labels."
+    }
+  },
+  "labels": {
+    "title": "Carrier labels",
+    "carton": "Carton {seq}",
+    "tracking": "Tracking {number}",
+    "noLabel": "No label yet",
+    "bought": "Label bought",
+    "waiting": "Waiting",
+    "ready_one": "{count} label ready to print",
+    "ready_other": "{count} labels ready to print",
+    "held": {
+      "notNeeded": "No carrier label needed.",
+      "officeBuys": "The office buys the labels: they show here once bought.",
+      "noPrinter": "No label printer at this station: the office prints the labels as PDF.",
+      "noRight": "Your role does not print labels here."
+    },
+    "notNeeded": {
+      "SENDER": "No carrier label: the goods go in our own van.",
+      "RECIPIENT": "No carrier label: the customer collects the goods.",
+      "CARRIER": "No carrier label needed."
+    }
+  },
+  "jobs": {
+    "title": "Print jobs",
+    "label": "Label · carton {seq}",
+    "DDT": "DDT",
+    "PACKING_LIST": "Packing list",
+    "retry": "Print the {what} again",
+    "retryLabel": "Print the label of carton {seq} again"
+  },
+  "job": {
+    "QUEUED": "Queued",
+    "SENT": "Sent to the printer",
+    "PRINTED": "Printed",
+    "FAILED": "Failed"
+  },
+  "unpack": {
+    "held": {
+      "labelled": "A carton has a carrier label: the office voids it first.",
+      "ddt": "The DDT is issued: the office cancels it first."
+    }
+  },
+  "done": {
+    "title": "Shipment {number} packed",
+    "body_one": "{count} carton.",
+    "body_other": "{count} cartons.",
+    "bodyLabels_one": "{count} carton · labels printed.",
+    "bodyLabels_other": "{count} cartons · labels printed.",
+    "next": "Next shipment"
+  }
+}

@@ -1,0 +1,301 @@
+{
+  "title": "Purchase order {number}",
+  "who": {
+    "buyer": "the buyer",
+    "buyerStart": "The buyer"
+  },
+  "answerBy": {
+    "title": "Please answer by {date}",
+    "body": "{buyer} at {company} asks you to confirm the quantities and dates, or to say what you can do instead.",
+    "bodyNoBuyer": "{company} asks you to confirm the quantities and dates, or to say what you can do instead."
+  },
+  "order": {
+    "title": "The order",
+    "from": "From",
+    "buyer": "Who asks",
+    "deliverTo": "Deliver to",
+    "sentOn": "Sent on",
+    "version": "Version",
+    "orderDate": "Order date",
+    "wanted": "Wanted by",
+    "incoterms": "Delivery terms",
+    "paymentTerms": "Payment terms",
+    "note": "Note from the buyer",
+    "pdf": "The PDF of this order is in the e-mail we sent you.",
+    "noPrices": "This page shows what and when, never prices."
+  },
+  "lines": {
+    "title_one": "{count} line",
+    "title_other": "{count} lines",
+    "line": "Line {seq}",
+    "asked": "{quantity} {unit}",
+    "needed": "Needed on {date}",
+    "colour": "Colour {colour}",
+    "yourCode": "your code {code}",
+    "grade": "grade {grade}",
+    "thickness": "{min}–{max} mm",
+    "thicknessFrom": "from {min} mm",
+    "thicknessUpTo": "up to {max} mm",
+    "oneDyeBatch": "one dye batch",
+    "tolerance": "area ± {pct} %",
+    "hides_one": "about {count} hide",
+    "hides_other": "about {count} hides",
+    "crVi": "Cr VI test report needed with each lot",
+    "confirmed": "Confirmed: {quantity} {unit} by {date}",
+    "yourAnswer": "Your answer",
+    "change": "Change",
+    "changeAria": "Change your answer to line {seq}",
+    "asAskedAgain": "As asked",
+    "asAskedAgainAria": "Line {seq} as asked again",
+    "reason": "Your reason: {reason}",
+    "answer": {
+      "AS_ASKED": "As asked",
+      "OTHER": "{quantity} {unit} by {date}",
+      "SPLIT": "Two deliveries: {first} and {second}",
+      "CANNOT_DELIVER": "You cannot deliver it"
+    },
+    "delivery": "{quantity} {unit} by {date}",
+    "changes": {
+      "LATER": "Later date",
+      "EARLIER": "Earlier date",
+      "LESS": "Less",
+      "MORE": "More",
+      "SPLIT": "Two deliveries",
+      "CANNOT_DELIVER": "Cannot deliver"
+    }
+  },
+  "answer": {
+    "title": "Your answer",
+    "review": "Your answer: {summary}.",
+    "outcome": {
+      "CONFIRMED": "Confirming tells {buyer} the order is on as asked.",
+      "PROPOSED": "{buyer} accepts or refuses your changes. Nothing is confirmed until then.",
+      "DECLINED": "You cannot deliver any line: sending this declines the order."
+    },
+    "confirmAll": "Confirm all as asked",
+    "sendChanges": "Send your changes",
+    "sendDecline": "Send: I cannot deliver",
+    "decline": "Decline the order…",
+    "undoAll": "Undo your changes",
+    "ref": "Your order or confirmation number",
+    "refHint": "Optional. We print it on our documents.",
+    "name": "Your name",
+    "nameOptional": "Your name (optional)",
+    "nameHint": "So {buyer} knows who answered.",
+    "note": "A note for {buyer} (optional)",
+    "busy": "Sending your answer…",
+    "held": {
+      "busy": "Sending your answer…",
+      "incomplete": "A line's answer is not complete: open it and save it again.",
+      "uploading": "Wait until your PDF is uploaded.",
+      "file": "Choose your PDF again, or remove it.",
+      "name": "Type your name first.",
+      "ref": "Your number is at most 60 characters.",
+      "note": "The note is at most 1000 characters."
+    }
+  },
+  "summary": {
+    "allAsAsked_one": "the line as asked",
+    "allAsAsked_other": "all {count} lines as asked",
+    "asAsked_one": "{count} line as asked",
+    "asAsked_other": "{count} lines as asked",
+    "later_one": "{count} later date",
+    "later_other": "{count} later dates",
+    "earlier_one": "{count} earlier date",
+    "earlier_other": "{count} earlier dates",
+    "quantity_one": "{count} other quantity",
+    "quantity_other": "{count} other quantities",
+    "split_one": "{count} line in two deliveries",
+    "split_other": "{count} lines in two deliveries",
+    "cannot_one": "{count} line you cannot deliver",
+    "cannot_other": "{count} lines you cannot deliver"
+  },
+  "file": {
+    "title": "Your confirmation PDF",
+    "hint": "Optional: your own confirmation as a PDF, at most 20 MB. It goes with your answer.",
+    "choose": "Choose a PDF",
+    "change": "Choose another",
+    "remove": "Remove",
+    "none": "No file chosen",
+    "uploading": "Uploading {name}…",
+    "done": "{name} · {size} · uploaded",
+    "quarantined": "{name} did not arrive as it was sent. Choose it again.",
+    "failed": "{name} could not be uploaded. Choose it again.",
+    "rejected": {
+      "notPdf": "{name} is not a PDF. Choose a PDF file.",
+      "tooBig": "{name} is larger than 20 MB.",
+      "empty": "{name} is empty."
+    },
+    "kb": "{size} KB",
+    "mb": "{size} MB"
+  },
+  "sheet": {
+    "title": "Line {seq} — your answer",
+    "asked": "Asked",
+    "askedValue": "{quantity} {unit} by {date}",
+    "kind": "What can you do?",
+    "kinds": {
+      "AS_ASKED": {
+        "title": "As asked",
+        "body": "{quantity} {unit} by {date}"
+      },
+      "OTHER": {
+        "title": "Another date or quantity",
+        "body": "One delivery, at another date, of another quantity, or both."
+      },
+      "SPLIT": {
+        "title": "In two deliveries",
+        "body": "Part now, the rest later: each with its quantity and date."
+      },
+      "CANNOT_DELIVER": {
+        "title": "I cannot deliver this line",
+        "body": "Nothing of this line. The other lines keep your answer."
+      }
+    },
+    "quantity": "Quantity ({unit})",
+    "date": "By",
+    "first": "First delivery",
+    "second": "Second delivery",
+    "reason": "Why",
+    "reasonHint": "A few words for {buyer}.",
+    "save": "Save",
+    "cancel": "Cancel",
+    "problem": {
+      "whole": {
+        "nothing": "Give another quantity, another date, or both.",
+        "same": "That is what was asked: choose “As asked”.",
+        "sameDay": "The two deliveries are on two different days."
+      },
+      "quantity": {
+        "number": "Give the quantity as a number, with at most four decimals.",
+        "positive": "Give a quantity above 0, or choose “I cannot deliver this line”."
+      },
+      "date": {
+        "missing": "Give the date.",
+        "past": "Give a date from today on.",
+        "far": "Give a date within two years."
+      },
+      "reason": {
+        "missing": "Say why, in a few words.",
+        "long": "At most 500 characters."
+      }
+    }
+  },
+  "decline": {
+    "title": "Decline this order",
+    "body": "{buyer} sees your answer at once. If you can deliver part of the order, answer line by line instead.",
+    "reason": "Why",
+    "reasons": {
+      "NO_CAPACITY": "No capacity for this order",
+      "MATERIAL_NOT_AVAILABLE": "The material is not available",
+      "OTHER": "Another reason"
+    },
+    "note": "A note (optional)",
+    "noteRequired": "Your reason",
+    "held": {
+      "note": "Say why you decline."
+    },
+    "back": "Back",
+    "go": "Decline the order"
+  },
+  "done": {
+    "CONFIRMED": {
+      "title": "Confirmed — thank you",
+      "body": "{buyer} sees it now.",
+      "expect": "We expect the goods at {site} by {date}.",
+      "expectRange": "We expect the goods at {site} from {first} to {last}.",
+      "expectNoSite": "We expect the goods by {date}.",
+      "later": "Need to change something later? Reply to our e-mail; it reaches {buyer}."
+    },
+    "PROPOSED": {
+      "title": "Sent — {buyer} decides on your changes",
+      "body": "Your answer: {summary}. Nothing is confirmed until {buyer} accepts or refuses your changes; you will hear back by e-mail."
+    },
+    "DECLINED": {
+      "title": "Declined",
+      "body": "{buyer} sees it now and will get back to you."
+    },
+    "ref": "Your reference",
+    "file": "Your PDF",
+    "lines": "Your answer, line by line"
+  },
+  "answered": {
+    "CONFIRMED": {
+      "title": "This order is confirmed",
+      "body": "There is nothing more to answer. Need to change something? Reply to our e-mail."
+    },
+    "CHANGES_PROPOSED": {
+      "title": "Your changes are with {buyer}",
+      "body": "{buyer} accepts or refuses them. You will hear back by e-mail."
+    },
+    "DECLINED": {
+      "title": "You declined this order",
+      "body": "{buyer} changes it or cancels it, and gets back to you."
+    },
+    "PARTLY_RECEIVED": {
+      "title": "Goods of this order are arriving",
+      "body": "Part of it was received already: it needs no confirmation any more."
+    },
+    "RECEIVED": {
+      "title": "This order was received",
+      "body": "The goods arrived: it needs no confirmation any more."
+    },
+    "DRAFT": {
+      "title": "The buyer is changing this order",
+      "body": "The changed order comes to you with a new link."
+    },
+    "CANCELLED": {
+      "title": "This order was cancelled",
+      "body": "It needs no answer. Reply to our e-mail with any question."
+    },
+    "CLOSED": {
+      "title": "This order is closed",
+      "body": "It needs no answer any more."
+    },
+    "other": {
+      "title": "This order needs no answer now",
+      "body": "Reply to our e-mail with any question."
+    }
+  },
+  "problem": {
+    "changed": "This order changed a moment ago. Look at it again: what you typed is kept.",
+    "notAnswerable": "This order takes no answer any more.",
+    "invalid": "Some answers are not complete. Open each changed line and check it.",
+    "rateLimited": "Too many tries. Wait a minute, then send again.",
+    "unavailableNow": "We cannot reach our system right now. Your answer was not sent: try again in a moment.",
+    "internal": "Something went wrong on our side. Your answer was not sent: try again.",
+    "upload": "Your PDF could not be uploaded. Choose it again, or send your answer without it."
+  },
+  "dead": {
+    "ask": "Ask for a new link",
+    "asked": "Asked — we passed it on. If the link was ours, {sender} writes to the address it was sent to.",
+    "askedAnonymous": "Asked — we passed it on. If the link was ours, the sender writes to the address it was sent to.",
+    "expiredTitle": "This link expired on {time}",
+    "expiredBody": "Ask {sender} for a new one.",
+    "expiredBodyAnonymous": "Ask whoever sent it to you for a new one."
+  },
+  "error": {
+    "title": "The order could not be opened",
+    "body": "Something went wrong on our side. Try again.",
+    "retry": "Try again"
+  },
+  "uom": {
+    "PCS": "pcs",
+    "PAIR": "pairs",
+    "SET": "sets",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  }
+}

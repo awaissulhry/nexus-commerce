@@ -15,7 +15,9 @@ describe('the Office navigation (PLT-160: one declaration per area)', () => {
       [1, 'home'],
       [2, 'sales'],
       [3, 'products'],
+      [5, 'planning'],
       [6, 'purchasing'],
+      [7, 'warehouse'],
       [8, 'production'],
       [9, 'quality'],
       [10, 'compliance'],
@@ -77,6 +79,20 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
     expect(ids(officeNavFor(permissionCheck(['quality.inspections.view'])))).toEqual([['quality', ['quality-inspections']]])
   })
 
+  it('the buying office: What to buy & make (planning.view), Purchase orders (purchasing.view), Receipts (inventory.stock.view)', () => {
+    expect(ids(officeNavFor(permissionCheck(['planning.view', 'purchasing.view', 'inventory.stock.view'])))).toEqual([
+      ['planning', ['planning-mrp']],
+      ['purchasing', ['purchasing-orders']],
+      ['warehouse', ['warehouse-receipts']],
+    ])
+    // The warehouse role reads the orders it receives against (and the parties: Customers and Suppliers), not the plan.
+    expect(ids(officeNavFor(permissionCheck(['purchasing.view', 'inventory.stock.view', 'parties.view'])))).toEqual([
+      ['sales', ['sales-customers']],
+      ['purchasing', ['purchasing-suppliers', 'purchasing-orders']],
+      ['warehouse', ['warehouse-receipts']],
+    ])
+  })
+
   it('a person with no permission sees no area: no door that leads nowhere', () => {
     expect(officeNavFor(permissionCheck([])).areas).toEqual([])
   })
@@ -93,7 +109,7 @@ describe('labels, crumbs, palette pages and the phone bar come from the same man
     expect(nav.areas.map((area) => area.label)).toEqual(['Home', 'Sales', 'Purchasing', 'Admin'])
     expect(nav.areas[3]?.sections?.map((s) => s.label)).toEqual(['Admin', 'Organisation', 'Access', 'Platform', 'Data'])
     const it = translateNav(OFFICE_NAV, createScopedTranslator('it', messagesFor('it', ['shell']), 'shell'))
-    expect(it.areas.map((area) => area.label)).toEqual(['Home', 'Vendite', 'Prodotti', 'Acquisti', 'Produzione', 'Qualità', 'Conformità', 'Contabilità', 'Amministrazione'])
+    expect(it.areas.map((area) => area.label)).toEqual(['Home', 'Vendite', 'Prodotti', 'Pianificazione', 'Acquisti', 'Magazzino', 'Produzione', 'Qualità', 'Conformità', 'Contabilità', 'Amministrazione'])
     expect(JSON.stringify(nav)).not.toContain('shell:')
   })
 

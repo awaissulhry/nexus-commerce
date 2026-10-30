@@ -21,6 +21,7 @@ export const manifest = defineManifest({
   'DELETE /purchasing/orders/:purchaseOrderId/lines/:lineId': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
   'POST /purchasing/from-plan': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
   'POST /purchasing/from-plan/undo': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'GET /purchasing/orders/:purchaseOrderId/preview': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
   'GET /purchasing/orders/:purchaseOrderId/send-check': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
   'POST /purchasing/orders/:purchaseOrderId/send': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
   'POST /purchasing/orders/:purchaseOrderId/send-link': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
@@ -34,5 +35,8 @@ export const manifest = defineManifest({
   'GET /link/purchase-order': { audiences: ['link'], permission: 'links.open', scope: 'record' },
   'POST /link/purchase-order/confirm': { audiences: ['link'], permission: 'links.confirm', scope: 'record' },
   'POST /link/purchase-order/decline': { audiences: ['link'], permission: 'links.decline', scope: 'record' },
+  // B-W1-33 (SCR-100): the supplier's confirmation PDF, uploaded before it answers.
+  'POST /link/purchase-order/confirmation': { audiences: ['link'], permission: 'links.confirm', scope: 'record' },
+  'POST /link/purchase-order/confirmation/:fileId/complete': { audiences: ['link'], permission: 'links.confirm', scope: 'record' },
   'POST /link/purchase-order/renew': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
 })

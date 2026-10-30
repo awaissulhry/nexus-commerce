@@ -1,0 +1,223 @@
+{
+  "intro": "Da cosa parte una spedizione da questo stabilimento: l'account corriere con cui si comprano le etichette, da dove parte la merce e dove tornano i resi, i valori proposti e le stampanti del banco imballo.",
+  "common": {
+    "retry": "Riprova",
+    "dismiss": "Chiudi"
+  },
+  "read": {
+    "loading": "Lettura delle impostazioni di spedizione…",
+    "failed": "Non è stato possibile leggere le impostazioni di spedizione",
+    "forbidden": {
+      "title": "Non puoi vedere le impostazioni di spedizione",
+      "body": "Serve il diritto di vedere le impostazioni di spedizione (shipping.settings.view). Chiedi a un amministratore."
+    },
+    "problem": {
+      "signed_out": "Sei uscito: accedi di nuovo.",
+      "forbidden": "Non puoi vedere queste impostazioni.",
+      "not_found": "Qui non c'è più nulla.",
+      "unavailable": "Il server della fabbrica non ha risposto. Riprova tra poco.",
+      "rate_limited": "Troppi tentativi: attendi un momento e riprova.",
+      "internal": "Qualcosa non ha funzionato da parte nostra. Riprova."
+    }
+  },
+  "noSites": {
+    "title": "Nessuno stabilimento da impostare",
+    "body": "Nessuno stabilimento di questa società rientra nei tuoi accessi. Un amministratore dà l'accesso a uno stabilimento."
+  },
+  "status": {
+    "unsaved_one": "{count} modifica non salvata",
+    "unsaved_other": "{count} modifiche non salvate",
+    "saved": "Tutte le modifiche salvate · {time}",
+    "lastSaved": "Ultimo salvataggio {when}",
+    "notSetUp": "Non ancora impostato"
+  },
+  "test": {
+    "pill": "PROVA",
+    "FAKE": "Account di prova: le etichette dicono PROVA, non si compra nulla e nulla arriva a un corriere.",
+    "SANDBOX": "Uso di prova di Sendcloud: le etichette servono per provare; non darne mai una a un autista.",
+    "bannerTitle": "Etichette di prova"
+  },
+  "site": {
+    "label": "Stabilimento",
+    "option": "{code} · {name}",
+    "notSetUp": "non impostato"
+  },
+  "conflict": {
+    "title": "Nel frattempo qualcun altro ha cambiato queste impostazioni",
+    "body": "Le tue modifiche sono ancora qui e non è stato salvato nulla. Ricarica mostra le impostazioni come sono ora (le tue modifiche qui si perdono).",
+    "reload": "Ricarica"
+  },
+  "save": {
+    "region": "Modifiche non salvate",
+    "problems_one": "prima correggi {count} problema",
+    "problems_other": "prima correggi {count} problemi",
+    "discard": "Annulla modifiche",
+    "busy": "Salvataggio…",
+    "save": "Salva",
+    "create": "Salva impostazioni",
+    "problem": {
+      "conflict": "Nel frattempo qualcun altro ha cambiato queste impostazioni.",
+      "notFound": "Le impostazioni di questo stabilimento non sono più dove erano: ricaricale.",
+      "invalid": "Alcuni campi non vanno: ciascuno dice perché.",
+      "forbidden": "Non puoi cambiare queste impostazioni.",
+      "signed_out": "Sei uscito: accedi di nuovo, le tue modifiche restano qui.",
+      "rate_limited": "Troppi tentativi: attendi un momento e salva di nuovo.",
+      "unavailable": "Il server della fabbrica non ha risposto: non è stato salvato nulla. Salva di nuovo.",
+      "internal": "Qualcosa non ha funzionato da parte nostra: non è stato salvato nulla. Salva di nuovo."
+    }
+  },
+  "discard": {
+    "title": "Annullare le modifiche?",
+    "body_one": "{count} modifica a queste impostazioni non è salvata. Annullando tornano le impostazioni come erano salvate.",
+    "body_other": "{count} modifiche a queste impostazioni non sono salvate. Annullando tornano le impostazioni come erano salvate.",
+    "keep": "Continua a modificare",
+    "confirm_one": "Annulla {count} modifica",
+    "confirm_other": "Annulla {count} modifiche"
+  },
+  "new": {
+    "title": "Questo stabilimento non ha ancora impostazioni di spedizione",
+    "body": "Aggiungi l'indirizzo da cui partono le etichette; Salva crea le impostazioni. Da allora le spedizioni da questo stabilimento le usano.",
+    "titleReadOnly": "Questo stabilimento non ha ancora impostazioni di spedizione",
+    "bodyReadOnly": "Le aggiunge chi può cambiare le impostazioni di spedizione."
+  },
+  "readOnly": {
+    "title": "Puoi leggere queste impostazioni",
+    "body": "Per cambiarle serve il diritto di cambiare le impostazioni di spedizione (shipping.settings.manage)."
+  },
+  "connection": {
+    "title": "Collegamento corriere",
+    "intro": "L'account Sendcloud con cui si comprano le etichette di {site}: l'account della società.",
+    "account": "Account corriere",
+    "accountHint": "Gli account Sendcloud della società. Un account di prova fa etichette con la scritta PROVA.",
+    "none": "Nessuno: non si possono comprare etichette",
+    "option": "{label} · {mode}",
+    "missingOption": "Un account che non è più della società",
+    "name": "Account",
+    "mode": "Modalità",
+    "keys": "Chiavi",
+    "keysSaved": "Conservate sigillate (mai mostrate)",
+    "keysMissing": "Non ancora conservate",
+    "lastOk": "Ultima chiamata riuscita",
+    "lastError": "Ultima chiamata fallita",
+    "never": "Ancora nessuna",
+    "missing": "L'account impostato per questo stabilimento non è più tra gli account corriere della società: scegline un altro.",
+    "noneSet": "Nessun account corriere è indicato per questo stabilimento: le etichette usano l'unico account Sendcloud della società, se ne ha uno solo. Scegline uno per essere certi.",
+    "setHidden": "Per questo stabilimento è impostato un account corriere. Solo un amministratore vede e sceglie gli account corriere.",
+    "noneHidden": "Per questo stabilimento non è indicato un account corriere: le etichette usano l'unico account Sendcloud della società, se ne ha uno solo. Lo indica un amministratore.",
+    "readFailed": "Non è stato possibile leggere gli account corriere: {problem}",
+    "loading": "Lettura degli account corriere…",
+    "empty": {
+      "title": "Collega un account corriere per comprare le etichette",
+      "body": "La società non ha ancora un account Sendcloud. Si collega in Amministrazione › Connessioni e API."
+    },
+    "where": "L'account si collega, se ne sostituiscono le chiavi e si scollega in Amministrazione › Connessioni e API.",
+    "manage": "Apri in Amministrazione › Connessioni e API",
+    "askAdmin": "Chiedi a un amministratore."
+  },
+  "state": {
+    "none": "Non indicato",
+    "unknown": "Impostato",
+    "missing": "Non della società",
+    "test": "Prova",
+    "paused": "In pausa",
+    "disabled": "Disattivato",
+    "noCredentials": "Chiavi mancanti",
+    "connected": "Collegato",
+    "pausedBody": "Questo account è in pausa: non si comprano etichette finché un amministratore non lo riprende.",
+    "noCredentialsBody": "Questo account non ha chiavi conservate: non si comprano etichette finché un amministratore non le conserva."
+  },
+  "mode": {
+    "LIVE": "Reale",
+    "SANDBOX": "Prova Sendcloud",
+    "FAKE": "Prova (corriere finto)"
+  },
+  "sender": {
+    "title": "Indirizzo di partenza",
+    "intro": "Stampato come mittente su ogni etichetta del corriere e su ogni DDT."
+  },
+  "returns": {
+    "title": "Indirizzo per i resi",
+    "intro": "Dove torna un collo che il corriere non riesce a consegnare.",
+    "different": "I resi vanno a un altro indirizzo",
+    "same": "I resi tornano all'indirizzo di partenza."
+  },
+  "address": {
+    "label": "Indirizzo",
+    "name": "Nome",
+    "nameHint": "Chi spedisce la merce, come lo stampa l'etichetta.",
+    "line1": "Via e numero civico",
+    "line2": "Seconda riga dell'indirizzo",
+    "postalCode": "CAP",
+    "city": "Città",
+    "province": "Provincia",
+    "country": "Paese",
+    "countryHint": "Due lettere, come IT",
+    "phone": "Telefono",
+    "email": "E-mail"
+  },
+  "defaults": {
+    "title": "Valori per le nuove spedizioni",
+    "intro": "Da cosa parte una nuova spedizione da questo stabilimento; ogni spedizione può cambiarli.",
+    "transportBy": "Chi trasporta la merce",
+    "transportHint": {
+      "SENDER": "Il nostro mezzo: il DDT dice trasporto a cura del mittente; non si compra un'etichetta.",
+      "RECIPIENT": "Ritira il cliente: il DDT dice trasporto a cura del destinatario; non si compra un'etichetta.",
+      "CARRIER": "Un corriere: le etichette si comprano con l'account corriere."
+    },
+    "carrier": "Corriere proposto",
+    "carrierHint": "Il codice del corriere in Sendcloud, come brt, gls o poste_italiane.",
+    "service": "Servizio proposto",
+    "serviceHint": "Il codice dell'opzione di spedizione Sendcloud per quel corriere.",
+    "appearance": "Aspetto esteriore dei beni sul DDT",
+    "appearanceHint": "L'aspetto esteriore dei beni scritto sul DDT.",
+    "appearancePlaceholder": "Scatole di cartone",
+    "cutOff": "Orario limite del giorno",
+    "cutOffHint": "HH:MM, ora italiana. Dopo, i colli partono il giorno lavorativo dopo.",
+    "noCutOff": "Non impostato"
+  },
+  "transportBy": {
+    "SENDER": "Nostro mezzo",
+    "RECIPIENT": "Ritira il cliente",
+    "CARRIER": "Corriere"
+  },
+  "printers": {
+    "title": "Stampanti del banco imballo",
+    "intro": "Dove stampa il banco imballo: le etichette del corriere su una stampante di etichette, il DDT e la packing list su una stampante A4.",
+    "labelPrinterId": "Stampante di etichette",
+    "documentPrinterId": "Stampante dei documenti",
+    "hint": {
+      "labelPrinterId": "Una stampante di etichette (ZPL) di questo stabilimento.",
+      "documentPrinterId": "Una stampante A4 di questo stabilimento."
+    },
+    "noneAtSite": {
+      "labelPrinterId": "Questo stabilimento non ha ancora una stampante di etichette: si aggiunge in Amministrazione › Dispositivi e stampanti.",
+      "documentPrinterId": "Questo stabilimento non ha ancora una stampante A4: si aggiunge in Amministrazione › Dispositivi e stampanti."
+    },
+    "none": {
+      "labelPrinterId": "Nessuna: le etichette si stampano come PDF dal browser",
+      "documentPrinterId": "Nessuna: l'ufficio stampa DDT e packing list"
+    },
+    "option": "{code} · {name}",
+    "paused": "in pausa",
+    "unknown": "Una stampante che non è più in questo stabilimento",
+    "set": "Impostata",
+    "hidden": "Non puoi vedere le stampanti di questo stabilimento (serve il diritto di vedere le stampanti); quelle impostate restano come sono.",
+    "readFailed": "Non è stato possibile leggere le stampanti dello stabilimento: {problem}",
+    "loading": "Lettura delle stampanti dello stabilimento…",
+    "manage": "Stampanti in Amministrazione › Dispositivi e stampanti"
+  },
+  "problem": {
+    "name": "Indica chi spedisce (o riceve) la merce.",
+    "required": "Obbligatorio.",
+    "country": "Due lettere maiuscole, come IT.",
+    "email": "Questo non è un indirizzo e-mail.",
+    "carrierCode": "Solo lettere minuscole, cifre, _ . -, come Sendcloud chiama il corriere.",
+    "serviceCode": "Solo lettere, cifre, _ . : -, come Sendcloud chiama l'opzione.",
+    "serviceNeedsCarrier": "Un servizio proposto appartiene a un corriere proposto: indica anche il corriere.",
+    "cutOff": "Un'ora del giorno come HH:MM, per esempio 17:00.",
+    "labelPrinter": "Le etichette del corriere si stampano su una stampante di etichette (ZPL) di questo stabilimento.",
+    "documentPrinter": "Il DDT e la packing list si stampano su una stampante A4 di questo stabilimento.",
+    "account": "Non è un account Sendcloud della società di questo stabilimento.",
+    "invalid": "Questo valore non è accettato."
+  }
+}

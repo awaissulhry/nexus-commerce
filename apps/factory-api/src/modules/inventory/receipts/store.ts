@@ -131,6 +131,7 @@ export const ORDER_LINE_COLUMNS = {
   estimatedHides: true,
   requiresCrViTest: true,
   confirmedQuantity: true,
+  confirmedDate: true,
 } as const satisfies Prisma.PurchaseOrderLineSelect
 export type OrderLineRow = Prisma.PurchaseOrderLineGetPayload<{ select: typeof ORDER_LINE_COLUMNS }>
 

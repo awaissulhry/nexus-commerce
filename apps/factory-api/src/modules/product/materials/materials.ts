@@ -3,12 +3,13 @@ import { ConflictError, ForbiddenError, InvalidStateError, ValidationError, type
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { colourListProblems, normaliseColour } from '@nexus/factory-domain/product/materials/colours'
-import type { CreateMaterialBody, ListMaterialsQuery, MaterialRow, MaterialView, StandardCostBody, UpdateMaterialBody } from '@nexus/factory-domain/product/materials/contracts'
+import type { CreateMaterialBody, MaterialRow, MaterialView, StandardCostBody, UpdateMaterialBody } from '@nexus/factory-domain/product/materials/contracts'
 import { PRODUCT_MATERIALS_COST, PRODUCT_MATERIALS_MANAGE, PRODUCT_MATERIALS_VIEW } from '@nexus/factory-domain/product/materials/permissions'
 import { changeMaterial, materialMachine, newMaterial, standardCostProblems, type MaterialFields, type MaterialInput, type MaterialPatch, type MaterialStatus } from '@nexus/factory-domain/product/materials/rules'
 import { carriedCost, decimalText, unconvertibleUnits, type Uom } from '@nexus/factory-domain/product/units/units'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
+import type { ListMaterialsFilters } from './contract'
 import {
   assertMayWrite,
   auditedFields,
@@ -23,6 +24,7 @@ import {
   materialViewOf,
   readColours,
   readMaterial,
+  seesCost,
   supplierProblems,
   viewInTx,
   writeFields,
@@ -61,8 +63,10 @@ function decodeCursor(value: string | undefined): Cursor | null {
 }
 
 /** The materials the caller may see, by code, one page at a time (SCR-047). */
-export async function listMaterials(caller: CommandCaller, query: ListMaterialsQuery): Promise<{ materials: MaterialRow[]; nextCursor: string | null; count: number }> {
+export async function listMaterials(caller: CommandCaller, query: ListMaterialsFilters): Promise<{ materials: MaterialRow[]; nextCursor: string | null; count: number }> {
   const context = contextOf(caller)
+  // Which materials lack a price is itself cost information: only for a holder of the cost grain.
+  if (query.missingCost !== undefined && !seesCost(context)) throw new ForbiddenError('Filtering by the standard cost needs the cost grain (money.cost).')
   const search = query.q?.trim()
   const filters: Prisma.ItemWhereInput[] = [
     scopeWhere(actorOf(context), PRODUCT_MATERIALS_VIEW, MATERIAL_SCOPE) as Prisma.ItemWhereInput,
@@ -81,6 +85,8 @@ export async function listMaterials(caller: CommandCaller, query: ListMaterialsQ
     query.tracking ? { tracking: query.tracking } : {},
     query.supplierId ? { defaultSupplierId: query.supplierId } : {},
     query.requiresCrViTest === undefined ? {} : { requiresCrViTest: query.requiresCrViTest },
+    query.ppeComponent === undefined ? {} : { isPpeComponent: query.ppeComponent },
+    query.missingCost === undefined ? {} : query.missingCost ? { standardCost: null } : { standardCost: { not: null } },
     query.companyId ? { OR: [{ companyId: query.companyId }, { companyId: null }] } : {},
   ]
   const cursor = decodeCursor(query.cursor)
