@@ -1,0 +1,91 @@
+/*
+ * The list tools (B-W2a-23: Columns ▾, Export ▾ and their dialogs) LAYOUT only: the DS draws every control; this file
+ * places them with semantic tokens. A dialog may keep a max-width (it is not a page).
+ */
+.fw-lt-notice {
+  margin-bottom: var(--nds-space-10);
+}
+
+/* A long view name on the Columns ▾ trigger stays on one line. */
+.fw-lt-trigger {
+  display: inline-block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.fw-lt-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+}
+
+.fw-lt-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fw-lt-fieldset > legend {
+  margin-bottom: var(--nds-space-6);
+  padding: 0;
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-lt-keeps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-lt-keeps-title {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-lt-keeps ul {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-lt-copy {
+  display: flex;
+  gap: var(--nds-space-8);
+  align-items: flex-end;
+}
+
+.fw-lt-copy > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fw-lt-text {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+.fw-lt-file {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--nds-space-6) var(--nds-space-16);
+  margin: 0;
+}
+
+.fw-lt-file dt {
+  color: var(--nds-text-2);
+}
+
+.fw-lt-file dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

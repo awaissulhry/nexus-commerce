@@ -19,12 +19,16 @@ import {
   type IRowNode,
 } from '@nexus/ui/grid'
 import { X } from 'lucide-react'
+import { Banner } from '@nexus/ui/components'
 import { Button, Skeleton, Spinner } from '@nexus/ui/primitives'
 import { useT } from '../lib/i18n/provider'
 import { WithMessages } from '../record-panels/i18n'
 import { ListKeysInfo } from './ListKeysInfo'
 import { FIT_ROWS, gridLayout, isListKey, listKeys, nextRowIndex, ownsKeys, sameIds, toggleId, type ListKey } from './model'
+import { ListToolsBar } from './tools/ListToolsBar'
+import { useListTools } from './tools/useListTools'
 import './list-frame.css'
+import './tools/tools.css'
 
 /** AG's own selection column (the row checkboxes and the header's select-all). */
 const SELECTION_COLUMN = 'ag-Grid-SelectionColumn'
@@ -83,6 +87,15 @@ export interface ListFrameProps<T> {
    * of 50.
    */
   endless?: { onNearEnd: () => void; loading: boolean; done: boolean } | null
+  /**
+   * The list's saved views and export (B-W2a-23; Columns ▾ and Export ▾ in the toolbar): by default the page's own key
+   * (its Office address with dots; a second frame on the page `<page>.2`), so every list has them without work; a key
+   * of its own (`sales.orders.lines`) for a list that is not its page's; null: none (a short list inside a dialog).
+   * Without the Office's list tools (a test, a design case of another screen) there are none either.
+   */
+  listKey?: string | null
+  /** The list's name for an export's file and sheet ("Ordini di vendita"); default the table's label. */
+  title?: string
   /** Design cases: the row that has the focus, the keys panel open. */
   focusRow?: number
   keysOpen?: boolean
@@ -105,9 +118,11 @@ export function ListFrame<T>(props: ListFrameProps<T>) {
   )
 }
 
-function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, focusRow, keysOpen }: ListFrameProps<T>) {
+function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen }: ListFrameProps<T>) {
   const t = useT('lists')
   const frameRef = useRef<HTMLDivElement>(null)
+  // Saved views and export: the layout on screen is applied to the columns the grid draws.
+  const listTools = useListTools({ frame: frameRef, listKey, columns, title: title ?? label })
   const apiRef = useRef<GridApi<T> | null>(null)
   const [ready, setReady] = useState(false)
   const selected = useMemo(() => selection?.selected ?? [], [selection?.selected])
@@ -274,6 +289,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
         <>
           {search && <GridSearchSlot>{search}</GridSearchSlot>}
           {tools}
+          {listTools.transport && <ListToolsBar state={listTools} />}
         </>
       )}
     </GridToolbar>
@@ -317,7 +333,8 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
           {...(long ? { onBodyScroll, onModelUpdated: onBodyScroll } : {})}
           rows={rowKind}
           rowData={rows as T[]}
-          columnDefs={columns}
+          columnDefs={listTools.columns}
+          {...(listTools.layout.density ? { density: listTools.layout.density } : {})}
           getRowId={getRowId}
           onGridReady={onGridReady}
           rowSelection={rowSelection}
@@ -332,6 +349,19 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
 
   return (
     <div className="fw-list" ref={frameRef}>
+      {listTools.linkNotice && (
+        <div className="fw-lt-notice">
+          <Banner
+          tone="warning"
+          title={t('tools.linkNotShared')}
+          action={
+            <Button size="sm" variant="quiet" onClick={listTools.dismissLinkNotice}>
+              {t('tools.dismiss')}
+            </Button>
+          }
+          />
+        </div>
+      )}
       <GridCard toolbar={toolbar} footer={footer}>
         {body}
       </GridCard>

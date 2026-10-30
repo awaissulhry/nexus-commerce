@@ -11,6 +11,7 @@ import { useLocale } from '../../lib/i18n/provider'
 import { OfficeSessionProvider } from '../../lib/session/context'
 import { recallScope, rememberScope, SCOPE_COOKIE } from '../../lib/session/scope-memory'
 import { permissionCheck, splitOfficePath, type OfficeSession } from '../../lib/session/session'
+import { ListToolsProvider } from '../../areas/_shared/list-tools/ListToolsProvider'
 import { officeNavFor } from '../nav/office-nav'
 import { OfficeShellView, type SystemBanner } from './view/OfficeShellView'
 
@@ -65,7 +66,10 @@ export function OfficeShell({ session, company, children }: { session: OfficeSes
       }}
     >
       {/* The pages see the company session (`useOfficeSession`, `useOfficeApi` with its x-factory-company). */}
-      <OfficeSessionProvider session={session}>{children}</OfficeSessionProvider>
+      <OfficeSessionProvider session={session}>
+        {/* B-W2a-23: every list frame's saved views and export. */}
+        <ListToolsProvider>{children}</ListToolsProvider>
+      </OfficeSessionProvider>
     </OfficeShellView>
   )
 }
