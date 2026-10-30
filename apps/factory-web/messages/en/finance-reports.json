@@ -1,0 +1,219 @@
+{
+  "band": {
+    "label": "Report status and actions",
+    "asAt": "As at",
+    "asAtLabel": "Value the stock as at this day",
+    "today": "Today",
+    "reading": "Reading…",
+    "readAt": "Read at {time}",
+    "more": "More actions",
+    "export": "Export this view (CSV)",
+    "exportHeld": "Nothing to export yet: the report has no rows.",
+    "print": "Print (new tab)"
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline: reading again when back"
+  },
+  "scope": {
+    "label": "What the report shows",
+    "site": "Site",
+    "allSites": "All sites",
+    "category": "Category",
+    "allCategories": "All categories",
+    "group": "Group by category",
+    "search": "Search an item, a lot or a work order",
+    "privacy": "Per item, lot, site and work order: never per person."
+  },
+  "category": {
+    "LEATHER": "Raw leather",
+    "MATERIALS": "Materials",
+    "TRIMS": "Trims",
+    "PACKAGING": "Packaging",
+    "FINISHED_GOODS": "Finished goods",
+    "WIP": "Work in progress"
+  },
+  "method": {
+    "title": "How the values are made",
+    "none": "No stock is valued on this day, so no costing method applies.",
+    "several": "The companies in view use different costing methods: choose one site to read one method.",
+    "company": {
+      "UNDECIDED": "Costing method: not chosen yet. The accountant chooses it (standard, moving average or FIFO, c.c. art. 2426); until then these values are provisional.",
+      "STANDARD": "Costing method: standard cost. A value marked \"depends on the method\" may differ under it.",
+      "MOVING_AVERAGE": "Costing method: moving average. A value marked \"depends on the method\" may differ under it.",
+      "FIFO": "Costing method: FIFO. A value marked \"depends on the method\" may differ under it."
+    },
+    "ledger": "Each value is the stock ledger's, as each move was valued: receipts at their purchase order's price, issues at the lot's average cost, opening stock and finished garments at the standard cost. Work in progress is the work order's cost ledger.",
+    "accountant": "To confirm with the accountant: the costing method, and whether to revalue what was posted before it is chosen.",
+    "noCost": "Values need the cost grain (money.cost): quantities, areas and hides are shown; the value columns are not drawn."
+  },
+  "totals": {
+    "title": "Totals by category",
+    "asAt": "As at {day}",
+    "rows": "Rows",
+    "total": "Total",
+    "failed": "The totals could not be read."
+  },
+  "note": {
+    "truncated": "Only the first 5,000 rows are shown: narrow the report by site or category.",
+    "unvalued_one": "{count} stock move has no value yet: its stock is counted but not valued.",
+    "unvalued_other": "{count} stock moves have no value yet: their stock is counted but not valued.",
+    "residue": "{residue} is left by the rounding of lot costs on stock that is gone: rows plus this equal the stock ledger.",
+    "currencies": "The stock is valued in more than one currency: no total is added across them."
+  },
+  "list": {
+    "title": "Stock valuation",
+    "fileTitle": "Stock valuation",
+    "count_one": "{count} row",
+    "count_other": "{count} rows",
+    "failed": "Couldn't load the stock valuation",
+    "slow": "Still loading…",
+    "empty": {
+      "title": "No stock on this date",
+      "body": "Nothing was on hand at the end of {day}."
+    },
+    "noMatch": {
+      "title": "Nothing matches",
+      "body": "No stock matches the site, the category or the search."
+    },
+    "clearFilters": "Clear the filters"
+  },
+  "col": {
+    "category": "Category",
+    "item": "Item",
+    "lot": "Lot",
+    "site": "Site",
+    "quantity": "On hand",
+    "value": "Value",
+    "unitCost": "Cost per unit",
+    "basis": "What the value rests on"
+  },
+  "row": {
+    "wip": "Work in progress · {number}",
+    "wipOpen": "The work order's cost so far",
+    "wipDone": "Work order done: its balance is the variance the close writes off",
+    "noColour": "No colour",
+    "noLot": "No lot",
+    "lotLink": "Open lot {code}",
+    "area": "{area} m²",
+    "hides_one": "{count} hide",
+    "hides_other": "{count} hides",
+    "dependsOnMethod": "depends on the method",
+    "sameUnderMethod": "the same under the method"
+  },
+  "valued": {
+    "FULL": "Valued",
+    "PART": "Partly valued",
+    "NONE": "No value"
+  },
+  "basis": {
+    "method": {
+      "PURCHASE_PRICE": "purchase price",
+      "LOT_COST": "lot average cost",
+      "STANDARD_COST": "standard cost",
+      "MANUAL": "cost typed with a reason"
+    },
+    "full": "the stock ledger's values",
+    "part_one": "{count} move has no cost yet",
+    "part_other": "{count} moves have no cost yet",
+    "none_one": "No value: {count} move has no cost",
+    "none_other": "No value: {count} moves have no cost",
+    "wip": "the work order's cost ledger",
+    "wipDone": "the closed work order's balance"
+  },
+  "bulk": {
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)"
+  },
+  "keys": {
+    "search": "Search an item or lot",
+    "title": "Keyboard shortcuts"
+  },
+  "csv": {
+    "file": "stock-valuation-{day}",
+    "category": "Category",
+    "item": "Item",
+    "colour": "Colour",
+    "lot": "Lot",
+    "workOrder": "Work order",
+    "site": "Site",
+    "quantity": "Quantity",
+    "uom": "Unit",
+    "areaM2": "Area (m²)",
+    "hides": "Hides",
+    "value": "Value",
+    "unitCost": "Cost per unit",
+    "currency": "Currency",
+    "basis": "Basis"
+  },
+  "how": {
+    "title": "How this lot is valued",
+    "openLot": "how lot {code} is valued",
+    "openItem": "how {code} is valued",
+    "lotTitle": "How lot {code} is valued",
+    "itemTitle": "How {code} is valued",
+    "failed": "Couldn't read how it is valued.",
+    "method": "Costing method",
+    "companyMethod": {
+      "UNDECIDED": "Not chosen yet (to confirm with the accountant)",
+      "STANDARD": "Standard cost",
+      "MOVING_AVERAGE": "Moving average",
+      "FIFO": "FIFO"
+    },
+    "onHand": "On hand",
+    "value": "Value",
+    "unitCost": "Cost per unit",
+    "lotCost": "Next issue leaves at",
+    "depends": "A chosen costing method may value it differently.",
+    "same": "The company's method values it the same.",
+    "before": "The latest {count} moves are shown; before them: {quantity}, {value}.",
+    "noMoves": "No move up to this day.",
+    "layersLabel": "Its moves and their costs",
+    "col": {
+      "day": "Day",
+      "move": "Move",
+      "quantity": "Quantity",
+      "cost": "Cost",
+      "balance": "After it"
+    },
+    "receipt": "{receipt} · {order} at {price}",
+    "reversal": "a reversal",
+    "notValued": "no cost yet",
+    "accountant": "Whether to revalue these moves once a method is chosen is the accountant's question."
+  },
+  "reason": {
+    "OPENING": "Opening stock",
+    "RECEIPT": "Receipt",
+    "ISSUE": "Issue to work order",
+    "RETURN": "Return from work order",
+    "TRANSFER": "Transfer",
+    "ADJUSTMENT": "Adjustment",
+    "COUNT": "Count difference",
+    "SCRAP": "Scrap",
+    "PRODUCTION_RECEIPT": "Finished goods from a work order"
+  },
+  "print": {
+    "title": "Stock valuation · {company} · as at {day}",
+    "meta": "Read {at} · printed by {person}",
+    "held": "Wait until the report is read.",
+    "button": "Print or save as PDF"
+  },
+  "noAccess": {
+    "title": "You cannot see the stock valuation",
+    "body": "It needs the stock permission (inventory.stock.view). Ask an administrator."
+  },
+  "common": {
+    "retry": "Try again",
+    "loading": "Loading…"
+  },
+  "problem": {
+    "signed_out": "Your session ended: sign in again.",
+    "forbidden": "You may not see this stock (a site outside your roles).",
+    "not_found": "This item or lot no longer exists.",
+    "unavailable": "The factory system did not answer: try again.",
+    "rate_limited": "Too many reads at once: wait a moment.",
+    "invalid": "The day or a filter is not valid.",
+    "internal": "Something went wrong on our side."
+  }
+}

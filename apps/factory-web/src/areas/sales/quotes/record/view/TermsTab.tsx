@@ -36,6 +36,9 @@ export function TermsTab({ quote, model, actions }: { quote: QuoteDetail; model:
   const identity = party?.taxIdentities.find((entry) => entry.current) ?? null
   const current = quote.current
   const dateLocale = INTL_LOCALE[locale]
+  const libraryItems = model.library?.items ?? []
+  const libraryChoices = current.paymentTermsId && !libraryItems.some((row) => row.id === current.paymentTermsId) ? [{ id: current.paymentTermsId, code: '', name: current.paymentTerms ?? '—' }, ...libraryItems] : libraryItems
+  const chosenTerms = libraryItems.find((row) => row.id === draft.paymentTermsId) ?? null
   const save = () => {
     if (count === 0 || problemCount > 0 || saving) return
     setSaving(true)
@@ -185,9 +188,24 @@ export function TermsTab({ quote, model, actions }: { quote: QuoteDetail; model:
         <h2 className="fw-q-h2">{t('terms.payment.title')}</h2>
         {editable ? (
           <div className="fw-q-fields">
-            <Field label={t('terms.paymentTerms')}>
-              <Input value={draft.paymentTerms} onChange={(event) => set('paymentTerms', event.target.value)} maxLength={200} />
-            </Field>
+            {/* B-W2a-49 (FIN-075): terms from the library of the quote's company; their printed name follows. */}
+            {model.library?.allowed && (
+              <Field label={t('terms.library')} hint={chosenTerms ? (locale === 'en' ? chosenTerms.summary.en : chosenTerms.summary.it) : model.library.problem ? t('terms.libraryFailed') : t('terms.libraryHint')}>
+                <Select value={draft.paymentTermsId} disabled={model.library.items === null} onChange={(event) => set('paymentTermsId', event.target.value)}>
+                  <option value="">{t('terms.libraryNone')}</option>
+                  {libraryChoices.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.code ? `${row.code} · ${row.name}` : row.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+            {draft.paymentTermsId === '' && (
+              <Field label={t('terms.paymentTerms')} hint={model.library?.allowed ? t('terms.typedHint') : undefined}>
+                <Input value={draft.paymentTerms} onChange={(event) => set('paymentTerms', event.target.value)} maxLength={200} />
+              </Field>
+            )}
             <Field label={t('terms.depositPct')} hint={t('terms.depositHint')} error={problems.depositPct ? t(problems.depositPct) : undefined}>
               <Input value={draft.depositPct} onChange={(event) => set('depositPct', event.target.value)} inputMode="decimal" />
             </Field>
@@ -218,6 +236,11 @@ export function TermsTab({ quote, model, actions }: { quote: QuoteDetail; model:
           ]}
         />
       </Card>
+
+      {/* B-W2a-49 (SAL-012): the customer's minimum order against this quote's net total (price grain). */}
+      {model.grains.price && current.belowMinimum && (
+        <Banner tone="warning" title={t('terms.belowMinimum', { minimum: money(current.belowMinimum.minimum, current.currency, locale), short: money(current.belowMinimum.short, current.currency, locale) })} />
+      )}
 
       {(current.taxMode.endsWith('B2C') || current.noWithdrawal) && (
         <Card padded>

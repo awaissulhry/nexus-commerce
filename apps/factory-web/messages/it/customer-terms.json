@@ -1,0 +1,124 @@
+{
+  "common": {
+    "retry": "Riprova"
+  },
+  "terms": {
+    "title": "Condizioni commerciali",
+    "intro": "I valori che un nuovo preventivo o ordine di questo cliente prende.",
+    "edit": "Modifica",
+    "close": "Chiudi",
+    "save": "Salva condizioni",
+    "saved": "Condizioni commerciali salvate. I preventivi aperti tengono le loro; i nuovi preventivi e ordini prendono queste.",
+    "unsaved_one": "{count} modifica non salvata",
+    "unsaved_other": "{count} modifiche non salvate",
+    "fixFirst_one": "Correggi prima {count} campo",
+    "fixFirst_other": "Correggi prima {count} campi",
+    "failed": "Impossibile caricare le condizioni",
+    "viewOnly": "Puoi vedere, non modificare",
+    "none": "Nessuno",
+    "noList": "Nessuno: prezzato dal listino base",
+    "baseList": "Nessuno (lo prezza il listino base)",
+    "noGroup": "Nessun gruppo di sconto",
+    "chain": "Riserva: {chain}",
+    "archivedTerms": "archiviati",
+    "typedOnly": "Scritti sul cliente, non dalla libreria",
+    "useTyped": "Nessuno dalla libreria (stampa “{text}”)",
+    "depositFromTerms": "{pct} dai suoi termini di pagamento",
+    "depositSettings": "Dalle impostazioni vendite",
+    "noPrice": "Il valore minimo d'ordine non è nel tuo ruolo (niente prezzi di vendita).",
+    "currencyHint": "I suoi preventivi e il listino sono in questa valuta.",
+    "paymentHint": "Cosa si paga e quando; l'acconto segue la rata all'ordine.",
+    "listHint": "Listini attivi in {currency} di questa azienda o di tutte.",
+    "groupHint": "Solo lettura: un cliente entra in un gruppo di sconto ricevendo il listino del gruppo (o uno che lo usa come riserva).",
+    "carrierHint": "Il codice del corriere da usare per primo (es. BRT, GLS).",
+    "depositHint": "Percentuale del totale lordo; vuoto: dai termini di pagamento, altrimenti dalle impostazioni vendite.",
+    "minimumHint": "Netto, in {currency}; un preventivo sotto lo segnala.",
+    "languageHint": "La lingua di preventivi, PDF e mail.",
+    "invoicingHint": "TD01 una fattura per spedizione, TD24 una fattura differita al mese.",
+    "choicesFailed": "Impossibile leggere i termini di pagamento o i listini da scegliere: gli altri campi si salvano lo stesso.",
+    "held": {
+      "notCustomer": "Le condizioni commerciali sono per i clienti",
+      "archived": "Archiviato: riattivalo per cambiare le condizioni",
+      "noManage": "Il tuo ruolo può vedere i clienti, non modificarli",
+      "noTerms": "Il tuo ruolo non può leggere la libreria dei termini di pagamento",
+      "noListsManage": "Dare un listino richiede il permesso di gestire i listini"
+    },
+    "problem": {
+      "currency": "Un codice valuta come EUR o CHF",
+      "language": "Un codice lingua di due lettere",
+      "deposit": "Una percentuale da 0 a 100",
+      "minimum": "Un importo con al massimo due decimali",
+      "carrier": "Al massimo 50 caratteri",
+      "incoterm": "Una delle regole Incoterms 2020"
+    },
+    "refused": {
+      "moved": "Qualcun altro ha cambiato questo cliente nel frattempo: riletto, niente è stato sovrascritto.",
+      "forbidden": "Il tuo ruolo non può dare questo listino o questi termini.",
+      "list": "Quel listino non può essere di questo cliente: deve essere attivo, della sua azienda o di tutte, e nella sua valuta.",
+      "terms": "Quei termini di pagamento non si possono usare: archiviati, o di un'altra azienda.",
+      "currency": "La valuta non va con il suo listino: cambiali insieme.",
+      "fields": "Alcuni campi sono stati rifiutati: controllali.",
+      "unavailable": "Il server non ha risposto: niente è cambiato, riprova.",
+      "internal": "Qualcosa è andato storto sul server: niente è cambiato."
+    }
+  },
+  "termsField": {
+    "currency": "Valuta",
+    "paymentTerms": "Termini di pagamento",
+    "priceList": "Listino",
+    "discountGroup": "Gruppo di sconto",
+    "incoterm": "Incoterms",
+    "carrier": "Corriere preferito",
+    "deposit": "Acconto predefinito %",
+    "minimum": "Valore minimo d'ordine",
+    "language": "Lingua dei documenti",
+    "invoicing": "Fatturazione"
+  },
+  "language": {
+    "it": "Italiano",
+    "en": "Inglese",
+    "other": "Altra ({code})"
+  },
+  "invoicing": {
+    "PER_SHIPMENT": "Una fattura per spedizione (TD01)",
+    "MONTHLY": "Una fattura differita al mese (TD24)"
+  },
+  "kind": {
+    "BASE": "base",
+    "CUSTOMER": "cliente",
+    "GROUP": "gruppo",
+    "CONTRACT": "contratto"
+  },
+  "incoterm": {
+    "EXW": "EXW · Franco fabbrica",
+    "FCA": "FCA · Franco vettore",
+    "CPT": "CPT · Trasporto pagato fino a",
+    "CIP": "CIP · Trasporto e assicurazione pagati fino a",
+    "DAP": "DAP · Reso al luogo di destinazione",
+    "DPU": "DPU · Reso al luogo di destinazione scaricato",
+    "DDP": "DDP · Reso sdoganato",
+    "FAS": "FAS · Franco lungo bordo",
+    "FOB": "FOB · Franco a bordo",
+    "CFR": "CFR · Costo e nolo",
+    "CIF": "CIF · Costo, assicurazione e nolo"
+  },
+  "import": {
+    "action": "Importa",
+    "everyCompany": "Tutte le aziende",
+    "held": {
+      "manage": "Il tuo ruolo può vedere i clienti, non modificarli",
+      "run": "Importare richiede il permesso di eseguire importazioni e caricare file"
+    }
+  },
+  "problem": {
+    "read": {
+      "signed_out": "La sessione è scaduta: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non può vedere questo.",
+      "not_found": "Non c’è più.",
+      "unavailable": "Il server non ha risposto: riprova tra poco.",
+      "rate_limited": "Troppe richieste: aspetta un momento.",
+      "contract": "La risposta non corrisponde a questa pagina: ricarica la pagina.",
+      "internal": "Qualcosa è andato storto sul server."
+    }
+  }
+}

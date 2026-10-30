@@ -76,6 +76,10 @@ export const currentSchema = z.object({
   firmOffer: z.boolean(),
   promiseDate: z.string().nullable(),
   paymentTerms: z.string().nullable(),
+  /** B-W2a-19/49: the library's terms (FIN-075), the price list version the quote keeps (SAL-165), the customer's minimum order (price grain). */
+  paymentTermsId: z.string().nullable().optional(),
+  priceList: z.object({ listId: z.string(), code: z.string(), name: z.string(), versionId: z.string(), revision: z.number() }).nullable().optional(),
+  belowMinimum: z.object({ minimum: z.number(), short: z.number() }).nullable().optional(),
   termsText: z.string().nullable(),
   termsVersion: z.string().nullable(),
   depositPct: z.string().nullable(),
@@ -364,11 +368,13 @@ export interface ListFilter {
   status?: QuoteStatus
   mine?: boolean
   q?: string
+  /** One customer's quotes (New quote › Start from a past quote). */
+  partyId?: string
 }
 
 export async function listQuotes(api: ApiClient, filter: ListFilter, cursor?: string | null, signal?: AbortSignal): Promise<{ quotes: QuoteListRow[]; nextCursor: string | null }> {
   return api.get('/sales/quotes', {
-    query: { status: filter.status, mine: filter.mine ? 'true' : undefined, q: filter.q?.trim() || undefined, cursor: cursor ?? undefined, limit: 50 },
+    query: { status: filter.status, mine: filter.mine ? 'true' : undefined, q: filter.q?.trim() || undefined, partyId: filter.partyId, cursor: cursor ?? undefined, limit: 50 },
     schema: z.object({ quotes: z.array(listRowSchema), nextCursor: z.string().nullable() }),
     signal,
   })
@@ -443,6 +449,8 @@ export interface HeaderPatch {
   firmOffer?: boolean
   promiseDate?: string | null
   paymentTerms?: string | null
+  /** B-W2a-49: terms from the library (their printed name follows); null: none. */
+  paymentTermsId?: string | null
   depositPct?: string | null
   depositKind?: DepositKind | null
   billToAddressId?: string | null
@@ -497,4 +505,17 @@ export function sendQuote(api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'versi
 
 export function sendNewLink(api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'version'>): Promise<z.infer<typeof sendLinkSchema>> {
   return api.post(`${quotePath(quote.id)}/send-link`, { body: { version: quote.version }, schema: sendLinkSchema, idempotencyKey: newIdempotencyKey() })
+}
+
+// ---- B-W2a-49: duplicate a quote (B-W2a-30's POST /sales/quotes/:id/duplicate; SAL-155) -----------------------------------
+
+/** What the copy left out, as the API says it (its reason in English: the screens say their own words, quotes/model.ts). */
+const droppedSchema = z.object({ seq: z.number(), size: z.string().nullable(), reason: z.string() })
+export type DroppedLine = z.infer<typeof droppedSchema>
+const copySchema = z.object({ quote: quoteSchema, dropped: z.array(droppedSchema), warnings: z.array(z.string()) })
+export type CopyAnswer = z.infer<typeof copySchema>
+
+/** A new draft quote copied from a quote's version (none: its current one), for the same customer or another one. */
+export function duplicateQuote(api: ApiClient, quoteId: string, body: { versionId?: string; partyId?: string; contactId?: string | null; customerRef?: string | null }): Promise<CopyAnswer> {
+  return api.post(`${quotePath(quoteId)}/duplicate`, { body, schema: copySchema, idempotencyKey: newIdempotencyKey() })
 }

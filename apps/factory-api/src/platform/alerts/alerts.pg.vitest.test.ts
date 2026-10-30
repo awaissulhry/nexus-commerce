@@ -6,8 +6,7 @@ import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
-import { deferredDeadline } from '@nexus/factory-domain/invoicing/from-shipment/deadlines'
-import { monthOf } from '@nexus/factory-domain/invoicing/fatturapa/format'
+import { presetDeadline } from '@nexus/factory-domain/invoicing/from-shipment/deadlines'
 import { plusCalendarDays } from '@nexus/factory-domain/timers/rules'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../packages/factory-db/seed/_core'
@@ -197,10 +196,12 @@ describe('the engine (scheduler and worker)', () => {
     expect(await one(`SELECT state, resolution, "resolvedById", "resolveNote" FROM "Alert" WHERE id = $1`, [ids.seededHoldAlert])).toEqual({ state: 'RESOLVED', resolution: 'CLEARED', resolvedById: null, resolveNote: null })
     expect(await admin(`SELECT verb, "actorId" FROM "AlertEvent" WHERE "alertId" = $1 AND verb = 'RESOLVED'`, [ids.seededHoldAlert])).toEqual([{ verb: 'RESOLVED', actorId: null }])
     expect(await admin(`SELECT verb, facts FROM "AlertEvent" WHERE "alertId" = $1`, [so2.id])).toEqual([{ verb: 'RAISED', facts: so2.facts }])
-    // A DATE rule sets one timer per record: DDT 144/2026 waits for its invoice (the 15th of the next month, 3 working days before).
+    // A DATE rule sets one timer per record: DDT 144/2026 waits for its invoice (by its customer's preset, B-W2a-54: per
+    // shipment its 12 days, monthly the 15th of the next month; 3 working days before).
     const timer = await one(`SELECT "timerKey", status, "dueAt", "fireAt", "recordLabel" FROM "DueTimer" WHERE "recordId" = $1`, [ids.ddt])
     expect(timer).toMatchObject({ timerKey: 'INVOICE_DEADLINE:-3d', status: 'PENDING', recordLabel: '144/2026' })
-    expect(businessDate(timer.dueAt)).toBe(deferredDeadline(monthOf((await one(`SELECT to_char("documentDate", 'YYYY-MM-DD') AS d FROM "Ddt" WHERE id = $1`, [ids.ddt])).d), businessDate(at)).dueBy)
+    const ddtRow = await one(`SELECT d.number, to_char(d."documentDate", 'YYYY-MM-DD') AS d, p."invoiceTiming"::text AS timing FROM "Ddt" d JOIN "Party" p ON p.id = d."partyId" WHERE d.id = $1`, [ids.ddt])
+    expect(businessDate(timer.dueAt)).toBe(presetDeadline({ number: ddtRow.number, date: ddtRow.d }, ddtRow.timing === 'MONTHLY' ? 'TD24' : 'TD01', businessDate(at)).dueBy)
     // The switched-off certificate rule sets nothing.
     expect(await admin(`SELECT id FROM "DueTimer" WHERE "recordId" = $1`, [ids.cert])).toEqual([])
     const events = await admin(`SELECT type, count(*)::int AS n FROM "OutboxEvent" WHERE "tenantId" = $1 AND type IN ('alert.raised', 'alert.resolved', 'alert.rule_changed') GROUP BY type ORDER BY type`, [T])

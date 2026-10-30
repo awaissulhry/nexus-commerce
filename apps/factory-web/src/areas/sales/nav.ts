@@ -1,4 +1,4 @@
-import { ClipboardList, Contact, FileText, Handshake } from 'lucide-react'
+import { ClipboardList, Contact, FileText, Handshake, Tags } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -28,6 +28,12 @@ export const officeArea: OfficeAreaNav = {
           // SCR-038 / SCR-039 (B-W1-25): orders from accepted quotes, the board by state, the order studio with the deposit.
           { id: 'sales-orders', label: 'shell:nav.sales.orders', href: '/sales/orders', icon: ClipboardList, permission: 'orders.view' },
         ],
+      },
+      // SCR-106 (B-W2a-49): Pricing › Price lists & contracts — customer price lists by dated version, their customers.
+      {
+        id: 'sales-pricing',
+        label: 'shell:nav.sales.pricing',
+        items: [{ id: 'sales-pricelists', label: 'shell:nav.sales.pricelists', href: '/sales/price-lists', icon: Tags, permission: 'pricelists.view' }],
       },
     ],
   },

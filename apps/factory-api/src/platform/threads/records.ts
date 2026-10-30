@@ -84,6 +84,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const quote = await client.quote.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
     return quote ? { companyId: quote.companyId, siteId: null, partyId: quote.partyId } : null
   },
+  // modules/sales/pricelists (SCR-106 the price list's Activity tab; B-W2a-49): the list's company (none: every company's
+  // list); notes only (a list prices many customers, so its thread stays internal).
+  PriceList: async (client, id) => {
+    const list = await client.priceList.findUnique({ where: { id }, select: { companyId: true } })
+    return list ? { companyId: list.companyId, siteId: null, partyId: null } : null
+  },
   // modules/purchasing (SCR-059; B-W1-30 the order mail with its PDF and confirm link, the cancellation): the buying company,
   // the delivery site and the supplier, so the order's mail and the supplier's replies stay with that supplier.
   PurchaseOrder: async (client, id) => {
@@ -164,6 +170,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
   ReturnAuthorisation: async (client, id) => {
     const rma = await client.returnAuthorisation.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
     return rma ? { companyId: rma.companyId, siteId: rma.siteId, partyId: rma.partyId } : null
+  },
+  // modules/sales/repairs (SCR-112 the Repair order's Activity tab; B-W2a-57): the company, the repairing site and the
+  // customer, so the repair's notes and the customer's mail about it stay with that customer.
+  RepairOrder: async (client, id) => {
+    const repair = await client.repairOrder.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
+    return repair ? { companyId: repair.companyId, siteId: repair.siteId, partyId: repair.partyId } : null
   },
 })
 

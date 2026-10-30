@@ -37,6 +37,8 @@ const LABELS: Readonly<Record<string, Labeller>> = Object.freeze({
   },
   Quote: async (client, id) => (await client.quote.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   PurchaseOrder: async (client, id) => (await client.purchaseOrder.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
+  // B-W2a-49 (modules/sales/pricelists): a price list by its code.
+  PriceList: async (client, id) => (await client.priceList.findUnique({ where: { id }, select: { code: true } }))?.code ?? null,
   SalesOrder: async (client, id) => (await client.salesOrder.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   WorkOrder: async (client, id) => (await client.workOrder.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   Shipment: async (client, id) => (await client.shipment.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
