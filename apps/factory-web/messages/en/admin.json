@@ -1490,7 +1490,8 @@
     "privacy": "Privacy",
     "quality": "Quality",
     "home": "Home",
-    "floorsync": "Floor sync"
+    "floorsync": "Floor sync",
+    "calendars": "Calendars"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",

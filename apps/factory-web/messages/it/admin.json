@@ -1490,7 +1490,8 @@
     "privacy": "Privacy",
     "quality": "Qualità",
     "home": "Home",
-    "floorsync": "Sincronizzazione reparto"
+    "floorsync": "Sincronizzazione reparto",
+    "calendars": "Calendari"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
