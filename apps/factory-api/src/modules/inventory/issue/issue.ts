@@ -14,6 +14,7 @@ import { mayAt, postedBy, stockContextOf, type StockContext } from '../ledger/ac
 import { InsufficientStockError, LEDGER_SELECT, postMoves, type LedgerRow, type MoveDraft, type PostedMove } from '../ledger/post-moves'
 import { latestMoveOf, PickRefusedError, pickingWorkOrder, readGroup } from './picking'
 import { giveBackIssue, reservedForIssue, ReservedForOtherError } from '../reservations/consume'
+import { holdOnIssue } from '../../quality/holds/checks'
 import {
   itemUnitsOf,
   lockHideCuts,
@@ -190,6 +191,10 @@ export async function issueInCommand(tools: CommandTools, workOrderId: string, b
   if (reason && !mayOverIssue(context, workOrder)) throw new ForbiddenError('An over-issue is the office\'s, with inventory.issue.over.')
   const stock = await resolveStock(tx, workOrder, body, path)
   const { item, itemColourId, lot, hide } = stock
+  // W2a B-W2a-26 hook (modules/quality/holds/checks.ts): a lot, hide or work order on hold is refused with the hold's
+  // reason before the database's StockMove_awaits_quality_hold would.
+  const held = await holdOnIssue(tx, tools.context, { lotId: lot?.id ?? null, hideId: hide?.id ?? null, workOrderId: workOrder.id })
+  if (held) refused({ code: 'QUALITY_HOLD', message: held })
   if (hide && body.quantity !== undefined) throw new ValidationError('A hide is issued whole, with what it measures.', [{ path: `${path}/quantity`, message: 'Leave it out for a hide.' }])
   const requested = quantityOf(item, body, path)
 

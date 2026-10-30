@@ -1662,6 +1662,11 @@
     "paymentterms_view": "Vedere le condizioni di pagamento",
     "paymentterms_manage": "Aggiungere e cambiare condizioni di pagamento",
     "pricelists_view": "Vedere i listini e i loro prezzi",
-    "pricelists_manage": "Gestire listini, versioni e clienti"
+    "pricelists_manage": "Gestire listini, versioni e clienti",
+    "quality_defects_view": "Vedere la libreria dei difetti e le destinazioni",
+    "quality_defects_manage": "Gestire la libreria dei difetti e le destinazioni",
+    "quality_holds_view": "Vedere cosa è bloccato",
+    "quality_holds_place": "Bloccare merci e ordini di lavoro",
+    "quality_holds_release": "Sbloccare un blocco con firma elettronica"
   }
 }
