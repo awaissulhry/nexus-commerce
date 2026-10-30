@@ -106,6 +106,7 @@ export async function readDemand(db: Reader, site: SiteRow): Promise<DemandRead>
       orderId: true,
       seq: true,
       kind: true,
+      partyId: true,
       styleId: true,
       styleRevisionId: true,
       colourwayId: true,
@@ -149,6 +150,9 @@ export async function readDemand(db: Reader, site: SiteRow): Promise<DemandRead>
       revisionId: row.styleRevisionId ?? releasedOf.get(row.styleId) ?? null,
       sizes: row.kind === 'MADE_TO_MEASURE' ? (mtmSize ? [{ size: mtmSize, pieces: 1 }] : []) : row.sizes.map((size) => ({ size: size.size, pieces: size.quantity })),
       dueDate: due ? dayOf(due) : null,
+      // B-W2a-22: the pegging names the line with its party; a made-to-measure unit is pegged to the line, not a size.
+      partyId: row.partyId,
+      madeToMeasure: row.kind === 'MADE_TO_MEASURE',
     }
   })
   const revisions: PlanRevision[] = []
@@ -245,7 +249,8 @@ export interface PurchaseRead extends PlanPurchase {
 export async function readPurchases(db: Reader, siteId: string, itemIds: readonly string[]): Promise<PurchaseRead[]> {
   if (itemIds.length === 0) return []
   const lines = await db.purchaseOrderLine.findMany({
-    where: { siteId, itemId: { in: [...itemIds] }, purchaseOrder: { status: { in: [...OPEN_PURCHASE_STATUSES] } } },
+    // B-W2a-22: a cancelled or closed-short line (W2a wave 3, SCM-059/060) brings nothing more.
+    where: { siteId, itemId: { in: [...itemIds] }, cancelledAt: null, closedShortAt: null, purchaseOrder: { status: { in: [...OPEN_PURCHASE_STATUSES] } } },
     select: {
       id: true,
       seq: true,

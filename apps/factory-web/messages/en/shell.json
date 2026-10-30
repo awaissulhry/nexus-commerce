@@ -99,7 +99,9 @@
       "hides": "Hides",
       "lots": "Lots & traceability",
       "moves": "Movements",
-      "locations": "Locations"
+      "locations": "Locations",
+      "inTheWarehouse": "In the warehouse",
+      "counts": "Counts"
     },
     "frame": {
       "topBar": "Top bar"

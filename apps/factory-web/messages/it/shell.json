@@ -99,7 +99,9 @@
       "hides": "Pelli",
       "lots": "Lotti e tracciabilità",
       "moves": "Movimenti",
-      "locations": "Ubicazioni"
+      "locations": "Ubicazioni",
+      "inTheWarehouse": "In magazzino",
+      "counts": "Inventari"
     },
     "frame": {
       "topBar": "Barra superiore"

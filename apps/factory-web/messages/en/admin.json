@@ -1598,6 +1598,9 @@
     "payments_void": "Void a payment typed by mistake",
     "costing_view": "See a style's cost sheet",
     "costing_rates_manage": "Keep the cost per standard minute",
+    "costing_standards_manage": "Prepare and freeze standard costs",
+    "costing_ledger_manage": "Post and reverse work-order cost entries",
+    "costing_method_manage": "Choose the costing method (accountant)",
     "production_settings_view": "See each site's floor rules",
     "production_settings_manage": "Change a site's floor rules",
     "production_cut": "Cut hides for a work order",
@@ -1650,6 +1653,8 @@
     "production_scrap": "Post scrap and ask for replacements",
     "production_scrap_approve": "Approve lower order quantities",
     "production_cutting_view": "See the cutting room's yield",
+    "planning_firm": "Make planned orders firm",
+    "planning_exceptions_manage": "Work the planning exceptions",
     "reasons_view": "See the reason lists and how often each code is used",
     "reasons_manage": "Keep the reason lists of the whole group"
   }

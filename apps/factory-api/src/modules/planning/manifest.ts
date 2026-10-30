@@ -8,6 +8,10 @@ import { defineManifest } from '../../core/manifest'
  * B-W2a-16: planning settings and capacity, office only, checked per site (a line's or work centre's: its site) with
  * can() (`record`): read with planning.view, kept with planning.settings.manage (settings, lanes) and
  * planning.items.manage (item parameters and reorder rules).
+ *
+ * B-W2a-22: MRP every day, office only, checked per site (a line's, run's, work order's or exception's: its site) with
+ * can() (`record`): read with planning.view; firm planned orders with planning.firm; the exception list worked with
+ * planning.exceptions.manage.
  */
 export const manifest = defineManifest({
   'POST /planning/runs': { audiences: ['office'], permission: 'planning.run', scope: 'record' },
@@ -33,4 +37,16 @@ export const manifest = defineManifest({
   'PATCH /planning/work-centres/:workCentreId/capacity': { audiences: ['office'], permission: 'planning.settings.manage', scope: 'record' },
   'GET /planning/capacity': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
   'GET /planning/capacity/cell': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  // B-W2a-22: MRP every day.
+  'POST /planning/requirements/:requirementId/firm': { audiences: ['office'], permission: 'planning.firm', scope: 'record' },
+  'POST /planning/requirements/:requirementId/unfirm': { audiences: ['office'], permission: 'planning.firm', scope: 'record' },
+  'GET /planning/pegging': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/readiness': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/work-orders/:workOrderId/readiness': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/shortages': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'GET /planning/exceptions': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/exceptions/acknowledge': { audiences: ['office'], permission: 'planning.exceptions.manage', scope: 'record' },
+  'GET /planning/exceptions/:exceptionId': { audiences: ['office'], permission: 'planning.view', scope: 'record' },
+  'POST /planning/exceptions/:exceptionId/snooze': { audiences: ['office'], permission: 'planning.exceptions.manage', scope: 'record' },
+  'POST /planning/exceptions/:exceptionId/resolve': { audiences: ['office'], permission: 'planning.exceptions.manage', scope: 'record' },
 })

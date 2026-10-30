@@ -3,6 +3,8 @@ import { defineEvent } from '../events/define'
 import { DECISIONS, MAX_DECIDED_LINES } from './decisions'
 import { ITEM_PLANNING_METHODS } from './settings/items'
 import { LANE_KINDS } from './capacity/load'
+// B-W2a-22: MRP every day (firm planned orders, the exception list).
+import { MAX_EXCEPTIONS_PER_ACTION } from './exceptions/lifecycle'
 
 /**
  * The planning module's events (plan A1 §3.4, §3.5; PLN-062; design 02 "What to buy & make", Live). apps/factory-api's
@@ -18,6 +20,11 @@ import { LANE_KINDS } from './capacity/load'
  *   planning.settings_changed        a site's horizon, buckets, default efficiency or nightly run time changed
  *   planning.item_parameters_changed how a site plans an item (and colour) was set, changed or removed
  *   planning.capacity_changed        the planned efficiency, people (a line) or units (a work centre) of a lane changed
+ *
+ * B-W2a-22 (MRP every day; PLN-075, PLN-193; design planning.mrp, planning.exceptions):
+ *   planning.requirement_firmed      a line of the latest plan was made firm (or changed), or planned again
+ *   planning.exceptions_found        a run refreshed the site's exception list: raised, still open, cleared
+ *   planning.exceptions_changed      exceptions were acknowledged, snoozed or resolved by a person
  */
 const live = { permission: 'planning.view', fields: ['runId', 'siteId'] } as const
 const SETTINGS_FIELDS = ['horizonWeeks', 'dayBucketWeeks', 'weekBucketWeeks', 'defaultEfficiencyPct', 'scheduledRunTime'] as const
@@ -99,5 +106,31 @@ export const events = [
       changed: z.array(z.enum(['plannedEfficiencyPct', 'people', 'note'])).min(1).max(3),
     }),
     live: { permission: 'planning.view', fields: ['siteId', 'laneKind', 'laneId', 'change'] },
+  }),
+  // ---- B-W2a-22: MRP every day ---------------------------------------------------------------------------------------
+  defineEvent({
+    type: 'planning.requirement_firmed',
+    context: 'planning',
+    description: 'A line of the latest plan was made a firm planned order (or its firm quantity, date or supplier changed), or made planned again.',
+    payload: z.strictObject({ runId: z.uuid(), siteId: z.uuid(), requirementId: z.uuid(), firm: z.boolean() }),
+    live: { permission: 'planning.view', fields: ['runId', 'siteId', 'requirementId', 'firm'] },
+  }),
+  defineEvent({
+    type: 'planning.exceptions_found',
+    context: 'planning',
+    description: "A planning run refreshed the site's exception list: the conditions it raised, those still open, and those it no longer found.",
+    payload: z.strictObject({ runId: z.uuid(), siteId: z.uuid(), raised: z.number().int().min(0), stillOpen: z.number().int().min(0), cleared: z.number().int().min(0) }),
+    live,
+  }),
+  defineEvent({
+    type: 'planning.exceptions_changed',
+    context: 'planning',
+    description: "Exceptions of a site's planning runs were acknowledged, snoozed or resolved.",
+    payload: z.strictObject({
+      siteId: z.uuid(),
+      change: z.enum(['ACKNOWLEDGED', 'SNOOZED', 'RESOLVED']),
+      exceptionIds: z.array(z.uuid()).min(1).max(MAX_EXCEPTIONS_PER_ACTION),
+    }),
+    live: { permission: 'planning.view', fields: ['siteId', 'change'] },
   }),
 ] as const
