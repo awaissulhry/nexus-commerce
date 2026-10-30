@@ -56,6 +56,8 @@ import { PAYMENT_TERMS_DEFINITIONS, PAYMENT_TERMS_PERMISSIONS } from '../../sale
 import { PRICE_LISTS_DEFINITIONS, PRICE_LISTS_PERMISSIONS } from '../../sales/pricelists/permissions'
 // B-W2a-23: saved views and the export of any list (views.save, views.manage, views.export).
 import { VIEWS_DEFINITIONS, VIEWS_PERMISSIONS } from '../../views/permissions'
+// B-W2a-32: global search (search.rebuild; searching itself needs no permission of its own).
+import { SEARCH_DEFINITIONS, SEARCH_PERMISSIONS } from '../../search/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -392,6 +394,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   QUALITY_HOLDS_DEFINITIONS,
   // B-W2a-23: saved views and exports.
   VIEWS_DEFINITIONS,
+  // B-W2a-32: rebuilding the search index.
+  SEARCH_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -435,6 +439,8 @@ for (const name of TASKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name))
 for (const name of [...QUALITY_DEFECTS_PERMISSIONS, ...QUALITY_HOLDS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-23: saved views and exports.
 for (const name of VIEWS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-32: global search.
+for (const name of SEARCH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

@@ -110,7 +110,7 @@
   "topbar": {
     "home": "Home di Nexus Factory",
     "searchLabel": "Cerca: apre la palette dei comandi",
-    "searchPlaceholder": "Trova una pagina o scansiona un'etichetta…",
+    "searchPlaceholder": "Cerca un record, una pagina o scansiona un'etichetta…",
     "theme": {
       "light": "Tema chiaro. Passa allo scuro",
       "dark": "Tema scuro. Passa a quello di sistema",
@@ -148,23 +148,28 @@
   },
   "palette": {
     "title": "Cerca",
-    "placeholder": "Nome di una pagina, codice etichetta o numero",
+    "placeholder": "Numero, nome, codice etichetta o pagina",
     "results": "Risultati",
     "group": {
       "labels": "Etichetta",
-      "numbers": "Numero",
+      "exact": "Numero esatto",
+      "records": "Record",
       "pages": "Pagine"
     },
-    "empty": "Nessun risultato per “{query}”.",
+    "empty": "Nessun risultato per “{query}”. Prova un numero, un nome o scansiona un'etichetta.",
     "keys": {
       "move": "per spostarti",
       "open": "per aprire",
+      "newTab": "nuova scheda",
+      "group": "gruppo successivo",
       "close": "per chiudere"
     },
     "label": {
       "found": "Etichetta {type} {code}",
-      "later": "Riferimento {reference}. Potrai aprirla da qui quando questi dati saranno in Nexus Factory.",
-      "refused": "{code} non è un'etichetta di questa fabbrica"
+      "later": "Riferimento {reference}. Nessun record ha ancora questa etichetta in Nexus Factory.",
+      "refused": "{code} non è un'etichetta di questa fabbrica",
+      "looking": "Riferimento {reference}. Cerco il suo record…",
+      "open": "{type} {code} · {title}"
     },
     "problem": {
       "format": "Non è scritta come si stampano le etichette. Scansionala di nuovo.",
@@ -173,8 +178,20 @@
       "tenant": "Questa etichetta è di un'altra fabbrica."
     },
     "number": {
-      "find": "Trova il numero “{number}”",
-      "later": "La ricerca per numero di documento arriva con i primi dati."
+      "find": "Numero “{number}”",
+      "later": "Nessun record che puoi aprire ha questo numero.",
+      "looking": "Cerco questo numero…"
+    },
+    "records": {
+      "loading": "Cerco i record…",
+      "slow": "Ancora in caricamento…",
+      "error": "La ricerca non risponde: le pagine funzionano comunque.",
+      "all": "Vedi tutti i risultati per “{query}”",
+      "allCount_one": "{count} risultato",
+      "allCount_other": "{count} risultati"
+    },
+    "record": {
+      "similar": "simile"
     }
   },
   "scanType": {

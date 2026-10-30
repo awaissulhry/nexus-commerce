@@ -127,6 +127,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'reasons.manage',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.manage', 'views.export',
+      // B-W2a-32: rebuild the search index.
+      'search.rebuild',
     ],
     grains: [],
   }),
