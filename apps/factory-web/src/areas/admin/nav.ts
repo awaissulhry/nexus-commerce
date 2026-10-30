@@ -1,4 +1,4 @@
-import { Building2, FileClock, Hash, Languages, ListChecks, PlugZap, Settings, ShieldCheck, Tablet, Upload, Users } from 'lucide-react'
+import { Building2, FileClock, FileLock, Hash, Languages, ListChecks, PlugZap, Settings, ShieldCheck, Tablet, Upload, Users } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -67,6 +67,8 @@ export const officeArea: OfficeAreaNav = {
         items: [
           { id: 'admin-import', label: 'shell:nav.admin.import', href: '/admin/import', icon: Upload, permission: 'imports.view' },
           { id: 'admin-audit', label: 'shell:nav.admin.audit', href: '/admin/audit', icon: FileClock, permission: 'audit.read' },
+          // SCR-086: the privacy duties, worker / staff / public notices and acknowledgements, the DPIA and the register.
+          { id: 'admin-privacy', label: 'shell:nav.admin.privacy', href: '/admin/privacy', icon: FileLock, permission: 'privacy.view' },
         ],
       },
     ],

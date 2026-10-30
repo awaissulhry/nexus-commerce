@@ -134,8 +134,10 @@ describe('every floor design case draws in both languages', () => {
     const cutting = render(homeScreen as DesignScreen<unknown>, homeScreen.cases.find((item) => item.id === 'cutting')!.model, 'en')
     expect(cutting).not.toContain('Coming soon')
     expect(cutting).toContain('Scan anything')
+    // Garment labels (SCR-096) and Pack (SCR-098) are built: the packing bench holds no tile as "Coming soon".
     const html = render(homeScreen as DesignScreen<unknown>, homeScreen.cases.find((item) => item.id === 'packing')!.model, 'en')
-    expect(html.match(/Coming soon/g)?.length).toBeGreaterThanOrEqual(2)
+    expect(html).toContain('Garment labels')
+    expect(html).not.toContain('Coming soon')
     const held = render(homeScreen as DesignScreen<unknown>, homeScreen.cases.find((item) => item.id === 'notice-blocks')!.model, 'en')
     expect(held).toContain('Read the notice first')
     expect(held).not.toContain('Coming soon')

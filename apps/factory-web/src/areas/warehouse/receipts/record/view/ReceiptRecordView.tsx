@@ -371,13 +371,10 @@ function LotCard({ lot, receipt, model, actions }: { lot: LotWithHides; receipt:
       <div className="fw-by-stack">
         <div className="fw-by-card-head">
           <h3 className="fw-by-h3">
-            {model.can.lots ? (
-              <Link className="fw-by-link" href={`${model.prefix}/compliance/tests/${lot.id}`}>
-                {lot.code}
-              </Link>
-            ) : (
-              lot.code
-            )}
+            {/* Warehouse › Lots & traceability (SCR-201): the lot's stock, trace and moves; its release links on from there. */}
+            <Link className="fw-by-link" href={`${model.prefix}/warehouse/lots/${encodeURIComponent(lot.id)}`}>
+              {lot.code}
+            </Link>
             <span className="fw-by-title-sub">{line ? `· ${line.item.code} ${line.item.name}${line.colour ? ` · ${line.colour.name}` : ''}` : ''}</span>
           </h3>
           <span className="fw-by-meta">
