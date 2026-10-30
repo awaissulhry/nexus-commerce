@@ -209,6 +209,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-28: Warehouse › Counts (SCR-132) and a count.
   '/warehouse/counts',
   '/warehouse/counts/[id]',
+  // B-W2a-58: Warehouse › Picking & kits (SCR-237) and its paper (a new tab, no navigation row).
+  '/warehouse/picking',
+  '/warehouse/picking/print',
   // B-W2a-32: All results of the global search (SCR-248), a frame page opened from the palette (no navigation row).
   '/search',
   // B-W2a-38: Production › Reports › Production reports (SCR-240) and its print page (a new tab, no navigation row).

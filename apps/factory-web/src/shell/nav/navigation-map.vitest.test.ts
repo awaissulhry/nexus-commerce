@@ -112,6 +112,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/lots': 'inventory.stock.view', // GET /inventory/lots
       '/warehouse/moves': 'inventory.stock.view', // GET /inventory/ledger
       '/warehouse/receipts': 'inventory.stock.view', // GET /inventory/receipts
+      '/warehouse/picking': 'inventory.stock.view', // GET /inventory/picking/pick-lists (B-W2a-58)
       '/warehouse/counts': 'inventory.counts.view', // GET /inventory/stock-counts
       '/warehouse/shipments': 'shipping.view', // GET /shipping/shipments
       '/warehouse/locations': 'inventory.locations.view', // GET /inventory/locations
@@ -165,6 +166,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/lots',
       '/warehouse/moves',
       '/warehouse/receipts',
+      '/warehouse/picking',
       '/warehouse/counts',
       '/warehouse/shipments',
       '/warehouse/locations',

@@ -1,0 +1,231 @@
+{
+  "col": {
+    "workOrder": "Ordine",
+    "style": "Modello",
+    "cutDate": "Taglio",
+    "readiness": "Disponibilità",
+    "lines": "Righe",
+    "kitPlace": "Posto kit",
+    "kit": "Kit",
+    "team": "Prelevato da",
+    "started": "Iniziato",
+    "finished": "Finito",
+    "actions": "Azioni"
+  },
+  "view": {
+    "all": "Tutte le liste di prelievo",
+    "today": "Da prelevare oggi",
+    "waiting": "In attesa di materiale",
+    "complete": "Kit completi"
+  },
+  "tile": {
+    "today": "Da prelevare oggi",
+    "waiting": "In attesa di materiale",
+    "complete": "Kit completi"
+  },
+  "tileHint": {
+    "today": "Taglio oggi o prima, kit non completo",
+    "waiting": "Mancante, in ritardo, richiesto o ancora atteso",
+    "complete": "Ogni riga prelevata per intero"
+  },
+  "band": {
+    "create": "Crea liste di prelievo",
+    "printSelected_one": "Stampa {count} lista di prelievo",
+    "printSelected_other": "Stampa {count} liste di prelievo",
+    "printShown_one": "Stampa {count} lista di prelievo",
+    "printShown_other": "Stampa {count} liste di prelievo"
+  },
+  "held": {
+    "noReserve": "Il tuo ruolo non può impegnare giacenza (inventory.reserve).",
+    "nothingToPrint": "Nessuna lista di prelievo mostrata da stampare.",
+    "CR_VI_PENDING": "Lotto {lot}: manca ancora l'esito del test cromo VI",
+    "CR_VI_FAILED": "Lotto {lot}: non ha superato il test cromo VI",
+    "QUALITY_HOLD": "Lotto {lot}: in quarantena",
+    "BLOCKED": "Lotto {lot}: bloccato dopo il rilascio",
+    "REJECTED": "Lotto {lot}: respinto",
+    "holdLot": "Il lotto {lot} è bloccato ({reason}, dal {since}): la sua giacenza non si preleva finché la qualità non rilascia il blocco",
+    "holdHide": "La pelle {hide} del lotto {lot} è bloccata ({reason}, dal {since}): non si preleva finché la qualità non rilascia il blocco"
+  },
+  "list": {
+    "tableLabel": "Liste di prelievo per ordine di produzione",
+    "search": "Cerca ordine di produzione o modello",
+    "viewLabel": "Righe salvate",
+    "notYet": "Non ancora letto",
+    "count_one": "{count} di {total} ordine di produzione",
+    "count_other": "{count} di {total} ordini di produzione",
+    "countMore_one": "{count} di {total} ordine di produzione",
+    "countMore_other": "{count} di {total} ordini di produzione",
+    "showMore": "Mostra altri",
+    "failed": "Non è stato possibile leggere le liste di prelievo",
+    "noMatch": "Nessuna riga corrisponde a questi filtri",
+    "empty": "Ancora nessuna lista di prelievo",
+    "emptyBody": "Nessun ordine di produzione è rilasciato per il prelievo. Crea le liste di prelievo per gli ordini rilasciati, oppure rilasciane uno in Produzione › Ordini di produzione.",
+    "pieces_one": "{count} capo",
+    "pieces_other": "{count} capi",
+    "due": "consegna {date}",
+    "notPlanned": "non ancora nel piano",
+    "lines": "{picked} di {all}",
+    "linesTitle": "{picked} di {all} righe prelevate per intero",
+    "onHold": "Bloccato",
+    "onHoldWhy": "Bloccato: {reason}",
+    "hasList": "Lista fatta",
+    "noList": "Nessuna lista",
+    "office": "l'ufficio",
+    "rowMenu": "Altro per {number}",
+    "openList": "Apri la lista di prelievo",
+    "printOne": "Stampa questa lista di prelievo",
+    "openWorkOrder": "Apri l'ordine di produzione",
+    "foot": "Solo quantità. Un kit è completo quando ogni riga è prelevata per intero; contano le scansioni del reparto e i prelievi dell'ufficio, i resi si sottraggono. Chi ha prelevato si dice per squadra, mai per persona."
+  },
+  "kit": {
+    "status": {
+      "OPEN": "Aperto",
+      "PARTLY": "In parte",
+      "COMPLETE": "Completo"
+    },
+    "place": "Posto del kit:",
+    "placeNone": "Non registrato",
+    "placeLater": "Non ancora registrato: il posto in cui si prepara il kit arriva con un passo successivo.",
+    "mark": "Segna il kit completo",
+    "markShort_one": "Manca ancora {count} riga: il kit è completo quando è prelevata.",
+    "markShort_other": "Mancano ancora {count} righe: il kit è completo quando sono prelevate.",
+    "markRecordLater": "Ogni riga è prelevata: il kit risulta già Completo. Segnare un kit a mano richiede una scheda del kit, che arriva con un passo successivo.",
+    "check": "Verifica kit completo",
+    "checkList_one": "Lista di prelievo fatta: {count} impegno",
+    "checkList_other": "Lista di prelievo fatta: {count} impegni",
+    "checkNoList": "Ancora nessuna lista di prelievo: niente è impegnato per questo ordine di produzione",
+    "lineDone": "{material}: prelevato per intero",
+    "lineShort": "{material}: {short} ancora da prelevare",
+    "allDone": "Ogni riga è prelevata: il kit è completo",
+    "notAllDone_one": "{count} riga ancora mancante",
+    "notAllDone_other": "{count} righe ancora mancanti"
+  },
+  "ready": {
+    "word": {
+      "NOT_ENOUGH": "Non basta",
+      "DELAYED": "In ritardo",
+      "REQUESTED": "Richiesto",
+      "EXPECTED": "Atteso",
+      "EXPECTED_ON": "Atteso {date}",
+      "NOT_BOOKED": "Non impegnato",
+      "RECEIVED": "Ricevuto",
+      "NOT_PLANNED": "Non pianificato"
+    },
+    "reason": {
+      "NOT_ENOUGH": "{material}: mancano {short} e non c'è ancora nulla in ordine.",
+      "DELAYED": "{material}: arriva tardi ({date}), dopo che serve.",
+      "DELAYED_PO": "{material}: {po} era previsto per il {date} o arriva dopo che serve.",
+      "REQUESTED": "{material}: richiesto (un ordine d'acquisto in bozza o un ordine pianificato confermato), non ancora ordinato.",
+      "EXPECTED": "{material}: {onOrder} attesi entro il {date}.",
+      "EXPECTED_PO": "{material}: {onOrder} attesi entro il {date} con {po}.",
+      "NOT_BOOKED": "{material}: {inStock} in giacenza, non ancora impegnati: crea la sua lista di prelievo.",
+      "RECEIVED": "{material}: impegnato per l'ordine o già prelevato.",
+      "NOT_PLANNED": "{material}: il piano non ne ha bisogno."
+    },
+    "why": "Perché {word} per {number}",
+    "title": "Perché '{word}'",
+    "noMaterials": "Il piano non ha fabbisogno di materiale per questo ordine di produzione: il suo ordine non è pianificato, il modello non ha una distinta rilasciata, oppure è una riparazione.",
+    "openPo": "Apri {po}",
+    "buy": "Acquista (Cosa acquistare e produrre)",
+    "foot": "La disponibilità è quella del piano, calcolata ora: la giacenza bloccata non conta mai."
+  },
+  "sheet": {
+    "title": "Lista di prelievo {number}",
+    "reading": "Lettura della lista di prelievo…",
+    "noun": "lista di prelievo",
+    "cut": "taglio {date}",
+    "print": "Stampa",
+    "tableLabel": "Le righe di {number}, per percorso di ubicazione",
+    "col": {
+      "where": "Dove prenderlo",
+      "material": "Materiale",
+      "needed": "Necessario",
+      "picked": "Prelevato",
+      "short": "Mancante"
+    },
+    "allPicked": "Prelevato per intero",
+    "nothingUsable": "Niente di utilizzabile in giacenza in questo stabilimento",
+    "hide": "pelle {hide}",
+    "lot": "lotto {lot}",
+    "anyLot": "qualsiasi lotto",
+    "reserved": "(impegnato)",
+    "proposed": "(proposto)",
+    "heldTitle": "Giacenza che non si può prelevare",
+    "started": "Iniziato {at}",
+    "finished": "Finito {at}",
+    "noLines": "Nessun materiale pianificato per questo ordine di produzione: niente da prelevare."
+  },
+  "create": {
+    "title": "Crea liste di prelievo",
+    "subtitle": "Ordini di produzione rilasciati senza lista di prelievo, per data di taglio",
+    "body": "Spunta gli ordini di produzione: a ciascuno viene impegnato ciò che gli serve ancora, dalla giacenza più vecchia, in quest'ordine — chi taglia prima è servito per primo quando il materiale non basta. La giacenza bloccata non si impegna mai.",
+    "tableLabel": "Ordini di produzione senza lista di prelievo",
+    "count_one": "{count} ordine di produzione",
+    "count_other": "{count} ordini di produzione",
+    "picked_one": "{count} spuntato",
+    "picked_other": "{count} spuntati",
+    "go_one": "Crea {count} lista di prelievo",
+    "go_other": "Crea {count} liste di prelievo",
+    "busy": "Impegno in corso…",
+    "heldNone": "Spunta almeno un ordine di produzione.",
+    "empty": "Ogni ordine di produzione rilasciato ha la sua lista di prelievo",
+    "emptyBody": "Niente in attesa: i nuovi ordini rilasciati compaiono qui.",
+    "done": "Fatto",
+    "heldOnHold": "Bloccato: la sua lista di prelievo attende che il blocco sia tolto.",
+    "heldHasList": "Ha già la sua lista di prelievo.",
+    "heldComplete": "Il suo kit è completo.",
+    "summary_one": "{created} di {count} lista di prelievo fatta",
+    "summary_other": "{created} di {count} liste di prelievo fatte",
+    "resultsLabel": "Cosa ha ottenuto ogni ordine di produzione",
+    "col": {
+      "outcome": "Esito",
+      "short": "Ancora mancante"
+    },
+    "result": {
+      "created_one": "{number}: lista di prelievo fatta ({count} impegno)",
+      "created_other": "{number}: lista di prelievo fatta ({count} impegni)",
+      "createdShort_one": "{number}: lista di prelievo fatta ({count} impegno); parte del materiale resta mancante",
+      "createdShort_other": "{number}: lista di prelievo fatta ({count} impegni); parte del materiale resta mancante",
+      "nothing": "{number}: niente di nuovo da impegnare, il fabbisogno è già impegnato o prelevato",
+      "nothingShort": "{number}: non si è potuto impegnare nulla, la giacenza utilizzabile non basta"
+    },
+    "refusal": {
+      "ON_HOLD": "{number}: bloccato, la sua lista di prelievo attende che il blocco sia tolto",
+      "NOT_RELEASED": "{number}: non rilasciato, la lista di prelievo si fa per un ordine di produzione rilasciato",
+      "NOT_FOUND": "{number}: non è un ordine di produzione di questo stabilimento",
+      "NOT_AVAILABLE": "{number}: la giacenza è stata presa nel frattempo da un altro fabbisogno; rileggi e riprova",
+      "LOT_NOT_AVAILABLE": "{number}: un lotto è stato preso nel frattempo da un altro fabbisogno; rileggi e riprova",
+      "HIDE_RESERVED": "{number}: una pelle è stata impegnata nel frattempo per un altro fabbisogno; rileggi e riprova",
+      "HIDE_NOT_IN_STOCK": "{number}: una pelle è uscita dalla giacenza nel frattempo; rileggi e riprova",
+      "LOT_HELD": "{number}: un lotto è stato bloccato nel frattempo",
+      "OTHER": "{number}: non fatta, riprova"
+    },
+    "notice": "Crea liste di prelievo: {created} di {count} fatte"
+  },
+  "print": {
+    "title_one": "Lista di prelievo per {count} ordine di produzione",
+    "title_other": "Liste di prelievo per {count} ordini di produzione",
+    "meta": "{company} · letto {at}",
+    "how": "Un solo giro del magazzino per tutti gli ordini di produzione qui sotto, ubicazione per ubicazione secondo il percorso; poi le righe di ogni ordine. Spunta ogni prelievo quando lo prendi.",
+    "held": "Ancora niente da stampare.",
+    "button": "Stampa o salva come PDF",
+    "reading": "Lettura delle liste di prelievo…",
+    "empty": "Nessun ordine di produzione richiesto",
+    "emptyBody": "Apri la stampa da Prelievi e kit con gli ordini di produzione spuntati.",
+    "walkTitle": "Il giro, per percorso di ubicazione",
+    "walkNone": "Niente da prelevare: ogni riga è prelevata per intero.",
+    "col": {
+      "place": "Ubicazione",
+      "workOrder": "Ordine di produzione",
+      "material": "Materiale",
+      "take": "Prendi",
+      "quantity": "Quantità",
+      "tick": "Preso"
+    }
+  },
+  "keys": {
+    "title": "Tasti di Prelievi e kit",
+    "create": "Crea liste di prelievo",
+    "print": "Stampa le liste spuntate (o quelle mostrate)"
+  }
+}
