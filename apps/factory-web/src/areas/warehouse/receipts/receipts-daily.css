@@ -1,0 +1,155 @@
+/*
+ * The receipt every day (B-W2a-63): the Discrepancies and Documents check tabs, their dialogs and the tannery hide list's
+ * totals — LAYOUT only, with semantic tokens (no colours of its own). The controls are the design system's. No page
+ * max-width: the tabs fill the shell's main area; wide screens put the cards and the report's form and PDF side by side.
+ */
+
+/* The row's main cell opens its detail: a real button that reads as a link. */
+.fw-rcd-open {
+  display: inline;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: var(--nds-text-link);
+  font: inherit;
+  font-weight: var(--nds-font-weight-medium);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.fw-rcd-open:hover {
+  text-decoration: underline;
+}
+
+.fw-rcd-open:focus-visible {
+  border-radius: var(--nds-radius-sm);
+  outline: 2px solid var(--nds-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Photos: thumbnails in a wrapping row, each opening the picture in a new tab. */
+.fw-rcd-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-rcd-photo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 112px;
+  height: 84px;
+  overflow: hidden;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-rcd-photo a {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.fw-rcd-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fw-rcd-photo-wait {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-4);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  text-align: center;
+}
+
+.fw-rcd-pre {
+  white-space: pre-wrap;
+}
+
+.fw-rcd-span {
+  grid-column: 1 / -1;
+}
+
+.fw-rcd-qty {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--nds-space-6);
+}
+
+.fw-rcd-chip-x {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.fw-rcd-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fw-rcd-checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The report: the form beside its PDF on a wide dialog, one column below. */
+.fw-rcd-send {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .fw-rcd-send {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  }
+}
+
+/* The hide list's totals per order line. */
+.fw-rcd-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-rcd-total {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  padding: var(--nds-space-10);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+}

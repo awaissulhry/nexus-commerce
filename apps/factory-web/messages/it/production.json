@@ -763,7 +763,10 @@
     "gone": "Non esiste più.",
     "invalid": "Nexus Factory lo ha rifiutato così: controlla i valori.",
     "printer": "La stampante lo ha rifiutato: scegli un’altra stampante etichette.",
-    "write": "Non è andato a buon fine: riprova."
+    "write": "Non è andato a buon fine: riprova.",
+    "scheduled_one": "Una barra del tabellone di pianificazione prenota una fase che verrebbe tolta: aprila lì e scegli Rimetti tra quelli da pianificare (Pianificazione › Tabellone di pianificazione), poi riprova.",
+    "scheduled_other": "{count} barre del tabellone di pianificazione prenotano fasi che verrebbero tolte: aprile lì una per una e scegli Rimetti tra quelli da pianificare (Pianificazione › Tabellone di pianificazione), poi riprova.",
+    "scheduledPublished": "Un piano pubblicato al reparto prenota una fase che verrebbe tolta, e un piano pubblicato non cambia mai: annulla questo ordine e creane uno nuovo."
   },
   "refusal": {
     "other": "Le regole del reparto ora lo rifiutano.",

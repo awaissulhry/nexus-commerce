@@ -36,7 +36,9 @@
       "suppliers": "Suppliers",
       "orders": "Purchase orders",
       "outside": "Outside work",
-      "subcontracting": "Subcontract orders"
+      "subcontracting": "Subcontract orders",
+      "sourcingClaims": "Sourcing & claims",
+      "claims": "Returns & claims"
     },
     "plant": {
       "area": "Plant",
@@ -73,12 +75,18 @@
       "settings": "Settings",
       "floorRules": "Floor rules & codes",
       "reports": "Reports",
-      "reportsPage": "Production reports"
+      "reportsPage": "Production reports",
+      "cuttingRoom": "Cutting room",
+      "cutting": "Cutting",
+      "floorControl": "Floor control",
+      "scrap": "Scrap & rework"
     },
     "quality": {
       "area": "Quality",
       "main": "Main",
-      "inspections": "Inspections"
+      "inspections": "Inspections",
+      "problems": "Problems",
+      "complaints": "Complaints"
     },
     "compliance": {
       "area": "Compliance",

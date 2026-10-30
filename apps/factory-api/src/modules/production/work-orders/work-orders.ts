@@ -26,7 +26,7 @@ import { allocateNumber } from '../../../platform/numbering/allocate'
 import { assertMay, officeContextOf } from './access'
 import {
   asDay,
-  clearDraftSpec,
+  clearDraftMaterials,
   dayOf,
   dayOrNull,
   hasSeries,
@@ -34,6 +34,7 @@ import {
   readOrderLines,
   readReleasedRevision,
   readWorkOrder,
+  removeDraftOperations,
   REVISION_COLUMNS,
   SITE_COLUMNS,
   STYLE_COLUMNS,
@@ -444,8 +445,9 @@ export interface CellsInput {
 
 /**
  * workorders.manage: sets cells of a DRAFT (SizeGridEditor: per cell, paste): each named line and size gets its pieces;
- * 0 removes the cell; a line not on the work order yet joins it (same style, company, site). The draft's stored
- * operations and planned materials, if any, are removed: the release writes them from the revision.
+ * 0 removes the cell; a line not on the work order yet joins it (same style, company, site). The draft's planned
+ * materials, if any, are removed (they are planned per cell: the release writes them); its stored operations stay (one
+ * per routing step, whatever the cells; the planning board's bars name them, B-W2a-F3).
  */
 export async function setCells(caller: CommandCaller, workOrderId: string, body: CellsInput, idempotencyKey?: string): Promise<{ workOrder: WorkOrderView }> {
   const context = officeContextOf(caller)
@@ -474,7 +476,7 @@ export async function setCells(caller: CommandCaller, workOrderId: string, body:
     if (clashes.length > 0) throw new ValidationError(clashes[0]!.message, clashes)
     assertCells(requests, lines, target, 'body/cells')
 
-    const cleared = await clearDraftSpec(tx, current.id)
+    const cleared = { operations: 0, materials: await clearDraftMaterials(tx, current.id) }
     const changes: { cellId: string; before: number; after: number; size: string; salesOrderLineId: string }[] = []
     for (const request of requests) {
       const line = lines.get(request.salesOrderLineId)!
@@ -533,7 +535,8 @@ export interface UpdateInput {
 /**
  * workorders.manage: the due date and priority (until CLOSED or CANCELLED), the note (always), and the revision while
  * a DRAFT (a revision of its style, not OBSOLETE, the one its lines fix if they fix one; its stored draft spec, if any,
- * is removed first: the release writes it from the revision).
+ * is removed first: the release writes it from the revision — refused while the planning board books one of its
+ * operations, B-W2a-F3).
  */
 export async function updateWorkOrder(caller: CommandCaller, workOrderId: string, body: UpdateInput, idempotencyKey?: string): Promise<{ workOrder: WorkOrderView }> {
   const workOrder = await officeWorkOrder(caller, workOrderId, WORKORDERS_MANAGE)
@@ -554,7 +557,12 @@ export async function updateWorkOrder(caller: CommandCaller, workOrderId: string
       const fixed = await tx.salesOrderLine.findMany({ where: { id: { in: [...new Set(cellLines.map((cell) => cell.salesOrderLineId))] }, styleRevisionId: { not: null } }, select: { seq: true, styleRevisionId: true } })
       const other = fixed.find((line) => line.styleRevisionId !== revision.id)
       if (other) throw new ValidationError('An order line of this work order is ordered to another revision.', [{ path: 'body/styleRevisionId', message: `Line ${other.seq} fixes another revision of the style.` }])
-      cleared = await clearDraftSpec(tx, current.id)
+      const operations = await removeDraftOperations(tx, current, {
+        doing: 'Changing the revision',
+        then: 'change the revision',
+        published: 'keep this revision, or cancel the work order and make a new one on the other revision',
+      })
+      cleared = { operations, materials: await clearDraftMaterials(tx, current.id) }
       data.styleRevisionId = revision.id
       changes.push('revision')
     }

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, CheckCircle2, Download, FileX, MessageSquare, MoreHorizontal, ShieldOff, Undo2, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Download, FileX, MessageSquare, MoreHorizontal, PackageX, ShieldOff, Undo2, XCircle } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, KeyValue, Menu, Modal, Tabs, type TabItem } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { DetailHeader } from '@nexus/ui/patterns'
@@ -14,7 +14,10 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
 import { dayAt, money, quantity } from '../../../../_shared/buying/model'
 import type { LotWithHides, Receipt, ReceiptHide, ReceiptLine, ReceiptLot } from '../../api'
-import { RECEIPT_TABS, RECEIPT_TONE, reversalMoves, type ReceiptRecordActions, type ReceiptRecordModel, type ReceiptTab } from '../../model'
+import { DAILY_TABS, RECEIPT_TABS, RECEIPT_TONE, reversalMoves, type ReceiptRecordActions, type ReceiptRecordModel, type ReceiptTab } from '../../model'
+import { blankDiscrepancy, NAMESPACE as DAILY, takesDiscrepancies } from '../../daily-model'
+import { DailyDialogs } from './DailyDialogs'
+import { DailyNoticeBanner, DiscrepanciesTab, DiscrepancyDetail, DocumentsTab } from './DailyTabs'
 import '../../../../_shared/buying/buying.css'
 
 export type { ReceiptRecordActions, ReceiptRecordModel } from '../../model'
@@ -32,7 +35,7 @@ const CR_VI_TONE = { NOT_REQUIRED: 'neutral', PENDING: 'warning', PASS: 'success
  */
 export function ReceiptRecordView({ model, actions, panels }: { model: ReceiptRecordModel; actions?: ReceiptRecordActions; panels?: ReactNode }) {
   return (
-    <WithMessages namespaces={['buying', 'lists', 'records']}>
+    <WithMessages namespaces={['buying', 'lists', 'records', DAILY, 'photo-kit']}>
       <ReceiptRecord model={model} actions={actions} panels={panels} />
     </WithMessages>
   )
@@ -87,6 +90,8 @@ function ReceiptRecord({ model, actions, panels }: { model: ReceiptRecordModel; 
 
 function ReadyReceipt({ receipt, model, actions, panels }: { receipt: Receipt; model: ReceiptRecordModel; actions?: ReceiptRecordActions; panels?: ReactNode }) {
   const t = useT('buying')
+  const td = useT(DAILY)
+  const daily = model.daily ?? null
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const href = `${model.prefix}/warehouse/receipts/${receipt.id}`
@@ -103,10 +108,23 @@ function ReadyReceipt({ receipt, model, actions, panels }: { receipt: Receipt; m
   })
 
   const reverseHeld = !model.can.reverse ? t('held.noReverse') : receipt.status !== 'POSTED' ? t('rc.reverse.notPosted') : receipt.reversal && !receipt.reversal.possible ? t('rc.reverse.used') : null
-  const tabs: TabItem[] = RECEIPT_TABS.map((tab: ReceiptTab) => ({
+  // B-W2a-63: Documents check and Discrepancies are drawn only with the W2a parts (a design case of the W1 tabs has none).
+  const shownTabs = RECEIPT_TABS.filter((tab) => daily || !DAILY_TABS.includes(tab))
+  const tabs: TabItem[] = shownTabs.map((tab: ReceiptTab) => ({
     id: tab,
     href: `${href}?tab=${tab}`,
-    label: tab === 'lots' && receipt.summary.lotsInQuarantine > 0 ? (
+    label: tab === 'discrepancies' ? (
+      receipt.discrepancies.open > 0 ? (
+        <span className="fw-by-tablabel">
+          {td('tab.discrepancies')}
+          <span className="fw-by-dot" aria-label={td('tab.open', { count: receipt.discrepancies.open })} role="img" />
+        </span>
+      ) : (
+        td('tab.discrepancies')
+      )
+    ) : tab === 'documents' ? (
+      td('tab.documents')
+    ) : tab === 'lots' && receipt.summary.lotsInQuarantine > 0 ? (
       <span className="fw-by-tablabel">
         {t(`rc.tab.${tab}`)}
         <span className="fw-by-dot" aria-label={t('rc.tab.waiting', { count: receipt.summary.lotsInQuarantine })} role="img" />
@@ -114,13 +132,16 @@ function ReadyReceipt({ receipt, model, actions, panels }: { receipt: Receipt; m
     ) : (
       t(`rc.tab.${tab}`)
     ),
-    count: tab === 'lines' ? receipt.lines.length : tab === 'lots' ? receipt.summary.lots : null,
+    count: tab === 'lines' ? receipt.lines.length : tab === 'lots' ? receipt.summary.lots : tab === 'discrepancies' ? receipt.discrepancies.count : null,
   }))
   const activity = panels ?? (model.panelsPreview ? <RecordPanelsView model={model.panelsPreview} /> : null)
   const showDock = model.dockOpen && model.tab !== 'activity' && !!activity
   const more = [
     { id: 'reverse', label: t('rc.reverse.menu'), tone: 'danger' as const, disabled: reverseHeld !== null, onSelect: () => actions?.onDialog?.({ kind: 'reverse', reason: '' }) },
     ...(receipt.purchaseOrder ? [{ id: 'po', label: t('rc.openOrder', { number: receipt.purchaseOrder.number }), href: `${model.prefix}/purchasing/orders/${receipt.purchaseOrder.id}` }] : []),
+    // B-W2a-63 (design page.conn "Supplier claims (purchasing.claims, W2a)"): the claims about this receipt, every state.
+    ...(daily?.can.claimsView ? [{ id: 'claims', label: td('band.claims'), href: `${model.prefix}/purchasing/claims?receipt=${encodeURIComponent(receipt.id)}` }] : []),
+    ...(daily ? [{ id: 'discrepancies', label: td('band.discrepancies'), href: `${href}?tab=discrepancies` }] : []),
     { id: 'copy', label: t('rc.record.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(receipt.number).catch(() => undefined) },
   ]
 
@@ -194,13 +215,16 @@ function ReadyReceipt({ receipt, model, actions, panels }: { receipt: Receipt; m
           }
         />
       )}
+      {daily && <DailyNoticeBanner daily={daily} actions={actions?.daily} />}
       {receipt.status === 'REVERSED' && <Banner tone="danger" title={t('rc.record.reversed', { time: receipt.reversedAt ? formatDateTime(receipt.reversedAt, place) : '—' })}>{receipt.reversalReason}</Banner>}
       {receipt.status === 'POSTED' && <Banner tone="info" title={t('rc.record.posted', { time: receipt.postedAt ? formatDateTime(receipt.postedAt, place) : '—' })} />}
 
       <div className={showDock ? 'fw-by-body has-dock' : 'fw-by-body'}>
         <div className="fw-by-main">
-          {model.tab === 'lines' && <LinesTab receipt={receipt} model={model} />}
+          {model.tab === 'lines' && <LinesTab receipt={receipt} model={model} actions={actions} />}
           {model.tab === 'lots' && <LotsTab receipt={receipt} model={model} actions={actions} />}
+          {model.tab === 'documents' && daily && <DocumentsTab receipt={receipt} lots={model.lots.value} daily={daily} actions={actions?.daily} prefix={model.prefix} timeZone={model.timeZone} />}
+          {model.tab === 'discrepancies' && daily && <DiscrepanciesTab receipt={receipt} daily={daily} actions={actions?.daily} prefix={model.prefix} timeZone={model.timeZone} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-by-hint">{t('record.noPanels')}</p>)}
         </div>
         {showDock && (
@@ -211,12 +235,15 @@ function ReadyReceipt({ receipt, model, actions, panels }: { receipt: Receipt; m
       </div>
 
       {model.dialog?.kind === 'reverse' && <ReverseDialog receipt={receipt} model={model} actions={actions} />}
+      {daily && daily.open && !daily.dialog && <DiscrepancyDetail receipt={receipt} daily={daily} actions={actions?.daily} prefix={model.prefix} timeZone={model.timeZone} />}
+      {daily && <DailyDialogs receipt={receipt} daily={daily} actions={actions?.daily} timeZone={model.timeZone} />}
     </div>
   )
 }
 
-function LinesTab({ receipt, model }: { receipt: Receipt; model: ReceiptRecordModel }) {
+function LinesTab({ receipt, model, actions }: { receipt: Receipt; model: ReceiptRecordModel; actions?: ReceiptRecordActions }) {
   const t = useT('buying')
+  const td = useT(DAILY)
   const locale = useLocale()
   const columns = useMemo<ColDef<ReceiptLine>[]>(() => {
     const MaterialCell = ({ data }: ICellRendererParams<ReceiptLine>) =>
@@ -252,6 +279,17 @@ function LinesTab({ receipt, model }: { receipt: Receipt; model: ReceiptRecordMo
     }
     const LotsCell = ({ data }: ICellRendererParams<ReceiptLine>) => (data ? <span className="fw-by-ellipsis">{data.lots.map((lot) => lot.code).join(' · ') || '—'}</span> : null)
     const ValueCell = ({ data }: ICellRendererParams<ReceiptLine>) => (data ? <span className="fw-by-num">{data.value ? money(data.value.valueAmount, data.value.currency, locale) : '—'}</span> : null)
+    // B-W2a-63 (design pop rc-disc-new, opened from "a line ⋯"): a discrepancy about this line.
+    const daily = model.daily
+    const LineMore = ({ data }: ICellRendererParams<ReceiptLine>) =>
+      data && daily ? (
+        <Menu
+          label={<MoreHorizontal size={16} aria-hidden />}
+          align="right"
+          triggerProps={{ 'aria-label': td('lines.rowMenu', { seq: data.seq }) }}
+          items={[{ id: 'discrepancy', label: td('lines.newDiscrepancy'), disabled: !daily.can.manage || !takesDiscrepancies(receipt), onSelect: () => actions?.daily?.onDialog?.({ kind: 'discrepancy', draft: { ...blankDiscrepancy(data.id), uom: data.item.baseUom } }) }]}
+        />
+      ) : null
     return [
       { colId: 'seq', headerName: t('po.col.seq'), field: 'seq', minWidth: 58, maxWidth: 70, type: 'rightAligned' },
       { colId: 'material', headerName: t('rc.col.material'), minWidth: 220, flex: 1.6, cellRenderer: MaterialCell },
@@ -260,8 +298,9 @@ function LinesTab({ receipt, model }: { receipt: Receipt; model: ReceiptRecordMo
       { colId: 'lots', headerName: t('rc.col.lots'), minWidth: 150, flex: 1, cellRenderer: LotsCell },
       { colId: 'note', headerName: t('rc.col.note'), field: 'note', minWidth: 150, flex: 1, tooltipField: 'note' },
       ...(model.can.cost ? [{ colId: 'value', headerName: t('rc.col.value'), minWidth: 110, flex: 0.7, type: 'rightAligned', cellRenderer: ValueCell } satisfies ColDef<ReceiptLine>] : []),
+      ...(daily ? [{ colId: 'more', headerName: td('col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: LineMore } satisfies ColDef<ReceiptLine>] : []),
     ]
-  }, [t, locale, model.can.cost])
+  }, [t, td, locale, model.can.cost, model.daily, receipt, actions])
 
   return (
     <div className="fw-by-stack">
@@ -277,6 +316,10 @@ function LinesTab({ receipt, model }: { receipt: Receipt; model: ReceiptRecordMo
             ...(receipt.purchaseOrder ? [{ label: t('rc.summary.order'), value: <Link className="fw-by-link" href={`${model.prefix}/purchasing/orders/${receipt.purchaseOrder.id}`}>{`${receipt.purchaseOrder.number} · ${t(`poStatus.${receipt.purchaseOrder.status}`)}`}</Link> }] : []),
             ...(receipt.note ? [{ label: t('rc.summary.note'), value: receipt.note }] : []),
             ...(model.can.cost && receipt.value ? [{ label: t('rc.summary.value'), value: money(receipt.value.valueAmount, receipt.value.currency, locale) }] : []),
+            // B-W2a-63 (design page.conn "Supplier invoice match (finance.payables, W2a)"): the three-way match is made
+            // in Finance › Supplier invoices (B-W2a-62); that page is not built yet, so this says where it will be.
+            ...(model.daily ? [{ label: td('lines.invoice'), value: td('lines.invoiceWhere') }] : []),
+            ...(model.daily && receipt.discrepancies.count > 0 ? [{ label: td('lines.discrepancies'), value: <Link className="fw-by-link" href={`${model.prefix}/warehouse/receipts/${receipt.id}?tab=discrepancies`}>{td('lines.discrepanciesValue', { count: receipt.discrepancies.count, open: receipt.discrepancies.open })}</Link> }] : []),
           ]}
         />
       </Card>
@@ -336,6 +379,7 @@ function LotsTab({ receipt, model, actions }: { receipt: Receipt; model: Receipt
 
 function LotCard({ lot, receipt, model, actions }: { lot: LotWithHides; receipt: Receipt; model: ReceiptRecordModel; actions?: ReceiptRecordActions }) {
   const t = useT('buying')
+  const td = useT(DAILY)
   const locale = useLocale()
   const line = receipt.lines.find((entry) => entry.seq === lot.lineSeq) ?? null
   const unit = line ? t(`uom.${line.item.baseUom}`) : ''
@@ -399,6 +443,19 @@ function LotCard({ lot, receipt, model, actions }: { lot: LotWithHides; receipt:
           ]}
         />
         {lot.qualityStatus === 'QUARANTINE' && <p className="fw-by-hint">{t('rc.lots.releaseWhere')}</p>}
+        {model.daily?.can.claimsView && (
+          <span className="fw-by-actions">
+            {/* B-W2a-63: the lot back to the tannery (Purchasing › Returns & claims, its Return to supplier dialog), or its claims. */}
+            <Button size="sm" asChild>
+              <Link href={`${model.prefix}/purchasing/claims?return=1&lot=${encodeURIComponent(lot.id)}`}>
+                <PackageX size={13} aria-hidden /> {td('lots.return')}
+              </Link>
+            </Button>
+            <Link className="fw-by-link" href={`${model.prefix}/purchasing/claims?lot=${encodeURIComponent(lot.id)}`}>
+              {td('lots.claims')}
+            </Link>
+          </span>
+        )}
         {lot.hides.length > 0 && (
           <ListFrame<ReceiptHide>
             label={t('rc.lots.hidesLabel', { lot: lot.code })}

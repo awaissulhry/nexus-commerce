@@ -114,7 +114,9 @@ export async function scrapList(caller: CommandCaller, query: ScrapQuery) {
 }
 
 async function rowViews(db: Reader, rows: readonly Row[], withCost: boolean) {
-  const orders = new Map((await db.workOrder.findMany({ where: { id: { in: unique(rows.map((row) => row.workOrderId)) } }, select: { id: true, number: true, status: true } })).map((row) => [row.id, row]))
+  const orders = new Map((await db.workOrder.findMany({ where: { id: { in: unique(rows.map((row) => row.workOrderId)) } }, select: { id: true, number: true, status: true, styleId: true } })).map((row) => [row.id, row]))
+  // B-W2a-60 (the page's "By reason, operation or style"): each row's style.
+  const styles = new Map((await db.style.findMany({ where: { id: { in: unique([...orders.values()].map((order) => order.styleId)) } }, select: { id: true, code: true, name: true } })).map((row) => [row.id, row]))
   const bundles = await db.bundle.findMany({ where: { id: { in: unique(rows.map((row) => row.bundleId)) } }, select: { id: true, code: true, workOrderId: true, workOrderSizeId: true, part: true, cutLogIds: true } })
   const bundleOf = new Map(bundles.map((row) => [row.id, row]))
   const operations = new Map((await db.workOrderOperation.findMany({ where: { id: { in: unique(rows.map((row) => row.operationId)) } }, select: { id: true, seq: true, code: true, name: true } })).map((row) => [row.id, row]))
@@ -142,7 +144,7 @@ async function rowViews(db: Reader, rows: readonly Row[], withCost: boolean) {
       kind: row.kind,
       source: row.source,
       at: toUtcIso(row.at),
-      workOrder: { id: row.workOrderId, number: orders.get(row.workOrderId)?.number ?? '', status: orders.get(row.workOrderId)?.status ?? 'RELEASED' },
+      workOrder: { id: row.workOrderId, number: orders.get(row.workOrderId)?.number ?? '', status: orders.get(row.workOrderId)?.status ?? 'RELEASED', style: styles.get(orders.get(row.workOrderId)?.styleId ?? '') ?? null },
       bundle: bundle ? { id: bundle.id, code: bundle.code } : null,
       operation: operation ? { id: operation.id, seq: operation.seq, code: operation.code, name: operation.name } : null,
       cell: { id: row.cellId, colourwayCode: cell?.colourwayCode ?? '', size: cell?.size ?? '' },

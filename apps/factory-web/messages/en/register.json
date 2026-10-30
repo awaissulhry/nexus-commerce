@@ -60,7 +60,9 @@
     "QualityRelease": "A release",
     "Inspection": "An inspection",
     "Shipment": "A shipment",
-    "LabResult": "A lab result (Cr VI)"
+    "LabResult": "A lab result (Cr VI)",
+    "Nonconformance": "A nonconformance (NCR)",
+    "Complaint": "A customer complaint"
   },
   "list": {
     "table": "PPE register entries",

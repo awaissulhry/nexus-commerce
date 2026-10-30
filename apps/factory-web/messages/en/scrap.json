@@ -1,0 +1,263 @@
+{
+  "page": {
+    "noAccess": {
+      "title": "You cannot open Scrap & rework",
+      "body": "This needs the permission {permission}. Ask an administrator to give it to your role."
+    },
+    "pareto": "Pareto by reason",
+    "approve": "Approve",
+    "approveN_one": "Approve {count}",
+    "approveN_other": "Approve {count}",
+    "more": "More actions",
+    "export": "Export all (CSV)",
+    "shortcuts": "Keyboard shortcuts",
+    "detailKeys": "in a row’s detail: approve, refuse, previous and next row"
+  },
+  "common": {
+    "updated": "Updated {time}",
+    "notYet": "Not read yet",
+    "dismiss": "Dismiss",
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "open": "Open",
+    "clearFilters": "Clear filters",
+    "more": "Show more",
+    "shortcuts": "Keyboard shortcuts",
+    "countOf": "{count} of {total}"
+  },
+  "live": {
+    "connecting": "Connecting to live updates",
+    "live": "Live",
+    "offline": "Offline: figures as last read"
+  },
+  "tiles": {
+    "label": "Scrap and rework"
+  },
+  "tile": {
+    "scrapToday": "Scrap today (pieces)",
+    "reworkOpen": "Rework open",
+    "toApprove": "Lower quantities to approve",
+    "recuts": "Replacements to cut",
+    "downgraded": "Downgraded to second quality",
+    "downgradedLater": "Comes later (W2b)"
+  },
+  "view": {
+    "all": "Every row",
+    "today": "Scrap today",
+    "rework": "Rework open",
+    "approve": "Waiting for approval",
+    "recuts": "Recuts to cut"
+  },
+  "period": {
+    "7": "Last 7 days",
+    "30": "Last 30 days",
+    "90": "Last 90 days",
+    "all": "Any time"
+  },
+  "kind": {
+    "SCRAP": "Scrap",
+    "REWORK": "Rework"
+  },
+  "rework": {
+    "OPEN": "Open",
+    "IN_PROGRESS": "In rework",
+    "DONE": "Done",
+    "CANCELLED": "Cancelled"
+  },
+  "pareto": {
+    "title": "By reason",
+    "dimension": "Group by",
+    "by": {
+      "reason": "Reason",
+      "operation": "Operation",
+      "style": "Style"
+    },
+    "pieces": "Pieces",
+    "cumulative": "Cumulative %",
+    "filter": "Filter the list by a bar",
+    "barValue": "{pieces} · {cumulative} %",
+    "other": "Other",
+    "otherHeld": "The smaller groups together: pick one in the list instead.",
+    "none": "Nothing scrapped or reworked in these rows.",
+    "hint": "Pieces of the rows shown (the period and filters above), largest first; a bar filters the list."
+  },
+  "col": {
+    "date": "Date",
+    "workOrder": "Work order",
+    "bundle": "Bundle, size and part",
+    "operation": "Operation",
+    "pieces": "Pieces",
+    "kind": "Kind",
+    "reason": "Reason",
+    "lot": "Lot / hide and area",
+    "replacement": "Replacement",
+    "approval": "Approval",
+    "station": "Station",
+    "value": "Value (cost)",
+    "more": "More"
+  },
+  "list": {
+    "tableLabel": "Scrap and rework",
+    "search": "Search work order, bundle, reason or lot",
+    "viewLabel": "Rows",
+    "kindLabel": "Kind",
+    "kindAll": "Scrap and rework",
+    "periodLabel": "Period",
+    "sizePart": "{size} · {part}",
+    "whole": "whole garment",
+    "rowMenu": "Actions for {number}",
+    "workOrder": "Open the work order",
+    "failed": "Scrap and rework could not be read",
+    "noMatch": {
+      "title": "No rows match these filters",
+      "body": "Clear the filters to see every row of the period."
+    },
+    "empty": {
+      "title": "No scrap yet",
+      "body": "Scrap and rework reported at the operations, and every rework order, appear here."
+    },
+    "loadingSlow": "Still loading…",
+    "hint": "{period}: the latest 500 rows; filters and the pareto work on them. Per work order, bundle, operation and station, never per person."
+  },
+  "replacement": {
+    "chip": "{kind} {quantity} · {status}",
+    "kind": {
+      "RECUT": "Recut",
+      "REDUCE": "Lower quantity"
+    },
+    "status": {
+      "OPEN": "open",
+      "APPROVED": "approved",
+      "REFUSED": "refused",
+      "DONE": "done",
+      "CANCELLED": "cancelled"
+    }
+  },
+  "approval": {
+    "OPEN": "Waiting",
+    "APPROVED": "Approved",
+    "REFUSED": "Refused",
+    "DONE": "Done",
+    "CANCELLED": "Cancelled"
+  },
+  "bulk": {
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)"
+  },
+  "csv": {
+    "date": "Date",
+    "workOrder": "Work order",
+    "bundle": "Bundle",
+    "operation": "Operation",
+    "size": "Size",
+    "part": "Part",
+    "pieces": "Pieces",
+    "kind": "Kind",
+    "reason": "Reason",
+    "lot": "Lot / hide and area",
+    "replacement": "Replacement",
+    "station": "Station",
+    "value": "Value (cost)",
+    "currency": "Currency"
+  },
+  "held": {
+    "permission": "This needs the permission {permission}.",
+    "busy": "Working…",
+    "loading": "Still loading",
+    "reason": "Say why in at least 3 characters.",
+    "noReduction": "Nothing waits for a decision on this row.",
+    "ownAsk": "You asked for it: another person approves or refuses it.",
+    "approve": {
+      "none": "Select rows with a lower quantity to approve.",
+      "nothing": "None of the rows selected has a lower quantity you may approve."
+    }
+  },
+  "item": {
+    "noun": "row",
+    "title": {
+      "SCRAP_one": "Scrap {count} piece · {number}",
+      "SCRAP_other": "Scrap {count} pieces · {number}",
+      "REWORK_one": "Rework {count} piece · {number}",
+      "REWORK_other": "Rework {count} pieces · {number}"
+    },
+    "reason": "Reason",
+    "operation": "Operation",
+    "bundle": "Bundle",
+    "station": "Station",
+    "noStation": "not recorded",
+    "workOrder": "Work order",
+    "value": "Value",
+    "valueHint": "at the cost of the hides’ issue",
+    "leather": "Leather it held",
+    "col": {
+      "lot": "Lot",
+      "hide": "Hide",
+      "area": "Area",
+      "value": "Value"
+    },
+    "leatherNone": "No hide named: the bundle’s cut is not linked to a hide.",
+    "leatherRework": "A rework brings the garments back; its scrap shows on its own row.",
+    "leatherHint": "The leather left stock when it was issued to the work order; this is what these garments held.",
+    "replacements": "What replaces it",
+    "noReplacement": "Nothing asked yet.",
+    "askedBy": "Asked by {name}: {reason}",
+    "approve": "Approve",
+    "refuse": "Refuse…",
+    "refuseGo": "Refuse",
+    "refuseNote": "Why it is refused",
+    "refuseHint": "The person who asked reads it.",
+    "noPhoto": "The floor’s scrap reports carry no photo yet."
+  },
+  "replace": {
+    "open": "Replace…",
+    "title": "Replace scrapped quantity",
+    "body": "{left} of {pieces} garments of {cell} still need a replacement.",
+    "how": "How",
+    "kind": {
+      "RECUT": "Ask for a recut",
+      "RECUTHint": "A recut need on the cut ({part}); the cutting table cuts it as single parts.",
+      "REDUCE": "Lower the order quantity",
+      "REDUCEHint": "Another person approves it; the order line is then closed short."
+    },
+    "quantity": "Garments",
+    "quantityHint": "At most {max}",
+    "reason": "Why",
+    "go": {
+      "RECUT": "Ask for recut",
+      "REDUCE": "Ask to lower the quantity"
+    },
+    "held": {
+      "rework": "A rework brings the garments back: replace what its scrap lost, on the scrap row.",
+      "notOpen": "Work order {number} is {status}: only a released or running work order is replaced.",
+      "covered": "Every garment of this row is replaced already.",
+      "quantity": "Between 1 and {max} garments."
+    }
+  },
+  "notice": {
+    "approved_one": "{count} lower quantity approved.",
+    "approved_other": "{count} lower quantities approved.",
+    "refused": "The lower quantity is refused; the person who asked reads why.",
+    "asked": {
+      "RECUT_one": "A recut of {count} garment is asked for {number}: it is on the cutting room’s list.",
+      "RECUT_other": "A recut of {count} garments is asked for {number}: it is on the cutting room’s list.",
+      "REDUCE_one": "A lower quantity of {count} garment is asked for {number}: another person approves it.",
+      "REDUCE_other": "A lower quantity of {count} garments is asked for {number}: another person approves it."
+    }
+  },
+  "problem": {
+    "read": "The read failed. Try again.",
+    "forbidden": "You may not do this.",
+    "gone": "This no longer exists.",
+    "offline": "The factory server cannot be reached. Check the connection and try again.",
+    "write": "This was not saved. Try again.",
+    "changed": "Someone changed this meanwhile. It was read again: check and try again.",
+    "invalid": "The request was refused as it is. Check the fields.",
+    "notOpen": "The work order is not open: only a released or running one is replaced.",
+    "moreThanScrapped": "More than was scrapped: earlier replacements already cover part of it.",
+    "moreThanCell": "More garments than the size holds.",
+    "noScrap": "Nothing was scrapped there to replace.",
+    "notAPart": "That part is not a part of this garment.",
+    "selfDecision": "You asked for it: another person decides it.",
+    "wrongState": "It was decided meanwhile. The rows were read again."
+  }
+}

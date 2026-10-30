@@ -182,6 +182,13 @@ describe('refusals in words, addresses, the CSV, the new work order', () => {
     expect(writeProblem(new ApiError('unavailable', 0, 'network', 'x'))).toEqual({ key: 'error.offline' })
     expect(writeProblem(new Error('x'))).toEqual({ key: 'error.write' })
   })
+  it('bars of the planning board that book an operation the change would take away (B-W2a-F3): never "changed meanwhile"', () => {
+    const booked = (...paths: string[]) => new ApiError('conflict', 409, 'conflict', 'x', null, paths.map((path) => ({ path, message: 'Op 20 Sewing on line L1 …' })))
+    expect(writeProblem(booked('scheduleSlots/WORKING/s1'))).toEqual({ key: 'error.scheduled', params: { count: 1 } })
+    expect(writeProblem(booked('scheduleSlots/WORKING/s1', 'scheduleSlots/WORKING/s2'))).toEqual({ key: 'error.scheduled', params: { count: 2 } })
+    expect(writeProblem(booked('scheduleSlots/WORKING/s1', 'scheduleSlots/PUBLISHED/s2'))).toEqual({ key: 'error.scheduledPublished' })
+    expect(releaseRefusalCodes(booked('scheduleSlots/WORKING/s1'))).toEqual([])
+  })
   it("the list's address: its own view, or the API list's query (Today's See all)", () => {
     const params = (query: string) => new URLSearchParams(query)
     expect(viewFromAddress(params(''))).toBe('open')

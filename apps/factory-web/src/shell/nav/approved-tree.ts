@@ -173,6 +173,13 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: false,
         pages: [{ id: 'purchasing.subcontracting', title: 'Subcontract orders', titleIt: 'Ordini ai terzisti', wave: 'W2a', href: '/purchasing/subcontracting' }],
       },
+      // W2a: B-W2a-63 Returns & claims (SCR-131). RFQs & sourcing (W2b) joins before it with its step.
+      {
+        label: 'Sourcing & claims',
+        labelIt: 'Offerte e reclami',
+        hideLabel: false,
+        pages: [{ id: 'purchasing.claims', title: 'Returns & claims', titleIt: 'Resi e reclami ai fornitori', wave: 'W2a', href: '/purchasing/claims' }],
+      },
     ],
   },
   {
@@ -240,6 +247,19 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'production.workorders', title: 'Work orders', titleIt: 'Ordini di produzione', wave: 'W1', href: '/production/work-orders' },
         ],
       },
+      // W2a: B-W2a-60 Cutting (SCR-238) and Scrap & rework (SCR-140).
+      {
+        label: 'Cutting room',
+        labelIt: 'Sala taglio',
+        hideLabel: false,
+        pages: [{ id: 'production.cutting', title: 'Cutting', titleIt: 'Taglio', wave: 'W2a', href: '/production/cutting' }],
+      },
+      {
+        label: 'Floor control',
+        labelIt: 'Controllo reparto',
+        hideLabel: false,
+        pages: [{ id: 'production.scrap', title: 'Scrap & rework', titleIt: 'Scarti e rilavorazioni', wave: 'W2a', href: '/production/scrap' }],
+      },
       {
         label: 'Reports',
         labelIt: 'Report',
@@ -266,6 +286,13 @@ export const OFFICE: readonly TreeArea[] = [
         labelIt: 'Principali',
         hideLabel: true,
         pages: [{ id: 'quality.inspections', title: 'Inspections', titleIt: 'Ispezioni', wave: 'W1', href: '/quality/inspections' }],
+      },
+      // W2a: B-W2a-65 Complaints (SCR-113 W2a part).
+      {
+        label: 'Problems',
+        labelIt: 'Problemi',
+        hideLabel: false,
+        pages: [{ id: 'quality.complaints', title: 'Complaints', titleIt: 'Reclami', wave: 'W2a', href: '/quality/complaints' }],
       },
     ],
   },

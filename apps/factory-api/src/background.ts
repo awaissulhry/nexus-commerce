@@ -51,6 +51,8 @@ import { setReportSource } from './observability/tracker'
 import { confirmationRemindersCron } from './modules/purchasing/reminders/daily'
 // B-W2a-55: the payment reminder ladder (prepares reminders on its timers; a person approves and sends each one).
 import { ladderCron, ladderHandlers } from './modules/receivables/ladder'
+// B-W2a-61: a customer return's decided credit drafts its credit notes (a person issues them).
+import { creditNoteHandlers } from './modules/invoicing/credit-note/handlers'
 import { payablesHandlers, sdiPickupCron } from './modules/payables/sdi'
 // B-W2a-66: the certificate renewal stages.
 import { renewalStagesCron } from './modules/compliance/renewals/stages'
@@ -89,6 +91,8 @@ const W2A_32_HANDLERS: readonly EventHandler[] = searchHandlers(SEARCH_INDEXERS)
 const W2A_33_HANDLERS: readonly EventHandler[] = [alertsRecheckHandler()]
 // B-W2a-55: a ladder timer fired (prepare the customer's due reminders); a customer's money changed (re-plan its timers).
 const W2A_55_HANDLERS: readonly EventHandler[] = ladderHandlers()
+// B-W2a-61: return.credit_due → the return's credit note drafts.
+const W2A_61_HANDLERS: readonly EventHandler[] = creditNoteHandlers()
 // B-W2a-62: a company's SDI pickup came due (the supplier invoices SDI delivered); goods arrived for an invoice (match again).
 const W2A_62_HANDLERS: readonly EventHandler[] = payablesHandlers()
 
@@ -151,7 +155,7 @@ if (mode === 'worker') {
   await standardReasonsForNewTenants({ database, log }).catch((error) => log.error({ err: error }, 'the standard reasons could not be given at start'))
   await indexNewTenants({ database, indexers: SEARCH_INDEXERS, log }).catch((error) => log.error({ err: error }, 'the search index could not be built at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_62_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]

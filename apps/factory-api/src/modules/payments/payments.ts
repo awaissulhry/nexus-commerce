@@ -14,6 +14,7 @@ import { ordersOfInvoices, ordersOfRequests, settleOrders } from '../invoicing/f
 import { refuseHardLocked } from '../accounting/period-guard'
 import { markDepositPaid } from '../sales/deposits/deposits'
 import { lockAll, lockMoney } from './locks'
+import { refundedOf } from './refunds'
 import { allocatedOf, assertMay, officeContextOf, officePayment, paymentDetail, placedOn, readPayment, targetLabels, type PaymentDetail, type PaymentRow, type Reader } from './store'
 
 /**
@@ -105,7 +106,8 @@ export async function allocateInCommand(tools: CommandTools, payment: Pick<Payme
     }
   }
   if (issues.length > 0) throw new DomainError('conflict', issues.length === 1 ? issues[0]!.message : 'These allocations cannot be made.', issues)
-  const unallocated = payment.amount - (await allocatedOf(tx, payment.id))
+  // B-W2a-61: a live refund of the payment's unplaced part (its credit balance) holds that money too.
+  const unallocated = payment.amount - (await allocatedOf(tx, payment.id)) - (await refundedOf(tx, payment.id))
   const plan = planAllocations(unallocated, planned, payment.currency)
   if (plan.issues.length > 0) throw new DomainError('conflict', plan.issues.length === 1 ? plan.issues[0]!.message : 'These allocations cannot be made.', plan.issues)
 
@@ -281,9 +283,12 @@ export async function listPayments(caller: CommandCaller, query: ListPaymentsQue
   )
   const page = rows.slice(0, query.limit)
   const labels = await caller.withClient((client) => targetLabels(client, page.flatMap((row) => row.allocations)))
+  // B-W2a-61: what live refunds take of each payment's unplaced part.
+  const refunds = page.length === 0 ? [] : await caller.withClient((client) => client.refund.groupBy({ by: ['paymentId'], where: { paymentId: { in: page.map((row) => row.id) }, status: { in: ['DUE', 'PAID'] } }, _sum: { amount: true } }))
   return {
     payments: page.map((row) => {
       const allocated = row.allocations.reduce((sum, allocation) => sum + allocation.amount, 0)
+      const refunded = refunds.find((entry) => entry.paymentId === row.id)?._sum.amount ?? 0
       return {
         id: row.id,
         companyId: row.companyId,
@@ -292,7 +297,8 @@ export async function listPayments(caller: CommandCaller, query: ListPaymentsQue
         method: row.method,
         amount: asMoney('price', row.amount),
         allocated: asMoney('price', allocated),
-        unallocated: asMoney('price', row.status === 'VOIDED' ? 0 : row.amount - allocated),
+        unallocated: asMoney('price', row.status === 'VOIDED' ? 0 : row.amount - allocated - refunded),
+        refunded: asMoney('price', refunded),
         currency: row.currency,
         receivedOn: row.receivedOn.toISOString().slice(0, 10),
         externalRef: row.externalRef,
@@ -359,7 +365,7 @@ export async function voidPayment(caller: CommandCaller, paymentId: string, body
   const { result } = await command(caller, { name: 'payments.void', idempotencyKey, input: { paymentId, ...body }, record: { type: 'Payment', id: payment.id, ...(body.version === undefined ? {} : { expectedVersion: body.version }) } }, async (tools) => {
     await lockMoney(tools.tx, tools.context, 'payment', payment.id)
     const current = (await readPayment(tools.tx, payment.id))!
-    const problems = voidProblems({ status: current.status, allocated: await allocatedOf(tools.tx, current.id) })
+    const problems = voidProblems({ status: current.status, allocated: await allocatedOf(tools.tx, current.id), refunded: await refundedOf(tools.tx, current.id) })
     if (problems.length > 0) throw new InvalidStateError(problems.join(' '))
     // B-W2a-F1: a payment received inside a HARD period lock is not voided: 409 in words before the database's.
     const receivedOn = current.receivedOn.toISOString().slice(0, 10)

@@ -9,7 +9,7 @@ import type { CommandCaller, CommandTx } from '../../../core/command'
 import { allocateNumber } from '../../../platform/numbering/allocate'
 import { checklistOf, readBasics, readReleaseFacts, type ReleaseFacts } from './facts'
 import { officeContextOf } from './access'
-import { clearDraftSpec, readWorkOrder, type Header } from './store'
+import { clearDraftMaterials, readWorkOrder, syncDraftOperations, type Header } from './store'
 import { workOrderView, type WorkOrderView } from './views'
 import { officeWorkOrder, onWorkOrder, todayNow, todayOfCommand } from './work-orders'
 import { readinessPart } from './release/blockers'
@@ -23,10 +23,11 @@ const beforeRelease = (row: Pick<Header, 'status' | 'heldFromStatus'>): boolean 
  * per site, waited for) makes two releases at one site take their turns, so each counts the material the other promised;
  * the style row FOR SHARE holds its revision as released until the commit (a new revision's release waits) — then the
  * release check (./facts checklistOf: THE check, the one the record shows) on the rows as they are now, a 409 listing
- * every blocker before the database is asked, and the frozen spec written: the draft's stored parts replaced by one
- * operation per routing step at the site's work centres and the planned materials (BOM line × cell), the revision's
- * label template, the batch number from the company's BATCH series (unique in the tenant), RELEASED with its time. The
- * …_production_guards trigger checks the same at the update, for every login.
+ * every blocker before the database is asked, and the frozen spec written: one operation per routing step at the site's
+ * work centres (a draft's stored operation of a step kept in place, so its planning-board bars stay; B-W2a-F3) and
+ * the planned materials (BOM line × cell), the revision's label template, the batch number from the company's BATCH
+ * series (unique in the tenant), RELEASED with its time. The …_production_guards trigger checks the same at the
+ * update, for every login.
  *
  * A material shortage passes only with the planner's override and its reason: recorded in the release's audit row (its
  * reason and `after.materialOverride`, read back by the record) and flagged on the event. WorkOrder has no column for it
@@ -93,27 +94,21 @@ export async function releaseWorkOrder(caller: CommandCaller, workOrderId: strin
     const label = facts.label!
     const overridden = checklist.checks.find((check) => check.code === 'MATERIAL' && check.state === 'OVERRIDDEN') ?? null
 
-    // The frozen spec: the draft's stored parts (if any) replaced by the ones built now. A repair (B-W2a-12, MES-019)
-    // keeps the steps stored on its draft as they are, and plans no material.
+    // The frozen spec: the draft's planned materials (if any) replaced by the ones built now, and its stored operations
+    // brought to the spec (B-W2a-F3): an operation whose routing step stays keeps its row, so the planning board's bars
+    // that book it stay; one whose step goes away is refused while a bar books it (./store syncDraftOperations). A
+    // repair (B-W2a-12, MES-019) keeps the steps stored on its draft as they are, and plans no material.
     const repair = current.kind === 'REPAIR'
-    const cleared = repair ? { operations: 0, materials: 0 } : await clearDraftSpec(tx, current.id)
     const actorId = tools.context.audience === 'office' ? tools.context.actorId : null
-    if (!repair) await tx.workOrderOperation.createMany({
-      data: facts.spec.operations.map((op) => ({
-        id: newId(),
-        siteId: current.siteId,
-        workOrderId: current.id,
-        styleRevisionId: revision.id,
-        seq: op.seq,
-        routingSeq: op.routingSeq,
-        code: op.code,
-        name: op.name,
-        standardMinutes: op.standardMinutes,
-        scanRequired: op.scanRequired,
-        workCentreId: op.workCentreId!,
-        createdById: actorId,
-      })),
-    })
+    const materials = repair ? 0 : await clearDraftMaterials(tx, current.id)
+    const synced = repair
+      ? null
+      : await syncDraftOperations(tx, current, revision.id, facts.spec.operations, actorId, {
+          doing: 'The release',
+          then: 'release it',
+          published: 'cancel this work order and make a new one',
+        })
+    const cleared = { operations: synced?.removed ?? 0, materials, ...(synced && synced.kept > 0 ? { kept: synced.kept } : {}) }
     if (!repair) await tx.workOrderMaterial.createMany({
       data: facts.spec.materials.map((material) => ({
         id: newId(),
@@ -149,7 +144,7 @@ export async function releaseWorkOrder(caller: CommandCaller, workOrderId: strin
       recordId: current.id,
       companyId: current.companyId,
       siteId: current.siteId,
-      before: { status: 'DRAFT', ...(cleared.operations + cleared.materials > 0 ? { draftSpec: cleared } : {}) },
+      before: { status: 'DRAFT', ...(cleared.operations + cleared.materials + (cleared.kept ?? 0) > 0 ? { draftSpec: cleared } : {}) },
       after: {
         status: 'RELEASED',
         releasedAt: toUtcIso(now),

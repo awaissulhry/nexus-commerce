@@ -71,6 +71,8 @@ export const MESSAGE_TEMPLATES = {
   // B-W2a-33: an exception rule raised an alert for a record (ALERT; {title} the rule's name), an alert was given to the person.
   'notifications.alert.raised': { en: 'Alert on {record}: {title}', it: 'Avviso su {record}: {title}' },
   'notifications.assigned.alert': { en: '{actor} assigned you the alert "{title}" on {record}', it: '{actor} ti ha assegnato l’avviso "{title}" su {record}' },
+  // B-W2a-65: a complaint was found to be about safety ({title}: the customer's first words): the owner and quality, at once.
+  'notifications.complaint.safety': { en: 'Safety complaint {record}: {title}. It is in the PPE register; the owner acknowledges it on the complaint', it: 'Reclamo di sicurezza {record}: {title}. È nel registro DPI; il titolare ne prende atto sul reclamo' },
 } as const satisfies Record<string, { readonly en: string; readonly it: string }>
 export type MessageKey = keyof typeof MESSAGE_TEMPLATES
 export const MESSAGE_KEYS = Object.freeze(Object.keys(MESSAGE_TEMPLATES)) as readonly MessageKey[]

@@ -102,6 +102,8 @@ export const LINE_COLUMNS = {
   // B-W2a-54 (wave 7/7): what a charge bills; the schedule step a line bills.
   chargeKind: true,
   milestoneId: true,
+  // B-W2a-61: a credit note's line crediting a customer return's line.
+  returnLineId: true,
 } as const satisfies Prisma.InvoiceLineSelect
 export type LineRow = Prisma.InvoiceLineGetPayload<{ select: typeof LINE_COLUMNS }>
 
@@ -146,6 +148,7 @@ export const lineView = (line: LineRow) => ({
   depositInvoiceId: line.depositInvoiceId,
   chargeKind: line.chargeKind,
   milestoneId: line.milestoneId,
+  returnLineId: line.returnLineId,
 })
 
 /** An issued invoice whose XML or PDF is not stored yet (the worker makes them, or POST …/files). */
@@ -193,12 +196,13 @@ export function headerView(invoice: InvoiceRow) {
 /**
  * What an invoice still asks or owes (B-W1-51; A2 SCR-081 "Payments": the balance): its gross (after the deposits it
  * deducts) less its issued credit notes less what is paid on it. A TD02 is paid through its deposit request: a credit
- * note on it is money to give back. A credit note asks nothing.
+ * note on it is money to give back. A credit note asks nothing. B-W2a-61: what PAID refunds of its credit notes gave
+ * back (`refunded`) is no longer paid on it.
  */
-export function balanceOf(invoice: Pick<InvoiceRow, 'docType' | 'status' | 'grossTotal'>, paid: number, credited: number): { open: number; refundDue: number } {
+export function balanceOf(invoice: Pick<InvoiceRow, 'docType' | 'status' | 'grossTotal'>, paid: number, credited: number, refunded = 0): { open: number; refundDue: number } {
   if (invoice.status === 'DRAFT' || invoice.docType === 'TD04') return { open: 0, refundDue: 0 }
-  if (invoice.docType === 'TD02') return { open: 0, refundDue: credited }
-  const rest = invoice.grossTotal - credited - paid
+  if (invoice.docType === 'TD02') return { open: 0, refundDue: Math.max(0, credited - refunded) }
+  const rest = invoice.grossTotal - credited - (paid - refunded)
   return { open: Math.max(0, rest), refundDue: Math.max(0, -rest) }
 }
 
@@ -220,7 +224,9 @@ export async function invoiceDetail(db: Reader, invoice: InvoiceRow) {
   const party = await db.party.findUnique({ where: { id: invoice.buyerPartyId }, select: { code: true, legalName: true } })
   const paid = (await db.paymentAllocation.aggregate({ where: { invoiceId: invoice.id }, _sum: { amount: true } }))._sum.amount ?? 0
   const credited = (await db.invoice.aggregate({ where: { creditOfId: invoice.id, docType: 'TD04', status: { not: 'DRAFT' } }, _sum: { grossTotal: true } }))._sum.grossTotal ?? 0
-  const balance = balanceOf(invoice, paid, credited)
+  // B-W2a-61: the refunds paid on its credit notes (receivables.prisma Refund, PAID).
+  const refunded = (await db.refund.aggregate({ where: { status: 'PAID', creditNote: { creditOfId: invoice.id } }, _sum: { amount: true } }))._sum.amount ?? 0
+  const balance = balanceOf(invoice, paid, credited, refunded)
   return {
     ...headerView(invoice),
     party: party ?? { code: '', legalName: '' },

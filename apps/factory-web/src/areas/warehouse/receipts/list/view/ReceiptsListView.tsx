@@ -13,7 +13,9 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { dayAt, money, quantity } from '../../../../_shared/buying/model'
 import type { ExpectedLine, ReceiptRow } from '../../api'
-import { RECEIPT_TILES, RECEIPT_TONE, RECEIPT_VIEWS, receiveSelection, type ReceiptsListActions, type ReceiptsListModel, type ReceiptView } from '../../model'
+import { DAILY_VIEWS, RECEIPT_TILES, RECEIPT_TONE, RECEIPT_VIEWS, receiveSelection, type ReceiptsListActions, type ReceiptsListModel, type ReceiptView } from '../../model'
+import { NAMESPACE as DAILY } from '../../daily-model'
+import { HideListImport, HideListTotals } from './HideList'
 import '../../../../_shared/buying/buying.css'
 
 export type { ReceiptsListActions, ReceiptsListModel } from '../../model'
@@ -28,7 +30,7 @@ export type { ReceiptsListActions, ReceiptsListModel } from '../../model'
  */
 export function ReceiptsListView({ model, actions }: { model: ReceiptsListModel; actions?: ReceiptsListActions }) {
   return (
-    <WithMessages namespaces={['buying', 'lists']}>
+    <WithMessages namespaces={['buying', 'lists', DAILY]}>
       <ReceiptsList model={model} actions={actions} />
     </WithMessages>
   )
@@ -36,6 +38,9 @@ export function ReceiptsListView({ model, actions }: { model: ReceiptsListModel;
 
 function ReceiptsList({ model, actions }: { model: ReceiptsListModel; actions?: ReceiptsListActions }) {
   const t = useT('buying')
+  const td = useT(DAILY)
+  // B-W2a-63: the W2a view's words are this step's catalogue's.
+  const viewWord = (view: ReceiptView) => (DAILY_VIEWS.includes(view) ? td(`view.${view}`) : t(`rc.view.${view}`))
   const lists = useT('lists')
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -106,6 +111,16 @@ function ReceiptsList({ model, actions }: { model: ReceiptsListModel; actions?: 
           <span className="fw-by-cell-sub">{data.hides > 0 ? t('rc.hides', { count: data.hides }) : ''}</span>
         </span>
       ) : null
+    // B-W2a-63 (design rc-grid "Discrepancies (W2a)"): not closed yet (warning), else how many were recorded.
+    const DiscrepanciesCell = ({ data }: ICellRendererParams<ReceiptRow>) => {
+      const counts = data?.discrepancies
+      if (!data || !counts || counts.count === 0) return data ? <span className="fw-by-cell-sub">—</span> : null
+      return (
+        <Link className={counts.open > 0 ? 'fw-by-link fw-by-warning' : 'fw-by-link'} href={`${href(data)}?tab=discrepancies`}>
+          {counts.open > 0 ? td('list.discOpen', { count: counts.open, unsent: counts.unsent }) : td('list.discClosed', { count: counts.count })}
+        </Link>
+      )
+    }
     const QuantityCell = ({ data }: ICellRendererParams<ReceiptRow>) => (data ? <span className="fw-by-num">{data.quantities.map((entry) => `${quantity(entry.baseQuantity, locale)} ${t(`uom.${entry.uom}`)}`).join(' · ') || '—'}</span> : null)
     const ValueCell = ({ data }: ICellRendererParams<ReceiptRow>) => (data ? <span className="fw-by-num">{data.value ? money(data.value.valueAmount, data.value.currency, locale) : '—'}</span> : null)
     const MoreCell = ({ data }: ICellRendererParams<ReceiptRow>) =>
@@ -118,6 +133,7 @@ function ReceiptsList({ model, actions }: { model: ReceiptsListModel; actions?: 
             { id: 'open', label: t('common.open'), href: href(data) },
             { id: 'tab', label: t('common.openNewTab'), href: href(data), target: '_blank' },
             { id: 'lots', label: t('rc.tab.lots'), href: `${href(data)}?tab=lots` },
+            { id: 'discrepancies', label: td('tab.discrepancies'), href: `${href(data)}?tab=discrepancies` },
             ...(data.purchaseOrder ? [{ id: 'po', label: t('rc.openOrder', { number: data.purchaseOrder.number }), href: `${model.prefix}/purchasing/orders/${data.purchaseOrder.id}` }] : []),
           ]}
         />
@@ -129,11 +145,12 @@ function ReceiptsList({ model, actions }: { model: ReceiptsListModel; actions?: 
       { colId: 'ddt', headerName: t('rc.col.ddt'), minWidth: 170, flex: 1.1, cellRenderer: DdtCell },
       { colId: 'lines', headerName: t('rc.col.lines'), field: 'lines', minWidth: 70, flex: 0.4, type: 'rightAligned' },
       { colId: 'lots', headerName: t('rc.col.lots'), minWidth: 150, flex: 1, cellRenderer: LotsCell },
+      { colId: 'discrepancies', headerName: td('col.discrepancies'), minWidth: 140, flex: 0.8, cellRenderer: DiscrepanciesCell },
       { colId: 'quantity', headerName: t('rc.col.quantity'), minWidth: 150, flex: 1, cellRenderer: QuantityCell },
       ...(model.can.cost ? [{ colId: 'value', headerName: t('rc.col.value'), minWidth: 110, flex: 0.7, type: 'rightAligned', cellRenderer: ValueCell } satisfies ColDef<ReceiptRow>] : []),
       { colId: 'more', headerName: t('rc.col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, model.prefix, model.can.cost])
+  }, [t, td, locale, model.prefix, model.can.cost])
 
   const expectedColumns = useMemo<ColDef<ExpectedLine>[]>(() => {
     const OrderCell = ({ data }: ICellRendererParams<ExpectedLine>) =>
@@ -261,7 +278,7 @@ function ReceiptsList({ model, actions }: { model: ReceiptsListModel; actions?: 
     <Select size="sm" aria-label={t('rc.list.viewLabel')} value={model.view} onChange={(event) => actions?.onView?.(event.target.value as ReceiptView)}>
       {RECEIPT_VIEWS.filter((view) => view !== 'expected' || model.can.receive).map((view) => (
         <option key={view} value={view}>
-          {t(`rc.view.${view}`)}
+          {viewWord(view)}
         </option>
       ))}
     </Select>
@@ -279,10 +296,14 @@ function ReceiptsList({ model, actions }: { model: ReceiptsListModel; actions?: 
           {' · '}
           {t(`live.${model.live}`)}
         </span>
-        <Button size="sm" variant="primary" heldReason={model.can.receive ? null : t('held.noReceive')} onClick={() => actions?.onReceive?.(null)} aria-keyshortcuts="c">
-          <PackageCheck size={14} aria-hidden /> {t('rc.list.receive')}
-        </Button>
+        <span className="fw-by-actions">
+          {model.hideList && <HideListImport model={model.hideList} actions={actions?.hideList} />}
+          <Button size="sm" variant="primary" heldReason={model.can.receive ? null : t('held.noReceive')} onClick={() => actions?.onReceive?.(null)} aria-keyshortcuts="c">
+            <PackageCheck size={14} aria-hidden /> {t('rc.list.receive')}
+          </Button>
+        </span>
       </div>
+      {model.hideList?.summary && <HideListTotals model={model.hideList} actions={actions?.hideList} prefix={model.prefix} />}
 
       {model.notice && (
         <Banner
@@ -300,7 +321,7 @@ function ReceiptsList({ model, actions }: { model: ReceiptsListModel; actions?: 
         metrics={tiles.map((tile) => {
           const count = tile.count(model.counts, expectedCount)
           return {
-            label: t(`rc.tile.${tile.id}`),
+            label: tile.daily ? td(`tile.${tile.id}`) : t(`rc.tile.${tile.id}`),
             value: count === null ? '—' : String(count),
             onClick: () => actions?.onView?.(model.view === tile.view ? 'all' : tile.view),
             active: tileView === tile.view,
@@ -367,7 +388,7 @@ function ReceiptsList({ model, actions }: { model: ReceiptsListModel; actions?: 
           focusRow={model.focusRow}
         />
       )}
-      {model.view !== (model.can.receive ? 'expected' : 'all') && <p className="fw-by-hint">{t('rc.list.viewing', { view: t(`rc.view.${model.view}`) })}</p>}
+      {model.view !== (model.can.receive ? 'expected' : 'all') && <p className="fw-by-hint">{t('rc.list.viewing', { view: viewWord(model.view) })}</p>}
 
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('common.shortcuts')} size="sm">
