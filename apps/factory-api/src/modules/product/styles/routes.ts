@@ -7,6 +7,8 @@ import {
   createRevisionContract,
   createScaleContract,
   createStyleContract,
+  duplicateOfferContract,
+  duplicateStyleContract,
   garmentTrackingContract,
   generateSkusContract,
   getScaleContract,
@@ -25,6 +27,7 @@ import {
   updateStyleContract,
 } from './contract'
 import { listColours } from './colours'
+import { duplicateOffer, duplicateStyle } from './duplicate'
 import { manifest } from './manifest'
 import { createRevision, listRevisions } from './revisions'
 import { addSizes, createScale, getScale, listScales, moveScale, reorderSizes, updateScale, updateSize } from './scales'
@@ -34,7 +37,8 @@ import { createStyle, getStyle, listStyles, moveStyle, setGarmentTracking, updat
 /**
  * Styles, colourways, size scales and the colour x size SKU matrix (product module, B-W1-11; A2 SCR-040, SCR-041,
  * SCR-049; features PRD-001, PRD-002, PRD-004, PRD-005, PRD-022, PRD-047, PRD-048, PRD-270). The BOM and the routing
- * of a revision are later steps (B-W1-13, B-W1-14); this step makes the revision's DRAFT shell.
+ * of a revision are later steps (B-W1-13, B-W1-14); this step makes the revision's DRAFT shell. W2a (B-W2a-09): a copy of
+ * a style with the parts picked (PRD-011, ./duplicate) and the customs fields on a style (PRD-018).
  */
 export default defineRoutes('product.styles', manifest, async (app) => {
   app.get('/product/styles', { schema: listStylesContract }, async (request) => listStyles(request, request.query))
@@ -76,6 +80,14 @@ export default defineRoutes('product.styles', manifest, async (app) => {
   app.patch('/product/styles/:styleId/skus/:skuId', { schema: updateSkuContract }, async (request) => ({
     style: await updateSku(request, request.params.styleId, request.params.skuId, request.body, idempotencyKeyFrom(request)),
   }))
+
+  app.get('/product/styles/:styleId/duplicate', { schema: duplicateOfferContract }, async (request) => ({
+    offer: await duplicateOffer(request, request.params.styleId, request.query.fromRevisionId),
+  }))
+
+  app.post('/product/styles/:styleId/duplicate', { schema: duplicateStyleContract }, async (request, reply) =>
+    reply.code(201).send(await duplicateStyle(request, request.params.styleId, request.body, idempotencyKeyFrom(request))),
+  )
 
   app.get('/product/styles/:styleId/revisions', { schema: listRevisionsContract }, async (request) => ({ revisions: await listRevisions(request, request.params.styleId) }))
 

@@ -27,6 +27,7 @@ import { command, IdempotencyKeyReusedError, type CommandCaller, type CommandToo
 import type { FloorContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { floorReadinessFor } from '../../../platform/privacy/read'
+import { bundleFlowOf } from '../bundles/flow'
 import { lockBundleForScan, readBundle, readBundleByCode, type BundleRow } from '../bundles/store'
 import { floorRecordSubjectFor, hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
 import { startOnFirstWork } from '../work-orders/moves'
@@ -397,17 +398,20 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   const acknowledged = scanSubject === 'WORKER' ? await hasAcknowledgedNotice(tx, workOrder.siteId, context.actorId) : false
   const notNamed = subjectRefusal({ scanSubject, workerId: context.actorId, acknowledged, stationId: work.stationId })
   if (notNamed) refuse(notNamed)
+  // W2a B-W2a-13 hook (bundles/flow.ts): a split bundle's live garments, a child's place in the flow, rework back in it.
+  const flow = await bundleFlowOf(tx, locked.bundle, operations, standing)
+  if (flow.refusal) refuse(flow.refusal)
 
   const decision = reportDecision({
     workOrder,
     bundleId: locked.bundle.id,
-    bundle: { code: locked.bundle.code, quantity: locked.bundle.quantity, status: locked.bundle.status, replacedCodes: locked.bundle.replacedCodes },
+    bundle: { code: locked.bundle.code, quantity: flow.quantity, status: locked.bundle.status, replacedCodes: locked.bundle.replacedCodes },
     scanned: work.scanned,
     operations,
     operationId: work.input.workOrderOperationId ?? null,
     station: station ? { code: station.code, kind: station.kind } : null,
     kindReason: work.input.kindReason?.trim() || null,
-    standing,
+    standing: flow.standing,
     counts: work.counts,
     viewer: { scanSubject, workerId: context.actorId, stationId: work.stationId },
     stationCodes: new Map([...stations.values()].map((row) => [row.id, row.code])),

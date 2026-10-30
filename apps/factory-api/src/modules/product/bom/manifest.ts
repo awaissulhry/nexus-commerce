@@ -20,6 +20,8 @@ export const manifest = defineManifest({
   'PUT /product/styles/:styleId/revisions/:revisionId/bom/lines/:lineId/colours': manage,
   'POST /product/styles/:styleId/revisions/:revisionId/copy': manage,
   'GET /product/styles/:styleId/bom/compare': view,
+  // W2a (PRD-090): one revision's BOM as CSV / XLSX (the import's columns) or PDF; the import is the imports routes'.
+  'GET /product/styles/:styleId/revisions/:revisionId/bom/export': view,
   'POST /product/styles/:styleId/revisions/:revisionId/release': release,
   // Abandoning a draft is product.bom.manage; withdrawing the released revision also needs product.bom.release (handler).
   'POST /product/styles/:styleId/revisions/:revisionId/obsolete': manage,
