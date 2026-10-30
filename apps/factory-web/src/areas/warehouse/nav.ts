@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Boxes, Layers, MapPin, PackageCheck, Settings, Squircle, Truck, Warehouse } from 'lucide-react'
+import { ArrowLeftRight, Boxes, ClipboardCheck, Layers, MapPin, PackageCheck, Settings, Squircle, Truck, Warehouse } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -37,6 +37,13 @@ export const officeArea: OfficeAreaNav = {
         id: 'warehouse-inbound',
         label: 'shell:nav.warehouse.inbound',
         items: [{ id: 'warehouse-receipts', label: 'shell:nav.warehouse.receipts', href: '/warehouse/receipts', icon: PackageCheck, permission: 'inventory.stock.view' }],
+      },
+      {
+        id: 'warehouse-in-the-warehouse',
+        label: 'shell:nav.warehouse.inTheWarehouse',
+        // B-W2a-28: SCR-132 cycle counts and the year-end physical inventory (inventory.counts.view: warehouse, finance,
+        // read-only, the owner).
+        items: [{ id: 'warehouse-counts', label: 'shell:nav.warehouse.counts', href: '/warehouse/counts', icon: ClipboardCheck, permission: 'inventory.counts.view' }],
       },
       {
         id: 'warehouse-outbound',

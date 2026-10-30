@@ -15,12 +15,19 @@ export const PRODUCTION_CUTTING_DEFINITIONS = definePermissions('production', {
       "Cut hides for a work order at the cutting table: scan a hide (issued to the work order by the scan when it is still in stock), log the garment sets or parts cut from it, close it with its remnant back to stock or the rest as waste, and undo one's own last cut (a floor device: at its own site).",
   },
   'cut.correct': { risk: 'write', description: 'Correct a wrong cut log entry with the reason: a mirror entry that takes its pieces and area back.' },
+  // W2a (B-W2a-13; MES-057; design production.cutting "Yield"): the cutting room's yield across work orders.
+  'cutting.view': {
+    risk: 'read',
+    description:
+      "See the cutting room's hide yield across work orders: per hide the area in, the pattern area cut, the remnant and the waste; planned against actual per style and per supplier lot (never per cutter).",
+  },
 })
 
 export const PRODUCTION_CUT = 'production.cut' satisfies Permission
 export const PRODUCTION_CUT_CORRECT = 'production.cut.correct' satisfies Permission
+export const PRODUCTION_CUTTING_VIEW = 'production.cutting.view' satisfies Permission
 
-export const PRODUCTION_CUTTING_PERMISSIONS: readonly Permission[] = Object.freeze([PRODUCTION_CUT, PRODUCTION_CUT_CORRECT])
+export const PRODUCTION_CUTTING_PERMISSIONS: readonly Permission[] = Object.freeze([PRODUCTION_CUT, PRODUCTION_CUT_CORRECT, PRODUCTION_CUTTING_VIEW])
 
 /** What a floor role may hold of them (FLOOR_SHARED_PERMISSIONS): cutting at its own site. Never a correction: the office's. */
 export const PRODUCTION_CUTTING_FLOOR_PERMISSIONS: readonly Permission[] = Object.freeze([PRODUCTION_CUT])

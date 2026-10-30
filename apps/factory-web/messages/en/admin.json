@@ -1643,6 +1643,13 @@
     "floorsync_discard": "Discard a refused floor tablet action",
     "calendars_view": "See the business calendars",
     "calendars_manage": "Change company, site and line calendars",
-    "calendars_suppliers_manage": "Change supplier and subcontractor calendars"
+    "calendars_suppliers_manage": "Change supplier and subcontractor calendars",
+    "production_rework": "Send garments back for rework and finish it",
+    "production_scrap_view": "See scrap and rework",
+    "production_scrap": "Post scrap and ask for replacements",
+    "production_scrap_approve": "Approve lower order quantities",
+    "production_cutting_view": "See the cutting room's yield",
+    "planning_firm": "Make planned orders firm",
+    "planning_exceptions_manage": "Work the planning exceptions"
   }
 }

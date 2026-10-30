@@ -47,6 +47,8 @@ export const BUNDLE_COLUMNS = {
   voidReason: true,
   deviceId: true,
   clientEventId: true,
+  // W2a B-W2a-13 (MES-071): the bundle it was split off, or null.
+  parentBundleId: true,
   version: true,
   createdAt: true,
 } as const satisfies Prisma.BundleSelect

@@ -67,6 +67,10 @@ export const BUNDLE_REFUSALS = [
   'VOIDED',
   'SCANNED',
   'REPLACED',
+  // W2a B-W2a-13 (split.ts; MES-071): a split that leaves none, a held work order, a bundle in an open rework.
+  'SPLIT_TOO_MANY',
+  'WORK_ORDER_ON_HOLD',
+  'IN_REWORK',
 ] as const
 export type BundleRefusalCode = (typeof BUNDLE_REFUSALS)[number]
 

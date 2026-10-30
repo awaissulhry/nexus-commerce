@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { LABEL_LANGUAGES } from '@nexus/factory-domain/labels/model'
 import { BUNDLE_REFUSALS, MAX_BUNDLE_SIZE, MAX_BUNDLES_PER_MAKE } from '@nexus/factory-domain/production/bundles/rules'
+import { SPLIT_REASONS } from '@nexus/factory-domain/production/bundles/split'
 import { WORK_ORDER_KINDS, WORK_ORDER_STATUSES } from '@nexus/factory-domain/production/work-orders/machine'
 import { labelBody, printJobView } from '../../../platform/print/contract'
 
@@ -53,9 +54,13 @@ const bundle = output({
   deviceId: id().nullable(),
   /** The floor queue's id of the event that made it (A1 §3.8), or null. */
   clientEventId: z.string().nullable(),
+  /** W2a (MES-071): the bundle it was split off (genealogy), or null. */
+  parentBundleId: id().nullable(),
   version: z.number().int(),
   createdAt: instant(),
 })
+/** A bundle as the answers show it (W2a B-W2a-13: the rework answers reuse it). */
+export const bundleView = bundle
 
 const operation = output({ seq: z.number().int(), code: z.string(), name: z.string() })
 
@@ -72,7 +77,7 @@ const ticket = output({
   operations: z.array(operation).readonly(),
 })
 
-const ticketAnswer = output({
+export const ticketAnswerView = output({
   bundleId: id(),
   code: z.string(),
   ticket,
@@ -158,7 +163,7 @@ const makeAnswer = output({
   workOrder: output({ id: id(), number: z.string(), status }),
   singlePiece: z.boolean(),
   bundles: z.array(bundle),
-  tickets: z.array(ticketAnswer),
+  tickets: z.array(ticketAnswerView),
   /** Each cell's counts after the bundles. */
   cells: z.array(cell),
   /** The answer to a repeated Idempotency-Key: nothing was made now (the tickets are the same jobs). */
@@ -200,7 +205,7 @@ export const scanBundleContract = defineContract({
   },
 })
 
-const reprintAnswer = output({ bundle, replacedCode: z.string(), ticket: ticketAnswer, replayed: z.boolean() })
+const reprintAnswer = output({ bundle, replacedCode: z.string(), ticket: ticketAnswerView, replayed: z.boolean() })
 
 export const reprintBundleContract = defineContract({
   params: bundleParams,
@@ -247,4 +252,32 @@ export const workOrderBundlesContract = defineContract({
       ),
     }),
   },
+})
+
+// ---- W2a B-W2a-13: split a bundle (MES-071) -------------------------------------------------------------------------------------
+
+const splitAnswer = output({
+  /** The child bundle split off. */
+  bundle,
+  /** The parent: it keeps its quantity as cut; `live` garments are still in it. */
+  parent: bundle.extend({ live: z.number().int() }),
+  ticket: ticketAnswerView,
+  replayed: z.boolean(),
+})
+
+export const splitBundleContract = defineContract({
+  params: bundleParams,
+  body: input({
+    /** Garments into the child bundle: 1 to the parent's live garments − 1 (at least one stays). */
+    quantity: z.number().int().min(1).max(MAX_BUNDLE_SIZE),
+    /** Why (the floor's reason tiles): rework, a recut, a hold. */
+    reason: z.enum(SPLIT_REASONS),
+    note: z.string().trim().min(1).max(200).optional(),
+    /** The floor queue's id for this event (A1 §3.8): a resend under any key answers the bundle it made. */
+    clientEventId: z.string().trim().min(1).max(80).optional(),
+    /** The ticket's code from the tablet's own BUNDLE block (a ticket printed offline); only with clientEventId. */
+    ticketCode: z.string().trim().min(1).max(60).optional(),
+    ...printing,
+  }),
+  response: { 200: splitAnswer, 201: splitAnswer },
 })

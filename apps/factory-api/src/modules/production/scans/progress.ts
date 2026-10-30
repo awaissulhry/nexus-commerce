@@ -11,6 +11,7 @@ import { officeOf, scanWorkOrder } from './access'
 import { readCorrectionRequests } from './corrections-store'
 import { dayOrNull } from '../work-orders/store'
 import { readCells, readLines, readOperations, readStations, readWorkOrderBundles, readWorkOrderScans, SCAN_HEADER, type Reader, type ScanHeader } from './store'
+import { liveBundlesOf } from '../bundles/flow'
 
 /**
  * Work in progress from the floor's scans (B-W1-42; MES-167, MES-079; A2 SCR-072 "Bundles & progress", SCR-073 "Work in
@@ -27,7 +28,8 @@ const OPEN = ['RELEASED', 'IN_PROGRESS'] as const
 export async function wipFor(db: Reader, workOrder: Pick<ScanHeader, 'id' | 'siteId'>): Promise<Wip> {
   const operations = await readOperations(db, workOrder.id)
   const cells = await readCells(db, workOrder.id)
-  const bundles = (await readWorkOrderBundles(db, workOrder.id)).filter((bundle) => bundle.status === 'ACTIVE')
+  // W2a B-W2a-13 hook (bundles/flow.ts): a split parent counts its live garments, the child its own.
+  const bundles = (await liveBundlesOf(db, workOrder.id, await readWorkOrderBundles(db, workOrder.id))).filter((bundle) => bundle.status === 'ACTIVE')
   const scans = await readWorkOrderScans(db, workOrder.id)
   const stations = await readStations(db, scans.map((scan) => scan.stationId))
   return wipOf({ operations, cells, bundles, scans, lineOf: (stationId) => stations.get(stationId)?.lineId ?? null })

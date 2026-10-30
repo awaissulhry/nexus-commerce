@@ -4,6 +4,10 @@ import { HIDE_STATES } from '../inventory/issue/rules'
 import { GARMENT_TRACKINGS } from './serials/rules'
 import { SCAN_SUBJECTS } from './settings/monitoring'
 import { WORK_ORDER_STATUSES } from './work-orders/machine'
+// W2a B-W2a-13: split, rework, replacements, scrap by lot.
+import { SPLIT_REASONS } from './bundles/split'
+import { REWORK_STATUSES } from './rework/rules'
+import { REPLACEMENT_KINDS, REPLACEMENT_STATUSES } from './scrap/rules'
 
 /**
  * The production module's events (plan A1 §3.4, §3.5 "workorder.released"; MES-001, MES-005, MES-007, MES-278; design
@@ -63,6 +67,11 @@ const scanLive = { permission: 'workorders.view', floor: true, fields: ['workOrd
 const correctionLive = { permission: 'production.scan.correct', floor: true, fields: ['workOrderId', 'number', 'requestId'] } as const
 /** The garment label screens of the event's site and the office's (production.serials). */
 const labelLive = { permission: 'production.serials', floor: true, fields: ['workOrderId', 'number', 'workOrderSizeId'] } as const
+// W2a B-W2a-13.
+/** The rework of the event's site (production.rework, the floor too). */
+const reworkLive = { permission: 'production.rework', floor: true, fields: ['workOrderId', 'number', 'reworkId'] } as const
+/** Scrap & rework in the office (production.scrap.view). */
+const scrapLive = { permission: 'production.scrap.view', fields: ['workOrderId', 'number'] } as const
 
 export const events = [
   defineEvent({
@@ -340,5 +349,109 @@ export const events = [
     description: 'A garment serial was voided before release (a spoilt label, a garment scrapped): its cell has one more garment to label.',
     payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), workOrderSizeId: z.uuid(), serialId: z.uuid(), serial: z.string(), postedBy: postedBy() }),
     live: labelLive,
+  }),
+  // ---- W2a B-W2a-13: split a bundle (MES-071), the rework loop (MES-126), replacements (MES-130), scrap by lot (MES-129).
+  defineEvent({
+    type: 'production.bundle_split',
+    context: 'production',
+    description: 'Garments of a bundle were split off into a child bundle with its own ticket (rework, a recut, a hold); the parent keeps its genealogy.',
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      /** The child bundle. */
+      bundleId: z.uuid(),
+      parentBundleId: z.uuid(),
+      code: z.string(),
+      workOrderSizeId: z.uuid(),
+      part: z.string().nullable(),
+      quantity: z.number().int().min(1),
+      reason: z.enum(SPLIT_REASONS),
+      postedBy: postedBy(),
+    }),
+    live: bundleLive,
+  }),
+  defineEvent({
+    type: 'production.rework_opened',
+    context: 'production',
+    description: "Garments of a cell were sent back to an operation to be made again (from a scan's rework count, or by hand).",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      reworkId: z.uuid(),
+      workOrderSizeId: z.uuid(),
+      bundleId: z.uuid().nullable(),
+      sourceScanId: z.uuid().nullable(),
+      foundAtOperationId: z.uuid().nullable(),
+      reworkAtOperationId: z.uuid(),
+      quantity: z.number().int().min(1),
+      /** A child bundle was split off for it in the same command. */
+      split: z.boolean(),
+      postedBy: postedBy(),
+    }),
+    live: reworkLive,
+  }),
+  defineEvent({
+    type: 'production.rework_moved',
+    context: 'production',
+    description: 'A rework was started, finished (good and scrapped garments) or cancelled.',
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      reworkId: z.uuid(),
+      bundleId: z.uuid().nullable(),
+      status: z.enum(REWORK_STATUSES),
+      goodQuantity: z.number().int().min(0),
+      scrapQuantity: z.number().int().min(0),
+      postedBy: postedBy(),
+    }),
+    live: reworkLive,
+  }),
+  defineEvent({
+    type: 'production.replacement_requested',
+    context: 'production',
+    description: 'Scrapped garments of a cell are to be replaced: a recut for the cutting room, or a lower order quantity to approve.',
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      replacementId: z.uuid(),
+      workOrderSizeId: z.uuid(),
+      kind: z.enum(REPLACEMENT_KINDS),
+      quantity: z.number().int().min(1),
+      sourceScanId: z.uuid().nullable(),
+      reworkOrderId: z.uuid().nullable(),
+    }),
+    live: scrapLive,
+  }),
+  defineEvent({
+    type: 'production.replacement_changed',
+    context: 'production',
+    description: 'A replacement request was approved, refused, done (a recut by its cut log entry) or cancelled.',
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      replacementId: z.uuid(),
+      kind: z.enum(REPLACEMENT_KINDS),
+      status: z.enum(REPLACEMENT_STATUSES),
+      cutLogId: z.uuid().nullable(),
+    }),
+    live: scrapLive,
+  }),
+  defineEvent({
+    type: 'production.scrap_posted',
+    context: 'production',
+    description: 'Material scrapped for a work order left stock by lot (SCRAP moves; the area of a hide for leather), valued by the stock ledger.',
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      /** The first move's id. */
+      scrapId: z.uuid(),
+      moveIds: z.array(z.uuid()),
+      itemIds: z.array(z.uuid()),
+      lotIds: z.array(z.uuid()),
+      hideIds: z.array(z.uuid()),
+      sourceScanId: z.uuid().nullable(),
+      reworkOrderId: z.uuid().nullable(),
+    }),
+    live: scrapLive,
   }),
 ] as const

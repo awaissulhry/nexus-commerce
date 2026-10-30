@@ -15,4 +15,6 @@ export const manifest = defineManifest({
   'POST /production/bundles/:bundleId/reprint': { audiences: ['office', 'floor'], permission: 'production.bundles', scope: 'record' },
   'POST /production/bundles/:bundleId/void': { audiences: ['office', 'floor'], permission: 'production.bundles', scope: 'record' },
   'GET /production/bundles/work-orders/:workOrderId/bundles': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
+  // W2a B-W2a-13 (MES-071).
+  'POST /production/bundles/:bundleId/split': { audiences: ['office', 'floor'], permission: 'production.bundles', scope: 'record' },
 })

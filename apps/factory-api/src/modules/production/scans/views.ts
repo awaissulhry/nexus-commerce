@@ -25,6 +25,7 @@ import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/pe
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
+import { bundleFlowOf } from '../bundles/flow'
 import { readBundleByCode, readCellLabels } from '../bundles/store'
 import { hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
 import { floorOf, floorOrOffice, mayScan, officeOf, scanWorkOrder } from './access'
@@ -71,7 +72,9 @@ export async function bundleCard(caller: CommandCaller, query: { readonly code: 
     if (!bundle || !workOrder || !mayScan(context, PRODUCTION_SCAN, workOrder)) throw new NotFoundError('Not a bundle ticket of this site: scan the bundle’s ticket.')
     const operations = await readOperations(db, workOrder.id)
     const scans = await readBundleScans(db, bundle.id)
-    const standing = standingScans(scans)
+    // W2a B-W2a-13 hook (bundles/flow.ts): a split bundle's live garments and a child's place in the flow.
+    const flow = await bundleFlowOf(db, bundle, operations, standingScans(scans))
+    const standing = flow.standing
     const stationId = context.audience === 'floor' ? await deviceStationOf(db, context.deviceId) : null
     const stations = await readStations(db, [stationId, ...scans.map((row) => row.stationId)])
     const scanSubject = await scanSubjectFor(db, workOrder.siteId)
@@ -94,7 +97,7 @@ export async function bundleCard(caller: CommandCaller, query: { readonly code: 
       station,
       operations: operations.map((operation) => {
         const report = standing.get(standingKey(bundle.id, operation.id)) ?? null
-        const cap = capAt(operations, operation, bundle, standing, bundle.id)
+        const cap = capAt(operations, operation, { ...bundle, quantity: flow.quantity }, standing, bundle.id)
         const reached = cap.ok && cap.cap > 0
         return {
           id: operation.id,
