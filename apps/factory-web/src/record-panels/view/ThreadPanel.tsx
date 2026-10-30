@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AtSign, Lock, Mail, MailOpen, Paperclip, Send } from 'lucide-react'
+import { AtSign, Lock, Mail, MailOpen, Paperclip, Send, X } from 'lucide-react'
 import { Banner, Disclosure, EmptyState, Field } from '@nexus/ui/components'
 import { ReplyComposer } from '@nexus/ui/patterns'
 import { Button, Checkbox, Input, SegmentedControl, Spinner, Tag } from '@nexus/ui/primitives'
@@ -10,10 +10,14 @@ import { useLocale, useT } from '../../lib/i18n/provider'
 import {
   attachableFiles,
   audienceBadges,
+  completeMention,
   composerAbsentReason,
   composerHeld,
   composerModes,
   MAX_BODY_LENGTH,
+  mentionQuery,
+  mentionsInText,
+  mentionSuggestions,
   type ComposerDraft,
   type ComposerMode,
   type EmailStatus,
@@ -56,6 +60,8 @@ export function ThreadPanel({ model, actions }: { model: RecordPanelsViewModel; 
   const [to, setTo] = useState(defaultTo)
   const [subject, setSubject] = useState('')
   const [mentions, setMentions] = useState<string[]>([])
+  // B-W2a-40: `@Name` typed in a note mentions that person too (with the picker's); a typed one the person took off stays off.
+  const [unmentioned, setUnmentioned] = useState<string[]>([])
   const [attachments, setAttachments] = useState<string[]>([])
   useEffect(() => setTo(defaultTo), [defaultTo])
 
@@ -72,7 +78,16 @@ export function ThreadPanel({ model, actions }: { model: RecordPanelsViewModel; 
     [attachable],
   )
 
-  const draft: ComposerDraft = { mode, body, to, subject, mentions: mode === 'note' ? mentions : [], attachments }
+  const typed = useMemo(() => (mode === 'note' ? mentionsInText(body, model.people) : []), [mode, body, model.people])
+  const allMentions = useMemo(() => [...new Set([...mentions, ...typed.filter((id) => !unmentioned.includes(id))])], [mentions, typed, unmentioned])
+  const query = mode === 'note' ? mentionQuery(body) : null
+  const suggestions = query === null ? [] : mentionSuggestions(query, model.people, allMentions)
+  const nameOf = (id: string) => model.people.find((person) => person.id === id)?.name ?? t('message.someone')
+  const unmention = (id: string) => {
+    setMentions((list) => list.filter((item) => item !== id))
+    if (typed.includes(id)) setUnmentioned((list) => [...list, id])
+  }
+  const draft: ComposerDraft = { mode, body, to, subject, mentions: mode === 'note' ? allMentions : [], attachments }
   const hasMail = (model.messages.items ?? []).some((message) => message.channel === 'EMAIL')
   const held = composerHeld(draft, { threadClosed: closed, sending: model.sending ?? false, files, hasMail })
   const heldText = held ? t(held.key, held.params) : null
@@ -83,6 +98,7 @@ export function ThreadPanel({ model, actions }: { model: RecordPanelsViewModel; 
       if (!sent) return
       setBody('')
       setMentions([])
+      setUnmentioned([])
       setAttachments([])
       setSubject('')
     })
@@ -179,6 +195,32 @@ export function ThreadPanel({ model, actions }: { model: RecordPanelsViewModel; 
             limit={MAX_BODY_LENGTH}
             primary={{ label: mode === 'note' ? t('composer.send.note') : t('composer.send.email'), onClick: send, heldReason: heldText }}
           />
+          {mode === 'note' && model.people.length > 0 && (
+            <>
+              {suggestions.length > 0 && (
+                <div className="fw-rp-mentions">
+                  <p className="fw-rp-muted fw-rp-small">{t('composer.mentionSuggest')}</p>
+                  {suggestions.map((person) => (
+                    <Button key={person.id} size="sm" variant="secondary" onClick={() => setBody((text) => completeMention(text, person))}>
+                      <AtSign size={12} aria-hidden /> {person.name}
+                    </Button>
+                  ))}
+                </div>
+              )}
+              {allMentions.length > 0 ? (
+                <div className="fw-rp-mentions">
+                  <p className="fw-rp-muted fw-rp-small">{t('composer.mentionsNow')}</p>
+                  {allMentions.map((id) => (
+                    <Button key={id} size="sm" variant="quiet" aria-label={t('composer.mentionRemove', { name: nameOf(id) })} onClick={() => unmention(id)}>
+                      <AtSign size={12} aria-hidden /> {nameOf(id)} <X size={12} aria-hidden />
+                    </Button>
+                  ))}
+                </div>
+              ) : suggestions.length === 0 ? (
+                <p className="fw-rp-muted fw-rp-small">{t('composer.mentionHelp')}</p>
+              ) : null}
+            </>
+          )}
           {model.can.email && model.party === null && <p className="fw-rp-muted fw-rp-small">{t('composer.absent.noParty')}</p>}
         </div>
       ) : absent && !closed ? (

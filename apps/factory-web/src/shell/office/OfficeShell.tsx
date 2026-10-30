@@ -14,6 +14,7 @@ import { permissionCheck, splitOfficePath, type OfficeSession } from '../../lib/
 import { ListToolsProvider } from '../../areas/_shared/list-tools/ListToolsProvider'
 import { officeNavFor } from '../nav/office-nav'
 import { useRecordSearch } from '../palette/use-record-search'
+import { useBell } from './use-bell'
 import { OfficeShellView, type SystemBanner } from './view/OfficeShellView'
 
 /**
@@ -47,6 +48,8 @@ export function OfficeShell({ session, company, children }: { session: OfficeSes
   const nav = useMemo(() => officeNavFor(permissionCheck(session.permissions)), [session.permissions])
   // B-W2a-32: the palette's Records and Exact number groups (GET /search as this company).
   const search = useRecordSearch({ company, companies: session.companies })
+  // B-W2a-40: the bell — unread notifications, one light read, then live (only for a person who reaches Home).
+  const bell = useBell(company, session.permissions.includes('home.view'))
   // No API reports the connections' modes yet (Connections, SCR-087, comes with B-W0-28): no TEST MODE banner until it does.
   const banners: SystemBanner[] = []
 
@@ -60,6 +63,7 @@ export function OfficeShell({ session, company, children }: { session: OfficeSes
         tenantTag: tenantTag(session.tenant.id),
         banners,
         paletteRecords: search.records,
+        bell,
       }}
       onNavigate={(href) => router.push(href)}
       onSiteChange={setSite}

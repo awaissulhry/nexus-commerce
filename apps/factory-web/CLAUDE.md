@@ -109,6 +109,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   lots, Cr VI results, the lot release; PPE register SCR-113): their shared parts are `areas/quality/_shared/` (record
   frame, check list = the gate in words, step-up hook + DS StepUpModal, live hook, `qualityCan`, the lot schema);
   catalogues `quality`, `lab`, `register`.
+- B-W2a-40 (every day at Home): `src/areas/home/notifications/` (SCR-005, `/home/notifications?tab=&state=`, catalogue
+  `home-notifications`; the shell's bell is `shell/office/use-bell.ts`: ONE `GET /notifications/counts` when the shell
+  mounts, then live `notification.created`, a reconnect, or the window event `factory:notifications-changed` that any
+  screen sends after it marks notifications read, done or snoozed), `src/areas/home/tasks/` (SCR-233, `/home/tasks?tile=
+  &scope=&q=&open=&new=1`, catalogue `home-tasks`), the record panels' Tasks tab, Follow / Followers and `@name` mentions
+  (`record-panels/tasks/` = every task and follower call and its zod, `view/TaskNewDialog.tsx` = the ONE New task dialog),
+  and Today with `include=TASKS,MENTIONS,ALERTS` (six tiles, my tasks and mentions with Done / Snooze, Coming up). "Snooze
+  until" is ONE dialog (`areas/home/today/view/SnoozeDialog.tsx` over `today/snooze.ts`: the site's times).
 - `src/lib/records/record-links.ts` — where a record opens: its own page once built (`RECORD_PAGES`, one line per record
   page; list pages in `LIST_PAGES`), else the record panel route `/w/<company>/records/<type>/<id>` (SCR-006 panels).
   Home › Today (`src/areas/home/today/`, SCR-029) and its lists open records through it.

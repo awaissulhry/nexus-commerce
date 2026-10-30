@@ -90,6 +90,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
     const PAGE_PERMISSION: Record<string, string> = {
       '/home/today': 'home.view', // GET /home/today
       '/home/approvals': 'quotes.view', // GET /sales/quote-approvals
+      '/home/tasks': 'home.view', // GET /tasks (B-W2a-40)
+      '/home/notifications': 'home.view', // GET /notifications (B-W2a-40)
       '/home/mail-to-sort': 'email.triage', // GET /email/inbound
       '/sales/customers': 'parties.view', // GET /parties
       '/sales/quotes': 'quotes.view', // GET /sales/quotes
@@ -162,6 +164,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
     expect(rows(sales).filter((row) => row.href.startsWith('/sales/') || row.href.startsWith('/home/')).map((row) => row.href)).toEqual([
       '/home/today',
       '/home/approvals',
+      '/home/tasks',
+      '/home/notifications',
       '/home/mail-to-sort',
       '/sales/customers',
       '/sales/quotes',

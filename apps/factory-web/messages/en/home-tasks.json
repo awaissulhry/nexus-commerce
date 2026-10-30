@@ -1,0 +1,171 @@
+{
+  "refused": {
+    "title": "My tasks is not open to you",
+    "body": "Your roles do not include Home. Ask an administrator if you need it."
+  },
+  "band": {
+    "label": "My tasks: status and actions",
+    "reading": "Reading…",
+    "more": "More actions on My tasks",
+    "keys": "Keyboard shortcuts",
+    "new": "New task"
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline — changes wait to be sent"
+  },
+  "tile": {
+    "title": "Tasks",
+    "count": "{count}",
+    "atLeast": "at least {count}",
+    "unknown": "Not available now",
+    "partial": "You have more than 500 tasks here: only the newest were counted.",
+    "OVERDUE": { "label": "Overdue", "hint": "open, due before today" },
+    "TODAY": { "label": "Today", "hint": "open, due today" },
+    "THIS_WEEK": { "label": "This week", "hint": "open, due in the next 7 days" },
+    "NO_DATE": { "label": "No date", "hint": "open, without a due day" },
+    "DONE_7D": { "label": "Done in 7 days", "hint": "marked done in the last 7 days" }
+  },
+  "scope": {
+    "label": "Whose tasks",
+    "MINE": "Mine",
+    "TEAM": "My team's",
+    "CREATED": "Created by me",
+    "teamHeld": "My team's comes with teams (People, a later wave): today a task is one person's."
+  },
+  "table": {
+    "label": "Tasks",
+    "title": "My tasks"
+  },
+  "count_one": "{count} task",
+  "count_other": "{count} tasks",
+  "search": "Search the tasks",
+  "col": {
+    "done": "Done",
+    "task": "Task",
+    "record": "Record",
+    "assignee": "For",
+    "due": "Due",
+    "checklist": "Checklist",
+    "createdBy": "Created by"
+  },
+  "row": {
+    "complete": "Mark “{title}” done",
+    "reopen": "Reopen “{title}”",
+    "snoozed": "Off Today until {date}",
+    "openRecord": "Open {record}",
+    "ownTask": "A task of its own"
+  },
+  "status": {
+    "OPEN": "Open",
+    "DONE": "Done",
+    "CANCELLED": "Cancelled"
+  },
+  "bulk": {
+    "done_one": "Mark {count} done",
+    "done_other": "Mark {count} done",
+    "reassign_one": "Reassign {count}",
+    "reassign_other": "Reassign {count}",
+    "due_one": "Set due for {count}",
+    "due_other": "Set due for {count}"
+  },
+  "held": {
+    "noManage": "Your roles do not let you make or change tasks.",
+    "offline": "Offline — change it when back online.",
+    "busy": "A change is being sent.",
+    "noneOpen": "None of the tasks chosen is open and yours to change.",
+    "rowReadOnly": "You may read this task but not change it.",
+    "rowClosed": "This task is done or cancelled: reopen it first."
+  },
+  "more": {
+    "label": "Show more",
+    "loading": "Reading more…"
+  },
+  "empty": {
+    "title": "No tasks.",
+    "body": "Add one here or on any record (its Tasks tab › Add task).",
+    "filtered": {
+      "title": "No task matches.",
+      "body": "Nothing here with this filter."
+    },
+    "clear": "Clear the filter"
+  },
+  "error": {
+    "title": "The tasks could not be read"
+  },
+  "retry": "Try again",
+  "dismiss": "Dismiss",
+  "cancel": "Cancel",
+  "keysTitle": "Keys of My tasks",
+  "keys": {
+    "new": "New task",
+    "done": "Mark the task done (in the list or its popup)",
+    "walk": "Previous / next task in its popup",
+    "close": "Close the popup or the dialog"
+  },
+  "popup": {
+    "reading": "Reading the task…",
+    "noun": "task",
+    "on": "On {record}",
+    "assignee": "For",
+    "assignedBy": "Given by {name} on {date}",
+    "due": "Due",
+    "createdBy": "Made",
+    "created": "By {name} on {date}",
+    "checklist": "Checklist",
+    "checklistCount": "Checklist · {done} / {total} done",
+    "noChecklist": "No checklist.",
+    "ticked": "ticked by {name} on {date}",
+    "description": "Description",
+    "noDescription": "No description.",
+    "noThread": "Comments and history: a task has no thread of its own yet. Write on its record instead.",
+    "snooze": "Snooze…",
+    "reopen": "Reopen",
+    "done": "Mark done"
+  },
+  "reassign": {
+    "title_one": "Reassign {count} task",
+    "title_other": "Reassign {count} tasks",
+    "body": "Give the tasks to someone else. They are told, and they follow each task's record.",
+    "to": "To",
+    "toHint": "People who keep tasks (and may see the records of these tasks).",
+    "pick": "Choose a person…",
+    "pickFirst": "Choose whom to give them to first.",
+    "same": "Every task chosen is theirs already.",
+    "go_one": "Reassign {count}",
+    "go_other": "Reassign {count}",
+    "listLabel": "The tasks and whose they become",
+    "change": "{from} → {to}",
+    "unchanged": "{name} (theirs already)",
+    "allOrNone": "All or none: if one of them changed meanwhile, nothing is changed and the list is read again."
+  },
+  "due": {
+    "title_one": "Set the due day of {count} task",
+    "title_other": "Set the due day of {count} tasks",
+    "day": "Due on",
+    "none": "No due day",
+    "pickFirst": "Choose a day, or no due day.",
+    "go_one": "Set due for {count}",
+    "go_other": "Set due for {count}",
+    "listLabel": "The tasks and their due day",
+    "change": "{from} → {to}"
+  },
+  "notice": {
+    "undo": "Undo",
+    "done": "Done: “{title}”.",
+    "undone": "Back on the list: “{title}”.",
+    "reopened": "Reopened: “{title}”.",
+    "created": "Task created: “{title}”.",
+    "assigned": "“{title}” given. They are told and follow its record.",
+    "unassigned": "“{title}” is nobody's now.",
+    "dueChanged": "Due day of “{title}” saved.",
+    "snoozed": "“{title}” is off Today until then.",
+    "bulkDone_one": "{count} task marked done.",
+    "bulkDone_other": "{count} tasks marked done.",
+    "reassigned_one": "{count} task reassigned.",
+    "reassigned_other": "{count} tasks reassigned.",
+    "dueSet_one": "Due day set for {count} task.",
+    "dueSet_other": "Due day set for {count} tasks."
+  }
+}

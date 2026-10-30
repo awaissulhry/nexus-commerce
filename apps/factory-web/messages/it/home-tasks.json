@@ -1,0 +1,171 @@
+{
+  "refused": {
+    "title": "Le mie attività non sono aperte per te",
+    "body": "I tuoi ruoli non includono Home. Chiedi a un amministratore se ti serve."
+  },
+  "band": {
+    "label": "Le mie attività: stato e azioni",
+    "reading": "Lettura…",
+    "more": "Altre azioni sulle mie attività",
+    "keys": "Scorciatoie da tastiera",
+    "new": "Nuova attività"
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In diretta",
+    "offline": "Offline — le modifiche aspettano di essere inviate"
+  },
+  "tile": {
+    "title": "Attività",
+    "count": "{count}",
+    "atLeast": "almeno {count}",
+    "unknown": "Ora non disponibile",
+    "partial": "Qui hai più di 500 attività: sono state contate solo le più recenti.",
+    "OVERDUE": { "label": "In ritardo", "hint": "aperte, scadute prima di oggi" },
+    "TODAY": { "label": "Oggi", "hint": "aperte, scadono oggi" },
+    "THIS_WEEK": { "label": "Questa settimana", "hint": "aperte, scadono nei prossimi 7 giorni" },
+    "NO_DATE": { "label": "Senza data", "hint": "aperte, senza scadenza" },
+    "DONE_7D": { "label": "Fatte in 7 giorni", "hint": "segnate fatte negli ultimi 7 giorni" }
+  },
+  "scope": {
+    "label": "Di chi sono",
+    "MINE": "Mie",
+    "TEAM": "Del mio team",
+    "CREATED": "Create da me",
+    "teamHeld": "Del mio team arriva con i team (Persone, un'ondata successiva): oggi un'attività è di una persona."
+  },
+  "table": {
+    "label": "Attività",
+    "title": "Le mie attività"
+  },
+  "count_one": "{count} attività",
+  "count_other": "{count} attività",
+  "search": "Cerca nelle attività",
+  "col": {
+    "done": "Fatta",
+    "task": "Attività",
+    "record": "Record",
+    "assignee": "Per",
+    "due": "Scadenza",
+    "checklist": "Elenco",
+    "createdBy": "Creata da"
+  },
+  "row": {
+    "complete": "Segna “{title}” come fatta",
+    "reopen": "Riapri “{title}”",
+    "snoozed": "Fuori da Oggi fino al {date}",
+    "openRecord": "Apri {record}",
+    "ownTask": "Un'attività a sé"
+  },
+  "status": {
+    "OPEN": "Aperta",
+    "DONE": "Fatta",
+    "CANCELLED": "Annullata"
+  },
+  "bulk": {
+    "done_one": "Segna {count} come fatta",
+    "done_other": "Segna {count} come fatte",
+    "reassign_one": "Riassegna {count}",
+    "reassign_other": "Riassegna {count}",
+    "due_one": "Scadenza per {count}",
+    "due_other": "Scadenza per {count}"
+  },
+  "held": {
+    "noManage": "I tuoi ruoli non ti permettono di creare o modificare attività.",
+    "offline": "Offline — modificala quando torni online.",
+    "busy": "Una modifica è in invio.",
+    "noneOpen": "Nessuna delle attività scelte è aperta e modificabile da te.",
+    "rowReadOnly": "Puoi leggere questa attività ma non modificarla.",
+    "rowClosed": "Questa attività è fatta o annullata: riaprila prima."
+  },
+  "more": {
+    "label": "Mostra altre",
+    "loading": "Lettura di altre…"
+  },
+  "empty": {
+    "title": "Nessuna attività.",
+    "body": "Aggiungine una qui o su qualsiasi record (scheda Attività › Aggiungi attività).",
+    "filtered": {
+      "title": "Nessuna attività corrisponde.",
+      "body": "Niente qui con questo filtro."
+    },
+    "clear": "Togli il filtro"
+  },
+  "error": {
+    "title": "Non è stato possibile leggere le attività"
+  },
+  "retry": "Riprova",
+  "dismiss": "Chiudi",
+  "cancel": "Annulla",
+  "keysTitle": "Tasti delle mie attività",
+  "keys": {
+    "new": "Nuova attività",
+    "done": "Segna l'attività come fatta (nell'elenco o nel suo riquadro)",
+    "walk": "Attività precedente / successiva nel riquadro",
+    "close": "Chiudi il riquadro o la finestra"
+  },
+  "popup": {
+    "reading": "Lettura dell'attività…",
+    "noun": "attività",
+    "on": "Su {record}",
+    "assignee": "Per",
+    "assignedBy": "Data da {name} il {date}",
+    "due": "Scadenza",
+    "createdBy": "Creata",
+    "created": "Da {name} il {date}",
+    "checklist": "Elenco di controllo",
+    "checklistCount": "Elenco di controllo · {done} / {total} fatte",
+    "noChecklist": "Nessun elenco di controllo.",
+    "ticked": "spuntata da {name} il {date}",
+    "description": "Descrizione",
+    "noDescription": "Nessuna descrizione.",
+    "noThread": "Commenti e cronologia: un'attività non ha ancora una conversazione propria. Scrivi sul suo record.",
+    "snooze": "Rimanda…",
+    "reopen": "Riapri",
+    "done": "Segna come fatta"
+  },
+  "reassign": {
+    "title_one": "Riassegna {count} attività",
+    "title_other": "Riassegna {count} attività",
+    "body": "Dai le attività a un'altra persona. Viene avvisata e segue il record di ciascuna.",
+    "to": "A",
+    "toHint": "Persone che gestiscono attività (e possono vedere i record di queste attività).",
+    "pick": "Scegli una persona…",
+    "pickFirst": "Scegli prima a chi darle.",
+    "same": "Tutte le attività scelte sono già sue.",
+    "go_one": "Riassegna {count}",
+    "go_other": "Riassegna {count}",
+    "listLabel": "Le attività e di chi diventano",
+    "change": "{from} → {to}",
+    "unchanged": "{name} (già sua)",
+    "allOrNone": "Tutto o niente: se una è cambiata nel frattempo non cambia nulla e l'elenco viene riletto."
+  },
+  "due": {
+    "title_one": "Imposta la scadenza di {count} attività",
+    "title_other": "Imposta la scadenza di {count} attività",
+    "day": "Scade il",
+    "none": "Nessuna scadenza",
+    "pickFirst": "Scegli un giorno, oppure nessuna scadenza.",
+    "go_one": "Scadenza per {count}",
+    "go_other": "Scadenza per {count}",
+    "listLabel": "Le attività e la loro scadenza",
+    "change": "{from} → {to}"
+  },
+  "notice": {
+    "undo": "Annulla",
+    "done": "Fatta: “{title}”.",
+    "undone": "Di nuovo in elenco: “{title}”.",
+    "reopened": "Riaperta: “{title}”.",
+    "created": "Attività creata: “{title}”.",
+    "assigned": "“{title}” assegnata. Viene avvisata e segue il suo record.",
+    "unassigned": "“{title}” ora non è di nessuno.",
+    "dueChanged": "Scadenza di “{title}” salvata.",
+    "snoozed": "“{title}” è fuori da Oggi fino ad allora.",
+    "bulkDone_one": "{count} attività segnata come fatta.",
+    "bulkDone_other": "{count} attività segnate come fatte.",
+    "reassigned_one": "{count} attività riassegnata.",
+    "reassigned_other": "{count} attività riassegnate.",
+    "dueSet_one": "Scadenza impostata per {count} attività.",
+    "dueSet_other": "Scadenza impostata per {count} attività."
+  }
+}

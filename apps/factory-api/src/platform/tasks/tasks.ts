@@ -54,6 +54,7 @@ import { resolveRecord } from '../threads/records'
  *   POST /tasks/:id/status       DONE (done), OPEN (reopen, Undo), CANCELLED
  *   POST /tasks/:id/snooze       off Today until a time (an OPEN task), or awake again (null)
  *   POST /tasks/bulk             Mark done · Reassign · Set due over many, in ONE command (all or none)
+ *   GET  /tasks/assignees        who may be given a task on a record, or of their own (B-W2a-40)
  *
  * Who sees a task: whoever made it, its assignee, and (a task on a record) whoever may read the record's thread. Who
  * changes it: a holder of tasks.manage among those, a record's task also for whoever may write notes on the record. The
@@ -135,6 +136,35 @@ export async function mayBeAssigned(client: Client, tenantId: string, userId: st
 }
 
 const ASSIGNEE_REFUSED = 'This person may not be given the task: they cannot keep tasks here, or cannot see its record.'
+
+/** The most people GET /tasks/assignees reads (by name). */
+export const ASSIGNABLE_MAX = 500
+
+/**
+ * GET /tasks/assignees (B-W2a-40): the ACTIVE people a task may be given to — on the record named (the same checks as
+ * making a task there: the caller reads it, may write on it and keeps tasks there; each person by `mayBeAssigned`), or of
+ * its own (the caller keeps tasks). Names only, by name.
+ */
+export async function taskAssignees(caller: CommandCaller, query: { readonly recordType?: string | undefined; readonly recordId?: string | undefined }) {
+  const context = officeOf(caller)
+  const actor = actorOf(context)
+  const now = serverClock.now()
+  const onRecord = query.recordType !== undefined || query.recordId !== undefined
+  if (onRecord && (!query.recordType || !query.recordId)) throw new ValidationError('Name the record.', [{ path: 'querystring/recordId', message: 'A record needs recordType and recordId.' }])
+  return caller.withClient(async (client) => {
+    let scope: ScopedRecord = { companyId: null, siteId: null, partyId: null }
+    if (onRecord) {
+      const found = await resolveRecord(client, query.recordType!, query.recordId!)
+      if (!found || !can(actor, THREADS_READ, found)) throw new NotFoundError('Record not found.')
+      if (!can(actor, THREADS_POST, found) || !can(actor, TASKS_MANAGE, found)) throw new ForbiddenError('You may not make tasks on this record.')
+      scope = found
+    } else if (!holds(actor, TASKS_MANAGE)) throw new ForbiddenError()
+    const users = await client.user.findMany({ where: { status: 'ACTIVE' }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }], take: ASSIGNABLE_MAX, select: { id: true, displayName: true } })
+    const people: { id: string; name: string; me: boolean }[] = []
+    for (const user of users) if (await mayBeAssigned(client, context.tenantId, user.id, scope, onRecord, now)) people.push({ id: user.id, name: user.displayName, me: user.id === context.actorId })
+    return { people, complete: users.length < ASSIGNABLE_MAX }
+  })
+}
 
 // ---- the answer ---------------------------------------------------------------------------------------------------------
 
