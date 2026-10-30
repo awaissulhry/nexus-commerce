@@ -1,7 +1,8 @@
 import { idempotencyKeyFrom } from '../../core/command'
 import { defineRoutes } from '../../core/manifest'
 import { serverClock } from '../../core/time'
-import { mentionablePeopleContract, postNoteContract, readThreadContract, setStatusContract, timelineContract } from './contract'
+import { addFollowerContract, followersContract, mentionablePeopleContract, postNoteContract, readThreadContract, setMyFollowContract, setStatusContract, timelineContract } from './contract'
+import { addFollower, listFollowers, setMyFollow } from './followers'
 import { manifest } from './manifest'
 import { mentionablePeople, postNote, readThread, setThreadStatus } from './threads'
 import { readTimeline } from './timeline'
@@ -36,5 +37,21 @@ export default defineRoutes('threads', manifest, async (app) => {
   app.put('/threads/:recordType/:recordId/status', { schema: setStatusContract }, async (request) => {
     const { recordType, recordId } = request.params
     return { thread: await setThreadStatus(request, { type: recordType, id: recordId }, request.body, idempotencyKeyFrom(request)) }
+  })
+
+  // B-W2a-20 (COL-011): the record's followers, my own follow, adding a colleague.
+  app.get('/threads/:recordType/:recordId/followers', { schema: followersContract }, async (request) => {
+    const { recordType, recordId } = request.params
+    return listFollowers(request, { type: recordType, id: recordId })
+  })
+
+  app.put('/threads/:recordType/:recordId/followers/me', { schema: setMyFollowContract }, async (request) => {
+    const { recordType, recordId } = request.params
+    return setMyFollow(request, { type: recordType, id: recordId }, request.body, idempotencyKeyFrom(request))
+  })
+
+  app.post('/threads/:recordType/:recordId/followers', { schema: addFollowerContract }, async (request) => {
+    const { recordType, recordId } = request.params
+    return addFollower(request, { type: recordType, id: recordId }, request.body, idempotencyKeyFrom(request))
   })
 })

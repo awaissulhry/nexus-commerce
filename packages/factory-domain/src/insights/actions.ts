@@ -16,8 +16,13 @@ import { FLOW_LENSES, type FlowLens } from './flow'
  *                comes back then, unassigned). The design: "the alert closes for everyone it went to".
  *   ACKNOWLEDGE  "I have seen it": the row stays, marked, while its condition holds.
  *
+ *   SNOOZE       (W2a, B-W2a-20; design home.today popup snooze "Later today 16:00 · Tomorrow 08:00 · Monday 08:00 · Pick a
+ *                date · Until something changes on the record"): the row leaves Today for everyone until that time, or
+ *                (no time) until its condition changes; like an acknowledgement it is the row's, not one person's. It is
+ *                not a decision: "Handled today" does not count it.
+ *
  * Only alerts take these verbs: an approval or a mail is decided in its own review (Approve · Reject, Sort), never closed
- * from Today. Snooze is W2a. Who may act is never stored: the API asks actingPermission at every action, for the person
+ * from Today. Who may act is never stored: the API asks actingPermission at every action, for the person
  * acting and for the assignee, and a person never acts on a row they could not see (it is not on their Today: 404).
  */
 
@@ -58,6 +63,11 @@ export interface StoredAction {
   readonly acknowledgedCondition: string | null
   readonly acknowledgedById: string | null
   readonly acknowledgedAt: Date | null
+  /** W2a: the condition it was snoozed in, by whom, when, and until when (null: until the condition changes). */
+  readonly snoozedCondition?: string | null
+  readonly snoozedById?: string | null
+  readonly snoozedAt?: Date | null
+  readonly snoozedUntil?: Date | null
 }
 
 /** A row's actions as the reader gets them. */
@@ -71,6 +81,8 @@ export interface RowActions {
   readonly assigned: { readonly toId: string; readonly byId: string; readonly at: Date } | null
   /** Acknowledged in this condition. */
   readonly acknowledged: { readonly byId: string; readonly at: Date } | null
+  /** W2a: whether the reader may snooze it (an alert); snoozed rows are not on Today. */
+  readonly snoozable: boolean
 }
 
 /** Whether a row takes the alert verbs (an approval or a mail is decided in its own review). */
@@ -79,27 +91,63 @@ export const takesActions = (item: Pick<AttentionItem, 'category'>): boolean => 
 /** Resolved in the row's present condition: it is not on Today. */
 export const isResolved = (item: Pick<AttentionItem, 'condition'>, stored: StoredAction | undefined): boolean => stored?.resolvedCondition === item.condition
 
+/**
+ * Snoozed now: snoozed in the row's present condition, until a time not yet come or until the condition changes (no
+ * time). A row whose condition moved comes back at once.
+ */
+export const isSnoozed = (item: Pick<AttentionItem, 'condition'>, stored: StoredAction | undefined, now: Date): boolean =>
+  !!stored?.snoozedAt && stored.snoozedCondition === item.condition && (stored.snoozedUntil == null || stored.snoozedUntil.getTime() > now.getTime())
+
 /** The row's actions for its reader (every row on Today is one its reader may act on). */
 export function rowActionsOf(item: Pick<AttentionItem, 'condition' | 'category'>, stored: StoredAction | undefined): RowActions {
   const acknowledged = stored && stored.acknowledgedCondition === item.condition && stored.acknowledgedById && stored.acknowledgedAt ? { byId: stored.acknowledgedById, at: stored.acknowledgedAt } : null
   const assigned = stored && stored.assignedToId && stored.assignedById && stored.assignedAt ? { toId: stored.assignedToId, byId: stored.assignedById, at: stored.assignedAt } : null
   const verbs: ActionVerb[] = takesActions(item) ? ['ASSIGN', 'RESOLVE', ...(acknowledged ? [] : (['ACKNOWLEDGE'] as const))] : []
-  return { condition: item.condition, version: stored?.version ?? 0, verbs, assigned, acknowledged }
+  return { condition: item.condition, version: stored?.version ?? 0, verbs, assigned, acknowledged, snoozable: takesActions(item) }
 }
 
-/** The rows still on Today (a row resolved in its present condition is not), each with its actions. */
-export function withActions<Item extends AttentionItem>(items: readonly Item[], stored: ReadonlyMap<string, StoredAction>): { readonly items: (Item & { readonly actions: RowActions })[]; readonly resolved: number } {
+/**
+ * The rows still on Today (a row resolved in its present condition is not; nor one snoozed now, W2a), each with its
+ * actions. Without `now` no snooze is applied (a caller that knows none).
+ */
+export function withActions<Item extends AttentionItem>(items: readonly Item[], stored: ReadonlyMap<string, StoredAction>, now?: Date): { readonly items: (Item & { readonly actions: RowActions })[]; readonly resolved: number; readonly snoozed: number } {
   const open: (Item & { readonly actions: RowActions })[] = []
   let resolved = 0
+  let snoozed = 0
   for (const item of items) {
     const action = stored.get(item.key)
     if (isResolved(item, action)) {
       resolved += 1
       continue
     }
+    if (now !== undefined && isSnoozed(item, action, now)) {
+      snoozed += 1
+      continue
+    }
     open.push({ ...item, actions: rowActionsOf(item, action) })
   }
-  return { items: open, resolved }
+  return { items: open, resolved, snoozed }
+}
+
+// ---- Snooze (W2a; design home.today popup snooze) ----------------------------------------------------------------------
+
+/** A snooze reaches at most this far ahead. */
+export const SNOOZE_MAX_DAYS = 90
+
+/** Why the row cannot be snoozed as it is now (null: it can); the time is checked apart (snoozeTimeProblem). */
+export function snoozeRefusal(item: Pick<AttentionItem, 'condition' | 'category'>, stored: StoredAction | undefined, sent: { readonly condition: string }): ActionRefusal | null {
+  if (!takesActions(item)) return 'NOT_AN_ALERT'
+  if (sent.condition !== item.condition) return 'CHANGED'
+  if (isResolved(item, stored)) return 'ALREADY_RESOLVED'
+  return null
+}
+
+/** What is wrong with a snooze until this time (null: nothing; a null time is "until something changes on the record"). */
+export function snoozeTimeProblem(until: Date | null, now: Date): string | null {
+  if (until === null) return null
+  if (until.getTime() <= now.getTime()) return 'Snooze until a later time.'
+  if (until.getTime() - now.getTime() > SNOOZE_MAX_DAYS * 86_400_000) return `Snooze for at most ${SNOOZE_MAX_DAYS} days.`
+  return null
 }
 
 /** The refusal codes of an action, in words for the person (the API answers 409 with them). */

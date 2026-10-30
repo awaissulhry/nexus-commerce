@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { defineEvent } from '../events/define'
 import { PURCHASE_ORDER_STATUSES } from './orders'
 import { SOURCE_PREFERENCES } from './sources/sources'
+import { SUBCONTRACT_ORDER_STATUSES } from './subcontracting/rules'
 
 /**
  * The purchasing module's events (plan A1 §3.4, §3.5; SCM-050, SCM-053, SCM-055; design 02 "Purchase orders", Live).
@@ -23,10 +24,19 @@ import { SOURCE_PREFERENCES } from './sources/sources'
  *   supplier_item.created | updated | archived   an approved source of a material was added, changed (or approved
  *                                  again), archived (B-W2a-10; modules/purchasing/supplier-items)
  *   purchase_requests.converted    requests to buy were drafted into a purchase order (B-W2a-10; one per order touched)
+ *   subcontract_order.created | updated | issued | reopened | cancelled | kit_sent | kit_returned | received | closed
+ *                                  work sent to a workshop (B-W2a-25; modules/purchasing/subcontracting): made, changed
+ *                                  (header, operations, kit plan), issued, back to draft, cancelled, kit and pieces out,
+ *                                  a kit line back unsent, goods back, closed. Ids, numbers, counts and states: no fee.
  */
 const live = { permission: 'purchasing.view', fields: ['purchaseOrderId', 'number'] } as const
 const sourceLive = { permission: 'purchasing.view', fields: ['supplierItemId', 'partyId', 'itemId'] } as const
 const base = { purchaseOrderId: z.uuid(), number: z.string().min(1).max(40) }
+// B-W2a-25: subcontract orders (the office's list and record refresh; planning's allocation board reads them later).
+const subcontractLive = { permission: 'purchasing.view', fields: ['subcontractOrderId', 'number', 'status'] } as const
+const subcontract = { subcontractOrderId: z.uuid(), number: z.string().min(1).max(40) }
+const subcontractStatus = z.enum(SUBCONTRACT_ORDER_STATUSES)
+const pieces = z.number().int().min(0)
 
 export const events = [
   defineEvent({
@@ -127,5 +137,69 @@ export const events = [
     description: 'Requests to buy (plan lines, reorder points) were drafted into this purchase order, one line each.',
     payload: z.strictObject({ ...base, created: z.boolean(), requests: z.number().int().min(1), fromPlan: z.number().int().min(0), fromReorder: z.number().int().min(0) }),
     live: { permission: 'purchasing.view', fields: ['purchaseOrderId', 'number', 'requests'] },
+  }),
+  // B-W2a-25: subcontracting (SCM-138, SCM-140, SCM-141, SCM-142).
+  defineEvent({
+    type: 'subcontract_order.created',
+    context: 'purchasing',
+    description: "A draft subcontract order was made for outside operations of a work order (its workshop, pieces, fee and return date).",
+    payload: z.strictObject({ ...subcontract, status: subcontractStatus, workOrderId: z.uuid(), partyId: z.uuid(), siteId: z.uuid(), operations: z.number().int().min(0), kitLines: z.number().int().min(0) }),
+    live: subcontractLive,
+  }),
+  defineEvent({
+    type: 'subcontract_order.updated',
+    context: 'purchasing',
+    description: "A subcontract order changed: its header, its operations (pieces, sizes, fee, return date) or its kit plan.",
+    payload: z.strictObject({ ...subcontract, status: subcontractStatus, fields: z.array(z.string().min(1).max(40)).max(20) }),
+    live: subcontractLive,
+  }),
+  defineEvent({
+    type: 'subcontract_order.issued',
+    context: 'purchasing',
+    description: 'A subcontract order went to its workshop: its operations and amount are fixed, the kit may go out.',
+    payload: z.strictObject({ ...subcontract, status: subcontractStatus, partyId: z.uuid(), operations: z.number().int().min(1), pieces }),
+    live: subcontractLive,
+  }),
+  defineEvent({
+    type: 'subcontract_order.reopened',
+    context: 'purchasing',
+    description: 'An issued subcontract order went back to draft to be changed (nothing of it was out).',
+    payload: z.strictObject({ ...subcontract, status: subcontractStatus }),
+    live: subcontractLive,
+  }),
+  defineEvent({
+    type: 'subcontract_order.cancelled',
+    context: 'purchasing',
+    description: 'A subcontract order was cancelled with a reason (nothing of it was out); its planned kit lines too.',
+    payload: z.strictObject({ ...subcontract, status: subcontractStatus, from: subcontractStatus }),
+    live: subcontractLive,
+  }),
+  defineEvent({
+    type: 'subcontract_order.kit_sent',
+    context: 'purchasing',
+    description: "Kit lines and pieces of a subcontract order went out: the material moved into the workshop's stock location (still ours), with the DDT for work on our behalf when one was issued.",
+    payload: z.strictObject({ ...subcontract, status: subcontractStatus, kitLineIds: z.array(z.uuid()).max(200), moveIds: z.array(z.uuid()).max(200), pieces, bundles: z.number().int().min(0), ddtId: z.uuid().nullable() }),
+    live: subcontractLive,
+  }),
+  defineEvent({
+    type: 'subcontract_order.kit_returned',
+    context: 'purchasing',
+    description: "A sent kit line of a subcontract order came back unsent: its transfer reversed, the line planned again.",
+    payload: z.strictObject({ ...subcontract, status: subcontractStatus, kitLineId: z.uuid(), moveId: z.uuid() }),
+    live: subcontractLive,
+  }),
+  defineEvent({
+    type: 'subcontract_order.received',
+    context: 'purchasing',
+    description: 'Goods came back from the workshop (pieces good, defective and scrapped there, bundle by bundle) and/or unused material it returned.',
+    payload: z.strictObject({ ...subcontract, status: subcontractStatus, receiptId: z.uuid(), good: pieces, defective: pieces, scrapped: pieces, bundles: z.number().int().min(0), returnedLines: z.number().int().min(0) }),
+    live: subcontractLive,
+  }),
+  defineEvent({
+    type: 'subcontract_order.closed',
+    context: 'purchasing',
+    description: 'A subcontract order whose goods are all back was closed.',
+    payload: z.strictObject({ ...subcontract, status: subcontractStatus }),
+    live: subcontractLive,
   }),
 ] as const

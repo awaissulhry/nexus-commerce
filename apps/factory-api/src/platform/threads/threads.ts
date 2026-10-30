@@ -26,6 +26,7 @@ import { ApiError } from '../../core/errors'
 import { heldRoles } from '../auth/roles/access'
 import { audienceSees, type FileAudience, type Viewer } from '../files/rules'
 import type { AttachmentView, MessageView, ThreadView } from './contract'
+import { followInCommand } from './followers'
 import { resolveRecord, type RecordScope } from './records'
 
 /**
@@ -377,9 +378,17 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
   const about = { threadId: thread.id, messageId: id, recordType: thread.recordType, recordId: thread.recordId }
   const where = { subject: thread.recordId, companyId: thread.companyId, siteId: thread.siteId }
   tools.emit(eventFor(messagePosted, { ...where, payload: { ...about, direction: input.direction, audience } }))
-  for (const userId of mentions) {
-    if (userId !== input.author.id) tools.emit(eventFor(userMentioned, { ...where, payload: { ...about, userId, authorId: input.author.id } }))
+  // B-W2a-20 (COL-006, COL-011): each person the note mentions (not its author) gets a mention row with the note (where
+  // was I mentioned), follows the record unless they have a follow row (muted stays muted), and is told (the event).
+  const told = mentions.filter((userId) => userId !== input.author.id)
+  if (told.length > 0) {
+    const authorId = input.author.kind === 'USER' ? input.author.id : null
+    await tools.tx.messageMention.createMany({
+      data: told.map((userId) => ({ id: newId(), messageId: id, threadId: thread.id, recordType: thread.recordType, recordId: thread.recordId, userId, authorId, at, createdAt: tools.now })),
+    })
+    for (const userId of told) await followInCommand(tools, { type: thread.recordType, id: thread.recordId, companyId: thread.companyId, siteId: thread.siteId }, userId, 'MENTIONED', input.author.id)
   }
+  for (const userId of told) tools.emit(eventFor(userMentioned, { ...where, payload: { ...about, userId, authorId: input.author.id } }))
   return row
 }
 

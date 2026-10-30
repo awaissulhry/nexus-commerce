@@ -12,4 +12,9 @@ export const manifest = defineManifest({
   'POST /threads/:recordType/:recordId/notes': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
   'GET /threads/:recordType/:recordId/people': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
   'PUT /threads/:recordType/:recordId/status': { audiences: ['office'], permission: 'threads.manage', scope: 'record' },
+  // B-W2a-20 (COL-011): followers. Reading and my own follow need threads.read over the record; adding a colleague
+  // threads.post (as mentioning them does), and they must be able to read it.
+  'GET /threads/:recordType/:recordId/followers': { audiences: ['office'], permission: 'threads.read', scope: 'record' },
+  'PUT /threads/:recordType/:recordId/followers/me': { audiences: ['office'], permission: 'threads.read', scope: 'record' },
+  'POST /threads/:recordType/:recordId/followers': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
 })

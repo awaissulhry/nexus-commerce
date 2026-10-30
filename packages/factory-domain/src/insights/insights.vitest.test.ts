@@ -6,6 +6,8 @@ import type { Actor, Grant, Permission } from '../core/permissions'
 import { EVENT_CATALOGUE } from '../events/catalogue'
 import {
   ATTENTION_KINDS,
+  isPersonalKind,
+  PERSONAL_KINDS,
   attentionFor,
   compareItems,
   countsOf,
@@ -106,12 +108,14 @@ describe('who a row is for (whyMine: the right to act, four eyes, the grain, the
 
   it('the sources a role reads and the tiles it gets', () => {
     expect(tileKindsFor(roleActor('owner'))).toEqual([...ATTENTION_KINDS])
-    expect(tileKindsFor(roleActor('buyer'))).toEqual(['PO_PROPOSAL', 'PO_NOT_CONFIRMED', 'MAIL_TO_SORT'])
+    // W2a: every office person's own rows (my tasks: tasks.manage; my mentions: home.view) follow the W1 kinds.
+    expect(tileKindsFor(roleActor('buyer'))).toEqual(['PO_PROPOSAL', 'PO_NOT_CONFIRMED', 'MAIL_TO_SORT', 'TASK_DUE', 'MENTION'])
     expect(sourcesFor(roleActor('buyer'))).toContain('LOT_HOLD') // seen, never acted on
-    expect(tileKindsFor(roleActor('quality_inspector'))).toEqual(['LOT_HOLD', 'REGISTER_DUTY', 'STYLE_COMPLIANCE'])
-    expect(tileKindsFor(roleActor('sales'))).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT'])
-    expect(tileKindsFor(roleActor('finance'))).toEqual(['INVOICE_SDI', 'QUOTE_APPROVAL', 'INVOICE_TO_ISSUE'])
-    expect(tileKindsFor(roleActor('read_only'))).toEqual([])
+    expect(tileKindsFor(roleActor('quality_inspector'))).toEqual(['LOT_HOLD', 'REGISTER_DUTY', 'STYLE_COMPLIANCE', 'TASK_DUE', 'MENTION'])
+    expect(tileKindsFor(roleActor('sales'))).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT', 'TASK_DUE', 'MENTION'])
+    expect(tileKindsFor(roleActor('finance'))).toEqual(['INVOICE_SDI', 'QUOTE_APPROVAL', 'INVOICE_TO_ISSUE', 'TASK_DUE', 'MENTION'])
+    // Read-only keeps no task (tasks.manage is a write); it still reads the notes that mention it.
+    expect(tileKindsFor(roleActor('read_only'))).toEqual(['MENTION'])
   })
 })
 
@@ -191,9 +195,9 @@ describe('rank, groups, pages and tiles', () => {
     expect(counts.byKind.reduce((sum, tile) => sum + tile.count, 0)).toBe(counts.total)
     expect(counts.byKind.find((tile) => tile.kind === 'ORDER_PROMISE')!.count).toBe(3)
     expect(counts.byKind.find((tile) => tile.kind === 'PRIVACY_DUTY')!.count).toBe(0)
-    expect(counts.byCategory).toEqual({ APPROVAL: 1, ALERT: 6 })
+    expect(counts.byCategory).toEqual({ APPROVAL: 1, ALERT: 6, TASK: 0, MENTION: 0 })
     expect(counts.now).toBe(ranked.filter((item) => item.group === 'NOW').length)
-    expect(countsOf([], [])).toEqual({ total: 0, now: 0, byCategory: { APPROVAL: 0, ALERT: 0 }, byKind: [] })
+    expect(countsOf([], [])).toEqual({ total: 0, now: 0, byCategory: { APPROVAL: 0, ALERT: 0, TASK: 0, MENTION: 0 }, byKind: [] })
   })
 
   it('the company and site filters (a site keeps its company’s rows without a site; a shared style belongs to every company)', () => {
@@ -332,9 +336,12 @@ describe('the catalogue', () => {
     const events = [...liveEventsOf([...ATTENTION_KINDS]), ...FLOW_LENSES.flatMap((lens) => LENS_RULES[lens].live), ...Object.values(WAITING_RULES).flatMap((rule) => rule.live)]
     // Declared, and streamed to live screens (GET /live): the web refreshes on them.
     expect(events.filter((type) => !EVENT_CATALOGUE.find(type, 1)?.live)).toEqual([])
-    for (const kind of ATTENTION_KINDS) for (const permission of KIND_RULES[kind].act) expect(EN_TEMPLATES[whyKey(kind, permission)], `${kind} ${permission}`).toBeTruthy()
-    // The design's tiles: Approvals are exactly the decisions a person reviews; everything else is an alert.
-    for (const kind of ATTENTION_KINDS) expect(KIND_RULES[kind].category, kind).toBe(KIND_RULES[kind].decide === 'REVIEW' ? 'APPROVAL' : 'ALERT')
+    const recordKinds = ATTENTION_KINDS.filter((kind) => !isPersonalKind(kind))
+    for (const kind of recordKinds) for (const permission of KIND_RULES[kind].act) expect(EN_TEMPLATES[whyKey(kind, permission)], `${kind} ${permission}`).toBeTruthy()
+    // The design's tiles: Approvals are exactly the decisions a person reviews; everything else is an alert. W2a's own
+    // rows (my tasks, my mentions) have their own categories and words (insights/personal).
+    for (const kind of recordKinds) expect(KIND_RULES[kind].category, kind).toBe(KIND_RULES[kind].decide === 'REVIEW' ? 'APPROVAL' : 'ALERT')
+    expect(PERSONAL_KINDS.map((kind) => KIND_RULES[kind].category)).toEqual(['TASK', 'MENTION'])
     expect(Object.keys(CODE_WORDS).sort()).toEqual(['checks', 'complianceChecks', 'duties', 'entryKind', 'heldReason', 'privacyDuties', 'reasons', 'steps'])
   })
 

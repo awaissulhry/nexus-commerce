@@ -45,8 +45,15 @@ const assignable = FACTORY_PERMISSIONS.assignable.filter((definition) => definit
 const every = (filter: (risk: string) => boolean = () => true): Permission[] =>
   assignable.filter((definition) => filter(definition.risk)).map((definition) => definition.name)
 
+/**
+ * B-W2a-20 (tasks on any record, COL-037): every office template that writes notes on records (threads.post) makes and
+ * keeps tasks too. Listed here, one line per template, so the long permission lists below stay as their steps wrote them.
+ */
+const TASKS_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor'])
+const addedFor = (key: string, audience: RoleAudience): Permission[] => (audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage'] : [])
+
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...content.permissions].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 
@@ -206,6 +213,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'calendars.suppliers.manage',
       // B-W2a-10: the approved sources (supplier articles, units, prices, minimums, lead times).
       'purchasing.sources.manage',
+      // B-W2a-25: subcontract orders to the workshops (operations, fees, kit plan, issue, cancel, close).
+      'purchasing.subcontract.manage',
       // W2a B-W2a-13 (MES-057): the hide yield per supplier lot feeds the supplier's rating.
       'production.cutting.view',
     ],
@@ -256,6 +265,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'shipping.labels.void',
       'parties.view',
       'purchasing.view',
+      // B-W2a-25: send a subcontract order's kit with its DDT, receive the goods back by bundle.
+      'purchasing.subcontract.kit',
+      'purchasing.subcontract.receive',
       'workorders.view',
       'orders.view',
       'quality.lots.view',

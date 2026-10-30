@@ -50,6 +50,35 @@ import { convertRequests, previewConversion } from './requests/convert'
 import { getRequest, listRequests, requestCounts } from './requests/queue'
 import { archiveSourceContract, createSourceContract, getSourceContract, listSourcesContract, restoreSourceContract, updateSourceContract } from './supplier-items/contract'
 import { archiveSource, createSource, getSource, listSources, restoreSource, updateSource } from './supplier-items/supplier-items'
+// B-W2a-25: subcontracting (./subcontracting).
+import {
+  addKitLinesContract,
+  addOperationContract,
+  cancelOrderContract as cancelSubcontractContract,
+  closeOrderContract as closeSubcontractContract,
+  createOrderContract as createSubcontractContract,
+  editKitLineContract,
+  editOperationContract,
+  getOrderContract as getSubcontractContract,
+  issueOrderContract as issueSubcontractContract,
+  listOrdersContract as listSubcontractsContract,
+  orderCountsContract as subcontractCountsContract,
+  outsideOperationsContract,
+  planKitContract,
+  receiveContract as receiveSubcontractContract,
+  removeKitLineContract,
+  removeOperationContract,
+  reopenOrderContract as reopenSubcontractContract,
+  returnKitLineContract,
+  sendKitContract,
+  stockContract as subcontractorStockContract,
+  updateOrderContract as updateSubcontractContract,
+} from './subcontracting/contract'
+import { returnKitLine, sendKit } from './subcontracting/kit'
+import * as subcontracts from './subcontracting/orders'
+import { receiveBack } from './subcontracting/receive'
+import { subcontractorStock } from './subcontracting/stock'
+import { processFiles } from '../../platform/files/service'
 
 /**
  * Purchase orders, part 1 (B-W1-30): the list ("Where POs stand") and the record, a new draft, its header, its lines (with
@@ -66,6 +95,10 @@ import { archiveSource, createSource, getSource, listSources, restoreSource, upd
  *
  * B-W2a-10: approved sources (./supplier-items: list, read, add, change, archive, approve again) and requests to buy
  * (./requests: the queue, its tiles, one request, the "Draft POs for n" preview and the conversion).
+ *
+ * B-W2a-25: subcontract orders (./subcontracting: the list and its tiles, the record, what a work order may send out, a
+ * new draft, its header, operations and kit plan, issue / back to draft / cancel / close, the kit out with its DDT, a kit
+ * line back unsent, goods back by bundle) and the stock at each subcontractor.
  */
 export default defineRoutes('purchasing', manifest, async (app) => {
   app.get('/purchasing/orders', { schema: listOrdersContract }, async (request) => listOrders(request, request.query))
@@ -132,6 +165,49 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/purchasing/requests/preview', { schema: previewConversionContract }, async (request) => previewConversion(request, request.body))
 
   app.post('/purchasing/requests/convert', { schema: convertRequestsContract }, async (request) => convertRequests(request, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2a-25 (SCM-138, SCM-140, SCM-141, SCM-142): subcontract orders and the stock at each subcontractor.
+  app.get('/purchasing/subcontracting/orders', { schema: listSubcontractsContract }, async (request) => subcontracts.listOrders(request, request.query))
+  app.get('/purchasing/subcontracting/orders/counts', { schema: subcontractCountsContract }, async (request) => subcontracts.orderCounts(request, request.query))
+  app.get('/purchasing/subcontracting/orders/:subcontractOrderId', { schema: getSubcontractContract }, async (request) => subcontracts.getOrder(request, request.params.subcontractOrderId))
+  app.get('/purchasing/subcontracting/work-orders/:workOrderId/outside-operations', { schema: outsideOperationsContract }, async (request) => subcontracts.outsideOperations(request, request.params.workOrderId))
+  app.get('/purchasing/subcontracting/stock', { schema: subcontractorStockContract }, async (request) => subcontractorStock(request, request.query))
+  app.post('/purchasing/subcontracting/orders', { schema: createSubcontractContract }, async (request, reply) => reply.code(201).send(await subcontracts.createOrder(request, request.body, idempotencyKeyFrom(request))))
+  app.patch('/purchasing/subcontracting/orders/:subcontractOrderId', { schema: updateSubcontractContract }, async (request) => subcontracts.updateOrder(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/operations', { schema: addOperationContract }, async (request, reply) =>
+    reply.code(201).send(await subcontracts.addOperation(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.patch('/purchasing/subcontracting/orders/:subcontractOrderId/operations/:operationId', { schema: editOperationContract }, async (request) =>
+    subcontracts.editOperation(request, request.params.subcontractOrderId, request.params.operationId, request.body, idempotencyKeyFrom(request)),
+  )
+  app.delete('/purchasing/subcontracting/orders/:subcontractOrderId/operations/:operationId', { schema: removeOperationContract }, async (request) =>
+    subcontracts.removeOperation(request, request.params.subcontractOrderId, request.params.operationId, request.query, idempotencyKeyFrom(request)),
+  )
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/kit', { schema: addKitLinesContract }, async (request, reply) =>
+    reply.code(201).send(await subcontracts.addKitLines(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/kit/from-work-order', { schema: planKitContract }, async (request) => subcontracts.planKit(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request)))
+  app.patch('/purchasing/subcontracting/orders/:subcontractOrderId/kit/:lineId', { schema: editKitLineContract }, async (request) =>
+    subcontracts.editKitLine(request, request.params.subcontractOrderId, request.params.lineId, request.body, idempotencyKeyFrom(request)),
+  )
+  app.delete('/purchasing/subcontracting/orders/:subcontractOrderId/kit/:lineId', { schema: removeKitLineContract }, async (request) =>
+    subcontracts.removeKitLine(request, request.params.subcontractOrderId, request.params.lineId, request.query, idempotencyKeyFrom(request)),
+  )
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/issue', { schema: issueSubcontractContract }, async (request) => subcontracts.issueOrder(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/reopen', { schema: reopenSubcontractContract }, async (request) => subcontracts.reopenOrder(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/cancel', { schema: cancelSubcontractContract }, async (request) => subcontracts.cancelOrder(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/close', { schema: closeSubcontractContract }, async (request) => subcontracts.closeOrder(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/kit/send', { schema: sendKitContract }, async (request, reply) =>
+    reply
+      .code(201)
+      .send(await sendKit(processFiles(), request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request), (error) => request.log.error({ err: error }, 'the kit DDT is issued; its PDF was not stored'))),
+  )
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/kit/:lineId/return', { schema: returnKitLineContract }, async (request) =>
+    returnKitLine(request, request.params.subcontractOrderId, request.params.lineId, request.body, idempotencyKeyFrom(request)),
+  )
+  app.post('/purchasing/subcontracting/orders/:subcontractOrderId/receive', { schema: receiveSubcontractContract }, async (request, reply) =>
+    reply.code(201).send(await receiveBack(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request))),
+  )
 
   const linkUse = app.officeAuth?.rateLimits.linkUse ?? AUTH_RATE_LIMITS.linkUse
   const limited = { rateLimit: { max: linkUse.max, timeWindow: linkUse.timeWindowMs } }

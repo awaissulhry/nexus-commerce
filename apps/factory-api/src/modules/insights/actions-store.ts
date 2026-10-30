@@ -22,6 +22,11 @@ export const ACTION_COLUMNS = {
   acknowledgedCondition: true,
   acknowledgedById: true,
   acknowledgedAt: true,
+  // W2a (B-W2a-20): Today's snooze.
+  snoozedCondition: true,
+  snoozedById: true,
+  snoozedAt: true,
+  snoozedUntil: true,
 } as const satisfies Prisma.AttentionActionSelect
 
 export type ActionRow = Prisma.AttentionActionGetPayload<{ select: typeof ACTION_COLUMNS }>
@@ -69,6 +74,10 @@ export interface ActionChange {
   readonly acknowledgedCondition?: string | null
   readonly acknowledgedById?: string | null
   readonly acknowledgedAt?: Date | null
+  readonly snoozedCondition?: string | null
+  readonly snoozedById?: string | null
+  readonly snoozedAt?: Date | null
+  readonly snoozedUntil?: Date | null
 }
 
 /** Stores the change on the row's action: a new action (version 1), or the locked existing one (its version + 1). */
@@ -84,12 +93,14 @@ export async function writeAction(tx: CommandTx, existing: { readonly id: string
 }
 
 export interface LogEntry {
-  readonly verb: 'ASSIGNED' | 'UNASSIGNED' | 'RESOLVED' | 'ACKNOWLEDGED'
+  readonly verb: 'ASSIGNED' | 'UNASSIGNED' | 'RESOLVED' | 'ACKNOWLEDGED' | 'SNOOZED'
   readonly condition: string
   readonly recordLabel: string
   readonly actorId: string
   readonly assigneeId: string | null
   readonly note: string | null
+  /** SNOOZED: until when (null: until the row's condition changes). */
+  readonly snoozedUntil?: Date | null
   readonly at: Date
   readonly requestId: string
 }
@@ -113,10 +124,14 @@ export async function writeLog(tx: CommandTx, actionId: string, identity: Action
   })
 }
 
-/** What a person did through Today's verbs in a span of time, newest first. */
+/**
+ * What a person did through Today's verbs in a span of time, newest first. A snooze (W2a) is not a decision: "Handled
+ * today" leaves it out (B-W2a-01's question, decided by B-W2a-20).
+ */
+const DECIDED = { not: 'SNOOZED' as const }
 export async function readHandled(db: FactoryClient, actorId: string, from: Date, to: Date, limit: number) {
   return db.attentionActionLog.findMany({
-    where: { actorId, at: { gte: from, lt: to } },
+    where: { actorId, at: { gte: from, lt: to }, verb: DECIDED },
     orderBy: [{ at: 'desc' }, { id: 'desc' }],
     take: limit,
     select: { id: true, rowKey: true, kind: true, recordType: true, recordId: true, recordLabel: true, companyId: true, verb: true, assigneeId: true, note: true, at: true },
@@ -124,7 +139,7 @@ export async function readHandled(db: FactoryClient, actorId: string, from: Date
 }
 
 export async function countHandled(db: FactoryClient, actorId: string, from: Date, to: Date): Promise<number> {
-  return db.attentionActionLog.count({ where: { actorId, at: { gte: from, lt: to } } })
+  return db.attentionActionLog.count({ where: { actorId, at: { gte: from, lt: to }, verb: DECIDED } })
 }
 
 export const LAYOUT_COLUMNS = { id: true, userId: true, sections: true, panels: true, mainLens: true, version: true, updatedAt: true } as const satisfies Prisma.TodayLayoutSelect
