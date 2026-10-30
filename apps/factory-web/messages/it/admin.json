@@ -1164,6 +1164,14 @@
       "team_leader": {
         "name": "Capo squadra",
         "description": "Guida una squadra in reparto: lavora e vede le schermate del capo squadra dello stabilimento; non vede importi."
+      },
+      "maintenance": {
+        "name": "Manutenzione",
+        "description": "Tiene in funzione le macchine: il registro macchine, le richieste dalle postazioni e gli interventi di manutenzione; dichiara di nuovo sicura una macchina segnalata non sicura; non vede importi."
+      },
+      "technician": {
+        "name": "Manutentore",
+        "description": "Esegue gli interventi di manutenzione con un dispositivo registrato e dichiara di nuovo sicura una macchina segnalata non sicura con il PIN; non vede importi."
       }
     },
     "bulk": {
@@ -1496,7 +1504,8 @@
     "paymentterms": "Condizioni di pagamento",
     "pricelists": "Listini",
     "tasks": "Attività",
-    "views": "Viste ed esportazioni"
+    "views": "Viste ed esportazioni",
+    "plant": "Stabilimento"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
