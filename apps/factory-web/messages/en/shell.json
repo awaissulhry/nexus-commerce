@@ -84,7 +84,9 @@
     "quality": {
       "area": "Quality",
       "main": "Main",
-      "inspections": "Inspections"
+      "inspections": "Inspections",
+      "problems": "Problems",
+      "complaints": "Complaints"
     },
     "compliance": {
       "area": "Compliance",

@@ -183,6 +183,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const repair = await client.repairOrder.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
     return repair ? { companyId: repair.companyId, siteId: repair.siteId, partyId: repair.partyId } : null
   },
+  // modules/quality/complaints (SCR-113 the Complaint's Activity tab; B-W2a-65): the company the complaint is made to and the
+  // customer, so its notes and the mail with the customer about it stay with that customer; no site (none is named).
+  Complaint: async (client, id) => {
+    const complaint = await client.complaint.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return complaint ? { companyId: complaint.companyId, siteId: null, partyId: complaint.partyId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}
