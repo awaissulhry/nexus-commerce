@@ -154,6 +154,7 @@ import { ReviewPartsExample } from './ReviewPartsExample'
 import { BottomBarExample, BrandingExample } from './shell'
 import { PdfViewerExample, QrCodeExample } from './documents'
 import { SizeGridExample } from './size-grid/SizeGridExample'
+import { PlanningBoardExample } from './planning/PlanningBoardExample'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -1536,6 +1537,7 @@ export function TokenCatalog() {
       <Section title="Floor counts" desc="Counting on the floor tier: the quantity pad (big number, − and +, digit pad, quick values), size buttons with what is left per size, and the AQL sample counter (gap G6; packages/ui/src/floor/QuantityPad, SizeButtons)."><FloorCountsExample /></Section>
       <Section title="Label preview" desc="Labels as data drawn to scale — bundle ticket, hide tag, garment PPE label, badge, carrier label — with Code 128 drawn here, QR and pictograms from the app, and the print state with retry (gap G11; packages/ui/src/components/LabelPreview)."><LabelPreviewExample /></Section>
       <Section title="Sign and accept" desc="Accept by typing your name: what is accepted, what it means, ticks, the typed name matched loosely, an optional email check, busy, done and held states, on the comfortable tier of a link page (gap G12; packages/ui/src/components/SignBlock)."><SignBlockExample /></Section>
+      <Section title="Planning board" desc="Resource lanes over days with work in standard minutes: drag or keyboard moves (Space or M, arrows, Enter, Escape) with the load after the drop, pins, held lanes, the tray, Undo / Redo, the allocation layout and the phone list; the load bar per lane and bucket says over capacity in words (gap D18; packages/ui/src/patterns/planning-board)."><PlanningBoardExample /></Section>
 
       <Section title="Radius">
         <Card>

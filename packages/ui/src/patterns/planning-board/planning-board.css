@@ -1,0 +1,594 @@
+/* PlanningBoard + LoadBar (gap D18; PlanningBoard.tsx, LoadBar.tsx). Loaded with the components, never by the shared
+   stylesheets: no page that does not draw a board carries these rules. Semantic --nds-* tokens only (no raw colour, no
+   numbered ramp), so both themes come from the tokens. Measured 2026-10-30 in both themes: every text pair here is at
+   least 7:1 (warning words in --nds-warning-text, 8.9; the note-warn pair is NOT used — its fg is 2.1:1 off its own
+   ground in dark), the over fill --nds-danger-strong is at least 4.2:1 against the track. A state is never said by colour alone: over capacity has words
+   and a hatched part past the capacity line, late cards stripes and a "Late" tag, closed cells a hatch and their reason,
+   a pinned card its pin and the word, a held drop zone its lock and reason. */
+
+/* ─────────── LoadBar ─────────── */
+
+.nds-loadbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  font-size: var(--nds-font-size-xs);
+  line-height: 1.35;
+  color: var(--nds-text-2);
+}
+.nds-loadbar-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--nds-space-6);
+  min-width: 0;
+}
+.nds-loadbar-label {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+.nds-loadbar-value {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text);
+}
+.nds-loadbar-after {
+  color: var(--nds-text-2);
+}
+.nds-loadbar-over {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-danger-text);
+}
+.nds-loadbar-track {
+  position: relative;
+  display: block;
+  height: 6px;
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-progress-track);
+  overflow: hidden;
+}
+.nds-loadbar-fill {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  background: var(--nds-primary);
+}
+.nds-loadbar.is-over .nds-loadbar-fill {
+  background: var(--nds-danger-strong);
+}
+/* Past the capacity line: hatched, so "over" does not rest on the red alone. */
+.nds-loadbar-excess {
+  position: absolute;
+  inset-block: 0;
+  background: repeating-linear-gradient(135deg, var(--nds-danger-strong) 0 3px, var(--nds-danger-soft) 3px 6px);
+}
+.nds-loadbar-cap {
+  position: absolute;
+  inset-block: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--nds-text);
+}
+.nds-loadbar-minutes {
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}
+.nds-loadbar.is-none .nds-loadbar-minutes,
+.nds-loadbar.is-closed .nds-loadbar-minutes,
+.nds-loadbar.is-unknown .nds-loadbar-minutes {
+  color: var(--nds-text-muted);
+}
+/* The load after a move being made: the same bar, outlined as a preview (and said: "after the move"). */
+.nds-loadbar.is-preview .nds-loadbar-track {
+  outline: 1px dashed var(--nds-text-2);
+  outline-offset: 2px;
+}
+.nds-loadbar.md {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-10);
+  font-size: var(--nds-font-size-sm);
+}
+.nds-loadbar.md .nds-loadbar-track {
+  flex: 1 1 120px;
+  min-width: 80px;
+  height: 8px;
+}
+.nds-loadbar.md .nds-loadbar-value {
+  font-size: var(--nds-font-size-base);
+}
+.nds-detailpop-trigger.nds-loadbar-trigger {
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--nds-space-2) var(--nds-space-4);
+  border-radius: var(--nds-radius-sm);
+  text-align: left;
+}
+.nds-detailpop-trigger.nds-loadbar-trigger > .nds-loadbar {
+  flex: 1 1 auto;
+}
+.nds-detailpop-trigger.nds-loadbar-trigger:hover {
+  background: var(--nds-surface-hover);
+}
+
+/* ─────────── the board ─────────── */
+
+.nds-pb {
+  --nds-pb-lane-w: 168px;
+  --nds-pb-cell-min: 132px;
+  --nds-pb-col-min: 232px;
+  --nds-pb-tray-w: 296px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  container-type: inline-size;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+.nds-pb-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-height: 32px;
+}
+.nds-pb-actions {
+  display: inline-flex;
+  gap: var(--nds-space-4);
+}
+.nds-pb-held {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-2) var(--nds-space-8);
+  border: 1px solid var(--nds-warning-border);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-warning-soft);
+  color: var(--nds-text);
+}
+.nds-pb-status {
+  flex: 1 1 240px;
+  min-width: 0;
+  color: var(--nds-text-2);
+}
+.nds-pb-empty {
+  margin: 0;
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px dashed var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  color: var(--nds-text-2);
+}
+.nds-pb-body.has-tray {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+  align-items: start;
+}
+@container (min-width: 1180px) {
+  .nds-pb-body.has-tray {
+    grid-template-columns: minmax(0, 1fr) var(--nds-pb-tray-w);
+  }
+}
+.nds-pb-scroll {
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+
+/* Time layout: lanes are rows, buckets are columns; every row has the same columns, so they line up. */
+.nds-pb-time {
+  display: flex;
+  flex-direction: column;
+  min-width: calc(var(--nds-pb-lane-w) + var(--nds-pb-buckets, 1) * var(--nds-pb-cell-min));
+}
+.nds-pb-headrow {
+  display: grid;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--nds-surface-raised);
+  border-bottom: 1px solid var(--nds-border);
+}
+.nds-pb-corner {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  padding: var(--nds-space-8);
+  background: var(--nds-surface-raised);
+  border-right: 1px solid var(--nds-border);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+.nds-pb-bucket {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  padding: var(--nds-space-6) var(--nds-space-8);
+  border-left: 1px solid var(--nds-border-subtle);
+}
+.nds-pb-bucket.is-today {
+  box-shadow: inset 0 -3px 0 var(--nds-primary);
+}
+.nds-pb-bucket.is-closed {
+  background: repeating-linear-gradient(135deg, var(--nds-surface-sunken) 0 6px, transparent 6px 12px);
+}
+.nds-pb-bucket-label {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+.nds-pb-bucket-detail,
+.nds-pb-bucket-closed {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+
+.nds-pb-lane {
+  display: grid;
+  grid-template-rows: auto;
+  grid-auto-rows: minmax(56px, auto);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+.nds-pb-lane:last-child {
+  border-bottom: 0;
+}
+.nds-pb-lane-head {
+  grid-column: 1;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  padding: var(--nds-space-8);
+  background: var(--nds-surface);
+  border-right: 1px solid var(--nds-border);
+}
+.nds-pb-lane-name {
+  font-size: var(--nds-font-size-base);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+.nds-pb-lane-detail {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+.nds-pb-lane-held {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-warning-text);
+}
+.nds-pb-lane-held > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* A drop cell lies under the load and the cards of its column. */
+.nds-pb-cell {
+  min-width: 0;
+  border-left: 1px solid var(--nds-border-subtle);
+}
+.nds-pb-cell.is-today {
+  box-shadow: inset 2px 0 0 var(--nds-primary);
+}
+.nds-pb-cell.is-closed,
+.nds-pb-lane.is-held .nds-pb-cell {
+  background: repeating-linear-gradient(135deg, var(--nds-surface-sunken) 0 6px, transparent 6px 12px);
+}
+.nds-pb-cell.is-target,
+.nds-pb-column.is-target,
+.nds-pb-tray.is-target {
+  background: var(--nds-primary-soft);
+  outline: 2px dashed var(--nds-primary);
+  outline-offset: -2px;
+}
+.nds-pb-cell.is-over-target {
+  background: var(--nds-danger-soft);
+  outline: 2px dashed var(--nds-danger);
+  outline-offset: -2px;
+}
+.nds-pb-cell.is-held-target,
+.nds-pb-column.is-held-target,
+.nds-pb-tray.is-held-target {
+  outline: 2px dashed var(--nds-text-muted);
+  outline-offset: -2px;
+}
+.nds-pb-load {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  padding: var(--nds-space-4) var(--nds-space-4) var(--nds-space-2);
+}
+.nds-pb-skeleton {
+  padding: var(--nds-space-4);
+}
+
+/* ─────────── cards ─────────── */
+
+.nds-pb-card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  margin: var(--nds-space-2) var(--nds-space-4);
+  padding: var(--nds-space-6) var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-left: 3px solid var(--nds-primary);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-raised);
+  box-shadow: var(--nds-shadow-card);
+  color: var(--nds-text);
+  text-align: left;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+.nds-pb-card:hover {
+  border-color: var(--nds-border-strong);
+}
+.nds-pb-card:focus-visible {
+  outline: none;
+  box-shadow: var(--nds-focus-ring);
+}
+.nds-pb-card.is-late {
+  border-left-color: var(--nds-danger);
+  background-image: repeating-linear-gradient(135deg, var(--nds-danger-soft) 0 6px, transparent 6px 12px);
+}
+.nds-pb-card.is-pinned {
+  border-left-color: var(--nds-text-muted);
+  cursor: default;
+}
+.nds-pb-card.is-moving {
+  opacity: 0.5;
+}
+.nds-pb-card.is-saving {
+  opacity: 0.7;
+  cursor: progress;
+}
+.nds-pb-card.is-ghost {
+  border-style: dashed;
+  border-left-width: 1px;
+  background: var(--nds-primary-soft);
+  box-shadow: none;
+  pointer-events: none;
+}
+.nds-pb-card.is-ghost.is-held {
+  background: var(--nds-surface-sunken);
+  border-color: var(--nds-text-muted);
+}
+.nds-pb-card.is-overlay {
+  margin: 0;
+  cursor: grabbing;
+  box-shadow: var(--nds-shadow-pop);
+}
+.nds-pb-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.nds-pb-card-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-pb-card-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-2);
+  flex: none;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+.nds-pb-card-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nds-text-2);
+}
+.nds-pb-card-minutes {
+  font-size: var(--nds-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-2);
+}
+.nds-pb-card-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+.nds-pb-card-note {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}
+
+/* ─────────── columns layout and the tray ─────────── */
+
+.nds-pb-columns {
+  display: grid;
+}
+.nds-pb-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  min-height: 240px;
+  padding: var(--nds-space-8);
+  border-left: 1px solid var(--nds-border-subtle);
+}
+.nds-pb-columns > :first-child {
+  border-left: 0;
+}
+.nds-pb-column.is-held {
+  background: repeating-linear-gradient(135deg, var(--nds-surface-sunken) 0 6px, transparent 6px 12px);
+}
+.nds-pb-column-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+.nds-pb-column-list,
+.nds-pb-tray-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+.nds-pb-column-list > .nds-pb-card,
+.nds-pb-tray-list > .nds-pb-card {
+  margin: 0;
+}
+.nds-pb-tray {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  min-height: 120px;
+  padding: var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+.nds-pb-tray:not(.is-column) .nds-pb-tray-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+.nds-pb-tray.is-column {
+  min-height: 240px;
+  border: 0;
+  border-radius: 0;
+  background: var(--nds-surface-sunken);
+}
+.nds-pb-tray-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+.nds-pb-tray-empty {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+/* ─────────── the list (phone width) ─────────── */
+
+.nds-pb-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+.nds-pb-list-lane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+.nds-pb-list-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+.nds-pb-list-bucket {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding-top: var(--nds-space-8);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+.nds-pb-list-bucket.is-today {
+  box-shadow: inset 3px 0 0 var(--nds-primary);
+  padding-left: var(--nds-space-8);
+}
+.nds-pb-list-bucket-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.nds-pb-list-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-pb-listcard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-left: 3px solid var(--nds-primary);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-raised);
+}
+.nds-pb-listcard.is-late {
+  border-left-color: var(--nds-danger);
+  background-image: repeating-linear-gradient(135deg, var(--nds-danger-soft) 0 6px, transparent 6px 12px);
+}
+.nds-pb-listcard.is-pinned {
+  border-left-color: var(--nds-text-muted);
+}
+.nds-pb-listcard-face {
+  display: flex;
+  flex: 1 1 160px;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+.nds-pb-listcard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+
+/* ─────────── dialogs and popovers ─────────── */
+
+.nds-pb-movedialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+.nds-pb-movedialog-from {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+.nds-pb-movedialog-held {
+  margin: 0;
+  padding: var(--nds-space-6) var(--nds-space-8);
+  border: 1px solid var(--nds-warning-border);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-warning-soft);
+  color: var(--nds-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nds-pb *,
+  .nds-loadbar * {
+    transition: none;
+    animation: none;
+  }
+}
