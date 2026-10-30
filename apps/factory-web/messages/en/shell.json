@@ -12,7 +12,11 @@
     "products": {
       "area": "Products",
       "main": "Main",
-      "styles": "Styles"
+      "styles": "Styles",
+      "materials": "Materials & trims",
+      "libraries": "Libraries",
+      "operations": "Operations",
+      "sizes": "Sizes & measurements"
     },
     "sales": {
       "area": "Sales",
@@ -59,7 +63,9 @@
       "main": "Main",
       "tests": "Tests & substances",
       "safety": "Product safety",
-      "register": "PPE register & recalls"
+      "register": "PPE register & recalls",
+      "certificates": "Certificates",
+      "labels": "Labels & marking"
     }
   },
   "topbar": {

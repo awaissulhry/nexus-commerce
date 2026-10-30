@@ -19,6 +19,10 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Quote: '/sales/quotes/[id]',
   SalesOrder: '/sales/orders/[id]',
   Style: '/products/styles/[id]',
+  // Products › Materials & trims (SCR-048; the API's model is Item) and the libraries (SCR-049).
+  Item: '/products/materials/[id]',
+  Operation: '/products/operations/[id]',
+  SizeScale: '/products/sizes/[id]',
   WorkOrder: '/production/work-orders/[id]',
   // Quality › Inspections (SCR-076); a release is reviewed in its DetailModal on the list (design §2.3).
   Inspection: '/quality/inspections/[id]',
@@ -27,6 +31,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Lot: '/compliance/tests/[id]',
   // Compliance › PPE register & recalls (SCR-113).
   PpeRegisterEntry: '/compliance/register/[id]',
+  // Compliance › Certificates (SCR-051) and Labels & marking (SCR-053).
+  Certificate: '/compliance/certificates/[id]',
+  LabelTemplate: '/compliance/labels/[id]',
 })
 
 /** An API list route → the web page that shows it (with the same query). */
@@ -39,6 +46,11 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // The order list (SCR-038) reads the API's own filters from the address (`?late=true`, `?deposit=OPEN`, `?status=`).
   '/sales/orders': '/sales/orders',
   '/product/styles': '/products/styles',
+  '/product/materials': '/products/materials',
+  '/product/operations': '/products/operations',
+  '/product/size-scales': '/products/sizes',
+  '/compliance/certificates': '/compliance/certificates',
+  '/compliance/labels': '/compliance/labels',
   '/production/work-orders': '/production/work-orders',
   // The pages read the API's own filters from the address (`?onHold=true`, `?waitingRelease=true`, `?status=OPEN`).
   '/quality/inspections': '/quality/inspections',

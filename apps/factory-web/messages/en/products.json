@@ -784,7 +784,9 @@
       "noTemplates": "No active label template yet: make one in Compliance › Labels & marking.",
       "noneChosen": "No label",
       "save": "Name this label",
-      "where": "Templates are made and approved in Compliance › Labels & marking."
+      "where": "Templates are made and approved in Compliance › Labels & marking.",
+      "open": "See the labels of this style",
+      "new": "New label for this style"
     },
     "tracking": {
       "title": "Garment tracking",

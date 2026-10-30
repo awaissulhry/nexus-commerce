@@ -340,6 +340,14 @@ describe('materials through the API (PRD-028, PRD-030, PRD-032, GAP-006)', () =>
     expect(second.nextCursor).toBeNull()
     expect((await call('viewer', 'GET', '/product/materials?cursor=nonsense')).statusCode).toBe(400)
     expect((await call('viewer', 'GET', '/product/materials?kind=SHOES')).statusCode).toBe(400)
+    // The tiles' filters (SCR-047): PPE components, and the materials without a standard cost (cost grain only).
+    expect((await page('?ppeComponent=true')).materials.map((row: Json) => row.code)).toEqual(['PR-BACK-1'])
+    expect((await page('?ppeComponent=false')).materials.map((row: Json) => row.code)).not.toContain('PR-BACK-1')
+    const missing = (await call('finance', 'GET', '/product/materials?missingCost=true')).json()
+    expect(missing.materials.map((row: Json) => row.code)).toEqual(expect.arrayContaining(['PR-BACK-1', 'TH-40']))
+    expect(missing.materials.map((row: Json) => row.code)).not.toContain('PL-NAP-12')
+    expect((await call('finance', 'GET', '/product/materials?missingCost=false')).json().materials.map((row: Json) => row.code)).toEqual(['LN-MESH-1', 'PL-NAP-12'])
+    expect((await call('viewer', 'GET', '/product/materials?missingCost=true')).statusCode).toBe(403)
   })
 
   it('clears what a change sends as null, the JSON fields included', async () => {

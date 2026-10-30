@@ -1,0 +1,598 @@
+{
+  "common": {
+    "back": "Indietro",
+    "yes": "Sì",
+    "no": "No"
+  },
+  "status": {
+    "DRAFT": "Bozza",
+    "VALID": "Valido",
+    "SUSPENDED": "Sospeso",
+    "WITHDRAWN": "Ritirato",
+    "EXPIRED": "Scaduto",
+    "held": {
+      "reason": "Scrivi prima le parole dell'organismo notificato."
+    }
+  },
+  "kind": {
+    "GARMENT": "Capo EN 17092",
+    "PROTECTOR": "Protettore EN 1621",
+    "GLOVE": "Guanto EN 13594",
+    "OTHER": "Altra norma"
+  },
+  "holder": {
+    "company": "Nostra azienda",
+    "brand": "Marchio (private label)"
+  },
+  "left": {
+    "years_one": "{count} anno",
+    "years_other": "{count} anni",
+    "months_one": "{count} mese",
+    "months_other": "{count} mesi",
+    "span": "ancora {span}",
+    "days_one": "ancora {count} giorno",
+    "days_other": "ancora {count} giorni",
+    "lastDay": "Oggi è l’ultimo giorno valido",
+    "expired_one": "Scaduto da {count} giorno",
+    "expired_other": "Scaduto da {count} giorni",
+    "withdrawn": "Ritirato: non copre nulla",
+    "notRegistered": "Non registrato · {span} di validità"
+  },
+  "explainer": {
+    "summary": "Come funziona il controllo dei certificati",
+    "rule": "Un capo può essere etichettato, rilasciato e spedito solo se in quel giorno un certificato valido ne copre modello, colore e taglia.",
+    "placesLabel": "Dove agisce il controllo",
+    "coveredIntro": "“Coperto” vuol dire tutto questo, nel giorno chiesto:",
+    "covered": {
+      "status": "Il certificato è Valido (non bozza, sospeso, ritirato o scaduto).",
+      "dates": "Il giorno cade tra Valido dal e Valido fino al.",
+      "style": "Il modello è nella sua copertura.",
+      "colour": "La variante colore è coperta (o lo sono tutte).",
+      "size": "La taglia è coperta (o lo è tutta la scala).",
+      "mtm": "Su misura: le misure del pilota rientrano in quelle corporee delle taglie coperte."
+    }
+  },
+  "stop": {
+    "release": "Rilascio dell’ordine di lavoro",
+    "label": "Stampa dell’etichetta del capo in reparto",
+    "ship": "Rilascio finale e spedizione"
+  },
+  "law": {
+    "annexV": "Reg. (UE) 2016/425 Allegato V",
+    "en17092": "EN 17092"
+  },
+  "list": {
+    "intro": "I certificati di esame UE del tipo di capi, protettori e guanti: cosa copre ciascuno e fino a quando.",
+    "add": "Aggiungi certificato",
+    "table": "Certificati",
+    "count_one": "{count} certificato",
+    "count_other": "{count} certificati",
+    "countOf_one": "{count} di {total}",
+    "countOf_other": "{count} di {total}",
+    "search": "Cerca numero, organismo, modello",
+    "rows": "Righe: {view}",
+    "rowsHeading": "Viste salvate",
+    "kindFilter": "Tipo di certificato",
+    "allKinds": "Ogni tipo",
+    "activeFilters": "Filtri attivi",
+    "removeFilter": "Togli il filtro {name}",
+    "clearAll": "Togli tutti",
+    "more": "Altro",
+    "exportView": "Esporta questa vista (CSV)",
+    "exportViewHint_one": "{count} certificato come mostrato",
+    "exportViewHint_other": "{count} certificati come mostrati",
+    "exportNothing": "Niente da esportare in questa vista",
+    "bulkExport_one": "Esporta {count} (CSV)",
+    "bulkExport_other": "Esporta {count} (CSV)",
+    "moreCapped": "Mostra altri",
+    "failedTitle": "Il registro non è stato letto",
+    "noMatch": "Nessun certificato con questi filtri",
+    "empty": {
+      "title": "Ancora nessun certificato",
+      "body": "Aggiungi il certificato dell’organismo notificato con il suo PDF, poi indica quali modelli e taglie copre.",
+      "bodyView": "L’ufficio conformità aggiunge i certificati: compaiono qui."
+    },
+    "emptyAdd": "Aggiungi il primo certificato",
+    "col": {
+      "number": "Numero · modello",
+      "standard": "Norma · tipo · classe",
+      "holder": "Titolare",
+      "body": "Organismo notificato",
+      "covers": "Copre",
+      "valid": "Validità",
+      "status": "Stato",
+      "actions": "Azioni"
+    },
+    "class": "classe {class}",
+    "level": "livello {class}",
+    "covers_one": "{count} modello o parte",
+    "covers_other": "{count} modelli o parti",
+    "validRange": "{from} – {to}"
+  },
+  "row": {
+    "menu": "Azioni per {number}",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "coverage": "Copertura",
+    "check": "Verifica un capo con questo certificato",
+    "copy": "Copia numero"
+  },
+  "noAccess": {
+    "title": "Non per il tuo ruolo",
+    "body": "Il registro dei certificati richiede il permesso di vederli (compliance.certificates.view): lo concede il responsabile conformità, la qualità o un amministratore."
+  },
+  "view": {
+    "all": "Tutti",
+    "valid": "Validi",
+    "expiring": "In scadenza entro 180 giorni",
+    "suspended": "Sospesi o ritirati",
+    "drafts": "Bozze non registrate",
+    "expired": "Scaduti"
+  },
+  "tile": {
+    "valid": "Validi",
+    "expiring": "In scadenza in 180 giorni",
+    "suspended": "Sospesi o ritirati",
+    "drafts": "Bozze non registrate",
+    "expiringHint": "{within90} entro 90 giorni · {within30} entro 30",
+    "unknown": "Non contati"
+  },
+  "tileHint": {
+    "valid": "Coprono i capi oggi",
+    "expiring": "Chiedi il rinnovo all’organismo notificato",
+    "suspended": "Il controllo rifiuta ciò che coprivano",
+    "drafts": "Non coprono nulla finché non registrate"
+  },
+  "held": {
+    "registerMax": "Il registro mostra i primi {max} certificati: restringi con una vista o una ricerca.",
+    "manage": "Il tuo ruolo non modifica i certificati (compliance.certificates.manage).",
+    "upload": "Il tuo ruolo non carica file (files.upload).",
+    "busy": "In corso…",
+    "long": "Al massimo 500 caratteri.",
+    "notDraft": "Si registra solo una bozza.",
+    "noCoverage": "Un certificato {status} non copre altro."
+  },
+  "notice": {
+    "suspended_one": "{number} sospeso dall’organismo notificato {body}: il controllo rifiuta il {count} modello o parte che copriva.",
+    "suspended_other": "{number} sospeso dall’organismo notificato {body}: il controllo rifiuta i {count} modelli o parti che copriva.",
+    "pastValidity": "{number} ha passato l’ultimo giorno valido ({date}): da oggi non copre nulla.",
+    "expiringSoon_one": "{number} scade tra {count} giorno ({date}): chiedi il rinnovo all’organismo notificato.",
+    "expiringSoon_other": "{number} scade tra {count} giorni ({date}): chiedi il rinnovo all’organismo notificato.",
+    "open": "Apri",
+    "more_one": "altro {count} avviso",
+    "more_other": "altri {count} avvisi",
+    "fewer": "Meno avvisi"
+  },
+  "done": {
+    "exported_one": "Esportato {count} certificato (CSV).",
+    "exported_other": "Esportati {count} certificati (CSV).",
+    "copied": "Copiato {number}.",
+    "copyFailed": "Il browser non ha permesso di copiare.",
+    "registered": "{number} è registrato: copre ciò che elenca dal primo giorno valido.",
+    "suspend": "{number} è sospeso: il controllo rifiuta ciò che copriva.",
+    "withdraw": "{number} è ritirato: non copre più nulla.",
+    "reinstate": "{number} è di nuovo valido.",
+    "saved": "La bozza è salvata.",
+    "coverageAdded": "{code} è coperto.",
+    "coverageEnded": "La copertura di {code} è chiusa (resta tra le coperture chiuse).",
+    "pdf": "{name} è sul certificato."
+  },
+  "add": {
+    "title": "Aggiungi certificato",
+    "intro": "Scrivilo come l’ha scritto l’organismo notificato. Nasce come bozza: non copre nulla finché non ha PDF e copertura ed è registrato.",
+    "create": "Crea certificato in bozza",
+    "pdf": "Il PDF del certificato",
+    "pdfHint": "Il PDF firmato dall’organismo notificato. Puoi aggiungerlo anche dopo nella scheda.",
+    "after": "Poi: indica quali modelli, varianti e taglie copre, quindi registralo.",
+    "fiveYearsLaw": "Un certificato di esame UE del tipo vale al massimo cinque anni (Reg. (UE) 2016/425 Allegato V): l’ultimo giorno può essere al più tardi il {latest}.",
+    "problem": {
+      "holder": "Scegli chi ne è titolare: la nostra azienda o il marchio.",
+      "number": "Scrivi il numero come l’ha scritto l’organismo notificato.",
+      "bodyName": "Scrivi il nome dell’organismo notificato.",
+      "bodyNumber": "Il numero dell’organismo notificato ha quattro cifre, come in NANDO.",
+      "standard": "Scrivi la norma con l’edizione, come “EN 17092-4:2020”.",
+      "standardPart": "Indica la parte della EN 17092 che dà la classe (dalla 2 alla 6).",
+      "class": "Scrivi la classe o il livello come lo riporta il certificato (lettere o cifre).",
+      "level": "Un protettore EN 1621 ha livello 1 o 2.",
+      "validFrom": "Scegli il primo giorno valido.",
+      "validTo": "Scegli l’ultimo giorno valido.",
+      "validToOrder": "L’ultimo giorno valido viene dopo il primo.",
+      "fiveYears": "Al massimo {years} anni: l’ultimo giorno può essere al più tardi il {latest}.",
+      "refused": "Il registro ha rifiutato questo campo: vedi sotto.",
+      "duplicate": "Questo organismo notificato ha già un certificato con questo numero nel registro.",
+      "invalid": "Il registro ha rifiutato il certificato così com’è.",
+      "failed": "Il certificato non è stato creato. Riprova."
+    }
+  },
+  "field": {
+    "standard": "Norma",
+    "standardHint": "La norma armonizzata e l’edizione sul certificato.",
+    "standardOther": "Un’altra norma…",
+    "standardTyped": "Norma come scritta",
+    "standardTypedHint": "Con l’edizione, come “EN 17092-4:2020”.",
+    "class": "Classe",
+    "classGranted": "La parte della EN 17092 dà questa classe.",
+    "level": "Livello di prestazione",
+    "levelPick": "Scegli il livello",
+    "levelValue": "Livello {level}",
+    "classOther": "Classe o livello",
+    "classOtherHint": "Come lo riporta il certificato (guanti: “1KP”).",
+    "number": "Numero del certificato",
+    "numberHint": "Come l’ha scritto l’organismo notificato.",
+    "holder": "Titolare",
+    "holderHint": "Con l’etichetta di un marchio il fabbricante legale è il marchio.",
+    "holderPick": "Scegli il titolare",
+    "holderCompany": "Nostra azienda · {name}",
+    "holderBrand": "Marchio · {name}",
+    "bodyName": "Organismo notificato",
+    "bodyNumber": "Il suo numero",
+    "bodyNumberHint": "Quattro cifre, come in NANDO.",
+    "model": "Riferimento modello",
+    "modelHint": "Il tipo che il certificato nomina.",
+    "validFrom": "Valido dal",
+    "validTo": "Valido fino al",
+    "validToHint": "Al massimo cinque anni dopo il primo giorno.",
+    "span": "Valido per {span}.",
+    "note": "Nota",
+    "noteHint": "Per l’ufficio (non stampata)."
+  },
+  "date": {
+    "notSet": "Non impostata",
+    "clear": "Togli la data"
+  },
+  "file": {
+    "choose": "Scegli un PDF",
+    "change": "Scegline un altro",
+    "none": "Nessun file scelto"
+  },
+  "check": {
+    "open": "Verifica un capo",
+    "title": "Verifica un capo",
+    "intro": "Questo capo può essere etichettato, rilasciato e spedito in quel giorno? La risposta dice quale certificato lo copre, o perché no e come rimediare.",
+    "style": "Modello",
+    "styleSearch": "Cerca codice o nome",
+    "styles": "Modelli trovati",
+    "noStyles": "Nessun risultato",
+    "changeStyle": "Cambia",
+    "colourway": "Variante colore",
+    "size": "Taglia",
+    "pick": "Scegli",
+    "date": "Il giorno",
+    "today": "Oggi",
+    "otherDay": "Un altro giorno: per un audit o un reclamo",
+    "run": "Verifica",
+    "held": {
+      "styles": "Il tuo ruolo non legge i modelli (product.styles.view).",
+      "style": "Scegli prima il modello.",
+      "colourway": "Scegli la variante colore.",
+      "size": "Scegli la taglia.",
+      "date": "Scegli il giorno."
+    },
+    "covered": "Sì – {style} {colourway} {size} è coperto da {number} il {date}.",
+    "coveredBy": "{standard}, classe {class}, organismo notificato {body}; valido {from} – {to}.",
+    "notRequired": "{style} {colourway} {size} non richiede certificato il {date}.",
+    "refused": "No – {style} {colourway} {size} non è coperto il {date}.",
+    "stops": "Finché non si rimedia l’ordine non si rilascia, l’etichetta non si stampa e il capo non si spedisce."
+  },
+  "gate": {
+    "no_certificate": "Nessun certificato valido copre questo modello.",
+    "certificate_not_valid": "Il certificato che lo coprirebbe non è valido (bozza, sospeso o ritirato).",
+    "certificate_expired": "Il certificato che lo copriva è scaduto.",
+    "certificate_not_yet_valid": "In quel giorno il certificato non è ancora valido.",
+    "colourway_not_covered": "Questa variante colore non è coperta.",
+    "size_not_covered": "Questa taglia è fuori dalla scala coperta.",
+    "style_not_made_to_measure": "Il modello non è su misura.",
+    "made_to_measure_not_allowed": "Il certificato non copre i capi su misura.",
+    "body_measures_missing": "Le taglie coperte non hanno misure corporee da confrontare.",
+    "measurement_missing": "Manca una misura del pilota.",
+    "measurement_invalid": "Una misura del pilota non è un numero valido.",
+    "measurement_outside": "Una misura del pilota è fuori dalle misure corporee delle taglie coperte."
+  },
+  "gateFix": {
+    "no_certificate": "Conformità: aggiungi il certificato dell’organismo notificato e la copertura, o togli il modello dall’ordine.",
+    "certificate_not_valid": "Conformità: registra la bozza, o chiedi all’organismo notificato di riattivarlo.",
+    "certificate_expired": "Conformità: chiedi il rinnovo all’organismo notificato e aggiungi il nuovo certificato.",
+    "certificate_not_yet_valid": "Aspetta il primo giorno valido, o chiedi per un giorno dopo.",
+    "colourway_not_covered": "Conformità: chiedi all’organismo notificato di aggiungere la variante, o toglila dall’ordine.",
+    "size_not_covered": "Conformità: chiedi all’organismo notificato di estendere il certificato, o togli la taglia dall’ordine.",
+    "style_not_made_to_measure": "Ufficio prodotto: abilita il su misura sul modello, o ordina una taglia standard.",
+    "made_to_measure_not_allowed": "Conformità: chiedi all’organismo notificato di coprire il su misura, o ordina una taglia standard.",
+    "body_measures_missing": "Ufficio prodotto: aggiungi le misure corporee alla scala taglie.",
+    "measurement_missing": "Vendite: prendi la misura che manca.",
+    "measurement_invalid": "Vendite: correggi la misura.",
+    "measurement_outside": "Conformità: chiedi all’organismo notificato per la taglia, o fai una taglia standard."
+  },
+  "record": {
+    "back": "Certificati",
+    "backToList": "Torna ai certificati",
+    "more": "Altre azioni",
+    "bodyMeta": "organismo notificato {number} {name}",
+    "modelMeta": "modello {model}",
+    "noPanels": "Qui compaiono conversazione, file e storico.",
+    "panelsHeld": "Conversazione, file e storico richiedono il permesso di leggere le conversazioni (threads.read)."
+  },
+  "tab": {
+    "coverage": "Copertura",
+    "body": "Organismo notificato",
+    "files": "File",
+    "activity": "Attività"
+  },
+  "action": {
+    "register": "Registra…",
+    "reinstate": "Riattiva…",
+    "suspend": "Segna come sospeso…",
+    "withdraw": "Segna come ritirato…",
+    "files": "Il PDF e i file",
+    "copyNumber": "Copia numero"
+  },
+  "state": {
+    "draft": "Una bozza non copre nulla: aggiungi PDF e copertura, poi registrala.",
+    "registered": "Registrato – può cambiare solo lo stato; una correzione è un nuovo certificato.",
+    "pastValidity": "L’ultimo giorno valido era il {date}: da oggi non copre nulla (il controllo notturno lo segna scaduto).",
+    "suspended": "Sospeso il {date}.",
+    "suspendedBlocks": "Finché non torna valido il controllo rifiuta ogni capo che copriva: niente rilascio, etichetta o spedizione.",
+    "withdrawn": "Ritirato il {date}: non copre più nulla.",
+    "expired": "Scaduto: l’ultimo giorno valido era il {date}.",
+    "expiredBlocks": "I capi che copriva non possono essere etichettati, rilasciati o spediti con esso. Un rinnovo è un nuovo certificato."
+  },
+  "details": {
+    "title": "Il certificato",
+    "draft": "Come scritto dal documento dell’organismo notificato; una bozza si può ancora correggere.",
+    "registered": "Come registrato.",
+    "edit": "Modifica",
+    "editing": "Ogni campo si controlla quando lo lasci.",
+    "save": "Salva"
+  },
+  "register": {
+    "title": "Prima di registrare",
+    "intro": "Ogni controllo deve essere superato.",
+    "confirmTitle": "Registra {number}",
+    "once": "Una volta registrato cambia solo lo stato. Una correzione è un nuovo certificato.",
+    "confirm": "Registra certificato",
+    "check": {
+      "pdf": {
+        "name": "PDF",
+        "ok": "Il PDF dell’organismo notificato è sul certificato.",
+        "open": "Manca il PDF dell’organismo notificato.",
+        "fix": "Aggiungilo nella scheda File."
+      },
+      "data": {
+        "name": "Dati",
+        "ok": "Numero, organismo, classe e date superano i controlli, cinque anni al massimo.",
+        "open": "Un campo non supera il controllo.",
+        "fix": "Modifica i dati della bozza."
+      },
+      "validity": {
+        "name": "Validità",
+        "ok": "L’ultimo giorno valido non è passato.",
+        "open": "L’ultimo giorno valido è passato.",
+        "fix": "Un certificato scaduto non si registra: aggiungi il rinnovo."
+      },
+      "coverage": {
+        "name": "Copertura",
+        "ok": "Copre almeno un modello o una parte.",
+        "open": "Non copre ancora nulla.",
+        "fix": "Aggiungi ciò che copre."
+      }
+    },
+    "held": {
+      "pdf": "Aggiungi prima il PDF dell’organismo notificato.",
+      "data": "Un campo della bozza non supera il controllo.",
+      "validity": "L’ultimo giorno valido è passato.",
+      "coverage": "Aggiungi prima ciò che copre."
+    }
+  },
+  "move": {
+    "suspend": {
+      "title": "Segna {number} come sospeso",
+      "confirm": "Segna come sospeso",
+      "what": "Registra la sospensione dell’organismo notificato. Protegge soltanto: da ora il controllo rifiuta ciò che copre, finché non viene riattivato.",
+      "impact_one": "Il controllo rifiuterà i capi di questo modello o parte:",
+      "impact_other": "Il controllo rifiuterà i capi di questi {count} modelli o parti:"
+    },
+    "withdraw": {
+      "title": "Segna {number} come ritirato",
+      "confirm": "Segna come ritirato",
+      "what": "Ritirato è definitivo: non copre più nulla e non si riattiva. Un nuovo certificato è una nuova scheda.",
+      "impact_one": "Non coprirà più questo modello o parte:",
+      "impact_other": "Non coprirà più questi {count} modelli o parti:"
+    },
+    "reinstate": {
+      "title": "Riattiva {number}",
+      "confirm": "Riattiva",
+      "what": "L’organismo notificato ha tolto la sospensione: il certificato copre di nuovo da oggi, entro le sue date.",
+      "impact_one": "Coprirà di nuovo questo modello o parte:",
+      "impact_other": "Coprirà di nuovo questi {count} modelli o parti:"
+    },
+    "nothingCovered": "Ora non copre nessun modello o parte.",
+    "notServed": "Ordini di lavoro aperti, capi a magazzino e spedizioni coinvolti non sono ancora elencati qui.",
+    "reason": "Le parole dell’organismo notificato",
+    "reasonOptional": "Perché (facoltativo)",
+    "reasonHint": "Resta nello storico del certificato."
+  },
+  "coverage": {
+    "title": "Cosa copre",
+    "intro": "Per modello: varianti colore × taglie. Una parte (un protettore) è elencata sotto.",
+    "add": "Aggiungi copertura",
+    "empty": {
+      "title": "Non copre ancora nulla",
+      "draft": "Aggiungi i modelli (o il protettore) che l’organismo notificato ha esaminato, con varianti e taglie.",
+      "body": "Ora non copre nulla."
+    },
+    "allColours": "Tutte le varianti",
+    "someColours_one": "{count} variante",
+    "someColours_other": "{count} varianti",
+    "wholeRange": "Tutta la scala",
+    "someSizes": "Taglie {sizes}",
+    "mtm": "Su misura ammesso",
+    "noMtm": "Niente su misura",
+    "end": "Chiudi copertura…",
+    "loadingStyle": "Lettura di varianti e taglie del modello…",
+    "styleFailed": "Varianti e taglie del modello non sono state lette: la copertura vale come scritto sopra.",
+    "styleHeld": "Il tuo ruolo non legge i modelli: la copertura vale come scritto sopra.",
+    "noColourways": "Il modello non ha ancora varianti.",
+    "gridLabel": "Copertura di {style}: varianti × taglie",
+    "colourway": "Variante",
+    "archivedColourway": "archiviata",
+    "cell": "{colourway} {size}: {state}",
+    "counts": "{covered} su {offered} celle offerte coperte.",
+    "items": "Parti che copre",
+    "col": {
+      "item": "Parte",
+      "note": "Nota",
+      "since": "Dal"
+    },
+    "ended_one": "{count} copertura chiusa",
+    "ended_other": "{count} coperture chiuse",
+    "endedOn": "chiusa",
+    "addTitle": "Aggiungi copertura a {number}",
+    "addConfirm": "Aggiungi copertura",
+    "target": "Cosa copre",
+    "targetStyle": "Un modello",
+    "targetItem": "Una parte (protettore)",
+    "item": "Parte",
+    "itemSearch": "Cerca codice o nome del materiale",
+    "ppeComponent": "Componente DPI",
+    "colourways": "Varianti colore",
+    "sizes": "Taglie",
+    "wholeRangeOf": "Tutta la scala ({sizes})",
+    "mtmField": "Capi su misura",
+    "mtmHint": "Coperti se le misure del pilota rientrano in quelle corporee delle taglie coperte.",
+    "mtmStyleOff": "Il modello non è su misura.",
+    "note": "Nota",
+    "noteHint": "Quale rapporto o lettera dell’organismo notificato lo dice.",
+    "held": {
+      "style": "Scegli il modello.",
+      "item": "Scegli la parte.",
+      "already": "È già coperto da questo certificato: chiudi prima quella copertura per cambiarla.",
+      "colourways": "Spunta almeno una variante.",
+      "sizes": "Spunta almeno una taglia.",
+      "materials": "Il tuo ruolo non legge i materiali (product.materials.view).",
+      "reason": "Di’ perché si chiude."
+    },
+    "endTitle": "Chiudi la copertura di {code}",
+    "endConfirm": "Chiudi copertura",
+    "endWhat": "Da ora il certificato non lo copre più.",
+    "endKept": "La copertura resta, chiusa, nello storico del certificato (mai cancellata).",
+    "endWiden": "Per allargarla, aggiungi poi la nuova copertura.",
+    "endReason": "Perché si chiude"
+  },
+  "cell": {
+    "covered": "coperta",
+    "notCovered": "non coperta",
+    "notOffered": "non offerta"
+  },
+  "cellShort": {
+    "covered": "Coperta",
+    "notCovered": "Non coperta",
+    "notOffered": "Non offerta"
+  },
+  "lapse": {
+    "title": "Cosa blocca quando scade",
+    "intro": "Chiedi al controllo, nel giorno che scegli, di ogni capo che copre: cosa rifiuterebbe e perché.",
+    "today": "Oggi",
+    "run_one": "Verifica {count} capo",
+    "run_other": "Verifica {count} capi",
+    "garments_one": "Oggi copre {count} capo (variante × taglia).",
+    "garments_other": "Oggi copre {count} capi (variante × taglia).",
+    "capped": "Si verificano i primi 200.",
+    "running": "Domanda al controllo: {done} di {total}…",
+    "failed": "Il controllo non ha risposto. Riprova.",
+    "refused_one": "Il {date} il controllo rifiuterebbe {count} capo su {total}.",
+    "refused_other": "Il {date} il controllo rifiuterebbe {count} capi su {total}.",
+    "allCovered": "Il {date} tutti i {total} capi sono ancora coperti.",
+    "stopsIntro": "Per ogni capo rifiutato il controllo blocca:",
+    "stopsLabel": "Cosa blocca un rifiuto",
+    "unknown_one": "Per {count} capo non si è avuta risposta.",
+    "unknown_other": "Per {count} capi non si è avuta risposta.",
+    "sizes": "taglie {sizes}",
+    "outcome": {
+      "refused": "Rifiutato",
+      "covered": "Coperto",
+      "not_required": "Nessun certificato richiesto",
+      "unknown": "Nessuna risposta"
+    },
+    "coveredBy": "Quel giorno è ancora coperto da {number}.",
+    "stillThis": "Quel giorno è ancora coperto da questo certificato.",
+    "held": {
+      "withdrawn": "Un certificato ritirato non copre nulla.",
+      "nothing": "Non copre nessun capo di un modello."
+    },
+    "notServed": "Ordini aperti, magazzino e spedizioni dietro questi capi non sono ancora contati qui."
+  },
+  "body": {
+    "title": "Organismo notificato",
+    "intro": "Chi ha esaminato il tipo e rilasciato il certificato.",
+    "name": "Nome",
+    "number": "Numero di identificazione",
+    "numberHint": "Come lo indica l’elenco NANDO dell’UE.",
+    "others": "Altri certificati di questo organismo",
+    "noOthers": "Nessuno nel registro."
+  },
+  "files": {
+    "title": "Il PDF del certificato",
+    "hasPdf": "Il PDF dell’organismo notificato è in archivio.",
+    "noPdf": "Ancora nessun PDF: un certificato si registra solo con esso.",
+    "upload": "Carica il PDF",
+    "addAnother": "Aggiungi un altro PDF",
+    "held": {
+      "status": "Un certificato {status} non accetta nuovi PDF."
+    },
+    "readHeld": "Il tuo ruolo non legge i file (files.read).",
+    "empty": {
+      "title": "Ancora nessun PDF",
+      "body": "Carica il PDF firmato dall’organismo notificato."
+    },
+    "others": "Altri documenti",
+    "col": {
+      "name": "File",
+      "size": "Dimensione",
+      "added": "Aggiunto"
+    },
+    "size": "{kb} KB",
+    "download": "Scarica",
+    "retention": {
+      "title": "Conservazione",
+      "body": "Conservato {years} anni dopo l’ultimo giorno valido: almeno fino al {date} (Reg. (UE) 2016/425 art. 8(3)).",
+      "added": "I file di un certificato registrato si aggiungono, non si sostituiscono."
+    },
+    "onlyPdf": "Solo un PDF può essere il file del certificato.",
+    "uploadFailed": "Il PDF non è stato inviato. Riprova.",
+    "uploadFailedAfterCreate": "La bozza è creata ma il PDF non è stato inviato: caricalo qui.",
+    "downloadFailed": "Il file non è stato scaricato."
+  },
+  "fileStatus": {
+    "AVAILABLE": "Disponibile",
+    "QUARANTINED": "Trattenuto dal controllo antivirus",
+    "PENDING": "In invio"
+  },
+  "write": {
+    "conflict": "Qualcuno ha cambiato il certificato nel frattempo: è stato riletto.",
+    "invalid": "Il registro l’ha rifiutato così com’è.",
+    "notFound": "Non c’è più.",
+    "failed": "Non è stato salvato. Riprova."
+  },
+  "csv": {
+    "number": "Numero",
+    "standard": "Norma",
+    "class": "Classe o livello",
+    "kind": "Tipo",
+    "holder": "Titolare",
+    "bodyName": "Organismo notificato",
+    "bodyNumber": "Numero organismo",
+    "model": "Riferimento modello",
+    "covers": "Modelli o parti coperti",
+    "validFrom": "Valido dal",
+    "validTo": "Valido fino al",
+    "daysLeft": "Giorni rimasti",
+    "status": "Stato"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "add": "Aggiungi certificato",
+    "check": "Verifica un capo",
+    "register": "Registra (una bozza)",
+    "thread": "La conversazione accanto alla scheda",
+    "help": "Tutte le scorciatoie"
+  }
+}
