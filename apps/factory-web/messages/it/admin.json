@@ -1706,6 +1706,11 @@
     "accounting_lock": "Chiudere un mese (provvisoria o definitiva) e riaprire una chiusura provvisoria",
     "accounting_unlock": "Riaprire una chiusura definitiva (d'accordo con il commercialista)",
     "security_view": "Vedere se ogni parte funziona, le regole di accesso, backup e prove di ripristino",
-    "security_drills_record": "Registrare una prova di ripristino"
+    "security_drills_record": "Registrare una prova di ripristino",
+    "sales_returns_view": "Vedere i resi dei clienti",
+    "sales_returns_manage": "Aprire e modificare i resi dei clienti",
+    "sales_returns_receive": "Ricevere la merce resa al magazzino",
+    "sales_returns_inspect": "Valutare la merce resa",
+    "sales_returns_decide": "Decidere l'esito della merce resa"
   }
 }
