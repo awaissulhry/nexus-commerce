@@ -204,7 +204,7 @@ describe('record links: the quality records open their own pages', () => {
   it('inspection, release (DetailModal), lot and register entry; the lists of Today land on the built pages', () => {
     expect(recordAddress({ type: 'Inspection', id: 'i1' }, OFFICE_PAGES)).toBe('/quality/inspections/i1')
     expect(recordAddress({ type: 'QualityRelease', id: 'r1' }, OFFICE_PAGES)).toBe('/quality/inspections?open=r1')
-    expect(recordAddress({ type: 'Lot', id: 'l1' }, OFFICE_PAGES)).toBe('/compliance/tests/l1')
+    expect(recordAddress({ type: 'Lot', id: 'l1' }, OFFICE_PAGES)).toBe('/warehouse/lots/l1')
     expect(recordAddress({ type: 'PpeRegisterEntry', id: 'e1' }, OFFICE_PAGES)).toBe('/compliance/register/e1')
     expect(listAddress('/compliance/register', { status: 'OPEN' }, OFFICE_PAGES)).toBe('/compliance/register?status=OPEN')
     expect(listAddress('/quality/lots', { onHold: 'true' }, OFFICE_PAGES)).toBe('/compliance/tests?onHold=true')

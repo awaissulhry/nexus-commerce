@@ -16,6 +16,9 @@
 --                       factory_work_order_guard (202610283801_production_guards): its whole body, with those rules.
 --   WorkOrderSize       a REPAIR work order's cells. REDEFINES factory_work_order_size_guard (202610283801_production_guards):
 --                       its whole body, with that rule.
+--   Reservation         a held work order still takes reservations (it is open). REDEFINES factory_reservation_guard
+--                       (202610304001_stock_plan_w2a_guards, W2a wave 4/7): its whole body, with ON_HOLD among the open
+--                       states.
 --   the gate            a held work order moves on nowhere: no scan, cut, bundle, correction request, garment label
 --                       print, final inspection, quality release, rework progress or finished-goods receipt takes it
 --                       until the hold is lifted (factory_work_order_gate, under a lock the hold, close and cancel wait
@@ -349,6 +352,131 @@ BEGIN
           OR (order_kind IS NOT NULL AND order_kind <> 'REPAIR' AND line.kind <> order_kind)) THEN
     RAISE EXCEPTION 'production: work order cell % makes its sales order line %: the same style, colourway, kind and measurement profile (a repair: any kind)', NEW."id", NEW."salesOrderLineId"
       USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- Reservation (B-W2a-11; SCM-205, SCM-209, SCM-210; W2a wave 5: a held work order is still open)
+--   As 202610304001_stock_plan_w2a_guards says, but for one rule: stock is reserved for a work order of the site that
+--   is DRAFT, RELEASED, IN_PROGRESS or ON_HOLD (a hold is lifted back to where it was, and its reservations stay with
+--   it). REDEFINES factory_reservation_guard (202610304001_stock_plan_w2a_guards): its whole body, with that one list.
+CREATE OR REPLACE FUNCTION "factory_reservation_guard"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  kept CONSTANT text[] := ARRAY['tenantId', 'siteId'];
+  office_moves CONSTANT text[] := ARRAY['quantity', 'issuedQuantity', 'needDate', 'status', 'issuedAt', 'releasedAt',
+    'releasedById', 'releaseReason', 'note', 'version', 'updatedAt'];
+  floor_moves CONSTANT text[] := ARRAY['issuedQuantity', 'status', 'issuedAt', 'version', 'updatedAt'];
+  item_tracking text;
+  lot_colour uuid;
+  lot_state text;
+  hide_state text;
+  work_state text;
+  line_company uuid;
+  line_site uuid;
+  order_state text;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'reservations: reservation % is released, never deleted', OLD."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW IS NOT DISTINCT FROM OLD THEN
+      RETURN NEW;
+    END IF;
+    IF OLD."status" <> 'ACTIVE' AND (to_jsonb(NEW) - kept) IS DISTINCT FROM (to_jsonb(OLD) - kept) THEN
+      RAISE EXCEPTION 'reservations: reservation % is %; it changes no more', OLD."id", OLD."status"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF current_user = 'factory_floor_runtime' THEN
+      IF (to_jsonb(NEW) - (kept || floor_moves)) IS DISTINCT FROM (to_jsonb(OLD) - (kept || floor_moves))
+         OR NEW."status" NOT IN ('ACTIVE', 'ISSUED') THEN
+        RAISE EXCEPTION 'reservations: a floor session records only what was issued against reservation % (and ISSUED)', OLD."id"
+          USING ERRCODE = 'check_violation';
+      END IF;
+    ELSIF (to_jsonb(NEW) - (kept || office_moves)) IS DISTINCT FROM (to_jsonb(OLD) - (kept || office_moves)) THEN
+      RAISE EXCEPTION 'reservations: what reservation % holds and what for never change; release it and reserve again', OLD."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSE
+    IF NEW."status" <> 'ACTIVE' OR NEW."issuedQuantity" <> 0 OR NEW."issuedAt" IS NOT NULL OR NEW."releasedAt" IS NOT NULL
+       OR NEW."releasedById" IS NOT NULL OR NEW."releaseReason" IS NOT NULL THEN
+      RAISE EXCEPTION 'reservations: reservation % starts ACTIVE, with nothing issued or released', NEW."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  IF NEW."quantity" <= 0 OR NEW."issuedQuantity" < 0 OR NEW."issuedQuantity" > NEW."quantity" THEN
+    RAISE EXCEPTION 'reservations: reservation % holds a quantity above 0, of which 0 up to all of it was issued', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF (NEW."status" = 'ISSUED') <> (NEW."issuedAt" IS NOT NULL)
+     OR (NEW."status" = 'ISSUED' AND NEW."issuedQuantity" <> NEW."quantity") THEN
+    RAISE EXCEPTION 'reservations: reservation % is ISSUED exactly with its time, once all of it was issued', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF (NEW."status" = 'RELEASED') <> (NEW."releasedAt" IS NOT NULL)
+     OR (NEW."releasedAt" IS NULL) <> (NEW."releasedById" IS NULL)
+     OR (NEW."releasedAt" IS NULL) <> (btrim(coalesce(NEW."releaseReason", '')) = '') THEN
+    RAISE EXCEPTION 'reservations: reservation % is RELEASED exactly with when, by whom and why (SCM-210)', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF (NEW."kind" = 'HIDE') <> (NEW."hideId" IS NOT NULL) OR (NEW."hideId" IS NOT NULL AND NEW."lotId" IS NULL) THEN
+    RAISE EXCEPTION 'reservations: reservation % names its hide and lot when it is a HIDE, and no hide otherwise', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF (NEW."workOrderId" IS NULL) = (NEW."salesOrderLineId" IS NULL) OR (NEW."partyId" IS NULL) <> (NEW."salesOrderLineId" IS NULL) THEN
+    RAISE EXCEPTION 'reservations: reservation % is held for exactly one work order or one sales order line (with its party)', NEW."id"
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    SELECT i."tracking"::text INTO item_tracking FROM "Item" i WHERE i."tenantId" = NEW."tenantId" AND i."id" = NEW."itemId";
+    IF FOUND AND (NEW."kind" = 'QUANTITY') = (item_tracking = 'HIDE') THEN
+      RAISE EXCEPTION 'reservations: reservation % is a % of an item tracked %: leather tracked hide by hide is reserved by AREA or HIDE, any other item by QUANTITY', NEW."id", NEW."kind", item_tracking
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW."itemColourId" IS NULL
+       AND EXISTS (SELECT 1 FROM "ItemColour" c WHERE c."tenantId" = NEW."tenantId" AND c."itemId" = NEW."itemId") THEN
+      RAISE EXCEPTION 'reservations: reservation % names the colour it holds: its item comes in colours', NEW."id"
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW."lotId" IS NOT NULL THEN
+      SELECT l."itemColourId", l."qualityStatus"::text INTO lot_colour, lot_state
+        FROM "Lot" l WHERE l."tenantId" = NEW."tenantId" AND l."siteId" = NEW."siteId" AND l."id" = NEW."lotId";
+      IF FOUND AND (lot_colour IS DISTINCT FROM NEW."itemColourId" OR lot_state = 'REJECTED') THEN
+        RAISE EXCEPTION 'reservations: reservation % holds lot % in the lot''s own colour, and never a REJECTED lot', NEW."id", NEW."lotId"
+          USING ERRCODE = 'check_violation';
+      END IF;
+    END IF;
+    IF NEW."hideId" IS NOT NULL THEN
+      SELECT h."state"::text INTO hide_state
+        FROM "Hide" h WHERE h."tenantId" = NEW."tenantId" AND h."siteId" = NEW."siteId" AND h."id" = NEW."hideId";
+      IF FOUND AND hide_state IN ('CONSUMED', 'SCRAPPED') THEN
+        RAISE EXCEPTION 'reservations: hide % is %; nothing of it can be reserved', NEW."hideId", hide_state
+          USING ERRCODE = 'check_violation';
+      END IF;
+    END IF;
+    IF NEW."workOrderId" IS NOT NULL THEN
+      SELECT w."status"::text INTO work_state
+        FROM "WorkOrder" w WHERE w."tenantId" = NEW."tenantId" AND w."siteId" = NEW."siteId" AND w."id" = NEW."workOrderId";
+      IF FOUND AND work_state NOT IN ('DRAFT', 'RELEASED', 'IN_PROGRESS', 'ON_HOLD') THEN
+        RAISE EXCEPTION 'reservations: work order % is %; stock is reserved only for an open work order', NEW."workOrderId", work_state
+          USING ERRCODE = 'check_violation';
+      END IF;
+    END IF;
+    IF NEW."salesOrderLineId" IS NOT NULL THEN
+      SELECT l."companyId", l."siteId", o."status"::text INTO line_company, line_site, order_state
+        FROM "SalesOrderLine" l JOIN "SalesOrder" o ON o."tenantId" = l."tenantId" AND o."id" = l."orderId"
+        WHERE l."tenantId" = NEW."tenantId" AND l."id" = NEW."salesOrderLineId";
+      IF FOUND AND (line_company <> NEW."companyId" OR (line_site IS NOT NULL AND line_site <> NEW."siteId")
+                    OR order_state NOT IN ('CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED')) THEN
+        RAISE EXCEPTION 'reservations: sales order line % is not a line of an open order of the company made at this site', NEW."salesOrderLineId"
+          USING ERRCODE = 'check_violation';
+      END IF;
+    END IF;
   END IF;
   RETURN NEW;
 END

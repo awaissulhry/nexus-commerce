@@ -151,6 +151,13 @@ model Item {
   // supply.prisma: the purchase order lines that buy it and the planning runs' requirements of it.
   purchaseOrderLines   PurchaseOrderLine[]
   materialRequirements MaterialRequirement[]
+  // W2a reservations.prisma, stockcount.prisma, planning.prisma: its reservations, the counts of it (whole, or a line),
+  // its planning parameters per site and the planning exceptions about it.
+  reservations         Reservation[]
+  stockCounts          StockCount[]
+  stockCountLines      StockCountLine[]
+  itemPlannings        ItemPlanning[]
+  planningExceptions   PlanningException[]
   // inventory.prisma: its receipt lines, lots, stock moves and their values.
   goodsReceiptLines    GoodsReceiptLine[]
   lots                 Lot[]
@@ -263,6 +270,11 @@ model ItemColour {
   // supply.prisma: the purchase order lines and requirements in this colour.
   purchaseOrderLines   PurchaseOrderLine[]
   materialRequirements MaterialRequirement[]
+  // W2a reservations.prisma, stockcount.prisma, planning.prisma: the same, of this colour.
+  reservations         Reservation[]
+  stockCountLines      StockCountLine[]
+  itemPlannings        ItemPlanning[]
+  planningExceptions   PlanningException[]
   // inventory.prisma: its receipt lines, lots and stock moves.
   goodsReceiptLines    GoodsReceiptLine[]
   lots                 Lot[]

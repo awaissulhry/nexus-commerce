@@ -311,7 +311,8 @@
       "receive": "Ricevi la merce e stampa i cartellini delle pelli",
       "pick": "Consegna i materiali a un ordine di lavoro",
       "final": "Controlla, firma e rilascia i capi",
-      "pack": "Scansiona i capi nei cartoni, stampa etichette e DDT"
+      "pack": "Scansiona i capi nei cartoni, stampa etichette e DDT",
+      "labels": "Stampa le etichette capo, solo con certificato valido"
     },
     "held": {
       "notice": "Prima leggi l'informativa",

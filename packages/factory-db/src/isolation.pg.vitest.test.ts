@@ -24,6 +24,7 @@ import { seed as seedNumberingBlocks } from '../seed/numbering-blocks'
 import { seed as seedOps } from '../seed/ops'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
+import { seed as seedPlanning } from '../seed/planning'
 import { seed as seedPricing } from '../seed/pricing'
 import { seed as seedPrint } from '../seed/print'
 import { seed as seedPrivacy } from '../seed/privacy'
@@ -188,6 +189,9 @@ beforeAll(async () => {
   await seedSourcing({ db: factory, namespace: 'iso-b' })
   await seedSubcontract({ db: factory, namespace: 'iso-a' })
   await seedSubcontract({ db: factory, namespace: 'iso-b' })
+  // The stock and planning schema of W2a (wave 4/7).
+  await seedPlanning({ db: factory, namespace: 'iso-a' })
+  await seedPlanning({ db: factory, namespace: 'iso-b' })
   // The production and schedule schema of W2a (wave 5/7).
   await seedSchedule({ db: factory, namespace: 'iso-a' })
   await seedSchedule({ db: factory, namespace: 'iso-b' })
@@ -257,10 +261,12 @@ it('covers every classified table and every runtime role', () => {
     'InvoiceLine',
     'Item',
     'ItemColour',
+    'ItemPlanning',
     'LabResult',
     'LabelTemplate',
     'LabourRate',
     'Line',
+    'LineCapacity',
     'LinkEvidence',
     'Location',
     'Lot',
@@ -292,7 +298,9 @@ it('covers every classified table and every runtime role', () => {
     'PaymentAllocation',
     'PaymentTerms',
     'PlanVersion',
+    'PlanningException',
     'PlanningRun',
+    'PlanningSettings',
     'PpeRegisterEntry',
     'PriceList',
     'PriceListEntry',
@@ -324,6 +332,8 @@ it('covers every classified table and every runtime role', () => {
     'RepairStageEvent',
     'ReplacementRequest',
     'ReportSubscription',
+    'RequirementPegging',
+    'Reservation',
     'RestoreDrill',
     'ReturnAuthorisation',
     'ReturnLine',
@@ -357,6 +367,8 @@ it('covers every classified table and every runtime role', () => {
     'SizeScale',
     'StaffNoticeAck',
     'Station',
+    'StockCount',
+    'StockCountLine',
     'StockMove',
     'StockValuation',
     'StoredFile',
@@ -380,6 +392,7 @@ it('covers every classified table and every runtime role', () => {
     'ViesCheck',
     'WorkCalendar',
     'WorkCentre',
+    'WorkCentreCapacity',
     'WorkOrder',
     'WorkOrderMaterial',
     'WorkOrderOperation',

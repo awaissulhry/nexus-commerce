@@ -21,6 +21,12 @@
   min-height: 0;
 }
 
+/* Movements' one long grid (Owner answer W2 B): a fixed-height viewport that scrolls inside, the header in view; its
+ * height follows the window so the page itself does not scroll past an empty band. */
+.fw-list-grid.endless {
+  height: max(420px, calc(100dvh - 300px));
+}
+
 .fw-list-state {
   display: flex;
   flex-direction: column;

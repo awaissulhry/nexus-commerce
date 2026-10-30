@@ -278,6 +278,27 @@ describe('a work order on hold', () => {
     await admin(`SET session_replication_role = 'replica'; DELETE FROM "StockMove" WHERE id = '${lifted.id}'; SET session_replication_role = 'origin'`)
   })
 
+  it('a held work order is still open: it takes reservations (wave 4’s guard, redefined)', async () => {
+    expect(await hold(wo(), 'IN_PROGRESS')).toBe(1)
+    try {
+      expect(
+        await insert(office(), 'Reservation', {
+          id: randomUUID(),
+          companyId: A.companyA,
+          siteId: A.siteA,
+          kind: 'QUANTITY',
+          itemId: key('product:item:lining'),
+          itemColourId: key('product:item-colour:lining:GRY'),
+          quantity: '1.8000',
+          workOrderId: wo(),
+          note: 'Lining for the rework while the hold lasts.',
+        }),
+      ).toBe(1)
+    } finally {
+      expect(await lift(wo(), 'IN_PROGRESS')).toBe(1)
+    }
+  })
+
   it('a held draft is not released; a completed work order is not held', async () => {
     const draft = seeded.production.draftWorkOrderId
     expect(await hold(draft, 'DRAFT')).toBe(1)

@@ -74,6 +74,9 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // claims and subcontracting): without them, opening one is refused. Eight f's as above.
       { id: `ffffffff${id(`series:${company}:CLAIM:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'CLAIM', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'CLM-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
       { id: `ffffffff${id(`series:${company}:SUBCONTRACT:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'SUBCONTRACT', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'SC-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // W2a wave 4: stock counts and the year-end inventory are numbered from it (apps/factory-api modules/inventory/counts):
+      // without one, opening a count is refused. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:COUNT:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'COUNT', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'CNT-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({

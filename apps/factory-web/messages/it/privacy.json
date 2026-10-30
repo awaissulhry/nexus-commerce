@@ -1,0 +1,399 @@
+{
+  "pv": {
+    "page": {
+      "intro": "I tuoi obblighi privacy, le informative che le persone leggono e confermano, la DPIA e il registro dei trattamenti.",
+      "duties": "{done} di {total} obblighi privacy fatti",
+      "updated": "Aggiornato alle {time}",
+      "updates_one": "{count} aggiornamento · Mostra",
+      "updates_other": "{count} aggiornamenti · Mostra",
+      "company": "Società",
+      "more": "Altre azioni",
+      "openPublic": "Apri l’informativa privacy pubblica",
+      "noPublic": "Nessuna informativa pubblica è ancora pubblicata.",
+      "newNotice": "Nuova versione di informativa",
+      "noAccess": "Ti serve: Vedere privacy e informative. Chiedi a un amministratore.",
+      "noCompanyTitle": "Nessuna società da mostrare",
+      "noCompany": "Il tuo ruolo non raggiunge i registri privacy di nessuna società."
+    },
+    "live": {
+      "connecting": "Collegamento agli aggiornamenti…",
+      "live": "In tempo reale",
+      "offline": "Aggiornamenti sospesi"
+    },
+    "sample": {
+      "title": "Testi di esempio",
+      "body": "Le informative, la DPIA e il registro di questa pagina contengono testi di ESEMPIO finché il consulente privacy non scrive quelli veri. Non consegnarli a nessuno come definitivi.",
+      "dialogBodyPublished": "L’informativa vera la scrive il consulente privacy; entra poi in vigore come nuova versione, e tutti la confermano di nuovo.",
+      "dialogTitle": "Questo testo è un esempio",
+      "dialogBody": "Pubblicalo solo per una prova: l’informativa vera la scrive il consulente privacy. Una versione pubblicata non cambia mai; una nuova versione la sostituisce."
+    },
+    "duties": {
+      "title": "I tuoi obblighi privacy",
+      "later": "Le richieste degli interessati (accesso, cancellazione) e le regole di conservazione arrivano in un passo successivo."
+    },
+    "duty": {
+      "state": {
+        "done": "Fatto",
+        "needs": "Da fare",
+        "review": "Da rivedere"
+      },
+      "doIt": "Fallo",
+      "open": "Apri",
+      "register": {
+        "name": "Registro dei trattamenti e responsabili",
+        "law": "GDPR art. 30 (registro), art. 28 (responsabili del trattamento)",
+        "done_one": "{count} trattamento è nel registro, con i suoi responsabili.",
+        "done_other": "{count} trattamenti sono nel registro, con i loro responsabili.",
+        "needs": "Il registro è vuoto: aggiungi cosa tratta la società e chi lo tratta per te."
+      },
+      "publicNotice": {
+        "name": "Informativa privacy pubblica",
+        "law": "GDPR artt. 13 e 14",
+        "done": "La versione {label} è pubblicata all’indirizzo pubblico della società, collegata dalle pagine link e dalle e-mail.",
+        "needs": "Nessuna informativa pubblica è pubblicata: le pagine link e le e-mail puntano a una pagina vuota."
+      },
+      "staffNotice": {
+        "name": "Informativa per il personale d’ufficio",
+        "law": "GDPR art. 13",
+        "done": "La versione {label} è in vigore: ogni persona d’ufficio la vede una volta all’accesso.",
+        "needs": "Nessuna informativa per il personale è pubblicata: chi lavora in ufficio non sa cosa il sistema conserva di sé."
+      },
+      "dpia": {
+        "name": "Valutazione d’impatto (DPIA)",
+        "law": "GDPR art. 35: prima che il trattamento inizi",
+        "done": "La DPIA versione {version} è archiviata, firmata.",
+        "review": "La DPIA versione {version} è archiviata; la revisione era prevista il {date}. Archivia la versione rivista.",
+        "needs": "Nessuna DPIA firmata è archiviata.",
+        "gates": "L’accesso con badge in reparto e le scansioni che registrano i lavoratori restano spenti finché una DPIA non è archiviata."
+      },
+      "workerNotice": {
+        "name": "Informativa ai lavoratori, confermata da ognuno",
+        "law": "GDPR art. 13; L. 300/1970 art. 4 c.3",
+        "done": "La versione {label} è in vigore: ogni lavoratore la conferma sul tablet prima della prima scansione.",
+        "needs": "Nessuna informativa ai lavoratori è pubblicata.",
+        "gates": "Il lavoro di reparto che registra i lavoratori resta spento finché non se ne pubblica una."
+      }
+    },
+    "floor": {
+      "title": "Il reparto di ogni sede può partire?",
+      "intro": "Il lavoro reale di reparto (accessi con badge e scansioni che registrano le persone) aspetta gli obblighi privacy della società e le regole di reparto della sede.",
+      "noSites": "Questa società non ha ancora sedi.",
+      "ready": "Pronto",
+      "held": "In attesa"
+    },
+    "site": {
+      "ready": "Gli obblighi privacy e le regole di reparto sono a posto.",
+      "noDpia": "L’accesso in reparto resta spento finché la DPIA non è archiviata.",
+      "noNotice": "L’accesso in reparto resta spento finché non è pubblicata un’informativa ai lavoratori.",
+      "noBasis": "La sede nomina i lavoratori nei registri di reparto, ma non c’è una base giuridica registrata.",
+      "toFloorRules": "Apri Regole di reparto"
+    },
+    "views": {
+      "label": "Elenchi",
+      "notices": "Informative",
+      "dpia": "DPIA",
+      "register": "Registro dei trattamenti",
+      "key": "Tasto {key}"
+    },
+    "keys": {
+      "views": "Informative · DPIA · Registro",
+      "new": "Nuova versione di informativa"
+    },
+    "list": {
+      "failed": "Impossibile caricare questo elenco",
+      "loading": "Caricamento…",
+      "retry": "Riprova"
+    },
+    "common": {
+      "export": "Esporta {count}"
+    },
+    "kind": {
+      "WORKER_FLOOR": {
+        "name": "Informativa ai lavoratori",
+        "who": "Mostrata sui tablet di reparto",
+        "means": "Cosa registrano gli strumenti di reparto sui lavoratori. Ogni lavoratore la legge e la conferma sul tablet prima della prima scansione; fino ad allora nessuna scansione lo nomina."
+      },
+      "OFFICE_STAFF": {
+        "name": "Informativa per il personale",
+        "who": "Mostrata una volta a ogni persona d’ufficio",
+        "means": "Cosa conserva il sistema sul personale d’ufficio. Ogni persona d’ufficio la vede una volta al prossimo accesso."
+      },
+      "PRIVACY_PUBLIC": {
+        "name": "Informativa privacy pubblica",
+        "who": "Per clienti, fornitori e visitatori",
+        "means": "L’informativa che chiunque legge all’indirizzo pubblico della società, collegata da ogni pagina link ed e-mail."
+      }
+    },
+    "status": {
+      "DRAFT": "Bozza",
+      "PUBLISHED": "In vigore",
+      "SUPERSEDED": "Sostituita"
+    },
+    "notices": {
+      "workerTitle": "Versioni dell’informativa ai lavoratori",
+      "workerIntro": "Pubblicare una nuova versione la richiede di nuovo a ogni lavoratore al prossimo accesso in reparto.",
+      "count_one": "{count} versione",
+      "count_other": "{count} versioni",
+      "emptyTitle": "Ancora nessuna informativa ai lavoratori",
+      "empty": "Ancora nessuna informativa ai lavoratori: l’accesso in reparto la aspetta.",
+      "writeFirst": "Scrivi la prima versione",
+      "otherTitle": "Informativa per il personale e informativa pubblica",
+      "otherIntro": "Una di ciascuna per società; una nuova versione sostituisce quella in vigore.",
+      "noneInForce": "Nessuna in vigore",
+      "openDraft": "Bozza {label} · Apri",
+      "newVersion": "Nuova versione",
+      "noDraft": "Nessuna bozza",
+      "copy": "Copia",
+      "staffWhere": "A ogni accesso in ufficio"
+    },
+    "col": {
+      "version": "Versione",
+      "languages": "Lingue",
+      "acknowledged": "Confermata",
+      "state": "Stato",
+      "notice": "Informativa",
+      "inForce": "In vigore",
+      "draft": "Bozza",
+      "where": "Dove si legge",
+      "activity": "Trattamento",
+      "purpose": "Finalità · base giuridica",
+      "people": "Di chi · quali dati",
+      "processors": "Responsabili · destinatari",
+      "retention": "Conservazione · trasferimenti",
+      "more": "Altro"
+    },
+    "notice": {
+      "title": "Informativa",
+      "titleOf": "{kind} · versione {label}",
+      "version": "{label} (v{n})",
+      "publishedOn": "Pubblicata il {date}",
+      "replacedOn": "Sostituita il {date}",
+      "notPublished": "Non pubblicata",
+      "noLanguage": "Ancora nessuna lingua",
+      "openPdf": "Apri il PDF",
+      "pdfOnly": "Solo PDF",
+      "pdfLanguage": "Questa lingua è un PDF: i lavoratori la leggono su carta dal personale, il tablet mostra italiano o inglese.",
+      "textOf": "Testo in {language}",
+      "saveText": "Salva questa lingua",
+      "removeLanguage": "Togli questa lingua",
+      "missing": "Scrivi queste lingue prima di pubblicare: {languages}. Gli schermi mostrano l’informativa in queste lingue.",
+      "addLanguage": "Aggiungi una lingua",
+      "addLanguageIntro": "La lingua di un lavoratore come PDF (la copia su carta consegnata dal personale), oppure come testo.",
+      "language": "Lingua",
+      "pickLanguage": "Scegli una lingua",
+      "addAs": "Aggiungi come",
+      "asPdf": "PDF",
+      "asText": "Testo",
+      "dropPdf": "L’informativa in {language}, in PDF",
+      "textAdded": "Scrivi sopra il testo in {language} e salvalo.",
+      "deleteDraft": "Elimina la bozza",
+      "deleteConfirm": "Eliminare la bozza {label}? I suoi testi vengono tolti; nessuno l’ha vista.",
+      "deleteNow": "Elimina",
+      "newVersion": "Nuova versione da questa",
+      "publish": "Pubblica {label}",
+      "publishMeans": {
+        "WORKER_FLOOR": "Una volta pubblicata, ogni lavoratore la legge e la conferma sul tablet al prossimo accesso; fino ad allora nessuna scansione o taglio lo nomina."
+      }
+    },
+    "ack": {
+      "title": "Chi l’ha confermata",
+      "notYetN_one": "{count} non ancora",
+      "notYetN_other": "{count} non ancora",
+      "count": "Confermata da {count} di {total}",
+      "none": "—",
+      "notYet": "—",
+      "notYetOne": "Non ancora",
+      "public": "Letta da chiunque, senza conferma",
+      "namesHere": "I nomi compaiono solo qui, dentro questa informativa, in ordine di nome: mai una classifica.",
+      "countsOnly": "Solo conteggi: i nomi li vede chi gestisce la privacy.",
+      "person": "Persona",
+      "when": "Confermata",
+      "how": "Come",
+      "language": "Lingua",
+      "channel": {
+        "DEVICE": "Sul tablet",
+        "PAPER": "Copia su carta firmata",
+        "OFFICE": "All’accesso in ufficio"
+      }
+    },
+    "paper": {
+      "title": "Una copia su carta firmata",
+      "intro": "Un lavoratore che ha firmato la copia su carta nella sua lingua: registralo qui, per la versione in vigore.",
+      "everyone": "Ogni lavoratore ha confermato questa versione.",
+      "worker": "Lavoratore",
+      "pickWorker": "Scegli un lavoratore",
+      "language": "Lingua firmata",
+      "record": "Registra la copia firmata"
+    },
+    "newNotice": {
+      "title": "Nuova versione di informativa",
+      "kind": "Quale informativa",
+      "label": "Etichetta della versione",
+      "labelHint": "Come le persone la vedono e la confermano, per esempio 2026-10.",
+      "copy": "Parti dai testi in vigore",
+      "after": "Nasce come bozza: nessuno la vede finché non la pubblichi.",
+      "create": "Crea la bozza"
+    },
+    "dpia": {
+      "inForce": "DPIA in vigore",
+      "why": "La valutazione d’impatto del tracciamento in reparto (GDPR art. 35). Il reparto si apre quando una DPIA firmata è archiviata.",
+      "version": "Versione",
+      "versionN": "Versione {n}",
+      "signedBy": "Firmata da",
+      "signedByHint": "Come lo nomina il documento firmato.",
+      "signedOn": "Firmata il",
+      "reviewDue": "Revisione entro",
+      "reviewHint": "Quando va rivista (GDPR art. 35, par. 11).",
+      "reviewPassed": "{date}: la revisione è scaduta",
+      "storedOn": "Archiviata",
+      "file": "PDF firmato",
+      "openPdf": "Apri il PDF firmato",
+      "pdfHere": "PDF firmato archiviato",
+      "noPdf": "Ancora nessun PDF firmato",
+      "noneTitle": "Nessuna DPIA archiviata",
+      "none": "Gli accessi con badge e le scansioni che registrano i lavoratori restano spenti finché una DPIA firmata non è archiviata.",
+      "draftTitle": "Bozza: versione {n}",
+      "draftIntro": "Carica il PDF firmato, indica chi l’ha firmato e quando, poi archivialo. Archiviare sostituisce la versione in vigore.",
+      "newTitle": "Una nuova versione della DPIA",
+      "newIntro": "Inizia una nuova versione quando il trattamento cambia (una nuova sede, un nuovo strumento di reparto) o alla revisione.",
+      "start": "Inizia una nuova versione della DPIA",
+      "noDraft": "Nessuna bozza. La inizia chi gestisce la privacy.",
+      "step1": "1. Il PDF firmato",
+      "step2": "2. Chi l’ha firmata e quando",
+      "pdfUploaded": "PDF caricato",
+      "dropPdf": "La DPIA come firmata, in PDF",
+      "replacePdf": "Un altro PDF sostituisce questo",
+      "store": "Archivia la DPIA firmata",
+      "versions": "Tutte le versioni",
+      "noVersions": "Ancora nessuna versione della DPIA.",
+      "scope": "Cosa valuta",
+      "scopeHint": "Lasciato vuoto: Nexus scrive l’ambito standard (strumenti di reparto e dati del personale d’ufficio).",
+      "after": "Nasce come bozza; la versione in vigore resta finché non archivi questa.",
+      "create": "Inizia la bozza"
+    },
+    "dpiaStatus": {
+      "DRAFT": "Bozza",
+      "STORED": "In vigore",
+      "SUPERSEDED": "Sostituita"
+    },
+    "register": {
+      "title": "Registro dei trattamenti",
+      "intro": "Quali dati personali tratta la società, perché, per quanto tempo e con chi (GDPR art. 30). Responsabili con la loro regione (art. 28).",
+      "count_one": "{count} trattamento",
+      "count_other": "{count} trattamenti",
+      "filter": "Mostra",
+      "filters": {
+        "ACTIVE": "In uso",
+        "ARCHIVED": "Archiviati",
+        "all": "Tutti"
+      },
+      "new": "Nuovo trattamento",
+      "emptyTitle": "Il registro è vuoto",
+      "empty": "Aggiungi cosa tratta la società: scansioni di reparto, storico del personale, posta con clienti e fornitori.",
+      "noneHere": "Nessun trattamento qui.",
+      "showAll": "Mostra tutti",
+      "rowMenu": "Altro per {name}",
+      "edit": "Modifica",
+      "view": "Apri",
+      "archive": "Archivia…",
+      "newTitle": "Nuovo trattamento",
+      "editTitle": "Modifica {name}",
+      "viewTitle": "{name}",
+      "add": "Aggiungi al registro",
+      "save": "Salva"
+    },
+    "activityStatus": {
+      "ACTIVE": "In uso",
+      "ARCHIVED": "Archiviato"
+    },
+    "form": {
+      "code": "Codice",
+      "codeHint": "Maiuscole, cifre, punti o trattini; non cambia mai. Per esempio FLOOR-SCANS.",
+      "name": "Trattamento",
+      "purpose": "Finalità",
+      "legalBasis": "Base giuridica",
+      "dataSubjects": "Di chi sono i dati",
+      "dataCategories": "Quali dati",
+      "recipients": "Destinatari",
+      "processors": "Responsabili del trattamento",
+      "transfers": "Trasferimenti fuori dall’UE",
+      "retention": "Conservazione",
+      "security": "Misure di sicurezza",
+      "listHint": "Uno per riga.",
+      "processorsHint": "Uno per riga, con la sua regione, per esempio: Servizio e-mail — UE (Irlanda).",
+      "required": "Obbligatorio.",
+      "tooLong": "Troppo lungo.",
+      "atLeastOne": "Indicane almeno uno.",
+      "listRule": "Ogni voce è una parola o una frase breve.",
+      "codeRule": "Maiuscole, cifre, punti, trattini o trattini bassi, al massimo 40."
+    },
+    "archive": {
+      "title": "Archiviare {name}?",
+      "body": "Resta nel registro come archiviato, per lo storico, e non può più cambiare.",
+      "confirm": "Archivia"
+    },
+    "held": {
+      "manage": "Serve il permesso: Gestire privacy e informative",
+      "noCompany": "Nessuna società aperta.",
+      "notDraft": "Cambia solo una bozza.",
+      "unsaved": "Salva prima le lingue che hai scritto.",
+      "missing": "Scrivi prima queste lingue: {languages}",
+      "emptyText": "Il testo è vuoto.",
+      "nothingTyped": "Niente è cambiato in questa lingua.",
+      "draftExists": "La bozza {label} di questa informativa è aperta: modificala, pubblicala o eliminala prima.",
+      "label": "Dai alla versione un’etichetta di al massimo 40 caratteri.",
+      "labelTaken": "Questa informativa ha già una versione {label}.",
+      "paperWorkerOnly": "Solo l’informativa ai lavoratori si conferma su carta.",
+      "paperInForce": "La copia su carta si registra per la versione in vigore.",
+      "pickWorker": "Scegli il lavoratore che l’ha firmata.",
+      "pickLanguage": "Scegli la lingua che ha firmato.",
+      "noDraft": "Inizia prima una bozza.",
+      "dpiaPdf": "Carica prima il PDF firmato.",
+      "dpiaSigner": "Indica chi l’ha firmata, come lo nomina il documento.",
+      "dpiaSignedOnMissing": "Indica il giorno della firma.",
+      "dpiaSignedOn": "Il giorno della firma è oggi o prima.",
+      "dpiaReviewMissing": "Indica quando va rivista.",
+      "dpiaReview": "Il giorno della revisione viene dopo quello della firma.",
+      "upload": "Caricare file richiede il permesso di caricare file.",
+      "form": "Compila quanto segnato.",
+      "nothingChanged": "Niente è cambiato."
+    },
+    "stepUp": {
+      "title": "Conferma con un nuovo codice",
+      "confirm": "Conferma",
+      "publish": "Pubblicare un’informativa la mette in vigore per tutti: scrivi il codice di 6 cifre dell’app di autenticazione.",
+      "dpia": "Archiviare la DPIA firmata apre il reparto: scrivi il codice di 6 cifre dell’app di autenticazione."
+    },
+    "done": {
+      "textSaved": "{language} salvata.",
+      "textRemoved": "{language} tolta dalla bozza.",
+      "pdfAdded": "Il PDF in {language} è nella bozza.",
+      "published": {
+        "WORKER_FLOOR": "La versione {label} è in vigore. Ogni lavoratore la legge e la conferma sul tablet al prossimo accesso.",
+        "OFFICE_STAFF": "La versione {label} è in vigore. Ogni persona d’ufficio la vede una volta al prossimo accesso.",
+        "PRIVACY_PUBLIC": "La versione {label} è in vigore all’indirizzo pubblico della società."
+      },
+      "draftDeleted": "Bozza {label} eliminata.",
+      "paper": "La copia su carta firmata è registrata.",
+      "paperAgain": "Quella copia su carta era già registrata.",
+      "dpiaPdf": "Il PDF firmato è nella bozza.",
+      "dpiaStored": "La DPIA versione {n} è archiviata e in vigore.",
+      "activityAdded": "{name} è nel registro.",
+      "activitySaved": "{name} salvato.",
+      "archived": "{name} archiviato.",
+      "copied": "Indirizzo copiato."
+    },
+    "problem": {
+      "signedOut": "La sessione è finita. Accedi di nuovo per continuare.",
+      "forbidden": "Il tuo ruolo non può vedere o fare questo.",
+      "notFound": "Non esiste più, o appartiene a un’altra società.",
+      "conflict": "Qualcuno l’ha cambiato nel frattempo. È stato riletto: controlla e riprova.",
+      "invalid": "Qualcosa non è stato accettato. Controlla i campi e riprova.",
+      "rateLimited": "Troppi tentativi. Attendi un momento, poi riprova.",
+      "unavailable": "Il server della fabbrica non ha risposto. Riprova tra un momento.",
+      "internal": "Qualcosa è andato storto. Riprova; se succede ancora, avvisa l’amministratore.",
+      "stepUpClosed": "Non fatto: il codice non è stato dato.",
+      "copy": "Non è stato possibile copiare l’indirizzo: selezionalo e copialo a mano."
+    }
+  }
+}
