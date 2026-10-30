@@ -1,0 +1,383 @@
+/*
+ * Product libraries (Materials & trims SCR-047/048, Operations and Sizes & measurements SCR-049) LAYOUT: the page head,
+ * the record band, cards in columns, cells of the list frame, the converter line, the size measures table. The controls
+ * are the design system's; this file places them with semantic tokens only (no raw colours, no restyled controls). No
+ * page sets a max-width (Owner rule 2026-10-29): the pages fill the shell's main area; wide screens get more columns.
+ */
+.fw-lib {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-lib-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-lib-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-lib-actions,
+.fw-lib-chips,
+.fw-lib-inline,
+.fw-lib-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-lib-actions {
+  gap: var(--nds-space-8);
+}
+
+.fw-lib-chips {
+  display: flex;
+}
+
+.fw-lib-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.fw-lib-warn {
+  color: var(--nds-warning-text);
+}
+
+.fw-lib-ok {
+  color: var(--nds-success-text);
+}
+
+.fw-lib-danger {
+  color: var(--nds-danger-text);
+}
+
+.fw-lib-strong {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-lib-mono {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-lib-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-12);
+}
+
+/* ---- the record band ---- */
+.fw-lib-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-lib-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-lib-title {
+  overflow-wrap: anywhere;
+}
+
+.fw-lib-title-name {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-normal);
+}
+
+/* ---- columns of cards (wide screens use the width) ---- */
+.fw-lib-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-lib-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .fw-lib-split {
+    grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  }
+}
+
+.fw-lib-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 1280px) {
+  .fw-lib-pair {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.fw-lib-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  align-items: start;
+}
+
+.fw-lib-form-grid > *,
+.fw-lib-split > *,
+.fw-lib-pair > * {
+  min-width: 0;
+}
+
+.fw-lib-span {
+  grid-column: 1 / -1;
+}
+
+.fw-lib-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-lib-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-lib-list {
+  margin: 0;
+  padding-left: var(--nds-space-18);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-lib-link {
+  color: var(--nds-text-link);
+  text-decoration: none;
+}
+
+.fw-lib-link:hover,
+.fw-lib-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-lib-scroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+/* ---- list frame cells ---- */
+.fw-lib-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-lib-sub {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-lib-rowlink {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+
+.fw-lib-rowlink:hover,
+.fw-lib-rowlink:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-lib-right {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.fw-lib-nowrap {
+  white-space: nowrap;
+}
+
+/* The units of a material in one line, with the converter's sentence under the fields. */
+.fw-lib-converter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* Fibres and other repeated rows of a form. */
+.fw-lib-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-lib-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(90px, 1fr) auto;
+  gap: var(--nds-space-8);
+  align-items: end;
+}
+
+/* The kind picker: as many choices as fit. */
+.fw-lib-kinds {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--nds-space-8);
+}
+
+/* ---- the size measures table (a scale's sizes × measurement points) ---- */
+.fw-lib-measures {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 100%;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-lib-measures th,
+.fw-lib-measures td {
+  padding: var(--nds-space-6) var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.fw-lib-measures thead th {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-medium);
+  white-space: nowrap;
+}
+
+.fw-lib-measures th[scope='row'] {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--nds-surface);
+  white-space: nowrap;
+}
+
+.fw-lib-measures td.is-archived,
+.fw-lib-measures th.is-archived {
+  color: var(--nds-text-3);
+}
+
+.fw-lib-swatch {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--nds-border-strong);
+}
+
+.fw-lib-keymap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-lib-keymap-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: var(--nds-space-12);
+  align-items: center;
+}
+
+.fw-lib-keymap-row dt {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.fw-lib-keymap-row dd {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* The bar of a form with unsaved changes, kept in view at the bottom of the card while it scrolls. */
+.fw-lib-savebar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-12);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-raised);
+}
+
+.fw-lib-readfield {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-lib-readfield-label {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-lib-readfield-value {
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 719px) {
+  .fw-lib-hide-phone {
+    display: none;
+  }
+
+  .fw-lib-row {
+    grid-template-columns: minmax(0, 1fr) minmax(80px, 1fr) auto;
+  }
+}

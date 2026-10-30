@@ -15,6 +15,7 @@ import { callerFor } from '../../../core/command'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { pdfPageCount } from '../../../platform/documents/testing/pdf-text'
+import { renderLabel } from '@nexus/factory-domain/compliance/labels/render'
 import { garmentLabelFor } from './preview'
 import { useLabelsClock } from './store'
 
@@ -167,6 +168,30 @@ describe('a preview of the seed jacket (PRD-331)', () => {
     expect(zpl.dpi).toBe(203)
     expect(zpl.text).toMatch(/^\^XA\n\^CI28\n\^PW400\n\^LL639\n/)
     expect(zpl.text).toContain('^FDAA^FS')
+  })
+
+  it("echoes the cell's values, so a browser renders a draft as it is typed with the same blocks (renderLabel)", async () => {
+    const { label, values } = await ok('viewer', 'GET', `/compliance/labels/${seedLabel}/preview?colourwayId=${BLK}&size=52&languages=de,it`)
+    expect(values).toMatchObject({
+      style: { id: jacket, code: 'SEED-JKT-01', ppeCategory: 'CATEGORY_II', ppeStandard: 'EN 17092-3:2020', ppeClass: 'AA', brandPartyId: brand },
+      colourway: { id: BLK },
+      size: { code: '52', scaleId: scale, bodyMeasures: { chest: { min: '100', max: '104', unit: 'cm' } } },
+      certificate: { outcome: 'covered', certificate: { number: 'SEED-CERT-0001', ppeClass: 'AA', validTo: '2031-01-14' }, date: '2026-10-29' },
+      identification: { kind: 'BATCH' },
+      date: '2026-10-29',
+      marketLanguages: ['de', 'it'],
+    })
+    const { template } = await ok('viewer', 'GET', `/compliance/labels/${seedLabel}`)
+    const facts = { ...template, storedProblems: [] } as Parameters<typeof renderLabel>[0]
+    const again = renderLabel(facts, {
+      ...values,
+      identification: { kind: values.identification.kind, value: null, recordType: null, recordId: null, reference: null },
+      manufactured: null,
+      sample: true,
+    })
+    expect(again.blocks).toEqual(label.blocks)
+    expect(again.problems).toEqual(label.problems)
+    expect(again.fit).toEqual(label.fit)
   })
 
   it("names the buyer's missing language, a size outside the range, and a cell no certificate covers that day", async () => {

@@ -1,0 +1,998 @@
+{
+  "common": {
+    "back": "Back",
+    "dismiss": "Dismiss",
+    "retry": "Try again",
+    "yes": "Yes",
+    "no": "No",
+    "notInRole": "Not in your role",
+    "notYet": "Not read yet",
+    "updated": "Updated {time}"
+  },
+  "dialog": {
+    "reason": "Reason (optional)",
+    "reasonHint": "Kept in the history with the change."
+  },
+  "held": {
+    "busy": "Wait: the last change is still being saved.",
+    "noManage": "Your role does not change this library.",
+    "noCost": "Setting the standard cost needs the cost right and the cost grain."
+  },
+  "problem": {
+    "read": {
+      "signed_out": "Your session ended: sign in again.",
+      "forbidden": "Your role does not read this.",
+      "not_found": "It is no longer there.",
+      "unavailable": "The factory server did not answer: try again in a moment.",
+      "rate_limited": "Too many requests: wait a moment.",
+      "contract": "The server answered in a form this page does not know: reload the page.",
+      "internal": "Something went wrong while reading: try again."
+    },
+    "write": {
+      "moved": "Someone else changed it meanwhile: it was read again, check it and do it again.",
+      "state": "Its state no longer allows this: it was read again.",
+      "codeTaken": "This code is already used by another record: choose another.",
+      "invalid": "The server refused a value: check the marked fields.",
+      "stepUp": "Confirm it is you (authenticator code) and do it again.",
+      "signed_out": "Your session ended: sign in again. Nothing was saved.",
+      "forbidden": "Your role does not allow this change.",
+      "not_found": "It is no longer there: the page was read again.",
+      "rate_limited": "Too many changes at once: wait a moment and do it again.",
+      "unavailable": "The factory server did not answer: nothing was saved, try again.",
+      "internal": "Something went wrong: nothing was saved, try again."
+    }
+  },
+  "list": {
+    "count_one": "{count} of {total}",
+    "count_other": "{count} of {total}",
+    "countMore_one": "{count} of {total}",
+    "countMore_other": "{count} of {total}",
+    "failed": "Could not load the list",
+    "noMatch": {
+      "title": "No rows match these filters",
+      "body": "Remove a filter or clear them all."
+    },
+    "clearAll": "Clear all",
+    "activeFilters": "Filters in use",
+    "removeFilter": "Remove filter",
+    "chipSearch": "Search: {q}",
+    "viewFilter": "Saved view",
+    "more": "Show 50 more",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "copyCode": "Copy code",
+    "rowMenu": "Actions for {code}",
+    "col": {
+      "more": "Actions"
+    },
+    "bulk": {
+      "export_one": "Export {count}",
+      "export_other": "Export {count}",
+      "archive_one": "Archive {count}",
+      "archive_other": "Archive {count}",
+      "reactivate_one": "Reactivate {count}",
+      "reactivate_other": "Reactivate {count}",
+      "archiveHeld": "An archived one is among the selected: take it out first.",
+      "reactivateHeld": "Only archived ones are reactivated: take the active ones out first.",
+      "costArchived": "An archived material is among the selected: take it out first."
+    }
+  },
+  "record": {
+    "tabsLabel": "Sections of the record",
+    "more": "More actions",
+    "loading": "Loading…",
+    "backToList": "Back to the list",
+    "changed": "Someone else changed it at {time}.",
+    "reload": "Reload",
+    "state": {
+      "loading": {
+        "title": "Loading",
+        "body": "Loading…"
+      },
+      "error": {
+        "title": "Could not load it",
+        "body": "Try again in a moment."
+      },
+      "notFound": {
+        "title": "Not found",
+        "body": "It does not exist, or it is in a company you do not work in."
+      },
+      "forbidden": {
+        "title": "No access",
+        "body": "Your role does not open this record. Ask an administrator for the role that does."
+      }
+    }
+  },
+  "save": {
+    "saving": "Saving…",
+    "saved": "Saved at {time}",
+    "failed": "Not saved",
+    "region": "Unsaved changes",
+    "unsaved_one": "{count} unsaved change",
+    "unsaved_other": "{count} unsaved changes",
+    "shortcut": "⌘S saves",
+    "discard": "Discard"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "menu": "Keyboard shortcuts",
+    "help": "All shortcuts",
+    "save": "Save the changes",
+    "newColour": "New colour",
+    "addSizes": "Add sizes"
+  },
+  "status": {
+    "ACTIVE": "Active",
+    "ARCHIVED": "Archived"
+  },
+  "styleStatus": {
+    "DRAFT": "Draft",
+    "ACTIVE": "Active",
+    "ARCHIVED": "Archived"
+  },
+  "revisionStatus": {
+    "DRAFT": "Draft",
+    "RELEASED": "Released",
+    "OBSOLETE": "Obsolete"
+  },
+  "certStatus": {
+    "DRAFT": "Draft",
+    "VALID": "Valid",
+    "SUSPENDED": "Suspended",
+    "WITHDRAWN": "Withdrawn",
+    "EXPIRED": "Expired"
+  },
+  "lotStatus": {
+    "QUARANTINE": "In quarantine",
+    "RELEASED": "Released",
+    "REJECTED": "Rejected",
+    "BLOCKED": "Blocked"
+  },
+  "crViStatus": {
+    "NOT_REQUIRED": "No test needed",
+    "PENDING": "Waiting result",
+    "PASS": "Pass",
+    "FAIL": "Fail"
+  },
+  "kind": {
+    "LEATHER": "Leather",
+    "TEXTILE": "Fabric",
+    "LINING": "Lining",
+    "MEMBRANE": "Membrane",
+    "PADDING": "Padding",
+    "THREAD": "Thread",
+    "TRIM": "Trim",
+    "HARDWARE": "Hardware",
+    "PROTECTOR": "Protector",
+    "LABEL": "Label",
+    "PACKAGING": "Packaging",
+    "COMPONENT": "Component"
+  },
+  "kindHint": {
+    "LEATHER": "Bought by the hide, cut by area; Cr VI tested",
+    "TEXTILE": "By the roll, used in metres",
+    "LINING": "By the roll, used in metres",
+    "MEMBRANE": "By the roll, used in metres",
+    "PADDING": "By the roll, used in metres",
+    "THREAD": "By the cone, used in metres",
+    "TRIM": "Counted in pieces",
+    "HARDWARE": "Counted in pieces",
+    "PROTECTOR": "A PPE component, traced by lot",
+    "LABEL": "Counted in pieces",
+    "PACKAGING": "Counted in pieces",
+    "COMPONENT": "A part we make"
+  },
+  "sourcing": {
+    "BUY": "Bought",
+    "MAKE": "Made here",
+    "MAKE_OR_BUY": "Made or bought"
+  },
+  "tracking": {
+    "NONE": "Not traced",
+    "LOT": "By lot",
+    "HIDE": "Hide by hide",
+    "SERIAL": "By serial"
+  },
+  "trackingHint": {
+    "NONE": "Stock counted without lots.",
+    "LOT": "Each delivery is a lot: tests and holds per lot.",
+    "HIDE": "Each hide received, held and cut on its own (leather only).",
+    "SERIAL": "One serial per piece (counted in pieces)."
+  },
+  "tannage": {
+    "CHROME": "Chrome tanned",
+    "VEGETABLE": "Vegetable tanned",
+    "CHROME_FREE": "Chrome-free",
+    "COMBINATION": "Combination"
+  },
+  "uom": {
+    "PCS": "pcs",
+    "PAIR": "pair",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hide",
+    "SIDE": "side",
+    "ROLL": "roll",
+    "CONE": "cone",
+    "BOX": "box"
+  },
+  "department": {
+    "CUTTING": "Cutting",
+    "SEWING": "Sewing",
+    "ASSEMBLY": "Assembly",
+    "FINISHING": "Finishing",
+    "INSPECTION": "Inspection",
+    "PACKING": "Packing",
+    "SUBCONTRACT": "Subcontract"
+  },
+  "converter": {
+    "label": "Units:",
+    "one": "Bought, stocked and used in {unit}."
+  },
+  "csv": {
+    "code": "Code",
+    "name": "Name",
+    "kind": "Kind",
+    "baseUom": "Base unit",
+    "purchaseUom": "Purchase unit",
+    "consumptionUom": "Consumption unit",
+    "supplier": "Default supplier",
+    "standardCost": "Standard cost per base unit",
+    "currency": "Currency",
+    "colours": "Colours",
+    "crvi": "Cr VI limit (mg/kg)",
+    "ppe": "PPE component",
+    "status": "Status",
+    "department": "Department",
+    "machine": "Machine type",
+    "skill": "Skill",
+    "smv": "Standard minutes",
+    "usedIn": "Routings",
+    "differing": "Routings with other minutes",
+    "sizes": "Sizes",
+    "sizeCount": "Number of sizes",
+    "styles": "Styles"
+  },
+  "materials": {
+    "list": {
+      "intro": "Leather, fabrics, trims, protectors and labels: how each is bought, stocked and used, its colours, supplier and the evidence its lots must bring.",
+      "new": "New material",
+      "keyNew": "New material",
+      "search": "Search code, name or supplier code",
+      "tableLabel": "Materials & trims",
+      "kindFilter": "Kind",
+      "allKinds": "Every kind",
+      "unitsTitle": "Bought in {buy}, stocked in {stock}, used in {use}",
+      "theirCode": "their code {code}",
+      "made": "Made here",
+      "noSupplier": "No default supplier",
+      "missingCost": "Missing",
+      "perUnit": "per {unit}",
+      "crvi": "Cr VI {limit}",
+      "ppe": "PPE component",
+      "openColours": "Open its colours"
+    },
+    "col": {
+      "material": "Material",
+      "kind": "Kind · sourcing",
+      "units": "Buy → stock → use",
+      "supplier": "Default supplier",
+      "colours": "Colours",
+      "cost": "Standard cost",
+      "compliance": "Evidence",
+      "status": "Status"
+    },
+    "view": {
+      "open": "Active materials",
+      "leather": "Leather",
+      "textiles": "Fabrics and linings",
+      "trims": "Trims and hardware",
+      "protectors": "Protectors",
+      "labels": "Labels and packaging",
+      "missingCost": "Missing standard cost",
+      "crvi": "Cr VI evidence required",
+      "ppe": "PPE components",
+      "archived": "Archived",
+      "all": "All"
+    },
+    "tile": {
+      "leather": "Leather articles",
+      "missingCost": "Missing standard cost",
+      "crvi": "Cr VI evidence required",
+      "ppe": "PPE components"
+    },
+    "tileHint": {
+      "leather": "Active leather, bought by the hide and traced lot by lot or hide by hide.",
+      "missingCost": "Quotes and cost sheets cannot cost these yet.",
+      "crvi": "Each lot is held until its chromium VI evidence is in (REACH Annex XVII entry 47).",
+      "ppe": "Protectors and other parts the garment certificate names."
+    },
+    "bulk": {
+      "cost_one": "Set standard cost for {count}",
+      "cost_other": "Set standard cost for {count}"
+    },
+    "forbidden": {
+      "title": "You do not have access to materials",
+      "body": "Reading materials needs the materials right (the product office, purchasing and the warehouse have it)."
+    },
+    "empty": {
+      "title": "No materials yet",
+      "body": "Add the first leather, fabric or trim: styles pick their BOM lines from here.",
+      "bodyView": "The product office adds them; you will see them here.",
+      "create": "Add the first material"
+    },
+    "archive": {
+      "title_one": "Archive {count} material",
+      "title_other": "Archive {count} materials",
+      "reach": "No new BOM line can use them.",
+      "kept": "BOMs, purchase orders and stock that hold them keep them.",
+      "back": "Reactivate brings one back."
+    },
+    "notice": {
+      "archived_one": "{count} material archived.",
+      "archived_other": "{count} materials archived.",
+      "costSet_one": "Standard cost set for {count} material.",
+      "costSet_other": "Standard cost set for {count} materials."
+    },
+    "cost": {
+      "title_one": "Set the standard cost of {count} material",
+      "title_other": "Set the standard cost of {count} materials",
+      "intro": "Per base unit, as quotes and cost sheets use it until supplier price lists exist. Leave a field empty to keep its cost.",
+      "now": "Now {cost} per {unit}",
+      "new": "New cost per {unit}",
+      "newOf": "New standard cost of {code}",
+      "badNumber": "A number with at most 6 decimals, like 2,45.",
+      "reason": "Why it changes",
+      "reasonHint": "A new price list, a quote from the tannery …: kept in the audit row.",
+      "styles": "Styles costed with these materials show the new figures on their next read.",
+      "apply_one": "Apply {count} change",
+      "apply_other": "Apply {count} changes",
+      "held": {
+        "invalid": "A new cost is not a number: fix it first.",
+        "none": "Type at least one new cost."
+      }
+    }
+  },
+  "newMaterial": {
+    "title": "New material",
+    "intro": "Pick the kind first: it sets the units, the tracking and the checks. The same rules the server runs check what you type.",
+    "kind": "Kind",
+    "company": "Company",
+    "companyHint": "Every company: shared master data.",
+    "everyCompany": "Every company",
+    "supplierSearch": "Find a supplier",
+    "supplierHint": "Type part of a name or code.",
+    "supplierPicked": "Chosen: {name}",
+    "noSupplier": "No default supplier",
+    "blocked": "blocked",
+    "noParties": "Your role does not read suppliers: the default supplier is set later by purchasing.",
+    "pick": "Choose…",
+    "create": "Create material",
+    "after": "Create opens the material: colours, properties and evidence come next.",
+    "refused": "The server refused this value.",
+    "otherProblems_one": "{count} more thing to fix",
+    "otherProblems_other": "{count} more things to fix",
+    "held": {
+      "code": "Give the code first.",
+      "name": "Give the name first.",
+      "cost": "The standard cost is not a number.",
+      "problems_one": "{count} thing to fix first: see the marked field.",
+      "problems_other": "{count} things to fix first: see the marked fields."
+    },
+    "why": {
+      "code": "1 to 40 capital letters or digits, with . _ - / inside.",
+      "name": "Name the material (at most 200 characters).",
+      "baseUom": "Leather counts in an area unit: m², dm² or ft².",
+      "purchaseFactor": "Say how many base units one purchase unit holds (a hide: its average area).",
+      "consumptionFactor": "Say how many base units one consumption unit holds.",
+      "tracking": "Leather is traced by lot or hide by hide; a PPE component by lot or serial; a serial counts in pieces.",
+      "sourcing": "A component is a part we make: made here, or made or bought.",
+      "defaultSupplierId": "A material we only make has no supplier.",
+      "supplierArticleCode": "At most 64 characters; none for a material we only make.",
+      "animalSpecies": "Leather names its animal (bovine, goat, kangaroo …).",
+      "tannage": "Leather names its tannage (chrome tanning is why Cr VI is tested).",
+      "grade": "Leather names the tannery’s selection or grade.",
+      "thicknessMinMm": "Leather has its thickness range in millimetres.",
+      "thicknessMaxMm": "The thickest is at least the thinnest, in millimetres.",
+      "animalOrigin": "Leather is of animal origin: the garment label says so (Reg. (EU) 1007/2011 art. 12).",
+      "crViLimitMgKg": "A limit above 0 and at most 3 mg/kg when a test is required (REACH Annex XVII entry 47).",
+      "other": "The server’s rules refuse this value."
+    }
+  },
+  "material": {
+    "back": "Materials & trims",
+    "baseIn": "in {unit}",
+    "tab": {
+      "overview": "Overview",
+      "colours": "Colours",
+      "properties": "Properties & grades",
+      "suppliers": "Suppliers & prices",
+      "compliance": "Compliance",
+      "stock": "Stock"
+    },
+    "action": {
+      "newColour": "New colour",
+      "archive": "Archive…",
+      "reactivate": "Reactivate"
+    },
+    "archive": {
+      "title": "Archive {code}"
+    },
+    "archivedBanner": "Archived: read only, no new BOM line can use it. ⋯ Reactivate brings it back.",
+    "held": {
+      "archived": "Archived: reactivate it first."
+    },
+    "refusedTitle": "What the server said",
+    "readOnly": "You can view, not change.",
+    "identity": "Identity and units",
+    "identityHint": "What it is, how it is bought, stocked and used. ⌘S saves.",
+    "save": "Save",
+    "code": "Code",
+    "codeHint": "Capital letters and digits, with . _ - / inside.",
+    "name": "Name",
+    "nameIt": "Name in Italian",
+    "nameEn": "Name in English",
+    "nameLangHint": "Shown to people working in that language.",
+    "sourcing": "Make or buy",
+    "tracking": "Tracking",
+    "units": "Units",
+    "baseUom": "Base unit (stock and cost)",
+    "baseUomHint": "Stock is kept and costed in it.",
+    "baseUomLocked": "Changes are refused while the material is on a BOM line or in stock: the server says so.",
+    "purchaseUom": "Purchase unit",
+    "purchaseUomHint": "How suppliers sell it (a hide, a roll, a cone).",
+    "consumptionUom": "Consumption unit",
+    "consumptionUomHint": "How the BOM uses it (dm² of leather, metres of thread).",
+    "factorOf": "1 {unit} = how many {base}",
+    "factorHide": "The average area of one hide.",
+    "supplier": "Default supplier",
+    "supplierIntro": "Who we buy from by default, and their article code.",
+    "supplierMade": "We make this material: it has no supplier.",
+    "defaultSupplier": "Supplier",
+    "supplierArticleCode": "Their article code",
+    "openSupplier": "Open {name}",
+    "leather": "Leather",
+    "animalSpecies": "Animal",
+    "animalSpeciesHint": "Bovine, goat, kangaroo …",
+    "tannage": "Tannage",
+    "grade": "Selection or grade",
+    "gradeHint": "As the tannery names it (TR1, A …).",
+    "finish": "Finish",
+    "thickness": "Thickness",
+    "thicknessMin": "Thickness from (mm)",
+    "thicknessMax": "Thickness to (mm)",
+    "crvi": "Chromium VI",
+    "requiresCrVi": "Cr VI evidence for every lot",
+    "requiresCrViHint": "Each lot is held until its evidence is in.",
+    "crViLimit": "Limit (mg/kg)",
+    "crViLimitHint": "At most 3 mg/kg by law; a brand may ask lower.",
+    "standardCost": "Standard purchase price",
+    "standardCostHint": "What quotes and cost sheets use until supplier price lists exist.",
+    "costPer": "Cost per {unit} (€)",
+    "animalOrigin": "Contains parts of animal origin",
+    "animalOriginHint": "The garment label then says so (Reg. (EU) 1007/2011 art. 12).",
+    "ppe": "PPE component",
+    "ppeHint": "An EN 1621 protector or another part a garment certificate names; traced by lot or serial.",
+    "side": {
+      "title": "At a glance",
+      "cost": "Standard cost",
+      "supplier": "Default supplier",
+      "colours": "Colours",
+      "colourCount_one": "{count} active colour",
+      "colourCount_other": "{count} active colours",
+      "crvi": "Cr VI evidence",
+      "noCrvi": "Not required",
+      "ppe": "PPE component",
+      "stock": "Stock",
+      "stockLink": "See the stock"
+    },
+    "warning": {
+      "NO_DEFAULT_SUPPLIER": "No default supplier: purchase orders will ask for one.",
+      "LEATHER_WITHOUT_CR6_TEST": "Leather without a Cr VI test: its lots are released without chromium VI evidence."
+    },
+    "notice": {
+      "costSet": "Standard cost saved.",
+      "archived": "Material archived.",
+      "reactivated": "Material reactivated.",
+      "colourAdded": "Colour {code} added.",
+      "coloursArchived_one": "{count} colour archived.",
+      "coloursArchived_other": "{count} colours archived.",
+      "coloursRestored_one": "{count} colour restored.",
+      "coloursRestored_other": "{count} colours restored."
+    },
+    "colours": {
+      "intro": "The material in each colour, as purchase orders need it. A colour used once is archived, never deleted.",
+      "count_one": "{count} active colour",
+      "count_other": "{count} active colours",
+      "col": {
+        "colour": "Colour",
+        "library": "Library colour",
+        "supplierCode": "Supplier colour code",
+        "status": "Status"
+      },
+      "edit": "Change…",
+      "archive": "Archive",
+      "restore": "Restore",
+      "archiveN_one": "Archive {count}",
+      "archiveN_other": "Archive {count}",
+      "restoreN_one": "Restore {count}",
+      "restoreN_other": "Restore {count}",
+      "held": {
+        "archived": "An archived colour is among the selected.",
+        "active": "Only archived colours are restored.",
+        "code": "Give our colour code first.",
+        "taken": "This material already has a colour with this code.",
+        "name": "Give the colour’s name first."
+      },
+      "empty": {
+        "title": "One colour only?",
+        "body": "Leave it empty. Otherwise add the first colour (n)."
+      },
+      "libraryUnknown": "A library colour you do not see",
+      "addTitle": "New colour of {code}",
+      "editTitle": "Colour {code}",
+      "code": "Our code",
+      "codeFixed": "Fixed once the colour exists.",
+      "name": "Name",
+      "supplierCode": "Supplier colour code",
+      "supplierCodeHint": "Printed on the purchase order.",
+      "library": "Library colour",
+      "libraryHint": "The colour of the colour library it matches (its swatch shows in the lists).",
+      "noLibrary": "None",
+      "libraryLoading": "Reading the colour library…",
+      "add": "Add colour",
+      "save": "Save"
+    },
+    "props": {
+      "title": "Properties",
+      "leatherHint": "Only the fields of leather. ⌘S saves.",
+      "otherHint": "Animal origin and other attributes. ⌘S saves.",
+      "composition": "Fibre composition",
+      "compositionHint": "Each fibre once; together exactly 100 %.",
+      "sum": "Together {sum} %",
+      "noComposition": "No composition given.",
+      "fibre": "Fibre",
+      "percent": "Share (%)",
+      "addFibre": "Add a fibre",
+      "removeFibre": "Remove fibre {n}",
+      "held": {
+        "fibres": "At most 10 fibres.",
+        "sum": "The fibres add up to {sum} %, not 100 %."
+      },
+      "attributes": "Other attributes",
+      "attributesHint": "Name = value (weight, width, origin …).",
+      "attrName": "Name",
+      "attrValue": "Value",
+      "addAttr": "Add an attribute",
+      "removeAttr": "Remove attribute {n}"
+    },
+    "cost": {
+      "title": "Standard cost",
+      "intro": "Per base unit: what quotes and cost sheets use until supplier price lists exist.",
+      "notInRole": "Not in your role: the cost grain shows it.",
+      "perBase": "Per {unit}",
+      "perUnit": "Per {unit}",
+      "clearHint": "In {currency}; empty removes it.",
+      "apply": "Save the cost",
+      "viewOnly": "Setting it needs the cost right."
+    },
+    "cp": {
+      "rules": "Evidence rules",
+      "rulesHint": "What every lot must prove before release. ⌘S saves.",
+      "limit": {
+        "empty": "Give the limit in mg/kg.",
+        "number": "A number above 0 with at most 3 decimals.",
+        "law": "At most 3 mg/kg: the legal limit (REACH Annex XVII entry 47)."
+      },
+      "limitWords": "Yes, at most {limit} mg/kg",
+      "certificates": "Certificates covering it",
+      "notPpe": "Not a PPE component.",
+      "noCertificatesRight": "Your role does not read certificates.",
+      "certificatesFailed": "Could not load the certificates",
+      "noCertificates": "No certificate covers it yet: garments with it cannot be labelled as PPE.",
+      "col": {
+        "certificate": "Certificate",
+        "standard": "Standard",
+        "validTo": "Valid until",
+        "lot": "Lot",
+        "crvi": "Cr VI result / limit",
+        "tested": "Tested on",
+        "state": "Lot state"
+      },
+      "tests": "Recent test results",
+      "testsIntro": "Its lots and their chromium VI results; each opens in Compliance › Tests & substances.",
+      "noLotsRight": "Your role does not read lots.",
+      "testsFailed": "Could not load the lots",
+      "noTests": "No tests yet.",
+      "noTestsCapped": "None among the {count} newest lots.",
+      "testsCapped": "From the {count} newest lots of every material.",
+      "crviNotRequired": "No test needed"
+    },
+    "stock": {
+      "onHand": "On hand",
+      "onHandHint": "In its base unit.",
+      "hides_one": "{count} hide",
+      "hides_other": "{count} hides",
+      "available": "Available",
+      "availableHint": "Released lots only.",
+      "held": "On hold (quality)",
+      "heldHint": "Lots not released yet.",
+      "truncated": "More rows than one read holds: the totals above count every one, the table shows the first.",
+      "lots": "Lots and hides",
+      "empty": "None in stock",
+      "failed": "Could not load the stock",
+      "col": {
+        "location": "Location",
+        "colour": "Colour",
+        "lot": "Lot or hide",
+        "onHand": "On hand",
+        "state": "Lot state"
+      },
+      "hide": "Hide {code} · lot {lot}",
+      "noColour": "One colour"
+    }
+  },
+  "operations": {
+    "list": {
+      "intro": "The operation library routings pick from: what is done, in which department, on which machine, with its standard minutes per garment.",
+      "new": "New operation",
+      "keyNew": "New operation",
+      "search": "Search code, name, machine or skill",
+      "tableLabel": "Operations",
+      "departmentFilter": "Department",
+      "allDepartments": "Every department",
+      "skill": "skill: {skill}",
+      "noSkill": "No skill given",
+      "minutes": "{minutes} min",
+      "usedIn_one": "In {count} routing",
+      "usedIn_other": "In {count} routings",
+      "differing_one": "{count} with other minutes",
+      "differing_other": "{count} with other minutes",
+      "allSame": "Same minutes everywhere",
+      "unused": "In no routing yet",
+      "openUsed": "Where used"
+    },
+    "col": {
+      "operation": "Operation",
+      "department": "Department",
+      "machine": "Machine · skill",
+      "smv": "SMV",
+      "used": "Routings",
+      "status": "Status"
+    },
+    "view": {
+      "open": "Active operations",
+      "unused": "In no routing",
+      "differs": "Minutes differ in a routing",
+      "archived": "Archived",
+      "all": "All"
+    },
+    "tile": {
+      "unused": "Used in no routing",
+      "differs": "SMV differs in some routings"
+    },
+    "tileHint": {
+      "unused": "Library operations no style routing has copied.",
+      "differs": "A draft or released routing has other minutes than the library."
+    },
+    "forbidden": {
+      "title": "You do not have access to operations",
+      "body": "The operation library needs the routing right (the production office and planning have it)."
+    },
+    "empty": {
+      "title": "No operations yet",
+      "body": "Add the first operation: style routings pick their steps from here.",
+      "bodyView": "The production office adds them; you will see them here.",
+      "create": "Add the first operation"
+    },
+    "archive": {
+      "title_one": "Archive {count} operation",
+      "title_other": "Archive {count} operations",
+      "reach": "No new routing step can use them.",
+      "kept": "Routings keep the steps they copied, with their own minutes.",
+      "back": "Reactivate brings one back."
+    },
+    "notice": {
+      "archived_one": "{count} operation archived.",
+      "archived_other": "{count} operations archived.",
+      "reactivated_one": "{count} operation reactivated.",
+      "reactivated_other": "{count} operations reactivated."
+    }
+  },
+  "newOperation": {
+    "title": "New operation",
+    "intro": "What is done and how: routings copy it with its minutes, and may change their own copy.",
+    "companyHint": "Every company: shared by every site.",
+    "create": "Create operation",
+    "held": {
+      "code": "Give the code first (capital letters and digits).",
+      "name": "Give the name first.",
+      "minutes": "Give the standard minutes first.",
+      "minutesInvalid": "Minutes above 0, like 4,25 (rounded to 3 decimals)."
+    }
+  },
+  "operation": {
+    "back": "Operations",
+    "tab": {
+      "definition": "Definition",
+      "minutes": "Minutes",
+      "whereused": "Where used"
+    },
+    "action": {
+      "archive": "Archive…",
+      "reactivate": "Reactivate"
+    },
+    "archive": {
+      "title": "Archive {code}"
+    },
+    "archivedBanner": "Archived: read only, no new routing step can use it. ⋯ Reactivate brings it back.",
+    "code": "Code",
+    "codeFrozen_one": "{count} routing copied this code: it no longer changes.",
+    "codeFrozen_other": "{count} routings copied this code: it no longer changes.",
+    "name": "Name",
+    "floorNameHint": "The floor screen and the traveller show the worker’s language.",
+    "floorNamesMissing": "Give the name in Italian and English: the floor shows each worker theirs.",
+    "department": "Department",
+    "departmentHint": "The kind of work centre it runs at.",
+    "machine": "Machine type",
+    "machineHint": "Flat-bed, post-bed, twin-needle, press …",
+    "skill": "Skill",
+    "smv": "Standard minutes per garment",
+    "smvHint": "Like 4,25; rounded to 3 decimals.",
+    "instructions": "Instructions",
+    "instructionsHint": "For the traveller and the floor screen.",
+    "definitionHint": "What is done and how. ⌘S saves.",
+    "minutes": {
+      "title": "Standard minutes",
+      "intro": "The SMV per garment new routings copy.",
+      "save": "Save the minutes",
+      "newOnly_one": "New routings take it; routings keep their own minutes. {count} draft routing can take it from Where used.",
+      "newOnly_other": "New routings take it; routings keep their own minutes. {count} draft routings can take it from Where used.",
+      "routings": "In routings",
+      "used": "Used",
+      "differing": "Other minutes",
+      "see": "See where they differ"
+    },
+    "used": {
+      "intro": "Every routing step made from it. A draft step that differs can take the library value ({minutes} min); a released routing stays as released.",
+      "count_one": "{count} step",
+      "count_other": "{count} steps",
+      "col": {
+        "style": "Style",
+        "revision": "Revision",
+        "step": "Step",
+        "minutes": "Minutes in the routing",
+        "difference": "Against the library"
+      },
+      "revision": "Rev {revision}",
+      "same": "Same as the library",
+      "diff": "{diff} min",
+      "update_one": "Update {count} to the library value",
+      "update_other": "Update {count} to the library value",
+      "held": {
+        "released": "Released: frozen. A new revision takes the library value.",
+        "obsolete": "Obsolete: frozen.",
+        "same": "Already the library value.",
+        "noRouting": "Changing a routing needs the routing right."
+      },
+      "confirmTitle_one": "Update {count} step to the library value",
+      "confirmTitle_other": "Update {count} steps to the library value",
+      "confirmIntro": "Each draft routing step takes the library’s minutes, one by one with its revision’s version.",
+      "step": "step {seq}",
+      "min": "min",
+      "empty": {
+        "title": "In no routing yet",
+        "body": "A style’s Operations tab adds it to a routing."
+      }
+    },
+    "notice": {
+      "updated_one": "{count} routing step updated to the library value.",
+      "updated_other": "{count} routing steps updated to the library value.",
+      "archived": "Operation archived.",
+      "reactivated": "Operation reactivated."
+    }
+  },
+  "sizes": {
+    "list": {
+      "intro": "The size scales styles draw from, each size with the body measures it is for: what the PPE label prints and a made-to-measure rider is checked against.",
+      "new": "New size scale",
+      "keyNew": "New size scale",
+      "search": "Search code or name",
+      "tableLabel": "Size scales",
+      "sizeCount_one": "{count} size",
+      "sizeCount_other": "{count} sizes",
+      "styles_one": "{count} style",
+      "styles_other": "{count} styles",
+      "orderFixed": "Order fixed by its styles",
+      "orderFree": "Order may change",
+      "openUsed": "Where used"
+    },
+    "col": {
+      "scale": "Size scale",
+      "sizes": "Sizes",
+      "styles": "Used by",
+      "status": "Status"
+    },
+    "view": {
+      "open": "Active scales",
+      "archived": "Archived",
+      "all": "All"
+    },
+    "forbidden": {
+      "title": "You do not have access to size scales",
+      "body": "Size scales come with the styles right."
+    },
+    "empty": {
+      "title": "No size scales yet",
+      "body": "Add the first scale (EU 44–64, S–4XL …): every style names one.",
+      "bodyView": "The product office adds them; you will see them here.",
+      "create": "Add the first size scale"
+    },
+    "archive": {
+      "title_one": "Archive {count} size scale",
+      "title_other": "Archive {count} size scales",
+      "reach": "No new style can choose them.",
+      "kept": "Styles on them keep their sizes.",
+      "back": "Reactivate brings one back."
+    },
+    "notice": {
+      "archived_one": "{count} size scale archived.",
+      "archived_other": "{count} size scales archived."
+    }
+  },
+  "newScale": {
+    "title": "New size scale",
+    "intro": "Type or paste the sizes in order, from small to large.",
+    "companyHint": "Every company: shared by every company.",
+    "sizes": "Sizes in order",
+    "sizesHint": "Separated by commas, spaces or new lines: \"44, 46, 48\".",
+    "preview_one": "{count} size: {sizes}",
+    "preview_other": "{count} sizes: {sizes}",
+    "after": "Create opens the scale: labels and body measures come next.",
+    "create": "Create size scale",
+    "held": {
+      "code": "Give the code first (capital letters and digits).",
+      "name": "Give the name first.",
+      "sizes": "Type at least one size.",
+      "badSizes": "Not a size code: {sizes} (1 to 10 letters or digits, . or _ inside, no hyphen).",
+      "tooMany": "At most 60 sizes in a scale."
+    }
+  },
+  "scale": {
+    "back": "Sizes & measurements",
+    "tab": {
+      "sizes": "Sizes",
+      "points": "Measurement points",
+      "whereused": "Where used"
+    },
+    "code": "Code",
+    "name": "Name",
+    "action": {
+      "add": "Add sizes",
+      "rename": "Rename…",
+      "archive": "Archive…",
+      "reactivate": "Reactivate"
+    },
+    "archive": {
+      "title": "Archive {code}"
+    },
+    "archivedBanner": "Archived: read only, no new style can choose it. ⋯ Reactivate brings it back.",
+    "orderFixedTag": "Order fixed by its styles",
+    "held": {
+      "archived": "Archived: reactivate it first.",
+      "order_one": "{count} style uses this scale: its order stays (add sizes before a size instead).",
+      "order_other": "{count} styles use this scale: its order stays (add sizes before a size instead)."
+    },
+    "notice": {
+      "added_one": "{count} size added.",
+      "added_other": "{count} sizes added.",
+      "archived": "Size scale archived.",
+      "reactivated": "Size scale reactivated."
+    },
+    "sizes": {
+      "title": "Sizes",
+      "intro": "In order, each with the body measures it is for (EN 17092 size pictogram, made-to-measure check). A locked size is named by a style, an SKU or an order: its code stays.",
+      "col": {
+        "size": "Size",
+        "label": "Label shown",
+        "status": "Offered",
+        "actions": "Actions"
+      },
+      "inUse": "In use: the code stays",
+      "up": "Move {code} up",
+      "down": "Move {code} down",
+      "first": "Already the first size.",
+      "last": "Already the last size.",
+      "edit": "Change size {code}",
+      "editShort": "Change",
+      "noMeasures": "No body measures yet: the PPE label cannot print the size pictogram until each size has them.",
+      "missing_one": "{point}: {count} size has no measure yet.",
+      "missing_other": "{point}: {count} sizes have no measure yet."
+    },
+    "points": {
+      "title": "Measurement points",
+      "intro": "The body measures its sizes carry, each in one unit for the whole scale.",
+      "col": {
+        "point": "Point",
+        "unit": "Unit",
+        "sizes": "Sizes measured"
+      },
+      "coverage_one": "{count} of {of}",
+      "coverage_other": "{count} of {of}",
+      "empty": {
+        "title": "No points yet",
+        "body": "Change a size to give its first body measure (chest, height, waist …)."
+      }
+    },
+    "used": {
+      "intro": "The styles on this scale, any status, and the sizes each uses.",
+      "col": {
+        "style": "Style",
+        "range": "Size range",
+        "base": "Base size",
+        "status": "Status"
+      },
+      "failed": "Could not load the styles",
+      "empty": {
+        "title": "No style uses it yet",
+        "body": "Its order and codes may still change."
+      }
+    },
+    "rename": {
+      "title": "Rename the size scale",
+      "codeFrozen_one": "{count} style uses it: the code stays.",
+      "codeFrozen_other": "{count} styles use it: the code stays.",
+      "held": {
+        "same": "Nothing changed yet."
+      }
+    },
+    "add": {
+      "title": "Add sizes to {code}",
+      "where": "Where",
+      "whereUsed": "Styles use the scale: new sizes go in without moving the others.",
+      "atEnd": "At the end",
+      "before": "Before {code}",
+      "go_one": "Add {count} size",
+      "go_other": "Add {count} sizes",
+      "held": {
+        "taken": "Already in the scale: {sizes}"
+      }
+    },
+    "size": {
+      "title": "Size {code} of {scale}",
+      "code": "Size code",
+      "codeHint": "Nothing names it yet: it may change.",
+      "codeInUse": "Named by a style, an SKU or an order: the code stays.",
+      "label": "Label shown",
+      "labelHint": "When not the code, like \"52 (L)\".",
+      "offered": "Offered in new ranges",
+      "offeredHint": "No: archived, kept where it is used.",
+      "measures": "Body measures",
+      "measuresHint": "The range of each point this size is for; one end is enough. Leave both empty to remove a point from this size.",
+      "min": "{point} from",
+      "max": "{point} to",
+      "unit": "Unit",
+      "unitFixed": "The scale measures this point in this unit.",
+      "newPoint": "New measurement point",
+      "pointRule": "Small letters, digits and _: chest, height, inside_leg.",
+      "pointTaken": "This size already has this point.",
+      "pointEmpty": "Name the point first.",
+      "addPoint": "Add point",
+      "held": {
+        "point": "Not a point code: {point} (small letters, digits and _).",
+        "number": "{point}: numbers above 0 with at most 2 decimals.",
+        "order": "{point}: the start is at most the end.",
+        "unit": "{point}: the scale measures it in another unit.",
+        "tooMany": "At most 30 points per size."
+      }
+    }
+  }
+}

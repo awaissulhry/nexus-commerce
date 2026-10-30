@@ -128,6 +128,8 @@ async function styleFor(client: Reader, context: RequestContext, template: Templ
 
 interface Preview {
   readonly label: RenderedLabel
+  /** What the cell was rendered with (a SAMPLE's values), for the browser's own render of a draft being typed. */
+  readonly values: Omit<LabelValues, 'identification' | 'manufactured' | 'sample'> & { readonly identification: { readonly kind: Identification['kind'] } }
   readonly cell: {
     styleId: string
     styleCode: string
@@ -147,7 +149,7 @@ async function render(caller: CommandCaller, templateId: string, query: CellQuer
   return caller.withClient(async (client) => {
     const { style, revisionId } = await styleFor(client, context, row, query)
     const cell = await readCell(client, style, row.id, { revisionId, colourwayId: query.colourwayId, size: query.size, date })
-    const label = renderLabel(factsOf(row), {
+    const values: LabelValues = {
       style: labelStyleOf(style),
       colourway: cell.colourway,
       size: cell.size,
@@ -157,10 +159,22 @@ async function render(caller: CommandCaller, templateId: string, query: CellQuer
       date,
       sample: true,
       marketLanguages: languagesOf(query.languages),
-    })
+    }
+    const label = renderLabel(factsOf(row), values)
     return {
       row,
       label,
+      values: {
+        style: { ...values.style },
+        colourway: values.colourway ? { ...values.colourway } : null,
+        size: values.size ? { ...values.size, bodyMeasures: values.size.bodyMeasures ? structuredClone(values.size.bodyMeasures) : null } : null,
+        certificate: values.certificate
+          ? { ...values.certificate, certificate: values.certificate.certificate ? { ...values.certificate.certificate } : null, reasons: [...values.certificate.reasons] }
+          : null,
+        identification: { kind: values.identification.kind },
+        date,
+        marketLanguages: [...values.marketLanguages],
+      },
       cell: {
         styleId: style.id,
         styleCode: style.code,
@@ -177,7 +191,7 @@ async function render(caller: CommandCaller, templateId: string, query: CellQuer
 
 /** GET /compliance/labels/:templateId/preview: the rendered SAMPLE label with its sources and problems, and its ZPL. */
 export async function previewLabel(caller: CommandCaller, templateId: string, query: CellQuery & { readonly dpi: number }) {
-  const { label, cell } = await render(caller, templateId, query)
+  const { label, cell, values } = await render(caller, templateId, query)
   let zpl: { dpi: number; text: string } | null = null
   try {
     zpl = { dpi: query.dpi, text: garmentLabelZpl(label, query.dpi) }
@@ -185,7 +199,12 @@ export async function previewLabel(caller: CommandCaller, templateId: string, qu
     // A label whose size is not readable has no ZPL (its problems say why).
     if (!(error instanceof RangeError)) throw error
   }
-  return { label: labelView(label), cell, zpl }
+  return {
+    label: labelView(label),
+    cell,
+    values: { ...values, marketLanguages: [...values.marketLanguages], certificate: values.certificate ? { ...values.certificate, reasons: [...values.certificate.reasons] } : null },
+    zpl,
+  }
 }
 
 /** GET /compliance/labels/:templateId/preview/pdf: the same SAMPLE label as a PDF of its size, stored nowhere. */
