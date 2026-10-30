@@ -1524,7 +1524,8 @@
     "plant": "Stabilimento",
     "alerts": "Avvisi e regole di eccezione",
     "accounting": "Contabilità",
-    "security": "Sicurezza e stato del sistema"
+    "security": "Sicurezza e stato del sistema",
+    "receivables": "Crediti e solleciti"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1736,6 +1737,12 @@
     "sales_returns_manage": "Aprire e modificare i resi dei clienti",
     "sales_returns_receive": "Ricevere la merce resa al magazzino",
     "sales_returns_inspect": "Valutare la merce resa",
-    "sales_returns_decide": "Decidere l'esito della merce resa"
+    "sales_returns_decide": "Decidere l'esito della merce resa",
+    "receivables_view": "Vedere quanto devono i clienti, gli estratti conto e i solleciti",
+    "receivables_reminders_manage": "Preparare, modificare, saltare e annullare i solleciti",
+    "receivables_reminders_approve": "Approvare e inviare i solleciti di pagamento",
+    "receivables_statements_send": "Inviare al cliente l'estratto conto per e-mail",
+    "receivables_settings_manage": "Modificare la scala dei solleciti e la regola degli interessi di mora",
+    "receivables_reminders_switch": "Attivare o disattivare i solleciti di un'azienda"
   }
 }
