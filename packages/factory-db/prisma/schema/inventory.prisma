@@ -71,6 +71,8 @@ model Location {
   stockCountLines StockCountLine[]
   movesOut StockMove[] @relation("StockMoveFrom")
   movesIn  StockMove[] @relation("StockMoveTo")
+  // W2a holds.prisma: the holds whose goods were moved here (a QUARANTINE place).
+  qualityHolds QualityHold[]
   // W2a: the workshop of a SUBCONTRACTOR location, and the subcontract orders sent to it (subcontract.prisma).
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
   party             Party?             @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -94,6 +96,8 @@ enum LocationKind {
   SHIPPING
   /// W2a (SCM-141): our stock at an outside workshop (a terzista), owned by its party (Location.partyId).
   SUBCONTRACTOR
+  /// W2a (GAP-003): finished garments ready to ship; a production receipt puts them here (or in a location inside one).
+  FINISHED_GOODS
 }
 
 /// Goods received from a supplier at a site (SCM-113), usually against a purchase order, with the supplier's DDT. OPEN
@@ -261,6 +265,8 @@ model Lot {
   // quality.prisma: its lab results (the Cr VI result's history) and supplier documents (B-W1-34).
   labResults  LabResult[]
   documents   LotDocument[]
+  // W2a ncr.prisma: the nonconformances about it.
+  nonconformances Nonconformance[]
   // W2a claims.prisma, subcontract.prisma: the claim lines and kit lines that name it.
   claimLines  SupplierClaimLine[]
   kitLines    SubcontractKitLine[]
@@ -386,7 +392,8 @@ model StockMove {
   baseQuantity   Decimal         @db.Decimal(18, 4)
   /// RECEIPT: the goods receipt line it posts.
   receiptLineId  String?         @db.Uuid
-  /// ISSUE, RETURN: the work order (the production schema, W1-23, brings its table; a plain id until then).
+  /// ISSUE, RETURN, PRODUCTION_RECEIPT: the work order (the production schema, W1-23, brings its table; a plain id
+  /// until then).
   workOrderId    String?         @db.Uuid
   /// A human reference: the work order number, the count sheet, the supplier's DDT.
   reference      String?
@@ -417,6 +424,8 @@ model StockMove {
   reversals    StockMove[]       @relation("StockMoveReversal")
   // W2a stockcount.prisma: the count line whose difference it posts (a COUNT move).
   stockCountLines StockCountLine[]
+  // W2a ncr.prisma: the NCR decision it carried out (a scrap, a move to quarantine).
+  ncrDispositionLines NcrDispositionLine[]
   device       Device?           @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   valuations   StockValuation[]
   // W2a cost-ledger.prisma (wave 7/7): the work-order cost entries it posted (an issue, a return, a scrap).
@@ -433,8 +442,8 @@ model StockMove {
   @@index([tenantId, siteId, itemId, lotId, hideId])
 }
 
-/// Why stock moved. Into the site's stock: OPENING, RECEIPT, RETURN; out of it: ISSUE, SCRAP; inside it: TRANSFER;
-/// either way: ADJUSTMENT, COUNT.
+/// Why stock moved. Into the site's stock: OPENING, RECEIPT, RETURN, PRODUCTION_RECEIPT; out of it: ISSUE, SCRAP; inside
+/// it: TRANSFER; either way: ADJUSTMENT, COUNT.
 enum StockMoveReason {
   /// Stock the site held before the factory app (B-W1-35).
   OPENING
@@ -450,6 +459,10 @@ enum StockMoveReason {
   /// A count difference.
   COUNT
   SCRAP
+  /// W2a (GAP-003, MES-011): finished garments of a work order (StockMove.workOrderId) into finished-goods stock, as the
+  /// FINISHED item of their SKU, partial or whole; never more than the work order's cell makes (the …_production_w2a_guards
+  /// trigger).
+  PRODUCTION_RECEIPT
 }
 
 /// The value of one move that changes the site's stock value (A1 §2.6: a cost, office only): its signed base quantity

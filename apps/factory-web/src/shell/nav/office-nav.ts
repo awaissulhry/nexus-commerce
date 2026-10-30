@@ -3,7 +3,8 @@ import { areaNavForPerson, findAreaNavPlace, type AreaNav, type AreaNavArea, typ
 /**
  * The Office navigation (A2 §1.1, PLT-160): ONE declaration per area, `src/areas/<area>/nav.ts`, exporting
  * `officeArea = { order, area }` (the design system's `AreaNavArea`). This file finds them by itself (no central list
- * to edit), orders them by `order` (A2 §1.3's row numbers), and gives the shell:
+ * to edit), orders them by `order` (the approved tree's area order, design 01-navigation-tree: Home, Sales, Products,
+ * Planning, Purchasing, Warehouse, Production, Quality, Compliance, Finance, People, Plant, Admin), and gives the shell:
  *  - `officeNavFor(can)` — only what this person may open (`areaNavForPerson`: a row with a permission they lack is
  *    gone, a section or area left empty goes with it; a row without a permission is shown to everyone in the office);
  *  - `translateNav(nav, t)` — labels are message keys (`shell:nav.admin.users`), drawn in the person's language;
@@ -13,7 +14,7 @@ import { areaNavForPerson, findAreaNavPlace, type AreaNav, type AreaNavArea, typ
  */
 
 export interface OfficeAreaNav {
-  /** The area's place in the main sidebar (A2 §1.3, top to bottom). */
+  /** The area's place in the main sidebar, top to bottom: the approved tree's area `order` (Admin 13, at the foot). */
   order: number
   area: AreaNavArea
 }
@@ -189,6 +190,14 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
 export const PROFILE_PAGE = '/me'
 
 /**
+ * The frame's own pages (design 01 "Frame & me" › Top bar): opened from the top bar, never a rail or overlay row; the
+ * palette finds them as it finds every page. Labels are message keys, as the manifest's.
+ */
+export const FRAME_PAGES: ReadonlyArray<{ id: string; label: string; area: string; href: string }> = Object.freeze([
+  { id: 'me', label: 'shell:topbar.profile', area: 'shell:nav.frame.topBar', href: PROFILE_PAGE },
+])
+
+/**
  * The page an office entry opens (`/w/<company>`, an area's own address, the brand link, a new session): the first
  * row in the navigation's order this person may open whose page is built — inside `areaId` first when one is given —
  * else My profile (W0 builds one area page, Home › Mail to sort; a person with no role opens no row).
@@ -247,4 +256,9 @@ export function navPages(nav: AreaNav): Array<{ id: string; label: string; area:
     }
   }
   return pages
+}
+
+/** The palette's pages (SCR-004): every page of the person's navigation, then the frame's own pages. */
+export function palettePages(nav: AreaNav): Array<{ id: string; label: string; area: string; href: string }> {
+  return [...navPages(nav), ...FRAME_PAGES]
 }

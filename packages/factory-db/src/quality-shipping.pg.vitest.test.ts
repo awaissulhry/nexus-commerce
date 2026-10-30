@@ -337,16 +337,21 @@ describe('the walls', () => {
       'ShippingSettings',
       'TrackingEvent',
     ])
+    // W2a schema wave 6/7 (LOG-105): the freight figures are prices (the shipment's charge, the site's rule), hidden from
+    // the floor; nothing else here holds money.
+    const prices: Record<string, string[]> = { Shipment: ['freightCharge'], ShippingSettings: ['freightAmount', 'freightFreeFrom'] }
     for (const { model, ownership } of models) {
-      expect(model.fields.filter((field) => field.tags.some((entry) => entry.startsWith('@grain'))), model.name).toEqual([])
-      expect(model.columns.filter((column) => /cost|margin|price|amount|total|wage/i.test(column)), model.name).toEqual([])
+      const grained = model.fields.filter((field) => field.tags.some((entry) => entry.startsWith('@grain')))
+      expect(grained.map((field) => field.column), model.name).toEqual(prices[model.name] ?? [])
+      expect(grained.every((field) => field.tags.includes('@grain price')), model.name).toBe(true)
+      expect(model.columns.filter((column) => /cost|margin|price|amount|total|wage/i.test(column) && !(prices[model.name] ?? []).includes(column)), model.name).toEqual([])
       const floorAccess = ownership.access[FLOOR_ROLE]
       if (floorAccess && model.name === 'QualitySettings') {
         // Tenant-wide rules, no site key: the floor reads them (a floor release's trigger reads the four-eyes rule, B-W1-45).
         expect(floorAccess, model.name).toEqual({ privileges: ['select'] })
       } else if (floorAccess) {
         expect(floorAccess.scopedBy, model.name).toEqual(['site'])
-        expect(floorAccess.hiddenColumns ?? [], model.name).toEqual([])
+        expect(floorAccess.hiddenColumns ?? [], model.name).toEqual(prices[model.name] ?? [])
       }
       const partnerAccess = ownership.access[PARTNER_ROLE]
       if (model.file === 'quality.prisma') expect(partnerAccess, model.name).toBeUndefined()

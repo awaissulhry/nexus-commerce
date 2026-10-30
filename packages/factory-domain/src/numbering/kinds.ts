@@ -36,6 +36,9 @@ export const NUMBER_KINDS = [
   'SUBCONTRACT',
   // W2a wave 4 (factory-db numbering.prisma): stock counts and the year-end inventory (CNT-…).
   'COUNT',
+  // W2a wave 6 (factory-db numbering.prisma): nonconformance reports (NCR-…) and maintenance jobs (MJ-…).
+  'NCR',
+  'MAINTENANCE_JOB',
   // W2a wave 7 (factory-db numbering.prisma): accounting export batches (EXP-…).
   'ACCOUNTING_EXPORT',
 ] as const
@@ -177,6 +180,8 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   CLAIM: 'CLM',
   SUBCONTRACT: 'SC',
   COUNT: 'CNT',
+  NCR: 'NCR',
+  MAINTENANCE_JOB: 'MJ',
   ACCOUNTING_EXPORT: 'EXP',
 }
 

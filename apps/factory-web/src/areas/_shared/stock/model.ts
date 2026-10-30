@@ -205,6 +205,8 @@ export const REASON_TONE: Readonly<Record<MoveReason, Tone>> = {
   ADJUSTMENT: 'warning',
   COUNT: 'warning',
   SCRAP: 'danger',
+  // W2a wave 5: finished garments of a work order into finished-goods stock.
+  PRODUCTION_RECEIPT: 'success',
 }
 export const LOCATION_KIND_ORDER: readonly LocationKind[] = ['WAREHOUSE', 'ZONE', 'BIN', 'RECEIVING', 'QUARANTINE', 'PRODUCTION', 'SHIPPING']
 

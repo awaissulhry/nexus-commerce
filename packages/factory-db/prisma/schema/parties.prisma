@@ -97,6 +97,9 @@ model Party {
   lots                 Lot[]
   // quality.prisma: the PPE register's entries it reported.
   ppeRegisterEntries   PpeRegisterEntry[]
+  // W2a ncr.prisma, plant.prisma: as a supplier, the nonconformances about its goods and the machines it sold.
+  nonconformances      Nonconformance[]
+  machines             Machine[]
   // money.prisma: the invoices it is the buyer of and the payments it made.
   invoices             Invoice[]
   payments             Payment[]
@@ -125,6 +128,8 @@ model Party {
   subcontractedOperations RoutingOperation[]
   subcontractorLocations  Location[]
   subcontractOrders       SubcontractOrder[]
+  // W2a schedule.prisma: as a workshop, its slots on the planning board.
+  scheduleSlots           ScheduleSlot[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the party's rows.

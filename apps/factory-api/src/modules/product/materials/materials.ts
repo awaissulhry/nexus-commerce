@@ -70,6 +70,8 @@ export async function listMaterials(caller: CommandCaller, query: ListMaterialsF
   const search = query.q?.trim()
   const filters: Prisma.ItemWhereInput[] = [
     scopeWhere(actorOf(context), PRODUCT_MATERIALS_VIEW, MATERIAL_SCOPE) as Prisma.ItemWhereInput,
+    // W2a wave 5: a finished garment's item (kind FINISHED) is stock, not a material of the library.
+    { kind: { not: 'FINISHED' } },
     query.status === 'ALL' ? {} : { status: query.status },
     search
       ? {

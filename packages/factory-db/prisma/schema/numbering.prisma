@@ -100,6 +100,10 @@ enum NumberKind {
   SUBCONTRACT
   /// W2a wave 4: a stock count's number (CNT-…; stockcount.prisma StockCount.number).
   COUNT
+  /// W2a wave 6: a nonconformance report's number (NCR-…; ncr.prisma Nonconformance.number).
+  NCR
+  /// W2a wave 6: a maintenance job's number (MJ-…; plant.prisma MaintenanceJob.number).
+  MAINTENANCE_JOB
   /// W2a wave 7: an accounting export batch's number (EXP-…; accounting.prisma AccountingExport.number).
   ACCOUNTING_EXPORT
 }

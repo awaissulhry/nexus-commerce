@@ -969,9 +969,9 @@
     },
     "company": {
       "address": "Registered office",
-      "byAdmin": "An admin changes it in Admin › Companies.",
+      "byAdmin": "An admin changes it in Admin › Companies & sites.",
       "capital": "Share capital",
-      "change": "Change in Admin › Companies",
+      "change": "Change in Admin › Companies & sites",
       "legalName": "Legal name",
       "missing": "What an invoice still needs",
       "notReady": "Data missing",
@@ -1029,7 +1029,7 @@
       "title": "No company to show"
     },
     "sdi": {
-      "byAdmin": "An admin manages the connection in Admin › Connections.",
+      "byAdmin": "An admin manages the connection in Admin › Connections & API.",
       "col": {
         "connection": "Connection",
         "mode": "Mode",
@@ -1042,7 +1042,7 @@
         "LIVE": "Live",
         "SANDBOX": "Intermediary’s test area"
       },
-      "open": "Open Admin › Connections",
+      "open": "Open Admin › Connections & API",
       "state": {
         "ACTIVE": "Connected",
         "NONE": "Not set up",
