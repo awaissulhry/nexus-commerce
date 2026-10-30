@@ -60,6 +60,8 @@ interface LineToWrite {
   /** B-W2a-54: a charge's kind, and the payment schedule step a line bills. */
   readonly chargeKind?: ChargeKind | null
   readonly milestoneId?: string | null
+  /** B-W2a-61: a credit note's line crediting a return line. */
+  readonly returnLineId?: string | null
 }
 
 async function rewriteLines(tools: CommandTools, invoice: InvoiceRow, lines: readonly LineToWrite[], amounts: readonly { netAmount: number; grossAmount: number | null }[]): Promise<void> {
@@ -91,6 +93,7 @@ async function rewriteLines(tools: CommandTools, invoice: InvoiceRow, lines: rea
         depositInvoiceId: line.depositInvoiceId,
         chargeKind: line.core.kind === 'CHARGE' ? (line.chargeKind ?? null) : null,
         milestoneId: line.milestoneId ?? null,
+        returnLineId: line.returnLineId ?? null,
         createdById: tools.context.audience === 'office' ? tools.context.actorId : null,
       },
       select: { id: true },
@@ -120,6 +123,10 @@ export async function correctInCommand(tools: CommandTools, invoiceId: string, i
 
   let totals = null as ReturnType<typeof computeInvoiceTotals> | null
   if (prepared !== null) {
+    // B-W2a-61: the lines of a credit note from a return are the return's decided credit (their link stays).
+    if (existing.some((row) => row.returnLineId !== null)) {
+      throw new ConflictError("This credit note credits a customer return: its lines are the return's decided credit and are not replaced. Correct its other data, or credit the difference with a credit note of its own.")
+    }
     await checkSources(tx, current, prepared)
     const deductions = existing.filter((row) => row.kind === 'DEPOSIT_DEDUCTION').map(kept)
     const lines: LineToWrite[] = [...prepared.map((line) => ({ ...line, depositInvoiceId: null })), ...(deductions.filter((line) => line !== null) as LineToWrite[])]

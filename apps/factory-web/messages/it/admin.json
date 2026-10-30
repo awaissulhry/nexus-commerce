@@ -1639,6 +1639,7 @@
     "payments_view": "Vedere i pagamenti ricevuti",
     "payments_record": "Registrare e abbinare pagamenti",
     "payments_void": "Annullare un pagamento inserito per errore",
+    "payments_refund": "Registrare i rimborsi ai clienti",
     "costing_view": "Vedere la scheda costi di un articolo",
     "costing_rates_manage": "Gestire il costo per minuto standard",
     "costing_standards_manage": "Preparare e congelare i costi standard",

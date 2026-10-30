@@ -1639,6 +1639,7 @@
     "payments_view": "See the payments received",
     "payments_record": "Record and allocate payments",
     "payments_void": "Void a payment typed by mistake",
+    "payments_refund": "Record refunds to customers",
     "costing_view": "See a style's cost sheet",
     "costing_rates_manage": "Keep the cost per standard minute",
     "costing_standards_manage": "Prepare and freeze standard costs",

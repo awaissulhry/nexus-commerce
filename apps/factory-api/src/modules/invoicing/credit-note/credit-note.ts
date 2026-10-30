@@ -17,7 +17,8 @@ import { invoiceDetail, officeInvoice, readInvoice } from '../store'
  * still creditable (issued credit notes counted; other DRAFT credit notes are not, the issue checks again under the
  * credited invoice's lock). The draft names the invoice it credits (creditOfId) and its order; it is issued and sent like
  * any invoice (issue.ts: invoices.issue + step-up; the CREDIT_NOTE series when the company keeps one). The answer says
- * what is still creditable and the refund that will be due once it is issued (refunds are W2b).
+ * what is still creditable and the refund that will be due once it is issued (the refund: payments/refunds.ts, B-W2a-61;
+ * a customer return's credit notes: ./from-return.ts).
  */
 
 export interface CreditNoteInput {

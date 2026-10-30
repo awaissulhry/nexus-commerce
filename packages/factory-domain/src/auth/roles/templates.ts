@@ -128,6 +128,10 @@ const NCR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze(
 const RECEIVABLES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   finance: ['receivables.view', 'receivables.reminders.manage', 'receivables.reminders.approve', 'receivables.statements.send', 'receivables.settings.manage'],
 })
+// B-W2a-61 (FIN-127; design finance.payments "Refund"): finance records the refunds to customers (money out).
+const REFUNDS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  finance: ['payments.refund'],
+})
 /**
  * B-W2a-62 (payables, FIN-136 / FIN-137; design finance.payables, the Finance area's people): finance registers, maps,
  * matches, approves and pays supplier invoices; the buyer maps lines to its orders, sends and accepts the differences
@@ -142,6 +146,8 @@ const PAYABLES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.fr
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
+  // B-W2a-61
+  ...(audience === 'office' ? (REFUNDS_ADDS[key] ?? []) : []),
   // B-W2a-62
   ...(audience === 'office' ? (PAYABLES_ADDS[key] ?? []) : [])]
 /**
