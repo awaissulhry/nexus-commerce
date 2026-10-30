@@ -3,6 +3,7 @@ import { defineEvent } from '../events/define'
 import { DOCUMENT_KINDS } from './compliance/rules'
 import { MATERIAL_STATUSES } from './materials/rules'
 import { OPERATION_STATUSES } from './routing/operations'
+import { COPYABLE_PARTS } from './styles/copy'
 import { REVISION_STATUSES } from './styles/revisions'
 import { STYLE_STATUSES } from './styles/rules'
 
@@ -70,9 +71,17 @@ export const events = [
   defineEvent({
     type: 'style.updated',
     context: 'product',
-    description: 'A style changed: its name, product type, brand, size range, base size, PPE classification, made-to-measure settings or how its garments are numbered (Q31).',
+    description: 'A style changed: its name, product type, brand, size range, base size, PPE classification, made-to-measure settings, customs and origin data (W2a) or how its garments are numbered (Q31).',
     payload: z.strictObject({ styleId: z.uuid(), code: z.string(), fields: z.array(z.string()) }),
     live: styleLive,
+  }),
+  // W2a (B-W2a-09; PRD-011): a copy of a style, linked to its source (the copy also sends style.created).
+  defineEvent({
+    type: 'style.duplicated',
+    context: 'product',
+    description: 'A style was copied into a new draft style, with the parts picked (BOM, routing, made-to-measure set-up, label).',
+    payload: z.strictObject({ styleId: z.uuid(), code: z.string(), sourceStyleId: z.uuid(), sourceCode: z.string(), sourceRevisionId: z.uuid().nullable(), parts: z.array(z.enum(COPYABLE_PARTS)) }),
+    live: { ...styleLive, fields: ['styleId', 'code', 'sourceStyleId', 'sourceCode'] },
   }),
   defineEvent({
     type: 'style.status_changed',
@@ -107,7 +116,7 @@ export const events = [
   defineEvent({
     type: 'style.bom_changed',
     context: 'product',
-    description: "A draft revision's BOM changed: a line added, changed or removed, its size quantities or colour grid, or the planned hide yield.",
+    description: "A draft revision's BOM changed: a line added, changed or removed (by hand or by a BOM import), its size quantities or colour grid, or the planned hide yield.",
     payload: z.strictObject({ styleId: z.uuid(), code: z.string(), revisionId: z.uuid(), revision: z.number().int(), lineIds: z.array(z.uuid()) }),
     live: { permission: 'product.bom.view', fields: ['styleId', 'code', 'revisionId', 'revision', 'lineIds'] },
   }),
@@ -130,14 +139,14 @@ export const events = [
   defineEvent({
     type: 'style.routing_changed',
     context: 'product',
-    description: "A draft revision's routing changed: steps added, changed, removed, reordered or copied from a released routing.",
+    description: "A draft revision's routing changed: steps added, changed, removed, reordered or copied from a released routing, or a step's subcontract details (W2a).",
     payload: z.strictObject({ styleId: z.uuid(), code: z.string(), revisionId: z.uuid(), revision: z.number().int(), stepIds: z.array(z.uuid()) }),
     live: { permission: 'product.routing.view', fields: ['styleId', 'code', 'revisionId', 'revision', 'stepIds'] },
   }),
   defineEvent({
     type: 'operation.created',
     context: 'product',
-    description: 'An operation was added to the library.',
+    description: 'An operation was added to the library (by hand or by an import).',
     payload: z.strictObject({ operationId: z.uuid(), code: z.string() }),
     live: operationLive,
   }),

@@ -5,6 +5,7 @@ import { localisedNames } from '../materials/contracts'
 import { sizeCode } from '../sizes/contracts'
 import { BODY_MEASURE_UNITS, MASTER_STATUSES } from '../sizes/rules'
 import { COLOURWAY_CODE, COLOURWAY_CODE_RULE, MAX_COLOURWAYS } from './colourways'
+import { COPY_PARTS, COPYABLE_PARTS } from './copy'
 import { REVISION_STATUSES } from './revisions'
 import { MAX_RANGE_SIZES, PPE_CATEGORIES, PRODUCT_TYPES, STYLE_CODE, STYLE_CODE_RULE, STYLE_STATUSES, STYLE_WARNINGS } from './rules'
 
@@ -51,6 +52,12 @@ const editable = {
   ppeClass: text(20).nullish(),
   mtmAllowed: z.boolean(),
   measurementTemplateId: id().nullish(),
+  /** W2a customs (PRD-018): the commodity code, HS 6, CN 8 or TARIC 10 digits (dots and spaces are taken out). */
+  hsCode: text(20).nullish(),
+  /** The country of origin, ISO 3166-1 alpha-2 ("IT"). */
+  originCountry: z.string().trim().length(2).nullish(),
+  /** The net mass of one garment in kilograms ("1.85"), above 0, at most 3 decimals. */
+  netMassKg: text(20).nullish(),
 }
 
 export const createStyleBody = input({
@@ -255,6 +262,10 @@ const summary = {
   ppeStandard: z.string().nullable(),
   ppeClass: z.string().nullable(),
   mtmAllowed: z.boolean(),
+  /** W2a customs and origin data (PRD-018; exports and Intrastat): null when not on record. */
+  hsCode: z.string().nullable(),
+  originCountry: z.string().nullable(),
+  netMassKg: z.string().nullable(),
   status: z.enum(STYLE_STATUSES),
   version: z.number().int(),
   updatedAt: instant(),
@@ -310,3 +321,71 @@ export const generatedSkus = output({
   style: styleView,
 })
 export type GeneratedSkus = z.infer<typeof generatedSkus>
+
+// ---- copy a style (W2a, PRD-011) ---------------------------------------------------------------------------------------
+
+/**
+ * A copy of a style (design products.styles pop:styles.duplicate): a new style with its own code and name, a DRAFT linked
+ * to its source, with the parts picked (./copy). The rest of its identity and its colourways are the source's.
+ */
+export const duplicateStyleBody = input({
+  code: styleCode(),
+  name: text(200),
+  /** Left out: the source's season. */
+  season: text(20).nullish(),
+  /** Left out: the source's brand; null: our own collection. */
+  brandPartyId: id().nullish(),
+  /** The parts copied into the copy's revision 1 (BOM, ROUTING, LABELS) and its made-to-measure set-up (MEASUREMENTS). */
+  parts: z.array(z.enum(COPYABLE_PARTS)).max(COPYABLE_PARTS.length).default([]),
+  /** The source revision the parts come from; left out: its released revision, else its newest. */
+  fromRevisionId: id().optional(),
+  /** The copy's first revision's change note; left out: "Copied from <code> revision <n>." */
+  changeNote: text(2000).optional(),
+  /** Make the copy's SKU matrix at once (default false). */
+  generateSkus: z.boolean().optional(),
+})
+export type DuplicateStyleBody = z.output<typeof duplicateStyleBody>
+
+export const duplicateOfferQuery = input({ fromRevisionId: id().optional() })
+export type DuplicateOfferQuery = z.output<typeof duplicateOfferQuery>
+
+const partOffer = output({
+  part: z.enum(COPY_PARTS),
+  /** It can be picked: the source has it and the caller may copy it. */
+  available: z.boolean(),
+  /** What it holds (BOM lines, routing steps); null where a count says nothing or the caller may not see it. */
+  count: z.number().int().nullable(),
+  /** Why it cannot be picked, in words; null when it can. */
+  reason: z.string().nullable(),
+})
+
+/** What the Duplicate dialog offers for a style: its revisions' parts, and what a copy would leave out. */
+export const duplicateOfferView = output({
+  source: output({ id: id(), code: z.string(), name: z.string(), status: z.enum(STYLE_STATUSES) }),
+  /** The revision the parts come from; null: the style has none yet. */
+  revision: output({ id: id(), revision: z.number().int(), status: z.enum(REVISION_STATUSES) }).nullable(),
+  parts: z.array(partOffer),
+  colourways: z.number().int(),
+  /** Range sizes archived in the scale since: the copy's range leaves them out. */
+  droppedSizes: z.array(z.string()),
+})
+export type DuplicateOfferView = z.infer<typeof duplicateOfferView>
+
+/** What a copy made. */
+export const duplicatedView = output({
+  style: styleView,
+  /** The copy's revision 1 (DRAFT) with the parts; null when no BOM, routing or label was copied. */
+  revision: revisionView.nullable(),
+  copied: output({
+    from: output({ styleId: id(), code: z.string(), revisionId: id().nullable(), revision: z.number().int().nullable() }),
+    parts: z.array(z.enum(COPYABLE_PARTS)),
+    colourways: z.number().int(),
+    bomLines: z.number().int(),
+    routingSteps: z.number().int(),
+    label: z.boolean(),
+    skus: z.number().int(),
+  }),
+  /** What the copy left out, in words (an archived size, an archived library colour). */
+  notes: z.array(z.string()),
+})
+export type DuplicatedView = z.infer<typeof duplicatedView>

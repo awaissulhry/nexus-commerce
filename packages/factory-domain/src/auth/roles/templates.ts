@@ -139,7 +139,11 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Planner',
     description: 'Plans work orders and capacity; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'inventory.locations.view', 'inventory.stock.view', 'inventory.reserve', 'shipping.view', 'planning.view', 'planning.run', 'planning.decide', 'purchasing.view', 'workorders.view', 'workorders.manage', 'workorders.release', 'orders.view', 'home.view', 'calendars.view', 'calendars.manage', 'calendars.suppliers.manage', 'production.scrap.view', 'production.scrap.approve'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'inventory.locations.view', 'inventory.stock.view', 'inventory.reserve', 'shipping.view', 'planning.view', 'planning.run', 'planning.decide', 'purchasing.view', 'workorders.view', 'workorders.manage', 'workorders.release', 'orders.view', 'home.view', 'calendars.view', 'calendars.manage', 'calendars.suppliers.manage',
+      // B-W2a-16: planning settings and capacity (horizon, efficiency, people per line) and item parameters.
+      'planning.settings.manage', 'planning.items.manage',
+      // B-W2a-13: scrap and rework (see), approve a lower order quantity.
+      'production.scrap.view', 'production.scrap.approve'],
     grains: [],
   }),
   template('buyer', {
@@ -173,6 +177,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'planning.view',
       'planning.run',
       'planning.decide',
+      // B-W2a-16: lead times, safety stock, order minimum and step, preferred supplier per item and site.
+      'planning.items.manage',
       'purchasing.view',
       'purchasing.manage',
       'purchasing.send',
@@ -182,6 +188,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'home.view',
       'calendars.view',
       'calendars.suppliers.manage',
+      // B-W2a-10: the approved sources (supplier articles, units, prices, minimums, lead times).
+      'purchasing.sources.manage',
       // W2a B-W2a-13 (MES-057): the hide yield per supplier lot feeds the supplier's rating.
       'production.cutting.view',
     ],
@@ -219,6 +227,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'inventory.counts.manage',
       'inventory.counts.approve',
       'inventory.reserve',
+      // B-W2a-12: report finished garments to stock.
+      'production.finish',
       'shipping.view',
       'shipping.manage',
       'shipping.pack',
@@ -287,6 +297,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'production.scan',
       'production.scan.correct',
       'production.serials',
+      // B-W2a-12: report finished garments to stock.
+      'production.finish',
       // W2a B-W2a-13: rework, scrap and its replacement, the cutting room's yield.
       'production.rework',
       'production.scrap.view',

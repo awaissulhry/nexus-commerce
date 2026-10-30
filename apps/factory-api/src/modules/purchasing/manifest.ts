@@ -39,4 +39,17 @@ export const manifest = defineManifest({
   'POST /link/purchase-order/confirmation': { audiences: ['link'], permission: 'links.confirm', scope: 'record' },
   'POST /link/purchase-order/confirmation/:fileId/complete': { audiences: ['link'], permission: 'links.confirm', scope: 'record' },
   'POST /link/purchase-order/renew': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
+  // B-W2a-10 (SCM-005): approved sources; read with purchasing.view, kept with purchasing.sources.manage (./supplier-items).
+  'GET /purchasing/supplier-items': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/supplier-items/:supplierItemId': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/supplier-items': { audiences: ['office'], permission: 'purchasing.sources.manage', scope: 'record' },
+  'PATCH /purchasing/supplier-items/:supplierItemId': { audiences: ['office'], permission: 'purchasing.sources.manage', scope: 'record' },
+  'POST /purchasing/supplier-items/:supplierItemId/archive': { audiences: ['office'], permission: 'purchasing.sources.manage', scope: 'record' },
+  'POST /purchasing/supplier-items/:supplierItemId/restore': { audiences: ['office'], permission: 'purchasing.sources.manage', scope: 'record' },
+  // B-W2a-10 (SCM-034, SCM-036): requests to buy, the queue and "Draft POs for n" (./requests).
+  'GET /purchasing/requests': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/requests/counts': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/requests/:kind/:refId': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/requests/preview': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/requests/convert': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
 })

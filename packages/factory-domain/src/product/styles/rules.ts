@@ -3,6 +3,7 @@ import { LOCALES } from '../../email/rules'
 import { defineMachine } from '../../state/machine'
 import type { LocalisedNames } from '../materials/rules'
 import { inScaleOrder, normaliseSizeCode, SIZE_CODE, SIZE_CODE_RULE, type PlacedSize } from '../sizes/rules'
+import { customsProblems, normaliseCustoms } from './customs'
 
 /**
  * The style rules (plan A1 §2.4 B; features PRD-001, PRD-002, PRD-022, PRD-025, PRD-048, PRD-270), pure. A style
@@ -22,6 +23,8 @@ import { inScaleOrder, normaliseSizeCode, SIZE_CODE, SIZE_CODE_RULE, type Placed
  *               checks the type)
  *   tracking    (PRD-025; Reg. (EU) 2016/425 art. 8(5)) a PPE garment carries a type, batch or serial number: its
  *               garments are traced by lot (the work order's batch)
+ *   customs     (PRD-018, W2a) the commodity code, the country of origin and the net mass of one garment (./customs),
+ *               each optional
  *
  * DRAFT → ACTIVE (it has a released revision: it can be sold) → ARCHIVED, and back (PRD-022: never deleted).
  */
@@ -74,11 +77,15 @@ export interface StyleFields {
   readonly ppeClass: string | null
   readonly mtmAllowed: boolean
   readonly measurementTemplateId: string | null
+  /** W2a customs and origin data (PRD-018, ./customs): HS 6 / CN 8 / TARIC 10 digits, ISO 3166-1 alpha-2, kg per garment. */
+  readonly hsCode: string | null
+  readonly originCountry: string | null
+  readonly netMassKg: string | null
 }
 export type StyleField = keyof StyleFields
 export const STYLE_FIELDS: readonly StyleField[] = Object.freeze([
   'code', 'name', 'nameI18n', 'description', 'productType', 'season', 'brandPartyId', 'sizeScaleId', 'sizes', 'baseSize',
-  'ppeCategory', 'ppeStandard', 'ppeClass', 'mtmAllowed', 'measurementTemplateId',
+  'ppeCategory', 'ppeStandard', 'ppeClass', 'mtmAllowed', 'measurementTemplateId', 'hsCode', 'originCountry', 'netMassKg',
 ] as const)
 
 /** A new style as typed: what is left out is empty (no range yet, not PPE unless said, not made to measure). */
@@ -228,6 +235,7 @@ export function styleProblems(style: StyleFields, scale: ScaleSizes, kept: reado
   }
 
   issues.push(...ppeProblems(style))
+  issues.push(...customsProblems(style))
   if (style.measurementTemplateId !== null && !style.mtmAllowed) {
     add('measurementTemplateId', 'A measurement template is for a style that may be made to measure (mtmAllowed).')
   }
@@ -255,6 +263,7 @@ function normalised(style: StyleFields, scale: ScaleSizes): StyleFields {
     sizes: unique.length === sizes.length ? inScaleOrder(sizes, scale) : sizes,
     baseSize: style.baseSize === null ? null : normaliseSizeCode(style.baseSize),
     ...normalisePpe(style),
+    ...normaliseCustoms(style),
   }
 }
 
@@ -283,6 +292,9 @@ export function newStyle(input: StyleInput, scale: ScaleSizes): StyleOutcome {
       ppeClass: input.ppeClass ?? null,
       mtmAllowed: input.mtmAllowed ?? false,
       measurementTemplateId: input.measurementTemplateId ?? null,
+      hsCode: input.hsCode ?? null,
+      originCountry: input.originCountry ?? null,
+      netMassKg: input.netMassKg ?? null,
     },
     scale,
   )

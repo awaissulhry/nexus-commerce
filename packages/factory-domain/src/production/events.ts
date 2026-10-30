@@ -22,6 +22,9 @@ import { REPLACEMENT_KINDS, REPLACEMENT_STATUSES } from './scrap/rules'
  *   workorder.changed               a DRAFT's cells or revision, or a work order's due date, priority or note changed
  *   workorder.released              released with its frozen specification and batch number (the floor can start)
  *   workorder.status_changed        started, completed, closed or cancelled
+ *   workorder.finished_to_stock     released garments of a work order went into finished-goods stock, all or part
+ *                                   (B-W2a-12; GAP-003, MES-011: one PRODUCTION_RECEIPT move per cell)
+ *   workorder.finished_reversed     a report to finished goods was taken back: its garments left stock again
  *   production.cut_logged           a cut log entry of a hide for a work order: its pieces per cell, the area it used
  *                                   (B-W1-40; the cutting tables of the site and the work order record refresh)
  *   production.hide_closed          a hide was closed for a work order (Hide done): its remnant back to stock, or used up
@@ -49,7 +52,8 @@ const subject = z.enum(SCAN_SUBJECTS)
 
 const live = { permission: 'workorders.view', fields: ['workOrderId', 'number'] } as const
 
-export const WORK_ORDER_CHANGES = ['cells', 'revision', 'details'] as const
+// B-W2a-12: 'steps', a repair DRAFT's routing steps (MES-019).
+export const WORK_ORDER_CHANGES = ['cells', 'revision', 'details', 'steps'] as const
 
 const decimal = () => z.string().regex(/^\d{1,14}\.\d{4}$/)
 const postedBy = () => z.enum(['OFFICE', 'FLOOR', 'SYSTEM'])
@@ -89,6 +93,8 @@ export const events = [
       salesOrderIds: z.array(z.uuid()).min(1),
       cells: z.number().int().min(0),
       pieces: z.number().int().min(0),
+      /** B-W2a-12: a REPAIR work order's repair order (MES-019); absent for a size run. */
+      repairOrderId: z.uuid().optional(),
     }),
     live: { ...live, fields: ['workOrderId', 'number', 'styleId'] },
   }),
@@ -127,6 +133,33 @@ export const events = [
     description: 'A work order was started, completed, closed or cancelled.',
     payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), from: z.enum(WORK_ORDER_STATUSES), to: z.enum(WORK_ORDER_STATUSES) }),
     live: { ...live, floor: true, fields: ['workOrderId', 'number', 'to'] },
+  }),
+  // B-W2a-12 (modules/production/completion): report finished to stock and taking a report back.
+  defineEvent({
+    type: 'workorder.finished_to_stock',
+    context: 'production',
+    description: "Released garments of a work order went into finished-goods stock (all or part, per size): one production receipt per cell.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      siteId: z.uuid(),
+      /** The report: its first move's id. */
+      reportId: z.uuid(),
+      locationId: z.uuid(),
+      moveIds: z.array(z.uuid()).min(1),
+      cells: z.array(z.strictObject({ workOrderSizeId: z.uuid(), itemId: z.uuid(), quantity: z.number().int().min(1) })).min(1),
+      pieces: z.number().int().min(1),
+      /** Every garment of every cell is in finished goods now. */
+      allInStock: z.boolean(),
+    }),
+    live: { ...live, fields: ['workOrderId', 'number', 'reportId'] },
+  }),
+  defineEvent({
+    type: 'workorder.finished_reversed',
+    context: 'production',
+    description: 'A report to finished goods was taken back (the reason is in the audit row): its garments left stock again.',
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), siteId: z.uuid(), reportId: z.uuid(), moveIds: z.array(z.uuid()).min(1), pieces: z.number().int().min(1) }),
+    live: { ...live, fields: ['workOrderId', 'number', 'reportId'] },
   }),
   defineEvent({
     type: 'production.cut_logged',

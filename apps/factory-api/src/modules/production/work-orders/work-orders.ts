@@ -17,7 +17,7 @@ import {
   type CellRequest,
   type CellTarget,
 } from '@nexus/factory-domain/production/work-orders/cells'
-import { daysLate, OPEN_STATUSES, type WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
+import { daysLate, OPEN_STATUSES, type WorkOrderKind, type WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_MANAGE, WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
@@ -73,6 +73,8 @@ export async function getWorkOrder(caller: CommandCaller, workOrderId: string): 
 
 export interface ListQuery {
   readonly status?: WorkOrderStatus | undefined
+  /** B-W2a-12: one kind (a size run, made to measure, a repair). */
+  readonly kind?: WorkOrderKind | undefined
   readonly styleId?: string | undefined
   readonly salesOrderId?: string | undefined
   readonly siteId?: string | undefined
@@ -92,6 +94,7 @@ function listWhere(context: ReturnType<typeof officeContextOf>, query: Omit<List
     AND: [
       scopeWhere(actorOf(context), WORKORDERS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput,
       query.status ? { status: query.status } : {},
+      query.kind ? { kind: query.kind } : {},
       query.open ? { status: { in: [...OPEN_STATUSES] } } : {},
       query.styleId ? { styleId: query.styleId } : {},
       query.siteId ? { siteId: query.siteId } : {},
@@ -448,6 +451,8 @@ export async function setCells(caller: CommandCaller, workOrderId: string, body:
   const context = officeContextOf(caller)
   const workOrder = await officeWorkOrder(caller, workOrderId, WORKORDERS_MANAGE)
   if (workOrder.status !== 'DRAFT') throw new InvalidStateError(`Work order ${workOrder.number} is ${workOrder.status}; its cells are frozen (a change is a new work order).`)
+  // B-W2a-12: a repair's one garment comes from its repair order.
+  if (workOrder.kind === 'REPAIR') throw new InvalidStateError(`Work order ${workOrder.number} repairs one garment of its repair order: its cell does not change (a different garment is a new repair work order).`)
   const lineIds = [...new Set(body.cells.map((cell) => cell.salesOrderLineId))]
   await linesFor(caller, lineIds)
   const requests = body.cells.map((cell, index) => ({ ...cell, index }))
@@ -542,6 +547,8 @@ export async function updateWorkOrder(caller: CommandCaller, workOrderId: string
     let cleared: { operations: number; materials: number } | null = null
     if (body.styleRevisionId !== undefined && body.styleRevisionId !== current.styleRevisionId) {
       if (current.status !== 'DRAFT') throw new InvalidStateError(`Work order ${current.number} is ${current.status}; its revision is frozen (a different specification is a new work order).`)
+      // B-W2a-12: a repair's steps were chosen from its revision's routing.
+      if (current.kind === 'REPAIR') throw new InvalidStateError(`Work order ${current.number} is a repair whose steps were chosen from its revision's routing: cancel it and make a new repair work order for another revision.`)
       const revision = await revisionOf(tx, current.styleId, body.styleRevisionId, 'body/styleRevisionId')
       const cellLines = await tx.workOrderSize.findMany({ where: { workOrderId: current.id }, select: { salesOrderLineId: true } })
       const fixed = await tx.salesOrderLine.findMany({ where: { id: { in: [...new Set(cellLines.map((cell) => cell.salesOrderLineId))] }, styleRevisionId: { not: null } }, select: { seq: true, styleRevisionId: true } })

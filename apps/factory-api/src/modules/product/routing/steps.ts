@@ -3,6 +3,7 @@ import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import type { AddStepsBody, CopyStepsBody, ReorderStepsBody, RoutingView, UpdateStepBody } from '@nexus/factory-domain/product/routing/contracts'
 import { operationUseRefusal } from '@nexus/factory-domain/product/routing/operations'
 import { PRODUCT_ROUTING_MANAGE } from '@nexus/factory-domain/product/routing/permissions'
+import { planSubcontract, sameSubcontract, type Subcontract } from '@nexus/factory-domain/product/routing/subcontract'
 import {
   copySourceRefusal,
   copySteps,
@@ -24,6 +25,7 @@ import {
   assertMayWrite,
   assertNoWorkOrders,
   auditedStep,
+  auditedSubcontract,
   contextOf,
   deleteSteps,
   fitsStyle,
@@ -38,7 +40,10 @@ import {
   readRevisionFor,
   readStyleFor,
   readSteps,
+  readSubcontracts,
   routingViewInTx,
+  subcontractColumns,
+  workshopProblems,
   type LockedDraft,
   type StepRecord,
 } from './store'
@@ -119,12 +124,17 @@ export async function addSteps(caller: CommandCaller, styleId: string, revisionI
   return result
 }
 
-/** product.routing.updateStep: a step's minutes for this style, its scan point or its instructions. */
+/**
+ * product.routing.updateStep: a step's minutes for this style, its scan point, its instructions, and (W2a, PRD-120) its
+ * subcontract details: the workshop (SUBCONTRACTOR role, of the style's company or every company), its fee per piece
+ * (the cost grain: the grain filter refuses a fee from a caller without it) and the transit days; null takes the step
+ * back in-house.
+ */
 export async function updateStep(caller: CommandCaller, styleId: string, revisionId: string, stepId: string, body: UpdateStepBody, idempotencyKey?: string): Promise<RoutingView> {
   const context = contextOf(caller)
   const { style } = await readRevisionFor(caller, styleId, revisionId)
   assertMayWrite(context, PRODUCT_ROUTING_MANAGE, style.companyId)
-  const { version, ...change } = body
+  const { version, subcontract: subcontractChange, ...change } = body
 
   const { result } = await command(caller, { name: 'product.routing.updateStep', idempotencyKey, input: { styleId, revisionId, stepId, ...body } }, async (tools) => {
     const { tx, now } = tools
@@ -133,10 +143,29 @@ export async function updateStep(caller: CommandCaller, styleId: string, revisio
     const plan = planStepChange(current, change)
     if (!plan.ok) throw invalid(prefixed(plan.issues))
     const changed = stepChanges(current, plan.step)
-    if (changed.length > 0) {
+    const was: Subcontract | null = (await readSubcontracts(tx, revisionId)).get(stepId) ?? null
+    let next = was
+    if (subcontractChange !== undefined) {
+      const planned = planSubcontract(was, subcontractChange)
+      if (!planned.ok) throw invalid(prefixed(planned.issues))
+      next = planned.subcontract
+      if (next !== null && next.supplierId !== was?.supplierId) {
+        const problems = await workshopProblems(tx, next.supplierId, draft.style.companyId)
+        if (problems.length > 0) throw invalid(problems)
+      }
+    }
+    const subcontracted = !sameSubcontract(was, next)
+    if (changed.length > 0 || subcontracted) {
       await tx.routingOperation.update({
         where: { id: stepId },
-        data: { standardMinutes: plan.step.standardMinutes, scanRequired: plan.step.scanRequired, instructions: plan.step.instructions, version: { increment: 1 }, updatedAt: now },
+        data: {
+          standardMinutes: plan.step.standardMinutes,
+          scanRequired: plan.step.scanRequired,
+          instructions: plan.step.instructions,
+          ...(subcontracted ? subcontractColumns(next) : {}),
+          version: { increment: 1 },
+          updatedAt: now,
+        },
         select: { id: true },
       })
     }
@@ -146,10 +175,10 @@ export async function updateStep(caller: CommandCaller, styleId: string, revisio
       recordType: 'RoutingOperation',
       recordId: stepId,
       companyId: draft.style.companyId,
-      before: Object.fromEntries(changed.map((field) => [field, before[field]])),
-      after: Object.fromEntries(changed.map((field) => [field, after[field]])),
+      before: { ...Object.fromEntries(changed.map((field) => [field, before[field]])), ...(subcontracted ? { subcontract: auditedSubcontract(was) } : {}) },
+      after: { ...Object.fromEntries(changed.map((field) => [field, after[field]])), ...(subcontracted ? { subcontract: auditedSubcontract(next) } : {}) },
     })
-    recordChange(tools, draft, [stepId], { changed: stepId, fields: changed })
+    recordChange(tools, draft, [stepId], { changed: stepId, fields: [...changed, ...(subcontracted ? ['subcontract'] : [])] })
     return routingViewInTx(tx, styleId, revisionId)
   })
   return result
@@ -226,6 +255,8 @@ export async function copyRoutingSteps(caller: CommandCaller, styleId: string, r
     if (sourceSteps.length === 0) throw new DomainError('invalid_state', `Revision ${source.revision} of that style has no routing steps to copy.`)
     await lockOperations(tx, sourceSteps.map((step) => step.operationId))
     const library = await readOperations(tx, sourceSteps.map((step) => step.operationId))
+    // W2a: a subcontracted step travels with its workshop, fee and transit days; the workshop must suit this style too.
+    const sourceSubcontracts = await readSubcontracts(tx, source.id)
     const problems: Issue[] = []
     for (const step of sourceSteps) {
       const operation = library.get(step.operationId)
@@ -236,8 +267,10 @@ export async function copyRoutingSteps(caller: CommandCaller, styleId: string, r
         const archived = operationUseRefusal(operation)
         if (archived) problems.push({ path: at, message: archived })
       }
+      const subcontract = sourceSubcontracts.get(step.id)
+      if (subcontract) problems.push(...(await workshopProblems(tx, subcontract.supplierId, draft.style.companyId, at)))
     }
-    if (problems.length > 0) throw new DomainError('invalid_state', `${problems.length} step(s) cannot be copied: their operations are not usable here.`, problems)
+    if (problems.length > 0) throw new DomainError('invalid_state', `${problems.length} step(s) cannot be copied: their operations or workshops are not usable here.`, problems)
 
     const current = await readSteps(tx, revisionId)
     const kept = body.replace ? [] : current
@@ -253,8 +286,18 @@ export async function copyRoutingSteps(caller: CommandCaller, styleId: string, r
       for (const step of current) tools.audit({ recordType: 'RoutingOperation', recordId: step.id, companyId: draft.style.companyId, before: { revisionId, ...auditedStep(step) }, after: { removed: true } })
     }
     const copied = copySteps(sourceSteps, first, newId)
-    await insertSteps(tools, { styleId, revisionId }, copied)
-    for (const step of copied) tools.audit({ recordType: 'RoutingOperation', recordId: step.id, companyId: draft.style.companyId, after: { revisionId, ...auditedStep(step) } })
+    // copySteps keeps the source's order: the n-th copy is the n-th source step.
+    const copiedSubcontracts = new Map(
+      copied.flatMap((step, index): [string, Subcontract][] => {
+        const subcontract = sourceSubcontracts.get(sourceSteps[index]!.id)
+        return subcontract ? [[step.id, subcontract]] : []
+      }),
+    )
+    await insertSteps(tools, { styleId, revisionId }, copied, copiedSubcontracts)
+    for (const step of copied) {
+      const subcontract = copiedSubcontracts.get(step.id) ?? null
+      tools.audit({ recordType: 'RoutingOperation', recordId: step.id, companyId: draft.style.companyId, after: { revisionId, ...auditedStep(step), ...(subcontract ? { subcontract: auditedSubcontract(subcontract) } : {}) } })
+    }
     recordChange(tools, draft, copied.map((step) => step.id), {
       copiedFrom: { styleId: body.fromStyleId, revisionId: source.id, revision: source.revision },
       replaced: body.replace ? current.length : 0,
