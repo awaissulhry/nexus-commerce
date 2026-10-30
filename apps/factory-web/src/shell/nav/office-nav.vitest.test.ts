@@ -39,7 +39,7 @@ describe('the Office navigation (PLT-160: one declaration per area)', () => {
 describe('navigation filtered by permission (areaNavForPerson, fail closed per row)', () => {
   it('the owner sees every W0 area and page, Today, and the W1 pages built so far', () => {
     expect(ids(officeNavFor(permissionCheck(OWNER_PERMISSIONS)))).toEqual([
-      ['home', ['home-today', 'home-mail-to-sort']],
+      ['home', ['home-today', 'home-tasks', 'home-notifications', 'home-mail-to-sort']],
       ['sales', ['sales-customers']],
       ['purchasing', ['purchasing-suppliers']],
       [
@@ -50,7 +50,7 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
   })
 
   it('a sales person sees Home › Today and Mail to sort, and no Admin at all', () => {
-    expect(ids(officeNavFor(permissionCheck(SALES_PERMISSIONS)))).toEqual([['home', ['home-today', 'home-mail-to-sort']]])
+    expect(ids(officeNavFor(permissionCheck(SALES_PERMISSIONS)))).toEqual([['home', ['home-today', 'home-tasks', 'home-notifications', 'home-mail-to-sort']]])
   })
 
   it('the administrator template today: every Admin row (B-W0-28 declared integrations.view)', () => {
@@ -63,7 +63,7 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
 
   it('workorders.view opens Production › Floor now and Work orders (B-W1-38 part 2), nothing of Admin', () => {
     expect(ids(officeNavFor(permissionCheck(['home.view', 'workorders.view', 'workorders.manage', 'workorders.release'])))).toEqual([
-      ['home', ['home-today']],
+      ['home', ['home-today', 'home-tasks', 'home-notifications']],
       ['production', ['production-floor', 'production-work-orders']],
     ])
   })
@@ -71,7 +71,7 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
   it('a quality inspector sees Quality › Inspections and Compliance › Tests & substances and the PPE register', () => {
     const inspector = ['home.view', 'quality.inspections.view', 'quality.lots.view', 'compliance.register.view']
     expect(ids(officeNavFor(permissionCheck(inspector)))).toEqual([
-      ['home', ['home-today']],
+      ['home', ['home-today', 'home-tasks', 'home-notifications']],
       ['quality', ['quality-inspections']],
       ['compliance', ['compliance-tests', 'compliance-register']],
     ])
@@ -138,8 +138,8 @@ describe('labels, crumbs, palette pages and the phone bar come from the same man
   })
 
   it('the palette jumps to every page the person may open', () => {
-    expect(navPages(officeNavFor(permissionCheck(SALES_PERMISSIONS))).map((page) => page.href)).toEqual(['/home/today', '/home/mail-to-sort'])
-    expect(navPages(nav)).toHaveLength(14)
+    expect(navPages(officeNavFor(permissionCheck(SALES_PERMISSIONS))).map((page) => page.href)).toEqual(['/home/today', '/home/tasks', '/home/notifications', '/home/mail-to-sort'])
+    expect(navPages(nav)).toHaveLength(16)
   })
 
   it('on a phone: Home and Sales as tabs, Purchasing and Admin under More (then More is current), Sales current on its records', () => {

@@ -74,8 +74,8 @@ export const FISCAL_RETENTION_YEARS = 10
 
 // ── the view model ────────────────────────────────────────────────────────────────────────────────────────────────
 
-export type PanelTab = 'thread' | 'files' | 'history'
-export const PANEL_TABS: readonly PanelTab[] = ['thread', 'files', 'history']
+export type PanelTab = 'thread' | 'tasks' | 'files' | 'history'
+export const PANEL_TABS: readonly PanelTab[] = ['thread', 'tasks', 'files', 'history']
 
 export interface PanelRecord {
   /** The record's model name, as the API names it (`Certificate`, `Quote`). */
@@ -248,6 +248,115 @@ export interface RecordPanelsViewModel {
   composerText?: string
   /** The composer is sending. */
   sending?: boolean
+  /** B-W2a-40: the record's open tasks (the Tasks tab; absent: a host without tasks, no tab). */
+  tasks?: PanelTasks
+  /** B-W2a-40: who follows the record (the Follow toggle and Followers (N); absent: none; null while it is read). */
+  followers?: PanelFollowers | null
+}
+
+// ── tasks and followers on the record (B-W2a-40; COL-037, COL-011; design shell.panels side panel, popups) ────────────
+
+/** One of the record's open tasks, as the Tasks tab draws it. */
+export interface PanelTask {
+  id: string
+  title: string
+  /** Its place in My tasks (the task's popup), with the company prefix. */
+  href: string
+  due: { date: string; days: number; word: 'OVERDUE' | 'TODAY' | 'SOON' | null } | null
+  assignee: { id: string; name: string; me: boolean } | null
+  progress: { done: number; total: number } | null
+  /** The reader may tick it (tasks.manage, and threads.post here). */
+  canChange: boolean
+}
+
+/** A part that loads on its own. */
+export type PanelRead<T> = { status: 'loading' } | { status: 'error'; problem: string } | { status: 'ready'; data: T }
+
+export interface PanelTasks {
+  /** Null while it is read the first time. */
+  items: readonly PanelTask[] | null
+  problem?: string | null
+  /** Why "+ Add task" is held (a message key of `records`), or null. */
+  addHeld: string | null
+  /** The New task dialog, open, with who may be given it. */
+  dialog?: { people: PanelRead<readonly { id: string; name: string; me: boolean }[]> } | null
+  /** "Done: <title> · Undo" after a tick (the Undo puts it back). */
+  undo?: { title: string } | null
+  busy?: boolean
+}
+
+export interface PanelFollower {
+  userId: string
+  name: string
+  me: boolean
+  reason: 'CREATOR' | 'ASSIGNEE' | 'MENTIONED' | 'CHOSE'
+  muted: boolean
+  since: string
+  addedBy: string | null
+}
+
+export interface PanelFollowers {
+  count: number
+  me: { following: boolean; muted: boolean }
+  list: readonly PanelFollower[]
+  /** Colleagues who may read the record and do not follow it yet (to add one). */
+  candidates: readonly PanelPerson[]
+  /** threads.post: may add a colleague. */
+  canAdd: boolean
+  problem?: string | null
+  busy?: boolean
+  /** The list open at once (design fixtures). */
+  open?: boolean
+}
+
+/**
+ * @mention typed in a note (design admin records' activity feeds, "@mention a person or team in a note", W2a; COL-006):
+ * the people whose display name follows an `@` in the text, as a whole name (case aside, not part of a longer word).
+ * Teams come with People (W2b): persons only.
+ */
+export function mentionsInText(body: string, people: readonly PanelPerson[]): string[] {
+  const text = body.toLocaleLowerCase()
+  const word = /[\p{L}\p{N}]/u
+  // Every whole-name match with where it sits; a shorter name inside a longer one at the same @ ("@Bea" in "@Bea Rossi") is not a mention of its own.
+  const hits: { id: string; at: number; end: number }[] = []
+  for (const person of people) {
+    const name = person.name.trim().toLocaleLowerCase()
+    if (name.length === 0) continue
+    for (let at = text.indexOf(`@${name}`); at >= 0; at = text.indexOf(`@${name}`, at + 1)) {
+      const before = at === 0 ? '' : text[at - 1]!
+      const after = text[at + name.length + 1] ?? ''
+      if ((before === '' || !word.test(before)) && (after === '' || !word.test(after))) hits.push({ id: person.id, at, end: at + name.length + 1 })
+    }
+  }
+  const kept = hits.filter((hit) => !hits.some((other) => other !== hit && other.at === hit.at && other.end > hit.end))
+  return [...new Set(kept.sort((a, b) => a.at - b.at).map((hit) => hit.id))]
+}
+
+/** The `@` word being typed at the end of the note (null: none), to suggest whom it names. */
+export function mentionQuery(body: string): string | null {
+  // A name may have up to three words ("@Live Coll" still suggests Live Colleague).
+  const match = MENTION_TAIL.exec(body)
+  return match ? match[2]! : null
+}
+
+/** The `@words` being typed at the end of the note: up to three words of a name. */
+const MENTION_TAIL = /(^|\s)@([^\s@]{0,40}(?: [^\s@]{0,40}){0,2})$/u
+
+/** The people a typed `@word` may name (their name starts with it, or a word of it does), at most five. */
+export function mentionSuggestions(query: string, people: readonly PanelPerson[], chosen: readonly string[]): PanelPerson[] {
+  const wanted = query.toLocaleLowerCase()
+  return people
+    .filter((person) => !chosen.includes(person.id))
+    .filter((person) => {
+      const name = person.name.toLocaleLowerCase()
+      return name.startsWith(wanted) || name.split(/\s+/).some((part) => part.startsWith(wanted))
+    })
+    .slice(0, 5)
+}
+
+/** The note with the `@word` at its end replaced by the person's whole name (and a space to type on). */
+export function completeMention(body: string, person: PanelPerson): string {
+  return body.replace(MENTION_TAIL, (_, space: string) => `${space}@${person.name} `)
 }
 
 // ── the composer (COL-003: internal note vs external message; COL-024: mail as the person) ──────────────────────────

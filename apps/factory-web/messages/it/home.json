@@ -70,7 +70,9 @@
     "keys": {
       "approve": "Approva il preventivo (nella sua revisione)",
       "reject": "Respingi il preventivo, con un motivo (nella sua revisione)",
-      "acknowledge": "Prendi visione dell'avviso (nell'elenco o nella sua revisione)"
+      "acknowledge": "Prendi visione dell'avviso (nell'elenco o nella sua revisione)",
+      "doneOrAcknowledge": "Fatto (un’attività o una menzione) o presa visione (un avviso)",
+      "snooze": "Rimanda la riga"
     },
     "group": {
       "NOW": "Ora",
@@ -94,7 +96,10 @@
       "REGISTER_DUTY": "Obblighi del registro DPI",
       "PRIVACY_DUTY": "Obblighi privacy",
       "STYLE_COMPLIANCE": "Modelli fermi per la conformità",
-      "MAIL_TO_SORT": "Posta da smistare"
+      "MAIL_TO_SORT": "Posta da smistare",
+      "TASK_DUE": "Le mie attività in scadenza",
+      "MENTION": "Menzioni",
+      "RULE_ALERT": "Avvisi delle regole di eccezione"
     },
     "severity": {
       "HIGH": "Urgente",
@@ -326,6 +331,18 @@
       "ALERT": {
         "label": "Avvisi sui miei record",
         "hint": "in ritardo, fermi, scartati o un obbligo aperto"
+      },
+      "DUE_TODAY": {
+        "label": "In scadenza oggi",
+        "hint": "righe che scadono oggi, di ogni tipo"
+      },
+      "OVERDUE": {
+        "label": "In ritardo",
+        "hint": "righe oltre la scadenza"
+      },
+      "MENTION": {
+        "label": "Menzioni",
+        "hint": "note che ti hanno menzionato"
       }
     },
     "w": {
@@ -467,7 +484,31 @@
           "UNKNOWN_SENDER": "il mittente non è un contatto del record",
           "THREAD_CLOSED": "il thread a cui risponde è chiuso"
         }
-      }
+      },
+      "TASK_DUE.TODAY": "La tua attività \"{title}\" scade oggi.",
+      "TASK_DUE.TODAY_AT": "La tua attività \"{title}\" scade oggi alle {dueTime}.",
+      "TASK_DUE.OVERDUE_one": "La tua attività \"{title}\" è in ritardo di {count} giorno: scadeva il {dueDate}.",
+      "TASK_DUE.OVERDUE_other": "La tua attività \"{title}\" è in ritardo di {count} giorni: scadeva il {dueDate}.",
+      "TASK_DUE.on": "È su {record}.",
+      "MENTION.NOTE": "{actor} ti ha menzionato in una nota su {record}.",
+      "why.TASK_DUE.assigned": "È assegnata a te.",
+      "why.MENTION.mentioned": "Sei stato menzionato.",
+      "COMING.TASK": "La tua attività \"{title}\" scade.",
+      "COMING.ORDER": "L'ordine {number} per {customer} è promesso.",
+      "COMING.DELIVERY": "{supplier} deve consegnare l'ordine d'acquisto {number}.",
+      "COMING.CERTIFICATE": "Il certificato {number} scade.",
+      "alerts.ORDER_LATE_RISK.LATE": "L'ordine {label} è in ritardo di {days} giorni: era promesso per il {promiseDate}.",
+      "alerts.ORDER_LATE_RISK.AT_RISK": "L'ordine {label} è promesso per il {promiseDate} (mancano {days} giorni) e non è pronto.",
+      "alerts.HOLD_TOO_LONG": "{label} è bloccato da {hours} ore (la regola dice {threshold} h).",
+      "alerts.MATERIAL_SHORT": "Il materiale {item} manca per l'ordine di lavoro rilasciato {label}.",
+      "alerts.APPROVAL_OVERDUE": "Il preventivo {label} aspetta la sua approvazione da {hours} ore.",
+      "alerts.PO_NOT_CONFIRMED": "L'ordine di acquisto {label} non è confermato {days} giorni dopo l'invio.",
+      "alerts.CERTIFICATE_EXPIRING": "Il certificato {label} scade il {dueDate} (mancano {days} giorni).",
+      "alerts.INVOICE_DEADLINE": "La merce del DDT {label} va fatturata entro il {dueDate} (mancano {days} giorni).",
+      "alerts.INVOICE_DEADLINE.LATE": "La merce del DDT {label} andava fatturata entro il {dueDate}: {days} giorni di ritardo.",
+      "why.RULE_ALERT.assigned": "È assegnato a te.",
+      "why.RULE_ALERT.recipient": "La regola \"{rule}\" avvisa te.",
+      "alerts.UNKNOWN": "Avviso su {label}."
     },
     "actions": {
       "menu": "Azioni su {record}",
@@ -570,6 +611,55 @@
       },
       "saved": "Oggi è disposto a modo tuo. È salvato per te su ogni dispositivo.",
       "changed": "La disposizione è stata cambiata da un'altra finestra. È stata riletta: disponila di nuovo."
+    },
+    "snooze": {
+      "title": "Rimanda {what} fino a",
+      "body": "Esce dal tuo elenco fino ad allora e torna da sola.",
+      "choices": "Quando torna",
+      "laterToday": "Più tardi oggi, {time}",
+      "tomorrow": "Domani, {time}",
+      "monday": "Lunedì, {time}",
+      "pick": "Scegli data e ora…",
+      "untilChange": "Finché qualcosa cambia sul record",
+      "pickLabel": "Torna il",
+      "pickHint": "Al massimo {count} giorni da adesso.",
+      "pickFirst": "Scegli prima una data e un’ora.",
+      "past": "Scegli un momento dopo adesso.",
+      "tooFar": "Al massimo {count} giorni da adesso.",
+      "cancel": "Annulla",
+      "confirm": "Rimanda",
+      "mention": "la menzione su {record}"
+    },
+    "own": {
+      "done": "Fatto",
+      "snooze": "Rimanda…",
+      "openTask": "Apri l’attività",
+      "doneTask": "Fatto: {record}. Esce da Oggi.",
+      "doneMention": "Fatto: la menzione su {record}. Esce da Oggi e dalle tue notifiche.",
+      "snoozed": "Rimandata: {record}. Torna all’ora che hai scelto.",
+      "snoozedUntilChange": "Rimandata: {record}. Torna quando qualcosa cambia."
+    },
+    "ruleAlert": {
+      "handled": "Una regola di eccezione ha sollevato questo avviso: prendine visione, assegnalo o risolvilo nell’avviso stesso (la sua pagina arriva con le schermate degli avvisi).",
+      "reading": "Sto leggendo dov’è il suo record…"
+    },
+    "coming": {
+      "title": "In arrivo",
+      "hint": "Cosa arriva a te nei prossimi cinque giorni lavorativi.",
+      "loading": "Sto leggendo i prossimi giorni…",
+      "error": "Non è stato possibile leggere cosa è in arrivo.",
+      "empty": "Niente in programma per te nei prossimi 5 giorni lavorativi.",
+      "calendar": "Giorni lavorativi del calendario aziendale.",
+      "noCalendar": "Nessun calendario scelto: da lunedì a venerdì.",
+      "closed": "giorno di chiusura",
+      "nothing": "Niente in questo giorno.",
+      "partial": "Un elenco si è fermato al suo limite: potrebbero essercene altri.",
+      "kind": {
+        "TASK": "Attività",
+        "ORDER": "Data promessa",
+        "DELIVERY": "Consegna attesa",
+        "CERTIFICATE": "Scadenza certificato"
+      }
     }
   },
   "mailToSort": {

@@ -1,0 +1,40 @@
+/* "Snooze until" (SnoozeDialog): the choices one per line, each the whole width; the dialog itself keeps the DS modal's
+   width. Layout only, with semantic tokens. */
+.fw-snooze {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-snooze-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-snooze-list .nds-btn {
+  width: 100%;
+  justify-content: flex-start;
+  gap: var(--nds-space-8);
+}
+
+.fw-snooze-when {
+  margin-left: auto;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-snooze-muted {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-snooze-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}

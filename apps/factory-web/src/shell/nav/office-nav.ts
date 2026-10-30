@@ -101,6 +101,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/home/today',
   '/home/today/print',
   '/home/approvals',
+  // B-W2a-40: My tasks (SCR-233) and Notifications (SCR-005).
+  '/home/tasks',
+  '/home/notifications',
   '/home/mail-to-sort',
   '/records/[type]/[id]',
   '/sales/customers',

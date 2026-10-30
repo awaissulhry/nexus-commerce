@@ -1,0 +1,150 @@
+/*
+ * Home › My tasks (SCR-233) LAYOUT: the band, the tiles, whose tasks, the list's cells, the popup and the dialogs. The
+ * page fills the shell's main area (no max-width: Owner rule 2026-10-29); controls are the design system's; semantic
+ * tokens only.
+ */
+.fw-tasks,
+.fw-tasks-section,
+.fw-tasks-popup,
+.fw-tasks-popup-part,
+.fw-tasks-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-tasks-section {
+  gap: var(--nds-space-8);
+}
+
+.fw-tasks-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-tasks-status,
+.fw-tasks-actions,
+.fw-tasks-scope,
+.fw-tasks-buttons,
+.fw-tasks-notice-actions,
+.fw-tasks-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-tasks-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+.fw-tasks-h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
+.fw-tasks-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-tasks-unknown {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-tasks-done {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+}
+
+.fw-tasks-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-tasks-title.is-done {
+  text-decoration: line-through;
+  color: var(--nds-text-2);
+}
+
+.fw-tasks-sub {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-tasks-record,
+.fw-tasks-due {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-tasks-due.is-late {
+  color: var(--nds-danger-text);
+  font-weight: 500;
+}
+
+.fw-tasks-popup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+}
+
+.fw-tasks-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-tasks-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fw-tasks-checklist,
+.fw-tasks-changes,
+.fw-tasks-keys {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-tasks-changes {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.fw-tasks-changes li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  padding: var(--nds-space-6) 0;
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-tasks-change-title {
+  overflow-wrap: anywhere;
+}

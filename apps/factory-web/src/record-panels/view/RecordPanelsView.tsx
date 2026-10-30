@@ -8,7 +8,9 @@ import { WithMessages } from '../i18n'
 import { fileGroups, type PanelTab, type RecordPanelsViewModel } from '../model'
 import type { RecordPanelsActions } from './actions'
 import { FilesPanel } from './FilesPanel'
+import { FollowersControl } from './FollowersControl'
 import { HistoryPanel } from './HistoryPanel'
+import { TasksPanel } from './TasksPanel'
 import { ThreadPanel } from './ThreadPanel'
 import '../record-panels.css'
 
@@ -18,7 +20,8 @@ export type { RecordPanelsActions } from './actions'
 /**
  * SCR-006 — the record panels (A2 §2.1): the same three panels on every record, as tabs — Thread (internal notes and
  * mail with the record's party, newest first, and the composer), Files (who sees each, versions, retention, upload,
- * download, the PDF viewer) and History (messages, changes and files in one feed with filter chips). Tasks come in W2.
+ * download, the PDF viewer) and History (messages, changes and files in one feed with filter chips). B-W2a-40: Tasks
+ * beside the thread (the record's open tasks, "+ Add task") and, above the tabs, Follow and Followers (N).
  * It draws ONE view model and fetches nothing (RecordPanels.tsx loads it); it works as wide as a page and as narrow as
  * a phone. Design-system parts only: Card, Tabs, ReplyComposer, FileRow, Timeline, PdfViewer, Banner, EmptyState.
  */
@@ -41,6 +44,8 @@ function Panels({ model, actions }: { model: RecordPanelsViewModel; actions?: Re
   const tabs = [
     // No count while older messages are still to load: the pill would say fewer than there are.
     { id: 'thread', label: t('panels.tabs.thread'), count: model.messages.more ? null : count(model.messages.items) },
+    // B-W2a-40: the record's open tasks (a host without tasks has no tab).
+    ...(model.tasks ? [{ id: 'tasks', label: t('panels.tabs.tasks'), count: model.tasks.problem ? null : count(model.tasks.items) }] : []),
     // Files counts documents (a file and its earlier versions are one), as the list shows them.
     ...(model.can.readFiles ? [{ id: 'files', label: t('panels.tabs.files'), count: model.files.items === null ? null : fileGroups(model.files.items).length }] : []),
     { id: 'history', label: t('panels.tabs.history') },
@@ -50,6 +55,7 @@ function Panels({ model, actions }: { model: RecordPanelsViewModel; actions?: Re
   return (
     <Card padded className="fw-rp">
       <section aria-label={t('panels.label', { title: model.title })} className="fw-rp-inner">
+        {model.followers !== undefined && <FollowersControl model={model} actions={actions} />}
         <Tabs
           ariaLabel={t('panels.tabs.label')}
           tabs={tabs}
@@ -72,6 +78,11 @@ function Panels({ model, actions }: { model: RecordPanelsViewModel; actions?: Re
         <div {...tabPanelProps(idBase, 'thread')} hidden={active !== 'thread'} className="fw-rp-panel">
           <ThreadPanel model={model} actions={actions} />
         </div>
+        {model.tasks && (
+          <div {...tabPanelProps(idBase, 'tasks')} hidden={active !== 'tasks'} className="fw-rp-panel">
+            <TasksPanel model={model} actions={actions} />
+          </div>
+        )}
         {model.can.readFiles && (
           <div {...tabPanelProps(idBase, 'files')} hidden={active !== 'files'} className="fw-rp-panel">
             <FilesPanel model={model} actions={actions} now={now} />

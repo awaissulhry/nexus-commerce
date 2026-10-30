@@ -5,7 +5,8 @@
       "label": "Record panels",
       "thread": "Thread",
       "files": "Files",
-      "history": "History"
+      "history": "History",
+      "tasks": "Tasks"
     },
     "retry": "Try again",
     "dismiss": "Dismiss",
@@ -109,7 +110,11 @@
       "noParty": "This record has no customer or supplier, so no email can be sent from it.",
       "noPermission": "You can read this thread; writing in it needs another role."
     },
-    "subjectFirst": "The first mail of this thread needs a subject."
+    "subjectFirst": "The first mail of this thread needs a subject.",
+    "mentionHelp": "Type @ and a colleague's name to mention them: they are told, and they follow the record.",
+    "mentionSuggest": "Mention:",
+    "mentionsNow": "This note mentions:",
+    "mentionRemove": "Do not mention {name}"
   },
   "message": {
     "theParty": "the customer or supplier",
@@ -297,6 +302,128 @@
       "released": "released a mail",
       "rejected": "rejected a mail",
       "changed": "changed it"
+    }
+  },
+  "tasks": {
+    "intro": "Open tasks on this record. Tick one when it is done.",
+    "add": "Add task",
+    "loading": "Reading the tasks…",
+    "listLabel": "Open tasks on {title}",
+    "complete": "Mark “{title}” done",
+    "done": "Done: “{title}”.",
+    "undo": "Undo",
+    "empty": {
+      "title": "No open tasks.",
+      "body": "Add one for yourself or a colleague: it lands on their Today when it is due."
+    },
+    "held": {
+      "readOnly": "You may read this task but not change it.",
+      "busy": "A change is being sent.",
+      "noManage": "Your roles do not let you make or change tasks.",
+      "noPost": "You may not write on this record, so you cannot add a task to it.",
+      "offline": "Offline — change it when back online."
+    },
+    "due": {
+      "overdue_one": "Overdue {count} day",
+      "overdue_other": "Overdue {count} days",
+      "today": "Due today",
+      "soon_one": "Due tomorrow",
+      "soon_other": "Due in {count} days",
+      "on": "Due {date}",
+      "none": "No due date"
+    },
+    "assignee": {
+      "you": "You",
+      "nobody": "Nobody yet"
+    },
+    "progress": "{done} / {total} done",
+    "new": {
+      "title": "New task",
+      "titleOn": "New task on {record}",
+      "cancel": "Cancel",
+      "create": "Create task",
+      "field": {
+        "title": "Task",
+        "titlePlaceholder": "Call the tannery about the lot",
+        "assignee": "For",
+        "assigneeHint": "People who keep tasks.",
+        "assigneeHintRecord": "People who keep tasks here and may see this record.",
+        "me": "Me ({name})",
+        "nobody": "Nobody yet",
+        "due": "Due",
+        "dueHint": "Optional. It comes on Today on that day.",
+        "dueClear": "No due date",
+        "checklist": "Checklist",
+        "checklistHint": "One item per line, at most {max}.",
+        "description": "Description"
+      },
+      "held": {
+        "title": "Give the task a title.",
+        "titleLong": "Keep the title to {max} characters.",
+        "checklistMany": "At most {max} checklist items.",
+        "checklistLong": "Keep each checklist item to {max} characters.",
+        "descriptionLong": "Keep the description to {max} characters."
+      }
+    },
+    "notice": {
+      "created": "Task created. Whoever it is for is told and follows the record."
+    },
+    "problem": {
+      "read": "The tasks could not be read. Try again in a moment.",
+      "forbidden": "You may not do this here.",
+      "notFound": "This record has no tasks here, or you may not see it.",
+      "offline": "The factory server did not answer. Check the connection and try again.",
+      "signedOut": "Your session ended. Sign in again to go on.",
+      "failed": "This could not be sent. Try again.",
+      "changed": "Someone changed this task since you read it. It was read again: look before you change it.",
+      "assignee": "This person may not be given the task: they cannot keep tasks here, or cannot see its record. The list was read again.",
+      "invalid": "This could not be done as asked. Check the fields and try again.",
+      "gone": "This task is no longer there for you. The list was read again.",
+      "stepUp": "Confirm it is you, then try again."
+    }
+  },
+  "followers": {
+    "group": "Following this record",
+    "reading": "Reading who follows it…",
+    "follow": "Follow",
+    "following": "Following",
+    "followingMuted": "Following, muted",
+    "count_one": "{count} follower",
+    "count_other": "{count} followers",
+    "open_one": "Followers: {count}. Show who follows and why",
+    "open_other": "Followers: {count}. Show who follows and why",
+    "title_one": "Followers ({count})",
+    "title_other": "Followers ({count})",
+    "intro": "Followers are told when a note, a mail or a reply comes in on this record. Muted: still following, without the news.",
+    "none": "Nobody follows this record yet.",
+    "you": "{name} (you)",
+    "reason": {
+      "CREATOR": "made it",
+      "ASSIGNEE": "was given something on it",
+      "MENTIONED": "was mentioned on it",
+      "CHOSE": "chose to follow"
+    },
+    "addedBy": "added by {name}",
+    "since": "since {date}",
+    "muted": "Muted",
+    "unfollow": "Unfollow",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "addLabel": "Add a colleague",
+    "pick": "Choose a colleague…",
+    "add": "Add",
+    "held": {
+      "busy": "A change is being sent.",
+      "noPost": "You may not write on this record, so you cannot add followers.",
+      "nobody": "Everyone who may see this record follows it already.",
+      "pick": "Choose a colleague first."
+    },
+    "notice": {
+      "following": "You follow this record: its news comes to your notifications.",
+      "muted": "Muted: you still follow it, without its news.",
+      "unfollowed": "You no longer follow this record.",
+      "added": "Added: they follow this record now.",
+      "refused": "This colleague may not see this record, so they cannot follow it."
     }
   }
 }

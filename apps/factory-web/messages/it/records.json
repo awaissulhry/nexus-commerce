@@ -5,7 +5,8 @@
       "label": "Pannelli del record",
       "thread": "Conversazione",
       "files": "File",
-      "history": "Cronologia"
+      "history": "Cronologia",
+      "tasks": "Attività"
     },
     "retry": "Riprova",
     "dismiss": "Chiudi",
@@ -109,7 +110,11 @@
       "noParty": "Questo record non ha un cliente o un fornitore: da qui non si può inviare un'email.",
       "noPermission": "Puoi leggere questa conversazione; per scrivere serve un altro ruolo."
     },
-    "subjectFirst": "La prima email di questa conversazione ha bisogno di un oggetto."
+    "subjectFirst": "La prima email di questa conversazione ha bisogno di un oggetto.",
+    "mentionHelp": "Scrivi @ e il nome di un collega per menzionarlo: viene avvisato e segue il record.",
+    "mentionSuggest": "Menziona:",
+    "mentionsNow": "Questa nota menziona:",
+    "mentionRemove": "Non menzionare {name}"
   },
   "message": {
     "theParty": "il cliente o il fornitore",
@@ -297,6 +302,128 @@
       "released": "ha sbloccato una email",
       "rejected": "ha scartato una email",
       "changed": "ha modificato"
+    }
+  },
+  "tasks": {
+    "intro": "Attività aperte su questo record. Spunta quando è fatta.",
+    "add": "Aggiungi attività",
+    "loading": "Lettura delle attività…",
+    "listLabel": "Attività aperte su {title}",
+    "complete": "Segna “{title}” come fatta",
+    "done": "Fatta: “{title}”.",
+    "undo": "Annulla",
+    "empty": {
+      "title": "Nessuna attività aperta.",
+      "body": "Aggiungine una per te o per un collega: arriva sul suo Oggi alla scadenza."
+    },
+    "held": {
+      "readOnly": "Puoi leggere questa attività ma non modificarla.",
+      "busy": "Una modifica è in invio.",
+      "noManage": "I tuoi ruoli non ti permettono di creare o modificare attività.",
+      "noPost": "Non puoi scrivere su questo record, quindi non puoi aggiungervi un'attività.",
+      "offline": "Offline — modificala quando torni online."
+    },
+    "due": {
+      "overdue_one": "In ritardo di {count} giorno",
+      "overdue_other": "In ritardo di {count} giorni",
+      "today": "Scade oggi",
+      "soon_one": "Scade domani",
+      "soon_other": "Scade tra {count} giorni",
+      "on": "Scade il {date}",
+      "none": "Nessuna scadenza"
+    },
+    "assignee": {
+      "you": "Tu",
+      "nobody": "Ancora nessuno"
+    },
+    "progress": "{done} / {total} fatte",
+    "new": {
+      "title": "Nuova attività",
+      "titleOn": "Nuova attività su {record}",
+      "cancel": "Annulla",
+      "create": "Crea attività",
+      "field": {
+        "title": "Attività",
+        "titlePlaceholder": "Chiamare la conceria per il lotto",
+        "assignee": "Per",
+        "assigneeHint": "Persone che gestiscono attività.",
+        "assigneeHintRecord": "Persone che gestiscono attività qui e possono vedere questo record.",
+        "me": "Io ({name})",
+        "nobody": "Ancora nessuno",
+        "due": "Scadenza",
+        "dueHint": "Facoltativa. Arriva su Oggi quel giorno.",
+        "dueClear": "Nessuna scadenza",
+        "checklist": "Elenco di controllo",
+        "checklistHint": "Una voce per riga, al massimo {max}.",
+        "description": "Descrizione"
+      },
+      "held": {
+        "title": "Dai un titolo all'attività.",
+        "titleLong": "Tieni il titolo entro {max} caratteri.",
+        "checklistMany": "Al massimo {max} voci nell'elenco.",
+        "checklistLong": "Tieni ogni voce entro {max} caratteri.",
+        "descriptionLong": "Tieni la descrizione entro {max} caratteri."
+      }
+    },
+    "notice": {
+      "created": "Attività creata. La persona a cui è destinata viene avvisata e segue il record."
+    },
+    "problem": {
+      "read": "Non è stato possibile leggere le attività. Riprova tra poco.",
+      "forbidden": "Qui non puoi farlo.",
+      "notFound": "Questo record qui non ha attività, oppure non puoi vederlo.",
+      "offline": "Il server della fabbrica non ha risposto. Controlla la connessione e riprova.",
+      "signedOut": "La sessione è scaduta. Accedi di nuovo per continuare.",
+      "failed": "Non è stato possibile inviarlo. Riprova.",
+      "changed": "Qualcuno ha modificato l'attività dopo che l'hai letta. È stata riletta: guardala prima di modificarla.",
+      "assignee": "A questa persona non si può dare l'attività: non gestisce attività qui, o non vede il record. L'elenco è stato riletto.",
+      "invalid": "Non è stato possibile farlo così. Controlla i campi e riprova.",
+      "gone": "Questa attività non c'è più per te. L'elenco è stato riletto.",
+      "stepUp": "Conferma che sei tu, poi riprova."
+    }
+  },
+  "followers": {
+    "group": "Chi segue questo record",
+    "reading": "Lettura di chi lo segue…",
+    "follow": "Segui",
+    "following": "Segui già",
+    "followingMuted": "Segui già, silenziato",
+    "count_one": "{count} follower",
+    "count_other": "{count} follower",
+    "open_one": "Follower: {count}. Mostra chi segue e perché",
+    "open_other": "Follower: {count}. Mostra chi segue e perché",
+    "title_one": "Follower ({count})",
+    "title_other": "Follower ({count})",
+    "intro": "Chi segue viene avvisato quando arriva una nota, una mail o una risposta su questo record. Silenziato: lo segue ancora, senza le novità.",
+    "none": "Nessuno segue ancora questo record.",
+    "you": "{name} (tu)",
+    "reason": {
+      "CREATOR": "l'ha creato",
+      "ASSIGNEE": "ha ricevuto qualcosa su di esso",
+      "MENTIONED": "è stato menzionato",
+      "CHOSE": "ha scelto di seguirlo"
+    },
+    "addedBy": "aggiunto da {name}",
+    "since": "dal {date}",
+    "muted": "Silenziato",
+    "unfollow": "Non seguire più",
+    "mute": "Silenzia",
+    "unmute": "Riattiva",
+    "addLabel": "Aggiungi un collega",
+    "pick": "Scegli un collega…",
+    "add": "Aggiungi",
+    "held": {
+      "busy": "Una modifica è in invio.",
+      "noPost": "Non puoi scrivere su questo record, quindi non puoi aggiungere follower.",
+      "nobody": "Tutti quelli che possono vedere questo record lo seguono già.",
+      "pick": "Scegli prima un collega."
+    },
+    "notice": {
+      "following": "Segui questo record: le sue novità arrivano nelle tue notifiche.",
+      "muted": "Silenziato: lo segui ancora, senza le novità.",
+      "unfollowed": "Non segui più questo record.",
+      "added": "Aggiunto: ora segue questo record.",
+      "refused": "Questo collega non può vedere il record, quindi non può seguirlo."
     }
   }
 }
