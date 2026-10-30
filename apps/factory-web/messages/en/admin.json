@@ -1568,6 +1568,7 @@
     "inventory_issue": "Pick and issue stock to a work order",
     "inventory_issue_over": "Issue more than a work order needs",
     "inventory_receive": "Receive goods against a purchase order",
+    "inventory_reserve": "Reserve stock and release it",
     "shipping_view": "See the shipments",
     "shipping_manage": "Plan and change shipments",
     "shipping_pack": "Pack a shipment",
