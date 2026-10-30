@@ -1,7 +1,9 @@
 import { z } from 'zod'
 import { defineEvent } from '../events/define'
 import { WORK_CENTRE_KINDS } from '../product/routing/operations'
+import { COST_ENTRY_KINDS, COSTING_METHODS } from './ledger/entries'
 import { LABOUR_RATE_STATUSES } from './rates'
+import { STANDARD_COST_CHANGES, STANDARD_COST_STATUSES } from './standards/rules'
 
 /**
  * Costing's events (plan A1 §3.4, §3.5; B-W1-16). apps/factory-api's modules/costing emits them in the command that
@@ -40,5 +42,46 @@ export const events = [
     description: "A company's (or the tenant-wide) costing settings changed: the overhead percentage.",
     payload: z.strictObject({ settingsId: z.uuid(), fields: z.array(z.string()) }),
     live: { permission: 'costing.view', fields: ['settingsId'] },
+  }),
+  // B-W2a-21 (standard vs actual): standards, the costing method, the work-order cost ledger. Ids, kinds and states only.
+  defineEvent({
+    type: 'standard_cost.changed',
+    context: 'costing',
+    description: "An item's standard cost for a period was prepared, corrected, discarded, frozen, or ended by the next one.",
+    payload: z.strictObject({
+      standardId: z.uuid(),
+      itemId: z.uuid(),
+      validFrom: z.string(),
+      status: z.enum(STANDARD_COST_STATUSES),
+      change: z.enum(STANDARD_COST_CHANGES),
+    }),
+    live: { permission: 'costing.view', fields: ['standardId', 'itemId', 'status', 'change'] },
+  }),
+  defineEvent({
+    type: 'costing_method.changed',
+    context: 'costing',
+    description: "A company's (or the tenant-wide) costing method was chosen, or locked by the first cost entry posted under it.",
+    payload: z.strictObject({ settingsId: z.uuid(), method: z.enum(COSTING_METHODS), change: z.enum(['chosen', 'locked']) }),
+    live: { permission: 'costing.view', fields: ['settingsId', 'method', 'change'] },
+  }),
+  defineEvent({
+    type: 'work_order_cost.posted',
+    context: 'costing',
+    description: "Entries were posted to a work order's cost ledger: material issued or returned, scrap, labour earned, garments into finished goods, their reversals.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      entryIds: z.array(z.uuid()),
+      kinds: z.array(z.enum(COST_ENTRY_KINDS)),
+      reversals: z.number().int().min(0),
+    }),
+    live: { permission: 'costing.view', fields: ['workOrderId', 'number', 'kinds'] },
+  }),
+  defineEvent({
+    type: 'work_order_cost.reversed',
+    context: 'costing',
+    description: "A person reversed a work order's cost entry with a reason (the entry stays; its opposite is posted).",
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), entryId: z.uuid(), reversalIds: z.array(z.uuid()) }),
+    live: { permission: 'costing.view', fields: ['workOrderId', 'number', 'entryId'] },
   }),
 ] as const
