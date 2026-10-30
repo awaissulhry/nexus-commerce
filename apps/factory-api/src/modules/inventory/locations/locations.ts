@@ -201,10 +201,9 @@ export async function moveLocation(caller: CommandCaller, locationId: string, in
 
 /** The location holds stock: any stock key whose balance there is not 0. */
 async function holdsStock(tx: Pick<CommandTx, 'stockMove'>, locationId: string): Promise<boolean> {
-  const [into, outOf] = await Promise.all([
-    tx.stockMove.groupBy({ by: ['itemId', 'itemColourId', 'lotId', 'hideId'], where: { toLocationId: locationId }, _sum: { baseQuantity: true } }),
-    tx.stockMove.groupBy({ by: ['itemId', 'itemColourId', 'lotId', 'hideId'], where: { fromLocationId: locationId }, _sum: { baseQuantity: true } }),
-  ])
+  // One query after another: `tx` may be a transaction's client (one connection; no Promise.all on it, B-W2a-11).
+  const into = await tx.stockMove.groupBy({ by: ['itemId', 'itemColourId', 'lotId', 'hideId'], where: { toLocationId: locationId }, _sum: { baseQuantity: true } })
+  const outOf = await tx.stockMove.groupBy({ by: ['itemId', 'itemColourId', 'lotId', 'hideId'], where: { fromLocationId: locationId }, _sum: { baseQuantity: true } })
   const key = (row: { itemId: string; itemColourId: string | null; lotId: string | null; hideId: string | null }) => `${row.itemId}|${row.itemColourId}|${row.lotId}|${row.hideId}`
   const out = new Map(outOf.map((row) => [key(row), row._sum.baseQuantity?.toString() ?? '0']))
   return into.some((row) => !(row._sum.baseQuantity?.minus(out.get(key(row)) ?? '0').isZero() ?? true))

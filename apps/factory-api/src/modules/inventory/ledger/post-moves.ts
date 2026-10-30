@@ -216,10 +216,9 @@ export async function readBalances(tx: CommandTx, keys: readonly LocatedKey[]): 
   if (keys.length === 0) return balances
   const where = { siteId: { in: ids(keys.map((key) => key.siteId)) }, itemId: { in: ids(keys.map((key) => key.itemId)) } }
   const locations = ids(keys.map((key) => key.locationId))
-  const [into, outOf] = await Promise.all([
-    tx.stockMove.groupBy({ by: ['toLocationId', 'siteId', 'itemId', 'itemColourId', 'lotId', 'hideId'], where: { ...where, toLocationId: { in: locations } }, _sum: { baseQuantity: true } }),
-    tx.stockMove.groupBy({ by: ['fromLocationId', 'siteId', 'itemId', 'itemColourId', 'lotId', 'hideId'], where: { ...where, fromLocationId: { in: locations } }, _sum: { baseQuantity: true } }),
-  ])
+  // One query after another: a transaction's client has one connection (pg refuses concurrent queries on it).
+  const into = await tx.stockMove.groupBy({ by: ['toLocationId', 'siteId', 'itemId', 'itemColourId', 'lotId', 'hideId'], where: { ...where, toLocationId: { in: locations } }, _sum: { baseQuantity: true } })
+  const outOf = await tx.stockMove.groupBy({ by: ['fromLocationId', 'siteId', 'itemId', 'itemColourId', 'lotId', 'hideId'], where: { ...where, fromLocationId: { in: locations } }, _sum: { baseQuantity: true } })
   const sum = (row: { siteId: string; itemId: string; itemColourId: string | null; lotId: string | null; hideId: string | null; _sum: { baseQuantity: Prisma.Decimal | null } }, locationId: string) => ({
     siteId: row.siteId,
     itemId: row.itemId,
@@ -374,20 +373,19 @@ interface Facts {
 async function readFacts(tx: CommandTx, context: StockContext, moves: readonly KeyedDraft[]): Promise<Facts> {
   const itemSelect = context.audience === 'floor' ? ITEM_SELECT : { ...ITEM_SELECT, standardCost: true }
   const reversalIds = ids(moves.map((move) => move.reversalOfId))
-  const [sites, items, colours, lots, hides, locations, lines, originals, reversals] = await Promise.all([
-    tx.site.findMany({ where: { id: { in: ids(moves.map((move) => move.siteId)) } }, select: { id: true, companyId: true, code: true } }),
-    tx.item.findMany({ where: { id: { in: ids(moves.map((move) => move.itemId)) } }, select: itemSelect }) as Promise<ItemRow[]>,
-    tx.itemColour.findMany({ where: { id: { in: ids(moves.map((move) => move.itemColourId)) } }, select: { id: true, itemId: true } }),
-    tx.lot.findMany({ where: { id: { in: ids(moves.map((move) => move.lotId)) } }, select: LOT_SELECT }),
-    tx.hide.findMany({ where: { id: { in: ids(moves.map((move) => move.hideId)) } }, select: HIDE_SELECT }),
-    tx.location.findMany({ where: { id: { in: ids(moves.flatMap((move) => [move.fromLocationId, move.toLocationId])) } }, select: LOCATION_SELECT }),
-    tx.goodsReceiptLine.findMany({
-      where: { id: { in: ids(moves.map((move) => move.receiptLineId)) } },
-      select: { id: true, siteId: true, itemId: true, itemColourId: true, receipt: { select: { status: true } } },
-    }),
-    tx.stockMove.findMany({ where: { id: { in: reversalIds } }, select: LEDGER_SELECT }),
-    tx.stockMove.findMany({ where: { reversalOfId: { in: reversalIds } }, select: { id: true, reversalOfId: true } }),
-  ])
+  // One query after another on the transaction's one connection (no Promise.all on a transaction client).
+  const sites = await tx.site.findMany({ where: { id: { in: ids(moves.map((move) => move.siteId)) } }, select: { id: true, companyId: true, code: true } })
+  const items = (await tx.item.findMany({ where: { id: { in: ids(moves.map((move) => move.itemId)) } }, select: itemSelect })) as ItemRow[]
+  const colours = await tx.itemColour.findMany({ where: { id: { in: ids(moves.map((move) => move.itemColourId)) } }, select: { id: true, itemId: true } })
+  const lots = await tx.lot.findMany({ where: { id: { in: ids(moves.map((move) => move.lotId)) } }, select: LOT_SELECT })
+  const hides = await tx.hide.findMany({ where: { id: { in: ids(moves.map((move) => move.hideId)) } }, select: HIDE_SELECT })
+  const locations = await tx.location.findMany({ where: { id: { in: ids(moves.flatMap((move) => [move.fromLocationId, move.toLocationId])) } }, select: LOCATION_SELECT })
+  const lines = await tx.goodsReceiptLine.findMany({
+    where: { id: { in: ids(moves.map((move) => move.receiptLineId)) } },
+    select: { id: true, siteId: true, itemId: true, itemColourId: true, receipt: { select: { status: true } } },
+  })
+  const originals = await tx.stockMove.findMany({ where: { id: { in: reversalIds } }, select: LEDGER_SELECT })
+  const reversals = await tx.stockMove.findMany({ where: { reversalOfId: { in: reversalIds } }, select: { id: true, reversalOfId: true } })
   return {
     sites: byId(sites),
     items: byId(items),
