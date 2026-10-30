@@ -16,4 +16,11 @@ export const manifest = defineManifest({
   'DELETE /shipping/shipments/:shipmentId/lines/:lineId': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
   'POST /shipping/shipments/:shipmentId/cancel': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
   'POST /shipping/shipments/:shipmentId/packing-list': { audiences: ['office'], permission: 'shipping.pack', scope: 'record' },
+  // B-W2a-48 (LOG-004, LOG-012, LOG-105): the backorder, the packing list's versions, the freight charged.
+  'GET /shipping/backorders': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
+  'GET /shipping/orders/:salesOrderId/backorder': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
+  'GET /shipping/shipments/:shipmentId/packing-lists': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
+  'PUT /shipping/shipments/:shipmentId/freight': { audiences: ['office'], permission: 'shipping.freight.manage', scope: 'record' },
+  'GET /shipping/sites/:siteId/freight-rule': { audiences: ['office'], permission: 'shipping.settings.view', scope: 'record' },
+  'PUT /shipping/sites/:siteId/freight-rule': { audiences: ['office'], permission: 'shipping.freight.manage', scope: 'record' },
 })

@@ -4,6 +4,8 @@ import { DDT_REASONS } from '../documents/model'
 import { DDT_SOURCE_TYPES } from './ddt/sources'
 import { TRACKING_SOURCES, TRACKING_STATUSES } from './labels/tracking'
 import { SHIPMENT_STATUSES } from './shipments'
+import { TRANSPORT_EVIDENCE_STATUSES } from './evidence/evidence'
+import { FREIGHT_BASES, FREIGHT_RULES } from './shipments/freight'
 
 /**
  * The shipping module's events (plan A1 §3.4; LOG-001, LOG-039, LOG-117). apps/factory-api's modules/shipping emits
@@ -134,5 +136,28 @@ export const events = [
     description: 'A DDT for another reason (no shipment) was cancelled with its reason; it keeps its number.',
     payload: z.strictObject({ ddtId: z.uuid(), sourceType: z.enum(DDT_SOURCE_TYPES), sourceId: z.uuid(), number: z.string() }),
     live: { permission: 'shipping.view', fields: ['ddtId', 'sourceType', 'sourceId', 'number'] },
+  }),
+  // B-W2a-48 (LOG-105, LOG-090): the freight charged and the intra-EU transport evidence (shipping/shipments, evidence).
+  // No figure in a payload: the freight is a price.
+  defineEvent({
+    type: 'shipment.freight_changed',
+    context: 'shipping',
+    description: "A shipment's freight charge was set by the site's rule when the goods left, typed by the office, or put back to the rule.",
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), byHand: z.boolean(), basis: z.enum(FREIGHT_BASES).nullable() }),
+    live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'byHand'] },
+  }),
+  defineEvent({
+    type: 'shipping.freight_rule_saved',
+    context: 'shipping',
+    description: "A site's freight rule (none, per shipment or per parcel, free from an order value) was saved.",
+    payload: z.strictObject({ siteId: z.uuid(), rule: z.enum(FREIGHT_RULES) }),
+    live: { permission: 'shipping.settings.view', fields: ['siteId', 'rule'] },
+  }),
+  defineEvent({
+    type: 'shipment.evidence_changed',
+    context: 'shipping',
+    description: "A shipment's intra-EU transport evidence moved: awaited when the goods left, a paper filed, complete, reopened, or needed or not after all.",
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), from: z.enum(TRANSPORT_EVIDENCE_STATUSES), to: z.enum(TRANSPORT_EVIDENCE_STATUSES), papers: z.number().int().min(0) }),
+    live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'from', 'to', 'papers'] },
   }),
 ] as const

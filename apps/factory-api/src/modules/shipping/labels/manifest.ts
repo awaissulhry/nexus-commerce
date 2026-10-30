@@ -12,5 +12,7 @@ export const manifest = defineManifest({
   'POST /shipping/shipments/:shipmentId/labels': { audiences: ['office'], permission: 'shipping.labels.buy', scope: 'record' },
   'POST /shipping/shipments/:shipmentId/labels/print': { audiences: ['office', 'floor'], permission: 'shipping.pack', scope: 'record' },
   'POST /shipping/shipments/:shipmentId/parcels/:parcelId/label/void': { audiences: ['office'], permission: 'shipping.labels.void', scope: 'record' },
+  // B-W2a-48 (LOG-028): every label of the shipment at once.
+  'POST /shipping/shipments/:shipmentId/labels/void': { audiences: ['office'], permission: 'shipping.labels.void', scope: 'record' },
   'GET /shipping/shipments/:shipmentId/tracking': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
 })

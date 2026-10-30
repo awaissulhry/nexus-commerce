@@ -78,6 +78,8 @@ import { SALES_RETURNS_DEFINITIONS, SALES_RETURNS_FLOOR_PERMISSIONS, SALES_RETUR
 import { PRODUCTION_REPORTS_DEFINITIONS, PRODUCTION_REPORTS_PERMISSIONS } from '../../production/reports/permissions'
 // B-W2a-41: the mail delivery log and the blocked addresses (email.delivery.view | unblock).
 import { EMAIL_DELIVERY_DEFINITIONS, EMAIL_DELIVERY_PERMISSIONS } from '../../email-delivery/permissions'
+// B-W2a-48: shipping every day (shipping.freight.manage, shipping.evidence.manage).
+import { SHIPPING_DAILY_DEFINITIONS, SHIPPING_DAILY_PERMISSIONS } from '../../shipping/shipments/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -436,6 +438,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCTION_REPORTS_DEFINITIONS,
   // B-W2a-41: the mail delivery log and the blocked addresses.
   EMAIL_DELIVERY_DEFINITIONS,
+  // B-W2a-48: shipping every day (freight charged, intra-EU transport evidence).
+  SHIPPING_DAILY_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -505,6 +509,8 @@ for (const name of SALES_RETURNS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of PRODUCTION_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-41: the mail delivery log and the blocked addresses.
 for (const name of EMAIL_DELIVERY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-48: shipping every day.
+for (const name of SHIPPING_DAILY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

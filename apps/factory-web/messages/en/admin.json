@@ -1599,6 +1599,8 @@
     "shipping_ddt_cancel": "Cancel an issued DDT with a reason",
     "shipping_labels_buy": "Buy carrier labels",
     "shipping_labels_void": "Void a carrier label",
+    "shipping_freight_manage": "Set the freight charged to customers",
+    "shipping_evidence_manage": "Keep the intra-EU transport evidence",
     "parties_view": "See customers and suppliers",
     "parties_manage": "Add and edit customers and suppliers",
     "parties_block": "Block and unblock a customer or supplier",

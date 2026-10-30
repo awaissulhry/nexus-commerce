@@ -80,7 +80,15 @@ const RETURNS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.fre
   team_leader: ['sales.returns.receive'],
   floor_inspector: ['sales.returns.receive', 'sales.returns.inspect'],
 })
-const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? [])]
+/**
+ * B-W2a-48 (shipping every day; LOG-105, LOG-090): finance sets the freight charged (a price: its grain) and says when a
+ * shipment's intra-EU transport evidence is enough; the warehouse files the carrier's papers. Owner takes them from every().
+ */
+const SHIPPING_DAILY_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  finance: ['shipping.freight.manage', 'shipping.evidence.manage'],
+  warehouse: ['shipping.evidence.manage'],
+})
+const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
