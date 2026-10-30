@@ -13,4 +13,8 @@ export const manifest = defineManifest({
   'POST /email/identities': { audiences: ['office'], permission: 'email.manage', scope: 'record' },
   'POST /email/identities/:identityId/check': { audiences: ['office'], permission: 'email.manage', scope: 'record' },
   'PUT /email/identities/:identityId': { audiences: ['office'], permission: 'email.manage', scope: 'record' },
+  // B-W2a-41 (PLT-149): the delivery log (scopeWhere over the mail's company) and the tenant-wide blocked list.
+  'GET /email/delivery': { audiences: ['office'], permission: 'email.delivery.view', scope: 'record' },
+  'GET /email/blocked': { audiences: ['office'], permission: 'email.delivery.view', scope: 'tenant' },
+  'POST /email/blocked/:suppressionId/unblock': { audiences: ['office'], permission: 'email.delivery.unblock', scope: 'tenant' },
 })

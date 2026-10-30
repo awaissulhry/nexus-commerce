@@ -118,3 +118,103 @@
 .fw-adm-imp-before {
   color: var(--nds-text-2);
 }
+
+/* ---- B-W2a-41: the Templates dialog and the guided first load (FirstLoadChecklist) ---- */
+.fw-adm-imp-templates {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-adm-imp-template {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  padding: var(--nds-space-8) 0;
+  border-top: 1px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+
+.fw-adm-imp-template:first-child {
+  border-top: 0;
+}
+
+.fw-adm-imp-template-name {
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.fw-adm-imp-first-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-adm-imp-first-company {
+  max-width: 360px;
+}
+
+.fw-adm-imp-first-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-adm-imp-first-rec {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  overflow-wrap: anywhere;
+}
+
+.fw-adm-imp-first-rec .is-ok,
+.fw-adm-step-meta.is-ok {
+  color: var(--nds-success);
+}
+
+.fw-adm-imp-first-rec .is-off,
+.fw-adm-step-meta.is-off {
+  color: var(--nds-danger);
+}
+
+.fw-adm-imp-first-diffs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fw-adm-imp-first-diffs:not(.is-plain) {
+  color: var(--nds-danger);
+}
+
+.fw-adm-imp-first-go {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+  max-width: 420px;
+}
+
+@media (max-width: 719px) {
+  .fw-adm-imp-first-go {
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .fw-adm-imp-first-company {
+    max-width: none;
+  }
+}

@@ -12,6 +12,8 @@ import type { BundleRow, WorkOrder, WorkOrderBundles } from '../../../_shared/ap
 import { reprintHold, waitingAt } from '../../../_shared/model'
 import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../../record/record-model'
 import { NotReleased, PartState } from '../../record/view/WorkOrderRecordView'
+import { bundlesOnHold, DAILY_NAMESPACE, splitHeld } from '../../daily/model'
+import { FinishedCard, say } from '../../daily/view/DailyParts'
 
 /**
  * SCR-072 — Bundles (design wo-bundles; MES-065, MES-068, MES-073): per cell what is cut, bundled and still to bundle;
@@ -27,6 +29,8 @@ export function BundlesTab({ workOrder, model, actions }: { workOrder: WorkOrder
   if (!data) return <PartState label={t('tab.bundles')} problem={model.bundles.problem} onRetry={() => actions?.onRetryPart?.('bundles')} />
   return (
     <div className="fw-pr-stack">
+      {/* B-W2a-46 (wo-bundles "W2a Report finished to stock"; wo-finish). */}
+      {model.daily && <FinishedCard workOrder={workOrder} daily={model.daily} actions={actions?.daily} />}
       <CellsCard data={data} />
       <BundleList workOrder={workOrder} data={data} model={model} actions={actions} />
       {model.bundleOpen && <BundleDetail data={data} workOrder={workOrder} model={model} actions={actions} />}
@@ -65,6 +69,10 @@ function BundleList({ workOrder, data, model, actions }: { workOrder: WorkOrder;
   const rowsKey = rows.map((row) => row.id).join(',')
   useEffect(() => setSelected((current) => current.filter((id) => rowsKey.includes(id))), [rowsKey])
   const canReprint = model.can.bundles && (workOrder.status === 'RELEASED' || workOrder.status === 'IN_PROGRESS')
+  // B-W2a-46: the bundles on hold (wo-bundles "on hold (W2a)") and Split… (bd-split, from the bundle's ⋯).
+  const tw = useT(DAILY_NAMESPACE)
+  const daily = model.daily ?? null
+  const onHold = useMemo(() => bundlesOnHold(daily?.bundleHolds ?? null), [daily?.bundleHolds])
 
   const columns = useMemo<ColDef<BundleRow>[]>(() => {
     const CodeCell = ({ data: row }: ICellRendererParams<BundleRow>) =>
@@ -125,6 +133,12 @@ function BundleList({ workOrder, data, model, actions }: { workOrder: WorkOrder;
             ...(model.can.bundles
               ? [{ id: 'reprint', label: t('bundles.reprintOne'), disabled: !canReprint || !!hold, description: !canReprint ? t('bundles.hold.notOpen') : hold ? t(`bundles.hold.${hold}`) : undefined, onSelect: () => actions?.onDialog?.({ kind: 'reprint', bundleIds: [row.id] }) }]
               : []),
+            ...(daily && daily.can.bundles
+              ? (() => {
+                  const split = say(tw, splitHeld(row, workOrder.status, daily.can))
+                  return [{ id: 'split', label: tw('split.menu'), disabled: !!split, description: split ?? undefined, onSelect: () => actions?.daily?.onDialog?.({ kind: 'split', bundleId: row.id }) }]
+                })()
+              : []),
           ]}
         />
       )
@@ -138,9 +152,10 @@ function BundleList({ workOrder, data, model, actions }: { workOrder: WorkOrder;
       { colId: 'last', headerName: t('bundles.col.last'), minWidth: 160, flex: 1.1, cellRenderer: LastCell },
       { colId: 'hides', headerName: t('bundles.col.hides'), minWidth: 150, flex: 1, valueGetter: (params) => (params.data ? params.data.hides.map((hide) => hide.code).join(', ') : '') },
       { colId: 'ticket', headerName: t('bundles.col.ticket'), minWidth: 120, flex: 0.8, cellRenderer: TicketCell },
+      ...(daily?.bundleHolds ? [{ colId: 'hold', headerName: tw('bundles.onHoldCol'), minWidth: 100, flex: 0.6, cellRenderer: ({ data: row }: ICellRendererParams<BundleRow>) => (row ? onHold.has(row.id) ? <Tag tone="danger">{tw('bundles.onHold')}</Tag> : <span>—</span> : null) }] : []),
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, scannedSeqs, opOf, canReprint, workOrder.status, model.can.bundles, actions])
+  }, [t, tw, locale, scannedSeqs, opOf, canReprint, workOrder.status, model.can.bundles, actions, daily, onHold])
 
   const filter = (
     <>

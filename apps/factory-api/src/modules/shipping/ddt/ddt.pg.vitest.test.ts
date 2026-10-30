@@ -295,7 +295,16 @@ describe('issuing (gapless per company and year)', () => {
     expect(events.filter((event) => event.type === 'ddt.issued').map((event) => event.payload)).toEqual([{ ddtId: S.ddt1, shipmentId: sh2(), number: numbered(before.next), documentDate: businessDate(new Date()), replacement: false, shipped: true }])
     expect(events.filter((event) => event.type === 'shipment.status_changed').map((event) => `${event.payload.from}>${event.payload.to}`).at(-1)).toBe('PACKED>SHIPPED')
     const audits = await admin<{ action: string; recordType: string }>(`SELECT action, "recordType" FROM "AuditLog" WHERE "requestId" = (SELECT "requestId" FROM "AuditLog" WHERE "recordId" = $1 AND action = 'shipping.issueDdt')`, [S.ddt1])
-    expect(audits.map((row) => `${row.recordType} ${row.action}`).sort()).toEqual(['Ddt shipping.issueDdt', 'GarmentSerial shipping.shipSerial', 'GarmentSerial shipping.shipSerial', 'Shipment shipping.issueDdt', 'StoredFile documents.render'])
+    expect(audits.map((row) => `${row.recordType} ${row.action}`).sort()).toEqual([
+      'Ddt shipping.issueDdt',
+      'GarmentSerial shipping.shipSerial',
+      'GarmentSerial shipping.shipSerial',
+      // B-W2a-48: the freight by the site's rule, and what left from stock and from the release.
+      'Shipment shipping.freightByRule',
+      'Shipment shipping.issueDdt',
+      'Shipment shipping.left',
+      'StoredFile documents.render',
+    ])
   })
 
   it('refuses a second live DDT for the shipment (409) and uses no number', async () => {

@@ -197,7 +197,7 @@ export async function countWorkOrders(caller: CommandCaller, query: { readonly s
     const byStatus = await client.workOrder.groupBy({ by: ['status'], where: listWhere(context, { siteId: query.siteId }, today), _count: { _all: true } })
     const of = (status: WorkOrderStatus) => byStatus.find((row) => row.status === status)?._count._all ?? 0
     const late = await client.workOrder.count({ where: listWhere(context, { siteId: query.siteId, late: true }, today) })
-    return { counts: { draft: of('DRAFT'), released: of('RELEASED'), inProgress: of('IN_PROGRESS'), completed: of('COMPLETED'), open: of('DRAFT') + of('RELEASED') + of('IN_PROGRESS'), late } }
+    return { counts: { draft: of('DRAFT'), released: of('RELEASED'), inProgress: of('IN_PROGRESS'), completed: of('COMPLETED'), open: of('DRAFT') + of('RELEASED') + of('IN_PROGRESS'), late, onHold: of('ON_HOLD') } }
   })
 }
 

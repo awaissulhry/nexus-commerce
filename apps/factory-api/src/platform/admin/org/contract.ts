@@ -228,3 +228,42 @@ export type CreateWorkCentreBody = z.infer<typeof createWorkCentreContract.body>
 export type EditWorkCentreBody = z.infer<typeof editWorkCentreContract.body>
 export type CreateStationBody = z.infer<typeof createStationContract.body>
 export type EditStationBody = z.infer<typeof editStationContract.body>
+
+// ---- B-W2a-41 (PLT-128): the floor languages of the sites (floor-languages.ts) ----------------------------------------
+
+export const floorLanguagesSiteView = output({
+  id: id(),
+  companyId: id(),
+  companyCode: z.string(),
+  companyName: z.string(),
+  code: z.string(),
+  name: z.string(),
+  status: z.string(),
+  /** The languages the site's tablets offer (ISO 639, in the site's order). */
+  locales: z.array(z.string()),
+  version: z.number().int(),
+  /** Active workers of the site per language they read; null: the reader may not see the site's workers. */
+  workers: z.record(z.string(), z.number().int()).nullable(),
+  /** The company's worker notice in force: its version label and its languages (text or PDF); null: none in force. */
+  notice: output({ id: id(), label: z.string(), locales: z.array(z.string()) }).nullable(),
+  /** The reader may change the site's floor languages (sites.manage there). */
+  canManage: z.boolean(),
+})
+export type FloorLanguagesSiteView = z.infer<typeof floorLanguagesSiteView>
+
+export const listFloorLanguagesContract = defineContract({
+  querystring: input({ companyId: id().optional(), includeArchived: z.coerce.boolean().optional() }),
+  response: { 200: output({ sites: z.array(floorLanguagesSiteView) }) },
+})
+
+export const setFloorLanguagesContract = defineContract({
+  params: input({ siteId: id() }),
+  body: input({
+    version: z.number().int().min(1),
+    /** Every language the site offers after the change, in order (an added one needs the worker notice in it). */
+    locales: z.array(z.string().trim().min(1).max(8)).min(1).max(12),
+    reason: z.string().trim().max(500).optional(),
+  }),
+  response: { 200: output({ site: floorLanguagesSiteView }) },
+})
+export type SetFloorLanguagesBody = z.infer<typeof setFloorLanguagesContract.body>

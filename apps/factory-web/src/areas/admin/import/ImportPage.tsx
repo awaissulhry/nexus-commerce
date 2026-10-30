@@ -14,6 +14,8 @@ import { bulkNotice, type BulkNotice } from '../kit/bulk-model'
 import { applyImport, cancelImport, getImport, listImporters, listImportRows, listImports, uploadSheet, type ImportJob, type Importer, type ImportRow, type NumberFormat } from './api'
 import { applicable, blankDraft, emptyWizard, isMoving, phaseOf, POLL_MS, RECENT_LIMIT, type ImportRights, type UploadDraft, type WizardModel } from './model'
 import { ImportView } from './view/ImportView'
+import { markFirstLoadDone, readFirstLoad, type FirstLoad } from './guided/api'
+import { firstLoadLoading, reasonProblem, stepNumber, type FirstLoadModel } from './guided/model'
 
 const NONE: Loaded<ImportRow> = { items: [], problem: null }
 
@@ -77,6 +79,28 @@ export function ImportPage() {
   const [cancelMany, setCancelMany] = useState<readonly string[] | null>(null)
   const [bulkBusy, setBulkBusy] = useState(false)
   const file = useRef<File | null>(null)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
+  // The guided first load (B-W2a-41): of the address's company, or the one picked in the section.
+  const [firstLoad, setFirstLoad] = useState<FirstLoadModel | null>(() => {
+    const id = session.company?.id ?? companies[0]?.id
+    return id ? firstLoadLoading(id) : null
+  })
+  const firstCompany = firstLoad?.companyId ?? null
+  const patchFirst = (next: Partial<FirstLoadModel>) => setFirstLoad((current) => (current ? { ...current, ...next } : current))
+  const shownFirst = (answer: FirstLoad): Partial<FirstLoadModel> => ({ steps: answer.steps, complete: answer.complete, problem: null })
+
+  const loadFirst = useCallback(async () => {
+    if (!can.view || !firstCompany) return
+    try {
+      const answer = await readFirstLoad(api, firstCompany)
+      setFirstLoad((current) => (current && current.companyId === answer.companyId ? { ...current, ...shownFirst(answer) } : current))
+    } catch (error) {
+      setFirstLoad((current) => (current && current.companyId === firstCompany ? { ...current, steps: null, problem: problemKey(error) } : current))
+    }
+  }, [api, can.view, firstCompany])
+  useEffect(() => {
+    void loadFirst()
+  }, [loadFirst])
 
   const draftFor = useCallback(
     (importerKey: string | null): UploadDraft => blankDraft(importerKey ?? '', session.company?.id ?? (companies.length === 1 ? companies[0]!.id : ''), locale as NumberFormat),
@@ -164,13 +188,44 @@ export function ImportPage() {
     file.current = null
     router.replace(pathname ?? '')
     void loadJobs()
+    void loadFirst()
   }
   const patch = (next: Partial<WizardModel>) => setWizard((current) => (current ? { ...current, ...next } : current))
 
   return (
     <ImportView
-      model={{ prefix, can, importers, jobs, companies, people, asOf, wizard, selected, cancelMany, bulkBusy, notice }}
+      model={{ prefix, can, importers, jobs, companies, people, asOf, wizard, selected, cancelMany, bulkBusy, notice, firstLoad: can.view ? firstLoad : null, templatesOpen }}
       actions={{
+        onTemplates: setTemplatesOpen,
+        firstLoad: {
+          onCompany: (companyId) => setFirstLoad(firstLoadLoading(companyId)),
+          onRetry: () => {
+            patchFirst({ problem: null, steps: null })
+            void loadFirst()
+          },
+          onAsk: (step, nothing) => patchFirst({ confirm: { step, nothing, reason: '' }, notice: null }),
+          onReason: (reason) => setFirstLoad((current) => (current?.confirm ? { ...current, confirm: { ...current.confirm, reason } } : current)),
+          onCancel: () => patchFirst({ confirm: null }),
+          onDismissNotice: () => patchFirst({ notice: null }),
+          onConfirm: () => {
+            const current = firstLoad
+            const confirm = current?.confirm
+            if (!current || !confirm || current.busy) return
+            if (confirm.nothing && reasonProblem(confirm.reason)) return
+            const step = current.steps?.find((item) => item.step === confirm.step)
+            patchFirst({ busy: true })
+            markFirstLoadDone(api, confirm.step, {
+              companyId: current.companyId,
+              ...(confirm.nothing ? { nothing: true, reason: confirm.reason.trim() } : step?.job ? { jobId: step.job.id } : {}),
+            })
+              .then((answer) => patchFirst({ ...shownFirst(answer), busy: false, confirm: null, notice: { key: confirm.nothing ? 'imp.first.notice.nothing' : 'imp.first.notice.done', tone: 'success', params: { n: stepNumber(confirm.step) } } }))
+              .catch((error: unknown) => {
+                // A refusal (an earlier step, a difference): the steps read again say why in the page's words.
+                patchFirst({ busy: false, confirm: null, notice: { key: isApiError(error) && error.kind === 'conflict' ? 'imp.first.notice.refused' : problemKey(error), tone: 'warning' } })
+                void loadFirst()
+              })
+          },
+        },
         onNew: (key) => open(key ? `?importer=${encodeURIComponent(key)}` : '?new=1'),
         onRetry: () => {
           setImporters(loading())

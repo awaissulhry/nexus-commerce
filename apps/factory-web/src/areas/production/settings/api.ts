@@ -71,10 +71,5 @@ export const recordLegalBasis = (api: ApiClient, siteId: string, body: LegalBasi
 export const changeBundleSize = (api: ApiClient, siteId: string, body: { standardBundleSize: number; version?: number }, idempotencyKey: string) =>
   api.post(`/production/settings/${seg(siteId)}/bundle-size`, { body, schema: changeSchema, idempotencyKey })
 
-const reasonSchema = z.object({ kind: z.enum(['SCRAP', 'REWORK']), code: z.string(), label: z.object({ it: z.string(), en: z.string() }), sortOrder: z.number() })
-export type ScanReason = z.infer<typeof reasonSchema>
-/** The tenant's scrap and rework reasons as the operation screen offers them (production.scan; read only in W1). */
-export const listReasons = async (api: ApiClient, signal?: AbortSignal) => (await api.get('/production/scans/reasons', { schema: z.object({ reasons: z.array(reasonSchema) }), signal })).reasons
-
 /** The step-up: a fresh authenticator code opens risky changes on this session for five minutes. */
 export const stepUp = (api: ApiClient, code: string) => api.post('/auth/office/step-up', { body: { code }, schema: z.object({ stepUpUntil: z.string() }) })

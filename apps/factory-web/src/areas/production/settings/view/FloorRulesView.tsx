@@ -1,18 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Scale, ShieldOff, SlidersHorizontal } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, Modal, Tabs, type TabItem } from '@nexus/ui/components'
-import { type ColDef } from '@nexus/ui/grid'
 import { saveKeyAction, StepUpModal } from '@nexus/ui/patterns'
-import { Button, Input, NumberStepper, Pill, RadioCard, Select, Skeleton, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
+import { Button, Input, NumberStepper, Pill, RadioCard, Select, Skeleton, Spinner, Textarea } from '@nexus/ui/primitives'
 import { MONITORING_BASES } from '@nexus/factory-domain/production/settings/monitoring'
-import { ListFrame } from '../../../../list-frame/ListFrame'
 import { formatDateTime, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
-import type { BasisKind, NoticeAcks, RulesDetail, ScanReason, ScanSubject, SiteRules } from '../api'
+import type { BasisKind, NoticeAcks, RulesDetail, ScanSubject, SiteRules } from '../api'
 import { bundleHeld, draftOf, FIXED_RULES, FLOOR_RULES_NAMESPACES, impactOf, MAX_BUNDLE, planOf, readinessOf, type FloorRulesCan, type Line, type SwitchDraft, type SwitchPlan, type Tab } from '../model'
 import '../floor-rules.css'
 
@@ -30,7 +28,6 @@ export interface FloorRulesModel {
   siteId: string | null
   detail: Part<RulesDetail>
   acks: Part<NoticeAcks>
-  reasons: Part<ScanReason[]>
   asOf: string | null
   busy: 'switch' | 'bundle' | null
   notice: { tone: 'success' | 'danger'; key: string; params?: Record<string, string | number> } | null
@@ -61,19 +58,19 @@ export interface FloorRulesActions {
  * recorded it and when), whether the site is ready for real floor work, the worker notice as counts only (Owner answer
  * W1), what a change reaches; Apply held until the basis and reference are given for WORKER and a reason for widening;
  * widening asks a fresh code, narrowing asks "Record stations only"; the standard bundle size; the rules this version
- * fixes. Reason codes: the scrap and rework reasons the operation screen offers, read only in W1. Fetches nothing.
+ * fixes. Reason codes (SCR-088, B-W2a-46): the shared reason list editor, passed in by the page as `codes`. Fetches nothing.
  */
-export function FloorRulesView({ model, actions }: { model: FloorRulesModel; actions?: FloorRulesActions }) {
+export function FloorRulesView({ model, actions, codes }: { model: FloorRulesModel; actions?: FloorRulesActions; codes?: ReactNode }) {
   return (
     <WithMessages namespaces={FLOOR_RULES_NAMESPACES}>
-      <FloorRules model={model} actions={actions} />
+      <FloorRules model={model} actions={actions} codes={codes} />
     </WithMessages>
   )
 }
 
 const lineText = (t: (key: string, params?: Readonly<Record<string, string | number>>) => string, line: Line) => t(line.key, line.params)
 
-function FloorRules({ model, actions }: { model: FloorRulesModel; actions?: FloorRulesActions }) {
+function FloorRules({ model, actions, codes }: { model: FloorRulesModel; actions?: FloorRulesActions; codes?: ReactNode }) {
   const t = useT('floor-rules')
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -163,7 +160,7 @@ function FloorRules({ model, actions }: { model: FloorRulesModel; actions?: Floo
       )}
 
       {model.tab === 'codes' ? (
-        <Codes model={model} actions={actions} />
+        <Codes model={model} codes={codes} />
       ) : detail ? (
         <Rules key={`${detail.site.id}-${detail.rules.version ?? 0}`} model={model} actions={actions} detail={detail} />
       ) : model.detail.problem ? (
@@ -502,57 +499,18 @@ function BundleCard({ model, actions, detail }: { model: FloorRulesModel; action
   )
 }
 
-function Codes({ model, actions }: { model: FloorRulesModel; actions?: FloorRulesActions }) {
+/**
+ * Reason codes (SCR-088; design production.settings fr-reasons; B-W2a-46): the page passes the shared reason list editor
+ * (areas/_shared/reasons, B-W2a-18) as `codes` — pause, scrap, rework, downtime, help-call, adjustment, hold and cancel
+ * reasons with words per language, icon and colour, active and used count, saved per cell. The view fetches nothing.
+ */
+function Codes({ model, codes }: { model: FloorRulesModel; codes?: ReactNode }) {
   const t = useT('floor-rules')
-  const reasons = model.reasons.value
-  const columns = useMemo<ColDef<ScanReason>[]>(
-    () => [
-      { colId: 'kind', headerName: t('fr.codes.col.kind'), minWidth: 110, flex: 0.6, cellRenderer: ({ data }: { data?: ScanReason }) => (data ? <Tag tone={data.kind === 'SCRAP' ? 'danger' : 'warning'}>{t(`fr.codes.kind.${data.kind}`)}</Tag> : null) },
-      { colId: 'code', headerName: t('fr.codes.col.code'), minWidth: 140, flex: 0.8, cellRenderer: ({ data }: { data?: ScanReason }) => (data ? <span className="fw-fr-code">{data.code}</span> : null) },
-      { colId: 'it', headerName: t('fr.codes.col.it'), minWidth: 180, flex: 1.2, valueGetter: (params) => params.data?.label.it ?? '' },
-      { colId: 'en', headerName: t('fr.codes.col.en'), minWidth: 180, flex: 1.2, valueGetter: (params) => params.data?.label.en ?? '' },
-      { colId: 'order', headerName: t('fr.codes.col.order'), minWidth: 90, flex: 0.4, type: 'rightAligned', valueGetter: (params) => params.data?.sortOrder ?? '' },
-    ],
-    [t],
-  )
   if (!model.can.reasons)
     return (
       <Card padded>
         <EmptyState icon={<ShieldOff size={22} aria-hidden />} title={t('fr.codes.noAccess.title')} description={t('fr.codes.noAccess.body')} />
       </Card>
     )
-  const scrap = reasons?.filter((reason) => reason.kind === 'SCRAP').length ?? 0
-  const rework = reasons?.filter((reason) => reason.kind === 'REWORK').length ?? 0
-  return (
-    <div className="fw-fr-stack">
-      <Banner tone="info" title={t('fr.codes.fixedTitle')}>
-        {t('fr.codes.fixedBody')}
-      </Banner>
-      <ListFrame<ScanReason>
-        label={t('fr.codes.tableLabel')}
-        rows={model.reasons.problem ? [] : reasons}
-        rowId={(reason) => `${reason.kind}|${reason.code}`}
-        columns={columns}
-        count={reasons ? t('fr.codes.count', { count: reasons.length, scrap, rework }) : '—'}
-        rowKind="text"
-        state={
-          model.reasons.problem ? (
-            <Banner
-              tone="danger"
-              title={t(model.reasons.problem)}
-              action={
-                actions?.onRetry ? (
-                  <Button size="sm" onClick={actions.onRetry}>
-                    {t('fr.retry')}
-                  </Button>
-                ) : undefined
-              }
-            />
-          ) : reasons && reasons.length === 0 ? (
-            <EmptyState title={t('fr.codes.empty')} />
-          ) : undefined
-        }
-      />
-    </div>
-  )
+  return <div className="fw-fr-stack">{codes ?? null}</div>
 }

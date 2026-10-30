@@ -173,23 +173,6 @@
       "offline": "Scansioni, tagli e fasci attendono sul tablet quando è offline e partono in ordine; ricevimenti, ispezioni, rilasci ed etichette capo richiedono la rete."
     },
     "codes": {
-      "fixedTitle": "Le causali che offre la schermata di operazione",
-      "fixedBody": "Ognuno le vede nella propria lingua (qui sono elencate entrambe). In questa versione l’elenco è fisso per ogni azienda: la modifica, con icone e colori, arriverà più avanti.",
-      "tableLabel": "Causali di scarto e rilavorazione",
-      "count_one": "{count} causale · {scrap} scarto · {rework} rilavorazione",
-      "count_other": "{count} causali · {scrap} scarto · {rework} rilavorazione",
-      "empty": "Ancora nessuna causale.",
-      "col": {
-        "kind": "Tipo",
-        "code": "Codice",
-        "it": "Italiano",
-        "en": "Inglese",
-        "order": "Ordine"
-      },
-      "kind": {
-        "SCRAP": "Scarto",
-        "REWORK": "Rilavorazione"
-      },
       "noAccess": {
         "title": "Il tuo ruolo non può leggere i codici causale",
         "body": "Per leggerli serve “production.scan”, che hanno il responsabile di produzione e gli operatori."

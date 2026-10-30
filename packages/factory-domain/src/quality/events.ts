@@ -5,6 +5,10 @@ import { FOUR_EYES_RULES, REVERSAL_REASONS, SECOND_PERSON_REASONS, SERIALS_TO } 
 // B-W2a-26: the defect library, the disposition codes and quality holds.
 import { DEFECT_LIBRARY_CHANGES, DISPOSITION_CODE_CHANGES, HOLD_CHANGED_FIELDS } from './holds/changes'
 import { HOLD_QUARANTINE, HOLD_SUBJECT_TYPES } from './holds/rules'
+// B-W2a-47: nonconformances.
+import { CONTAINMENT_CHANGES, DECISION_CHANGES, NCR_CHANGED_FIELDS } from './ncr/changes'
+import { CONTAINMENT_KINDS, NCR_SOURCES, NCR_STAGES } from './ncr/rules'
+import { DEFECT_CLASSES } from './defects/rules'
 
 /**
  * The quality module's events (plan A1 §3.4). The lab step (B-W1-34, modules/quality/lab) emits them in the command that
@@ -27,6 +31,13 @@ import { HOLD_QUARANTINE, HOLD_SUBJECT_TYPES } from './holds/rules'
  * `quality.hold_released` once per release (the work orders it lifted), `quality.hold_changed` when its owner, expected
  * release or notes change. Holds reach the office's hold screens (quality.holds.view) and the site's floor devices (an
  * open card of a held bundle, lot or work order holds its action with the reason). No cost, price or name in a payload.
+ *
+ * Nonconformances (B-W2a-47, modules/quality/ncr): `ncr.created` once per NCR raised (from which record), `ncr.changed`
+ * when its content, owner, containment due time, links or PPE register entry change, `ncr.stage_changed` for each move
+ * of its stage (the board's lanes; a close names the holds it closed), `ncr.containment_changed` for each containment
+ * action added, changed, done or cancelled (the hold it placed or names), `ncr.decision_changed` for each decision
+ * added, changed, removed, approved or carried out (the stock moves posted, the follow-up made), `ncr.hold_closed` when
+ * the NCR closes a hold it decides. They reach the NCR screens of the office (quality.ncr.view). No cost, price or name.
  */
 const lotStatus = z.enum(['QUARANTINE', 'RELEASED', 'REJECTED', 'BLOCKED'])
 
@@ -231,5 +242,72 @@ export const events = [
     description: "A hold's owner, expected release or notes changed.",
     payload: z.strictObject({ holdId: z.uuid(), fields: z.array(z.enum(HOLD_CHANGED_FIELDS)).min(1) }),
     live: { permission: 'quality.holds.view', fields: ['holdId', 'fields'] },
+  }),
+  // ---- B-W2a-47: nonconformances ----------------------------------------------------------------------------------------
+  defineEvent({
+    type: 'ncr.created',
+    context: 'quality',
+    description: 'A nonconformance (NCR) was raised, by hand or from a record (an inspection, a bundle, a lot, a receipt, a return, a complaint, a supplier claim, a hold); its number, severity and where it came from.',
+    payload: z.strictObject({
+      ncrId: z.uuid(),
+      number: z.string(),
+      source: z.enum(NCR_SOURCES),
+      sourceType: z.string().nullable(),
+      sourceId: z.uuid().nullable(),
+      severity: z.enum(DEFECT_CLASSES),
+      workOrderId: z.uuid().nullable(),
+      lotId: z.uuid().nullable(),
+      /** The holds it decides from the start (raised from a hold). */
+      holdIds: z.array(z.uuid()),
+      registerEntryId: z.uuid().nullable(),
+    }),
+    live: { permission: 'quality.ncr.view', fields: ['ncrId', 'number', 'severity', 'source'] },
+  }),
+  defineEvent({
+    type: 'ncr.changed',
+    context: 'quality',
+    description: "An NCR's content, owner, containment due time, linked records or PPE register entry changed.",
+    payload: z.strictObject({ ncrId: z.uuid(), number: z.string(), fields: z.array(z.enum(NCR_CHANGED_FIELDS)).min(1) }),
+    live: { permission: 'quality.ncr.view', fields: ['ncrId', 'number', 'fields'] },
+  }),
+  defineEvent({
+    type: 'ncr.stage_changed',
+    context: 'quality',
+    description: 'An NCR moved on its board: contained, decided, closed with an e-signature (the holds it closed) or cancelled.',
+    payload: z.strictObject({ ncrId: z.uuid(), number: z.string(), from: z.enum(NCR_STAGES), to: z.enum(NCR_STAGES), holdsClosed: z.array(z.uuid()) }),
+    live: { permission: 'quality.ncr.view', fields: ['ncrId', 'number', 'from', 'to'] },
+  }),
+  defineEvent({
+    type: 'ncr.containment_changed',
+    context: 'quality',
+    description: 'A containment action of an NCR was added, changed, done (with its evidence, a hold it placed or names) or cancelled.',
+    payload: z.strictObject({ ncrId: z.uuid(), number: z.string(), actionId: z.uuid(), seq: z.number().int(), kind: z.enum(CONTAINMENT_KINDS), change: z.enum(CONTAINMENT_CHANGES), holdId: z.uuid().nullable() }),
+    live: { permission: 'quality.ncr.view', fields: ['ncrId', 'number', 'actionId', 'change'] },
+  }),
+  defineEvent({
+    type: 'ncr.decision_changed',
+    context: 'quality',
+    description: 'A decision of an NCR (a quantity and its disposition) was added, changed, removed, approved by another person or carried out (the stock moves it posted, the record it opened).',
+    payload: z.strictObject({
+      ncrId: z.uuid(),
+      number: z.string(),
+      decisionId: z.uuid(),
+      seq: z.number().int(),
+      dispositionCode: z.string(),
+      change: z.enum(DECISION_CHANGES),
+      quantity: z.string(),
+      approvalRequired: z.boolean(),
+      stockMoveIds: z.array(z.uuid()),
+      followUpType: z.string().nullable(),
+      followUpId: z.uuid().nullable(),
+    }),
+    live: { permission: 'quality.ncr.view', fields: ['ncrId', 'number', 'decisionId', 'change'] },
+  }),
+  defineEvent({
+    type: 'ncr.hold_closed',
+    context: 'quality',
+    description: 'An NCR closed a hold it decides (the goods were decided in it); the work orders the hold lifted.',
+    payload: z.strictObject({ ncrId: z.uuid(), number: z.string(), holdId: z.uuid(), workOrdersLifted: z.array(z.uuid()) }),
+    live: { permission: 'quality.ncr.view', fields: ['ncrId', 'number', 'holdId'] },
   }),
 ] as const
