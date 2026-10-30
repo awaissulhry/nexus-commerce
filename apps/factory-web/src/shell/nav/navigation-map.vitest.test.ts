@@ -126,6 +126,10 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/finance/invoices': 'invoices.view', // GET /invoicing/invoices
       '/finance/payments': 'payments.view', // GET /payments
       '/finance/settings': 'invoices.view', // GET /invoicing/settings
+      // B-W2a-53: Plant › Maintenance.
+      '/plant/requests': 'plant.view', // GET /plant/requests
+      '/plant/jobs': 'plant.view', // GET /plant/jobs
+      '/plant/machines': 'plant.view', // GET /plant/machines
       '/admin': 'companies.view', // the checklist reads the companies
       '/admin/companies': 'companies.view',
       '/admin/devices': 'devices.view',

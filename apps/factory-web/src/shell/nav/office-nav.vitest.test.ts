@@ -22,6 +22,8 @@ describe('the Office navigation (PLT-160: one declaration per area)', () => {
       [8, 'quality'],
       [9, 'compliance'],
       [10, 'finance'],
+      // B-W2a-53: Plant (Owner answer T2), the tree's area 12.
+      [12, 'plant'],
       [13, 'admin'],
     ])
     expect(OFFICE_NAV.view).toBe('office')
@@ -119,7 +121,7 @@ describe('labels, crumbs, palette pages and the phone bar come from the same man
     expect(nav.areas.map((area) => area.label)).toEqual(['Home', 'Sales', 'Purchasing', 'Admin'])
     expect(nav.areas[3]?.sections?.map((s) => s.label)).toEqual(['Main', 'Organisation', 'Access', 'Platform', 'Data'])
     const it = translateNav(OFFICE_NAV, createScopedTranslator('it', messagesFor('it', ['shell']), 'shell'))
-    expect(it.areas.map((area) => area.label)).toEqual(['Home', 'Vendite', 'Prodotti', 'Pianificazione', 'Acquisti', 'Magazzino', 'Produzione', 'Qualità', 'Conformità', 'Amministrazione', 'Sistema'])
+    expect(it.areas.map((area) => area.label)).toEqual(['Home', 'Vendite', 'Prodotti', 'Pianificazione', 'Acquisti', 'Magazzino', 'Produzione', 'Qualità', 'Conformità', 'Amministrazione', 'Stabilimento', 'Sistema'])
     expect(JSON.stringify(nav)).not.toContain('shell:')
   })
 

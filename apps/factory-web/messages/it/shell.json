@@ -34,6 +34,13 @@
       "suppliers": "Fornitori",
       "orders": "Ordini d'acquisto"
     },
+    "plant": {
+      "area": "Stabilimento",
+      "maintenance": "Manutenzione",
+      "requests": "Richieste di intervento",
+      "jobs": "Interventi",
+      "machines": "Macchine e attrezzature"
+    },
     "admin": {
       "area": "Sistema",
       "main": "Principali",

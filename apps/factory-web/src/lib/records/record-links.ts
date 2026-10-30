@@ -61,6 +61,11 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   IntegrationAccount: '/admin/connections/[id]',
   // Home › My tasks (SCR-233, B-W2a-40): a task opens in its DetailModal on the list.
   Task: '/home/tasks?open=[id]',
+  // B-W2a-53 Plant › Maintenance: a machine (SCR-150), a maintenance job (SCR-149); a request opens in its DetailModal on
+  // the queue (SCR-148).
+  Machine: '/plant/machines/[id]',
+  MaintenanceJob: '/plant/jobs/[id]',
+  MaintenanceRequest: '/plant/requests?open=[id]',
 })
 
 /**
@@ -112,6 +117,10 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2a-45: the schedule's board and the allocation board.
   '/planning/schedule': '/planning/board',
   '/planning/allocation': '/planning/allocation',
+  // B-W2a-53: the plant's lists (the requests queue reads `?tile=`, the jobs `?view=`, the machines `?view=` and `?q=`).
+  '/plant/requests': '/plant/requests',
+  '/plant/jobs': '/plant/jobs',
+  '/plant/machines': '/plant/machines',
 })
 
 export interface RecordRef {
