@@ -78,6 +78,27 @@ import { returnKitLine, sendKit } from './subcontracting/kit'
 import * as subcontracts from './subcontracting/orders'
 import { receiveBack } from './subcontracting/receive'
 import { subcontractorStock } from './subcontracting/stock'
+// B-W2a-44: supplier claims and returns to the supplier (./claims).
+import * as claims from './claims/claims'
+import {
+  addLinesContract as addClaimLinesContract,
+  answerClaimContract,
+  cancelClaimContract,
+  claimCountsContract,
+  closeClaimContract,
+  createClaimContract,
+  editLineContract as editClaimLineContract,
+  getClaimContract,
+  listClaimsContract,
+  removeLineContract as removeClaimLineContract,
+  returnGoodsContract,
+  returnToSupplierContract,
+  sendCheckContract as claimSendCheckContract,
+  sendClaimContract,
+  updateClaimContract,
+} from './claims/contract'
+import { returnGoods, returnToSupplier } from './claims/returns'
+import { sendCheck as claimSendCheck, sendClaim } from './claims/send'
 import { processFiles } from '../../platform/files/service'
 
 /**
@@ -99,6 +120,10 @@ import { processFiles } from '../../platform/files/service'
  * B-W2a-25: subcontract orders (./subcontracting: the list and its tiles, the record, what a work order may send out, a
  * new draft, its header, operations and kit plan, issue / back to draft / cancel / close, the kit out with its DDT, a kit
  * line back unsent, goods back by bundle) and the stock at each subcontractor.
+ *
+ * B-W2a-44: supplier claims (./claims: the list and its tiles, the record, a draft from discrepancies, a lot or typed
+ * lines, its header and lines, the send-check and the send by e-mail, the supplier's answer, close, cancel), the goods of
+ * a return back with the return DDT, and "Return to supplier" in one go.
  */
 export default defineRoutes('purchasing', manifest, async (app) => {
   app.get('/purchasing/orders', { schema: listOrdersContract }, async (request) => listOrders(request, request.query))
@@ -207,6 +232,27 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   )
   app.post('/purchasing/subcontracting/orders/:subcontractOrderId/receive', { schema: receiveSubcontractContract }, async (request, reply) =>
     reply.code(201).send(await receiveBack(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request))),
+  )
+
+  // B-W2a-44 (SCM-134): supplier claims and returns to the supplier.
+  app.get('/purchasing/claims', { schema: listClaimsContract }, async (request) => claims.listClaims(request, request.query))
+  app.get('/purchasing/claims/counts', { schema: claimCountsContract }, async (request) => claims.claimCounts(request, request.query))
+  app.get('/purchasing/claims/:claimId', { schema: getClaimContract }, async (request) => claims.getClaim(request, request.params.claimId))
+  app.post('/purchasing/claims', { schema: createClaimContract }, async (request, reply) => reply.code(201).send(await claims.createClaim(request, request.body, idempotencyKeyFrom(request))))
+  app.patch('/purchasing/claims/:claimId', { schema: updateClaimContract }, async (request) => claims.updateClaim(request, request.params.claimId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/claims/:claimId/lines', { schema: addClaimLinesContract }, async (request, reply) => reply.code(201).send(await claims.addLines(request, request.params.claimId, request.body, idempotencyKeyFrom(request))))
+  app.patch('/purchasing/claims/:claimId/lines/:lineId', { schema: editClaimLineContract }, async (request) => claims.editLine(request, request.params.claimId, request.params.lineId, request.body, idempotencyKeyFrom(request)))
+  app.delete('/purchasing/claims/:claimId/lines/:lineId', { schema: removeClaimLineContract }, async (request) => claims.removeLine(request, request.params.claimId, request.params.lineId, request.query, idempotencyKeyFrom(request)))
+  app.get('/purchasing/claims/:claimId/send-check', { schema: claimSendCheckContract }, async (request) => claimSendCheck(request, request.params.claimId))
+  app.post('/purchasing/claims/:claimId/send', { schema: sendClaimContract }, async (request) => sendClaim(request, request.params.claimId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/claims/:claimId/answer', { schema: answerClaimContract }, async (request) => claims.answerClaim(request, request.params.claimId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/claims/:claimId/close', { schema: closeClaimContract }, async (request) => claims.closeClaim(request, request.params.claimId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/claims/:claimId/cancel', { schema: cancelClaimContract }, async (request) => claims.cancelClaim(request, request.params.claimId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/claims/:claimId/return', { schema: returnGoodsContract }, async (request, reply) =>
+    reply.code(201).send(await returnGoods(processFiles(), request, request.params.claimId, request.body, idempotencyKeyFrom(request), (error) => request.log.error({ err: error }, 'the return DDT is issued; its PDF was not stored'))),
+  )
+  app.post('/purchasing/claims/returns', { schema: returnToSupplierContract }, async (request, reply) =>
+    reply.code(201).send(await returnToSupplier(processFiles(), request, request.body, idempotencyKeyFrom(request), (error) => request.log.error({ err: error }, 'the return DDT is issued; its PDF was not stored'))),
   )
 
   const linkUse = app.officeAuth?.rateLimits.linkUse ?? AUTH_RATE_LIMITS.linkUse
