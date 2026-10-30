@@ -38,6 +38,13 @@ const LABELS: Readonly<Record<string, Labeller>> = Object.freeze({
   PpeRegisterEntry: async (client, id) => ((await client.ppeRegisterEntry.findUnique({ where: { id }, select: { id: true } })) ? `PPE register entry ${id.slice(-6)}` : null),
   Lot: async (client, id) => (await client.lot.findUnique({ where: { id }, select: { code: true } }))?.code ?? null,
   GoodsReceipt: async (client, id) => (await client.goodsReceipt.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
+  // B-W2a-35 (modules/plant): a machine by its asset number, a request by its machine's, a job by its number.
+  Machine: async (client, id) => (await client.machine.findUnique({ where: { id }, select: { assetNumber: true } }))?.assetNumber ?? null,
+  MaintenanceRequest: async (client, id) => {
+    const request = await client.maintenanceRequest.findUnique({ where: { id }, select: { machine: { select: { assetNumber: true } } } })
+    return request ? `${request.machine.assetNumber} request` : null
+  },
+  MaintenanceJob: async (client, id) => (await client.maintenanceJob.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
 })
 
 /** The record's label, or null when it is not there for this caller. A type without its own labeller: its type and id end. */

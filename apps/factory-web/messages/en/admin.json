@@ -1164,6 +1164,14 @@
       "team_leader": {
         "name": "Team leader",
         "description": "Leads a crew on the floor: works and sees the team leader's screens of the device's site; sees no money."
+      },
+      "maintenance": {
+        "name": "Maintenance",
+        "description": "Keeps the machines running: the machine register, the requests from the stations and the maintenance jobs; signs a machine marked unsafe safe again; sees no money."
+      },
+      "technician": {
+        "name": "Maintenance technician",
+        "description": "Works maintenance jobs on an enrolled floor device and signs a machine marked unsafe safe again with the PIN; sees no money."
       }
     },
     "bulk": {
@@ -1497,7 +1505,8 @@
     "pricelists": "Price lists",
     "tasks": "Tasks",
     "views": "Views and exports",
-    "search": "Search"
+    "search": "Search",
+    "plant": "Plant"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",

@@ -128,6 +128,20 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const hold = await client.qualityHold.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
     return hold ? { companyId: hold.companyId, siteId: hold.siteId, partyId: null } : null
   },
+  // modules/plant (SCR-148, SCR-149, SCR-150 the records' Activity tab; B-W2a-35): the machine's company and site; notes
+  // only (a machine's supplier is no party of its maintenance).
+  Machine: async (client, id) => {
+    const machine = await client.machine.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
+    return machine ? { companyId: machine.companyId, siteId: machine.siteId, partyId: null } : null
+  },
+  MaintenanceRequest: async (client, id) => {
+    const request = await client.maintenanceRequest.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
+    return request ? { companyId: request.companyId, siteId: request.siteId, partyId: null } : null
+  },
+  MaintenanceJob: async (client, id) => {
+    const job = await client.maintenanceJob.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
+    return job ? { companyId: job.companyId, siteId: job.siteId, partyId: null } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}
