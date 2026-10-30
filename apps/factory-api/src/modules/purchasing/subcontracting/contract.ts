@@ -160,6 +160,12 @@ export const listOrdersContract = defineContract({
     siteId: id().optional(),
     /** Only the late ones. */
     late: flag(),
+    /** The tiles as filters (B-W2a-56; the same rules as `/counts`): issued with kit lines still to send. */
+    kitToSend: flag(),
+    /** Something of it is at the workshop (AT_WORKSHOP, PARTLY_RECEIVED). */
+    atWorkshop: flag(),
+    /** Waiting for goods, due back from today to the end of the week (Sunday, Europe/Rome). */
+    dueThisWeek: flag(),
     /** Number, workshop code or name, work order number. */
     q: z.string().trim().min(1).max(80).optional(),
     cursor: id().optional(),
@@ -207,6 +213,30 @@ export const outsideOperationsContract = defineContract({
       workshops: z.array(ref.extend({ locations: z.array(ref) })),
       /** Live subcontract orders of the work order. */
       orders: z.array(output({ id: id(), number: z.string(), status })),
+    }),
+  },
+})
+
+/**
+ * B-W2a-56, the "New subcontract order" dialog's work order picker: the released or running work orders the caller
+ * reaches with purchasing.view (a buyer holds no workorders.view), by number or style, with how many of their operations
+ * the routing sends out and how many live subcontract orders they have.
+ */
+export const workOrderChoicesContract = defineContract({
+  querystring: input({ q: z.string().trim().min(1).max(80).optional(), siteId: id().optional(), limit: z.coerce.number().int().min(1).max(50).default(20) }),
+  response: {
+    200: output({
+      items: z.array(
+        workOrderRef.extend({
+          companyId: id(),
+          site: output({ id: id(), code: z.string() }),
+          garments: z.number().int(),
+          /** Operations whose routing step is done outside (it names a workshop). */
+          outsideSteps: z.number().int(),
+          /** Live (not cancelled, not closed) subcontract orders of the work order. */
+          liveOrders: z.number().int(),
+        }),
+      ),
     }),
   },
 })

@@ -1,4 +1,4 @@
-import { FileText, ShoppingCart, Truck } from 'lucide-react'
+import { Factory, FileText, ShoppingCart, Truck } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -24,6 +24,12 @@ export const officeArea: OfficeAreaNav = {
           { id: 'purchasing-suppliers', label: 'shell:nav.purchasing.suppliers', href: '/purchasing/suppliers', icon: Truck, permission: 'parties.view' },
           { id: 'purchasing-orders', label: 'shell:nav.purchasing.orders', href: '/purchasing/orders', icon: FileText, permission: 'purchasing.view' },
         ],
+      },
+      // B-W2a-56: Outside work › Subcontract orders (SCR-128; its view Stock at subcontractors, SCR-129).
+      {
+        id: 'purchasing-outside',
+        label: 'shell:nav.purchasing.outside',
+        items: [{ id: 'purchasing-subcontracting', label: 'shell:nav.purchasing.subcontracting', href: '/purchasing/subcontracting', icon: Factory, permission: 'purchasing.view' }],
       },
     ],
   },

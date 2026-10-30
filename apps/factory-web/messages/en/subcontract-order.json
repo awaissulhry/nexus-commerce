@@ -1,0 +1,631 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "clear": "Clear",
+    "dismiss": "Dismiss",
+    "loading": "Loading…",
+    "retry": "Try again"
+  },
+  "held": {
+    "busy": "Working…"
+  },
+  "problem": {
+    "read": "The server didn't answer as expected. Try again.",
+    "forbidden": "Your role may not see or do this.",
+    "offline": "No connection to the server. Check the network and try again.",
+    "gone": "It no longer exists, or it belongs to another company.",
+    "write": "It was not saved. Try again.",
+    "changed": "Someone changed the order meanwhile: it was read again. Check and try again.",
+    "invalid": "Something in it was not accepted. Check the fields and try again.",
+    "slowDown": "Too many tries at once. Wait a moment and try again."
+  },
+  "part": {
+    "failed": "Couldn't load {part}",
+    "loading": "Loading {part}…"
+  },
+  "mark": {
+    "saving": "Saving…",
+    "saved": "Saved",
+    "failed": "Not saved: {why}"
+  },
+  "record": {
+    "loading": "Loading the subcontract order…",
+    "backToList": "Back to subcontract orders",
+    "not_found": {
+      "title": "Not found",
+      "body": "This subcontract order does not exist, or it belongs to another company."
+    },
+    "forbidden": {
+      "title": "Not for your role",
+      "body": "Your role does not reach this order’s company, site or workshop."
+    },
+    "error": {
+      "title": "Couldn't load the order"
+    },
+    "noAccess": {
+      "title": "Not for your role",
+      "body": "Subcontract orders need purchasing.view: ask an administrator for it."
+    },
+    "changed": "Changed at {time} by someone else · your open dialog is kept",
+    "reload": "Reload",
+    "cancelled": "Cancelled on {date}",
+    "readOnly": "You read this order: changing it, sending its kit or receiving goods back need another role.",
+    "noPanels": "The thread, files and history appear here."
+  },
+  "band": {
+    "back": "Subcontract orders",
+    "title": "Subcontract order",
+    "act": {
+      "issue": "Send to the workshop",
+      "send": "Send kit",
+      "receive": "Receive back",
+      "close": "Close order",
+      "reopen": "Back to draft",
+      "cancel": "Cancel order"
+    },
+    "dock": "Thread",
+    "dockHint": "The thread beside any tab on a wide screen (⌘J)",
+    "dockLabel": "Thread, files and history",
+    "more": "More actions",
+    "jobSheet": "Print job sheet",
+    "printDdt": "Print kit DDT {number}",
+    "printDdtNone": "Print kit DDT",
+    "noDdt": "No live kit DDT yet: it is issued when the kit is sent.",
+    "reopen": "Back to draft",
+    "cancel": "Cancel order…",
+    "copyNumber": "Copy number",
+    "late": "Late since {date}"
+  },
+  "journey": {
+    "draft": "Draft",
+    "sent": "Sent",
+    "kitOut": "Kit out (DDT) · in work",
+    "back": "Back",
+    "closed": "Closed",
+    "short": "Step {step} of {count}: {label}",
+    "next": "then {label}"
+  },
+  "waits": {
+    "draft": "A draft: the buyer sets the operations, pieces, fee and return date, then sends it to the workshop.",
+    "kit": "Sent to {workshop}: the warehouse sends the kit and the pieces with the DDT.",
+    "close": "Every piece is back: close the order.",
+    "closed": "Closed on {date}.",
+    "cancelled": "Cancelled: nothing went out.",
+    "back_one": "{count} piece at {workshop}, due back {date}.",
+    "back_other": "{count} pieces at {workshop}, due back {date}.",
+    "backNoDate_one": "{count} piece at {workshop}.",
+    "backNoDate_other": "{count} pieces at {workshop}."
+  },
+  "tab": {
+    "label": "The order’s tabs",
+    "ops": "Operations & quantities",
+    "kit": "Kit sent",
+    "back": "Received back",
+    "documents": "Documents",
+    "activity": "Activity"
+  },
+  "notice": {
+    "issued": "Sent to the workshop: the warehouse can send the kit now.",
+    "reopened": "Back to draft: change it and send it again.",
+    "cancelled": "The order is cancelled; its planned kit lines too.",
+    "closed": "The order is closed.",
+    "operationAdded": "Operation added.",
+    "operationRemoved": "Operation removed.",
+    "kitLineAdded": "Kit line added.",
+    "kitPlanned": "The kit is planned from the work order’s materials.",
+    "lineReturned": "The line is back in our stock and planned again.",
+    "printed": "The DDT’s PDF is printed again.",
+    "annulled": "DDT {number} is annulled: its number stays.",
+    "copied": "{number} copied.",
+    "kitRemoved_one": "{count} kit line removed.",
+    "kitRemoved_other": "{count} kit lines removed."
+  },
+  "grid": {
+    "caption": "Pieces by colour and size",
+    "colour": "Colour",
+    "total": "Total",
+    "cellName": "{colour}, size {size}",
+    "notOffered": "not made",
+    "empty": "No colourways or sizes.",
+    "totals": "{colour}: {rowTotal}. Size {size}: {columnTotal}. Total: {grand}.",
+    "notWhole": "{cell}: whole pieces only, 0 to {max}.",
+    "cutToMax": "{cell}: at most {max} pieces.",
+    "pasted": "{applied} cells filled, {skipped} skipped.",
+    "issues": "To check"
+  },
+  "ops": {
+    "draftHint": "A draft: each field saves when you leave it (Enter or Tab); Esc puts the saved value back.",
+    "add": "Add operation",
+    "frozen": "Changes to the operations are made only while the order is a draft; the counts move with the kit and the goods back.",
+    "frozenReopen": "Changes are made only while the order is a draft: nothing is out yet, so ⋯ Back to draft opens it again.",
+    "empty": {
+      "title": "No operations",
+      "body": "Pick them from the work order’s routing."
+    },
+    "card": {
+      "title": "Line {line} · {seq} {code} {name}",
+      "from": "From work order {number} · {style}"
+    },
+    "remove": "Remove line {line}",
+    "removeShort": "Remove",
+    "pieces": "Pieces",
+    "piecesOf": "Pieces of line {line}",
+    "fee": "Fee per piece ({currency})",
+    "feeOf": "Fee per piece of line {line}",
+    "amount": "Amount {amount}",
+    "back": "Expected back",
+    "backOf": "Expected back for line {line}",
+    "noDate": "No date yet",
+    "note": "Note for the workshop",
+    "noteOf": "Note for the workshop, line {line}",
+    "sizes": "Pieces per size",
+    "sizesOf": "Pieces per size, line {line}",
+    "editSizes": "Pieces per size…",
+    "countsLabel": "Sent and back",
+    "count": {
+      "sent": "Sent",
+      "of": "{done} of {total}",
+      "good": "Back good",
+      "defective": "Back defective",
+      "scrapped": "Scrapped there",
+      "atWorkshop": "At the workshop"
+    },
+    "total": "Order amount (cost): {amount}",
+    "cell": {
+      "piecesWhole": "whole pieces, at least 1",
+      "piecesRange": "more pieces than the work order makes",
+      "piecesTaken": "some pieces are on another live order",
+      "feeNumber": "a fee of 0 or more, up to six decimals",
+      "date": "a date",
+      "dateBefore": "due back on or after the order date",
+      "sizesAddUp": "the pieces per size must add up: change them in Pieces per size",
+      "notDraft": "the order is no longer a draft"
+    },
+    "notSplit_one": "Not split by size: {count} piece.",
+    "notSplit_other": "Not split by size: {count} pieces."
+  },
+  "kit": {
+    "tableLabel": "Kit lines",
+    "col": {
+      "seq": "Line",
+      "component": "Component",
+      "quantity": "Quantity",
+      "lot": "Lot",
+      "status": "Status",
+      "sent": "Sent",
+      "ddt": "DDT",
+      "more": "Actions"
+    },
+    "noColour": "No colour",
+    "untracked": "Not tracked by lot",
+    "lotAtSend": "Lot picked when it is sent",
+    "hide": "Hide {code}",
+    "noDdt": "Sent without a DDT",
+    "ddt": "DDT {number}",
+    "remove": "Remove",
+    "takeBack": "Take back (it never left)…",
+    "rowMenu": "Actions for kit line {seq}",
+    "plan": "Plan from the work order",
+    "add": "Add kit line",
+    "notSelectableSent": "Already sent: take it back from its row menu if it never left.",
+    "notSelectableCancelled": "Cancelled with the order.",
+    "empty": {
+      "title": "Kit not sent yet",
+      "body": "No kit line yet: the buyer plans it from the work order’s materials, or the pieces go alone.",
+      "bodyEdit": "Plan it from the work order’s materials, or add the lines one by one. Leather tracked by the hide goes cut, as bundles."
+    },
+    "floorLater": "Here the office sends the kit with its DDT; sending it from the warehouse tablet (Subcontract kits) comes with a later step.",
+    "ddts": {
+      "title": "Kit DDTs (work on our behalf)",
+      "none": "No DDT issued for this order yet.",
+      "col": {
+        "number": "Number",
+        "date": "Date",
+        "lines": "Kit lines",
+        "state": "State",
+        "open": "PDF"
+      }
+    },
+    "count_one": "{count} kit line",
+    "count_other": "{count} kit lines",
+    "removeN_one": "Remove {count} line",
+    "removeN_other": "Remove {count} lines"
+  },
+  "kitLine": {
+    "status": {
+      "PLANNED": "Planned",
+      "SENT": "Sent",
+      "CANCELLED": "Cancelled"
+    },
+    "title": "Add kit line",
+    "confirm": "Add",
+    "noMaterials": "Picking a material needs product.materials.view.",
+    "material": "Material",
+    "search": "Code or name",
+    "noMatch": "No active material matches.",
+    "colour": "Colour",
+    "pickColour": "Pick a colour",
+    "quantity": "Quantity",
+    "unit": "Unit",
+    "hideNote": "Leather tracked by the hide goes cut, as bundles: name the hide when the line is sent.",
+    "held": {
+      "material": "Pick a material.",
+      "colour": "Pick its colour.",
+      "quantity": "A quantity above 0, up to four decimals."
+    }
+  },
+  "lot": {
+    "QUARANTINE": "In quarantine",
+    "RELEASED": "Released",
+    "BLOCKED": "Blocked",
+    "REJECTED": "Rejected"
+  },
+  "back": {
+    "summary": "Back good {good} · defective {defective} · scrapped {scrapped} · still at the workshop {out}",
+    "empty": {
+      "due": "Nothing back yet — due {date}",
+      "title": "Nothing back yet",
+      "body": "Goods come back by operation and bundle: good, defective or scrapped at the workshop, with the unused material."
+    },
+    "receipt": "Receipt {n} · {date}",
+    "workshopDdt": "The workshop’s DDT",
+    "ddtOn": "{number} of {date}",
+    "noDdt": "Not given",
+    "recorded": "Recorded",
+    "note": "Note",
+    "linesLabel": "Pieces back, receipt {n}",
+    "returnsLabel": "Unused material returned",
+    "col": {
+      "operation": "Operation",
+      "bundle": "Bundle",
+      "good": "Good",
+      "defective": "Defective",
+      "scrapped": "Scrapped",
+      "reason": "Reason",
+      "material": "Material",
+      "lot": "Lot",
+      "quantity": "Quantity",
+      "to": "Back to"
+    },
+    "operation": "Line {line} · {code}",
+    "bundle": "{code} · {colourway} {size}",
+    "noBundle": "Whole operation",
+    "qualityLater": "The quality inspection of what came back is not linked from here yet."
+  },
+  "docs": {
+    "jobSheet": {
+      "name": "Job sheet {number}",
+      "status": "Printed and sent with the kit; no price on it. It opens in a new tab: print it, or save it as a PDF.",
+      "open": "Open job sheet"
+    },
+    "ddt": {
+      "name": "Kit DDT {number}",
+      "status_one": "{date} · {count} kit line",
+      "status_other": "{date} · {count} kit lines"
+    },
+    "live": "Live",
+    "annulled": "Annulled",
+    "noDdt": "No kit DDT yet: it is issued when the kit is sent.",
+    "show": "Show here",
+    "openPdf": "Open PDF",
+    "annul": "Annul…",
+    "noFiles": "Opening a PDF needs files.read.",
+    "noCancel": "Annulling a DDT needs shipping.ddt.cancel.",
+    "pdf": {
+      "missing": "The DDT is issued but its PDF was not stored: print it again."
+    },
+    "pdfLoading": "Reading the PDF…",
+    "printAgain": "Print again",
+    "later": "The workshop’s written terms and its invoices come with later steps."
+  },
+  "cancel": {
+    "title": "Cancel {number}",
+    "confirm": "Cancel the order",
+    "what": "{workshop} gets no work from it; nothing has gone out.",
+    "pieces": "Its pieces of {number} are free again for another order.",
+    "final": "A cancelled order cannot be opened again.",
+    "reason": "Why",
+    "reasonHint": "Kept on the order and in its history.",
+    "reasonNeeded": "Say why it is cancelled.",
+    "kit_one": "Its {count} planned kit line is cancelled too.",
+    "kit_other": "Its {count} planned kit lines are cancelled too."
+  },
+  "close": {
+    "title": "Close {number}",
+    "confirm": "Close the order",
+    "back": "Back: {good} good, {defective} defective, {scrapped} scrapped at the workshop.",
+    "balanceLater": "The material balance (sent, in the garments, returned, still out) comes with a later step: check the stock at the workshop first.",
+    "final": "A closed order takes nothing more.",
+    "note": "Note",
+    "noteHint": "Optional; kept in the order’s history."
+  },
+  "addOperation": {
+    "title": "Add operation",
+    "confirm": "Add",
+    "body": "The operations of work order {number} not on this order yet.",
+    "loading": "Reading the work order’s routing…",
+    "none": "Every operation of the work order is on this order already.",
+    "operation": "Operation",
+    "line": "{seq} · {code} {name}",
+    "left": "{left} of {garments} pieces free",
+    "outside": "Outside at {workshop}",
+    "inHouse": "In house in the routing",
+    "full": "Every piece is on live orders already.",
+    "pieces": "Pieces",
+    "piecesHint": "Every size gets its share when all pieces go; fewer pieces: split them per size afterwards.",
+    "held": {
+      "loading": "Still reading the work order…",
+      "failed": "The work order could not be read.",
+      "pick": "Pick an operation.",
+      "already": "This operation is on the order already.",
+      "pieces": "From 1 to {left} pieces."
+    },
+    "refused": {
+      "pieces": "Some pieces are on another live order: lower the pieces.",
+      "operation": "That operation is not of the work order any more."
+    }
+  },
+  "removeOperation": {
+    "title": "Remove line {line}",
+    "confirm": "Remove",
+    "body_one": "{code} {name} with its {count} piece leaves the order.",
+    "body_other": "{code} {name} with its {count} pieces leaves the order."
+  },
+  "sizes": {
+    "title": "Pieces per size, line {line}",
+    "body": "The cells of work order {number}: each takes at most the garments it makes.",
+    "loading": "Reading the work order’s sizes…",
+    "caption": "Pieces sent per colour and size",
+    "max": "At most: {cells}",
+    "held": {
+      "loading": "Still reading the sizes…",
+      "failed": "The work order’s sizes could not be read.",
+      "over": "{cell} takes at most {max}.",
+      "none": "At least one piece."
+    },
+    "confirm_one": "Save {count} piece",
+    "confirm_other": "Save {count} pieces"
+  },
+  "removeKit": {
+    "onlyPlanned": "Only planned lines are removed.",
+    "line": "Line {seq} · {code} {name}",
+    "title_one": "Remove {count} kit line",
+    "title_other": "Remove {count} kit lines",
+    "confirm_one": "Remove {count} line",
+    "confirm_other": "Remove {count} lines"
+  },
+  "returnLine": {
+    "title": "Take back kit line {seq}",
+    "confirm": "Take it back",
+    "what": "{code} {name} never left: it goes back where it came from.",
+    "reverse": "Its move into the workshop’s place is reversed and the line is planned again.",
+    "ddtFirst": "DDT {number} is live for it: annul the DDT in Documents first.",
+    "reason": "Why",
+    "held": {
+      "ddtLive": "DDT {number} is live: the goods travelled with it. Annul it in Documents first.",
+      "reason": "Say why it comes back."
+    },
+    "refused": {
+      "ddtLive": "Its DDT is live: annul it in Documents first, then take the line back."
+    }
+  },
+  "annul": {
+    "title": "Annul DDT {number}",
+    "confirm": "Annul the DDT",
+    "keeps": "{number} keeps its number, marked annulled, for 10 years.",
+    "lines": "Its kit lines stay sent: take back the ones that never left from the Kit tab.",
+    "replace": "Goods that travel still need a new DDT: send the kit again with one.",
+    "reason": "Why",
+    "type": "Type {number} to confirm",
+    "typeHint": "Capital letters and spaces count.",
+    "typeWrong": "Does not match the DDT number.",
+    "held": {
+      "reason": "Say why (at least 3 characters).",
+      "phrase": "Type the DDT number to confirm."
+    }
+  },
+  "send": {
+    "title": "Send kit · {number} to {workshop}",
+    "confirm": "Send",
+    "body": "Our material moves to {location}: it stays ours, in our books, until it comes back in the garments.",
+    "kitTitle": "Kit lines",
+    "noKit": "No planned kit line: only pieces and bundles go now.",
+    "sourcesLoading": "Reading where the material is…",
+    "line": "Line {seq} · {code} {name}{colour}",
+    "from": "From",
+    "fromLot": "A tracked material leaves by its released lot.",
+    "noStock": "Nothing of it is available on this site: receive it or move it here first.",
+    "pickFrom": "Pick where it leaves from",
+    "option": "{location}{lot}{hide} · {available} {unit} available",
+    "quantity": "Quantity ({unit})",
+    "piecesTitle": "Pieces that go now",
+    "noPieces": "Every piece has gone out already.",
+    "piecesOf": "Line {line} · {code}",
+    "piecesLeft": "{left} of {total} still to send; 0: none now",
+    "bundlesTitle": "Cut bundles that travel",
+    "bundlesNoRight": "The work order’s bundles need workorders.view: type the pieces above.",
+    "noBundles": "The work order has no active bundle.",
+    "bundlesHint": "Each bundle is listed on the DDT; with no pieces typed above, the whole-garment bundles count as the pieces sent.",
+    "ddtTitle": "DDT for work on our behalf",
+    "ddtIssue": "Issue the DDT now",
+    "ddtNoRight": "Issuing the DDT needs shipping.ddt.issue: the kit goes without one and the warehouse issues it later.",
+    "ddtLater": "No DDT now: issue it before the goods leave the building.",
+    "ddt": {
+      "reason": "Reason for the transport",
+      "reasonText": "Reason in words",
+      "reasons": {
+        "WORK_ON_ACCOUNT": "Work on our behalf (conto lavorazione)",
+        "OTHER": "Other"
+      },
+      "transportBy": "Carried by",
+      "by": {
+        "SENDER": "Us (sender)",
+        "RECIPIENT": "The workshop (recipient)",
+        "CARRIER": "A carrier"
+      },
+      "carrier": "Carrier",
+      "packages": "Packages",
+      "weight": "Gross weight",
+      "appearance": "Outward appearance",
+      "appearanceHint": "Boxes, rolls, bundles…",
+      "remarks": "Remarks on the DDT",
+      "fixed": "The number comes from the series and is kept 10 years; the DDT never changes after this (a mistake is annulled)."
+    },
+    "held": {
+      "loading": "Still reading where the material is…",
+      "sourcesFailed": "Where the material is could not be read: try again.",
+      "from": "Line {line}: pick where it leaves from.",
+      "quantity": "Line {line}: a quantity above 0.",
+      "piecesWhole": "Line {line}: whole pieces.",
+      "piecesLeft": "Line {line}: at most {left} pieces are still to send.",
+      "nothing": "Nothing is picked: a kit line, pieces or a bundle.",
+      "reasonText": "Say the reason in words.",
+      "carrier": "Name the carrier.",
+      "packages": "At least 1 package.",
+      "weight": "The gross weight in kilograms."
+    },
+    "refused": {
+      "ddtRight": "Your role may send the kit but not issue the DDT: send it without one.",
+      "lot": "A tracked material needs its lot: pick where it leaves from again.",
+      "lotNotReleased": "Only a released lot goes to a workshop: pick another place or lot.",
+      "hide": "A material tracked by the hide needs its hide.",
+      "from": "That place is not of this site, or holds none of it now.",
+      "quantity": "A quantity was not accepted: check the units.",
+      "pieces": "More pieces than are still to send.",
+      "bundles": "A bundle is not of this work order or of a size this order sends.",
+      "tooManyBundles": "Too many lines for one DDT: send the bundles in two goes.",
+      "transportBy": "Say who carries the goods.",
+      "carrier": "Name the carrier.",
+      "packages": "The packages were not accepted.",
+      "weight": "The weight was not accepted: kilograms, up to three decimals.",
+      "startAt": "The transport’s start is not accepted.",
+      "company": "The company’s legal details for the DDT are incomplete: complete them in Admin › Companies & sites.",
+      "recipient": "The workshop has no address for the DDT: add it to the workshop.",
+      "stock": "Not enough of it at that place any more: pick again."
+    },
+    "done": {
+      "ddt": "Kit sent with DDT {number}.",
+      "pdfMissing": "Kit sent with DDT {number}: the DDT is issued but its PDF was not stored — print it again in Documents.",
+      "noDdt": "Kit sent without a DDT: issue it before the goods leave the building."
+    },
+    "bundle_one": "{code} · {colourway} {size} · {count} garment",
+    "bundle_other": "{code} · {colourway} {size} · {count} garments",
+    "bundlePart_one": "{code} · {colourway} {size} · {count} piece ({part})",
+    "bundlePart_other": "{code} · {colourway} {size} · {count} pieces ({part})"
+  },
+  "receive": {
+    "title": "Receive back · {number} from {workshop}",
+    "confirm": "Record goods back",
+    "when": "Came back on",
+    "ddtNumber": "The workshop’s DDT",
+    "ddtHint": "As printed on its delivery note.",
+    "ddtDate": "Its date",
+    "piecesTitle": "Pieces back",
+    "nothingOut": "No piece is at the workshop: only unused material can come back.",
+    "addBundle": "Add a bundle",
+    "bundle": "Bundle",
+    "noBundle": "Not by bundle",
+    "good": "Good",
+    "defective": "Defective",
+    "scrapped": "Scrapped there",
+    "reason": "Reason",
+    "removeLine": "Remove this line",
+    "bundlesNoRight": "Bundles need workorders.view: the pieces come back by operation.",
+    "returnsTitle": "Unused material back",
+    "noStock": "None of our material is at this workshop.",
+    "col": {
+      "material": "Material",
+      "lot": "Lot",
+      "there": "At the workshop",
+      "back": "Back now",
+      "to": "To"
+    },
+    "returnOf": "Quantity of {code} back",
+    "toOf": "Where {code} goes",
+    "pickTo": "Pick a place",
+    "noPlaces": "The places need inventory.locations.view.",
+    "note": "Note",
+    "what": "The order is partly back or back; the pieces back count on each operation.",
+    "fee": "The workshop’s fee for the pieces back good goes on the work order’s cost.",
+    "held": {
+      "date": "Say when it came back.",
+      "future": "Not a day after today.",
+      "whole": "Line {line}: whole pieces, 0 or more.",
+      "reason": "Line {line}: say why pieces are defective or scrapped.",
+      "moreThanOut": "Line {line}: only {out} pieces are at the workshop.",
+      "returnQuantity": "{item}: a quantity above 0.",
+      "returnMore": "{item}: at most {max} is at the workshop.",
+      "returnTo": "{item}: pick where it goes.",
+      "nothing": "Nothing is back yet: a piece or some material.",
+      "ddtNumber": "Type the number of the workshop’s DDT, or clear its date."
+    },
+    "refused": {
+      "bundle": "A bundle is not of a size this operation sends, or comes back more than it holds.",
+      "moreThanOut": "More pieces than are at the workshop.",
+      "pieces": "At least one piece per line, whole pieces only.",
+      "toLocation": "That place is not of this site.",
+      "returns": "A returned material was not accepted: check its quantity.",
+      "receivedAt": "The date it came back is not accepted.",
+      "stock": "Less of it is at the workshop than you returned."
+    },
+    "done": {
+      "part": "Recorded: the order is partly back.",
+      "all": "Recorded: every piece is back. Close the order.",
+      "partWaiting": "Recorded: partly back. The workshop’s fee waits for the work order’s cost to be ready.",
+      "allWaiting": "Recorded: every piece is back. The workshop’s fee waits for the work order’s cost to be ready.",
+      "partCurrency": "Recorded: partly back. The order is in another currency: its fee is not booked to the work order.",
+      "allCurrency": "Recorded: every piece is back. The order is in another currency: its fee is not booked to the work order.",
+      "partPosted_one": "Recorded: partly back. The fee went on the work order’s cost ({count} entry).",
+      "partPosted_other": "Recorded: partly back. The fee went on the work order’s cost ({count} entries).",
+      "allPosted_one": "Recorded: every piece is back; the fee went on the work order’s cost ({count} entry). Close the order.",
+      "allPosted_other": "Recorded: every piece is back; the fee went on the work order’s cost ({count} entries). Close the order."
+    },
+    "operation_one": "Line {line} · {code} {name} · {count} piece at the workshop",
+    "operation_other": "Line {line} · {code} {name} · {count} pieces at the workshop",
+    "bundleOption_one": "{code} · {colourway} {size} · {count} garment",
+    "bundleOption_other": "{code} · {colourway} {size} · {count} garments"
+  },
+  "sheet": {
+    "title": "Job sheet {number} · {workshop}",
+    "titleLoading": "Job sheet",
+    "meta": "{company} · site {site} · read {at} by {person}",
+    "purpose": "Printed and sent with the kit. It carries no price.",
+    "print": "Print",
+    "held": "Still reading the order.",
+    "failed": "Couldn't read the order",
+    "workshop": "Workshop",
+    "location": "Our stock there",
+    "workOrder": "Work order",
+    "orderDate": "Order date",
+    "back": "Due back",
+    "pieces": "Pieces",
+    "opsTitle": "What the workshop does",
+    "noOps": "No operation on the order.",
+    "kitTitle": "Kit sent with it",
+    "noKit": "No kit: the pieces travel alone.",
+    "colour": "Colour",
+    "noteTitle": "Note",
+    "ours": "The material sent stays ours: return what is not used with the garments.",
+    "opLine_one": "{count} piece · due back {date}",
+    "opLine_other": "{count} pieces · due back {date}"
+  },
+  "uom": {
+    "PCS": "pcs",
+    "PAIR": "pair",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  }
+}

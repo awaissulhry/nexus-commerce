@@ -159,6 +159,13 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'purchasing.orders', title: 'Purchase orders', titleIt: "Ordini d'acquisto", wave: 'W1', href: '/purchasing/orders' },
         ],
       },
+      // W2a: B-W2a-56 Subcontract orders (SCR-128, SCR-129).
+      {
+        label: 'Outside work',
+        labelIt: 'Lavorazioni esterne',
+        hideLabel: false,
+        pages: [{ id: 'purchasing.subcontracting', title: 'Subcontract orders', titleIt: 'Ordini ai terzisti', wave: 'W2a', href: '/purchasing/subcontracting' }],
+      },
     ],
   },
   {

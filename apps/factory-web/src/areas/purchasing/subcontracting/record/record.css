@@ -1,0 +1,157 @@
+/*
+ * The subcontract order's record LAYOUT (SCR-128 record), on top of the buying office's (fw-by-*): the operations'
+ * cards side by side on wide screens, a draft's cells with their save marks, the counts strip, the dialogs' sections
+ * and rows, the documents' rows. The controls are the design system's; semantic tokens only, no page max-width.
+ */
+/* Side by side when there is room; a single card fills the row (no empty half on the right). */
+.fw-sco-ops,
+.fw-sco-receipts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr));
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-sco-cells {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--nds-space-10) var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-sco-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-sco-cell.is-wide {
+  grid-column: 1 / -1;
+}
+
+.fw-sco-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-sco-mark[data-state='saved'] {
+  color: var(--nds-success);
+}
+
+.fw-sco-mark[data-state='failed'] {
+  color: var(--nds-danger);
+}
+
+.fw-sco-spin {
+  animation: fw-sco-spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fw-sco-spin {
+    animation: none;
+  }
+}
+
+@keyframes fw-sco-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fw-sco-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-sco-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-sco-counts li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-sco-count-label {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-sco-total {
+  text-align: right;
+}
+
+.fw-sco-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-10);
+  border-top: 1px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+
+.fw-sco-rows,
+.fw-sco-checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-sco-checks {
+  gap: var(--nds-space-6);
+}
+
+.fw-sco-row,
+.fw-sco-back {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-sco-backline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  align-items: end;
+  gap: var(--nds-space-8) var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-sco-docs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-sco-doc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-sco-doc > :first-child {
+  flex: 1 1 280px;
+  min-width: 0;
+}
