@@ -255,7 +255,8 @@
       "REPAIR": "Repair order",
       "COMPLAINT": "Customer complaint",
       "CLAIM": "Supplier claim",
-      "SUBCONTRACT": "Subcontract order"
+      "SUBCONTRACT": "Subcontract order",
+      "COUNT": "Stock count"
     },
     "record": {
       "Invoice": "Invoice",

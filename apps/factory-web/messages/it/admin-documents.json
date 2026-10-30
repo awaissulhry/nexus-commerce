@@ -255,7 +255,8 @@
       "REPAIR": "Ordine di riparazione",
       "COMPLAINT": "Reclamo del cliente",
       "CLAIM": "Reclamo al fornitore",
-      "SUBCONTRACT": "Ordine al terzista"
+      "SUBCONTRACT": "Ordine al terzista",
+      "COUNT": "Inventario"
     },
     "record": {
       "Invoice": "Fattura",
