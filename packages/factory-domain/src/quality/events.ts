@@ -2,6 +2,9 @@ import { z } from 'zod'
 import { defineEvent } from '../events/define'
 import { CR_VI_EVIDENCE, EVIDENCE_RULES, LAB_TESTS, LOT_DOCUMENT_KINDS } from './lab/rules'
 import { FOUR_EYES_RULES, REVERSAL_REASONS, SECOND_PERSON_REASONS, SERIALS_TO } from './release/rules'
+// B-W2a-26: the defect library, the disposition codes and quality holds.
+import { DEFECT_LIBRARY_CHANGES, DISPOSITION_CODE_CHANGES, HOLD_CHANGED_FIELDS } from './holds/changes'
+import { HOLD_QUARANTINE, HOLD_SUBJECT_TYPES } from './holds/rules'
 
 /**
  * The quality module's events (plan A1 §3.4). The lab step (B-W1-34, modules/quality/lab) emits them in the command that
@@ -17,6 +20,13 @@ import { FOUR_EYES_RULES, REVERSAL_REASONS, SECOND_PERSON_REASONS, SERIALS_TO } 
  * person signed, if one did), `quality.release_reversed` once per reversal (the PPE register entry it opened), and
  * `quality.release_rule_changed` when the four-eyes rule or its list of customers changes (Q1). They reach the
  * inspection screens of the office (quality.inspections.view) and the site's floor devices (the bench).
+ *
+ * The defect library, the disposition codes and quality holds (B-W2a-26, modules/quality/{defects,holds}):
+ * `quality.defects_changed` / `quality.dispositions_changed` when codes are added, changed, retired or deleted (the
+ * pickers read the library again); `quality.hold_placed` once per hold (the work orders it put ON_HOLD),
+ * `quality.hold_released` once per release (the work orders it lifted), `quality.hold_changed` when its owner, expected
+ * release or notes change. Holds reach the office's hold screens (quality.holds.view) and the site's floor devices (an
+ * open card of a held bundle, lot or work order holds its action with the reason). No cost, price or name in a payload.
  */
 const lotStatus = z.enum(['QUARANTINE', 'RELEASED', 'REJECTED', 'BLOCKED'])
 
@@ -170,5 +180,56 @@ export const events = [
       loosened: z.boolean(),
     }),
     live: { permission: 'quality.inspections.view', fields: ['companyId', 'releaseFourEyes'] },
+  }),
+  // ---- B-W2a-26: the defect library, the disposition codes, quality holds -------------------------------------------
+  defineEvent({
+    type: 'quality.defects_changed',
+    context: 'quality',
+    description: 'Codes of the defect library were added, changed, retired, made active again or deleted, or the starter set was added: pickers read the library again.',
+    payload: z.strictObject({ change: z.enum(DEFECT_LIBRARY_CHANGES), codes: z.array(z.string().min(1).max(40)).min(1).max(500) }),
+    live: { permission: 'quality.defects.view', fields: ['change', 'codes'] },
+  }),
+  defineEvent({
+    type: 'quality.dispositions_changed',
+    context: 'quality',
+    description: 'Disposition codes were added, changed, set inactive or active again, or the standard ones were added.',
+    payload: z.strictObject({ change: z.enum(DISPOSITION_CODE_CHANGES), codes: z.array(z.string().min(1).max(40)).min(1).max(100) }),
+    live: { permission: 'quality.defects.view', fields: ['change', 'codes'] },
+  }),
+  defineEvent({
+    type: 'quality.hold_placed',
+    context: 'quality',
+    description: 'Goods were put on hold (QHS-074, MES-008): lots, hides, work orders, bundles, garment serials, shipments or parcels of one site; the work orders it put ON_HOLD.',
+    payload: z.strictObject({
+      holdId: z.uuid(),
+      subjectType: z.enum(HOLD_SUBJECT_TYPES),
+      subjectIds: z.array(z.uuid()).min(1).max(100),
+      reasonCode: z.string().min(1).max(40),
+      sourceType: z.string().nullable(),
+      sourceId: z.uuid().nullable(),
+      placedBy: z.enum(['USER', 'WORKER', 'SYSTEM']),
+      quarantine: z.enum(HOLD_QUARANTINE),
+      workOrdersHeld: z.array(z.uuid()),
+    }),
+    live: { permission: 'quality.holds.view', floor: true, fields: ['holdId', 'subjectType', 'subjectIds', 'workOrdersHeld'] },
+  }),
+  defineEvent({
+    type: 'quality.hold_released',
+    context: 'quality',
+    description: 'A hold was released with an e-signature by someone other than who placed it (and, for garments, who made them); the work orders it lifted back to where they were.',
+    payload: z.strictObject({
+      holdId: z.uuid(),
+      subjectType: z.enum(HOLD_SUBJECT_TYPES),
+      subjectIds: z.array(z.uuid()).min(1).max(100),
+      workOrdersLifted: z.array(z.uuid()),
+    }),
+    live: { permission: 'quality.holds.view', floor: true, fields: ['holdId', 'subjectType', 'subjectIds', 'workOrdersLifted'] },
+  }),
+  defineEvent({
+    type: 'quality.hold_changed',
+    context: 'quality',
+    description: "A hold's owner, expected release or notes changed.",
+    payload: z.strictObject({ holdId: z.uuid(), fields: z.array(z.enum(HOLD_CHANGED_FIELDS)).min(1) }),
+    live: { permission: 'quality.holds.view', fields: ['holdId', 'fields'] },
   }),
 ] as const

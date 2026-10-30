@@ -86,6 +86,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   grid (NexusGrid in GridCard), toolbar count/search ⇄ bulk actions while rows are selected, the header select-all box
   (mixed when some), shift-click range, keys `/` j k x Enter Space ?, a footer with Show more and ONE keys icon
   (`ListKeysInfo`; never key hints above a table). Its words are `messages/<locale>/lists.json`; lab: `/design/list-frame`.
+  Its toolbar also holds the list tools (B-W2a-23, `list-frame/tools/`, SCR-232): Columns ▾ (saved views — mine, shared
+  with a role or everyone, a role's default; Save view as…, Update, Rename or share with Copy link, Remove; Customise
+  columns… = the DS PreferencesModal with the density) and Export ▾ (this view as CSV or Excel, my recent exports, the
+  export-job dialog) for every Office list page without work: the key is the page's (`/sales/orders` → `sales.orders`;
+  a second frame `<page>.2`; `listKey` prop to name one, null for none; record pages have none). A view's filters are
+  the list's own address terms, so a list keeps its state in its address as before. The seam is `ListToolsContext`
+  (`tools/transport.ts`), mounted once by the Office shell (`areas/_shared/list-tools/ListToolsProvider.tsx`: the API,
+  the address, the clipboard, the working layout in localStorage per list); `areas/_shared/list-tools/memory.ts` is the
+  same in memory (the gallery). Export ▾ appears only for a list with an API export source.
 - `src/record-panels/` — SCR-006, the panels every record page mounts: `<RecordPanels record={{ type, id, companyId,
   siteId }} title party />` (thread, files, history; live refresh from `/live`). A screen with its own catalogue wraps its
   view in `WithMessages` (record-panels/i18n.tsx): the layouts load `shell` only.

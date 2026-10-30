@@ -22,6 +22,8 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { officeContextOf, seesCost, siteFor } from '../ledger/access'
 import { demandOpen, readDemands, RESERVATION_COLUMNS } from '../reservations/store'
+// B-W2a-26: stock under an ACTIVE quality hold is held too.
+import { heldByQualityHolds, heldForTotals, NOTHING_HELD } from '../../quality/holds/stock'
 
 /**
  * The stock overview, the stock card and the ledger check (SCM-190, SCM-191, SCM-198, SCM-258, SCM-280, QHS-073; A2
@@ -124,8 +126,9 @@ export async function stockOverview(caller: CommandCaller, query: OverviewQuery)
     const locationOf = named(locations)
     const siteOf = named(sites)
     const statusOf = (lotId: string) => lotOf.get(lotId)?.qualityStatus as LotQualityStatus | undefined
+    const quality = asOf ? NOTHING_HELD : await heldByQualityHolds(client, { lotIds: balances.map((balance) => balance.lotId), hideIds: balances.map((balance) => balance.hideId) })
     const shown = balances.filter(
-      (balance) => (!query.held || (balance.lotId && statusOf(balance.lotId) !== 'RELEASED')) && (!query.reserved || (reservedNow?.bySite.get(keyOfSite(balance))?.greaterThan(0) ?? false)),
+      (balance) => (!query.held || (balance.lotId && statusOf(balance.lotId) !== 'RELEASED') || quality.holds(balance)) && (!query.reserved || (reservedNow?.bySite.get(keyOfSite(balance))?.greaterThan(0) ?? false)),
     )
 
     const lotCosts = new Map<string, Decimal | null>()
@@ -150,7 +153,7 @@ export async function stockOverview(caller: CommandCaller, query: OverviewQuery)
     const rows = shown.slice(0, ROW_LIMIT).map((balance) => {
       const item = itemOf.get(balance.itemId)!
       const lot = balance.lotId ? lotOf.get(balance.lotId) : undefined
-      const figures = figuresOf(balance.onHand, lot?.qualityStatus as LotQualityStatus | undefined)
+      const figures = figuresOf(balance.onHand, quality.holds(balance) ? 'BLOCKED' : (lot?.qualityStatus as LotQualityStatus | undefined))
       const value = withCost ? valueOf(balance) : null
       // A hide's own HIDE reservation holds this row exactly (never more than the row holds).
       const reserved = reservedNow ? Dec.min(balance.onHand, reservedNow.byHide.get(balance.hideId ?? '') ?? ZERO) : null
@@ -169,7 +172,8 @@ export async function stockOverview(caller: CommandCaller, query: OverviewQuery)
         ...(withCost ? { unitCost: asMoney('cost', value?.unitCost ?? null), value: asMoney('cost', value?.value ?? null) } : {}),
       }
     })
-    const perItem = itemTotals(shown, statusOf).map((total) => {
+    const totalsOf = heldForTotals(shown, statusOf, quality, 'BLOCKED' as LotQualityStatus)
+    const perItem = itemTotals(totalsOf.balances, totalsOf.statusOf).map((total) => {
       const item = itemOf.get(total.itemId)!
       const value = withCost
         ? shown

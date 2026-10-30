@@ -57,6 +57,11 @@ export const locationsImportAdapter: ImportAdapter = Object.freeze({
   async write(tools, row, scope) {
     const { tx, audit, now, context } = tools
     const values = row.values
+    // B-W2a-25: a workshop's stock location names its workshop, which this sheet has no column for (the trigger refuses a
+    // SUBCONTRACTOR location without one); it is made on the locations page, and a location never turns into one.
+    if (values.kind === 'SUBCONTRACTOR' || (row.action !== 'CREATE' && row.before?.kind === 'SUBCONTRACTOR' && values.kind !== undefined && values.kind !== 'SUBCONTRACTOR')) {
+      throw new Error(`Location ${String(row.key.code)}: a workshop's stock location (Subcontractor) is made on the locations page with its workshop, not from a sheet.`)
+    }
     if (row.action === 'CREATE') {
       const site = await siteByCode(tx, String(row.key.site), scope)
       const id = newId()

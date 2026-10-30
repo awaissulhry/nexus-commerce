@@ -18,6 +18,8 @@ export const locationView = output({
   code: z.string(),
   name: z.string(),
   kind,
+  /** B-W2a-25 (SCM-141): the workshop whose stock place it is, exactly for a SUBCONTRACTOR location. */
+  partyId: id().nullable(),
   status: z.enum(LOCATION_STATUSES),
   /** 0 at the top of the site's tree. */
   depth: z.number().int(),
@@ -60,6 +62,8 @@ export const createLocationContract = defineContract({
     code: z.string().trim().min(1).max(40),
     name: z.string().trim().min(1).max(120),
     kind,
+    /** B-W2a-25: the workshop (a party with the SUBCONTRACTOR role), required for and only for kind SUBCONTRACTOR. */
+    partyId: id().nullish(),
   }),
   response: { 201: output({ location: locationView }) },
 })

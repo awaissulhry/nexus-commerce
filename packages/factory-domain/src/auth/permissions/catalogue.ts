@@ -23,8 +23,13 @@ import { PLANNING_EXCEPTIONS_DEFINITIONS, PLANNING_EXCEPTIONS_PERMISSIONS } from
 import { PLANNING_FIRM_DEFINITIONS, PLANNING_FIRM_PERMISSIONS } from '../../planning/mrp/permissions'
 import { PURCHASING_DEFINITIONS, PURCHASING_PERMISSIONS } from '../../purchasing/permissions'
 import { PURCHASING_SOURCES_DEFINITIONS, PURCHASING_SOURCES_PERMISSIONS } from '../../purchasing/sources/permissions'
+// B-W2a-25: subcontracting (purchasing.subcontract.manage | kit | receive).
+import { PURCHASING_SUBCONTRACT_DEFINITIONS, PURCHASING_SUBCONTRACT_PERMISSIONS } from '../../purchasing/subcontracting/permissions'
 import { QUALITY_FINAL_DEFINITIONS, QUALITY_FINAL_FLOOR_PERMISSIONS, QUALITY_FINAL_PERMISSIONS } from '../../quality/final/permissions'
 import { QUALITY_LAB_DEFINITIONS, QUALITY_LAB_PERMISSIONS } from '../../quality/lab/permissions'
+// B-W2a-26: the defect library and disposition codes (quality.defects.*), quality holds (quality.holds.*).
+import { QUALITY_DEFECTS_DEFINITIONS, QUALITY_DEFECTS_PERMISSIONS } from '../../quality/defects/permissions'
+import { QUALITY_HOLDS_DEFINITIONS, QUALITY_HOLDS_PERMISSIONS } from '../../quality/holds/permissions'
 import { PRODUCT_BOM_DEFINITIONS, PRODUCT_BOM_PERMISSIONS } from '../../product/bom/permissions'
 import { PRODUCT_MATERIALS_DEFINITIONS, PRODUCT_MATERIALS_PERMISSIONS } from '../../product/materials/permissions'
 import { PRODUCT_ROUTING_DEFINITIONS, PRODUCT_ROUTING_PERMISSIONS } from '../../product/routing/permissions'
@@ -49,6 +54,8 @@ import { SHIPPING_DEFINITIONS, SHIPPING_FLOOR_PERMISSIONS, SHIPPING_PERMISSIONS 
 // B-W2a-19: the payment terms library and the customer price lists.
 import { PAYMENT_TERMS_DEFINITIONS, PAYMENT_TERMS_PERMISSIONS } from '../../sales/terms/permissions'
 import { PRICE_LISTS_DEFINITIONS, PRICE_LISTS_PERMISSIONS } from '../../sales/pricelists/permissions'
+// B-W2a-23: saved views and the export of any list (views.save, views.manage, views.export).
+import { VIEWS_DEFINITIONS, VIEWS_PERMISSIONS } from '../../views/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -371,6 +378,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   CALENDARS_DEFINITIONS,
   // B-W2a-10: approved sources (purchasing.sources.manage).
   PURCHASING_SOURCES_DEFINITIONS,
+  // B-W2a-25: subcontracting (purchasing.subcontract.manage | kit | receive).
+  PURCHASING_SUBCONTRACT_DEFINITIONS,
   // B-W2a-18: the reason lists.
   REASONS_DEFINITIONS,
   // B-W2a-19: paymentterms.view | manage, pricelists.view | manage.
@@ -378,6 +387,11 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRICE_LISTS_DEFINITIONS,
   // B-W2a-20: tasks on any record (tasks.manage).
   TASKS_DEFINITIONS,
+  // B-W2a-26: defects, dispositions, holds.
+  QUALITY_DEFECTS_DEFINITIONS,
+  QUALITY_HOLDS_DEFINITIONS,
+  // B-W2a-23: saved views and exports.
+  VIEWS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -407,6 +421,8 @@ for (const name of PRODUCTION_COMPLETION_PERMISSIONS) {
 }
 // B-W2a-16: planning settings and capacity.
 for (const name of PLANNING_SETTINGS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-25: subcontracting.
+for (const name of PURCHASING_SUBCONTRACT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-22: MRP every day.
 for (const name of [...PLANNING_FIRM_PERMISSIONS, ...PLANNING_EXCEPTIONS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-18: the reason lists.
@@ -415,6 +431,10 @@ for (const name of REASONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name
 for (const name of [...PAYMENT_TERMS_PERMISSIONS, ...PRICE_LISTS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-20: tasks on any record.
 for (const name of TASKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-26: defects, dispositions, holds.
+for (const name of [...QUALITY_DEFECTS_PERMISSIONS, ...QUALITY_HOLDS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-23: saved views and exports.
+for (const name of VIEWS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

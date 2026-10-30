@@ -24,6 +24,8 @@ import { emailInHandlers } from './platform/email-in/handlers'
 import { emailSendHandler } from './platform/email-out/outbound'
 import { digestCron } from './platform/email-out/digest/digest'
 import { notificationsHandler } from './platform/notifications/fan-out'
+import { exportExpiryCron } from './platform/exports/expire'
+import { exportHandlers } from './platform/exports/worker'
 import { assertNoFakeAccountsInProduction } from './platform/gateway/boot'
 import { importHandlers } from './platform/imports/worker'
 import { inboundHandler } from './platform/inbound/process'
@@ -59,7 +61,7 @@ const MODES = ['worker', 'scheduler'] as const
 type Mode = (typeof MODES)[number]
 
 /** The handlers of published events, one list for the worker. Modules add theirs here (dispatch.ts defineHandler). */
-const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler(), startOnIssueHandler(), invoiceFilesHandler(), sdiPollHandler(), sdiArchiveHandler(), sdiCourtesyCopyHandler(), trackingPollHandler(), afterAcceptanceHandler(), shipDocumentsHandler(), ...orderHandlers(), tellBuyerHandler(), ...costingHandlers()]
+const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler(), startOnIssueHandler(), invoiceFilesHandler(), sdiPollHandler(), sdiArchiveHandler(), sdiCourtesyCopyHandler(), trackingPollHandler(), afterAcceptanceHandler(), shipDocumentsHandler(), ...orderHandlers(), tellBuyerHandler(), ...costingHandlers(), ...exportHandlers()]
 // B-W2a-20: the notification centre's fan-out (mentions, followed records, assignments, approvals).
 const W2A_20_HANDLERS: readonly EventHandler[] = [notificationsHandler()]
 
@@ -123,7 +125,7 @@ if (mode === 'worker') {
   const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
-  const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log })]
+  const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]
   crons.push(standardReasonsCron({ database, log }))
   // B-W2a-20: the daily digests people turned on.
   crons.push(digestCron({ database, log }))

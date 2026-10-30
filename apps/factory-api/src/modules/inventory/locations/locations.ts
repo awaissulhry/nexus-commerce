@@ -5,6 +5,7 @@ import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { archiveProblems, locationProblems, locationTree, normalizeLocationCode, wouldCycle, type LocationKind } from '@nexus/factory-domain/inventory/locations/rules'
 import { INVENTORY_LOCATIONS_MANAGE, INVENTORY_LOCATIONS_VIEW } from '@nexus/factory-domain/inventory/permissions'
+import { kindChangeProblems, workshopLocationProblems } from '@nexus/factory-domain/purchasing/subcontracting/rules'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { mayAt, officeContextOf, postedBy, siteFor, stockContextOf, type SiteRow } from '../ledger/access'
@@ -26,6 +27,7 @@ export const LOCATION_SELECT = {
   code: true,
   name: true,
   kind: true,
+  partyId: true,
   status: true,
   version: true,
   createdAt: true,
@@ -33,7 +35,7 @@ export const LOCATION_SELECT = {
 } as const satisfies Prisma.LocationSelect
 export type LocationRow = Prisma.LocationGetPayload<{ select: typeof LOCATION_SELECT }>
 
-const audited = (row: LocationRow) => ({ siteId: row.siteId, parentId: row.parentId, code: row.code, name: row.name, kind: row.kind, status: row.status })
+const audited = (row: LocationRow) => ({ siteId: row.siteId, parentId: row.parentId, code: row.code, name: row.name, kind: row.kind, partyId: row.partyId, status: row.status })
 
 function viewOf(row: LocationRow & { depth: number; path: readonly string[] }): LocationView {
   return {
@@ -44,6 +46,7 @@ function viewOf(row: LocationRow & { depth: number; path: readonly string[] }): 
     code: row.code,
     name: row.name,
     kind: row.kind,
+    partyId: row.partyId,
     status: row.status,
     depth: row.depth,
     path: [...row.path],
@@ -120,6 +123,22 @@ export interface CreateInput {
   readonly code: string
   readonly name: string
   readonly kind: LocationKind
+  /** B-W2a-25: the workshop of a SUBCONTRACTOR location (required for that kind, refused for any other). */
+  readonly partyId?: string | null | undefined
+}
+
+/**
+ * B-W2a-25 (SCM-141): a SUBCONTRACTOR location is our stock at one workshop: it names the workshop (a SUBCONTRACTOR party,
+ * not archived, of the site's company or every company), and a workshop has one active location per site (subcontract
+ * orders send its kit there). The …_supply_w2a_guards trigger holds kind ⇔ party and that the party never changes.
+ */
+async function checkWorkshop(client: Pick<CommandTx, 'party' | 'location'>, site: SiteRow, kind: LocationKind, partyId: string | null): Promise<void> {
+  const party = partyId && isUuid(partyId) ? await client.party.findUnique({ where: { id: partyId }, select: { roles: true, status: true, companyId: true } }) : null
+  const problems = workshopLocationProblems(kind, partyId, party, site.companyId)
+  if (problems.length > 0) throw new ValidationError(problems[0]!.message, atBody(problems))
+  if (kind !== 'SUBCONTRACTOR' || partyId === null) return
+  const other = await client.location.findFirst({ where: { siteId: site.id, kind: 'SUBCONTRACTOR', partyId, status: 'ACTIVE' }, select: { code: true } })
+  if (other) throw new ConflictError(`The workshop has its stock location ${other.code} on site ${site.code} already: one per workshop and site.`)
 }
 
 /** inventory.locations.create */
@@ -134,10 +153,11 @@ export async function createLocation(caller: CommandCaller, input: CreateInput, 
   try {
     const { result } = await command(caller, { name: 'inventory.locations.create', idempotencyKey, input }, async ({ tx, audit, now }) => {
       await checkParent(tx, site, parentId, null)
+      await checkWorkshop(tx, site, input.kind, input.partyId ?? null)
       if (await tx.location.findFirst({ where: { siteId: site.id, code }, select: { id: true } })) throw taken(site, code)
       const id = newId()
       const row = await tx.location.create({
-        data: { id, companyId: site.companyId, siteId: site.id, parentId, code, name, kind: input.kind, createdAt: now, updatedAt: now, createdById: postedBy(context).createdById },
+        data: { id, companyId: site.companyId, siteId: site.id, parentId, code, name, kind: input.kind, partyId: input.partyId ?? null, createdAt: now, updatedAt: now, createdById: postedBy(context).createdById },
         select: LOCATION_SELECT,
       })
       audit({ recordType: 'Location', recordId: id, companyId: site.companyId, siteId: site.id, after: audited(row) })
@@ -168,8 +188,8 @@ export interface UpdateInput {
 export async function updateLocation(caller: CommandCaller, locationId: string, input: UpdateInput, idempotencyKey?: string): Promise<LocationView> {
   const { row: before, site } = await manageable(caller, locationId)
   const name = input.name?.trim() ?? before.name
-  const problems = locationProblems({ name })
-  if (problems.length > 0) throw new ValidationError('The location is not valid.', atBody(problems))
+  const problems = [...locationProblems({ name }), ...kindChangeProblems(before.kind, input.kind ?? before.kind)]
+  if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'The location is not valid.', atBody(problems))
   const { result } = await command(
     caller,
     { name: 'inventory.locations.update', idempotencyKey, input: { locationId, ...input }, record: { type: 'Location', id: locationId, expectedVersion: input.version } },
