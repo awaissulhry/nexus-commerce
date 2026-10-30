@@ -38,6 +38,13 @@
       "outside": "Lavorazioni esterne",
       "subcontracting": "Ordini ai terzisti"
     },
+    "plant": {
+      "area": "Stabilimento",
+      "maintenance": "Manutenzione",
+      "requests": "Richieste di intervento",
+      "jobs": "Interventi",
+      "machines": "Macchine e attrezzature"
+    },
     "admin": {
       "area": "Sistema",
       "main": "Principali",

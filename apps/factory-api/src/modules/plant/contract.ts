@@ -520,6 +520,35 @@ export const handBackContract = defineContract({
 export const closeJobContract = defineContract({ params: jobParams, body: versionOnly, response: { 200: moveAnswer } })
 export const cancelJobContract = defineContract({ params: jobParams, body: input({ version: version(), reason: text(PLANT_LIMITS.note) }), response: { 200: moveAnswer } })
 
+// ---- the office screens' pickers (B-W2a-53) ------------------------------------------------------------------------------
+
+const stationPlace = output({ id: id(), code: z.string(), name: z.string(), lineId: id().nullable(), workCentreId: id() })
+
+/** The sites a plant screen works in, each with its active lines, work centres and stations (New machine, inline place). */
+export const plantPlacesContract = defineContract({
+  response: {
+    200: output({
+      sites: z.array(output({ id: id(), companyId: id(), code: z.string(), name: z.string(), lines: z.array(place), workCentres: z.array(place), stations: z.array(stationPlace) })),
+    }),
+  },
+})
+
+/**
+ * Who a job of the site may be given to (Make a job, New job, Assign jobs, the inline assignee): the ACTIVE office users
+ * who work maintenance jobs there, and — for a caller who may see the floor workers (workers.view) — the site's ACTIVE
+ * floor workers with a live floor role that works them. Names only, in a picker; never a list, filter or total.
+ */
+export const plantTechniciansContract = defineContract({
+  querystring: input({ siteId: id() }),
+  response: {
+    200: output({
+      technicians: z.array(output({ kind: z.enum(['USER', 'WORKER']), id: id(), name: z.string(), me: z.boolean() })),
+      /** false: the caller may not see the floor workers (workers.view), so none is listed. */
+      floorListed: z.boolean(),
+    }),
+  },
+})
+
 // ---- the floor ---------------------------------------------------------------------------------------------------------
 
 const floorMachine = machineOut.extend({ symptoms: z.array(symptomOut) })

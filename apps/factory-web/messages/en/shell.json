@@ -38,6 +38,13 @@
       "outside": "Outside work",
       "subcontracting": "Subcontract orders"
     },
+    "plant": {
+      "area": "Plant",
+      "maintenance": "Maintenance",
+      "requests": "Machine requests",
+      "jobs": "Maintenance jobs",
+      "machines": "Machines & tools"
+    },
     "admin": {
       "area": "Admin",
       "main": "Main",

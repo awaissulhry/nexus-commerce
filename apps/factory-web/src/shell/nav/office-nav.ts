@@ -214,6 +214,16 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-38: Production › Reports › Production reports (SCR-240) and its print page (a new tab, no navigation row).
   '/production/reports',
   '/production/reports/print',
+  // B-W2a-53: Plant › Maintenance — Machine requests (SCR-148) and their print for the shift, Maintenance jobs (SCR-149),
+  // a job and its job sheet, Machines & tools (SCR-150), a machine and the tag sheet.
+  '/plant/requests',
+  '/plant/requests/print',
+  '/plant/jobs',
+  '/plant/jobs/[id]',
+  '/plant/jobs/[id]/sheet',
+  '/plant/machines',
+  '/plant/machines/[id]',
+  '/plant/machines/tags',
 ])
 
 /** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */

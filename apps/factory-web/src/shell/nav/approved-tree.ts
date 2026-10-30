@@ -319,6 +319,26 @@ export const OFFICE: readonly TreeArea[] = [
       },
     ],
   },
+  // W2a: B-W2a-53 the Plant area (Owner answer T2), its Maintenance pages: Machine requests (SCR-148), Maintenance jobs
+  // (SCR-149), Machines & tools (SCR-150). Preventive checks, spare parts, downtime and Health & safety join later.
+  {
+    id: 'plant',
+    order: 12,
+    title: 'Plant',
+    titleIt: 'Stabilimento',
+    groups: [
+      {
+        label: 'Maintenance',
+        labelIt: 'Manutenzione',
+        hideLabel: false,
+        pages: [
+          { id: 'plant.requests', title: 'Machine requests', titleIt: 'Richieste di intervento', wave: 'W2a', href: '/plant/requests' },
+          { id: 'plant.jobs', title: 'Maintenance jobs', titleIt: 'Interventi', wave: 'W2a', href: '/plant/jobs' },
+          { id: 'plant.machines', title: 'Machines & tools', titleIt: 'Macchine e attrezzature', wave: 'W2a', href: '/plant/machines' },
+        ],
+      },
+    ],
+  },
   {
     id: 'admin',
     order: 13,
