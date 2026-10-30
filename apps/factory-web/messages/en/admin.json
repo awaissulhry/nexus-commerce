@@ -1164,6 +1164,14 @@
       "team_leader": {
         "name": "Team leader",
         "description": "Leads a crew on the floor: works and sees the team leader's screens of the device's site; sees no money."
+      },
+      "maintenance": {
+        "name": "Maintenance",
+        "description": "Keeps the machines running: the machine register, the requests from the stations and the maintenance jobs; signs a machine marked unsafe safe again; sees no money."
+      },
+      "technician": {
+        "name": "Maintenance technician",
+        "description": "Works maintenance jobs on an enrolled floor device and signs a machine marked unsafe safe again with the PIN; sees no money."
       }
     },
     "bulk": {
@@ -1497,7 +1505,10 @@
     "pricelists": "Price lists",
     "tasks": "Tasks",
     "views": "Views and exports",
-    "search": "Search"
+    "search": "Search",
+    "plant": "Plant",
+    "alerts": "Alerts and exception rules",
+    "accounting": "Accounting"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1682,6 +1693,13 @@
     "inventory_discrepancies_report": "Send the discrepancy report to the supplier",
     "search_rebuild": "Rebuild the search index of the whole group",
     "planning_schedule_manage": "Plan the schedule and allocate work to lines",
-    "planning_schedule_publish": "Publish the schedule to the floor"
+    "planning_schedule_publish": "Publish the schedule to the floor",
+    "alerts_view": "See the alerts of the records you see, and the exception rules",
+    "alerts_handle": "Acknowledge, assign, snooze and resolve alerts",
+    "alerts_rules_manage": "Change and add exception rules",
+    "accounting_view": "See the accounting exports, the month's checks, Intrastat rows and the period locks",
+    "accounting_export": "Make and re-export the numbered accounting batch of a month",
+    "accounting_lock": "Lock a month (soft or hard) and lift a soft lock",
+    "accounting_unlock": "Lift a hard period lock (agree it with the accountant)"
   }
 }
