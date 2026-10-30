@@ -35,6 +35,8 @@ export const ORDER_COLUMNS = {
   billTo: true,
   shipTo: true,
   paymentTerms: true,
+  // B-W2a-30: the library terms its payment schedule comes from.
+  paymentTermsId: true,
   requestedDate: true,
   promiseDate: true,
   originalPromiseDate: true,
@@ -101,6 +103,11 @@ export const LINE_COLUMNS = {
   promiseDate: true,
   priority: true,
   siteId: true,
+  // B-W2a-30 (SAL-210): closed short — all four or none.
+  closedShortQuantity: true,
+  closedShortAt: true,
+  closedShortById: true,
+  closeShortReason: true,
   version: true,
 } as const satisfies Prisma.SalesOrderLineSelect
 export type LineRow = Prisma.SalesOrderLineGetPayload<{ select: typeof LINE_COLUMNS }>
@@ -209,6 +216,8 @@ export async function readOrderFacts(db: Reader, order: Pick<OrderRow, 'id'>): P
     }),
     shipped: shipped.map((row): PieceCount => ({ lineId: row.salesOrderLineId, size: row.size, quantity: row._sum.quantity ?? 0 })),
     invoiced,
+    // B-W2a-30: a line closed short is done (its left pieces will not be made or shipped).
+    closedShort: new Set(lines.filter((line) => line.closedShortQuantity !== null).map((line) => line.id)),
   })
   return { lines, progress, workOrders, shipments, invoices }
 }
