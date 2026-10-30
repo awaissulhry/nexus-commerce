@@ -2,7 +2,7 @@ import { ArrowLeftRight, Boxes, Layers, MapPin, PackageCheck, Settings, Squircle
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
- * Warehouse (A2 §1.3 row 7; design 01 warehouse: Main (Stock, Hides, Lots & traceability, Movements), Inbound (Receipts),
+ * Warehouse (design 01 area 6 "Warehouse / Magazzino": Main (Stock, Hides, Lots & traceability, Movements), Inbound (Receipts),
  * In the warehouse, Outbound, Reports, Settings). Labels are message keys (`shell:` = messages/<locale>/shell.json). Each
  * row's permission is the one its page's API needs. Main › Stock, Hides, Lots & traceability, Movements and Settings ›
  * Locations (SCR-060, SCR-200, SCR-201, SCR-064, SCR-065): the stock screens step. B-W1-32 part 2 builds Inbound › Receipts (SCR-063, with the
@@ -12,7 +12,7 @@ import type { OfficeAreaNav } from '../../shell/nav/office-nav'
  * steps, in the tree's order.
  */
 export const officeArea: OfficeAreaNav = {
-  order: 7,
+  order: 6,
   area: {
     id: 'warehouse',
     label: 'shell:nav.warehouse.area',

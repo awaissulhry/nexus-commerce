@@ -969,9 +969,9 @@
     },
     "company": {
       "address": "Sede legale",
-      "byAdmin": "Lo modifica un amministratore in Amministrazione › Aziende.",
+      "byAdmin": "Lo modifica un amministratore in Sistema › Società e stabilimenti.",
       "capital": "Capitale sociale",
-      "change": "Modifica in Amministrazione › Aziende",
+      "change": "Modifica in Sistema › Società e stabilimenti",
       "legalName": "Ragione sociale",
       "missing": "Cosa manca ancora per fatturare",
       "notReady": "Dati mancanti",
@@ -1029,7 +1029,7 @@
       "title": "Nessuna azienda da mostrare"
     },
     "sdi": {
-      "byAdmin": "Il collegamento lo gestisce un amministratore in Amministrazione › Collegamenti.",
+      "byAdmin": "Il collegamento lo gestisce un amministratore in Sistema › Connessioni e API.",
       "col": {
         "connection": "Collegamento",
         "mode": "Modalità",
@@ -1042,7 +1042,7 @@
         "LIVE": "Reale",
         "SANDBOX": "Area di prova dell’intermediario"
       },
-      "open": "Apri Amministrazione › Collegamenti",
+      "open": "Apri Sistema › Connessioni e API",
       "state": {
         "ACTIVE": "Collegata",
         "NONE": "Non configurata",
@@ -1056,7 +1056,7 @@
       "title": "Fatturazione elettronica (SDI)"
     },
     "series": {
-      "byAdmin": "Le numerazioni le gestisce un amministratore in Amministrazione › Documenti e numerazioni.",
+      "byAdmin": "Le numerazioni le gestisce un amministratore in Sistema › Documenti e numerazioni.",
       "col": {
         "kind": "Documento",
         "next": "Prossimo numero"
@@ -1067,7 +1067,7 @@
         "INVOICE": "Fatture"
       },
       "none": "Nessuna numerazione attiva: la apre un amministratore",
-      "open": "Apri Amministrazione › Documenti e numerazioni",
+      "open": "Apri Sistema › Documenti e numerazioni",
       "title": "Numerazioni",
       "usesInvoice": "Numerate nella serie delle fatture"
     },

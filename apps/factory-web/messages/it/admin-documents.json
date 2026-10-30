@@ -246,7 +246,16 @@
       "RETURN": "Reso",
       "LOT": "Lotto",
       "BATCH": "Partita",
-      "PPE_REGISTER": "Registro DPI"
+      "PPE_REGISTER": "Registro DPI",
+      "BUNDLE": "Cartellino del fascio",
+      "HIDE": "Cartellino della pelle",
+      "GARMENT_SERIAL": "Numero di serie del capo",
+      "INSPECTION": "Collaudo finale",
+      "RELEASE": "Rilascio qualità",
+      "REPAIR": "Ordine di riparazione",
+      "COMPLAINT": "Reclamo del cliente",
+      "CLAIM": "Reclamo al fornitore",
+      "SUBCONTRACT": "Ordine al terzista"
     },
     "record": {
       "Invoice": "Fattura",

@@ -305,7 +305,7 @@
     },
     "noAccess": {
       "title": "Inspections are not open to your role",
-      "body": "They need quality.inspections.view; the owner or an administrator grants it in Admin › Roles."
+      "body": "They need quality.inspections.view; the owner or an administrator grants it in Admin › Roles & permissions."
     }
   },
   "view": {
@@ -844,7 +844,7 @@
     },
     "noAccess": {
       "title": "The evidence trail is not open to your role",
-      "body": "It needs quality.inspections.view; the owner or an administrator grants it in Admin › Roles."
+      "body": "It needs quality.inspections.view; the owner or an administrator grants it in Admin › Roles & permissions."
     },
     "badAddress": {
       "title": "This address names no garment or batch",

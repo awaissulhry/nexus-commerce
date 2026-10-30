@@ -68,7 +68,7 @@
     "NO_SHIP_TO": "Choose the delivery address.",
     "NO_CONTACT_EMAIL": "The contact has no email: the quote and its link go by email.",
     "NO_PROMISE_DATE": "A consumer must see the delivery date: set it (Codice del Consumo art. 49).",
-    "COMPANY_LEGAL": "The company's letterhead data is incomplete (Admin › Companies).",
+    "COMPANY_LEGAL": "The company's letterhead data is incomplete (Admin › Companies & sites).",
     "BILL_TO_INCOMPLETE": "The invoice address needs street, postal code, city and country.",
     "SHIP_TO_INCOMPLETE": "The delivery address needs street, postal code, city and country.",
     "SDI_IDENTITY": "An Italian business is invoiced through SDI: add its SDI code or PEC to the customer.",

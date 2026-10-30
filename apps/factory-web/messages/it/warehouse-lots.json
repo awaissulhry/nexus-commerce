@@ -286,8 +286,8 @@
       "title": "Lotto {code}",
       "tabsLabel": "Parti del lotto",
       "received": "Ricevuto il {date}",
-      "toChecklist": "Lista di rilascio in Prove e sostanze",
-      "noQuality": "Il tuo ruolo non comprende “quality.lots.view”: la qualità decide i lotti in Conformità › Prove e sostanze.",
+      "toChecklist": "Lista di rilascio in Test e sostanze",
+      "noQuality": "Il tuo ruolo non comprende “quality.lots.view”: la qualità decide i lotti in Conformità › Test e sostanze.",
       "copyCode": "Copia il codice lotto",
       "rejected": "Respinto il {date}: definitivo, la giacenza non si usa mai."
     },
@@ -304,7 +304,7 @@
       "empty": "Ancora nessun lotto",
       "emptyBody": "I lotti nascono al ricevimento della merce (o con la giacenza iniziale).",
       "receive": "Ricevi merce",
-      "decideWhere": "Rilascio, blocco e rifiuto di un lotto, e il risultato Cr VI, si fanno in Conformità › Prove e sostanze (riga ⋯)."
+      "decideWhere": "Rilascio, blocco e rifiuto di un lotto, e il risultato Cr VI, si fanno in Conformità › Test e sostanze (riga ⋯)."
     },
     "view": {
       "waiting": "In attesa di rilascio (bloccati)",
@@ -359,7 +359,7 @@
     "age_one": "{count} giorno",
     "age_other": "{count} giorni",
     "rowMenu": "Azioni per il lotto {code}",
-    "decide": "Decidi in Prove e sostanze",
+    "decide": "Decidi in Test e sostanze",
     "openMoves": "Apri in Movimenti",
     "openReceipt": "Apri il ricevimento {number}",
     "openHides": "Le sue pelli",
@@ -400,8 +400,8 @@
       "readyUnblock": "Pronto per lo sblocco: ogni controllo è superato.",
       "open_one": "Rilascio · {count} controllo aperto",
       "open_other": "Rilascio · {count} controlli aperti",
-      "fixThere": "Risolvi in Prove e sostanze",
-      "where": "Qui in sola lettura: una persona con il ruolo qualità rilascia il lotto in Prove e sostanze digitando il codice (mai chi l’ha ricevuto)."
+      "fixThere": "Risolvi in Test e sostanze",
+      "where": "Qui in sola lettura: una persona con il ruolo qualità rilascia il lotto in Test e sostanze digitando il codice (mai chi l’ha ricevuto)."
     },
     "checkName": {
       "STATE": "Stato del lotto",

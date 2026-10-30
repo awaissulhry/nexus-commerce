@@ -311,7 +311,7 @@
     },
     "LABEL_TEMPLATE": {
       "OK": "Garment label {label} is active.",
-      "none": "The revision names no garment label: set one in Products › Labels.",
+      "none": "The revision names no garment label: set one in Compliance › Labels & marking.",
       "notActive": "Garment label {label} is not active: the release needs it active."
     },
     "CERTIFICATE": {
@@ -345,7 +345,7 @@
     },
     "BATCH_NUMBER": {
       "OK": "A batch number is given at the release and never changes.",
-      "BLOCKED": "The company has no batch number series: an administrator sets one up in Admin › Numbering."
+      "BLOCKED": "The company has no batch number series: an administrator sets one up in Admin › Documents & numbering."
     }
   },
   "problem": {

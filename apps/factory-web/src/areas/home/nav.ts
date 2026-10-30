@@ -2,9 +2,9 @@ import { CheckCheck, Home, Inbox, Sun } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
- * Home (A2 §1.3 row 1, §1.4 "Home"). Labels are message keys (`shell:` = messages/<locale>/shell.json).
- * W0 holds the one W0 page of Home; B-W1-52 adds Today (SCR-029, with the W1 Overview strip on it); B-W1-21 adds
- * Approvals (SCR-030, W1: quote approvals); B-W1-08 adds My work (W1).
+ * Home (design 01 area 1 "Home"; A2 §1.4 "Home"). Labels are message keys (`shell:` = messages/<locale>/shell.json).
+ * Main (no label on screen), in the tree's order: Today (SCR-029, B-W1-52), Approvals (SCR-030, B-W1-21: quote approvals in
+ * W1), Mail to sort (SCR-019, B-W0-31). My tasks, Notifications and the Insights group come with W2a/W2b.
  */
 export const officeArea: OfficeAreaNav = {
   order: 1,
@@ -17,7 +17,7 @@ export const officeArea: OfficeAreaNav = {
     sections: [
       {
         id: 'home-top',
-        label: 'shell:nav.home.area',
+        label: 'shell:nav.home.main',
         hideLabel: true,
         noCrumb: true,
         items: [
