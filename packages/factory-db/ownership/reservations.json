@@ -1,0 +1,14 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/reservations.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office writes reservations through apps/factory-api's modules/inventory/reservations (B-W2a-11), always through command(); the API keeps staff to the companies and sites their grants reach. The floor of the site (factory_floor_runtime, scoped by site) reads its site's reservations: its issue to a work order (floor.pick, W1, and the W2a pick lists) refuses in words a lot or hide reserved for another work order, and records the issue against the work order's own reservation in the same command (issuedQuantity and ACTIVE -> ISSUED only: the …_stock_plan_w2a_guards trigger refuses any other floor change). The table holds no price or cost. Portal and link sessions read nothing here (no portal in W2a). Nobody deletes a reservation: it is released with its reason. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Reservation": {
+      "about": "The office reserves a quantity, an area of leather or one hide of its site's stock for a work order or a sales order line, changes the quantity or need date while it is ACTIVE, and releases it with the reason. The site's floor reads them (an issue refuses another work order's reserved lot or hide) and records an issue against its work order's reservation (issuedQuantity, ISSUED).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,56 @@
+/*
+ * SCR-096 — garment labels at the final operation: layout only, inside the DS FloorFrame. Sizes read the floor tier's
+ * `--nds-density-*` tokens; colours are semantic `--nds-*` roles. No raw colour. The one-job screen stays centred on the
+ * tablet (the frame's own column).
+ */
+
+/* ── the work order's line on top: number · batch · style · batch or serial ───────────────────────────────────────── */
+.fw-labels-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+/* ── the label to scale in its column (the DS preview takes the column's width and shrinks to fit a narrow one) ──────── */
+.fw-labels-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+
+/* ── the stand-in marks (outlined, dashed: never mistaken for the real artwork) ──────────────────────────────────── */
+.fw-labels-mark {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* The label's own ink (the paper is white in both themes). */
+  color: inherit;
+}
+
+/* ── the label printers when the site has several: one big choice each ───────────────────────────────────────────── */
+.fw-labels-printers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-10);
+}
+.fw-labels-printers > .fw-floor-subtitle {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* ── labels a print made no job for ───────────────────────────────────────────────────────────────────────────────── */
+.fw-labels-problems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding-inline-start: 1.2em;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-density-font-body);
+}

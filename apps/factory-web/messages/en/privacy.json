@@ -1,0 +1,399 @@
+{
+  "pv": {
+    "page": {
+      "intro": "Your privacy duties, the notices people read and acknowledge, the DPIA and the record of processing.",
+      "duties": "{done} of {total} privacy duties done",
+      "updated": "Updated {time}",
+      "updates_one": "{count} update · Show",
+      "updates_other": "{count} updates · Show",
+      "company": "Company",
+      "more": "More actions",
+      "openPublic": "Open the public privacy notice",
+      "noPublic": "No public notice is published yet.",
+      "newNotice": "New notice version",
+      "noAccess": "You need: See privacy & notices. Ask an administrator.",
+      "noCompanyTitle": "No company to show",
+      "noCompany": "Your role reaches no company's privacy records."
+    },
+    "live": {
+      "connecting": "Connecting to live updates…",
+      "live": "Live",
+      "offline": "Live updates paused"
+    },
+    "sample": {
+      "title": "Sample texts",
+      "body": "The notices, the DPIA and the register on this page hold SAMPLE texts until the privacy consultant writes the real ones. Do not hand them to anyone as final.",
+      "dialogBodyPublished": "The privacy consultant writes the real notice; it then comes into force as a new version, and everyone acknowledges it again.",
+      "dialogTitle": "This text is a sample",
+      "dialogBody": "Publish it only for a trial: the privacy consultant writes the real notice. A published version never changes; a new version replaces it."
+    },
+    "duties": {
+      "title": "Your privacy duties",
+      "later": "Data requests (access, erasure) and retention rules come in a later step."
+    },
+    "duty": {
+      "state": {
+        "done": "Done",
+        "needs": "Needs you",
+        "review": "Review due"
+      },
+      "doIt": "Do it",
+      "open": "Open",
+      "register": {
+        "name": "Record of processing and processors",
+        "law": "GDPR art. 30 (the record), art. 28 (processors)",
+        "done_one": "{count} processing activity is in the record, with its processors.",
+        "done_other": "{count} processing activities are in the record, with their processors.",
+        "needs": "The record is empty: add what the company processes and who processes it for you."
+      },
+      "publicNotice": {
+        "name": "Public privacy notice",
+        "law": "GDPR arts. 13 and 14",
+        "done": "Version {label} is published at the company's public address, linked from link pages and e-mails.",
+        "needs": "No public notice is published: link pages and e-mails point to an empty page."
+      },
+      "staffNotice": {
+        "name": "Notice for office staff",
+        "law": "GDPR art. 13",
+        "done": "Version {label} is in force: each office person sees it once at sign-in.",
+        "needs": "No staff notice is published: office staff are not told what the system keeps about them."
+      },
+      "dpia": {
+        "name": "Impact assessment (DPIA)",
+        "law": "GDPR art. 35: before the processing starts",
+        "done": "DPIA version {version} is stored, signed.",
+        "review": "DPIA version {version} is stored; its review was due on {date}. Store the reviewed version.",
+        "needs": "No signed DPIA is stored.",
+        "gates": "Floor sign-in with a badge and scans that record workers stay off until a DPIA is stored."
+      },
+      "workerNotice": {
+        "name": "Worker notice, acknowledged by every worker",
+        "law": "GDPR art. 13; L. 300/1970 art. 4 c.3",
+        "done": "Version {label} is in force: each worker acknowledges it on the tablet before their first scan.",
+        "needs": "No worker notice is published.",
+        "gates": "Floor work that records workers stays off until one is published."
+      }
+    },
+    "floor": {
+      "title": "May each site's floor start?",
+      "intro": "Real floor work (badge sign-ins and scans that record people) waits for the company's privacy duties and the site's floor rules.",
+      "noSites": "This company has no site yet.",
+      "ready": "Ready",
+      "held": "Waits"
+    },
+    "site": {
+      "ready": "The privacy duties and the floor rules are in place.",
+      "noDpia": "Floor sign-in stays off until the DPIA is stored.",
+      "noNotice": "Floor sign-in stays off until a worker notice is published.",
+      "noBasis": "The site names workers in its floor records, but no legal basis is on record.",
+      "toFloorRules": "Open Floor rules & codes"
+    },
+    "views": {
+      "label": "Lists",
+      "notices": "Notices",
+      "dpia": "DPIA",
+      "register": "Processing register",
+      "key": "Key {key}"
+    },
+    "keys": {
+      "views": "Notices · DPIA · Register",
+      "new": "New notice version"
+    },
+    "list": {
+      "failed": "Couldn't load this list",
+      "loading": "Loading…",
+      "retry": "Try again"
+    },
+    "common": {
+      "export": "Export {count}"
+    },
+    "kind": {
+      "WORKER_FLOOR": {
+        "name": "Worker notice",
+        "who": "Shown on the floor tablets",
+        "means": "What the floor tools record about workers. Each worker reads and acknowledges it on the tablet before their first scan; until then no scan names them."
+      },
+      "OFFICE_STAFF": {
+        "name": "Staff notice",
+        "who": "Shown once to each office person",
+        "means": "What the system keeps about office staff. Each office person sees it once at their next sign-in."
+      },
+      "PRIVACY_PUBLIC": {
+        "name": "Public privacy notice",
+        "who": "For customers, suppliers and visitors",
+        "means": "The notice anyone can read at the company's public address, linked from every link page and e-mail."
+      }
+    },
+    "status": {
+      "DRAFT": "Draft",
+      "PUBLISHED": "In force",
+      "SUPERSEDED": "Replaced"
+    },
+    "notices": {
+      "workerTitle": "Worker notice versions",
+      "workerIntro": "Publishing a new version asks every worker again at their next floor sign-in.",
+      "count_one": "{count} version",
+      "count_other": "{count} versions",
+      "emptyTitle": "No worker notice yet",
+      "empty": "No worker notice yet: floor sign-in waits for one.",
+      "writeFirst": "Write the first version",
+      "otherTitle": "Staff notice and public notice",
+      "otherIntro": "One of each per company; a new version replaces the one in force.",
+      "noneInForce": "None in force",
+      "openDraft": "Draft {label} · Open",
+      "newVersion": "New version",
+      "noDraft": "No draft",
+      "copy": "Copy",
+      "staffWhere": "At each office sign-in"
+    },
+    "col": {
+      "version": "Version",
+      "languages": "Languages",
+      "acknowledged": "Acknowledged",
+      "state": "State",
+      "notice": "Notice",
+      "inForce": "In force",
+      "draft": "Draft",
+      "where": "Where people read it",
+      "activity": "Activity",
+      "purpose": "Purpose · legal basis",
+      "people": "Whose data · what data",
+      "processors": "Processors · recipients",
+      "retention": "Kept for · transfers",
+      "more": "More"
+    },
+    "notice": {
+      "title": "Notice",
+      "titleOf": "{kind} · version {label}",
+      "version": "{label} (v{n})",
+      "publishedOn": "Published {date}",
+      "replacedOn": "Replaced {date}",
+      "notPublished": "Not published",
+      "noLanguage": "No language yet",
+      "openPdf": "Open the PDF",
+      "pdfOnly": "PDF only",
+      "pdfLanguage": "This language is a PDF: workers read it on paper from HR, the tablet shows Italian or English.",
+      "textOf": "Text in {language}",
+      "saveText": "Save this language",
+      "removeLanguage": "Remove this language",
+      "missing": "Write these languages before publishing: {languages}. The screens show the notice in them.",
+      "addLanguage": "Add a language",
+      "addLanguageIntro": "A worker's own language as a PDF (the paper copy HR hands out), or as text.",
+      "language": "Language",
+      "pickLanguage": "Pick a language",
+      "addAs": "Add as",
+      "asPdf": "PDF",
+      "asText": "Text",
+      "dropPdf": "The notice in {language}, as a PDF",
+      "textAdded": "Type the text in {language} above and save it.",
+      "deleteDraft": "Delete draft",
+      "deleteConfirm": "Delete draft {label}? Its texts are removed; nobody has seen it.",
+      "deleteNow": "Delete",
+      "newVersion": "New version from this one",
+      "publish": "Publish {label}",
+      "publishMeans": {
+        "WORKER_FLOOR": "Once published, every worker reads and acknowledges it on the tablet at their next sign-in; until then no scan or cut log names them."
+      }
+    },
+    "ack": {
+      "title": "Who acknowledged it",
+      "notYetN_one": "{count} not yet",
+      "notYetN_other": "{count} not yet",
+      "count": "{count} of {total} acknowledged",
+      "none": "—",
+      "notYet": "—",
+      "notYetOne": "Not yet",
+      "public": "Read by anyone, no acknowledgement",
+      "namesHere": "Names are shown here, inside this one notice only, sorted by name: never a ranking.",
+      "countsOnly": "Counts only: names are shown to people who manage privacy.",
+      "person": "Person",
+      "when": "Acknowledged",
+      "how": "How",
+      "language": "Language",
+      "channel": {
+        "DEVICE": "On the tablet",
+        "PAPER": "Signed paper copy",
+        "OFFICE": "At office sign-in"
+      }
+    },
+    "paper": {
+      "title": "A signed paper copy",
+      "intro": "A worker who signed the paper copy in their language: record it here, for the version in force.",
+      "everyone": "Every worker has acknowledged this version.",
+      "worker": "Worker",
+      "pickWorker": "Pick a worker",
+      "language": "Language signed",
+      "record": "Record the signed copy"
+    },
+    "newNotice": {
+      "title": "New notice version",
+      "kind": "Which notice",
+      "label": "Version label",
+      "labelHint": "As people see and acknowledge it, for example 2026-10.",
+      "copy": "Start from the texts in force",
+      "after": "It starts as a draft: nobody sees it until you publish it.",
+      "create": "Make the draft"
+    },
+    "dpia": {
+      "inForce": "DPIA in force",
+      "why": "The impact assessment of floor tracking (GDPR art. 35). The floor gate opens when a signed DPIA is stored.",
+      "version": "Version",
+      "versionN": "Version {n}",
+      "signedBy": "Signed by",
+      "signedByHint": "As the signed document names them.",
+      "signedOn": "Signed on",
+      "reviewDue": "Review due",
+      "reviewHint": "When it must be reviewed (GDPR art. 35(11)).",
+      "reviewPassed": "{date}: the review is due",
+      "storedOn": "Stored",
+      "file": "Signed PDF",
+      "openPdf": "Open the signed PDF",
+      "pdfHere": "Signed PDF stored",
+      "noPdf": "No signed PDF yet",
+      "noneTitle": "No DPIA stored",
+      "none": "Badge sign-ins and scans that record workers stay off until a signed DPIA is stored.",
+      "draftTitle": "Draft: version {n}",
+      "draftIntro": "Upload the signed PDF, say who signed it and when, then store it. Storing replaces the version in force.",
+      "newTitle": "A new DPIA version",
+      "newIntro": "Start a new version when the processing changes (a new site, a new floor tool) or at its review.",
+      "start": "Start a new DPIA version",
+      "noDraft": "No draft. People who manage privacy start one.",
+      "step1": "1. The signed PDF",
+      "step2": "2. Who signed it and when",
+      "pdfUploaded": "PDF uploaded",
+      "dropPdf": "The DPIA as signed, in PDF",
+      "replacePdf": "Another PDF replaces this one",
+      "store": "Store the signed DPIA",
+      "versions": "Every version",
+      "noVersions": "No DPIA version yet.",
+      "scope": "What it assesses",
+      "scopeHint": "Left empty: Nexus writes the standard scope (floor tools and office staff data).",
+      "after": "It starts as a draft; the version in force stays until you store this one.",
+      "create": "Start the draft"
+    },
+    "dpiaStatus": {
+      "DRAFT": "Draft",
+      "STORED": "In force",
+      "SUPERSEDED": "Replaced"
+    },
+    "register": {
+      "title": "Record of processing activities",
+      "intro": "What personal data the company processes, why, how long and with whom (GDPR art. 30). Processors with their region (art. 28).",
+      "count_one": "{count} activity",
+      "count_other": "{count} activities",
+      "filter": "Show",
+      "filters": {
+        "ACTIVE": "In use",
+        "ARCHIVED": "Archived",
+        "all": "All"
+      },
+      "new": "New activity",
+      "emptyTitle": "The record is empty",
+      "empty": "Add what the company processes: floor scans, staff history, mail with customers and suppliers.",
+      "noneHere": "No activity here.",
+      "showAll": "Show all",
+      "rowMenu": "More for {name}",
+      "edit": "Edit",
+      "view": "Open",
+      "archive": "Archive…",
+      "newTitle": "New processing activity",
+      "editTitle": "Edit {name}",
+      "viewTitle": "{name}",
+      "add": "Add to the record",
+      "save": "Save"
+    },
+    "activityStatus": {
+      "ACTIVE": "In use",
+      "ARCHIVED": "Archived"
+    },
+    "form": {
+      "code": "Code",
+      "codeHint": "Capitals, digits, dots or dashes; it never changes. For example FLOOR-SCANS.",
+      "name": "Activity",
+      "purpose": "Purpose",
+      "legalBasis": "Legal basis",
+      "dataSubjects": "Whose data",
+      "dataCategories": "What data",
+      "recipients": "Recipients",
+      "processors": "Processors",
+      "transfers": "Transfers outside the EU",
+      "retention": "Kept for",
+      "security": "Security measures",
+      "listHint": "One per line.",
+      "processorsHint": "One per line, with its region, for example: E-mail service — EU (Ireland).",
+      "required": "Required.",
+      "tooLong": "Too long.",
+      "atLeastOne": "Name at least one.",
+      "listRule": "Each entry is a word or a short phrase.",
+      "codeRule": "Capitals, digits, dots, dashes or underscores, at most 40."
+    },
+    "archive": {
+      "title": "Archive {name}?",
+      "body": "It stays in the record as archived, for the history, and can no longer change.",
+      "confirm": "Archive"
+    },
+    "held": {
+      "manage": "Needs the right: Manage privacy & notices",
+      "noCompany": "No company is open.",
+      "notDraft": "Only a draft changes.",
+      "unsaved": "Save the languages you typed first.",
+      "missing": "Write these languages first: {languages}",
+      "emptyText": "The text is empty.",
+      "nothingTyped": "Nothing changed in this language.",
+      "draftExists": "Draft {label} of this notice is open: edit it, publish it or delete it first.",
+      "label": "Give the version a label of at most 40 characters.",
+      "labelTaken": "This notice already has a version {label}.",
+      "paperWorkerOnly": "Only the worker notice is acknowledged on paper.",
+      "paperInForce": "A paper copy is recorded for the version in force.",
+      "pickWorker": "Pick the worker who signed it.",
+      "pickLanguage": "Pick the language they signed.",
+      "noDraft": "Start a draft first.",
+      "dpiaPdf": "Upload the signed PDF first.",
+      "dpiaSigner": "Say who signed it, as the document names them.",
+      "dpiaSignedOnMissing": "Say the day it was signed.",
+      "dpiaSignedOn": "The signing day is today or earlier.",
+      "dpiaReviewMissing": "Say when it must be reviewed.",
+      "dpiaReview": "The review day comes after the signing day.",
+      "upload": "Uploading files needs the right to upload files.",
+      "form": "Fill in what is marked.",
+      "nothingChanged": "Nothing changed."
+    },
+    "stepUp": {
+      "title": "Confirm with a fresh code",
+      "confirm": "Confirm",
+      "publish": "Publishing a notice puts it in force for everyone: type the 6-digit code from your authenticator app.",
+      "dpia": "Storing the signed DPIA opens the floor gate: type the 6-digit code from your authenticator app."
+    },
+    "done": {
+      "textSaved": "{language} saved.",
+      "textRemoved": "{language} removed from the draft.",
+      "pdfAdded": "The PDF in {language} is on the draft.",
+      "published": {
+        "WORKER_FLOOR": "Version {label} is in force. Every worker reads and acknowledges it on the tablet at their next sign-in.",
+        "OFFICE_STAFF": "Version {label} is in force. Each office person sees it once at their next sign-in.",
+        "PRIVACY_PUBLIC": "Version {label} is in force at the company's public address."
+      },
+      "draftDeleted": "Draft {label} deleted.",
+      "paper": "The signed paper copy is recorded.",
+      "paperAgain": "That paper copy was recorded already.",
+      "dpiaPdf": "The signed PDF is on the draft.",
+      "dpiaStored": "DPIA version {n} is stored and in force.",
+      "activityAdded": "{name} is in the record.",
+      "activitySaved": "{name} saved.",
+      "archived": "{name} archived.",
+      "copied": "Address copied."
+    },
+    "problem": {
+      "signedOut": "Your session ended. Sign in again to go on.",
+      "forbidden": "Your role may not see or do this.",
+      "notFound": "It no longer exists, or it belongs to another company.",
+      "conflict": "Someone changed it meanwhile. It was read again: check it and try once more.",
+      "invalid": "Something in it was not accepted. Check the fields and try again.",
+      "rateLimited": "Too many tries. Wait a moment, then try again.",
+      "unavailable": "The factory server did not answer. Try again in a moment.",
+      "internal": "Something went wrong. Try again; if it happens again, tell the administrator.",
+      "stepUpClosed": "Not done: the code was not given.",
+      "copy": "The address could not be copied: select it and copy it by hand."
+    }
+  }
+}

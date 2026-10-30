@@ -1,4 +1,4 @@
-import { Activity, ClipboardList, Factory } from 'lucide-react'
+import { Activity, ClipboardList, Factory, SlidersHorizontal } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -27,6 +27,12 @@ export const officeArea: OfficeAreaNav = {
           // SCR-069 … SCR-072: the list and the work order studio.
           { id: 'production-work-orders', label: 'shell:nav.production.workOrders', href: '/production/work-orders', icon: ClipboardList, permission: 'workorders.view' },
         ],
+      },
+      {
+        id: 'production-settings',
+        label: 'shell:nav.production.settings',
+        // SCR-074: per site, who floor records name (the monitoring switch with its legal basis) and the floor's codes.
+        items: [{ id: 'production-floor-rules', label: 'shell:nav.production.floorRules', href: '/production/settings', icon: SlidersHorizontal, permission: 'production.settings.view' }],
       },
     ],
   },

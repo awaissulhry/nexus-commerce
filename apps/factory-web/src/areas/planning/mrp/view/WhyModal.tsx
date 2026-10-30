@@ -225,7 +225,7 @@ function WhyBody({ explain, unit, q, model, actions }: { explain: Explain; unit:
                 id: `${entry.lot?.id ?? 'none'}-${index}`,
                 cells: [
                   entry.lot ? (
-                    <Link className="fw-by-link" href={`${model.prefix}/compliance/tests/${entry.lot.id}`}>
+                    <Link className="fw-by-link" href={`${model.prefix}/warehouse/lots/${encodeURIComponent(entry.lot.id)}`}>
                       {entry.lot.code}
                     </Link>
                   ) : (

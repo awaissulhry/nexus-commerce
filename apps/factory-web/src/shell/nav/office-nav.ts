@@ -171,6 +171,18 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/admin/connections/[accountId]',
   '/admin/import',
   '/admin/audit',
+  // Stock screens: Stock (SCR-060), Hides (SCR-200) and a hide, Lots & traceability (SCR-201) and a lot, Movements
+  // (SCR-064), Locations (SCR-065) and a location, Floor rules & codes (SCR-074), Privacy & notices (SCR-086).
+  '/warehouse/stock',
+  '/warehouse/hides',
+  '/warehouse/hides/[id]',
+  '/warehouse/lots',
+  '/warehouse/lots/[id]',
+  '/warehouse/moves',
+  '/warehouse/locations',
+  '/warehouse/locations/[id]',
+  '/production/settings',
+  '/admin/privacy',
 ])
 
 /** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */

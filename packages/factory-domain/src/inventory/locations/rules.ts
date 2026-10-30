@@ -8,7 +8,8 @@ import type { Issue } from '../../core/errors'
  * inside it. The …_supply_guards trigger holds the same (and refuses a parent that would make a cycle).
  */
 
-export const LOCATION_KINDS = ['WAREHOUSE', 'ZONE', 'BIN', 'RECEIVING', 'QUARANTINE', 'PRODUCTION', 'SHIPPING'] as const
+// W2a wave 3 (factory-db inventory.prisma): SUBCONTRACTOR, our stock at an outside workshop; the location names its party.
+export const LOCATION_KINDS = ['WAREHOUSE', 'ZONE', 'BIN', 'RECEIVING', 'QUARANTINE', 'PRODUCTION', 'SHIPPING', 'SUBCONTRACTOR'] as const
 export type LocationKind = (typeof LOCATION_KINDS)[number]
 
 export const LOCATION_STATUSES = ['ACTIVE', 'ARCHIVED'] as const

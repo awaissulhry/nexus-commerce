@@ -1,0 +1,228 @@
+{
+  "bar": "Actions",
+  "loading": "Reading the work order’s labels…",
+  "noPermission": {
+    "title": "Garment labels are not for your role",
+    "body": "Printing garment labels needs the labels permission at this station. Ask your team leader."
+  },
+  "scan": {
+    "title": "For which work order?",
+    "lead": "Scan the traveller or a bundle ticket at the final operation, or a garment’s serial label to print it again.",
+    "hint": "Traveller, bundle ticket or serial",
+    "label": "Scan or type the code",
+    "read": "Read: {code}",
+    "type": "Type",
+    "camera": {
+      "start": "Camera",
+      "stop": "Stop the camera",
+      "error": "The camera cannot be used here. Type the code instead."
+    }
+  },
+  "note": {
+    "otherLabel": "{code} is not a work order, bundle or serial label. Scan the traveller or a bundle ticket.",
+    "otherFactory": "{code} is a label of another factory.",
+    "typo": "{code} was misread. Scan it again or type it.",
+    "notFound": "Nothing at this site has the code {code}.",
+    "several": "Several work orders have the number {code}: scan a bundle ticket of yours instead.",
+    "printed_one": "Sent to the printer: {count} label ({sizes}).",
+    "printed_other": "Sent to the printer: {count} labels ({sizes}).",
+    "reprinted_one": "Printed again: {count} label of {what}. The reason is logged.",
+    "reprinted_other": "Printed again: {count} labels of {what}. The reason is logged."
+  },
+  "strip": {
+    "batch": "batch {batch}",
+    "noBatch": "no batch number",
+    "BATCH": "batch number on every label",
+    "SERIAL": "a serial per garment"
+  },
+  "sizes": {
+    "titleBatch": "Which size · labels with the batch number",
+    "titleSerial": "Which size · a serial label per garment",
+    "label": "Size",
+    "colour": "{colour} · {code}",
+    "of": "of {count} finished",
+    "notScanned": "not scanned",
+    "noneFinished": "none finished yet",
+    "toLabel_one": "{count} to label",
+    "toLabel_other": "{count} to label",
+    "done": "Done",
+    "overLabelled_one": "{size}: {count} label more than the garments finished now (a scan was undone after the print). Tell the office.",
+    "overLabelled_other": "{size}: {count} labels more than the garments finished now (a scan was undone after the print). Tell the office.",
+    "labelled_one": "{size}: {count} label printed",
+    "labelled_other": "{size}: {count} labels printed",
+    "labelledSerial_one": "{size}: {count} garment has its serial",
+    "labelledSerial_other": "{size}: {count} garments have their serial",
+    "again_one": "{count} printed again",
+    "again_other": "{count} printed again"
+  },
+  "gate": {
+    "title": "Certificate check · {size}",
+    "covered": "{standard} · certificate {number} valid until {until} · covers {style}, {size}.",
+    "coveredClass": "{standard} class {ppeClass} · certificate {number} valid until {until} · covers {style}, {size}.",
+    "notRequired": "This style needs no PPE certificate: its labels print as they are."
+  },
+  "preview": {
+    "code": "Barcode {value}",
+    "invalid": "This code cannot print as a barcode: {value}",
+    "standIn": "Stand-in artwork: the CE mark, the PPE pictogram and the care symbols are placeholders until the real artwork is set up. Not final.",
+    "serialStandIn": "The serial shown is an example: each garment gets its own when it prints.",
+    "sample": "Shown as a sample: the label prints with the real batch number.",
+    "none": "The label of this size is not on this tablet: it shows when the network is back.",
+    "reading": "Reading the label of this size…"
+  },
+  "printer": {
+    "one": "Prints on {printer}.",
+    "pick": "Which label printer?",
+    "none": "This site has no label printer. Tell the office.",
+    "noneFits": "No label printer here takes this label’s size. Tell the office."
+  },
+  "print": {
+    "size_one": "Print {count} label · {size}",
+    "size_other": "Print {count} labels · {size}",
+    "all_one": "Print all ({count})",
+    "all_other": "Print all ({count})",
+    "allNone": "Print all",
+    "nothing": "Print"
+  },
+  "finish": "Finish",
+  "held": {
+    "offline": "Printing needs the network: each garment label is logged by the office at once.",
+    "busy": "Wait: the office is answering.",
+    "blocked": "Nothing of this work order prints now.",
+    "refused": "This size cannot print today: see the certificate check.",
+    "noPrinter": "No label printer here takes this label.",
+    "pickPrinter": "Pick the label printer first.",
+    "nothingFinished": "Nothing of this size is finished at the final operation yet.",
+    "scanSerial": "Every garment of this size has its serial. To print one again, scan its label.",
+    "nothingLeft": "Every finished garment has its label."
+  },
+  "refused": {
+    "title_one": "{count} size did not print",
+    "title_other": "{count} sizes did not print",
+    "line": "{size}: {words}"
+  },
+  "jobs": {
+    "title": "Print jobs",
+    "batch_one": "{what} · {count} label",
+    "batch_other": "{what} · {count} labels",
+    "batchAgain_one": "{what} · {count} label again",
+    "batchAgain_other": "{what} · {count} labels again",
+    "serial": "{what} · {serial}",
+    "retry": "Retry {what}",
+    "notMade": "Labels that made no print job",
+    "problem": "{what}: {problem}"
+  },
+  "job": {
+    "QUEUED": "Waiting",
+    "SENT": "Sent",
+    "PRINTED": "Printed",
+    "FAILED": "Not printed"
+  },
+  "reprint": {
+    "title": "Print labels again?",
+    "open": "Reprint",
+    "openSerial": "Reprint {serial}",
+    "question_one": "{count} label of {size} was printed. Why again?",
+    "question_other": "{count} labels of {size} were printed. Why again?",
+    "questionAt_one": "{count} label of {size} was printed at {time}. Why again?",
+    "questionAt_other": "{count} labels of {size} were printed at {time}. Why again?",
+    "cancel": "Cancel",
+    "serialQuestion": "The label of {serial} was printed. Why again? The same serial prints.",
+    "count": "How many labels again · {size}",
+    "unit": "labels",
+    "range": "From 1 to {max}: never more than were printed.",
+    "why": "Why again?",
+    "reason": {
+      "DAMAGED": "Damaged or smudged",
+      "UNREADABLE": "Print unreadable",
+      "LOST": "Label lost",
+      "JAMMED": "Printer jammed"
+    },
+    "logged": "Every reprint is logged with its reason."
+  },
+  "pad": {
+    "minus": "One less",
+    "plus": "One more",
+    "clear": "Clear",
+    "back": "Delete the last digit",
+    "empty": "Type how many"
+  },
+  "done": {
+    "title": "Labels of {number} printed",
+    "body_one": "{count} label printed on this visit. Every print is logged.",
+    "body_other": "{count} labels printed on this visit. Every print is logged.",
+    "next": "Next work order"
+  },
+  "notice": {
+    "stepUp": "Your PIN is needed for this.",
+    "forbidden": "Your role may not do this at this station.",
+    "notFound": "It is no longer at this site. Scan the work order again.",
+    "conflict": "It changed meanwhile: it was read again. Check the numbers and try again.",
+    "invalid": "The office did not accept it as it was sent. Check the numbers and try again.",
+    "signedOut": "You were signed out. Sign in again.",
+    "rateLimited": "Too many tries: wait a moment, then try again.",
+    "unavailable": "The office did not answer. Try again in a moment."
+  },
+  "refusal": {
+    "FLOOR_NOT_READY": {
+      "title": "Labels cannot print at this site yet",
+      "body": "Floor work here waits for the office: the privacy steps or the floor rules are not complete. Tell the office."
+    },
+    "WORK_ORDER_NOT_OPEN": {
+      "title": "Work order {number} is not open for labels",
+      "body": "Only a released or running work order prints garment labels. Tell the office."
+    },
+    "NO_LABEL_TEMPLATE": {
+      "title": "No garment label is set for {style}",
+      "body": "The style’s released revision names no label. Tell quality."
+    },
+    "NO_BATCH_NUMBER": {
+      "title": "Work order {number} has no batch number",
+      "body": "Every label carries the batch number. Tell the office."
+    },
+    "NO_FINAL_OPERATION": {
+      "title": "The routing of {style} has no final operation",
+      "body": "Labels print for garments finished at the last scanned operation. Tell the office."
+    },
+    "NOTHING_FINISHED": {
+      "title": "Nothing of size {size} is finished yet",
+      "body": "Labels print for garments finished at the final operation."
+    },
+    "NOTHING_TO_LABEL": {
+      "title": "Every finished garment of size {size} has its label",
+      "body": "To print one again, use Reprint."
+    },
+    "MORE_THAN_FINISHED": {
+      "title": "More labels than finished garments in size {size}",
+      "body": "Labels never outnumber the garments finished. The numbers were read again: check them."
+    },
+    "CERTIFICATE": {
+      "title": "No valid certificate covers size {size} of {style}",
+      "body": "Labels cannot print. Tell quality."
+    },
+    "TEMPLATE_NOT_ACTIVE": {
+      "title": "The label layout was retired",
+      "body": "Labels cannot print with it. Tell the office."
+    },
+    "LABEL_NOT_PRINTABLE": {
+      "title": "This label cannot print as it is",
+      "body": "Something on it is missing or does not fit. Tell quality."
+    },
+    "NO_PRINTER": {
+      "title": "No label printer here takes this label",
+      "body": "Tell the office to set up a label printer for this site."
+    },
+    "MORE_THAN_PRINTED": {
+      "title": "More labels again than were printed",
+      "body": "Lower the number and try again."
+    },
+    "SERIAL_VOID": {
+      "title": "This serial was cancelled",
+      "body": "Its garment has a new serial: scan that label."
+    },
+    "SERIAL_SHIPPED": {
+      "title": "This garment has already shipped",
+      "body": "Its label cannot print again here. Tell the office."
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/sourcing.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office writes approved sources, purchase order revisions and reminders through apps/factory-api's modules/purchasing, always through command(); the worker and scheduler do so in the tenant's system context (the confirm-by reminders). Supplier prices are costs (@grain cost; Owner answer C2: no prices on supplier screens): the floor reads none of these tables. A portal or PO_CONFIRM link session (factory_partner_runtime) reads only its OWN party's revisions (it re-confirms revision 2 by its link: what changed in quantities and dates), never their prices, PDF or who sent them; it reads no source and no reminder. Revisions and reminders are append-only (UPDATE, DELETE and TRUNCATE refused for every login by the …_supply_w2a_guards triggers); a source is archived, never deleted. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "SupplierItem": {
+      "about": "The office keeps each supplier's approved sources: the material and colour, its article code, the unit and terms it sells in and its price; archives one that is no longer approved. Office only (B-W2a-10).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "PurchaseOrderRevision": {
+      "about": "The send of a purchase order writes the revision it sent, frozen with its PDF (B-W2a-52). Append-only. A link session reads its own party's revisions without their prices, PDF or who sent them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_partner_runtime": {
+          "privileges": ["select"],
+          "scopedBy": ["party"],
+          "hiddenColumns": ["beforePrices", "afterPrices", "documentFileId", "sentById", "createdById"]
+        }
+      }
+    },
+    "PurchaseOrderReminder": {
+      "about": "The scheduler (in the system context) or the buyer writes one row per reminder sent to a supplier that has not answered by the confirm-by deadline (B-W2a-52). Append-only. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    }
+  }
+}

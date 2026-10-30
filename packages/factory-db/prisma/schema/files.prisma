@@ -93,12 +93,16 @@ model StoredFile {
   // quality.prisma: the lab results it is the report of, the lot documents it is.
   labResults     LabResult[]
   lotDocuments   LotDocument[]
+  // W2a stockcount.prisma: the year-end count whose signed valued list it is.
+  stockCountValuedLists StockCount[] @relation("StockCountValuedList")
   // privacy.prisma: the notice language and the DPIA whose PDF it is.
   privacyNoticeTexts PrivacyNoticeText[] @relation("PrivacyNoticeTextFile")
   privacyDpias       PrivacyDpia[]       @relation("PrivacyDpiaFile")
   // views.prisma, ops.prisma: the export whose file it is, the restore drill it is the evidence of.
   exportJobs         ExportJob[]
   restoreDrills      RestoreDrill[]
+  // W2a sourcing.prisma: the purchase order revisions whose PDF it is.
+  purchaseOrderRevisions PurchaseOrderRevision[] @relation("PurchaseOrderRevisionDocument")
 
   @@unique([tenantId, storageKey])
   // The target of the tenant-safe references from other rows (a company's logo, a document's PDF).

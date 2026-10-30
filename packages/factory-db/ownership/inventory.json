@@ -2,9 +2,9 @@
   "$comment": "Who may read and write each model of prisma/schema/inventory.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker, in the tenant's system context: the handler that values the floor's moves) writes locations, goods receipts, lots, hides, stock moves and valuations through apps/factory-api's modules/inventory, always through command(); the API keeps staff to the companies and sites their grants reach. The floor (factory_floor_runtime) works on its OWN site's stock only (every table it reaches has a site key): it reads the locations, receives goods (receipts, their lines, lots and hides one by one, B-W1-33), changes a hide's state (cutting, B-W1-40) and posts stock moves (receipts, issues to a work order, returns, transfers, B-W1-39); it never releases a lot and never reads a value: no table it inserts into has a cost column (the generated isolation tests insert every column of a copy), and the valuation ledger is not granted to it at all (plan A1 §2.2, §2.6). Portal and link sessions read nothing here. StockMove and StockValuation are append-only (`@append-only`; the …_supply_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes them. Nobody deletes a location (archived), a receipt (cancelled or reversed), a lot (rejected) or a hide (scrapped); the office deletes only the lines of an OPEN receipt. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "Location": {
-      "about": "The office keeps each site's location tree and archives empty locations. The floor reads its own site's locations (bin labels, scans).",
+      "about": "The office keeps each site's location tree and archives empty locations; a SUBCONTRACTOR location (W2a) names the workshop that holds it (partyId; no partner role reads it). The floor reads its own site's locations (bin labels, scans).",
       "kind": "tenant",
-      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
         "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }

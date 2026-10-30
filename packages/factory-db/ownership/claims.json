@@ -1,0 +1,29 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/claims.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office records what was wrong with a delivery, reports it to the supplier and follows it to its end, and writes the claims to suppliers with their lines (returns and claims for credit), through apps/factory-api's modules/inventory/receipts (B-W2a-31) and modules/purchasing/claims (B-W2a-44), always through command(). The credit asked is a cost (@grain cost). No W2a step needs the floor or a portal or link session here (the report and the claim reach the supplier as a PDF by mail): they read nothing. Nobody deletes a claim (it is cancelled or closed) or a sent discrepancy; the office deletes an OPEN discrepancy and the lines of a DRAFT claim (the …_supply_w2a_guards triggers hold the states for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "ReceiptDiscrepancy": {
+      "about": "The office records a discrepancy of a goods receipt (short, over, damaged, wrong item or colour), sends the report to the supplier, records its answer and closes it; deletes one still OPEN (recorded by mistake). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "SupplierClaim": {
+      "about": "The office opens a claim (a return or a claim for credit or replacement), sends it, records the supplier's answer, closes or cancels it. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "SupplierClaimLine": {
+      "about": "The office writes the lines of a DRAFT claim (and deletes them), and records the stock move and return DDT of a line sent back and the credit per line. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}

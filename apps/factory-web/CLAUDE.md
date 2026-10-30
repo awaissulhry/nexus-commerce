@@ -125,6 +125,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   supplier's answer and the buyer's accept/refuse), `areas/warehouse/receipts/` (SCR-063 list `?view=expected|posted|today|
   waiting|reversed|all`, the receiving page `/warehouse/receipts/new?order=&lines=` posting the whole receipt at once with the
   hide entry sheet (SCR-061), the receipt `?tab=lines|lots|activity` with its lots and quality state (SCR-062) and Reverse).
+- The stock screens (catalogue `stock` shared + one per page; shared parts `areas/_shared/stock/`: api (every inventory read and
+  write, zod), model (abilities with the cost grain, words for API faults, units never added across, leather's two numbers
+  and both area units, state tones, `movesHref`), parts (pills, Qty, Dual, NoAccess, ReadFailed), made-up fixtures):
+  `areas/warehouse/stock/` (SCR-060; `adjust/` the ONE Adjust stock dialog), `moves/` (SCR-064: the why panel, the ledger
+  as ONE long grid = ListFrame `endless`, the move's DetailModal `?open=`, reverse), `hides/` (SCR-200 + record), `lots/`
+  (SCR-201 + record: stock, trace both ways, moves; release/block/reject stay in Compliance › Tests & substances, linked),
+  `locations/` (SCR-065 + record); `areas/production/settings/` (SCR-074: who floor records name, its legal basis, step-up
+  when widening); `areas/admin/privacy/` (SCR-086: duties, notices, DPIA, register; sample texts said on screen);
+  `floor/tasks/labels/` (SCR-096, `/floor/labels`: garment labels behind the certificate gate; online only).
 
 ## Rules
 - `FACTORY_API_URL` has NO fallback: without it `next dev`, `next build` and `next start` refuse to start
