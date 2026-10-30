@@ -1,3 +1,4 @@
+import { depositDueDaysFor } from '../terms/store'
 import type { FastifyRequest } from 'fastify'
 import { DomainError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
@@ -98,7 +99,10 @@ async function linkView(request: FastifyRequest, facts: LinkFacts) {
     const deposit = version.status === 'ACCEPTED' ? await depositOfVersion(client, version.id) : null
     const language = version.language === 'en' ? 'en' : 'it'
     const instructions = deposit ? await instructionsFor(client, deposit, quoteDocumentNumber(quote.number, version.revision), language) : null
-    return { company, labels, deposit, instructions }
+    // B-W2a-19: the deposit clause's days, as the sent PDF printed them (the version's payment terms).
+    const terms = await client.quoteVersion.findUnique({ where: { id: version.id }, select: { paymentTermsId: true } })
+    const depositDueDays = await depositDueDaysFor(client, terms?.paymentTermsId ?? null)
+    return { company, labels, deposit, instructions, depositDueDays }
   })
   const customer = customerQuoteOf({
     quote,
@@ -109,6 +113,7 @@ async function linkView(request: FastifyRequest, facts: LinkFacts) {
     shipTo: version.shipTo as unknown as ShipToSnapshot,
     contact: null,
     date: businessDate(version.sentAt ?? version.createdAt),
+    depositDueDays: extra.depositDueDays,
   })
   const acceptance = version.status === 'ACCEPTED' ? await request.withClient((client) => client.quoteAcceptance.findFirst({ where: { versionId: version.id }, select: { signerName: true, acceptedAt: true, documentSha256: true, termsVersion: true } })) : null
   const answers = status.canAnswer

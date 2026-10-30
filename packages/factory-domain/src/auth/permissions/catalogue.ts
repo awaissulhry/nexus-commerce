@@ -1,4 +1,6 @@
 import { CALENDARS_DEFINITIONS, CALENDARS_PERMISSIONS } from '../../calendars/permissions'
+// B-W2a-18: the reason lists (reasons.view, reasons.manage).
+import { REASONS_DEFINITIONS, REASONS_PERMISSIONS } from '../../reasons/permissions'
 import { CERTIFICATES_PERMISSIONS } from '../../compliance/certificates/permissions'
 import { REGISTER_PERMISSIONS } from '../../compliance/register/permissions'
 import { COSTING_DEFINITIONS, COSTING_PERMISSIONS } from '../../costing/permissions'
@@ -44,6 +46,9 @@ import { COMPANY_BANK_DEFINITIONS, COMPANY_BANK_PERMISSIONS } from '../../sales/
 import { ORDERS_DEFINITIONS, ORDERS_PERMISSIONS } from '../../sales/orders/permissions'
 import { QUOTES_DEFINITIONS, QUOTES_PERMISSIONS, SALES_SETTINGS_DEFINITIONS, SALES_SETTINGS_PERMISSIONS } from '../../sales/quotes/permissions'
 import { SHIPPING_DEFINITIONS, SHIPPING_FLOOR_PERMISSIONS, SHIPPING_PERMISSIONS } from '../../shipping/permissions'
+// B-W2a-19: the payment terms library and the customer price lists.
+import { PAYMENT_TERMS_DEFINITIONS, PAYMENT_TERMS_PERMISSIONS } from '../../sales/terms/permissions'
+import { PRICE_LISTS_DEFINITIONS, PRICE_LISTS_PERMISSIONS } from '../../sales/pricelists/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -366,6 +371,11 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   CALENDARS_DEFINITIONS,
   // B-W2a-10: approved sources (purchasing.sources.manage).
   PURCHASING_SOURCES_DEFINITIONS,
+  // B-W2a-18: the reason lists.
+  REASONS_DEFINITIONS,
+  // B-W2a-19: paymentterms.view | manage, pricelists.view | manage.
+  PAYMENT_TERMS_DEFINITIONS,
+  PRICE_LISTS_DEFINITIONS,
   // B-W2a-20: tasks on any record (tasks.manage).
   TASKS_DEFINITIONS,
   MONEY_PERMISSIONS,
@@ -399,6 +409,10 @@ for (const name of PRODUCTION_COMPLETION_PERMISSIONS) {
 for (const name of PLANNING_SETTINGS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-22: MRP every day.
 for (const name of [...PLANNING_FIRM_PERMISSIONS, ...PLANNING_EXCEPTIONS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-18: the reason lists.
+for (const name of REASONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-19: payment terms and price lists.
+for (const name of [...PAYMENT_TERMS_PERMISSIONS, ...PRICE_LISTS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-20: tasks on any record.
 for (const name of TASKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

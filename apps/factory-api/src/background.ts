@@ -6,6 +6,8 @@ import { redact } from './core/logger'
 import { openQueues, queueConnection, type Log } from './core/queue'
 import { loadFactoryEnv } from './env'
 import { certificateExpiryCron } from './modules/compliance/certificates/expiry'
+// B-W2a-21: the work-order cost ledger after each stock move, scan and rework of a work order.
+import { costingHandlers } from './modules/costing/actual/handlers'
 import { startOnIssueHandler } from './modules/inventory/issue/start'
 import { floorMoveValuationHandler } from './modules/inventory/ledger/valuation'
 import { invoiceFilesHandler } from './modules/invoicing/invoice-files'
@@ -30,6 +32,8 @@ import { outboxLagCron } from './platform/outbox/lag'
 import { queuePublisher, startRelay } from './platform/outbox/relay'
 import { printDispatchHandler } from './platform/print/handler'
 import { rolesSyncCron, syncAllTenants } from './platform/auth/roles/sync'
+// B-W2a-18: a new tenant's empty reason lists get the standard reasons.
+import { standardReasonsCron, standardReasonsForNewTenants } from './platform/reasons/standard'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -55,7 +59,7 @@ const MODES = ['worker', 'scheduler'] as const
 type Mode = (typeof MODES)[number]
 
 /** The handlers of published events, one list for the worker. Modules add theirs here (dispatch.ts defineHandler). */
-const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler(), startOnIssueHandler(), invoiceFilesHandler(), sdiPollHandler(), sdiArchiveHandler(), sdiCourtesyCopyHandler(), trackingPollHandler(), afterAcceptanceHandler(), shipDocumentsHandler(), ...orderHandlers(), tellBuyerHandler()]
+const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler(), startOnIssueHandler(), invoiceFilesHandler(), sdiPollHandler(), sdiArchiveHandler(), sdiCourtesyCopyHandler(), trackingPollHandler(), afterAcceptanceHandler(), shipDocumentsHandler(), ...orderHandlers(), tellBuyerHandler(), ...costingHandlers()]
 // B-W2a-20: the notification centre's fan-out (mentions, followed records, assignments, approvals).
 const W2A_20_HANDLERS: readonly EventHandler[] = [notificationsHandler()]
 
@@ -114,11 +118,13 @@ const stops: Array<() => Promise<void>> = []
 if (mode === 'worker') {
   // A deploy that changed a role template starts a new worker: the system roles follow it (audited per tenant).
   await syncAllTenants({ database, log }).catch((error) => log.error({ err: error }, 'the system roles could not be synced at start'))
+  await standardReasonsForNewTenants({ database, log }).catch((error) => log.error({ err: error }, 'the standard reasons could not be given at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
   const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log })]
+  crons.push(standardReasonsCron({ database, log }))
   // B-W2a-20: the daily digests people turned on.
   crons.push(digestCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })

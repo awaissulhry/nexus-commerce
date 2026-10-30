@@ -5,6 +5,7 @@ import { markMoney } from '@nexus/factory-domain/money/marked'
 import { QUOTES_MANAGE } from '@nexus/factory-domain/sales/quotes/permissions'
 import { isIssueList, MAX_QUOTE_LINES, piecesOf, resolvePrice, sizeGrid, type SizeInput, type SizeRow } from '@nexus/factory-domain/sales/quotes/quotes'
 import type { CommandCaller, CommandTools, CommandTx } from '../../../core/command'
+import { chainForQuote, keepListVersion, listPriceOf } from './list-price'
 import { refreshVersion } from './pricing'
 import { assertDraft, assertQuotable, detailInCommand, onQuote } from './quotes'
 import { decimal, officeQuote, quotePartyOf, readLineRecords, type LineRecord } from './store'
@@ -116,7 +117,16 @@ export async function addLine(caller: CommandCaller, quoteId: string, body: AddL
     if (lines.length >= MAX_QUOTE_LINES) throw invalid([{ path: 'body', message: `A quote holds at most ${MAX_QUOTE_LINES} lines.` }])
     const target = await lineTarget(tx, current.companyId, { styleId: body.styleId, colourwayId: body.colourwayId, styleRevisionId: body.styleRevisionId }, null, 'body')
     const sizes = sizeGrid(body.sizes, target.grid, 'body/sizes')
-    const price = resolvePrice(body, null, 'body')
+    // B-W2a-19 (SAL-165): the customer's list price, unless one is sent; the offered price follows it unless a price or
+    // a discount is sent. The version keeps the list version the first time it reads one.
+    const chain = await chainForQuote(tx, current, version, party, now, [target.style.id])
+    const listed = listPriceOf(chain, version.taxMode, party, target.style.id, target.colourway.id)
+    const fromList = body.listUnitPrice === undefined && listed !== null
+    const price = resolvePrice(
+      fromList ? { ...body, listUnitPrice: listed.onBasis, unitPrice: body.unitPrice ?? (body.discountPct === undefined || body.discountPct === null ? listed.onBasis : undefined) } : body,
+      null,
+      'body',
+    )
     const issues = [...(isIssueList(sizes) ? sizes : []), ...(isIssueList(price) ? price : [])]
     if (issues.length > 0) throw invalid(issues)
     const grid = sizes as SizeRow[]
@@ -148,13 +158,14 @@ export async function addLine(caller: CommandCaller, quoteId: string, body: AddL
       select: { id: true },
     })
     await writeSizes(tx, { id, partyId: current.partyId }, grid, actorId)
+    if (fromList) await keepListVersion(tools, version, chain)
     await refreshVersion(tools, current, version, new Set([id]))
     tools.audit({
       action: 'quotes.addLine',
       recordType: 'Quote',
       recordId: current.id,
       companyId: current.companyId,
-      after: { lineId: id, ...lineAudit({ seq, styleId: target.style.id, colourwayId: target.colourway.id, styleRevisionId: target.revisionId, description, note: blankToNull(body.note), ...priced, sizes: grid }) },
+      after: { lineId: id, ...lineAudit({ seq, styleId: target.style.id, colourwayId: target.colourway.id, styleRevisionId: target.revisionId, description, note: blankToNull(body.note), ...priced, sizes: grid }), listVersionId: fromList ? listed.versionId : null },
     })
     tools.emit({ type: 'quote.lines_changed', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, change: 'added', lineId: id } })
     return detailInCommand(tools, current.id)
@@ -174,7 +185,23 @@ export async function editLine(caller: CommandCaller, quoteId: string, lineId: s
     const target = await lineTarget(tx, current.companyId, { styleId: line.styleId, colourwayId: body.colourwayId ?? line.colourwayId, styleRevisionId: body.styleRevisionId }, line.styleRevisionId, 'body')
     const sizes = sizeGrid(body.sizes ?? line.sizes, target.grid, 'body/sizes')
     const before = { unitPrice: decimal(line.unitPrice)!, listUnitPrice: decimal(line.listUnitPrice) }
-    const price = resolvePrice(body, before, 'body')
+    // B-W2a-19 (SAL-165): a new colourway reads its list price (when no list price is sent); a line offered at its old
+    // list price moves to the new one, a discounted or hand-priced line keeps its price.
+    let fromList: { readonly onBasis: string; readonly versionId: string } | null = null
+    let chain: Awaited<ReturnType<typeof chainForQuote>> | null = null
+    if (target.colourway.id !== line.colourwayId && body.listUnitPrice === undefined) {
+      const party = await quotePartyOf(tx, current.partyId, businessDate(tools.now), tools.now)
+      if (party) {
+        chain = await chainForQuote(tx, current, version, party, tools.now, [line.styleId])
+        fromList = listPriceOf(chain, version.taxMode, party, line.styleId, target.colourway.id)
+      }
+    }
+    const atList = before.listUnitPrice !== null && before.listUnitPrice === before.unitPrice
+    const price = resolvePrice(
+      fromList ? { ...body, listUnitPrice: fromList.onBasis, unitPrice: body.unitPrice ?? (body.discountPct === undefined && atList ? fromList.onBasis : undefined) } : body,
+      before,
+      'body',
+    )
     const issues = [...(isIssueList(sizes) ? sizes : []), ...(isIssueList(price) ? price : [])]
     if (issues.length > 0) throw invalid(issues)
     const grid = sizes as SizeRow[]
@@ -190,6 +217,7 @@ export async function editLine(caller: CommandCaller, quoteId: string, lineId: s
       select: { id: true },
     })
     if (!sameGrid) await writeSizes(tx, { id: line.id, partyId: current.partyId }, grid, actorIdOf(tools))
+    if (fromList && chain) await keepListVersion(tools, version, chain)
     await refreshVersion(tools, current, version, recost ? new Set([line.id]) : new Set())
     tools.audit({
       action: 'quotes.editLine',

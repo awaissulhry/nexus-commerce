@@ -85,6 +85,8 @@ export interface AcceptedVersion {
   readonly depositAmount: number | null
   /** The acceptance's day (Europe/Rome): the due date counts from it. */
   readonly acceptedOn: string
+  /** B-W2a-19: the days it is due after the acceptance (the quote's payment terms); default DEPOSIT_DUE_DAYS. */
+  readonly depositDueDays?: number | undefined
 }
 
 /**
@@ -95,7 +97,7 @@ export interface AcceptedVersion {
 export async function requestDepositInCommand(tools: CommandTools, version: AcceptedVersion, profile: CustomerTaxProfile | null): Promise<{ row: DepositRow; created: boolean; draft: DepositDraft | null } | null> {
   const existing = await depositOfVersion(tools.tx, version.id)
   if (existing) return { row: existing, created: false, draft: null }
-  const draft = depositRequestFor({ depositPct: version.depositPct, depositKind: version.depositKind, depositAmount: version.depositAmount, currency: version.currency }, version.acceptedOn, profile)
+  const draft = depositRequestFor({ depositPct: version.depositPct, depositKind: version.depositKind, depositAmount: version.depositAmount, currency: version.currency }, version.acceptedOn, profile, version.depositDueDays)
   if (!draft) return null
   const id = newId()
   const row = await tools.tx.depositRequest.create({

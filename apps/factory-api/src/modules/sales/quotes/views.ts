@@ -1,3 +1,4 @@
+import { belowMinimum } from '@nexus/factory-domain/sales/terms/terms'
 import type { Grain } from '@nexus/factory-domain/auth/grains/grains'
 import { certificateGate } from '@nexus/factory-domain/compliance/cert-gate/gate'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
@@ -142,7 +143,13 @@ export async function readFacts(db: Reader, quote: QuoteRow, now: Date, options:
     })),
     rules: priced.rules,
   })
-  return { today, version, lines: ordered, party, rules, priced, issues, styles, colourways, revisions, contact, certificates }
+  // B-W2a-19: the price list version the quote keeps, and the customer's minimum order against the net total.
+  const kept = version.priceListVersionId ? await db.priceListVersion.findUnique({ where: { id: version.priceListVersionId }, select: { id: true, revision: true, list: { select: { id: true, code: true, name: true } } } }) : null
+  const priceList = kept ? { listId: kept.list.id, code: kept.list.code, name: kept.list.name, versionId: kept.id, revision: kept.revision } : null
+  const minimum = (await db.party.findUnique({ where: { id: quote.partyId }, select: { minimumOrderAmount: true, currency: true } })) ?? null
+  const short = minimum && minimum.currency === version.currency ? belowMinimum(minimum.minimumOrderAmount, priced.netAmount, version.currency) : null
+  const belowMinimumOrder = short ? { minimum: short.minimum, short: short.short } : null
+  return { today, version, lines: ordered, party, rules, priced, issues, styles, colourways, revisions, contact, certificates, priceList, belowMinimum: belowMinimumOrder }
 }
 
 /**
@@ -187,6 +194,9 @@ export async function quoteDetail(db: Reader, quote: QuoteRow, now: Date) {
       firmOffer: version.firmOffer,
       promiseDate: day(version.promiseDate),
       paymentTerms: version.paymentTerms,
+      paymentTermsId: version.paymentTermsId,
+      priceList: facts.priceList,
+      belowMinimum: asMoney('price', facts.belowMinimum),
       termsText: version.termsText,
       termsVersion: version.termsVersion,
       depositPct: decimal(version.depositPct),
