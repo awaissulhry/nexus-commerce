@@ -122,6 +122,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W1-30/31 part 2: Purchase orders (SCR-058) and the PO studio (SCR-059).
   '/purchasing/orders',
   '/purchasing/orders/[id]',
+  // B-W2a-56: Subcontract orders (SCR-128, its view Stock at subcontractors SCR-129), an order, its job sheet (a new tab).
+  '/purchasing/subcontracting',
+  '/purchasing/subcontracting/[id]',
+  '/purchasing/subcontracting/[id]/job-sheet',
   // B-W1-29 part 2: What to buy & make (SCR-055).
   '/planning/mrp',
   // B-W2a-45: Planning board (SCR-122) and Lines & subcontractors (SCR-126).
@@ -213,6 +217,16 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-38: Production › Reports › Production reports (SCR-240) and its print page (a new tab, no navigation row).
   '/production/reports',
   '/production/reports/print',
+  // B-W2a-53: Plant › Maintenance — Machine requests (SCR-148) and their print for the shift, Maintenance jobs (SCR-149),
+  // a job and its job sheet, Machines & tools (SCR-150), a machine and the tag sheet.
+  '/plant/requests',
+  '/plant/requests/print',
+  '/plant/jobs',
+  '/plant/jobs/[id]',
+  '/plant/jobs/[id]/sheet',
+  '/plant/machines',
+  '/plant/machines/[id]',
+  '/plant/machines/tags',
 ])
 
 /** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */

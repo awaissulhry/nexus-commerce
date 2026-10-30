@@ -159,6 +159,13 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'purchasing.orders', title: 'Purchase orders', titleIt: "Ordini d'acquisto", wave: 'W1', href: '/purchasing/orders' },
         ],
       },
+      // W2a: B-W2a-56 Subcontract orders (SCR-128, SCR-129).
+      {
+        label: 'Outside work',
+        labelIt: 'Lavorazioni esterne',
+        hideLabel: false,
+        pages: [{ id: 'purchasing.subcontracting', title: 'Subcontract orders', titleIt: 'Ordini ai terzisti', wave: 'W2a', href: '/purchasing/subcontracting' }],
+      },
     ],
   },
   {
@@ -312,6 +319,26 @@ export const OFFICE: readonly TreeArea[] = [
         labelIt: 'Impostazioni',
         hideLabel: false,
         pages: [{ id: 'finance.settings', title: 'Finance settings', titleIt: 'Impostazioni amministrazione', wave: 'W1', href: '/finance/settings' }],
+      },
+    ],
+  },
+  // W2a: B-W2a-53 the Plant area (Owner answer T2), its Maintenance pages: Machine requests (SCR-148), Maintenance jobs
+  // (SCR-149), Machines & tools (SCR-150). Preventive checks, spare parts, downtime and Health & safety join later.
+  {
+    id: 'plant',
+    order: 12,
+    title: 'Plant',
+    titleIt: 'Stabilimento',
+    groups: [
+      {
+        label: 'Maintenance',
+        labelIt: 'Manutenzione',
+        hideLabel: false,
+        pages: [
+          { id: 'plant.requests', title: 'Machine requests', titleIt: 'Richieste di intervento', wave: 'W2a', href: '/plant/requests' },
+          { id: 'plant.jobs', title: 'Maintenance jobs', titleIt: 'Interventi', wave: 'W2a', href: '/plant/jobs' },
+          { id: 'plant.machines', title: 'Machines & tools', titleIt: 'Macchine e attrezzature', wave: 'W2a', href: '/plant/machines' },
+        ],
       },
     ],
   },

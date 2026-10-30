@@ -178,7 +178,8 @@ describe('the deposit milestone: its TD02 names the step and pays in advance (TP
 
   it('a step is invoiced through its deposit request only: the deposit has nothing paid left, the others say why', async () => {
     expect((await refused('POST', '/invoicing/invoices/from-milestone', { milestoneId: ids.depositStep }, 409)).message).toBe('Nothing paid on this deposit request is waiting for a deposit invoice.')
-    expect((await refused('POST', '/invoicing/invoices/from-milestone', { milestoneId: ids.balanceStep }, 409)).message).toContain('a deposit invoice names the deposit request it invoices: this step of order SEED-SO-0003 has none')
+    // B-W2a-F2: a before-shipping step is invoiced through its own request; this one (written before) has none yet.
+    expect((await refused('POST', '/invoicing/invoices/from-milestone', { milestoneId: ids.balanceStep }, 409)).message).toContain(`this step of order SEED-SO-0003 has none yet. Sales opens it first (POST /sales/orders/${moneyA.shipping.quality.serialSalesOrderId}/schedule/${ids.balanceStep}/request)`)
     expect((await refused('POST', '/invoicing/invoices/from-milestone', { milestoneId: ids.invoiceStep }, 409)).message).toContain('falls due with the invoice of the shipped goods')
     expect((await refused('POST', '/invoicing/invoices/from-milestone', { milestoneId: newId() }, 404)).message).toBe('Payment schedule step not found.')
     expect((await wall('otherTenant', 'POST', '/invoicing/invoices/from-milestone', { milestoneId: ids.balanceStep })).status).toBe(404)

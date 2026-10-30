@@ -84,6 +84,8 @@ import { EMAIL_DELIVERY_DEFINITIONS, EMAIL_DELIVERY_PERMISSIONS } from '../../em
 import { SHIPPING_DAILY_DEFINITIONS, SHIPPING_DAILY_PERMISSIONS } from '../../shipping/shipments/permissions'
 // B-W2a-57: repairs and alterations (sales.repairs.view | manage | receive | check | ship).
 import { SALES_REPAIRS_DEFINITIONS, SALES_REPAIRS_PERMISSIONS } from '../../sales/repairs/permissions'
+// B-W2a-55: receivables (receivables.view | reminders.manage | reminders.approve | statements.send | settings.manage | reminders.switch).
+import { RECEIVABLES_DEFINITIONS, RECEIVABLES_PERMISSIONS } from '../../receivables/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -448,6 +450,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SHIPPING_DAILY_DEFINITIONS,
   // B-W2a-57: repairs and alterations.
   SALES_REPAIRS_DEFINITIONS,
+  // B-W2a-55: receivables (the ageing, statements, the reminder ladder a person approves).
+  RECEIVABLES_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -523,6 +527,8 @@ for (const name of EMAIL_DELIVERY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclar
 for (const name of SHIPPING_DAILY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-57: repairs and alterations.
 for (const name of SALES_REPAIRS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-55: receivables.
+for (const name of RECEIVABLES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

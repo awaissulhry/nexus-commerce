@@ -22,6 +22,8 @@ describe('the Office navigation (PLT-160: one declaration per area)', () => {
       [8, 'quality'],
       [9, 'compliance'],
       [10, 'finance'],
+      // B-W2a-53: Plant (Owner answer T2), the tree's area 12.
+      [12, 'plant'],
       [13, 'admin'],
     ])
     expect(OFFICE_NAV.view).toBe('office')
@@ -83,14 +85,15 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
     expect(ids(officeNavFor(permissionCheck(['planning.view', 'purchasing.view', 'inventory.stock.view'])))).toEqual([
       // B-W2a-45: the Planning board and Lines & subcontractors read with planning.view too.
       ['planning', ['planning-mrp', 'planning-board', 'planning-allocation']],
-      ['purchasing', ['purchasing-orders']],
+      // B-W2a-56: Subcontract orders read with purchasing.view too.
+      ['purchasing', ['purchasing-orders', 'purchasing-subcontracting']],
       ['warehouse', ['warehouse-stock', 'warehouse-hides', 'warehouse-lots', 'warehouse-moves', 'warehouse-receipts', 'warehouse-picking']],
       ['finance', ['finance-reports-page']],
     ])
     // The warehouse role reads the orders it receives against (and the parties: Customers and Suppliers), not the plan.
     expect(ids(officeNavFor(permissionCheck(['purchasing.view', 'inventory.stock.view', 'parties.view'])))).toEqual([
       ['sales', ['sales-customers']],
-      ['purchasing', ['purchasing-suppliers', 'purchasing-orders']],
+      ['purchasing', ['purchasing-suppliers', 'purchasing-orders', 'purchasing-subcontracting']],
       ['warehouse', ['warehouse-stock', 'warehouse-hides', 'warehouse-lots', 'warehouse-moves', 'warehouse-receipts', 'warehouse-picking']],
       // B-W2a-51: Finance › Reports › Finance reports (the stock valuation) reads inventory.stock.view.
       ['finance', ['finance-reports-page']],
@@ -123,7 +126,7 @@ describe('labels, crumbs, palette pages and the phone bar come from the same man
     expect(nav.areas.map((area) => area.label)).toEqual(['Home', 'Sales', 'Purchasing', 'Admin'])
     expect(nav.areas[3]?.sections?.map((s) => s.label)).toEqual(['Main', 'Organisation', 'Access', 'Platform', 'Data'])
     const it = translateNav(OFFICE_NAV, createScopedTranslator('it', messagesFor('it', ['shell']), 'shell'))
-    expect(it.areas.map((area) => area.label)).toEqual(['Home', 'Vendite', 'Prodotti', 'Pianificazione', 'Acquisti', 'Magazzino', 'Produzione', 'Qualità', 'Conformità', 'Amministrazione', 'Sistema'])
+    expect(it.areas.map((area) => area.label)).toEqual(['Home', 'Vendite', 'Prodotti', 'Pianificazione', 'Acquisti', 'Magazzino', 'Produzione', 'Qualità', 'Conformità', 'Amministrazione', 'Stabilimento', 'Sistema'])
     expect(JSON.stringify(nav)).not.toContain('shell:')
   })
 

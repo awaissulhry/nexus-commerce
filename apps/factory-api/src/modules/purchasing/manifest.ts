@@ -76,6 +76,8 @@ export const manifest = defineManifest({
   'GET /purchasing/subcontracting/orders/:subcontractOrderId': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
   'GET /purchasing/subcontracting/work-orders/:workOrderId/outside-operations': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
   'GET /purchasing/subcontracting/stock': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  // B-W2a-56: the released and running work orders a new subcontract order may be made for.
+  'GET /purchasing/subcontracting/work-orders': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
   'POST /purchasing/subcontracting/orders': { audiences: ['office'], permission: 'purchasing.subcontract.manage', scope: 'record' },
   'PATCH /purchasing/subcontracting/orders/:subcontractOrderId': { audiences: ['office'], permission: 'purchasing.subcontract.manage', scope: 'record' },
   'POST /purchasing/subcontracting/orders/:subcontractOrderId/operations': { audiences: ['office'], permission: 'purchasing.subcontract.manage', scope: 'record' },

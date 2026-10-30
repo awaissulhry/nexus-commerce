@@ -45,26 +45,38 @@ export interface DepositVersionFacts {
   readonly currency: CurrencyCode
 }
 
+/** The fiscal decision of a deposit request: whether its payment is invoiced (TD02), by which rule, and why. */
+export type DepositFiscalDecision = Pick<DepositDraft, 'fiscalDocument' | 'fiscalRule' | 'reason'>
+
+/**
+ * The fiscal decision of a payment of `kind` asked of this customer now (the VAT rules of B-W1-05 tax/deposit-rule): a
+ * CAPARRA none, an ACCONTO the rule's (TD02 when it says so). Shared by the deposit and by a before-shipping step's
+ * request (B-W2a-F2), so both follow one rule.
+ */
+export function depositFiscalOf(kind: DepositKind, profile: CustomerTaxProfile | null): DepositFiscalDecision {
+  if (kind === 'CAPARRA') {
+    return { fiscalDocument: 'NONE', fiscalRule: CAPARRA_RULE, reason: 'A caparra confirmatoria (c.c. art. 1385) is not a payment on the price: no deposit invoice when it is paid (accountant to confirm).' }
+  }
+  if (profile === null) {
+    return { fiscalDocument: 'TD02', fiscalRule: 'DEPOSIT_INVOICE_IT', reason: 'The customer has no tax identity in force: the deposit is invoiced as an Italian one, checked again when it is paid.' }
+  }
+  try {
+    const decision = depositDocumentFor(profile)
+    return { fiscalDocument: decision.documentType === 'TD02' ? 'TD02' : 'NONE', fiscalRule: decision.ruleId, reason: decision.reason }
+  } catch (error) {
+    if (!(error instanceof TaxRuleError)) throw error
+    // A sale the rules do not decide (an EU consumer under OSS): invoiced, and the issue's checks stop it for a person.
+    return { fiscalDocument: 'TD02', fiscalRule: 'UNDECIDED', reason: error.message }
+  }
+}
+
 /** The deposit request an accepted version asks for, or null when it asks none (no percent, or nothing to pay). */
 export function depositRequestFor(version: DepositVersionFacts, acceptedOn: BusinessDate, profile: CustomerTaxProfile | null, dueDays: number = DEPOSIT_DUE_DAYS): DepositDraft | null {
   if (version.depositPct === null || version.depositAmount === null || version.depositAmount <= 0) return null
   const kind = version.depositKind ?? 'ACCONTO'
   // B-W2a-19: `dueDays` from the quote's payment terms (their order instalment), else DEPOSIT_DUE_DAYS.
   const base = { kind, depositPct: version.depositPct, currency: version.currency, amount: version.depositAmount, dueDate: addDays(acceptedOn, dueDays) }
-  if (kind === 'CAPARRA') {
-    return { ...base, fiscalDocument: 'NONE', fiscalRule: CAPARRA_RULE, reason: 'A caparra confirmatoria (c.c. art. 1385) is not a payment on the price: no deposit invoice when it is paid (accountant to confirm).' }
-  }
-  if (profile === null) {
-    return { ...base, fiscalDocument: 'TD02', fiscalRule: 'DEPOSIT_INVOICE_IT', reason: 'The customer has no tax identity in force: the deposit is invoiced as an Italian one, checked again when it is paid.' }
-  }
-  try {
-    const decision = depositDocumentFor(profile)
-    return { ...base, fiscalDocument: decision.documentType === 'TD02' ? 'TD02' : 'NONE', fiscalRule: decision.ruleId, reason: decision.reason }
-  } catch (error) {
-    if (!(error instanceof TaxRuleError)) throw error
-    // A sale the rules do not decide (an EU consumer under OSS): invoiced, and the issue's checks stop it for a person.
-    return { ...base, fiscalDocument: 'TD02', fiscalRule: 'UNDECIDED', reason: error.message }
-  }
+  return { ...base, ...depositFiscalOf(kind, profile) }
 }
 
 /** The company's account the deposit is paid to (Q12: by bank transfer). */

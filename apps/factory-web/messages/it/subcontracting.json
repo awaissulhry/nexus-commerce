@@ -1,0 +1,311 @@
+{
+  "status": {
+    "DRAFT": "Bozza",
+    "ISSUED": "Inviato",
+    "AT_WORKSHOP": "In lavorazione",
+    "PARTLY_RECEIVED": "Rientrato in parte",
+    "RECEIVED": "Rientrato",
+    "CLOSED": "Chiuso",
+    "CANCELLED": "Annullato"
+  },
+  "statusIn": {
+    "DRAFT": "una bozza",
+    "ISSUED": "inviato al terzista",
+    "AT_WORKSHOP": "presso il terzista",
+    "PARTLY_RECEIVED": "rientrato in parte",
+    "RECEIVED": "rientrato",
+    "CLOSED": "chiuso",
+    "CANCELLED": "annullato"
+  },
+  "kit": {
+    "NONE": "Nessun kit",
+    "TO_SEND": "Kit da inviare",
+    "PARTLY_SENT": "Kit inviato in parte",
+    "SENT": "Kit inviato"
+  },
+  "act": {
+    "issue": "inviarlo",
+    "reopen": "riportarlo in bozza",
+    "cancel": "annullarlo",
+    "close": "chiuderlo",
+    "send": "inviare il kit",
+    "receive": "ricevere il rientro"
+  },
+  "held": {
+    "permission": "Il tuo ruolo non può farlo ({permission}).",
+    "busy": "In corso…",
+    "loading": "Ancora in caricamento…",
+    "issue": {
+      "state": "Solo una bozza va al terzista; questo ordine è {status}.",
+      "noOperation": "L’ordine non ha ancora lavorazioni: aggiungi cosa fa il terzista dal ciclo dell’ordine di produzione.",
+      "noFee": "La riga {line} ({code}) non ha il compenso a capo: inseriscilo prima di inviare l’ordine al terzista.",
+      "noFeeHidden": "Una riga non ha ancora il compenso a capo: lo inserisce un buyer prima dell’invio.",
+      "noDate": "L’ordine non ha la data di rientro: indica quando rientra la merce.",
+      "workOrder": "L’ordine di produzione {number} non è rilasciato né in corso: ora non si manda lavoro fuori."
+    },
+    "reopen": {
+      "state": "Solo un ordine inviato al terzista torna in bozza; questo è {status}."
+    },
+    "cancel": {
+      "state": "Si annulla solo una bozza o un ordine inviato la cui merce non è partita; questo è {status}."
+    },
+    "out": "Parte del kit o dei capi è già uscita: falla prima rientrare.",
+    "close": {
+      "state": "L’ordine si chiude quando tutti i capi sono rientrati; ora è {status}."
+    },
+    "send": {
+      "draft": "Il kit parte quando l’ordine è inviato al terzista: prima invialo.",
+      "state": "Non parte più nulla: l’ordine è {status}.",
+      "workOrder": "L’ordine di produzione {number} non è rilasciato né in corso: ora non parte nulla.",
+      "nothing": "Tutto il previsto è partito: non restano righe di kit né capi da inviare."
+    },
+    "receive": {
+      "nothingOut": "Non è ancora partito nulla: la merce rientra quando kit o capi sono presso il terzista.",
+      "state": "Non rientra più nulla: l’ordine è {status}."
+    },
+    "workshopInactive": "Il terzista è bloccato o archiviato: non gli si manda lavoro.",
+    "locationArchived": "L’ubicazione del terzista è archiviata: creane una attiva in Magazzino › Ubicazioni.",
+    "currency": "L’ordine non ha una valuta valida.",
+    "server": "Il server lo blocca: ora non è possibile {act}. Ricarica l’ordine e controlla le schede."
+  },
+  "problem": {
+    "read": "Il server non ha risposto come previsto. Riprova.",
+    "forbidden": "Il tuo ruolo non può vederlo o farlo.",
+    "offline": "Nessuna connessione al server. Controlla la rete e riprova.",
+    "gone": "Non esiste più, o appartiene a un’altra società.",
+    "write": "Non è stato salvato. Riprova.",
+    "changed": "Qualcuno l’ha modificato nel frattempo: è stato riletto. Controlla e riprova.",
+    "invalid": "Qualcosa non è stato accettato. Controlla i campi e riprova.",
+    "slowDown": "Troppi tentativi insieme. Attendi un momento e riprova."
+  },
+  "common": {
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "clear": "Cancella",
+    "clearFilters": "Togli i filtri",
+    "dismiss": "Chiudi",
+    "loading": "Caricamento…",
+    "more": "Mostra altri",
+    "notYet": "Non ancora letto",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "retry": "Riprova",
+    "save": "Salva",
+    "shortcuts": "Scorciatoie da tastiera",
+    "updated": "Aggiornato alle {time}",
+    "none": "—",
+    "pieces_one": "{count} capo",
+    "pieces_other": "{count} capi",
+    "count_one": "{count} ordine",
+    "count_other": "{count} ordini",
+    "countMore_one": "{count} ordine mostrato, altri da caricare",
+    "countMore_other": "{count} ordini mostrati, altri da caricare"
+  },
+  "live": {
+    "connecting": "Connessione agli aggiornamenti in tempo reale…",
+    "live": "In tempo reale",
+    "offline": "Aggiornamenti in tempo reale in pausa"
+  },
+  "page": {
+    "title": "Ordini ai terzisti",
+    "new": "Nuovo ordine al terzista",
+    "more": "Altre azioni",
+    "showStock": "Giacenze presso i terzisti",
+    "showOrders": "Ordini ai terzisti",
+    "export": "Esporta gli ordini mostrati (CSV)",
+    "shortcuts": "Scorciatoie da tastiera",
+    "keyNew": "Nuovo ordine al terzista",
+    "noAccess": {
+      "title": "Non per il tuo ruolo",
+      "body": "Gli ordini ai terzisti richiedono purchasing.view: chiedilo a un amministratore."
+    },
+    "switch": "Cosa mostra la pagina"
+  },
+  "tiles": {
+    "label": "Lavorazioni esterne"
+  },
+  "tile": {
+    "kit": "Kit da inviare",
+    "workshop": "Presso i terzisti",
+    "due": "Rientro questa settimana",
+    "late": "In ritardo",
+    "balance": "Saldo materiale aperto",
+    "balanceLater": "Il saldo materiale per ordine arriva con un passo successivo: il conteggio non è ancora noto."
+  },
+  "view": {
+    "open": "Ordini aperti",
+    "kit": "Kit da inviare",
+    "workshop": "Presso i terzisti",
+    "due": "Rientro questa settimana",
+    "late": "In ritardo",
+    "drafts": "Bozze",
+    "back": "Rientrati, da chiudere",
+    "closed": "Chiusi",
+    "cancelled": "Annullati",
+    "all": "Tutti gli ordini"
+  },
+  "list": {
+    "viewLabel": "Righe",
+    "viewing": "Vista: {view}.",
+    "tableLabel": "Ordini ai terzisti",
+    "search": "Cerca numero, terzista o ordine di produzione",
+    "ordered": "ordinati {count}",
+    "sentBack": "{sent} inviati · {back} rientrati",
+    "atWorkshop": "{count} presso il terzista",
+    "nothingSent": "Ancora nulla inviato",
+    "late": "In ritardo dal {date}",
+    "noDate": "Data non ancora fissata",
+    "kitLines": "{sent} di {planned} righe inviate",
+    "rowMenu": "Azioni per {number}",
+    "tab": {
+      "ops": "Lavorazioni e quantità",
+      "kit": "Kit inviato",
+      "back": "Rientri"
+    },
+    "jobSheet": "Stampa scheda di lavorazione",
+    "failed": "Impossibile caricare gli ordini ai terzisti",
+    "empty": {
+      "title": "Nessun ordine ai terzisti",
+      "body": "Manda a un terzista le lavorazioni esterne di un ordine di produzione (cucitura, ricamo, tasche protezioni, finitura): l’ordine raccoglie kit, DDT e rientri."
+    },
+    "noMatch": {
+      "title": "Nessun ordine corrisponde",
+      "body": "Nessun ordine di questa vista corrisponde alla ricerca. Togli i filtri per vedere tutti gli ordini aperti."
+    },
+    "loadingSlow": "Ancora in caricamento…"
+  },
+  "col": {
+    "number": "Numero",
+    "workshop": "Terzista",
+    "service": "Lavorazione",
+    "workOrder": "Ordine di produzione",
+    "pieces": "Capi inviati / rientrati",
+    "kit": "Kit",
+    "back": "Rientro previsto",
+    "fee": "Compenso (costo)",
+    "status": "Stato",
+    "more": "Azioni"
+  },
+  "bulk": {
+    "export_one": "Esporta {count} ordine (CSV)",
+    "export_other": "Esporta {count} ordini (CSV)"
+  },
+  "csv": {
+    "number": "Numero",
+    "status": "Stato",
+    "workshop": "Terzista",
+    "workOrder": "Ordine di produzione",
+    "style": "Modello",
+    "services": "Lavorazioni",
+    "ordered": "Capi ordinati",
+    "sent": "Capi inviati",
+    "backGood": "Rientrati buoni",
+    "backDefective": "Rientrati difettosi",
+    "scrapped": "Scartati",
+    "kit": "Kit",
+    "expectedBack": "Rientro previsto",
+    "fee": "Compenso",
+    "currency": "Valuta",
+    "site": "Stabilimento"
+  },
+  "updates_one": "{count} aggiornamento",
+  "updates_other": "{count} aggiornamenti",
+  "stock": {
+    "title": "Giacenze presso i terzisti",
+    "intro": "Ogni terzista è un’ubicazione di magazzino: il nostro materiale presso di lui per lotto, sempre nei nostri libri finché non rientra nei capi.",
+    "tableLabel": "Il nostro materiale presso i terzisti",
+    "search": "Cerca terzista, materiale o lotto",
+    "col": {
+      "workshop": "Terzista",
+      "material": "Materiale",
+      "lot": "Lotto",
+      "quantity": "Quantità",
+      "value": "Valore (costo)",
+      "lastSent": "Ultimo invio",
+      "daysOut": "Giorni fuori"
+    },
+    "workshopFilter": "Terzista",
+    "allWorkshops": "Tutti i terzisti",
+    "lines_one": "{count} riga",
+    "lines_other": "{count} righe",
+    "count_one": "{count} riga di giacenza",
+    "count_other": "{count} righe di giacenza",
+    "workshopValue": "{workshop}: {lines} · {value}",
+    "workshopLines": "{workshop}: {lines}",
+    "noValue": "non valorizzato",
+    "daysOutLater": "I giorni fuori (anzianità) arrivano con un passo successivo.",
+    "empty": "Nessun nostro materiale è presso un terzista",
+    "emptyBody": "Il materiale va al terzista con il kit di un ordine, sul DDT di conto lavorazione.",
+    "noMatch": "Nessuna riga di giacenza corrisponde alla ricerca.",
+    "failed": "Impossibile caricare le giacenze presso i terzisti",
+    "truncated": "Sono mostrate solo le prime righe: filtra per terzista per vedere il resto.",
+    "ours": "Sempre nostro: resta nei nostri libri mentre è presso il terzista.",
+    "export_one": "Esporta {count} riga (CSV)",
+    "export_other": "Esporta {count} righe (CSV)",
+    "quality": {
+      "QUARANTINE": "In quarantena",
+      "RELEASED": "Rilasciato",
+      "BLOCKED": "Bloccato",
+      "REJECTED": "Respinto"
+    }
+  },
+  "new": {
+    "title": "Nuovo ordine al terzista",
+    "workOrder": "Ordine di produzione",
+    "workOrderHint": "Ordini di produzione rilasciati o in corso; quelli con lavorazioni esterne nel ciclo le indicano.",
+    "workOrderSearch": "Numero o modello",
+    "noWorkOrder": "Nessun ordine di produzione rilasciato o in corso corrisponde.",
+    "workOrderLine": "{style} · {garments} · {site}",
+    "outsideSteps_one": "{count} lavorazione esterna",
+    "outsideSteps_other": "{count} lavorazioni esterne",
+    "noOutsideSteps": "Nessuna lavorazione esterna nel ciclo",
+    "liveOrders_one": "{count} ordine aperto",
+    "liveOrders_other": "{count} ordini aperti",
+    "change": "Cambia",
+    "operations": "Lavorazioni del terzista",
+    "operationsHint": "Sceglile dal ciclo dell’ordine di produzione; ciascuna invia i capi non già su un ordine aperto.",
+    "operationLine": "{seq} · {code} {name}",
+    "outsideBy": "Esterna presso {workshop} · {days}",
+    "inHouse": "In casa nel ciclo",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "fee": "compenso {fee} a capo",
+    "feeHidden": "compenso: non nel tuo ruolo",
+    "left": "{left} di {garments} capi ancora liberi",
+    "full": "Tutti i capi sono già su ordini aperti",
+    "pieces": "Capi",
+    "workshop": "Terzista",
+    "workshopHint": "Il terzista del ciclo è quello predefinito. “Solo qualificati” arriva con la qualifica fornitori (W2b): oggi un terzista attivo.",
+    "workshopOfRouting": "{name} (dal ciclo)",
+    "otherWorkshop": "Un altro terzista…",
+    "workshopSearch": "Cerca terzisti attivi",
+    "noWorkshop": "Nessun terzista attivo corrisponde.",
+    "noLocation": "{workshop} non ha ancora un’ubicazione in questo stabilimento: creane una (tipo Terzista) in Magazzino › Ubicazioni.",
+    "location": "Nostra giacenza presso di lui: {location}",
+    "locationLater": "La sua ubicazione nello stabilimento si trova alla creazione dell’ordine.",
+    "returnDate": "Data di rientro",
+    "returnDateHint": "Vuota: i giorni di transito del ciclo da oggi, saltando i giorni di chiusura del terzista.",
+    "returnDateEmpty": "Dal ciclo",
+    "planKit": "Prepara il kit dai materiali dell’ordine di produzione",
+    "planKitHint": "La pelle gestita a pelli va tagliata, in pacchi: non è una riga di kit.",
+    "note": "Nota per il terzista",
+    "create": "Crea bozza",
+    "held": {
+      "workOrder": "Scegli prima un ordine di produzione.",
+      "operations": "Scegli almeno una lavorazione.",
+      "workshop": "Scegli il terzista: le lavorazioni scelte non ne indicano uno.",
+      "pieces": "Ogni lavorazione invia da 1 capo fino ai capi ancora liberi."
+    },
+    "number": "Il numero viene dalla serie quando si crea la bozza.",
+    "after": "La bozza si apre su Lavorazioni e quantità: capi per taglia e compenso si salvano cella per cella.",
+    "loading": "Lettura del ciclo dell’ordine di produzione…",
+    "refused": {
+      "location": "{workshop} non ha un’ubicazione attiva nello stabilimento dell’ordine: creane una in Magazzino › Ubicazioni.",
+      "pieces": "Alcuni capi sono già su un altro ordine aperto: riduci i capi e riprova.",
+      "workOrder": "L’ordine di produzione non è più rilasciato né in corso.",
+      "workshop": "Il terzista non è un subfornitore attivo di questa società."
+    },
+    "toLocations": "Apri Ubicazioni",
+    "ordersOf": "Già fuori per questo ordine di produzione: {orders}"
+  }
+}
