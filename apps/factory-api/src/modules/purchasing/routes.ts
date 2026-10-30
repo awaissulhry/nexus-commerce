@@ -94,6 +94,7 @@ import {
   sendKitContract,
   stockContract as subcontractorStockContract,
   updateOrderContract as updateSubcontractContract,
+  workOrderChoicesContract,
 } from './subcontracting/contract'
 import { returnKitLine, sendKit } from './subcontracting/kit'
 import * as subcontracts from './subcontracting/orders'
@@ -238,6 +239,8 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.get('/purchasing/subcontracting/orders/:subcontractOrderId', { schema: getSubcontractContract }, async (request) => subcontracts.getOrder(request, request.params.subcontractOrderId))
   app.get('/purchasing/subcontracting/work-orders/:workOrderId/outside-operations', { schema: outsideOperationsContract }, async (request) => subcontracts.outsideOperations(request, request.params.workOrderId))
   app.get('/purchasing/subcontracting/stock', { schema: subcontractorStockContract }, async (request) => subcontractorStock(request, request.query))
+  // B-W2a-56: the "New subcontract order" dialog's work order picker.
+  app.get('/purchasing/subcontracting/work-orders', { schema: workOrderChoicesContract }, async (request) => subcontracts.workOrderChoices(request, request.query))
   app.post('/purchasing/subcontracting/orders', { schema: createSubcontractContract }, async (request, reply) => reply.code(201).send(await subcontracts.createOrder(request, request.body, idempotencyKeyFrom(request))))
   app.patch('/purchasing/subcontracting/orders/:subcontractOrderId', { schema: updateSubcontractContract }, async (request) => subcontracts.updateOrder(request, request.params.subcontractOrderId, request.body, idempotencyKeyFrom(request)))
   app.post('/purchasing/subcontracting/orders/:subcontractOrderId/operations', { schema: addOperationContract }, async (request, reply) =>

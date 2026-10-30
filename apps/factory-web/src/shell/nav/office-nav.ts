@@ -119,6 +119,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W1-30/31 part 2: Purchase orders (SCR-058) and the PO studio (SCR-059).
   '/purchasing/orders',
   '/purchasing/orders/[id]',
+  // B-W2a-56: Subcontract orders (SCR-128, its view Stock at subcontractors SCR-129), an order, its job sheet (a new tab).
+  '/purchasing/subcontracting',
+  '/purchasing/subcontracting/[id]',
+  '/purchasing/subcontracting/[id]/job-sheet',
   // B-W1-29 part 2: What to buy & make (SCR-055).
   '/planning/mrp',
   // B-W2a-45: Planning board (SCR-122) and Lines & subcontractors (SCR-126).

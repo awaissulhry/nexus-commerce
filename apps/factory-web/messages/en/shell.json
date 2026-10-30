@@ -32,7 +32,9 @@
       "area": "Purchasing",
       "main": "Main",
       "suppliers": "Suppliers",
-      "orders": "Purchase orders"
+      "orders": "Purchase orders",
+      "outside": "Outside work",
+      "subcontracting": "Subcontract orders"
     },
     "admin": {
       "area": "Admin",

@@ -1,0 +1,311 @@
+{
+  "status": {
+    "DRAFT": "Draft",
+    "ISSUED": "Sent",
+    "AT_WORKSHOP": "In work",
+    "PARTLY_RECEIVED": "Partly back",
+    "RECEIVED": "Back",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled"
+  },
+  "statusIn": {
+    "DRAFT": "a draft",
+    "ISSUED": "sent to the workshop",
+    "AT_WORKSHOP": "at the workshop",
+    "PARTLY_RECEIVED": "partly back",
+    "RECEIVED": "back",
+    "CLOSED": "closed",
+    "CANCELLED": "cancelled"
+  },
+  "kit": {
+    "NONE": "No kit",
+    "TO_SEND": "Kit to send",
+    "PARTLY_SENT": "Kit partly sent",
+    "SENT": "Kit sent"
+  },
+  "act": {
+    "issue": "issue it",
+    "reopen": "take it back to draft",
+    "cancel": "cancel it",
+    "close": "close it",
+    "send": "send the kit",
+    "receive": "receive goods back"
+  },
+  "held": {
+    "permission": "Your role may not do this ({permission}).",
+    "busy": "Working…",
+    "loading": "Still loading…",
+    "issue": {
+      "state": "Only a draft goes to the workshop; this order is {status}.",
+      "noOperation": "The order has no operation yet: add what the workshop does from the work order’s routing.",
+      "noFee": "Line {line} ({code}) has no fee per piece: type it before the order goes to the workshop.",
+      "noFeeHidden": "A line has no fee per piece yet: a buyer types it before the order goes out.",
+      "noDate": "The order has no return date: say when the goods are due back.",
+      "workOrder": "Work order {number} is not released or running: no work goes out for it now."
+    },
+    "reopen": {
+      "state": "Only an order sent to the workshop goes back to draft; this one is {status}."
+    },
+    "cancel": {
+      "state": "Only a draft or a sent order whose goods never left is cancelled; this one is {status}."
+    },
+    "out": "Part of the kit or the pieces are out already: take them back first.",
+    "close": {
+      "state": "The order closes once every piece is back; it is {status}."
+    },
+    "send": {
+      "draft": "The kit goes out once the order is sent to the workshop: issue it first.",
+      "state": "Nothing more goes out: the order is {status}.",
+      "workOrder": "Work order {number} is not released or running: nothing goes out for it now.",
+      "nothing": "Everything planned has gone out: no kit line and no piece is left to send."
+    },
+    "receive": {
+      "nothingOut": "Nothing has gone out yet: goods come back once the kit or the pieces are at the workshop.",
+      "state": "Nothing more comes back: the order is {status}."
+    },
+    "workshopInactive": "The workshop is blocked or archived: no work goes to it.",
+    "locationArchived": "The workshop’s stock location is archived: make an active one in Warehouse › Locations.",
+    "currency": "The order has no valid currency.",
+    "server": "The server holds it: it is not possible to {act} now. Reload the order and check its tabs."
+  },
+  "problem": {
+    "read": "The server didn't answer as expected. Try again.",
+    "forbidden": "Your role may not see or do this.",
+    "offline": "No connection to the server. Check the network and try again.",
+    "gone": "It no longer exists, or it belongs to another company.",
+    "write": "It was not saved. Try again.",
+    "changed": "Someone changed it meanwhile: it was read again. Check and try again.",
+    "invalid": "Something in it was not accepted. Check the fields and try again.",
+    "slowDown": "Too many tries at once. Wait a moment and try again."
+  },
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "clear": "Clear",
+    "clearFilters": "Clear filters",
+    "dismiss": "Dismiss",
+    "loading": "Loading…",
+    "more": "Show more",
+    "notYet": "Not read yet",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "retry": "Try again",
+    "save": "Save",
+    "shortcuts": "Keyboard shortcuts",
+    "updated": "Updated {time}",
+    "none": "—",
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "count_one": "{count} order",
+    "count_other": "{count} orders",
+    "countMore_one": "{count} order shown, more to load",
+    "countMore_other": "{count} orders shown, more to load"
+  },
+  "live": {
+    "connecting": "Connecting to live updates…",
+    "live": "Live",
+    "offline": "Live updates paused"
+  },
+  "page": {
+    "title": "Subcontract orders",
+    "new": "New subcontract order",
+    "more": "More actions",
+    "showStock": "Stock at subcontractors",
+    "showOrders": "Subcontract orders",
+    "export": "Export the orders shown (CSV)",
+    "shortcuts": "Keyboard shortcuts",
+    "keyNew": "New subcontract order",
+    "noAccess": {
+      "title": "Not for your role",
+      "body": "Subcontract orders need purchasing.view: ask an administrator for it."
+    },
+    "switch": "What the page shows"
+  },
+  "tiles": {
+    "label": "Outside work"
+  },
+  "tile": {
+    "kit": "Kit to send",
+    "workshop": "At workshops",
+    "due": "Due back this week",
+    "late": "Late",
+    "balance": "Balance open",
+    "balanceLater": "The material balance per order comes with a later step: its count is not known yet."
+  },
+  "view": {
+    "open": "Open orders",
+    "kit": "Kit to send",
+    "workshop": "At workshops",
+    "due": "Due back this week",
+    "late": "Late",
+    "drafts": "Drafts",
+    "back": "Back, to close",
+    "closed": "Closed",
+    "cancelled": "Cancelled",
+    "all": "Every order"
+  },
+  "list": {
+    "viewLabel": "Rows",
+    "viewing": "Showing: {view}.",
+    "tableLabel": "Subcontract orders",
+    "search": "Search number, workshop or work order",
+    "ordered": "ordered {count}",
+    "sentBack": "{sent} sent · {back} back",
+    "atWorkshop": "{count} at the workshop",
+    "nothingSent": "Nothing sent yet",
+    "late": "Late since {date}",
+    "noDate": "No date yet",
+    "kitLines": "{sent} of {planned} lines sent",
+    "rowMenu": "Actions for {number}",
+    "tab": {
+      "ops": "Operations & quantities",
+      "kit": "Kit sent",
+      "back": "Received back"
+    },
+    "jobSheet": "Print job sheet",
+    "failed": "Couldn't load subcontract orders",
+    "empty": {
+      "title": "No subcontract orders",
+      "body": "Send a work order’s outside operations (sewing, embroidery, armour pockets, finishing) to a workshop: the order holds the kit, the DDT and what comes back."
+    },
+    "noMatch": {
+      "title": "No order matches",
+      "body": "Nothing in this view matches the search. Clear the filters to see every open order."
+    },
+    "loadingSlow": "Still loading…"
+  },
+  "col": {
+    "number": "Number",
+    "workshop": "Workshop",
+    "service": "Service",
+    "workOrder": "Work order",
+    "pieces": "Pieces sent / back",
+    "kit": "Kit",
+    "back": "Expected back",
+    "fee": "Fee (cost)",
+    "status": "Status",
+    "more": "Actions"
+  },
+  "bulk": {
+    "export_one": "Export {count} order (CSV)",
+    "export_other": "Export {count} orders (CSV)"
+  },
+  "csv": {
+    "number": "Number",
+    "status": "Status",
+    "workshop": "Workshop",
+    "workOrder": "Work order",
+    "style": "Style",
+    "services": "Services",
+    "ordered": "Pieces ordered",
+    "sent": "Pieces sent",
+    "backGood": "Back good",
+    "backDefective": "Back defective",
+    "scrapped": "Scrapped",
+    "kit": "Kit",
+    "expectedBack": "Expected back",
+    "fee": "Fee",
+    "currency": "Currency",
+    "site": "Site"
+  },
+  "updates_one": "{count} update",
+  "updates_other": "{count} updates",
+  "stock": {
+    "title": "Stock at subcontractors",
+    "intro": "Each workshop is a stock location: our material there by lot, still in our books until it comes back in the garments.",
+    "tableLabel": "Our material at the workshops",
+    "search": "Search workshop, material or lot",
+    "col": {
+      "workshop": "Workshop",
+      "material": "Material",
+      "lot": "Lot",
+      "quantity": "Quantity",
+      "value": "Value (cost)",
+      "lastSent": "Last sent",
+      "daysOut": "Days out"
+    },
+    "workshopFilter": "Workshop",
+    "allWorkshops": "Every workshop",
+    "lines_one": "{count} line",
+    "lines_other": "{count} lines",
+    "count_one": "{count} stock line",
+    "count_other": "{count} stock lines",
+    "workshopValue": "{workshop}: {lines} · {value}",
+    "workshopLines": "{workshop}: {lines}",
+    "noValue": "not valued",
+    "daysOutLater": "Days out (ageing) come with a later step.",
+    "empty": "None of our material is at a workshop",
+    "emptyBody": "Material goes to a workshop with a subcontract order’s kit, on its DDT for work on our behalf.",
+    "noMatch": "No stock line matches the search.",
+    "failed": "Couldn't load stock at subcontractors",
+    "truncated": "Only the first lines are shown: filter by workshop to see the rest.",
+    "ours": "Still ours: it stays in our books while the workshop holds it.",
+    "export_one": "Export {count} line (CSV)",
+    "export_other": "Export {count} lines (CSV)",
+    "quality": {
+      "QUARANTINE": "In quarantine",
+      "RELEASED": "Released",
+      "BLOCKED": "Blocked",
+      "REJECTED": "Rejected"
+    }
+  },
+  "new": {
+    "title": "New subcontract order",
+    "workOrder": "Work order",
+    "workOrderHint": "Released or running work orders; the ones whose routing sends work out come with their outside steps.",
+    "workOrderSearch": "Number or style",
+    "noWorkOrder": "No released or running work order matches.",
+    "workOrderLine": "{style} · {garments} · {site}",
+    "outsideSteps_one": "{count} outside step",
+    "outsideSteps_other": "{count} outside steps",
+    "noOutsideSteps": "No outside step in its routing",
+    "liveOrders_one": "{count} live order",
+    "liveOrders_other": "{count} live orders",
+    "change": "Change",
+    "operations": "Operations the workshop does",
+    "operationsHint": "Pick them from the work order’s routing; each sends every garment not already on a live order.",
+    "operationLine": "{seq} · {code} {name}",
+    "outsideBy": "Outside at {workshop} · {days}",
+    "inHouse": "Done in house in the routing",
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "fee": "fee {fee} a piece",
+    "feeHidden": "fee: not in your role",
+    "left": "{left} of {garments} pieces still free",
+    "full": "Every piece is on live orders already",
+    "pieces": "Pieces",
+    "workshop": "Workshop",
+    "workshopHint": "The routing’s workshop is the default. “Qualified only” comes with the supplier qualification (W2b): today an active subcontractor.",
+    "workshopOfRouting": "{name} (in the routing)",
+    "otherWorkshop": "Another workshop…",
+    "workshopSearch": "Search active subcontractors",
+    "noWorkshop": "No active subcontractor matches.",
+    "noLocation": "{workshop} has no stock location on this site yet: make one (kind Subcontractor) in Warehouse › Locations first.",
+    "location": "Our stock there: {location}",
+    "locationLater": "Its stock location on the site is found when the order is made.",
+    "returnDate": "Return date",
+    "returnDateHint": "Empty: the routing’s transit days from today, the workshop’s closed days skipped.",
+    "returnDateEmpty": "From the routing",
+    "planKit": "Plan the kit from the work order’s materials",
+    "planKitHint": "Leather tracked by the hide goes cut, as bundles: it is not a kit line.",
+    "note": "Note for the workshop",
+    "create": "Create draft",
+    "held": {
+      "workOrder": "Pick a work order first.",
+      "operations": "Pick at least one operation.",
+      "workshop": "Pick the workshop: the operations you picked name none.",
+      "pieces": "Each operation sends from 1 piece up to the pieces still free."
+    },
+    "number": "The number comes from the series when the draft is made.",
+    "after": "The draft opens on Operations & quantities: pieces per size and the fee save cell by cell.",
+    "loading": "Reading the work order’s routing…",
+    "refused": {
+      "location": "{workshop} has no active stock location on the work order’s site: make one in Warehouse › Locations first.",
+      "pieces": "Some pieces are already on another live order: lower the pieces and try again.",
+      "workOrder": "The work order is no longer released or running.",
+      "workshop": "The workshop is not an active subcontractor of this company."
+    },
+    "toLocations": "Open Locations",
+    "ordersOf": "Already out for this work order: {orders}"
+  }
+}
