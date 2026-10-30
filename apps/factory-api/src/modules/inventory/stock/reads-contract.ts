@@ -327,6 +327,8 @@ export const ledgerRow = output({
   postedBy,
   /** Its value with the cost grain; null when it has none (a transfer, no cost basis, a floor move not valued yet). */
   valuation: money.cost(valuation.nullable()),
+  /** B-W2a-11: a write-off's SCRAP move — its WRITE_OFF reason code, its note without the code, its write-off (the first move's id: its photos' record). */
+  writeOff: output({ id: id(), reasonCode: z.string(), note: z.string().nullable() }).nullable(),
 })
 export type LedgerRow = z.infer<typeof ledgerRow>
 
@@ -360,6 +362,10 @@ export const ledgerContract = defineContract({
     reversed: flag().optional(),
     from: instant().optional(),
     to: instant().optional(),
+    /** B-W2a-11 (SCM-195): text or a scanned code — material code or name, lot, hide, location, work order or receipt number, reference, note. */
+    q: z.string().trim().min(1).max(80).optional(),
+    /** Only write-offs (true) or none of them (false). */
+    writeOffs: flag().optional(),
     cursor: id().optional(),
     limit: limit(1000, 200),
   }),
@@ -367,6 +373,8 @@ export const ledgerContract = defineContract({
     200: output({
       moves: z.array(ledgerRow),
       nextCursor: id().nullable(),
+      /** On the first page (no cursor): how many moves match, for the one long grid (Owner answer W2 B); null on the next pages. */
+      rowCount: z.number().int().nullable(),
       /**
        * With one stock key (site and item; a colour, lot, hide or location narrow it) and no filter but `from`: the
        * balance now, so the running balance of each row is `closing` less the deltas of the rows above it (newest first).
@@ -384,6 +392,8 @@ export const ledgerCountsContract = defineContract({
       scraps30d: z.number().int(),
       counts30d: z.number().int(),
       reversals30d: z.number().int(),
+      /** B-W2a-11: write-offs (SCRAP moves of the write-off, not reversed) of 30 days. */
+      writeOffs30d: z.number().int(),
       /** Moves into or out of the site's stock without a value yet: only with the cost grain (absent otherwise). */
       unvalued: money.cost(z.number().int()),
     }),
@@ -420,16 +430,19 @@ export const explainContract = defineContract({
     hideId: id().optional(),
     /** The figure of one location; default the site's stock (transfers inside it net 0). */
     locationId: id().optional(),
+    /** B-W2a-11 (SCM-197): the figure as it was at this instant (the moves that happened up to it). */
+    asOf: instant().optional(),
   }),
   response: {
     200: output({
       siteId: id(),
+      asOf: instant().nullable(),
       item,
       colour: named.nullable(),
       lot: output({ id: id(), code: z.string() }).nullable(),
       hide: output({ id: id(), code: z.string() }).nullable(),
       location: named.nullable(),
-      /** The balance now, from the located balances (what the stock page shows). */
+      /** The balance now (or as of `asOf`), from the located balances (what the stock page shows). */
       onHand: z.string(),
       /** Per reason: what came in, what went out, the net and how many moves. */
       byReason: z.array(output({ reason: z.enum(STOCK_MOVE_REASONS), in: z.string(), out: z.string(), net: z.string(), moves: z.number().int() })),
