@@ -2,6 +2,7 @@ import { addDays, addYears, certificateProblems, daysBetween, en17092ClassOf, MA
 import { isBusinessDate } from '@nexus/factory-domain/core/time'
 import type { LiveState, Notice, Read } from '../../quality/_shared/model'
 import type { BrandOption, Certificate, CertificateDetail, CertificateFile, CertificateInput, CertificateStatus, Coverage, GateReasonCode, GateResult, MaterialOption, StyleFacts, StyleOption } from './api'
+import type { RenewalsModel } from './renewals/model'
 
 /**
  * The certificate register's rules without a screen (SCR-050, SCR-051; Reg. (EU) 2016/425 Annex V, EN 17092): who may do
@@ -112,7 +113,8 @@ export function leftOf(certificate: Pick<Certificate, 'status' | 'validFrom' | '
 
 // ---- views and tiles (one filter model) -----------------------------------------------------------------------------------
 
-export const CERT_VIEWS = ['all', 'valid', 'expiring', 'suspended', 'drafts', 'expired'] as const
+// W2a (B-W2a-66): `changes` = the certificates with a change to the approved type waiting for the notified body.
+export const CERT_VIEWS = ['all', 'valid', 'expiring', 'suspended', 'drafts', 'expired', 'changes'] as const
 export type CertView = (typeof CERT_VIEWS)[number]
 /** The tiles: each one a saved view (pressing it shows that view; its number is that view's count). */
 export const CERT_TILES = ['valid', 'expiring', 'suspended', 'drafts'] as const satisfies readonly CertView[]
@@ -126,8 +128,11 @@ export interface CertFilters {
 
 export const NO_FILTERS: CertFilters = { view: 'all', kind: 'all', q: '' }
 
-export function inView(certificate: Certificate, view: CertView): boolean {
+/** `waiting`: the changes to the approved type waiting for the notified body, per certificate (the `changes` view). */
+export function inView(certificate: Certificate, view: CertView, waiting: Readonly<Record<string, number>> = {}): boolean {
   switch (view) {
+    case 'changes':
+      return (waiting[certificate.id] ?? 0) > 0
     case 'all':
       return true
     case 'valid':
@@ -151,8 +156,8 @@ export function matchesQuery(certificate: Certificate, q: string): boolean {
   return words.every((word) => text.includes(word))
 }
 
-export function filterRows(certificates: readonly Certificate[], filters: CertFilters): Certificate[] {
-  return certificates.filter((certificate) => inView(certificate, filters.view) && (filters.kind === 'all' || kindOf(certificate.standard) === filters.kind) && matchesQuery(certificate, filters.q))
+export function filterRows(certificates: readonly Certificate[], filters: CertFilters, waiting: Readonly<Record<string, number>> = {}): Certificate[] {
+  return certificates.filter((certificate) => inView(certificate, filters.view, waiting) && (filters.kind === 'all' || kindOf(certificate.standard) === filters.kind) && matchesQuery(certificate, filters.q))
 }
 
 export const isFiltered = (filters: CertFilters): boolean => filters.view !== 'all' || filters.kind !== 'all' || filters.q.trim() !== ''
@@ -624,6 +629,8 @@ export interface CertificatesListModel {
   filters: CertFilters
   /** The whole register read (≤ REGISTER_MAX); the view's rows are filtered here. */
   rows: Read<Certificate[]>
+  /** W2a: the changes to the approved type waiting for the notified body, per certificate id (null: not read). */
+  waiting: Read<Record<string, number>> | null
   today: string | null
   asOf: string | null
   live: LiveState
@@ -639,7 +646,8 @@ export interface CertificatesListModel {
   focusRow?: number
 }
 
-export const RECORD_TABS = ['coverage', 'body', 'files', 'activity'] as const
+// W2a (B-W2a-66): Renewals (the validity, the expiry alerts, the renewal, the changes to the approved type).
+export const RECORD_TABS = ['coverage', 'renewals', 'body', 'files', 'activity'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
 export type RecordDialog =
@@ -720,4 +728,6 @@ export interface CertificateRecordModel {
   dialogProblem: string | null
   dialogLines: readonly string[]
   dockOpen: boolean
+  /** W2a: the Renewals tab (read while it is open); null: not mounted. */
+  renewals: RenewalsModel | null
 }

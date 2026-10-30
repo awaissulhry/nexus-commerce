@@ -160,6 +160,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/production/work-orders/[id]',
   '/quality/inspections',
   '/quality/inspections/[id]',
+  // B-W2a-65: Quality › Complaints (SCR-113 W2a part).
+  '/quality/complaints',
+  '/quality/complaints/[id]',
   '/compliance/certificates',
   '/compliance/certificates/[id]',
   '/compliance/labels',
@@ -209,6 +212,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/warehouse/hides/[id]',
   '/warehouse/lots',
   '/warehouse/lots/[id]',
+  // B-W2a-64: the trace of a record that is not a lot (SCR-201-trace, opened by the Trace dialog; no navigation row).
+  '/warehouse/lots/trace',
   '/warehouse/moves',
   '/warehouse/locations',
   '/warehouse/locations/[id]',

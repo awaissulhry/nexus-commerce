@@ -98,7 +98,7 @@ describe('the report to the supplier: words, no price', () => {
 
   it('prints the receipt, the supplier and each discrepancy in the supplier language, in order', () => {
     const report = discrepancyReport(input)
-    expect(report.title).toBe('Rapporto di non conformità della consegna')
+    expect(report.title).toBe('Segnalazione difformità della consegna')
     expect(report.sample).toBe('ANTEPRIMA - non inviato')
     expect(report.facts).toEqual([
       { label: 'Nostro ricevimento', value: 'GR-2026-0007' },
@@ -114,7 +114,7 @@ describe('the report to the supplier: words, no price', () => {
       // The standard reason's words are the kind's: printed once.
       { seq: '20', material: 'LEA-100 Vacchetta · Nero · vs. cod. VAC-N · riga ordine 10', kind: 'Quantità mancante', quantity: '12,5 ft²', note: '' },
     ])
-    expect(report.fileName).toBe('Rapporto-non-conformita-GR-2026-0007.pdf')
+    expect(report.fileName).toBe('Segnalazione-difformita-GR-2026-0007.pdf')
     expect(JSON.stringify(report)).not.toMatch(/€|price|prezzo|cost/i)
   })
 
@@ -124,6 +124,16 @@ describe('the report to the supplier: words, no price', () => {
       body: 'Dear Order Desk,\n\nattached is the report of the 2 discrepancies we found in the delivery GR-2026-0007 (your delivery note DDT-881). Please reply and tell us how you will settle them.\n\nKind regards',
     })
     expect(discrepancyReportMail({ language: 'it', receiptNumber: 'GR-2026-0007', supplierDdtNumber: null, count: 1, recipientName: null, message: 'Vedi foto.' }).body).toBe('Buongiorno,\n\nVedi foto.\n\nCordiali saluti')
+  })
+
+  it("speaks of 'difformità' as the screens do ('non conformità' is the NCR's word)", () => {
+    expect(discrepancyReportMail({ language: 'it', receiptNumber: 'GR-2026-0007', supplierDdtNumber: 'DDT-881', count: 2, recipientName: null, message: null })).toEqual({
+      subject: 'Difformità della consegna GR-2026-0007 (vs. DDT DDT-881)',
+      body: 'Buongiorno,\n\nin allegato la segnalazione delle 2 difformità riscontrate alla consegna GR-2026-0007 (vs. DDT DDT-881). Vi chiediamo di risponderci indicando come intendete procedere.\n\nCordiali saluti',
+    })
+    expect(discrepancyReportMail({ language: 'it', receiptNumber: 'GR-2026-0007', supplierDdtNumber: null, count: 1, recipientName: null, message: null }).body).toContain('la segnalazione della difformità riscontrata')
+    const words = JSON.stringify([discrepancyReport(input), discrepancyReport({ ...input, language: 'en' }), discrepancyReportMail({ language: 'it', receiptNumber: 'GR-1', supplierDdtNumber: null, count: 3, recipientName: null, message: null })])
+    expect(words).not.toMatch(/conformit/i)
   })
 })
 

@@ -224,8 +224,6 @@
     "noUpload": "Your role may not upload files (files.upload).",
     "noReceive": "Your role may not receive goods (inventory.receive).",
     "noClaims": "Your role may not prepare supplier claims (purchasing.claims.manage).",
-    "noEmail": "Your role may not e-mail suppliers (email.send): ask a buyer.",
-    "noParties": "Your role may not read the supplier’s contacts (parties.view).",
     "noImport": "Your role may not run imports (imports.run and files.upload).",
     "receiptClosed": "A reversed or cancelled receipt takes no new discrepancy.",
     "receiptCancelled": "A cancelled receipt takes no photo.",
@@ -254,11 +252,11 @@
     "pickRecipient": "Pick at least one of the supplier’s contacts.",
     "tooManyRecipients": "At most {max} recipients.",
     "cc": "Not an e-mail address: {list}",
-    "contactsFailed": "The supplier’s contacts could not be read.",
+    "contactsFailed": "The request could not be checked.",
     "pickDocument": "Pick at least one document to ask for.",
-    "subject": "Write a subject.",
-    "body": "Write the message.",
-    "nothingWanted": "The lots wait for no document and the delivery note is recorded."
+    "nothingWanted": "The lots wait for no document and the delivery note is recorded.",
+    "noRequest": "Your role may not ask suppliers for documents (inventory.receipts.documents.request).",
+    "requestClosed": "A reversed or cancelled receipt waits for no document."
   },
   "report": {
     "title": "Send discrepancy report · {number}",
@@ -383,16 +381,19 @@
     "title": "Request documents from the supplier",
     "subtitle": "{supplier} · {number}",
     "send": "Send request",
-    "loading": "Reading the supplier’s contacts…",
-    "contactsFailed": "Couldn't read the supplier’s contacts",
+    "loading": "Checking the request…",
+    "contactsFailed": "Couldn't check the request",
     "asked": "What you ask for",
-    "languageHint": "The supplier reads it in this language; the text follows until you change it.",
-    "body": "Message",
-    "bodyHint": "The standard words in the supplier’s language; change them as you like. No price, no internal note.",
+    "languageHint": "The supplier reads it in this language.",
     "what": "The mail goes on this receipt’s thread: the supplier’s answer and its attachments arrive there.",
     "sentTitle": "Request sent",
     "sentBody": "Sent to {to}.",
-    "sentWhere": "It is on the receipt’s thread (Activity), where the answer will arrive."
+    "sentWhere": "It is on the receipt’s thread (Activity), where the answer will arrive.",
+    "toHint": "Only the supplier’s own contacts with an e-mail; add one in Purchasing › Suppliers.",
+    "note": "Your note",
+    "noteHint": "Optional, at most {max} characters, set under the list in your own words. No price, no internal note.",
+    "preview": "What the supplier gets",
+    "previewHint": "The standard text in the supplier’s language, with the documents you ask for and your note. It is not changed here."
   },
   "refused": {
     "reason": "That reason is no longer in use: pick another.",
@@ -409,7 +410,11 @@
     "claimLines": "A line of the claim needs a quantity: give the discrepancy its quantity first.",
     "photoStore": "The photo couldn't reach the file store: try again.",
     "photoType": "That file is not a photo the receipt takes (JPEG, PNG, WebP, HEIC).",
-    "requestTo": "An address is not accepted: check the contacts."
+    "requestContact": "A contact is not one of the supplier’s (or has no e-mail any more): pick again.",
+    "requestDocuments": "A document is no longer missing: close the request and open it again.",
+    "requestNothing": "Nothing is missing any more: no request is needed.",
+    "requestClosed": "The receipt was reversed or cancelled meanwhile: it waits for no document.",
+    "requestNote": "The note holds at most {max} characters."
   },
   "notice": {
     "recorded": "Discrepancy {seq} recorded.",

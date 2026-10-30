@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { DIFFERENCES, GOODS_RECEIPT_STATUSES } from '@nexus/factory-domain/inventory/receipts/rules'
 import { DISCREPANCY_KINDS, DISCREPANCY_STATUSES, type DiscrepancyKind, type SettleStatus } from '@nexus/factory-domain/inventory/receipts/discrepancies'
+import { DOCUMENT_ASKS } from '@nexus/factory-domain/inventory/receipts/document-request'
 import { IMPORT_STATUSES } from '@nexus/factory-domain/imports/job'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { PURCHASE_ORDER_STATUSES } from '@nexus/factory-domain/purchasing/orders'
@@ -11,9 +12,9 @@ import { putToStore, sha256Hex, storeUrl } from '../../../record-panels/store'
 /**
  * Every call of the receipt's W2a parts (B-W2a-63 on B-W2a-31's API): the supplier's delivery note photo, the
  * discrepancies with their photos, the report to the supplier (its check, the PDF, the send), a tannery hide list's
- * totals, a claim from discrepancies (B-W2a-44's POST /purchasing/claims), and "Request from supplier" (a mail on the
- * receipt's thread through email out). Shapes mirror apps/factory-api modules/inventory/receipts/contract.ts and
- * platform/email-out/contract.ts, checked with zod (unknown fields dropped). The API's English (problems, messages,
+ * totals, a claim from discrepancies (B-W2a-44's POST /purchasing/claims), and "Request from supplier" (B-W2a-F4: the
+ * receipt's own GET/POST …/documents/request, a standard mail on its thread). Shapes mirror apps/factory-api
+ * modules/inventory/receipts/contract.ts and platform/email-out/contract.ts, checked with zod (unknown fields dropped). The API's English (problems, messages,
  * the standard mail text it proposes) is never drawn as our words: the screens classify it by path and say their own.
  */
 
@@ -199,23 +200,45 @@ export function claimFromDiscrepancies(api: ApiClient, body: ClaimFromBody, idem
     .then((answer) => answer.claim)
 }
 
-// ---- "Request from supplier": the supplier's contacts and a mail on the receipt's thread -------------------------------------
+// ---- "Request from supplier" (B-W2a-F4): the receipt's own narrow request, not a free mail ------------------------------------
 
-const contactSchema = z.object({ id: z.string(), name: z.string(), email: z.string().nullable(), roles: z.array(z.string()), language: z.string().nullable(), status: z.string() })
-export type SupplierContact = z.infer<typeof contactSchema>
+const wantedSchema = z.object({
+  key: z.string(),
+  ask: z.enum(DOCUMENT_ASKS),
+  lot: z.object({ id: z.string(), code: z.string(), supplierLotRef: z.string().nullable(), dyeBatch: z.string().nullable() }).nullable(),
+})
 
-/** The supplier's active contacts with an e-mail (parties.view), quality people first, then the order desk. */
-export async function supplierContacts(api: ApiClient, partyId: string, signal?: AbortSignal): Promise<SupplierContact[]> {
-  const answer = await api.get(`/parties/${enc(partyId)}`, { schema: z.object({ party: z.object({ contacts: z.array(contactSchema) }) }), signal })
-  const rank = (contact: SupplierContact) => (contact.roles.includes('QUALITY') ? 0 : contact.roles.includes('ORDERS') ? 1 : 2)
-  return answer.party.contacts.filter((contact) => contact.status === 'ACTIVE' && !!contact.email).sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
+const requestCheckSchema = z.object({
+  ready: z.boolean(),
+  problems: z.array(z.object({ path: z.string(), message: z.string() })),
+  receipt: z.object({ id: z.string(), number: z.string(), status: z.enum(GOODS_RECEIPT_STATUSES), supplierDdtNumber: z.string().nullable(), supplierDdtDate: z.string().nullable() }),
+  wanted: z.array(wantedSchema),
+  recipients: z.array(recipientSchema),
+  language: z.enum(['it', 'en']),
+  subject: z.string(),
+  body: z.string(),
+})
+export type RequestCheck = z.infer<typeof requestCheckSchema>
+
+/** What the request would send now (inventory.receipts.documents.request): the documents wanted, the supplier's contacts. */
+export function requestCheck(api: ApiClient, receiptId: string, signal?: AbortSignal): Promise<RequestCheck> {
+  return api.get(`${receiptUrl(receiptId)}/documents/request`, { schema: requestCheckSchema, signal })
 }
 
-/** A mail to the supplier on the receipt's thread (email.send; the worker delivers it, FAKE SES off Railway). */
-export function sendRequestMail(api: ApiClient, receiptId: string, body: { to: string[]; subject: string; body: string; locale: 'it' | 'en' }, idempotencyKey: string): Promise<{ emailId: string }> {
+export interface RequestBody {
+  /** The supplier's own contacts (no other address). */
+  contactIds: string[]
+  /** Keys of the check's `wanted`. */
+  documents: string[]
+  language: 'it' | 'en'
+  note: string | null
+}
+
+/** The standard mail to the supplier on the receipt's thread (the worker delivers it, FAKE SES off Railway). */
+export function sendDocumentRequest(api: ApiClient, receiptId: string, body: RequestBody, idempotencyKey: string): Promise<{ emailId: string; to: string[] }> {
   return api
-    .post(`/threads/GoodsReceipt/${enc(receiptId)}/emails`, { body, schema: z.object({ messageId: z.string(), email: z.object({ id: z.string() }) }), idempotencyKey })
-    .then((answer) => ({ emailId: answer.email.id }))
+    .post(`${receiptUrl(receiptId)}/documents/request`, { body, schema: z.object({ request: z.object({ emailId: z.string(), to: z.array(z.string()) }) }), idempotencyKey })
+    .then((answer) => ({ emailId: answer.request.emailId, to: answer.request.to }))
 }
 
 // ---- a tannery hide list's totals (SCM-248) --------------------------------------------------------------------------------------

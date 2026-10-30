@@ -177,14 +177,14 @@ const poNotConfirmed: Find = async (tx, rule, now, only) => {
     }))
 }
 
-/** CERTIFICATE_EXPIRING: VALID certificates whose last valid day comes within the rule's lead and the timers' horizon. */
+/** CERTIFICATE_EXPIRING: VALID certificates whose last valid day comes within the rule's lead and the timers' horizon; a renewed one (B-W2a-66: its successor linked) leaves the window. */
 const certificatesExpiring: Dated = async (tx, rule, now, only) => {
   const { daysBefore } = thresholdOf('CERTIFICATE_EXPIRING', rule.threshold) as { daysBefore: number }
   const today = businessDate(now)
   // A company's rule watches its certificates and the shared ones (no company).
   const company = rule.companyId ? { OR: [{ companyId: rule.companyId }, { companyId: null }] } : {}
   const rows = await tx.certificate.findMany({
-    where: { ...idIn(only), ...company, status: 'VALID', validTo: { gte: asDate(today), lte: asDate(plusCalendarDays(today, daysBefore + TIMER_HORIZON_DAYS)) } },
+    where: { ...idIn(only), ...company, status: 'VALID', successorId: null, validTo: { gte: asDate(today), lte: asDate(plusCalendarDays(today, daysBefore + TIMER_HORIZON_DAYS)) } },
     orderBy: [{ validTo: 'asc' }, { id: 'asc' }],
     take: FIND_LIMIT,
     select: { id: true, number: true, companyId: true, validTo: true },

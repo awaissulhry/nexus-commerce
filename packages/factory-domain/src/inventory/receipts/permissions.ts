@@ -7,7 +7,8 @@ import type { Permission } from '../../core/permissions'
  * Checked with can() against the receipt's company and site; office only. Reading a receipt's discrepancies, its
  * delivery-note photos and a hide list's totals is inventory.stock.view; adding a delivery-note photo is inventory.receive
  * (office and floor) with files.upload (office); importing a tannery's hide list is inventory.receive with imports.run and
- * imports.apply. No money anywhere here (Owner answer C2: no prices on what a supplier receives).
+ * imports.apply. Asking the supplier for a receipt's missing documents is inventory.receipts.documents.request (B-W2a-F4).
+ * No money anywhere here (Owner answer C2: no prices on what a supplier receives).
  */
 export const INVENTORY_DISCREPANCIES_DEFINITIONS = definePermissions('inventory', {
   'discrepancies.manage': {
@@ -18,9 +19,15 @@ export const INVENTORY_DISCREPANCIES_DEFINITIONS = definePermissions('inventory'
     risk: 'write',
     description: "Send the discrepancy report (a PDF without prices) to the supplier's contacts by e-mail, on the receipt's thread; the discrepancies it names become reported.",
   },
+  // B-W2a-F4 (Owner answer 1A): the one narrow mail the warehouse sends without email.send.
+  'receipts.documents.request': {
+    risk: 'write',
+    description: "Ask the supplier for the documents a receipt's lots still wait for (a Cr VI test report, a PPE certificate, the delivery note): one standard e-mail in the supplier's language, with a short note, to the supplier's own contacts only, on the receipt's thread.",
+  },
 })
 
 export const INVENTORY_DISCREPANCIES_MANAGE = 'inventory.discrepancies.manage' satisfies Permission
 export const INVENTORY_DISCREPANCIES_REPORT = 'inventory.discrepancies.report' satisfies Permission
+export const INVENTORY_RECEIPT_DOCUMENTS_REQUEST = 'inventory.receipts.documents.request' satisfies Permission
 
-export const INVENTORY_DISCREPANCIES_PERMISSIONS: readonly Permission[] = Object.freeze([INVENTORY_DISCREPANCIES_MANAGE, INVENTORY_DISCREPANCIES_REPORT])
+export const INVENTORY_DISCREPANCIES_PERMISSIONS: readonly Permission[] = Object.freeze([INVENTORY_DISCREPANCIES_MANAGE, INVENTORY_DISCREPANCIES_REPORT, INVENTORY_RECEIPT_DOCUMENTS_REQUEST])
