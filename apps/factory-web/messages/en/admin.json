@@ -1736,6 +1736,11 @@
     "sales_returns_manage": "Open and change customer returns",
     "sales_returns_receive": "Receive returned goods at the dock",
     "sales_returns_inspect": "Grade returned goods",
-    "sales_returns_decide": "Decide what happens to returned goods"
+    "sales_returns_decide": "Decide what happens to returned goods",
+    "sales_repairs_view": "See repairs",
+    "sales_repairs_manage": "Make and move repairs",
+    "sales_repairs_receive": "Receive a garment for repair",
+    "sales_repairs_check": "Sign a protective garment's safety check",
+    "sales_repairs_ship": "Send a repaired garment back"
   }
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ExternalLink, FileX, Lock, MessageSquare, MoreHorizontal, ShieldOff } from 'lucide-react'
+import { Copy, ExternalLink, FileX, Lock, MessageSquare, MoreHorizontal, ShieldOff, Tags } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu, Tabs, type TabItem } from '@nexus/ui/components'
 import { DetailHeader } from '@nexus/ui/patterns'
 import { Button, Kbd, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
@@ -14,6 +14,7 @@ import { DocumentSendView, type DocumentSendActions } from '../../../../_shared/
 import { previewHref, type QuoteDetail } from '../../api'
 import { daysUntil, nextStep, QUOTE_TABS, readOnlyReason, STATUS_TONE, type QuoteTab } from '../../model'
 import type { QuoteRecordActions, QuoteRecordViewModel } from '../record-model'
+import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
 import { ApprovalTab } from './ApprovalTab'
 import { QuoteDialogs } from './Dialogs'
 import { DocumentsTab } from './DocumentsTab'
@@ -196,6 +197,8 @@ function ReadyRecord({ quote, model, actions, sendActions, panels }: { quote: Qu
     { id: 'preview', label: t('action.previewPdf'), icon: <ExternalLink size={14} aria-hidden />, href: previewHref(quote.id, quote.current.language === 'en' ? 'en' : 'it'), target: '_blank' as const },
     ...(status === 'APPROVED' && model.can.manage ? [{ id: 'reopen', label: t('action.reopen'), onSelect: () => actions?.onDialog?.('reopen') }] : []),
     ...(status === 'SENT' && model.can.send ? [{ id: 'newLink', label: t('action.newLink'), onSelect: () => actions?.onDialog?.('newLink') }] : []),
+    // B-W2a-49 (SAL-155): a new draft copied from a version of this quote, for this customer or another.
+    { id: 'duplicate', label: t('action.duplicate'), icon: <Copy size={14} aria-hidden />, disabled: !model.can.manage, description: model.can.manage ? undefined : t('held.noManage'), onSelect: () => actions?.onDuplicateStart?.() },
     ...(canCancel ? [{ id: 'cancel', label: t('action.cancel'), tone: 'danger' as const, onSelect: () => actions?.onDialog?.('cancel') }] : []),
     {
       id: 'copy',
@@ -263,6 +266,12 @@ function ReadyRecord({ quote, model, actions, sendActions, panels }: { quote: Qu
             <Tag tone="neutral">{t('record.versionChip', { revision: quote.currentRevision })}</Tag>
             {validity !== null && <Tag tone={validity < 0 ? 'danger' : validity <= 7 ? 'warning' : 'info'}>{validity < 0 ? t('record.validEnded') : t('record.validLeft', { count: validity })}</Tag>}
             {quote.contact && <span className="fw-q-hint">{quote.contact.name}</span>}
+            {/* B-W2a-49 (design page.conn "Price list"): the list version this quote is priced from, a link to it. */}
+            {quote.current.priceList && (
+              <Link className="fw-q-hint" href={`${model.prefix}/sales/price-lists/${encodeURIComponent(quote.current.priceList.listId)}?tab=prices&version=${encodeURIComponent(quote.current.priceList.versionId)}`}>
+                <Tags size={12} aria-hidden /> {t('record.priceList', { code: quote.current.priceList.code, revision: quote.current.priceList.revision })}
+              </Link>
+            )}
           </span>
           {saveWords}
         </div>
@@ -321,6 +330,7 @@ function ReadyRecord({ quote, model, actions, sendActions, panels }: { quote: Qu
       </div>
 
       <QuoteDialogs quote={quote} model={model} actions={actions} />
+      {model.duplicate && <DuplicateDialog model={model.duplicate} canManage={model.can.manage} actions={actions} />}
       {model.send && <DocumentSendView open model={model.send} actions={sendActions} />}
     </div>
   )

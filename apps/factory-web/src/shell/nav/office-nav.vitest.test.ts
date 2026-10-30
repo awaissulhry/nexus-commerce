@@ -86,12 +86,15 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
       // B-W2a-56: Subcontract orders read with purchasing.view too.
       ['purchasing', ['purchasing-orders', 'purchasing-subcontracting']],
       ['warehouse', ['warehouse-stock', 'warehouse-hides', 'warehouse-lots', 'warehouse-moves', 'warehouse-receipts']],
+      ['finance', ['finance-reports-page']],
     ])
     // The warehouse role reads the orders it receives against (and the parties: Customers and Suppliers), not the plan.
     expect(ids(officeNavFor(permissionCheck(['purchasing.view', 'inventory.stock.view', 'parties.view'])))).toEqual([
       ['sales', ['sales-customers']],
       ['purchasing', ['purchasing-suppliers', 'purchasing-orders', 'purchasing-subcontracting']],
       ['warehouse', ['warehouse-stock', 'warehouse-hides', 'warehouse-lots', 'warehouse-moves', 'warehouse-receipts']],
+      // B-W2a-51: Finance › Reports › Finance reports (the stock valuation) reads inventory.stock.view.
+      ['finance', ['finance-reports-page']],
     ])
   })
 
@@ -101,6 +104,7 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
     expect(ids(officeNavFor(permissionCheck(['privacy.view'])))).toEqual([['admin', ['admin-privacy']]])
     expect(ids(officeNavFor(permissionCheck(['inventory.stock.view', 'inventory.locations.view', 'shipping.settings.view'])))).toEqual([
       ['warehouse', ['warehouse-stock', 'warehouse-hides', 'warehouse-lots', 'warehouse-moves', 'warehouse-receipts', 'warehouse-locations', 'warehouse-shipping']],
+      ['finance', ['finance-reports-page']],
     ])
   })
 

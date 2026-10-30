@@ -1,4 +1,4 @@
-import { Banknote, FileText, SlidersHorizontal, Receipt } from 'lucide-react'
+import { Banknote, FileText, FolderArchive, PieChart, SlidersHorizontal, Receipt } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -28,6 +28,18 @@ export const officeArea: OfficeAreaNav = {
           // SCR-082: payments received and where they are placed (payments.view).
           { id: 'finance-payments', label: 'shell:nav.finance.payments', href: '/finance/payments', icon: Banknote, permission: 'payments.view' },
         ],
+      },
+      // B-W2a-51: Close › Accounting export (SCR-156: numbered batches for the accountant, the wizard, the period locks).
+      {
+        id: 'finance-close',
+        label: 'shell:nav.finance.close',
+        items: [{ id: 'finance-accounting', label: 'shell:nav.finance.accounting', href: '/finance/accounting', icon: FolderArchive, permission: 'accounting.view' }],
+      },
+      // B-W2a-51: Reports › Finance reports (SCR-239: the stock valuation at any date; inventory.stock.view, values by the cost grain).
+      {
+        id: 'finance-reports',
+        label: 'shell:nav.finance.reportsGroup',
+        items: [{ id: 'finance-reports-page', label: 'shell:nav.finance.reports', href: '/finance/reports', icon: PieChart, permission: 'inventory.stock.view' }],
       },
       {
         id: 'finance-settings',

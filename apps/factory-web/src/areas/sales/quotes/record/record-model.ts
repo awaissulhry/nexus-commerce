@@ -1,6 +1,8 @@
 import type { PdfInput } from '@nexus/ui/components/PdfViewer/index'
 import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import type { DocumentSendModel } from '../../../_shared/document-send/model'
+import type { PaymentTermsRow } from '../../customers/terms/api'
+import type { DuplicateActions, DuplicateModel } from '../duplicate/model'
 import type { ApprovalRow, PartyDetail, QuoteDetail, QuoteVersionRow, StyleDetail, StyleRow } from '../api'
 import type { Grains, QuoteAbilities, QuoteTab, Tone } from '../model'
 
@@ -76,9 +78,17 @@ export interface QuoteRecordViewModel {
   dockOpen: boolean
   /** The design index's stand-in for the record panels (the live page mounts the real ones). */
   panelsPreview?: RecordPanelsViewModel
+  /** B-W2a-49: the payment terms library of the quote's company (Terms & delivery); null items while read. */
+  library?: { items: PaymentTermsRow[] | null; problem: string | null; allowed: boolean }
+  /** B-W2a-49: Duplicate (band ⋯); null: closed. */
+  duplicate?: DuplicateModel | null
 }
 
-export interface QuoteRecordActions {
+export interface QuoteRecordActions extends DuplicateActions {
+  /** B-W2a-49: band ⋯ Duplicate. */
+  onDuplicateStart?: () => void
+  /** B-W2a-49: a colour line back at its list price. */
+  onUseListPrice?: (lineId: string) => void
   onRetry?: () => void
   onReload?: () => void
   onCells?: (styleId: string, value: Record<string, Record<string, number>>) => void

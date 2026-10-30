@@ -7,7 +7,8 @@ import { amountText, DOC_TYPE_WORDS, type InvoiceDocType } from '../invoices'
  * close command of B-W1-25 asks; stage 15-invoice), pure.
  *
  * Settled means all of:
- *   shipped      every size of every line shipped (lines on SHIPPED or DELIVERED shipments) as ordered;
+ *   shipped      every size of every line shipped (lines on SHIPPED or DELIVERED shipments) as ordered, a line closed
+ *                short counting as shipped for what it never shipped (B-W2a-54);
  *   invoiced     every garment shipped billed by an issued TD01 or TD24 (none less, none more);
  *   documents    every fiscal document of the order (its TD01/TD24 invoices, the TD02s of its deposit requests, the
  *                TD04s that credit them) reached the customer's side at SDI: DELIVERED or NOT_DELIVERABLE (the latter
@@ -26,6 +27,11 @@ export interface SettlementLine {
   readonly description: string
   /** Its sizes as ordered (a line without size rows: one entry, size null, the line's quantity). */
   readonly sizes: readonly { readonly size: string | null; readonly ordered: number }[]
+  /**
+   * B-W2a-54: the line was closed short (B-W2a-30 SalesOrderLine.closedShortQuantity): each size's pieces not shipped are
+   * done, not owed (toShip 0), so a closed-short order settles on what shipped.
+   */
+  readonly closedShort?: boolean
 }
 
 export interface SettlementInvoice {
@@ -79,6 +85,8 @@ export interface SettlementLineView {
   /** Decimal string. */
   readonly invoiced: string
   readonly toShip: number
+  /** Pieces closed short (ordered, never shipped, no longer owed); 0 on an open line. */
+  readonly closedShort: number
   readonly toInvoice: string
 }
 
@@ -133,6 +141,7 @@ export function orderSettlement(facts: SettlementFacts): OrderSettlement {
       const shippedQty = entry.size === null ? (shippedByLine.get(line.salesOrderLineId) ?? 0) : (shipped.get(sizeKey(line.salesOrderLineId, entry.size)) ?? 0)
       const invoicedQty = entry.size === null ? (invoicedByLine.get(line.salesOrderLineId) ?? ZERO) : (invoiced.get(sizeKey(line.salesOrderLineId, entry.size)) ?? ZERO)
       const toInvoice = new Dec(shippedQty).minus(invoicedQty)
+      const notShipped = Math.max(0, entry.ordered - shippedQty)
       lines.push({
         salesOrderLineId: line.salesOrderLineId,
         seq: line.seq,
@@ -141,7 +150,8 @@ export function orderSettlement(facts: SettlementFacts): OrderSettlement {
         ordered: entry.ordered,
         shipped: shippedQty,
         invoiced: invoicedQty.toString(),
-        toShip: Math.max(0, entry.ordered - shippedQty),
+        toShip: line.closedShort ? 0 : notShipped,
+        closedShort: line.closedShort ? notShipped : 0,
         toInvoice: (toInvoice.isNegative() ? ZERO : toInvoice).toString(),
       })
     }

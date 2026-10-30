@@ -1,8 +1,11 @@
 import type { Prisma } from '@nexus/factory-db'
+import type { FreightBilled, ShipmentFreight } from '@nexus/factory-domain/invoicing/charges/charges'
 import type { CreditedInvoice, CreditedLine } from '@nexus/factory-domain/invoicing/credit-note/credit-note'
 import type { DepositInvoiceFacts } from '@nexus/factory-domain/invoicing/from-shipment/deductions'
 import type { InvoicedQuantity, OrderLinePrice, ShippedQuantity } from '@nexus/factory-domain/invoicing/from-shipment/shipped'
+import type { ShipInvoiceType } from '@nexus/factory-domain/invoicing/from-shipment/deadlines'
 import { treatmentOf } from '@nexus/factory-domain/invoicing/invoices'
+import { invoiceTypePreset, type InvoiceTiming } from '@nexus/factory-domain/sales/terms/terms'
 import type { VatTreatment } from '@nexus/factory-domain/tax/vat-treatment'
 import { readInvoice, readLines, type Reader } from '../store'
 
@@ -27,6 +30,9 @@ export interface DdtRow {
   readonly shipmentStatus: string
   readonly salesOrderId: string
   readonly cancelled: boolean
+  /** B-W2a-54: the shipment's freight charged (B-W2a-48 Shipment.freightCharge: minor units, null = not decided) in the order's currency. */
+  readonly freightCharge: number | null
+  readonly orderCurrency: string
 }
 
 export async function readDdts(db: Reader, where: Prisma.DdtWhereInput, take = 500): Promise<DdtRow[]> {
@@ -35,7 +41,16 @@ export async function readDdts(db: Reader, where: Prisma.DdtWhereInput, take = 5
     where: { AND: [where, { shipmentId: { not: null } }] },
     take,
     orderBy: [{ documentDate: 'asc' }, { number: 'asc' }],
-    select: { id: true, number: true, documentDate: true, companyId: true, partyId: true, shipmentId: true, cancellations: { select: { id: true }, take: 1 }, shipment: { select: { number: true, status: true, salesOrderId: true } } },
+    select: {
+      id: true,
+      number: true,
+      documentDate: true,
+      companyId: true,
+      partyId: true,
+      shipmentId: true,
+      cancellations: { select: { id: true }, take: 1 },
+      shipment: { select: { number: true, status: true, salesOrderId: true, freightCharge: true, salesOrder: { select: { currency: true } } } },
+    },
   })
   return rows.map((row) => ({
     id: row.id,
@@ -48,7 +63,29 @@ export async function readDdts(db: Reader, where: Prisma.DdtWhereInput, take = 5
     shipmentStatus: row.shipment!.status,
     salesOrderId: row.shipment!.salesOrderId,
     cancelled: row.cancellations.length > 0,
+    freightCharge: row.shipment!.freightCharge,
+    orderCurrency: row.shipment!.salesOrder.currency,
   }))
+}
+
+/** A DDT's shipment freight as the charge rules read it (B-W2a-54). */
+export const freightOf = (ddt: DdtRow): ShipmentFreight => ({ ddtId: ddt.id, ddtNumber: ddt.number, ddtDate: ddt.date, shipmentNumber: ddt.shipmentNumber, amount: ddt.freightCharge, currency: ddt.orderCurrency })
+
+/** The FREIGHT lines of TD01/TD24 invoices on these DDTs (drafts too, marked), but invoice `except` (B-W2a-54). */
+export async function freightBilledOf(db: Reader, ddtIds: readonly string[], except: string | null = null): Promise<(FreightBilled & { readonly invoiceId: string; readonly draft: boolean })[]> {
+  if (ddtIds.length === 0) return []
+  const rows = await db.invoiceLine.findMany({
+    where: { ddtId: { in: [...ddtIds] }, kind: 'CHARGE', chargeKind: 'FREIGHT', invoice: { docType: { in: ['TD01', 'TD24'] }, ...(except ? { id: { not: except } } : {}) } },
+    select: { invoiceId: true, ddtId: true, invoice: { select: { number: true, status: true } } },
+  })
+  return rows.map((row) => ({ invoiceId: row.invoiceId, ddtId: row.ddtId!, invoiceNumber: row.invoice.number, draft: row.invoice.status === 'DRAFT' }))
+}
+
+/** How each of these customers is invoiced (B-W2a-19 Party.invoiceTiming): the type its shipped goods get by default. */
+export async function presetsOf(db: Reader, partyIds: readonly string[]): Promise<Map<string, { readonly timing: InvoiceTiming; readonly preset: ShipInvoiceType }>> {
+  if (partyIds.length === 0) return new Map()
+  const rows = await db.party.findMany({ where: { id: { in: [...new Set(partyIds)] } }, select: { id: true, invoiceTiming: true } })
+  return new Map(rows.map((row) => [row.id, { timing: row.invoiceTiming, preset: invoiceTypePreset(row.invoiceTiming) }]))
 }
 
 /** The garments each DDT's shipment carried, per order line and size. */

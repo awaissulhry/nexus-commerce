@@ -6,6 +6,8 @@ import { LINK_QUOTE_STATES } from './quotes/acceptance'
 import { APPROVAL_REASONS } from './quotes/quotes'
 // B-W2a-43: customer returns.
 import { RETURN_STATUSES } from './returns/rules'
+// B-W2a-57: repairs and alterations.
+import { REPAIR_KINDS, REPAIR_STAGES, SAFETY_RESULTS } from './repairs/rules'
 
 /**
  * The sales module's events (plan A1 §3.4, §3.5; B-W1-21 quotes). apps/factory-api's modules/sales emits them in the
@@ -64,6 +66,13 @@ import { RETURN_STATUSES } from './returns/rules'
  *   return.status_changed        it moved (received, inspected, more goods came, closed, cancelled)
  *   return.replacement_ordered   the replacement order was made for its REPLACE lines
  *   return_policy.changed        a company's or the tenant's return policy changed (which fields)
+ * B-W2a-57 (repairs and alterations; live: sales.repairs.view; office only):
+ *   repair.created               a repair or alteration was made (numbered), from an RMA line, a complaint or by hand, in
+ *                                its first stage (waiting for the garment, or received)
+ *   repair.changed               its problem, garment, owner, the customer's DDT or its note changed (which fields)
+ *   repair.stage_changed         it moved: received, estimated, approved, in repair, repaired, back into repair, shipped
+ *                                back (with its DDT: ddt.source_issued), cancelled
+ *   repair.safety_checked        a repaired protective garment's safety check was signed: PASS or FAIL
  */
 const live = { permission: 'quotes.view', fields: ['quoteId', 'versionId'] } as const
 const orderLive = { permission: 'orders.view', fields: ['orderId', 'number'] } as const
@@ -71,6 +80,9 @@ const orderStatus = z.enum(SALES_ORDER_STATUSES)
 // B-W2a-43: customer returns.
 const returnLive = { permission: 'sales.returns.view', fields: ['returnId', 'number'] } as const
 const returnStatus = z.enum(RETURN_STATUSES)
+// B-W2a-57: repairs and alterations.
+const repairLive = { permission: 'sales.repairs.view', fields: ['repairId', 'number'] } as const
+const repairStage = z.enum(REPAIR_STAGES)
 const ids = { quoteId: z.uuid(), versionId: z.uuid() }
 
 export const events = [
@@ -343,5 +355,34 @@ export const events = [
     description: "A company's or the tenant's return policy changed: the return window, the days for the goods, who pays the freight back, the restocking fee or the conditions.",
     payload: z.strictObject({ companyId: z.uuid().nullable(), fields: z.array(z.string()) }),
     live: { permission: 'sales.returns.view', fields: ['companyId', 'fields'] },
+  }),
+  // B-W2a-57: repairs and alterations (ids, numbers, stages and results; never an amount or a name).
+  defineEvent({
+    type: 'repair.created',
+    context: 'sales',
+    description: "A repair or alteration of a customer's garment was made (numbered from the company's REPAIR series), from a return line decided Repair, a complaint or by hand, in its first stage.",
+    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), partyId: z.uuid(), kind: z.enum(REPAIR_KINDS), stage: repairStage, returnLineId: z.uuid().nullable(), complaintId: z.uuid().nullable(), safetyCheckRequired: z.boolean() }),
+    live: { ...repairLive, fields: ['repairId', 'number', 'stage'] },
+  }),
+  defineEvent({
+    type: 'repair.changed',
+    context: 'sales',
+    description: "A repair's problem, garment, owner, the customer's transport document or its internal note changed.",
+    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), fields: z.array(z.string()) }),
+    live: repairLive,
+  }),
+  defineEvent({
+    type: 'repair.stage_changed',
+    context: 'sales',
+    description: 'A repair moved to another stage: the garment arrived, estimated, approved, in repair, repaired, back into repair, shipped back to the customer, or cancelled.',
+    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), from: repairStage, to: repairStage, workOrderId: z.uuid().nullable(), ddtId: z.uuid().nullable() }),
+    live: { ...repairLive, fields: ['repairId', 'number', 'from', 'to'] },
+  }),
+  defineEvent({
+    type: 'repair.safety_checked',
+    context: 'sales',
+    description: "A repaired protective garment's safety check was signed (seams, abrasion zones, closures, protectors, the certificate still covers it): passed, so it may go back, or failed.",
+    payload: z.strictObject({ repairId: z.uuid(), number: z.string(), result: z.enum(SAFETY_RESULTS) }),
+    live: { ...repairLive, fields: ['repairId', 'number', 'result'] },
   }),
 ] as const

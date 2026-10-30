@@ -114,6 +114,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/sales/orders/[id]',
   // B-W2a-50: a typed New order (its lines on the screen until "Confirm order").
   '/sales/orders/new',
+  // B-W2a-49: Sales › Pricing › Price lists & contracts (SCR-106) and a price list.
+  '/sales/price-lists',
+  '/sales/price-lists/[listId]',
   '/purchasing/suppliers',
   '/purchasing/suppliers/[partyId]',
   // B-W1-30/31 part 2: Purchase orders (SCR-058) and the PO studio (SCR-059).
@@ -164,6 +167,11 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/finance/payments',
   '/finance/payments/[id]',
   '/finance/settings',
+  // B-W2a-51: Accounting export (SCR-156) with its files tab; Finance reports › stock valuation (SCR-239) with its print tab.
+  '/finance/accounting',
+  '/finance/accounting/files',
+  '/finance/reports',
+  '/finance/reports/print',
   // B-W0-27 Admin: All settings, Companies & sites, Devices & printers, Users, Roles & permissions, and their records.
   '/admin',
   '/admin/companies',

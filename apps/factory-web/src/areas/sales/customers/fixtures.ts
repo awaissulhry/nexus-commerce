@@ -2,6 +2,8 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { CUSTOMERS, inShell, listModel, rowOf, SUPPLIERS, useDesignList } from '../../parties/_shared/fixtures'
 import { blankNewParty, failed, loaded, loading, SIDES, type PartiesListModel } from '../../parties/_shared/model'
+import { demoCustomersImport, importButton } from './_demo/fixtures'
+import type { CustomersImportModel } from './import/view/CustomersImportView'
 import { CustomersView } from './view/CustomersView'
 
 /**
@@ -15,9 +17,15 @@ const rows = CUSTOMERS.map(rowOf)
 const list = (over: Partial<PartiesListModel> = {}) => listModel('customers', over)
 const pick = (...codes: string[]) => rows.filter((row) => codes.includes(row.code)).map((row) => row.id)
 
-function CustomersDesign({ model }: { model: PartiesListModel }) {
-  return inShell('/sales/customers', createElement(CustomersView, useDesignList(model)))
+/** A case: the list, and (B-W2a-49) the band's Import with its wizard when open. */
+type CustomersCase = PartiesListModel & { importer?: CustomersImportModel }
+
+function CustomersDesign({ model }: { model: CustomersCase }) {
+  const { importer, ...list } = model
+  return inShell('/sales/customers', createElement(CustomersView, { ...useDesignList(list), headActions: importButton(importer ?? { held: null, sheet: null }) }))
 }
+
+const importCase = (importer: CustomersImportModel): CustomersCase => ({ ...list(), importer })
 
 const euDraft = () => {
   const draft = blankNewParty(SIDES.customers)
@@ -29,7 +37,7 @@ const euDraft = () => {
   }
 }
 
-export const designScreen = defineDesignScreen<PartiesListModel>({
+export const designScreen = defineDesignScreen<CustomersCase>({
   screen: 'SCR-032',
   title: 'Customers',
   view: CustomersDesign,
@@ -134,5 +142,12 @@ export const designScreen = defineDesignScreen<PartiesListModel>({
       }),
     },
     { id: 'shortcuts', label: 'Keyboard shortcuts (?)', model: list({ dialog: { kind: 'shortcuts' } }) },
+    // B-W2a-49 (design pop:customers.import, band "Import (W2a)"): the customers and suppliers importer.
+    { id: 'import-upload', label: 'W2a: Import — the sheet (every company by default)', model: importCase({ held: null, sheet: demoCustomersImport('upload') }), note: 'Rows by code: new customers, changed ones; nothing is written before Apply.' },
+    { id: 'import-check', label: 'W2a: Import — the dry run (2 new, 1 changed, 1 refused)', model: importCase({ held: null, sheet: demoCustomersImport('planned') }), note: 'The columns read and ignored; the refused row says why; Apply 3.' },
+    { id: 'import-result', label: 'W2a: Import — applied', model: importCase({ held: null, sheet: demoCustomersImport('applied') }), note: 'Closing reads the list and its tiles again.' },
+    { id: 'import-no-apply', label: 'W2a: Import without the apply right (Apply held)', model: importCase({ held: null, sheet: demoCustomersImport('planned', { run: true, apply: false }) }) },
+    { id: 'import-held', label: 'W2a: Import held (no import right)', model: importCase({ held: 'import.held.run', sheet: null }), note: 'The button says why on hover and focus.' },
+    { id: 'import-held-manage', label: 'W2a: Import held (a role that only views customers)', model: { ...list({ can: { view: true, manage: false, block: false, vies: false } }), importer: { held: 'import.held.manage', sheet: null } } },
   ],
 })

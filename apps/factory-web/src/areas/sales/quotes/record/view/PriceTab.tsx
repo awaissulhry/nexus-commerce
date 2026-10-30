@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Banner, Card, EmptyState, MetricStrip, SummaryTable } from '@nexus/ui/components'
 import { Tag } from '@nexus/ui/primitives'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
@@ -93,6 +94,22 @@ export function PriceTab({ quote, model }: { quote: QuoteDetail; model: QuoteRec
             : []),
         ]}
       />
+      {/* B-W2a-49 (SAL-165): the price list the List price column comes from; the quote keeps this version. */}
+      <p className="fw-q-hint">
+        {current.priceList ? (
+          <>
+            {t('price.fromList')}{' '}
+            <Link href={`${model.prefix}/sales/price-lists/${encodeURIComponent(current.priceList.listId)}?tab=prices&version=${encodeURIComponent(current.priceList.versionId)}`}>
+              {t('price.listVersion', { code: current.priceList.code, name: current.priceList.name, revision: current.priceList.revision })}
+            </Link>
+            {' · '}
+            {t('price.keepsVersion')}
+          </>
+        ) : (
+          t('price.noList')
+        )}
+      </p>
+      {current.belowMinimum && <Banner tone="warning" title={t('terms.belowMinimum', { minimum: money(current.belowMinimum.minimum, currency, locale), short: money(current.belowMinimum.short, currency, locale) })} />}
       {(!grains.cost || !grains.margin) && <Banner tone="info" title={t(grains.margin ? 'price.grainNoteMargin' : 'price.grainNote')} />}
       <Card>
         <div className="fw-q-table">

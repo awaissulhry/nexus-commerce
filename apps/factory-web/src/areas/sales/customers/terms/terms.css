@@ -1,0 +1,60 @@
+/*
+ * Customer › Tax & terms › Commercial terms (B-W2a-49) and Customers › Import LAYOUT: the card's head, its form in
+ * columns (two or more on wide screens: no page max-width, Owner rule 2026-10-29), the text rows. The controls are the
+ * design system's; semantic tokens only.
+ */
+.fw-ct-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  margin-bottom: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ct-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-ct-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-ct-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ct-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-ct-cell {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-ct-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-ct-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-12);
+}

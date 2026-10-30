@@ -29,6 +29,11 @@ export const manifest = defineManifest({
   'DELETE /invoicing/invoices/:invoiceId/deductions/:lineId': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
   'POST /invoicing/invoices/:invoiceId/credit-note': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
   'GET /invoicing/orders/:orderId/settlement': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  // Invoicing every day (B-W2a-54; handlers in ./from-shipment/deferred.ts, ./milestones.ts): the deferred invoices due,
+  // one TD24 of a customer's month, the invoice of a payment schedule step (its deposit's TD02). No permission of its own.
+  'GET /invoicing/deferred': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'POST /invoicing/invoices/deferred': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
+  'POST /invoicing/invoices/from-milestone': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
   // Finance settings as invoicing reads them (SCR-083; settings.ts): per company the caller may see invoices of.
   'GET /invoicing/settings': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
 })
