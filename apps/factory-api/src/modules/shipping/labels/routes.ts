@@ -3,8 +3,8 @@ import { defineRoutes } from '../../../core/manifest'
 import { systemCallerOf } from '../../../platform/files/files'
 import { processFiles } from '../../../platform/files/service'
 import { processCarrier } from './carrier'
-import { buyLabelsContract, getLabelsContract, printLabelsContract, trackingContract, voidLabelContract } from './contract'
-import { buyLabels, getLabels, printLabels, voidLabel } from './labels'
+import { buyLabelsContract, getLabelsContract, printLabelsContract, trackingContract, voidAllLabelsContract, voidLabelContract } from './contract'
+import { buyLabels, getLabels, printLabels, voidAllLabels, voidLabel } from './labels'
 import { manifest } from './manifest'
 import { getTracking } from './tracking'
 
@@ -30,6 +30,11 @@ export default defineRoutes('shipping.labels', manifest, async (app) => {
 
   app.post('/shipping/shipments/:shipmentId/parcels/:parcelId/label/void', { schema: voidLabelContract }, async (request) =>
     voidLabel(processCarrier(), request, request.params.shipmentId, request.params.parcelId, request.body, idempotencyKeyFrom(request)),
+  )
+
+  // B-W2a-48 (LOG-028): every label of the shipment at once.
+  app.post('/shipping/shipments/:shipmentId/labels/void', { schema: voidAllLabelsContract }, async (request) =>
+    voidAllLabels(processCarrier(), request, request.params.shipmentId, request.body, idempotencyKeyFrom(request)),
   )
 
   app.get('/shipping/shipments/:shipmentId/tracking', { schema: trackingContract }, async (request) => getTracking(request, request.params.shipmentId))

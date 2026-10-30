@@ -1,4 +1,4 @@
-import { Activity, ClipboardList, Factory, SlidersHorizontal } from 'lucide-react'
+import { Activity, BarChart3, ClipboardList, Factory, SlidersHorizontal } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -27,6 +27,12 @@ export const officeArea: OfficeAreaNav = {
           // SCR-069 … SCR-072: the list and the work order studio.
           { id: 'production-work-orders', label: 'shell:nav.production.workOrders', href: '/production/work-orders', icon: ClipboardList, permission: 'workorders.view' },
         ],
+      },
+      {
+        // B-W2a-38: Reports (design production.reports): the daily production report, per line, style and size.
+        id: 'production-reports',
+        label: 'shell:nav.production.reports',
+        items: [{ id: 'production-reports-page', label: 'shell:nav.production.reportsPage', href: '/production/reports', icon: BarChart3, permission: 'production.reports.view' }],
       },
       {
         id: 'production-settings',

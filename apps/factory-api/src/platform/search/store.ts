@@ -49,25 +49,38 @@ export function entryOf(indexer: SearchIndexer, document: SearchDocument) {
 }
 type EntryRow = ReturnType<typeof entryOf>
 const FIELDS = ['companyId', 'siteId', 'partyId', 'number', 'title', 'subtitle', 'status', 'area', 'viewPermission', 'searchText'] as const satisfies readonly (keyof EntryRow)[]
+const ENTRY_SELECT = { id: true, recordId: true, companyId: true, siteId: true, partyId: true, number: true, title: true, subtitle: true, status: true, area: true, viewPermission: true, searchText: true } as const
 
-/** Upserts the documents' entries; an entry that would not change is left as it is. */
+/**
+ * Upserts the documents' entries; an entry that would not change is left as it is. A record without an entry is
+ * inserted with ON CONFLICT DO NOTHING on (tenant, record type, record id): two events that index the same new record at
+ * once both read no entry, the second insert waits for the first and then skips it (B-W2a-32: it hit
+ * SearchEntry_tenantId_recordType_recordId_key and needed the job's retry), and goes on with the entry the first wrote
+ * (read again: READ COMMITTED), rewritten only when its own read differs.
+ */
 export async function writeDocuments(tx: CommandTx, indexer: SearchIndexer, documents: readonly SearchDocument[], now: Date): Promise<WriteCount> {
   const count = noWrites()
   if (documents.length === 0) return count
-  const existing = await tx.searchEntry.findMany({
-    where: { recordType: indexer.recordType, recordId: { in: documents.map((document) => document.recordId) } },
-    select: { id: true, recordId: true, companyId: true, siteId: true, partyId: true, number: true, title: true, subtitle: true, status: true, area: true, viewPermission: true, searchText: true },
-  })
+  const existing = await tx.searchEntry.findMany({ where: { recordType: indexer.recordType, recordId: { in: documents.map((document) => document.recordId) } }, select: ENTRY_SELECT })
   const byRecord = new Map(existing.map((row) => [row.recordId, row]))
   for (const document of documents) {
     const row = entryOf(indexer, document)
-    const before = byRecord.get(document.recordId)
-    if (before && FIELDS.every((field) => before[field] === row[field])) {
+    let found = byRecord.get(document.recordId) ?? null
+    if (!found) {
+      const { count: made } = await tx.searchEntry.createMany({ data: [{ id: newId(), recordType: indexer.recordType, recordId: document.recordId, ...row, indexedAt: now }], skipDuplicates: true })
+      if (made === 1) {
+        count.written++
+        continue
+      }
+      found = await tx.searchEntry.findFirst({ where: { recordType: indexer.recordType, recordId: document.recordId }, select: ENTRY_SELECT })
+      if (!found) throw new Error(`search: the entry of ${indexer.recordType} ${document.recordId} was neither written nor found`)
+    }
+    const before = found
+    if (FIELDS.every((field) => before[field] === row[field])) {
       count.unchanged++
       continue
     }
-    if (before) await tx.searchEntry.update({ where: { id: before.id }, data: { ...row, indexedAt: now } })
-    else await tx.searchEntry.create({ data: { id: newId(), recordType: indexer.recordType, recordId: document.recordId, ...row, indexedAt: now } })
+    await tx.searchEntry.update({ where: { id: before.id }, data: { ...row, indexedAt: now } })
     count.written++
   }
   return count

@@ -1,4 +1,5 @@
 import type { Prisma } from '@nexus/factory-db'
+import { dayWords } from '@nexus/factory-domain/accounting/periods'
 import { ConflictError, DomainError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
@@ -10,6 +11,7 @@ import { command, type CommandCaller, type CommandTools } from '../../core/comma
 import { actorOf } from '../../core/context'
 import { serverClock } from '../../core/time'
 import { ordersOfInvoices, ordersOfRequests, settleOrders } from '../invoicing/from-shipment/settlement'
+import { refuseHardLocked } from '../accounting/period-guard'
 import { markDepositPaid } from '../sales/deposits/deposits'
 import { lockAll, lockMoney } from './locks'
 import { allocatedOf, assertMay, officeContextOf, officePayment, paymentDetail, placedOn, readPayment, targetLabels, type PaymentDetail, type PaymentRow, type Reader } from './store'
@@ -199,6 +201,10 @@ async function refuseCountedReference(db: Reader, companyId: string, externalRef
 
 /** Inside a command: the Payment row RECEIVED, audited, with its event. */
 export async function insertPayment(tools: CommandTools, payment: CheckedPayment): Promise<PaymentRow> {
+  // B-W2a-F1: a day inside a HARD period lock is refused in words (409) before the database's Payment_period_lock.
+  await refuseHardLocked(tools.tx, tools.context, [
+    { companyId: payment.companyId, day: payment.receivedOn, refused: `the payment received on ${dayWords(payment.receivedOn)} (bank reference ${payment.externalRef}) is not recorded`, path: 'body/receivedOn' },
+  ])
   const id = newId()
   await tools.tx.payment.create({
     data: { id, companyId: payment.companyId, partyId: payment.partyId, method: 'BANK_TRANSFER', amount: payment.amount, currency: payment.currency, receivedOn: dateValue(payment.receivedOn), externalRef: payment.externalRef, internalNote: payment.internalNote, createdAt: tools.now, updatedAt: tools.now, createdById: actorIdOf(tools) },
@@ -355,6 +361,9 @@ export async function voidPayment(caller: CommandCaller, paymentId: string, body
     const current = (await readPayment(tools.tx, payment.id))!
     const problems = voidProblems({ status: current.status, allocated: await allocatedOf(tools.tx, current.id) })
     if (problems.length > 0) throw new InvalidStateError(problems.join(' '))
+    // B-W2a-F1: a payment received inside a HARD period lock is not voided: 409 in words before the database's.
+    const receivedOn = current.receivedOn.toISOString().slice(0, 10)
+    await refuseHardLocked(tools.tx, tools.context, [{ companyId: current.companyId, day: receivedOn, refused: `the payment received on ${dayWords(receivedOn)} (bank reference ${current.externalRef}) is not voided`, path: 'paymentId' }])
     await tools.tx.payment.update({ where: { id: current.id }, data: { status: 'VOIDED', voidedAt: tools.now, voidReason: reason }, select: { id: true } })
     tools.audit({ recordType: 'Payment', recordId: current.id, companyId: current.companyId, before: { status: 'RECEIVED' }, after: { status: 'VOIDED' }, reason })
     tools.emit({ type: 'payment.voided', subject: current.id, companyId: current.companyId, payload: { paymentId: current.id } })

@@ -176,6 +176,31 @@ describe('the index (worker side)', () => {
     expect(await indexEvent(system, indexers, envelope('calendar.changed', partyId))).toMatchObject({ written: 0, replayed: false })
   })
 
+  it('two events that index the same new record at once write one entry, without an error (an upsert: no retry, B-W2a-32)', async () => {
+    const parties = indexers.find((indexer) => indexer.recordType === 'Party')!
+    const partyId = id('party:P2')
+    // A record without an entry yet: what two events of a record made a moment ago both find.
+    await admin('DELETE FROM "SearchEntry" WHERE "recordType" = $1 AND "recordId" = $2', ['Party', partyId])
+    // Both commands read the record, then wait for each other: neither has written when the other reads the index.
+    let arrived = 0
+    let together!: () => void
+    const both = new Promise<void>((resolve) => (together = resolve))
+    const gated: SearchIndexer = {
+      ...parties,
+      async read(tx, filter, take) {
+        const documents = await parties.read(tx, filter, take)
+        if (++arrived === 2) together()
+        await both
+        return documents
+      },
+    }
+    const [one, two] = await Promise.all([indexEvent(system, [gated], envelope('party.updated', partyId, { partyId })), indexEvent(system, [gated], envelope('party.updated', partyId, { partyId }))])
+    expect([one.written + two.written, one.unchanged + two.unchanged]).toEqual([1, 1])
+    const rows = await admin<{ title: string }>('SELECT title FROM "SearchEntry" WHERE "recordType" = $1 AND "recordId" = $2', ['Party', partyId])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.title).toEqual(expect.any(String))
+  })
+
   it('an event naming a record that is gone removes its entry', async () => {
     const ghost = newId()
     await admin(`INSERT INTO "SearchEntry" (id, "tenantId", "recordType", "recordId", number, title, area, "viewPermission", "searchText", "indexedAt") VALUES ($1, $2, 'Invoice', $3, NULL, 'Draft', 'finance', 'invoices.view', 'draft', now())`, [newId(), tenantId, ghost])

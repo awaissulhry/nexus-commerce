@@ -1,0 +1,426 @@
+{
+  "band": {
+    "site": "Site",
+    "asOf": "As of {time}",
+    "reading": "Reading the board…",
+    "notRead": "Not read",
+    "place": "Place all by due date",
+    "publish": "Publish to floor"
+  },
+  "save": {
+    "idle": "Moves save as you make them",
+    "saving": "Saving…",
+    "saved": "All moves saved · {time}",
+    "failed": "Not saved: {reason}",
+    "offline": "Offline — moves wait for the connection"
+  },
+  "plan": {
+    "none": "No working plan yet: the first move makes it",
+    "working": "Working plan v{version}",
+    "published": "The floor works to v{version} ({from} – {to}, from {start})",
+    "neverPublished": "Nothing published to the floor yet",
+    "changes": "Since then: {moved} moved, {added} added, {removed} removed"
+  },
+  "more": {
+    "label": "More",
+    "legend": "Legend",
+    "versions": "Published versions",
+    "keys": "Keyboard shortcuts",
+    "allocation": "Lines & subcontractors",
+    "office": "Back to Office"
+  },
+  "toolbar": {
+    "label": "Board controls",
+    "view": "View",
+    "views": {
+      "resources": "Resources",
+      "orders": "Orders"
+    },
+    "zoom": "Zoom",
+    "zooms": {
+      "DAY": "Day",
+      "WEEK": "Week",
+      "MONTH": "Month"
+    },
+    "today": "Today",
+    "earlier": "Earlier",
+    "later": "Later",
+    "date": "First day shown",
+    "search": "Search an order number",
+    "searchPlaceholder": "Order number (/)"
+  },
+  "filters": {
+    "label": "Filters",
+    "lanes": "Lines",
+    "status": "Status",
+    "material": "Material not ready",
+    "style": "Style",
+    "anyStyle": "Every style",
+    "highlight": "Highlight",
+    "late": "Late",
+    "materialMark": "Material"
+  },
+  "woStatus": {
+    "DRAFT": "Draft",
+    "RELEASED": "Released",
+    "IN_PROGRESS": "In progress",
+    "ON_HOLD": "On hold",
+    "COMPLETED": "Completed",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled"
+  },
+  "board": {
+    "label": "Planning board · {site}",
+    "title": "Schedule",
+    "titleOrders": "Schedule by order",
+    "hint": "Drag a bar in time or to another line; the load above each line shows the standard minutes booked against what the line has. Nothing reaches the floor until you publish.",
+    "hintOrders": "One lane per work order with its operations; drag an operation in time. To move it to another line, use the Resources view.",
+    "empty": "No work orders on this site in this window. Place work orders from the tray.",
+    "trayEmpty": "Every work order has a slot"
+  },
+  "bucket": {
+    "week": "Week {week}",
+    "range": "{from} – {to}"
+  },
+  "closed": {
+    "HOLIDAY": "Holiday",
+    "CLOSURE": "Closed"
+  },
+  "capacity": {
+    "none": "No working time in these days.",
+    "noPeople": "No people to plan with: set them in Planning settings.",
+    "noStations": "No stations to plan with: set them in Planning settings.",
+    "formulaPeople_one": "{people} person × {minutes} working min × {efficiency}% efficiency = {available} min available.",
+    "formulaPeople_other": "{people} people × {minutes} working min × {efficiency}% efficiency = {available} min available.",
+    "formulaStations_one": "{people} station × {minutes} working min × {efficiency}% efficiency = {available} min available.",
+    "formulaStations_other": "{people} stations × {minutes} working min × {efficiency}% efficiency = {available} min available.",
+    "closed": "Closed: {days}.",
+    "otherWork": "Also booked here: {minutes} min of work not on the board yet, at its due date ({booked} min in all).",
+    "workshop": "A workshop: its capacity in standard minutes is not planned here."
+  },
+  "lane": {
+    "workshop": "Workshop",
+    "line_one": "{people} person · {efficiency}% efficiency",
+    "line_other": "{people} people · {efficiency}% efficiency",
+    "workCentre_one": "Work centre · {stations} station · {efficiency}%",
+    "workCentre_other": "Work centre · {stations} stations · {efficiency}%",
+    "order": "{style} · {pieces} pcs · {status}"
+  },
+  "card": {
+    "operation": "Op {seq} {operation} · {style} · {pieces} pcs",
+    "part": "Part of the order · {style} · {pieces} pcs",
+    "movedBy": "Moved by {name} at {time}",
+    "due": "due {date}",
+    "noDue": "no due date",
+    "tray_one": "{style} · {pieces} pcs · {due} · {operations} operation without a slot",
+    "tray_other": "{style} · {pieces} pcs · {due} · {operations} operations without a slot"
+  },
+  "mark": {
+    "rush": "Rush",
+    "material": "Material not ready",
+    "materialFrom": "Material {date}",
+    "draft": "Draft · books no capacity",
+    "onHold": "On hold · books no capacity",
+    "keptOver": "Kept over capacity"
+  },
+  "chip": {
+    "PAST_LATEST_SAFE_START": "Past its latest safe start",
+    "START_SOON": "Must start soon",
+    "MATERIAL_NOT_READY": "Material not ready",
+    "ON_HOLD": "On hold",
+    "DRAFT": "Draft",
+    "NO_DUE_DATE": "No due date"
+  },
+  "status": {
+    "LATE": "Late",
+    "AT_RISK": "At risk",
+    "ON_TIME": "On time",
+    "NO_DUE_DATE": "No due date",
+    "DONE": "Done"
+  },
+  "reason": {
+    "PAST_DUE": "Its due date ({due}) has passed.",
+    "CANNOT_FINISH_IN_TIME": "Started now it finishes on {finish}, after its due date ({due}).",
+    "PLAN_FINISHES_LATE": "The plan finishes it on {finish}, after its due date ({due}).",
+    "START_SOON": "It must start by {start} to finish by {due}.",
+    "STARTS_AFTER_LATEST_START": "A bar starts after its latest start: the operations after it have no time to spare.",
+    "BEFORE_CALENDAR": "The work runs past the end of the working calendar.",
+    "ON_TIME": "It can start as late as {start} and still finish by {due}.",
+    "NO_DUE_DATE": "No due date: it is planned without a latest start.",
+    "DONE": "Every operation is done.",
+    "LATE": "It finishes after its due date ({due}).",
+    "AT_RISK": "It must start by {start} to finish by {due}."
+  },
+  "readiness": {
+    "NOT_ENOUGH": "Not enough material",
+    "DELAYED": "Material delayed",
+    "REQUESTED": "Material requested",
+    "EXPECTED": "Material expected",
+    "NOT_BOOKED": "Material in stock, not set aside",
+    "RECEIVED": "Material ready",
+    "NOT_PLANNED": "Material not planned"
+  },
+  "held": {
+    "readOnly": "Read-only: only planners move work on the board. You can look at it and open the work orders.",
+    "readOnlyBody": "The plan changes with the permission to change the working plan; publishing needs the permission to publish it.",
+    "offline": "Offline — moves wait to be sent until the connection is back.",
+    "offlineBody": "The board is read-only while the live channel is down; it reads everything again when it comes back.",
+    "loading": "The board is still being read.",
+    "busy": "Saving: wait for the answer.",
+    "trayEmpty": "Every work order already has a slot.",
+    "otherOrder": "An operation stays with its own work order: switch to Resources to move it to another line.",
+    "nothingToPlace": "{order} has no operation left to place.",
+    "noOperation": "No operation of {order} still to place is done on {lane}.",
+    "partOnCentre": "A part of an order goes to a line or a workshop, not to a work centre.",
+    "laneDoesNot": "{lane} does not do Op {operation}: it is done at {centre}."
+  },
+  "refusal": {
+    "MOVED_BY": "Moved by {name} at {time} · the board was read again.",
+    "MOVED": "Moved by someone else at {time} · the board was read again.",
+    "MOVED_SOMEONE": "Moved by someone else meanwhile · the board was read again.",
+    "OVERLOAD": "The lane would go over its capacity: keep it there with a reason or choose another place.",
+    "PLAN_CHANGED": "The working plan changed since it was read: the board was read again.",
+    "LANE_DOES_NOT": "That lane does not do this operation.",
+    "ALREADY_ON_BOARD": "This operation already has a bar on the board: move that one.",
+    "PART_THERE": "This work order already has a part on that lane: change it on Lines & subcontractors.",
+    "NOT_OPEN": "The work order is not open any more: it is not placed on the board.",
+    "LANE_ARCHIVED": "That lane is no longer active: choose an active line, work centre or workshop.",
+    "NO_WORKING_TIME": "The work does not fit in the working time of the days shown: choose a later day.",
+    "PART_LANE": "A part of an order goes to a line or a workshop.",
+    "OPERATION_DONE": "That operation is done: nothing to place.",
+    "NOTHING_TO_PLACE": "Nothing to place: every operation with work left is on the board.",
+    "NOTHING_CHANGED": "Nothing changed since the last published version.",
+    "CONFLICT": "The board refused this change as the plan is now: it was read again.",
+    "FORBIDDEN": "You may not change the working plan at this site.",
+    "NOT_FOUND": "It is no longer on the working plan: the board was read again.",
+    "INVALID": "The board could not send this change as it is.",
+    "OFFLINE": "No connection to the server: nothing was saved.",
+    "SIGNED_OUT": "Your session ended: sign in again.",
+    "FAILED": "The server did not save it. Try again."
+  },
+  "error": {
+    "title": "Couldn't load the schedule",
+    "forbidden": "You may not see the planning board of this site.",
+    "offline": "The server did not answer. Nothing is drawn, so an empty board is never shown by mistake.",
+    "failed": "The board could not be read. Nothing is drawn, so an empty board is never shown by mistake.",
+    "noSite": "This company has no site to plan yet.",
+    "retry": "Try again"
+  },
+  "problems": {
+    "title": "Problems in this plan",
+    "none": "No problems in this plan.",
+    "summary_one": "{count} problem",
+    "summary_other": "{count} problems",
+    "kind": {
+      "OVERBOOKED": "Overbooked",
+      "FINISHES_LATE": "Finishes late"
+    },
+    "show": "Show on board"
+  },
+  "problem": {
+    "on": "on {day}",
+    "between": "from {from} to {to}",
+    "OVERBOOKED": "{lane} is at {pct}% {when} (+{over} min over).",
+    "FINISHES_LATE_one": "{order} finishes {days} day after its due date.",
+    "FINISHES_LATE_other": "{order} finishes {days} days after its due date.",
+    "LATE_NOW": "{order} cannot finish by its due date as planned."
+  },
+  "notice": {
+    "otherPlanner": "Another planner changed the plan: the board was read again.",
+    "nextFree": "{order} went to the next free day instead.",
+    "published": "v{version} published to the floor.",
+    "placed_one": "{count} bar placed by due date.",
+    "placed_other": "{count} bars placed by due date."
+  },
+  "dialog": {
+    "close": "Close"
+  },
+  "bar": {
+    "title": "Work order {order}",
+    "open": "Open work order",
+    "sendToTray": "Send back to the tray",
+    "garments": "Garments",
+    "status": "Status",
+    "due": "Promise date",
+    "noDue": "No due date",
+    "latestSafeStart": "Latest safe start",
+    "planned": "Planned",
+    "span": "{start} – {finish}",
+    "notPlanned": "Not on the board",
+    "line": "Line",
+    "noLine": "Not allocated",
+    "minutes": "Standard minutes",
+    "minutesValue": "{minutes} min",
+    "material": "Material",
+    "materialOn": "{word} · {date}",
+    "materialUnknown": "Not checked",
+    "onHold": "On hold",
+    "sizes": "Pieces per size",
+    "colourway": "Colour",
+    "size": "Size",
+    "pieces": "Pieces",
+    "operations": "Operations",
+    "operation": "Operation",
+    "lane": "Lane",
+    "when": "When",
+    "startsLate": "Starts late",
+    "gates": "Sample and quality gates on the board come later; the work order shows them."
+  },
+  "drop": {
+    "title": "{lane} would be at {pct}% {when}",
+    "titlePlain": "{lane} would go over its capacity",
+    "body": "Dropping {order} here takes {lane} over the minutes it has.",
+    "bodyApi": "Counting the work not on the board yet, dropping {order} here takes {lane} over the minutes it has.",
+    "days": "The load after the drop",
+    "when": "When",
+    "after": "After the drop",
+    "over": "Over",
+    "load": "{booked} / {available} min · {pct}%",
+    "overValue": "+{minutes} min",
+    "reason": "Reason to keep it here",
+    "reasonHint": "Overtime, an extra person, a short order… The reason stays on the bar.",
+    "reasonHeld": "Say in a few words why it stays on the overbooked lane.",
+    "keep": "Keep with a reason",
+    "next": "Move to the next free day",
+    "cancel": "Cancel",
+    "setting": "This site warns when a lane goes over: blocking a drop is not set up."
+  },
+  "publish": {
+    "title": "Publish schedule v{version} to the floor",
+    "titlePlain": "Publish to the floor",
+    "range": "Days to publish",
+    "ranges": {
+      "tomorrow": "Tomorrow",
+      "default": "Next 5 working days",
+      "custom": "Custom"
+    },
+    "from": "First day",
+    "to": "Last day",
+    "review": "Review",
+    "customHeld": "Choose a first and a last day, the last on or after the first.",
+    "covers_one": "{from} – {to}: {days} working day",
+    "covers_other": "{from} – {to}: {days} working days",
+    "bars_one": "{slots} bar to publish.",
+    "bars_other": "{slots} bars to publish.",
+    "diffSince": "Changes since v{version}",
+    "diffFirst": "The first version for these days",
+    "diff": "{moved} moved, {added} added, {removed} removed",
+    "byLane": "Changes per line",
+    "lane": "Line",
+    "moved": "Moved",
+    "added": "Added",
+    "removed": "Removed",
+    "checks": "Checks",
+    "state": {
+      "PASS": "Pass",
+      "WARNING": "Warning"
+    },
+    "check": {
+      "OVERBOOKED": {
+        "pass": "No lane is overbooked on these days.",
+        "warn_one": "{count} lane and day overbooked.",
+        "warn_other": "{count} lanes and days overbooked."
+      },
+      "IN_THE_PAST": {
+        "pass": "No operation starts in the past.",
+        "warn_one": "{count} operation starts in the past.",
+        "warn_other": "{count} operations start in the past."
+      },
+      "MATERIAL_NOT_READY": {
+        "pass": "Material is ready for every work order.",
+        "warn_one": "{count} work order without its material.",
+        "warn_other": "{count} work orders without their material."
+      }
+    },
+    "show": "Show {what}",
+    "what": "What happens",
+    "whatBody": "The lines' and stations' dispatch lists change to it at once; the floor sees \"New schedule v{version} from {start}\".",
+    "notify": "The line tablets get the new list by themselves; no message is sent to the line leaders.",
+    "confirm": "Publish v{version}",
+    "confirmPlain": "Publish",
+    "cancel": "Cancel",
+    "done": "v{version} published to the floor.",
+    "doneBody": "The floor works to it from {start}.",
+    "doneHeld": "Published: close the dialog.",
+    "rangeRefused": "These days cannot be published: a version covers at most 62 days, the last day on or after the first.",
+    "planChanged": "The working plan changed since you opened this review: here it is again.",
+    "held": {
+      "permission": "Publishing to the floor needs the permission to publish the plan at this site.",
+      "nothingChanged": "Nothing changed since v{version} was published.",
+      "nothingOnDays": "The working plan has nothing on the next working days to publish.",
+      "nothingOnRange": "The working plan has nothing from {from} to {to} to publish.",
+      "cannot": "These days cannot be published now: open the board's problems.",
+      "noPlan": "There is no working plan yet: place work on the board first."
+    }
+  },
+  "place": {
+    "title": "Place all by due date",
+    "body": "Every work order of the tray, each operation at its latest start so it finishes on its due date (or from now when that has passed). Look at the result before you apply it.",
+    "proposals": "The bars it would place",
+    "order": "Order",
+    "operation": "Operation",
+    "lane": "Lane",
+    "when": "When",
+    "how": "How",
+    "placedBy": {
+      "BACKWARD": "At its latest start",
+      "FORWARD": "From now: it will be late"
+    },
+    "over": "Over capacity",
+    "skipped_one": "{count} operation is not placed ({orders}): place it by hand.",
+    "skipped_other": "{count} operations are not placed ({orders}): place them by hand.",
+    "reason_one": "{count} bar would overbook its lane: the reason to keep it",
+    "reason_other": "{count} bars would overbook their lanes: the reason to keep them",
+    "reasonHeld_one": "{count} bar overbooks its lane: give the reason first.",
+    "reasonHeld_other": "{count} bars overbook their lanes: give the reason first.",
+    "minutes": "{minutes} standard minutes in all.",
+    "nothing": "Nothing to place.",
+    "apply_one": "Place {count} bar",
+    "apply_other": "Place {count} bars",
+    "applyPlain": "Place",
+    "cancel": "Cancel",
+    "planChanged": "The working plan changed since this preview: open it again."
+  },
+  "legend": {
+    "title": "Legend",
+    "late": "Striped",
+    "lateWords": "Late: the work order finishes after its due date, or a bar starts after its latest start.",
+    "materialWords": "The material of the work order is not ready; the date says when it is expected.",
+    "draftWords": "A draft or held work order: drawn, but it books no capacity until it is released.",
+    "keptOverWords": "Kept on an overbooked lane with a reason.",
+    "rushWords": "A rush order: first in the dispatch lists.",
+    "moved": "Moved by",
+    "movedWords": "Another planner moved this bar last, at that time.",
+    "today": "Today",
+    "todayWords": "The column of today.",
+    "closed": "Closed",
+    "closedWords": "A holiday or a shutdown from the calendar: hatched, it takes no drop.",
+    "overLoad": "+min over",
+    "overLoadWords": "The load bar past its capacity line: the lane is overbooked by that many minutes.",
+    "standardMinute": "A standard minute is how long an operation should take a trained person. Load = standard minutes × pieces. Capacity = people × working minutes × the line's efficiency."
+  },
+  "versions": {
+    "title": "Published versions",
+    "none": "Nothing published to the floor yet.",
+    "number": "Version",
+    "covers": "Days",
+    "from": "The floor works to it from",
+    "published": "Published",
+    "slots": "Bars",
+    "by": "{name}, {time}",
+    "hint": "The floor works to the highest version whose start has come; the working plan changes only here."
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "search": "Search an order",
+    "today": "Go to today",
+    "zoom": "Zoom day / week / month",
+    "view": "Orders view / Resources view",
+    "pick": "Pick up the focused bar",
+    "arrows": "Choose a day and a lane",
+    "drop": "Drop it there (or open the focused bar)",
+    "cancel": "Cancel the move, close a dialog",
+    "undo": "Undo a move",
+    "redo": "Redo a move"
+  }
+}

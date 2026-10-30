@@ -17,7 +17,9 @@ import {
   type Phrase,
   type RowWords,
 } from '@nexus/factory-domain/insights/words'
-import { DEFAULT_LAYOUT, type FlowLensView, type HandledView, type PanelView, type QueueData, type QueueItem, type QuoteReview, type TodayItem, type TodayLayout, type TodayViewModel } from './model'
+import { mentionWords, personalPhrase, taskDueWords } from '@nexus/factory-domain/insights/personal'
+import { alertRowPhrase, alertWhyPhrase } from '@nexus/factory-domain/alerts/today'
+import { W2A_TILES, type ComingUpView, DEFAULT_LAYOUT, type FlowLensView, type HandledView, type PanelView, type QueueData, type QueueItem, type QuoteReview, type TodayItem, type TodayLayout, type TodayViewModel } from './model'
 import { TodayView } from './view/TodayView'
 
 /**
@@ -471,6 +473,169 @@ const INSPECTOR_ITEMS = [ROWS.blockedLot, ROWS.styleHeld, ROWS.quarantineLot, RO
 const FINANCE_ITEMS = [ROWS.sdiRejected, ROWS.quoteApproval, ROWS.toInvoice]
 
 
+// ---- W2a (B-W2a-40): my tasks and mentions, an exception rule's alert, Snooze, Coming up ---------------------------------
+
+const ref = (value: Phrase) => ({ key: value.key, params: value.params as Record<string, string | number | string[]> })
+/** One of my own rows (a task due, a mention) or an exception rule's alert, as the API sends it with `include`. */
+function own(n: number, item: Pick<TodayItem, 'kind' | 'state' | 'severity' | 'group' | 'record' | 'category'> & { sentence: Phrase; why: Phrase; blocks?: Phrase | null; due?: TodayItem['due']; key?: string; href: string }): QueueItem {
+  const { sentence, why, blocks = null, key, href, ...rest } = item
+  return {
+    key: key ?? `${item.kind}:${item.record.id}`,
+    severityWord: '',
+    companyId: COMPANY,
+    siteId: null,
+    partyId: null,
+    sentence: sentence.text,
+    why: why.text,
+    blocks: blocks?.text ?? null,
+    words: { sentence: ref(sentence), why: ref(why), blocks: blocks ? ref(blocks) : null },
+    sentenceFigure: null,
+    due: item.due ?? null,
+    since: at(29 - (n % 5)),
+    ageDays: n % 5,
+    decide: 'OPEN',
+    figures: null,
+    condition: String(n).padStart(32, 'b'),
+    actions: { version: 0, verbs: [], assigned: null, acknowledged: null, snoozable: false },
+    href,
+    reviewHref: null,
+    ...rest,
+  }
+}
+
+const TASK_CALL = taskDueWords({ title: 'Call the demo tannery about lot LOT-A-000214', dueDate: '2026-10-27', dueTime: null, overdueDays: 2, recordLabel: 'LOT-A-000214' })
+const TASK_SAMPLE = taskDueWords({ title: 'Send the sample jacket to Moto Demo Club', dueDate: '2026-10-29', dueTime: '15:00', overdueDays: 0, recordLabel: 'Q-2026-0142' })
+const W2A = {
+  taskOverdue: own(21, {
+    kind: 'TASK_DUE',
+    state: 'OVERDUE',
+    category: 'TASK',
+    severity: 'HIGH',
+    group: 'NOW',
+    record: { type: 'Task', id: id(21), label: 'Call the demo tannery about lot LOT-A-000214' },
+    sentence: TASK_CALL.sentence,
+    blocks: TASK_CALL.blocks,
+    why: personalPhrase('why.TASK_DUE.assigned'),
+    due: { date: '2026-10-27', days: -2, word: 'OVERDUE' },
+    href: `/w/DEMO/home/tasks?open=${id(21)}`,
+  }),
+  taskToday: own(22, {
+    kind: 'TASK_DUE',
+    state: 'TODAY',
+    category: 'TASK',
+    severity: 'MEDIUM',
+    group: 'TODAY',
+    record: { type: 'Task', id: id(22), label: 'Send the sample jacket to Moto Demo Club' },
+    sentence: TASK_SAMPLE.sentence,
+    blocks: TASK_SAMPLE.blocks,
+    why: personalPhrase('why.TASK_DUE.assigned'),
+    due: { date: '2026-10-29', days: 0, word: 'TODAY' },
+    href: `/w/DEMO/home/tasks?open=${id(22)}`,
+  }),
+  mention: own(23, {
+    kind: 'MENTION',
+    state: 'MENTIONED',
+    category: 'MENTION',
+    severity: 'MEDIUM',
+    group: 'TODAY',
+    key: `MENTION:${id(5)}:${id(23)}`,
+    record: { type: 'Quote', id: id(5), label: 'Q-2026-0142' },
+    sentence: mentionWords({ actor: 'Marco Esempio', recordLabel: 'Q-2026-0142' }),
+    why: personalPhrase('why.MENTION.mentioned'),
+    href: `/w/DEMO/sales/quotes/${id(5)}`,
+  }),
+  ruleAlert: own(24, {
+    kind: 'RULE_ALERT',
+    state: 'OPEN',
+    category: 'ALERT',
+    severity: 'HIGH',
+    group: 'NOW',
+    record: { type: 'Alert', id: id(24), label: 'SO-2026-0047' },
+    sentence: alertRowPhrase('ORDER_LATE_RISK', 'SO-2026-0047', { late: false, daysLeft: 2, promiseDate: '2026-10-31' }),
+    why: alertWhyPhrase(false, 'Orders at risk of being late'),
+    due: { date: '2026-10-31', days: 2, word: 'SOON' },
+    // Until Home › Alerts exists, the chip opens the row's own review here (which links the order).
+    href: `/w/DEMO/home/today?open=${encodeURIComponent(`RULE_ALERT:${id(24)}`)}`,
+  }),
+}
+/** A W1 alert the reader may snooze (W2a: `actions.snoozable`). */
+const SNOOZABLE_HOLD: QueueItem = { ...ROWS.blockedLot, actions: { ...ROWS.blockedLot.actions, snoozable: true } }
+const W2A_ITEMS: QueueItem[] = [W2A.taskOverdue, W2A.ruleAlert, SNOOZABLE_HOLD, ROWS.heldWorkOrder, W2A.taskToday, W2A.mention, ROWS.quoteApproval, ROWS.mail]
+
+function w2aQueue(items: readonly QueueItem[], extra: Partial<QueueData> = {}): QueueData {
+  const count = (test: (item: QueueItem) => boolean) => items.filter(test).length
+  return {
+    ...queueOf(items, extra),
+    tiles: [
+      { tile: 'ALL', count: items.length, complete: true },
+      { tile: 'APPROVAL', count: count((item) => item.category === 'APPROVAL'), complete: true },
+      { tile: 'DUE_TODAY', count: count((item) => item.due?.days === 0), complete: true },
+      { tile: 'OVERDUE', count: count((item) => (item.due?.days ?? 0) < 0), complete: true },
+      { tile: 'MENTION', count: count((item) => item.category === 'MENTION'), complete: true },
+      { tile: 'ALERT', count: count((item) => item.category === 'ALERT'), complete: true },
+    ],
+    ...extra,
+  }
+}
+
+const COMING: ComingUpView = {
+  calendar: true,
+  complete: true,
+  days: [
+    {
+      date: '2026-10-30',
+      working: true,
+      items: [
+        { kind: 'TASK', label: 'Check the size run with the demo club', words: ref(personalPhrase('COMING.TASK', { title: 'Check the size run with the demo club' })), href: `/w/DEMO/home/tasks?open=${id(25)}` },
+        { kind: 'ORDER', label: 'SO-2026-0047', words: ref(personalPhrase('COMING.ORDER', { number: 'SO-2026-0047', customer: 'Moto Demo Club' })), href: `/w/DEMO/sales/orders/${id(8)}` },
+      ],
+    },
+    { date: '2026-11-02', working: true, items: [{ kind: 'DELIVERY', label: 'PO-2026-0031', words: ref(personalPhrase('COMING.DELIVERY', { supplier: 'Conceria Demo', number: 'PO-2026-0031' })), href: `/w/DEMO/purchasing/orders/${id(9)}` }] },
+    { date: '2026-11-03', working: true, items: [] },
+    { date: '2026-11-04', working: true, items: [{ kind: 'CERTIFICATE', label: 'CERT-DEMO-0007', words: ref(personalPhrase('COMING.CERTIFICATE', { number: 'CERT-DEMO-0007' })), href: `/w/DEMO/compliance/certificates/${id(26)}` }] },
+    { date: '2026-11-05', working: true, items: [] },
+  ],
+}
+
+/** Today as the W2a screen draws it: six tiles, my tasks and mentions among the rows, Coming up below the work. */
+const w2a: TodayViewModel = {
+  ...base,
+  tileSet: W2A_TILES,
+  queue: { status: 'ready', data: w2aQueue(W2A_ITEMS, { handledToday: 2 }) },
+  comingUp: { status: 'ready', data: COMING },
+  alertRecords: {},
+}
+const W2A_CASES: { id: string; label: string; model: TodayViewModel; note?: string }[] = [
+  {
+    id: 'w2a-owner',
+    label: 'W2a — my tasks, a mention and an exception rule’s alert; Coming up',
+    model: w2a,
+    note: 'Six tiles: Needs me now · Approvals · Due today · Overdue · Mentions · Alerts on my records (kept until Home › Alerts). A task row takes Done (e) and Snooze (h) in its ⋯; a mention the same through its notification; the exception rule’s alert opens its record; a lot on hold the reader may snooze has Snooze beside its alert verbs. Coming up: the next five working days.',
+  },
+  { id: 'w2a-due-today', label: 'W2a — Due today pressed', model: { ...w2a, tile: 'DUE_TODAY' }, note: 'Rows due today, of any kind.' },
+  { id: 'w2a-overdue', label: 'W2a — Overdue pressed', model: { ...w2a, tile: 'OVERDUE' } },
+  { id: 'w2a-mentions', label: 'W2a — Mentions pressed', model: { ...w2a, tile: 'MENTION' }, note: 'The notes that mentioned me; Done takes the mention off Today and the notifications.' },
+  { id: 'w2a-task-open', label: 'W2a — a task in the decide modal', model: { ...w2a, open: W2A.taskOverdue.key }, note: 'Done (E, primary), Snooze… (H); Open the task opens it on My tasks.' },
+  { id: 'w2a-mention-open', label: 'W2a — a mention in the decide modal', model: { ...w2a, open: W2A.mention.key } },
+  {
+    id: 'w2a-rule-alert',
+    label: 'W2a — an exception rule’s alert in the decide modal',
+    model: { ...w2a, open: W2A.ruleAlert.key, alertRecords: { [W2A.ruleAlert.key]: { status: 'ready', data: `/w/DEMO/sales/orders/${id(8)}` } } },
+    note: 'Handled in the alert itself (Home › Alerts); here its record opens.',
+  },
+  { id: 'w2a-snooze', label: 'W2a — Snooze an alert row', model: { ...w2a, dialog: { kind: 'snooze', key: SNOOZABLE_HOLD.key } }, note: 'Later today 16:00 · Tomorrow 08:00 · Monday 08:00 · Pick a date · Until something changes on the record; the site’s times.' },
+  { id: 'w2a-snooze-task', label: 'W2a — Snooze my task', model: { ...w2a, dialog: { kind: 'snooze', key: W2A.taskToday.key } }, note: 'A task comes back at a time (no "until something changes").' },
+  {
+    id: 'w2a-done',
+    label: 'W2a — after Done on a task',
+    model: { ...w2a, queue: { status: 'ready', data: w2aQueue(W2A_ITEMS.filter((item) => item.key !== W2A.taskOverdue.key), { handledToday: 2 }) }, notice: { key: 'today.own.doneTask', tone: 'success', params: { record: W2A.taskOverdue.record.label } } },
+  },
+  { id: 'w2a-offline', label: 'W2a — offline: Done and Snooze held', model: { ...w2a, live: 'offline', open: W2A.taskToday.key }, note: 'Rows stay readable; Done and Snooze say "Offline — decide when back online".' },
+  { id: 'w2a-loading', label: 'W2a — loading', model: { ...w2a, queue: { status: 'loading' }, comingUp: { status: 'loading' } } },
+  { id: 'w2a-coming-empty', label: 'W2a — nothing coming up', model: { ...w2a, comingUp: { status: 'ready', data: { calendar: false, complete: true, days: COMING.days.map((day) => ({ ...day, items: [] })) } } }, note: 'No calendar picked: Monday to Friday.' },
+  { id: 'w2a-coming-error', label: 'W2a — Coming up could not be read', model: { ...w2a, comingUp: { status: 'error', problem: 'today.problem.offline' } }, note: 'Only that section fails; the rest works.' },
+]
+
 export const designScreen = defineDesignScreen<TodayViewModel>({
   screen: 'SCR-029',
   title: 'Today',
@@ -671,5 +836,6 @@ export const designScreen = defineDesignScreen<TodayViewModel>({
       },
       note: 'The assignee sees "Assigned to you by Anna Prova"; mail to sort has no alert verbs (it is sorted in its review).',
     },
+    ...W2A_CASES,
   ],
 })

@@ -1,6 +1,6 @@
 import { defineDesignScreen } from '../lib/design/design-screen'
 import { DEMO_COMPANIES, DEMO_SITES, demoPdf } from '../shell/design-data'
-import type { PanelFile, PanelMessage, PanelParty, PanelTimelineEntry, RecordPanelsViewModel } from './model'
+import type { PanelFile, PanelFollowers, PanelMessage, PanelParty, PanelTask, PanelTasks, PanelTimelineEntry, RecordPanelsViewModel } from './model'
 import { RecordPanelsView } from './view/RecordPanelsView'
 
 /**
@@ -156,6 +156,31 @@ const base: RecordPanelsViewModel = {
   me: '0190f0e2-3333-7000-8000-000000000001',
 }
 
+// ── B-W2a-40: tasks on the record, Follow / Followers, @mention (made-up people and dates) ─────────────────────────
+const ME = { id: '0190f0e2-3333-7000-8000-000000000001', name: 'Alex Demo', me: true }
+const tid = (n: number) => `0190f0e2-4444-7000-8000-${String(n).padStart(12, '0')}`
+const TASKS: PanelTask[] = [
+  { id: tid(1), title: 'Chiedere il rapporto definitivo al laboratorio', href: `/w/DEMO/home/tasks?open=${tid(1)}`, due: { date: '2026-10-27', days: -2, word: 'OVERDUE' }, assignee: ME, progress: { done: 1, total: 3 }, canChange: true },
+  { id: tid(2), title: 'Inviare la foto dell\'etichetta al marchio', href: `/w/DEMO/home/tasks?open=${tid(2)}`, due: { date: '2026-10-29', days: 0, word: 'TODAY' }, assignee: { id: PEOPLE[0]!.id, name: PEOPLE[0]!.name, me: false }, progress: null, canChange: true },
+  { id: tid(3), title: 'Controllare la scadenza del certificato', href: `/w/DEMO/home/tasks?open=${tid(3)}`, due: null, assignee: null, progress: null, canChange: true },
+]
+const tasksOf = (extra: Partial<PanelTasks> = {}): PanelTasks => ({ items: TASKS, problem: null, addHeld: null, dialog: null, undo: null, busy: false, ...extra })
+const FOLLOWERS: PanelFollowers = {
+  count: 4,
+  me: { following: true, muted: false },
+  list: [
+    { userId: ME.id, name: ME.name, me: true, reason: 'CREATOR', muted: false, since: at(14, 9), addedBy: null },
+    { userId: PEOPLE[0]!.id, name: PEOPLE[0]!.name, me: false, reason: 'ASSIGNEE', muted: false, since: at(27, 16), addedBy: null },
+    { userId: PEOPLE[1]!.id, name: PEOPLE[1]!.name, me: false, reason: 'MENTIONED', muted: true, since: at(28, 11), addedBy: null },
+    { userId: '0190f0e2-3333-7000-8000-000000000005', name: 'Elio Fittizio', me: false, reason: 'CHOSE', muted: false, since: at(28, 15), addedBy: PEOPLE[0]!.name },
+  ],
+  candidates: [PEOPLE[2]!],
+  canAdd: true,
+  problem: null,
+  busy: false,
+}
+const w2a = { ...base, tasks: tasksOf(), followers: FOLLOWERS }
+
 export const designScreen = defineDesignScreen<RecordPanelsViewModel>({
   screen: 'SCR-006',
   title: 'Record panels: thread, files, history',
@@ -259,6 +284,51 @@ export const designScreen = defineDesignScreen<RecordPanelsViewModel>({
       id: 'loading',
       label: 'Loading',
       model: { ...base, thread: null, messages: { items: null, more: false }, files: { items: null, more: false }, timeline: { items: null, more: false } },
+    },
+    {
+      id: 'tasks',
+      label: 'W2a · Tasks on this record',
+      model: { ...w2a, tab: 'tasks' },
+      note: 'Open tasks with their due day in words (overdue, today, none), whose it is and the checklist; a tick marks one done with Undo; "+ Add task". Follow and Followers (4) above the tabs.',
+    },
+    {
+      id: 'tasks-done-undo',
+      label: 'W2a · A task ticked done (Undo)',
+      model: { ...w2a, tab: 'tasks', tasks: tasksOf({ items: TASKS.slice(1), undo: { title: TASKS[0]!.title } }) },
+    },
+    {
+      id: 'tasks-none',
+      label: 'W2a · No open tasks',
+      model: { ...w2a, tab: 'tasks', tasks: tasksOf({ items: [] }) },
+    },
+    {
+      id: 'tasks-held',
+      label: 'W2a · Read-only person (tasks held)',
+      model: { ...w2a, tab: 'tasks', can: { ...ALL, post: false, email: false }, tasks: tasksOf({ addHeld: 'tasks.held.noPost', items: TASKS.map((task) => ({ ...task, canChange: false })) }), followers: { ...FOLLOWERS, me: { following: false, muted: false }, canAdd: false } },
+      note: '"+ Add task" and the ticks say why they are held; Follow is still open to them (threads.read), adding a colleague is not.',
+    },
+    {
+      id: 'task-new',
+      label: 'W2a · New task on this record',
+      model: { ...w2a, tab: 'tasks', tasks: tasksOf({ dialog: { people: { status: 'ready', data: [ME, ...PEOPLE.slice(0, 2).map((person) => ({ ...person, me: false }))] } } }) },
+      note: 'Title, for whom (people who keep tasks here and may see the record; me by default), due day, checklist one per line, description. ⌘Enter creates.',
+    },
+    {
+      id: 'tasks-error',
+      label: 'W2a · Tasks could not be read',
+      model: { ...w2a, tab: 'tasks', tasks: tasksOf({ items: null, problem: 'tasks.problem.offline' }) },
+    },
+    {
+      id: 'followers',
+      label: 'W2a · Followers (4)',
+      model: { ...w2a, followers: { ...FOLLOWERS, open: true } },
+      note: 'Who follows and why (made it, was given something on it, was mentioned, chose to; added by), muted ones marked; Unfollow / Mute for me; add a colleague who may read the record.',
+    },
+    {
+      id: 'mention-typed',
+      label: 'W2a · @mention typed in a note',
+      model: { ...w2a, composerText: 'Il laboratorio ha confermato. @Bea Esempio puoi inviare la foto? @Car' },
+      note: 'A colleague named after @ is mentioned (told, and follows the record); the word being typed offers whom it names.',
     },
     {
       id: 'error',

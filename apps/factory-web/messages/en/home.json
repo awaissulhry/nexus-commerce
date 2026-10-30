@@ -70,7 +70,9 @@
     "keys": {
       "approve": "Approve the quote (in its review)",
       "reject": "Reject the quote, with a reason (in its review)",
-      "acknowledge": "Acknowledge the alert (in the list or its review)"
+      "acknowledge": "Acknowledge the alert (in the list or its review)",
+      "doneOrAcknowledge": "Done (a task or a mention) or acknowledge (an alert)",
+      "snooze": "Snooze the row"
     },
     "group": {
       "NOW": "Now",
@@ -94,7 +96,10 @@
       "REGISTER_DUTY": "PPE register duties",
       "PRIVACY_DUTY": "Privacy duties",
       "STYLE_COMPLIANCE": "Styles held by compliance",
-      "MAIL_TO_SORT": "Mail to sort"
+      "MAIL_TO_SORT": "Mail to sort",
+      "TASK_DUE": "My tasks due",
+      "MENTION": "Mentions",
+      "RULE_ALERT": "Exception rule alerts"
     },
     "severity": {
       "HIGH": "Urgent",
@@ -326,6 +331,18 @@
       "ALERT": {
         "label": "Alerts on my records",
         "hint": "late, on hold, rejected or a duty open"
+      },
+      "DUE_TODAY": {
+        "label": "Due today",
+        "hint": "rows due today, of any kind"
+      },
+      "OVERDUE": {
+        "label": "Overdue",
+        "hint": "rows past their due day"
+      },
+      "MENTION": {
+        "label": "Mentions",
+        "hint": "notes that mentioned you"
       }
     },
     "w": {
@@ -467,7 +484,31 @@
           "UNKNOWN_SENDER": "its sender is not a contact of the record",
           "THREAD_CLOSED": "the thread it answers is closed"
         }
-      }
+      },
+      "TASK_DUE.TODAY": "Your task \"{title}\" is due today.",
+      "TASK_DUE.TODAY_AT": "Your task \"{title}\" is due today at {dueTime}.",
+      "TASK_DUE.OVERDUE_one": "Your task \"{title}\" is {count} day overdue: it was due on {dueDate}.",
+      "TASK_DUE.OVERDUE_other": "Your task \"{title}\" is {count} days overdue: it was due on {dueDate}.",
+      "TASK_DUE.on": "It is on {record}.",
+      "MENTION.NOTE": "{actor} mentioned you in a note on {record}.",
+      "why.TASK_DUE.assigned": "It is assigned to you.",
+      "why.MENTION.mentioned": "You were mentioned.",
+      "COMING.TASK": "Your task \"{title}\" is due.",
+      "COMING.ORDER": "Order {number} for {customer} is promised.",
+      "COMING.DELIVERY": "{supplier} should deliver purchase order {number}.",
+      "COMING.CERTIFICATE": "Certificate {number} expires.",
+      "alerts.ORDER_LATE_RISK.LATE": "Order {label} is {days} days late: it was promised for {promiseDate}.",
+      "alerts.ORDER_LATE_RISK.AT_RISK": "Order {label} is promised for {promiseDate} ({days} days left) and is not ready.",
+      "alerts.HOLD_TOO_LONG": "{label} has been on hold for {hours} hours (the rule says {threshold} h).",
+      "alerts.MATERIAL_SHORT": "Material {item} is short for released work order {label}.",
+      "alerts.APPROVAL_OVERDUE": "Quote {label} has waited {hours} hours for its approval.",
+      "alerts.PO_NOT_CONFIRMED": "Purchase order {label} is not confirmed {days} days after it was sent.",
+      "alerts.CERTIFICATE_EXPIRING": "Certificate {label} expires on {dueDate} ({days} days left).",
+      "alerts.INVOICE_DEADLINE": "The goods of DDT {label} must be invoiced by {dueDate} ({days} days left).",
+      "alerts.INVOICE_DEADLINE.LATE": "The goods of DDT {label} were due to be invoiced by {dueDate}: {days} days late.",
+      "why.RULE_ALERT.assigned": "It is assigned to you.",
+      "why.RULE_ALERT.recipient": "The rule \"{rule}\" tells you.",
+      "alerts.UNKNOWN": "Alert on {label}."
     },
     "actions": {
       "menu": "Actions on {record}",
@@ -570,6 +611,55 @@
       },
       "saved": "Today is arranged your way. It is saved for you on every device.",
       "changed": "Your arrangement was changed from another window. It was read again: arrange it once more."
+    },
+    "snooze": {
+      "title": "Snooze {what} until",
+      "body": "It leaves your list until then, and comes back by itself.",
+      "choices": "When it comes back",
+      "laterToday": "Later today, {time}",
+      "tomorrow": "Tomorrow, {time}",
+      "monday": "Monday, {time}",
+      "pick": "Pick a date and time…",
+      "untilChange": "Until something changes on the record",
+      "pickLabel": "Back on",
+      "pickHint": "At most {count} days from now.",
+      "pickFirst": "Pick a date and a time first.",
+      "past": "Pick a moment later than now.",
+      "tooFar": "At most {count} days from now.",
+      "cancel": "Cancel",
+      "confirm": "Snooze",
+      "mention": "the mention on {record}"
+    },
+    "own": {
+      "done": "Done",
+      "snooze": "Snooze…",
+      "openTask": "Open the task",
+      "doneTask": "Done: {record}. It leaves Today.",
+      "doneMention": "Done: the mention on {record}. It leaves Today and your notifications.",
+      "snoozed": "Snoozed: {record}. It comes back at the time you chose.",
+      "snoozedUntilChange": "Snoozed: {record}. It comes back when something changes on it."
+    },
+    "ruleAlert": {
+      "handled": "An exception rule raised this alert: acknowledge, assign or resolve it in the alert itself (its own page comes with the alerts screens).",
+      "reading": "Reading where its record is…"
+    },
+    "coming": {
+      "title": "Coming up",
+      "hint": "What lands on you in the next five working days.",
+      "loading": "Reading the next days…",
+      "error": "Couldn't load what is coming up.",
+      "empty": "Nothing scheduled for you in the next 5 working days.",
+      "calendar": "Working days of the business calendar.",
+      "noCalendar": "No calendar picked: Monday to Friday.",
+      "closed": "closed day",
+      "nothing": "Nothing lands on this day.",
+      "partial": "A list stopped at its limit: there may be more.",
+      "kind": {
+        "TASK": "Task",
+        "ORDER": "Promise date",
+        "DELIVERY": "Delivery due",
+        "CERTIFICATE": "Certificate expiry"
+      }
     }
   },
   "mailToSort": {

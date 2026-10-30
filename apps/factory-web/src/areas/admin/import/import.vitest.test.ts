@@ -15,6 +15,10 @@ import { designScreen } from './fixtures'
 import type { ImportViewModel } from './model'
 import { ImportWizardInline } from './view/ImportWizard'
 import { JobCell, rowsWords } from './view/ImportView'
+import { TemplatesInline } from './view/TemplatesDialog'
+import { FIRST_LOAD_STEPS, markFirstLoadDone, readFirstLoad, STEP_STATES, type FirstLoadStepView } from './guided/api'
+import { differenceWords, doneHeld, doneWords, importHeld, importLink, nothingHeld, reasonProblem, reconciliationWords, stateKey, stepName, stepWhat } from './guided/model'
+import { FirstLoadConfirmInline } from './guided/view/FirstLoadSection'
 import {
   applicable,
   applyHeld,
@@ -142,9 +146,10 @@ describe('the upload step', () => {
     expect(sheetContentType('a.xls')).toBeNull()
   })
 
-  it('links the opening-stock template and the refused rows through /api (plain GETs, no header needed)', () => {
-    expect(templateHref('inventory.opening', 'xlsx', 'it')).toBe('/api/inventory/opening/template?format=xlsx&numberFormat=it')
-    expect(templateHref('product.materials', 'csv', 'en')).toBeNull()
+  it('links every importer\'s template and the refused rows through /api (plain GETs, no header needed)', () => {
+    expect(templateHref('inventory.opening', 'xlsx', 'it')).toBe('/api/imports/importers/inventory.opening/template?format=xlsx&numberFormat=it')
+    expect(templateHref('product.materials', 'csv', 'en')).toBe('/api/imports/importers/product.materials/template?format=csv&numberFormat=en')
+    expect(templateHref('a b', 'csv', 'it')).toBe('/api/imports/importers/a%20b/template?format=csv&numberFormat=it')
     expect(refusedRowsHref('j 1')).toBe('/api/imports/j%201/errors')
   })
 })
@@ -245,6 +250,8 @@ describe('every Import word exists in it and en', () => {
       ...['it', 'en'].map((format) => `imp.numbers.${format}`),
       ...KNOWN_IMPORTERS.flatMap((key) => [`imp.importer.${key.replace(/\./g, '_')}.name`, `imp.importer.${key.replace(/\./g, '_')}.fills`]),
       ...['applying', 'applyFailed', 'planFailed', 'applied', 'cancelled'].map((phase) => `imp.bulk.left.${phase}`),
+      ...STEP_STATES.map(stateKey),
+      ...FIRST_LOAD_STEPS.flatMap((step) => [stepName(step), stepWhat(step)]),
     ]
     expect(literal.size).toBeGreaterThan(60)
     for (const locale of LOCALES) {
@@ -261,6 +268,9 @@ function render(model: ImportViewModel, locale: (typeof LOCALES)[number]): strin
   const View = designScreen.view as ComponentType<{ model: unknown }>
   const wrap = (child: ReturnType<typeof createElement>) => renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, child))
   const page = wrap(createElement(View, { model }))
+  const extra = (child: ReturnType<typeof createElement>) => wrap(createElement(AdminPageMessages, { namespace: 'admin-import', children: child }))
+  const templates = model.templatesOpen ? extra(createElement(TemplatesInline, { importers: model.importers.items ?? [] })) : ''
+  const confirm = model.firstLoad?.confirm ? extra(createElement(FirstLoadConfirmInline, { model: model.firstLoad })) : ''
   const wizard = model.wizard
     ? wrap(
         createElement(AdminPageMessages, {
@@ -269,7 +279,7 @@ function render(model: ImportViewModel, locale: (typeof LOCALES)[number]): strin
         }),
       )
     : ''
-  return page + wizard
+  return page + wizard + templates + confirm
 }
 
 describe('SCR-017 draws every case in both languages with no key left on screen', () => {
@@ -298,7 +308,8 @@ describe('SCR-017 draws every case in both languages with no key left on screen'
     expect(draw('plan-failed')).toContain('These columns hold money values you may not see: Costo standard')
     expect(draw('checked-no-apply')).toContain('Applying needs the right to apply imports')
     expect(draw('no-access')).toContain('See import jobs and their plans')
-    expect(draw('page')).toContain('/api/inventory/opening/template?format=xlsx&amp;numberFormat=en')
+    expect(draw('page')).toContain('/api/imports/importers/inventory.opening/template?format=xlsx&amp;numberFormat=en')
+    expect(draw('page')).toContain('/api/imports/importers/product.materials/template?format=csv&amp;numberFormat=en')
   })
 
   it('Recent imports is the list frame: the count and the keys in the footer icon', () => {
@@ -329,6 +340,99 @@ describe('SCR-017 draws every case in both languages with no key left on screen'
     expect(rowsWords(t, base())).toMatch(/^imp\.recent\.rowsPlanned/)
     expect(rowsWords(t, base({ status: 'APPLIED' }))).toMatch(/^imp\.recent\.rowsApplied/)
     expect(rowsWords(t, base({ status: 'UPLOADED', plannedAt: null }))).toBe('—')
+  })
+})
+
+// ---- the guided first load and the templates (B-W2a-41; PLT-177, PLT-185) ----
+
+const firstStep = (id: string, step: FirstLoadStepView['step']): FirstLoadStepView => designScreen.cases.find((item) => item.id === id)!.model.firstLoad!.steps!.find((item) => item.step === step)!
+const money = (minor: number, currency: string) => `${(minor / 100).toFixed(2)} ${currency}`
+
+describe('the guided first load', () => {
+  it('holds each action with its reason: an earlier step, the right, no importer, an import under way, a difference', () => {
+    const waiting = firstStep('first-start', 'materials')
+    expect(importHeld(waiting)).toEqual({ key: 'imp.first.held.waiting', params: { step: 1 } })
+    expect(doneHeld(waiting)).toEqual({ key: 'imp.first.held.waiting', params: { step: 1 } })
+    expect(nothingHeld(waiting)).toEqual({ key: 'imp.first.held.waiting', params: { step: 1 } })
+    const todo = firstStep('first-start', 'customers')
+    expect(importHeld(todo)).toBeNull()
+    expect(doneHeld(todo)).toEqual({ key: 'imp.first.held.noImport' })
+    expect(nothingHeld(todo)).toBeNull()
+    expect(importHeld(firstStep('first-no-right', 'customers'))).toEqual({ key: 'imp.first.held.noImportRight' })
+    expect(doneHeld(firstStep('first-no-right', 'customers'))).toEqual({ key: 'imp.first.held.noDoneRight' })
+    const orders = firstStep('first-open-orders', 'openOrders')
+    expect(importHeld(orders)).toEqual({ key: 'imp.first.held.noImporter' })
+    expect(doneHeld(orders)).toEqual({ key: 'imp.first.held.noImporterDone' })
+    expect(nothingHeld(orders)).toBeNull()
+    const ready = firstStep('first-mid', 'materials')
+    expect(doneHeld(ready)).toBeNull()
+    expect(nothingHeld(ready)).toEqual({ key: 'imp.first.held.loadedSomething' })
+    expect(importLink(ready)).toBe(ready.job!.id)
+    const off = firstStep('first-mismatch', 'openingStock')
+    expect(doneHeld(off)).toEqual({ key: 'imp.first.held.mismatch', params: { count: 4 } })
+    const running = firstStep('first-running', 'openingStock')
+    expect(doneHeld(running)).toEqual({ key: 'imp.first.held.running' })
+    expect(importLink(running)).toBe(running.runningJobId)
+    expect(doneHeld(firstStep('first-done', 'customers'))).toEqual({ key: 'imp.first.held.done' })
+  })
+
+  it('says the reconciliation and each difference in the page\'s words; the value only when the API sent it', () => {
+    const off = firstStep('first-mismatch', 'openingStock')
+    expect(reconciliationWords('openingStock', off.reconciliation!, money).map((line) => line.key)).toEqual(['imp.first.rec.rows', 'imp.first.rec.quantity', 'imp.first.rec.quantity', 'imp.first.rec.value', 'imp.first.rec.atStandard'])
+    expect(reconciliationWords('openingStock', firstStep('first-mismatch-no-cost', 'openingStock').reconciliation!, money).map((line) => line.key)).not.toContain('imp.first.rec.value')
+    expect(reconciliationWords('customers', firstStep('first-mid', 'customers').reconciliation!, money)).toEqual([
+      { key: 'imp.first.rec.rows', params: { rows: 186, loaded: 186 } },
+      { key: 'imp.first.rec.customers', params: { count: 142 } },
+    ])
+    expect(differenceWords(off, money)).toEqual([
+      { key: 'imp.first.diff.refused', params: { count: 3 } },
+      { key: 'imp.first.diff.skipped', params: { count: 1 } },
+      { key: 'imp.first.diff.quantity', params: { unit: 'FT2', sheet: '1284.5000', loaded: '1176.3227' } },
+      { key: 'imp.first.diff.value', params: { sheet: '84210.50 EUR', loaded: '77903.10 EUR' } },
+    ])
+    expect(differenceWords({ reconciliation: null, differences: [{ path: 'step/other', message: 'An API sentence.' }] }, money)).toEqual([{ said: 'An API sentence.' }])
+    expect(doneWords(firstStep('first-done', 'materials'), () => 'then')).toEqual({ key: 'imp.first.done.changed', params: { when: 'then' } })
+    expect(doneWords(firstStep('first-done', 'openOrders'), () => 'then')).toEqual({ key: 'imp.first.done.nothing', params: { when: 'then' } })
+    expect(reasonProblem('ok')).toBe('imp.first.confirm.reasonShort')
+    expect(reasonProblem('No orders before the go-live.')).toBeNull()
+  })
+
+  it('reads the steps and marks one done through the API, each answer checked', async () => {
+    const steps = designScreen.cases.find((item) => item.id === 'first-mid')!.model.firstLoad!.steps!
+    const answer = { companyId: 'c1', steps, complete: false }
+    const { api, calls } = mockApi([
+      { status: 200, body: answer },
+      { status: 200, body: answer },
+      { status: 200, body: { companyId: 'c1', steps: [{ step: 'customers' }], complete: false } },
+    ])
+    expect((await readFirstLoad(api, 'c1')).steps).toHaveLength(5)
+    await markFirstLoadDone(api, 'openOrders', { companyId: 'c1', nothing: true, reason: 'None yet.' })
+    expect(calls[0]).toMatchObject({ method: 'GET', url: '/api/imports/first-load?companyId=c1' })
+    expect(calls[1]).toMatchObject({ method: 'POST', url: '/api/imports/first-load/openOrders/done', body: { companyId: 'c1', nothing: true, reason: 'None yet.' } })
+    expect(calls[1]!.headers.get('idempotency-key')).toMatch(/^[0-9a-f-]{36}$/)
+    await expect(readFirstLoad(api, 'c1')).rejects.toMatchObject({ kind: 'contract' })
+  })
+
+  it('draws the steps in order with their numbers, the differences, the held reasons and the confirm', () => {
+    const draw = (id: string, locale: (typeof LOCALES)[number] = 'en') => render(designScreen.cases.find((item) => item.id === id)!.model, locale).replace(/<!-- -->/g, '')
+    const off = draw('first-mismatch')
+    expect(off).toContain('First load, in order')
+    expect(off).toContain('3 of 5 done')
+    expect(off).toContain('Rows in the sheet 15 · loaded 11')
+    expect(off).toContain('FT2: 1284.5000 in the sheet, 1176.3227 loaded.')
+    expect(off).toContain('Stock value in the sheet')
+    expect(off).toContain('3 rows were refused')
+    expect(draw('first-mismatch-no-cost')).not.toContain('Stock value')
+    expect(draw('first-start')).toContain('Finish step 1 first')
+    expect(draw('first-open-orders')).toContain('Open orders have no import yet')
+    expect(draw('first-confirm-nothing')).toContain('Nothing to load for Open orders?')
+    expect(draw('first-confirm-done', 'it')).toContain('Segnare Materiali come fatto?')
+    expect(draw('first-error')).toContain('The first load could not be read')
+    expect(draw('first-error')).toContain('What do you want to load?')
+    expect(draw('no-access')).not.toContain('First load, in order')
+    const templates = draw('templates')
+    expect(templates).toContain('/api/imports/importers/parties.parties/template?format=xlsx&amp;numberFormat=en')
+    expect(templates).toContain('only when you may see that money')
   })
 })
 

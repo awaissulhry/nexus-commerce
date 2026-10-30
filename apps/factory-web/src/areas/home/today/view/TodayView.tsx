@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
-import { AlertOctagon, AlertTriangle, ArrowRight, CalendarCheck, CheckCircle2, ChevronRight, Circle, ExternalLink, Eye, MoreHorizontal, Sun, UserRound, X } from 'lucide-react'
+import { AlarmClock, AlertOctagon, AlertTriangle, ArrowRight, AtSign, CalendarCheck, CalendarClock, CheckCircle2, ChevronRight, Circle, ExternalLink, Eye, ListTodo, MoreHorizontal, Sun, UserRound, X } from 'lucide-react'
 import { AsOf, Banner, Card, EmptyState, Menu, MetricStrip, PressableRow, type Metric } from '@nexus/ui/components'
 import { Button, FilterChip, InfoTip, SegmentedControl, Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatTime } from '../../../../lib/i18n/format'
@@ -12,8 +12,15 @@ import type { Translate } from '../../../../lib/i18n/messages'
 import { WithMessages } from '../../../../record-panels/i18n'
 import {
   arrangePanels,
+  comingIsEmpty,
   dueWords,
   groupItems,
+  inTile,
+  offersVerb,
+  ownVerbHeld,
+  ownVerbKey,
+  snoozesUntilChange,
+  snoozeTarget,
   lensesInOrder,
   panelRows,
   queueKey,
@@ -24,8 +31,12 @@ import {
   verbHeld,
   verbKey,
   type Category,
+  type ComingUpView,
+  type Loaded,
   type LiveState,
+  type OwnVerb,
   type QueueItem,
+  type Tile,
   type TodayDialog,
   type TodayLayout,
   type TodayViewModel,
@@ -34,6 +45,8 @@ import { phraseText, sentenceText } from '../words'
 import { AssignDialog, HandledDialog, ResolveDialog } from './ActionDialogs'
 import { ArrangeModal } from './ArrangeModal'
 import { DecideModal, type DecideActions } from './DecideModal'
+import { SnoozeDialog } from './SnoozeDialog'
+import { SNOOZE_MAX_DAYS } from '../snooze'
 import '../today.css'
 
 export type { TodayViewModel } from '../model'
@@ -58,20 +71,31 @@ export interface TodayActions extends DecideActions {
   onResolve?: (key: string, note: string) => Promise<boolean>
   /** Apply the arrangement (PUT /home/today/layout). */
   onArrange?: (layout: TodayLayout) => Promise<void>
+  /** W2a: Snooze a row until a time, or (null) until something changes (resolves true when done). */
+  onSnooze?: (key: string, until: string | null) => Promise<boolean>
+  /** W2a: read Coming up again. */
+  onRetryComing?: () => void
 }
 
 /** What a control asks to open (the container turns it into a TodayDialog with its data). */
-export type DialogRequest = { readonly kind: 'assign'; readonly key: string } | { readonly kind: 'resolve'; readonly key: string } | { readonly kind: 'handled' } | { readonly kind: 'arrange' }
+export type DialogRequest =
+  | { readonly kind: 'assign'; readonly key: string }
+  | { readonly kind: 'resolve'; readonly key: string }
+  | { readonly kind: 'handled' }
+  | { readonly kind: 'arrange' }
+  | { readonly kind: 'snooze'; readonly key: string }
 
 /**
  * Today's keys, in the list footer's info icon. Not a grid: no cells, no selection, no "?" list — j / k and Enter in the
- * list (j / k also step through rows in the decide modal), a / r in a quote approval's review.
+ * list (j / k also step through rows in the decide modal), a / r in a quote approval's review. W2a (`own`): e is also
+ * Done for my task or mention, and h snoozes.
  */
-export function todayKeys(t: Translate): ListKey[] {
+export function todayKeys(t: Translate, own = false): ListKey[] {
   return [
     { keys: ['j', 'k'], does: 'keys.rows' },
     { keys: ['↵'], does: 'keys.open' },
-    { keys: ['e'], does: t('today.keys.acknowledge') },
+    { keys: ['e'], does: t(own ? 'today.keys.doneOrAcknowledge' : 'today.keys.acknowledge') },
+    ...(own ? [{ keys: ['h'], does: t('today.keys.snooze') }] : []),
     { keys: ['a'], does: t('today.keys.approve') },
     { keys: ['r'], does: t('today.keys.reject') },
   ]
@@ -135,6 +159,12 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
     if (verbHeld(item, 'ACKNOWLEDGE', { live: model.live, busy: model.busy }) !== null) return
     void actions?.onAcknowledge?.(item.key)
   }
+  /** W2a: Done (my task or mention) and Snooze (those, and an alert the reader may snooze). */
+  const own = (item: QueueItem, verb: OwnVerb) => {
+    if (ownVerbHeld(item, verb, { live: model.live, busy: model.busy }) !== null) return
+    if (verb === 'DONE') void actions?.onDone?.(item.key)
+    else openDialog({ kind: 'snooze', key: item.key })
+  }
 
   const listRef = useRef<HTMLDivElement>(null)
   const queue = model.queue.status === 'ready' ? model.queue.data : null
@@ -142,7 +172,7 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
     const all = queue?.items ?? []
     // The design index filters in the view; the container's list is filtered by the API already.
     if (actions?.onTile) return all
-    return all.filter((item) => (!tile || item.category === tile) && (!kind || item.kind === kind))
+    return all.filter((item) => inTile(item, tile) && (!kind || item.kind === kind))
   }, [queue, tile, kind, actions?.onTile])
   const keys = useMemo(() => items.map((item) => item.key), [items])
 
@@ -152,15 +182,31 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
   itemsRef.current = items
   const acknowledgeRef = useRef(acknowledge)
   acknowledgeRef.current = acknowledge
+  const ownRef = useRef(own)
+  ownRef.current = own
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (open !== null || dialog !== null || event.defaultPrevented) return
       const target = event.target as HTMLElement | null
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"]') !== null)) return
       const inList = target ? listRef.current?.contains(target) === true : false
-      if (inList && verbKey(event.key, { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, inField: false }) === 'acknowledge') {
+      const modifiers = { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, inField: false }
+      const rowOf = () => {
         const key = target?.closest<HTMLElement>('[data-today-row]')?.dataset.todayRow
-        const item = key ? itemsRef.current.find((entry) => entry.key === key) : undefined
+        return key ? itemsRef.current.find((entry) => entry.key === key) : undefined
+      }
+      // W2a: e is Done on my task or mention, h snoozes; on an alert e still acknowledges.
+      const ownVerb = inList ? ownVerbKey(event.key, modifiers) : null
+      if (ownVerb) {
+        const item = rowOf()
+        if (item && offersVerb(item, ownVerb) && !(ownVerb === 'DONE' && item.category === 'ALERT')) {
+          event.preventDefault()
+          ownRef.current(item, ownVerb)
+          return
+        }
+      }
+      if (inList && verbKey(event.key, modifiers) === 'acknowledge') {
+        const item = rowOf()
         if (item) {
           event.preventDefault()
           acknowledgeRef.current(item)
@@ -240,8 +286,8 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
   // is a filter of the list (aria-pressed); pressing it again clears it. 0 is an answer; a count that could not be read
   // is "—", a lower bound "at least N", each with its reason.
   const readyQueue = model.queue.status === 'ready' ? model.queue.data : null
-  const pressed = (entry: (typeof TILES)[number]) => (entry === 'ALL' ? tile === null && kind === null : tile === entry)
-  const tiles: Metric[] = TILES.map((entry): Metric => {
+  const pressed = (entry: Tile) => (entry === 'ALL' ? tile === null && kind === null : tile === entry)
+  const tiles: Metric[] = (model.tileSet ?? TILES).map((entry): Metric => {
     const counted = readyQueue?.tiles.find((candidate) => candidate.tile === entry)
     const label = t(`today.tile.${entry}.label`)
     if (!counted) {
@@ -354,6 +400,7 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
                       busy={model.busy}
                       onOpen={() => setOpen(item.key)}
                       onAcknowledge={() => acknowledge(item)}
+                      onOwn={(verb) => own(item, verb)}
                       onDialog={openDialog}
                     />
                   ))}
@@ -369,7 +416,7 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
                 </Button>
               )}
               {handledLine}
-              <ListKeysInfo keys={todayKeys(t)} />
+              <ListKeysInfo keys={todayKeys(t, model.tileSet !== undefined)} />
             </div>
           </>
         )}
@@ -378,6 +425,8 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
   )
 
   const flowSection = model.flow && shownSection('flow') ? <FlowSection key="flow" model={model} lens={lens} onLens={setLens} onRetry={() => actions?.onRetry?.('flow')} /> : null
+  // W2a: Coming up — after the work (not one of the arranged sections yet: the layout's sections are the API's).
+  const comingSection = model.comingUp ? <ComingUpSection key="coming-up" state={model.comingUp} onRetry={() => actions?.onRetryComing?.()} /> : null
 
   // My lists: beside the work on wide screens (one list per row) when it comes after "Needs me now"; above the work,
   // across the page with each list's width, when the person put it first; on narrow screens in its place.
@@ -447,10 +496,11 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
   const at = order.indexOf('needs-me')
   // Before "Needs me now": across the page. From it on: the work column, with My lists beside it (unless it came first).
   const head = order.slice(0, at).map((id) => node[id])
-  const work = order.slice(at).filter((id) => id !== 'role-panels').map((id) => node[id])
+  const work = [...order.slice(at).filter((id) => id !== 'role-panels').map((id) => node[id]), comingSection]
   const side = listsFirst ? null : listsSection
   const assignItem = dialog?.kind === 'assign' ? (items.find((entry) => entry.key === dialog.key) ?? null) : null
   const resolveItem = dialog?.kind === 'resolve' ? (items.find((entry) => entry.key === dialog.key) ?? null) : null
+  const snoozeItem = dialog?.kind === 'snooze' ? (items.find((entry) => entry.key === dialog.key) ?? null) : null
   const held = (item: QueueItem, verb: 'ASSIGN' | 'RESOLVE') => verbHeld(item, verb, { live: model.live, busy: false })
 
   return (
@@ -485,6 +535,7 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
         onClose={() => setOpen(null)}
         onDialog={openDialog}
         paused={dialog !== null}
+        alertRecords={model.alertRecords ?? {}}
         actions={actions}
       />
 
@@ -509,6 +560,20 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
         />
       )}
       {dialog?.kind === 'handled' && <HandledDialog list={dialog.list} onRetry={() => actions?.onRetryDialog?.()} onClose={() => openDialog(null)} />}
+      {snoozeItem && (
+        <SnoozeDialog
+          what={snoozeItem.kind === 'TASK_DUE' ? snoozeItem.record.label : snoozeItem.kind === 'MENTION' ? t('today.snooze.mention', { record: snoozeItem.record.label }) : snoozeItem.record.label}
+          now={model.now}
+          untilChange={snoozesUntilChange(snoozeItem)}
+          maxDays={SNOOZE_MAX_DAYS[snoozeTarget(snoozeItem).kind === 'task' ? 'task' : snoozeTarget(snoozeItem).kind === 'notification' ? 'notification' : 'alert']}
+          held={(() => {
+            const held = ownVerbHeld(snoozeItem, 'SNOOZE', { live: model.live, busy: model.busy })
+            return held ? t(held) : null
+          })()}
+          onSnooze={async (until) => (actions?.onSnooze ? actions.onSnooze(snoozeItem.key, until) : true)}
+          onClose={() => openDialog(null)}
+        />
+      )}
       <ArrangeModal
         open={dialog?.kind === 'arrange'}
         layout={model.layout}
@@ -533,6 +598,7 @@ function QueueRow({
   busy,
   onOpen,
   onAcknowledge,
+  onOwn,
   onDialog,
 }: {
   item: QueueItem
@@ -542,6 +608,8 @@ function QueueRow({
   busy: boolean
   onOpen: () => void
   onAcknowledge: () => void
+  /** W2a: Done or Snooze (my task or mention; Snooze on an alert the reader may snooze). */
+  onOwn: (verb: OwnVerb) => void
   onDialog: (dialog: DialogRequest) => void
 }) {
   const t = useT('home')
@@ -555,7 +623,24 @@ function QueueRow({
     const held = heldWords(verb)
     return held === null ? { id, label, icon, onSelect: run } : { id, label, icon, disabled: true, description: held }
   }
-  const Icon = SEVERITY_ICON[item.severity]
+  const ownItem = (id: string, verb: OwnVerb, label: string, icon: ReactNode) => {
+    const held = ownVerbHeld(item, verb, { live, busy })
+    return held === null ? { id, label, icon, onSelect: () => onOwn(verb) } : { id, label, icon, disabled: true, description: t(held) }
+  }
+  // The row's ⋯: an alert's verbs (and Snooze when the reader may snooze it); my task's or mention's Done and Snooze.
+  const alertVerbs = alert && item.actions.verbs.length > 0
+  const menuItems = [
+    ...(alertVerbs
+      ? [
+          verbItem('acknowledge', 'ACKNOWLEDGE', t('today.actions.acknowledge'), <Eye size={14} aria-hidden />, onAcknowledge),
+          verbItem('assign', 'ASSIGN', t('today.actions.assign'), <UserRound size={14} aria-hidden />, () => onDialog({ kind: 'assign', key: item.key })),
+          verbItem('resolve', 'RESOLVE', t('today.actions.resolve'), <CheckCircle2 size={14} aria-hidden />, () => onDialog({ kind: 'resolve', key: item.key })),
+        ]
+      : []),
+    ...(offersVerb(item, 'DONE') ? [ownItem('done', 'DONE', t('today.own.done'), <CheckCircle2 size={14} aria-hidden />)] : []),
+    ...(offersVerb(item, 'SNOOZE') ? [ownItem('snooze', 'SNOOZE', t('today.own.snooze'), <AlarmClock size={14} aria-hidden />)] : []),
+  ]
+  const Icon = item.kind === 'TASK_DUE' ? ListTodo : item.kind === 'MENTION' ? AtSign : SEVERITY_ICON[item.severity]
   const due = dueWords(item.due)
   const why = phraseText(item.words.why, t, locale)
   const blocks = item.words.blocks ? phraseText(item.words.blocks, t, locale) : null
@@ -587,17 +672,8 @@ function QueueRow({
               {item.record.label}
               <ExternalLink size={12} aria-hidden />
             </a>
-            {alert && (
-              <Menu
-                label={<MoreHorizontal size={16} aria-hidden />}
-                align="right"
-                triggerProps={{ 'aria-label': t('today.actions.menu', { record: item.record.label }) }}
-                items={[
-                  verbItem('acknowledge', 'ACKNOWLEDGE', t('today.actions.acknowledge'), <Eye size={14} aria-hidden />, onAcknowledge),
-                  verbItem('assign', 'ASSIGN', t('today.actions.assign'), <UserRound size={14} aria-hidden />, () => onDialog({ kind: 'assign', key: item.key })),
-                  verbItem('resolve', 'RESOLVE', t('today.actions.resolve'), <CheckCircle2 size={14} aria-hidden />, () => onDialog({ kind: 'resolve', key: item.key })),
-                ]}
-              />
+            {menuItems.length > 0 && (
+              <Menu label={<MoreHorizontal size={16} aria-hidden />} align="right" triggerProps={{ 'aria-label': t('today.actions.menu', { record: item.record.label }) }} items={menuItems} />
             )}
           </span>
         }
@@ -716,3 +792,70 @@ function FlowSection({ model, lens, onLens, onRetry }: { model: TodayViewModel; 
   )
 }
 
+
+/**
+ * Coming up (design home.today `coming-up`, W2a): my next five working days, one row per day (the filtered site's or
+ * company's calendar; none: Monday to Friday), each item one line with its record as a real link. The design's
+ * AgendaList (new) is composed here (app CSS), as W1 composed QueueList: no DS part yet.
+ */
+function ComingUpSection({ state, onRetry }: { state: Loaded<ComingUpView>; onRetry: () => void }) {
+  const t = useT('home')
+  const locale = useLocale()
+  const weekday = (date: string) => new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-GB', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00.000Z`))
+  return (
+    <section className="fw-today-section" aria-labelledby="fw-today-coming">
+      <div className="fw-today-head">
+        <h2 id="fw-today-coming" className="fw-today-h">
+          {t('today.coming.title')}
+        </h2>
+        <span className="fw-today-muted">{t('today.coming.hint')}</span>
+      </div>
+      {state.status === 'loading' ? (
+        <div className="fw-today-agenda" aria-busy="true">
+          <p className="fw-today-muted" role="status">
+            {t('today.coming.loading')}
+          </p>
+          <Skeleton height={20} />
+          <Skeleton height={20} />
+        </div>
+      ) : state.status === 'error' ? (
+        <Banner tone="danger" title={t('today.coming.error')} action={<Button size="sm" onClick={onRetry}>{t('today.retry')}</Button>}>
+          {t(state.problem)}
+        </Banner>
+      ) : comingIsEmpty(state.data) ? (
+        <EmptyState icon={<CalendarClock size={22} aria-hidden />} title={t('today.coming.empty')} description={t(state.data.calendar ? 'today.coming.calendar' : 'today.coming.noCalendar')} />
+      ) : (
+        <>
+          <ol className="fw-today-agenda" aria-label={t('today.coming.title')}>
+            {state.data.days.map((day) => (
+              <li key={day.date} className="fw-today-agenda-day">
+                <h3 className="fw-today-group-h">
+                  <span className="fw-today-agenda-weekday">{weekday(day.date)}</span> {formatDate(day.date, { locale, timeZone: 'UTC' })}
+                  {!day.working && <Tag tone="neutral">{t('today.coming.closed')}</Tag>}
+                </h3>
+                {day.items.length === 0 ? (
+                  <p className="fw-today-muted">{t('today.coming.nothing')}</p>
+                ) : (
+                  <ul className="fw-today-agenda-items">
+                    {day.items.map((item) => (
+                      <li key={`${item.kind}:${item.href}`} className="fw-today-agenda-item">
+                        <Tag tone="neutral">{t(`today.coming.kind.${item.kind}`)}</Tag>
+                        <span className="fw-today-agenda-text">{phraseText(item.words, t, locale)}</span>
+                        <a className="fw-today-record" href={item.href} title={t('today.row.openRecord', { record: item.label })}>
+                          {item.label}
+                          <ExternalLink size={12} aria-hidden />
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ol>
+          <p className="fw-today-muted">{t(state.data.calendar ? 'today.coming.calendar' : 'today.coming.noCalendar')}</p>
+          {!state.data.complete && <p className="fw-today-muted">{t('today.coming.partial')}</p>}
+        </>
+      )}
+    </section>
+  )
+}

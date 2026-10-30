@@ -324,6 +324,148 @@
       "resumedFailed_one": "Il servizio non è stato riattivato:",
       "resumedFailed_other": "Nessuno dei {count} servizi è stato riattivato:",
       "noSelect": "Non collegato: non c’è nulla da sospendere o riattivare"
+    },
+    "delivery": {
+      "title": "Registro di consegna e indirizzi bloccati",
+      "intro": "Ogni e-mail inviata dalla fabbrica e a che punto è: in attesa, inviata, consegnata, respinta o segnalata, oppure non inviata. Un'e-mail respinta in modo definitivo o segnalata come spam blocca il suo indirizzo: nessun'altra e-mail ci arriva finché non lo sblocchi.",
+      "masked": "Alcuni indirizzi sono mascherati: li vede per intero solo chi gestisce la posta di quell'azienda.",
+      "maskedHint": "Mascherato: l'indirizzo per intero lo vede solo chi gestisce la posta di questa azienda.",
+      "tableLabel": "E-mail inviate",
+      "count_one": "1 e-mail",
+      "count_other": "{count} e-mail",
+      "more": "Mostra le precedenti",
+      "loadingMore": "Carico le e-mail precedenti…",
+      "noneFiltered": "Nessuna e-mail con questo filtro.",
+      "emptyTitle": "Nessuna e-mail ancora inviata",
+      "emptyBody": "Le e-mail compaiono qui appena un preventivo, un ordine, una fattura o un'e-mail di accesso lascia la fabbrica.",
+      "filtered": "Mostro: {state}",
+      "person": "Una persona (qui senza nome)",
+      "noRecord": "Un'e-mail senza documento",
+      "digestCarried_one": "Conteneva 1 notifica",
+      "digestCarried_other": "Conteneva {count} notifiche",
+      "hidden_one": "+1 copia nascosta",
+      "hidden_other": "+{count} copie nascoste",
+      "col": {
+        "message": "Messaggio",
+        "to": "A",
+        "state": "Stato",
+        "at": "Quando",
+        "problem": "Problema"
+      },
+      "kind": {
+        "RECORD": "E-mail di un documento",
+        "SIGN_IN": "E-mail di accesso",
+        "DIGEST": "Riepilogo notifiche"
+      },
+      "state": {
+        "WAITING": "In attesa di partire",
+        "SENT": "Inviata",
+        "DELIVERED": "Consegnata",
+        "PROBLEM": "Respinta o segnalata",
+        "FAILED": "Non inviata"
+      },
+      "tile": {
+        "WAITING": "In attesa",
+        "SENT": "Inviate",
+        "DELIVERED": "Consegnate",
+        "PROBLEM": "Respinte o segnalate",
+        "FAILED": "Non inviate"
+      },
+      "tileHint": {
+        "WAITING": "In coda o in invio ora (ultimi 30 giorni).",
+        "SENT": "Il servizio di posta le ha prese; ancora nessuna risposta (ultimi 30 giorni).",
+        "DELIVERED": "Il server di posta del destinatario le ha accettate (ultimi 30 giorni).",
+        "PROBLEM": "Respinte in modo definitivo o segnalate come spam dal destinatario: l'indirizzo è bloccato (ultimi 30 giorni).",
+        "FAILED": "Non sono mai partite: rifiutate, o tentativi esauriti (ultimi 30 giorni)."
+      },
+      "about": {
+        "INVOICES": "Fatture",
+        "LINKS": "Link"
+      },
+      "problem": {
+        "bounced": "Respinta: la casella non esiste o rifiuta la posta.",
+        "complained": "Il destinatario l'ha segnalata come spam.",
+        "failed": "Non è mai partita dalla fabbrica."
+      },
+      "recordType": {
+        "Quote": "Preventivo",
+        "SalesOrder": "Ordine di vendita",
+        "PurchaseOrder": "Ordine d'acquisto",
+        "Invoice": "Fattura",
+        "Shipment": "Spedizione",
+        "DepositRequest": "Richiesta di acconto",
+        "GoodsReceipt": "Entrata merce",
+        "Party": "Cliente o fornitore",
+        "WorkOrder": "Ordine di lavoro",
+        "other": "Documento"
+      },
+      "link": {
+        "QUOTE_ACCEPT": "Preventivo da accettare (link)",
+        "PO_CONFIRM": "Ordine da confermare (link)",
+        "DOCUMENT_VIEW": "Documenti (link)",
+        "DEPOSIT_INFO": "Pagina dell'acconto (link)",
+        "other": "Un link"
+      }
+    },
+    "blocked": {
+      "title": "Indirizzi bloccati",
+      "intro": "Nessuna e-mail va a questi indirizzi. Ognuno è stato respinto in modo definitivo, ha segnalato spam o è stato fermato da una persona. Sbloccane uno solo quando il problema è risolto.",
+      "tableLabel": "Indirizzi bloccati",
+      "count_one": "1 indirizzo bloccato",
+      "count_other": "{count} indirizzi bloccati",
+      "countUnblocked_one": "1 indirizzo sbloccato",
+      "countUnblocked_other": "{count} indirizzi sbloccati",
+      "viewLabel": "Quali indirizzi",
+      "view": {
+        "BLOCKED": "Bloccati ora",
+        "UNBLOCKED": "Sbloccati"
+      },
+      "emptyTitle": "Nessun indirizzo è bloccato",
+      "emptyBody": "Quando un'e-mail viene respinta in modo definitivo o un destinatario la segnala, l'indirizzo compare qui.",
+      "noneUnblocked": "Nessun indirizzo è stato ancora sbloccato.",
+      "col": {
+        "address": "Indirizzo",
+        "why": "Perché",
+        "since": "Bloccato dal",
+        "mail": "L'e-mail",
+        "unblocked": "Sbloccato",
+        "actions": "Azioni"
+      },
+      "reason": {
+        "BOUNCE": "Respinto in modo definitivo",
+        "COMPLAINT": "Il destinatario ha segnalato spam",
+        "MANUAL": "Fermato da una persona"
+      },
+      "unblock": "Sblocca",
+      "unblockOne": "Sblocca {address}",
+      "unblockMany_one": "Sblocca {count}",
+      "unblockMany_other": "Sblocca {count}",
+      "unblockedOn": "Sbloccato il {at}",
+      "noSelect": "Già sbloccato: niente da fare.",
+      "noneToUnblock": "Nessuno degli indirizzi selezionati è bloccato: niente da sbloccare.",
+      "heldRight": "Per sbloccare serve il diritto di sbloccare gli indirizzi su tutte le aziende (un solo elenco vale per tutte).",
+      "left": {
+        "unblocked_one": "1 indirizzo selezionato è già sbloccato: escluso.",
+        "unblocked_other": "{count} indirizzi selezionati sono già sbloccati: esclusi."
+      },
+      "confirmTitle_one": "Sbloccare {count} indirizzo?",
+      "confirmTitle_other": "Sbloccare {count} indirizzi?",
+      "confirmGo_one": "Sblocca {count} indirizzo",
+      "confirmGo_other": "Sblocca {count} indirizzi",
+      "confirmBody": "Da ora le e-mail possono di nuovo arrivare a questi indirizzi. Se uno viene di nuovo respinto in modo definitivo, si blocca di nuovo da solo.",
+      "confirmAgain": "La riga resta nell'elenco degli indirizzi sbloccati, con quando e perché.",
+      "complaintTitle": "Un destinatario ha segnalato la nostra posta come spam",
+      "complaintBody": "Scrivigli di nuovo solo se l'ha chiesto: sbloccare non cambia ciò che ha detto al suo servizio di posta.",
+      "listLabel": "Indirizzi",
+      "reasonLabel": "Motivo",
+      "reasonHint": "Obbligatorio. Resta con la modifica (per esempio: il cliente ha sistemato la sua casella).",
+      "reasonShort": "Spiega il perché in almeno 3 lettere.",
+      "unblockedDone_one": "1 indirizzo sbloccato: le e-mail possono di nuovo arrivarci.",
+      "unblockedDone_other": "{count} indirizzi sbloccati: le e-mail possono di nuovo arrivarci.",
+      "unblockedPartial_one": "{done} di {total} indirizzi sbloccati. Non sbloccati:",
+      "unblockedPartial_other": "{done} di {total} indirizzi sbloccati. Non sbloccati:",
+      "unblockedFailed_one": "Nessun indirizzo sbloccato. Non sbloccati:",
+      "unblockedFailed_other": "Nessun indirizzo sbloccato ({count} rifiutati). Non sbloccati:"
     }
   },
   "mail": {

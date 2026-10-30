@@ -1,0 +1,130 @@
+{
+  "band": {
+    "site": "Site",
+    "asOf": "As of {time}",
+    "reading": "Reading the allocation…",
+    "notRead": "Not read",
+    "board": "Planning board",
+    "more": "More",
+    "keys": "Keyboard shortcuts"
+  },
+  "save": {
+    "idle": "Moves save as you make them",
+    "saving": "Saving…",
+    "saved": "All moves saved",
+    "failed": "Not saved: {reason}"
+  },
+  "lanes": {
+    "title": "Lanes",
+    "none": "This site has no line or workshop yet."
+  },
+  "kind": {
+    "LINE": "Line",
+    "WORKSHOP": "Workshop"
+  },
+  "lane": {
+    "line_one": "{pieces} garment booked",
+    "line_other": "{pieces} garments booked",
+    "workshop_one": "{pieces} garments booked · {orders} subcontract order",
+    "workshop_other": "{pieces} garments booked · {orders} subcontract orders",
+    "capacity": "Next 4 weeks: {booked} of {available} min booked ({pct}%). The column counts every card in it.",
+    "workshopCapacity": "A workshop: its load in standard minutes is not planned here."
+  },
+  "window": "Next 4 weeks",
+  "card": {
+    "detail": "{style} · {pieces} pcs · {due}",
+    "due": "due {date}",
+    "noDue": "no due date",
+    "gone": "This card is no longer on the board",
+    "goneBody": "It was moved or the work order closed meanwhile: the board shows it as it is now.",
+    "title": "{order} · {lane}",
+    "onBoard": "Show on the planning board",
+    "open": "Open work order",
+    "move_one": "Move {pieces} garment",
+    "move_other": "Move {pieces} garments",
+    "pieces": "Garments here",
+    "piecesValue": "{pieces} of {of}",
+    "minutes": "Standard minutes",
+    "minutesValue": "{minutes} min",
+    "dueLabel": "Due date",
+    "status": "Schedule",
+    "moveTitle": "Move all or part of it",
+    "to": "To",
+    "howMany": "Garments",
+    "howManyHint": "From 1 to {pieces}; the rest stays here.",
+    "less": "One less",
+    "more": "One more",
+    "rule": "The work order's own line makes the garments no part names; a part goes to another line or a workshop, one part per lane."
+  },
+  "mark": {
+    "part": "Part: {pieces} of {of}",
+    "atRisk": "At risk",
+    "onHold": "On hold",
+    "draft": "Draft"
+  },
+  "status": {
+    "LATE": "Late",
+    "AT_RISK": "At risk",
+    "ON_TIME": "On time",
+    "NO_DUE_DATE": "No due date",
+    "DONE": "Done"
+  },
+  "held": {
+    "readOnly": "Read-only: only planners allocate work orders. You can look at the board and open the work orders.",
+    "readOnlyBody": "Allocating needs the permission to change the working plan at this site.",
+    "offline": "Offline — moves wait to be sent until the connection is back.",
+    "offlineBody": "The board is read-only while the live channel is down; it reads everything again when it comes back.",
+    "busy": "Saving: wait for the answer.",
+    "same": "Choose another column.",
+    "pieces_one": "Give whole garments, from 1 to {pieces}.",
+    "pieces_other": "Give whole garments, from 1 to {pieces}."
+  },
+  "board": {
+    "title": "Allocation board",
+    "hint": "Drag a work order onto a line or a workshop; open a card to move part of its garments. Nothing reaches the floor until the plan is published.",
+    "label": "Lines & subcontractors · {site}",
+    "tray": "Not allocated",
+    "trayEmpty": "Every work order is allocated",
+    "empty": "Nothing to allocate.",
+    "moveBucket": "Period"
+  },
+  "error": {
+    "title": "Couldn't load the allocation board",
+    "forbidden": "You may not see the allocation of this site.",
+    "offline": "The server did not answer. Nothing is drawn, so an empty board is never shown by mistake.",
+    "failed": "The allocation could not be read. Nothing is drawn, so an empty board is never shown by mistake.",
+    "noSite": "This company has no site to plan yet.",
+    "retry": "Try again"
+  },
+  "refusal": {
+    "STALE": "The card is not in that column any more: the board was read again.",
+    "WHOLE": "Move whole garments, from 1.",
+    "TOO_MANY": "The card does not hold that many garments.",
+    "SAME": "It is already allocated so.",
+    "UNALLOCATED_PART": "Part of an order cannot wait unallocated while the rest is on a line: move it to another lane.",
+    "CHANGED": "The work order changed since it was read: the board was read again.",
+    "LOCKED": "The work order is finished: its allocation stays as it was.",
+    "NOT_OPEN": "The work order is not open any more: it is not allocated.",
+    "LANE_INACTIVE": "That line or workshop is no longer active.",
+    "INVALID": "This allocation cannot be saved as it is.",
+    "FORBIDDEN": "You may not allocate work orders at this site.",
+    "NOT_FOUND": "The work order is no longer on the board: the board was read again.",
+    "OFFLINE": "No connection to the server: nothing was saved.",
+    "FAILED": "The server did not save it. Try again."
+  },
+  "notice": {
+    "moved_one": "{pieces} garment moved.",
+    "moved_other": "{pieces} garments moved."
+  },
+  "dialog": {
+    "close": "Close"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "pick": "Pick up the focused card",
+    "columns": "Choose a column",
+    "drop": "Drop it there (or open the focused card)",
+    "cancel": "Cancel the move, close a dialog",
+    "undo": "Undo a move"
+  }
+}

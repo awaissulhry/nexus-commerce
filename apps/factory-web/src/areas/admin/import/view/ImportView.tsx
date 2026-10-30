@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, type ReactNode } from 'react'
 import Link from 'next/link'
-import { CircleX, FileSpreadsheet, Upload } from 'lucide-react'
-import { Card, EmptyState, Modal } from '@nexus/ui/components'
+import { CircleX, FileSpreadsheet, MoreHorizontal, Upload } from 'lucide-react'
+import { Card, EmptyState, Menu, Modal } from '@nexus/ui/components'
 import { IdentityCell, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Pill } from '@nexus/ui/primitives'
 import { formatDateTime } from '../../../../lib/i18n/format'
@@ -19,6 +19,8 @@ import { BulkButton, FrameState, ListState, NoAccess, PageHead } from '../../sha
 import type { ImportJob, ImportStatus } from '../api'
 import { cancelReach, lastImportOf, leftToApply, phaseOf, templateHref, type ImportRights, type ImportViewModel } from '../model'
 import { ImportWizard, useImporterWords, type WizardActions } from './ImportWizard'
+import { TemplatesDialog } from './TemplatesDialog'
+import { FirstLoadSection, type FirstLoadActions } from '../guided/view/FirstLoadSection'
 import '../../shared/admin.css'
 import '../import.css'
 
@@ -38,6 +40,10 @@ export interface ImportActions extends WizardActions {
   /** Cancels these jobs, one call each; one notice says what was done. */
   onCancelManyGo?: (jobs: readonly ImportJob[]) => Promise<void> | void
   onDismissNotice?: () => void
+  /** Opens (true) or closes the Templates dialog (the page's More menu). */
+  onTemplates?: (open: boolean) => void
+  /** The guided first load's actions. */
+  firstLoad?: FirstLoadActions
 }
 
 const STATUS_TONE: Readonly<Record<ImportStatus, 'info' | 'success' | 'danger' | 'neutral' | 'warning'>> = {
@@ -149,7 +155,7 @@ function Imports({ model, actions }: { model: ImportViewModel; actions?: ImportA
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (event.metaKey || event.ctrlKey || event.altKey || model.wizard || model.cancelMany || !model.can.run) return
+      if (event.metaKey || event.ctrlKey || event.altKey || model.wizard || model.cancelMany || model.templatesOpen || model.firstLoad?.confirm || !model.can.run) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]') || target.isContentEditable)) return
       if (event.key !== 'c') return
       event.preventDefault()
@@ -183,9 +189,17 @@ function Imports({ model, actions }: { model: ImportViewModel; actions?: ImportA
         intro={t('imp.intro')}
         asOf={model.asOf}
         actions={
+          <>
+          <Menu
+            label={<MoreHorizontal size={16} aria-hidden />}
+            align="right"
+            triggerProps={{ 'aria-label': t('imp.more') }}
+            items={[{ id: 'templates', label: t('imp.templates.menu'), icon: <FileSpreadsheet size={14} aria-hidden />, onSelect: () => actions?.onTemplates?.(true), disabled: !importers || importers.length === 0, title: importers && importers.length === 0 ? t('imp.templates.none') : undefined }]}
+          />
           <Button variant="primary" size="sm" onClick={() => actions?.onNew?.(null)} heldReason={!model.can.run ? t('imp.held.noRunRight') : importers && importers.length === 0 ? t('imp.held.noImporter') : null}>
             <Upload size={14} aria-hidden /> {t('imp.new')}
           </Button>
+          </>
         }
       />
       <PageNotice namespace="admin-import" notice={model.notice} onDismiss={actions?.onDismissNotice} nameOf={nameOf} />
@@ -225,16 +239,14 @@ function Imports({ model, actions }: { model: ImportViewModel; actions?: ImportA
                           {t('imp.what.start')}
                         </Button>
                       )}
-                      {xlsx && csv && (
-                        <span className="fw-adm-imp-links">
-                          <a className="fw-adm-link" href={xlsx} download>
-                            {t('imp.template.xlsx')}
-                          </a>
-                          <a className="fw-adm-link" href={csv} download>
-                            {t('imp.template.csv')}
-                          </a>
-                        </span>
-                      )}
+                      <span className="fw-adm-imp-links" role="group" aria-label={t('imp.template.label', { name: words.name(importer.key, importer.label) })}>
+                        <a className="fw-adm-link" href={xlsx} download>
+                          {t('imp.template.xlsx')}
+                        </a>
+                        <a className="fw-adm-link" href={csv} download>
+                          {t('imp.template.csv')}
+                        </a>
+                      </span>
                     </div>
                   </div>
                 </Card>
@@ -244,6 +256,8 @@ function Imports({ model, actions }: { model: ImportViewModel; actions?: ImportA
         )}
         <p className="fw-adm-hint">{t('imp.what.later')}</p>
       </section>
+
+      {model.firstLoad && <FirstLoadSection model={model.firstLoad} companies={model.companies} base={base} actions={actions?.firstLoad} />}
 
       <section className="fw-adm-imp-section" aria-labelledby="imp-recent">
         <h2 id="imp-recent" className="fw-adm-imp-h2">
@@ -278,6 +292,7 @@ function Imports({ model, actions }: { model: ImportViewModel; actions?: ImportA
 
       <ImportWizard model={model.wizard} importers={importers ?? []} companies={model.companies} can={model.can} actions={actions} />
       <CancelManyModal model={model} actions={actions} />
+      <TemplatesDialog open={model.templatesOpen === true} importers={importers ?? []} onClose={() => actions?.onTemplates?.(false)} />
     </div>
   )
 }

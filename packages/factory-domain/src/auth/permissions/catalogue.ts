@@ -31,6 +31,8 @@ import { PURCHASING_DEFINITIONS, PURCHASING_PERMISSIONS } from '../../purchasing
 import { PURCHASING_SOURCES_DEFINITIONS, PURCHASING_SOURCES_PERMISSIONS } from '../../purchasing/sources/permissions'
 // B-W2a-25: subcontracting (purchasing.subcontract.manage | kit | receive).
 import { PURCHASING_SUBCONTRACT_DEFINITIONS, PURCHASING_SUBCONTRACT_PERMISSIONS } from '../../purchasing/subcontracting/permissions'
+// B-W2a-44: supplier claims and returns to the supplier (purchasing.claims.manage | return).
+import { PURCHASING_CLAIMS_DEFINITIONS, PURCHASING_CLAIMS_PERMISSIONS } from '../../purchasing/claims/permissions'
 import { QUALITY_FINAL_DEFINITIONS, QUALITY_FINAL_FLOOR_PERMISSIONS, QUALITY_FINAL_PERMISSIONS } from '../../quality/final/permissions'
 import { QUALITY_LAB_DEFINITIONS, QUALITY_LAB_PERMISSIONS } from '../../quality/lab/permissions'
 // B-W2a-26: the defect library and disposition codes (quality.defects.*), quality holds (quality.holds.*).
@@ -72,6 +74,12 @@ import { ACCOUNTING_DEFINITIONS, ACCOUNTING_PERMISSIONS } from '../../accounting
 import { SECURITY_DEFINITIONS, SECURITY_PERMISSIONS } from '../../ops/permissions'
 // B-W2a-43: customer returns (sales.returns.view | manage | receive | inspect | decide).
 import { SALES_RETURNS_DEFINITIONS, SALES_RETURNS_FLOOR_PERMISSIONS, SALES_RETURNS_PERMISSIONS } from '../../sales/returns/permissions'
+// B-W2a-38: production reports (the daily production report, its e-mail).
+import { PRODUCTION_REPORTS_DEFINITIONS, PRODUCTION_REPORTS_PERMISSIONS } from '../../production/reports/permissions'
+// B-W2a-41: the mail delivery log and the blocked addresses (email.delivery.view | unblock).
+import { EMAIL_DELIVERY_DEFINITIONS, EMAIL_DELIVERY_PERMISSIONS } from '../../email-delivery/permissions'
+// B-W2a-48: shipping every day (shipping.freight.manage, shipping.evidence.manage).
+import { SHIPPING_DAILY_DEFINITIONS, SHIPPING_DAILY_PERMISSIONS } from '../../shipping/shipments/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -400,6 +408,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PURCHASING_SOURCES_DEFINITIONS,
   // B-W2a-25: subcontracting (purchasing.subcontract.manage | kit | receive).
   PURCHASING_SUBCONTRACT_DEFINITIONS,
+  // B-W2a-44: supplier claims and returns to the supplier (purchasing.claims.manage | return).
+  PURCHASING_CLAIMS_DEFINITIONS,
   // B-W2a-18: the reason lists.
   REASONS_DEFINITIONS,
   // B-W2a-19: paymentterms.view | manage, pricelists.view | manage.
@@ -424,6 +434,12 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SECURITY_DEFINITIONS,
   // B-W2a-43: customer returns.
   SALES_RETURNS_DEFINITIONS,
+  // B-W2a-38: production reports (production.reports.view | subscribe).
+  PRODUCTION_REPORTS_DEFINITIONS,
+  // B-W2a-41: the mail delivery log and the blocked addresses.
+  EMAIL_DELIVERY_DEFINITIONS,
+  // B-W2a-48: shipping every day (freight charged, intra-EU transport evidence).
+  SHIPPING_DAILY_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -459,6 +475,8 @@ for (const name of PRODUCTION_COMPLETION_PERMISSIONS) {
 for (const name of PLANNING_SETTINGS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-25: subcontracting.
 for (const name of PURCHASING_SUBCONTRACT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-44: supplier claims.
+for (const name of PURCHASING_CLAIMS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-22: MRP every day.
 for (const name of [...PLANNING_FIRM_PERMISSIONS, ...PLANNING_EXCEPTIONS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-34: the planning board.
@@ -487,6 +505,12 @@ for (const name of ACCOUNTING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(n
 for (const name of SECURITY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-43: customer returns.
 for (const name of SALES_RETURNS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-38: production reports.
+for (const name of PRODUCTION_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-41: the mail delivery log and the blocked addresses.
+for (const name of EMAIL_DELIVERY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-48: shipping every day.
+for (const name of SHIPPING_DAILY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

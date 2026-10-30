@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { isApiError, issuePath, type ApiError } from '../lib/api/errors'
+import { recordAddress } from '../lib/records/record-links'
 import { useOfficeApi, useOfficeSession } from '../lib/session/context'
+import { companyPrefix } from '../lib/session/session'
+import { OFFICE_PAGES } from '../shell/nav/office-nav'
 import {
   completeUpload,
   downloadLink,
@@ -31,7 +34,10 @@ import {
   type FileKind,
   type Loaded,
   type PanelFile,
+  type PanelFollowers,
   type PanelMessage,
+  type PanelRead,
+  type PanelTasks,
   type PanelParty,
   type PanelPerson,
   type PanelRecord,
@@ -43,6 +49,8 @@ import {
   type TimelineFilter,
 } from './model'
 import { putToStore, readFromStore, sha256Hex, storeUrl, StoreError } from './store'
+import { addFollower, createTask, listAssignees, listTasks, readFollowers, setMyFollow, setTaskStatus, taskReadProblem, taskWriteProblem } from './tasks/api'
+import { addTaskHeld, createBody, followersChangeFor, taskChangeFor, type Assignable, type Followers, type TaskDraft, type TaskItem } from './tasks/model'
 import { RecordPanelsView } from './view/RecordPanelsView'
 
 /**
@@ -161,6 +169,14 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
   const [notice, setNotice] = useState<Notice | null>(null)
   const [preview, setPreview] = useState<RecordPanelsViewModel['preview']>(null)
   const [sending, setSending] = useState(false)
+  // B-W2a-40: the record's open tasks and its followers.
+  const [tasks, setTasks] = useState<{ items: TaskItem[] | null; problem: string | null }>({ items: null, problem: null })
+  const [taskDialog, setTaskDialog] = useState<{ people: PanelRead<readonly Assignable[]> } | null>(null)
+  const [taskUndo, setTaskUndo] = useState<TaskItem | null>(null)
+  const [taskBusy, setTaskBusy] = useState(false)
+  const [followers, setFollowers] = useState<{ data: Followers | null; problem: string | null }>({ data: null, problem: null })
+  const [followBusy, setFollowBusy] = useState(false)
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const filterRef = useRef(filter)
   filterRef.current = filter
 
@@ -225,20 +241,44 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
     }
   }, [api, key, can.post])
 
+  // Reading tasks is reaching Home (home.view): without it the panels have no Tasks tab.
+  const seesTasks = held.has('home.view')
+  const loadTasks = useCallback(async () => {
+    if (!seesTasks) return
+    try {
+      const page = await listTasks(api, { scope: 'RECORD', record: key, status: 'OPEN', limit: 100 })
+      setTasks({ items: page.items, problem: null })
+    } catch (error) {
+      setTasks((current) => ({ ...current, problem: taskReadProblem(error) }))
+    }
+  }, [api, key, seesTasks])
+  const loadFollowers = useCallback(async () => {
+    try {
+      setFollowers({ data: await readFollowers(api, key), problem: null })
+    } catch (error) {
+      setFollowers((current) => ({ ...current, problem: taskReadProblem(error) }))
+    }
+  }, [api, key])
+
   const loadAll = useCallback(() => {
     void loadThread()
     void loadEmails()
     void loadFiles()
     void loadTimeline()
     void loadPeople()
-  }, [loadThread, loadEmails, loadFiles, loadTimeline, loadPeople])
+    void loadTasks()
+    void loadFollowers()
+  }, [loadThread, loadEmails, loadFiles, loadTimeline, loadPeople, loadTasks, loadFollowers])
   // On arrival: everything but the history, which the filter's effect below reads (once, also on arrival).
   useEffect(() => {
     void loadThread()
     void loadEmails()
     void loadFiles()
     void loadPeople()
-  }, [loadThread, loadEmails, loadFiles, loadPeople])
+    void loadTasks()
+    void loadFollowers()
+  }, [loadThread, loadEmails, loadFiles, loadPeople, loadTasks, loadFollowers])
+  useEffect(() => () => (undoTimer.current ? clearTimeout(undoTimer.current) : undefined), [])
   useEffect(() => {
     setTimeline((current) => ({ ...current, items: null, problem: null }))
     void loadTimeline()
@@ -252,6 +292,8 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
         if (part === 'files') void loadFiles()
         if (part === 'timeline') void loadTimeline()
       }
+      if (taskChangeFor(change, key)) void loadTasks()
+      if (followersChangeFor(change, key)) void loadFollowers()
     },
     onReconnect: loadAll,
   })
@@ -367,6 +409,135 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
     }
   }
 
+  // ---- tasks on the record (B-W2a-40) ------------------------------------------------------------------------------
+  const prefix = companyPrefix(session.company?.code ?? '')
+  const addHeld = addTaskHeld(held, true)
+  const loadAssignees = useCallback(async () => {
+    setTaskDialog({ people: { status: 'loading' } })
+    try {
+      const people = await listAssignees(api, key)
+      setTaskDialog((current) => (current ? { people: { status: 'ready', data: people } } : current))
+    } catch (error) {
+      setTaskDialog((current) => (current ? { people: { status: 'error', problem: taskReadProblem(error) } } : current))
+    }
+  }, [api, key])
+  const showUndo = (task: TaskItem | null) => {
+    if (undoTimer.current) clearTimeout(undoTimer.current)
+    setTaskUndo(task)
+    // The Undo stays about twelve seconds (design 00 "receipts with Undo for 12 s").
+    if (task) undoTimer.current = setTimeout(() => setTaskUndo(null), 12_000)
+  }
+  const completeTask = async (taskId: string) => {
+    const task = tasks.items?.find((item) => item.id === taskId)
+    if (!task) return
+    // At once (the one optimistic tick of the design), then the API; a refusal puts it back and says why.
+    setTasks((current) => ({ ...current, items: current.items?.filter((item) => item.id !== taskId) ?? null }))
+    setTaskBusy(true)
+    setNotice(null)
+    try {
+      showUndo(await setTaskStatus(api, task, 'DONE'))
+    } catch (error) {
+      const problem = taskWriteProblem(error)
+      setNotice({ key: problem.key, tone: problem.tone })
+      void loadTasks()
+    } finally {
+      setTaskBusy(false)
+    }
+  }
+  const undoTask = async () => {
+    const task = taskUndo
+    if (!task) return
+    showUndo(null)
+    setTaskBusy(true)
+    try {
+      await setTaskStatus(api, task, 'OPEN')
+    } catch (error) {
+      setNotice({ key: taskWriteProblem(error).key, tone: 'warning' })
+    } finally {
+      setTaskBusy(false)
+      void loadTasks()
+    }
+  }
+  const makeTask = async (draft: TaskDraft): Promise<boolean> => {
+    setTaskBusy(true)
+    setNotice(null)
+    try {
+      await createTask(api, createBody(draft, key))
+      setNotice({ key: 'tasks.notice.created', tone: 'success' })
+      setTaskDialog(null)
+      void loadTasks()
+      void loadFollowers()
+      return true
+    } catch (error) {
+      const problem = taskWriteProblem(error)
+      setNotice({ key: problem.key, tone: problem.tone })
+      if (problem.reload) void loadAssignees()
+      return false
+    } finally {
+      setTaskBusy(false)
+    }
+  }
+  const panelTasks: PanelTasks = {
+    items:
+      tasks.items?.map((task) => ({
+        id: task.id,
+        title: task.title,
+        href: `${prefix}${recordAddress({ type: 'Task', id: task.id }, OFFICE_PAGES)}`,
+        due: task.due,
+        assignee: task.assignee,
+        progress: task.progress,
+        canChange: task.canChange,
+      })) ?? null,
+    problem: tasks.problem,
+    addHeld,
+    dialog: taskDialog,
+    undo: taskUndo ? { title: taskUndo.title } : null,
+    busy: taskBusy,
+  }
+
+  // ---- followers (B-W2a-40) ------------------------------------------------------------------------------------------
+  const follow = async (wanted: { following: boolean; muted: boolean }) => {
+    setFollowBusy(true)
+    setNotice(null)
+    try {
+      setFollowers({ data: await setMyFollow(api, key, wanted), problem: null })
+      setNotice({ key: !wanted.following ? 'followers.notice.unfollowed' : wanted.muted ? 'followers.notice.muted' : 'followers.notice.following', tone: 'success' })
+    } catch (error) {
+      setNotice({ key: taskWriteProblem(error).key, tone: 'danger' })
+      void loadFollowers()
+    } finally {
+      setFollowBusy(false)
+    }
+  }
+  const addColleague = async (userId: string) => {
+    setFollowBusy(true)
+    setNotice(null)
+    try {
+      setFollowers({ data: await addFollower(api, key, userId), problem: null })
+      setNotice({ key: 'followers.notice.added', tone: 'success' })
+    } catch (error) {
+      const problem = taskWriteProblem(error)
+      setNotice({ key: problem.key === 'tasks.problem.invalid' ? 'followers.notice.refused' : problem.key, tone: 'danger' })
+      void loadFollowers()
+    } finally {
+      setFollowBusy(false)
+    }
+  }
+  const followerIds = new Set(followers.data?.followers.map((entry) => entry.userId) ?? [])
+  const panelFollowers: PanelFollowers | null = followers.data
+    ? {
+        count: followers.data.count,
+        me: { following: followers.data.me.following, muted: followers.data.me.muted },
+        list: followers.data.followers.map((entry) => ({ userId: entry.userId, name: entry.name, me: entry.me, reason: entry.reason, muted: entry.muted, since: entry.since, addedBy: entry.addedBy?.name ?? null })),
+        candidates: people.filter((person) => person.id !== session.user.id && !followerIds.has(person.id)),
+        canAdd: can.post,
+        problem: followers.problem,
+        busy: followBusy,
+      }
+    : followers.problem
+      ? { count: 0, me: { following: false, muted: false }, list: [], candidates: [], canAdd: false, problem: followers.problem, busy: false }
+      : null
+
   const panelMessages: PanelMessage[] | null =
     messages.items?.map((message) => {
       const email = emails.get(message.id)
@@ -420,6 +591,8 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
     notice,
     preview,
     sending,
+    ...(seesTasks ? { tasks: panelTasks } : {}),
+    followers: panelFollowers,
     ...(tab ? { tab } : {}),
   }
 
@@ -438,7 +611,11 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
         onTimelineFilter: setFilter,
         onMoreTimeline: () => void loadTimeline(true, timeline.cursor),
         onRetry: (part) => {
-          if (part === 'thread') {
+          if (part === 'tasks') {
+            setTasks({ items: null, problem: null })
+            void loadTasks()
+          } else if (part === 'followers') void loadFollowers()
+          else if (part === 'thread') {
             setMessages((current) => ({ ...current, problem: null }))
             void loadThread()
           } else if (part === 'files') {
@@ -450,6 +627,13 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
           }
         },
         onDismissNotice: () => setNotice(null),
+        onCompleteTask: (taskId) => void completeTask(taskId),
+        onUndoTask: () => void undoTask(),
+        onTaskDialog: (open) => (open ? void loadAssignees() : setTaskDialog(null)),
+        onRetryAssignees: () => void loadAssignees(),
+        onCreateTask: makeTask,
+        onFollow: (wanted) => void follow(wanted),
+        onAddFollower: (userId) => void addColleague(userId),
       }}
     />
   )

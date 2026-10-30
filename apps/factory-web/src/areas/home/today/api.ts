@@ -4,11 +4,13 @@ import { isApiError } from '../../../lib/api/errors'
 import {
   actedSchema,
   assigneesSchema,
+  comingUpSchema,
   flowSchema,
   handledSchema,
   layoutSchema,
   todaySchema,
   type Assignee,
+  type ComingUpAnswer,
   type FlowAnswer,
   type HandledList,
   type LayoutAnswer,
@@ -29,14 +31,43 @@ import { PanelShapeError, panelPage, type PanelRecordRow, type PanelSource } fro
  * The alert verbs (API insights/actions): POST /home/today/rows/:key/assign | resolve | acknowledge with the row's
  * condition and its actions' version as read (a row that changed meanwhile is a 409), GET …/assignees, GET
  * /home/today/handled, GET and PUT /home/today/layout.
+ *
+ * W2a (B-W2a-20, B-W2a-33): `include=TASKS,MENTIONS,ALERTS` and the tiles' `due=TODAY|OVERDUE`; GET /home/coming-up;
+ * Snooze of an alert row (POST …/rows/:key/snooze), Done and Snooze of my task (POST /tasks/:id/status | snooze with the
+ * task's version, read first) and of a mention (POST /notifications/done | snooze with its notification).
  */
 
 export async function fetchToday(
   api: ApiClient,
-  query: { readonly kind?: string | null; readonly category?: string | null; readonly cursor?: string | null; readonly limit?: number },
+  query: {
+    readonly kind?: string | null
+    readonly category?: string | null
+    /** W2a tiles "Due today" and "Overdue". */
+    readonly due?: 'TODAY' | 'OVERDUE' | null
+    /** W2a: what else to list (TASKS, MENTIONS, ALERTS); absent, the answer is W1's. */
+    readonly include?: readonly string[] | null
+    readonly cursor?: string | null
+    readonly limit?: number
+  },
   signal?: AbortSignal,
 ): Promise<TodayAnswer> {
-  return api.get('/home/today', { query: { kind: query.kind ?? undefined, category: query.category ?? undefined, cursor: query.cursor ?? undefined, limit: query.limit ?? 50 }, schema: todaySchema, signal })
+  return api.get('/home/today', {
+    query: {
+      kind: query.kind ?? undefined,
+      category: query.category ?? undefined,
+      due: query.due ?? undefined,
+      include: query.include && query.include.length > 0 ? query.include.join(',') : undefined,
+      cursor: query.cursor ?? undefined,
+      limit: query.limit ?? 50,
+    },
+    schema: todaySchema,
+    signal,
+  })
+}
+
+/** Coming up: my next five working days (W2a). */
+export async function fetchComingUp(api: ApiClient, signal?: AbortSignal): Promise<ComingUpAnswer> {
+  return api.get('/home/coming-up', { schema: comingUpSchema, signal })
 }
 
 export async function fetchFlow(api: ApiClient, signal?: AbortSignal): Promise<FlowAnswer> {
@@ -171,4 +202,51 @@ export function actionProblem(error: unknown): { key: string; tone: 'warning' | 
   if (error.kind === 'forbidden') return { key: 'today.actions.problem.forbidden', tone: 'danger', reload: false }
   if (error.kind === 'unavailable') return { key: 'today.problem.offline', tone: 'danger', reload: false }
   return { key: 'today.actions.problem.failed', tone: 'danger', reload: false }
+}
+
+// ---- W2a: Snooze, and Done / Snooze of my own rows ------------------------------------------------------------------------
+
+/** Snooze an alert row until a time, or (null) until its condition changes; the row's condition and version as read. */
+export function snoozeRow(api: ApiClient, item: Pick<TodayItem, 'key' | 'condition' | 'actions'>, until: string | null): Promise<unknown> {
+  return api.post(rowPath(item.key, 'snooze'), { body: { ...asRead(item), until }, idempotencyKey: newIdempotencyKey() })
+}
+
+const taskVersionSchema = z.object({ task: z.object({ id: z.string(), version: z.number().int(), status: z.string() }) })
+
+/** The task's version as stored now (a Today row does not carry it): read just before a change, which sends it back. */
+async function taskVersion(api: ApiClient, taskId: string): Promise<number> {
+  const { task } = await api.get(`/tasks/${encodeURIComponent(taskId)}`, { schema: taskVersionSchema })
+  return task.version
+}
+
+/** My task done (Undo: back to OPEN). */
+export async function setTaskStatus(api: ApiClient, taskId: string, status: 'DONE' | 'OPEN'): Promise<unknown> {
+  const version = await taskVersion(api, taskId)
+  return api.post(`/tasks/${encodeURIComponent(taskId)}/status`, { body: { version, status }, idempotencyKey: newIdempotencyKey() })
+}
+
+/** My task off Today until a time. */
+export async function snoozeTask(api: ApiClient, taskId: string, until: string): Promise<unknown> {
+  const version = await taskVersion(api, taskId)
+  return api.post(`/tasks/${encodeURIComponent(taskId)}/snooze`, { body: { version, until }, idempotencyKey: newIdempotencyKey() })
+}
+
+/** A mention done (it is read too), or back (Undo). */
+export function setMentionDone(api: ApiClient, notificationId: string, done: boolean): Promise<unknown> {
+  return api.post('/notifications/done', { body: { ids: [notificationId], done }, idempotencyKey: newIdempotencyKey() })
+}
+
+/** A mention snoozed until a time, or (null) until there is new activity on its record. */
+export function snoozeMention(api: ApiClient, notificationId: string, until: string | null): Promise<unknown> {
+  return api.post('/notifications/snooze', { body: { ids: [notificationId], until }, idempotencyKey: newIdempotencyKey() })
+}
+
+const alertRecordSchema = z.object({
+  alert: z.object({ id: z.string(), record: z.object({ type: z.string(), id: z.string(), label: z.string() }), companyId: z.string().nullable(), siteId: z.string().nullable() }),
+})
+
+/** The record an exception rule's alert is about (a RULE_ALERT row's record is the alert; its own page is Home › Alerts). */
+export async function fetchAlertRecord(api: ApiClient, alertId: string, signal?: AbortSignal): Promise<{ type: string; id: string; label: string; companyId: string | null; siteId: string | null }> {
+  const { alert } = await api.get(`/alerts/${encodeURIComponent(alertId)}`, { schema: alertRecordSchema, signal })
+  return { ...alert.record, companyId: alert.companyId, siteId: alert.siteId }
 }

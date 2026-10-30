@@ -1,0 +1,150 @@
+/*
+ * Home › Notifications (SCR-005) LAYOUT: the band, the tabs, the list's cells and the dialogs' parts. The page fills the
+ * shell's main area (no max-width of its own); controls are the design system's; semantic tokens only.
+ */
+.fw-ntf {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-ntf-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-ntf-status,
+.fw-ntf-actions,
+.fw-ntf-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-ntf-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ntf-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-ntf-muted,
+.fw-ntf-sub {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ntf-sub {
+  font-size: var(--nds-font-size-xs);
+}
+
+/* ── a row ─────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-ntf-what {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ntf-icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--nds-text-2);
+}
+
+.fw-ntf-what-text,
+.fw-ntf-when {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fw-ntf a.fw-ntf-sentence {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--nds-space-6);
+  color: var(--nds-text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.fw-ntf a.fw-ntf-sentence:hover {
+  text-decoration: underline;
+}
+
+.fw-ntf-what.is-unread a.fw-ntf-sentence {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-ntf-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--nds-primary);
+}
+
+.fw-ntf a.fw-ntf-record {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+
+.fw-ntf a.fw-ntf-record:hover {
+  text-decoration: underline;
+}
+
+/* ── dialogs ───────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-ntf-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-ntf-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-ntf-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-ntf-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-ntf-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-ntf-keys {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}

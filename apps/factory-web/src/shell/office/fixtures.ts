@@ -70,6 +70,30 @@ export const designScreen = defineDesignScreen<OfficeShellViewModel>({
       note: 'A sales person: Home, Sales and the areas it reads; nothing of Admin.',
     },
     {
+      id: 'bell',
+      label: 'The bell: 4 unread (B-W2a-40)',
+      model: { ...owner, bell: { status: 'ready', unread: 4, complete: true } },
+      note: 'Mentions, assignments, approvals and alerts: "Notifications: 4 unread" in words; it opens Home › Notifications. One light read, then live.',
+    },
+    {
+      id: 'bell-none',
+      label: 'The bell: nothing unread',
+      model: { ...owner, bell: { status: 'ready', unread: 0, complete: true } },
+      note: 'No badge; its words say "nothing unread".',
+    },
+    {
+      id: 'bell-many',
+      label: 'The bell: more than 1000 unread',
+      model: { ...owner, bell: { status: 'ready', unread: 1000, complete: false } },
+      note: 'The badge says 99+, the words "more than 1000 unread".',
+    },
+    {
+      id: 'bell-unknown',
+      label: 'The bell: count not available',
+      model: { ...owner, bell: { status: 'error' } },
+      note: 'An unknown count shows no badge, never 0; the words say the count is not available now.',
+    },
+    {
       id: 'test-mode',
       label: 'TEST MODE banner',
       model: { ...owner, banners: [{ id: 'test-mode', kind: 'test-mode', connections: ['Email (fake)', 'Files (fake)', 'Printing (fake)'] }] },

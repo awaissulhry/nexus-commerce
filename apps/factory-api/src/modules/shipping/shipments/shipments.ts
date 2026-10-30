@@ -3,6 +3,7 @@ import { ConflictError, InvalidStateError, NotFoundError, ValidationError, type 
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { asMoney } from '@nexus/factory-domain/money/marked'
 import { SHIPPING_MANAGE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { carrierNameFor } from '@nexus/factory-domain/shipping/labels/labels'
 import { lineProblems, lineQuantityProblems, shipmentMachine, type ShipmentStatus, type TransportBy } from '@nexus/factory-domain/shipping/shipments'
@@ -13,6 +14,8 @@ import { allocateNumber } from '../../../platform/numbering/allocate'
 import { assertMay, mayOn, officeContextOf } from '../access'
 import { lockCells, reserveReleased, tenantOf } from '../cells'
 import { contentsView, headerView, lockedStatus, readShipment, shipmentFacts, type ShipmentHeader } from '../store'
+import { assertOrderCaps, capRequestsOf } from './backorder'
+import { freightView } from './freight'
 
 /**
  * The office's shipments (B-W1-46; LOG-001, LOG-002, LOG-039, GAP-002; A2 SCR-066, SCR-067): plan a DRAFT shipment
@@ -26,16 +29,20 @@ import { contentsView, headerView, lockedStatus, readShipment, shipmentFacts, ty
 
 /** The office's shipment record: header, order, party and contents (inside a command or in a scoped client). */
 export async function shipmentDetail(db: CommandTx, shipment: ShipmentHeader) {
-  const [order, party, contents] = await Promise.all([
-    db.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { number: true, customerRef: true, status: true } }),
-    db.party.findUnique({ where: { id: shipment.partyId }, select: { code: true, legalName: true } }),
-    contentsView(db, shipment.id),
-  ])
+  // One query after another (B-W2a-48): a transaction's client has one connection.
+  const order = await db.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { number: true, customerRef: true, status: true } })
+  const party = await db.party.findUnique({ where: { id: shipment.partyId }, select: { code: true, legalName: true } })
+  const contents = await contentsView(db, shipment.id)
+  // B-W2a-48: the freight charged (money.price) and the intra-EU transport evidence's state; office reads only.
+  const freight = await freightView(db, shipment)
+  const evidence = await db.shipment.findUnique({ where: { id: shipment.id }, select: { transportEvidence: true, transportEvidenceAt: true } })
   return {
     ...headerView(shipment),
     party: party ?? { code: '', legalName: '' },
     salesOrder: { number: order?.number ?? '', customerRef: order?.customerRef ?? null, status: order?.status ?? '' },
     ...contents,
+    freight,
+    transportEvidence: { status: evidence?.transportEvidence ?? 'NOT_NEEDED', completedAt: evidence?.transportEvidenceAt ? toUtcIso(evidence.transportEvidenceAt) : null },
   }
 }
 
@@ -61,6 +68,8 @@ export interface ListShipmentsQuery {
   readonly siteId?: string | undefined
   readonly salesOrderId?: string | undefined
   readonly partyId?: string | undefined
+  /** B-W2a-48 (LOG-090): the transport evidence's state; `open` = AWAITED or PARTIAL (what is still to collect). */
+  readonly evidence?: 'NOT_NEEDED' | 'AWAITED' | 'PARTIAL' | 'COMPLETE' | 'open' | undefined
   readonly cursor?: string | undefined
   readonly limit: number
 }
@@ -87,6 +96,7 @@ export async function listShipments(caller: CommandCaller, query: ListShipmentsQ
       query.siteId ? { siteId: query.siteId } : {},
       query.salesOrderId ? { salesOrderId: query.salesOrderId } : {},
       query.partyId ? { partyId: query.partyId } : {},
+      query.evidence === 'open' ? { transportEvidence: { in: ['AWAITED', 'PARTIAL'] } } : query.evidence ? { transportEvidence: query.evidence } : {},
       query.cursor ? { id: { lt: query.cursor } } : {},
     ],
   }
@@ -113,7 +123,10 @@ export async function listShipments(caller: CommandCaller, query: ListShipmentsQ
         shippedAt: true,
         cancelledAt: true,
         createdAt: true,
-        salesOrder: { select: { number: true, party: { select: { legalName: true } } } },
+        // B-W2a-48: the freight charged (money.price in the answer) and the transport evidence's state.
+        freightCharge: true,
+        transportEvidence: true,
+        salesOrder: { select: { number: true, currency: true, party: { select: { legalName: true } } } },
         lines: { select: { quantity: true } },
         parcels: { select: { seq: true, grossWeightKg: true, trackingNumber: true, labelledAt: true }, orderBy: { seq: 'asc' } },
         ddts: { where: { cancellations: { none: {} } }, select: { id: true, number: true }, take: 1 },
@@ -161,6 +174,9 @@ export async function listShipments(caller: CommandCaller, query: ListShipmentsQ
       shippedAt: at(row.shippedAt),
       cancelledAt: at(row.cancelledAt),
       createdAt: toUtcIso(row.createdAt),
+      freightCharge: asMoney('price', row.freightCharge),
+      currency: row.salesOrder.currency,
+      transportEvidence: row.transportEvidence,
     })),
     nextCursor: rows.length > query.limit ? page[page.length - 1]!.id : null,
   }
@@ -175,7 +191,7 @@ const CELL_SELECT = {
   size: true,
   salesOrderLineId: true,
   salesOrderLine: { select: { orderId: true } },
-  workOrder: { select: { id: true, number: true } },
+  workOrder: { select: { id: true, number: true, kind: true } },
   colourway: { select: { code: true } },
 } as const satisfies Prisma.WorkOrderSizeSelect
 
@@ -210,6 +226,11 @@ async function cellsFor(
       problems.push({ path: `${at}/workOrderSizeId`, message: 'Not a work order cell.' })
       continue
     }
+    // B-W2a-12 / B-W2a-48: a repaired garment goes back with its repair's DDT (B-W2a-17), never on a shipment of the order.
+    if (cell.workOrder.kind === 'REPAIR') {
+      problems.push({ path: `${at}/workOrderSizeId`, message: `${cell.workOrder.number} is a repair work order: its garment goes back with the repair's DDT, never on a shipment of the order.` })
+      continue
+    }
     problems.push(...lineProblems(shipment, { siteId: cell.siteId, partyId: cell.partyId, salesOrderId: cell.salesOrderLine.orderId }, quantity, at))
   }
   if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'These lines cannot ship on this shipment.', problems)
@@ -224,6 +245,8 @@ async function addGarments(tools: CommandTools, shipment: { id: string; siteId: 
   const { tx, context } = tools
   const more = new Map([...byCell].map(([cellId, entry]) => [cellId, entry.quantity]))
   await reserveReleased(tx, tenantOf(context), more, new Map([...cells].map(([cellId, cell]) => [cellId, cellLabel(cell)])))
+  // B-W2a-48 (LOG-004 with SAL-210): never more than the order line ordered of a size, nothing of a line closed short.
+  await assertOrderCaps(tx, tenantOf(context), [...more].map(([cellId, garments]) => ({ salesOrderLineId: cells.get(cellId)!.salesOrderLineId, size: cells.get(cellId)!.size, more: garments })))
   const unpacked = new Map(
     (await tx.shipmentLine.findMany({ where: { shipmentId: shipment.id, workOrderSizeId: { in: [...more.keys()] }, parcelId: null }, select: { id: true, workOrderSizeId: true, quantity: true } })).map((line) => [line.workOrderSizeId, line]),
   )
@@ -406,8 +429,11 @@ export async function changeLine(caller: CommandCaller, shipmentId: string, line
     const problems = lineQuantityProblems({ id: line.id, workOrderSizeId: line.workOrderSizeId, parcelId: line.parcelId, quantity: line.quantity, serials: line.serials.length, serialTracked: false }, body.quantity)
     if (problems.length > 0) throw new ConflictError(problems.join(' '))
     const label = `${line.workOrderSize.workOrder.number} ${line.workOrderSize.colourway.code} ${line.workOrderSize.size}`
-    if (body.quantity > line.quantity) await reserveReleased(tools.tx, tenantOf(tools.context), new Map([[line.workOrderSizeId, body.quantity - line.quantity]]), new Map([[line.workOrderSizeId, label]]))
-    else await lockCells(tools.tx, tenantOf(tools.context), [line.workOrderSizeId])
+    if (body.quantity > line.quantity) {
+      await reserveReleased(tools.tx, tenantOf(tools.context), new Map([[line.workOrderSizeId, body.quantity - line.quantity]]), new Map([[line.workOrderSizeId, label]]))
+      // B-W2a-48: the order line's size and its short close hold too.
+      await assertOrderCaps(tools.tx, tenantOf(tools.context), await capRequestsOf(tools.tx, new Map([[line.workOrderSizeId, body.quantity - line.quantity]])))
+    } else await lockCells(tools.tx, tenantOf(tools.context), [line.workOrderSizeId])
     if (body.quantity !== line.quantity) await tools.tx.shipmentLine.update({ where: { id: line.id }, data: { quantity: body.quantity, version: { increment: 1 } }, select: { id: true } })
     tools.audit({ recordType: 'ShipmentLine', recordId: line.id, companyId: current.companyId, siteId: current.siteId, before: { quantity: line.quantity }, after: { quantity: body.quantity } })
     changed(tools, current, current.status, 'lines')

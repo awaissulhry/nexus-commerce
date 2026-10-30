@@ -1,0 +1,130 @@
+{
+  "band": {
+    "site": "Stabilimento",
+    "asOf": "Aggiornato alle {time}",
+    "reading": "Lettura delle assegnazioni…",
+    "notRead": "Non letto",
+    "board": "Tabellone di pianificazione",
+    "more": "Altro",
+    "keys": "Scorciatoie da tastiera"
+  },
+  "save": {
+    "idle": "Gli spostamenti si salvano mentre li fai",
+    "saving": "Salvataggio…",
+    "saved": "Tutti gli spostamenti salvati",
+    "failed": "Non salvato: {reason}"
+  },
+  "lanes": {
+    "title": "Corsie",
+    "none": "Questo stabilimento non ha ancora linee né terzisti."
+  },
+  "kind": {
+    "LINE": "Linea",
+    "WORKSHOP": "Terzista"
+  },
+  "lane": {
+    "line_one": "{pieces} capo prenotato",
+    "line_other": "{pieces} capi prenotati",
+    "workshop_one": "{pieces} capi prenotati · {orders} ordine di conto lavoro",
+    "workshop_other": "{pieces} capi prenotati · {orders} ordini di conto lavoro",
+    "capacity": "Prossime 4 settimane: {booked} di {available} min prenotati ({pct}%). La colonna conta ogni scheda che contiene.",
+    "workshopCapacity": "Un terzista: il suo carico in minuti standard non si pianifica qui."
+  },
+  "window": "Prossime 4 settimane",
+  "card": {
+    "detail": "{style} · {pieces} pz · {due}",
+    "due": "consegna {date}",
+    "noDue": "senza data di consegna",
+    "gone": "Questa scheda non è più sul tabellone",
+    "goneBody": "È stata spostata o l'ordine di lavoro è stato chiuso nel frattempo: il tabellone la mostra com'è ora.",
+    "title": "{order} · {lane}",
+    "onBoard": "Mostra sul tabellone di pianificazione",
+    "open": "Apri l'ordine di lavoro",
+    "move_one": "Sposta {pieces} capo",
+    "move_other": "Sposta {pieces} capi",
+    "pieces": "Capi qui",
+    "piecesValue": "{pieces} di {of}",
+    "minutes": "Minuti standard",
+    "minutesValue": "{minutes} min",
+    "dueLabel": "Data di consegna",
+    "status": "Programma",
+    "moveTitle": "Sposta tutto o una parte",
+    "to": "Verso",
+    "howMany": "Capi",
+    "howManyHint": "Da 1 a {pieces}; il resto rimane qui.",
+    "less": "Uno in meno",
+    "more": "Uno in più",
+    "rule": "La linea dell'ordine di lavoro fa i capi che nessuna parte nomina; una parte va su un'altra linea o da un terzista, una parte per corsia."
+  },
+  "mark": {
+    "part": "Parte: {pieces} di {of}",
+    "atRisk": "A rischio",
+    "onHold": "Sospeso",
+    "draft": "Bozza"
+  },
+  "status": {
+    "LATE": "In ritardo",
+    "AT_RISK": "A rischio",
+    "ON_TIME": "In tempo",
+    "NO_DUE_DATE": "Senza data di consegna",
+    "DONE": "Fatto"
+  },
+  "held": {
+    "readOnly": "Sola lettura: assegnano gli ordini di lavoro solo i pianificatori. Puoi guardare il tabellone e aprire gli ordini di lavoro.",
+    "readOnlyBody": "Per assegnare serve il permesso di modificare il piano di lavoro di questo stabilimento.",
+    "offline": "Offline: gli spostamenti aspettano di essere inviati finché la connessione non torna.",
+    "offlineBody": "Il tabellone è in sola lettura mentre il canale in tempo reale è assente; quando torna rilegge tutto.",
+    "busy": "Salvataggio in corso: aspetta la risposta.",
+    "same": "Scegli un'altra colonna.",
+    "pieces_one": "Indica capi interi, da 1 a {pieces}.",
+    "pieces_other": "Indica capi interi, da 1 a {pieces}."
+  },
+  "board": {
+    "title": "Tabellone delle assegnazioni",
+    "hint": "Trascina un ordine di lavoro su una linea o da un terzista; apri una scheda per spostare una parte dei suoi capi. Al reparto non arriva nulla finché il piano non è pubblicato.",
+    "label": "Linee e terzisti · {site}",
+    "tray": "Non assegnati",
+    "trayEmpty": "Ogni ordine di lavoro è assegnato",
+    "empty": "Niente da assegnare.",
+    "moveBucket": "Periodo"
+  },
+  "error": {
+    "title": "Impossibile caricare il tabellone delle assegnazioni",
+    "forbidden": "Non puoi vedere le assegnazioni di questo stabilimento.",
+    "offline": "Il server non ha risposto. Non si disegna nulla, così un tabellone vuoto non appare mai per errore.",
+    "failed": "Non è stato possibile leggere le assegnazioni. Non si disegna nulla, così un tabellone vuoto non appare mai per errore.",
+    "noSite": "Questa società non ha ancora uno stabilimento da pianificare.",
+    "retry": "Riprova"
+  },
+  "refusal": {
+    "STALE": "La scheda non è più in quella colonna: il tabellone è stato riletto.",
+    "WHOLE": "Sposta capi interi, da 1.",
+    "TOO_MANY": "La scheda non ha tutti quei capi.",
+    "SAME": "È già assegnato così.",
+    "UNALLOCATED_PART": "Una parte di un ordine non può restare non assegnata mentre il resto è su una linea: spostala su un'altra corsia.",
+    "CHANGED": "L'ordine di lavoro è cambiato da quando è stato letto: il tabellone è stato riletto.",
+    "LOCKED": "L'ordine di lavoro è finito: la sua assegnazione resta com'era.",
+    "NOT_OPEN": "L'ordine di lavoro non è più aperto: non viene assegnato.",
+    "LANE_INACTIVE": "Quella linea o quel terzista non è più attivo.",
+    "INVALID": "Questa assegnazione non si può salvare così com'è.",
+    "FORBIDDEN": "Non puoi assegnare ordini di lavoro in questo stabilimento.",
+    "NOT_FOUND": "L'ordine di lavoro non è più sul tabellone: il tabellone è stato riletto.",
+    "OFFLINE": "Nessuna connessione al server: non è stato salvato nulla.",
+    "FAILED": "Il server non l'ha salvato. Riprova."
+  },
+  "notice": {
+    "moved_one": "{pieces} capo spostato.",
+    "moved_other": "{pieces} capi spostati."
+  },
+  "dialog": {
+    "close": "Chiudi"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "pick": "Prendi la scheda selezionata",
+    "columns": "Scegli una colonna",
+    "drop": "Lasciala lì (o apri la scheda selezionata)",
+    "cancel": "Annulla lo spostamento, chiudi una finestra",
+    "undo": "Annulla uno spostamento"
+  }
+}

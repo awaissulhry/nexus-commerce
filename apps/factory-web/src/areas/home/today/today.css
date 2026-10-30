@@ -449,3 +449,54 @@ a.fw-today-stage-box:hover {
   gap: var(--nds-space-3);
   min-width: 0;
 }
+
+/* W2a — Coming up (the design's AgendaList, composed here): one block per day, its items one line each. */
+.fw-today-agenda {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-today-agenda-day {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-today-agenda-day > .fw-today-group-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-today-agenda-weekday::first-letter {
+  text-transform: uppercase;
+}
+
+.fw-today-agenda-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-today-agenda-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-4) 0;
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-today-agenda-text {
+  flex: 1 1 16rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
