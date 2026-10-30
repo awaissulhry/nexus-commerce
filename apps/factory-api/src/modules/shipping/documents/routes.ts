@@ -4,7 +4,21 @@ import { defineRoutes } from '../../../core/manifest'
 import { AUTH_RATE_LIMITS, officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import { processEmail } from '../../../platform/email-out/service'
 import { processFiles } from '../../../platform/files/service'
-import { attachContract, documentsContract, linkDocumentsContract, linkDownloadContract, renewContract, sendLinkContract } from './contract'
+import {
+  announcePaperContract,
+  attachContract,
+  completeEvidenceContract,
+  completePaperContract,
+  documentsContract,
+  evidenceContract,
+  evidenceNeededContract,
+  linkDocumentsContract,
+  linkDownloadContract,
+  renewContract,
+  reopenEvidenceContract,
+  sendLinkContract,
+} from './contract'
+import { announcePaper, completeEvidence, completePaper, getEvidence, reopenEvidence, setEvidenceNeeded } from './evidence'
 import { linkTokenOf, renewDocumentLink } from './link'
 import { manifest } from './manifest'
 import { attachFromOffice, getDocuments, sendFromOffice } from './office'
@@ -55,4 +69,21 @@ export default defineRoutes('shipping.documents', manifest, async (app) => {
     }, request.log)
     return reply.code(202).send({ status: 'requested' as const, message: RENEW_ANSWER })
   })
+
+  // B-W2a-48 (LOG-090): intra-EU transport evidence.
+  app.get('/shipping/shipments/:shipmentId/evidence', { schema: evidenceContract }, async (request) => getEvidence(request, request.params.shipmentId))
+
+  app.post('/shipping/shipments/:shipmentId/evidence/papers', { schema: announcePaperContract }, async (request, reply) =>
+    reply.code(201).send(await announcePaper(processFiles(), request, request.params.shipmentId, request.body, idempotencyKeyFrom(request))),
+  )
+
+  app.post('/shipping/shipments/:shipmentId/evidence/papers/:fileId/complete', { schema: completePaperContract }, async (request) =>
+    completePaper(processFiles(), request, request.params.shipmentId, request.params.fileId, request.body ?? {}, idempotencyKeyFrom(request)),
+  )
+
+  app.post('/shipping/shipments/:shipmentId/evidence/complete', { schema: completeEvidenceContract }, async (request) => completeEvidence(request, request.params.shipmentId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/shipping/shipments/:shipmentId/evidence/reopen', { schema: reopenEvidenceContract }, async (request) => reopenEvidence(request, request.params.shipmentId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/shipping/shipments/:shipmentId/evidence/needed', { schema: evidenceNeededContract }, async (request) => setEvidenceNeeded(request, request.params.shipmentId, request.body, idempotencyKeyFrom(request)))
 })

@@ -1,8 +1,14 @@
 import { z } from 'zod'
 import { id, instant, output } from '@nexus/factory-domain/core/contracts'
+import { money } from '@nexus/factory-domain/money/marked'
+import { TRANSPORT_EVIDENCE_STATUSES } from '@nexus/factory-domain/shipping/evidence/evidence'
 import { SHIPMENT_STATUSES, TRANSPORT_BY } from '@nexus/factory-domain/shipping/shipments'
+import { FREIGHT_BASES } from '@nexus/factory-domain/shipping/shipments/freight'
 
-/** The answers' shapes the office and packing routes share (no money anywhere: a shipment carries none). */
+/**
+ * The answers' shapes the office and packing routes share. No money in what packers see; the office's shipment carries
+ * one price since B-W2a-48 (the freight charged, money.price: dropped for a reader without the price grain).
+ */
 
 export const lineSchema = output({
   id: id(),
@@ -50,6 +56,15 @@ export const contentsSchema = {
 export const statusSchema = z.enum(SHIPMENT_STATUSES)
 export const transportBySchema = z.enum(TRANSPORT_BY)
 
+/** The freight of a shipment (B-W2a-48): the charge, whether the office typed it, and what the site's rule gives now. */
+export const freightSchema = output({
+  /** null: not decided yet (the rule's is set when the goods leave). */
+  charge: money.price(z.number().int().nullable()),
+  currency: z.string(),
+  byHand: z.boolean(),
+  byRule: output({ charge: money.price(z.number().int().nullable()), basis: z.enum(FREIGHT_BASES), words: z.string() }),
+})
+
 /** The office's shipment: header, order and party, and its contents. */
 export const shipmentSchema = output({
   id: id(),
@@ -81,6 +96,10 @@ export const shipmentSchema = output({
   updatedAt: instant(),
   createdById: id().nullable(),
   ...contentsSchema,
+  /** B-W2a-48 (LOG-105): the freight charged to the customer, in the order's currency (minor units). */
+  freight: freightSchema,
+  /** B-W2a-48 (LOG-090): the intra-EU transport evidence's state (GET …/evidence has the papers). */
+  transportEvidence: output({ status: z.enum(TRANSPORT_EVIDENCE_STATUSES), completedAt: instant().nullable() }),
 })
 
 export const oneShipment = output({ shipment: shipmentSchema })

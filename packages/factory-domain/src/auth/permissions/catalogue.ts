@@ -72,6 +72,8 @@ import { ACCOUNTING_DEFINITIONS, ACCOUNTING_PERMISSIONS } from '../../accounting
 import { SECURITY_DEFINITIONS, SECURITY_PERMISSIONS } from '../../ops/permissions'
 // B-W2a-43: customer returns (sales.returns.view | manage | receive | inspect | decide).
 import { SALES_RETURNS_DEFINITIONS, SALES_RETURNS_FLOOR_PERMISSIONS, SALES_RETURNS_PERMISSIONS } from '../../sales/returns/permissions'
+// B-W2a-48: shipping every day (shipping.freight.manage, shipping.evidence.manage).
+import { SHIPPING_DAILY_DEFINITIONS, SHIPPING_DAILY_PERMISSIONS } from '../../shipping/shipments/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -424,6 +426,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SECURITY_DEFINITIONS,
   // B-W2a-43: customer returns.
   SALES_RETURNS_DEFINITIONS,
+  // B-W2a-48: shipping every day (freight charged, intra-EU transport evidence).
+  SHIPPING_DAILY_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -487,6 +491,8 @@ for (const name of ACCOUNTING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(n
 for (const name of SECURITY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-43: customer returns.
 for (const name of SALES_RETURNS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-48: shipping every day.
+for (const name of SHIPPING_DAILY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

@@ -16,4 +16,11 @@ export const manifest = defineManifest({
   'GET /shipping/link/documents': { audiences: ['link'], permission: 'links.open', scope: 'record' },
   'POST /shipping/link/documents/:fileId/download': { audiences: ['link'], permission: 'links.open', scope: 'record' },
   'POST /shipping/link/renew': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
+  // B-W2a-48 (LOG-090): intra-EU transport evidence (evidence.ts); files.upload is checked over the company in the handler.
+  'GET /shipping/shipments/:shipmentId/evidence': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
+  'POST /shipping/shipments/:shipmentId/evidence/papers': { audiences: ['office'], permission: 'shipping.evidence.manage', scope: 'record' },
+  'POST /shipping/shipments/:shipmentId/evidence/papers/:fileId/complete': { audiences: ['office'], permission: 'shipping.evidence.manage', scope: 'record' },
+  'POST /shipping/shipments/:shipmentId/evidence/complete': { audiences: ['office'], permission: 'shipping.evidence.manage', scope: 'record' },
+  'POST /shipping/shipments/:shipmentId/evidence/reopen': { audiences: ['office'], permission: 'shipping.evidence.manage', scope: 'record' },
+  'POST /shipping/shipments/:shipmentId/evidence/needed': { audiences: ['office'], permission: 'shipping.evidence.manage', scope: 'record' },
 })
