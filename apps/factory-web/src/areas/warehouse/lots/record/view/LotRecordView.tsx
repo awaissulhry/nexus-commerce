@@ -518,7 +518,7 @@ function RejectedStock({ value, model, actions }: { value: LotRecord; model: Lot
       title={t('lt.reject.title')}
       action={
         <Button size="sm" asChild>
-          <Link href={`${model.prefix}/purchasing/claims?return=${encodeURIComponent(lot.id)}`}>
+          <Link href={`${model.prefix}/purchasing/claims?return=1&lot=${encodeURIComponent(lot.id)}`}>
             <Undo2 size={13} aria-hidden /> {t('lt.reject.return')}
           </Link>
         </Button>
