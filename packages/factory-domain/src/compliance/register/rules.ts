@@ -36,7 +36,9 @@ export type RegisterRisk = (typeof REGISTER_RISKS)[number]
  */
 export const REGISTER_SOURCE_TYPES = ['QualityReleaseReversal', 'QualityRelease', 'Inspection', 'Shipment', 'LabResult',
   // B-W2a-47: a PPE nonconformance that may present a risk (the register guard accepts it since wave 6).
-  'Nonconformance'] as const
+  'Nonconformance',
+  // B-W2a-65: a customer complaint (a safety one opens its entry at triage; the register guard accepts it since wave 2).
+  'Complaint'] as const
 export type RegisterSourceType = (typeof REGISTER_SOURCE_TYPES)[number]
 
 export const KIND_WORDS: Readonly<Record<RegisterKind, string>> = Object.freeze({ COMPLAINT: 'complaint', NON_CONFORMITY: 'non-conformity', RECALL: 'recall' })
