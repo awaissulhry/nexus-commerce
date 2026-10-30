@@ -71,6 +71,8 @@ model Location {
   stockCountLines StockCountLine[]
   movesOut StockMove[] @relation("StockMoveFrom")
   movesIn  StockMove[] @relation("StockMoveTo")
+  // W2a holds.prisma: the holds whose goods were moved here (a QUARANTINE place).
+  qualityHolds QualityHold[]
   // W2a: the workshop of a SUBCONTRACTOR location, and the subcontract orders sent to it (subcontract.prisma).
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
   party             Party?             @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -259,6 +261,8 @@ model Lot {
   // quality.prisma: its lab results (the Cr VI result's history) and supplier documents (B-W1-34).
   labResults  LabResult[]
   documents   LotDocument[]
+  // W2a ncr.prisma: the nonconformances about it.
+  nonconformances Nonconformance[]
   // W2a claims.prisma, subcontract.prisma: the claim lines and kit lines that name it.
   claimLines  SupplierClaimLine[]
   kitLines    SubcontractKitLine[]
@@ -415,6 +419,8 @@ model StockMove {
   reversals    StockMove[]       @relation("StockMoveReversal")
   // W2a stockcount.prisma: the count line whose difference it posts (a COUNT move).
   stockCountLines StockCountLine[]
+  // W2a ncr.prisma: the NCR decision it carried out (a scrap, a move to quarantine).
+  ncrDispositionLines NcrDispositionLine[]
   device       Device?           @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   valuations   StockValuation[]
   // W2a claims.prisma, subcontract.prisma: the claim line it returned, the kit line it sent.

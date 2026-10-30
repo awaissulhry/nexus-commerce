@@ -36,6 +36,9 @@ export const NUMBER_KINDS = [
   'SUBCONTRACT',
   // W2a wave 4 (factory-db numbering.prisma): stock counts and the year-end inventory (CNT-…).
   'COUNT',
+  // W2a wave 6 (factory-db numbering.prisma): nonconformance reports (NCR-…) and maintenance jobs (MJ-…).
+  'NCR',
+  'MAINTENANCE_JOB',
 ] as const
 export type NumberKind = (typeof NUMBER_KINDS)[number]
 
@@ -175,6 +178,8 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   CLAIM: 'CLM',
   SUBCONTRACT: 'SC',
   COUNT: 'CNT',
+  NCR: 'NCR',
+  MAINTENANCE_JOB: 'MJ',
 }
 
 /** The pattern a new series gets when the admin types none: `FT-{YYYY}-{N:5}` (yearly) or `LOT-{N:6}` (never resets). */

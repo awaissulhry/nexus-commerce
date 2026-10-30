@@ -146,6 +146,8 @@ model WorkOrder {
   // W2a reservations.prisma, planning.prisma: the stock held for it, and the planning runs' pegging of its material.
   reservations  Reservation[]
   peggings      RequirementPegging[]
+  // W2a ncr.prisma: the nonconformances about it.
+  nonconformances Nonconformance[]
   // The floor's correction requests and refused scans about it (B-W1-42).
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]

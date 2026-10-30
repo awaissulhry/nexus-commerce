@@ -1,0 +1,330 @@
+// The plant: machines and their maintenance (W2a schema wave 6/7; B-W2a-35; features QHS-162, QHS-178, QHS-184; Owner
+// answer H1; D.Lgs. 81/2008 art. 71; design plant.machines, plant.requests, plant.jobs, floor.machine). The machine
+// register with each machine's class (its type, with the symptoms a station reports for it), its place (site, station,
+// work centre), its status now; a request from a station when a machine breaks down; a maintenance job, numbered from
+// the company's MAINTENANCE_JOB series, from a request, a plan or by hand. apps/factory-api's modules/plant writes them
+// (B-W2a-35), always through command(); a station reports and a technician works a job through floorCommand.
+//
+// Unsafe (H1): anyone at the station marks a machine unsafe at once: a request with `unsafe`, and the machine
+// DO_NOT_USE in the same transaction; only a technician signs it safe again (the request's sign-safe columns: the API's
+// permission says who is a technician). While a request is unsafe and not signed safe its machine stays DO_NOT_USE, and a
+// job hands the machine back as running only once it is signed safe (the …_quality_plant_w2a_guards triggers, for every
+// login, at commit). Each status change, lock and sign-safe is in the audit log.
+//
+// Statuto dei Lavoratori art. 4: nothing here measures a person; a request names its reporter (a person or the station)
+// and a job its technician only inside the one record, never as a figure.
+//
+// Who sees what (ownership/plant.json): the office reads and writes. The floor of the site reads the classes and
+// symptoms (the tiles), its machines (never their cost), requests and jobs; it reports a problem (a request), marks the
+// machine down or unsafe at once, and a technician acknowledges nothing but works its jobs (start, hand back) and signs a
+// locked machine safe with the PIN. Portal and link sessions read nothing here.
+
+/// A class of machine or equipment (QHS-162: lockstitch, post-bed, walking-foot, bar-tack, cutting table, CNC cutter,
+/// clicking press, skiving, heat press, compressor, steam iron, label printer): its words and icon. Archived
+/// (inactive), never deleted while a machine is of it.
+model MachineClass {
+  id          String           @id @db.Uuid
+  tenantId    String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Upper-case letters, digits and underscores (factory-domain checks it); unique in the tenant; never changes.
+  code        String
+  labelIt     String
+  labelEn     String
+  labelI18n   Json             @default("{}")
+  /// The design system's tag icon (IconPicker id); null: the plain dot.
+  icon        String?
+  sortOrder   Int              @default(0)
+  active      Boolean          @default(true)
+  version     Int              @default(1)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?          @db.Uuid
+
+  symptoms MachineSymptom[]
+  machines Machine[]
+
+  @@unique([tenantId, code])
+  // The target of the symptoms' and machines' tenant-safe references.
+  @@unique([tenantId, id])
+}
+
+/// A symptom a station reports (QHS-178: won't start, thread breaks, skipped stitches, oil leak, noise, guard missing,
+/// other), for one class of machine or every class; an unsafe symptom (a guard missing) marks the machine unsafe at once
+/// (H1). Retired (inactive), never deleted while a request names it.
+model MachineSymptom {
+  id          String        @id @db.Uuid
+  tenantId    String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The class it is for; null: every class.
+  classId     String?       @db.Uuid
+  /// Upper-case letters, digits and underscores (factory-domain checks it); unique in the tenant; never changes.
+  code        String
+  labelIt     String
+  labelEn     String
+  labelI18n   Json          @default("{}")
+  icon        String?
+  /// A swatch of the design system ("#RRGGBB"); null: none.
+  colour      String?
+  /// Reporting it marks the machine unsafe at once (H1): the request is `unsafe`.
+  unsafe      Boolean       @default(false)
+  /// An "Other" symptom: the reporter adds a photo or a note.
+  needsDetail Boolean       @default(false)
+  sortOrder   Int           @default(0)
+  active      Boolean       @default(true)
+  version     Int           @default(1)
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?       @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  machineClass MachineClass?        @relation(fields: [tenantId, classId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  requests     MaintenanceRequest[]
+  jobs         MaintenanceJob[]
+
+  @@unique([tenantId, code])
+  // The target of the requests' and jobs' tenant-safe references.
+  @@unique([tenantId, id])
+}
+
+/// A machine's status now (QHS-162, H1).
+enum MachineStatus {
+  RUNNING
+  /// Stopped by a fault (a request reported it down).
+  DOWN
+  /// A technician is working on it.
+  UNDER_MAINTENANCE
+  /// Do not use: unsafe, locked until a technician signs it safe (or set by the office with its reason).
+  DO_NOT_USE
+  /// Out of use for good, kept for its history; final.
+  RETIRED
+}
+
+/// A machine or piece of equipment of a site (QHS-162): its asset number (on its QR tag), class, make, model and
+/// serial, the station and work centre it stands at, the supplier and what it cost, and its status. Retired, never
+/// deleted. Its documents (manual, CE declaration) are files of the row (StoredFile recordType "Machine").
+model Machine {
+  id           String        @id @db.Uuid
+  tenantId     String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId    String        @db.Uuid
+  siteId       String        @db.Uuid
+  /// The asset number on its tag (scanned to report a problem), unique in the tenant; never changes.
+  assetNumber  String
+  classId      String        @db.Uuid
+  make         String?
+  modelName    String?
+  /// The maker's serial number.
+  serialNumber String?
+  /// The year it was built.
+  year         Int?
+  /// Where it stands: a station and a work centre of its site (either may be unknown).
+  stationId    String?       @db.Uuid
+  workCentreId String?       @db.Uuid
+  /// Who sold it, and what it cost, in the company's currency (minor units; office only).
+  supplierId   String?       @db.Uuid
+  /// @grain cost
+  purchaseCost Int?
+  status       MachineStatus @default(RUNNING)
+  /// When the status last changed, and why (required for DO_NOT_USE).
+  statusSince  DateTime      @db.Timestamptz(3)
+  statusReason String?
+  note         String?
+  version      Int           @default(1)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?       @db.Uuid
+
+  site         Site                 @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  machineClass MachineClass         @relation(fields: [tenantId, classId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  station      Station?             @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  workCentre   WorkCentre?          @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplier     Party?               @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  requests     MaintenanceRequest[]
+  jobs         MaintenanceJob[]
+
+  @@unique([tenantId, assetNumber])
+  // The target of the requests' and jobs' references: a machine of the same site.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, stationId])
+}
+
+/// NEW → ACKNOWLEDGED → JOB_MADE | MERGED | CLOSED; NEW → JOB_MADE | MERGED | CLOSED.
+enum MaintenanceRequestStatus {
+  NEW
+  ACKNOWLEDGED
+  /// A maintenance job was made for it (the request names the job).
+  JOB_MADE
+  /// Merged into another request of the same machine (a duplicate).
+  MERGED
+  /// Closed without a job (with the reason).
+  CLOSED
+}
+
+/// Why a request closed without a job (the design's "Close without a job").
+enum RequestCloseReason {
+  SOLVED_BY_OPERATOR
+  NOT_A_FAULT
+  DUPLICATE
+  OTHER
+}
+
+/// A request from a station (QHS-178; design floor.machine "Report a machine problem", plant.requests): a machine's
+/// problem with its symptom, words and photos (files of the row: StoredFile recordType "MaintenanceRequest"), whether it
+/// was marked unsafe, who reported it and when, its triage, the job made for it, and — for an unsafe one — the
+/// technician's sign-safe (H1). Never deleted.
+model MaintenanceRequest {
+  id                     String                   @id @db.Uuid
+  tenantId               String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The machine's company and site.
+  companyId              String                   @db.Uuid
+  siteId                 String                   @db.Uuid
+  machineId              String                   @db.Uuid
+  symptomId              String?                  @db.Uuid
+  description            String?
+  /// Marked unsafe at once (H1): the machine is DO_NOT_USE until a technician signs it safe; never changes.
+  unsafe                 Boolean                  @default(false)
+  /// Who reported it and when: an office user, a floor worker or the station alone (a site that records the station,
+  /// MES-278), at least one; the tablet it was sent from.
+  reportedAt             DateTime                 @db.Timestamptz(3)
+  reportedById           String?                  @db.Uuid
+  reportedByWorkerId     String?                  @db.Uuid
+  stationId              String?                  @db.Uuid
+  deviceId               String?                  @db.Uuid
+  status                 MaintenanceRequestStatus @default(NEW)
+  /// Seen by maintenance: when and by whom (set once, from ACKNOWLEDGED on).
+  acknowledgedAt         DateTime?                @db.Timestamptz(3)
+  acknowledgedById       String?                  @db.Uuid
+  /// The job made for it (exactly while JOB_MADE), the request it was merged into (exactly while MERGED).
+  jobId                  String?                  @db.Uuid
+  mergedIntoId           String?                  @db.Uuid
+  /// CLOSED (or MERGED): when and by whom; CLOSED also why.
+  closedAt               DateTime?                @db.Timestamptz(3)
+  closedById             String?                  @db.Uuid
+  closeReason            RequestCloseReason?
+  closeNote              String?
+  /// An unsafe request signed safe by a technician (an office user, or a floor worker with the PIN: exactly one), when
+  /// and what was checked (H1; D.Lgs. 81/2008 art. 71). Set once.
+  signedSafeAt           DateTime?                @db.Timestamptz(3)
+  signedSafeById         String?                  @db.Uuid
+  signedSafeByWorkerId   String?                  @db.Uuid
+  signedSafeNote         String?
+  version                Int                      @default(1)
+  createdAt              DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById            String?                  @db.Uuid
+
+  site               Site                 @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  machine            Machine              @relation(fields: [tenantId, siteId, machineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  symptom            MachineSymptom?      @relation(fields: [tenantId, symptomId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  reportedByWorker   Worker?              @relation("MaintenanceRequestReportedBy", fields: [tenantId, siteId, reportedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  signedSafeByWorker Worker?              @relation("MaintenanceRequestSignedSafeBy", fields: [tenantId, siteId, signedSafeByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  station            Station?             @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device             Device?              @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  job                MaintenanceJob?      @relation(fields: [tenantId, siteId, jobId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  mergedInto         MaintenanceRequest?  @relation("MaintenanceRequestMerge", fields: [tenantId, siteId, mergedIntoId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  merged             MaintenanceRequest[] @relation("MaintenanceRequestMerge")
+
+  // The target of the merges' reference: a request of the same site.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, machineId])
+  @@index([tenantId, status])
+}
+
+/// What kind of maintenance job (QHS-184).
+enum MaintenanceJobType {
+  CORRECTIVE
+  PREVENTIVE
+  INSPECTION
+  IMPROVEMENT
+  SAFETY
+}
+
+/// Where a job came from.
+enum MaintenanceJobSource {
+  /// One or more requests (they name the job).
+  REQUEST
+  /// A preventive maintenance plan (W2b).
+  PM_PLAN
+  STATUTORY_CHECK
+  /// An action of an incident (W2b).
+  INCIDENT
+  MANUAL
+}
+
+enum MaintenancePriority {
+  /// Unsafe, or the line stopped.
+  P1
+  P2
+  P3
+}
+
+/// NEW → PLANNED | IN_PROGRESS | CANCELLED; PLANNED → NEW | IN_PROGRESS | CANCELLED; IN_PROGRESS → WAITING_PARTS |
+/// HANDED_BACK | CANCELLED; WAITING_PARTS → IN_PROGRESS | CANCELLED; HANDED_BACK → IN_PROGRESS | CLOSED. CLOSED and
+/// CANCELLED are final.
+enum MaintenanceJobStatus {
+  NEW
+  PLANNED
+  IN_PROGRESS
+  WAITING_PARTS
+  /// The technician handed the machine back (what was done, the machine's state after); the line confirms, then CLOSED.
+  HANDED_BACK
+  CLOSED
+  CANCELLED
+}
+
+/// A maintenance job (QHS-184; design plant.jobs, floor.machine "My jobs"): its number, machine, type, problem and
+/// symptom, priority, technician (an office user or a floor worker of the site, at most one), due time and state, and
+/// its hand-back: what was done and the machine's state after (running, do not use, retired). Cancelled, never deleted.
+model MaintenanceJob {
+  id                   String               @id @db.Uuid
+  tenantId             String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The machine's company and site.
+  companyId            String               @db.Uuid
+  siteId               String               @db.Uuid
+  /// Its number from the company's MAINTENANCE_JOB series (MJ-2026-0014; allocateNumber when it is made), unique in the
+  /// company; never changes.
+  number               String
+  machineId            String               @db.Uuid
+  type                 MaintenanceJobType
+  source               MaintenanceJobSource
+  problem              String
+  symptomId            String?              @db.Uuid
+  priority             MaintenancePriority  @default(P2)
+  /// The technician: an office user or a floor worker of the site, at most one; neither: not assigned yet.
+  assigneeId           String?              @db.Uuid
+  assigneeWorkerId     String?              @db.Uuid
+  dueAt                DateTime?            @db.Timestamptz(3)
+  status               MaintenanceJobStatus @default(NEW)
+  /// When the work first started (set once, from IN_PROGRESS on).
+  startedAt            DateTime?            @db.Timestamptz(3)
+  /// The hand-back (from HANDED_BACK on, cleared when the job goes back to work): when, by whom (an office user or a
+  /// floor worker: exactly one), what was done and the machine's state after.
+  handedBackAt         DateTime?            @db.Timestamptz(3)
+  handedBackById       String?              @db.Uuid
+  handedBackByWorkerId String?              @db.Uuid
+  workDone             String?
+  machineAfter         MachineStatus?
+  /// CLOSED: when and by whom.
+  closedAt             DateTime?            @db.Timestamptz(3)
+  closedById           String?              @db.Uuid
+  /// CANCELLED: when and why.
+  cancelledAt          DateTime?            @db.Timestamptz(3)
+  cancelReason         String?
+  version              Int                  @default(1)
+  createdAt            DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?              @db.Uuid
+
+  site               Site                 @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  machine            Machine              @relation(fields: [tenantId, siteId, machineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  symptom            MachineSymptom?      @relation(fields: [tenantId, symptomId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  assigneeWorker     Worker?              @relation("MaintenanceJobAssignee", fields: [tenantId, siteId, assigneeWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  handedBackByWorker Worker?              @relation("MaintenanceJobHandedBackBy", fields: [tenantId, siteId, handedBackByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  requests           MaintenanceRequest[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the requests' reference: a job of the same site.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, machineId])
+  @@index([tenantId, status])
+}
