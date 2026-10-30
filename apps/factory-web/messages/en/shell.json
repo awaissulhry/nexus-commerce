@@ -34,7 +34,16 @@
       "area": "Purchasing",
       "main": "Main",
       "suppliers": "Suppliers",
-      "orders": "Purchase orders"
+      "orders": "Purchase orders",
+      "outside": "Outside work",
+      "subcontracting": "Subcontract orders"
+    },
+    "plant": {
+      "area": "Plant",
+      "maintenance": "Maintenance",
+      "requests": "Machine requests",
+      "jobs": "Maintenance jobs",
+      "machines": "Machines & tools"
     },
     "admin": {
       "area": "Admin",
@@ -116,6 +125,7 @@
       "moves": "Movements",
       "locations": "Locations",
       "inTheWarehouse": "In the warehouse",
+      "picking": "Picking & kits",
       "counts": "Counts"
     },
     "frame": {

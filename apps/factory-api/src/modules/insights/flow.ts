@@ -23,6 +23,7 @@ import { QUALITY_LOTS_VIEW } from '@nexus/factory-domain/quality/lab/permissions
 import { daysLate as orderDaysLate } from '@nexus/factory-domain/sales/orders/orders'
 import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import type { CommandCaller } from '../../core/command'
+import { ORDER_DEPOSIT_ONLY } from '../sales/deposits/deposits'
 import { dayOrNull } from './sources/common'
 import { scopeFilterOf, viewerOf } from './viewer'
 
@@ -59,9 +60,10 @@ const orders: Reader = async (db, viewer, filter) => {
     AND: [scopeWhere(viewer.actor, ORDERS_VIEW, { company: 'companyId', party: 'partyId' }) as Prisma.SalesOrderWhereInput, filterWhere(filter, false), { status: { in: ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED'] } }],
   }
   const found = await db.salesOrder.findMany({ where, take: FLOW_LIMIT + 1, select: { id: true, status: true, promiseDate: true, createdAt: true } })
-  // The orders list's own deposit filter (deposit=OPEN): a deposit is needed and a request of it is still OPEN.
+  // The orders list's own deposit filter (deposit=OPEN): a deposit is needed and a request of it is still OPEN (the
+  // deposit's own: a before-shipping step's request is the balance, B-W2a-F2).
   const waiting = new Set(
-    (await db.salesOrder.findMany({ where: { AND: [where, { status: 'CONFIRMED' }, { depositRequired: true, depositRequests: { some: { status: 'OPEN' } } }] }, select: { id: true } })).map((row) => row.id),
+    (await db.salesOrder.findMany({ where: { AND: [where, { status: 'CONFIRMED' }, { depositRequired: true, depositRequests: { some: { status: 'OPEN', ...ORDER_DEPOSIT_ONLY } } }] }, select: { id: true } })).map((row) => row.id),
   )
   const rows = found.slice(0, FLOW_LIMIT).map((row) => ({
     stage: orderStageOf(row.status, waiting.has(row.id)),

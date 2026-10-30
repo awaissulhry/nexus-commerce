@@ -1,0 +1,76 @@
+/*
+ * Purchasing › Subcontract orders (SCR-128, SCR-129) LAYOUT on top of the buying office's (`_shared/buying/buying.css`:
+ * the head, the band, the body with the thread, cards, fields). The controls are the design system's; this file only
+ * places them, with semantic tokens (no colours of its own). No page max-width (Owner rule 2026-10-29).
+ */
+.fw-sc-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-sc-late {
+  color: var(--nds-danger);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-sc-services {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-sc-workshops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-16);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-sc-pick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-6);
+}
+
+.fw-sc-op {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+
+.fw-sc-op.is-picked {
+  border-color: var(--nds-accent);
+}
+
+.fw-sc-op-pieces {
+  width: 6.5rem;
+}
+
+.fw-sc-op-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .fw-sc-op {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .fw-sc-op-pieces {
+    grid-column: 2;
+  }
+}

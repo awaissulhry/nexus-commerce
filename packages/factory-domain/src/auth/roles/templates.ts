@@ -119,7 +119,18 @@ const NCR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze(
   sales: ['quality.ncr.view', 'quality.ncr.raise'],
   planner: ['quality.ncr.view'],
 })
-const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : [])]
+/**
+ * B-W2a-55 (receivables, FIN-109 … FIN-111; design finance.receivables, the Finance area's people): finance reads the
+ * ageing and statements, prepares, edits, approves and sends the reminders, e-mails statements and keeps the ladder.
+ * The Owner's switch (receivables.reminders.switch, step-up) is the owner's alone, through every(); read-only gets
+ * receivables.view through the registry.
+ */
+const RECEIVABLES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  finance: ['receivables.view', 'receivables.reminders.manage', 'receivables.reminders.approve', 'receivables.statements.send', 'receivables.settings.manage'],
+})
+const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
+  // B-W2a-55
+  ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

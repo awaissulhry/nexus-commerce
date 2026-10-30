@@ -5,10 +5,12 @@ import type { FirmSupply, PlanReservation } from '@nexus/factory-domain/planning
 import { itemPlanningFor } from '@nexus/factory-domain/planning/settings/items'
 import { buyFromSource, sourceFor, unitsBoughtIn } from '@nexus/factory-domain/purchasing/sources/sources'
 import type { SourceFacts } from '@nexus/factory-domain/purchasing/sources/sources'
-import { Dec } from '@nexus/factory-domain/tax/decimal'
+import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
+import type { LotFacts } from '@nexus/factory-domain/planning/netting'
 import { demandOpen, readDemands, RESERVATION_COLUMNS } from '../inventory/reservations/store'
 import { activeSourcesOf } from '../purchasing/supplier-items/store'
-import { dayOf, ITEM_COLUMNS, lotFactsOf, planItemOf, readDemand, readLots, readPurchases, readStock, readSupplyRules, readWorkOrders, unitsOf, type DemandRead, type ItemRow, type PurchaseRead, type Reader, type SiteRow } from './store'
+import { heldByQualityHolds } from '../quality/holds/stock'
+import { dayOf, ITEM_COLUMNS, lotFactsOf, planItemOf, readDemand, readLots, readPurchases, readStock, readSupplyRules, readWorkOrders, unitsOf, type DemandRead, type ItemRow, type PlanStockRow as PlanStockOf, type PurchaseRead, type Reader, type SiteRow } from './store'
 
 /**
  * What a run, and every live read of the plan (readiness, the shortage list), reads of a site (B-W2a-22), in one client,
@@ -122,8 +124,10 @@ export async function readPlanInputs(db: Reader, site: SiteRow, runDate: Busines
   const itemIds = [...new Set([...demandItemIds, ...firmSupply.map((firm) => firm.itemId), ...safetyOnlyItemIds])].sort()
   const items = itemIds.length === 0 ? [] : await db.item.findMany({ where: { id: { in: itemIds } }, select: ITEM_COLUMNS })
   const workOrders = await readWorkOrders(db, site.id, demand.orderLines.map((line) => line.orderLineId))
-  const stock = await readStock(db, site.id, itemIds)
-  const lots = await readLots(db, stock.flatMap((entry) => (entry.lotId ? [entry.lotId] : [])))
+  const read = await readStock(db, site.id, itemIds)
+  const lotRows = await readLots(db, read.flatMap((entry) => (entry.lotId ? [entry.lotId] : [])))
+  // B-W2a-58: stock under an ACTIVE quality hold is out of the plan (readiness, shortages, the run).
+  const { stock, lots } = await withQualityHolds(db, site.id, read, lotRows.map(lotFactsOf))
   const purchases = await readPurchases(db, site.id, itemIds)
   const reservations = await readReservations(db, site.id, itemIds)
   const sources = await activeSourcesOf(db, itemIds)
@@ -141,7 +145,7 @@ export async function readPlanInputs(db: Reader, site: SiteRow, runDate: Busines
     workOrderCells: workOrders.cells,
     workOrderIssues: workOrders.issues,
     stock,
-    lots: lots.map(lotFactsOf),
+    lots,
     purchases,
     supplyRulesOf,
     reservations,
@@ -178,4 +182,43 @@ export function buyingOf(facts: {
     const suggestion = usable ? buyFromSource(quantity, units, usable, supplier ? (facts.supplierLeadTimes.get(supplier) ?? null) : null) : null
     return { action: 'BUY', supplierId: supplier, suggestion }
   }
+}
+
+/**
+ * Quality holds (B-W2a-26) in the plan (B-W2a-58, the lead's follow-up of #973): the stock of a lot or a hide under an
+ * ACTIVE quality hold is not usable, exactly as a lot that is not RELEASED is not (W1). A held lot reads as one in
+ * QUARANTINE (reason QUALITY_HOLD: held, it may still become usable). A held hide of a lot that is not held leaves its
+ * lot's line for a held line of its own, under a stand-in lot the plan has no facts of (netting counts such stock as
+ * held). So material readiness, the shortage list and the run never count held stock; releasing the hold gives it back
+ * on the next read. The stand-in never leaves the plan: no lot id of a stock line is written anywhere.
+ */
+export async function withQualityHolds(db: Reader, siteId: string, stock: readonly PlanStockOf[], lots: readonly LotFacts[]): Promise<{ stock: PlanStockOf[]; lots: LotFacts[] }> {
+  const lotIds = [...new Set(stock.flatMap((entry) => (entry.lotId ? [entry.lotId] : [])))]
+  if (lotIds.length === 0) return { stock: [...stock], lots: [...lots] }
+  // The hides an ACTIVE hold of the site names (few), not every hide of the site's lots.
+  const hideHolds = await db.qualityHold.findMany({ where: { siteId, status: 'ACTIVE', subjectType: 'Hide' }, select: { subjectIds: true } })
+  const named = [...new Set(hideHolds.flatMap((hold) => hold.subjectIds))]
+  const hides = named.length === 0 ? [] : await db.hide.findMany({ where: { siteId, id: { in: named }, lotId: { in: lotIds } }, select: { id: true, lotId: true } })
+  const held = await heldByQualityHolds(db, { lotIds, hideIds: hides.map((hide) => hide.id) })
+  if (held.lots.size === 0 && held.hides.size === 0) return { stock: [...stock], lots: [...lots] }
+  const lotFacts = lots.map((lot) => (held.lots.has(lot.id) && lot.qualityStatus === 'RELEASED' ? { ...lot, qualityStatus: 'QUARANTINE' as const } : lot))
+  const heldHides = hides.filter((hide) => held.hides.has(hide.id) && !held.lots.has(hide.lotId))
+  if (heldHides.length === 0) return { stock: [...stock], lots: lotFacts }
+  const where = { siteId, hideId: { in: heldHides.map((hide) => hide.id) } }
+  const into = await db.stockMove.groupBy({ by: ['hideId'], where: { ...where, toLocationId: { not: null } }, _sum: { baseQuantity: true } })
+  const outOf = await db.stockMove.groupBy({ by: ['hideId'], where: { ...where, fromLocationId: { not: null } }, _sum: { baseQuantity: true } })
+  const onHand = new Map<string, Decimal>()
+  for (const row of into) if (row.hideId) onHand.set(row.hideId, (onHand.get(row.hideId) ?? new Dec(0)).plus(row._sum.baseQuantity?.toString() ?? '0'))
+  for (const row of outOf) if (row.hideId) onHand.set(row.hideId, (onHand.get(row.hideId) ?? new Dec(0)).minus(row._sum.baseQuantity?.toString() ?? '0'))
+  const next = stock.map((entry) => ({ ...entry }))
+  for (const hide of heldHides) {
+    const quantity = onHand.get(hide.id)
+    const index = next.findIndex((entry) => entry.lotId === hide.lotId)
+    if (!quantity || !quantity.gt(0) || index < 0) continue
+    const entry = next[index]!
+    const left = new Dec(entry.quantity.toString()).minus(quantity)
+    next[index] = { ...entry, quantity: (left.gt(0) ? left : new Dec(0)).toFixed(4), hides: Math.max(0, entry.hides - 1) }
+    next.push({ itemId: entry.itemId, itemColourId: entry.itemColourId, lotId: `quality-hold:${hide.id}`, quantity: quantity.toFixed(4), hides: 1 })
+  }
+  return { stock: next.filter((entry) => new Dec(entry.quantity.toString()).gt(0)), lots: lotFacts }
 }

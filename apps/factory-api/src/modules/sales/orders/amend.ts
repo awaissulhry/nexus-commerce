@@ -15,7 +15,7 @@ import { quotePartyOf, treatmentOfStored } from '../quotes/store'
 import { officeContextOf } from './access'
 import { officeOrder, recordAfter } from './moves'
 import { newLineDraft, priceLines, scaledCost, snapshotLine, type LineDraft, type PricedLines } from './pricing'
-import { remakeScheduleInCommand } from './schedule'
+import { lockStepRequests, remakeScheduleInCommand } from './schedule'
 import { asDay, dayOrNull, lockOrder, readOrder, readOrderFacts, type LineRecord, type OrderFacts, type OrderRow, type Reader } from './store'
 import type { OrderView } from './views'
 
@@ -24,8 +24,9 @@ import type { OrderView } from './views'
  * confirmed order's lines change only here (W1's promise change writes only dates): ONE command on the order
  * (orders.manage; a reason) —
  *
- *   1. the lines' work-order locks (no work order is made for them meanwhile), then the order's row FOR UPDATE at the
- *      version read; CONFIRMED, IN_PRODUCTION or READY (the …_sales_guards triggers say so too);
+ *   1. the lines' work-order locks (no work order is made for them meanwhile), the money locks of the open
+ *      before-shipping steps' deposit requests (B-W2a-F2), then the order's row FOR UPDATE at the version read;
+ *      CONFIRMED, IN_PRODUCTION or READY (the …_sales_guards triggers say so too);
  *   2. the order as it is (the snapshot before: header and lines with sizes and prices, never a cost), the lines as they
  *      will be (factory-domain sales/amendments `amendmentProblems`: never under what work orders make; a new line's
  *      style, colourway, sizes and list price as for a quote line), priced again on the order's basis and VAT (an
@@ -288,6 +289,9 @@ export async function applyAmendment(caller: CommandCaller, orderId: string, bod
     const { tx, now } = tools
     const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
     await lockOrderLines(tx, context.tenantId, lineIds)
+    // B-W2a-F2: the deposit requests of the open before-shipping steps, before the order's row (a payment takes a
+    // request's lock, then the order's row).
+    await lockStepRequests(tools, order.id)
     const locked = await lockOrder(tx, order.id, body.version)
     const fresh = (await readOrder(tx, order.id))!
     const facts = await readOrderFacts(tx, fresh)

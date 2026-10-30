@@ -37,6 +37,8 @@ export interface TimerOffset {
 export const TIMER_KINDS = {
   CERTIFICATE_EXPIRY: "A certificate's last valid day.",
   INVOICE_DEADLINE: "The last day to invoice the goods of a DDT (the 15th of the next month, a deferred invoice).",
+  // B-W2a-55: the reminder ladder (record Invoice; the key's offset is the step's days from the due date).
+  PAYMENT_REMINDER: "The due date of an invoice's oldest open instalment: a step of the company's reminder ladder.",
 } as const satisfies Record<string, string>
 export type TimerKind = keyof typeof TIMER_KINDS
 

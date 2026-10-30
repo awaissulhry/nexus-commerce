@@ -514,3 +514,38 @@ describe("the records' threads", () => {
     expect((await maintenance.browser.get(`/threads/MaintenanceRequest/${plant.requestIds[1]}`)).status).toBe(200)
   })
 })
+
+// ---- the office screens' pickers (B-W2a-53) ------------------------------------------------------------------------------
+
+describe("the office screens' pickers (B-W2a-53)", () => {
+  it('places: the sites the person reaches, each with its active lines, work centres and stations; other companies and tenants see none', async () => {
+    const all = await ok('manager', 'GET', '/plant/places')
+    const a1 = all.sites.find((site: Json) => site.id === A.siteA1)
+    expect(a1).toBeDefined()
+    expect(a1.stations.map((station: Json) => station.code)).toEqual(expect.arrayContaining(['SEW-01', 'SEW-02', 'CUT-01']))
+    expect(a1.stations.every((station: Json) => typeof station.workCentreId === 'string')).toBe(true)
+    expect(a1.workCentres.length).toBeGreaterThan(0)
+    expect(all.sites.map((site: Json) => site.id)).toContain(A.siteB1)
+    // Company B only: A's sites are not offered.
+    expect((await ok('companyB', 'GET', '/plant/places')).sites.map((site: Json) => site.id)).toEqual([A.siteB1])
+    expect((await ok('otherTenant', 'GET', '/plant/places')).sites.map((site: Json) => site.id)).not.toContain(A.siteA1)
+  })
+
+  it('technicians: the office users who work maintenance jobs at the site and, for whoever sees floor workers, its floor technicians', async () => {
+    const lead = await as(maintenance.browser, 'GET', `/plant/technicians?siteId=${A.siteA1}`)
+    expect(lead.floorListed).toBe(true)
+    expect(lead.technicians[0]).toMatchObject({ kind: 'USER', id: maintenance.id, me: true })
+    expect(lead.technicians).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'WORKER', id: technicianId, name: 'Made-up Technician' })]))
+    // The floor supervisor holds no plant.jobs.work: never offered.
+    expect(lead.technicians.map((entry: Json) => entry.id)).not.toContain(supervisor.id)
+    // Without workers.view no floor worker is listed (the office users still are).
+    const manager = await ok('manager', 'GET', `/plant/technicians?siteId=${A.siteA1}`)
+    expect(manager.floorListed).toBe(false)
+    expect(manager.technicians.map((entry: Json) => entry.kind)).not.toContain('WORKER')
+    expect(manager.technicians.map((entry: Json) => entry.id)).toContain(maintenance.id)
+    // plant.view alone may not pick a technician; another tenant or an unknown site finds nothing.
+    await no('viewer', 'GET', `/plant/technicians?siteId=${A.siteA1}`, undefined, 403)
+    await no('otherTenant', 'GET', `/plant/technicians?siteId=${A.siteA1}`, undefined, 404)
+    await no('manager', 'GET', `/plant/technicians?siteId=${newId()}`, undefined, 404)
+  })
+})

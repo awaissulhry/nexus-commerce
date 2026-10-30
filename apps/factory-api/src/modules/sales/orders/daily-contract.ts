@@ -284,19 +284,34 @@ const milestoneView = output({
   version: z.number().int(),
 })
 
+const scheduleFields = {
+  orderId: id(),
+  number: z.string(),
+  currency: z.string(),
+  grossAmount: money.price(z.number().int()),
+  /** Empty: paid on invoice terms; no milestones. */
+  steps: z.array(milestoneView),
+  cancelled: z.array(milestoneView),
+  openAmount: money.price(z.number().int()),
+  paidAmount: money.price(z.number().int()),
+}
+
 export const scheduleContract = defineContract({
   params: orderParams,
-  response: {
-    200: output({
-      orderId: id(),
-      number: z.string(),
-      currency: z.string(),
-      grossAmount: money.price(z.number().int()),
-      /** Empty: paid on invoice terms; no milestones. */
-      steps: z.array(milestoneView),
-      cancelled: z.array(milestoneView),
-      openAmount: money.price(z.number().int()),
-      paidAmount: money.price(z.number().int()),
-    }),
-  },
+  response: { 200: output(scheduleFields) },
+})
+
+/**
+ * B-W2a-F2: the office opens a before-shipping step — its deposit request made now (an advance paid before the goods
+ * leave is invoiced with a TD02, DPR 633/1972 art. 6 c.4). Answers the schedule and the request made.
+ */
+export const stepRequestContract = defineContract({
+  params: input({ orderId: id(), milestoneId: id() }),
+  body: input({
+    /** The step's version (the schedule's step `version`). */
+    version,
+    /** The day it falls due; none: the step's own day (needed when the step has none). */
+    dueDate: businessDate().nullish(),
+  }),
+  response: { 201: output({ ...scheduleFields, depositRequestId: id() }) },
 })
