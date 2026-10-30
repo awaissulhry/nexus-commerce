@@ -17,9 +17,9 @@ import { followDepositInCommand } from './schedule'
  *                                  says it is settled; the event is only the trigger. order.unsettled needs nothing
  *                                  here: the money module writes it on the order's history itself, and a CLOSED order
  *                                  never changes
- *   sales.ordersFollowDeposits     B-W2a-30 (SAL-216): payment.deposit_paid — the DEPOSIT step of the order's payment
- *                                  schedule that names the request becomes PAID (with the request's paidAt); nothing to
- *                                  do: no command
+ *   sales.ordersFollowDeposits     B-W2a-30 (SAL-216): payment.deposit_paid — the step of the order's payment schedule
+ *                                  that names the request (the DEPOSIT step, or B-W2a-F2 a BEFORE_SHIPPING step's own
+ *                                  request) becomes PAID (with the request's paidAt); nothing to do: no command
  */
 
 const SHIPPED_MOVES = new Set(['SHIPPED', 'DELIVERED', 'RETURNED'])

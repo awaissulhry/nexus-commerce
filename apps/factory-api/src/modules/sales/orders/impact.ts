@@ -24,8 +24,11 @@ export async function readCancelFacts(db: Reader, order: Pick<OrderRow, 'id' | '
   const cuts = workOrderIds.length > 0 ? await db.cutLog.findMany({ where: { workOrderId: { in: workOrderIds } }, select: { id: true, workOrderId: true, hideId: true, baseAreaUsed: true, reversalOfId: true } }) : []
   const reversed = new Set(cuts.flatMap((row) => (row.reversalOfId ? [row.reversalOfId] : [])))
   const standing = cuts.filter((row) => row.reversalOfId === null && !reversed.has(row.id))
-  const deposits = await db.depositRequest.findMany({ where: { OR: [{ orderId: order.id }, ...(order.quoteVersionId ? [{ quoteVersionId: order.quoteVersionId }] : [])] }, select: { id: true, status: true, amount: true }, orderBy: { id: 'asc' } })
-  const milestones = await db.salesOrderMilestone.findMany({ where: { orderId: order.id }, select: { id: true, kind: true, status: true, amount: true }, orderBy: { seq: 'asc' } })
+  const requests = await db.depositRequest.findMany({ where: { OR: [{ orderId: order.id }, ...(order.quoteVersionId ? [{ quoteVersionId: order.quoteVersionId }] : [])] }, select: { id: true, status: true, amount: true }, orderBy: { id: 'asc' } })
+  const milestones = await db.salesOrderMilestone.findMany({ where: { orderId: order.id }, select: { id: true, kind: true, status: true, amount: true, depositRequestId: true }, orderBy: { seq: 'asc' } })
+  // B-W2a-F2: a before-shipping step's own request is the balance, named as such.
+  const balances = new Set(milestones.flatMap((row) => (row.kind === 'BEFORE_SHIPPING' && row.depositRequestId ? [row.depositRequestId] : [])))
+  const deposits = requests.map((row) => ({ ...row, stepKind: balances.has(row.id) ? 'BEFORE_SHIPPING' : null }))
   const reservations =
     lineIds.length + workOrderIds.length > 0
       ? await db.reservation.findMany({ where: { status: 'ACTIVE', OR: [...(lineIds.length > 0 ? [{ salesOrderLineId: { in: lineIds } }] : []), ...(workOrderIds.length > 0 ? [{ workOrderId: { in: workOrderIds } }] : [])] }, select: { id: true }, orderBy: { id: 'asc' } })

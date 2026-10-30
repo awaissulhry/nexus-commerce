@@ -48,6 +48,14 @@ export const DEPOSIT_COLUMNS = {
 } as const satisfies Prisma.DepositRequestSelect
 export type DepositRow = Prisma.DepositRequestGetPayload<{ select: typeof DEPOSIT_COLUMNS }>
 
+/**
+ * B-W2a-F2: an order's deposit — a request no before-shipping step names. A BEFORE_SHIPPING step of the payment schedule
+ * has a request of its own (the balance paid before the goods leave, invoiced as an advance), which is not the deposit
+ * production waits for: every "is the deposit paid?" read (the release gate, the orders list's deposit state and filter,
+ * Today's flow) takes only these. Requests made before the schedule existed are deposits.
+ */
+export const ORDER_DEPOSIT_ONLY = { milestones: { none: { kind: 'BEFORE_SHIPPING' } } } as const satisfies Prisma.DepositRequestWhereInput
+
 const day = (value: Date): string => value.toISOString().slice(0, 10)
 
 /** A deposit request as the office and its customer read it (the price grain marks the amount in the contracts). */

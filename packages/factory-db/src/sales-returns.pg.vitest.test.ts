@@ -296,7 +296,20 @@ describe('order amendments, the schedule and closing short', () => {
     expect(await admin('SELECT status::text AS status FROM "SalesOrderMilestone" WHERE id = $1', [deposit])).toEqual([{ status: 'PAID' }])
     await expect(admin(`UPDATE "SalesOrderMilestone" SET amount = 1 WHERE id = $1`, [deposit])).rejects.toThrow(/is PAID; it never changes/)
     await expect(admin(`UPDATE "SalesOrderMilestone" SET status = 'PAID' WHERE id = $1`, [balance])).rejects.toThrow(/wrong payment time or note/)
-    await expect(admin(`UPDATE "SalesOrderMilestone" SET "depositRequestId" = $2 WHERE id = $1`, [balance, pricingA.money.sales.depositRequestId])).rejects.toThrow(/not the DEPOSIT step/)
+    // B-W2a-F2: a BEFORE_SHIPPING step may name a deposit request (its own: an advance, TD02 when paid before the goods
+    // leave); an ON_INVOICE (or ON_DELIVERY) step may not — it falls due with the goods' invoice.
+    await admin(`UPDATE "SalesOrderMilestone" SET "depositRequestId" = $2 WHERE id = $1`, [balance, pricingA.money.sales.depositRequestId])
+    await admin(`UPDATE "SalesOrderMilestone" SET "depositRequestId" = NULL WHERE id = $1`, [balance])
+    await expect(
+      admin(`INSERT INTO "SalesOrderMilestone" (id, "tenantId", "companyId", "orderId", "partyId", seq, kind, amount, "depositRequestId", "updatedAt") VALUES ($1, $2, $3, $4, $5, 91, 'ON_INVOICE', 100, $6, now())`, [
+        randomUUID(),
+        a.tenantId,
+        A.companyA,
+        pricingA.money.sales.orderId,
+        A.P1,
+        pricingA.money.sales.depositRequestId,
+      ]),
+    ).rejects.toThrow(/not the DEPOSIT step or a BEFORE_SHIPPING step/)
     await expect(admin(`UPDATE "SalesOrderMilestone" SET status = 'WAIVED' WHERE id = $1`, [balance])).rejects.toThrow(/wrong payment time or note/)
     await expect(
       admin(`INSERT INTO "SalesOrderMilestone" (id, "tenantId", "companyId", "orderId", "partyId", seq, kind, amount, status, "paidAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, 90, 'ON_INVOICE', 100, 'PAID', now(), now())`, [

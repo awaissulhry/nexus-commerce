@@ -160,7 +160,7 @@ export const createDeferredContract = defineContract({
   },
 })
 
-/** B-W2a-54 (FIN-058): the invoice of a step of an order's payment schedule (a deposit step: its TD02). */
+/** B-W2a-54 (FIN-058): the invoice of a step of an order's payment schedule (a deposit step, or B-W2a-F2 a before-shipping step: its TD02). */
 export const fromMilestoneContract = defineContract({ body: input({ milestoneId: id() }), response: { 201: output({ invoice: invoiceView }) } })
 
 export const removeDeductionContract = defineContract({

@@ -177,8 +177,10 @@ export interface CancelFacts {
   readonly workOrders: readonly { readonly id: string; readonly number: string; readonly status: string; readonly cutHides: number; readonly cutArea: string | null }[]
   readonly shipments: readonly { readonly id: string; readonly number: string; readonly status: string }[]
   readonly invoices: readonly { readonly id: string; readonly number: string | null; readonly docType: string; readonly status: string }[]
-  readonly deposits: readonly { readonly id: string; readonly status: string; readonly amount: MinorUnits }[]
-  readonly milestones: readonly { readonly id: string; readonly kind: string; readonly status: string; readonly amount: MinorUnits }[]
+  /** B-W2a-F2: `stepKind` BEFORE_SHIPPING for a before-shipping step's own request (the balance), else the deposit. */
+  readonly deposits: readonly { readonly id: string; readonly status: string; readonly amount: MinorUnits; readonly stepKind?: string | null | undefined }[]
+  /** B-W2a-F2: `depositRequestId` when the step is paid through a request of its own (the request is named instead). */
+  readonly milestones: readonly { readonly id: string; readonly kind: string; readonly status: string; readonly amount: MinorUnits; readonly depositRequestId?: string | null | undefined }[]
   /** ACTIVE reservations held for its lines or its work orders. */
   readonly reservations: readonly { readonly id: string }[]
   /** Open purchase orders the latest planning counted on for its lines. */
@@ -199,6 +201,14 @@ const numbers = (refs: readonly ImpactRef[]): string => refs.map((ref) => ref.nu
 const total = (rows: readonly { readonly amount: MinorUnits }[]): MinorUnits => rows.reduce((sum, row) => sum + row.amount, 0)
 
 /** What a cancellation of the order would stop at, change and leave behind (the design's Cancel order dialog). */
+/** "The deposit" / "The balance before shipping" / "The deposit and the balance before shipping" (B-W2a-F2). */
+function askedWords(requests: CancelFacts['deposits']): { what: string; verb: 'is' | 'are'; it: 'it' | 'them' } {
+  const balance = requests.some((row) => row.stepKind === 'BEFORE_SHIPPING')
+  const deposit = requests.some((row) => row.stepKind !== 'BEFORE_SHIPPING')
+  if (balance && deposit) return { what: 'The deposit and the balance before shipping', verb: 'are', it: 'them' }
+  return { what: balance ? 'The balance before shipping' : 'The deposit', verb: 'is', it: 'it' }
+}
+
 export function cancelImpact(facts: CancelFacts): CancelImpact {
   const blocks: ImpactItem[] = []
   const touches: ImpactItem[] = []
@@ -222,7 +232,10 @@ export function cancelImpact(facts: CancelFacts): CancelImpact {
   if (issued.length > 0) blocks.push(item('INVOICE_ISSUED', `Invoices of the order were issued (${numbers(issued)}): a fiscal document is never deleted; Finance issues a credit note first.`, issued))
 
   const openDeposits = facts.deposits.filter((row) => row.status === 'OPEN')
-  if (openDeposits.length > 0) touches.push(item('DEPOSITS_CANCELLED', 'The deposit not paid yet is cancelled with the order: the customer is no longer asked for it.', openDeposits.map((row) => ({ type: 'DepositRequest', id: row.id, number: null })), total(openDeposits)))
+  if (openDeposits.length > 0) {
+    const asked = askedWords(openDeposits)
+    touches.push(item('DEPOSITS_CANCELLED', `${asked.what} not paid yet ${asked.verb} cancelled with the order: the customer is no longer asked for ${asked.it}.`, openDeposits.map((row) => ({ type: 'DepositRequest', id: row.id, number: null })), total(openDeposits)))
+  }
   const openSteps = facts.milestones.filter((row) => row.status === 'OPEN')
   if (openSteps.length > 0) touches.push(item('PAYMENT_STEPS_CANCELLED', `${openSteps.length} open step(s) of the payment schedule are cancelled.`, openSteps.map((row) => ({ type: 'SalesOrderMilestone', id: row.id, number: null })), total(openSteps)))
 
@@ -242,9 +255,11 @@ export function cancelImpact(facts: CancelFacts): CancelImpact {
   if (paid.length > 0) {
     const td02 = facts.invoices.filter((row) => row.docType === 'TD02' && row.status !== 'DRAFT').map((row) => ({ type: 'Invoice', id: row.id, number: row.number }))
     const refs = [...paid.map((row) => ({ type: 'DepositRequest', id: row.id, number: null })), ...td02]
-    leavesBehind.push(item('DEPOSIT_PAID', `The deposit was paid${td02.length > 0 ? ` and invoiced (${numbers(td02)})` : ''}: it stays; a refund or a credit note is Finance's.`, refs, total(paid)))
+    const asked = askedWords(paid)
+    leavesBehind.push(item('DEPOSIT_PAID', `${asked.what} ${asked.verb === 'is' ? 'was' : 'were'} paid${td02.length > 0 ? ` and invoiced (${numbers(td02)})` : ''}: ${asked.it} ${asked.verb === 'is' ? 'stays' : 'stay'}; a refund or a credit note is Finance's.`, refs, total(paid)))
   }
-  const settled = facts.milestones.filter((row) => row.status === 'PAID' && row.kind !== 'DEPOSIT')
+  // A step paid through its own request is named with the request above (B-W2a-F2), not twice.
+  const settled = facts.milestones.filter((row) => row.status === 'PAID' && row.kind !== 'DEPOSIT' && !row.depositRequestId)
   if (settled.length > 0) leavesBehind.push(item('PAYMENT_STEPS_PAID', `${settled.length} paid step(s) of the payment schedule stay paid: a refund is Finance's.`, settled.map((row) => ({ type: 'SalesOrderMilestone', id: row.id, number: null })), total(settled)))
 
   return { cancellable: blocks.length === 0, blocks, touches, leavesBehind }

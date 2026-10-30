@@ -52,7 +52,8 @@ import { REPAIR_KINDS, REPAIR_STAGES, SAFETY_RESULTS } from './repairs/rules'
  *                                must accept it again (never an amount: the screen reads the amendment)
  *   sales_order.lines_closed     lines were closed short (what is left of them will not be made or shipped) or reopened
  *   sales_order.schedule_changed its payment schedule was made, made again after an amendment, a step paid (its
- *                                deposit) or cancelled with the order
+ *                                deposit request), cancelled with the order, or (B-W2a-F2) a before-shipping step's
+ *                                deposit request made when the office opened the step (REQUESTED)
  * B-W2a-43 (customer returns; live: sales.returns.view; the dock's events also reach the floor of the RMA's site):
  *   return.authorised            an RMA was made (AUTHORISED, numbered), with the lines that come back and the deadline
  *   return.lines_changed         lines were added, changed or removed before the goods arrived
@@ -281,8 +282,8 @@ export const events = [
   defineEvent({
     type: 'sales_order.schedule_changed',
     context: 'sales',
-    description: "A sales order's payment schedule was made, made again after an amendment, a step paid with its deposit, or its open steps cancelled with the order.",
-    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), change: z.enum(['MADE', 'REMADE', 'PAID', 'CANCELLED']), milestoneIds: z.array(z.uuid()) }),
+    description: "A sales order's payment schedule was made, made again after an amendment, a step paid with its deposit request, its open steps cancelled with the order, or a before-shipping step's deposit request made when the office opened the step.",
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), change: z.enum(['MADE', 'REMADE', 'PAID', 'CANCELLED', 'REQUESTED']), milestoneIds: z.array(z.uuid()) }),
     live: { ...orderLive, fields: ['orderId', 'number', 'change'] },
   }),
   // B-W2a-43: customer returns (ids, numbers and what changed; never an amount, a price or a credit value).
