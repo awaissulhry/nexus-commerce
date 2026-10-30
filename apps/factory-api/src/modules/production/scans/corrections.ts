@@ -11,7 +11,7 @@ import { lockBundleForScan, readBundle } from '../bundles/store'
 import { mayScan, officeOf, refuse } from './access'
 import { decideCorrectionRequest, lockCorrectionRequest, readCorrectionRequest, readCorrectionRequests, type CorrectionRequest, type CorrectionStatus } from './corrections-store'
 import { readDefects, writeDefects } from './defects-store'
-import { requestView, scanEvent, scanView } from './scans'
+import { refuseIfHeld, requestView, scanEvent, scanView } from './scans'
 import { lockBundleScans, readBundleScans, readHeader, readOperations, readScan, readStations, scanWorkOrderLock, workerNames, workerUsers, type Reader } from './store'
 
 /**
@@ -59,6 +59,8 @@ export async function approveCorrection(caller: CommandCaller, requestId: string
     const locked = await lockBundleForScan(tx, request.bundleId)
     if (!locked) throw new NotFoundError('Correction request not found.')
     await lockBundleScans(tx, context.tenantId, request.siteId, request.bundleId)
+    // W2a B-W2a-26 hook: a correction of a bundle or work order on hold waits for the hold's release.
+    await refuseIfHeld(tools, request.bundleId, request.workOrderId)
     const workOrder = (await readHeader(tx, request.workOrderId))!
     const operations = await readOperations(tx, workOrder.id)
     const scans = await readBundleScans(tx, request.bundleId)

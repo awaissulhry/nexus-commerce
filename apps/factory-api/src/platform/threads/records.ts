@@ -123,6 +123,11 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const receipt = await client.goodsReceipt.findUnique({ where: { id }, select: { companyId: true, siteId: true, supplierId: true } })
     return receipt ? { companyId: receipt.companyId, siteId: receipt.siteId, partyId: receipt.supplierId } : null
   },
+  // modules/quality/holds (SCR-078 the Hold record's Activity tab; B-W2a-26): the hold's company and site; notes only.
+  QualityHold: async (client, id) => {
+    const hold = await client.qualityHold.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
+    return hold ? { companyId: hold.companyId, siteId: hold.siteId, partyId: null } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}

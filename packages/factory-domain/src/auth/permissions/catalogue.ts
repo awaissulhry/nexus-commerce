@@ -27,6 +27,9 @@ import { PURCHASING_SOURCES_DEFINITIONS, PURCHASING_SOURCES_PERMISSIONS } from '
 import { PURCHASING_SUBCONTRACT_DEFINITIONS, PURCHASING_SUBCONTRACT_PERMISSIONS } from '../../purchasing/subcontracting/permissions'
 import { QUALITY_FINAL_DEFINITIONS, QUALITY_FINAL_FLOOR_PERMISSIONS, QUALITY_FINAL_PERMISSIONS } from '../../quality/final/permissions'
 import { QUALITY_LAB_DEFINITIONS, QUALITY_LAB_PERMISSIONS } from '../../quality/lab/permissions'
+// B-W2a-26: the defect library and disposition codes (quality.defects.*), quality holds (quality.holds.*).
+import { QUALITY_DEFECTS_DEFINITIONS, QUALITY_DEFECTS_PERMISSIONS } from '../../quality/defects/permissions'
+import { QUALITY_HOLDS_DEFINITIONS, QUALITY_HOLDS_PERMISSIONS } from '../../quality/holds/permissions'
 import { PRODUCT_BOM_DEFINITIONS, PRODUCT_BOM_PERMISSIONS } from '../../product/bom/permissions'
 import { PRODUCT_MATERIALS_DEFINITIONS, PRODUCT_MATERIALS_PERMISSIONS } from '../../product/materials/permissions'
 import { PRODUCT_ROUTING_DEFINITIONS, PRODUCT_ROUTING_PERMISSIONS } from '../../product/routing/permissions'
@@ -382,6 +385,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRICE_LISTS_DEFINITIONS,
   // B-W2a-20: tasks on any record (tasks.manage).
   TASKS_DEFINITIONS,
+  // B-W2a-26: defects, dispositions, holds.
+  QUALITY_DEFECTS_DEFINITIONS,
+  QUALITY_HOLDS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -421,6 +427,8 @@ for (const name of REASONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name
 for (const name of [...PAYMENT_TERMS_PERMISSIONS, ...PRICE_LISTS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-20: tasks on any record.
 for (const name of TASKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-26: defects, dispositions, holds.
+for (const name of [...QUALITY_DEFECTS_PERMISSIONS, ...QUALITY_HOLDS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

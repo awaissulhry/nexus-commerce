@@ -274,6 +274,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'floorsync.view',
       'floorsync.discard',
       'home.view',
+      // B-W2a-26: sees what is on hold (design quality.holds: warehouse and supervisors read).
+      'quality.holds.view',
     ],
     grains: [],
   }),
@@ -345,6 +347,10 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       // B-W2a-18: Floor rules & codes' reason lists (pause, scrap, rework, downtime, help calls …).
       'reasons.view',
       'reasons.manage',
+      // B-W2a-26 (MES-008): puts work orders and bundles on hold; reads the defect library.
+      'quality.holds.view',
+      'quality.holds.place',
+      'quality.defects.view',
     ],
     grains: [],
   }),
@@ -352,7 +358,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Quality inspector',
     description: 'Inspects lots and finished goods and releases them; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'compliance.certificates.manage', 'compliance.declarations.manage', 'compliance.labels.manage', 'compliance.register.view', 'compliance.register.manage', 'imports.view', 'imports.run', 'imports.apply', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'inventory.scrap', 'inventory.opening.import', 'parties.view', 'production.serials', 'workorders.view', 'quality.lots.view', 'quality.lots.test', 'quality.lots.documents', 'quality.lots.release', 'quality.lots.reject', 'quality.inspections.view', 'quality.inspections.record', 'quality.garments.release', 'quality.garments.reverse', 'home.view', 'production.rework', 'production.scrap.view'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'compliance.certificates.manage', 'compliance.declarations.manage', 'compliance.labels.manage', 'compliance.register.view', 'compliance.register.manage', 'imports.view', 'imports.run', 'imports.apply', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'inventory.scrap', 'inventory.opening.import', 'parties.view', 'production.serials', 'workorders.view', 'quality.lots.view', 'quality.lots.test', 'quality.lots.documents', 'quality.lots.release', 'quality.lots.reject', 'quality.inspections.view', 'quality.inspections.record', 'quality.garments.release', 'quality.garments.reverse', 'home.view', 'production.rework', 'production.scrap.view',
+      // B-W2a-26: keeps the defect library and disposition codes; places and releases holds (only quality releases).
+      'quality.defects.view', 'quality.defects.manage', 'quality.holds.view', 'quality.holds.place', 'quality.holds.release'],
     grains: [],
   }),
   template('floor_supervisor', {
@@ -361,7 +369,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     requireMfa: false,
     permissions: ['files.read', 'devices.view', 'devices.manage', 'devices.revoke', 'workers.view', 'workers.manage', 'workers.roles', 'workers.credentials', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'production.settings.view', 'production.scan.correct', 'workorders.view', 'floorsync.view', 'floorsync.discard', 'home.view', 'calendars.view', 'production.rework', 'production.scrap.view', 'production.cutting.view',
       // B-W2a-18: sees the floor's reason lists (Floor rules & codes).
-      'reasons.view'],
+      'reasons.view',
+      // B-W2a-26 (MES-008): puts work orders and bundles on hold; reads the defect library.
+      'quality.holds.view', 'quality.holds.place', 'quality.defects.view'],
     grains: [],
   }),
   template('read_only', {

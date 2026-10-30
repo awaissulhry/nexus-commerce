@@ -1667,6 +1667,11 @@
     "paymentterms_view": "See the payment terms library",
     "paymentterms_manage": "Add and change payment terms",
     "pricelists_view": "See price lists and their prices",
-    "pricelists_manage": "Keep price lists, their versions and customers"
+    "pricelists_manage": "Keep price lists, their versions and customers",
+    "quality_defects_view": "See the defect library and the disposition codes",
+    "quality_defects_manage": "Keep the defect library and the disposition codes",
+    "quality_holds_view": "See what is on hold",
+    "quality_holds_place": "Put goods and work orders on hold",
+    "quality_holds_release": "Release a hold with an e-signature"
   }
 }
