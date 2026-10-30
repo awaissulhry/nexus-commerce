@@ -11,7 +11,8 @@ import { AdminPageMessages } from '../../kit/messages'
 import { PageNotice } from '../../kit/parts'
 import { adminHref } from '../../shared/model'
 import { ListState, PageHead } from '../../shared/view/parts'
-import { changedLanguages, dateSample, FLOOR_ENDONYMS, FLOOR_LANGUAGES, localeCounts, numberSample, zonesInUse, type CompanyLanguage, type LanguagesViewModel } from '../model'
+import { changedLanguages, dateSample, localeCounts, numberSample, zonesInUse, type CompanyLanguage, type FloorDialog, type FloorSite, type LanguagesViewModel } from '../model'
+import { FloorLanguages } from './FloorLanguagesSection'
 import '../languages.css'
 
 export type { LanguagesViewModel } from '../model'
@@ -20,13 +21,15 @@ export interface LanguagesActions {
   onSave?: (changes: Array<{ company: CompanyLanguage; locale: string }>) => Promise<void> | void
   onDismissNotice?: () => void
   onRetry?: () => void
+  /** B-W2a-41: save a site's floor languages after an add or a remove. */
+  onFloorChange?: (site: FloorSite, dialog: FloorDialog, locales: string[], reason: string) => Promise<void> | void
 }
 
 /**
  * SCR-016 — Admin › Languages & formats (design 02 admin.languages): the office languages with how much of each is
  * written, the documents' languages and each company's own (saved with the EditModeBar, ⌘S), how numbers and dates
- * are written, how time is kept with the zones in use, and the floor workers' languages. A section the person may not
- * read is absent. Fetches nothing (LanguagesPage.tsx reads the API).
+ * are written, how time is kept with the zones in use, and each site's floor languages (B-W2a-41: add or remove one,
+ * the worker notice checked for each). A section the person may not read is absent. Fetches nothing (LanguagesPage.tsx reads the API).
  */
 export function LanguagesView({ model, actions }: { model: LanguagesViewModel; actions?: LanguagesActions }) {
   return (
@@ -60,7 +63,6 @@ function Languages({ model, actions }: { model: LanguagesViewModel; actions?: La
   useEffect(() => setDraft({ ...(model.draft ?? {}) }), [model.draft, model.companies])
   const changes = changedLanguages(companies, draft)
   const people = model.people?.items ? localeCounts(model.people.items) : null
-  const workers = model.workers?.items ? localeCounts(model.workers.items) : null
   return (
     <form
       className="fw-adm fw-adm-langs"
@@ -215,28 +217,17 @@ function Languages({ model, actions }: { model: LanguagesViewModel; actions?: La
           {zonesInUse(companies).length > 1 && <p className="fw-adm-hint">{t('langs.time.several', { count: zonesInUse(companies).length })}</p>}
         </Section>
 
-        {model.workers && (
+        {model.floor && (
           <Section id="floor" wide title={t('langs.floor.title')} intro={t('langs.floor.intro')}>
-            {model.workers.problem || model.workers.items === null ? (
-              <ListState problem={model.workers.problem} loading={model.workers.items === null} onRetry={actions?.onRetry} rows={2} />
-            ) : (
-              <ul className="fw-adm-list fw-adm-langs-columns">
-                {FLOOR_LANGUAGES.map((code) => {
-                  const count = workers?.[code] ?? 0
-                  const spoken = (LOCALES as readonly string[]).includes(code)
-                  return (
-                    <li key={code} className="fw-adm-langs-row">
-                      <span className="fw-adm-name" lang={code}>
-                        {FLOOR_ENDONYMS[code]}
-                      </span>
-                      <span className="fw-adm-hint">{ta(`common.language.${code}`)}</span>
-                      <Pill tone={spoken ? 'success' : 'neutral'}>{t(spoken ? 'langs.floor.screens' : 'langs.floor.notYet')}</Pill>
-                      <span className="fw-adm-hint">{t('langs.floor.workers', { count })}</span>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
+            <FloorLanguages
+              prefix={model.prefix}
+              floor={model.floor}
+              dialog={model.floorDialog}
+              problem={model.floorProblem}
+              busy={model.floorBusy}
+              onChange={actions?.onFloorChange}
+              onRetry={actions?.onRetry}
+            />
           </Section>
         )}
       </div>

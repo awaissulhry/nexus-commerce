@@ -40,6 +40,8 @@ import { events as timers } from '../timers/events'
 import { events as accounting } from '../accounting/events'
 // B-W2a-36: Security & health (restore drills, two-factor per role).
 import { events as ops } from '../ops/events'
+// B-W2a-41: the mail delivery log (an address unblocked).
+import { events as emailDelivery } from '../email-delivery/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -147,7 +149,9 @@ export function createCatalogue(definitions: readonly EventDefinition[]): EventC
  * accounting: the accounting exports and the period locks (B-W2a-39).
  * ops: restore drills and the two-factor rule of a role (B-W2a-36).
  */
-export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...purchasing, ...invoicing, ...payments, ...costing, ...production, ...sales, ...privacy, ...quality, ...floorSync, ...insights, ...calendars, ...reasons, ...notifications, ...tasks, ...views, ...search, ...plant, ...alerts, ...timers, ...accounting, ...ops] as const satisfies readonly EventDefinition[]
+export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...purchasing, ...invoicing, ...payments, ...costing, ...production, ...sales, ...privacy, ...quality, ...floorSync, ...insights, ...calendars, ...reasons, ...notifications, ...tasks, ...views, ...search, ...plant, ...alerts, ...timers, ...accounting, ...ops,
+  // B-W2a-41
+  ...emailDelivery] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

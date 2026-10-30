@@ -2,6 +2,7 @@ import { matches, type Loaded, type Notice, type StepUpModel } from '../shared/m
 import { reachOf, type BulkNotice, type Reach } from '../kit/bulk-model'
 import type { AccountStatus, InboundDelivery, InboundStatus, IntegrationAccount, IntegrationCall, IntegrationMode, IntegrationProvider } from './api'
 import type { MailDomainModel } from './mail/model'
+import type { DeliveryModel } from './delivery/model'
 
 /**
  * SCR-087 Connections & API (design 02 admin.connections; PLT-139, PLT-195, PLT-197, PLT-011): every rented pipe in
@@ -157,6 +158,8 @@ export interface ConnectionsViewModel {
   notice?: BulkNotice | null
   /** The mail domain section (SCR-015); null: the person may not read sending identities (email.send). */
   mail: MailDomainModel | null
+  /** The delivery log and blocked addresses (B-W2a-41); null or absent: the person may not read it (email.delivery.view). */
+  delivery?: DeliveryModel | null
   stepUp?: StepUpModel
 }
 

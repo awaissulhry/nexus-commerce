@@ -15,6 +15,7 @@ import { checkIdentity, createIdentity, listAccounts, listIdentities, setPaused,
 import { identityState, type AddDomainDraft } from './mail/model'
 import type { BulkSwitch, CompanyChoice, ConnectionTile, PauseConfirm } from './model'
 import { ConnectionsView } from './view/ConnectionsView'
+import { useDelivery } from './delivery/use-delivery'
 
 /**
  * `/w/<company>/admin/connections` (SCR-087 with SCR-015): the integration accounts (`GET /integrations/accounts`), the
@@ -49,6 +50,8 @@ export function ConnectionsPage() {
   const [mailProblem, setMailProblem] = useState<string | null>(null)
   const [mailNotice, setMailNotice] = useState<Notice | null>(null)
   const [checking, setChecking] = useState<string | null>(null)
+  // B-W2a-41: the delivery log and blocked addresses (email.delivery.view; absent without it).
+  const delivery = useDelivery(api, held.has('email.delivery.view'))
 
   const readIdentities = useCallback(async () => {
     if (!held.has('email.send')) return
@@ -123,8 +126,10 @@ export function ConnectionsPage() {
               notice: mailNotice,
             }
           : null,
+        delivery: delivery.model,
       }}
       actions={{
+        delivery: delivery.actions,
         onTile: setTile,
         onQuery: setQuery,
         onRetry: () => {

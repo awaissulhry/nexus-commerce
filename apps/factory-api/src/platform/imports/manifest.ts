@@ -14,4 +14,8 @@ export const manifest = defineManifest({
   'GET /imports/:importId/errors': { audiences: ['office'], permission: 'imports.view', scope: 'record' },
   'POST /imports/:importId/apply': { audiences: ['office'], permission: 'imports.apply', scope: 'record' },
   'POST /imports/:importId/cancel': { audiences: ['office'], permission: 'imports.run', scope: 'record' },
+  // B-W2a-41: templates (the importer's own permissions checked like GET /imports/importers) and the guided first load.
+  'GET /imports/importers/:importerKey/template': { audiences: ['office'], permission: 'imports.view', scope: 'tenant' },
+  'GET /imports/first-load': { audiences: ['office'], permission: 'imports.view', scope: 'record' },
+  'POST /imports/first-load/:step/done': { audiences: ['office'], permission: 'imports.apply', scope: 'record' },
 })
