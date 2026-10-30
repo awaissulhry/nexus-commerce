@@ -12,11 +12,12 @@
       "last": "Ultima importazione: {when} · {state}",
       "never": "Mai importato",
       "start": "Importa",
-      "later": "Modelli, listini e addetti avranno le loro importazioni con le rispettive aree; il primo caricamento guidato (clienti → fornitori → materiali → giacenze iniziali, con totali che devono tornare) e i modelli da scaricare per ogni importazione arriveranno più avanti."
+      "later": "Modelli di capo, listini e addetti avranno le loro importazioni con le rispettive aree."
     },
     "template": {
       "xlsx": "Modello (Excel)",
-      "csv": "Modello (CSV)"
+      "csv": "Modello (CSV)",
+      "label": "Modello di {name}"
     },
     "recent": {
       "title": "Importazioni recenti",
@@ -265,6 +266,125 @@
       "partial_other": "{count} importazioni su {total} annullate. Non annullate:",
       "failed_one": "L’importazione non è stata annullata:",
       "failed_other": "Nessuna delle {count} importazioni è stata annullata:"
+    },
+    "more": "Altre azioni",
+    "templates": {
+      "menu": "Modelli dei fogli",
+      "title": "Modelli dei fogli",
+      "intro": "Il modello di ogni importazione, scritto come l'importazione lo legge ({sample}). Quello Excel spiega anche ogni colonna in un secondo foglio. Gli esempi sono inventati: sostituiscili con i tuoi dati.",
+      "none": "Nessuna importazione è aperta per te, quindi non c'è un modello da scaricare.",
+      "money": "Una colonna con importi (un costo, un prezzo) è nel modello solo se puoi vedere quegli importi: altrimenti l'importazione la rifiuta.",
+      "close": "Chiudi"
+    },
+    "first": {
+      "title": "Primo caricamento, in ordine",
+      "intro": "I dati di partenza nell'ordine in cui i record si richiamano: clienti, fornitori, materiali, giacenze iniziali, ordini aperti. Ogni passo confronta il foglio con ciò che è caricato ora; è fatto solo quando coincidono.",
+      "progress": "{done} di {total} fatti",
+      "company": "Azienda",
+      "loading": "Lettura del primo caricamento…",
+      "failedTitle": "Non è stato possibile leggere il primo caricamento",
+      "retry": "Riprova",
+      "dismiss": "Chiudi",
+      "number": "Passo {n}:",
+      "job": "Importazione letta: {file} · applicata il {when}",
+      "diffLabel": "Cosa non coincide",
+      "import": "Importa il foglio",
+      "openImport": "Apri l'importazione",
+      "openRunning": "Apri l'importazione in corso",
+      "done": {
+        "matched": "Fatto il {when}: il foglio coincideva con ciò che è caricato.",
+        "nothing": "Fatto il {when}: niente da caricare.",
+        "changed": "Fatto il {when}, ma non coincide più: qualcosa è cambiato da allora."
+      },
+      "markDone": "Fatto",
+      "nothing": "Niente da caricare",
+      "busy": "Salvataggio…",
+      "step": {
+        "customers": {
+          "name": "Clienti",
+          "what": "Le aziende e le persone a cui vendi (l'importazione clienti e fornitori, ruolo cliente)."
+        },
+        "suppliers": {
+          "name": "Fornitori",
+          "what": "Concerie, fornitori di accessori e terzisti (la stessa importazione, ruolo fornitore o terzista): un solo foglio può contenerli entrambi."
+        },
+        "materials": {
+          "name": "Materiali",
+          "what": "Pelli, fodere, accessori e protezioni con le loro unità, prima che le giacenze li nominino."
+        },
+        "openingStock": {
+          "name": "Giacenze iniziali",
+          "what": "Ciò che è in magazzino oggi: lotti, pelli con le loro superfici, i rapporti sul cromo VI già esistenti."
+        },
+        "openOrders": {
+          "name": "Ordini aperti",
+          "what": "Gli ordini già presi. Non hanno ancora un'importazione: inseriscili come ordini di vendita (Vendite › Ordini), poi segna questo passo Niente da caricare."
+        }
+      },
+      "state": {
+        "done": "Fatto",
+        "ready": "Coincide: segnalo come fatto",
+        "mismatch": "Non coincide",
+        "running": "Importazione in corso",
+        "todo": "Da caricare",
+        "waiting": "Attende un passo precedente",
+        "held": "Nessuna importazione ancora"
+      },
+      "rec": {
+        "rows": "Righe nel foglio {rows} · caricate {loaded}",
+        "customers_one": "{count} di esse ora è un cliente",
+        "customers_other": "{count} di esse ora sono clienti",
+        "suppliers_one": "{count} di esse ora è un fornitore",
+        "suppliers_other": "{count} di esse ora sono fornitori",
+        "quantity": "{unit}: {sheet} nel foglio · {loaded} caricati",
+        "value": "Valore delle giacenze nel foglio {sheet} · caricato {loaded}",
+        "atStandard_one": "{count} riga senza costo unitario, valorizzata al costo standard: {value}",
+        "atStandard_other": "{count} righe senza costo unitario, valorizzate al costo standard: {value}",
+        "matches": "Coincide",
+        "differs": "Non coincide"
+      },
+      "diff": {
+        "refused_one": "{count} riga è stata rifiutata: correggila nel foglio (scarica le righe rifiutate) e importa di nuovo.",
+        "refused_other": "{count} righe sono state rifiutate: correggile nel foglio (scarica le righe rifiutate) e importa di nuovo.",
+        "skipped_one": "{count} riga è stata saltata perché il suo record è cambiato dopo il controllo: importa di nuovo il foglio.",
+        "skipped_other": "{count} righe sono state saltate perché i loro record sono cambiati dopo il controllo: importa di nuovo il foglio.",
+        "missing_one": "Il record di {count} riga non c'è più (archiviato o spostato dopo l'importazione).",
+        "missing_other": "I record di {count} righe non ci sono più (archiviati o spostati dopo l'importazione).",
+        "quantity": "{unit}: {sheet} nel foglio, {loaded} caricati.",
+        "value": "Valore delle giacenze: {sheet} nel foglio, {loaded} caricato.",
+        "empty": "L'importazione non aveva righe."
+      },
+      "held": {
+        "waiting": "Finisci prima il passo {step}: i passi vanno in ordine.",
+        "noImporter": "Gli ordini aperti non hanno ancora un'importazione: inseriscili come ordini di vendita, poi segna questo passo Niente da caricare.",
+        "noImporterDone": "Gli ordini aperti non hanno ancora un'importazione: usa Niente da caricare quando sono inseriti come ordini di vendita.",
+        "noImportRight": "Per importare questo foglio servono il diritto di eseguire importazioni e quello di modificare ciò che carica. Chiedi a un amministratore.",
+        "noDoneRight": "Per segnare un passo come fatto servono il diritto di applicare importazioni e quello di modificare ciò che carica. Chiedi a un amministratore.",
+        "running": "Un'importazione di questo passo è in corso: aprila e finiscila o annullala prima.",
+        "noImport": "Importa prima il foglio di questo passo (scarica il suo modello, poi importalo).",
+        "mismatch_one": "Il foglio e ciò che è caricato non coincidono: vedi la differenza qui sotto.",
+        "mismatch_other": "Il foglio e ciò che è caricato non coincidono: vedi le {count} differenze qui sotto.",
+        "loadedSomething": "Un'importazione di questo passo ha caricato dei record: segnalo come fatto quando coincide, non come niente da caricare.",
+        "done": "Questo passo è fatto."
+      },
+      "confirm": {
+        "doneTitle": "Segnare {step} come fatto?",
+        "doneBody": "Il foglio e ciò che è caricato coincidono. Segnando il passo come fatto si apre il successivo; potrai comunque importare altro più tardi.",
+        "nothingTitle": "Niente da caricare per {step}?",
+        "nothingBody": "Il passo viene segnato come fatto senza un'importazione. Scrivi il perché, così chi viene dopo lo sa.",
+        "reason": "Perché non c'è niente da caricare",
+        "reasonHint": "Per esempio: non prendiamo ordini prima dell'avvio.",
+        "reasonShort": "Scrivi qualche parola.",
+        "reasonLong": "Al massimo 500 caratteri.",
+        "keep": "Lascialo aperto",
+        "doneGo": "Segna come fatto",
+        "nothingGo": "Niente da caricare"
+      },
+      "notice": {
+        "done": "Il passo {n} è fatto.",
+        "nothing": "Il passo {n} è fatto: niente da caricare.",
+        "refused": "Non segnato come fatto: il passo non coincide (o uno precedente è aperto). Vedi qui sotto."
+      }
     }
   }
 }

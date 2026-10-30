@@ -1,4 +1,5 @@
 import type { Loaded } from '../shared/model'
+import type { FirstLoadModel } from './guided/model'
 import { reachOf, type BulkNotice, type Reach } from '../kit/bulk-model'
 import { IMPORT_MAX_BYTES, layoutSchema, type ImportJob, type Importer, type ImportRow, type Layout, type NumberFormat } from './api'
 
@@ -17,13 +18,13 @@ export const KNOWN_IMPORTERS = ['product.materials', 'parties.parties', 'invento
 export const importerStem = (key: string) => `imp.importer.${key.replace(/\./g, '_')}`
 export const hasOwnWords = (key: string) => (KNOWN_IMPORTERS as readonly string[]).includes(key)
 
-/** Importers whose template the API serves (B-W1-35: `GET /inventory/opening/template`). */
-export const TEMPLATES: Readonly<Record<string, string>> = { 'inventory.opening': '/inventory/opening/template' }
-
-/** The template as a plain link through this app's `/api` (a GET: the session cookie, no header needed). */
-export function templateHref(importerKey: string, format: 'csv' | 'xlsx', numberFormat: NumberFormat): string | null {
-  const path = TEMPLATES[importerKey]
-  return path ? `/api${path}?${new URLSearchParams({ format, numberFormat }).toString()}` : null
+/**
+ * Every importer's template (B-W2a-41, PLT-177: `GET /imports/importers/:importerKey/template`, served for each importer
+ * the person may use; its money columns only with their grain) as a plain link through this app's `/api` (a GET: the
+ * session cookie, no header needed), in the number format the sheet will be read in.
+ */
+export function templateHref(importerKey: string, format: 'csv' | 'xlsx', numberFormat: NumberFormat): string {
+  return `/api/imports/importers/${encodeURIComponent(importerKey)}/template?${new URLSearchParams({ format, numberFormat }).toString()}`
 }
 
 /** The refused rows of a job as a CSV, a plain link. */
@@ -240,6 +241,10 @@ export interface ImportViewModel {
   /** The bulk cancel is running. */
   bulkBusy?: boolean
   notice?: BulkNotice | null
+  /** The guided first load of a company (B-W2a-41); absent: not read for this page (no company). */
+  firstLoad?: FirstLoadModel | null
+  /** The Templates dialog (the page's More menu) is open. */
+  templatesOpen?: boolean
 }
 
 export const RECENT_LIMIT = 50

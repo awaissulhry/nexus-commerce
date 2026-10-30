@@ -2,7 +2,7 @@
 
 import { forwardRef, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import Link from 'next/link'
-import { LogOut, Monitor, Moon, Search, Sun, UserRound } from 'lucide-react'
+import { Bell, LogOut, Monitor, Moon, Search, Sun, UserRound } from 'lucide-react'
 import { Banner, Menu, SearchTrigger } from '@nexus/ui/components'
 import { BottomBar } from '@nexus/ui/components/BottomBar/index'
 import { DetailHeader, WorkspaceSubheader, type WorkspaceSubheaderProps } from '@nexus/ui/patterns'
@@ -12,6 +12,7 @@ import { Kbd, ToolbarButton } from '@nexus/ui/primitives'
 import { useScopedT, useT } from '../../../lib/i18n/provider'
 import { companyPrefix } from '../../../lib/session/session'
 import { useTheme } from '../../../lib/theme/use-theme'
+import { bellWords, type BellState } from '../../../areas/home/notifications/model'
 import { officeCrumbs, palettePages, translateNav } from '../../nav/office-nav'
 import type { PaletteRecords } from '../../palette/palette-model'
 import { CommandPaletteView } from '../../palette/view/CommandPaletteView'
@@ -21,7 +22,8 @@ import '../office-shell.css'
 /**
  * SCR-003 — the Office shell (PLT-160, PLT-173; A2 §1, §2.1). Composed from design-system parts only:
  *  - top bar: the brand, the company and site switcher (SCR-002), the search field that opens the palette (SCR-004,
- *    also ⌘K / Ctrl K), the theme button and the person's menu (profile, sign out);
+ *    also ⌘K / Ctrl K), the bell (B-W2a-40: unread notifications in words, opens Home › Notifications), the theme button
+ *    and the person's menu (profile, sign out);
  *  - system banners under it: TEST MODE while a fake or sandbox connection is active;
  *  - the main sidebar: the DS `AppRail`, one row per area the person may open (areas/<area>/nav.ts);
  *  - the area's sub-sidebar, as Commerce's Settings and product studio have it: the DS `WorkspaceSubheader` (NOT
@@ -59,6 +61,11 @@ export interface OfficeShellViewModel {
   paletteQuery?: string
   /** B-W2a-32: what the record search answered for the palette (absent: no record search, as in the shell's cases). */
   paletteRecords?: PaletteRecords | null
+  /**
+   * B-W2a-40: the bell — the person's unread notifications (mentions, assignments, approvals, alerts, records they
+   * follow). Absent or null: no bell (a person who does not reach Home). An unknown count shows no badge, never 0.
+   */
+  bell?: BellState | null
 }
 
 export interface OfficeShellViewProps {
@@ -137,6 +144,8 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
   }
 
   const ThemeIcon = mode === 'light' ? Sun : mode === 'dark' ? Moon : Monitor
+  const bell = model.bell ? bellWords(model.bell) : null
+  const notificationsHref = toHref('/home/notifications')
   const searchLabel = t('topbar.searchLabel')
 
   return (
@@ -169,6 +178,15 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
           />
         </div>
         <div className="fw-topbar-utility">
+          {bell && (
+            <ToolbarButton
+              icon={<Bell size={16} />}
+              label={t(bell.key, { count: bell.count })}
+              description={t('topbar.bell.open')}
+              badge={bell.badge ?? undefined}
+              onClick={() => (onNavigate ? onNavigate(notificationsHref) : window.location.assign(notificationsHref))}
+            />
+          )}
           <ToolbarButton icon={<ThemeIcon size={16} />} label={t(`topbar.theme.${mode}`)} onClick={cycleTheme} />
           <Menu
             className="fw-usermenu"

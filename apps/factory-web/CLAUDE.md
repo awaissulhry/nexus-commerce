@@ -109,6 +109,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   lots, Cr VI results, the lot release; PPE register SCR-113): their shared parts are `areas/quality/_shared/` (record
   frame, check list = the gate in words, step-up hook + DS StepUpModal, live hook, `qualityCan`, the lot schema);
   catalogues `quality`, `lab`, `register`.
+- B-W2a-40 (every day at Home): `src/areas/home/notifications/` (SCR-005, `/home/notifications?tab=&state=`, catalogue
+  `home-notifications`; the shell's bell is `shell/office/use-bell.ts`: ONE `GET /notifications/counts` when the shell
+  mounts, then live `notification.created`, a reconnect, or the window event `factory:notifications-changed` that any
+  screen sends after it marks notifications read, done or snoozed), `src/areas/home/tasks/` (SCR-233, `/home/tasks?tile=
+  &scope=&q=&open=&new=1`, catalogue `home-tasks`), the record panels' Tasks tab, Follow / Followers and `@name` mentions
+  (`record-panels/tasks/` = every task and follower call and its zod, `view/TaskNewDialog.tsx` = the ONE New task dialog),
+  and Today with `include=TASKS,MENTIONS,ALERTS` (six tiles, my tasks and mentions with Done / Snooze, Coming up). "Snooze
+  until" is ONE dialog (`areas/home/today/view/SnoozeDialog.tsx` over `today/snooze.ts`: the site's times).
 - `src/lib/records/record-links.ts` — where a record opens: its own page once built (`RECORD_PAGES`, one line per record
   page; list pages in `LIST_PAGES`), else the record panel route `/w/<company>/records/<type>/<id>` (SCR-006 panels).
   Home › Today (`src/areas/home/today/`, SCR-029) and its lists open records through it.
@@ -132,6 +140,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   operations|quality|activity`, `?at=<seq>`; tabs in `cutting/`, `bundles/`, `progress/`), `wip/` Floor now
   (`/production/floor`); `_shared/` api, rules (`model.ts`), hooks, made-up fixtures. Totals per work order, operation
   and line only: no person's output and no station anywhere (Statuto art. 4, Owner F2); worker names only inside one record.
+  `reports/` (B-W2a-38) Production › Reports › Production reports (SCR-240 `/production/reports?site=&date=`: band with ⋯ Email me / Print, Daily production tiles + PerformanceGraph bars per lane + a SummaryTable per lane by style and size; `view/SubscribeDialog` = pop:prr-subscribe; `print/` = SCR-240-print `/production/reports/print` in a new tab; catalogue `production-reports`, also Floor now's `wip/view/LinesPanel` (fn-lines: a card per line sets `?line=`, [ / ] step)). Never a person: per line, work centre, style, size; per station only signed in / machine down (F2).
 - The buying office (one catalogue `buying`; shared parts `areas/_shared/buying/`: abilities with the cost grain, words for
   problems and quantities, live hook, sites from `/inventory/locations`, layout CSS, made-up fixtures): `areas/planning/mrp/`
   What to buy & make (SCR-055: `?site=` `?view=` `?q=` `?line=` the Why detail; one-click Draft PO with Undo, Draft POs per

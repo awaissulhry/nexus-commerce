@@ -4,16 +4,20 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { CATALOGUE } from '../../../lib/i18n/messages'
-import { editCompany, listCompanies, listUsers, listWorkers } from '../shared/api'
+import { isApiError, issuePath } from '../../../lib/api/errors'
+import { editCompany, listCompanies, listUsers } from '../shared/api'
 import { failed, loaded, loading, problemKey, problemNotice, type Loaded, type Notice } from '../shared/model'
-import { completenessOf, type CompanyLanguage } from './model'
+import { listFloorLanguages, setFloorLanguages } from './api'
+import { completenessOf, floorRefusalOf, type CompanyLanguage, type FloorProblem, type FloorSite } from './model'
 import { LanguagesView } from './view/LanguagesView'
 
 /**
  * `/w/<company>/admin/languages` (SCR-016): the companies with their sites (`GET /org/companies`: language, time zone),
- * the office people's languages (`GET /auth/users`, users.view) and the floor workers' (`GET /auth/floor/workers`,
- * workers.view); a read the person may not make is not made and its section is absent. Saving a company's language is
- * `PATCH /org/companies/:id` with the version read (companies.manage), one company at a time.
+ * the office people's languages (`GET /auth/users`, users.view) and each site's floor languages (`GET
+ * /org/floor-languages`, sites.view: the languages, the active workers per language, the worker notice in force); a
+ * read the person may not make is not made and its section is absent. Saving a company's language is `PATCH
+ * /org/companies/:id` with the version read (companies.manage), one company at a time; a site's floor languages `PUT
+ * /org/sites/:id/floor-languages` with the site's version (sites.manage; B-W2a-41), its refusal in the page's words.
  */
 export function LanguagesPage() {
   const api = useOfficeApi()
@@ -23,7 +27,9 @@ export function LanguagesPage() {
   const completeness = useMemo(() => completenessOf(CATALOGUE), [])
   const [companies, setCompanies] = useState<Loaded<CompanyLanguage>>(loading())
   const [people, setPeople] = useState<Loaded<{ locale: string }> | null>(held.has('users.view') ? loading() : null)
-  const [workers, setWorkers] = useState<Loaded<{ locale: string }> | null>(held.has('workers.view') ? loading() : null)
+  const [floor, setFloor] = useState<Loaded<FloorSite> | null>(held.has('sites.view') ? loading() : null)
+  const [floorProblem, setFloorProblem] = useState<FloorProblem | null>(null)
+  const [floorBusy, setFloorBusy] = useState(false)
   const [asOf, setAsOf] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
@@ -54,10 +60,10 @@ export function LanguagesPage() {
             (error: unknown) => setPeople(failed(problemKey(error))),
           )
         : Promise.resolve(),
-      held.has('workers.view')
-        ? listWorkers(api).then(
-            (items) => setWorkers(loaded(items.filter((worker) => worker.status === 'ACTIVE').map((worker) => ({ locale: worker.locale })))),
-            (error: unknown) => setWorkers(failed(problemKey(error))),
+      held.has('sites.view')
+        ? listFloorLanguages(api).then(
+            (items) => setFloor(loaded(items)),
+            (error: unknown) => setFloor(failed(problemKey(error))),
           )
         : Promise.resolve(),
     ])
@@ -69,12 +75,28 @@ export function LanguagesPage() {
 
   return (
     <LanguagesView
-      model={{ prefix, companies, people, workers, completeness, can: { manage: held.has('companies.manage') }, asOf, busy, notice }}
+      model={{ prefix, companies, people, floor, floorProblem, floorBusy, completeness, can: { manage: held.has('companies.manage') }, asOf, busy, notice }}
       actions={{
         onDismissNotice: () => setNotice(null),
         onRetry: () => {
           setCompanies(loading())
+          if (floor?.problem) setFloor(loading())
           void load()
+        },
+        onFloorChange: async (site, dialog, locales, reason) => {
+          setFloorBusy(true)
+          setFloorProblem(null)
+          try {
+            const saved = await setFloorLanguages(api, site.id, { version: site.version, locales, ...(reason ? { reason } : {}) })
+            setFloor((current) => (current?.items ? loaded(current.items.map((item) => (item.id === saved.id ? saved : item))) : current))
+            setNotice({ key: dialog.action === 'add' ? 'langs.floor.done.added' : 'langs.floor.done.removed', tone: 'success', params: { site: `${site.companyCode} › ${site.name}` } })
+          } catch (error) {
+            const issues = isApiError(error) ? error.issues.map((issue) => ({ path: issuePath(issue).replace(/\./g, '/'), message: issue.message })) : []
+            setFloorProblem(floorRefusalOf(site, dialog, isApiError(error) ? error.kind : 'internal', issues, problemKey(error)))
+            await load()
+          } finally {
+            setFloorBusy(false)
+          }
         },
         onSave: async (changes) => {
           setBusy(true)

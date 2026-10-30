@@ -1,0 +1,426 @@
+{
+  "band": {
+    "site": "Stabilimento",
+    "asOf": "Aggiornato alle {time}",
+    "reading": "Lettura del tabellone…",
+    "notRead": "Non letto",
+    "place": "Pianifica tutto per data di consegna",
+    "publish": "Pubblica al reparto"
+  },
+  "save": {
+    "idle": "Gli spostamenti si salvano mentre li fai",
+    "saving": "Salvataggio…",
+    "saved": "Tutti gli spostamenti salvati · {time}",
+    "failed": "Non salvato: {reason}",
+    "offline": "Offline: gli spostamenti aspettano la connessione"
+  },
+  "plan": {
+    "none": "Nessun piano di lavoro ancora: lo crea il primo spostamento",
+    "working": "Piano di lavoro v{version}",
+    "published": "Il reparto lavora sulla v{version} ({from} – {to}, dal {start})",
+    "neverPublished": "Niente ancora pubblicato al reparto",
+    "changes": "Da allora: {moved} spostati, {added} aggiunti, {removed} tolti"
+  },
+  "more": {
+    "label": "Altro",
+    "legend": "Legenda",
+    "versions": "Versioni pubblicate",
+    "keys": "Scorciatoie da tastiera",
+    "allocation": "Linee e terzisti",
+    "office": "Torna all'Ufficio"
+  },
+  "toolbar": {
+    "label": "Controlli del tabellone",
+    "view": "Vista",
+    "views": {
+      "resources": "Risorse",
+      "orders": "Ordini"
+    },
+    "zoom": "Scala",
+    "zooms": {
+      "DAY": "Giorno",
+      "WEEK": "Settimana",
+      "MONTH": "Mese"
+    },
+    "today": "Oggi",
+    "earlier": "Prima",
+    "later": "Dopo",
+    "date": "Primo giorno mostrato",
+    "search": "Cerca un numero d'ordine",
+    "searchPlaceholder": "Numero d'ordine (/)"
+  },
+  "filters": {
+    "label": "Filtri",
+    "lanes": "Linee",
+    "status": "Stato",
+    "material": "Materiale non pronto",
+    "style": "Modello",
+    "anyStyle": "Tutti i modelli",
+    "highlight": "Evidenzia",
+    "late": "In ritardo",
+    "materialMark": "Materiale"
+  },
+  "woStatus": {
+    "DRAFT": "Bozza",
+    "RELEASED": "Rilasciato",
+    "IN_PROGRESS": "In lavorazione",
+    "ON_HOLD": "Sospeso",
+    "COMPLETED": "Completato",
+    "CLOSED": "Chiuso",
+    "CANCELLED": "Annullato"
+  },
+  "board": {
+    "label": "Tabellone di pianificazione · {site}",
+    "title": "Programma",
+    "titleOrders": "Programma per ordine",
+    "hint": "Trascina una barra nel tempo o su un'altra linea; il carico sopra ogni linea mostra i minuti standard prenotati rispetto a quelli che la linea ha. Al reparto non arriva nulla finché non pubblichi.",
+    "hintOrders": "Una corsia per ordine di lavoro con le sue fasi; trascina una fase nel tempo. Per spostarla su un'altra linea usa la vista Risorse.",
+    "empty": "Nessun ordine di lavoro su questo stabilimento in questo periodo. Pianificali dalla lista da pianificare.",
+    "trayEmpty": "Ogni ordine di lavoro ha il suo posto"
+  },
+  "bucket": {
+    "week": "Settimana {week}",
+    "range": "{from} – {to}"
+  },
+  "closed": {
+    "HOLIDAY": "Festività",
+    "CLOSURE": "Chiuso"
+  },
+  "capacity": {
+    "none": "Nessun tempo di lavoro in questi giorni.",
+    "noPeople": "Nessuna persona con cui pianificare: impostala nelle Impostazioni di pianificazione.",
+    "noStations": "Nessuna postazione con cui pianificare: impostala nelle Impostazioni di pianificazione.",
+    "formulaPeople_one": "{people} persona × {minutes} min di lavoro × {efficiency}% di efficienza = {available} min disponibili.",
+    "formulaPeople_other": "{people} persone × {minutes} min di lavoro × {efficiency}% di efficienza = {available} min disponibili.",
+    "formulaStations_one": "{people} postazione × {minutes} min di lavoro × {efficiency}% di efficienza = {available} min disponibili.",
+    "formulaStations_other": "{people} postazioni × {minutes} min di lavoro × {efficiency}% di efficienza = {available} min disponibili.",
+    "closed": "Chiuso: {days}.",
+    "otherWork": "Prenotati qui anche {minutes} min di lavoro non ancora sul tabellone, alla sua data di consegna ({booked} min in tutto).",
+    "workshop": "Un terzista: la sua capacità in minuti standard non si pianifica qui."
+  },
+  "lane": {
+    "workshop": "Terzista",
+    "line_one": "{people} persona · {efficiency}% di efficienza",
+    "line_other": "{people} persone · {efficiency}% di efficienza",
+    "workCentre_one": "Centro di lavoro · {stations} postazione · {efficiency}%",
+    "workCentre_other": "Centro di lavoro · {stations} postazioni · {efficiency}%",
+    "order": "{style} · {pieces} pz · {status}"
+  },
+  "card": {
+    "operation": "Fase {seq} {operation} · {style} · {pieces} pz",
+    "part": "Parte dell'ordine · {style} · {pieces} pz",
+    "movedBy": "Spostato da {name}, {time}",
+    "due": "consegna {date}",
+    "noDue": "senza data di consegna",
+    "tray_one": "{style} · {pieces} pz · {due} · {operations} fase senza posto",
+    "tray_other": "{style} · {pieces} pz · {due} · {operations} fasi senza posto"
+  },
+  "mark": {
+    "rush": "Urgente",
+    "material": "Materiale non pronto",
+    "materialFrom": "Materiale {date}",
+    "draft": "Bozza · non prenota capacità",
+    "onHold": "Sospeso · non prenota capacità",
+    "keptOver": "Tenuto oltre la capacità"
+  },
+  "chip": {
+    "PAST_LATEST_SAFE_START": "Oltre l'ultimo inizio utile",
+    "START_SOON": "Deve iniziare presto",
+    "MATERIAL_NOT_READY": "Materiale non pronto",
+    "ON_HOLD": "Sospeso",
+    "DRAFT": "Bozza",
+    "NO_DUE_DATE": "Senza data di consegna"
+  },
+  "status": {
+    "LATE": "In ritardo",
+    "AT_RISK": "A rischio",
+    "ON_TIME": "In tempo",
+    "NO_DUE_DATE": "Senza data di consegna",
+    "DONE": "Fatto"
+  },
+  "reason": {
+    "PAST_DUE": "La data di consegna ({due}) è passata.",
+    "CANNOT_FINISH_IN_TIME": "Se inizia ora finisce il {finish}, dopo la data di consegna ({due}).",
+    "PLAN_FINISHES_LATE": "Il piano lo finisce il {finish}, dopo la data di consegna ({due}).",
+    "START_SOON": "Deve iniziare entro il {start} per finire entro il {due}.",
+    "STARTS_AFTER_LATEST_START": "Una barra inizia dopo il suo ultimo inizio: le fasi successive non hanno margine.",
+    "BEFORE_CALENDAR": "Il lavoro va oltre la fine del calendario di lavoro.",
+    "ON_TIME": "Può iniziare anche il {start} e finire comunque entro il {due}.",
+    "NO_DUE_DATE": "Senza data di consegna: è pianificato senza un ultimo inizio.",
+    "DONE": "Tutte le fasi sono fatte.",
+    "LATE": "Finisce dopo la data di consegna ({due}).",
+    "AT_RISK": "Deve iniziare entro il {start} per finire entro il {due}."
+  },
+  "readiness": {
+    "NOT_ENOUGH": "Materiale insufficiente",
+    "DELAYED": "Materiale in ritardo",
+    "REQUESTED": "Materiale richiesto",
+    "EXPECTED": "Materiale in arrivo",
+    "NOT_BOOKED": "Materiale a magazzino, non impegnato",
+    "RECEIVED": "Materiale pronto",
+    "NOT_PLANNED": "Materiale non pianificato"
+  },
+  "held": {
+    "readOnly": "Sola lettura: sul tabellone spostano il lavoro solo i pianificatori. Puoi guardarlo e aprire gli ordini di lavoro.",
+    "readOnlyBody": "Il piano si modifica con il permesso di modificare il piano di lavoro; per pubblicarlo serve il permesso di pubblicazione.",
+    "offline": "Offline: gli spostamenti aspettano di essere inviati finché la connessione non torna.",
+    "offlineBody": "Il tabellone è in sola lettura mentre il canale in tempo reale è assente; quando torna rilegge tutto.",
+    "loading": "Il tabellone è ancora in lettura.",
+    "busy": "Salvataggio in corso: aspetta la risposta.",
+    "trayEmpty": "Ogni ordine di lavoro ha già il suo posto.",
+    "otherOrder": "Una fase resta con il suo ordine di lavoro: passa a Risorse per spostarla su un'altra linea.",
+    "nothingToPlace": "{order} non ha più fasi da pianificare.",
+    "noOperation": "Nessuna fase di {order} ancora da pianificare si fa su {lane}.",
+    "partOnCentre": "Una parte di un ordine va su una linea o da un terzista, non su un centro di lavoro.",
+    "laneDoesNot": "{lane} non fa la fase {operation}: si fa in {centre}."
+  },
+  "refusal": {
+    "MOVED_BY": "Spostato da {name}, {time} · il tabellone è stato riletto.",
+    "MOVED": "Spostato da un altro, {time} · il tabellone è stato riletto.",
+    "MOVED_SOMEONE": "Spostato da un altro nel frattempo · il tabellone è stato riletto.",
+    "OVERLOAD": "La corsia andrebbe oltre la sua capacità: tienilo lì con un motivo o scegli un altro posto.",
+    "PLAN_CHANGED": "Il piano di lavoro è cambiato da quando è stato letto: il tabellone è stato riletto.",
+    "LANE_DOES_NOT": "Quella corsia non fa questa fase.",
+    "ALREADY_ON_BOARD": "Questa fase ha già una barra sul tabellone: sposta quella.",
+    "PART_THERE": "Questo ordine di lavoro ha già una parte su quella corsia: modificala in Linee e terzisti.",
+    "NOT_OPEN": "L'ordine di lavoro non è più aperto: non va sul tabellone.",
+    "LANE_ARCHIVED": "Quella corsia non è più attiva: scegli una linea, un centro di lavoro o un terzista attivo.",
+    "NO_WORKING_TIME": "Il lavoro non sta nel tempo di lavoro dei giorni mostrati: scegli un giorno più avanti.",
+    "PART_LANE": "Una parte di un ordine va su una linea o da un terzista.",
+    "OPERATION_DONE": "Quella fase è fatta: niente da pianificare.",
+    "NOTHING_TO_PLACE": "Niente da pianificare: ogni fase con lavoro residuo è sul tabellone.",
+    "NOTHING_CHANGED": "Niente è cambiato dall'ultima versione pubblicata.",
+    "CONFLICT": "Il tabellone ha rifiutato questa modifica con il piano com'è ora: è stato riletto.",
+    "FORBIDDEN": "Non puoi modificare il piano di lavoro di questo stabilimento.",
+    "NOT_FOUND": "Non è più sul piano di lavoro: il tabellone è stato riletto.",
+    "INVALID": "Il tabellone non ha potuto inviare questa modifica così com'è.",
+    "OFFLINE": "Nessuna connessione al server: non è stato salvato nulla.",
+    "SIGNED_OUT": "La sessione è finita: accedi di nuovo.",
+    "FAILED": "Il server non l'ha salvato. Riprova."
+  },
+  "error": {
+    "title": "Impossibile caricare il programma",
+    "forbidden": "Non puoi vedere il tabellone di pianificazione di questo stabilimento.",
+    "offline": "Il server non ha risposto. Non si disegna nulla, così un tabellone vuoto non appare mai per errore.",
+    "failed": "Non è stato possibile leggere il tabellone. Non si disegna nulla, così un tabellone vuoto non appare mai per errore.",
+    "noSite": "Questa società non ha ancora uno stabilimento da pianificare.",
+    "retry": "Riprova"
+  },
+  "problems": {
+    "title": "Problemi di questo piano",
+    "none": "Nessun problema in questo piano.",
+    "summary_one": "{count} problema",
+    "summary_other": "{count} problemi",
+    "kind": {
+      "OVERBOOKED": "Sovraccarico",
+      "FINISHES_LATE": "Finisce in ritardo"
+    },
+    "show": "Mostra sul tabellone"
+  },
+  "problem": {
+    "on": "il {day}",
+    "between": "dal {from} al {to}",
+    "OVERBOOKED": "{lane} è al {pct}% {when} (+{over} min oltre).",
+    "FINISHES_LATE_one": "{order} finisce {days} giorno dopo la data di consegna.",
+    "FINISHES_LATE_other": "{order} finisce {days} giorni dopo la data di consegna.",
+    "LATE_NOW": "{order} non può finire entro la data di consegna così com'è pianificato."
+  },
+  "notice": {
+    "otherPlanner": "Un altro pianificatore ha modificato il piano: il tabellone è stato riletto.",
+    "nextFree": "{order} è andato invece al primo giorno libero.",
+    "published": "v{version} pubblicata al reparto.",
+    "placed_one": "{count} barra pianificata per data di consegna.",
+    "placed_other": "{count} barre pianificate per data di consegna."
+  },
+  "dialog": {
+    "close": "Chiudi"
+  },
+  "bar": {
+    "title": "Ordine di lavoro {order}",
+    "open": "Apri l'ordine di lavoro",
+    "sendToTray": "Rimetti tra quelli da pianificare",
+    "garments": "Capi",
+    "status": "Stato",
+    "due": "Data promessa",
+    "noDue": "Senza data di consegna",
+    "latestSafeStart": "Ultimo inizio utile",
+    "planned": "Pianificato",
+    "span": "{start} – {finish}",
+    "notPlanned": "Non sul tabellone",
+    "line": "Linea",
+    "noLine": "Non assegnato",
+    "minutes": "Minuti standard",
+    "minutesValue": "{minutes} min",
+    "material": "Materiale",
+    "materialOn": "{word} · {date}",
+    "materialUnknown": "Non verificato",
+    "onHold": "Sospeso",
+    "sizes": "Pezzi per taglia",
+    "colourway": "Colore",
+    "size": "Taglia",
+    "pieces": "Pezzi",
+    "operations": "Fasi",
+    "operation": "Fase",
+    "lane": "Corsia",
+    "when": "Quando",
+    "startsLate": "Inizia in ritardo",
+    "gates": "I controlli di campione e qualità sul tabellone arrivano più avanti; li mostra l'ordine di lavoro."
+  },
+  "drop": {
+    "title": "{lane} sarebbe al {pct}% {when}",
+    "titlePlain": "{lane} andrebbe oltre la sua capacità",
+    "body": "Mettendo {order} qui, {lane} supera i minuti che ha.",
+    "bodyApi": "Contando il lavoro non ancora sul tabellone, mettendo {order} qui {lane} supera i minuti che ha.",
+    "days": "Il carico dopo lo spostamento",
+    "when": "Quando",
+    "after": "Dopo lo spostamento",
+    "over": "Oltre",
+    "load": "{booked} / {available} min · {pct}%",
+    "overValue": "+{minutes} min",
+    "reason": "Motivo per tenerlo qui",
+    "reasonHint": "Straordinari, una persona in più, un ordine breve… Il motivo resta sulla barra.",
+    "reasonHeld": "Spiega in poche parole perché resta sulla corsia sovraccarica.",
+    "keep": "Tieni con un motivo",
+    "next": "Sposta al primo giorno libero",
+    "cancel": "Annulla",
+    "setting": "Questo stabilimento avvisa quando una corsia va oltre: il blocco dello spostamento non è impostato."
+  },
+  "publish": {
+    "title": "Pubblica il programma v{version} al reparto",
+    "titlePlain": "Pubblica al reparto",
+    "range": "Giorni da pubblicare",
+    "ranges": {
+      "tomorrow": "Domani",
+      "default": "Prossimi 5 giorni lavorativi",
+      "custom": "Personalizzato"
+    },
+    "from": "Primo giorno",
+    "to": "Ultimo giorno",
+    "review": "Rivedi",
+    "customHeld": "Scegli un primo e un ultimo giorno, l'ultimo uguale o dopo il primo.",
+    "covers_one": "{from} – {to}: {days} giorno lavorativo",
+    "covers_other": "{from} – {to}: {days} giorni lavorativi",
+    "bars_one": "{slots} barra da pubblicare.",
+    "bars_other": "{slots} barre da pubblicare.",
+    "diffSince": "Modifiche dalla v{version}",
+    "diffFirst": "La prima versione per questi giorni",
+    "diff": "{moved} spostati, {added} aggiunti, {removed} tolti",
+    "byLane": "Modifiche per linea",
+    "lane": "Linea",
+    "moved": "Spostati",
+    "added": "Aggiunti",
+    "removed": "Tolti",
+    "checks": "Controlli",
+    "state": {
+      "PASS": "Superato",
+      "WARNING": "Attenzione"
+    },
+    "check": {
+      "OVERBOOKED": {
+        "pass": "Nessuna corsia è sovraccarica in questi giorni.",
+        "warn_one": "{count} corsia e giorno sovraccarichi.",
+        "warn_other": "{count} corsie e giorni sovraccarichi."
+      },
+      "IN_THE_PAST": {
+        "pass": "Nessuna fase inizia nel passato.",
+        "warn_one": "{count} fase inizia nel passato.",
+        "warn_other": "{count} fasi iniziano nel passato."
+      },
+      "MATERIAL_NOT_READY": {
+        "pass": "Il materiale è pronto per ogni ordine di lavoro.",
+        "warn_one": "{count} ordine di lavoro senza il suo materiale.",
+        "warn_other": "{count} ordini di lavoro senza il loro materiale."
+      }
+    },
+    "show": "Mostra {what}",
+    "what": "Cosa succede",
+    "whatBody": "Le liste di lavoro delle linee e delle postazioni passano subito a questa versione; il reparto vede \"Nuovo programma v{version} dal {start}\".",
+    "notify": "I tablet di linea ricevono la nuova lista da soli; ai capilinea non viene inviato alcun messaggio.",
+    "confirm": "Pubblica v{version}",
+    "confirmPlain": "Pubblica",
+    "cancel": "Annulla",
+    "done": "v{version} pubblicata al reparto.",
+    "doneBody": "Il reparto ci lavora dal {start}.",
+    "doneHeld": "Pubblicata: chiudi la finestra.",
+    "rangeRefused": "Questi giorni non si possono pubblicare: una versione copre al massimo 62 giorni, l'ultimo uguale o dopo il primo.",
+    "planChanged": "Il piano di lavoro è cambiato da quando hai aperto questa revisione: eccola di nuovo.",
+    "held": {
+      "permission": "Per pubblicare al reparto serve il permesso di pubblicare il piano in questo stabilimento.",
+      "nothingChanged": "Niente è cambiato da quando è stata pubblicata la v{version}.",
+      "nothingOnDays": "Il piano di lavoro non ha nulla da pubblicare nei prossimi giorni lavorativi.",
+      "nothingOnRange": "Il piano di lavoro non ha nulla da pubblicare dal {from} al {to}.",
+      "cannot": "Questi giorni non si possono pubblicare ora: guarda i problemi del tabellone.",
+      "noPlan": "Non c'è ancora un piano di lavoro: prima metti del lavoro sul tabellone."
+    }
+  },
+  "place": {
+    "title": "Pianifica tutto per data di consegna",
+    "body": "Tutti gli ordini di lavoro da pianificare, ogni fase al suo ultimo inizio per finire alla data di consegna (o da ora, quando è già passato). Guarda il risultato prima di applicarlo.",
+    "proposals": "Le barre che metterebbe",
+    "order": "Ordine",
+    "operation": "Fase",
+    "lane": "Corsia",
+    "when": "Quando",
+    "how": "Come",
+    "placedBy": {
+      "BACKWARD": "Al suo ultimo inizio",
+      "FORWARD": "Da ora: sarà in ritardo"
+    },
+    "over": "Oltre la capacità",
+    "skipped_one": "{count} fase non viene pianificata ({orders}): pianificala a mano.",
+    "skipped_other": "{count} fasi non vengono pianificate ({orders}): pianificale a mano.",
+    "reason_one": "{count} barra sovraccaricherebbe la sua corsia: il motivo per tenerla",
+    "reason_other": "{count} barre sovraccaricherebbero le loro corsie: il motivo per tenerle",
+    "reasonHeld_one": "{count} barra sovraccarica la sua corsia: prima scrivi il motivo.",
+    "reasonHeld_other": "{count} barre sovraccaricano le loro corsie: prima scrivi il motivo.",
+    "minutes": "{minutes} minuti standard in tutto.",
+    "nothing": "Niente da pianificare.",
+    "apply_one": "Metti {count} barra",
+    "apply_other": "Metti {count} barre",
+    "applyPlain": "Metti",
+    "cancel": "Annulla",
+    "planChanged": "Il piano di lavoro è cambiato da questa anteprima: aprila di nuovo."
+  },
+  "legend": {
+    "title": "Legenda",
+    "late": "A righe",
+    "lateWords": "In ritardo: l'ordine di lavoro finisce dopo la data di consegna, o una barra inizia dopo il suo ultimo inizio.",
+    "materialWords": "Il materiale dell'ordine di lavoro non è pronto; la data dice quando è atteso.",
+    "draftWords": "Un ordine di lavoro in bozza o sospeso: disegnato, ma non prenota capacità finché non è rilasciato.",
+    "keptOverWords": "Tenuto su una corsia sovraccarica con un motivo.",
+    "rushWords": "Un ordine urgente: primo nelle liste di lavoro.",
+    "moved": "Spostato da",
+    "movedWords": "Un altro pianificatore ha spostato questa barra per ultimo, a quell'ora.",
+    "today": "Oggi",
+    "todayWords": "La colonna di oggi.",
+    "closed": "Chiuso",
+    "closedWords": "Una festività o una chiusura dal calendario: tratteggiata, non accetta spostamenti.",
+    "overLoad": "+min oltre",
+    "overLoadWords": "La barra di carico oltre la linea della capacità: la corsia è sovraccarica di quei minuti.",
+    "standardMinute": "Un minuto standard è quanto dovrebbe durare una fase per una persona addestrata. Carico = minuti standard × pezzi. Capacità = persone × minuti di lavoro × efficienza della linea."
+  },
+  "versions": {
+    "title": "Versioni pubblicate",
+    "none": "Niente ancora pubblicato al reparto.",
+    "number": "Versione",
+    "covers": "Giorni",
+    "from": "Il reparto ci lavora dal",
+    "published": "Pubblicata",
+    "slots": "Barre",
+    "by": "{name}, {time}",
+    "hint": "Il reparto lavora sulla versione più alta il cui inizio è arrivato; il piano di lavoro cambia solo qui."
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "search": "Cerca un ordine",
+    "today": "Vai a oggi",
+    "zoom": "Scala giorno / settimana / mese",
+    "view": "Vista Ordini / vista Risorse",
+    "pick": "Prendi la barra selezionata",
+    "arrows": "Scegli un giorno e una corsia",
+    "drop": "Lasciala lì (o apri la barra selezionata)",
+    "cancel": "Annulla lo spostamento, chiudi una finestra",
+    "undo": "Annulla uno spostamento",
+    "redo": "Ripeti uno spostamento"
+  }
+}

@@ -12,11 +12,12 @@
       "last": "Last import: {when} · {state}",
       "never": "Not imported yet",
       "start": "Import",
-      "later": "Styles, price lists and workers get their imports with their own areas; the guided first load (customers → suppliers → materials → opening stock, with totals that must match) and the downloadable templates for every import come later."
+      "later": "Styles, price lists and workers get their imports with their own areas."
     },
     "template": {
       "xlsx": "Template (Excel)",
-      "csv": "Template (CSV)"
+      "csv": "Template (CSV)",
+      "label": "Template of {name}"
     },
     "recent": {
       "title": "Recent imports",
@@ -265,6 +266,125 @@
       "partial_other": "{count} of {total} imports cancelled. Not cancelled:",
       "failed_one": "The import was not cancelled:",
       "failed_other": "None of the {count} imports was cancelled:"
+    },
+    "more": "More actions",
+    "templates": {
+      "menu": "Templates",
+      "title": "Templates",
+      "intro": "Each import's template, written the way the import reads it ({sample}). The Excel one also explains every column on a second sheet. The examples in it are made up: replace them with your data.",
+      "none": "No import is open to you, so there is no template to download.",
+      "money": "A column that holds money (a cost, a price) is in the template only when you may see that money: the import refuses it otherwise.",
+      "close": "Close"
+    },
+    "first": {
+      "title": "First load, in order",
+      "intro": "Your opening data in the order the records need each other: customers, suppliers, materials, opening stock, open orders. Each step compares the sheet with what is loaded now; it is done only when they match.",
+      "progress": "{done} of {total} done",
+      "company": "Company",
+      "loading": "Reading the first load…",
+      "failedTitle": "The first load could not be read",
+      "retry": "Try again",
+      "dismiss": "Dismiss",
+      "number": "Step {n}:",
+      "job": "Import read: {file} · applied {when}",
+      "diffLabel": "What does not match",
+      "import": "Import the sheet",
+      "openImport": "Open the import",
+      "openRunning": "Open the import under way",
+      "done": {
+        "matched": "Done on {when}: the sheet matched what is loaded.",
+        "nothing": "Done on {when}: nothing to load.",
+        "changed": "Done on {when}, but it no longer matches: something changed since."
+      },
+      "markDone": "Done",
+      "nothing": "Nothing to load",
+      "busy": "Saving…",
+      "step": {
+        "customers": {
+          "name": "Customers",
+          "what": "The companies and people you sell to (the customers and suppliers import, role cliente)."
+        },
+        "suppliers": {
+          "name": "Suppliers",
+          "what": "Tanneries, trim suppliers and subcontractors (the same import, role fornitore or terzista): one sheet may hold both."
+        },
+        "materials": {
+          "name": "Materials",
+          "what": "Leathers, linings, trims and protectors with their units, before any stock names them."
+        },
+        "openingStock": {
+          "name": "Opening stock",
+          "what": "What lies in the warehouse today: lots, hides with their areas, the existing chromium VI reports."
+        },
+        "openOrders": {
+          "name": "Open orders",
+          "what": "Orders already taken. They have no import yet: enter them as sales orders (Sales › Orders), then mark this step Nothing to load."
+        }
+      },
+      "state": {
+        "done": "Done",
+        "ready": "Matches: mark it done",
+        "mismatch": "Does not match",
+        "running": "Import under way",
+        "todo": "To load",
+        "waiting": "Waits for an earlier step",
+        "held": "No import yet"
+      },
+      "rec": {
+        "rows": "Rows in the sheet {rows} · loaded {loaded}",
+        "customers_one": "{count} of them a customer now",
+        "customers_other": "{count} of them customers now",
+        "suppliers_one": "{count} of them a supplier now",
+        "suppliers_other": "{count} of them suppliers now",
+        "quantity": "{unit}: {sheet} in the sheet · {loaded} loaded",
+        "value": "Stock value in the sheet {sheet} · loaded {loaded}",
+        "atStandard_one": "{count} row without a unit cost, valued at the standard cost: {value}",
+        "atStandard_other": "{count} rows without a unit cost, valued at the standard cost: {value}",
+        "matches": "Matches",
+        "differs": "Does not match"
+      },
+      "diff": {
+        "refused_one": "{count} row was refused: fix it in the sheet (download the refused rows) and import again.",
+        "refused_other": "{count} rows were refused: fix them in the sheet (download the refused rows) and import again.",
+        "skipped_one": "{count} row was skipped because its record changed after the check: import the sheet again.",
+        "skipped_other": "{count} rows were skipped because their records changed after the check: import the sheet again.",
+        "missing_one": "{count} row's record is not there any more (archived or moved since the import).",
+        "missing_other": "{count} rows' records are not there any more (archived or moved since the import).",
+        "quantity": "{unit}: {sheet} in the sheet, {loaded} loaded.",
+        "value": "Stock value: {sheet} in the sheet, {loaded} loaded.",
+        "empty": "The import had no rows."
+      },
+      "held": {
+        "waiting": "Finish step {step} first: the steps go in order.",
+        "noImporter": "Open orders have no import yet: enter them as sales orders, then mark this step Nothing to load.",
+        "noImporterDone": "Open orders have no import yet: use Nothing to load once they are entered as sales orders.",
+        "noImportRight": "Importing this sheet needs the right to run imports and to change what it loads. Ask an administrator.",
+        "noDoneRight": "Marking a step done needs the right to apply imports and to change what it loads. Ask an administrator.",
+        "running": "An import of this step is under way: open it and finish or cancel it first.",
+        "noImport": "Import the sheet of this step first (download its template, then import it).",
+        "mismatch_one": "The sheet and what is loaded do not match: see the difference below.",
+        "mismatch_other": "The sheet and what is loaded do not match: see the {count} differences below.",
+        "loadedSomething": "An import of this step loaded records: mark it done when it matches, not as nothing to load.",
+        "done": "This step is done."
+      },
+      "confirm": {
+        "doneTitle": "Mark {step} done?",
+        "doneBody": "The sheet and what is loaded match. Marking the step done opens the next one; you can still import more later.",
+        "nothingTitle": "Nothing to load for {step}?",
+        "nothingBody": "The step is marked done without an import. Say why, so the next person knows.",
+        "reason": "Why there is nothing to load",
+        "reasonHint": "For example: we take no orders before the go-live.",
+        "reasonShort": "Write a few words.",
+        "reasonLong": "At most 500 characters.",
+        "keep": "Keep it open",
+        "doneGo": "Mark done",
+        "nothingGo": "Nothing to load"
+      },
+      "notice": {
+        "done": "Step {n} is done.",
+        "nothing": "Step {n} is done: nothing to load.",
+        "refused": "Not marked done: the step does not match (or an earlier one is open). See it below."
+      }
     }
   }
 }

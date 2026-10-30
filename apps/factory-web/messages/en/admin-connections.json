@@ -324,6 +324,148 @@
       "resumedFailed_one": "The service was not resumed:",
       "resumedFailed_other": "None of the {count} services was resumed:",
       "noSelect": "Not connected: there is nothing to pause or resume"
+    },
+    "delivery": {
+      "title": "Delivery log and blocked addresses",
+      "intro": "Every mail the factory sent and where it is now: waiting, sent, delivered, bounced or complained about, or failed. A mail that bounced for good or drew a complaint blocks its address: no more mail goes there until you unblock it.",
+      "masked": "Some addresses are masked: only people who manage that company's mail see them in full.",
+      "maskedHint": "Masked: only people who manage this company's mail see the address in full.",
+      "tableLabel": "Mail sent",
+      "count_one": "1 mail",
+      "count_other": "{count} mails",
+      "more": "Show older",
+      "loadingMore": "Loading older mail…",
+      "noneFiltered": "No mail matches this filter.",
+      "emptyTitle": "No mail sent yet",
+      "emptyBody": "Mail appears here as soon as a quote, an order, an invoice or a sign-in mail leaves the factory.",
+      "filtered": "Showing: {state}",
+      "person": "A person (not named here)",
+      "noRecord": "A mail without a record",
+      "digestCarried_one": "Carried 1 notification",
+      "digestCarried_other": "Carried {count} notifications",
+      "hidden_one": "+1 hidden copy",
+      "hidden_other": "+{count} hidden copies",
+      "col": {
+        "message": "Message",
+        "to": "To",
+        "state": "State",
+        "at": "When",
+        "problem": "Problem"
+      },
+      "kind": {
+        "RECORD": "A record's mail",
+        "SIGN_IN": "Sign-in mail",
+        "DIGEST": "Notification digest"
+      },
+      "state": {
+        "WAITING": "Waiting to go",
+        "SENT": "Sent",
+        "DELIVERED": "Delivered",
+        "PROBLEM": "Bounced or complained",
+        "FAILED": "Not sent"
+      },
+      "tile": {
+        "WAITING": "Waiting",
+        "SENT": "Sent",
+        "DELIVERED": "Delivered",
+        "PROBLEM": "Bounced or complained",
+        "FAILED": "Not sent"
+      },
+      "tileHint": {
+        "WAITING": "Queued or being sent now (last 30 days).",
+        "SENT": "The mail service took them; no word back yet (last 30 days).",
+        "DELIVERED": "The recipient's mail server accepted them (last 30 days).",
+        "PROBLEM": "They bounced for good or the recipient marked them as spam: the address is blocked (last 30 days).",
+        "FAILED": "They never left: refused, or out of tries (last 30 days)."
+      },
+      "about": {
+        "INVOICES": "Invoices",
+        "LINKS": "Links"
+      },
+      "problem": {
+        "bounced": "Bounced: the mailbox does not exist or refuses mail.",
+        "complained": "The recipient marked it as spam.",
+        "failed": "It never left the factory."
+      },
+      "recordType": {
+        "Quote": "Quote",
+        "SalesOrder": "Sales order",
+        "PurchaseOrder": "Purchase order",
+        "Invoice": "Invoice",
+        "Shipment": "Shipment",
+        "DepositRequest": "Deposit request",
+        "GoodsReceipt": "Goods receipt",
+        "Party": "Customer or supplier",
+        "WorkOrder": "Work order",
+        "other": "Record"
+      },
+      "link": {
+        "QUOTE_ACCEPT": "Quote to accept (link)",
+        "PO_CONFIRM": "Order to confirm (link)",
+        "DOCUMENT_VIEW": "Documents (link)",
+        "DEPOSIT_INFO": "Deposit page (link)",
+        "other": "A link"
+      }
+    },
+    "blocked": {
+      "title": "Blocked addresses",
+      "intro": "No mail goes to these addresses. Each one bounced for good, complained, or was stopped by a person. Unblock one only when the problem is fixed.",
+      "tableLabel": "Blocked addresses",
+      "count_one": "1 address blocked",
+      "count_other": "{count} addresses blocked",
+      "countUnblocked_one": "1 address unblocked",
+      "countUnblocked_other": "{count} addresses unblocked",
+      "viewLabel": "Which addresses",
+      "view": {
+        "BLOCKED": "Blocked now",
+        "UNBLOCKED": "Unblocked"
+      },
+      "emptyTitle": "No address is blocked",
+      "emptyBody": "When a mail bounces for good or a recipient complains, the address shows up here.",
+      "noneUnblocked": "No address was unblocked yet.",
+      "col": {
+        "address": "Address",
+        "why": "Why",
+        "since": "Blocked since",
+        "mail": "The mail",
+        "unblocked": "Unblocked",
+        "actions": "Actions"
+      },
+      "reason": {
+        "BOUNCE": "Bounced for good",
+        "COMPLAINT": "The recipient complained",
+        "MANUAL": "Stopped by a person"
+      },
+      "unblock": "Unblock",
+      "unblockOne": "Unblock {address}",
+      "unblockMany_one": "Unblock {count}",
+      "unblockMany_other": "Unblock {count}",
+      "unblockedOn": "Unblocked on {at}",
+      "noSelect": "Unblocked already: nothing to do.",
+      "noneToUnblock": "None of the selected addresses is blocked: nothing to unblock.",
+      "heldRight": "Unblocking needs the right to unblock addresses over every company (one list serves all of them).",
+      "left": {
+        "unblocked_one": "1 selected address is unblocked already: left out.",
+        "unblocked_other": "{count} selected addresses are unblocked already: left out."
+      },
+      "confirmTitle_one": "Unblock {count} address?",
+      "confirmTitle_other": "Unblock {count} addresses?",
+      "confirmGo_one": "Unblock {count} address",
+      "confirmGo_other": "Unblock {count} addresses",
+      "confirmBody": "From now on mail may go to these addresses again. If one bounces for good again, it is blocked again by itself.",
+      "confirmAgain": "The row stays in the list of unblocked addresses, with when and why.",
+      "complaintTitle": "A recipient marked our mail as spam",
+      "complaintBody": "Write to them again only if they asked for it: unblocking does not change what they told their mail service.",
+      "listLabel": "Addresses",
+      "reasonLabel": "Reason",
+      "reasonHint": "Required. Kept with the change (for example: the customer fixed their mailbox).",
+      "reasonShort": "Say why in at least 3 letters.",
+      "unblockedDone_one": "1 address unblocked: mail may go to it again.",
+      "unblockedDone_other": "{count} addresses unblocked: mail may go to them again.",
+      "unblockedPartial_one": "{done} of {total} addresses unblocked. Not unblocked:",
+      "unblockedPartial_other": "{done} of {total} addresses unblocked. Not unblocked:",
+      "unblockedFailed_one": "No address unblocked. Not unblocked:",
+      "unblockedFailed_other": "No address unblocked ({count} refused). Not unblocked:"
     }
   },
   "mail": {

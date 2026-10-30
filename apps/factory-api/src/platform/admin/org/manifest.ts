@@ -19,4 +19,7 @@ export const manifest = defineManifest({
   'PATCH /org/work-centres/:workCentreId': { audiences: ['office'], permission: 'sites.manage', scope: 'record' },
   'POST /org/sites/:siteId/stations': { audiences: ['office'], permission: 'sites.manage', scope: 'record' },
   'PATCH /org/stations/:stationId': { audiences: ['office'], permission: 'sites.manage', scope: 'record' },
+  // B-W2a-41 (PLT-128): the floor languages (each site checked with can(); an added language needs the worker notice in it).
+  'GET /org/floor-languages': { audiences: ['office'], permission: 'sites.view', scope: 'record' },
+  'PUT /org/sites/:siteId/floor-languages': { audiences: ['office'], permission: 'sites.manage', scope: 'record' },
 })

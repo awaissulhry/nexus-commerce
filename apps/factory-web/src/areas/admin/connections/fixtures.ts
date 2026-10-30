@@ -4,6 +4,8 @@ import { at, COMPANIES, inShell, NOW, panels, PREFIX } from '../shared/fixtures'
 import { failed, loaded, loading } from '../shared/model'
 import type { InboundDelivery, IntegrationAccount, IntegrationCall, SendingIdentity } from './api'
 import type { MailDomainModel } from './mail/model'
+import type { BlockedAddress, DeliveryCounts, DeliveryMail } from './delivery/api'
+import type { DeliveryModel } from './delivery/model'
 import type { ConnectionRecordModel, ConnectionsViewModel, Ledger } from './model'
 import { ConnectionRecordView } from './record/view/ConnectionRecordView'
 import { ConnectionsView } from './view/ConnectionsView'
@@ -174,6 +176,73 @@ export const IDENTITIES: SendingIdentity[] = [IDENTITY_READY, IDENTITY_WAITING, 
 export const MAIL_COMPANIES = COMPANIES.map((company) => ({ id: company.id, name: company.legalName }))
 export const CHOICES = COMPANIES.map((company) => ({ id: company.id, code: company.code, name: company.legalName }))
 
+// ---- the delivery log and blocked addresses (B-W2a-41) ----
+
+const mail = (n: number, extra: Partial<DeliveryMail> & Pick<DeliveryMail, 'state' | 'status' | 'at'>): DeliveryMail => ({
+  id: uid(400 + n),
+  companyId: DEMO.id,
+  kind: 'RECORD',
+  templateKey: 'thread.message',
+  record: null,
+  to: [],
+  recipients: 1,
+  fullAddresses: true,
+  queuedAt: extra.at,
+  attempts: 1,
+  problem: null,
+  link: null,
+  notifications: null,
+  ...extra,
+})
+
+/** Made-up mail of the Demo companies: a quote, an order, invoices (one bounced), a document link, a digest, a sign-in. */
+export const MAILS: DeliveryMail[] = [
+  mail(1, { state: 'DELIVERED', status: 'DELIVERED', at: at(29, 9, 31), record: { type: 'Quote', id: uid(501), label: 'Q-2026-0042' }, to: ['acquisti@moto-esempio.example'], link: 'QUOTE_ACCEPT' }),
+  mail(2, { state: 'PROBLEM', status: 'BOUNCED', at: at(29, 9, 12), record: { type: 'Invoice', id: uid(502), label: 'FT-2026-0041' }, to: ['amministrazione@vecchio-cliente.example'], problem: 'Permanent/General: mailbox unavailable' }),
+  mail(3, { state: 'SENT', status: 'SENT', at: at(29, 8, 55), record: { type: 'PurchaseOrder', id: uid(503), label: 'PO-2026-00012' }, to: ['ordini@conceria-esempio.example', 'qualita@conceria-esempio.example'], recipients: 3, link: 'PO_CONFIRM' }),
+  mail(4, { state: 'DELIVERED', status: 'DELIVERED', at: at(29, 8, 20), record: { type: 'Shipment', id: uid(504), label: 'SH-2026-0007' }, to: ['magazzino@moto-esempio.example'], link: 'DOCUMENT_VIEW' }),
+  mail(5, { state: 'PROBLEM', status: 'COMPLAINED', at: at(28, 17, 40), record: { type: 'SalesOrder', id: uid(505), label: 'SO-2026-0031' }, to: ['info@negozio-esempio.example'], problem: 'abuse' }),
+  mail(6, { state: 'FAILED', status: 'FAILED', at: at(28, 16, 5), record: { type: 'Invoice', id: uid(506), label: 'FT-2026-0039' }, to: ['amministrazione@vecchio-cliente.example'], attempts: 0, problem: 'suppressed: 1 recipient(s) bounced or complained before' }),
+  mail(7, { state: 'DELIVERED', status: 'DELIVERED', at: at(28, 7, 0), kind: 'DIGEST', templateKey: 'notifications.digest', record: { type: 'User', id: uid(507), label: null }, to: ['lucia@officina-demo.example'], notifications: 6 }),
+  mail(8, { state: 'WAITING', status: 'QUEUED', at: at(29, 9, 41), kind: 'SIGN_IN', templateKey: 'auth.invitation', record: { type: 'User', id: uid(508), label: null }, to: ['nuovo.collega@officina-demo.example'], attempts: 0 }),
+]
+
+const MASK = (address: string) => `${address[0]}•••${address.slice(address.indexOf('@'))}`
+export const MAILS_MASKED: DeliveryMail[] = MAILS.map((item) => ({ ...item, fullAddresses: false, to: item.to.map(MASK) }))
+
+export const DELIVERY_COUNTS: DeliveryCounts = { WAITING: 1, SENT: 12, DELIVERED: 214, PROBLEM: 2, FAILED: 1 }
+
+const blockedRow = (n: number, extra: Partial<BlockedAddress> & Pick<BlockedAddress, 'address' | 'reason' | 'at'>): BlockedAddress => ({
+  id: uid(600 + n),
+  fullAddress: true,
+  detail: null,
+  mail: null,
+  unblocked: null,
+  version: 1,
+  ...extra,
+})
+
+export const BLOCKED: BlockedAddress[] = [
+  blockedRow(1, { address: 'amministrazione@vecchio-cliente.example', reason: 'BOUNCE', detail: 'Permanent/General', at: at(29, 9, 12), mail: { id: MAILS[1]!.id, companyId: DEMO.id, record: { type: 'Invoice', id: uid(502), label: 'FT-2026-0041' } } }),
+  blockedRow(2, { address: 'info@negozio-esempio.example', reason: 'COMPLAINT', detail: 'abuse', at: at(28, 17, 40), mail: { id: MAILS[4]!.id, companyId: DEMO.id, record: { type: 'SalesOrder', id: uid(505), label: 'SO-2026-0031' } } }),
+  blockedRow(3, { address: 'vecchia.casella@esempio.example', reason: 'MANUAL', detail: 'The customer asked for no more mail at this address', at: at(20, 11, 0) }),
+]
+export const UNBLOCKED: BlockedAddress[] = [
+  blockedRow(4, { address: 'ufficio@riparato-esempio.example', reason: 'BOUNCE', detail: 'Permanent/General', at: at(14, 10, 0), version: 2, unblocked: { at: at(21, 15, 30), byId: uid(700), reason: 'The customer fixed their mailbox' } }),
+]
+
+const ledger0 = <T,>(items: readonly T[] | null, more: string | null = null, problem: string | null = null) => ({ items, problem, more })
+export const deliveryModel = (over: Partial<DeliveryModel> = {}): DeliveryModel => ({
+  mails: ledger0(MAILS, MAILS[MAILS.length - 1]!.id),
+  counts: DELIVERY_COUNTS,
+  blockedCount: BLOCKED.length,
+  filter: null,
+  blocked: ledger0(BLOCKED),
+  blockedView: 'BLOCKED',
+  canUnblock: true,
+  ...over,
+})
+
 // ---- SCR-087 ----
 
 type Case = { page: 'list'; model: ConnectionsViewModel } | { page: 'record'; model: ConnectionRecordModel; dock?: boolean }
@@ -184,8 +253,9 @@ const PICKED = [ACCOUNTS[0]!.id, ACCOUNTS[3]!.id, ACCOUNTS[4]!.id, `missing-SDI-
 const MAIL: MailDomainModel = { identities: loaded(IDENTITIES), companies: MAIL_COMPANIES, sesAccounts: ACCOUNTS.filter((item) => item.provider === 'SES'), can: { manage: true } }
 const list = (over: Partial<ConnectionsViewModel> = {}): Case => ({
   page: 'list',
-  model: { prefix: PREFIX, accounts: loaded(ACCOUNTS), companies: CHOICES, tile: null, query: '', asOf: NOW, now: NOW, can: { manage: true }, mail: MAIL, ...over },
+  model: { prefix: PREFIX, accounts: loaded(ACCOUNTS), companies: CHOICES, tile: null, query: '', asOf: NOW, now: NOW, can: { manage: true }, mail: MAIL, delivery: deliveryModel(), ...over },
 })
+const withDelivery = (over: Partial<DeliveryModel>, page: Partial<ConnectionsViewModel> = {}): Case => list({ ...page, delivery: deliveryModel(over) })
 const ledger = <T,>(items: readonly T[] | null, more: string | null = null, problem: string | null = null): Ledger<T> => ({ items, problem, more })
 const record = (index: number, over: Partial<ConnectionRecordModel> = {}, dock = false): Case => ({
   page: 'record',
@@ -258,8 +328,42 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'viewer', label: 'Someone who only reads', model: list({ can: { manage: false }, mail: { ...MAIL, can: { manage: false } } }), note: 'Pause and resume are held with the right they need; nothing else changes.' },
     { id: 'no-mail-right', label: 'Without the right to send mail', model: list({ mail: null }) },
     { id: 'no-companies', label: 'Without the right to see companies', model: list({ companies: null }), note: 'Company names are "—"; per-company "Not connected" rows are left out.' },
-    { id: 'loading', label: 'Loading', model: list({ accounts: loading(), asOf: null, mail: { ...MAIL, identities: loading() } }) },
-    { id: 'error', label: 'The API did not answer', model: list({ accounts: failed('problem.unavailable'), asOf: null, mail: { ...MAIL, identities: failed('problem.unavailable') } }) },
+    { id: 'loading', label: 'Loading', model: list({ accounts: loading(), asOf: null, mail: { ...MAIL, identities: loading() }, delivery: deliveryModel({ mails: ledger0(null), counts: null, blockedCount: null, blocked: ledger0(null) }) }) },
+    { id: 'error', label: 'The API did not answer', model: list({ accounts: failed('problem.unavailable'), asOf: null, mail: { ...MAIL, identities: failed('problem.unavailable') }, delivery: deliveryModel({ mails: ledger0(null, null, 'problem.unavailable'), counts: null, blocked: ledger0(null, null, 'problem.unavailable') }) }) },
+    // B-W2a-41: the delivery log and blocked addresses (PLT-149).
+    {
+      id: 'delivery',
+      label: 'Delivery log: every mail and where it is (admin, full addresses)',
+      model: list(),
+      note: 'Under the mail domain: the tiles count 30 days by state; a bounced invoice, a complaint and a mail refused because its address is blocked; the quote, PO and documents mails carried a link. Blocked addresses below with Unblock.',
+    },
+    { id: 'delivery-masked', label: 'Delivery log: someone who does not manage the mail', model: withDelivery({ mails: ledger0(MAILS_MASKED), blocked: ledger0(BLOCKED.map((row) => ({ ...row, fullAddress: false, address: MASK(row.address) }))), canUnblock: false }), note: 'Addresses masked (the domain stays); Unblock is held with the right it needs.' },
+    { id: 'delivery-problems', label: 'Delivery log: bounced or complained', model: withDelivery({ filter: 'PROBLEM', mails: ledger0(MAILS.filter((item) => item.state === 'PROBLEM')) }) },
+    { id: 'delivery-invoices', label: 'Delivery log: invoices (one bounced, one refused)', model: withDelivery({ filter: 'INVOICES', mails: ledger0(MAILS.filter((item) => item.record?.type === 'Invoice')) }) },
+    { id: 'delivery-links', label: 'Delivery log: mail that carried a link', model: withDelivery({ filter: 'LINKS', mails: ledger0(MAILS.filter((item) => item.link !== null)) }) },
+    { id: 'delivery-filter-empty', label: 'Delivery log: nothing matches the filter', model: withDelivery({ filter: 'FAILED', mails: ledger0([]) }) },
+    { id: 'delivery-empty', label: 'Delivery log: no mail sent yet, nothing blocked', model: withDelivery({ mails: ledger0([]), counts: { WAITING: 0, SENT: 0, DELIVERED: 0, PROBLEM: 0, FAILED: 0 }, blockedCount: 0, blocked: ledger0([]) }) },
+    { id: 'delivery-loading', label: 'Delivery log: loading', model: withDelivery({ mails: ledger0(null), counts: null, blockedCount: null, blocked: ledger0(null) }) },
+    { id: 'delivery-error', label: 'Delivery log: the log did not load (the rest of the page works)', model: withDelivery({ mails: ledger0(null, null, 'problem.unavailable'), counts: null, blocked: ledger0(null, null, 'problem.unavailable') }) },
+    { id: 'blocked-selected', label: 'Blocked addresses: two ticked', model: withDelivery({ selected: [BLOCKED[0]!.id, BLOCKED[2]!.id] }), note: 'Unblock 2 says its reach.' },
+    {
+      id: 'unblock-confirm',
+      label: 'Unblock: one confirm with the reason',
+      model: withDelivery({ selected: [BLOCKED[0]!.id, BLOCKED[1]!.id], confirm: [BLOCKED[0]!.id, BLOCKED[1]!.id] }),
+      note: 'One address complained: the confirm warns before mail may reach it again. The reason is required.',
+    },
+    { id: 'unblock-held', label: 'Unblock held: the right is over every company', model: withDelivery({ canUnblock: false, selected: [BLOCKED[0]!.id] }) },
+    {
+      id: 'unblocked-done',
+      label: 'After unblocking: one notice',
+      model: withDelivery({
+        blocked: ledger0(BLOCKED.slice(1)),
+        blockedCount: 2,
+        notice: { key: 'conn.blocked.unblockedPartial', tone: 'warning', params: { count: 1, done: 1, refused: 1, total: 2 }, refusedIds: [{ id: BLOCKED[1]!.id, problem: 'problem.conflict' }] },
+      }),
+    },
+    { id: 'unblocked-view', label: 'Blocked addresses: the unblocked ones (the record)', model: withDelivery({ blockedView: 'UNBLOCKED', blocked: ledger0(UNBLOCKED) }) },
+    { id: 'delivery-no-right', label: 'Without the right to read the delivery log', model: list({ delivery: null }), note: 'The section is absent (never a locked box).' },
     { id: 'record-overview', label: 'Connection: overview (SDI, fake)', model: record(2), note: 'Test held: no harmless ping exists on the adapters yet.' },
     { id: 'record-failing', label: 'Connection: failing (carrier, test)', model: record(3) },
     { id: 'record-paused', label: 'Connection: paused (VAT check)', model: record(4) },

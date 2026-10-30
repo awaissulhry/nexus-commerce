@@ -16,6 +16,9 @@ import {
   listCompaniesContract,
 } from './contract'
 import { manifest } from './manifest'
+// B-W2a-41 (PLT-128): the floor languages of the sites.
+import { listFloorLanguagesContract, setFloorLanguagesContract } from './contract'
+import { listFloorLanguages, setFloorLanguages } from './floor-languages'
 import { createCompany, createLine, createSite, createStation, createWorkCentre, editCompany, editLine, editSite, editStation, editWorkCentre, getCompany, getSite, listCompanies } from './org'
 
 /**
@@ -61,5 +64,11 @@ export default defineRoutes('admin-org', manifest, async (app) => {
   )
   app.patch('/org/stations/:stationId', { schema: editStationContract }, async (request) => ({
     station: await editStation(request, request.params.stationId, request.body, idempotencyKeyFrom(request)),
+  }))
+
+  // B-W2a-41 (PLT-128): the languages each site's tablets offer workers.
+  app.get('/org/floor-languages', { schema: listFloorLanguagesContract }, async (request) => ({ sites: await listFloorLanguages(request, request.query) }))
+  app.put('/org/sites/:siteId/floor-languages', { schema: setFloorLanguagesContract }, async (request) => ({
+    site: await setFloorLanguages(request, request.params.siteId, request.body, idempotencyKeyFrom(request)),
   }))
 })

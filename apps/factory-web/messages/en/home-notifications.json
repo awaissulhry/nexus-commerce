@@ -1,0 +1,246 @@
+{
+  "refused": {
+    "title": "Notifications are not open to you",
+    "body": "Your roles do not include Home (home.view). Ask an administrator if you need it."
+  },
+  "band": {
+    "label": "Notifications: status and actions",
+    "reading": "Reading…",
+    "unread_one": "{count} unread",
+    "unread_other": "{count} unread",
+    "unreadMore": "More than {count} unread",
+    "preferences": "Preferences",
+    "allRead": "Mark all read in {tab}"
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline"
+  },
+  "held": {
+    "offline": "Offline — this waits until you are back online.",
+    "busy": "A change is being sent.",
+    "unknown": "The count is not known yet.",
+    "nothingUnread": "Nothing unread here."
+  },
+  "tabs": {
+    "title": "Which ones"
+  },
+  "tab": {
+    "ALL": {
+      "label": "All",
+      "hint": "everything you were told, records you follow included"
+    },
+    "MENTION": {
+      "label": "Mentions",
+      "hint": "notes that @mentioned you"
+    },
+    "ASSIGNMENT": {
+      "label": "Assigned to me",
+      "hint": "tasks, alerts and rows given to you"
+    },
+    "APPROVAL": {
+      "label": "Approvals",
+      "hint": "requests for your yes, and your requests decided"
+    },
+    "SYSTEM": {
+      "label": "System",
+      "hint": "alerts of the exception rules and finished jobs"
+    }
+  },
+  "tiles": {
+    "unread_one": "{count} unread",
+    "unread_other": "{count} unread"
+  },
+  "list": {
+    "title": "Notifications",
+    "label": "{tab}: notifications",
+    "error": "Couldn't load your notifications.",
+    "more": "Show more",
+    "loadingMore": "Loading more…"
+  },
+  "count_one": "{count} notification",
+  "count_other": "{count} notifications",
+  "col": {
+    "what": "Notification",
+    "record": "Record",
+    "when": "When",
+    "state": "State"
+  },
+  "category": {
+    "MENTION": "Mention",
+    "ASSIGNMENT": "Assigned to you",
+    "APPROVAL": "Approval",
+    "ALERT": "Alert",
+    "FOLLOWING": "A record you follow",
+    "SYSTEM": "System"
+  },
+  "together_one": "{count} together",
+  "together_other": "{count} together",
+  "openRecord": "Open {record}",
+  "when": {
+    "TODAY": "Today",
+    "YESTERDAY": "Yesterday",
+    "EARLIER": "Earlier"
+  },
+  "stateWord": {
+    "read": "Read",
+    "unread": "Unread",
+    "done": "Done",
+    "doneAt": "Done {at}",
+    "snoozedUntil": "Snoozed until {at}",
+    "snoozedChange": "Snoozed until something changes"
+  },
+  "state": {
+    "label": "Which state",
+    "OPEN": "To look at",
+    "SNOOZED": "Snoozed",
+    "DONE": "Done"
+  },
+  "bulk": {
+    "read_one": "Mark read {count}",
+    "read_other": "Mark read {count}",
+    "done_one": "Done {count}",
+    "done_other": "Done {count}",
+    "snooze_one": "Snooze {count}",
+    "snooze_other": "Snooze {count}",
+    "wake_one": "Back now {count}",
+    "wake_other": "Back now {count}",
+    "back_one": "Back to the list {count}",
+    "back_other": "Back to the list {count}"
+  },
+  "snooze": {
+    "what_one": "{count} notification",
+    "what_other": "{count} notifications"
+  },
+  "empty": {
+    "title": "No notifications.",
+    "tabTitle": "Nothing in {tab}.",
+    "body": "You are told about mentions, assignments, approvals and records you follow.",
+    "SNOOZED": {
+      "title": "Nothing snoozed.",
+      "body": "A snoozed notification comes back by itself at its time, or when something changes on its record."
+    },
+    "DONE": {
+      "title": "Nothing done yet.",
+      "body": "What you mark done (E) is kept here; put it back on the list from here."
+    }
+  },
+  "retry": "Try again",
+  "dismiss": "Dismiss",
+  "undo": "Undo",
+  "offline": {
+    "title": "Offline",
+    "body": "The list stays readable; marking read, done or snoozed waits until you are back online."
+  },
+  "keys": {
+    "done": "Done (it leaves the list)",
+    "snooze": "Snooze until a time or new activity",
+    "mute": "Mute the record: no more news of it (a mention still reaches you)",
+    "allRead": "Mark all read in this tab"
+  },
+  "keysTitle": "Keyboard keys of Notifications",
+  "notice": {
+    "read_one": "{count} marked read.",
+    "read_other": "{count} marked read.",
+    "unread_one": "{count} marked unread.",
+    "unread_other": "{count} marked unread.",
+    "done_one": "{count} done: it left the list.",
+    "done_other": "{count} done: they left the list.",
+    "undone": "Back on the list.",
+    "back_one": "{count} back on the list.",
+    "back_other": "{count} back on the list.",
+    "woken_one": "{count} back now.",
+    "woken_other": "{count} back now.",
+    "snoozed_one": "{count} snoozed: it comes back at its time.",
+    "snoozed_other": "{count} snoozed: they come back at their time.",
+    "snoozedChange_one": "{count} snoozed until something changes on its record.",
+    "snoozedChange_other": "{count} snoozed until something changes on their records.",
+    "muted": "{record} muted: its news no longer reaches you (a mention still does).",
+    "muteNoRecord": "{record} has no news to mute.",
+    "muteForbidden": "You may not follow {record} any more.",
+    "allRead": "Everything in this tab is marked read."
+  },
+  "problem": {
+    "read": "The list could not be read. Try again.",
+    "forbidden": "You may not do this.",
+    "offline": "No connection to the server. Try again when you are back online.",
+    "signedOut": "Your session ended. Sign in again.",
+    "failed": "This could not be sent. Try again.",
+    "changed": "Something changed meanwhile. The list was read again.",
+    "invalid": "This could not be done as asked. The list was read again."
+  },
+  "digest": {
+    "title": "Notification preferences",
+    "body": "Quiet by default: everything stays in the app, and nothing is e-mailed until you turn on your daily digest. The digest is one e-mail a day with what you have not looked at yet.",
+    "cancel": "Cancel",
+    "save": "Save",
+    "on": "Daily digest by e-mail",
+    "onWords": "Daily digest on",
+    "offWords": "Daily digest off: nothing is e-mailed",
+    "time": "Sent at",
+    "timeHint": "Your company's time zone.",
+    "days": "On these days",
+    "day": {
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday",
+      "7": "Sunday"
+    },
+    "kinds": "It carries",
+    "lastSent": "Last sent {at}.",
+    "neverSent": "Never sent yet.",
+    "later": "Each kind by app, e-mail or push, instantly or daily, comes later; until then only this digest reaches your e-mail.",
+    "problem": {
+      "time": "Choose a time of day.",
+      "days": "Choose at least one day.",
+      "kinds": "Choose at least one kind.",
+      "changed": "Your preferences changed meanwhile (in another tab?). They were read again: look, then save.",
+      "invalid": "These preferences could not be saved as they are."
+    },
+    "saved": {
+      "on": "Daily digest on: it is e-mailed at {time} on the days you chose.",
+      "off": "Daily digest off: nothing is e-mailed."
+    }
+  },
+  "w": {
+    "notifications": {
+      "mentioned": "{actor} mentioned you on {record}",
+      "following": {
+        "note": "{actor} wrote a note on {record}, which you follow",
+        "mail_in": "A reply arrived on {record}, which you follow",
+        "mail_out": "{actor} sent a message on {record}, which you follow"
+      },
+      "assigned": {
+        "today": "{actor} assigned you {record} on Today ({kind})",
+        "task": "{actor} assigned you the task \"{title}\" ({record})",
+        "job": "{actor} assigned you maintenance job {record}: \"{title}\"",
+        "alert": "{actor} assigned you the alert \"{title}\" on {record}"
+      },
+      "approval": {
+        "quote_requested": "{actor} asks you to approve quote {record}{figure}",
+        "quote_decided": "{actor} {status} your approval request for quote {record}",
+        "nudged": "{actor} reminds you: quote {record} still waits for your approval"
+      },
+      "plant": {
+        "reported": "A machine problem was reported on {record}: {title}",
+        "unsafe": "{record} was marked unsafe ({title}): it stays do-not-use until a technician signs it safe"
+      },
+      "alert": {
+        "raised": "Alert on {record}: {title}"
+      }
+    },
+    "fallback": "News on {record}",
+    "someone": "Someone",
+    "system": "The system",
+    "status": {
+      "APPROVED": "approved",
+      "REJECTED": "rejected"
+    },
+    "margin": "margin {value} %",
+    "figure": " ({parts})"
+  }
+}

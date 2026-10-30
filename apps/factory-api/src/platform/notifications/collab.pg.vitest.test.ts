@@ -262,6 +262,19 @@ describe('tasks on any record (COL-037)', () => {
     const both = await ok('sales', 'POST', '/tasks/bulk', { action: 'SET_DUE', items: [{ id: own.task.id, version: own.task.version }, { id: other.task.id, version: other.task.version }], dueDate: today })
     expect(both.tasks.map((task: Json) => task.dueDate)).toEqual([today, today])
   })
+
+  it('names who may be given a task: on a record (keeps tasks there, reads it), or of their own (keeps tasks) (B-W2a-40)', async () => {
+    const names = (answer: Json) => (answer.people as Json[]).map((person) => person.id).sort()
+    const onRecord = await ok('sales', 'GET', `/tasks/assignees?recordType=Company&recordId=${companyOne}`)
+    expect(names(onRecord)).toEqual([PEOPLE.owner, PEOPLE.sales].sort())
+    expect((onRecord.people as Json[]).find((person) => person.id === PEOPLE.sales)).toEqual({ id: PEOPLE.sales, name: 'Person sales', me: true })
+    expect(onRecord.complete).toBe(true)
+    // Of their own: whoever keeps tasks anywhere (the outsider too); never a read-only person.
+    expect(names(await ok('sales', 'GET', '/tasks/assignees'))).toEqual([PEOPLE.owner, PEOPLE.sales, PEOPLE.outsider].sort())
+    expect((await call('reader', 'GET', '/tasks/assignees')).status).toBe(403)
+    expect((await call('outsider', 'GET', `/tasks/assignees?recordType=Company&recordId=${companyOne}`)).status).toBe(404)
+    expect((await call('sales', 'GET', '/tasks/assignees?recordType=Company')).status).toBe(400)
+  })
 })
 
 describe('the daily digest: the only e-mail, off until the person turns it on (PLT-142)', () => {

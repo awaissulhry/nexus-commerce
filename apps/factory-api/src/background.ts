@@ -42,6 +42,8 @@ import { loadIndexers } from './platform/search/registry'
 // B-W2a-33: the exception rules (evaluated every 5 minutes, and again for one record after its events) and the date timers.
 import { alertsEvaluateCron, alertsRecheckHandler } from './platform/alerts/engine'
 import { timersFireCron } from './platform/timers/fire'
+// B-W2a-38: the daily production report e-mailed to the people subscribed.
+import { dailyReportCron } from './modules/production/reports/mail'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -143,6 +145,8 @@ if (mode === 'worker') {
   crons.push(digestCron({ database, log }))
   // B-W2a-33: the exception rules' evaluation and the date timers' firing.
   crons.push(alertsEvaluateCron({ database, log }), timersFireCron({ database, log }))
+  // B-W2a-38: the daily production report, to the people subscribed (quiet default: none).
+  crons.push(dailyReportCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

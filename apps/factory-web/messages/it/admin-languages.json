@@ -48,11 +48,58 @@
     },
     "floor": {
       "title": "Lingue del reparto",
-      "intro": "Le lingue che leggono gli operatori, ognuna nella propria lingua. Le schermate del reparto parlano italiano e inglese; chi legge un'altra lingua per ora vede l'italiano.",
-      "screens": "Le schermate la parlano",
-      "notYet": "Non ancora nelle schermate",
-      "workers_one": "1 operatore",
-      "workers_other": "{count} operatori"
+      "intro": "Le lingue che i tablet di ogni sito offrono agli operatori, ciascuna nelle sue parole. Una lingua si aggiunge solo se l'informativa per gli operatori in vigore la contiene: l'operatore legge ciò che il reparto registra su di lui in una lingua che capisce.",
+      "screens": "Gli schermi del reparto la parlano",
+      "notYet": "Non ancora sugli schermi",
+      "workers_one": "1 operatore la legge",
+      "workers_other": "{count} operatori la leggono",
+      "noSite": "Nessun sito attivo: i tablet di un sito offrono le sue lingue.",
+      "noSiteLink": "Aziende e siti",
+      "screensNote": "Gli schermi del reparto hanno parole proprie in Italiano e English. Un sito può offrire un'altra lingua presente nella sua informativa: lì gli schermi mostrano Italiano o English finché non esistono le loro parole in quella lingua. Ogni nuova lingua richiede l'elenco del Titolare e il testo dell'informativa del consulente privacy.",
+      "notice": "Informativa per gli operatori in vigore: {label}, in {languages}.",
+      "noticeLink": "Privacy",
+      "noNotice": "Nessuna informativa per gli operatori in vigore",
+      "noNoticeWhy": "Si può aggiungere una lingua quando l'informativa è pubblicata.",
+      "offered": "Le lingue del reparto di {site}",
+      "inNotice": "Nell'informativa",
+      "notInNotice": "Non nell'informativa",
+      "remove": "Togli",
+      "removeFrom": "Togli {language} da {site}",
+      "add": "Aggiungi",
+      "addOne": "Aggiungi una lingua",
+      "addTo": "Aggiungi una lingua del reparto a {site}",
+      "notInNoticeList": "Non ancora nell'informativa, quindi non offerte: {languages}.",
+      "workersElse": "Operatori di questo sito leggono una lingua che non offre: {languages}. Per ora vedono l'italiano.",
+      "workersLink": "Operatori del reparto",
+      "confirm": {
+        "addTitle": "Aggiungere {language} a {site}?",
+        "removeTitle": "Togliere {language} da {site}?",
+        "add": "Da ora i tablet del sito offrono {language} all'accesso.",
+        "remove": "I tablet del sito non offrono più {language} all'accesso.",
+        "noWords": "Gli schermi del reparto mostrano Italiano o English finché non esistono le loro parole in {language}; l'informativa per gli operatori è mostrata in {language}.",
+        "after": "Dopo, il sito offre: {languages}."
+      },
+      "held": {
+        "noRight": "Serve il diritto: Gestire siti, linee e postazioni",
+        "last": "Un sito tiene almeno una lingua del reparto.",
+        "workers_one": "1 operatore attivo la legge: dagli prima un'altra lingua.",
+        "workers_other": "{count} operatori attivi la leggono: dai loro prima un'altra lingua.",
+        "noNotice": "Nessuna informativa per gli operatori in vigore: pubblicala prima in Sistema › Privacy e informative.",
+        "allAdded": "Ogni lingua del reparto è già offerta.",
+        "noneInNotice": "L'informativa in vigore non ha altre lingue: aggiungine una prima in Sistema › Privacy e informative.",
+        "notInNotice": "L'informativa in vigore non ha un testo in questa lingua: aggiungilo prima in Sistema › Privacy e informative."
+      },
+      "problem": {
+        "workers_one": "{language} non è stata tolta: 1 operatore attivo del sito la legge. Dagli prima un'altra lingua.",
+        "workers_other": "{language} non è stata tolta: {count} operatori attivi del sito la leggono. Dai loro prima un'altra lingua.",
+        "notInNotice": "{language} non è stata aggiunta: l'informativa in vigore non ha un testo in questa lingua. Aggiungilo prima in Sistema › Privacy e informative.",
+        "noNotice": "{language} non è stata aggiunta: per questa azienda non c'è un'informativa per gli operatori in vigore. Pubblicala prima in Sistema › Privacy e informative.",
+        "changed": "Qualcuno ha cambiato nel frattempo le lingue del reparto di questo sito. La pagina è stata riletta: controlla e riprova."
+      },
+      "done": {
+        "added": "Lingua del reparto aggiunta a {site}.",
+        "removed": "Lingua del reparto tolta da {site}."
+      }
     },
     "later": "Un glossario dei termini del mestiere e il controllo dei messaggi tradotti automaticamente arrivano nei prossimi passi.",
     "done": {

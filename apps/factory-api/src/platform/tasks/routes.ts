@@ -1,8 +1,8 @@
 import { idempotencyKeyFrom } from '../../core/command'
 import { defineRoutes } from '../../core/manifest'
-import { assignTaskContract, bulkTasksContract, createTaskContract, getTaskContract, listTasksContract, snoozeTaskContract, taskStatusContract, updateTaskContract } from './contract'
+import { assignTaskContract, bulkTasksContract, createTaskContract, getTaskContract, listTasksContract, snoozeTaskContract, taskAssigneesContract, taskStatusContract, updateTaskContract } from './contract'
 import { manifest } from './manifest'
-import { assignTask, bulkTasks, createTask, getTask, listTasks, setTaskStatus, snoozeTask, updateTask } from './tasks'
+import { assignTask, bulkTasks, createTask, getTask, listTasks, setTaskStatus, snoozeTask, taskAssignees, updateTask } from './tasks'
 
 /**
  * Tasks on any record (B-W2a-20; COL-037): My tasks and a record's tasks, one task, make, change, assign, done / reopen
@@ -12,6 +12,8 @@ export default defineRoutes('tasks', manifest, async (app) => {
   app.get('/tasks', { schema: listTasksContract }, async (request) => listTasks(request, request.query))
 
   app.post('/tasks/bulk', { schema: bulkTasksContract }, async (request) => bulkTasks(request, request.body, idempotencyKeyFrom(request)))
+
+  app.get('/tasks/assignees', { schema: taskAssigneesContract }, async (request) => taskAssignees(request, request.query))
 
   app.get('/tasks/:id', { schema: getTaskContract }, async (request) => getTask(request, request.params.id))
 

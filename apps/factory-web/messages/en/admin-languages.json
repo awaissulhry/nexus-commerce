@@ -48,11 +48,58 @@
     },
     "floor": {
       "title": "Floor languages",
-      "intro": "The languages the floor workers read, each in its own words. The floor screens speak Italiano and English; a worker who reads another language sees Italiano for now.",
+      "intro": "The languages each site's tablets offer workers, each named in its own words. A language is added only when the worker notice in force has it: a worker reads what the floor records about them in a language they understand.",
       "screens": "Floor screens speak it",
       "notYet": "Not on the screens yet",
-      "workers_one": "1 worker",
-      "workers_other": "{count} workers"
+      "workers_one": "1 worker reads it",
+      "workers_other": "{count} workers read it",
+      "noSite": "No active site yet: a site's tablets offer its languages.",
+      "noSiteLink": "Companies & sites",
+      "screensNote": "The floor screens have their own words in Italiano and English. A site may offer another language its worker notice has: there the screens show Italiano or English until their words in it exist. Each new language needs the Owner's list and the privacy consultant's text of the notice.",
+      "notice": "Worker notice in force: {label}, in {languages}.",
+      "noticeLink": "Privacy",
+      "noNotice": "No worker notice in force",
+      "noNoticeWhy": "A language can be added once the notice is published.",
+      "offered": "The floor languages of {site}",
+      "inNotice": "In the worker notice",
+      "notInNotice": "Not in the worker notice",
+      "remove": "Remove",
+      "removeFrom": "Remove {language} from {site}",
+      "add": "Add",
+      "addOne": "Add a language",
+      "addTo": "Add a floor language to {site}",
+      "notInNoticeList": "Not in the worker notice yet, so not offered: {languages}.",
+      "workersElse": "Workers of this site read a language it does not offer: {languages}. They see Italiano for now.",
+      "workersLink": "Floor workers",
+      "confirm": {
+        "addTitle": "Add {language} to {site}?",
+        "removeTitle": "Remove {language} from {site}?",
+        "add": "The site's tablets offer {language} at sign-in from now on.",
+        "remove": "The site's tablets stop offering {language} at sign-in.",
+        "noWords": "The floor screens show Italiano or English until their words in {language} exist; the worker notice is shown in {language}.",
+        "after": "Afterwards the site offers: {languages}."
+      },
+      "held": {
+        "noRight": "Needs the right: Manage sites, lines and stations",
+        "last": "A site keeps at least one floor language.",
+        "workers_one": "1 active worker reads it: give them another language first.",
+        "workers_other": "{count} active workers read it: give them another language first.",
+        "noNotice": "No worker notice in force: publish it in Admin › Privacy & notices first.",
+        "allAdded": "Every floor language is offered already.",
+        "noneInNotice": "The worker notice in force has no other language: add one to it in Admin › Privacy & notices first.",
+        "notInNotice": "The worker notice in force has no text in it: add it in Admin › Privacy & notices first."
+      },
+      "problem": {
+        "workers_one": "{language} was not removed: 1 active worker of the site reads it. Give them another language first.",
+        "workers_other": "{language} was not removed: {count} active workers of the site read it. Give them another language first.",
+        "notInNotice": "{language} was not added: the worker notice in force has no text in it. Add it in Admin › Privacy & notices first.",
+        "noNotice": "{language} was not added: no worker notice is in force for this company. Publish it in Admin › Privacy & notices first.",
+        "changed": "Someone changed this site's floor languages meanwhile. The page was read again: check and try once more."
+      },
+      "done": {
+        "added": "Floor language added at {site}.",
+        "removed": "Floor language removed at {site}."
+      }
     },
     "later": "A glossary of trade terms and a check of machine-translated messages come in later steps.",
     "done": {

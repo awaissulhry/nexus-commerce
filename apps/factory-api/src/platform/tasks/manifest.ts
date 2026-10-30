@@ -8,6 +8,8 @@ import { defineManifest } from '../../core/manifest'
 export const manifest = defineManifest({
   'GET /tasks': { audiences: ['office'], permission: 'home.view', scope: 'record' },
   'GET /tasks/:id': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  // B-W2a-40: who may be given a task (on a record, or of its own): only someone who makes or changes tasks asks.
+  'GET /tasks/assignees': { audiences: ['office'], permission: 'tasks.manage', scope: 'record' },
   'POST /tasks': { audiences: ['office'], permission: 'tasks.manage', scope: 'record' },
   'POST /tasks/bulk': { audiences: ['office'], permission: 'tasks.manage', scope: 'record' },
   'PUT /tasks/:id': { audiences: ['office'], permission: 'tasks.manage', scope: 'record' },
