@@ -200,7 +200,9 @@ export async function creditedInvoiceOf(db: Reader, invoiceId: string, exceptCre
   const lines = await readLines(db, invoice.id)
   const credits = await db.invoice.findMany({ where: { creditOfId: invoice.id, docType: 'TD04', status: { not: 'DRAFT' }, ...(exceptCredit ? { id: { not: exceptCredit } } : {}) }, select: { netTotal: true, grossTotal: true } })
   const deducted = invoice.docType === 'TD02' ? await db.invoiceLine.aggregate({ where: { depositInvoiceId: invoice.id, invoice: { status: { not: 'DRAFT' } } }, _sum: { netAmount: true } }) : null
-  const paid = invoice.docType === 'TD02' ? invoice.grossTotal : ((await db.paymentAllocation.aggregate({ where: { invoiceId: invoice.id }, _sum: { amount: true } }))._sum.amount ?? 0)
+  // B-W2a-61: what PAID refunds of its credit notes gave back is no longer paid on it.
+  const refunded = (await db.refund.aggregate({ where: { status: 'PAID', creditNote: { creditOfId: invoice.id } }, _sum: { amount: true } }))._sum.amount ?? 0
+  const paid = (invoice.docType === 'TD02' ? invoice.grossTotal : ((await db.paymentAllocation.aggregate({ where: { invoiceId: invoice.id }, _sum: { amount: true } }))._sum.amount ?? 0)) - refunded
   const creditedLines: CreditedLine[] = lines.flatMap((line) => {
     const vat = treatmentOf({ vatRatePct: line.vatRatePct.toFixed(2), vatNature: line.vatNature, vatLegalRef: line.vatLegalRef })
     return vat ? [{ id: line.id, seq: line.seq, kind: line.kind, description: line.description, itemCode: line.itemCode, quantity: line.quantity.toFixed(4), uom: line.uom, unitPrice: line.unitPrice.toFixed(6), discountPct: line.discountPct === null ? null : line.discountPct.toFixed(4), vat, salesOrderLineId: line.salesOrderLineId, size: line.size }] : []

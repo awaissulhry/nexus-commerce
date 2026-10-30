@@ -1,5 +1,6 @@
 import { randomInt, randomUUID } from 'node:crypto'
 import type { Clock } from '@nexus/factory-domain/ports/clock'
+import { sdiReceivedFileSchema, sdiReceivedListSchema, type SdiReceivedFile, type SdiReceivedList, type SdiReceivedListRequest } from '@nexus/factory-domain/payables/sdi-port'
 import { sdiMessageSchema, type SdiArchiveReceipt, type SdiArchiveRequest, type SdiMessage, type SdiNotificationType, type SdiSendReceipt, type SdiSendRequest, type SdiStatusAnswer, type SdiStatusRequest } from '@nexus/factory-domain/ports/sdi'
 import { ProviderError, type GatewayCall } from '../../platform/gateway/gateway'
 import type { SdiAdapter } from './port'
@@ -27,6 +28,11 @@ import { fatturaPaSchemaValidator, type XmlValidator } from './xsd'
  * Plans: RC, MC, NS (an error code, default 00423 with SDI's sample description), SEND_ERROR (a 503 on the first
  * `attempts` attempts, default every one: the gateway retries, then gives up), REFUSE (a 422: final), TIMEOUT (the file
  * is kept, then no answer ever comes: the gateway times out; the status poll later finds the file and its RC).
+ *
+ * The passive side (B-W2a-62): `deliver({ tenantId, accountId, xml })` puts a supplier's invoice in the account's
+ * inbox, as SDI would deliver it to the company (tests, the local live check); `listReceived` pages what was delivered
+ * since a time, `getReceived` hands one XML back. `failReceived(n)` makes the next n calls answer 503 (the gateway
+ * retries the reads).
  */
 
 export type FakeSdiPlan =
@@ -65,6 +71,16 @@ export interface FakeWebhook {
   readonly tenantId: string
   readonly accountId: string
   readonly body: string
+}
+
+interface FakeReceived {
+  readonly providerRef: string
+  readonly sdiIdentifier: string
+  readonly fileName: string
+  readonly receivedAt: Date
+  readonly tenantId: string
+  readonly accountId: string
+  readonly xml: string
 }
 
 export interface FakeSdiOptions {
@@ -107,6 +123,9 @@ export class FakeSdi implements SdiAdapter {
   /** Every send attempt the fake saw (its idempotency key, file name and attempt), for the tests. */
   readonly attempts: { readonly idempotencyKey: string; readonly fileName: string; readonly attempt: number }[] = []
   readonly archives: { readonly providerRef: string; readonly fileName: string; readonly archiveRef: string }[] = []
+  /** B-W2a-62: the supplier invoices SDI delivered to the accounts' companies (the passive side). */
+  readonly inbox: FakeReceived[] = []
+  private receivedFailures = 0
   private readonly scripted: FakeSdiPlan[] = []
   private readonly plans = new Map<string, FakeSdiPlan>()
   private readonly clock: Clock
@@ -265,6 +284,62 @@ export class FakeSdi implements SdiAdapter {
           }
         }),
     )
+  }
+
+  /** A supplier's invoice SDI delivers to the company of this account (the FAKE's inbox; tests and the local check). */
+  deliver(input: { readonly tenantId: string; readonly accountId: string; readonly xml: string; readonly fileName?: string; readonly sdiIdentifier?: string; readonly receivedAt?: Date }): FakeReceived {
+    this.sequence++
+    const delivered: FakeReceived = {
+      providerRef: `fake-sdi-in-${randomUUID()}`,
+      sdiIdentifier: input.sdiIdentifier ?? String(randomInt(100_000_000, 999_999_999)),
+      fileName: input.fileName ?? `IT00000000000_${String(this.sequence).padStart(5, '0')}.xml`,
+      receivedAt: input.receivedAt ?? this.clock.now(),
+      tenantId: input.tenantId,
+      accountId: input.accountId,
+      xml: input.xml,
+    }
+    this.inbox.push(delivered)
+    return delivered
+  }
+
+  /** The next `times` passive calls answer 503 (the intermediary unavailable). */
+  failReceived(times: number): void {
+    this.receivedFailures = times
+  }
+
+  private receivedCheck(call: GatewayCall): void {
+    if (call.account.mode !== 'FAKE') throw new ProviderError('Only a FAKE account uses the fake SDI.', { retryable: false })
+    if (this.receivedFailures > 0) {
+      this.receivedFailures--
+      call.answer({ httpStatus: 503 })
+      throw new ProviderError('The fake SDI intermediary is unavailable (HTTP 503).', { httpStatus: 503 })
+    }
+  }
+
+  async listReceived(call: GatewayCall, request: SdiReceivedListRequest): Promise<SdiReceivedList> {
+    this.receivedCheck(call)
+    const since = Date.parse(request.since)
+    const now = this.clock.now().getTime()
+    const mine = this.inbox.filter((entry) => entry.tenantId === call.account.tenantId && entry.accountId === call.account.id && entry.receivedAt.getTime() >= since && entry.receivedAt.getTime() <= now)
+    const start = request.cursor ? Number.parseInt(request.cursor, 10) : 0
+    const page = mine.slice(start, start + 50)
+    const next = start + 50 < mine.length ? String(start + 50) : null
+    call.answer({ httpStatus: 200, response: { items: page.length, more: next !== null } })
+    return sdiReceivedListSchema.parse({
+      items: page.map((entry) => ({ providerRef: entry.providerRef, sdiIdentifier: entry.sdiIdentifier, fileName: entry.fileName, receivedAt: entry.receivedAt.toISOString() })),
+      next,
+    }) as SdiReceivedList
+  }
+
+  async getReceived(call: GatewayCall, providerRef: string): Promise<SdiReceivedFile> {
+    this.receivedCheck(call)
+    const entry = this.inbox.find((item) => item.providerRef === providerRef && item.tenantId === call.account.tenantId && item.accountId === call.account.id)
+    if (!entry) {
+      call.answer({ httpStatus: 404 })
+      throw new ProviderError('The fake SDI intermediary has no such delivered invoice.', { httpStatus: 404, retryable: false })
+    }
+    call.answer({ httpStatus: 200, response: { bytes: Buffer.byteLength(entry.xml, 'utf8') } })
+    return sdiReceivedFileSchema.parse({ providerRef: entry.providerRef, sdiIdentifier: entry.sdiIdentifier, fileName: entry.fileName, receivedAt: entry.receivedAt.toISOString(), xml: entry.xml }) as SdiReceivedFile
   }
 
   webhookMessages(body: string): SdiMessage[] {

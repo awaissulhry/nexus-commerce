@@ -29,13 +29,17 @@ import { SDI_SEND_STATUSES } from './sdi/states'
  *
  * Invoices from shipped goods, credit notes, the order settled (B-W1-51; FIN-054, FIN-069, FIN-078, FIN-121;
  * modules/invoicing/from-shipment, credit-note):
- *   invoice.refund_due     a credit note was issued on what is paid: a refund is due to the customer (refunds are W2b;
- *                          the needs-attention list)
+ *   invoice.refund_due     a credit note was issued on what is paid: a refund is due to the customer (B-W2a-61: the
+ *                          "Refunds to make" of modules/payments/refunds.ts; the needs-attention list)
  *   order.fully_settled    the order became settled: every line shipped, invoiced (SDI delivered or not deliverable) and
  *                          paid. Emitted once per change, by the command that completed it (a payment allocated, an SDI
  *                          outcome); B-W1-25's close command consumes it (the order's CLOSED state is sales')
  *   order.unsettled        a settled order is not settled any more (a credit note, an allocation reversed, a new invoice):
  *                          `missing` says what (factory-domain invoicing/from-shipment/settlement codes)
+ *
+ * B-W2a-61 (FIN-070; modules/invoicing/credit-note/from-return.ts):
+ *   invoice.return_credit_drafted   a credit note draft (TD04) was made from a customer return's decided lines (the
+ *                                   worker on return.credit_due, or a person on the RMA): the RMA's "Replacement & credit"
  */
 const docType = z.enum(INVOICE_DOC_TYPES)
 const live = { permission: 'invoices.view', fields: ['invoiceId', 'docType'] } as const
@@ -139,5 +143,13 @@ export const events = [
     description: 'A settled order is not settled any more (a credit note, a payment taken back, a new invoice).',
     payload: z.strictObject({ orderId: z.uuid(), partyId: z.uuid(), missing: z.array(z.string().max(40)).max(20) }),
     live: { permission: 'invoices.view', fields: ['orderId'] },
+  }),
+  // B-W2a-61: a credit note draft from a customer return.
+  defineEvent({
+    type: 'invoice.return_credit_drafted',
+    context: 'invoicing',
+    description: "A credit note draft was made from a customer return's decided lines; a person issues it.",
+    payload: z.strictObject({ invoiceId: z.uuid(), returnId: z.uuid(), creditOfId: z.uuid(), partyId: z.uuid(), returnLineIds: z.array(z.uuid()).min(1) }),
+    live: { permission: 'invoices.view', fields: ['invoiceId', 'returnId'] },
   }),
 ] as const

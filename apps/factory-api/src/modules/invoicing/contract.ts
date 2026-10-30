@@ -59,6 +59,8 @@ const lineView = output({
   /** B-W2a-54: CHARGE only, what it bills; the step of the order's payment schedule the line bills (a TD02's deposit). */
   chargeKind: z.enum(CHARGE_KINDS).nullable(),
   milestoneId: id().nullable(),
+  /** B-W2a-61: a credit note's line crediting a customer return's line (the RMA's line). */
+  returnLineId: id().nullable(),
 })
 
 /** A legal invoicing deadline (DPR 633/1972 art. 21 c.4), in words, with the days left (factory-domain from-shipment/deadlines). */

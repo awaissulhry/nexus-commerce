@@ -70,6 +70,8 @@ export interface PreparedLine {
   readonly chargeKind?: ChargeKind | null
   /** The step of the order's payment schedule it bills (B-W2a-54: a deposit invoice's deposit step). */
   readonly milestoneId?: string | null
+  /** B-W2a-61 (FIN-070): a credit note's line crediting a customer return's line. */
+  readonly returnLineId?: string | null
 }
 
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
@@ -202,6 +204,7 @@ async function writeLines(tools: CommandTools, invoice: { id: string; buyerParty
         depositInvoiceId: line.depositInvoiceId ?? null,
         chargeKind: line.core.kind === 'CHARGE' ? (line.chargeKind ?? null) : null,
         milestoneId: line.milestoneId ?? null,
+        returnLineId: line.returnLineId ?? null,
         createdById: actorIdOf(tools),
       },
       select: { id: true },
@@ -223,7 +226,7 @@ function refuseNegative(totals: Pick<InvoiceTotals, 'netTotal' | 'grossTotal'>):
 }
 
 /** A stored line as a prepared one (its amounts recomputed from it; a deduction keeps its fixed amounts). */
-export function preparedOfRow(row: { kind: CoreLine['kind']; description: string; itemCode: string | null; quantity: Prisma.Decimal; uom: string | null; unitPrice: Prisma.Decimal; discountPct: Prisma.Decimal | null; vatRatePct: Prisma.Decimal; vatNature: string | null; vatLegalRef: string | null; salesOrderLineId: string | null; size: string | null; ddtId: string | null; depositInvoiceId: string | null; netAmount: number; grossAmount: number | null; chargeKind: ChargeKind | null; milestoneId: string | null }): PreparedLine {
+export function preparedOfRow(row: { kind: CoreLine['kind']; description: string; itemCode: string | null; quantity: Prisma.Decimal; uom: string | null; unitPrice: Prisma.Decimal; discountPct: Prisma.Decimal | null; vatRatePct: Prisma.Decimal; vatNature: string | null; vatLegalRef: string | null; salesOrderLineId: string | null; size: string | null; ddtId: string | null; depositInvoiceId: string | null; netAmount: number; grossAmount: number | null; chargeKind: ChargeKind | null; milestoneId: string | null; returnLineId: string | null }): PreparedLine {
   return {
     core: {
       kind: row.kind,
@@ -242,10 +245,11 @@ export function preparedOfRow(row: { kind: CoreLine['kind']; description: string
     depositInvoiceId: row.depositInvoiceId,
     chargeKind: row.chargeKind,
     milestoneId: row.milestoneId,
+    returnLineId: row.returnLineId,
   }
 }
 
-const ROW_COLUMNS = { kind: true, description: true, itemCode: true, quantity: true, uom: true, unitPrice: true, discountPct: true, vatRatePct: true, vatNature: true, vatLegalRef: true, salesOrderLineId: true, size: true, ddtId: true, depositInvoiceId: true, netAmount: true, grossAmount: true, chargeKind: true, milestoneId: true } as const
+const ROW_COLUMNS = { kind: true, description: true, itemCode: true, quantity: true, uom: true, unitPrice: true, discountPct: true, vatRatePct: true, vatNature: true, vatLegalRef: true, salesOrderLineId: true, size: true, ddtId: true, depositInvoiceId: true, netAmount: true, grossAmount: true, chargeKind: true, milestoneId: true, returnLineId: true } as const
 
 /** A draft's stored lines, prepared again (in their order). */
 export async function storedPrepared(db: CommandTx, invoiceId: string): Promise<PreparedLine[]> {
@@ -475,6 +479,10 @@ export async function replaceLines(caller: CommandCaller, invoiceId: string, bod
   const profile = await caller.withClient(async (client) => (await partyFacts(client, invoice.buyerPartyId, businessDate(serverClock.now()), serverClock.now()))?.profile ?? null)
   const lines = prepareLines(body.lines, profile)
   return onDraft(caller, invoice, { name: 'invoices.replaceLines', idempotencyKey, input: { invoiceId, ...body }, version: body.version }, async (tools, current) => {
+    // B-W2a-61: a credit note from a return credits what the return's decision says; typed lines would lose that link.
+    if (current.docType === 'TD04' && (await tools.tx.invoiceLine.count({ where: { invoiceId: current.id, returnLineId: { not: null } } })) > 0) {
+      throw new ConflictError("This credit note credits a customer return: its lines are the return's decided credit. Delete the draft and make it again from the return, or credit the invoice with a credit note of its own.")
+    }
     await checkSources(tools.tx, current, lines)
     const deductions = (await storedPrepared(tools.tx, current.id)).filter((line) => line.core.kind === 'DEPOSIT_DEDUCTION')
     const totals = await refreshDraft(tools, current, [...lines, ...deductions], current.priceBasis, storedSourceOf(current.paymentTerms))

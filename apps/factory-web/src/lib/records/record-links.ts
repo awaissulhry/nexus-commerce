@@ -72,6 +72,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   PriceList: '/sales/price-lists/[id]',
   // Finance › Accounting export (SCR-156, B-W2a-51): a batch opens on its files tab (its checks, explanations and files).
   AccountingExport: '/finance/accounting/files?export=[id]',
+  // Production › Scrap & rework (SCR-140, B-W2a-60): a rework order opens in its row's detail on the list.
+  ReworkOrder: '/production/scrap?open=rework:[id]',
   // Planning › Planning settings (SCR-124, B-W2a-59): a calendar opens on Calendars & shifts, a shift pattern in its editor.
   WorkCalendar: '/planning/settings?tab=calendars&cal=[id]',
   ShiftPattern: '/planning/settings?tab=calendars&pattern=[id]',
@@ -141,6 +143,9 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/plant/machines': '/plant/machines',
   // B-W2a-49: the price lists (SCR-106) read `?rows=`, `?kind=` and `?q=`.
   '/sales/price-lists': '/sales/price-lists',
+  // B-W2a-60: the cuts across work orders (SCR-238, `?view=`, `?q=`) and scrap & rework (SCR-140, `?view=`, `?period=`).
+  '/production/cutting/cuts': '/production/cutting',
+  '/production/scrap': '/production/scrap',
 })
 
 export interface RecordRef {

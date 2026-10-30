@@ -25,6 +25,8 @@ import { manifest } from './manifest'
 import { invoiceRelated } from './related'
 import { financeSettings } from './settings'
 import { createCreditNote } from './credit-note/credit-note'
+import { draftReturnCreditNotesContract, returnCreditNotesContract } from './credit-note/contract'
+import { draftReturnCreditNotes, returnCreditNotes } from './credit-note/from-return'
 import { createDeferredContract, creditNoteContract, deferredContract, fromDdtsContract, fromMilestoneContract, removeDeductionContract, settlementContract, shippedNotInvoicedContract } from './from-shipment/contract'
 import { createDeferred, deferredDue } from './from-shipment/deferred'
 import { createFromMilestone } from './milestones'
@@ -102,4 +104,11 @@ export default defineRoutes('invoicing', manifest, async (app) => {
   app.get('/invoicing/settings', { schema: settingsContract }, async (request) => financeSettings(request))
 
   app.get('/invoicing/orders/:orderId/settlement', { schema: settlementContract }, async (request) => getSettlement(request, request.params.orderId))
+
+  // B-W2a-61: a customer return's credit notes, and their drafts from its decided lines.
+  app.get('/invoicing/returns/:returnId/credit-notes', { schema: returnCreditNotesContract }, async (request) => returnCreditNotes(request, request.params.returnId))
+
+  app.post('/invoicing/returns/:returnId/credit-notes', { schema: draftReturnCreditNotesContract }, async (request, reply) =>
+    reply.code(201).send(await draftReturnCreditNotes(request, request.params.returnId, request.body, idempotencyKeyFrom(request))),
+  )
 })

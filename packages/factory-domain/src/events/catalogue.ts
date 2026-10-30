@@ -44,6 +44,8 @@ import { events as ops } from '../ops/events'
 import { events as emailDelivery } from '../email-delivery/events'
 // B-W2a-55: receivables (payment reminders, the settings, statements sent).
 import { events as receivables } from '../receivables/events'
+// B-W2a-62: payables (supplier invoices, the three-way match, approval, payment, SDI pickups).
+import { events as payables } from '../payables/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -155,7 +157,9 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   // B-W2a-41
   ...emailDelivery,
   // B-W2a-55
-  ...receivables] as const satisfies readonly EventDefinition[]
+  ...receivables,
+  // B-W2a-62
+  ...payables] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']
