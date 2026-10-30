@@ -763,7 +763,10 @@
     "gone": "It is not there any more.",
     "invalid": "Nexus Factory refused it as it is: check the values.",
     "printer": "The printer refused it: choose another label printer.",
-    "write": "It didn't go through: try again."
+    "write": "It didn't go through: try again.",
+    "scheduled_one": "A bar on the planning board books an operation this would take away: open it there and choose Send back to the tray (Planning › Planning board), then try again.",
+    "scheduled_other": "{count} bars on the planning board book operations this would take away: open each there and choose Send back to the tray (Planning › Planning board), then try again.",
+    "scheduledPublished": "A plan published to the floor books an operation this would take away, and a published plan never changes: cancel this work order and make a new one instead."
   },
   "refusal": {
     "other": "The rules of the floor refuse it now.",
