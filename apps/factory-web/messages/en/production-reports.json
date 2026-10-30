@@ -1,0 +1,191 @@
+{
+  "noAccess": {
+    "title": "You cannot see the production reports",
+    "body": "The daily production report needs production.reports.view at a site. Ask your administrator for the role that holds it."
+  },
+  "band": {
+    "label": "Report status and actions",
+    "reading": "Reading the report…",
+    "subscribed": "By e-mail at {time}, {days}",
+    "more": "More actions",
+    "email": "Email me the daily report every morning",
+    "emailChange": "Change the daily e-mail",
+    "emailHeld": "Wait until the report is read",
+    "print": "Print (new tab)"
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline: the figures may be old"
+  },
+  "scope": {
+    "label": "Site and day",
+    "site": "Site",
+    "noPrevious": "No earlier working day",
+    "previous": "Previous working day",
+    "previousShort": "Previous",
+    "day": "Day",
+    "noNext": "This is today: no later day yet",
+    "next": "Next day",
+    "nextShort": "Next",
+    "today": "Today"
+  },
+  "privacy": "Per line, style and size, never per person (Statuto dei Lavoratori art. 4).",
+  "daily": {
+    "title": "Daily production",
+    "soFar": "{day}, so far",
+    "of": "{day}",
+    "failed": "The report could not be read",
+    "closed": "A closed day in this site's calendar: no minutes were planned.",
+    "empty": {
+      "title": "Nothing recorded on this day",
+      "body": "No good, scrapped or reworked garment was reported by the floor's scans on this day."
+    }
+  },
+  "common": {
+    "retry": "Try again",
+    "loading": "Loading…",
+    "cancel": "Cancel"
+  },
+  "error": {
+    "read": "Something went wrong while reading. Try again.",
+    "forbidden": "You have no permission to read this.",
+    "notFound": "There is no site where you may read this.",
+    "offline": "No answer from the server. Check the connection and try again."
+  },
+  "tile": {
+    "good": "Good",
+    "goodHint": "garments out of each line's last operation",
+    "scrap": "Scrap",
+    "scrapHint": "garments scrapped",
+    "rework": "Rework",
+    "reworkHint": "garments sent back",
+    "efficiency": "Line efficiency",
+    "efficiencyHint": "earned over planned minutes, every line"
+  },
+  "chart": {
+    "label": "Garments per line and work centre, and line efficiency",
+    "garments": "Garments",
+    "efficiency": "Efficiency",
+    "efficiencyAxis": "Efficiency (%)",
+    "caption": "Bars: good, scrap and rework per line or work centre. Points: each line's efficiency."
+  },
+  "kind": {
+    "LINE": "Line",
+    "WORK_CENTRE": "Work centre"
+  },
+  "lane": {
+    "figures": "{good} good · {scrap} scrap · {rework} rework",
+    "noMinutes": "Efficiency: no minutes planned this day",
+    "efficiency": "Efficiency {pct}: {earned} of {available} minutes ({people} people × {minutes} min)",
+    "nothing": "Nothing by style and size.",
+    "tableLabel": "{lane} by style and size"
+  },
+  "col": {
+    "style": "Style",
+    "size": "Size",
+    "good": "Good",
+    "scrap": "Scrap",
+    "rework": "Rework"
+  },
+  "subscribe": {
+    "title": "Email me this report",
+    "subtitle": "{site} · each morning",
+    "what": "Each morning it brings the previous working day's report: per line, style and size, never per person.",
+    "nowOn": "You get it now at {time}.",
+    "nowOff": "Your e-mail is off: Subscribe turns it on again.",
+    "lastSent": "last sent {at}",
+    "time": "Time",
+    "timeHint": "The site's time, each morning.",
+    "language": "Language",
+    "languageOwn": "Each person's own language",
+    "languageIt": "Italian",
+    "languageEn": "English",
+    "weekdays": "Days",
+    "recipients": "Who gets it",
+    "onlyMe": "To you ({name}).",
+    "me": "{name} (you)",
+    "getsIt": "gets it already",
+    "whoMay": "Only people who may read the production reports of this site are listed.",
+    "othersTitle": "You also send it to",
+    "other": "{name} at {time}",
+    "turnOffFor": "Turn off for {name}",
+    "turnOff": "Turn off my e-mail",
+    "save": "Save",
+    "go": "Subscribe",
+    "held": {
+      "busy": "Saving…",
+      "noView": "You cannot read this report",
+      "time": "Give a time of day (07:00)",
+      "weekdays": "Choose at least one day",
+      "recipients": "Choose who gets it",
+      "noSubscribe": "Only you: adding colleagues needs production.reports.subscribe"
+    },
+    "problem": {
+      "write": "It could not be saved. Try again.",
+      "forbidden": "You may not send this report to others.",
+      "changed": "It changed since you read it. Close and open it again.",
+      "recipient": "{name} may not read the production reports of this site.",
+      "someone": "Someone you chose may not read this report.",
+      "settings": "The time or the days are not valid."
+    }
+  },
+  "weekday": {
+    "1": "Mon",
+    "2": "Tue",
+    "3": "Wed",
+    "4": "Thu",
+    "5": "Fri",
+    "6": "Sat",
+    "7": "Sun"
+  },
+  "weekdays": {
+    "workweek": "Monday to Friday",
+    "everyDay": "every day",
+    "some_one": "on {count} day",
+    "some_other": "on {count} days"
+  },
+  "print": {
+    "title": "Daily production · {site} · {day}",
+    "titleLoading": "Daily production",
+    "meta": "Read {at} · printed by {person}",
+    "soFar": "the day so far",
+    "held": "Wait until the report is read",
+    "button": "Print",
+    "totals": "The day's totals"
+  },
+  "lines": {
+    "title": "Lines",
+    "hint": "Each line at a glance. Pick a line to see only its work orders ([ and ] step through).",
+    "allLines": "All lines",
+    "failed": "The lines could not be read",
+    "none": {
+      "title": "No line at your sites",
+      "body": "Lines are set up in Admin › Companies & sites."
+    },
+    "cardLabel": "{line}: {state}. Show only this line.",
+    "state": {
+      "RUNNING": "Running",
+      "WAITING": "Waiting",
+      "NO_WORK": "No work"
+    },
+    "lastReport": "Last report {time}",
+    "noReport": "No report today",
+    "outputLabel": "{line}: output against the plan",
+    "output": {
+      "noPlan": "{done} garments today · no plan published for today",
+      "ofPlan": "{done} of {planned} planned today"
+    },
+    "plan": "plan v{number}",
+    "noWorkOrders": "No work order on this line",
+    "workOrders_one": "{count} work order: {numbers}",
+    "workOrders_other": "{count} work orders: {numbers}",
+    "bottleneck": "Most waiting: {seq} {operation}, {waiting} pieces ({number})",
+    "noStations": "No station on this line",
+    "everyoneIn": "Someone signed in at every station",
+    "nobody": "Nobody signed in: {stations}",
+    "machineDown_one": "{count} machine down",
+    "machineDown_other": "{count} machines down",
+    "scoped": "Only line {line}"
+  }
+}

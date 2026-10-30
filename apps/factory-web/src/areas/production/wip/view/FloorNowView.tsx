@@ -10,6 +10,8 @@ import type { SiteWip, SiteWipRow, WorkOrderCounts, WorkOrderRow } from '../../_
 import type { LiveState } from '../../_shared/hooks'
 import { percentOf, progressPhrase, type ProductionCan } from '../../_shared/model'
 import '../../_shared/production.css'
+// B-W2a-38: the Lines section (fn-lines) and the line scope it sets.
+import { LinesPanel, type LinesPanelModel } from './LinesPanel'
 
 /** SCR-073 — Floor now's view model (FloorNowView draws it and fetches nothing). */
 export interface FloorNowModel {
@@ -20,10 +22,17 @@ export interface FloorNowModel {
   late: { items: WorkOrderRow[] | null; problem: string | null }
   asOf: string | null
   live: LiveState
+  /** B-W2a-38: each line at a glance (GET /production/reports/lines); absent: the section is not drawn. */
+  lines?: LinesPanelModel['lines']
+  /** B-W2a-38: the line the page is scoped to (`?line=`): the work orders on it only; null: all lines. */
+  lineScope?: string | null
 }
 
 export interface FloorNowActions {
   onRetry?: () => void
+  /** B-W2a-38: a line card sets the line scope (null: all lines). */
+  onLine?: (lineId: string | null) => void
+  onRetryLines?: () => void
 }
 
 /**
@@ -35,7 +44,7 @@ export interface FloorNowActions {
  */
 export function FloorNowView({ model, actions }: { model: FloorNowModel; actions?: FloorNowActions }) {
   return (
-    <WithMessages namespaces={['production']}>
+    <WithMessages namespaces={['production', 'production-reports']}>
       <FloorNow model={model} actions={actions} />
     </WithMessages>
   )
@@ -43,8 +52,13 @@ export function FloorNowView({ model, actions }: { model: FloorNowModel; actions
 
 function FloorNow({ model, actions }: { model: FloorNowModel; actions?: FloorNowActions }) {
   const t = useT('production')
+  const tr = useT('production-reports')
   const locale = useLocale()
-  const rows = model.wip.value?.workOrders ?? null
+  // B-W2a-38: scoped to a line, the work orders on it (allocated or planned there today) only.
+  const scoped = model.lineScope ? (model.lines?.value?.lines.find((line) => line.id === model.lineScope) ?? null) : null
+  const onLine = scoped ? new Set(scoped.workOrders.map((row) => row.id)) : null
+  const rows = model.wip.value ? model.wip.value.workOrders.filter((row) => !onLine || onLine.has(row.workOrder.id)) : null
+  const lateItems = model.late.items ? model.late.items.filter((row) => !onLine || onLine.has(row.id)) : null
   const waiting = rows ? rows.reduce((sum, row) => sum + row.operations.reduce((acc, op) => acc + (op.scanRequired ? op.waiting : 0), 0), 0) : null
   const scrap = rows ? rows.reduce((sum, row) => sum + row.operations.reduce((acc, op) => acc + op.scrap, 0), 0) : null
   const listHref = (view: string) => `${model.prefix}/production/work-orders?view=${view}`
@@ -71,10 +85,16 @@ function FloorNow({ model, actions }: { model: FloorNowModel; actions?: FloorNow
         ]}
       />
 
+      {model.lines && (
+        <Card padded className="fw-pr-card">
+          <LinesPanel model={{ lines: model.lines, scope: model.lineScope ?? null }} actions={{ onLine: actions?.onLine, onRetry: actions?.onRetryLines }} />
+        </Card>
+      )}
+
       <Card padded className="fw-pr-card">
         <div className="fw-pr-card-head">
           <h2 className="fw-pr-h2">{t('floor.wip')}</h2>
-          <span className="fw-pr-hint">{t('floor.wipHint')}</span>
+          <span className="fw-pr-hint">{scoped ? tr('lines.scoped', { line: `${scoped.code} · ${scoped.name}` }) : t('floor.wipHint')}</span>
         </div>
         {model.wip.problem ? (
           <EmptyState title={t('floor.failed')} description={t(model.wip.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
@@ -107,11 +127,11 @@ function FloorNow({ model, actions }: { model: FloorNowModel; actions?: FloorNow
         <h2 className="fw-pr-h2">{t('floor.late')}</h2>
         {model.late.problem ? (
           <p className="fw-pr-hint">{t(model.late.problem)}</p>
-        ) : !model.late.items ? (
+        ) : !lateItems ? (
           <p className="fw-pr-hint" role="status">
             <Spinner size={12} /> {t('common.loading')}
           </p>
-        ) : model.late.items.length === 0 ? (
+        ) : lateItems.length === 0 ? (
           <p className="fw-pr-hint">{t('floor.noLate')}</p>
         ) : (
           <SummaryTable
@@ -119,7 +139,7 @@ function FloorNow({ model, actions }: { model: FloorNowModel; actions?: FloorNow
             stackOnPhone
             columns={[t('col.number'), t('col.style'), t('col.customer'), t('col.due'), t('col.progress')]}
             widths={['16%', '22%', '24%', '18%', undefined]}
-            rows={model.late.items.map((row) => {
+            rows={lateItems.map((row) => {
               const words = progressPhrase(row)
               return {
                 id: row.id,

@@ -1,13 +1,17 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { at, canOf, COUNTS, inShell, LIST_ROWS, PREFIX, SITE_WIP, type Role } from '../_shared/fixtures'
+// B-W2a-38: the Lines section (fn-lines).
+import { LINE_CARDS, LINES } from '../reports/demo/fixtures'
 import { FloorNowView, type FloorNowModel } from './view/FloorNowView'
 
 /**
  * SCR-073 — Floor now (design production.floor; MES-167, MES-305) with made-up data only: the tiles, every open work
  * order with its operations (waiting · done; the operation with the most waiting marked in words), the late work orders,
  * and the states (loading, error, nothing on the floor, no late work order, no permission). Roles: Owner, Production
- * manager, Team leader (the supervisor's tablet in the Office, A2 decision 7), Sales (read-only).
+ * manager, Team leader (the supervisor's tablet in the Office, A2 decision 7), Sales (read-only). B-W2a-38: each line at a
+ * glance (Running / Waiting / No work, output against the plan, its work orders, where most pieces wait, per station only
+ * "nobody signed in" and machines down: Owner F2), a line card setting the line scope, and the section's own states.
  */
 
 interface FloorCase {
@@ -18,7 +22,7 @@ interface FloorCase {
 const late = LIST_ROWS.filter((row) => (row.daysLate ?? 0) > 0)
 const floor = (role: Role, over: Partial<FloorNowModel> = {}): FloorCase => ({
   role,
-  floor: { prefix: PREFIX, can: canOf(role), wip: { value: SITE_WIP, problem: null }, counts: COUNTS, late: { items: late, problem: null }, asOf: at(29, 9, 42), live: 'live', ...over },
+  floor: { prefix: PREFIX, can: canOf(role), wip: { value: SITE_WIP, problem: null }, counts: COUNTS, late: { items: late, problem: null }, asOf: at(29, 9, 42), live: 'live', lines: { value: LINES, problem: null }, lineScope: null, ...over },
 })
 
 function FloorDesign({ model }: { model: FloorCase }) {
@@ -38,6 +42,10 @@ export const designScreen = defineDesignScreen<FloorCase>({
     { id: 'empty', label: 'Nothing on the floor right now', model: floor('manager', { wip: { value: { workOrders: [] }, problem: null }, late: { items: [], problem: null }, counts: { draft: 2, released: 0, inProgress: 0, completed: 0, open: 2, late: 0 } }) },
     { id: 'loading', label: 'Loading', model: floor('manager', { wip: { value: null, problem: null }, late: { items: null, problem: null }, counts: null, asOf: null, live: 'connecting' }) },
     { id: 'error', label: 'The read failed: in words, with Try again', model: floor('manager', { wip: { value: null, problem: 'error.offline' }, late: { items: null, problem: 'error.offline' }, counts: null, live: 'offline' }) },
-    { id: 'no-permission', label: 'No permission (workorders.view): the API refused the read', model: floor('sales', { wip: { value: null, problem: 'error.forbidden' }, late: { items: null, problem: 'error.forbidden' }, counts: null }) },
+    { id: 'no-permission', label: 'No permission (workorders.view): the API refused the read', model: floor('sales', { wip: { value: null, problem: 'error.forbidden' }, late: { items: null, problem: 'error.forbidden' }, counts: null, lines: { value: null, problem: 'error.forbidden' } }) },
+    { id: 'line-scope', label: 'Lines: L1 picked — only its work orders below ([ and ] step through)', model: floor('manager', { lineScope: LINE_CARDS[0]!.id }), note: 'The picked card is pressed; All lines clears the scope.' },
+    { id: 'lines-loading', label: 'Lines: still being read', model: floor('manager', { lines: { value: null, problem: null } }) },
+    { id: 'lines-error', label: 'Lines: the read failed, with Try again', model: floor('manager', { lines: { value: null, problem: 'error.offline' } }) },
+    { id: 'lines-none', label: 'Lines: no line at the sites', model: floor('manager', { lines: { value: { ...LINES, lines: [] }, problem: null } }) },
   ],
 })

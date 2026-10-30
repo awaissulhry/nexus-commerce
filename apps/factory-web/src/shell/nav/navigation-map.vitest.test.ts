@@ -112,6 +112,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/shipping': 'shipping.settings.view', // GET /shipping/settings
       '/production/floor': 'workorders.view', // GET /production/scans/wip
       '/production/work-orders': 'workorders.view', // GET /production/work-orders
+      '/production/reports': 'production.reports.view', // GET /production/reports/daily
       '/production/settings': 'production.settings.view', // GET /production/settings
       '/quality/inspections': 'quality.inspections.view', // GET /quality/inspections
       '/compliance/certificates': 'compliance.certificates.view', // GET /compliance/certificates

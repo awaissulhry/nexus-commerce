@@ -1671,6 +1671,8 @@
     "production_scrap_view": "See scrap and rework",
     "production_scrap": "Post scrap and ask for replacements",
     "production_scrap_approve": "Approve lower order quantities",
+    "production_reports_view": "See the daily production report per line, style and size",
+    "production_reports_subscribe": "E-mail the production report to colleagues",
     "production_cutting_view": "See the cutting room's yield",
     "planning_firm": "Make planned orders firm",
     "planning_exceptions_manage": "Work the planning exceptions",

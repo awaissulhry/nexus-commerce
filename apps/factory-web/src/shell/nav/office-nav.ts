@@ -189,6 +189,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/warehouse/counts/[id]',
   // B-W2a-32: All results of the global search (SCR-248), a frame page opened from the palette (no navigation row).
   '/search',
+  // B-W2a-38: Production › Reports › Production reports (SCR-240) and its print page (a new tab, no navigation row).
+  '/production/reports',
+  '/production/reports/print',
 ])
 
 /** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */

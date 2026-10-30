@@ -66,6 +66,8 @@ import { VIEWS_DEFINITIONS, VIEWS_PERMISSIONS } from '../../views/permissions'
 import { SEARCH_DEFINITIONS, SEARCH_PERMISSIONS } from '../../search/permissions'
 // B-W2a-35: the plant (machines, machine requests, maintenance jobs).
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
+// B-W2a-38: production reports (the daily production report, its e-mail).
+import { PRODUCTION_REPORTS_DEFINITIONS, PRODUCTION_REPORTS_PERMISSIONS } from '../../production/reports/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -412,6 +414,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PLANT_DEFINITIONS,
   // B-W2a-33: exception rules and stored alerts (alerts.view | handle | rules.manage).
   ALERTS_DEFINITIONS,
+  // B-W2a-38: production reports (production.reports.view | subscribe).
+  PRODUCTION_REPORTS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -467,6 +471,8 @@ for (const name of SEARCH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)
 for (const name of PLANT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-33: exception rules and stored alerts.
 for (const name of ALERTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-38: production reports.
+for (const name of PRODUCTION_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }
