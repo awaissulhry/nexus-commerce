@@ -146,5 +146,8 @@ export function fileNameOf(document: Pick<LinkDocument, 'originalName' | 'conten
 /** A file the page reads in the viewer (a PDF); anything else is downloaded only. */
 export const isPdf = (document: Pick<LinkDocument, 'contentType'>): boolean => document.contentType === 'application/pdf'
 
-/** A business day (YYYY-MM-DD) at noon UTC, so no zone moves it a day. */
-export const dayInstant = (day: string): string => `${day}T12:00:00Z`
+/**
+ * A business day (YYYY-MM-DD) at noon UTC, so no zone moves it a day. A document's date may also come as an instant (the
+ * DoC's and the leaflet's `issuedAt`): that one is kept as it is (appending a time to it made the page throw).
+ */
+export const dayInstant = (day: string): string => (/^\d{4}-\d{2}-\d{2}$/.test(day) ? `${day}T12:00:00Z` : day)
