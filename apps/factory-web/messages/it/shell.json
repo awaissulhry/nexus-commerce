@@ -60,6 +60,14 @@
       "tests": "Test e sostanze",
       "safety": "Sicurezza prodotto",
       "register": "Registro DPI e richiami"
+    },
+    "finance": {
+      "area": "Contabilità",
+      "main": "Principali",
+      "invoices": "Fatture",
+      "payments": "Incassi",
+      "settingsGroup": "Impostazioni",
+      "settings": "Impostazioni contabilità"
     }
   },
   "topbar": {

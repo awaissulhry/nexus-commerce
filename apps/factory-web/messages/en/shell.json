@@ -60,6 +60,14 @@
       "tests": "Tests & substances",
       "safety": "Product safety",
       "register": "PPE register & recalls"
+    },
+    "finance": {
+      "area": "Finance",
+      "main": "Main",
+      "invoices": "Invoices",
+      "payments": "Payments",
+      "settingsGroup": "Settings",
+      "settings": "Finance settings"
     }
   },
   "topbar": {

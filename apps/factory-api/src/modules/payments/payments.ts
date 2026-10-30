@@ -12,7 +12,7 @@ import { serverClock } from '../../core/time'
 import { ordersOfInvoices, ordersOfRequests, settleOrders } from '../invoicing/from-shipment/settlement'
 import { markDepositPaid } from '../sales/deposits/deposits'
 import { lockAll, lockMoney } from './locks'
-import { allocatedOf, assertMay, officeContextOf, officePayment, paymentDetail, readPayment, type PaymentDetail, type PaymentRow, type Reader } from './store'
+import { allocatedOf, assertMay, officeContextOf, officePayment, paymentDetail, placedOn, readPayment, targetLabels, type PaymentDetail, type PaymentRow, type Reader } from './store'
 
 /**
  * Payments received (B-W1-28; FIN-121, FIN-122; Q12: bank transfers; A2 SCR-082): record a transfer (its bank reference
@@ -270,10 +270,11 @@ export async function listPayments(caller: CommandCaller, query: ListPaymentsQue
       where,
       orderBy: { id: 'desc' },
       take: query.limit + 1,
-      select: { id: true, companyId: true, partyId: true, method: true, amount: true, currency: true, receivedOn: true, externalRef: true, status: true, createdAt: true, party: { select: { legalName: true } }, allocations: { select: { amount: true } } },
+      select: { id: true, companyId: true, partyId: true, method: true, amount: true, currency: true, receivedOn: true, externalRef: true, status: true, createdAt: true, party: { select: { legalName: true } }, allocations: { select: { amount: true, invoiceId: true, depositRequestId: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } },
     }),
   )
   const page = rows.slice(0, query.limit)
+  const labels = await caller.withClient((client) => targetLabels(client, page.flatMap((row) => row.allocations)))
   return {
     payments: page.map((row) => {
       const allocated = row.allocations.reduce((sum, allocation) => sum + allocation.amount, 0)
@@ -290,6 +291,7 @@ export async function listPayments(caller: CommandCaller, query: ListPaymentsQue
         receivedOn: row.receivedOn.toISOString().slice(0, 10),
         externalRef: row.externalRef,
         status: row.status,
+        placedOn: placedOn(row.allocations, labels),
         createdAt: toUtcIso(row.createdAt),
       }
     }),

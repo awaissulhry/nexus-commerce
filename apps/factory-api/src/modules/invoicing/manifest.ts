@@ -9,6 +9,8 @@ export const manifest = defineManifest({
   'GET /invoicing/invoices': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
   'GET /invoicing/invoices/:invoiceId': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
   'GET /invoicing/invoices/:invoiceId/checks': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  // The record's DDTs, deductions, credit notes, payments and its orders' deposits (SCR-081; related.ts).
+  'GET /invoicing/invoices/:invoiceId/related': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
   'POST /invoicing/invoices': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
   'POST /invoicing/invoices/deposit-draft': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
   'PATCH /invoicing/invoices/:invoiceId': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
@@ -27,4 +29,6 @@ export const manifest = defineManifest({
   'DELETE /invoicing/invoices/:invoiceId/deductions/:lineId': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
   'POST /invoicing/invoices/:invoiceId/credit-note': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
   'GET /invoicing/orders/:orderId/settlement': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  // Finance settings as invoicing reads them (SCR-083; settings.ts): per company the caller may see invoices of.
+  'GET /invoicing/settings': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
 })

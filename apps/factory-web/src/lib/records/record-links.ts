@@ -27,6 +27,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Lot: '/compliance/tests/[id]',
   // Compliance › PPE register & recalls (SCR-113).
   PpeRegisterEntry: '/compliance/register/[id]',
+  // Finance › Invoices (SCR-081: invoices, deposit invoices, credit notes) and Payments (SCR-082: a payment's placements).
+  Invoice: '/finance/invoices/[id]',
+  Payment: '/finance/payments/[id]',
 })
 
 /** An API list route → the web page that shows it (with the same query). */
@@ -44,6 +47,9 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/quality/inspections': '/quality/inspections',
   '/quality/lots': '/compliance/tests',
   '/compliance/register': '/compliance/register',
+  // The invoice list reads the API's own filters from the address (`?status=REJECTED`, `?docType=TD04`).
+  '/invoicing/invoices': '/finance/invoices',
+  '/payments': '/finance/payments',
 })
 
 export interface RecordRef {
