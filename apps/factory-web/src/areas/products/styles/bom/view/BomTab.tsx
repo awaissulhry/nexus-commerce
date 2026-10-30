@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowDown, ArrowUp, CircleAlert, CircleX, Plus, Search, Trash2 } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, KeyValue, Modal, SummaryTable } from '@nexus/ui/components'
+import { ArrowDown, ArrowUp, CircleAlert, CircleX, Download, Plus, Search, Trash2, Upload } from 'lucide-react'
+import { Banner, Card, EmptyState, Field, KeyValue, Menu, Modal, SummaryTable } from '@nexus/ui/components'
 import { Button, Input, RadioCard, SegmentedControl, Select, Spinner, Tag, Textarea, Toggle } from '@nexus/ui/primitives'
 import { dimensionOf, UOMS } from '@nexus/factory-domain/product/units/units'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { BomLine, BomLineInput, BomView, MaterialView, StyleView } from '../../api'
-import { decimalInput, decimalText, editableRevision, editText, issueWords, revisionInView } from '../../model'
+import { SheetImportDialog } from '../../import/view/SheetImportDialog'
+import { decimalInput, decimalText, draftOf, editableRevision, editText, issueWords, nextRevisionNumber, revisionInView } from '../../model'
 import type { BomViewMode, StyleRecordActions, StyleRecordViewModel } from '../../record/record-model'
 import { moveSeq, sizeCells } from '../bom-model'
 
@@ -26,6 +27,21 @@ export function BomTab({ style, model, actions }: { style: StyleView; model: Sty
   const revision = revisionInView(style.revisions, model.revisionId)
   const editable = editableRevision(style, revision) && model.can.bomManage
   const heldWhy = !model.can.bomManage ? t('held.noManage') : !editableRevision(style, revision) ? t('bom.held.frozen') : model.busy ? t('held.busy') : null
+  // W2a Import BOM (importer product.bom): rows go into a style's DRAFT revision, so a frozen one says where to go first.
+  const draft = draftOf(style.revisions)
+  const importHeld = !model.can.bomManage
+    ? t('held.noManage')
+    : !model.can.imports
+      ? t('bom.import.held.noImports')
+      : style.status === 'ARCHIVED'
+        ? t('held.archived')
+        : !editableRevision(style, revision)
+          ? draft
+            ? t('bom.import.held.goToDraft', { revision: draft.revision })
+            : t('bom.import.held.startFirst', { revision: nextRevisionNumber(style.revisions) })
+          : model.busy
+            ? t('held.busy')
+            : null
 
   // n adds a line, v cycles the views (00 §3.17) — never while typing or in a dialog.
   useEffect(() => {
@@ -117,6 +133,25 @@ export function BomTab({ style, model, actions }: { style: StyleView; model: Sty
               onChange={(value) => actions?.onBomView?.(value as BomViewMode)}
               options={VIEWS.map((view) => ({ value: view, label: t(`bom.view.${view}`) }))}
             />
+            <Menu
+              label={
+                <span className="fw-st-inline">
+                  <Download size={13} aria-hidden /> {model.exporting ? t('bom.export.making') : t('bom.export.title')}
+                </span>
+              }
+              align="right"
+              triggerProps={{ 'aria-label': t('bom.export.label', { revision: bom.revision.revision }) }}
+              items={(['xlsx', 'csv', 'pdf'] as const).map((format) => ({
+                id: format,
+                label: t(`bom.export.${format}`),
+                description: t(`bom.export.${format}Hint`),
+                disabled: !!model.exporting,
+                onSelect: () => actions?.onExportBom?.(format),
+              }))}
+            />
+            <Button size="sm" heldReason={importHeld} onClick={() => actions?.onImportBom?.()}>
+              <Upload size={13} aria-hidden /> {t('bom.import.open')}
+            </Button>
             <Button size="sm" variant="primary" heldReason={heldWhy} onClick={() => actions?.onDialog?.({ kind: 'bomLine', lineId: null })} aria-keyshortcuts="n">
               <Plus size={13} aria-hidden /> {t('bom.add')}
             </Button>
@@ -144,6 +179,7 @@ export function BomTab({ style, model, actions }: { style: StyleView; model: Sty
 
       <LeatherCard bom={bom} model={model} editable={editable} actions={actions} />
 
+      {model.bomImport && <SheetImportDialog model={model.bomImport} actions={actions?.bomImport} />}
       {model.dialog?.kind === 'bomLine' && <LineDialog bom={bom} model={model} actions={actions} lineId={model.dialog.lineId} />}
       {model.dialog?.kind === 'removeLine' && <RemoveLineDialog bom={bom} model={model} actions={actions} lineId={model.dialog.lineId} />}
     </div>

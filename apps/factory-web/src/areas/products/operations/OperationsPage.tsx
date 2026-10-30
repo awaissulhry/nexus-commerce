@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useT } from '../../../lib/i18n/provider'
+import { useLocale, useT } from '../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { WithMessages } from '../../../record-panels/i18n'
 import { useLiveChanges } from '../../../record-panels/live'
 import { downloadCsv, libraryCan, readProblem, writeProblem, type Notice } from '../library/model'
+import { useSheetImport } from '../styles/import/sheet-import'
 import { archiveOperation, countOperations, createOperation, listOperations, reactivateOperation } from './api'
 import { bodyOf, emptyDraft, listQuery, OPERATION_TILES, operationsCsv, viewOf, viewQuery, WORK_CENTRE_KINDS, type OperationFilters, type WorkCentreKind } from './model'
 import { OperationsListView, type NewOperationModel, type OperationsListViewModel } from './view/OperationsListView'
@@ -58,6 +59,12 @@ function Container() {
   const [busy, setBusy] = useState(false)
   const [newOperation, setNewOperation] = useState<NewOperationModel | null>(null)
   const readSeq = useRef(0)
+  const locale = useLocale()
+  const held = useMemo(() => new Set(session.permissions), [session.permissions])
+  const companies = useMemo(() => session.companies.map((company) => ({ id: company.id, name: company.name })), [session.companies])
+  const importRights = useMemo(() => ({ view: held.has('imports.view'), run: held.has('imports.run') && held.has('files.upload'), apply: held.has('imports.apply'), people: false }), [held])
+  // W2a: Import (importer product.operations, keyed by code): new operations and changed minutes, names, machines.
+  const importHeld = !can.operationsManage ? 'held.noManage' : !importRights.run ? 'operations.import.held' : null
 
   const load = useCallback(async () => {
     const mine = ++readSeq.current
@@ -168,7 +175,20 @@ function Container() {
     }
   }
 
-  const model: OperationsListViewModel = { prefix, can, filters, rows, tiles, asOf, updates, newOperation, busy, notice }
+  const sheetImport = useSheetImport(api, {
+    importerKey: 'product.operations',
+    companyId: companyId ?? (companies.length === 1 ? companies[0]!.id : ''),
+    companies,
+    everyCompany: t('operations.import.everyCompany'),
+    rights: importRights,
+    locale,
+    onApplied: () => {
+      void load()
+      loadTiles()
+    },
+  })
+
+  const model: OperationsListViewModel = { prefix, can, filters, rows, tiles, asOf, updates, newOperation, busy, notice, importHeld, sheetImport: sheetImport.model }
   return (
     <OperationsListView
       model={model}
@@ -187,6 +207,10 @@ function Container() {
         onDraft: (draft) => setNewOperation((current) => (current ? { ...current, draft, refused: [] } : current)),
         onCreate: () => void create(),
         onDismissNotice: () => setNotice(null),
+        onImport: () => {
+          if (!importHeld) sheetImport.open()
+        },
+        sheetImport: sheetImport.actions,
       }}
     />
   )

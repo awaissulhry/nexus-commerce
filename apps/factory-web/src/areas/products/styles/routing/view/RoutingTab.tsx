@@ -2,14 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowDown, ArrowUp, CircleAlert, CircleX, Flag, Plus, Search, Trash2 } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, MetricStrip, Modal } from '@nexus/ui/components'
-import { Button, Checkbox, Input, Select, Spinner, Tag, Textarea, Toggle } from '@nexus/ui/primitives'
+import { ArrowDown, ArrowUp, CircleAlert, CircleX, Flag, Plus, Search, Trash2, Truck } from 'lucide-react'
+import { Banner, Card, EmptyState, Field, KeyValue, MetricStrip, Modal } from '@nexus/ui/components'
+import { Button, Checkbox, Input, RadioCard, Select, Spinner, Tag, Textarea, Toggle } from '@nexus/ui/primitives'
 import { WORK_CENTRE_KINDS } from '@nexus/factory-domain/product/routing/operations'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { RoutingStep, RoutingView, StyleView } from '../../api'
 import { costCellOf, decimalInput, editableRevision, editText, issueWords, minutesText, moneyText, revisionInView } from '../../model'
 import type { StyleRecordActions, StyleRecordViewModel } from '../../record/record-model'
+import { subcontractDraftOf, subcontractPatch, subcontractProblems, workshopName, workshopsFor, type SubcontractDraft } from '../subcontract-model'
 
 /**
  * SCR-043 Operations (routing) of the revision in view: the minutes strip (standard minutes per garment, by department
@@ -72,6 +73,7 @@ export function RoutingTab({ style, model, actions }: { style: StyleView; model:
             active: kind === entry.workCentreKind,
           })),
           { label: t('routing.strip.scans'), value: String(routing.minutes.scanPoints), hint: t('routing.strip.scansHint', { count: routing.minutes.steps }) },
+          { label: t('routing.strip.subcontracted'), value: String(routing.minutes.subcontracted), hint: t('routing.strip.subcontractedHint', { count: routing.minutes.steps }) },
           ...(model.can.costView ? [{ label: t('routing.strip.labour'), value: model.grains.cost ? (labour ?? '—') : t('cost.notInRole'), hint: model.grains.cost ? t('routing.strip.labourHint') : t('cost.notInRoleHint') }] : []),
         ]}
       />
@@ -151,12 +153,13 @@ export function RoutingTab({ style, model, actions }: { style: StyleView; model:
                   <th scope="col">{t('routing.col.machine')}</th>
                   <th scope="col">{t('routing.col.minutes')}</th>
                   <th scope="col">{t('routing.col.scanned')}</th>
+                  <th scope="col">{t('routing.col.subcontracted')}</th>
                   <th scope="col">{t('routing.col.actions')}</th>
                 </tr>
               </thead>
               <tbody>
                 {shown.map((step) => (
-                  <StepRow key={step.id} step={step} routing={routing} editable={editable} heldWhy={heldWhy} actions={actions} prefix={model.prefix} onInstructions={() => setInstructions(step.id)} />
+                  <StepRow key={step.id} step={step} routing={routing} editable={editable} heldWhy={heldWhy} actions={actions} prefix={model.prefix} costGrain={model.grains.cost} onInstructions={() => setInstructions(step.id)} />
                 ))}
               </tbody>
             </table>
@@ -166,12 +169,15 @@ export function RoutingTab({ style, model, actions }: { style: StyleView; model:
 
       {model.dialog?.kind === 'addOperations' && <AddOperationsDialog routing={routing} model={model} actions={actions} />}
       {model.dialog?.kind === 'removeStep' && <RemoveStepDialog routing={routing} model={model} actions={actions} stepId={model.dialog.stepId} />}
+      {model.dialog?.kind === 'subcontract' && routing.steps.some((step) => model.dialog?.kind === 'subcontract' && step.id === model.dialog.stepId) && (
+        <SubcontractDialog step={routing.steps.find((step) => model.dialog?.kind === 'subcontract' && step.id === model.dialog.stepId)!} style={style} model={model} editable={editable} heldWhy={heldWhy} actions={actions} />
+      )}
       {instructions && <InstructionsDialog step={routing.steps.find((step) => step.id === instructions)!} editable={editable} busy={model.busy} actions={actions} onClose={() => setInstructions(null)} />}
     </div>
   )
 }
 
-function StepRow({ step, routing, editable, heldWhy, actions, prefix, onInstructions }: { step: RoutingStep; routing: RoutingView; editable: boolean; heldWhy: string | null; actions?: StyleRecordActions; prefix: string; onInstructions: () => void }) {
+function StepRow({ step, routing, editable, heldWhy, actions, prefix, costGrain, onInstructions }: { step: RoutingStep; routing: RoutingView; editable: boolean; heldWhy: string | null; actions?: StyleRecordActions; prefix: string; costGrain: boolean; onInstructions: () => void }) {
   const t = useT('products')
   const locale = useLocale()
   const [minutes, setMinutes] = useState(editText(step.standardMinutes, locale))
@@ -265,6 +271,9 @@ function StepRow({ step, routing, editable, heldWhy, actions, prefix, onInstruct
         ) : (
           t(step.scanRequired ? 'common.yes' : 'common.no')
         )}
+      </td>
+      <td>
+        <SubcontractCell step={step} costGrain={costGrain} editable={editable} onOpen={() => actions?.onDialog?.({ kind: 'subcontract', stepId: step.id })} />
       </td>
       <td>
         <span className="fw-st-inline fw-st-nowrap">
@@ -438,6 +447,168 @@ function InstructionsDialog({ step, editable, busy, actions, onClose }: { step: 
       ) : (
         <p>{step.instructions ?? '—'}</p>
       )}
+    </Modal>
+  )
+}
+
+/** The routing grid's Subcontracted cell: the workshop, its fee per piece (the cost grain) and the transit days. */
+function SubcontractCell({ step, costGrain, editable, onOpen }: { step: RoutingStep; costGrain: boolean; editable: boolean; onOpen: () => void }) {
+  const t = useT('products')
+  const locale = useLocale()
+  const sub = step.subcontract
+  if (!sub)
+    return (
+      <span className="fw-st-cellstack">
+        <span className="fw-st-hint">{t('subcontract.inHouse')}</span>
+        {editable && (
+          <button type="button" className="fw-st-linkbtn fw-st-hint" onClick={onOpen}>
+            {t('subcontract.make')}
+          </button>
+        )}
+      </span>
+    )
+  const fee = !costGrain ? t('subcontract.feeNotInRole') : sub.pricePerPiece ? t('subcontract.feeIs', { fee: moneyText(sub.pricePerPiece, 'EUR', locale) }) : t('subcontract.feePerOrder')
+  return (
+    <span className="fw-st-cellstack">
+      <span className="fw-st-inline">
+        <Truck size={12} aria-hidden /> <b>{sub.supplier.code}</b> {sub.supplier.name}
+      </span>
+      <span className="fw-st-hint">{[fee, sub.transitDays === null ? t('subcontract.noDays') : t('subcontract.days', { count: sub.transitDays })].join(' · ')}</span>
+      <button type="button" className="fw-st-linkbtn fw-st-hint" onClick={onOpen}>
+        {t(editable ? 'subcontract.change' : 'subcontract.details')}
+      </button>
+    </span>
+  )
+}
+
+/**
+ * Subcontract details of one step (design pop:styles.opDrawer "Subcontract details (W2a)"; the W1 routing has no
+ * operation drawer, so it is a dialog from the step's Subcontracted cell, like Instructions): done in-house or by a
+ * workshop of the style's company (or of every company), its fee per piece — the cost grain only — and the transit days.
+ */
+function SubcontractDialog({ step, style, model, editable, heldWhy, actions }: { step: RoutingStep; style: StyleView; model: StyleRecordViewModel; editable: boolean; heldWhy: string | null; actions?: StyleRecordActions }) {
+  const t = useT('products')
+  const locale = useLocale()
+  const [draft, setDraft] = useState<SubcontractDraft>(() => subcontractDraftOf(step, locale))
+  const [tried, setTried] = useState(false)
+  const load = useRef(actions?.onLoadWorkshops)
+  load.current = actions?.onLoadWorkshops
+  useEffect(() => {
+    if (model.can.workshops && model.libraries.workshops === null) load.current?.()
+  }, [model.can.workshops, model.libraries.workshops])
+  const close = () => actions?.onDialog?.(null)
+  const set = (patch: Partial<SubcontractDraft>) => setDraft((current) => ({ ...current, ...patch }))
+  const cost = model.grains.cost
+  const problems = subcontractProblems(draft, model.grains)
+  const patch = subcontractPatch(step, draft, model.grains)
+  const choices = model.libraries.workshops ? workshopsFor(model.libraries.workshops, style.companyId) : null
+  const current = step.subcontract
+  const held = !editable
+    ? heldWhy
+    : Object.keys(problems).length > 0
+      ? t('subcontract.held.fix', { count: Object.keys(problems).length })
+      : patch === undefined
+        ? t('subcontract.held.same')
+        : model.busy
+          ? t('held.busy')
+          : null
+  const save = () => {
+    setTried(true)
+    if (held || patch === undefined) return
+    void actions?.onSubcontract?.(step.id, patch).then((ok) => ok && close())
+  }
+  const show = (field: 'supplierId' | 'fee' | 'days') => (tried && problems[field] ? t(problems[field]!) : undefined)
+
+  if (!editable)
+    return (
+      <Modal open onClose={close} size="md" title={t('subcontract.title', { step: `${step.seq} · ${step.code}` })} footer={<Button onClick={close}>{t('common.close')}</Button>}>
+        <div className="fw-st-dialog">
+          {heldWhy && <Banner tone="info" title={heldWhy} />}
+          <KeyValue
+            dense
+            labelCase="sentence"
+            items={[
+              { label: t('subcontract.who'), value: current ? `${current.supplier.code} · ${current.supplier.name}` : t('subcontract.inHouse') },
+              ...(current
+                ? [
+                    { label: t('subcontract.fee'), value: !cost ? t('cost.notInRole') : current.pricePerPiece ? t('subcontract.feeIs', { fee: moneyText(current.pricePerPiece, 'EUR', locale) }) : t('subcontract.feePerOrder') },
+                    { label: t('subcontract.transit'), value: current.transitDays === null ? t('subcontract.noDays') : t('subcontract.days', { count: current.transitDays }) },
+                  ]
+                : []),
+            ]}
+          />
+        </div>
+      </Modal>
+    )
+
+  return (
+    <Modal
+      open
+      onClose={close}
+      size="md"
+      title={t('subcontract.title', { step: `${step.seq} · ${step.code}` })}
+      subtitle={step.name}
+      footer={
+        <>
+          <Button onClick={close}>{t('common.back')}</Button>
+          <Button variant="primary" heldReason={held} onClick={save} aria-keyshortcuts="Meta+Enter Control+Enter">
+            {t('identity.save')}
+          </Button>
+        </>
+      }
+    >
+      <div
+        className="fw-st-dialog"
+        onKeyDown={(event) => {
+          if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+            event.preventDefault()
+            save()
+          }
+        }}
+      >
+        <div className="fw-st-start" role="radiogroup" aria-label={t('subcontract.who')}>
+          <RadioCard name="fw-sub-mode" value="in" checked={draft.mode === 'in'} selected={draft.mode === 'in'} onChange={() => set({ mode: 'in' })} title={t('subcontract.mode.in')} description={t('subcontract.mode.inHint')} />
+          <RadioCard name="fw-sub-mode" value="out" checked={draft.mode === 'out'} selected={draft.mode === 'out'} onChange={() => set({ mode: 'out' })} title={t('subcontract.mode.out')} description={t('subcontract.mode.outHint')} />
+        </div>
+        {draft.mode === 'out' && (
+          <>
+            <Field label={t('subcontract.workshop')} required hint={style.companyId === null ? t('subcontract.workshopHintAll') : t('subcontract.workshopHint')} error={show('supplierId')}>
+              {!model.can.workshops ? (
+                <span className="fw-st-cellstack">
+                  <span className="fw-st-static">{current ? `${current.supplier.code} · ${current.supplier.name}` : '—'}</span>
+                  <span className="fw-st-hint">{t('subcontract.noParties')}</span>
+                </span>
+              ) : choices === null ? (
+                <p className="fw-st-hint" role="status">
+                  <Spinner size={14} /> {t('subcontract.loading')}
+                </p>
+              ) : (
+                <Select value={draft.supplierId} onChange={(event) => set({ supplierId: event.target.value })}>
+                  <option value="">{t('subcontract.pick')}</option>
+                  {current && !choices.some((workshop) => workshop.id === current.supplier.id) && <option value={current.supplier.id}>{`${current.supplier.code} · ${current.supplier.name}`}</option>}
+                  {choices.map((workshop) => (
+                    <option key={workshop.id} value={workshop.id}>
+                      {workshop.code} · {workshopName(workshop)}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            {model.can.workshops && choices !== null && choices.length === 0 && <Banner tone="warning" title={t('subcontract.noneYet')} />}
+            <div className="fw-st-form-grid">
+              <Field label={t('subcontract.fee')} hint={cost ? t('subcontract.feeHint') : t('cost.notInRoleHint')} error={show('fee')}>
+                {cost ? <Input value={draft.fee} inputMode="decimal" suffix="€" onChange={(event) => set({ fee: event.target.value })} /> : <span className="fw-st-static">{t('cost.notInRole')}</span>}
+              </Field>
+              <Field label={t('subcontract.transit')} hint={t('subcontract.transitHint')} error={show('days')}>
+                <Input value={draft.days} inputMode="numeric" suffix={t('subcontract.daysUnit')} onChange={(event) => set({ days: event.target.value })} />
+              </Field>
+            </div>
+            {current && draft.supplierId && draft.supplierId !== current.supplier.id && <p className="fw-st-hint">{t('subcontract.otherStarts')}</p>}
+          </>
+        )}
+        {draft.mode === 'in' && current && <p className="fw-st-hint">{t('subcontract.backInHouse', { code: current.supplier.code })}</p>}
+        <p className="fw-st-hint">{t('subcontract.floor')}</p>
+      </div>
     </Modal>
   )
 }

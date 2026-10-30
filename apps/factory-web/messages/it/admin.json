@@ -1507,7 +1507,8 @@
     "views": "Viste ed esportazioni",
     "search": "Ricerca",
     "plant": "Stabilimento",
-    "alerts": "Avvisi e regole di eccezione"
+    "alerts": "Avvisi e regole di eccezione",
+    "accounting": "Contabilità"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1695,6 +1696,10 @@
     "planning_schedule_publish": "Pubblicare il programma al reparto",
     "alerts_view": "Vedere gli avvisi dei record che vedi e le regole di eccezione",
     "alerts_handle": "Prendere in carico, assegnare, posticipare e risolvere gli avvisi",
-    "alerts_rules_manage": "Modificare e aggiungere regole di eccezione"
+    "alerts_rules_manage": "Modificare e aggiungere regole di eccezione",
+    "accounting_view": "Vedere le esportazioni contabili, i controlli del mese, le righe Intrastat e le chiusure di periodo",
+    "accounting_export": "Creare e riesportare il lotto contabile numerato di un mese",
+    "accounting_lock": "Chiudere un mese (provvisoria o definitiva) e riaprire una chiusura provvisoria",
+    "accounting_unlock": "Riaprire una chiusura definitiva (d'accordo con il commercialista)"
   }
 }
