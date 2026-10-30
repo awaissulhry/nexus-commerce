@@ -12,4 +12,9 @@ export const manifest = defineManifest({
   'POST /inventory/transfers': { audiences: ['office', 'floor'], permission: 'inventory.transfer', scope: 'record' },
   'POST /inventory/scraps': { audiences: ['office'], permission: 'inventory.scrap', scope: 'record' },
   'POST /inventory/moves/:moveId/reverse': { audiences: ['office'], permission: 'inventory.reverse', scope: 'record' },
+  // B-W2a-11 (SCM-193): write-off with a reason code, then its photos (files.upload is checked by the handler too).
+  'POST /inventory/write-offs': { audiences: ['office'], permission: 'inventory.scrap', scope: 'record' },
+  'GET /inventory/write-offs/:writeOffId': { audiences: ['office'], permission: 'inventory.stock.view', scope: 'record' },
+  'POST /inventory/write-offs/:writeOffId/photos': { audiences: ['office'], permission: 'inventory.scrap', scope: 'record' },
+  'POST /inventory/write-offs/:writeOffId/photos/:fileId/complete': { audiences: ['office'], permission: 'inventory.scrap', scope: 'record' },
 })

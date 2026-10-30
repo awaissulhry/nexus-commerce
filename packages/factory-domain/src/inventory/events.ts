@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { defineEvent } from '../events/define'
 import { PURCHASE_ORDER_STATUSES } from '../purchasing/orders'
 import { HIDE_STATES } from './issue/rules'
+import { COUNT_ITEM_KINDS, STOCK_COUNT_KINDS, STOCK_COUNT_STATUSES } from './counts/rules'
 import { STOCK_MOVE_REASONS } from './ledger/moves'
 
 /**
@@ -23,6 +24,14 @@ import { STOCK_MOVE_REASONS } from './ledger/moves'
  * Opening stock (B-W1-35, modules/inventory/opening): `inventory.opening_posted` once per imported line of the count (its
  * lot, new or joined, its hides and its OPENING moves, each also `inventory.moved`); posted by the import's apply, so
  * by the system. It reaches the stock, lots and hides screens and the opening-stock summary (inventory.stock.view).
+
+ *
+ * Stock counts (B-W2a-15, modules/inventory/counts; SCM-224, SCM-230): `inventory.count_changed` once per move of a
+ * count (made, started, submitted, approved, sent back, cancelled) or edit of its header, `inventory.count_recorded` once
+ * per request that records counts, recounts or reasons, asks recounts, adds or removes a line, `inventory.count_applied`
+ * once when its differences are posted (its COUNT moves also emit `inventory.moved`), `inventory.count_signed_off` once
+ * when a year-end inventory is signed off with its valued list. They reach the counts screens (inventory.counts.view);
+ * never a cost, never a person.
  */
 const decimal = () => z.string().regex(/^\d{1,14}\.\d{4}$/)
 
@@ -172,5 +181,123 @@ export const events = [
       baseQuantity: decimal(),
     }),
     live: { permission: 'inventory.stock.view', fields: ['jobId', 'line', 'itemId', 'lotId', 'lotCode', 'qualityStatus'] },
+  }),
+  // ---- B-W2a-11 (SCM-205, SCM-209, SCM-210, SCM-193): reservations and write-offs -----------------------------------------
+  // modules/inventory/reservations emits `inventory.reserved` once per request (its reservations, all for one work order
+  // or one order line) and `inventory.reservations_released` once per release (one or many, with the reason); an issue
+  // that counts against a work order's reservations emits only its own `inventory.issued` and `inventory.moved`.
+  // modules/inventory/ledger's write-off emits `inventory.written_off` once (its SCRAP moves also `inventory.moved`).
+  defineEvent({
+    type: 'inventory.reserved',
+    context: 'inventory',
+    description: 'Stock of a site was reserved for a work order or a sales order line: quantities, areas of leather or named hides.',
+    payload: z.strictObject({
+      reservationIds: z.array(z.uuid()).min(1),
+      workOrderId: z.uuid().nullable(),
+      salesOrderLineId: z.uuid().nullable(),
+      itemIds: z.array(z.uuid()).min(1),
+      hideIds: z.array(z.uuid()),
+    }),
+    live: { permission: 'inventory.stock.view', fields: ['reservationIds', 'workOrderId', 'salesOrderLineId', 'itemIds', 'hideIds'] },
+  }),
+  defineEvent({
+    type: 'inventory.reservations_released',
+    context: 'inventory',
+    description: 'Reservations were released with the reason: what they still held is available again.',
+    payload: z.strictObject({
+      reservationIds: z.array(z.uuid()).min(1),
+      workOrderIds: z.array(z.uuid()),
+      salesOrderLineIds: z.array(z.uuid()),
+      itemIds: z.array(z.uuid()).min(1),
+      hideIds: z.array(z.uuid()),
+    }),
+    live: { permission: 'inventory.stock.view', fields: ['reservationIds', 'workOrderIds', 'itemIds', 'hideIds'] },
+  }),
+  defineEvent({
+    type: 'inventory.written_off',
+    context: 'inventory',
+    description: 'Stock was written off with a reason (damaged, expired, obsolete, lost): it left the site as scrap.',
+    payload: z.strictObject({
+      writeOffId: z.uuid(),
+      reasonCode: z.string().min(1),
+      moveIds: z.array(z.uuid()).min(1),
+      itemIds: z.array(z.uuid()).min(1),
+      hideIds: z.array(z.uuid()),
+      lotIds: z.array(z.uuid()),
+    }),
+    live: { permission: 'inventory.stock.view', fields: ['writeOffId', 'reasonCode', 'moveIds', 'itemIds', 'hideIds', 'lotIds'] },
+  }),
+  // ---- stock counts (B-W2a-15) ----
+  defineEvent({
+    type: 'inventory.count_changed',
+    context: 'inventory',
+    description: 'A stock count or year-end inventory was made, started (its expected quantities frozen), edited, submitted, approved, sent back for a recount or cancelled.',
+    payload: z.strictObject({
+      countId: z.uuid(),
+      number: z.string(),
+      kind: z.enum(STOCK_COUNT_KINDS),
+      status: z.enum(STOCK_COUNT_STATUSES),
+      /** The state before (the same when only the header changed). */
+      previousStatus: z.enum(STOCK_COUNT_STATUSES).nullable(),
+      change: z.enum(['CREATED', 'STARTED', 'EDITED', 'SUBMITTED', 'APPROVED', 'SENT_BACK', 'CANCELLED']),
+      /** Its lines (after a start: the frozen snapshot's). */
+      lines: z.number().int().min(0),
+      /** From SUBMITTED on: whether a second person approves (the value is a cost and never travels here). */
+      approvalRequired: z.boolean().nullable(),
+      scopeLocationId: z.uuid().nullable(),
+      scopeItemId: z.uuid().nullable(),
+      scopeLotId: z.uuid().nullable(),
+      scopeItemKind: z.enum(COUNT_ITEM_KINDS).nullable(),
+    }),
+    live: { permission: 'inventory.counts.view', fields: ['countId', 'number', 'kind', 'status', 'change'] },
+  }),
+  defineEvent({
+    type: 'inventory.count_recorded',
+    context: 'inventory',
+    description: "Lines of a stock count changed while it is counted: counts or recounts typed, reasons given, recounts asked for, a line found that was not expected added, or such a line removed.",
+    payload: z.strictObject({
+      countId: z.uuid(),
+      number: z.string(),
+      change: z.enum(['COUNTED', 'RECOUNT_ASKED', 'ADDED', 'REMOVED']),
+      lineIds: z.array(z.uuid()).min(1),
+      /** After the change: the lines, and how many are counted. */
+      lines: z.number().int().min(0),
+      counted: z.number().int().min(0),
+    }),
+    live: { permission: 'inventory.counts.view', fields: ['countId', 'number', 'change', 'lineIds', 'lines', 'counted'] },
+  }),
+  defineEvent({
+    type: 'inventory.count_applied',
+    context: 'inventory',
+    description: "A stock count's differences were posted: one COUNT move per line that differs, dated at the count's snapshot.",
+    payload: z.strictObject({
+      countId: z.uuid(),
+      number: z.string(),
+      kind: z.enum(STOCK_COUNT_KINDS),
+      /** The count was approved in the same command (its differences were under the approval limit). */
+      approvedWithApply: z.boolean(),
+      moveIds: z.array(z.uuid()),
+      /** The lines that differed: one move each. */
+      differences: z.number().int().min(0),
+      snapshotAt: z.iso.datetime(),
+    }),
+    live: { permission: 'inventory.counts.view', fields: ['countId', 'number', 'kind', 'differences'] },
+  }),
+  defineEvent({
+    type: 'inventory.count_signed_off',
+    context: 'inventory',
+    description: 'A year-end inventory was signed off: its valued list as of the inventory date is frozen as files of the count (c.c. art. 2217).',
+    payload: z.strictObject({
+      countId: z.uuid(),
+      number: z.string(),
+      /** The inventory date, YYYY-MM-DD. */
+      inventoryDate: z.iso.date(),
+      /** The valued list's PDF (the count's valuedListFileId) and its spreadsheet. */
+      valuedListFileId: z.uuid(),
+      valuedListSheetFileId: z.uuid(),
+      /** The list's rows (item, colour and lot). */
+      rows: z.number().int().min(0),
+    }),
+    live: { permission: 'inventory.counts.view', fields: ['countId', 'number', 'inventoryDate'] },
   }),
 ] as const

@@ -1,0 +1,23 @@
+{
+  "$comment": "Type-checks the browser golden flow's spec, stages and harness (tests/ is outside the app's tsconfig): cd apps/factory-web && npx tsc --noEmit -p tests/golden-flow/_harness/tsconfig.json. stack.ts and handlers.ts run under tsx in the API's world and are checked with the API's settings (tsconfig.stack.json).",
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": false,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["../../golden-flow.spec.ts", "../*.ts", "./*.ts"],
+  "exclude": ["./stack.ts", "./handlers.ts"]
+}

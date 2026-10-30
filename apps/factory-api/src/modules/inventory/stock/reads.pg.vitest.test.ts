@@ -170,7 +170,7 @@ describe('the ledger as the Movements grid shows it (SCR-064; Owner answers W1, 
     const plain = await ok(`/inventory/ledger?siteId=${ids.siteA1}`, 'warehouse')
     expect(plain.moves.every((move: Json) => !('valuation' in move))).toBe(true)
     const counts = await ok(`/inventory/ledger/counts?siteId=${ids.siteA1}`, 'warehouse')
-    expect(counts).toEqual({ adjustments7d: 5, scraps30d: 1, counts30d: 0, reversals30d: 1 })
+    expect(counts).toEqual({ adjustments7d: 5, scraps30d: 1, writeOffs30d: 0, counts30d: 0, reversals30d: 1 })
     const withCost = await ok(`/inventory/ledger/counts?siteId=${ids.siteA1}`)
     // Hide 3 came in at the standard cost (valued); nothing is left unvalued but nothing either: all office moves.
     expect(withCost).toMatchObject({ adjustments7d: 5, scraps30d: 1, reversals30d: 1, unvalued: 0 })

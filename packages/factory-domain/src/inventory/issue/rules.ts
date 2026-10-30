@@ -53,6 +53,8 @@ export const REFUSALS = [
   'ALREADY_CUT',
   'NOT_LAST_ACTION',
   'REVERSED_ALREADY',
+  // B-W2a-11: the stock is held by another work order's or order line's reservation (inventory/reservations/rules).
+  'RESERVED_FOR_OTHER',
 ] as const
 export type RefusalCode = (typeof REFUSALS)[number]
 

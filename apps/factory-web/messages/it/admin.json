@@ -1568,6 +1568,7 @@
     "inventory_issue": "Prelevare e consegnare merce a un ordine di lavoro",
     "inventory_issue_over": "Consegnare più di quanto serve a un ordine di lavoro",
     "inventory_receive": "Ricevere merce su un ordine d'acquisto",
+    "inventory_reserve": "Riservare e liberare merce",
     "shipping_view": "Vedere le spedizioni",
     "shipping_manage": "Pianificare e cambiare spedizioni",
     "shipping_pack": "Imballare una spedizione",
