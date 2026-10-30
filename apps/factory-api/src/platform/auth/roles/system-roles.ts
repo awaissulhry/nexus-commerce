@@ -46,10 +46,19 @@ const same = (a: SystemRoleContent, b: SystemRoleContent): boolean =>
 
 const CONTENT_SELECT = { id: true, key: true, name: true, description: true, requireMfa: true, permissions: true, grains: true } as const
 
+/**
+ * What a system row should hold: its template's content, except that a tenant may ASK two-factor of a ready-made office
+ * role whose template does not (B-W2a-36, PLT-045: platform/admin/security): a sync keeps that raise, never lowers it.
+ */
+export function contentFor(template: RoleTemplate, row: { readonly requireMfa: boolean } | undefined): SystemRoleContent {
+  const content = templateContent(template)
+  return row?.requireMfa && !content.requireMfa && template.audience === 'office' ? { ...content, requireMfa: true } : content
+}
+
 /** A system row differs from its template (or has none left). */
 export function isOutdated(row: { readonly key: string } & SystemRoleContent): boolean {
   const template = templateOf(row.key)
-  return template ? !same(row, templateContent(template)) : row.permissions.length > 0 || row.grains.length > 0 || row.requireMfa
+  return template ? !same(row, contentFor(template, row)) : row.permissions.length > 0 || row.grains.length > 0 || row.requireMfa
 }
 
 /** What a sync would change in the tenant of this client. */
@@ -58,8 +67,8 @@ export async function systemRoleChanges(client: FactoryClient | CommandTx): Prom
   const byKey = new Map(rows.map((row) => [row.key, row]))
   const changes: SystemRoleChange[] = []
   for (const template of ROLE_TEMPLATES) {
-    const after = templateContent(template)
     const row = byKey.get(template.key)
+    const after = contentFor(template, row)
     if (!row) changes.push({ key: template.key, roleId: newId(), kind: 'created', before: null, after })
     else if (!same(row, after)) changes.push({ key: template.key, roleId: row.id, kind: 'updated', before: contentOfRow(row), after })
   }

@@ -68,6 +68,8 @@ import { SEARCH_DEFINITIONS, SEARCH_PERMISSIONS } from '../../search/permissions
 import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 // B-W2a-39: the accounting exports and the period locks (accounting.view | export | lock | unlock).
 import { ACCOUNTING_DEFINITIONS, ACCOUNTING_PERMISSIONS } from '../../accounting/permissions'
+// B-W2a-36: Security & health (security.view, security.drills.record).
+import { SECURITY_DEFINITIONS, SECURITY_PERMISSIONS } from '../../ops/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -416,6 +418,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   ALERTS_DEFINITIONS,
   // B-W2a-39: the accounting exports and the period locks.
   ACCOUNTING_DEFINITIONS,
+  // B-W2a-36: Security & health.
+  SECURITY_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -473,6 +477,8 @@ for (const name of PLANT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name))
 for (const name of ALERTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-39: the accounting exports and the period locks.
 for (const name of ACCOUNTING_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-36: Security & health.
+for (const name of SECURITY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

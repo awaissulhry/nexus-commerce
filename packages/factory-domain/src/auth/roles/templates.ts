@@ -160,6 +160,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'views.save', 'views.manage', 'views.export',
       // B-W2a-32: rebuild the search index.
       'search.rebuild',
+      // B-W2a-36: Security & health; record a restore drill.
+      'security.view', 'security.drills.record',
     ],
     grains: [],
   }),

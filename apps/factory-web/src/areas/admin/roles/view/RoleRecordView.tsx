@@ -12,6 +12,7 @@ import { PermissionMatrix } from '../../shared/view/PermissionMatrix'
 import { RecordFrame } from '../../shared/view/RecordFrame'
 import { ALWAYS_RULES, heldAreas, holdersOf, templateGap, type Holder, type RoleRecordModel, type RoleTab } from '../model'
 import { holderColumns, RoleMarks } from './columns'
+import { RoleTwoFactor, type RoleTwoFactorActions } from '../../security/view/RoleTwoFactor'
 
 export type { RoleRecordModel } from '../model'
 
@@ -20,6 +21,8 @@ export interface RoleRecordActions {
   onOpen?: (href: string) => void
   onDock?: () => void
   onRetry?: () => void
+  /** B-W2a-36: the Two-factor card's save, dialog and step-up. */
+  twoFactor?: RoleTwoFactorActions
 }
 
 /**
@@ -98,7 +101,7 @@ function RoleRecord({ model, actions, panels }: { model: RoleRecordModel; action
         )}
         {gap?.kind === 'outdated' && <Banner tone="warning" title={t('roles.gap.outdated')} />}
         {model.tab === 'permissions' && <PermissionsTab model={model} />}
-        {model.tab === 'rules' && <RulesTab model={model} />}
+        {model.tab === 'rules' && <RulesTab model={model} actions={actions} />}
         {model.tab === 'users' && <UsersTab model={model} actions={actions} />}
         {model.tab === 'activity' && panels}
       </RecordFrame>
@@ -144,7 +147,7 @@ function PermissionsTab({ model }: { model: RoleRecordModel }) {
   )
 }
 
-function RulesTab({ model }: { model: RoleRecordModel }) {
+function RulesTab({ model, actions }: { model: RoleRecordModel; actions?: RoleRecordActions }) {
   const t = useT('admin')
   const role = model.role!
   return (
@@ -152,10 +155,14 @@ function RulesTab({ model }: { model: RoleRecordModel }) {
       <Card header={t('role.rules.title')} description={t('role.rules.hint')} headingLevel={2}>
         <SummaryTable label={t('role.rules.title')} density="roomy" stackOnPhone columns={[t('role.rules.rule'), t('role.rules.why')]} rows={ALWAYS_RULES.map((rule) => ({ id: rule, cells: [t(`role.rule.${rule}.title`), t(`role.rule.${rule}.why`)] }))} />
       </Card>
-      <Card header={t('role.mfa.title')} headingLevel={2} padded>
-        <p className="fw-adm-intro">{t(role.requireMfa ? 'role.mfa.on' : 'role.mfa.off')}</p>
-        <p className="fw-adm-hint">{t('role.mfa.later')}</p>
-      </Card>
+      {/* B-W2a-36 (PLT-045): the switch; a floor role keeps the W0 words (it never asks for two-factor). */}
+      {model.twoFactor && role.audience === 'office' ? (
+        <RoleTwoFactor model={model.twoFactor} actions={actions?.twoFactor} />
+      ) : (
+        <Card header={t('role.mfa.title')} headingLevel={2} padded>
+          <p className="fw-adm-intro">{t(role.requireMfa ? 'role.mfa.on' : 'role.mfa.off')}</p>
+        </Card>
+      )}
     </div>
   )
 }
