@@ -6,7 +6,7 @@
   },
   "noAccess": {
     "title": "The PPE register is not for your role",
-    "body": "Seeing the register needs the permission compliance.register.view. The owner or an administrator grants it in Admin › Roles."
+    "body": "Seeing the register needs the permission compliance.register.view. The owner or an administrator grants it in Admin › Roles & permissions."
   },
   "tile": {
     "open": "Open entries",

@@ -2,7 +2,7 @@ import { Clock, Layers, Ruler, Shirt } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
- * Products (A2 §1.3 row 3; design 01 §3.3 "Products / Prodotti"): what we make — styles with colours × sizes, their
+ * Products (design 01 area 3 "Products / Prodotti"): what we make — styles with colours × sizes, their
  * BOM, routing, cost and compliance in one studio, and the libraries they draw from. Labels are message keys
  * (`shell:` = messages/<locale>/shell.json). B-W1-11/13/14/16/20 part 2 build Styles (SCR-040 … SCR-045); the product
  * screens step builds Materials & trims (SCR-047/048) and the libraries Operations and Sizes & measurements (SCR-049),

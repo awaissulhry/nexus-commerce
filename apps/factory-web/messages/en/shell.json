@@ -5,6 +5,7 @@
   "nav": {
     "home": {
       "area": "Home",
+      "main": "Main",
       "today": "Today",
       "approvals": "Approvals",
       "mailToSort": "Mail to sort"
@@ -33,6 +34,7 @@
     },
     "admin": {
       "area": "Admin",
+      "main": "Main",
       "overview": "All settings",
       "organisation": "Organisation",
       "companies": "Companies & sites",
@@ -98,6 +100,9 @@
       "lots": "Lots & traceability",
       "moves": "Movements",
       "locations": "Locations"
+    },
+    "frame": {
+      "topBar": "Top bar"
     }
   },
   "topbar": {

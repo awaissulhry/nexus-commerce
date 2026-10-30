@@ -6,7 +6,7 @@
   },
   "noAccess": {
     "title": "Il registro DPI non è per il tuo ruolo",
-    "body": "Per vedere il registro serve il permesso compliance.register.view. Lo concede il titolare o un amministratore in Amministrazione › Ruoli."
+    "body": "Per vedere il registro serve il permesso compliance.register.view. Lo concede il titolare o un amministratore in Sistema › Ruoli e permessi."
   },
   "tile": {
     "open": "Voci aperte",
@@ -178,7 +178,7 @@
       "recallNeedsGarments": "Un richiamo indica cosa richiama: aggiungi un numero di lotto o una matricola.",
       "tooManyBatches": "Al massimo 50 numeri di lotto in una voce.",
       "tooManySerials": "Al massimo 500 matricole in una voce.",
-      "noSeries": "Questa società non ha ancora una numerazione del registro DPI: si imposta in Amministrazione › Documenti e numerazioni.",
+      "noSeries": "Questa società non ha ancora una numerazione del registro DPI: si imposta in Sistema › Documenti e numerazioni.",
       "refused": "La voce è stata rifiutata così com’è: controlla modello, lotti e matricole."
     }
   },

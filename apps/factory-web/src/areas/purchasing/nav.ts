@@ -2,12 +2,12 @@ import { FileText, ShoppingCart, Truck } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
- * Purchasing (A2 §1.3 row 6; design 01 office "purchasing", group Main with no label). Labels are message keys
+ * Purchasing (design 01 area 5 "Purchasing / Acquisti", group Main with no label). Labels are message keys
  * (`shell:` = messages/<locale>/shell.json). B-W1-07 builds Suppliers (SCR-056, its record SCR-057: the same party
  * record as Customers, parties.view); the purchase-order steps add their rows here when their pages are built.
  */
 export const officeArea: OfficeAreaNav = {
-  order: 6,
+  order: 5,
   area: {
     id: 'purchasing',
     label: 'shell:nav.purchasing.area',

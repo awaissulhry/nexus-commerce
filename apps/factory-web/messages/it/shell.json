@@ -5,6 +5,7 @@
   "nav": {
     "home": {
       "area": "Home",
+      "main": "Principali",
       "today": "Oggi",
       "approvals": "Approvazioni",
       "mailToSort": "Posta da smistare"
@@ -32,7 +33,8 @@
       "orders": "Ordini d'acquisto"
     },
     "admin": {
-      "area": "Amministrazione",
+      "area": "Sistema",
+      "main": "Principali",
       "overview": "Tutte le impostazioni",
       "organisation": "Organizzazione",
       "companies": "Società e stabilimenti",
@@ -72,12 +74,12 @@
       "labels": "Etichette e marcature"
     },
     "finance": {
-      "area": "Contabilità",
+      "area": "Amministrazione",
       "main": "Principali",
       "invoices": "Fatture",
       "payments": "Incassi",
       "settingsGroup": "Impostazioni",
-      "settings": "Impostazioni contabilità"
+      "settings": "Impostazioni amministrazione"
     },
     "planning": {
       "area": "Pianificazione",
@@ -92,12 +94,15 @@
       "shipments": "Spedizioni",
       "settings": "Impostazioni",
       "shipping": "Corrieri e spedizioni",
-      "main": "Principale",
+      "main": "Principali",
       "stock": "Giacenze",
       "hides": "Pelli",
       "lots": "Lotti e tracciabilità",
       "moves": "Movimenti",
       "locations": "Ubicazioni"
+    },
+    "frame": {
+      "topBar": "Barra superiore"
     }
   },
   "topbar": {

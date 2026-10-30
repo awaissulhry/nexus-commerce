@@ -246,7 +246,17 @@
       "RETURN": "Return",
       "LOT": "Lot",
       "BATCH": "Batch",
-      "PPE_REGISTER": "PPE register entry"
+      "PPE_REGISTER": "PPE register entry",
+      "BUNDLE": "Bundle ticket",
+      "HIDE": "Hide tag",
+      "GARMENT_SERIAL": "Garment serial number",
+      "INSPECTION": "Final inspection",
+      "RELEASE": "Quality release",
+      "REPAIR": "Repair order",
+      "COMPLAINT": "Customer complaint",
+      "CLAIM": "Supplier claim",
+      "SUBCONTRACT": "Subcontract order",
+      "COUNT": "Stock count"
     },
     "record": {
       "Invoice": "Invoice",
