@@ -90,7 +90,7 @@ interface CostFacts {
 }
 
 /** The facts of many work orders at once (a page, or every one in scope for the tiles). */
-async function costFactsOf(db: Reader, workOrders: readonly CostedWorkOrder[], now: Date): Promise<CostFacts[]> {
+export async function costFactsOf(db: Reader, workOrders: readonly CostedWorkOrder[], now: Date): Promise<CostFacts[]> {
   if (workOrders.length === 0) return []
   const ids = workOrders.map((row) => row.id)
   const companyIds = unique(workOrders.map((row) => row.companyId))

@@ -4,6 +4,8 @@ import { isHeld, type LotQualityStatus } from '@nexus/factory-domain/inventory/s
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTx } from '../../../core/command'
 import { readLots, readSiteStock, type Reader } from '../issue/store'
+// B-W2a-26: stock under an ACTIVE quality hold is held too.
+import { heldByQualityHolds } from '../../quality/holds/stock'
 
 /**
  * The reservations' reads and lock (B-W2a-11). Every read names its columns and selects no relation, so it runs the same
@@ -144,11 +146,12 @@ export async function readStockParts(db: Reader, key: ReserveKey): Promise<{ sto
   }
   const lotRows = await readLots(db, [...new Set([...sums.values()].flatMap((entry) => (entry.lotId ? [entry.lotId] : [])))])
   const lots = new Map([...lotRows.values()].map((lot) => [lot.id, { code: lot.code, qualityStatus: lot.qualityStatus }]))
+  const quality = await heldByQualityHolds(db, { lotIds: [...sums.values()].map((entry) => entry.lotId), hideIds: [...sums.values()].map((entry) => entry.hideId) })
   const stock = [...sums.values()].map((entry) => ({
     lotId: entry.lotId,
     hideId: entry.hideId,
     onHand: entry.onHand.toFixed(4),
-    held: entry.lotId ? isHeld(lots.get(entry.lotId)?.qualityStatus as LotQualityStatus | undefined) : false,
+    held: (entry.lotId ? isHeld(lots.get(entry.lotId)?.qualityStatus as LotQualityStatus | undefined) : false) || quality.holds(entry),
   }))
   return { stock, lots }
 }

@@ -226,7 +226,7 @@ export const cancelDdtContract = defineContract({
 // ---- B-W2a-17: a DDT for another reason ---------------------------------------------------------------------------------
 
 /** What the office says on a source's DDT; the goods, the recipient and the place come from the source and its party. */
-const sourceRequest = input({
+export const sourceRequest = input({
   /** The SOURCE's version as read: checked under its lock, never bumped. */
   version,
   /** Causale; default the source's first (WORK_ON_ACCOUNT, RETURN, REPAIR). */
