@@ -145,6 +145,11 @@ model Company {
   privacyNotices       PrivacyNotice[]
   privacyDpias         PrivacyDpia[]
   processingActivities ProcessingActivity[]
+  // pricing.prisma, complaints.prisma: its payment terms and price lists (tenant-wide rows have none), its complaints.
+  paymentTerms         PaymentTerms[]
+  /// @not-money the relation to its price lists
+  priceLists           PriceList[]
+  complaints           Complaint[]
   // calendar.prisma: its calendars (its own and its sites', lines', workshops' and suppliers') and its shift patterns.
   workCalendars        WorkCalendar[]
   shiftPatterns        ShiftPattern[]
@@ -224,6 +229,9 @@ model Site {
   shippingSettings   ShippingSettings[]
   shipments          Shipment[]
   ddts               Ddt[]
+  // returns.prisma: the returns coming back to it and the repairs it makes.
+  returnAuthorisations ReturnAuthorisation[]
+  repairOrders         RepairOrder[]
   // calendar.prisma, views.prisma, alerts.prisma: its calendar, the reports sent about it, the alert rules that look at it.
   workCalendars       WorkCalendar[]
   reportSubscriptions ReportSubscription[]

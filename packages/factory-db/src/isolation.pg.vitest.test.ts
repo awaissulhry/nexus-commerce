@@ -24,12 +24,14 @@ import { seed as seedNumberingBlocks } from '../seed/numbering-blocks'
 import { seed as seedOps } from '../seed/ops'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
+import { seed as seedPricing } from '../seed/pricing'
 import { seed as seedPrint } from '../seed/print'
 import { seed as seedPrivacy } from '../seed/privacy'
 import { seed as seedProduct } from '../seed/product'
 import { seed as seedProduction } from '../seed/production'
 import { seed as seedQuality } from '../seed/quality'
 import { seed as seedQualityLab } from '../seed/quality-lab'
+import { seed as seedReturns } from '../seed/returns'
 import { seed as seedReasons } from '../seed/reasons'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
@@ -170,6 +172,10 @@ beforeAll(async () => {
   await seedQualityLab({ db: factory, namespace: 'iso-b' })
   await seedInsights({ db: factory, namespace: 'iso-a' })
   await seedInsights({ db: factory, namespace: 'iso-b' })
+  await seedPricing({ db: factory, namespace: 'iso-a' })
+  await seedPricing({ db: factory, namespace: 'iso-b' })
+  await seedReturns({ db: factory, namespace: 'iso-a' })
+  await seedReturns({ db: factory, namespace: 'iso-b' })
   // The platform schema of W2a (wave 1/7).
   for (const seedPlatform of [seedCalendar, seedReasons, seedCollab, seedViews, seedAlerts, seedSearch, seedOps]) {
     await seedPlatform({ db: factory, namespace: 'iso-a' })
@@ -202,6 +208,7 @@ it('covers every classified table and every runtime role', () => {
     'Colour',
     'Colourway',
     'Company',
+    'Complaint',
     'ComplianceDocument',
     'CostingSettings',
     'CutLog',
@@ -272,8 +279,12 @@ it('covers every classified table and every runtime role', () => {
     'PasswordReset',
     'Payment',
     'PaymentAllocation',
+    'PaymentTerms',
     'PlanningRun',
     'PpeRegisterEntry',
+    'PriceList',
+    'PriceListEntry',
+    'PriceListVersion',
     'PrintJob',
     'Printer',
     'PrivacyDpia',
@@ -294,14 +305,21 @@ it('covers every classified table and every runtime role', () => {
     'QuoteVersion',
     'ReasonCode',
     'RecordFollower',
+    'RepairOrder',
+    'RepairStageEvent',
     'ReportSubscription',
     'RestoreDrill',
+    'ReturnAuthorisation',
+    'ReturnLine',
+    'ReturnReceipt',
     'Role',
     'RoleAssignment',
     'RoutingOperation',
     'SalesOrder',
+    'SalesOrderAmendment',
     'SalesOrderLine',
     'SalesOrderLineSize',
+    'SalesOrderMilestone',
     'SalesSettings',
     'SavedView',
     'ScanCorrectionRequest',

@@ -40,6 +40,13 @@
 // to another party than its quote or order. Uniqueness made only of references (one order per accepted version, one
 // open version per quote) is the sales module's: a unique key of ids alone cannot be copied by the generated isolation
 // tests (src/isolation.pg.vitest.test.ts).
+//
+// W2a (schema wave 2/7; SAL-209, SAL-210, SAL-216, SAL-217, SAL-338, SAL-340): a confirmed order changes by amendments,
+// each kept as a SalesOrderAmendment with the order before and after (append-only); its payment schedule is its
+// SalesOrderMilestone rows; a line is closed short (the pieces that will not be made or shipped), also once the order
+// PARTLY_SHIPPED (the only change its lines take then: the …_sales_w2a_guards triggers); a quote version and an order
+// keep the payment terms of the library they were made with, a quote version the price list version its list prices came
+// from (pricing.prisma); the sales settings hold the return policy (returns.prisma).
 
 /// A quote of a company to a party (SAL-143): its number, its party and contact, and the status of its current version.
 /// Its documents are its versions.
@@ -136,6 +143,10 @@ model QuoteVersion {
   promiseDate         DateTime?          @db.Date
   /// Payment terms as printed.
   paymentTerms        String?
+  /// The library's payment terms they came from (pricing.prisma PaymentTerms), when they came from one.
+  paymentTermsId      String?            @db.Uuid
+  /// @not-money a reference: the price list version its list prices came from (SAL-165: an open quote keeps it)
+  priceListVersionId  String?            @db.Uuid
   /// The terms and conditions as printed on this version, and the reference of their version.
   termsText           String?
   termsVersion        String?
@@ -188,6 +199,10 @@ model QuoteVersion {
   taxIdentity     PartyTaxIdentity? @relation(fields: [tenantId, partyId, taxIdentityId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   billToAddress   PartyAddress?     @relation("QuoteVersionBillTo", fields: [tenantId, partyId, billToAddressId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   shipToAddress   PartyAddress?     @relation("QuoteVersionShipTo", fields: [tenantId, partyId, shipToAddressId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // pricing.prisma: the library's payment terms and the price list version it was made with.
+  termsOfPayment  PaymentTerms?     @relation(fields: [tenantId, paymentTermsId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  /// @not-money the relation to the price list version its list prices came from
+  priceListVersion PriceListVersion? @relation(fields: [tenantId, priceListVersionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   lines           QuoteLine[]
   approvals       QuoteApproval[]
   acceptances     QuoteAcceptance[]
@@ -467,6 +482,8 @@ model DepositRequest {
   // money.prisma: its deposit invoices (TD02) and the payments allocated to it.
   invoices     Invoice[]
   allocations  PaymentAllocation[]
+  // The deposit step of its order's payment schedule.
+  milestones   SalesOrderMilestone[]
 
   // The target of the references from its deposit invoices and payment allocations: the same company and party.
   @@unique([tenantId, companyId, partyId, id])
@@ -517,6 +534,9 @@ model SalesOrder {
   billTo              Json
   shipTo              Json
   paymentTerms        String?
+  /// The library's payment terms it was sold with (pricing.prisma PaymentTerms): its payment schedule and its invoices'
+  /// due dates come from them; null: none (the printed text only).
+  paymentTermsId      String?          @db.Uuid
   /// The date the party asked for, the date promised now, and the first date promised (set once, never changed).
   requestedDate       DateTime?        @db.Date
   promiseDate         DateTime?        @db.Date
@@ -561,6 +581,16 @@ model SalesOrder {
   shipments       Shipment[]
   // money.prisma: the invoices that bill it.
   invoices        Invoice[]
+  // pricing.prisma: the library's payment terms it was sold with.
+  termsOfPayment  PaymentTerms?         @relation(fields: [tenantId, paymentTermsId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Its amendments and its payment schedule.
+  amendments      SalesOrderAmendment[]
+  milestones      SalesOrderMilestone[]
+  // returns.prisma: the returns of goods sold on it, and those it replaces goods of.
+  returns         ReturnAuthorisation[] @relation("ReturnSalesOrder")
+  replacementFor  ReturnAuthorisation[] @relation("ReturnReplacementOrder")
+  // complaints.prisma: the complaints about it.
+  complaints      Complaint[]
 
   @@unique([tenantId, companyId, number])
   // The target of the references from the order's lines and deposit requests: the same company and party.
@@ -627,6 +657,14 @@ model SalesOrderLine {
   priority             Int?
   /// The site that makes it; null: not decided yet.
   siteId               String?       @db.Uuid
+  /// Closed short (SAL-210, "Close remaining lines"): the pieces of the line that will not be made or shipped (what was
+  /// left to ship of it, 1 to quantity; per size: each size's quantity less what shipped of it), when, by whom and why;
+  /// all four set or none. Set, and cleared again ("Reopen lines"), while the order is CONFIRMED, IN_PRODUCTION, READY or
+  /// PARTLY_SHIPPED: the only change a PARTLY_SHIPPED order's lines take.
+  closedShortQuantity  Int?
+  closedShortAt        DateTime?     @db.Timestamptz(3)
+  closedShortById      String?       @db.Uuid
+  closeShortReason     String?
   version              Int           @default(1)
   createdAt            DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
@@ -646,6 +684,9 @@ model SalesOrderLine {
   shipmentLines      ShipmentLine[]
   // money.prisma: the invoice lines that bill it.
   invoiceLines       InvoiceLine[]
+  // returns.prisma: the return lines of its goods, and those it replaces (a replacement order's line).
+  returnLines        ReturnLine[]         @relation("ReturnLineOrderLine")
+  replacedReturnLines ReturnLine[]        @relation("ReturnLineReplacement")
 
   @@unique([tenantId, orderId, seq])
   // The target of the references from the line's size rows (and the work orders of W1-23).
@@ -698,6 +739,15 @@ model SalesSettings {
   defaultValidityDays Int
   /// The deposit asked at acceptance, percent of the gross total, above 0 and at most 100; null: none by default.
   defaultDepositPct   Decimal? @db.Decimal(7, 4)
+  /// The return policy (SAL-338, SAL-340, SAL-343; design ssettings.returns): the days from delivery a customer may ask
+  /// for a return and the days from the authorisation the goods must arrive in (each 1 to 365; null: none), who pays the
+  /// freight back, the restocking fee in percent of the credited value (above 0 and at most 100; dropped when the cause
+  /// is ours; null: none), and the conditions printed on the RMA. The reason codes are the RETURN reason list.
+  returnWindowDays       Int?
+  returnGoodsDueDays     Int?
+  returnFreightPaidBy    ReturnFreightPayer?
+  returnRestockingFeePct Decimal?            @db.Decimal(7, 4)
+  returnConditions       String?
   version             Int      @default(1)
   createdAt           DateTime @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime @default(now()) @updatedAt @db.Timestamptz(3)
@@ -706,4 +756,115 @@ model SalesSettings {
   company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, companyId])
+}
+
+/// One amendment of a confirmed order (SAL-217; design order.changes "Amendments"): the change applied, numbered per
+/// order, with the order as it was before and as it is after, frozen (the header's dates, terms and totals, and every
+/// line with its sizes and prices; never a cost), the money change and the reason, and whether the customer must accept
+/// it again (the net total changed; the order's reapprovalNeededAt says it waits; the re-acceptance link is W2b,
+/// SAL-190). Written by apps/factory-api's modules/sales/orders in the command that changes the lines (B-W2a-30); never
+/// changed or removed (the …_sales_w2a_guards triggers, for every login).
+/// @append-only
+model SalesOrderAmendment {
+  id                 String   @id @db.Uuid
+  tenantId           String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and party (the reference's keys).
+  companyId          String   @db.Uuid
+  orderId            String   @db.Uuid
+  partyId            String   @db.Uuid
+  /// 1, 2, 3 … per order ("revision 2" of the order).
+  revision           Int
+  /// Why it was changed, as the office writes it.
+  reason             String
+  /// The order before and after: { "header": { promiseDate, requestedDate, paymentTerms, netAmount, vatAmount,
+  /// grossAmount, … }, "lines": [{ id, seq, kind, styleId, colourwayId, description, quantity, unitPrice, netAmount,
+  /// vatRatePct, sizes: [{ size, quantity, unitPrice }] }] }. Prices, never a cost.
+  /// @grain price
+  before             Json
+  /// @grain price
+  after              Json
+  /// The net and gross totals before and after (the money change).
+  /// @grain price
+  netAmountBefore    Int
+  /// @grain price
+  netAmountAfter     Int
+  /// @grain price
+  grossAmountBefore  Int
+  /// @grain price
+  grossAmountAfter   Int
+  /// The customer must accept the order again (the net total changed).
+  reacceptanceNeeded Boolean  @default(false)
+  /// The request whose command applied it; its audit rows share it.
+  requestId          String
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  /// The office user who made it.
+  createdById        String?  @db.Uuid
+
+  order SalesOrder @relation(fields: [tenantId, companyId, partyId, orderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, orderId, revision])
+}
+
+/// One step of an order's payment schedule (SAL-216; design order.money.schedule): what is due when (the deposit on the
+/// order, the balance before shipping or on delivery, the rest on the invoice's terms), its amount and its state. Made
+/// from the order's payment terms (or typed) when the order is made, made again by an amendment while OPEN. The deposit
+/// step names its deposit request (it is PAID when the request is). OPEN → PAID | WAIVED | CANCELLED; the last three are
+/// final. Never deleted.
+model SalesOrderMilestone {
+  id               String               @id @db.Uuid
+  tenantId         String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and party (the references' keys).
+  companyId        String               @db.Uuid
+  orderId          String               @db.Uuid
+  partyId          String               @db.Uuid
+  /// Its place in the schedule: 10, 20, 30 …
+  seq              Int
+  kind             SalesMilestoneKind
+  /// As printed ("Acconto 30% all'ordine"); null: the kind's words.
+  label            String?
+  /// The percent of the order's gross total it came from, above 0 and at most 100, when it came from one.
+  sharePct         Decimal?             @db.Decimal(7, 4)
+  /// The amount due, VAT included, in the order's currency; above 0.
+  /// @grain price
+  amount           Int
+  /// The day it falls due, once known (a deposit's due date, an invoice's due date); null: when its event happens.
+  dueDate          DateTime?            @db.Date
+  /// DEPOSIT only: its deposit request (of the same order's company and party).
+  depositRequestId String?              @db.Uuid
+  status           SalesMilestoneStatus @default(OPEN)
+  /// Set exactly when PAID.
+  paidAt           DateTime?            @db.Timestamptz(3)
+  /// Why it was waived or cancelled; set exactly then.
+  statusNote       String?
+  version          Int                  @default(1)
+  createdAt        DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?              @db.Uuid
+
+  order          SalesOrder      @relation(fields: [tenantId, companyId, partyId, orderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and partyId.
+  depositRequest DepositRequest? @relation(fields: [tenantId, companyId, partyId, depositRequestId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, orderId, seq])
+  // The target of the money module's references (wave 7/7: the invoice lines that bill a step): a step of the same buyer.
+  @@unique([tenantId, partyId, id])
+  // Open steps by due date.
+  @@index([tenantId, status, dueDate])
+}
+
+/// When a step of the payment schedule falls due.
+enum SalesMilestoneKind {
+  /// On the order: the deposit.
+  DEPOSIT
+  BEFORE_SHIPPING
+  ON_DELIVERY
+  /// On the invoice's terms (days after the invoice, or the end of its month).
+  ON_INVOICE
+}
+
+enum SalesMilestoneStatus {
+  OPEN
+  PAID
+  WAIVED
+  CANCELLED
 }

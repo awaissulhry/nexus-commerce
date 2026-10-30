@@ -1,0 +1,48 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/returns.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office writes returns (RMAs, their lines, receipts, inspections and decisions) and repairs through apps/factory-api's modules/sales/returns (B-W2a-43) and modules/sales/repairs (B-W2a-57), always through command(); the API keeps staff to the companies and parties their grants reach. The floor (factory_floor_runtime, the dock's tablet: floor.returnsin, B-W2a-76) works only on its own site's RMAs: it reads them and their lines (never a price, a discount or a credit value: those columns are hidden from it), writes the dock receipt, moves an AUTHORISED RMA to RECEIVED and a RECEIVED one to INSPECTED, and writes a line's received pieces, grade, cause, condition and outcome; the …_sales_w2a_guards triggers refuse any other floor change. The floor reads no repair yet (the floor's repair queue is W2b, MES-132: then select and update by site). A portal or link session reads nothing here yet (the customer's returns pages are W2b: then the partner role gets select on its own party's RMAs and lines, without prices it was not billed, the internal note and who wrote a row, and insert of a REQUESTED RMA). Nothing is deleted but an RMA line before the goods arrive. ReturnReceipt and RepairStageEvent are append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "ReturnAuthorisation": {
+      "about": "The office makes an RMA (numbered, authorised), names its order and replacement order, closes, rejects or cancels it. The dock of its site reads it and moves it AUTHORISED → RECEIVED (with a receipt) and RECEIVED → INSPECTED.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "ReturnLine": {
+      "about": "The office picks what comes back from the customer's invoiced and shipped lines (and removes a line) before the goods arrive, then decides each received line and its credit value. The dock of its site reads the lines without prices or credit values and writes the received pieces, the grade, cause and condition, and the outcome the inspector confirms.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"], "hiddenColumns": ["unitPrice", "discountPct", "creditAmount"] }
+      }
+    },
+    "ReturnReceipt": {
+      "about": "The dock of the RMA's site (or the office) records each arrival of the goods: parcels, condition, carrier, the customer's DDT. Nobody changes or removes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+      }
+    },
+    "RepairOrder": {
+      "about": "The office makes a repair or alteration (numbered), moves it through its stages, makes its repair work order, records the safety check of a PPE garment, and ships it back or cancels it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "RepairStageEvent": {
+      "about": "The office adds one row for each stage a repair moves to, in the same command. Nobody changes or removes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    }
+  }
+}

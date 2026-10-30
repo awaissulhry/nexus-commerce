@@ -1,0 +1,13 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/complaints.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (customer service logs, quality triages and follows up) writes complaints through apps/factory-api's modules/quality/complaints (B-W2a-65), always through command(); the API keeps staff to the companies and parties their grants reach. The floor reads nothing here. A portal or link session reads nothing here yet (the customer's claims pages and the claim link are W2b: then the partner role gets select and insert on its own party's complaints, without the triage, the owner, the internal note and who wrote a row). Never deleted: a complaint is closed with its reason; a SAFETY complaint closes only with its PPE register entry (the …_sales_w2a_guards triggers). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Complaint": {
+      "about": "The office logs a complaint (numbered), triages it (category, severity, owner, answer due), raises and acknowledges its safety alert, links it to its order, shipment, return and garment, answers and closes it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/sales.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context: the expiry sweep, the deposit request and order made after an acceptance) writes quotes, deposit requests and orders through apps/factory-api's modules/sales, always through command(); the API keeps staff to the companies and parties their grants reach. A portal or one-off link session (factory_partner_runtime) reads only its OWN party's rows (every table here carries the party's partyId), never a cost, margin or internal column nor which office user wrote a row (the partner wall of src/ownership.ts: every column marked `@internal` or with a cost, margin or wages grain is hidden); prices stay readable, they are the party's own document. The accept link (QUOTE_ACCEPT) answers in the partner scope, in one command: it updates its party's SENT version and quote to ACCEPTED or DECLINED and adds the QuoteAcceptance row; the …_sales_guards triggers refuse any other partner change. The floor reads nothing here: a work order carries the style, colour, sizes and dates it needs. Nobody deletes a header: a quote is cancelled, a version superseded, an order or deposit request cancelled; the office deletes only the lines and size rows of a DRAFT version or of an order that is still CONFIRMED, IN_PRODUCTION or READY (the triggers hold the states for every login). QuoteAcceptance is append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/sales.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context: the expiry sweep, the deposit request and order made after an acceptance) writes quotes, deposit requests and orders through apps/factory-api's modules/sales, always through command(); the API keeps staff to the companies and parties their grants reach. A portal or one-off link session (factory_partner_runtime) reads only its OWN party's rows (every table here carries the party's partyId), never a cost, margin or internal column nor which office user wrote a row (the partner wall of src/ownership.ts: every column marked `@internal` or with a cost, margin or wages grain is hidden); prices stay readable, they are the party's own document. The accept link (QUOTE_ACCEPT) answers in the partner scope, in one command: it updates its party's SENT version and quote to ACCEPTED or DECLINED and adds the QuoteAcceptance row; the …_sales_guards triggers refuse any other partner change. The floor reads nothing here: a work order carries the style, colour, sizes and dates it needs. Nobody deletes a header: a quote is cancelled, a version superseded, an order or deposit request cancelled; the office deletes only the lines and size rows of a DRAFT version or of an order that is still CONFIRMED, IN_PRODUCTION or READY (the triggers hold the states for every login). QuoteAcceptance and SalesOrderAmendment are append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "Quote": {
       "about": "The office creates quotes, moves their status with their current version, cancels them and keeps the lost reason. A portal or link session reads its own party's quotes, and its accept or decline moves a SENT quote to ACCEPTED or DECLINED (nothing else: the trigger).",
@@ -86,7 +86,7 @@
       "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
-        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["unitCost", "costAmount", "createdById"] }
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["unitCost", "costAmount", "closedShortById", "createdById"] }
       }
     },
     "SalesOrderLineSize": {
@@ -96,6 +96,22 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
         "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
+      }
+    },
+    "SalesOrderAmendment": {
+      "about": "The office (modules/sales/orders, B-W2a-30) adds one row for each amendment of a confirmed order, in the command that changes its lines: the order before and after, the money change, the reason. Nobody changes or removes one. A portal or link session reads none yet (the re-acceptance link of a changed order is W2b, SAL-190: then the partner role reads its own party's amendments, without who made them).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "SalesOrderMilestone": {
+      "about": "The office makes an order's payment schedule from its payment terms, makes it again with an amendment while a step is OPEN, marks a step PAID, waives or cancels it. A portal or link session reads none yet (the customer's order page with its schedule is W2b).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
       }
     },
     "SalesSettings": {

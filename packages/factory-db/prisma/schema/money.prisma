@@ -246,8 +246,12 @@ model InvoiceLine {
   depositInvoice Invoice?        @relation("InvoiceDepositDeduction", fields: [tenantId, buyerPartyId, depositInvoiceId], references: [tenantId, buyerPartyId, id], onDelete: Restrict, onUpdate: Restrict)
   salesOrderLine SalesOrderLine? @relation(fields: [tenantId, buyerPartyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   ddt            Ddt?            @relation(fields: [tenantId, buyerPartyId, ddtId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // returns.prisma: the return lines of what it billed.
+  returnLines    ReturnLine[]    @relation("ReturnLineInvoiceLine")
 
   @@unique([tenantId, invoiceId, seq])
+  // The target of the return lines' reference (returns.prisma): a line billed to the same buyer.
+  @@unique([tenantId, buyerPartyId, id])
   @@index([tenantId, partyId])
   // What is invoiced per order line and size (the shipped-not-invoiced queue, FIN-116), per DDT and per deposit.
   @@index([tenantId, salesOrderLineId])

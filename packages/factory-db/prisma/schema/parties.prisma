@@ -42,6 +42,23 @@ model Party {
   /// As a supplier, its usual lead time: calendar days from the order to the goods at our site, 0 or more (PLN-066).
   /// Planning uses it when the item names none, or the item is bought from it instead of the item's default supplier.
   leadTimeDays Int?
+  /// The commercial terms its new quotes and orders start with (SAL-012; design customer.tax.terms): its payment terms
+  /// from the library (FIN-075) and its price list (SAL-165; a discount group is a GROUP list), null: none of its own.
+  paymentTermsId       String?            @db.Uuid
+  /// @not-money a reference: the price list it is priced from (its prices are PriceListEntry rows)
+  priceListId          String?            @db.Uuid
+  /// The deposit asked at acceptance, percent of the gross total, above 0 and at most 100; null: the sales settings'.
+  defaultDepositPct    Decimal?           @db.Decimal(7, 4)
+  /// When its goods are invoiced: per shipment, or once a month for the month's DDTs (FIN-059: one deferred invoice,
+  /// TD24, by the 15th of the next month, DPR 633/1972 art. 21 c.4 lett. a).
+  invoiceTiming        PartyInvoiceTiming @default(PER_SHIPMENT)
+  /// The Incoterms 2020 rule agreed for its sales (EXW, FCA, DAP, DDP …: three capitals), when one is.
+  incoterm             String?
+  /// The carrier its goods go with by default (the carrier's code, as on a shipment).
+  preferredCarrierCode String?
+  /// The smallest order it is offered, net, in its currency (minor units), 0 or more; null: none.
+  /// @grain price
+  minimumOrderAmount   Int?
   /// For the office only: the partner role can neither read nor write it.
   /// @internal
   internalNote String?
@@ -80,6 +97,15 @@ model Party {
   // money.prisma: the invoices it is the buyer of and the payments it made.
   invoices             Invoice[]
   payments             Payment[]
+  // pricing.prisma: its default payment terms and price list (Restrict, not Prisma's SetNull default for an optional
+  // relation: that would also clear tenantId).
+  termsOfPayment       PaymentTerms?        @relation(fields: [tenantId, paymentTermsId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  /// @not-money the relation to its default price list
+  priceList            PriceList?           @relation(fields: [tenantId, priceListId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // returns.prisma, complaints.prisma: its returns, repairs and complaints.
+  returnAuthorisations ReturnAuthorisation[]
+  repairOrders         RepairOrder[]
+  complaints           Complaint[]
 
   // calendar.prisma: as a supplier or subcontractor, its calendar (its closed days).
   workCalendars       WorkCalendar[]
@@ -114,6 +140,14 @@ enum PartyStatus {
   ACTIVE
   BLOCKED
   ARCHIVED
+}
+
+/// When a customer's goods are invoiced (its commercial terms).
+enum PartyInvoiceTiming {
+  /// Each shipment once it left (with its DDT, or an immediate invoice travelling with the goods).
+  PER_SHIPMENT
+  /// Once a month, one deferred invoice (TD24) for the month's DDTs.
+  MONTHLY
 }
 
 /// An address of a party: its registered office, where its invoices go, where goods are delivered or collected. Many
@@ -199,6 +233,9 @@ model PartyContact {
   quotes              Quote[]
   // supply.prisma: the purchase orders sent to them.
   purchaseOrders      PurchaseOrder[]
+  // returns.prisma, complaints.prisma: the returns they asked for and the complaints they made.
+  returnAuthorisations ReturnAuthorisation[]
+  complaints          Complaint[]
 
   // The target of the measurement profiles' reference: a rider is a contact of the profile's own party.
   @@unique([tenantId, partyId, id])

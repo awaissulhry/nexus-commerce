@@ -29,6 +29,8 @@ export const NUMBER_KINDS = [
   'GARMENT_SERIAL',
   'INSPECTION',
   'RELEASE',
+  'REPAIR',
+  'COMPLAINT',
 ] as const
 export type NumberKind = (typeof NUMBER_KINDS)[number]
 
@@ -163,6 +165,8 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   PPE_REGISTER: 'REG',
   INSPECTION: 'INS',
   RELEASE: 'REL',
+  REPAIR: 'REP',
+  COMPLAINT: 'CMP',
 }
 
 /** The pattern a new series gets when the admin types none: `FT-{YYYY}-{N:5}` (yearly) or `LOT-{N:6}` (never resets). */

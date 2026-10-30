@@ -1,0 +1,425 @@
+// Returns and repairs (W2a plan §5 schema wave 2/7; features SAL-333, SAL-335, SAL-340, SAL-341, SAL-352, SAL-362,
+// LOG-114, QHS-117, SAL-383, SAL-390, LOG-116; design sales.returns with its records "Return (RMA)" and "Repair order",
+// floor.returnsin): the return authorisation (RMA) with the lines that come back, the dock receipt of the goods, and the
+// repair order with its stages. apps/factory-api's modules/sales/returns (B-W2a-43) and modules/sales/repairs (B-W2a-57)
+// write them, always through command(); the floor's "Receive a return" (B-W2a-76) receives and grades the goods.
+//
+// An RMA is numbered from its company's RETURN series when it is made, and authorised: the customer may send the goods
+// back to its site by a deadline (the return policy, sales.prisma SalesSettings). Its lines name what comes back: an
+// invoiced line (money.prisma InvoiceLine) and/or a sales order line and size, never more pieces than were sold (the
+// invoice line's quantity, or what shipped of the order line and size, less what other live RMAs take back; the
+// …_sales_w2a_guards triggers). At the dock each parcel is a ReturnReceipt (its condition, the customer's DDT; its photos
+// are StoredFile rows with recordType "ReturnReceipt"); the lines get their received pieces, their grade and cause, and a
+// disposition that decides money, stock and work at once (repair, remake, replace, credit only, return unchanged, scrap).
+// A replacement is a sales order (W1 SalesOrder) the RMA names; a credit note names its return lines from the money side
+// (wave 7/7).
+//
+// A repair order (a repair or an alteration of one garment) is numbered from the company's REPAIR series, made from an
+// RMA line, a complaint or by hand, and moves through its stages; every stage change is a RepairStageEvent row written in
+// the same transaction (append-only: the history of the repair). Its repair work order is a W1 WorkOrder of its site. A
+// PPE garment that was repaired goes back only after a passed safety check.
+//
+// Links to records of the other W2a waves are recordType + recordId on their side (an outbound DDT for a repair names its
+// source; an NCR its linked records). Foreign keys here point only to W0/W1 tables and to this wave's own.
+//
+// Who sees what (ownership/returns.json): the office reads and writes. The floor of the RMA's site reads its RMAs and
+// lines (never a price or credit value), records the dock receipt, moves an AUTHORISED RMA to RECEIVED and an RECEIVED
+// one to INSPECTED, and writes the received pieces, the grade and the outcome of a line. The portal reads nothing here yet
+// (the customer's returns pages are W2b). Nothing is deleted but an RMA line before the goods arrive.
+
+/// A return authorisation (RMA; SAL-333, SAL-362): a customer's goods coming back to one site of the selling company,
+/// with its number, deadline and state. REQUESTED → AUTHORISED → RECEIVED → INSPECTED → CLOSED; REJECTED from REQUESTED;
+/// CANCELLED before the goods arrive; CLOSED (with a finish reason) from AUTHORISED, RECEIVED or INSPECTED. CLOSED,
+/// REJECTED and CANCELLED are final. RECEIVED only with a dock receipt; INSPECTED once every received line has its
+/// disposition (both checked at commit).
+model ReturnAuthorisation {
+  id                 String       @id @db.Uuid
+  tenantId           String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The selling company, and the site the goods come back to (one of its sites).
+  companyId          String       @db.Uuid
+  siteId             String       @db.Uuid
+  /// The customer.
+  partyId            String       @db.Uuid
+  /// The number from the company's RETURN series, unique in the company.
+  number             String
+  /// The person at the customer who asked, when known.
+  contactId          String?      @db.Uuid
+  /// The customer's own reference of the return.
+  customerRef        String?
+  /// The sales order the goods were sold on, when they came from one.
+  salesOrderId       String?      @db.Uuid
+  status             ReturnStatus @default(REQUESTED)
+  /// When the customer asked.
+  requestedAt        DateTime     @db.Timestamptz(3)
+  /// When and by whom it was authorised: set from AUTHORISED on (a CANCELLED one may have them), set once.
+  authorisedAt       DateTime?    @db.Timestamptz(3)
+  authorisedById     String?      @db.Uuid
+  /// The last day the goods may arrive (the return policy's days from the authorisation); null: no deadline.
+  goodsDueBy         DateTime?    @db.Date
+  /// The first dock receipt: set from RECEIVED on, set once.
+  receivedAt         DateTime?    @db.Timestamptz(3)
+  /// When every received line had its disposition: set when INSPECTED.
+  inspectedAt        DateTime?    @db.Timestamptz(3)
+  /// The replacement order made for it (SAL-352): an order of the same company and customer.
+  replacementOrderId String?      @db.Uuid
+  /// The office user who follows it up.
+  ownerId            String?      @db.Uuid
+  /// When it reached a final status, and why: the finish reason of a CLOSED one, the reason of a REJECTED or CANCELLED one.
+  closedAt           DateTime?    @db.Timestamptz(3)
+  statusReason       String?
+  /// For the office and the dock only.
+  /// @internal
+  internalNote       String?
+  version            Int          @default(1)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?      @db.Uuid
+
+  site             Site           @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  party            Party          @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and partyId.
+  contact          PartyContact?  @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  salesOrder       SalesOrder?    @relation("ReturnSalesOrder", fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  replacementOrder SalesOrder?    @relation("ReturnReplacementOrder", fields: [tenantId, companyId, partyId, replacementOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines            ReturnLine[]
+  receipts         ReturnReceipt[]
+  // complaints.prisma: the complaints that came with or led to it.
+  complaints       Complaint[]
+
+  @@unique([tenantId, companyId, number])
+  // The targets of the references from its lines (the same site and party), its receipts (the same site) and the
+  // complaints (the same company and party).
+  @@unique([tenantId, siteId, partyId, id])
+  @@unique([tenantId, siteId, id])
+  @@unique([tenantId, companyId, partyId, id])
+  // The returns list and its tiles (waiting for goods, to inspect).
+  @@index([tenantId, status])
+  @@index([tenantId, partyId])
+}
+
+enum ReturnStatus {
+  /// Asked for, not yet authorised (a customer's request through the portal, W2b; the office's own start AUTHORISED).
+  REQUESTED
+  /// The customer may send the goods.
+  AUTHORISED
+  /// Goods arrived (some or all).
+  RECEIVED
+  /// Every received line has its disposition.
+  INSPECTED
+  CLOSED
+  REJECTED
+  CANCELLED
+}
+
+/// One line of an RMA (SAL-335): what comes back, copied from the invoiced order: an invoice line and/or a sales order
+/// line and size, the pieces (never more than sold), the customer's reason; then at the dock the pieces received, the
+/// grade and cause found (QHS-117), and the disposition decided (SAL-341). What comes back changes, and a line is added
+/// or removed, only before the goods arrive (REQUESTED, AUTHORISED); the receipt, inspection and decision while the RMA
+/// is AUTHORISED, RECEIVED or INSPECTED; nothing once it is final.
+model ReturnLine {
+  id                 String              @id @db.Uuid
+  tenantId           String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The RMA's site and customer (the floor role's and the references' key).
+  siteId             String              @db.Uuid
+  partyId            String              @db.Uuid
+  returnId           String              @db.Uuid
+  /// The line's place on the RMA: 10, 20, 30 …
+  seq                Int
+  /// What was sold: the sales order line and its size (a size-grid line's size; null for a made-to-measure unit) and/or
+  /// the invoice line that billed it; at least one. When both, the invoice line bills that order line (and size).
+  salesOrderLineId   String?             @db.Uuid
+  size               String?
+  invoiceLineId      String?             @db.Uuid
+  /// What comes back as the customer and the dock read it (style, colourway, size).
+  description        String
+  /// The garment's serial or batch number as read from its label, when known (kept as read).
+  serial             String?
+  batchNumber        String?
+  /// Pieces authorised to come back, from 1; never above what was sold less what other live RMAs take back.
+  quantity           Int
+  /// The customer's reason: a code of the RETURN reason list (B-W2a-01's reason codes), and their words.
+  reasonCode         String
+  reasonNote         String?
+  /// The price and discount as invoiced (what a credit starts from).
+  /// @grain price
+  unitPrice          Decimal?            @db.Decimal(18, 6)
+  discountPct        Decimal?            @db.Decimal(7, 4)
+  /// At the dock (LOG-114): the pieces received (0 to quantity), when first, and the receipt they came with.
+  receivedQuantity   Int                 @default(0)
+  receivedAt         DateTime?           @db.Timestamptz(3)
+  receiptId          String?             @db.Uuid
+  /// The inspection (QHS-117): the grade and the cause found, the condition in words; when and by whom (set with the
+  /// grade, only for received pieces).
+  grade              ReturnGrade?
+  cause              ReturnCause?
+  conditionNote      String?
+  inspectedAt        DateTime?           @db.Timestamptz(3)
+  inspectedById      String?             @db.Uuid
+  /// The decision (SAL-341): what the customer gets, what happens to the goods, when and by whom (set together, after
+  /// the inspection).
+  disposition        ReturnDisposition?
+  goodsOutcome       ReturnGoodsOutcome?
+  decidedAt          DateTime?           @db.Timestamptz(3)
+  decidedById        String?             @db.Uuid
+  /// The value credited for the line (net, minor units, the RMA's invoice currency), 0 or more; null: not decided.
+  /// @grain price
+  creditAmount       Int?
+  /// REPLACE: the replacement order's line that replaces it.
+  replacementLineId  String?             @db.Uuid
+  version            Int                 @default(1)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?             @db.Uuid
+
+  rma             ReturnAuthorisation @relation(fields: [tenantId, siteId, partyId, returnId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId, partyId
+  // and returnId.
+  salesOrderLine  SalesOrderLine?     @relation("ReturnLineOrderLine", fields: [tenantId, partyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  invoiceLine     InvoiceLine?        @relation("ReturnLineInvoiceLine", fields: [tenantId, partyId, invoiceLineId], references: [tenantId, buyerPartyId, id], onDelete: Restrict, onUpdate: Restrict)
+  receipt         ReturnReceipt?      @relation(fields: [tenantId, siteId, returnId, receiptId], references: [tenantId, siteId, returnId, id], onDelete: Restrict, onUpdate: Restrict)
+  replacementLine SalesOrderLine?     @relation("ReturnLineReplacement", fields: [tenantId, partyId, replacementLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  repairOrders    RepairOrder[]
+
+  @@unique([tenantId, returnId, seq])
+  // The target of the references from the repair orders (and the money module's credit note lines, wave 7/7): a line of
+  // the same customer.
+  @@unique([tenantId, partyId, id])
+  // What was sold, less what live RMAs take back (the guard's sums).
+  @@index([tenantId, invoiceLineId])
+  @@index([tenantId, salesOrderLineId])
+}
+
+/// The grade of returned garments (QHS-117; floor.returnsin "Grade each garment").
+enum ReturnGrade {
+  NEW
+  LIKE_NEW
+  GOOD
+  DAMAGED
+  UNUSABLE
+}
+
+/// What the inspection found caused the problem (design rma.inspection "Cause").
+enum ReturnCause {
+  /// A defect of ours (making or material): our cost, no fee.
+  OUR_DEFECT
+  /// Damaged on the way.
+  TRANSIT
+  MISUSE
+  /// Normal wear.
+  WEAR
+  /// Nothing wrong (a wrong size ordered, a change of mind).
+  NO_FAULT
+}
+
+/// What the customer gets back (SAL-341).
+enum ReturnDisposition {
+  REPAIR
+  /// Made again (a new work order).
+  REMAKE
+  /// Another garment from stock or production, on the replacement order.
+  REPLACE
+  CREDIT_ONLY
+  RETURN_UNCHANGED
+  SCRAP
+}
+
+/// Where the returned goods go (floor.returnsin "the suggested outcome": restock, repair, second quality, scrap).
+enum ReturnGoodsOutcome {
+  RESTOCK
+  SECOND_QUALITY
+  /// Held for a decision (a safety check, a claim).
+  QUARANTINE
+  REPAIR
+  SCRAP
+  /// Sent back to the customer as it came.
+  BACK_TO_CUSTOMER
+}
+
+/// One arrival of an RMA's goods at its site's dock (LOG-114; floor.returnsin "Parcel condition"): when, the parcels'
+/// condition, the carrier and the customer's DDT. Its photos (parcel and contents) are StoredFile rows with recordType
+/// "ReturnReceipt". Written by the dock or the office in the command of the receipt; never changed or removed (the
+/// …_sales_w2a_guards triggers, for every login): a correction is a note on the RMA's thread.
+/// @append-only
+model ReturnReceipt {
+  id                String          @id @db.Uuid
+  tenantId          String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The RMA's site (the floor role's key).
+  siteId            String          @db.Uuid
+  returnId          String          @db.Uuid
+  receivedAt        DateTime        @db.Timestamptz(3)
+  /// How many parcels came, from 1, and their condition.
+  parcels           Int             @default(1)
+  parcelCondition   ParcelCondition
+  /// Who brought it, and the carrier's tracking number.
+  carrierName       String?
+  trackingNumber    String?
+  /// The customer's DDT the goods travelled with (its number and date as printed), when one came.
+  customerDdtNumber String?
+  customerDdtDate   DateTime?       @db.Date
+  note              String?
+  /// The request whose command wrote it; its audit rows share it.
+  requestId         String
+  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
+  /// The caller of the command: an office user, or the dock's tablet (the ledger names no worker: L. 300/1970 art. 4;
+  /// the audit row keeps who was signed in).
+  createdById       String?         @db.Uuid
+
+  rma   ReturnAuthorisation @relation(fields: [tenantId, siteId, returnId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines ReturnLine[]
+
+  // The target of the lines' reference: a receipt of the same RMA.
+  @@unique([tenantId, siteId, returnId, id])
+  @@index([tenantId, returnId, receivedAt])
+}
+
+/// A parcel's condition at the dock (floor.returnsin "box fine / box damaged / opened").
+enum ParcelCondition {
+  INTACT
+  DAMAGED
+  OPENED
+}
+
+/// Who pays the freight of a return (the return policy, sales.prisma SalesSettings).
+enum ReturnFreightPayer {
+  CUSTOMER
+  COMPANY
+  /// The company when the cause is ours, the customer otherwise.
+  BY_CAUSE
+}
+
+/// A repair or an alteration of one garment (SAL-383, SAL-390, LOG-116; design "Repair order"): what came in and in what
+/// state, its stages from received to shipped, its repair work order, the safety check of a PPE garment, and the way back.
+/// Made from an RMA line (disposition REPAIR), a complaint, or by hand. Stages: AWAITING_GOODS → RECEIVED → (ESTIMATED →
+/// APPROVED →) IN_REPAIR → REPAIRED → SHIPPED; REPAIRED → IN_REPAIR after a failed check; SHIPPED unrepaired from
+/// RECEIVED, ESTIMATED or APPROVED (declined, not repairable); CANCELLED before it is repaired. SHIPPED and CANCELLED
+/// are final. Every stage change has its RepairStageEvent row in the same transaction (checked at commit). A repaired
+/// garment that needs a safety check ships only after it passed one, made after the repair.
+model RepairOrder {
+  id                String            @id @db.Uuid
+  tenantId          String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company, and the site that repairs it (one of its sites).
+  companyId         String            @db.Uuid
+  siteId            String            @db.Uuid
+  /// The customer whose garment it is.
+  partyId           String            @db.Uuid
+  /// The number from the company's REPAIR series, unique in the company.
+  number            String
+  kind              RepairKind        @default(REPAIR)
+  /// Where it came from: an RMA line of the same customer, a complaint of the same customer; neither: made by hand.
+  returnLineId      String?           @db.Uuid
+  complaintId       String?           @db.Uuid
+  /// The garment: its serial as read from its label (kept as read), or its style, colourway and size.
+  serial            String?
+  styleId           String?           @db.Uuid
+  colourwayId       String?           @db.Uuid
+  size              String?
+  /// The customer's description of the problem.
+  problem           String
+  stage             RepairStage       @default(RECEIVED)
+  /// The garment arrived (set from RECEIVED on), with the customer's DDT (DPR 472/1996: goods sent for repair travel
+  /// with one; the way back is our DDT, which names this repair as its source).
+  receivedAt        DateTime?         @db.Timestamptz(3)
+  inboundDdtNumber  String?
+  inboundDdtDate    DateTime?         @db.Date
+  /// The repair work order (a W1 WorkOrder of the repairing site).
+  workOrderId       String?           @db.Uuid
+  /// When the repair was done (set while REPAIRED, kept when SHIPPED; cleared when it goes back into repair).
+  repairedAt        DateTime?         @db.Timestamptz(3)
+  /// A PPE garment: it goes back only after a check that it still protects (seams, abrasion zones, protectors, the
+  /// certificate still covers it). The check: the points checked { "seams": "PASS", "protectors": { "result": "PASS",
+  /// "lot": "…", "level": "2" }, "certificateCovers": true, … }, its result, when and by whom; all set or none.
+  safetyCheckRequired Boolean         @default(false)
+  safetyChecklist   Json?
+  safetyCheckResult SafetyCheckResult?
+  safetyCheckedAt   DateTime?         @db.Timestamptz(3)
+  safetyCheckedById String?           @db.Uuid
+  /// Set exactly when SHIPPED.
+  shippedAt         DateTime?         @db.Timestamptz(3)
+  /// Set exactly when CANCELLED.
+  cancelledAt       DateTime?         @db.Timestamptz(3)
+  cancelReason      String?
+  /// The office user who follows it up.
+  ownerId           String?           @db.Uuid
+  /// For the office only.
+  /// @internal
+  internalNote      String?
+  version           Int               @default(1)
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?           @db.Uuid
+
+  site       Site               @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  party      Party              @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId, partyId
+  // and styleId.
+  returnLine ReturnLine?        @relation(fields: [tenantId, partyId, returnLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  complaint  Complaint?         @relation(fields: [tenantId, partyId, complaintId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  style      Style?             @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  colourway  Colourway?         @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder  WorkOrder?         @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  stages     RepairStageEvent[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the stage events' reference: an event of the same site.
+  @@unique([tenantId, siteId, id])
+  // The returns and repairs list (repairs in progress).
+  @@index([tenantId, stage])
+  @@index([tenantId, returnLineId])
+  @@index([tenantId, serial])
+}
+
+enum RepairKind {
+  REPAIR
+  /// A change of fit or a detail asked by the customer.
+  ALTERATION
+}
+
+/// The stages of a repair (SAL-390).
+enum RepairStage {
+  /// Made before the garment arrived (from a complaint or by hand).
+  AWAITING_GOODS
+  RECEIVED
+  /// Parts and labour estimated (the estimate is W2b).
+  ESTIMATED
+  /// The customer approved the estimate.
+  APPROVED
+  IN_REPAIR
+  REPAIRED
+  /// Back with the customer (repaired, or unrepaired when declined or not repairable).
+  SHIPPED
+  CANCELLED
+}
+
+enum SafetyCheckResult {
+  PASS
+  FAIL
+}
+
+/// One stage change of a repair (SAL-390; design repair.work "Stage, date, owner"): from which stage to which, when, by
+/// whom and why. Written in the command that moves the repair, after the move (the repair's stage and version are this
+/// row's); never changed or removed (the …_sales_w2a_guards triggers, for every login).
+/// @append-only
+model RepairStageEvent {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The repair's site.
+  siteId      String       @db.Uuid
+  repairId    String       @db.Uuid
+  /// null for the repair's first stage.
+  fromStage   RepairStage?
+  stage       RepairStage
+  /// The repair's version after the move (its compare-and-set version: every write moves it on), so each move has its
+  /// own row: the command moves the repair first, then writes this row.
+  repairVersion Int
+  at          DateTime     @db.Timestamptz(3)
+  note        String?
+  /// The request whose command wrote it; its audit rows share it.
+  requestId   String
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  /// Who moved it (an office user).
+  createdById String?      @db.Uuid
+
+  repair RepairOrder @relation(fields: [tenantId, siteId, repairId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, repairId, at])
+}
