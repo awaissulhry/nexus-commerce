@@ -221,6 +221,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'inventory.counts.manage',
       'inventory.counts.approve',
       'inventory.reserve',
+      // B-W2a-12: report finished garments to stock.
+      'production.finish',
       'shipping.view',
       'shipping.manage',
       'shipping.pack',
@@ -289,6 +291,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'production.scan',
       'production.scan.correct',
       'production.serials',
+      // B-W2a-12: report finished garments to stock.
+      'production.finish',
       'workorders.view',
       'workorders.manage',
       'workorders.release',

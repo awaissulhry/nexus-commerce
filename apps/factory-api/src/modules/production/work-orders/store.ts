@@ -172,7 +172,8 @@ export interface LineRow extends OrderLineFacts {
 
 /**
  * These order lines with their size grids and orders, and the pieces of each size already on work orders that are not
- * CANCELLED, other than `exceptWorkOrderId`.
+ * CANCELLED, other than `exceptWorkOrderId`. A REPAIR work order's cell (B-W2a-12, MES-019) repairs a garment the line
+ * sold: it is not production of the line and never counts here.
  */
 export async function readOrderLines(db: Reader, lineIds: readonly string[], exceptWorkOrderId?: string): Promise<Map<string, LineRow>> {
   const ids = [...new Set(lineIds)].filter(isUuid)
@@ -200,7 +201,7 @@ export async function readOrderLines(db: Reader, lineIds: readonly string[], exc
   const sizes = await db.salesOrderLineSize.findMany({ where: { lineId: { in: lines.map((line) => line.id) } }, select: { lineId: true, size: true, quantity: true }, orderBy: { id: 'asc' } })
   const taken = await db.workOrderSize.groupBy({
     by: ['salesOrderLineId', 'size'],
-    where: { salesOrderLineId: { in: lines.map((line) => line.id) }, workOrder: { status: { not: 'CANCELLED' } }, ...(exceptWorkOrderId ? { workOrderId: { not: exceptWorkOrderId } } : {}) },
+    where: { salesOrderLineId: { in: lines.map((line) => line.id) }, workOrder: { status: { not: 'CANCELLED' }, kind: { not: 'REPAIR' } }, ...(exceptWorkOrderId ? { workOrderId: { not: exceptWorkOrderId } } : {}) },
     _sum: { quantity: true },
   })
   const orders = await db.salesOrder.findMany({ where: { id: { in: [...new Set(lines.map((line) => line.orderId))] } }, select: { id: true, number: true, status: true } })

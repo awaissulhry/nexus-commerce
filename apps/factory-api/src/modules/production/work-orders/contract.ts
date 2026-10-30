@@ -3,6 +3,7 @@ import { businessDate, defineContract, id, input, instant, output } from '@nexus
 import { MAX_CELL_PIECES, MAX_CELLS, MAX_LINES } from '@nexus/factory-domain/production/work-orders/cells'
 import { WORK_ORDER_KINDS, WORK_ORDER_STATUSES } from '@nexus/factory-domain/production/work-orders/machine'
 import { CHECK_STATES, RELEASE_CHECKS } from '@nexus/factory-domain/production/work-orders/release'
+import { MAX_REPAIR_STEPS } from '@nexus/factory-domain/production/work-orders/repair'
 import { UNUSABLE_REASONS } from '@nexus/factory-domain/planning/usable'
 import { WORK_CENTRE_KINDS } from '@nexus/factory-domain/product/routing/operations'
 
@@ -80,6 +81,8 @@ export const workOrderSchema = output({
   updatedAt: instant(),
   createdById: id().nullable(),
   nextActions: z.array(status),
+  /** B-W2a-12 (MES-019): a REPAIR work order's repair order; null for a size run. */
+  repairOrder: output({ id: id(), number: z.string(), stage: z.string() }).nullable(),
   orders: z.array(output({ id: id(), number: z.string(), customerRef: z.string().nullable(), status: z.string(), partyId: id(), partyName: z.string(), depositRequired: z.boolean() })),
   cells: z.array(
     output({
@@ -114,6 +117,8 @@ const oneWorkOrder = output({ workOrder: workOrderSchema })
 export const listContract = defineContract({
   querystring: input({
     status: status.optional(),
+    /** B-W2a-12: one kind (SIZE_GRID, MADE_TO_MEASURE, REPAIR). */
+    kind: z.enum(WORK_ORDER_KINDS).optional(),
     styleId: id().optional(),
     salesOrderId: id().optional(),
     siteId: id().optional(),
@@ -330,6 +335,57 @@ export const compareContract = defineContract({
       }).nullable(),
       labelChanged: z.boolean(),
       certificate: output({ state: z.enum(CHECK_STATES), message: z.string(), problems: z.array(issue) }),
+    }),
+  },
+})
+
+// ---- B-W2a-12: repair work orders (MES-019) ------------------------------------------------------------------------------
+
+const routingSeqs = () => z.array(z.number().int().min(1).max(100_000)).min(1).max(MAX_REPAIR_STEPS)
+
+export const createRepairContract = defineContract({
+  body: input({
+    repairOrderId: id(),
+    /** The repair order's version as read. */
+    version,
+    /** The routing steps (their places in the revision's routing) the repair needs, at least one. */
+    routingSeqs: routingSeqs(),
+    /** The sales order line the garment was sold on: needed when the repair names no RMA line and no known serial. */
+    salesOrderLineId: id().optional(),
+    size: size().optional(),
+    /** Default: the revision the line fixes, else the style's released one. */
+    styleRevisionId: id().optional(),
+    dueDate: businessDate().optional(),
+    priority: z.number().int().min(-1000).max(1000).optional(),
+    note: z.string().trim().max(2000).nullish(),
+  }),
+  response: { 201: oneWorkOrder },
+})
+
+export const repairStepsContract = defineContract({ params: workOrderParams, body: input({ version, routingSeqs: routingSeqs() }), response: { 200: oneWorkOrder } })
+
+export const repairOptionsContract = defineContract({
+  querystring: input({ repairOrderId: id() }),
+  response: {
+    200: output({
+      repair: output({ id: id(), number: z.string(), kind: z.string(), stage: z.string(), version: z.number().int(), siteId: id(), siteCode: z.string(), serial: z.string().nullable() }),
+      /** Its live (or last) repair work order. */
+      workOrder: output({ id: id(), number: z.string(), status }).nullable(),
+      /** Where the garment was sold (its RMA line's, or its serial's cell), and what does not fit, in words. */
+      garment: output({
+        from: z.enum(['ASKED', 'RETURN_LINE', 'SERIAL']).nullable(),
+        salesOrderLineId: id().nullable(),
+        orderNumber: z.string().nullable(),
+        lineSeq: z.number().int().nullable(),
+        kind: z.string().nullable(),
+        size: z.string().nullable(),
+        problems: z.array(z.string()),
+      }),
+      revision: output({ id: id(), revision: z.number().int(), status: z.string() }).nullable(),
+      /** The revision's routing: each step and whether the site has an active work centre for it. */
+      steps: z.array(output({ seq: z.number().int(), code: z.string(), name: z.string(), workCentreKind: z.enum(WORK_CENTRE_KINDS), standardMinutes: z.string(), available: z.boolean() })),
+      /** What stops making it now, in words. */
+      blockers: z.array(z.string()),
     }),
   },
 })

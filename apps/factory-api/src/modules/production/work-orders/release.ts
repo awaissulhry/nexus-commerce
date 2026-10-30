@@ -85,10 +85,12 @@ export async function releaseWorkOrder(caller: CommandCaller, workOrderId: strin
     const label = facts.label!
     const overridden = checklist.checks.find((check) => check.code === 'MATERIAL' && check.state === 'OVERRIDDEN') ?? null
 
-    // The frozen spec: the draft's stored parts (if any) replaced by the ones built now.
-    const cleared = await clearDraftSpec(tx, current.id)
+    // The frozen spec: the draft's stored parts (if any) replaced by the ones built now. A repair (B-W2a-12, MES-019)
+    // keeps the steps stored on its draft as they are, and plans no material.
+    const repair = current.kind === 'REPAIR'
+    const cleared = repair ? { operations: 0, materials: 0 } : await clearDraftSpec(tx, current.id)
     const actorId = tools.context.audience === 'office' ? tools.context.actorId : null
-    await tx.workOrderOperation.createMany({
+    if (!repair) await tx.workOrderOperation.createMany({
       data: facts.spec.operations.map((op) => ({
         id: newId(),
         siteId: current.siteId,
@@ -104,7 +106,7 @@ export async function releaseWorkOrder(caller: CommandCaller, workOrderId: strin
         createdById: actorId,
       })),
     })
-    await tx.workOrderMaterial.createMany({
+    if (!repair) await tx.workOrderMaterial.createMany({
       data: facts.spec.materials.map((material) => ({
         id: newId(),
         siteId: current.siteId,

@@ -1600,6 +1600,7 @@
     "production_settings_manage": "Cambiare le regole di reparto",
     "production_cut": "Tagliare pelli per un ordine di lavoro",
     "production_cut_correct": "Correggere una registrazione di taglio sbagliata",
+    "production_finish": "Caricare a magazzino i capi finiti",
     "workorders_view": "Vedere gli ordini di lavoro",
     "workorders_manage": "Creare e cambiare ordini di lavoro in bozza",
     "workorders_release": "Rilasciare un ordine di lavoro al reparto",

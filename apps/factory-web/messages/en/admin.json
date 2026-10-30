@@ -1600,6 +1600,7 @@
     "production_settings_manage": "Change a site's floor rules",
     "production_cut": "Cut hides for a work order",
     "production_cut_correct": "Correct a wrong cut log entry",
+    "production_finish": "Report finished garments to stock",
     "workorders_view": "See the work orders",
     "workorders_manage": "Make and change draft work orders",
     "workorders_release": "Release a work order to the floor",

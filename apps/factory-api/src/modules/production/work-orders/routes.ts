@@ -6,6 +6,8 @@ import { manifest } from './manifest'
 import { moveWorkOrder } from './moves'
 import { releaseCheck, releaseWorkOrder } from './release'
 import { countWorkOrders, createWorkOrder, getWorkOrder, listWorkOrders, openLines, setCells, updateWorkOrder } from './work-orders'
+import { createRepairWorkOrder, repairOptions, setRepairSteps } from './repairs'
+import { createRepairContract, repairOptionsContract, repairStepsContract } from './contract'
 
 /**
  * Work orders from sales order lines with a frozen specification (B-W1-38; MES-001, MES-002, MES-005, MES-007,
@@ -41,4 +43,11 @@ export default defineRoutes('production.work-orders', manifest, async (app) => {
   app.post('/production/work-orders/:workOrderId/close', { schema: moveContract }, async (request) => moveWorkOrder(request, request.params.workOrderId, 'CLOSED', request.body, idempotencyKeyFrom(request)))
 
   app.post('/production/work-orders/:workOrderId/cancel', { schema: cancelContract }, async (request) => moveWorkOrder(request, request.params.workOrderId, 'CANCELLED', request.body, idempotencyKeyFrom(request)))
+
+  // B-W2a-12 (MES-019): a repair work order from a repair order, its steps, and what the dialog needs.
+  app.get('/production/work-orders/repair-options', { schema: repairOptionsContract }, async (request) => repairOptions(request, request.query.repairOrderId))
+
+  app.post('/production/work-orders/repairs', { schema: createRepairContract }, async (request, reply) => reply.code(201).send(await createRepairWorkOrder(request, request.body, idempotencyKeyFrom(request))))
+
+  app.put('/production/work-orders/:workOrderId/repair-steps', { schema: repairStepsContract }, async (request) => setRepairSteps(request, request.params.workOrderId, request.body, idempotencyKeyFrom(request)))
 })
