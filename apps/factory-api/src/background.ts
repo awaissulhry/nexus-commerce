@@ -49,6 +49,8 @@ import { scanSweepCron } from './platform/files/scan/sweep'
 import { setReportSource } from './observability/tracker'
 // B-W2a-52: the daily purchase order confirmation reminders (sends nothing while a company's switch is off: the default).
 import { confirmationRemindersCron } from './modules/purchasing/reminders/daily'
+// B-W2a-55: the payment reminder ladder (prepares reminders on its timers; a person approves and sends each one).
+import { ladderCron, ladderHandlers } from './modules/receivables/ladder'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -82,6 +84,8 @@ const SEARCH_INDEXERS = await loadIndexers(fileURLToPath(new URL('.', import.met
 const W2A_32_HANDLERS: readonly EventHandler[] = searchHandlers(SEARCH_INDEXERS)
 // B-W2a-33: one record's exception rules again right after an event that changes it.
 const W2A_33_HANDLERS: readonly EventHandler[] = [alertsRecheckHandler()]
+// B-W2a-55: a ladder timer fired (prepare the customer's due reminders); a customer's money changed (re-plan its timers).
+const W2A_55_HANDLERS: readonly EventHandler[] = ladderHandlers()
 
 const mode = process.argv[2] as Mode
 if (!MODES.includes(mode)) {
@@ -142,7 +146,7 @@ if (mode === 'worker') {
   await standardReasonsForNewTenants({ database, log }).catch((error) => log.error({ err: error }, 'the standard reasons could not be given at start'))
   await indexNewTenants({ database, indexers: SEARCH_INDEXERS, log }).catch((error) => log.error({ err: error }, 'the search index could not be built at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]
@@ -157,6 +161,8 @@ if (mode === 'worker') {
   crons.push(scanSweepCron({ database, log }))
   // B-W2a-52: confirmation reminders to suppliers, only for a company that switched them on (none until a setting exists).
   crons.push(confirmationRemindersCron({ database, log }))
+  // B-W2a-55: the reminder ladder's daily pass (06:00): stale reminders cancelled, the invoices' ladder timers kept in step.
+  crons.push(ladderCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

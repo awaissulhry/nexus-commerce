@@ -74,6 +74,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
   },
   // modules/sales/quotes (SCR-034; B-W1-24 the quote mail with its PDF and the acceptance confirmation): the selling
   // company and the customer.
+  // modules/receivables (B-W2a-55): a payment reminder's e-mail goes out on its own thread, the company owed and the
+  // customer (email out's EmailOutbound of recordType "PaymentReminder").
+  PaymentReminder: async (client, id) => {
+    const reminder = await client.paymentReminder.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return reminder ? { companyId: reminder.companyId, siteId: null, partyId: reminder.partyId } : null
+  },
   Quote: async (client, id) => {
     const quote = await client.quote.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
     return quote ? { companyId: quote.companyId, siteId: null, partyId: quote.partyId } : null
