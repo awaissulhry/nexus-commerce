@@ -5,10 +5,12 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { getBoard, listOrders, type OrderBoard } from '../api'
+import { findCustomers, getParty } from '../../quotes/api'
+import { getBoard, listOrders, nextOrderNumber, type OrderBoard } from '../api'
 import { downloadText, useCoalesced, useLive } from '../hooks'
 import { abilitiesOf, boardLanes, laneQuery, layoutFromAddress, listAddress, listTouches, ordersCsv, readProblem, romeToday, rowsFromAddress, rowsQuery, type Lane, type Layout, type RowView } from '../model'
-import type { OrdersListModel } from './list-model'
+import { newOrderAddress } from '../new/new-model'
+import type { NewOrderDialogModel, OrdersListModel } from './list-model'
 import { OrdersListView } from './view/OrdersListView'
 
 /**
@@ -17,6 +19,9 @@ import { OrdersListView } from './view/OrdersListView'
  * page with "Show more" (cursor), the tiles' and lanes' counts (GET /sales/orders/board), and keeps them live: a new
  * order from an accepted quote, a deposit paid, a state that moved wait behind "N updates · Show" (rows never move under
  * the cursor; the tiles follow at once). The board reads each lane (50 cards each). Export N = CSV of the loaded rows.
+ * B-W2a-50: the board follows live changes by itself (it is left open on a second screen: the cards hold no selection);
+ * New order (`?new=1` opens it): the customer search, the customer read in full, the number it will get → the typed
+ * order's page.
  */
 export function OrdersPage() {
   return (
@@ -48,6 +53,9 @@ function OrdersContainer() {
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<OrdersListModel['notice']>(null)
   const readId = useRef(0)
+  const companyId = session.company?.id ?? session.companies[0]?.id ?? ''
+  const [newOrder, setNewOrder] = useState<NewOrderDialogModel | null>(params?.get('new') === '1' && can.manage ? emptyNew(session.companies, companyId) : null)
+  const searchSeq = useRef(0)
 
   const go = useCallback((next: { rows?: RowView; q?: string; layout?: Layout }) => router.replace(listAddress(pathname, { rows: next.rows ?? rows, q: next.q ?? q, layout: next.layout ?? layout })), [router, pathname, rows, q, layout])
 
@@ -60,12 +68,13 @@ function OrdersContainer() {
     [api, q],
   )
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     const id = ++readId.current
     readBoard(id)
     if (layout === 'board') {
       const shown = boardLanes(rows)
-      setLanes(shown.map((status) => ({ status, items: null, more: false, problem: null })))
+      // A live re-read keeps the cards in place (the focus stays) until the new ones arrive.
+      if (!silent) setLanes(shown.map((status) => ({ status, items: null, more: false, problem: null })))
       await Promise.all(
         shown.map(async (status) => {
           try {
@@ -114,16 +123,50 @@ function OrdersContainer() {
     }
   }, [api, cursor, rows, q])
 
-  // Live: an order event (a new order, a move, a deposit paid…) → "N updates · Show"; the tiles follow at once.
+  // Live: an order event (a new order, a move, a deposit paid…) → "N updates · Show"; the tiles follow at once. The
+  // board reads its lanes again by itself (B-W2a-50: a board left open on a second screen).
   const recount = useCoalesced(() => readBoard(readId.current), 800)
+  const rereadBoard = useCoalesced(() => void load(true), 900)
   const live = useLive(
     (change) => {
       if (!listTouches(change)) return
+      if (layout === 'board') {
+        rereadBoard()
+        return
+      }
       setUpdates((count) => count + 1)
       recount()
     },
     () => void load(),
   )
+
+  // ---- New order (B-W2a-50) --------------------------------------------------------------------------------------------
+  const searchCustomers = useCallback(
+    (query: string, company: string) => {
+      const mine = ++searchSeq.current
+      setNewOrder((current) => (current ? { ...current, results: null, searchProblem: null } : current))
+      findCustomers(api, query, company || null)
+        .then((results) => mine === searchSeq.current && setNewOrder((current) => (current ? { ...current, results } : current)))
+        .catch((error: unknown) => mine === searchSeq.current && setNewOrder((current) => (current ? { ...current, searchProblem: readProblem(error) } : current)))
+    },
+    [api],
+  )
+  const readNumber = useCallback(
+    (company: string) => {
+      setNewOrder((current) => (current ? { ...current, number: undefined } : current))
+      nextOrderNumber(api, company)
+        .then((number) => setNewOrder((current) => (current && current.companyId === company ? { ...current, number } : current)))
+        .catch(() => setNewOrder((current) => (current && current.companyId === company ? { ...current, number: null } : current)))
+    },
+    [api],
+  )
+  const opened = newOrder !== null
+  const openedCompany = newOrder?.companyId ?? ''
+  useEffect(() => {
+    if (!opened) return
+    searchCustomers('', openedCompany)
+    readNumber(openedCompany)
+  }, [opened, openedCompany, searchCustomers, readNumber])
 
   const exportRows = useCallback(
     (ids: string[]) => {
@@ -136,7 +179,7 @@ function OrdersContainer() {
     [list.items, can.price, t, locale],
   )
 
-  const model: OrdersListModel = { prefix, can, today: romeToday(), layout, rows, q, list, lanes, board, asOf, live, updates, notice }
+  const model: OrdersListModel = { prefix, can, today: romeToday(), layout, rows, q, list, lanes, board, asOf, live, updates, notice, newOrder }
 
   return (
     <OrdersListView
@@ -151,7 +194,31 @@ function OrdersContainer() {
         onOpen: (id) => router.push(`${prefix}/sales/orders/${id}`),
         onExport: exportRows,
         onDismissNotice: () => setNotice(null),
+        onNewOrder: (open) => setNewOrder(open && can.manage ? emptyNew(session.companies, companyId) : null),
+        onNewCompany: (company) => setNewOrder((current) => (current ? { ...current, companyId: company, party: null, contactId: '' } : current)),
+        onNewSearch: (query) => newOrder && searchCustomers(query, newOrder.companyId),
+        onNewPick: (partyId) => {
+          if (!partyId) {
+            setNewOrder((current) => (current ? { ...current, party: null, partyProblem: null, contactId: '' } : current))
+            return
+          }
+          getParty(api, partyId)
+            .then((party) => {
+              const orders = party.contacts.find((contact) => contact.status === 'ACTIVE' && contact.roles.includes('ORDERS'))
+              setNewOrder((current) => (current ? { ...current, party, partyProblem: null, contactId: orders?.id ?? '' } : current))
+            })
+            .catch((error: unknown) => setNewOrder((current) => (current ? { ...current, partyProblem: readProblem(error) } : current)))
+        },
+        onNewField: (field, value) => setNewOrder((current) => (current ? { ...current, [field]: value } : current)),
+        onNewCreate: () => {
+          if (!newOrder?.party) return
+          router.push(newOrderAddress(prefix, { companyId: newOrder.companyId, partyId: newOrder.party.id, contactId: newOrder.contactId, customerRef: newOrder.customerRef }))
+        },
       }}
     />
   )
+}
+
+function emptyNew(companies: NewOrderDialogModel['companies'], companyId: string): NewOrderDialogModel {
+  return { companies, companyId, results: null, searchProblem: null, party: null, partyProblem: null, contactId: '', customerRef: '', number: undefined }
 }

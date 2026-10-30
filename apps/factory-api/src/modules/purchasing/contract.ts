@@ -4,6 +4,10 @@ import { LINK_STATES } from '@nexus/factory-domain/links/purposes'
 import { money } from '@nexus/factory-domain/money/marked'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { MAX_LINES, MAX_TEXT, PURCHASE_ORDER_STATUSES, SEND_CHECK_CODES } from '@nexus/factory-domain/purchasing/orders'
+import { REACH_ACTIONS } from '@nexus/factory-domain/purchasing/orders/changes'
+import { DELIVERY_STATES } from '@nexus/factory-domain/purchasing/orders/delivery'
+import { LINE_DIFF_KINDS, MAX_CHANGE_NOTE, REVISION_ANSWERS } from '@nexus/factory-domain/purchasing/revisions/revisions'
+import { ERROR_CODES } from '@nexus/factory-domain/core/errors'
 
 /**
  * The purchasing routes' contracts (B-W1-30; A2 SCR-058 "Purchase orders", SCR-059 the record, SCR-037 the send dialog,
@@ -68,6 +72,8 @@ const lineView = output({
   receivedBaseQuantity: z.string(),
   /** The plan lines this line buys (What to buy & make), with their run's state and decision. */
   plan: z.array(output({ requirementId: id(), runId: id(), runStatus: z.string(), decision: z.string() })),
+  /** B-W2a-52: cancelled (nothing more of it is wanted) or closed short (the rest will not come); null while open. */
+  ended: output({ kind: z.enum(['CANCELLED', 'CLOSED_SHORT']), at: instant(), byId: id().nullable(), reason: z.string().nullable() }).nullable(),
   version: z.number().int(),
 })
 
@@ -93,10 +99,14 @@ const orderView = output({
   note: z.string().nullable(),
   internalNote: z.string().nullable(),
   netAmount: money.cost(z.number().int()),
+  /** B-W2a-52: the lines not cancelled (a sent order's netAmount stays as it was sent). */
+  openNetAmount: money.cost(z.number().int()),
   lineCount: z.number().int(),
   earliestNeedDate: z.string().nullable(),
   sentAt: instant().nullable(),
   sentById: id().nullable(),
+  /** B-W2a-52 (SCM-087): when the supplier is asked to answer by (set at the send; the office may move it). */
+  confirmBy: instant().nullable(),
   confirmedAt: instant().nullable(),
   confirmedVia: z.enum(['LINK', 'OFFICE']).nullable(),
   confirmedByName: z.string().nullable(),
@@ -131,13 +141,28 @@ export const listOrdersContract = defineContract({
     q: z.string().trim().min(1).max(60).optional(),
     /** Only orders sent more than 48 hours ago that the supplier has not answered (the "Not confirmed after 48 h" tile). */
     waitingOver48h: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+    /** B-W2a-52 (SCM-067): only orders with an open line expected late (before today) or this week (today to Sunday). */
+    due: z.enum(['LATE', 'THIS_WEEK']).optional(),
+    /** B-W2a-52 (SCM-087): only orders still waiting for the supplier's answer after their confirm-by time. */
+    pastConfirmBy: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
   response: {
     200: output({
       /** "Where POs stand": drafts to send, waiting for the supplier, not confirmed 48 hours after the send, declined. */
-      summary: output({ drafts: z.number().int(), waiting: z.number().int(), notConfirmedAfter48h: z.number().int(), changesProposed: z.number().int(), declined: z.number().int() }),
+      summary: output({
+        drafts: z.number().int(),
+        waiting: z.number().int(),
+        notConfirmedAfter48h: z.number().int(),
+        changesProposed: z.number().int(),
+        declined: z.number().int(),
+        /** B-W2a-52: orders with an open line expected this week / late; null when not every open line could be read ("—"). */
+        dueThisWeek: z.number().int().nullable(),
+        late: z.number().int().nullable(),
+        /** B-W2a-52: orders still waiting after their confirm-by time. */
+        pastConfirmBy: z.number().int(),
+      }),
       orders: z.array(
         output({
           id: id(),
@@ -156,10 +181,14 @@ export const listOrdersContract = defineContract({
           lineCount: z.number().int(),
           netAmount: money.cost(z.number().int()),
           sentAt: instant().nullable(),
+          confirmBy: instant().nullable(),
           confirmedAt: instant().nullable(),
           confirmedVia: z.enum(['LINK', 'OFFICE']).nullable(),
           confirmedByName: z.string().nullable(),
           declinedAt: instant().nullable(),
+          /** B-W2a-52: the next open line's expected day (confirmed, else needed) and where the deliveries stand. */
+          nextExpectedDate: z.string().nullable(),
+          delivery: z.enum(DELIVERY_STATES).nullable(),
           createdById: id().nullable(),
           updatedAt: instant(),
           version: z.number().int(),
@@ -277,6 +306,10 @@ export const sendCheckContract = defineContract({
       subject: z.string(),
       /** The mail's standard text as the thread keeps it (the link itself is only in the mail sent). */
       message: z.string(),
+      /** B-W2a-52: the confirm-by time the send sets unless one is given; the revision; what a later one changes (words). */
+      confirmBy: instant(),
+      revision: z.number().int(),
+      changes: z.array(z.string()).nullable(),
     }),
   },
 })
@@ -286,7 +319,16 @@ const delivery = z.enum(['sent', 'failed', 'retry', 'settled']).nullable()
 
 export const sendContract = defineContract({
   params: orderParams,
-  body: input({ version, cc: z.array(email).max(10).optional(), subject: text(200).nullish(), message: text(MAX_TEXT.message).nullish() }),
+  body: input({
+    version,
+    cc: z.array(email).max(10).optional(),
+    subject: text(200).nullish(),
+    message: text(MAX_TEXT.message).nullish(),
+    /** B-W2a-52 (SCM-087): when the supplier is asked to answer by; default 48 hours, longer by its closed days. */
+    confirmBy: instant().nullish(),
+    /** B-W2a-52 (SCM-058): a later revision's note to the supplier: what changed and why. */
+    changeNote: text(MAX_CHANGE_NOTE).nullish(),
+  }),
   response: {
     200: output({
       order: orderView,
@@ -299,6 +341,11 @@ export const sendContract = defineContract({
         /** The confirm link (never its address: only the mail holds it). */
         link: output({ id: id(), expiresAt: instant() }),
         emailId: id(),
+        confirmBy: instant(),
+        /** The revision row of this send (factory-db PurchaseOrderRevision). */
+        revisionId: id(),
+        /** A later revision: what changed, in the supplier's words (the mail says it too). */
+        changes: z.array(z.string()).nullable(),
       }),
       delivery,
     }),
@@ -317,11 +364,316 @@ export const sendLinkContract = defineContract({
   },
 })
 
+/** B-W2a-52: what a cancel or close short reaches (the dialogs' "Reach"): per line, and the pegged work and sales orders. */
+const peggedView = output({
+  kind: z.string(),
+  workOrder: output({ id: id(), number: z.string().nullable() }).nullable(),
+  salesOrder: output({ id: id(), number: z.string().nullable() }).nullable(),
+  size: z.string().nullable(),
+  demandDate: z.string(),
+  quantity: z.string(),
+})
+const reachView = output({
+  /** The site's latest plan the pegging is read from (null: none). */
+  runId: id().nullable(),
+  lines: z.array(
+    output({
+      lineId: id(),
+      seq: z.number().int(),
+      label: z.string(),
+      baseUom: z.string(),
+      orderedBase: z.string(),
+      receivedBase: z.string(),
+      outstandingBase: z.string(),
+      planLineIds: z.array(id()),
+      pegged: z.array(peggedView),
+    }),
+  ),
+  workOrders: z.array(output({ id: id(), number: z.string().nullable() })),
+  salesOrders: z.array(output({ id: id(), number: z.string().nullable() })),
+})
+
 export const cancelContract = defineContract({
   params: orderParams,
   body: input({ version, reason: text(MAX_TEXT.reason).min(1), message: text(MAX_TEXT.message).nullish() }),
-  response: { 200: output({ order: orderView, supplierTold: z.boolean() }) },
+  response: { 200: output({ order: orderView, supplierTold: z.boolean(), reach: reachView }) },
 })
+
+// ---- B-W2a-52: changes after the send ------------------------------------------------------------------------------------
+
+export const changeContract = defineContract({
+  params: orderParams,
+  body: input({ version, note: text(MAX_CHANGE_NOTE).nullish() }),
+  response: { 200: output({ order: orderView, revision: z.number().int(), revokedLinkIds: z.array(id()) }) },
+})
+
+const endBody = input({
+  version,
+  lineIds: z.array(id()).min(1).max(MAX_LINES),
+  reason: text(MAX_TEXT.reason).min(1),
+  /** The office's own words for the supplier, after the standard text. */
+  message: text(MAX_TEXT.message).nullish(),
+})
+
+export const cancelLinesContract = defineContract({ params: orderParams, body: endBody, response: { 200: output({ order: orderView, reach: reachView, supplierTold: z.boolean() }) } })
+
+export const closeShortContract = defineContract({ params: orderParams, body: endBody, response: { 200: output({ order: orderView, reach: reachView, supplierTold: z.boolean() }) } })
+
+export const reachContract = defineContract({
+  params: orderParams,
+  querystring: input({
+    action: z.enum(REACH_ACTIONS),
+    /** CANCEL_LINES and CLOSE_SHORT: the lines, comma-separated. */
+    lineIds: z
+      .string()
+      .max(MAX_LINES * 37)
+      .transform((value) => value.split(',').map((part) => part.trim()).filter((part) => part !== ''))
+      .pipe(z.array(id()).max(MAX_LINES))
+      .optional(),
+  }),
+  response: {
+    200: output({
+      action: z.enum(REACH_ACTIONS),
+      status: z.enum(PURCHASE_ORDER_STATUSES),
+      allowed: z.boolean(),
+      problems: z.array(z.string()),
+      /** The caller holds what it takes (manage, and send when the supplier is told). */
+      mayDo: z.boolean(),
+      supplierTold: z.boolean(),
+      /** The supplier confirmed the order: a cancel ends a contract. */
+      confirmed: z.boolean(),
+      ...reachView.shape,
+    }),
+  },
+})
+
+const diffView = output({
+  header: z.array(output({ field: z.string(), before: z.string().nullable(), after: z.string().nullable() })),
+  lines: z.array(output({ lineId: id(), seq: z.number().int(), itemId: id(), kind: z.enum(LINE_DIFF_KINDS), changes: z.array(output({ field: z.string(), before: z.string().nullable(), after: z.string().nullable() })) })),
+  count: z.number().int(),
+})
+const pricesView = output({ currency: z.string(), netAmount: money.cost(z.number().int()), lines: z.array(output({ id: id(), seq: z.number().int(), unitPrice: money.cost(z.string()), netAmount: money.cost(z.number().int()) })) })
+
+export const revisionsContract = defineContract({
+  params: orderParams,
+  querystring: input({ language: z.enum(['it', 'en']).optional() }),
+  response: {
+    200: output({
+      purchaseOrderId: id(),
+      number: z.string(),
+      revision: z.number().int(),
+      status: z.enum(PURCHASE_ORDER_STATUSES),
+      draft: output({ revision: z.number().int(), documentNumber: z.string(), changes: diffView, words: z.array(z.string()) }).nullable(),
+      revisions: z.array(
+        output({
+          id: id(),
+          revision: z.number().int(),
+          documentNumber: z.string(),
+          sentAt: instant(),
+          sentById: id().nullable(),
+          sentByName: z.string().nullable(),
+          changeNote: z.string().nullable(),
+          documentFileId: id().nullable(),
+          changes: diffView,
+          words: z.array(z.string()),
+          answer: z.enum(REVISION_ANSWERS),
+          confirmation: output({ at: z.string(), via: z.string().nullable(), byName: z.string().nullable(), supplierRef: z.string().nullable() }).nullable(),
+          lines: z.number().int(),
+          /** The cost grain: the prices of the revision and the one before, and what changed in them. */
+          prices: money.cost(
+            output({
+              before: pricesView.nullable(),
+              after: pricesView,
+              changed: output({
+                netAmount: money.cost(output({ before: z.number().int(), after: z.number().int() }).nullable()),
+                lines: z.array(
+                  output({
+                    lineId: id(),
+                    seq: z.number().int(),
+                    unitPrice: money.cost(output({ before: z.string().nullable(), after: z.string().nullable() }).nullable()),
+                    netAmount: money.cost(output({ before: z.number().int().nullable(), after: z.number().int().nullable() })),
+                  }),
+                ),
+              }),
+            }).optional(),
+          ),
+        }),
+      ),
+    }),
+  },
+})
+
+export const expectedContract = defineContract({
+  querystring: input({
+    companyId: id().optional(),
+    siteId: id().optional(),
+    partyId: id().optional(),
+    state: z.enum(DELIVERY_STATES).optional(),
+    limit: z.coerce.number().int().min(1).max(500).default(100),
+  }),
+  response: {
+    200: output({
+      today: z.string(),
+      /** False when more open lines exist than one read takes: the tiles are then a floor. */
+      complete: z.boolean(),
+      tiles: output({ LATE: output({ lines: z.number().int(), orders: z.number().int() }), THIS_WEEK: output({ lines: z.number().int(), orders: z.number().int() }), LATER: output({ lines: z.number().int(), orders: z.number().int() }) }),
+      lines: z.array(
+        output({
+          lineId: id(),
+          purchaseOrderId: id(),
+          number: z.string(),
+          status: z.enum(PURCHASE_ORDER_STATUSES),
+          revision: z.number().int(),
+          companyId: id(),
+          siteId: id(),
+          partyId: id(),
+          supplierName: z.string(),
+          seq: z.number().int(),
+          itemId: id(),
+          item: output({ code: z.string(), name: z.string() }),
+          itemColourId: id().nullable(),
+          colour: output({ code: z.string(), name: z.string() }).nullable(),
+          uom: z.enum(UOMS),
+          baseUom: z.enum(UOMS).nullable(),
+          needDate: z.string(),
+          confirmedDate: z.string().nullable(),
+          expectedDate: z.string(),
+          dateFrom: z.enum(['CONFIRMED', 'ASKED']),
+          orderedBase: z.string(),
+          expectedBase: z.string(),
+          receivedBase: z.string(),
+          outstandingBase: z.string(),
+          state: z.enum(DELIVERY_STATES),
+          daysLate: z.number().int(),
+        }),
+      ),
+      more: z.boolean(),
+    }),
+  },
+})
+
+const refusedView = output({ code: z.enum(ERROR_CODES), message: z.string(), issues: z.array(output({ path: z.string(), message: z.string() })) })
+
+export const sendManyContract = defineContract({
+  body: input({
+    orders: z.array(input({ id: id(), version, confirmBy: instant().nullish() })).min(1).max(50),
+    message: text(MAX_TEXT.message).nullish(),
+  }),
+  response: {
+    200: output({
+      sent: z.number().int(),
+      refused: z.number().int(),
+      outcomes: z.array(
+        output({
+          id: id(),
+          number: z.string().nullable(),
+          outcome: z.enum(['SENT', 'REFUSED']),
+          sent: sendContract.response[200].shape.sent.nullable(),
+          delivery,
+          refused: refusedView.nullable(),
+        }),
+      ),
+    }),
+  },
+})
+
+export const sendChecksContract = defineContract({
+  body: input({ orderIds: z.array(id()).min(1).max(50) }),
+  response: {
+    200: output({
+      ready: z.number().int(),
+      cards: z.array(
+        output({
+          id: id(),
+          number: z.string().nullable(),
+          partyId: id().nullable(),
+          status: z.enum(PURCHASE_ORDER_STATUSES).nullable(),
+          version: z.number().int().nullable(),
+          ready: z.boolean(),
+          checks: z.array(checkView),
+          recipient: output({ contactId: id(), name: z.string(), email: z.string().nullable() }).nullable(),
+          documentNumber: z.string().nullable(),
+          language: z.enum(['it', 'en']).nullable(),
+          linkExpiresAt: instant().nullable(),
+          subject: z.string().nullable(),
+          message: z.string().nullable(),
+          confirmBy: instant().nullable(),
+          revision: z.number().int().nullable(),
+          changes: z.array(z.string()).nullable(),
+          refused: refusedView.nullable(),
+        }),
+      ),
+    }),
+  },
+})
+
+const reminderView = output({
+  id: id(),
+  revision: z.number().int(),
+  kind: z.string(),
+  sentAt: instant(),
+  automatic: z.boolean(),
+  sentById: id().nullable(),
+  sentByName: z.string().nullable(),
+  to: z.string().nullable(),
+  emailId: id().nullable(),
+  mailStatus: z.string().nullable(),
+  note: z.string().nullable(),
+})
+
+export const remindContract = defineContract({
+  params: orderParams,
+  body: input({ version, message: text(MAX_TEXT.message).nullish() }),
+  response: { 200: output({ order: orderView, reminder: output({ id: id(), revision: z.number().int(), sentAt: instant(), to: z.string(), emailId: id(), automatic: z.boolean() }) }) },
+})
+
+export const remindersContract = defineContract({
+  params: orderParams,
+  response: {
+    200: output({
+      purchaseOrderId: id(),
+      number: z.string(),
+      status: z.enum(PURCHASE_ORDER_STATUSES),
+      revision: z.number().int(),
+      /** The company's automatic reminders (the Owner's switch; off until a setting holds it). */
+      automatic: z.boolean(),
+      confirmBy: instant().nullable(),
+      overdue: z.boolean(),
+      sentForRevision: z.number().int(),
+      nextAutomaticAt: instant().nullable(),
+      reminders: z.array(reminderView),
+    }),
+  },
+})
+
+export const dueRemindersContract = defineContract({
+  querystring: input({ companyId: id().optional(), siteId: id().optional(), partyId: id().optional(), limit: z.coerce.number().int().min(1).max(200).default(50) }),
+  response: {
+    200: output({
+      orders: z.array(
+        output({
+          id: id(),
+          number: z.string(),
+          companyId: id(),
+          siteId: id(),
+          partyId: id(),
+          supplierName: z.string(),
+          revision: z.number().int(),
+          sentAt: instant().nullable(),
+          confirmBy: instant(),
+          remindersSent: z.number().int(),
+          lastReminderAt: instant().nullable(),
+          nextAutomaticAt: instant().nullable(),
+          automatic: z.boolean(),
+          version: z.number().int(),
+        }),
+      ),
+      more: z.boolean(),
+    }),
+  },
+})
+
+export const moveConfirmByContract = defineContract({ params: orderParams, body: input({ version, confirmBy: instant() }), response: { 200: one } })
 
 // ---- documents and the supplier's view --------------------------------------------------------------------------------------
 
@@ -401,6 +753,8 @@ export const supplierViewContract = defineContract({
           note: z.string().nullable(),
           confirmedQuantity: z.string().nullable(),
           confirmedDate: z.string().nullable(),
+          /** B-W2a-52: cancelled or closed short (null while open). */
+          ended: z.enum(['CANCELLED', 'CLOSED_SHORT']).nullable(),
           version: z.number().int(),
         }),
       ),

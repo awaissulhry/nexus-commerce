@@ -44,6 +44,11 @@ import { alertsEvaluateCron, alertsRecheckHandler } from './platform/alerts/engi
 import { timersFireCron } from './platform/timers/fire'
 // B-W2a-38: the daily production report e-mailed to the people subscribed.
 import { dailyReportCron } from './modules/production/reports/mail'
+// B-W2a-42: uploads held for their virus scan are scanned again; this process's error reports say worker or scheduler.
+import { scanSweepCron } from './platform/files/scan/sweep'
+import { setReportSource } from './observability/tracker'
+// B-W2a-52: the daily purchase order confirmation reminders (sends nothing while a company's switch is off: the default).
+import { confirmationRemindersCron } from './modules/purchasing/reminders/daily'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -83,6 +88,7 @@ if (!MODES.includes(mode)) {
   console.error(`usage: background.js <${MODES.join('|')}> (got ${JSON.stringify(process.argv[2] ?? '')})`)
   process.exit(2)
 }
+setReportSource(mode)
 
 /** JSON lines on standard output, every field redacted like the API's log (core/logger.ts). */
 function lineLog(name: Mode): Log {
@@ -147,6 +153,10 @@ if (mode === 'worker') {
   crons.push(alertsEvaluateCron({ database, log }), timersFireCron({ database, log }))
   // B-W2a-38: the daily production report, to the people subscribed (quiet default: none).
   crons.push(dailyReportCron({ database, log }))
+  // B-W2a-42: uploads still held for their virus scan (the scanner did not answer at confirm); nothing while scanning is off.
+  crons.push(scanSweepCron({ database, log }))
+  // B-W2a-52: confirmation reminders to suppliers, only for a company that switched them on (none until a setting exists).
+  crons.push(confirmationRemindersCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

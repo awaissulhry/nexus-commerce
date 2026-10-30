@@ -1273,7 +1273,8 @@
       "site": "Site",
       "station": "Station",
       "lastSeen": "Last seen",
-      "version": "App version"
+      "version": "App version",
+      "battery": "Battery"
     },
     "status": {
       "PENDING": "Waiting",
@@ -1287,11 +1288,18 @@
     },
     "inUse": "In use",
     "notSeenTag": "Not seen for 24 h",
+    "outdatedTag": "Older version",
+    "battery": {
+      "percent": "{percent}%",
+      "charging": "Charging",
+      "lowTag": "Low",
+      "unknown": "Not said by this browser"
+    },
     "empty": {
       "title": "No tablets yet",
       "body": "Enrol one: it takes a minute with the QR code."
     },
-    "later": "The print queue (every label with its tries and Retry) comes in W1; battery and network in W2a.",
+    "later": "The print queue (every label with its tries and Retry) comes in W1; the network a tablet uses is not reported yet.",
     "step": {
       "where": "Where will it work?",
       "scan": "Scan this on the tablet",
@@ -1457,7 +1465,13 @@
       "inUseNo": "Nobody signed in",
       "neverWho": "Never who (Statuto dei Lavoratori art. 4).",
       "revoked": "Revoked",
-      "later": "Battery, network and actions waiting to sync come in W2a."
+      "later": "The network the tablet uses is not reported yet.",
+      "outdated": "A newer version of the floor app is out ({version}). The tablet updates by itself once nothing waits in its queue.",
+      "queued": "Actions waiting to sync",
+      "queuedValue_one": "{count} action",
+      "queuedValue_other": "{count} actions",
+      "reportedAt": "As the tablet said at {at}.",
+      "notReported": "Not reported yet"
     },
     "done": {
       "saved": "Saved."
@@ -1599,6 +1613,8 @@
     "shipping_ddt_cancel": "Cancel an issued DDT with a reason",
     "shipping_labels_buy": "Buy carrier labels",
     "shipping_labels_void": "Void a carrier label",
+    "shipping_freight_manage": "Set the freight charged to customers",
+    "shipping_evidence_manage": "Keep the intra-EU transport evidence",
     "parties_view": "See customers and suppliers",
     "parties_manage": "Add and edit customers and suppliers",
     "parties_block": "Block and unblock a customer or supplier",
@@ -1694,6 +1710,11 @@
     "quality_holds_view": "See what is on hold",
     "quality_holds_place": "Put goods and work orders on hold",
     "quality_holds_release": "Release a hold with an e-signature",
+    "quality_ncr_view": "See the nonconformances (NCRs)",
+    "quality_ncr_raise": "Raise an NCR from any record",
+    "quality_ncr_manage": "Follow up NCRs: containment, decisions, stock moves",
+    "quality_ncr_approve": "Approve another person's NCR decision",
+    "quality_ncr_close": "Close an NCR with an e-signature",
     "views_save": "Save and share own views of a list",
     "views_manage": "Share views with everyone and set a role's default",
     "views_export": "Export a list to CSV or Excel",

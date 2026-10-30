@@ -8,6 +8,8 @@ import { releaseCheck, releaseWorkOrder } from './release'
 import { countWorkOrders, createWorkOrder, getWorkOrder, listWorkOrders, openLines, setCells, updateWorkOrder } from './work-orders'
 import { createRepairWorkOrder, repairOptions, setRepairSteps } from './repairs'
 import { createRepairContract, repairOptionsContract, repairStepsContract } from './contract'
+import { listReadinessContract } from './release/contract'
+import { listReadiness } from './release/readiness'
 
 /**
  * Work orders from sales order lines with a frozen specification (B-W1-38; MES-001, MES-002, MES-005, MES-007,
@@ -21,6 +23,9 @@ export default defineRoutes('production.work-orders', manifest, async (app) => {
   app.get('/production/work-orders/counts', { schema: countsContract }, async (request) => countWorkOrders(request, request.query))
 
   app.get('/production/work-orders/open-lines', { schema: openLinesContract }, async (request) => openLines(request, request.query.salesOrderId))
+
+  // B-W2a-46 (MES-004; design wo-grid "Readiness (W2a word)"): the plan's readiness word of the list's work orders.
+  app.get('/production/work-orders/readiness', { schema: listReadinessContract }, async (request) => listReadiness(request, request.query))
 
   app.get('/production/work-orders/:workOrderId', { schema: getContract }, async (request) => getWorkOrder(request, request.params.workOrderId))
 

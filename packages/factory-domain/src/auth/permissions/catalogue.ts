@@ -38,6 +38,8 @@ import { QUALITY_LAB_DEFINITIONS, QUALITY_LAB_PERMISSIONS } from '../../quality/
 // B-W2a-26: the defect library and disposition codes (quality.defects.*), quality holds (quality.holds.*).
 import { QUALITY_DEFECTS_DEFINITIONS, QUALITY_DEFECTS_PERMISSIONS } from '../../quality/defects/permissions'
 import { QUALITY_HOLDS_DEFINITIONS, QUALITY_HOLDS_PERMISSIONS } from '../../quality/holds/permissions'
+// B-W2a-47: nonconformances.
+import { QUALITY_NCR_DEFINITIONS, QUALITY_NCR_PERMISSIONS } from '../../quality/ncr/permissions'
 import { PRODUCT_BOM_DEFINITIONS, PRODUCT_BOM_PERMISSIONS } from '../../product/bom/permissions'
 import { PRODUCT_MATERIALS_DEFINITIONS, PRODUCT_MATERIALS_PERMISSIONS } from '../../product/materials/permissions'
 import { PRODUCT_ROUTING_DEFINITIONS, PRODUCT_ROUTING_PERMISSIONS } from '../../product/routing/permissions'
@@ -78,6 +80,8 @@ import { SALES_RETURNS_DEFINITIONS, SALES_RETURNS_FLOOR_PERMISSIONS, SALES_RETUR
 import { PRODUCTION_REPORTS_DEFINITIONS, PRODUCTION_REPORTS_PERMISSIONS } from '../../production/reports/permissions'
 // B-W2a-41: the mail delivery log and the blocked addresses (email.delivery.view | unblock).
 import { EMAIL_DELIVERY_DEFINITIONS, EMAIL_DELIVERY_PERMISSIONS } from '../../email-delivery/permissions'
+// B-W2a-48: shipping every day (shipping.freight.manage, shipping.evidence.manage).
+import { SHIPPING_DAILY_DEFINITIONS, SHIPPING_DAILY_PERMISSIONS } from '../../shipping/shipments/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -418,6 +422,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2a-26: defects, dispositions, holds.
   QUALITY_DEFECTS_DEFINITIONS,
   QUALITY_HOLDS_DEFINITIONS,
+  // B-W2a-47: nonconformances (quality.ncr.view | raise | manage | approve | close).
+  QUALITY_NCR_DEFINITIONS,
   // B-W2a-23: saved views and exports.
   VIEWS_DEFINITIONS,
   // B-W2a-32: rebuilding the search index.
@@ -436,6 +442,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCTION_REPORTS_DEFINITIONS,
   // B-W2a-41: the mail delivery log and the blocked addresses.
   EMAIL_DELIVERY_DEFINITIONS,
+  // B-W2a-48: shipping every day (freight charged, intra-EU transport evidence).
+  SHIPPING_DAILY_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -485,6 +493,8 @@ for (const name of [...PAYMENT_TERMS_PERMISSIONS, ...PRICE_LISTS_PERMISSIONS]) i
 for (const name of TASKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-26: defects, dispositions, holds.
 for (const name of [...QUALITY_DEFECTS_PERMISSIONS, ...QUALITY_HOLDS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-47: nonconformances.
+for (const name of QUALITY_NCR_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-23: saved views and exports.
 for (const name of VIEWS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-31: receiving every day.
@@ -505,6 +515,8 @@ for (const name of SALES_RETURNS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclare
 for (const name of PRODUCTION_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-41: the mail delivery log and the blocked addresses.
 for (const name of EMAIL_DELIVERY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-48: shipping every day.
+for (const name of SHIPPING_DAILY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

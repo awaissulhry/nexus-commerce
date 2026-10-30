@@ -154,6 +154,8 @@ export const KINDS: Readonly<Record<RuleKind, KindSpec>> = Object.freeze({
       { event: 'purchase_order.declined', key: 'purchaseOrderId' },
       { event: 'purchase_order.changes_proposed', key: 'purchaseOrderId' },
       { event: 'purchase_order.cancelled', key: 'purchaseOrderId' },
+      // B-W2a-52: a change makes the order a draft again (no longer waiting for the supplier).
+      { event: 'purchase_order.revision_started', key: 'purchaseOrderId' },
     ],
   }),
   CERTIFICATE_EXPIRING: spec({

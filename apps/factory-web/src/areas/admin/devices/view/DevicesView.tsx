@@ -93,7 +93,7 @@ function Devices({ model, actions }: { model: DevicesViewModel; actions?: Device
   const loadedList = devicesMode ? model.devices : model.printers
   const items = loadedList.items
   const onPrinter = actions?.onPrinter
-  const deviceCols = useMemo(() => deviceColumns({ t, locale, prefix: model.prefix, sites: model.sites, now }), [t, locale, model.prefix, model.sites, now])
+  const deviceCols = useMemo(() => deviceColumns({ t, locale, prefix: model.prefix, sites: model.sites, now, currentVersion: model.currentVersion }), [t, locale, model.prefix, model.sites, now, model.currentVersion])
   const printerCols = useMemo(() => printerColumns({ t, sites: model.sites, onEdit: model.can.managePrinters ? (printer) => onPrinter?.({ kind: 'edit', printerId: printer.id }) : null }), [t, model.sites, model.can.managePrinters, onPrinter])
   const deviceAll = deviceRows(devices ?? [], model.tile, model.query, model.sites, now)
   const printerAll = printerRows(printers ?? [], model.query, model.sites)

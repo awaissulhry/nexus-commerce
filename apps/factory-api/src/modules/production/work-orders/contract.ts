@@ -6,6 +6,7 @@ import { CHECK_STATES, RELEASE_CHECKS } from '@nexus/factory-domain/production/w
 import { MAX_REPAIR_STEPS } from '@nexus/factory-domain/production/work-orders/repair'
 import { UNUSABLE_REASONS } from '@nexus/factory-domain/planning/usable'
 import { WORK_CENTRE_KINDS } from '@nexus/factory-domain/product/routing/operations'
+import { blockingHoldSchema, readinessPartSchema, workOrderHoldSchema } from './release/contract'
 
 /**
  * The office's work orders (B-W1-38; MES-001, MES-002, MES-003, MES-005, MES-007, MES-305; A2 SCR-069, SCR-070): the
@@ -77,6 +78,8 @@ export const workOrderSchema = output({
   closedAt: instant().nullable(),
   cancelledAt: instant().nullable(),
   cancelReason: z.string().nullable(),
+  /** B-W2a-46: while ON_HOLD, its reason, since when and the status it goes back to (else null). */
+  hold: workOrderHoldSchema.nullable(),
   createdAt: instant(),
   updatedAt: instant(),
   createdById: id().nullable(),
@@ -174,7 +177,8 @@ export const countsContract = defineContract({
   response: {
     200: output({
       /** Work orders the caller may see per state; `open` = draft + released + in progress; `late` = open past the due date. */
-      counts: output({ draft: z.number().int(), released: z.number().int(), inProgress: z.number().int(), completed: z.number().int(), open: z.number().int(), late: z.number().int() }),
+      // B-W2a-46: onHold (design wo-metrics "On hold (W2a)").
+      counts: output({ draft: z.number().int(), released: z.number().int(), inProgress: z.number().int(), completed: z.number().int(), open: z.number().int(), late: z.number().int(), onHold: z.number().int() }),
     }),
   },
 })
@@ -278,6 +282,9 @@ export const releaseCheckContract = defineContract({
           held: z.array(output({ reason: z.enum(UNUSABLE_REASONS), quantity: z.string() })),
         }),
       ),
+      /** B-W2a-46: the plan's readiness (null before the check is read, or for a repair) and the holds that block. */
+      readiness: readinessPartSchema.nullable(),
+      holds: z.array(blockingHoldSchema),
     }),
   },
 })

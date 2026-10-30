@@ -14,7 +14,9 @@ import {
   orderAnswerContract,
   refuseProposalContract,
   renewLinkOrderContract,
+  counterProposalContract,
 } from './confirm/contract'
+import { counterPropose } from './confirm/counter'
 import { acceptProposal, refuseProposal } from './confirm/decide'
 import { orderAnswer } from './confirm/office'
 import { linkView } from './confirm/read'
@@ -37,13 +39,32 @@ import {
   supplierViewContract,
   undoDraftContract,
   updateOrderContract,
+  // B-W2a-52: changes after the send, expected deliveries, Send n, reminders.
+  cancelLinesContract,
+  changeContract,
+  closeShortContract,
+  dueRemindersContract,
+  expectedContract,
+  moveConfirmByContract,
+  reachContract,
+  remindContract,
+  remindersContract,
+  revisionsContract,
+  sendChecksContract,
+  sendManyContract,
 } from './contract'
 import { listDocuments } from './documents'
 import { draftFromPlan, undoDraftFromPlan } from './from-plan'
 import { addLine, editLine, removeLine } from './lines'
 import { manifest } from './manifest'
-import { cancelOrder, createOrder, getOrder, listOrders, updateOrder } from './orders'
-import { inlineDisposition, previewOrderPdf, sendCheck, sendNewLink, sendOrder } from './send'
+import { cancelOrder, createOrder, expectedDeliveries, getOrder, listOrders, updateOrder } from './orders'
+import { inlineDisposition, previewOrderPdf, sendCheck, sendChecksOf, sendMany, sendNewLink, sendOrder } from './send'
+import { changeOrder } from './revisions/change'
+import { cancelLines, closeShort, reachOfAction } from './revisions/ending'
+import { listRevisions } from './revisions/read'
+import { dueReminders } from './reminders/daily'
+import { moveConfirmBy, orderReminders } from './reminders/deadline'
+import { remindSupplier } from './reminders/remind'
 import { previewSupplierView } from './supplier-view'
 import { convertRequestsContract, getRequestContract, listRequestsContract, previewConversionContract, requestCountsContract } from './requests/contract'
 import { convertRequests, previewConversion } from './requests/convert'
@@ -124,6 +145,11 @@ import { processFiles } from '../../platform/files/service'
  * B-W2a-44: supplier claims (./claims: the list and its tiles, the record, a draft from discrepancies, a lot or typed
  * lines, its header and lines, the send-check and the send by e-mail, the supplier's answer, close, cancel), the goods of
  * a return back with the return DDT, and "Return to supplier" in one go.
+ *
+ * B-W2a-52: a sent order's changes — Change (the next revision as a draft; ./revisions/change.ts), the buyer's
+ * counter-proposal (./confirm/counter.ts), the revisions with their diff (./revisions/read.ts), cancel lines and close
+ * lines short with what they reach (./revisions/ending.ts); the confirm-by deadline, reminders by hand and the due list
+ * (./reminders); the expected deliveries (orders.ts); Send n and its cards (send.ts).
  */
 export default defineRoutes('purchasing', manifest, async (app) => {
   app.get('/purchasing/orders', { schema: listOrdersContract }, async (request) => listOrders(request, request.query))
@@ -166,6 +192,21 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/purchasing/orders/:purchaseOrderId/proposal/accept', { schema: acceptProposalContract }, async (request) => acceptProposal(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
 
   app.post('/purchasing/orders/:purchaseOrderId/proposal/refuse', { schema: refuseProposalContract }, async (request) => refuseProposal(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2a-52 (SCM-058, SCM-059, SCM-060, SCM-067, SCM-087): changes after the send, expected deliveries, Send n, reminders.
+  app.post('/purchasing/orders/:purchaseOrderId/proposal/counter', { schema: counterProposalContract }, async (request) => counterPropose(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/orders/:purchaseOrderId/change', { schema: changeContract }, async (request) => changeOrder(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
+  app.get('/purchasing/orders/:purchaseOrderId/revisions', { schema: revisionsContract }, async (request) => listRevisions(request, request.params.purchaseOrderId, request.query.language))
+  app.post('/purchasing/orders/:purchaseOrderId/lines/cancel', { schema: cancelLinesContract }, async (request) => cancelLines(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/orders/:purchaseOrderId/lines/close-short', { schema: closeShortContract }, async (request) => closeShort(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
+  app.get('/purchasing/orders/:purchaseOrderId/reach', { schema: reachContract }, async (request) => reachOfAction(request, request.params.purchaseOrderId, request.query))
+  app.post('/purchasing/orders/:purchaseOrderId/confirm-by', { schema: moveConfirmByContract }, async (request) => moveConfirmBy(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
+  app.post('/purchasing/orders/:purchaseOrderId/remind', { schema: remindContract }, async (request) => remindSupplier(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
+  app.get('/purchasing/orders/:purchaseOrderId/reminders', { schema: remindersContract }, async (request) => orderReminders(request, request.params.purchaseOrderId))
+  app.get('/purchasing/reminders/due', { schema: dueRemindersContract }, async (request) => dueReminders(request, request.query))
+  app.get('/purchasing/expected', { schema: expectedContract }, async (request) => expectedDeliveries(request, request.query))
+  app.post('/purchasing/orders/send-checks', { schema: sendChecksContract }, async (request) => sendChecksOf(request, request.body))
+  app.post('/purchasing/orders/send-many', { schema: sendManyContract }, async (request) => sendMany(request, request.body, idempotencyKeyFrom(request)))
 
   // B-W2a-10 (SCM-005): approved sources.
   app.get('/purchasing/supplier-items', { schema: listSourcesContract }, async (request) => listSources(request, request.query))

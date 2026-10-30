@@ -7,6 +7,7 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { WorkOrder } from '../../../_shared/api'
 import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
 import { NotReleased, PartState } from './WorkOrderRecordView'
+import { ScrapCard } from '../../daily/view/DailyParts'
 
 const INSPECTION_TONE = { OPEN: 'info', PASSED: 'success', FAILED: 'danger', CANCELLED: 'neutral' } as const
 
@@ -18,11 +19,21 @@ const INSPECTION_TONE = { OPEN: 'info', PASSED: 'success', FAILED: 'danger', CAN
 export function QualityTab({ workOrder, model, actions }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions }) {
   const t = useT('production')
   const locale = useLocale()
-  if (model.quality === null) return <p className="fw-pr-hint">{t('quality.noRight')}</p>
   if (workOrder.status === 'DRAFT') return <NotReleased what={t('quality.what')} />
+  // B-W2a-46 (wo-scrap): scrap, rework and holds of the work order, beside the inspections.
+  const scrap = model.daily ? <ScrapCard prefix={model.prefix} daily={model.daily} actions={actions?.daily} /> : null
+  if (model.quality === null)
+    return (
+      <div className="fw-pr-stack">
+        <p className="fw-pr-hint">{t('quality.noRight')}</p>
+        {scrap}
+      </div>
+    )
   const final = model.quality.value
   if (!final) return <PartState label={t('tab.quality')} problem={model.quality.problem} onRetry={() => actions?.onRetryPart?.('quality')} />
   return (
+    <div className="fw-pr-stack">
+    {scrap}
     <div className="fw-pr-cards">
       <Card padded className="fw-pr-card">
         <h2 className="fw-pr-h2">{t('quality.inspections')}</h2>
@@ -66,6 +77,7 @@ export function QualityTab({ workOrder, model, actions }: { workOrder: WorkOrder
         />
         <p className="fw-pr-hint">{t('quality.hint')}</p>
       </Card>
+    </div>
     </div>
   )
 }

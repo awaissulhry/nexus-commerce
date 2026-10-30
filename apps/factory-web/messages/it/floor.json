@@ -454,6 +454,11 @@
   },
   "sync": {
     "title": "In attesa di invio",
+    "update": {
+      "queue": "Una nuova versione dell'app attende che questa coda si svuoti. Poi si aggiorna da sola; nulla di ciò che attende va perso.",
+      "network": "Una nuova versione dell'app attende la rete. Si aggiorna da sola quando la rete torna.",
+      "screen": "Una nuova versione dell'app attende che questa schermata sia finita. Si aggiorna da sola nella schermata iniziale."
+    },
     "actions": "Azioni della coda",
     "sendNow": "Invia ora",
     "sending": "Invio in corso…",

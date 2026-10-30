@@ -148,6 +148,8 @@ describe('MES-019: a repair work order from a repair order', () => {
       DEPOSIT: 'NOT_REQUIRED',
       MATERIAL: 'NOT_REQUIRED',
       BATCH_NUMBER: 'OK',
+      // B-W2a-46 (MES-004): a repair takes the hold check like any work order.
+      HOLDS: 'OK',
     })
     const sizeRun = (await admin<{ id: string }>(`SELECT id FROM "WorkOrder" WHERE kind = 'SIZE_GRID' AND status = 'DRAFT' LIMIT 1`))[0]!.id
     expect((await refused('planner', 'PUT', `/production/work-orders/${sizeRun}/repair-steps`, { routingSeqs: [20] }, 409)).message).toContain("it takes its revision's whole routing at the release; only a repair chooses its steps.")

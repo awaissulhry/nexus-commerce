@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { color } from '@nexus/ui/tokens/colors'
 import { messagesFor } from '../../lib/i18n/messages'
 import { FloorApp } from '../../floor/FloorApp'
+import { floorAppVersion } from '../../floor/install'
 import { FLOOR_NAMESPACES } from '../../floor/tasks/routes'
 
 /**
@@ -28,5 +29,10 @@ export const viewport: Viewport = {
 }
 
 export default function FloorLayout({ children }: { children: ReactNode }) {
-  return <FloorApp catalogues={{ it: messagesFor('it', FLOOR_NAMESPACES), en: messagesFor('en', FLOOR_NAMESPACES) }}>{children}</FloorApp>
+  // The version this page is served with (B-W2a-42 safe app updates): the tablet runs it until it may take a newer one.
+  return (
+    <FloorApp appVersion={floorAppVersion()} catalogues={{ it: messagesFor('it', FLOOR_NAMESPACES), en: messagesFor('en', FLOOR_NAMESPACES) }}>
+      {children}
+    </FloorApp>
+  )
 }

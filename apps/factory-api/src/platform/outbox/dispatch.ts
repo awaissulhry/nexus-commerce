@@ -8,6 +8,7 @@ import { liveMessageFor } from '@nexus/factory-domain/events/live'
 import { callerFor, type CommandCaller } from '../../core/command'
 import { JOB_DEFAULTS, type Log, type QueueKit } from '../../core/queue'
 import { publishLive } from '../../core/sse'
+import { reportError } from '../../observability/tracker'
 import { systemContext } from './system'
 
 /**
@@ -126,6 +127,7 @@ export function startEventWorkers(options: DispatchSettings & { readonly databas
         { queue: worker.name, job: job?.name, jobId: job?.id, attemptsMade: job?.attemptsMade, err: error },
         final ? 'job failed its last attempt (copied to the dead-letter queue)' : 'job failed; it will be retried',
       )
+      if (final) reportError(error, { queue: worker.name, job: job?.name ?? null, attempt: job?.attemptsMade ?? null, final: true }) // B-W2a-42 (PLT-218)
     })
     worker.on('error', (error) => options.log.error({ queue: worker.name, err: error }, 'queue worker error'))
   }

@@ -255,6 +255,35 @@ export const designScreen = defineDesignScreen<RecordPanelsViewModel>({
       model: { ...base, tab: 'files', notice: { key: 'files.notice.quarantined', tone: 'danger' } },
     },
     {
+      id: 'virus-scan',
+      label: 'Files held by the virus scan (W2a)',
+      model: {
+        ...base,
+        tab: 'files',
+        files: {
+          items: [
+            file(9, 'Bolla fornitore.pdf', { status: 'QUARANTINED', quarantineReason: 'scan_pending', availableAt: null, createdAt: at(29, 9) }),
+            file(10, 'Foto difetto.jpg', { kind: 'PHOTO', contentType: 'image/jpeg', status: 'QUARANTINED', quarantineReason: 'virus_found', availableAt: null, createdAt: at(29, 8) }),
+            file(11, 'Listino cifrato.pdf', { status: 'QUARANTINED', quarantineReason: 'scan_failed', availableAt: null, createdAt: at(28, 17) }),
+            ...FILES.slice(0, 2),
+          ],
+          more: false,
+        },
+      },
+      note: 'B-W2a-42, PLT-245: an upload waits held until the scan says it is clean; an infected one is never opened; a scanner that could not check it says so. Made-up files.',
+    },
+    {
+      id: 'virus-found-notice',
+      label: 'The notice after an infected upload (W2a)',
+      model: { ...base, tab: 'files', notice: { key: 'files.notice.infected', tone: 'danger' } },
+    },
+    {
+      id: 'scan-pending-notice',
+      label: 'The notice when the scanner did not answer (W2a)',
+      model: { ...base, tab: 'files', notice: { key: 'files.notice.scanPending', tone: 'warning' } },
+      note: 'Never "clean" by default: the file stays held until a scan says so (the sweep tries again every 5 minutes).',
+    },
+    {
       id: 'pdf-preview',
       label: 'PDF viewer',
       model: {

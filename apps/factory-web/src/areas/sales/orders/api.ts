@@ -24,6 +24,35 @@ export const DEPOSIT_KINDS = ['ACCONTO', 'CAPARRA'] as const
 export const LINK_STATES = ['LIVE', 'REVOKED', 'USED_UP', 'EXPIRED'] as const
 export const ORDER_ACTIONS = ['changePromise', 'markReady', 'cancel', 'close'] as const
 export type OrderAction = (typeof ORDER_ACTIONS)[number]
+/** B-W2a-30: the record's daily actions (factory-domain sales/orders/daily DAILY_ORDER_ACTIONS). */
+export const DAILY_ORDER_ACTIONS = ['amend', 'closeLines', 'reopenLines', 'copyAsQuote'] as const
+export type DailyOrderAction = (typeof DAILY_ORDER_ACTIONS)[number]
+/** The cancel's impact check: what stops it, what it changes, what it leaves behind (factory-domain IMPACT_CODES). */
+export const IMPACT_CODES = [
+  'STATE',
+  'DRAFT_WORK_ORDERS',
+  'SHIPMENT_IN_PREPARATION',
+  'SHIPPED',
+  'INVOICE_DRAFT',
+  'INVOICE_ISSUED',
+  'DEPOSITS_CANCELLED',
+  'PAYMENT_STEPS_CANCELLED',
+  'WORK_ORDERS_OPEN',
+  'LEATHER_CUT',
+  'STOCK_RESERVED',
+  'PURCHASE_ORDERS',
+  'DEPOSIT_PAID',
+  'PAYMENT_STEPS_PAID',
+] as const
+export type ImpactCode = (typeof IMPACT_CODES)[number]
+/** The payment schedule's steps and states (factory-domain sales/orders/schedule). */
+export const MILESTONE_KINDS = ['DEPOSIT', 'BEFORE_SHIPPING', 'ON_DELIVERY', 'ON_INVOICE'] as const
+export type MilestoneKind = (typeof MILESTONE_KINDS)[number]
+export const MILESTONE_STATUSES = ['OPEN', 'PAID', 'WAIVED', 'CANCELLED'] as const
+export type MilestoneStatus = (typeof MILESTONE_STATUSES)[number]
+/** An amendment's line changes (factory-domain sales/amendments LINE_CHANGES). */
+export const LINE_CHANGES = ['ADDED', 'REMOVED', 'CHANGED'] as const
+export type LineChange = (typeof LINE_CHANGES)[number]
 export const TILE_KEYS = ['late', 'waitingForDeposit', 'inProduction', 'readyToShip'] as const
 export type TileKey = (typeof TILE_KEYS)[number]
 export const SDI_STATE_CODES = ['DRAFT', 'NOT_SENT', 'SENDING', 'AT_SDI', 'DELIVERED', 'NOT_DELIVERED', 'REJECTED', 'ERROR'] as const
@@ -120,6 +149,8 @@ const progressSchema = z.object({
   shipped: z.number(),
   invoiced: z.string(),
   toShip: z.number(),
+  /** B-W2a-30: pieces closed short (they will not be made or shipped). */
+  closedShort: z.number().default(0),
 })
 export type Progress = z.infer<typeof progressSchema>
 
@@ -149,6 +180,8 @@ export const orderLineSchema = z.object({
   promiseDate: z.string().nullable(),
   priority: z.number().nullable(),
   siteId: z.string().nullable(),
+  /** B-W2a-30 (SAL-210): closed short — the pieces that will not be made or shipped, when, by whom, why; null: open. */
+  closedShort: z.object({ quantity: z.number(), at: instant.nullable(), byId: z.string().nullable(), reason: z.string().nullable() }).nullable().default(null),
   version: z.number(),
   sizes: z.array(z.object({ size: z.string().nullable(), quantity: z.number(), unitPrice: z.string().nullable().optional(), progress: progressSchema })),
   progress: progressSchema,
@@ -219,6 +252,16 @@ export const orderSchema = z.object({
   people: z.array(z.object({ id: z.string(), name: z.string() })).default([]),
   settlement: z.object({ settled: z.boolean(), missing: z.array(z.object({ code: z.string(), message: z.string() })), source: z.string() }),
   actions: z.array(z.object({ action: z.enum(ORDER_ACTIONS), allowed: z.boolean(), needsReason: z.boolean(), held: z.string().nullable() })),
+  // ---- B-W2a-30 (orders every day) --------------------------------------------------------------------------------------
+  /** The library terms its payment schedule comes from. */
+  paymentTermsId: z.string().nullable().default(null),
+  /** An amendment changed the net total: the customer must accept the order again (the link is W2b, SAL-190). */
+  reapprovalNeededAt: instant.nullable().default(null),
+  /** Amend, close and reopen lines, copy as a new quote — each held by the API's rule (this app says its own words). */
+  dailyActions: z.array(z.object({ action: z.enum(DAILY_ORDER_ACTIONS), allowed: z.boolean(), held: z.string().nullable() })).default([]),
+  amendments: z.object({ count: z.number(), latestRevision: z.number().nullable(), latestAt: instant.nullable() }).default({ count: 0, latestRevision: null, latestAt: null }),
+  /** SAL-209: a confirmed order's lines change only through an amendment. */
+  locked: z.boolean().default(true),
 })
 export type Order = z.infer<typeof orderSchema>
 export type ChainInvoice = Order['chain']['invoices'][number]
@@ -240,9 +283,6 @@ export async function markReady(api: ApiClient, id: string, body: { version: num
   return (await api.post(`${orderPath(id)}/ready`, { body, schema: one, idempotencyKey: newIdempotencyKey() })).order
 }
 
-export async function cancelOrder(api: ApiClient, id: string, body: { version: number; reason: string }): Promise<{ order: Order; paidDepositRequestIds: string[] }> {
-  return api.post(`${orderPath(id)}/cancel`, { body, schema: z.object({ order: orderSchema, paidDepositRequestIds: z.array(z.string()) }), idempotencyKey: newIdempotencyKey() })
-}
 
 export async function closeOrder(api: ApiClient, id: string, body: { version: number; reason?: string | null }): Promise<Order> {
   return (await api.post(`${orderPath(id)}/close`, { body, schema: one, idempotencyKey: newIdempotencyKey() })).order
@@ -343,4 +383,281 @@ export type OrderWorkOrder = z.infer<typeof orderWorkOrderSchema>
 /** The work orders that make this order's lines (workorders.view), with their floor progress. */
 export async function listOrderWorkOrders(api: ApiClient, salesOrderId: string, signal?: AbortSignal): Promise<OrderWorkOrder[]> {
   return (await api.get('/production/work-orders', { query: { salesOrderId, limit: 200 }, schema: z.object({ workOrders: z.array(orderWorkOrderSchema) }), signal })).workOrders
+}
+
+// ---- B-W2a-30: an order every day (manual entry, amendments, close lines, cancel with its impact, the schedule) ----------
+
+const issueSchema = z.object({ path: z.string(), message: z.string() })
+/** A refusal's place (`body/lines/2/sizes`): the screens say their own words by it, never the API's English. */
+export type PathIssue = z.infer<typeof issueSchema>
+
+/** A size as a manual order or an amendment sends it (a size at 0 leaves it out). */
+export interface SizeInput {
+  size: string
+  quantity: number
+}
+
+/** A new line of a typed order: its style, colourway, size grid and (else the customer's list price) its unit price. */
+export interface NewLineInput {
+  styleId: string
+  colourwayId: string
+  sizes: SizeInput[]
+  unitPrice?: string | null
+}
+
+export interface ManualOrderBody {
+  companyId: string
+  partyId: string
+  contactId?: string | null
+  customerRef?: string | null
+  requestedDate?: string | null
+  promiseDate?: string | null
+  internalNote?: string | null
+  lines: NewLineInput[]
+}
+
+/** The number a new order will get (the company's SALES_ORDER series; nothing is allocated). */
+export async function nextOrderNumber(api: ApiClient, companyId: string, signal?: AbortSignal): Promise<string | null> {
+  return (await api.get('/sales/order-numbers/next', { query: { companyId }, schema: z.object({ number: z.string().nullable() }), signal })).number
+}
+
+const previewLineSchema = z.object({
+  seq: z.number(),
+  styleId: z.string(),
+  colourwayId: z.string(),
+  styleRevisionId: z.string().nullable(),
+  description: z.string().nullable(),
+  quantity: z.number(),
+  sizes: z.array(z.object({ size: z.string(), quantity: z.number(), unitPrice: z.string().nullable().optional() })),
+  unitPrice: z.string().optional(),
+  netAmount: z.number().optional(),
+  vatAmount: z.number().optional(),
+  vatRatePct: z.string(),
+  vatNature: z.string().nullable(),
+  costAmount: z.number().nullable().optional(),
+})
+export type PreviewLine = z.infer<typeof previewLineSchema>
+
+export const scheduleStepPreviewSchema = z.object({ seq: z.number(), kind: z.enum(MILESTONE_KINDS), sharePct: z.string().nullable(), amount: z.number().optional(), dueDate: z.string().nullable() })
+
+export const manualPreviewSchema = z.object({
+  ok: z.boolean(),
+  number: z.string().nullable(),
+  problems: z.array(issueSchema),
+  order: z
+    .object({
+      currency: z.string(),
+      taxMode: z.string(),
+      priceBasis: z.enum(['NET', 'GROSS']),
+      language: z.string(),
+      contactId: z.string().nullable(),
+      paymentTermsId: z.string().nullable(),
+      paymentTerms: z.string().nullable(),
+      depositPct: z.string().nullable(),
+      depositAmount: z.number().nullable().optional(),
+      netAmount: z.number().optional(),
+      vatAmount: z.number().optional(),
+      grossAmount: z.number().optional(),
+      costAmount: z.number().nullable().optional(),
+      lines: z.array(previewLineSchema),
+      schedule: z.array(scheduleStepPreviewSchema),
+    })
+    .nullable(),
+})
+export type ManualPreview = z.infer<typeof manualPreviewSchema>
+
+/** Prices a typed order as it stands (nothing written): totals, the deposit, the schedule, the problems by place. */
+export function previewManualOrder(api: ApiClient, body: ManualOrderBody, signal?: AbortSignal): Promise<ManualPreview> {
+  return api.post('/sales/orders/manual/preview', { body, schema: manualPreviewSchema, signal })
+}
+
+/** "Confirm order": the typed order is made CONFIRMED in one command (its deposit request and schedule with it). */
+export async function createManualOrder(api: ApiClient, body: ManualOrderBody, idempotencyKey: string): Promise<Order> {
+  return (await api.post('/sales/orders/manual', { body, schema: one, idempotencyKey })).order
+}
+
+/** An existing line as an amendment keeps it (its whole size grid; none: unchanged), or a new line. */
+export type AmendLineInput = { id: string; sizes?: SizeInput[]; unitPrice?: string | null } | NewLineInput
+
+export interface AmendBody {
+  reason?: string
+  customerRef?: string | null
+  requestedDate?: string | null
+  /** Every line the order keeps (a line left out is removed). */
+  lines: AmendLineInput[]
+}
+
+const diffSchema = z.object({
+  lines: z.array(
+    z.object({
+      change: z.enum(LINE_CHANGES),
+      lineId: z.string(),
+      seq: z.number(),
+      styleId: z.string(),
+      colourwayId: z.string(),
+      piecesBefore: z.number(),
+      piecesAfter: z.number(),
+      sizes: z.array(z.object({ size: z.string(), before: z.number(), after: z.number() })),
+      priceChanged: z.boolean(),
+      textChanged: z.boolean(),
+    }),
+  ),
+  header: z.array(z.object({ field: z.enum(['customerRef', 'requestedDate']), before: z.string().nullable(), after: z.string().nullable() })),
+  prices: z.array(z.object({ lineId: z.string(), unitPrice: z.object({ before: z.string().nullable(), after: z.string().nullable() }).nullable().optional(), netBefore: z.number(), netAfter: z.number() })).optional(),
+  netAmountBefore: z.number().optional(),
+  netAmountAfter: z.number().optional(),
+  grossAmountBefore: z.number().optional(),
+  grossAmountAfter: z.number().optional(),
+  reacceptanceNeeded: z.boolean(),
+})
+export type AmendmentDiff = z.infer<typeof diffSchema>
+
+const snapshotSchema = z.object({
+  header: z.object({ customerRef: z.string().nullable().optional(), requestedDate: z.string().nullable().optional(), netAmount: z.number().optional(), grossAmount: z.number().optional() }).passthrough(),
+  lines: z.array(
+    z.object({
+      id: z.string(),
+      seq: z.number(),
+      styleId: z.string(),
+      colourwayId: z.string(),
+      quantity: z.number(),
+      unitPrice: z.string().optional(),
+      netAmount: z.number().optional(),
+      closedShortQuantity: z.number().nullable().optional(),
+      sizes: z.array(z.object({ size: z.string(), quantity: z.number(), unitPrice: z.string().nullable().optional() })),
+    }),
+  ),
+})
+export type OrderSnapshot = z.infer<typeof snapshotSchema>
+
+export const amendmentSchema = z.object({
+  id: z.string(),
+  revision: z.number(),
+  reason: z.string(),
+  createdAt: instant,
+  createdById: z.string().nullable(),
+  createdBy: z.string().nullable(),
+  reacceptance: z.enum(['NEEDED', 'NOT_NEEDED']),
+  diff: diffSchema,
+  /** The order before and after, frozen (price grain: absent without it). */
+  before: snapshotSchema.optional(),
+  after: snapshotSchema.optional(),
+})
+export type Amendment = z.infer<typeof amendmentSchema>
+
+export const amendmentsSchema = z.object({ orderId: z.string(), number: z.string(), reapprovalNeededAt: instant.nullable(), amendments: z.array(amendmentSchema) })
+export type AmendmentsAnswer = z.infer<typeof amendmentsSchema>
+
+/** The Changes tab: every amendment, newest last as numbered, with its difference and snapshots (prices, never cost). */
+export function listAmendments(api: ApiClient, orderId: string, signal?: AbortSignal): Promise<AmendmentsAnswer> {
+  return api.get(`${orderPath(orderId)}/amendments`, { schema: amendmentsSchema, signal })
+}
+
+export const amendPreviewSchema = z.object({ ok: z.boolean(), revision: z.number(), version: z.number(), problems: z.array(issueSchema), diff: diffSchema.nullable() })
+export type AmendPreview = z.infer<typeof amendPreviewSchema>
+
+/** What the amendment would change (the review dialog): lines old → new by size, the money change, re-acceptance. */
+export function previewAmendment(api: ApiClient, orderId: string, body: AmendBody & { version?: number }, signal?: AbortSignal): Promise<AmendPreview> {
+  return api.post(`${orderPath(orderId)}/amendments/preview`, { body, schema: amendPreviewSchema, signal })
+}
+
+/** "Apply amendment" with the order's version as read (a stale one: 409). */
+export function applyAmendment(api: ApiClient, orderId: string, body: AmendBody & { version: number; reason: string }, idempotencyKey: string): Promise<{ order: Order; amendment: Amendment }> {
+  return api.post(`${orderPath(orderId)}/amendments`, { body, schema: z.object({ order: orderSchema, amendment: amendmentSchema }), idempotencyKey })
+}
+
+const closeLinesSchema = z.object({
+  order: orderSchema,
+  closed: z.array(z.object({ lineId: z.string(), seq: z.number(), closedShortQuantity: z.number() })),
+  reducesDone: z.array(z.string()),
+  stillInWorkOrders: z.array(z.object({ lineId: z.string(), pieces: z.number() })),
+})
+export type CloseLinesAnswer = z.infer<typeof closeLinesSchema>
+
+/** "Close remaining lines": what is left of the lines named (none: every open line) will not be made or shipped. */
+export function closeLines(api: ApiClient, orderId: string, body: { version: number; reason: string; lineIds?: string[] }): Promise<CloseLinesAnswer> {
+  return api.post(`${orderPath(orderId)}/close-lines`, { body, schema: closeLinesSchema, idempotencyKey: newIdempotencyKey() })
+}
+
+/** "Reopen lines" (the close's reversal). */
+export function reopenLines(api: ApiClient, orderId: string, body: { version: number; reason: string; lineIds?: string[] }): Promise<{ order: Order; reopened: string[] }> {
+  return api.post(`${orderPath(orderId)}/reopen-lines`, { body, schema: z.object({ order: orderSchema, reopened: z.array(z.string()) }), idempotencyKey: newIdempotencyKey() })
+}
+
+const impactItemSchema = z.object({
+  code: z.enum(IMPACT_CODES),
+  message: z.string(),
+  refs: z.array(z.object({ type: z.string(), id: z.string(), number: z.string().nullable() })),
+  amount: z.number().nullable().optional(),
+})
+export type ImpactItem = z.infer<typeof impactItemSchema>
+export const impactSchema = z.object({ cancellable: z.boolean(), blocks: z.array(impactItemSchema), touches: z.array(impactItemSchema), leavesBehind: z.array(impactItemSchema) })
+export type Impact = z.infer<typeof impactSchema>
+
+export const cancelCheckSchema = z.object({
+  orderId: z.string(),
+  number: z.string(),
+  status,
+  version: z.number(),
+  impact: impactSchema,
+  /** The leather cut for its work orders: hides and area in the hide's base unit (no money, no worker). */
+  leatherCut: z.array(z.object({ workOrderId: z.string(), number: z.string(), hides: z.number(), area: z.string().nullable() })),
+})
+export type CancelCheck = z.infer<typeof cancelCheckSchema>
+
+/** The cancel's impact check: what stops it, what it changes, what it leaves behind. */
+export function getCancelCheck(api: ApiClient, orderId: string, signal?: AbortSignal): Promise<CancelCheck> {
+  return api.get(`${orderPath(orderId)}/cancel-check`, { schema: cancelCheckSchema, signal })
+}
+
+/** "Cancel order" with the reason and the number typed to confirm it. */
+export function cancelOrder(api: ApiClient, id: string, body: { version: number; reason: string; confirmNumber: string }): Promise<{ order: Order; paidDepositRequestIds: string[]; impact: Impact | null }> {
+  return api.post(`${orderPath(id)}/cancel`, { body, schema: z.object({ order: orderSchema, paidDepositRequestIds: z.array(z.string()), impact: impactSchema.nullable().default(null) }), idempotencyKey: newIdempotencyKey() })
+}
+
+export const milestoneSchema = z.object({
+  id: z.string(),
+  seq: z.number(),
+  kind: z.enum(MILESTONE_KINDS),
+  label: z.string(),
+  sharePct: z.string().nullable(),
+  amount: z.number().optional(),
+  dueDate: z.string().nullable(),
+  depositRequestId: z.string().nullable(),
+  status: z.enum(MILESTONE_STATUSES),
+  paidAt: instant.nullable(),
+  statusNote: z.string().nullable(),
+  version: z.number(),
+})
+export type Milestone = z.infer<typeof milestoneSchema>
+
+export const scheduleSchema = z.object({
+  orderId: z.string(),
+  number: z.string(),
+  currency: z.string(),
+  grossAmount: z.number().optional(),
+  /** Empty: paid on invoice terms; no milestones. */
+  steps: z.array(milestoneSchema),
+  cancelled: z.array(milestoneSchema),
+  openAmount: z.number().optional(),
+  paidAmount: z.number().optional(),
+})
+export type Schedule = z.infer<typeof scheduleSchema>
+
+/** The order's payment schedule (the deposit and the balance steps with their state). */
+export function getSchedule(api: ApiClient, orderId: string, signal?: AbortSignal): Promise<Schedule> {
+  return api.get(`${orderPath(orderId)}/schedule`, { schema: scheduleSchema, signal })
+}
+
+const copyAnswerSchema = z.object({
+  quote: z.object({ id: z.string(), number: z.string().nullable().optional() }).passthrough(),
+  /** What the copy left out (archived styles or colourways, sizes no longer offered): counted, never the API's words. */
+  dropped: z.array(z.object({ seq: z.number(), size: z.string().nullable() })),
+  warnings: z.array(z.string()),
+})
+export type CopyAnswer = z.infer<typeof copyAnswerSchema>
+
+/** "Copy as new quote": a draft quote for the same customer with the order's lines (what is left out is counted). */
+export function copyAsQuote(api: ApiClient, orderId: string): Promise<CopyAnswer> {
+  return api.post(`${orderPath(orderId)}/copy-as-quote`, { body: {}, schema: copyAnswerSchema, idempotencyKey: newIdempotencyKey() })
 }

@@ -10,6 +10,7 @@ import { runBulk, type BulkResult } from '../shared/bulk'
 import { bulkNotice } from '../shared/reach'
 import { adminHref, failed, loaded, loading, problemKey, problemNotice, type Loaded, type Notice } from '../shared/model'
 import { printerBody, type DevicesMode, type DeviceTile, type EnrolModel, type PrinterDialog, type SiteChoice } from './model'
+import { fetchFloorVersion } from './version'
 import { DevicesView } from './view/DevicesView'
 
 /** How often the enrol dialog asks whether the tablet has used its code (no live event says so yet). */
@@ -80,6 +81,8 @@ export function DevicesPage() {
   const [pages, setPages] = useState(1)
   const [asOf, setAsOf] = useState<string | null>(null)
   const [now, setNow] = useState(() => new Date().toISOString())
+  // B-W2a-42: the floor app version the server serves now (a tablet reporting another one is outdated).
+  const [currentVersion, setCurrentVersion] = useState<string | null>(null)
   const asked = params?.get('enrol') ?? null
   const [enrol, setEnrol] = useState<EnrolModel | null>(asked ? { step: 'where', siteId: asked === '1' ? null : asked } : null)
   const [printer, setPrinter] = useState<PrinterDialog | null>(params?.get('new') === 'printer' ? { kind: 'new', siteId: params?.get('site') ?? null } : null)
@@ -103,6 +106,7 @@ export function DevicesPage() {
         : Promise.resolve(),
       held.has('print.view') ? failedJobs(api).then((jobs) => setFailedPrinters(new Set(jobs.map((job) => job.printerId)).size), () => setFailedPrinters(null)) : Promise.resolve(),
       held.has('companies.view') && held.has('sites.view') ? siteChoices(api).then(setSites, () => undefined) : Promise.resolve(),
+      fetchFloorVersion().then(setCurrentVersion),
     ])
     setAsOf(new Date().toISOString())
   }, [api, held])
@@ -142,7 +146,7 @@ export function DevicesPage() {
 
   return (
     <DevicesView
-      model={{ prefix, mode, devices, printers, failedPrinters, sites, tile, query, pages, asOf, now, can, enrol, printer, busy, dialogProblem, notice }}
+      model={{ prefix, mode, devices, printers, failedPrinters, sites, tile, query, pages, asOf, now, currentVersion, can, enrol, printer, busy, dialogProblem, notice }}
       actions={{
         onMode: (next) => {
           setMode(next)

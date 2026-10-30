@@ -2,12 +2,12 @@
 
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
-import { FileX, MessageSquare, MoreHorizontal, ShieldOff } from 'lucide-react'
+import { FileX, MessageSquare, MoreHorizontal, PauseCircle, ShieldOff, Unlock } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu, Tabs, type TabItem } from '@nexus/ui/components'
 import { DetailHeader } from '@nexus/ui/patterns'
 import { Button, Kbd, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
-import { useLocale, useT } from '../../../../../lib/i18n/provider'
+import { useLocale, useScopedT, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
 import type { WorkOrder } from '../../../_shared/api'
@@ -17,6 +17,9 @@ import { CuttingTab } from '../../cutting/view/CuttingTab'
 import { OperationsTab } from '../../progress/view/OperationsTab'
 import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
 import { RecordDialogs } from './Dialogs'
+import { DAILY_NAMESPACE, holdHeld, holdReasonWords } from '../../daily/model'
+import { DailyDialogs } from '../../daily/view/DailyDialogs'
+import { say } from '../../daily/view/DailyParts'
 import { MaterialsTab } from './MaterialsTab'
 import { OverviewTab } from './OverviewTab'
 import { QualityTab } from './QualityTab'
@@ -34,7 +37,7 @@ export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-mod
  */
 export function WorkOrderRecordView({ model, actions, panels }: { model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; panels?: ReactNode }) {
   return (
-    <WithMessages namespaces={['production', 'lists', 'records']}>
+    <WithMessages namespaces={['production', DAILY_NAMESPACE, 'lists', 'records']}>
       <WorkOrderRecord model={model} actions={actions} panels={panels} />
     </WithMessages>
   )
@@ -164,6 +167,25 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
     },
   ]
 
+  // B-W2a-46 (wo-hold "band second action"): Put on hold, or Release the hold while it is held.
+  const daily = model.daily ?? null
+  const tw = useT(DAILY_NAMESPACE)
+  // A notice's key may name its catalogue (`production-work-orders:notice.held`); else it is the area's.
+  const notices = useScopedT('production')
+  const activeHolds = (daily?.holds?.value ?? []).filter((hold) => hold.status === 'ACTIVE')
+  const heldOwnHold = workOrder.hold?.recordType === 'QualityHold' ? workOrder.hold.recordId : null
+  const releaseTarget = activeHolds[0]?.id ?? heldOwnHold
+  const holdButton = !daily ? null : workOrder.status === 'ON_HOLD' ? (
+    <Button size="sm" heldReason={!daily.can.holdsRelease ? tw('held.noHoldRelease') : !releaseTarget ? tw('held.underRecord') : null} onClick={() => releaseTarget && actions?.daily?.onDialog?.({ kind: 'releaseHold', holdId: releaseTarget })}>
+      <Unlock size={14} aria-hidden /> <span>{tw('holds.release')}</span>
+    </Button>
+  ) : ['DRAFT', 'RELEASED', 'IN_PROGRESS'].includes(workOrder.status) ? (
+    <Button size="sm" heldReason={say(tw, holdHeld(workOrder, daily.can, daily.busy))} onClick={() => actions?.daily?.onDialog?.({ kind: 'hold', workOrderIds: [workOrder.id], numbers: [workOrder.number] })}>
+      <PauseCircle size={14} aria-hidden /> <span>{tw('holds.put')}</span>
+    </Button>
+  ) : null
+  const holdWords = workOrder.hold ? (activeHolds[0] ? holdReasonWords(activeHolds[0].reasonCode, daily?.reasons ?? null, locale) : (workOrder.hold.reason ?? '—')) : null
+
   const activity = panels ?? (model.panelsPreview ? <RecordPanelsView model={model.panelsPreview} /> : null)
   const showDock = model.dockOpen && model.tab !== 'activity' && !!activity
   const customers = [...new Set(workOrder.orders.map((order) => order.partyName))]
@@ -187,6 +209,7 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
           actions={
             <span className="fw-pr-actions">
               {primary}
+              {holdButton}
               {activity && (
                 <Button size="sm" variant={model.dockOpen ? 'tonal' : 'secondary'} active={model.dockOpen} aria-pressed={model.dockOpen} onClick={() => actions?.onDock?.()} title={t('record.dockHint')}>
                   <MessageSquare size={14} aria-hidden /> <span>{t('record.dock')}</span>
@@ -233,7 +256,7 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
       {model.notice && (
         <Banner
           tone={model.notice.tone}
-          title={t(model.notice.words.key, model.notice.words.params)}
+          title={notices(model.notice.words.key, model.notice.words.params)}
           action={
             actions?.onDismissNotice ? (
               <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
@@ -244,6 +267,11 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
         />
       )}
       {workOrder.status === 'CANCELLED' && <Banner tone="danger" title={t('record.cancelled', { reason: workOrder.cancelReason ?? '—' })} />}
+      {workOrder.status === 'ON_HOLD' && workOrder.hold && (
+        <Banner tone="danger" title={tw('holds.banner', { reason: holdWords ?? '—', back: tw(`status.${workOrder.hold.fromStatus ?? 'DRAFT'}`) })}>
+          {tw('holds.floorRefuses')}
+        </Banner>
+      )}
       {workOrder.status === 'CLOSED' && <Banner tone="info" title={t('record.closed')} />}
       {!model.can.manage && !model.can.release && <Banner tone="info" title={t('record.readOnly')} />}
 
@@ -265,6 +293,7 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
       </div>
 
       <RecordDialogs workOrder={workOrder} model={model} actions={actions} />
+      {daily && <DailyDialogs workOrder={workOrder} daily={daily} actions={actions?.daily} pick={model.pick?.value ?? null} bundles={model.bundles.value} />}
     </div>
   )
 }

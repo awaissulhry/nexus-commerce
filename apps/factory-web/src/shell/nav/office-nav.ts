@@ -112,6 +112,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/sales/quotes/[id]',
   '/sales/orders',
   '/sales/orders/[id]',
+  // B-W2a-50: a typed New order (its lines on the screen until "Confirm order").
+  '/sales/orders/new',
   // B-W2a-49: Sales › Pricing › Price lists & contracts (SCR-106) and a price list.
   '/sales/price-lists',
   '/sales/price-lists/[listId]',

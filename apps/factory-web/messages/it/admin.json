@@ -1273,7 +1273,8 @@
       "site": "Stabilimento",
       "station": "Postazione",
       "lastSeen": "Ultimo contatto",
-      "version": "Versione app"
+      "version": "Versione app",
+      "battery": "Batteria"
     },
     "status": {
       "PENDING": "In attesa",
@@ -1287,11 +1288,18 @@
     },
     "inUse": "In uso",
     "notSeenTag": "Non visto da 24 ore",
+    "outdatedTag": "Versione precedente",
+    "battery": {
+      "percent": "{percent}%",
+      "charging": "In carica",
+      "lowTag": "Bassa",
+      "unknown": "Non indicata da questo browser"
+    },
     "empty": {
       "title": "Ancora nessun tablet",
       "body": "Registrane uno: basta un minuto con il codice QR."
     },
-    "later": "La coda di stampa (ogni etichetta con i tentativi e Riprova) arriva in W1; batteria e rete in W2a.",
+    "later": "La coda di stampa (ogni etichetta con i tentativi e Riprova) arriva in W1; la rete usata da un tablet non è ancora comunicata.",
     "step": {
       "where": "Dove lavorerà?",
       "scan": "Inquadra sul tablet",
@@ -1457,7 +1465,13 @@
       "inUseNo": "Nessuno collegato",
       "neverWho": "Mai chi (Statuto dei Lavoratori art. 4).",
       "revoked": "Revocato il",
-      "later": "Batteria, rete e azioni in attesa di sincronizzazione arrivano in W2a."
+      "later": "La rete usata dal tablet non è ancora comunicata.",
+      "outdated": "È uscita una versione più nuova dell'app del reparto ({version}). Il tablet si aggiorna da solo quando nella sua coda non attende più nulla.",
+      "queued": "Azioni in attesa di invio",
+      "queuedValue_one": "{count} azione",
+      "queuedValue_other": "{count} azioni",
+      "reportedAt": "Come detto dal tablet alle {at}.",
+      "notReported": "Non ancora comunicato"
     },
     "done": {
       "saved": "Salvato."
@@ -1599,6 +1613,8 @@
     "shipping_ddt_cancel": "Annullare un DDT emesso con un motivo",
     "shipping_labels_buy": "Acquistare etichette del corriere",
     "shipping_labels_void": "Annullare un'etichetta del corriere",
+    "shipping_freight_manage": "Impostare il trasporto addebitato ai clienti",
+    "shipping_evidence_manage": "Gestire le prove di trasporto intra-UE",
     "parties_view": "Vedere clienti e fornitori",
     "parties_manage": "Aggiungere e modificare clienti e fornitori",
     "parties_block": "Bloccare e sbloccare un cliente o fornitore",
@@ -1694,6 +1710,11 @@
     "quality_holds_view": "Vedere cosa è bloccato",
     "quality_holds_place": "Bloccare merci e ordini di lavoro",
     "quality_holds_release": "Sbloccare un blocco con firma elettronica",
+    "quality_ncr_view": "Vedere le non conformità (NC)",
+    "quality_ncr_raise": "Aprire una NC da qualsiasi documento",
+    "quality_ncr_manage": "Gestire le NC: contenimento, decisioni, movimenti",
+    "quality_ncr_approve": "Approvare la decisione di un'altra persona su una NC",
+    "quality_ncr_close": "Chiudere una NC con firma elettronica",
     "views_save": "Salvare e condividere le proprie viste di un elenco",
     "views_manage": "Condividere viste con tutti e impostare la vista predefinita di un ruolo",
     "views_export": "Esportare un elenco in CSV o Excel",

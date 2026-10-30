@@ -140,6 +140,11 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const hold = await client.qualityHold.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
     return hold ? { companyId: hold.companyId, siteId: hold.siteId, partyId: null } : null
   },
+  // B-W2a-47: an NCR's thread is internal (its supplier hears through the supplier claim, not here).
+  Nonconformance: async (client, id) => {
+    const ncr = await client.nonconformance.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
+    return ncr ? { companyId: ncr.companyId, siteId: ncr.siteId, partyId: null } : null
+  },
   // modules/plant (SCR-148, SCR-149, SCR-150 the records' Activity tab; B-W2a-35): the machine's company and site; notes
   // only (a machine's supplier is no party of its maintenance).
   Machine: async (client, id) => {

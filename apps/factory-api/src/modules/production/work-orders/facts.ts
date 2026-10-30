@@ -9,7 +9,6 @@ import {
   certificateCheck,
   depositCheck,
   labelCheck,
-  materialCheck,
   materialLines,
   releaseChecklist,
   revisionCheck,
@@ -23,8 +22,11 @@ import {
 } from '@nexus/factory-domain/production/work-orders/release'
 import { planMaterials, planOperations, type BomGap, type MissingWorkCentre, type PlannedMaterial, type PlannedOperation, type SpecCell } from '@nexus/factory-domain/production/work-orders/spec'
 import { repairNotRequired, repairWorkCentreCheck } from '@nexus/factory-domain/production/work-orders/repair'
+// B-W2a-46 (MES-004): the release's W2a blockers, holds and the plan's readiness.
+import { holdsCheck, materialReadinessCheck } from '@nexus/factory-domain/production/work-orders/blockers'
+import { materialReadinessOf, readReleaseBlockers, type PlanCache, type ReleaseBlockerFacts } from './release/blockers'
 import type { UnusableReason } from '@nexus/factory-domain/planning/usable'
-import { decimalText } from '@nexus/factory-domain/product/units/units'
+import { decimalOf, decimalText } from '@nexus/factory-domain/product/units/units'
 import { ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { gateRequestFor } from '../../compliance/certificates/gate'
 import { lotFactsOf, readLots, readStock } from '../../planning/store'
@@ -261,6 +263,8 @@ export interface ReleaseFacts extends Basics {
   readonly deposits: DepositFacts[]
   readonly material: MaterialLine[]
   readonly batchSeries: boolean
+  /** B-W2a-46: the holds naming the work order and the plan's readiness (./release/blockers). */
+  readonly blockers: ReleaseBlockerFacts
 }
 
 /**
@@ -291,22 +295,29 @@ export async function repairSpecOf(db: Reader, workOrderId: string, parts: SpecP
   return { operations, missing: [], materials: [], gaps: [] }
 }
 
-/** Everything the release check reads, for a DRAFT, on the day `date`. */
-export async function readReleaseFacts(db: Reader, basics: Basics, date: BusinessDate): Promise<ReleaseFacts> {
+/**
+ * Everything the release check reads, for a DRAFT, on the day `date`. B-W2a-46: `plans` shares a site's live plan between
+ * many drafts; the plan's readiness is read when a material is short (it decides MATERIAL then), always for the record,
+ * never for a reader of many drafts that cannot afford a site netting each (Today's held source: W1's material check).
+ */
+export async function readReleaseFacts(db: Reader, basics: Basics, date: BusinessDate, plans?: PlanCache, readiness: 'always' | 'whenShort' | 'never' = 'whenShort'): Promise<ReleaseFacts> {
   const { workOrder, style, cells, orders, revision } = basics
   const current = await readReleasedRevision(db, style.id)
   const parts = await readSpecParts(db, revision?.styleId === style.id ? revision.id : null, workOrder.siteId)
   if (workOrder.kind === 'REPAIR') {
     // B-W2a-12: a repair checks no certificate, deposit, BOM or material (factory-domain production/work-orders/repair).
     const spec = await repairSpecOf(db, workOrder.id, parts)
-    return { ...basics, current, parts, spec, gates: [], deposits: [], material: [], batchSeries: await hasSeries(db, workOrder.companyId, 'BATCH') }
+    const batchSeries = await hasSeries(db, workOrder.companyId, 'BATCH')
+    return { ...basics, current, parts, spec, gates: [], deposits: [], material: [], batchSeries, blockers: await readReleaseBlockers(db, workOrder, date, { cache: plans, readiness: 'whenShort', short: false }) }
   }
   const spec = planSpec(parts, cells)
   const gates = await readGates(db, style.id, cells, date)
   const deposits = await readDeposits(db, orders)
   const material = materialLines(await readMaterialNeeds(db, workOrder, spec.materials, parts))
   const batchSeries = await hasSeries(db, workOrder.companyId, 'BATCH')
-  return { ...basics, current, parts, spec, gates, deposits, material, batchSeries }
+  const short = material.some((line) => decimalOf(line.short).gt(0))
+  const blockers = await readReleaseBlockers(db, workOrder, date, { cache: plans, readiness, short })
+  return { ...basics, current, parts, spec, gates, deposits, material, batchSeries, blockers }
 }
 
 /** THE release check: the record's checklist and the release's refusal are this one answer. */
@@ -328,6 +339,7 @@ export function checklistOf(facts: ReleaseFacts, override: { readonly reason: st
       repairNotRequired('DEPOSIT'),
       repairNotRequired('MATERIAL'),
       batchCheck(facts.batchSeries),
+      holdsCheck(facts.workOrder.number, facts.blockers.holds),
     ])
   }
   return releaseChecklist([
@@ -338,7 +350,8 @@ export function checklistOf(facts: ReleaseFacts, override: { readonly reason: st
     bomCheck(revision, spec.gaps),
     cellsCheck(cells.map((cell) => ({ id: cell.id, label: cellLabel(cell), inRange: style.sizes.includes(cell.size) }))),
     depositCheck(facts.deposits),
-    materialCheck(facts.material, override),
+    materialReadinessCheck(facts.material, materialReadinessOf(facts.blockers.readiness), override),
     batchCheck(facts.batchSeries),
+    holdsCheck(facts.workOrder.number, facts.blockers.holds),
   ])
 }

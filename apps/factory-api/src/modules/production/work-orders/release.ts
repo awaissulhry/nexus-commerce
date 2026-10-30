@@ -7,11 +7,15 @@ import { releaseRefusal, type MaterialLine, type ReleaseChecklist } from '@nexus
 import { assertTransition } from '@nexus/factory-domain/state/machine'
 import type { CommandCaller, CommandTx } from '../../../core/command'
 import { allocateNumber } from '../../../platform/numbering/allocate'
-import { checklistOf, readBasics, readReleaseFacts } from './facts'
+import { checklistOf, readBasics, readReleaseFacts, type ReleaseFacts } from './facts'
 import { officeContextOf } from './access'
 import { clearDraftSpec, readWorkOrder, type Header } from './store'
 import { workOrderView, type WorkOrderView } from './views'
 import { officeWorkOrder, onWorkOrder, todayNow, todayOfCommand } from './work-orders'
+import { readinessPart } from './release/blockers'
+
+/** B-W2a-46: a DRAFT, or a DRAFT put on hold (its release check shows the hold as a blocker). */
+const beforeRelease = (row: Pick<Header, 'status' | 'heldFromStatus'>): boolean => row.status === 'DRAFT' || (row.status === 'ON_HOLD' && row.heldFromStatus === 'DRAFT')
 
 /**
  * The release (B-W1-38; MES-005, MES-076; plan A1 §2.5 "Work order"; PLAN §4.7 stage 10-work-order "release WO (frozen
@@ -33,23 +37,27 @@ import { officeWorkOrder, onWorkOrder, todayNow, todayOfCommand } from './work-o
 export async function releaseCheck(caller: CommandCaller, workOrderId: string) {
   const workOrder = await officeWorkOrder(caller, workOrderId)
   return caller.withClient(async (client) => {
-    if (workOrder.status !== 'DRAFT') return checkAnswer(workOrder, null)
-    const facts = await readReleaseFacts(client, await readBasics(client, workOrder), todayNow())
-    return checkAnswer(workOrder, checklistOf(facts, null), facts.material)
+    if (!beforeRelease(workOrder)) return checkAnswer(workOrder, null)
+    // The record shows the plan's readiness beside the checks: read it always here.
+    const facts = await readReleaseFacts(client, await readBasics(client, workOrder), todayNow(), undefined, 'always')
+    return checkAnswer(workOrder, checklistOf(facts, null), facts.material, facts.blockers)
   })
 }
 
-function checkAnswer(workOrder: Pick<Header, 'id' | 'number' | 'status' | 'version'>, checklist: ReleaseChecklist | null, material: readonly MaterialLine[] = []) {
+function checkAnswer(workOrder: Pick<Header, 'id' | 'number' | 'status' | 'version' | 'heldFromStatus'>, checklist: ReleaseChecklist | null, material: readonly MaterialLine[] = [], blockers: ReleaseFacts['blockers'] | null = null) {
   return {
     workOrderId: workOrder.id,
     number: workOrder.number,
     status: workOrder.status,
     version: workOrder.version,
-    frozen: workOrder.status !== 'DRAFT',
+    frozen: !beforeRelease(workOrder),
     releasable: checklist?.releasable ?? false,
     checks: checklist ? checklist.checks.map((check) => ({ ...check, problems: [...check.problems] })) : [],
     blockers: checklist ? [...checklist.blockers] : [],
     materials: material.map((line) => ({ ...line, held: [...line.held] })),
+    // B-W2a-46: the plan's readiness beside the checks, and the holds that block the release.
+    readiness: readinessPart(blockers?.readiness ?? null),
+    holds: blockers ? blockers.holds.map((hold) => ({ ...hold })) : [],
   }
 }
 
@@ -68,13 +76,13 @@ export interface ReleaseInput {
 export async function releaseWorkOrder(caller: CommandCaller, workOrderId: string, body: ReleaseInput, idempotencyKey?: string): Promise<{ workOrder: WorkOrderView }> {
   const { tenantId } = officeContextOf(caller)
   const workOrder = await officeWorkOrder(caller, workOrderId, WORKORDERS_RELEASE)
-  if (workOrder.status !== 'DRAFT') throw new InvalidStateError(`Work order ${workOrder.number} is ${workOrder.status}; it was released already.`)
+  if (!beforeRelease(workOrder)) throw new InvalidStateError(`Work order ${workOrder.number} is ${workOrder.status}; it was released already.`)
   return onWorkOrder(caller, workOrder, { name: 'workorders.release', idempotencyKey, input: { workOrderId, ...body }, version: body.version }, async (tools) => {
     const { tx, now } = tools
     await lockSiteReleases(tx, tenantId, workOrder.siteId)
     await tx.$queryRaw`SELECT 1 FROM "Style" WHERE "id" = ${workOrder.styleId}::uuid FOR SHARE`
     const current = (await readWorkOrder(tx, workOrder.id))!
-    if (current.status !== 'DRAFT') throw new InvalidStateError(`Work order ${current.number} is ${current.status}; it was released already.`)
+    if (!beforeRelease(current)) throw new InvalidStateError(`Work order ${current.number} is ${current.status}; it was released already.`)
 
     const facts = await readReleaseFacts(tx, await readBasics(tx, current), todayOfCommand(tools))
     const override = body.materialOverride ?? null

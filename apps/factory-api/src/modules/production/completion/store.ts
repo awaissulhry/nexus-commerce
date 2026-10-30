@@ -6,6 +6,8 @@ import { defaultPlaceOf, finishedPlaces, PRODUCTION_RECEIPT, readSkus, skuKey, t
 import { LEDGER_SELECT, type LedgerRow } from '../../inventory/ledger/post-moves'
 import { releasedPerCell } from '../../quality/final/store'
 import { cellLabel, readCells, type CellRow, type Header } from '../work-orders/store'
+import { onShipmentsFromRelease } from '@nexus/factory-domain/shipping/shipments/stock'
+import { takenFromStockByCell } from '../../shipping/shipments/stock'
 
 /**
  * What "Report finished to stock" reads about a work order (B-W2a-12; GAP-003, MES-011), with one reader: a scoped client
@@ -76,6 +78,8 @@ export async function readCompletionFacts(db: Reader, workOrder: Header): Promis
   const held = sumBy(heldSerials, (serial) => serial.workOrderSizeId, () => 1)
 
   const moves = await readReceiptMoves(db, workOrder.id)
+  // B-W2a-48: a garment a shipment took out of finished goods is in the receipts AND on the shipment: count it once.
+  const takenFromStock = await takenFromStockByCell(db, workOrder.id, cells.map((cell) => ({ cellId: cell.id, itemId: skus.get(skuKey(cell.colourwayId, cell.size))?.itemId ?? null })))
   const receivedByItem = sumBy(moves, (move) => move.itemId, (move) => Number(new Dec(move.baseQuantity.toString()).toFixed(0)) * (move.reversalOfId ? -1 : 1))
   const figures = cells.map((cell) => {
     const itemId = skus.get(skuKey(cell.colourwayId, cell.size))?.itemId ?? null
@@ -86,7 +90,7 @@ export async function readCompletionFacts(db: Reader, workOrder: Header): Promis
       quantity: cell.quantity,
       released: counts.released,
       reversed: counts.reversed,
-      onShipments: onShipments.get(cell.id) ?? 0,
+      onShipments: onShipmentsFromRelease(onShipments.get(cell.id) ?? 0, takenFromStock.get(cell.id) ?? 0),
       received: itemId ? (receivedByItem.get(itemId) ?? 0) : 0,
       heldSerials: held.get(cell.id) ?? 0,
     })

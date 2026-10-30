@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import type { FactoryClient, WorkCentreKind } from '@nexus/factory-db'
 import { deviceStatus } from '@nexus/factory-domain/auth/floor/status'
 import { UnauthenticatedError } from '@nexus/factory-domain/core/errors'
+import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { assertCsrf } from '../sessions/cookies'
 import type { OfficeAuth } from '../sessions/office-auth'
 import { deviceCookieOf, setDeviceCookie } from './cookies'
@@ -18,7 +19,14 @@ import { floorHash, mintSiteToken, parseSiteToken, type SiteToken } from './toke
  *                              work centre's kind: the tablet's mode), the tenant's language, the site's sign-in rule
  *                              (a badge alone, or badge and PIN), whether someone is signed in, and the roster of the
  *                              site's active workers who have a PIN (names only, for a sign-in by name and PIN).
- * Both run in the FLOOR scope of the code's or token's tenant and site; a bad code or token answers 401.
+ *   POST /floor/device/state   the tablet's own state (B-W2a-42; PLT-241; design admin.devices): the floor app's version,
+ *                              the battery (when the browser says it) and the actions waiting in its offline queue (a
+ *                              count, never whose), signed in or not. Bookkeeping like the device's last contact: written
+ *                              without an audit row and without the record's version (an office edit never conflicts
+ *                              with a tablet's report). A new app version is a fact of the device's history ("app
+ *                              updated" on its Activity tab): it is written in a floor command with its audit row
+ *                              `floor.deviceAppUpdated` (before → after).
+ * All run in the FLOOR scope of the code's or token's tenant and site; a bad code or token answers 401.
  */
 
 export interface DeviceRequest {
@@ -114,4 +122,31 @@ export async function enrolDevice(auth: OfficeAuth, request: FastifyRequest, rep
     if (!device) throw refused()
     return deviceInfoOf(client, device, auth.clock.now())
   })
+}
+
+export interface DeviceStateReport {
+  readonly appVersion: string
+  readonly batteryPercent: number | null
+  readonly batteryCharging: boolean | null
+  readonly queuedActions: number
+}
+
+export async function reportDeviceState(auth: OfficeAuth, request: FastifyRequest, body: DeviceStateReport) {
+  assertCsrf(request)
+  const { device, token } = await requireDevice(auth, request)
+  const now = auth.clock.now()
+  const state = { batteryPercent: body.batteryPercent, batteryCharging: body.batteryCharging, queuedActions: body.queuedActions, statusReportedAt: now, lastSeenAt: now }
+  const before = await auth.database.withScope(siteScope(token), (client) => client.device.findUnique({ where: { id: device.id }, select: { appVersion: true } }))
+  const from = before?.appVersion ?? null
+  if (from === body.appVersion) {
+    await auth.database.withScope(siteScope(token), (client) => client.device.updateMany({ where: { id: device.id, status: 'ACTIVE' }, data: state }))
+    return { reportedAt: toUtcIso(now), appUpdated: false }
+  }
+  const place = { tenantId: token.tenantId, siteId: token.siteId, id: device.id }
+  await floorCommand(auth, floorContext(request, place, device.id), { name: 'floor.deviceAppUpdated', input: { deviceId: device.id, from, to: body.appVersion } }, async ({ tx, audit }) => {
+    await tx.device.updateMany({ where: { id: device.id, status: 'ACTIVE' }, data: { ...state, appVersion: body.appVersion } })
+    audit({ recordType: 'Device', recordId: device.id, before: { appVersion: from }, after: { appVersion: body.appVersion } })
+    return null
+  })
+  return { reportedAt: toUtcIso(now), appUpdated: true }
 }

@@ -29,6 +29,13 @@ import { CLAIM_KINDS, CLAIM_STATUSES } from './claims/rules'
  *                                  work sent to a workshop (B-W2a-25; modules/purchasing/subcontracting): made, changed
  *                                  (header, operations, kit plan), issued, back to draft, cancelled, kit and pieces out,
  *                                  a kit line back unsent, goods back, closed. Ids, numbers, counts and states: no fee.
+ *   purchase_order.revision_started | lines_cancelled | lines_closed_short | confirm_by_moved | reminder_sent
+ *                                  B-W2a-52 (modules/purchasing revisions/, reminders/): the buyer started the next
+ *                                  revision (a change, or a counter-proposal to the supplier's changes: the order is a
+ *                                  draft again, its links stopped); lines cancelled (the plan lines they bought open
+ *                                  again; the supplier told when it holds the order); lines of a partly received order
+ *                                  closed short; the confirm-by deadline moved; a reminder to confirm sent (by the buyer,
+ *                                  or by the daily run once a company switches automatic reminders on)
  *   supplier_claim.created | updated | sent | answered | goods_returned | closed | cancelled
  *                                  a claim to a supplier (B-W2a-44; modules/purchasing/claims): made (by hand, from
  *                                  discrepancies, from a lot, or as a Return to supplier), changed (header, lines), sent
@@ -46,6 +53,9 @@ const pieces = z.number().int().min(0)
 // B-W2a-44: supplier claims (the office's Returns & claims list and record refresh; B-W2a-62's credit note matching reads them).
 const claimLive = { permission: 'purchasing.view', fields: ['supplierClaimId', 'number', 'status'] } as const
 const claim = { supplierClaimId: z.uuid(), number: z.string().min(1).max(40), status: z.enum(CLAIM_STATUSES) }
+// B-W2a-52: a purchase order's changes (the office's list and record refresh).
+const orderStatus = z.enum(PURCHASE_ORDER_STATUSES)
+const endedLineIds = z.array(z.uuid()).min(1).max(200)
 
 export const events = [
   defineEvent({
@@ -260,5 +270,42 @@ export const events = [
     description: 'A draft supplier claim was cancelled.',
     payload: z.strictObject(claim),
     live: claimLive,
+  }),
+  // B-W2a-52: a purchase order's changes after the send (SCM-058, SCM-059, SCM-060, SCM-087). Ids, numbers, counts and
+  // states only: no quantity, no price.
+  defineEvent({
+    type: 'purchase_order.revision_started',
+    context: 'purchasing',
+    description: 'The buyer started the next revision of a sent purchase order (a change, or a counter-proposal to the supplier’s changes): it is a draft again and its confirm links stopped working.',
+    payload: z.strictObject({ ...base, revision: z.number().int().min(2), from: orderStatus, counterProposal: z.boolean(), revokedLinkIds: z.array(z.uuid()).max(100) }),
+    live,
+  }),
+  defineEvent({
+    type: 'purchase_order.lines_cancelled',
+    context: 'purchasing',
+    description: 'Lines of a purchase order were cancelled: nothing more of them is wanted; the plan lines they bought are open again and the supplier is told when it holds the order.',
+    payload: z.strictObject({ ...base, lineIds: endedLineIds, from: orderStatus, to: orderStatus, reopenedRequirementIds: z.array(z.uuid()).max(400), outboundId: z.uuid().nullable() }),
+    live,
+  }),
+  defineEvent({
+    type: 'purchase_order.lines_closed_short',
+    context: 'purchasing',
+    description: 'Lines of a partly received purchase order were closed short: what came is kept, the rest will not come.',
+    payload: z.strictObject({ ...base, lineIds: endedLineIds, from: orderStatus, to: orderStatus, reopenedRequirementIds: z.array(z.uuid()).max(400), outboundId: z.uuid().nullable() }),
+    live,
+  }),
+  defineEvent({
+    type: 'purchase_order.confirm_by_moved',
+    context: 'purchasing',
+    description: 'The office moved the time by which the supplier is asked to confirm a sent purchase order.',
+    payload: z.strictObject({ ...base, confirmBy: z.iso.datetime() }),
+    live,
+  }),
+  defineEvent({
+    type: 'purchase_order.reminder_sent',
+    context: 'purchasing',
+    description: 'A reminder to confirm a purchase order went to its supplier, by the buyer or by the daily run of the automatic reminders.',
+    payload: z.strictObject({ ...base, revision: z.number().int().min(1), reminderId: z.uuid(), outboundId: z.uuid(), automatic: z.boolean() }),
+    live,
   }),
 ] as const
