@@ -401,6 +401,8 @@ export interface TermsDraft {
   firmOffer: boolean
   promiseDate: string
   paymentTerms: string
+  /** B-W2a-49: the library's terms ('' = none: the typed text is printed). */
+  paymentTermsId: string
   depositPct: string
   depositKind: 'ACCONTO' | 'CAPARRA'
   changeNote: string
@@ -418,6 +420,7 @@ export function termsDraftOf(quote: QuoteDetail): TermsDraft {
     firmOffer: current.firmOffer,
     promiseDate: current.promiseDate ?? '',
     paymentTerms: current.paymentTerms ?? '',
+    paymentTermsId: current.paymentTermsId ?? '',
     depositPct: current.depositPct ?? '',
     depositKind: current.depositKind ?? 'ACCONTO',
     changeNote: current.changeNote ?? '',
@@ -436,7 +439,9 @@ export function termsPatch(before: TermsDraft, after: TermsDraft): Record<string
   if (after.validUntil !== before.validUntil) patch.validUntil = text(after.validUntil)
   if (after.firmOffer !== before.firmOffer) patch.firmOffer = after.firmOffer
   if (after.promiseDate !== before.promiseDate) patch.promiseDate = text(after.promiseDate)
-  if (after.paymentTerms !== before.paymentTerms) patch.paymentTerms = text(after.paymentTerms)
+  // Library terms print their own name: the typed text is sent only without them (or when it was changed by hand).
+  if (after.paymentTermsId !== before.paymentTermsId) patch.paymentTermsId = text(after.paymentTermsId)
+  if (after.paymentTerms !== before.paymentTerms && (after.paymentTermsId === '' || after.paymentTermsId === before.paymentTermsId)) patch.paymentTerms = text(after.paymentTerms)
   if (after.depositPct !== before.depositPct) patch.depositPct = after.depositPct.trim() === '' ? null : parsePercent(after.depositPct)
   if (after.depositKind !== before.depositKind) patch.depositKind = after.depositKind
   if (after.changeNote !== before.changeNote) patch.changeNote = text(after.changeNote)
@@ -520,3 +525,44 @@ export function quotesCsv(rows: readonly QuoteListRow[], grains: Grains, words: 
   )
   return [header.map(csvCell).join(','), ...lines].join('\r\n') + '\r\n'
 }
+
+// ---- B-W2a-49: list price, duplicate, start from a past quote -------------------------------------------------------------
+
+/** How a line's price stands against the customer's price list: at it, below or above it (by hand or a discount), or no list. */
+export type ListPriceState = 'atList' | 'below' | 'above' | 'noList'
+
+export function listPriceState(line: Pick<QuoteLine, 'unitPrice' | 'listUnitPrice'>): ListPriceState {
+  if (line.listUnitPrice === null || line.listUnitPrice === undefined || line.unitPrice === undefined) return 'noList'
+  const list = Number(line.listUnitPrice)
+  const price = Number(line.unitPrice)
+  if (!Number.isFinite(list) || !Number.isFinite(price) || price === list) return 'atList'
+  return price < list ? 'below' : 'above'
+}
+
+/** The difference from the list price in percent (one decimal as text "-5.0"), or null at the list price / without one. */
+export function offListPct(line: Pick<QuoteLine, 'unitPrice' | 'listUnitPrice'>): string | null {
+  if (listPriceState(line) === 'atList' || listPriceState(line) === 'noList') return null
+  const list = Number(line.listUnitPrice)
+  if (list <= 0) return null
+  return (((Number(line.unitPrice) - list) / list) * 100).toFixed(4)
+}
+
+/**
+ * What a copy left out, in this screen's words (the API answers English sentences: B-W2a-30 quotes/duplicate.ts — each
+ * kind is matched here and said as a `sales` key; anything else says "no longer offered").
+ */
+export function droppedWords(dropped: { seq: number; size: string | null; reason: string }): { key: string; params: Record<string, string | number> } {
+  if (/made-to-measure/i.test(dropped.reason)) return { key: 'dup.dropped.mtm', params: { line: dropped.seq } }
+  if (dropped.size !== null) return { key: 'dup.dropped.size', params: { line: dropped.seq, size: dropped.size } }
+  if (/none of its sizes/i.test(dropped.reason)) return { key: 'dup.dropped.noSizes', params: { line: dropped.seq } }
+  return { key: 'dup.dropped.other', params: { line: dropped.seq } }
+}
+
+/** A copy's warnings in this screen's words: today only the price basis (net ⇄ VAT included) changed between customers. */
+export function warningWords(warning: string): { key: string } {
+  return /VAT/.test(warning) ? { key: 'dup.warning.basis' } : { key: 'dup.warning.other' }
+}
+
+/** The New quote dialog's "Start from" (design pop:quotes.new): Blank, or a past quote (Template, Inquiry: W2b). */
+export const START_FROM = ['blank', 'past'] as const
+export type StartFrom = (typeof START_FROM)[number]

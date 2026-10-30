@@ -84,15 +84,15 @@ export interface PartyRecordActions {
  * Activity. Later-wave tabs are not drawn. Fetches nothing: PartyRecord.tsx reads and writes; the record panels
  * (thread, files, history) come in as `panels` and `documents`.
  */
-export function PartyRecordView({ model, actions, panels, documents }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode }) {
+export function PartyRecordView({ model, actions, panels, documents, terms }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode }) {
   return (
     <PartiesMessages>
-      <PartyRecord model={model} actions={actions} panels={panels} documents={documents} />
+      <PartyRecord model={model} actions={actions} panels={panels} documents={documents} terms={terms} />
     </PartiesMessages>
   )
 }
 
-function PartyRecord({ model, actions, panels, documents }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode }) {
+function PartyRecord({ model, actions, panels, documents, terms }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode }) {
   const t = useT('parties')
   const locale = useLocale()
   const side = model.side
@@ -249,6 +249,8 @@ function PartyRecord({ model, actions, panels, documents }: { model: PartyRecord
             <ViesCard model={model} party={party} actions={actions} viesHeld={viesHeld} />
           </div>
         )}
+        {/* A side's own Tax & terms card (Customers: Commercial terms, B-W2a-49), below identity and VIES. */}
+        {tab === 'tax' && terms}
         {tab === 'orders' && side === 'customers' && <DealsTab model={model} actions={actions} />}
         {tab === 'orders' && side === 'suppliers' && <PurchaseOrdersTab model={model} />}
         {tab === 'documents' && documents}

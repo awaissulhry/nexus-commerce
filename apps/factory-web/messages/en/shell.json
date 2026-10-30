@@ -26,13 +26,17 @@
       "main": "Main",
       "customers": "Customers",
       "quotes": "Quotes",
-      "orders": "Orders"
+      "orders": "Orders",
+      "pricing": "Pricing",
+      "pricelists": "Price lists & contracts"
     },
     "purchasing": {
       "area": "Purchasing",
       "main": "Main",
       "suppliers": "Suppliers",
-      "orders": "Purchase orders"
+      "orders": "Purchase orders",
+      "outside": "Outside work",
+      "subcontracting": "Subcontract orders"
     },
     "plant": {
       "area": "Plant",
@@ -91,7 +95,11 @@
       "invoices": "Invoices",
       "payments": "Payments",
       "settingsGroup": "Settings",
-      "settings": "Finance settings"
+      "settings": "Finance settings",
+      "close": "Close",
+      "accounting": "Accounting export",
+      "reportsGroup": "Reports",
+      "reports": "Finance reports"
     },
     "planning": {
       "area": "Planning",

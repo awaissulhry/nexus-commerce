@@ -2,13 +2,12 @@ import type { Prisma } from '@nexus/factory-db'
 import { thresholdOf, type RuleKind } from '@nexus/factory-domain/alerts/kinds'
 import { daysBetween, placeCovers, type Finding, type RulePlace } from '@nexus/factory-domain/alerts/rules'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
-import { deferredDeadline } from '@nexus/factory-domain/invoicing/from-shipment/deadlines'
-import { monthOf } from '@nexus/factory-domain/invoicing/fatturapa/format'
 import { notInvoiced } from '@nexus/factory-domain/invoicing/from-shipment/shipped'
 import { HOLD_SUBJECT_TYPES, type HoldSubjectType } from '@nexus/factory-domain/quality/holds/rules'
 import { OPEN_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { plusCalendarDays } from '@nexus/factory-domain/timers/rules'
 import type { CommandTx } from '../../core/command'
+import { ddtDeadlines } from '../../modules/invoicing/from-shipment/deadlines'
 import { invoicedOf, readDdts, shippedOf } from '../../modules/invoicing/from-shipment/store'
 import { readSubjects } from '../../modules/quality/holds/store'
 
@@ -180,8 +179,8 @@ const certificatesExpiring: Dated = async (tx, rule, now, only) => {
 
 /**
  * INVOICE_DEADLINE: the live DDTs of shipped (or delivered) shipments with goods no issued invoice bills, each with the last
- * day to invoice them: the 15th of the month after the DDT's (a deferred invoice, DPR 633/1972 art. 21 c.4 lett. a; the
- * invoicing module's own rule). B-W2a-54 sets the deadline of the invoice type each customer uses through the same timers.
+ * day to invoice them by its customer's preset (B-W2a-54, the invoicing module's ddtDeadlines: monthly → the 15th of the
+ * month after the DDT's, DPR 633/1972 art. 21 c.4 lett. a; per shipment → the DDT's 12 days, then that 15th).
  */
 const invoiceDeadlines: Dated = async (tx, rule, now, only) => {
   const today = businessDate(now)
@@ -189,9 +188,9 @@ const invoiceDeadlines: Dated = async (tx, rule, now, only) => {
   const ddts = await readDdts(tx, where, FIND_LIMIT)
   const rows = notInvoiced(await shippedOf(tx, ddts), await invoicedOf(tx, ddts.map((ddt) => ddt.id)))
   const open = new Set(rows.filter((row) => row.notInvoiced.gt(0)).map((row) => row.ddtId))
-  return ddts
-    .filter((ddt) => open.has(ddt.id) && !ddt.cancelled)
-    .map((ddt) => ({ recordType: 'Ddt', recordId: ddt.id, label: ddt.number, scope: { companyId: ddt.companyId, siteId: null, partyId: ddt.partyId }, date: deferredDeadline(monthOf(ddt.date), today).dueBy }))
+  const waiting = ddts.filter((ddt) => open.has(ddt.id) && !ddt.cancelled)
+  const deadlines = await ddtDeadlines(tx, waiting, today)
+  return waiting.map((ddt) => ({ recordType: 'Ddt', recordId: ddt.id, label: ddt.number, scope: { companyId: ddt.companyId, siteId: null, partyId: ddt.partyId }, date: deadlines.get(ddt.id)!.dueBy }))
 }
 
 export const FINDERS: Readonly<Partial<Record<RuleKind, Find>>> = Object.freeze({

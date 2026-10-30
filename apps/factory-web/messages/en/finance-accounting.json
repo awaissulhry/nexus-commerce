@@ -1,0 +1,615 @@
+{
+  "band": {
+    "label": "Accounting export status and actions",
+    "locks": "Period lock:",
+    "lockPillLabel": "{month}: {state}. Open its lock",
+    "reading": "Reading…",
+    "new": "New export",
+    "toHistory": "Back to the exports",
+    "more": "More actions",
+    "lockPeriod": "Lock a period…",
+    "mapping": "Account mapping",
+    "mappingHeld": "Comes with W2b, in Finance settings.",
+    "readAt": "Read at {time}"
+  },
+  "layout": {
+    "long": "Files in Nexus's default layout: the accountant's software and its import layout are to confirm with the accountant. Nothing is sent to the accountant or to any authority: a person hands the files over.",
+    "short": "Nexus layout (to confirm)"
+  },
+  "notice": {
+    "cancelled": "The draft export of {month} is cancelled."
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Offline: reading again when back",
+    "fixed_one": "{count} check fixed since you opened this",
+    "fixed_other": "{count} checks fixed since you opened this",
+    "changed": "The month changed since you opened this",
+    "checkAgain": "Check again"
+  },
+  "noAccess": {
+    "title": "You cannot see the accounting exports",
+    "body": "They need the accounting permission (accounting.view). Ask an administrator."
+  },
+  "common": {
+    "retry": "Try again",
+    "loading": "Loading…",
+    "working": "Working…",
+    "close": "Close",
+    "done": "Done",
+    "dismiss": "Dismiss"
+  },
+  "keys": {
+    "new": "New export",
+    "title": "Keyboard shortcuts"
+  },
+  "status": {
+    "DRAFT": "Draft",
+    "EXPORTED": "Exported",
+    "CANCELLED": "Cancelled"
+  },
+  "lockState": {
+    "open": "open",
+    "soft": "soft-locked",
+    "hard": "closed",
+    "lifted": "lock lifted"
+  },
+  "package": {
+    "SALES_JOURNAL": {
+      "title": "Sales journal",
+      "body": "The invoices issued in the month, one row per VAT rate (an invoice rejected by SDI counts as never issued)."
+    },
+    "PURCHASES_JOURNAL": {
+      "title": "Purchases journal",
+      "body": "The supplier invoices received in the month (by the day they arrived), one row per VAT rate."
+    },
+    "PAYMENTS": {
+      "title": "Payments",
+      "body": "The payments received in the month, what each pays and what is not placed; the refunds paid in the month."
+    },
+    "COST_OF_SALES": {
+      "title": "Cost of goods sold and variances",
+      "body": "What the goods sold cost, and the work orders' variances."
+    },
+    "VAT_REGISTERS": {
+      "title": "VAT registers",
+      "body": "The VAT registers of the month."
+    },
+    "INTRASTAT": {
+      "title": "Intrastat (EU sales)",
+      "body": "The month's sales of goods to other EU states, with the data the file needs."
+    },
+    "YEAR_END_STOCK": {
+      "title": "Year-end stock pack",
+      "body": "The signed-off year-end inventory (its valued list as signed) and the stock valued at the year end."
+    }
+  },
+  "contents": {
+    "held": {
+      "w2b": "Comes with W2b: it cannot go in an export yet.",
+      "yearEnd": "Goes with the export of the month that ends the year (31 December).",
+      "grain": {
+        "price": "It carries prices: it needs the price grain (money.price).",
+        "cost": "It carries costs: it needs the cost grain (money.cost)."
+      }
+    },
+    "documents_one": "{count} document",
+    "documents_other": "{count} documents",
+    "rows_one": "{count} row in the file",
+    "rows_other": "{count} rows in the file",
+    "reDocuments_one": "Re-export: {count} document new, changed or removed goes.",
+    "reDocuments_other": "Re-export: {count} documents new, changed or removed go.",
+    "reWhole_one": "Re-export: the whole file again ({count} change behind it).",
+    "reWhole_other": "Re-export: the whole file again ({count} changes behind it).",
+    "intrastatAccountant": "Whether the company files Intrastat, how often and in which file is to confirm with the accountant."
+  },
+  "sum": {
+    "TAXABLE": "Taxable",
+    "VAT": "VAT",
+    "GROSS": "Total",
+    "RECEIVED": "Received",
+    "REFUNDED": "Refunded",
+    "NOT_PLACED": "Not placed",
+    "VALUE": "Value"
+  },
+  "history": {
+    "noNumber": "No number yet",
+    "title": "Exports",
+    "lead": "Every batch, numbered; a re-export carries only what changed, never a duplicate.",
+    "slow": "Still loading…",
+    "count_one": "{count} batch",
+    "count_other": "{count} batches",
+    "countMore_one": "{count} batch so far",
+    "countMore_other": "{count} batches so far",
+    "more": "Show more",
+    "failed": "Couldn't load the exports",
+    "empty": {
+      "title": "No exports yet",
+      "body": "Make the first numbered batch for the accountant with New export."
+    },
+    "noMatch": {
+      "title": "No batch matches",
+      "body": "No batch has this status in this year."
+    },
+    "clearFilters": "Clear the filters",
+    "statusLabel": "Status",
+    "allStatuses": "Every status",
+    "yearLabel": "Year",
+    "allYears": "Every year",
+    "col": {
+      "batch": "Batch",
+      "period": "Period",
+      "contents": "Contents",
+      "made": "Made by",
+      "files": "Files",
+      "changed": "Changed since",
+      "more": "More"
+    },
+    "reExportOf": "Re-export of {number}",
+    "firstExport": "First export",
+    "cancelled": "Cancelled before it finished",
+    "documents_one": "{count} document · {changed} changed · {removed} removed",
+    "documents_other": "{count} documents · {changed} changed · {removed} removed",
+    "someone": "Someone",
+    "files_one": "{count} file",
+    "files_other": "{count} files",
+    "noFiles": "No files",
+    "amendedBy": "Amended by {number}",
+    "upToDate": "Nothing changed since",
+    "changedSince_one": "{count} document changed since",
+    "changedSince_other": "{count} documents changed since",
+    "reExport": "Re-export",
+    "rowMenu": "More for {number} ({month})",
+    "openFiles": "Open the files (new tab)",
+    "cancelDraft": "Cancel the draft…",
+    "lockMonth": "Lock {month}…",
+    "bulkFiles_one": "Files of {count} batch",
+    "bulkFiles_other": "Files of {count} batches",
+    "held": {
+      "notExported": "Only an exported batch is re-exported.",
+      "notLatest": "A later batch ({number}) carries the month now: re-export that one.",
+      "nothingChanged": "Nothing changed since {number}: there is nothing to re-export.",
+      "notDraft": "Only a draft is cancelled; an exported batch is amended by a re-export."
+    },
+    "unselectable": {
+      "draft": "A draft has no files yet.",
+      "cancelled": "A cancelled batch has no files.",
+      "noFiles": "This batch has no files."
+    }
+  },
+  "cancel": {
+    "title": "Cancel the draft export of {month}?",
+    "body": "The draft never got its number and its files were never handed over. The next export of the month replaces it anyway.",
+    "reason": "Why",
+    "go": "Cancel the draft",
+    "held": {
+      "reason": "Say why in words first."
+    }
+  },
+  "wizard": {
+    "title": "New export",
+    "titleMonth": "Export of {month}",
+    "stepOf": "Step {step} of {count}: {name}",
+    "nav": "Steps",
+    "back": "Back",
+    "continue": "Continue",
+    "showMe": "Show me"
+  },
+  "step": {
+    "period": {
+      "title": "Period",
+      "lead": "Which month goes to the accountant, and whether it is locked."
+    },
+    "checks": {
+      "title": "Checks",
+      "lead": "Each check passes, or is explained in words before the export (the batch keeps the explanation)."
+    },
+    "contents": {
+      "title": "Contents",
+      "lead": "What goes to the accountant in this batch."
+    },
+    "intrastat": {
+      "title": "Intrastat rows",
+      "lead": "The EU sales rows with the data the file needs; what is missing is flagged with where to fix it."
+    },
+    "review": {
+      "title": "Review"
+    },
+    "export": {
+      "title": "Export and lock"
+    },
+    "failed": "Couldn't load {step}",
+    "reading": "Reading {step}…"
+  },
+  "held": {
+    "chooseMonth": "Choose a month first.",
+    "reading": "Wait until the month is read.",
+    "readFailed": "The month could not be read: try again.",
+    "checks_one": "{count} check fails without an explanation.",
+    "checks_other": "{count} checks fail without an explanation.",
+    "noPackage": "Choose at least one package.",
+    "intrastat": "Fix the rows that lack data, or explain the Intrastat check.",
+    "nothingChanged": "Nothing changed since {number}: there is nothing to send.",
+    "noExport": "Making a batch needs the export permission (accounting.export).",
+    "busy": "Wait: the last action is still running.",
+    "firstStep": "This is the first step."
+  },
+  "period": {
+    "previousYear": "Previous year",
+    "nextYear": "Next year",
+    "noNextYear": "The next year has not begun.",
+    "months": "The months of {year}",
+    "exported": "Exported as {numbers}",
+    "notExported": "Not exported yet",
+    "notOver": "Not over yet",
+    "readingMonth": "Reading {month}…",
+    "first": "{month} is not exported yet: this batch is its first export.",
+    "reExport_one": "{month} is exported as {number}: this batch is a re-export of what changed since ({count} document).",
+    "reExport_other": "{month} is exported as {number}: this batch is a re-export of what changed since ({count} documents).",
+    "running": "The month is not over (it ends on {end}): what is dated later reaches the accountant in a re-export.",
+    "draft": "A draft of this month did not finish: this export replaces it.",
+    "yearEnd": "The month ends the year: the year-end stock pack goes with it."
+  },
+  "check": {
+    "PERIOD_ENDED": {
+      "title": "The month is over",
+      "pass": "{month} is over.",
+      "fail_one": "{month} is not over (it ends on {end}): what is dated later goes in a re-export.",
+      "fail_other": "{month} is not over (it ends on {end}): what is dated later goes in a re-export."
+    },
+    "SHIPMENTS_INVOICED": {
+      "title": "Every shipment invoiced",
+      "pass": "Every DDT of goods shipped in {month} is invoiced.",
+      "fail_one": "{count} DDT of goods shipped in {month} is not wholly invoiced.",
+      "fail_other": "{count} DDTs of goods shipped in {month} are not wholly invoiced."
+    },
+    "NO_INVOICE_REJECTED": {
+      "title": "No invoice rejected at SDI",
+      "pass": "No invoice of {month} is rejected by SDI.",
+      "fail_one": "{count} invoice of {month} is rejected by SDI: it counts as never issued until it is sent again.",
+      "fail_other": "{count} invoices of {month} are rejected by SDI: they count as never issued until they are sent again."
+    },
+    "PAYMENTS_PLACED": {
+      "title": "Payments placed",
+      "pass": "Every payment received in {month} is placed on what it pays.",
+      "fail_one": "{count} payment received in {month} is not wholly placed on what it pays.",
+      "fail_other": "{count} payments received in {month} are not wholly placed on what they pay."
+    },
+    "PLACEMENTS_WITHIN_PAYMENTS": {
+      "title": "Placements never exceed payments",
+      "pass": "No payment is placed or refunded beyond its amount.",
+      "fail_one": "{count} payment is placed or refunded beyond its amount.",
+      "fail_other": "{count} payments are placed or refunded beyond their amount."
+    },
+    "TOTALS_EQUAL_ROWS": {
+      "title": "Totals equal row sums",
+      "pass": "Every invoice's totals equal the sum of its VAT rows.",
+      "fail_one": "{count} invoice has totals that are not the sum of its VAT rows.",
+      "fail_other": "{count} invoices have totals that are not the sum of their VAT rows."
+    },
+    "INTRASTAT_COMPLETE": {
+      "title": "Intrastat data complete",
+      "pass": "Every EU sale row has what the Intrastat file needs.",
+      "fail_one": "{count} item of data the Intrastat file needs is missing (see Intrastat rows).",
+      "fail_other": "{count} items of data the Intrastat file needs are missing (see Intrastat rows)."
+    },
+    "YEAR_END_SIGNED_OFF": {
+      "title": "Year-end inventory signed off",
+      "pass": "Every site's year-end inventory is signed off.",
+      "fail_one": "{count} year-end inventory is open or missing.",
+      "fail_other": "{count} year-end inventories are open or missing."
+    },
+    "STOCK_VALUED": {
+      "title": "Every stock move valued",
+      "pass": "Every stock move up to the year end has its value.",
+      "fail_one": "{count} stock move up to the year end has no value yet.",
+      "fail_other": "{count} stock moves up to the year end have no value yet."
+    },
+    "fixesLabel": "Where to fix \"{check}\"",
+    "moreFixes_one": "and {count} more",
+    "moreFixes_other": "and {count} more",
+    "explain": "Why it may pass over (kept with the batch)",
+    "explainHint": "In words the accountant reads: what is open and when it closes."
+  },
+  "checks": {
+    "allPass_one": "{count} check passes",
+    "allPass_other": "All {count} checks pass",
+    "failing_one": "{count} fails · {unexplained} without an explanation",
+    "failing_other": "{count} fail · {unexplained} without an explanation",
+    "w2b": "\"Work orders closed\" comes with W2b."
+  },
+  "fix": {
+    "Ddt": "DDT {number}",
+    "Invoice": "Invoice {number}",
+    "Payment": "Payment {number}",
+    "Style": "Style {number}",
+    "Party": "Customer {number}",
+    "StockCount": "Count {number}",
+    "Site": "Site {number}",
+    "other": "Record {number}"
+  },
+  "field": {
+    "hsCode": "commodity code (CN, 8 digits)",
+    "originCountry": "country of origin",
+    "netMassKg": "net mass per garment",
+    "taxIdentity": "VAT ID",
+    "incoterm": "delivery terms (Incoterm)"
+  },
+  "intrastat": {
+    "accountant": "To confirm with the accountant: whether the company files Intrastat for sales, monthly or quarterly, the official file and the nature codes (11 and 21 are only suggested).",
+    "sumRows_one": "{count} row",
+    "sumRows_other": "{count} rows",
+    "sumFileRows_one": "{count} file row",
+    "sumFileRows_other": "{count} file rows",
+    "count_one": "{count} EU sale row",
+    "count_other": "{count} EU sale rows",
+    "empty": {
+      "title": "No EU sales in {month}",
+      "body": "No goods of the month went to another EU state: the Intrastat file would be empty."
+    },
+    "col": {
+      "invoice": "Invoice",
+      "partner": "Buyer and VAT ID",
+      "goods": "CN code and origin",
+      "to": "To, terms, transport",
+      "quantity": "Net mass and units",
+      "value": "Value",
+      "flags": "What is missing"
+    },
+    "line": "Line {seq} · {nature} ({code}, suggested)",
+    "nature": {
+      "SALE": "Sale",
+      "RETURN": "Return"
+    },
+    "noVat": "No VAT ID",
+    "cn": "CN {code}",
+    "noCn": "No CN code",
+    "origin": "origin {country}",
+    "noOrigin": "no origin",
+    "noTerms": "no delivery terms",
+    "noTransport": "transport not recorded",
+    "mass": "{kg} kg",
+    "noMass": "No net mass",
+    "units": "{units} pieces",
+    "complete": "Complete",
+    "blocking_one": "{count} missing",
+    "blocking_other": "{count} missing",
+    "warnings_one": "{count} note",
+    "warnings_other": "{count} notes",
+    "fixIn": "Fix in {record}"
+  },
+  "flag": {
+    "NOT_EUR": "not in euros",
+    "NO_STYLE": "goods without a style",
+    "CN_CODE_MISSING": "no CN code",
+    "CN_CODE_SHORT": "a 6-digit code, 8 asked",
+    "ORIGIN_MISSING": "no origin",
+    "NET_MASS_MISSING": "no net mass",
+    "VAT_ID_MISSING": "no buyer VAT ID",
+    "DELIVERY_TERMS_MISSING": "no delivery terms",
+    "DESTINATION_FROM_BILL_TO": "country from the invoice (no DDT)"
+  },
+  "review": {
+    "first": "Everything in the chosen packages goes: this is the month's first batch.",
+    "reExport": "A re-export of {number}: journals carry only their new, changed and removed documents; Intrastat and the year-end pack go whole again when anything behind them changed.",
+    "new": "New",
+    "newHint": "Not in any batch before",
+    "changed": "Changed",
+    "changedHint": "Different from what the accountant holds",
+    "removed": "Removed",
+    "removedHint": "No longer in the month",
+    "same": "Already exported",
+    "sameHint": "As the accountant holds them",
+    "col": {
+      "package": "Package",
+      "documents": "Documents",
+      "new": "New",
+      "changed": "Changed",
+      "removed": "Removed",
+      "same": "Already exported",
+      "rows": "File rows",
+      "totals": "Totals"
+    },
+    "goes": "goes in this batch",
+    "goesWhole": "goes whole again",
+    "leftOut": "nothing changed: left out",
+    "noTotals": "No sums",
+    "checks_one": "{count} check · {failing} failing · {explained} explained",
+    "checks_other": "{count} checks · {failing} failing · {explained} explained",
+    "grains": "Sums of a grain you do not hold are not shown."
+  },
+  "export": {
+    "number": "Batch number it will get",
+    "numberHint": "If nobody exports before you.",
+    "noSeries": "No number series yet (Admin › Documents & numbering)",
+    "period": "Period",
+    "kind": "Kind",
+    "first": "First export of the month",
+    "reExport": "Re-export of {number}",
+    "willMake": "The files this batch will make",
+    "file_one": "CSV · {count} row",
+    "file_other": "CSV · {count} rows",
+    "fileYearEnd_one": "CSV · {count} row, with the signed-off valued list (PDF, XLSX)",
+    "fileYearEnd_other": "CSV · {count} rows, with the signed-off valued list (PDF, XLSX)",
+    "language": "Language of the files",
+    "languageHint": "Headings and number format (Italian: ; and the decimal comma).",
+    "languageIt": "Italian",
+    "languageEn": "English",
+    "note": "Note for the batch",
+    "handOver": "Exporting makes the files and gives the batch its number. Nothing is sent: you hand the files to the accountant.",
+    "making": "Making the batch of {month}…",
+    "makingDetail": "The month is read again, the files are made, then the number is given.",
+    "go": "Export {month} as {number}",
+    "goNoNumber": "Export {month}",
+    "done_one": "{number} is made: {month}, {count} file.",
+    "done_other": "{number} is made: {month}, {count} files.",
+    "doneBody": "Download the files and hand them to the accountant; then lock the month.",
+    "filesLabel": "The files of {number}",
+    "openFiles": "Open the files in a new tab",
+    "nothing": "Nothing changed in {month} since {number}",
+    "nothingBody": "There is no batch to make: the accountant holds the month as it is. You can lock it."
+  },
+  "files": {
+    "status_one": "{package} · {count} row · {format}",
+    "status_other": "{package} · {count} rows · {format}",
+    "download": "Download",
+    "held": {
+      "noView": "Downloading needs the accounting permission (accounting.view)."
+    },
+    "title_one": "Export files of {count} batch",
+    "title_other": "Export files of {count} batches",
+    "none": {
+      "title": "No batch named",
+      "body": "Open the files from Finance › Accounting export."
+    },
+    "failed": "Couldn't load this batch",
+    "batch": "{number} · {month}",
+    "carried": "Carried",
+    "kind": "Kind",
+    "made": "Made",
+    "amended": "Amended",
+    "note": "Note",
+    "explained": "Checks passed over, with their explanation",
+    "noExplanation": "No explanation kept.",
+    "allPassed_one": "{count} check passed when it was made.",
+    "allPassed_other": "All {count} checks passed when it was made."
+  },
+  "lock": {
+    "title": "Lock {month}",
+    "lead": "Lock the month once its batch is handed over: soft (finance may still write into it with a reason) or hard (nothing dated in it can change).",
+    "afterExport": "The lock comes after the batch is made.",
+    "accountant": "Agree the final close with the accountant first.",
+    "dialogTitle": "The lock of {month}",
+    "dialogTitleAny": "Lock a period",
+    "month": "Month",
+    "chooseMonth": "Choose a month",
+    "readFailed": "Couldn't read the locks",
+    "level": "How to lock",
+    "now": {
+      "open": "{month} is open: nothing locks it.",
+      "soft": "{month} is soft-locked by {by} since {at}.",
+      "hard": "{month} is closed for good by {by} since {at}.",
+      "lifted": "{month}: its lock was lifted by {by} on {at}."
+    },
+    "short": {
+      "open": "{month} is open.",
+      "soft": "{month} is soft-locked: finance may still write into it with a reason.",
+      "hard": "{month} is closed for good: nothing dated in it can change.",
+      "lifted": "{month} was locked, and its lock was lifted."
+    },
+    "soft": {
+      "title": "Soft lock",
+      "body": "Finance may still write into the month, with a reason.",
+      "already": "The month is soft-locked already: choose Hard to close it for good.",
+      "go": "Lock {month} softly"
+    },
+    "hard": {
+      "title": "Hard lock (final close)",
+      "body": "Nothing dated in {month} can change: the database refuses it. Only the owner lifts it, with a reason.",
+      "go": "Close {month} for good"
+    },
+    "phrase": {
+      "label": "Type \"{phrase}\" to close it for good",
+      "empty": "Type the phrase exactly; capitals and extra spaces do not count.",
+      "partial": "Keep typing.",
+      "mismatch": "This is not the phrase.",
+      "match": "The phrase matches."
+    },
+    "note": "Note (optional)",
+    "done": {
+      "soft": "{month} is soft-locked",
+      "hard": "{month} is closed for good",
+      "softBody": "Nothing holds a final close.",
+      "hardBody": "Nothing dated in the month can change now.",
+      "warnings": "Before the final close:"
+    },
+    "held": {
+      "noLock": "Locking needs the lock permission (accounting.lock).",
+      "chooseMonth": "Choose a month first.",
+      "alreadySoft": "The month is soft-locked already.",
+      "alreadyHard": "The month is closed for good already.",
+      "hardFirst": "A closed month is lifted first, never made soft.",
+      "phrase": "Type the phrase exactly first."
+    }
+  },
+  "lift": {
+    "title": "Lift the lock",
+    "softBody": "Writes dated in the month are open again (accounting.lock).",
+    "hardBody": "Only someone who may lift a final close (accounting.unlock: the owner) does it, with a fresh code from the authenticator app. Agree it with the accountant first.",
+    "reason": "Why",
+    "go": "Lift the lock of {month}",
+    "done": "The lock of {month} is lifted.",
+    "held": {
+      "notLocked": "The month is not locked.",
+      "noUnlock": "Lifting a final close needs accounting.unlock (the owner, by default).",
+      "reason": "Say why in words first."
+    }
+  },
+  "stepUp": {
+    "title": "Confirm it is you",
+    "lift": "Lifting a final close asks a fresh code from your authenticator app.",
+    "confirm": "Confirm"
+  },
+  "aside": {
+    "title": "This export",
+    "month": "Month",
+    "noMonth": "Not chosen yet",
+    "kind": "Kind",
+    "packages": "Contents",
+    "noPackages": "None chosen",
+    "checks": "Checks",
+    "checksPass": "All pass",
+    "checksFail": "{failing} failing · {unexplained} without an explanation",
+    "number": "Number it will get",
+    "batch": "Batch made",
+    "lock": "Lock"
+  },
+  "problem": {
+    "read": {
+      "signed_out": "Your session ended: sign in again.",
+      "forbidden": "You may not see this company's accounting.",
+      "not_found": "This batch or month no longer exists.",
+      "unavailable": "The factory system did not answer: try again.",
+      "rate_limited": "Too many reads at once: wait a moment.",
+      "invalid": "The month or a filter is not valid.",
+      "internal": "Something went wrong on our side."
+    },
+    "write": {
+      "signed_out": "Your session ended: sign in again, then try once more.",
+      "forbidden": "You may not do this (a permission or a grain is missing).",
+      "not_found": "This batch or lock no longer exists: the page is read again.",
+      "rate_limited": "Too many tries: wait a moment.",
+      "unavailable": "The factory system did not answer: nothing was done, try again.",
+      "step_up": "A fresh code from your authenticator app is needed.",
+      "invalid": "Something typed is not valid.",
+      "internal": "Something went wrong on our side: nothing was done.",
+      "explain": "A failing check is not explained yet: explain it on the Checks step.",
+      "phrase": "The phrase is not the one asked.",
+      "moved": "Someone changed it meanwhile: it is read again.",
+      "changedWhile": "Documents of the month changed while the export was being made: the month is read again; export it again."
+    }
+  },
+  "refusal": {
+    "ALREADY_EXPORTED": "The month is exported already: the next batch is a re-export of what changed (the month is read again).",
+    "EXPORTED_MEANWHILE": "Someone exported the month meanwhile: look at it again.",
+    "NOTHING_CHANGED": "Nothing changed since the last batch: there is nothing to send.",
+    "NOT_LATEST": "A later batch carries the month now: the month is read again.",
+    "NOTHING_EXPORTED": "The month has no exported batch to amend: the month is read again.",
+    "PACKAGE_W2B": "A chosen package comes with W2b.",
+    "YEAR_END_NOT_THIS_PERIOD": "The year-end stock pack goes only with the month that ends the year.",
+    "PACKAGE_GRAIN": "A chosen package carries amounts of a grain you do not hold.",
+    "NOT_DRAFT": "This batch is not a draft any more: the list is read again.",
+    "CANCELLED": "This export was replaced or cancelled before it finished: look at the month again.",
+    "ALREADY_LOCKED": "The month is locked so already.",
+    "HARD_LOCKED": "The month is closed for good: lift the lock first.",
+    "OVERLAPS": "Another lock covers this month already.",
+    "NOT_LOCKED": "The lock is lifted already.",
+    "CHANGED": "The lock changed meanwhile: it is read again.",
+    "INVOICE_REJECTED": "An invoice of the month is rejected by SDI: send it again first.",
+    "STOCK_NOT_VALUED": "Some stock moves of the month have no value yet.",
+    "YEAR_END_COUNT_OPEN": "A year-end inventory is still open.",
+    "YEAR_END_COUNT_MISSING": "The year-end inventory of December is not applied yet.",
+    "other": "Something still holds the final close."
+  }
+}

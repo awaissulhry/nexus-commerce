@@ -139,7 +139,8 @@
     "back": "Indietro",
     "keep": "Mantieni",
     "you": "tu",
-    "colleague": "un collega"
+    "colleague": "un collega",
+    "close": "Chiudi"
   },
   "problem": {
     "read": {
@@ -199,7 +200,8 @@
     "reopen": "Riapri per modificare",
     "newLink": "Invia un nuovo link",
     "cancel": "Annulla preventivo…",
-    "copyNumber": "Copia numero"
+    "copyNumber": "Copia numero",
+    "duplicate": "Duplica"
   },
   "tab": {
     "lines": "Righe",
@@ -246,7 +248,8 @@
     "waitingYours": "L'hai chiesta tu: decide un approvatore (Amministrazione o Titolare). Nel frattempo le righe sono bloccate.",
     "waitingWho": "Decide un approvatore qui o da Home › Approvazioni; chi ha chiesto non decide mai.",
     "accepted": "Accettato dal cliente. Le prove e la richiesta di acconto sono nella scheda Documenti.",
-    "noPanels": "Conversazione e file si aprono con il preventivo."
+    "noPanels": "Conversazione e file si aprono con il preventivo.",
+    "priceList": "Listino {code} · versione {revision}"
   },
   "save": {
     "saving": "Salvataggio…",
@@ -326,7 +329,8 @@
       "unitGross": "Prezzo unitario (IVA incl.)",
       "net": "Netto riga",
       "unitCost": "Costo unitario",
-      "margin": "Margine %"
+      "margin": "Margine %",
+      "list": "Prezzo di listino"
     },
     "priceOf": "Prezzo unitario di {colour}",
     "pricePlaceholder": "es. 450,00",
@@ -335,7 +339,13 @@
     "belowFloor": "Sotto la soglia",
     "autosave": "Si salva poco dopo che smetti di scrivere. Un colore senza pezzi non viene quotato.",
     "keys": "Tasti: n — aggiungi un modello (da qualunque punto della scheda) · frecce, Tab, Invio — spostati tra le celle · Esc — rimetti la cella · ⌘V — incolla un blocco da un foglio di calcolo.",
-    "priceInvalid": "Non è un prezzo: scrivi un numero come 450,00 (o 450.00)."
+    "priceInvalid": "Non è un prezzo: scrivi un numero come 450,00 (o 450.00).",
+    "noList": "Nessun prezzo di listino",
+    "belowList": "{pct} sul listino",
+    "aboveList": "{pct} sopra il listino",
+    "useList": "Usa il listino",
+    "useListOf": "Usa il prezzo di listino per {colour}",
+    "backToList": "{colour} è tornato al prezzo di listino."
   },
   "summary": {
     "label": "L'affare in sintesi",
@@ -397,7 +407,11 @@
       "marginPct": "Margine %"
     },
     "negative": "Sotto costo",
-    "editOnLines": "I prezzi si cambiano nella scheda Righe (un solo punto di modifica)."
+    "editOnLines": "I prezzi si cambiano nella scheda Righe (un solo punto di modifica).",
+    "fromList": "Prezzi di listino da",
+    "listVersion": "{code} · {name}, versione {revision}",
+    "keepsVersion": "il preventivo tiene questa versione finché non viene rivisto.",
+    "noList": "Nessun listino ha prezzato questo preventivo: i prezzi sono scritti a mano."
   },
   "terms": {
     "party": {
@@ -467,7 +481,13 @@
     "problem": {
       "validPast": "L'offerta deve valere almeno fino a domani.",
       "depositPct": "Una percentuale da 0 a 100."
-    }
+    },
+    "library": "Termini di pagamento dalla libreria",
+    "libraryHint": "I termini del cliente vengono prima; il nome stampato segue la lingua del documento.",
+    "libraryFailed": "Impossibile leggere la libreria dei termini di pagamento: resta il testo scritto.",
+    "libraryNone": "Nessuno: stampa il testo qui sotto",
+    "typedHint": "Stampato come scritto (senza termini dalla libreria).",
+    "belowMinimum": "Sotto l'ordine minimo del cliente di {minimum}: mancano {short}."
   },
   "versions": {
     "loading": "Lettura delle versioni…",
@@ -766,7 +786,63 @@
     "held": {
       "customer": "Prima scegli un cliente.",
       "party": "Questo cliente è {status}: non gli si può fare un preventivo.",
-      "identity": "Questo cliente non ha dati fiscali in vigore: aggiungili prima al cliente."
-    }
+      "identity": "Questo cliente non ha dati fiscali in vigore: aggiungili prima al cliente.",
+      "past": "Scegli prima il preventivo passato"
+    },
+    "startFrom": "Parti da",
+    "from": {
+      "blank": "Vuoto",
+      "past": "Un preventivo passato"
+    },
+    "fromBody": {
+      "blank": "Aggiungi i modelli nella scheda Righe.",
+      "past": "Le righe vengono copiate per questo cliente, con le sue condizioni e i suoi prezzi di listino."
+    },
+    "createFrom": "Crea da {number}",
+    "pastSearch": "Preventivo passato",
+    "pastHint": "I preventivi di questo cliente; scrivi un numero per trovarne uno qualsiasi.",
+    "pastPlaceholder": "es. 2026-00012",
+    "pastNone": "Nessun preventivo trovato",
+    "pastFound_one": "{count} preventivo",
+    "pastFound_other": "{count} preventivi",
+    "pastLine": "Versione {revision} · {lines} righe · {units} pezzi",
+    "pastOther": "Altro cliente"
+  },
+  "dup": {
+    "title": "Duplica {number}",
+    "body": "Un nuovo preventivo in bozza con un numero suo, da oggi, con le righe copiate. Invii, link e approvazioni non vengono copiati.",
+    "version": "Versione da copiare",
+    "versionCurrent": "Versione {revision} (attuale)",
+    "versionOther": "Versione {revision} · {status}",
+    "for": "Per",
+    "same": "Lo stesso cliente · {name}",
+    "sameBody": "Tiene condizioni, acconto, indirizzi, contatto e lingua.",
+    "other": "Un altro cliente",
+    "otherBody": "Prende condizioni, prezzi di listino e indirizzi di quel cliente.",
+    "keeps": "Prezzi",
+    "keepsSame": "Una riga venduta a prezzo di listino prende il listino di oggi; un prezzo scontato o scritto a mano resta.",
+    "keepsOther": "Le righe a prezzo di listino prendono il listino del nuovo cliente; le altre tengono il loro prezzo: controllale.",
+    "go": "Duplica",
+    "held": {
+      "customer": "Scegli prima il cliente",
+      "inactive": "Quel cliente non è attivo"
+    },
+    "doneTitle": "{number} creato",
+    "doneBody_one": "{number} è una nuova bozza copiata da {source}, con {count} riga.",
+    "doneBody_other": "{number} è una nuova bozza copiata da {source}, con {count} righe.",
+    "droppedTitle_one": "{count} parte è stata lasciata fuori",
+    "droppedTitle_other": "{count} parti sono state lasciate fuori",
+    "dropped": {
+      "mtm": "Riga {line}: il su misura arriva più avanti, il capo non è copiato.",
+      "size": "Riga {line}: la taglia {size} non è più offerta in quella variante.",
+      "noSizes": "Riga {line}: nessuna delle sue taglie è più offerta.",
+      "other": "Riga {line}: il modello o la variante non è più offerto."
+    },
+    "warning": {
+      "basis": "L'originale era prezzato su un'altra base (netto o IVA inclusa): controlla i prezzi tenuti come scritti.",
+      "other": "Controlla i prezzi copiati prima di inviare."
+    },
+    "allCopied": "Tutte le righe sono state copiate.",
+    "open": "Apri {number}"
   }
 }

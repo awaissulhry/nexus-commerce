@@ -7,8 +7,10 @@ import { INVOICES_ISSUE } from '@nexus/factory-domain/invoicing/permissions'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { checkSources, prepareLines, termsFor, type LineInput, type PaymentInput, type PreparedLine } from '../drafts'
-import { coreLineOf, partyFacts, paymentTermsOf, reviewIssue } from '../facts'
+import type { ChargeKind } from '@nexus/factory-domain/invoicing/charges/charges'
+import { checkSources, prepareLines, type LineInput, type PaymentInput, type PreparedLine } from '../drafts'
+import { sourceOfPayment, storedSourceOf, termsJsonOf } from '../terms'
+import { coreLineOf, partyFacts, reviewIssue } from '../facts'
 import { invoiceDetail, officeInvoice, readInvoice, readLines, type InvoiceDetail, type InvoiceRow, type LineRow } from '../store'
 import { lockInvoice, readSends } from './store'
 
@@ -45,11 +47,6 @@ export const resendProblems = (problems: readonly IssueProblem[]): IssueProblem[
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
 const dayOf = (value: Date): string => value.toISOString().slice(0, 10)
 
-function paymentInputOf(stored: unknown): PaymentInput | null {
-  const first = paymentTermsOf(stored)?.installments[0]
-  return first ? { method: first.method, dueDate: first.dueDate ?? null, iban: first.iban ?? null } : null
-}
-
 const refsJson = (refs: CorrectionInput['documentRefs']): Prisma.InputJsonValue | null =>
   refs && refs.length > 0 ? refs.map((ref) => ({ kind: 'PURCHASE_ORDER', number: ref.number.trim(), ...(ref.date ? { date: ref.date } : {}) })) : null
 
@@ -60,6 +57,9 @@ interface LineToWrite {
   readonly size: string | null
   readonly ddtId: string | null
   readonly depositInvoiceId: string | null
+  /** B-W2a-54: a charge's kind, and the payment schedule step a line bills. */
+  readonly chargeKind?: ChargeKind | null
+  readonly milestoneId?: string | null
 }
 
 async function rewriteLines(tools: CommandTools, invoice: InvoiceRow, lines: readonly LineToWrite[], amounts: readonly { netAmount: number; grossAmount: number | null }[]): Promise<void> {
@@ -89,6 +89,8 @@ async function rewriteLines(tools: CommandTools, invoice: InvoiceRow, lines: rea
         size: line.size,
         ddtId: line.ddtId,
         depositInvoiceId: line.depositInvoiceId,
+        chargeKind: line.core.kind === 'CHARGE' ? (line.chargeKind ?? null) : null,
+        milestoneId: line.milestoneId ?? null,
         createdById: tools.context.audience === 'office' ? tools.context.actorId : null,
       },
       select: { id: true },
@@ -138,8 +140,9 @@ export async function correctInCommand(tools: CommandTools, invoiceId: string, i
   if (gross < paid + credited) {
     throw new ConflictError('The corrected total would be below what is already paid and credited on this invoice: reverse the payment first, or correct the lines differently.')
   }
-  const payment = input.payment === undefined ? paymentInputOf(current.paymentTerms) : input.payment
-  const terms = termsFor(payment, gross)
+  // B-W2a-54: the terms are made again from where they came from (terms.ts), on the invoice's own date.
+  const source = input.payment === undefined ? storedSourceOf(current.paymentTerms) : sourceOfPayment(input.payment)
+  const terms = await termsJsonOf(tx, current.companyId, source, gross, dayOf(current.issueDate!))
   const data: Prisma.InvoiceUncheckedUpdateInput = {
     ...(totals
       ? { netTotal: totals.netTotal, vatTotal: totals.vatTotal, grossTotal: totals.grossTotal, vatSummary: totals.vatSummary as unknown as Prisma.InputJsonValue, stampDutyAmount: totals.stampDutyAmount }

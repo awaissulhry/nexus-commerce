@@ -184,6 +184,15 @@ describe('a subcontract order from an outside operation (SCM-138)', () => {
     expect(planner.operations.find((row: Json) => row.id === seed.production.operationIds.sew).outside).not.toHaveProperty('pricePerPiece')
   })
 
+  it('offers the released and running work orders to a role with purchasing.view only, with their outside steps (B-W2a-56)', async () => {
+    const choices = await ok('planner', 'GET', '/purchasing/subcontracting/work-orders')
+    expect(choices.items).toEqual(expect.arrayContaining([expect.objectContaining({ id: seed.production.workOrderId, status: 'IN_PROGRESS', outsideSteps: 1, garments: expect.any(Number), site: expect.objectContaining({ id: A.siteA1 }) })]))
+    const found = await ok('planner', 'GET', `/purchasing/subcontracting/work-orders?q=${encodeURIComponent(choices.items[0].number)}`)
+    expect(found.items.map((row: Json) => row.id)).toContain(choices.items[0].id)
+    expect((await ok('otherTenant', 'GET', '/purchasing/subcontracting/work-orders')).items.map((row: Json) => row.id)).not.toContain(seed.production.workOrderId)
+    await refused('floor', 'GET', '/purchasing/subcontracting/work-orders', undefined, 403)
+  })
+
   it('refuses more pieces of an operation than the work order makes across live orders', async () => {
     const error = await refused('buyer', 'POST', '/purchasing/subcontracting/orders', { workOrderId: seed.production.workOrderId, operations: [{ workOrderOperationId: seed.production.operationIds.sew }] }, 400)
     expect(error.issues[0]).toMatchObject({ path: 'body/operations/0/pieces', message: expect.stringContaining('7 piece(s) of operation') })
@@ -290,6 +299,18 @@ describe('the kit out with its DDT for work on our behalf (SCM-140), stock at th
     expect(ddt!.lines.map((line) => line.sourceLineId)).toEqual([lining.id, ...bundles.map(() => null)])
     expect(ddt!.lines.slice(1).map((line) => line.code)).toEqual(bundles.map((bundle) => bundle.code))
     expect(order.ddts).toEqual([expect.objectContaining({ id: ddtId, cancelled: false, kitLineIds: [lining.id] })])
+  })
+
+  it('filters the list by each tile, with the same rules as the tiles (B-W2a-56)', async () => {
+    const counts = await ok('planner', 'GET', '/purchasing/subcontracting/orders/counts')
+    for (const [filter, count] of [['atWorkshop', counts.atWorkshops], ['kitToSend', counts.kitToSend], ['dueThisWeek', counts.dueBackThisWeek], ['late', counts.late]] as const) {
+      const list = await ok('planner', 'GET', `/purchasing/subcontracting/orders?${filter}=true`)
+      expect(list.items.length, filter).toBe(count)
+    }
+    const atWorkshop = await ok('planner', 'GET', '/purchasing/subcontracting/orders?atWorkshop=true')
+    expect(atWorkshop.items.map((row: Json) => row.id)).toContain(order.id)
+    const toSend = await ok('planner', 'GET', '/purchasing/subcontracting/orders?kitToSend=true')
+    expect(toSend.items.map((row: Json) => row.id)).not.toContain(order.id)
   })
 
   it("shows our stock at the workshop (still ours: its value only with the cost grain)", async () => {

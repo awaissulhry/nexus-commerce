@@ -50,6 +50,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // Purchasing › the PO studio (SCR-059); Warehouse › a goods receipt (SCR-063).
   PurchaseOrder: '/purchasing/orders/[id]',
   GoodsReceipt: '/warehouse/receipts/[id]',
+  // Purchasing › Subcontract orders (SCR-128, B-W2a-56): an order sent to a workshop.
+  SubcontractOrder: '/purchasing/subcontracting/[id]',
   // Admin (B-W0-27/28): a company, a site (its address names its company: `[companyId]` is the record's own company), a
   // device or printer, an office user, a floor worker, a role, a connection.
   Company: '/admin/companies/[id]',
@@ -66,6 +68,10 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Machine: '/plant/machines/[id]',
   MaintenanceJob: '/plant/jobs/[id]',
   MaintenanceRequest: '/plant/requests?open=[id]',
+  // Sales › Price lists & contracts (SCR-106, B-W2a-49): a customer price list.
+  PriceList: '/sales/price-lists/[id]',
+  // Finance › Accounting export (SCR-156, B-W2a-51): a batch opens on its files tab (its checks, explanations and files).
+  AccountingExport: '/finance/accounting/files?export=[id]',
 })
 
 /**
@@ -100,11 +106,16 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // The invoice list reads the API's own filters from the address (`?status=REJECTED`, `?docType=TD04`).
   '/invoicing/invoices': '/finance/invoices',
   '/payments': '/finance/payments',
+  // B-W2a-51: the accounting batches (`?status=`, `?year=`) and the stock valuation (`?asOf=`, `?site=`, `?category=`).
+  '/accounting/exports': '/finance/accounting',
+  '/costing/valuation': '/finance/reports',
   // The shipments list (SCR-066) reads `?rows=` and `?q=` from the address.
   '/shipping/shipments': '/warehouse/shipments',
   // The PO list reads `status` (one state, as the API) and `waitingOver48h`; Receipts reads `status`, `view=expected`.
   '/purchasing/orders': '/purchasing/orders',
   '/inventory/receipts': '/warehouse/receipts',
+  // B-W2a-56: the subcontract orders (the page reads `?view=`, `?q=`; `?show=stock` is the stock at the workshops).
+  '/purchasing/subcontracting/orders': '/purchasing/subcontracting',
   // The stock screens read the API's own filters from the address.
   '/inventory/stock': '/warehouse/stock',
   '/inventory/hides': '/warehouse/hides',
@@ -121,6 +132,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/plant/requests': '/plant/requests',
   '/plant/jobs': '/plant/jobs',
   '/plant/machines': '/plant/machines',
+  // B-W2a-49: the price lists (SCR-106) read `?rows=`, `?kind=` and `?q=`.
+  '/sales/price-lists': '/sales/price-lists',
 })
 
 export interface RecordRef {

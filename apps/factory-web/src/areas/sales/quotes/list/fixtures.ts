@@ -3,6 +3,7 @@ import { DEMO_COMPANIES } from '../../../../shell/design-data'
 import type { PartyRow, QuoteListRow } from '../api'
 import { NO_FILTERS, type QuoteTile, type TileCount } from '../model'
 import { CAN, GRAINS, PARTY, PEOPLE, PREFIX } from '../record/fixtures'
+import { duplicateOf } from '../duplicate/model'
 import type { NewQuoteModel, QuotesListViewModel } from './list-model'
 import { QuotesListView } from './view/QuotesListView'
 
@@ -110,6 +111,39 @@ export const designScreen = defineDesignScreen<QuotesListViewModel>({
     { id: 'new-quote', label: 'New quote: customer search', model: model({ grains: GRAINS.sales, can: CAN.sales, newQuote: NEW }), note: 'Customers by name, code or VAT; blocked and VIES warnings shown; the number it will get, before Create.' },
     { id: 'new-quote-picked', label: 'New quote: customer picked', model: model({ grains: GRAINS.sales, can: CAN.sales, newQuote: { ...NEW, party: PARTY, contactId: PARTY.contacts[0]!.id, customerRef: 'RFQ-0042' } }), note: 'The orders contact is pre-picked; ⌘↵ creates the draft and opens its Lines tab.' },
     { id: 'new-quote-blocked', label: 'New quote: a blocked customer (held)', model: model({ newQuote: { ...NEW, party: { ...PARTY, status: 'BLOCKED', legalName: 'Negozio Bloccato Demo', tradeName: null } } }) },
+    // B-W2a-49 (SAL-155): New quote › Start from a past quote; row ⋯ Duplicate.
+    {
+      id: 'new-quote-past',
+      label: 'W2a: New quote — start from a past quote of this customer',
+      model: model({ grains: GRAINS.sales, can: CAN.sales, newQuote: { ...NEW, party: PARTY, contactId: PARTY.contacts[0]!.id, startFrom: 'past', past: { query: '', results: ROWS.slice(0, 4), problem: null, chosenId: ROWS[1]!.id, done: null } } }),
+      note: 'Its lines are copied for this customer with its own terms and list prices; ⌘↵ creates the copy.',
+    },
+    { id: 'new-quote-past-pick', label: 'W2a: New quote — past quote not picked yet (Create held)', model: model({ grains: GRAINS.sales, can: CAN.sales, newQuote: { ...NEW, party: PARTY, startFrom: 'past', past: { query: '', results: null, problem: null, chosenId: '', done: null } } }) },
+    {
+      id: 'new-quote-past-done',
+      label: 'W2a: New quote from a past quote — what the copy left out',
+      model: model({
+        grains: GRAINS.sales,
+        can: CAN.sales,
+        newQuote: {
+          ...NEW,
+          party: PARTY,
+          startFrom: 'past',
+          past: { query: '', results: ROWS.slice(0, 4), problem: null, chosenId: ROWS[1]!.id, done: { quoteId: id(60), number: 'Q-2026-0160', lines: 2, dropped: [{ seq: 30, size: '58', reason: 'Size 58 is no longer offered in this colourway.' }, { seq: 40, size: null, reason: 'Made-to-measure comes later: the unit is not copied.' }], warnings: [] } },
+        },
+      }),
+    },
+    { id: 'duplicate', label: 'W2a: Duplicate (row ⋯) — for the same customer', model: model({ grains: GRAINS.sales, can: CAN.sales, duplicate: duplicateOf({ id: ROWS[0]!.id, number: ROWS[0]!.number, partyId: ROWS[0]!.partyId, partyName: ROWS[0]!.partyName, revision: 1, versions: [] }) }), note: 'A new draft with its own number from today; sends, links and approvals are not copied.' },
+    {
+      id: 'duplicate-other',
+      label: 'W2a: Duplicate — for another customer',
+      model: model({ grains: GRAINS.sales, can: CAN.sales, duplicate: { ...duplicateOf({ id: ROWS[0]!.id, number: ROWS[0]!.number, partyId: ROWS[0]!.partyId, partyName: ROWS[0]!.partyName, revision: 1, versions: [] }), target: 'other', results: RESULTS } }),
+    },
+    {
+      id: 'duplicate-done',
+      label: 'W2a: Duplicated — a warning about the price basis',
+      model: model({ grains: GRAINS.sales, can: CAN.sales, duplicate: { ...duplicateOf({ id: ROWS[0]!.id, number: ROWS[0]!.number, partyId: ROWS[0]!.partyId, partyName: ROWS[0]!.partyName, revision: 1, versions: [] }), done: { quoteId: id(61), number: 'Q-2026-0161', lines: 2, dropped: [], warnings: ['The source was priced without VAT; this customer buys with VAT included: check the prices kept as typed.'] } } }),
+    },
     { id: 'loading', label: 'Loading', model: model({ rows: { items: null, more: false, problem: null }, tiles: UNKNOWN, asOf: null }), note: 'Unknown counts show "—", never 0.' },
     { id: 'error', label: 'Error', model: model({ rows: { items: null, more: false, problem: 'problem.read.unavailable' }, tiles: UNKNOWN }) },
     { id: 'no-permission', label: 'No permission (direct address)', model: model({ rows: { items: null, more: false, problem: 'problem.read.forbidden' }, tiles: UNKNOWN, can: CAN.viewer }), note: 'The page is absent from the navigation; a direct address says the role does not allow it.' },

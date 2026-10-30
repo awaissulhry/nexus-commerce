@@ -127,12 +127,29 @@ export interface ListQuery {
   readonly workOrderId?: string | undefined
   readonly siteId?: string | undefined
   readonly late?: boolean | undefined
+  readonly kitToSend?: boolean | undefined
+  readonly atWorkshop?: boolean | undefined
+  readonly dueThisWeek?: boolean | undefined
   readonly q?: string | undefined
   readonly cursor?: string | undefined
   readonly limit: number
 }
 
 const scopeOf = (context: OfficeContext) => scopeWhere(actorOf(context), PURCHASING_VIEW, { company: 'companyId', site: 'siteId', party: 'partyId' }) as Prisma.SubcontractOrderWhereInput
+
+/** The last day of the week of `day` (Sunday): "due back this week". */
+function sundayOf(day: BusinessDate): Date {
+  const start = new Date(`${day}T00:00:00.000Z`)
+  return new Date(start.getTime() + ((7 - start.getUTCDay()) % 7) * 86_400_000)
+}
+
+/** The tiles' rules (B-W2a-56: each tile is also the list's filter, so a tile and its list always agree). */
+const TILE_WHERE = {
+  kitToSend: (): Prisma.SubcontractOrderWhereInput => ({ status: { in: ['ISSUED', 'AT_WORKSHOP', 'PARTLY_RECEIVED'] }, kitLines: { some: { status: 'PLANNED' } } }),
+  atWorkshop: (): Prisma.SubcontractOrderWhereInput => ({ status: { in: ['AT_WORKSHOP', 'PARTLY_RECEIVED'] } }),
+  dueThisWeek: (now: BusinessDate): Prisma.SubcontractOrderWhereInput => ({ status: { in: [...DUE_STATUSES] }, expectedBackDate: { gte: dayValue(now), lte: sundayOf(now) } }),
+  late: (now: BusinessDate): Prisma.SubcontractOrderWhereInput => ({ status: { in: [...DUE_STATUSES] }, expectedBackDate: { lt: dayValue(now) } }),
+}
 
 /** purchasing.view: the orders the caller reaches, newest first (a cursor of ids). */
 export async function listOrders(caller: CommandCaller, query: ListQuery): Promise<{ items: OrderSummaryView[]; nextCursor: string | null }> {
@@ -145,7 +162,10 @@ export async function listOrders(caller: CommandCaller, query: ListQuery): Promi
       query.partyId ? { partyId: query.partyId } : {},
       query.workOrderId ? { workOrderId: query.workOrderId } : {},
       query.siteId ? { siteId: query.siteId } : {},
-      query.late ? { status: { in: [...DUE_STATUSES] }, expectedBackDate: { lt: dayValue(now) } } : {},
+      query.late ? TILE_WHERE.late(now) : {},
+      query.kitToSend ? TILE_WHERE.kitToSend() : {},
+      query.atWorkshop ? TILE_WHERE.atWorkshop() : {},
+      query.dueThisWeek ? TILE_WHERE.dueThisWeek(now) : {},
       query.q
         ? {
             OR: [
@@ -171,18 +191,57 @@ export async function listOrders(caller: CommandCaller, query: ListQuery): Promi
 export async function orderCounts(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly partyId?: string | undefined }) {
   const context = officeContextOf(caller)
   const now = today()
-  const sunday = (() => {
-    const day = new Date(`${now}T00:00:00.000Z`)
-    const offset = (7 - day.getUTCDay()) % 7
-    return new Date(day.getTime() + offset * 86_400_000)
-  })()
   const base: Prisma.SubcontractOrderWhereInput[] = [scopeOf(context), query.siteId ? { siteId: query.siteId } : {}, query.partyId ? { partyId: query.partyId } : {}]
   return caller.withClient(async (client) => {
-    const kitToSend = await client.subcontractOrder.count({ where: { AND: [...base, { status: { in: ['ISSUED', 'AT_WORKSHOP', 'PARTLY_RECEIVED'] } }, { kitLines: { some: { status: 'PLANNED' } } }] } })
-    const atWorkshops = await client.subcontractOrder.count({ where: { AND: [...base, { status: { in: ['AT_WORKSHOP', 'PARTLY_RECEIVED'] } }] } })
-    const dueBackThisWeek = await client.subcontractOrder.count({ where: { AND: [...base, { status: { in: [...DUE_STATUSES] } }, { expectedBackDate: { gte: dayValue(now), lte: sunday } }] } })
-    const late = await client.subcontractOrder.count({ where: { AND: [...base, { status: { in: [...DUE_STATUSES] } }, { expectedBackDate: { lt: dayValue(now) } }] } })
+    const kitToSend = await client.subcontractOrder.count({ where: { AND: [...base, TILE_WHERE.kitToSend()] } })
+    const atWorkshops = await client.subcontractOrder.count({ where: { AND: [...base, TILE_WHERE.atWorkshop()] } })
+    const dueBackThisWeek = await client.subcontractOrder.count({ where: { AND: [...base, TILE_WHERE.dueThisWeek(now)] } })
+    const late = await client.subcontractOrder.count({ where: { AND: [...base, TILE_WHERE.late(now)] } })
     return { kitToSend, atWorkshops, dueBackThisWeek, late }
+  })
+}
+
+/**
+ * purchasing.view (B-W2a-56, the "New subcontract order" dialog): the RELEASED and IN_PROGRESS work orders the caller
+ * reaches (purchasing.view over their company and site), newest first, by number or style code/name; each with its
+ * garments, how many of its operations the routing sends out (a step naming a workshop) and its live orders.
+ */
+export async function workOrderChoices(caller: CommandCaller, query: { readonly q?: string | undefined; readonly siteId?: string | undefined; readonly limit: number }) {
+  const context = officeContextOf(caller)
+  const where: Prisma.WorkOrderWhereInput = {
+    AND: [
+      scopeWhere(actorOf(context), PURCHASING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput,
+      { status: { in: [...WORK_ORDER_STATES] } },
+      query.siteId ? { siteId: query.siteId } : {},
+      query.q
+        ? { OR: [{ number: { contains: query.q, mode: 'insensitive' } }, { style: { code: { contains: query.q, mode: 'insensitive' } } }, { style: { name: { contains: query.q, mode: 'insensitive' } } }] }
+        : {},
+    ],
+  }
+  return caller.withClient(async (client) => {
+    const rows = await client.workOrder.findMany({ where, orderBy: { id: 'desc' }, take: query.limit, select: { id: true, number: true, status: true, companyId: true, siteId: true, styleId: true } })
+    const ids = rows.map((row) => row.id)
+    const styles = new Map((await client.style.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.styleId))] } }, select: { id: true, code: true, name: true } })).map((style) => [style.id, style]))
+    const sites = new Map((await client.site.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.siteId))] } }, select: { id: true, code: true } })).map((site) => [site.id, site]))
+    const garments = new Map((await client.workOrderSize.groupBy({ by: ['workOrderId'], where: { workOrderId: { in: ids } }, _sum: { quantity: true } })).map((row) => [row.workOrderId, row._sum.quantity ?? 0]))
+    const operations = await client.workOrderOperation.findMany({ where: { workOrderId: { in: ids } }, select: { id: true, workOrderId: true, seq: true, routingSeq: true, code: true, name: true, styleRevisionId: true } })
+    const steps = await outsideStepsOf(client, operations)
+    const outside = new Map<string, number>()
+    for (const operation of operations) if (steps.has(operation.id)) outside.set(operation.workOrderId, (outside.get(operation.workOrderId) ?? 0) + 1)
+    const live = new Map((await client.subcontractOrder.groupBy({ by: ['workOrderId'], where: { workOrderId: { in: ids }, status: { notIn: ['CANCELLED', 'CLOSED'] } }, _count: { _all: true } })).map((row) => [row.workOrderId, row._count._all]))
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        number: row.number,
+        status: row.status,
+        style: styles.get(row.styleId) ?? { id: row.styleId, code: '', name: '' },
+        companyId: row.companyId,
+        site: sites.get(row.siteId) ?? { id: row.siteId, code: '' },
+        garments: garments.get(row.id) ?? 0,
+        outsideSteps: outside.get(row.id) ?? 0,
+        liveOrders: live.get(row.id) ?? 0,
+      })),
+    }
   })
 }
 

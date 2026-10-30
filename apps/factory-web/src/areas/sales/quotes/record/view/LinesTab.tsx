@@ -8,7 +8,7 @@ import { Button, Checkbox, InfoTip, Input, Pill, RadioCard, Spinner, Tag } from 
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { QuoteDetail, QuoteLine, StyleDetail } from '../../api'
-import { certificateIssues, gridShapeOf, gridValueOf, isEditable, marginTone, money, percent, styleBlocks, styleTags, unitPrice, unitsOf, type NextStepView, type StyleBlock } from '../../model'
+import { certificateIssues, gridShapeOf, gridValueOf, isEditable, listPriceState, marginTone, money, offListPct, percent, styleBlocks, styleTags, unitPrice, unitsOf, type NextStepView, type StyleBlock } from '../../model'
 import type { QuoteRecordActions, QuoteRecordViewModel } from '../record-model'
 import { sizeGridWords } from './grid-copy'
 
@@ -235,6 +235,8 @@ function StyleBlockCard({ block, quote, model, actions, editable }: { block: Sty
         ) : (
           '—'
         ),
+        // B-W2a-49: the customer's list price for this colour line, and how far the offered price is from it.
+        model.grains.price ? <ListPriceCell key="l" line={line} currency={currency} editable={editable} onUseList={(lineId) => actions?.onUseListPrice?.(lineId)} /> : '—',
         model.grains.price ? money(line?.netAmount, currency, locale) : '—',
         ...(model.grains.cost ? [line ? (line.costComplete ? unitPrice(line.unitCost, currency, locale) : t('lines.costMissing')) : '—'] : []),
         ...(model.grains.margin
@@ -252,7 +254,7 @@ function StyleBlockCard({ block, quote, model, actions, editable }: { block: Sty
       ],
     }
   })
-  const columns = [t('lines.col.colour'), t('lines.col.pieces'), t(quote.current.priceBasis === 'GROSS' ? 'lines.col.unitGross' : 'lines.col.unitNet'), t('lines.col.net'), ...(model.grains.cost ? [t('lines.col.unitCost')] : []), ...(model.grains.margin ? [t('lines.col.margin')] : [])]
+  const columns = [t('lines.col.colour'), t('lines.col.pieces'), t(quote.current.priceBasis === 'GROSS' ? 'lines.col.unitGross' : 'lines.col.unitNet'), t('lines.col.list'), t('lines.col.net'), ...(model.grains.cost ? [t('lines.col.unitCost')] : []), ...(model.grains.margin ? [t('lines.col.margin')] : [])]
 
   return (
     <Card padded className="fw-q-block">
@@ -394,5 +396,26 @@ export function SummaryRail({ quote, model, actions, step }: { quote: QuoteDetai
         )}
       </Card>
     </div>
+  )
+}
+
+/** A colour line's list price (B-W2a-49, from the customer's price list) and its distance from the offered price. */
+function ListPriceCell({ line, currency, editable, onUseList }: { line: QuoteLine | undefined; currency: string; editable: boolean; onUseList: (lineId: string) => void }) {
+  const t = useT('sales')
+  const locale = useLocale()
+  if (!line) return <span>—</span>
+  const state = listPriceState(line)
+  if (state === 'noList') return <span className="fw-q-hint">{t('lines.noList')}</span>
+  const pct = offListPct(line)
+  return (
+    <span className="fw-q-inline">
+      {unitPrice(line.listUnitPrice, currency, locale)}
+      {state !== 'atList' && pct && <Tag tone={state === 'below' ? 'warning' : 'info'}>{t(state === 'below' ? 'lines.belowList' : 'lines.aboveList', { pct: percent(String(Math.abs(Number(pct))), locale) })}</Tag>}
+      {state !== 'atList' && editable && (
+        <Button size="sm" variant="quiet" onClick={() => onUseList(line.id)} aria-label={t('lines.useListOf', { colour: line.colourway.code })}>
+          {t('lines.useList')}
+        </Button>
+      )}
+    </span>
   )
 }

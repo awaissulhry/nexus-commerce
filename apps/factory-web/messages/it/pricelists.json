@@ -1,0 +1,486 @@
+{
+  "common": {
+    "back": "Indietro",
+    "close": "Chiudi",
+    "dismiss": "Chiudi",
+    "retry": "Riprova"
+  },
+  "kind": {
+    "BASE": "Base",
+    "CUSTOMER": "Cliente",
+    "GROUP": "Gruppo",
+    "CONTRACT": "Contratto"
+  },
+  "kindHint": {
+    "BASE": "Prezza ogni cliente senza un listino suo. Un listino base per azienda e valuta.",
+    "CUSTOMER": "I prezzi di un cliente; un modello che manca viene dal listino di riserva.",
+    "GROUP": "Un gruppo di sconto: ogni cliente con questo listino fa parte del gruppo.",
+    "CONTRACT": "Prezzi concordati in un contratto, con le loro date."
+  },
+  "state": {
+    "DRAFT": "Bozza",
+    "SCHEDULED": "Parte più avanti",
+    "IN_FORCE": "In vigore",
+    "EXPIRED": "Scaduto",
+    "ARCHIVED": "Archiviato"
+  },
+  "versionState": {
+    "DRAFT": "Bozza",
+    "IN_FORCE": "In vigore",
+    "STARTS": "Parte più avanti",
+    "ENDED": "Terminata"
+  },
+  "partyStatus": {
+    "PROSPECT": "Potenziale",
+    "ACTIVE": "Attivo",
+    "BLOCKED": "Bloccato",
+    "ARCHIVED": "Archiviato"
+  },
+  "validity": {
+    "range": "{from} – {to}",
+    "from": "Dal {from}",
+    "until": "Fino al {to}",
+    "none": "Nessuna data prevista"
+  },
+  "live": {
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "connecting": "Connessione in corso",
+    "live": "In tempo reale",
+    "offline": "Non in linea — le modifiche aspettano di essere inviate"
+  },
+  "noAccess": {
+    "title": "Non hai accesso ai listini",
+    "body": "I listini richiedono il permesso di vederli (pricelists.view): lo hanno i ruoli Vendite, Amministrazione e Titolare."
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "new": "Nuovo listino"
+  },
+  "tile": {
+    "active": "In vigore",
+    "starting": "Partono entro 30 giorni",
+    "ending": "Scadono entro 30 giorni"
+  },
+  "rows": {
+    "active": "In vigore",
+    "drafts": "Bozze",
+    "expired": "Scaduti",
+    "all": "Tutti",
+    "archived": "Archiviati"
+  },
+  "list": {
+    "intro": "Listini clienti per versione datata: un preventivo prende i prezzi delle righe dal listino del cliente e tiene la versione con cui è stato prezzato.",
+    "new": "Nuovo listino",
+    "table": "Listini",
+    "search": "Cerca codice o nome",
+    "count_one": "{count} listino",
+    "count_other": "{count} listini",
+    "rows": "Righe: {rows}",
+    "rowsHeading": "Righe salvate",
+    "kindAll": "Tipo: tutti",
+    "kindIs": "Tipo: {kind}",
+    "activeFilters": "Filtri attivi",
+    "removeFilter": "Togli il filtro {name}",
+    "clearAll": "Togli tutti",
+    "more": "Altro",
+    "exportView": "Questa vista (CSV)",
+    "exportNothing": "Niente da esportare in questa vista",
+    "exportOne": "Esporta (CSV)",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "openVersions": "Versioni",
+    "rowMenu": "Azioni per {name}",
+    "fallsBack": "riserva {code}",
+    "versionShown": "Versione {revision}",
+    "draftWaiting": "Bozza in attesa",
+    "failed": "Impossibile caricare i listini",
+    "noMatch": "Nessuna riga corrisponde a questi filtri",
+    "empty": {
+      "title": "Ancora nessun listino",
+      "body": "Crea prima il listino base: prezza ogni cliente senza un listino suo.",
+      "bodyView": "I listini li crea chi ha il permesso di gestirli."
+    },
+    "tileUnknown": "Impossibile contare",
+    "col": {
+      "name": "Nome",
+      "kind": "Tipo",
+      "customers": "Clienti",
+      "currency": "Valuta",
+      "validity": "Validità dal–al",
+      "styles": "Modelli a listino",
+      "version": "Versione",
+      "state": "Stato",
+      "more": "Azioni"
+    },
+    "bulk": {
+      "export_one": "Esporta {count} (CSV)",
+      "export_other": "Esporta {count} (CSV)",
+      "archive_one": "Archivia {count}",
+      "archive_other": "Archivia {count}",
+      "exported_one": "{count} listino esportato.",
+      "exported_other": "{count} listini esportati.",
+      "archived_one": "{count} listino archiviato.",
+      "archived_other": "{count} listini archiviati.",
+      "archivedPartly": "{done} archiviati, {failed} rifiutati: prezzano clienti o un listino li usa come riserva."
+    }
+  },
+  "csv": {
+    "code": "Codice",
+    "name": "Nome",
+    "kind": "Tipo",
+    "currency": "Valuta",
+    "customers": "Clienti",
+    "validFrom": "Valido dal",
+    "validTo": "Valido al",
+    "styles": "Modelli a listino",
+    "version": "Versione",
+    "state": "Stato"
+  },
+  "held": {
+    "busy": "Sto salvando l'ultima modifica",
+    "noManage": "Il tuo ruolo può vedere i listini, non modificarli",
+    "noPartiesManage": "Dare un listino ai clienti richiede anche il permesso di modificare i clienti",
+    "noPrice": "Il tuo ruolo non vede i prezzi di vendita: i prezzi non sono mostrati",
+    "noStyles": "Il tuo ruolo non può vedere i modelli da scegliere",
+    "archived": "Il listino è archiviato: riattivalo prima",
+    "noVersion": "Il listino non ha ancora una versione",
+    "activeVersion": "La versione {revision} è in vigore: i suoi prezzi restano così. Crea la versione successiva per cambiare i prezzi.",
+    "activeHasDraft": "La versione {revision} è in vigore: i suoi prezzi restano così. Cambia i prezzi sulla bozza.",
+    "oneDraft": "C'è già una bozza in attesa: una bozza alla volta",
+    "nothingToArchive": "Nessuno di questi si può archiviare: prezzano clienti",
+    "archiveCustomers_one": "{count} cliente è prezzato da questo listino: dagli prima un altro listino",
+    "archiveCustomers_other": "{count} clienti sono prezzati da questo listino: dagli prima un altro listino",
+    "archiveFallback": "{lists} usano questo listino come riserva: cambiali prima"
+  },
+  "new": {
+    "title": "Nuovo listino",
+    "body": "Il listino nasce con la versione 1 in bozza: niente è in vigore finché una versione non viene attivata.",
+    "name": "Nome",
+    "code": "Codice",
+    "codeHint": "Lettere, cifre, punti, trattini; unico.",
+    "kind": "Tipo",
+    "currency": "Valuta",
+    "currencyHint": "Non cambia più dopo la creazione.",
+    "company": "Appartiene a",
+    "companyHint": "Un listino di tutte le aziende può essere usato da ognuna.",
+    "everyCompany": "Tutte le aziende",
+    "base": "Listino di riserva",
+    "baseHint": "Un modello che manca qui viene prezzato da questo listino.",
+    "noBase": "Nessuno",
+    "validFrom": "Primo giorno previsto",
+    "validFromHint": "Resta un'ipotesi: la versione entra in vigore quando viene attivata.",
+    "validTo": "Ultimo giorno previsto",
+    "note": "Nota",
+    "create": "Crea bozza",
+    "fixFirst_one": "Correggi prima {count} campo",
+    "fixFirst_other": "Correggi prima {count} campi",
+    "problem": {
+      "codeMissing": "Dai un codice al listino",
+      "code": "Fino a 40 lettere, cifre, punti, trattini o trattini bassi",
+      "nameMissing": "Dai un nome al listino",
+      "nameLong": "Al massimo 200 caratteri",
+      "currency": "Un codice valuta come EUR o CHF",
+      "baseOfBase": "Un listino base non ha riserva",
+      "fromPast": "Oggi o un giorno successivo",
+      "toBefore": "Dal primo giorno in poi",
+      "noteLong": "Al massimo 2000 caratteri"
+    },
+    "refused": {
+      "codeTaken": "Quel codice è già usato: scegline un altro.",
+      "codeOrBase": "Quel codice è già usato, oppure questa azienda ha già un listino base in questa valuta (archivialo prima, o crea un listino cliente, gruppo o contratto).",
+      "base": "Quel listino non può fare da riserva: deve essere attivo, di questa azienda o di tutte, e nella stessa valuta.",
+      "company": "Quell'azienda non può avere questo listino: scegline un'altra.",
+      "fields": "Alcuni campi sono stati rifiutati: controlla codice, nome e date."
+    }
+  },
+  "archive": {
+    "titleMany_one": "Archivia {count} listino",
+    "titleMany_other": "Archivia {count} listini",
+    "title": "Archivia {code}",
+    "body": "Un listino archiviato non prezza nessuno ed esce dalle scelte; le sue versioni e i preventivi prezzati restano come sono. Si può riattivare.",
+    "skipped_one": "{count} listino selezionato resta fuori: prezza clienti o è archiviato.",
+    "skipped_other": "{count} listini selezionati restano fuori: prezzano clienti o sono archiviati.",
+    "done": "{code} archiviato.",
+    "reactivated": "{code} è di nuovo attivo.",
+    "refused": "Non archiviato: dei clienti sono prezzati da esso, o un listino lo usa come riserva.",
+    "refusedReactivate": "Non riattivato: il listino di riserva è archiviato, oppure sarebbe un secondo listino base."
+  },
+  "record": {
+    "back": "Listini",
+    "backToList": "Torna ai listini",
+    "name": "Listino",
+    "loading": "Lettura del listino…",
+    "failed": "Impossibile caricare il listino",
+    "notFound": "Listino non trovato",
+    "notFoundBody": "Potrebbe essere stato tolto, o appartiene a un'azienda che non vedi.",
+    "tabsLabel": "Schede del listino",
+    "partFailed": "Impossibile caricare {part}",
+    "partLoading": "Lettura di {part}…",
+    "activate": "Attiva la versione {revision}",
+    "nextVersion": "Crea la versione successiva",
+    "more": "Altre azioni",
+    "copyCode": "Copia codice",
+    "toVersions": "Versioni",
+    "archive": "Archivia",
+    "reactivate": "Riattiva",
+    "everyCompany": "Tutte le aziende",
+    "ownCompany": "Questa azienda",
+    "shown": "Versione {revision}: {days}",
+    "fallsBack": "Riserva:",
+    "changed": "Qualcun altro ha modificato questo listino alle {time}",
+    "reload": "Ricarica",
+    "archivedBanner": "Archiviato: non prezza nessuno. Riattivalo per modificarlo.",
+    "readOnly": "Puoi vedere, non modificare",
+    "copied": "{code} copiato.",
+    "copyFailed": "Impossibile copiare {code}."
+  },
+  "tab": {
+    "prices": "Prezzi",
+    "customers": "Clienti",
+    "versions": "Versioni",
+    "activity": "Attività"
+  },
+  "prices": {
+    "version": "Versione mostrata",
+    "versionDraft": "Versione {revision} · bozza",
+    "versionActive": "Versione {revision}",
+    "days": "Validità",
+    "status": "Stato",
+    "activatedAt": "Attivata il",
+    "toDraft": "Vai alla bozza",
+    "table": "Prezzi della versione {revision}",
+    "count_one": "{count} prezzo",
+    "count_other": "{count} prezzi",
+    "search": "Cerca modello o colore",
+    "add": "Aggiungi un prezzo",
+    "col": {
+      "style": "Modello",
+      "colour": "Variante colore",
+      "price": "Prezzo unitario (netto)",
+      "cost": "Costo standard",
+      "margin": "Margine % a questo prezzo"
+    },
+    "everyColour": "Ogni variante",
+    "priceOf": "Prezzo di {style} {colour}",
+    "belowFloor": "Sotto la soglia",
+    "cell": {
+      "saving": "Salvataggio",
+      "failed": "Non salvato"
+    },
+    "bulk": {
+      "raise_one": "Aumenta {count} di %",
+      "raise_other": "Aumenta {count} di %",
+      "remove_one": "Togli {count}",
+      "remove_other": "Togli {count}"
+    },
+    "empty": {
+      "title": "Ancora nessun prezzo",
+      "body": "Aggiungi i modelli: un prezzo per modello, o per variante quando cambia.",
+      "bodyView": "Questa versione non ha prezzi."
+    },
+    "noMatch": "Nessun prezzo corrisponde alla ricerca",
+    "autosave": "Ogni prezzo si salva quando lasci la cella (Invio o Tab). Esc rimette quello salvato.",
+    "grainNote": "Costo standard e margine non sono nel tuo ruolo: quelle colonne non ci sono.",
+    "grainNoteCost": "Il costo standard non è nel tuo ruolo: solo il margine %.",
+    "emptyCell": "Il prezzo di {style} è rimasto vuoto: resta com’era. Togli la riga invece.",
+    "invalid": "Il prezzo di {style} non è un numero sopra 0: non è salvato.",
+    "refused": "Non salvato: il modello o la variante è archiviato, o non è dell’azienda del listino."
+  },
+  "raise": {
+    "title_one": "Aumenta {count} prezzo di %",
+    "title_other": "Aumenta {count} prezzi di %",
+    "pct": "Percentuale",
+    "pctHint": "5 aumenta del 5 %, -3 abbassa del 3 %.",
+    "table": "I prezzi prima e dopo",
+    "col": {
+      "row": "Modello · variante",
+      "now": "Ora",
+      "next": "Nuovo",
+      "margin": "Nuovo margine %"
+    },
+    "rounding": "Arrotondato al centesimo di {currency}.",
+    "go_one": "Salva {count} prezzo",
+    "go_other": "Salva {count} prezzi",
+    "held": {
+      "pct": "Scrivi prima la percentuale",
+      "pctInvalid": "Una percentuale sopra -100, diversa da 0, con al massimo 4 decimali",
+      "nothing": "Nessun prezzo scelto"
+    },
+    "done": "{count} prezzi cambiati del {pct} %."
+  },
+  "remove": {
+    "title_one": "Togli {count} prezzo",
+    "title_other": "Togli {count} prezzi",
+    "body": "Queste righe escono dalla bozza: un preventivo non troverà qui il loro prezzo di listino.",
+    "bodyFallback": "Queste righe escono dalla bozza: i loro modelli saranno prezzati da {base}.",
+    "done": "{count} prezzi tolti dalla bozza."
+  },
+  "add": {
+    "title": "Aggiungi un prezzo alla versione {revision}",
+    "style": "Modello",
+    "styleHint": "Codice o nome.",
+    "stylePlaceholder": "es. JKT",
+    "searching": "Ricerca…",
+    "none": "Nessun modello trovato",
+    "found_one": "{count} modello",
+    "found_other": "{count} modelli",
+    "change": "Cambia",
+    "colour": "Per",
+    "colourHint": "Ogni variante, o una con un prezzo diverso (vale sopra quello del modello).",
+    "price": "Prezzo unitario netto ({currency})",
+    "priceHint": "Netto al pezzo; un preventivo al consumatore aggiunge l’IVA.",
+    "go": "Aggiungi il prezzo",
+    "held": {
+      "style": "Scegli prima un modello",
+      "taken": "Questa versione lo prezza già: cambialo nella tabella",
+      "price": "Scrivi il prezzo",
+      "priceInvalid": "Un numero sopra 0"
+    },
+    "done": "{style} aggiunto alla bozza."
+  },
+  "customers": {
+    "intro": "Chi ha questo listino come listino predefinito. Il listino di un cliente si cambia anche sulla sua scheda (Fiscale e condizioni).",
+    "introGroup": "I clienti di questo gruppo di sconto: ognuno ha questo listino come predefinito.",
+    "table": "Clienti prezzati da questo listino",
+    "count_one": "{count} cliente",
+    "count_other": "{count} clienti",
+    "add": "Aggiungi clienti",
+    "col": {
+      "customer": "Cliente",
+      "code": "Codice",
+      "status": "Stato"
+    },
+    "bulk": {
+      "remove_one": "Togli {count}",
+      "remove_other": "Togli {count}"
+    },
+    "empty": {
+      "title": "Non assegnato",
+      "body": "Nessun cliente ha ancora questo listino.",
+      "base": "Un listino base prezza ogni cliente senza listino proprio: qui non serve nessuno."
+    },
+    "fallbackOf": "Listini che usano questo come riserva: {lists}.",
+    "addTitle": "Dai {code} ai clienti",
+    "addBody": "Ogni cliente scelto avrà questo listino come predefinito (in {currency}); i nuovi preventivi prenderanno i prezzi da qui.",
+    "search": "Cliente",
+    "searchPlaceholder": "Nome, codice o partita IVA",
+    "none": "Nessun cliente trovato",
+    "found_one": "{count} cliente",
+    "found_other": "{count} clienti",
+    "already": "Ha già questo listino",
+    "addGo_one": "Dallo a {count} cliente",
+    "addGo_other": "Dallo a {count} clienti",
+    "held": {
+      "pick": "Scegli prima un cliente"
+    },
+    "removeTitle_one": "Togli il listino a {count} cliente",
+    "removeTitle_other": "Togli il listino a {count} clienti",
+    "removeBody": "Saranno prezzati dal listino base; i loro preventivi aperti tengono la versione con cui sono stati prezzati.",
+    "added_one": "Listino dato a {count} cliente.",
+    "added_other": "Listino dato a {count} clienti.",
+    "removed_one": "Listino tolto a {count} cliente.",
+    "removed_other": "Listino tolto a {count} clienti.",
+    "refused": "Non modificato: un cliente di un'altra azienda, archiviato, in un'altra valuta, o che il tuo ruolo non può modificare."
+  },
+  "versions": {
+    "intro": "Ogni versione ha le sue date; i preventivi aperti tengono la versione con cui sono stati prezzati.",
+    "table": "Versioni",
+    "name": "Versione {revision}",
+    "col": {
+      "version": "Versione",
+      "days": "Validità",
+      "status": "Stato",
+      "prices": "Prezzi",
+      "changed": "Righe cambiate",
+      "actions": "Azioni"
+    },
+    "activatedOn": "Attivata il {date}",
+    "first": "Prima versione",
+    "changedCount_one": "{count} riga",
+    "changedCount_other": "{count} righe",
+    "openPrices": "Prezzi",
+    "activate": "Attiva",
+    "compare": "Confronta due versioni",
+    "held": {
+      "compareOne": "Per ora c’è una sola versione"
+    },
+    "quotesKeep": "Una versione in vigore resta per sempre: cambia i prezzi sulla successiva, poi attivala da un giorno.",
+    "made": "Versione {revision} creata in bozza con {count} prezzi copiati.",
+    "refused": "Non creata: c’è già una bozza, o il listino è archiviato."
+  },
+  "activate": {
+    "title": "Attiva la versione {revision}",
+    "body": "Dal suo primo giorno questa versione prezza i nuovi preventivi; la versione in vigore termina il giorno prima.",
+    "from": "Primo giorno",
+    "fromHint": "Oggi o dopo, mai nel passato.",
+    "to": "Ultimo giorno",
+    "toHint": "Lascia vuoto per tenerla aperta.",
+    "prices": "Prezzi",
+    "ends": "Termina",
+    "endsValue": "La versione {revision} il {date}",
+    "endsNone": "Nient’altro è in vigore in quei giorni",
+    "starts": "In vigore",
+    "startsRange": "{from} – {to}",
+    "startsOpen": "Dal {from}, senza fine",
+    "quotesKeep": "I preventivi prezzati fino al {before} tengono la versione con cui sono stati prezzati.",
+    "go": "Attiva",
+    "held": {
+      "from": "Scegli il primo giorno",
+      "past": "Da oggi ({today}) o un giorno dopo: mai nel passato",
+      "order": "L'ultimo giorno è uguale o dopo il primo",
+      "later": "La versione {revision} è attiva dal {date}: fai partire questa più tardi, o termina prima quella",
+      "other": "Queste date non si possono attivare: controllale con le altre versioni",
+      "noPrices": "La bozza non ha ancora prezzi: aggiungi prima dei modelli",
+      "noDraft": "Nessuna bozza da attivare"
+    },
+    "done": "La versione {revision} è attiva dal {from}.",
+    "doneEnded": "La versione {revision} è attiva dal {from}; la versione {ended} termina il {to}.",
+    "refused": "Non attivata: le date si sovrappongono a un’altra versione, o la bozza è cambiata nel frattempo."
+  },
+  "compare": {
+    "title": "Confronta due versioni",
+    "before": "Da",
+    "after": "A",
+    "same": "Scegli due versioni diverse.",
+    "loading": "Confronto in corso…",
+    "summary_one": "{count} riga cambiata dalla versione {before} alla {after}.",
+    "summary_other": "{count} righe cambiate dalla versione {before} alla {after}.",
+    "table": "Righe cambiate",
+    "col": {
+      "row": "Modello · variante",
+      "change": "Modifica",
+      "before": "Prima",
+      "after": "Dopo",
+      "pct": "Variazione %"
+    },
+    "change": {
+      "ADDED": "Aggiunto",
+      "REMOVED": "Tolto",
+      "CHANGED": "Cambiato",
+      "SAME": "Uguale"
+    }
+  },
+  "problem": {
+    "read": {
+      "signed_out": "La sessione è scaduta: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non può vedere questo.",
+      "not_found": "Non c’è più.",
+      "unavailable": "Il server non ha risposto: riprova tra poco.",
+      "rate_limited": "Troppe richieste: aspetta un momento.",
+      "contract": "La risposta non corrisponde a questa pagina: ricarica la pagina.",
+      "internal": "Qualcosa è andato storto sul server."
+    },
+    "write": {
+      "moved": "Qualcun altro l’ha cambiato nel frattempo: riletto, niente è stato sovrascritto.",
+      "refused": "Rifiutato così com’è: controlla i valori.",
+      "signed_out": "La sessione è scaduta: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non può farlo.",
+      "not_found": "Non c’è più.",
+      "step_up": "Conferma prima la tua identità con l’app di autenticazione.",
+      "rate_limited": "Troppe richieste: aspetta un momento.",
+      "unavailable": "Il server non ha risposto: niente è cambiato, riprova.",
+      "internal": "Qualcosa è andato storto sul server: niente è cambiato."
+    }
+  }
+}

@@ -3,8 +3,8 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { INVOICES_MANAGE } from '@nexus/factory-domain/invoicing/permissions'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import type { CommandCaller } from '../../../core/command'
-import { paymentTermsOf } from '../facts'
 import { onDraft, refreshDraft, storedPrepared } from '../drafts'
+import { storedSourceOf } from '../terms'
 import { invoiceDetail, officeInvoice, readInvoice, type InvoiceDetail } from '../store'
 
 /**
@@ -20,8 +20,7 @@ export async function removeDeduction(caller: CommandCaller, invoiceId: string, 
     if (!line || line.kind !== 'DEPOSIT_DEDUCTION') throw new NotFoundError('Deposit deduction not found on this invoice.')
     const kept = (await tools.tx.invoiceLine.findMany({ where: { invoiceId: current.id }, orderBy: { seq: 'asc' }, select: { id: true } })).map((row) => row.id)
     const lines = (await storedPrepared(tools.tx, current.id)).filter((_, index) => kept[index] !== line.id)
-    const first = paymentTermsOf(current.paymentTerms)?.installments[0]
-    const totals = await refreshDraft(tools, current, lines, current.priceBasis, first ? { method: first.method, dueDate: first.dueDate ?? null, iban: first.iban ?? null } : null)
+    const totals = await refreshDraft(tools, current, lines, current.priceBasis, storedSourceOf(current.paymentTerms))
     tools.audit({
       action: 'invoices.removeDeduction',
       recordType: 'Invoice',

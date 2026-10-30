@@ -1,0 +1,219 @@
+{
+  "band": {
+    "label": "Stato e azioni del report",
+    "asAt": "Alla data",
+    "asAtLabel": "Valorizza la giacenza a questa data",
+    "today": "Oggi",
+    "reading": "Lettura in corso…",
+    "readAt": "Letto alle {time}",
+    "more": "Altre azioni",
+    "export": "Esporta questa vista (CSV)",
+    "exportHeld": "Ancora niente da esportare: il report non ha righe.",
+    "print": "Stampa (nuova scheda)"
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In tempo reale",
+    "offline": "Offline: si rilegge al ritorno"
+  },
+  "scope": {
+    "label": "Cosa mostra il report",
+    "site": "Sede",
+    "allSites": "Tutte le sedi",
+    "category": "Categoria",
+    "allCategories": "Tutte le categorie",
+    "group": "Raggruppa per categoria",
+    "search": "Cerca un articolo, un lotto o un ordine di lavoro",
+    "privacy": "Per articolo, lotto, sede e ordine di lavoro: mai per persona."
+  },
+  "category": {
+    "LEATHER": "Pelle grezza",
+    "MATERIALS": "Materiali",
+    "TRIMS": "Accessori",
+    "PACKAGING": "Imballaggi",
+    "FINISHED_GOODS": "Prodotti finiti",
+    "WIP": "Semilavorati in corso"
+  },
+  "method": {
+    "title": "Come sono calcolati i valori",
+    "none": "Nessuna giacenza valorizzata a questa data: nessun metodo di costo si applica.",
+    "several": "Le società in vista usano metodi di costo diversi: scegli una sede per leggerne uno.",
+    "company": {
+      "UNDECIDED": "Metodo di costo: non ancora scelto. Lo sceglie il commercialista (standard, media ponderata o FIFO, art. 2426 c.c.); fino ad allora questi valori sono provvisori.",
+      "STANDARD": "Metodo di costo: costo standard. Un valore segnato \"dipende dal metodo\" può differire.",
+      "MOVING_AVERAGE": "Metodo di costo: media ponderata. Un valore segnato \"dipende dal metodo\" può differire.",
+      "FIFO": "Metodo di costo: FIFO. Un valore segnato \"dipende dal metodo\" può differire."
+    },
+    "ledger": "Ogni valore è quello del registro di magazzino, come è stato valorizzato ogni movimento: ricevimenti al prezzo dell'ordine d'acquisto, prelievi al costo medio del lotto, giacenza iniziale e capi finiti al costo standard. I semilavorati sono il registro costi dell'ordine di lavoro.",
+    "accountant": "Da confermare con il commercialista: il metodo di costo e se rivalutare quanto registrato prima della scelta.",
+    "noCost": "I valori richiedono il livello costi (money.cost): sono mostrati quantità, superfici e pelli; le colonne dei valori non sono mostrate."
+  },
+  "totals": {
+    "title": "Totali per categoria",
+    "asAt": "Al {day}",
+    "rows": "Righe",
+    "total": "Totale",
+    "failed": "Non è stato possibile leggere i totali."
+  },
+  "note": {
+    "truncated": "Sono mostrate solo le prime 5.000 righe: restringi il report per sede o categoria.",
+    "unvalued_one": "{count} movimento di magazzino non ha ancora un valore: la sua giacenza è contata ma non valorizzata.",
+    "unvalued_other": "{count} movimenti di magazzino non hanno ancora un valore: la loro giacenza è contata ma non valorizzata.",
+    "residue": "{residue} resta dall'arrotondamento dei costi di lotto su giacenza esaurita: righe più questo importo danno il registro di magazzino.",
+    "currencies": "La giacenza è valorizzata in più valute: non si somma un totale tra valute."
+  },
+  "list": {
+    "title": "Valorizzazione del magazzino",
+    "fileTitle": "Valorizzazione magazzino",
+    "count_one": "{count} riga",
+    "count_other": "{count} righe",
+    "failed": "Non è stato possibile caricare la valorizzazione",
+    "slow": "Ancora in caricamento…",
+    "empty": {
+      "title": "Nessuna giacenza a questa data",
+      "body": "A fine giornata del {day} non c'era nulla in giacenza."
+    },
+    "noMatch": {
+      "title": "Nessun risultato",
+      "body": "Nessuna giacenza corrisponde a sede, categoria o ricerca."
+    },
+    "clearFilters": "Togli i filtri"
+  },
+  "col": {
+    "category": "Categoria",
+    "item": "Articolo",
+    "lot": "Lotto",
+    "site": "Sede",
+    "quantity": "In giacenza",
+    "value": "Valore",
+    "unitCost": "Costo unitario",
+    "basis": "Su cosa si basa il valore"
+  },
+  "row": {
+    "wip": "Semilavorato · {number}",
+    "wipOpen": "Il costo dell'ordine di lavoro finora",
+    "wipDone": "Ordine di lavoro concluso: il saldo è lo scostamento che la chiusura stornerà",
+    "noColour": "Nessun colore",
+    "noLot": "Nessun lotto",
+    "lotLink": "Apri il lotto {code}",
+    "area": "{area} m²",
+    "hides_one": "{count} pelle",
+    "hides_other": "{count} pelli",
+    "dependsOnMethod": "dipende dal metodo",
+    "sameUnderMethod": "uguale con il metodo"
+  },
+  "valued": {
+    "FULL": "Valorizzato",
+    "PART": "Valorizzato in parte",
+    "NONE": "Senza valore"
+  },
+  "basis": {
+    "method": {
+      "PURCHASE_PRICE": "prezzo d'acquisto",
+      "LOT_COST": "costo medio del lotto",
+      "STANDARD_COST": "costo standard",
+      "MANUAL": "costo inserito con motivo"
+    },
+    "full": "i valori del registro di magazzino",
+    "part_one": "{count} movimento non ha ancora un costo",
+    "part_other": "{count} movimenti non hanno ancora un costo",
+    "none_one": "Senza valore: {count} movimento non ha costo",
+    "none_other": "Senza valore: {count} movimenti non hanno costo",
+    "wip": "il registro costi dell'ordine di lavoro",
+    "wipDone": "il saldo dell'ordine di lavoro concluso"
+  },
+  "bulk": {
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)"
+  },
+  "keys": {
+    "search": "Cerca un articolo o un lotto",
+    "title": "Scorciatoie da tastiera"
+  },
+  "csv": {
+    "file": "valorizzazione-magazzino-{day}",
+    "category": "Categoria",
+    "item": "Articolo",
+    "colour": "Colore",
+    "lot": "Lotto",
+    "workOrder": "Ordine di lavoro",
+    "site": "Sede",
+    "quantity": "Quantità",
+    "uom": "Unità",
+    "areaM2": "Superficie (m²)",
+    "hides": "Pelli",
+    "value": "Valore",
+    "unitCost": "Costo unitario",
+    "currency": "Valuta",
+    "basis": "Base del valore"
+  },
+  "how": {
+    "title": "Come è valorizzato questo lotto",
+    "openLot": "come è valorizzato il lotto {code}",
+    "openItem": "come è valorizzato {code}",
+    "lotTitle": "Come è valorizzato il lotto {code}",
+    "itemTitle": "Come è valorizzato {code}",
+    "failed": "Non è stato possibile leggere come è valorizzato.",
+    "method": "Metodo di costo",
+    "companyMethod": {
+      "UNDECIDED": "Non ancora scelto (da confermare con il commercialista)",
+      "STANDARD": "Costo standard",
+      "MOVING_AVERAGE": "Media ponderata",
+      "FIFO": "FIFO"
+    },
+    "onHand": "In giacenza",
+    "value": "Valore",
+    "unitCost": "Costo unitario",
+    "lotCost": "Il prossimo prelievo esce a",
+    "depends": "Un metodo di costo scelto potrebbe valorizzarlo diversamente.",
+    "same": "Il metodo della società lo valorizza allo stesso modo.",
+    "before": "Sono mostrati gli ultimi {count} movimenti; prima di essi: {quantity}, {value}.",
+    "noMoves": "Nessun movimento fino a questa data.",
+    "layersLabel": "I suoi movimenti e i loro costi",
+    "col": {
+      "day": "Giorno",
+      "move": "Movimento",
+      "quantity": "Quantità",
+      "cost": "Costo",
+      "balance": "Dopo il movimento"
+    },
+    "receipt": "{receipt} · {order} a {price}",
+    "reversal": "uno storno",
+    "notValued": "ancora senza costo",
+    "accountant": "Se rivalutare questi movimenti dopo la scelta del metodo lo decide il commercialista."
+  },
+  "reason": {
+    "OPENING": "Giacenza iniziale",
+    "RECEIPT": "Ricevimento",
+    "ISSUE": "Prelievo per ordine di lavoro",
+    "RETURN": "Reso da ordine di lavoro",
+    "TRANSFER": "Trasferimento",
+    "ADJUSTMENT": "Rettifica",
+    "COUNT": "Differenza inventariale",
+    "SCRAP": "Scarto",
+    "PRODUCTION_RECEIPT": "Prodotti finiti da ordine di lavoro"
+  },
+  "print": {
+    "title": "Valorizzazione del magazzino · {company} · al {day}",
+    "meta": "Letto il {at} · stampato da {person}",
+    "held": "Attendi la lettura del report.",
+    "button": "Stampa o salva in PDF"
+  },
+  "noAccess": {
+    "title": "Non puoi vedere la valorizzazione del magazzino",
+    "body": "Serve il permesso sul magazzino (inventory.stock.view). Chiedi a un amministratore."
+  },
+  "common": {
+    "retry": "Riprova",
+    "loading": "Caricamento…"
+  },
+  "problem": {
+    "signed_out": "La sessione è scaduta: accedi di nuovo.",
+    "forbidden": "Non puoi vedere questa giacenza (una sede fuori dai tuoi ruoli).",
+    "not_found": "Questo articolo o lotto non esiste più.",
+    "unavailable": "Il sistema della fabbrica non ha risposto: riprova.",
+    "rate_limited": "Troppe letture insieme: attendi un momento.",
+    "invalid": "La data o un filtro non è valido.",
+    "internal": "Si è verificato un errore da parte nostra."
+  }
+}

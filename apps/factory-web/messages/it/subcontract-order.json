@@ -1,0 +1,631 @@
+{
+  "common": {
+    "cancel": "Annulla",
+    "clear": "Cancella",
+    "dismiss": "Chiudi",
+    "loading": "Caricamento…",
+    "retry": "Riprova"
+  },
+  "held": {
+    "busy": "In corso…"
+  },
+  "problem": {
+    "read": "Il server non ha risposto come previsto. Riprova.",
+    "forbidden": "Il tuo ruolo non può vederlo o farlo.",
+    "offline": "Nessuna connessione al server. Controlla la rete e riprova.",
+    "gone": "Non esiste più, o appartiene a un’altra società.",
+    "write": "Non è stato salvato. Riprova.",
+    "changed": "Qualcuno ha modificato l’ordine nel frattempo: è stato riletto. Controlla e riprova.",
+    "invalid": "Qualcosa non è stato accettato. Controlla i campi e riprova.",
+    "slowDown": "Troppi tentativi insieme. Attendi un momento e riprova."
+  },
+  "part": {
+    "failed": "Impossibile caricare {part}",
+    "loading": "Caricamento di {part}…"
+  },
+  "mark": {
+    "saving": "Salvataggio…",
+    "saved": "Salvato",
+    "failed": "Non salvato: {why}"
+  },
+  "record": {
+    "loading": "Caricamento dell’ordine al terzista…",
+    "backToList": "Torna agli ordini ai terzisti",
+    "not_found": {
+      "title": "Non trovato",
+      "body": "Questo ordine al terzista non esiste, o appartiene a un’altra società."
+    },
+    "forbidden": {
+      "title": "Non per il tuo ruolo",
+      "body": "Il tuo ruolo non raggiunge la società, lo stabilimento o il terzista di questo ordine."
+    },
+    "error": {
+      "title": "Impossibile caricare l’ordine"
+    },
+    "noAccess": {
+      "title": "Non per il tuo ruolo",
+      "body": "Gli ordini ai terzisti richiedono purchasing.view: chiedilo a un amministratore."
+    },
+    "changed": "Modificato alle {time} da qualcun altro · la finestra aperta resta",
+    "reload": "Ricarica",
+    "cancelled": "Annullato il {date}",
+    "readOnly": "Puoi leggere questo ordine: modificarlo, inviare il kit o ricevere il rientro richiedono un altro ruolo.",
+    "noPanels": "Qui compaiono conversazione, file e cronologia."
+  },
+  "band": {
+    "back": "Ordini ai terzisti",
+    "title": "Ordine al terzista",
+    "act": {
+      "issue": "Invia al terzista",
+      "send": "Invia kit",
+      "receive": "Registra rientro",
+      "close": "Chiudi ordine",
+      "reopen": "Riporta in bozza",
+      "cancel": "Annulla ordine"
+    },
+    "dock": "Conversazione",
+    "dockHint": "La conversazione accanto a ogni scheda su schermo largo (⌘J)",
+    "dockLabel": "Conversazione, file e cronologia",
+    "more": "Altre azioni",
+    "jobSheet": "Stampa scheda di lavorazione",
+    "printDdt": "Stampa DDT kit {number}",
+    "printDdtNone": "Stampa DDT kit",
+    "noDdt": "Nessun DDT kit valido: si emette all’invio del kit.",
+    "reopen": "Riporta in bozza",
+    "cancel": "Annulla ordine…",
+    "copyNumber": "Copia numero",
+    "late": "In ritardo dal {date}"
+  },
+  "journey": {
+    "draft": "Bozza",
+    "sent": "Inviato",
+    "kitOut": "Kit uscito (DDT) · in lavorazione",
+    "back": "Rientrato",
+    "closed": "Chiuso",
+    "short": "Passo {step} di {count}: {label}",
+    "next": "poi {label}"
+  },
+  "waits": {
+    "draft": "Una bozza: il buyer fissa lavorazioni, capi, compenso e data di rientro, poi la invia al terzista.",
+    "kit": "Inviato a {workshop}: il magazzino spedisce kit e capi con il DDT.",
+    "close": "Tutti i capi sono rientrati: chiudi l’ordine.",
+    "closed": "Chiuso il {date}.",
+    "cancelled": "Annullato: non è uscito nulla.",
+    "back_one": "{count} capo presso {workshop}, rientro previsto il {date}.",
+    "back_other": "{count} capi presso {workshop}, rientro previsto il {date}.",
+    "backNoDate_one": "{count} capo presso {workshop}.",
+    "backNoDate_other": "{count} capi presso {workshop}."
+  },
+  "tab": {
+    "label": "Schede dell’ordine",
+    "ops": "Lavorazioni e quantità",
+    "kit": "Kit inviato",
+    "back": "Rientri",
+    "documents": "Documenti",
+    "activity": "Attività"
+  },
+  "notice": {
+    "issued": "Inviato al terzista: il magazzino può spedire il kit.",
+    "reopened": "Tornato in bozza: modificalo e invialo di nuovo.",
+    "cancelled": "L’ordine è annullato, con le righe di kit previste.",
+    "closed": "L’ordine è chiuso.",
+    "operationAdded": "Lavorazione aggiunta.",
+    "operationRemoved": "Lavorazione tolta.",
+    "kitLineAdded": "Riga di kit aggiunta.",
+    "kitPlanned": "Il kit è previsto dai materiali dell’ordine di produzione.",
+    "lineReturned": "La riga è tornata nella nostra giacenza ed è di nuovo prevista.",
+    "printed": "Il PDF del DDT è stato ristampato.",
+    "annulled": "Il DDT {number} è annullato: il numero resta.",
+    "copied": "{number} copiato.",
+    "kitRemoved_one": "{count} riga di kit tolta.",
+    "kitRemoved_other": "{count} righe di kit tolte."
+  },
+  "grid": {
+    "caption": "Capi per colore e taglia",
+    "colour": "Colore",
+    "total": "Totale",
+    "cellName": "{colour}, taglia {size}",
+    "notOffered": "non prodotto",
+    "empty": "Nessuna variante o taglia.",
+    "totals": "{colour}: {rowTotal}. Taglia {size}: {columnTotal}. Totale: {grand}.",
+    "notWhole": "{cell}: solo capi interi, da 0 a {max}.",
+    "cutToMax": "{cell}: al massimo {max} capi.",
+    "pasted": "{applied} celle riempite, {skipped} saltate.",
+    "issues": "Da controllare"
+  },
+  "ops": {
+    "draftHint": "Una bozza: ogni campo si salva quando lo lasci (Invio o Tab); Esc rimette il valore salvato.",
+    "add": "Aggiungi lavorazione",
+    "frozen": "Le lavorazioni si modificano solo in bozza; i conteggi seguono kit e rientri.",
+    "frozenReopen": "Si modifica solo in bozza: non è ancora uscito nulla, quindi ⋯ Riporta in bozza lo riapre.",
+    "empty": {
+      "title": "Nessuna lavorazione",
+      "body": "Sceglile dal ciclo dell’ordine di produzione."
+    },
+    "card": {
+      "title": "Riga {line} · {seq} {code} {name}",
+      "from": "Dall’ordine di produzione {number} · {style}"
+    },
+    "remove": "Togli riga {line}",
+    "removeShort": "Togli",
+    "pieces": "Capi",
+    "piecesOf": "Capi della riga {line}",
+    "fee": "Compenso a capo ({currency})",
+    "feeOf": "Compenso a capo della riga {line}",
+    "amount": "Importo {amount}",
+    "back": "Rientro previsto",
+    "backOf": "Rientro previsto della riga {line}",
+    "noDate": "Data non ancora fissata",
+    "note": "Nota per il terzista",
+    "noteOf": "Nota per il terzista, riga {line}",
+    "sizes": "Capi per taglia",
+    "sizesOf": "Capi per taglia, riga {line}",
+    "editSizes": "Capi per taglia…",
+    "countsLabel": "Inviati e rientrati",
+    "count": {
+      "sent": "Inviati",
+      "of": "{done} di {total}",
+      "good": "Rientrati buoni",
+      "defective": "Rientrati difettosi",
+      "scrapped": "Scartati dal terzista",
+      "atWorkshop": "Presso il terzista"
+    },
+    "total": "Importo dell’ordine (costo): {amount}",
+    "cell": {
+      "piecesWhole": "capi interi, almeno 1",
+      "piecesRange": "più capi di quanti ne faccia l’ordine di produzione",
+      "piecesTaken": "alcuni capi sono su un altro ordine aperto",
+      "feeNumber": "un compenso da 0 in su, fino a sei decimali",
+      "date": "una data",
+      "dateBefore": "il rientro va dal giorno dell’ordine in poi",
+      "sizesAddUp": "i capi per taglia devono tornare: modificali in Capi per taglia",
+      "notDraft": "l’ordine non è più una bozza"
+    },
+    "notSplit_one": "Non diviso per taglia: {count} capo.",
+    "notSplit_other": "Non diviso per taglia: {count} capi."
+  },
+  "kit": {
+    "tableLabel": "Righe del kit",
+    "col": {
+      "seq": "Riga",
+      "component": "Componente",
+      "quantity": "Quantità",
+      "lot": "Lotto",
+      "status": "Stato",
+      "sent": "Inviato",
+      "ddt": "DDT",
+      "more": "Azioni"
+    },
+    "noColour": "Senza colore",
+    "untracked": "Non gestito a lotti",
+    "lotAtSend": "Lotto scelto all’invio",
+    "hide": "Pelle {code}",
+    "noDdt": "Inviato senza DDT",
+    "ddt": "DDT {number}",
+    "remove": "Togli",
+    "takeBack": "Fai rientrare (non è mai partito)…",
+    "rowMenu": "Azioni per la riga di kit {seq}",
+    "plan": "Prevedi dall’ordine di produzione",
+    "add": "Aggiungi riga di kit",
+    "notSelectableSent": "Già inviata: falla rientrare dal menu della riga se non è mai partita.",
+    "notSelectableCancelled": "Annullata con l’ordine.",
+    "empty": {
+      "title": "Kit non ancora inviato",
+      "body": "Nessuna riga di kit: il buyer la prevede dai materiali dell’ordine, oppure partono solo i capi.",
+      "bodyEdit": "Prevedilo dai materiali dell’ordine di produzione, o aggiungi le righe una a una. La pelle gestita a pelli parte tagliata, in pacchi."
+    },
+    "floorLater": "Qui l’ufficio spedisce il kit con il DDT; l’invio dal tablet di magazzino (Kit terzisti) arriva con un passo successivo.",
+    "ddts": {
+      "title": "DDT del kit (conto lavorazione)",
+      "none": "Nessun DDT ancora emesso per questo ordine.",
+      "col": {
+        "number": "Numero",
+        "date": "Data",
+        "lines": "Righe kit",
+        "state": "Stato",
+        "open": "PDF"
+      }
+    },
+    "count_one": "{count} riga di kit",
+    "count_other": "{count} righe di kit",
+    "removeN_one": "Togli {count} riga",
+    "removeN_other": "Togli {count} righe"
+  },
+  "kitLine": {
+    "status": {
+      "PLANNED": "Prevista",
+      "SENT": "Inviata",
+      "CANCELLED": "Annullata"
+    },
+    "title": "Aggiungi riga di kit",
+    "confirm": "Aggiungi",
+    "noMaterials": "Scegliere un materiale richiede product.materials.view.",
+    "material": "Materiale",
+    "search": "Codice o nome",
+    "noMatch": "Nessun materiale attivo corrisponde.",
+    "colour": "Colore",
+    "pickColour": "Scegli un colore",
+    "quantity": "Quantità",
+    "unit": "Unità",
+    "hideNote": "La pelle gestita a pelli parte tagliata, in pacchi: indica la pelle all’invio della riga.",
+    "held": {
+      "material": "Scegli un materiale.",
+      "colour": "Scegli il colore.",
+      "quantity": "Una quantità sopra 0, fino a quattro decimali."
+    }
+  },
+  "lot": {
+    "QUARANTINE": "In quarantena",
+    "RELEASED": "Rilasciato",
+    "BLOCKED": "Bloccato",
+    "REJECTED": "Respinto"
+  },
+  "back": {
+    "summary": "Rientrati buoni {good} · difettosi {defective} · scartati {scrapped} · ancora presso il terzista {out}",
+    "empty": {
+      "due": "Ancora nessun rientro — previsto il {date}",
+      "title": "Ancora nessun rientro",
+      "body": "La merce rientra per lavorazione e pacco: buona, difettosa o scartata dal terzista, con il materiale non usato."
+    },
+    "receipt": "Rientro {n} · {date}",
+    "workshopDdt": "DDT del terzista",
+    "ddtOn": "{number} del {date}",
+    "noDdt": "Non indicato",
+    "recorded": "Registrato",
+    "note": "Nota",
+    "linesLabel": "Capi rientrati, rientro {n}",
+    "returnsLabel": "Materiale non usato restituito",
+    "col": {
+      "operation": "Lavorazione",
+      "bundle": "Pacco",
+      "good": "Buoni",
+      "defective": "Difettosi",
+      "scrapped": "Scartati",
+      "reason": "Motivo",
+      "material": "Materiale",
+      "lot": "Lotto",
+      "quantity": "Quantità",
+      "to": "Rientrato in"
+    },
+    "operation": "Riga {line} · {code}",
+    "bundle": "{code} · {colourway} {size}",
+    "noBundle": "Lavorazione intera",
+    "qualityLater": "Il controllo qualità di quanto rientrato non è ancora collegato da qui."
+  },
+  "docs": {
+    "jobSheet": {
+      "name": "Scheda di lavorazione {number}",
+      "status": "Si stampa e si spedisce con il kit; senza prezzi. Si apre in una nuova scheda: stampala o salvala in PDF.",
+      "open": "Apri scheda"
+    },
+    "ddt": {
+      "name": "DDT kit {number}",
+      "status_one": "{date} · {count} riga di kit",
+      "status_other": "{date} · {count} righe di kit"
+    },
+    "live": "Valido",
+    "annulled": "Annullato",
+    "noDdt": "Ancora nessun DDT kit: si emette all’invio del kit.",
+    "show": "Mostra qui",
+    "openPdf": "Apri PDF",
+    "annul": "Annulla DDT…",
+    "noFiles": "Aprire un PDF richiede files.read.",
+    "noCancel": "Annullare un DDT richiede shipping.ddt.cancel.",
+    "pdf": {
+      "missing": "Il DDT è emesso ma il suo PDF non è stato salvato: ristampalo."
+    },
+    "pdfLoading": "Lettura del PDF…",
+    "printAgain": "Ristampa",
+    "later": "Le condizioni scritte del terzista e le sue fatture arrivano con passi successivi."
+  },
+  "cancel": {
+    "title": "Annulla {number}",
+    "confirm": "Annulla l’ordine",
+    "what": "{workshop} non riceve lavoro da questo ordine; non è uscito nulla.",
+    "pieces": "I suoi capi di {number} tornano liberi per un altro ordine.",
+    "final": "Un ordine annullato non si riapre.",
+    "reason": "Motivo",
+    "reasonHint": "Resta sull’ordine e nella cronologia.",
+    "reasonNeeded": "Indica perché si annulla.",
+    "kit_one": "Anche la sua {count} riga di kit prevista è annullata.",
+    "kit_other": "Anche le sue {count} righe di kit previste sono annullate."
+  },
+  "close": {
+    "title": "Chiudi {number}",
+    "confirm": "Chiudi l’ordine",
+    "back": "Rientrati: {good} buoni, {defective} difettosi, {scrapped} scartati dal terzista.",
+    "balanceLater": "Il saldo materiale (inviato, nei capi, restituito, ancora fuori) arriva con un passo successivo: prima controlla la giacenza presso il terzista.",
+    "final": "Un ordine chiuso non accetta altro.",
+    "note": "Nota",
+    "noteHint": "Facoltativa; resta nella cronologia."
+  },
+  "addOperation": {
+    "title": "Aggiungi lavorazione",
+    "confirm": "Aggiungi",
+    "body": "Le lavorazioni dell’ordine di produzione {number} non ancora su questo ordine.",
+    "loading": "Lettura del ciclo dell’ordine di produzione…",
+    "none": "Tutte le lavorazioni dell’ordine di produzione sono già su questo ordine.",
+    "operation": "Lavorazione",
+    "line": "{seq} · {code} {name}",
+    "left": "{left} di {garments} capi liberi",
+    "outside": "Esterna presso {workshop}",
+    "inHouse": "In casa nel ciclo",
+    "full": "Tutti i capi sono già su ordini aperti.",
+    "pieces": "Capi",
+    "piecesHint": "Se partono tutti i capi ogni taglia ha la sua parte; con meno capi dividili per taglia dopo.",
+    "held": {
+      "loading": "Ancora in lettura dell’ordine di produzione…",
+      "failed": "Impossibile leggere l’ordine di produzione.",
+      "pick": "Scegli una lavorazione.",
+      "already": "Questa lavorazione è già sull’ordine.",
+      "pieces": "Da 1 a {left} capi."
+    },
+    "refused": {
+      "pieces": "Alcuni capi sono su un altro ordine aperto: riduci i capi.",
+      "operation": "Quella lavorazione non è più dell’ordine di produzione."
+    }
+  },
+  "removeOperation": {
+    "title": "Togli riga {line}",
+    "confirm": "Togli",
+    "body_one": "{code} {name} con il suo {count} capo esce dall’ordine.",
+    "body_other": "{code} {name} con i suoi {count} capi esce dall’ordine."
+  },
+  "sizes": {
+    "title": "Capi per taglia, riga {line}",
+    "body": "Le celle dell’ordine di produzione {number}: ognuna al massimo i capi che produce.",
+    "loading": "Lettura delle taglie dell’ordine di produzione…",
+    "caption": "Capi inviati per colore e taglia",
+    "max": "Al massimo: {cells}",
+    "held": {
+      "loading": "Ancora in lettura delle taglie…",
+      "failed": "Impossibile leggere le taglie dell’ordine di produzione.",
+      "over": "{cell} ne prende al massimo {max}.",
+      "none": "Almeno un capo."
+    },
+    "confirm_one": "Salva {count} capo",
+    "confirm_other": "Salva {count} capi"
+  },
+  "removeKit": {
+    "onlyPlanned": "Si tolgono solo le righe previste.",
+    "line": "Riga {seq} · {code} {name}",
+    "title_one": "Togli {count} riga di kit",
+    "title_other": "Togli {count} righe di kit",
+    "confirm_one": "Togli {count} riga",
+    "confirm_other": "Togli {count} righe"
+  },
+  "returnLine": {
+    "title": "Fai rientrare la riga di kit {seq}",
+    "confirm": "Fai rientrare",
+    "what": "{code} {name} non è mai partito: torna da dove è venuto.",
+    "reverse": "Il suo movimento verso il terzista è stornato e la riga torna prevista.",
+    "ddtFirst": "Il DDT {number} è valido per questa riga: annullalo prima in Documenti.",
+    "reason": "Motivo",
+    "held": {
+      "ddtLive": "Il DDT {number} è valido: la merce ha viaggiato con esso. Annullalo prima in Documenti.",
+      "reason": "Indica perché rientra."
+    },
+    "refused": {
+      "ddtLive": "Il suo DDT è valido: annullalo prima in Documenti, poi fai rientrare la riga."
+    }
+  },
+  "annul": {
+    "title": "Annulla DDT {number}",
+    "confirm": "Annulla il DDT",
+    "keeps": "{number} mantiene il numero, segnato annullato, per 10 anni.",
+    "lines": "Le sue righe di kit restano inviate: fai rientrare quelle mai partite dalla scheda Kit.",
+    "replace": "La merce che viaggia ha bisogno di un nuovo DDT: rispedisci il kit con uno nuovo.",
+    "reason": "Motivo",
+    "type": "Digita {number} per confermare",
+    "typeHint": "Maiuscole e spazi contano.",
+    "typeWrong": "Non corrisponde al numero del DDT.",
+    "held": {
+      "reason": "Indica il motivo (almeno 3 caratteri).",
+      "phrase": "Digita il numero del DDT per confermare."
+    }
+  },
+  "send": {
+    "title": "Invia kit · {number} a {workshop}",
+    "confirm": "Invia",
+    "body": "Il nostro materiale va in {location}: resta nostro, nei nostri libri, finché non rientra nei capi.",
+    "kitTitle": "Righe del kit",
+    "noKit": "Nessuna riga di kit prevista: ora partono solo capi e pacchi.",
+    "sourcesLoading": "Lettura di dove si trova il materiale…",
+    "line": "Riga {seq} · {code} {name}{colour}",
+    "from": "Da",
+    "fromLot": "Un materiale tracciato esce con il suo lotto rilasciato.",
+    "noStock": "Non è disponibile in questo stabilimento: prima ricevilo o spostalo qui.",
+    "pickFrom": "Scegli da dove parte",
+    "option": "{location}{lot}{hide} · {available} {unit} disponibili",
+    "quantity": "Quantità ({unit})",
+    "piecesTitle": "Capi che partono ora",
+    "noPieces": "Tutti i capi sono già partiti.",
+    "piecesOf": "Riga {line} · {code}",
+    "piecesLeft": "{left} di {total} ancora da inviare; 0: nessuno ora",
+    "bundlesTitle": "Pacchi tagliati che viaggiano",
+    "bundlesNoRight": "I pacchi dell’ordine di produzione richiedono workorders.view: indica i capi sopra.",
+    "noBundles": "L’ordine di produzione non ha pacchi attivi.",
+    "bundlesHint": "Ogni pacco è elencato sul DDT; senza capi indicati sopra, i pacchi di capi interi contano come capi inviati.",
+    "ddtTitle": "DDT di conto lavorazione",
+    "ddtIssue": "Emetti ora il DDT",
+    "ddtNoRight": "Emettere il DDT richiede shipping.ddt.issue: il kit parte senza e il magazzino lo emette dopo.",
+    "ddtLater": "Nessun DDT ora: emettilo prima che la merce esca.",
+    "ddt": {
+      "reason": "Causale del trasporto",
+      "reasonText": "Causale in parole",
+      "reasons": {
+        "WORK_ON_ACCOUNT": "Conto lavorazione",
+        "OTHER": "Altro"
+      },
+      "transportBy": "Trasporto a cura di",
+      "by": {
+        "SENDER": "Mittente",
+        "RECIPIENT": "Destinatario",
+        "CARRIER": "Vettore"
+      },
+      "carrier": "Vettore",
+      "packages": "Colli",
+      "weight": "Peso lordo",
+      "appearance": "Aspetto esteriore dei beni",
+      "appearanceHint": "Scatole, rotoli, pacchi…",
+      "remarks": "Annotazioni sul DDT",
+      "fixed": "Il numero viene dalla serie e si conserva 10 anni; il DDT non cambia più (un errore si annulla)."
+    },
+    "held": {
+      "loading": "Ancora in lettura di dove si trova il materiale…",
+      "sourcesFailed": "Impossibile leggere dove si trova il materiale: riprova.",
+      "from": "Riga {line}: scegli da dove parte.",
+      "quantity": "Riga {line}: una quantità sopra 0.",
+      "piecesWhole": "Riga {line}: capi interi.",
+      "piecesLeft": "Riga {line}: al massimo {left} capi da inviare.",
+      "nothing": "Nulla di scelto: una riga di kit, dei capi o un pacco.",
+      "reasonText": "Indica la causale in parole.",
+      "carrier": "Indica il vettore.",
+      "packages": "Almeno 1 collo.",
+      "weight": "Il peso lordo in chilogrammi."
+    },
+    "refused": {
+      "ddtRight": "Il tuo ruolo può inviare il kit ma non emettere il DDT: invialo senza.",
+      "lot": "Un materiale tracciato richiede il lotto: scegli di nuovo da dove parte.",
+      "lotNotReleased": "Al terzista va solo un lotto rilasciato: scegli un altro posto o lotto.",
+      "hide": "Un materiale gestito a pelli richiede la pelle.",
+      "from": "Quel posto non è di questo stabilimento, o ora non ne contiene.",
+      "quantity": "Una quantità non è stata accettata: controlla le unità.",
+      "pieces": "Più capi di quanti restino da inviare.",
+      "bundles": "Un pacco non è di questo ordine di produzione o di una taglia che l’ordine invia.",
+      "tooManyBundles": "Troppe righe per un DDT: invia i pacchi in due volte.",
+      "transportBy": "Indica chi trasporta la merce.",
+      "carrier": "Indica il vettore.",
+      "packages": "I colli non sono stati accettati.",
+      "weight": "Il peso non è stato accettato: chilogrammi, fino a tre decimali.",
+      "startAt": "L’inizio del trasporto non è accettato.",
+      "company": "I dati legali della società per il DDT sono incompleti: completali in Sistema › Società e stabilimenti.",
+      "recipient": "Il terzista non ha un indirizzo per il DDT: aggiungilo al terzista.",
+      "stock": "Non ce n’è più abbastanza in quel posto: scegli di nuovo."
+    },
+    "done": {
+      "ddt": "Kit inviato con il DDT {number}.",
+      "pdfMissing": "Kit inviato con il DDT {number}: il DDT è emesso ma il PDF non è stato salvato — ristampalo in Documenti.",
+      "noDdt": "Kit inviato senza DDT: emettilo prima che la merce esca."
+    },
+    "bundle_one": "{code} · {colourway} {size} · {count} capo",
+    "bundle_other": "{code} · {colourway} {size} · {count} capi",
+    "bundlePart_one": "{code} · {colourway} {size} · {count} pezzo ({part})",
+    "bundlePart_other": "{code} · {colourway} {size} · {count} pezzi ({part})"
+  },
+  "receive": {
+    "title": "Registra rientro · {number} da {workshop}",
+    "confirm": "Registra il rientro",
+    "when": "Rientrato il",
+    "ddtNumber": "DDT del terzista",
+    "ddtHint": "Come stampato sul suo documento.",
+    "ddtDate": "Sua data",
+    "piecesTitle": "Capi rientrati",
+    "nothingOut": "Nessun capo è presso il terzista: può rientrare solo materiale non usato.",
+    "addBundle": "Aggiungi un pacco",
+    "bundle": "Pacco",
+    "noBundle": "Non per pacco",
+    "good": "Buoni",
+    "defective": "Difettosi",
+    "scrapped": "Scartati dal terzista",
+    "reason": "Motivo",
+    "removeLine": "Togli questa riga",
+    "bundlesNoRight": "I pacchi richiedono workorders.view: i capi rientrano per lavorazione.",
+    "returnsTitle": "Materiale non usato restituito",
+    "noStock": "Nessun nostro materiale è presso questo terzista.",
+    "col": {
+      "material": "Materiale",
+      "lot": "Lotto",
+      "there": "Presso il terzista",
+      "back": "Rientra ora",
+      "to": "Verso"
+    },
+    "returnOf": "Quantità di {code} che rientra",
+    "toOf": "Dove va {code}",
+    "pickTo": "Scegli un posto",
+    "noPlaces": "I posti richiedono inventory.locations.view.",
+    "note": "Nota",
+    "what": "L’ordine risulta rientrato in parte o del tutto; i capi rientrati contano su ogni lavorazione.",
+    "fee": "Il compenso del terzista per i capi rientrati buoni va sul costo dell’ordine di produzione.",
+    "held": {
+      "date": "Indica quando è rientrato.",
+      "future": "Non oltre oggi.",
+      "whole": "Riga {line}: capi interi, da 0 in su.",
+      "reason": "Riga {line}: indica perché i capi sono difettosi o scartati.",
+      "moreThanOut": "Riga {line}: presso il terzista ci sono solo {out} capi.",
+      "returnQuantity": "{item}: una quantità sopra 0.",
+      "returnMore": "{item}: presso il terzista ce n’è al massimo {max}.",
+      "returnTo": "{item}: scegli dove va.",
+      "nothing": "Ancora nulla di rientrato: un capo o del materiale.",
+      "ddtNumber": "Indica il numero del DDT del terzista, o togli la data."
+    },
+    "refused": {
+      "bundle": "Un pacco non è di una taglia che questa lavorazione invia, o rientra più di quanto contiene.",
+      "moreThanOut": "Più capi di quanti siano presso il terzista.",
+      "pieces": "Almeno un capo per riga, solo capi interi.",
+      "toLocation": "Quel posto non è di questo stabilimento.",
+      "returns": "Un materiale restituito non è stato accettato: controlla la quantità.",
+      "receivedAt": "La data di rientro non è accettata.",
+      "stock": "Presso il terzista ce n’è meno di quanto restituito."
+    },
+    "done": {
+      "part": "Registrato: l’ordine è rientrato in parte.",
+      "all": "Registrato: tutti i capi sono rientrati. Chiudi l’ordine.",
+      "partWaiting": "Registrato: rientrato in parte. Il compenso del terzista attende il costo dell’ordine di produzione.",
+      "allWaiting": "Registrato: tutti i capi sono rientrati. Il compenso del terzista attende il costo dell’ordine di produzione.",
+      "partCurrency": "Registrato: rientrato in parte. L’ordine è in un’altra valuta: il compenso non va sull’ordine di produzione.",
+      "allCurrency": "Registrato: tutti i capi sono rientrati. L’ordine è in un’altra valuta: il compenso non va sull’ordine di produzione.",
+      "partPosted_one": "Registrato: rientrato in parte. Il compenso è sul costo dell’ordine di produzione ({count} voce).",
+      "partPosted_other": "Registrato: rientrato in parte. Il compenso è sul costo dell’ordine di produzione ({count} voci).",
+      "allPosted_one": "Registrato: tutti i capi sono rientrati; il compenso è sul costo dell’ordine di produzione ({count} voce). Chiudi l’ordine.",
+      "allPosted_other": "Registrato: tutti i capi sono rientrati; il compenso è sul costo dell’ordine di produzione ({count} voci). Chiudi l’ordine."
+    },
+    "operation_one": "Riga {line} · {code} {name} · {count} capo presso il terzista",
+    "operation_other": "Riga {line} · {code} {name} · {count} capi presso il terzista",
+    "bundleOption_one": "{code} · {colourway} {size} · {count} capo",
+    "bundleOption_other": "{code} · {colourway} {size} · {count} capi"
+  },
+  "sheet": {
+    "title": "Scheda di lavorazione {number} · {workshop}",
+    "titleLoading": "Scheda di lavorazione",
+    "meta": "{company} · stabilimento {site} · letta il {at} da {person}",
+    "purpose": "Si stampa e si spedisce con il kit. Non riporta prezzi.",
+    "print": "Stampa",
+    "held": "Ancora in lettura dell’ordine.",
+    "failed": "Impossibile leggere l’ordine",
+    "workshop": "Terzista",
+    "location": "Nostra giacenza presso di lui",
+    "workOrder": "Ordine di produzione",
+    "orderDate": "Data ordine",
+    "back": "Rientro previsto",
+    "pieces": "Capi",
+    "opsTitle": "Cosa fa il terzista",
+    "noOps": "Nessuna lavorazione sull’ordine.",
+    "kitTitle": "Kit che lo accompagna",
+    "noKit": "Nessun kit: i capi viaggiano da soli.",
+    "colour": "Colore",
+    "noteTitle": "Nota",
+    "ours": "Il materiale inviato resta nostro: restituisci con i capi quanto non usato.",
+    "opLine_one": "{count} capo · rientro previsto il {date}",
+    "opLine_other": "{count} capi · rientro previsto il {date}"
+  },
+  "uom": {
+    "PCS": "pz",
+    "PAIR": "paio",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "mezze pelli",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole"
+  }
+}

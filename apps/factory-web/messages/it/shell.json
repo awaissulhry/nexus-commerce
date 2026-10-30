@@ -26,13 +26,17 @@
       "main": "Principali",
       "customers": "Clienti",
       "quotes": "Preventivi",
-      "orders": "Ordini"
+      "orders": "Ordini",
+      "pricing": "Prezzi",
+      "pricelists": "Listini e contratti"
     },
     "purchasing": {
       "area": "Acquisti",
       "main": "Principali",
       "suppliers": "Fornitori",
-      "orders": "Ordini d'acquisto"
+      "orders": "Ordini d'acquisto",
+      "outside": "Lavorazioni esterne",
+      "subcontracting": "Ordini ai terzisti"
     },
     "plant": {
       "area": "Stabilimento",
@@ -91,7 +95,11 @@
       "invoices": "Fatture",
       "payments": "Incassi",
       "settingsGroup": "Impostazioni",
-      "settings": "Impostazioni amministrazione"
+      "settings": "Impostazioni amministrazione",
+      "close": "Chiusura",
+      "accounting": "Esportazione contabile",
+      "reportsGroup": "Report",
+      "reports": "Report amministrazione"
     },
     "planning": {
       "area": "Pianificazione",
