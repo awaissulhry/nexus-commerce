@@ -1,11 +1,14 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output, quantity } from '@nexus/factory-domain/core/contracts'
+import { notMoney } from '@nexus/factory-domain/money/marked'
 import { ITEM_TRACKINGS } from '@nexus/factory-domain/inventory/ledger/moves'
 import { HIDE_STATES } from '@nexus/factory-domain/inventory/issue/rules'
 import { UNUSABLE_REASONS } from '@nexus/factory-domain/planning/usable'
+import { READINESS_WORDS } from '@nexus/factory-domain/planning/readiness/readiness'
 import { WORK_ORDER_STATUSES } from '@nexus/factory-domain/production/work-orders/machine'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { moveView } from '../ledger/contract'
+import { KIT_STATUSES, MAX_PICK_LISTS, PICK_VIEWS } from './kit-rules'
 
 /**
  * Picking and issuing to a work order (B-W1-39; SCM-215, SCM-194, SCM-216; A2 SCR-093, SCR-070). Quantities are decimal
@@ -72,7 +75,10 @@ const candidate = output({
   onHand: decimal,
 })
 
-const pickLine = output({
+/** The quality hold (B-W2a-26) behind a held entry: its reason in both languages and since when (B-W2a-58). */
+export const pickHold = output({ id: id(), subjectType: z.enum(['Lot', 'Hide']), reasonCode: z.string(), reasonIt: z.string(), reasonEn: z.string(), placedAt: instant() })
+
+export const pickLine = output({
   itemId: id(),
   itemCode: z.string(),
   itemName: z.string(),
@@ -103,8 +109,23 @@ const pickLine = output({
   ),
   /** Usable stock of the site, oldest first (at most 50; `more` counts the rest). */
   usable: output({ onHand: decimal, candidates: z.array(candidate), more: z.number().int() }),
-  /** Stock of the same material and colour that may not be issued, with the reason. */
-  held: z.array(output({ reason: z.enum(UNUSABLE_REASONS), words: z.string(), lotId: id(), lotCode: z.string(), onHand: decimal, hides: z.number().int() })),
+  /**
+   * Stock of the same material and colour that may not be issued, with the reason. B-W2a-58: stock under an ACTIVE quality
+   * hold (B-W2a-26) is here too (reason QUALITY_HOLD) with the hold — a held lot, or one held hide of its lot.
+   */
+  held: z.array(
+    output({
+      reason: z.enum(UNUSABLE_REASONS),
+      words: z.string(),
+      lotId: id(),
+      lotCode: z.string(),
+      onHand: decimal,
+      hides: z.number().int(),
+      hideId: id().nullable().optional(),
+      hideCode: z.string().nullable().optional(),
+      hold: pickHold.optional(),
+    }),
+  ),
   /** What the work order holds (issued minus returned) per lot and hide; `returnable` = it less what was cut. */
   atWorkOrder: z.array(
     output({ lotId: id().nullable(), lotCode: z.string().nullable(), hideId: id().nullable(), hideCode: z.string().nullable(), quantity: decimal, cut: decimal, returnable: decimal }),
@@ -215,4 +236,154 @@ export const reversePickContract = defineContract({
   params: input({ moveId: id() }),
   body: input({ note: why() }),
   response: { 201: reversal },
+})
+
+// ---- Picking & kits (B-W2a-58; design warehouse.picking, SCR-237; PLN-086) ----------------------------------------------
+
+const readinessMaterial = output({
+  itemId: id(),
+  itemColourId: id().nullable(),
+  label: z.string(),
+  uom,
+  word: z.enum(READINESS_WORDS),
+  date: businessDate().nullable(),
+  needed: decimal,
+  issued: decimal,
+  reserved: decimal,
+  inStock: decimal,
+  onOrder: decimal,
+  short: decimal,
+  /** One sentence in English (the screens say their own words from `word`, `date` and the figures). */
+  reason: z.string(),
+  /** The purchase orders it counts on ("Open PO"). */
+  purchaseOrders: z.array(output({ id: id(), number: z.string(), status: z.string(), dueDate: businessDate() })),
+})
+
+/** The plan's readiness word of a work order (planning readiness, computed now), with each material's reason. */
+const readiness = output({ word: z.enum(READINESS_WORDS), label: z.string(), date: businessDate().nullable(), reason: z.string(), materials: z.array(readinessMaterial) })
+
+const kitWorkOrder = output({
+  id: id(),
+  number: z.string(),
+  status: z.enum(WORK_ORDER_STATUSES),
+  kind: z.string(),
+  companyId: id(),
+  siteId: id(),
+  dueDate: businessDate().nullable(),
+  priority: z.number().int(),
+  pieces: z.number().int(),
+  style: output({ id: id(), code: z.string(), name: z.string() }),
+  /** ON_HOLD: why (the floor's words) and the status it goes back to. */
+  onHold: output({ reason: z.string().nullable(), from: z.enum(WORK_ORDER_STATUSES).nullable() }).nullable(),
+})
+
+/** Who picked: a team (the floor device's work centre, else the device) or the office. Never a person. */
+const pickedBy = z.array(output({ kind: z.enum(['OFFICE', 'TEAM']), name: z.string().nullable() }))
+/** The work order's pick list = its reservations (ACTIVE or ISSUED). */
+const pickListState = output({ created: z.boolean(), reservations: z.number().int(), createdAt: instant().nullable() })
+const kitStatus = z.enum(KIT_STATUSES)
+
+export const pickListsContract = defineContract({
+  querystring: input({
+    siteId: id().optional(),
+    view: z.enum(PICK_VIEWS).default('all'),
+    q: z.string().trim().max(80).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    cursor: z.string().regex(/^\d+$/).optional(),
+  }),
+  response: {
+    200: output({
+      asOf: instant(),
+      sites: z.array(output({ id: id(), code: z.string(), name: z.string() })),
+      /** The saved rows' counts (after the search): to pick today, waiting for material, kits complete, no pick list yet, all. */
+      tiles: output({ today: z.number().int(), waiting: z.number().int(), complete: z.number().int(), toCreate: z.number().int(), all: z.number().int() }),
+      rows: z.array(
+        output({
+          workOrder: kitWorkOrder,
+          /** The plan's first day for it (the site's working plan), else null. */
+          cutDate: businessDate().nullable(),
+          readiness,
+          /** Lines (material × colour) issued in full of all lines ("6 of 9"). */
+          lines: output({ all: z.number().int(), picked: z.number().int(), short: z.number().int() }),
+          /** OPEN · PARTLY · COMPLETE from the issues; `location` is not recorded yet (no schema: always null). */
+          kit: output({ status: kitStatus, location: z.null() }),
+          pickList: pickListState,
+          pickedBy,
+          startedAt: instant().nullable(),
+          finishedAt: instant().nullable(),
+        }),
+      ),
+      /** How many rows the saved row holds (all pages): a count, not money. */
+      total: notMoney(z.number().int()),
+      nextCursor: z.string().nullable(),
+    }),
+  },
+})
+
+const place = output({ locationId: id(), locationCode: z.string(), onHand: decimal })
+
+export const pickListSheetsContract = defineContract({
+  querystring: input({ workOrderIds: z.string().trim().min(1).max(800) }),
+  response: {
+    200: output({
+      asOf: instant(),
+      sheets: z.array(
+        output({
+          workOrder: kitWorkOrder.extend({ batchNumber: z.string().nullable(), version: z.number().int(), issuable: z.boolean() }),
+          cutDate: businessDate().nullable(),
+          readiness,
+          kit: output({ status: kitStatus, location: z.null(), all: z.number().int(), picked: z.number().int(), short: z.number().int() }),
+          pickList: pickListState,
+          pickedBy,
+          startedAt: instant().nullable(),
+          finishedAt: instant().nullable(),
+          lines: z.array(
+            pickLine.extend({
+              /** The pick list of the line: reserved for it (open), what a new pick list would reserve, what nothing covers. */
+              pick: output({
+                reserved: decimal,
+                short: decimal,
+                proposed: z.array(
+                  output({ kind: z.enum(['HIDE', 'LOT', 'ANY']), lotId: id().nullable(), lotCode: z.string().nullable(), hideId: id().nullable(), hideCode: z.string().nullable(), quantity: decimal, locations: z.array(place) }),
+                ),
+                reservations: z.array(
+                  output({
+                    id: id(),
+                    status: z.enum(['ACTIVE', 'ISSUED', 'RELEASED']),
+                    lotId: id().nullable(),
+                    lotCode: z.string().nullable(),
+                    hideId: id().nullable(),
+                    hideCode: z.string().nullable(),
+                    quantity: decimal,
+                    issued: decimal,
+                    locations: z.array(place),
+                  }),
+                ),
+              }),
+            }),
+          ),
+        }),
+      ),
+    }),
+  },
+})
+
+export const createPickListsContract = defineContract({
+  body: input({ siteId: id(), workOrderIds: z.array(id()).min(1).max(MAX_PICK_LISTS) }),
+  response: {
+    201: output({
+      created: z.number().int(),
+      results: z.array(
+        output({
+          workOrderId: id(),
+          number: z.string().nullable(),
+          /** CREATED (reserved now) · NOTHING_TO_RESERVE (already reserved or issued, or no usable stock) · REFUSED (words). */
+          outcome: z.enum(['CREATED', 'NOTHING_TO_RESERVE', 'REFUSED']),
+          reserved: z.array(output({ itemCode: z.string(), colourCode: z.string().nullable(), kind: z.enum(['HIDE', 'LOT', 'ANY']), lotCode: z.string().nullable(), hideCode: z.string().nullable(), quantity: decimal, baseUom: z.string() })),
+          short: z.array(output({ itemCode: z.string(), colourCode: z.string().nullable(), quantity: decimal, baseUom: z.string() })),
+          refusal: output({ code: z.string(), message: z.string() }).nullable(),
+        }),
+      ),
+    }),
+  },
 })

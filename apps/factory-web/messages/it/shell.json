@@ -73,7 +73,11 @@
       "settings": "Impostazioni",
       "floorRules": "Regole di reparto",
       "reports": "Report",
-      "reportsPage": "Report produzione"
+      "reportsPage": "Report produzione",
+      "cuttingRoom": "Sala taglio",
+      "cutting": "Taglio",
+      "floorControl": "Controllo reparto",
+      "scrap": "Scarti e rilavorazioni"
     },
     "quality": {
       "area": "Qualità",
@@ -106,7 +110,9 @@
       "main": "Principali",
       "mrp": "Cosa comprare e produrre",
       "board": "Tabellone di pianificazione",
-      "allocation": "Linee e terzisti"
+      "allocation": "Linee e terzisti",
+      "settingsGroup": "Impostazioni",
+      "settings": "Impostazioni pianificazione"
     },
     "warehouse": {
       "area": "Magazzino",
@@ -123,6 +129,7 @@
       "moves": "Movimenti",
       "locations": "Ubicazioni",
       "inTheWarehouse": "In magazzino",
+      "picking": "Prelievi e kit",
       "counts": "Inventari"
     },
     "frame": {

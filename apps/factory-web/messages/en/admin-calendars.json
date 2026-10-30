@@ -1,0 +1,121 @@
+{
+  "acal": {
+    "tab": "Calendars",
+    "more": "More actions",
+    "holidaysAll": "Holidays for all sites",
+    "holidaysAllHint": "The company's working days and holidays, which every site inherits",
+    "title": "Working days and holidays {year}",
+    "hint": "Italian national holidays, the patron saint, the August shutdown: every site of the company follows these days.",
+    "gridLabel": "Calendar of {name} · {year}",
+    "failed": "Couldn't load the working days and holidays",
+    "readOnly": "You can see the company's working days and holidays; keeping them needs the Calendars right over every site of the company.",
+    "inherit": "Sites inherit these days and may open or close a date on their own calendar (Planning › Planning settings):",
+    "siteLink": "{code} · {name}",
+    "siteOwn_one": "its own calendar, {count} date of its own this year",
+    "siteOwn_other": "its own calendar, {count} dates of its own this year",
+    "siteFollows": "follows the company",
+    "none": {
+      "title": "No company calendar yet",
+      "body": "Sites use Monday to Friday, one shift, until the company has a calendar. Set it up to add the public holidays and the closures every site follows.",
+      "create": "Set up the company calendar"
+    },
+    "list": {
+      "title": "Holidays and closures",
+      "hint": "Each date set on the company calendar, with the sites that decide it differently.",
+      "label": "Holidays and closures {year}",
+      "empty": "No holiday or closure set for {year}",
+      "emptyBody": "Load the Italian holidays of {year}, or add the patron saint and the shutdowns."
+    },
+    "col": {
+      "date": "Date",
+      "name": "Name",
+      "kind": "Kind",
+      "sites": "Sites",
+      "actions": "Actions",
+      "remove": "Remove"
+    },
+    "span": "{from} – {to}",
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "source": {
+      "national": "Italian national list",
+      "hand": "Added by hand"
+    },
+    "kind": {
+      "working": "Working day (open)"
+    },
+    "remove": "Remove {name}",
+    "load": "Load Italian holidays {year}",
+    "loadedAlready_one": "{count} day of the Italian list is set for {year}; loading again adds only what is missing.",
+    "loadedAlready_other": "{count} days of the Italian list are set for {year}; loading again adds only what is missing.",
+    "sites": {
+      "all": "All sites",
+      "allBut": "All sites but {sites}",
+      "open": "{code} (open)",
+      "closed": "{code} (closed)"
+    },
+    "elsewhere": {
+      "title": "Changed by someone else",
+      "body": "The company calendar changed on another screen meanwhile. Reload to see it.",
+      "reload": "Reload"
+    },
+    "week": {
+      "title": "Working week",
+      "hint": "The days the company works in a normal week. A site or a line may keep a week of its own.",
+      "days": "Working days",
+      "none": "No working day",
+      "atLeastOne": "Keep at least one working day in the week."
+    },
+    "pattern": {
+      "label": "Shift pattern",
+      "default": "The planning default: one shift, 08:00–17:00 with a lunch break",
+      "where": "Shifts are kept per site and line in Planning settings.",
+      "link": "Calendars & shifts"
+    },
+    "add": {
+      "open": "Add holiday",
+      "title": "Add a holiday or closure",
+      "subtitle": "On the calendar of {name}: every site follows it",
+      "from": "From",
+      "to": "To (optional)",
+      "toHint": "For a closure over several days, such as the August shutdown.",
+      "datePlaceholder": "Pick a date",
+      "clear": "Clear",
+      "name": "Name",
+      "nameHint": "What the day is called on the calendar and the print.",
+      "namePlaceholder": "Patron saint, Summer closure",
+      "kind": "Kind",
+      "holiday": "Public holiday",
+      "closure": "Closure",
+      "capacity": "Recalculates capacity at once: no line of the company works that day unless a site or a line opens it.",
+      "conflictTitle_one": "{count} day is already set: add again to replace it",
+      "conflictTitle_other": "{count} days are already set: add again to replace them",
+      "replace_one": "Replace {count} day",
+      "replace_other": "Replace {count} days",
+      "go": "Add",
+      "cancel": "Cancel",
+      "needDate": "Pick the first day.",
+      "toBefore": "The last day comes before the first.",
+      "tooLong": "A range is at most a year long.",
+      "needName": "Give the day a name.",
+      "conflict": "Some days are already set."
+    },
+    "problem": {
+      "wholeCompany": "Keeping the company's calendar needs calendars.manage over every site of the company: your grant reaches only some of them."
+    },
+    "done": {
+      "created": "The company calendar is set up: Monday to Friday, one shift. Add its holidays next.",
+      "week": "The working week is saved; capacity is recalculated at once.",
+      "added_one": "{name}: {count} day added.",
+      "added_other": "{name}: {count} days added.",
+      "addedReplaced_one": "{name}: {count} day set, {replaced} replaced.",
+      "addedReplaced_other": "{name}: {count} days set, {replaced} replaced.",
+      "removed_one": "{name}: {count} day removed; the sites work it again as the week says.",
+      "removed_other": "{name}: {count} days removed; the sites work them again as the week says.",
+      "loaded_one": "Italian holidays {year}: {count} added.",
+      "loaded_other": "Italian holidays {year}: {count} added.",
+      "loadedSkipped_one": "Italian holidays {year}: {count} added · {skipped} already set, kept.",
+      "loadedSkipped_other": "Italian holidays {year}: {count} added · {skipped} already set, kept."
+    }
+  }
+}

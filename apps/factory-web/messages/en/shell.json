@@ -73,7 +73,11 @@
       "settings": "Settings",
       "floorRules": "Floor rules & codes",
       "reports": "Reports",
-      "reportsPage": "Production reports"
+      "reportsPage": "Production reports",
+      "cuttingRoom": "Cutting room",
+      "cutting": "Cutting",
+      "floorControl": "Floor control",
+      "scrap": "Scrap & rework"
     },
     "quality": {
       "area": "Quality",
@@ -106,7 +110,9 @@
       "main": "Main",
       "mrp": "What to buy & make",
       "board": "Planning board",
-      "allocation": "Lines & subcontractors"
+      "allocation": "Lines & subcontractors",
+      "settingsGroup": "Settings",
+      "settings": "Planning settings"
     },
     "warehouse": {
       "area": "Warehouse",
@@ -123,6 +129,7 @@
       "moves": "Movements",
       "locations": "Locations",
       "inTheWarehouse": "In the warehouse",
+      "picking": "Picking & kits",
       "counts": "Counts"
     },
     "frame": {

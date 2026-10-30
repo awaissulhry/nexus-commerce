@@ -3,6 +3,9 @@ import { ConflictError, NotFoundError, type Issue } from '@nexus/factory-domain/
 import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { pickList } from '@nexus/factory-domain/inventory/issue/pick-list'
+import type { Balance } from '@nexus/factory-domain/inventory/ledger/moves'
+import { usabilityOf } from '@nexus/factory-domain/planning/usable'
+import { blockedWords } from '@nexus/factory-domain/quality/holds/rules'
 import { ISSUABLE_STATUSES, type Refusal } from '@nexus/factory-domain/inventory/issue/rules'
 import { quantityText } from '@nexus/factory-domain/inventory/ledger/moves'
 import { INVENTORY_ISSUE } from '@nexus/factory-domain/inventory/permissions'
@@ -11,6 +14,9 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { mayAt, stockContextOf, type StockContext } from '../ledger/access'
 import { LEDGER_SELECT, type LedgerRow } from '../ledger/post-moves'
+import { reasonWords } from '../../../platform/reasons/service'
+import { activeHoldsOf, type ActiveHold } from '../../quality/holds/checks'
+import { heldByQualityHolds } from '../../quality/holds/stock'
 import {
   pickHideOf,
   pickItemOf,
@@ -27,6 +33,8 @@ import {
   readPickMaterials,
   readSiteStock,
   STYLE_COLUMNS,
+  type HideRow,
+  type LotRow,
   type PickHeader,
   type Reader,
 } from './store'
@@ -128,16 +136,18 @@ export async function pickListView(db: Reader, context: StockContext, workOrder:
   const hides = await readHides(db, hideIds)
   const locations = await readLocations(db, [...new Set(stock.map((row) => row.locationId))])
   const cuts = await readCuts(db, workOrder.siteId, workOrder.id, atWorkOrder.flatMap((row) => (row.hideId ? [row.hideId] : [])))
+  // B-W2a-58 (the lead's follow-up of #973): stock under an ACTIVE quality hold is never offered; it is held, with the hold.
+  const quality = await qualityHeldOf(db, stock, lots, hides)
   const lines = pickList({
     materials,
     items: new Map([...items.values()].map((item) => [item.id, pickItemOf(item)])),
     colours,
-    stock: pickStockOf(stock, locations),
+    stock: pickStockOf(quality.free, locations),
     lots: new Map([...lots.values()].map((lot) => [lot.id, pickLotOf(lot)])),
     hides: new Map([...hides.values()].map((hide) => [hide.id, pickHideOf(hide)])),
     atWorkOrder,
     cuts,
-  })
+  }).map((line) => withHolds(line, quality.held))
   const last = await lastIssueOf(db, context, workOrder.siteId)
   return {
     workOrder: {
@@ -156,6 +166,92 @@ export async function pickListView(db: Reader, context: StockContext, workOrder:
     lines,
     undo: last && last.moves[0]!.workOrderId === workOrder.id ? undoView(last.moves) : null,
   }
+}
+
+// ---- quality holds (B-W2a-26) in the pick list -----------------------------------------------------------------------------
+
+/** The hold behind a held entry: its reason (both languages, for the screens' own words) and since when. */
+export interface PickHold {
+  readonly id: string
+  readonly subjectType: 'Lot' | 'Hide'
+  readonly reasonCode: string
+  readonly reasonIt: string
+  readonly reasonEn: string
+  readonly placedAt: string
+}
+
+/** A held entry of a line for stock under a quality hold: the lot (all its stock), or one hide of a lot that is not held. */
+export interface QualityHeldEntry {
+  readonly itemId: string
+  readonly itemColourId: string | null
+  readonly reason: 'QUALITY_HOLD'
+  readonly words: string
+  readonly lotId: string
+  readonly lotCode: string
+  readonly onHand: string
+  readonly hides: number
+  readonly hideId: string | null
+  readonly hideCode: string | null
+  readonly hold: PickHold
+}
+
+/**
+ * The site's balances split by the quality holds (B-W2a-26; QHS-074): `free` is what the pick list may offer (a balance a
+ * lot status already holds stays there: the pick list says that reason itself), `held` the entries of the lots and hides
+ * an ACTIVE hold holds, with the hold in words ("Lot … is on hold (Supplier check, since 21 Nov 2026): …", the issue's
+ * own refusal). Releasing the hold offers the stock again on the next read.
+ */
+export async function qualityHeldOf(db: Reader, stock: readonly Balance[], lots: ReadonlyMap<string, LotRow>, hides: ReadonlyMap<string, HideRow>): Promise<{ free: Balance[]; held: QualityHeldEntry[] }> {
+  const quality = await heldByQualityHolds(db, { lotIds: stock.map((row) => row.lotId), hideIds: stock.map((row) => row.hideId) })
+  const offered = (row: Balance) => usabilityOf(row.lotId ? (lots.has(row.lotId) ? pickLotOf(lots.get(row.lotId)!) : null) : null).usable
+  const isHeld = (row: Balance) => quality.holds(row) && offered(row)
+  const heldRows = stock.filter(isHeld)
+  if (heldRows.length === 0) return { free: [...stock], held: [] }
+  const lotHolds = await activeHoldsOf(db, 'Lot', heldRows.map((row) => row.lotId))
+  const hideHolds = await activeHoldsOf(db, 'Hide', heldRows.map((row) => row.hideId))
+  const reasons = await reasonWords(db as Prisma.TransactionClient, 'HOLD')
+  const holdOf = (hold: ActiveHold, subjectType: 'Lot' | 'Hide'): PickHold => {
+    const reason = reasons.get(hold.reasonCode)
+    return { id: hold.id, subjectType, reasonCode: hold.reasonCode, reasonIt: reason?.labelIt ?? hold.reasonCode, reasonEn: reason?.labelEn ?? hold.reasonCode, placedAt: toUtcIso(hold.placedAt) }
+  }
+  const entries = new Map<string, QualityHeldEntry & { hideSet: Set<string> }>()
+  for (const row of heldRows) {
+    const lot = row.lotId ? lots.get(row.lotId) : undefined
+    const lotHold = row.lotId ? lotHolds.find((hold) => hold.subjectIds.includes(row.lotId!)) : undefined
+    const hide = row.hideId ? hides.get(row.hideId) : undefined
+    const hideHold = !lotHold && row.hideId ? hideHolds.find((hold) => hold.subjectIds.includes(row.hideId!)) : undefined
+    const hold = lotHold ? holdOf(lotHold, 'Lot') : hideHold ? holdOf(hideHold, 'Hide') : null
+    if (!hold || !row.lotId || !lot) continue
+    const key = hold.subjectType === 'Lot' ? `lot|${row.lotId}` : `hide|${row.hideId}`
+    const label = hold.subjectType === 'Lot' ? lot.code : (hide?.code ?? '')
+    const entry = entries.get(key) ?? {
+      itemId: row.itemId,
+      itemColourId: row.itemColourId,
+      reason: 'QUALITY_HOLD' as const,
+      words: blockedWords({ holdId: hold.id, subjectType: hold.subjectType, label, reason: hold.reasonEn, placedAt: hold.placedAt }, hold.subjectType === 'Lot' ? 'its stock is not issued' : 'it is not issued'),
+      lotId: row.lotId,
+      lotCode: lot.code,
+      onHand: '0.0000',
+      hides: 0,
+      hideId: hold.subjectType === 'Hide' ? row.hideId : null,
+      hideCode: hold.subjectType === 'Hide' ? (hide?.code ?? null) : null,
+      hold,
+      hideSet: new Set<string>(),
+    }
+    if (row.hideId) entry.hideSet.add(row.hideId)
+    entries.set(key, { ...entry, onHand: quantityText(new Dec(entry.onHand).plus(row.onHand)), hides: entry.hideSet.size })
+  }
+  const held = [...entries.values()].map(({ hideSet: _hides, ...entry }) => entry)
+  return { free: stock.filter((row) => !isHeld(row)), held }
+}
+
+/** A pick list line with the quality-held entries of its material and colour after the ones its lots' state holds. */
+export function withHolds<Line extends { readonly itemId: string; readonly itemColourId: string | null; readonly held: readonly object[] }>(line: Line, held: readonly QualityHeldEntry[]): Line {
+  const mine = held
+    .filter((entry) => entry.itemId === line.itemId && entry.itemColourId === line.itemColourId)
+    .map(({ itemId: _item, itemColourId: _colour, ...entry }) => entry)
+    .sort((a, b) => (a.lotCode < b.lotCode ? -1 : a.lotCode > b.lotCode ? 1 : (a.hideCode ?? '') < (b.hideCode ?? '') ? -1 : 1))
+  return mine.length === 0 ? line : { ...line, held: [...line.held, ...mine] }
 }
 
 // ---- the poster's last issue ----------------------------------------------------------------------------------------------

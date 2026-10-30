@@ -1,8 +1,9 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
-import { issueContract, pickingWorkOrdersContract, pickListContract, returnContract, reversePickContract, undoContract } from './contract'
+import { createPickListsContract, issueContract, pickingWorkOrdersContract, pickListContract, pickListSheetsContract, pickListsContract, returnContract, reversePickContract, undoContract } from './contract'
 import { issue, returnStock, reversePick, undoIssue } from './issue'
 import { manifest } from './manifest'
+import { createPickLists, listPickLists, pickListSheets } from './kits'
 import { getPickList, pickingWorkOrders } from './picking'
 
 /**
@@ -30,5 +31,14 @@ export default defineRoutes('inventory.issue', manifest, async (app) => {
 
   app.post('/inventory/picking/moves/:moveId/reverse', { schema: reversePickContract }, async (request, reply) =>
     reply.code(201).send(await reversePick(request, request.params.moveId, request.body, idempotencyKeyFrom(request))),
+  )
+
+  // B-W2a-58: Picking & kits (SCR-237) — the pick lists of many work orders, their sheets, and Create pick lists.
+  app.get('/inventory/picking/pick-lists', { schema: pickListsContract }, async (request) => listPickLists(request, request.query))
+
+  app.get('/inventory/picking/pick-lists/sheet', { schema: pickListSheetsContract }, async (request) => pickListSheets(request, request.query))
+
+  app.post('/inventory/picking/pick-lists', { schema: createPickListsContract }, async (request, reply) =>
+    reply.code(201).send(await createPickLists(request, request.body, idempotencyKeyFrom(request))),
   )
 })

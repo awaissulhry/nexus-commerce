@@ -10,8 +10,9 @@ import { useT } from '../../../../lib/i18n/provider'
 import type { Company, Site } from '../../shared/api'
 import { adminHref, STATUS_TONE } from '../../shared/model'
 import { ListFrame } from '../../../../list-frame/ListFrame'
-import { AdminMessages, dash, FrameState, ListKeysHelp, NoticeBanner, RecordProblem } from '../../shared/view/parts'
+import { dash, FrameState, ListKeysHelp, NoticeBanner, RecordProblem } from '../../shared/view/parts'
 import { RecordFrame } from '../../shared/view/RecordFrame'
+import { WithMessages } from '../../../../record-panels/i18n'
 import {
   addressLine,
   changedFields,
@@ -47,18 +48,21 @@ export interface CompanyRecordActions {
  * SCR-008 — the Company record (design 02 admin.org "Record: Company"): Legal & tax (what every document and invoice
  * prints, c.c. art. 2250; what SDI needs), its Sites, its Defaults, and Activity (the record panels: thread, files,
  * history). Forms save with the DS EditModeBar (⌘S, Discard, Apply held with its reason); a person without
- * companies.manage reads the data as text. Calendars come with W2a. Fetches nothing (CompanyRecord.tsx reads the API).
+ * companies.manage reads the data as text. Calendars (B-W2a-59: working days and holidays) is passed in as `calendars`
+ * (its own container), shown with calendars.view. Fetches nothing (CompanyRecord.tsx reads the API).
  */
-export function CompanyRecordView({ model, actions, panels }: { model: CompanyRecordModel; actions?: CompanyRecordActions; panels?: ReactNode }) {
+export function CompanyRecordView({ model, actions, panels, calendars }: { model: CompanyRecordModel; actions?: CompanyRecordActions; panels?: ReactNode; calendars?: ReactNode }) {
   return (
-    <AdminMessages>
-      <CompanyRecord model={model} actions={actions} panels={panels} />
-    </AdminMessages>
+    // AdminMessages' catalogues and, for the Calendars tab's label (B-W2a-59), the tab's own.
+    <WithMessages namespaces={['admin', 'records', 'admin-calendars']}>
+      <CompanyRecord model={model} actions={actions} panels={panels} calendars={calendars} />
+    </WithMessages>
   )
 }
 
-function CompanyRecord({ model, actions, panels }: { model: CompanyRecordModel; actions?: CompanyRecordActions; panels?: ReactNode }) {
+function CompanyRecord({ model, actions, panels, calendars }: { model: CompanyRecordModel; actions?: CompanyRecordActions; panels?: ReactNode; calendars?: ReactNode }) {
   const t = useT('admin')
+  const tc = useT('admin-calendars')
   const href = (path: string) => adminHref(model.prefix, path)
   const back = { href: href('/companies'), label: t('nav.companies') }
   const company = model.company
@@ -92,6 +96,7 @@ function CompanyRecord({ model, actions, panels }: { model: CompanyRecordModel; 
     { id: 'legal', label: t('company.tab.legal') },
     { id: 'sites', label: t('company.tab.sites'), count: model.sites.items ? model.sites.items.length : null },
     { id: 'defaults', label: t('company.tab.defaults') },
+    ...(model.can.viewCalendars ? [{ id: 'calendars' as const, label: tc('acal.tab') }] : []),
     { id: 'activity', label: t('company.tab.activity') },
   ]
   const archived = company.status === 'ARCHIVED'
@@ -131,6 +136,7 @@ function CompanyRecord({ model, actions, panels }: { model: CompanyRecordModel; 
         {model.tab === 'legal' && <LegalTab model={model} company={company} actions={actions} />}
         {model.tab === 'sites' && <SitesTab model={model} company={company} actions={actions} />}
         {model.tab === 'defaults' && <DefaultsTab model={model} company={company} actions={actions} />}
+        {model.tab === 'calendars' && model.can.viewCalendars && calendars}
         {model.tab === 'activity' && panels}
       </RecordFrame>
       <ArchiveConfirm model={model} company={company} actions={actions} />

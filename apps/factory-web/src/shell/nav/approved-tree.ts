@@ -142,6 +142,13 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'planning.allocation', title: 'Lines & subcontractors', titleIt: 'Linee e terzisti', wave: 'W2a', href: '/planning/allocation' },
         ],
       },
+      // W2a: B-W2a-59 Planning settings (SCR-124, SCR-127).
+      {
+        label: 'Settings',
+        labelIt: 'Impostazioni',
+        hideLabel: false,
+        pages: [{ id: 'planning.settings', title: 'Planning settings', titleIt: 'Impostazioni pianificazione', wave: 'W2a', href: '/planning/settings' }],
+      },
     ],
   },
   {
@@ -195,8 +202,11 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'In the warehouse',
         labelIt: 'In magazzino',
         hideLabel: false,
-        // W2a: B-W2a-28 Counts (SCR-132). Picking & kits (B-W2a-58) joins before it with its step; Transfers is W2b.
-        pages: [{ id: 'warehouse.counts', title: 'Counts', titleIt: 'Inventari', wave: 'W2a', href: '/warehouse/counts' }],
+        // W2a: B-W2a-58 Picking & kits (SCR-237), B-W2a-28 Counts (SCR-132); Transfers is W2b.
+        pages: [
+          { id: 'warehouse.picking', title: 'Picking & kits', titleIt: 'Prelievi e kit', wave: 'W2a', href: '/warehouse/picking' },
+          { id: 'warehouse.counts', title: 'Counts', titleIt: 'Inventari', wave: 'W2a', href: '/warehouse/counts' },
+        ],
       },
       {
         label: 'Outbound',
@@ -229,6 +239,19 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'production.floor', title: 'Floor now', titleIt: 'Reparto ora', wave: 'W1', href: '/production/floor' },
           { id: 'production.workorders', title: 'Work orders', titleIt: 'Ordini di produzione', wave: 'W1', href: '/production/work-orders' },
         ],
+      },
+      // W2a: B-W2a-60 Cutting (SCR-238) and Scrap & rework (SCR-140).
+      {
+        label: 'Cutting room',
+        labelIt: 'Sala taglio',
+        hideLabel: false,
+        pages: [{ id: 'production.cutting', title: 'Cutting', titleIt: 'Taglio', wave: 'W2a', href: '/production/cutting' }],
+      },
+      {
+        label: 'Floor control',
+        labelIt: 'Controllo reparto',
+        hideLabel: false,
+        pages: [{ id: 'production.scrap', title: 'Scrap & rework', titleIt: 'Scarti e rilavorazioni', wave: 'W2a', href: '/production/scrap' }],
       },
       {
         label: 'Reports',

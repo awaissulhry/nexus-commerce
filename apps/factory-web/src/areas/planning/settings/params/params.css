@@ -1,0 +1,200 @@
+/*
+ * Planning settings › Item parameters, Reorder rules, Horizon & fences, Line efficiency (SCR-127) LAYOUT: the grids'
+ * cells (two lines, a value with its save mark), the dialogs' fields, the horizon's two cards. The controls are the
+ * design system's; semantic tokens only. No page max-width (Owner rule 2026-10-29): wide screens use the width.
+ */
+.fw-pp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pp-two {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.fw-pp-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-strong);
+}
+
+.fw-pp-sub {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-pp-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fw-pp-cell > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-pp-cell.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-pp-refused,
+.fw-pp-problem {
+  color: var(--nds-danger-text);
+}
+
+.fw-pp-refused {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pp-problem {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pp-refusals,
+.fw-pp-names {
+  margin: var(--nds-space-4) 0 0;
+  padding-left: var(--nds-space-18);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pp-names {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.fw-pp-dialog,
+.fw-pp-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pp-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pp-pair,
+.fw-pp-fields,
+.fw-pp-bulk {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-12);
+  align-items: start;
+}
+
+.fw-pp-bulk-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-pp-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+
+.fw-pp-review {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pp-review th,
+.fw-pp-review td {
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border-bottom: 1px solid var(--nds-border-subtle);
+  text-align: left;
+  vertical-align: top;
+}
+
+.fw-pp-review thead th {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pp-change {
+  display: block;
+}
+
+.fw-pp-cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .fw-pp-cards {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
+.fw-pp-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-pp-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-strong);
+}
+
+.fw-pp-preview-title {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pp-later {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-pp-spark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-pp-keys {
+  display: grid;
+  gap: var(--nds-space-8);
+  margin: 0;
+}
+
+.fw-pp-keys > div {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) 1fr;
+  gap: var(--nds-space-10);
+  align-items: center;
+}
+
+.fw-pp-keys dd {
+  margin: 0;
+}

@@ -1,0 +1,361 @@
+{
+  "ps": {
+    "title": "Impostazioni pianificazione",
+    "tabs": "Parti delle impostazioni di pianificazione",
+    "tab": {
+      "calendars": "Calendari e turni",
+      "items": "Parametri articolo",
+      "reorder": "Regole di riordino",
+      "horizon": "Orizzonte e barriere",
+      "efficiency": "Efficienza linee"
+    },
+    "site": "Stabilimento",
+    "siteOption": "{code} · {name}",
+    "print": "Calendario di stabilimento (stampa)",
+    "changedBy": "Modificato da …",
+    "retry": "Riprova",
+    "stillLoading": "Caricamento ancora in corso…",
+    "sitesFailed": "Impossibile caricare gli stabilimenti che pianifichi",
+    "noAccess": {
+      "title": "Il tuo ruolo non può vedere le impostazioni di pianificazione",
+      "body": "Il tuo ruolo non comprende “planning.view”. Chiedi a un amministratore se ti serve questa pagina."
+    },
+    "noSites": {
+      "title": "Ancora nessuno stabilimento da pianificare",
+      "body": "Le impostazioni di pianificazione sono per stabilimento. Aggiungi uno stabilimento in Sistema › Società e stabilimenti, o chiedi i diritti di pianificazione su uno.",
+      "action": "Società e stabilimenti"
+    },
+    "status": {
+      "saved": "Tutte le modifiche salvate · {time}",
+      "saving": "Salvataggio…",
+      "unsaved_one": "{count} modifica non salvata",
+      "unsaved_other": "{count} modifiche non salvate",
+      "failed_one": "{count} modifica non salvata — riprova",
+      "failed_other": "{count} modifiche non salvate — riprova"
+    },
+    "save": {
+      "region": "Modifiche non salvate",
+      "unsaved_one": "{count} modifica non salvata",
+      "unsaved_other": "{count} modifiche non salvate",
+      "discard": "Annulla modifiche",
+      "save": "Salva"
+    },
+    "held": {
+      "busy": "Salvataggio in corso: attendi la risposta.",
+      "calendars": "Per gestire i calendari serve il diritto Calendari (calendars.manage).",
+      "items": "Per gestire i parametri articolo serve il diritto di pianificazione articoli (planning.items.manage).",
+      "settings": "Per gestire le impostazioni di pianificazione serve il relativo diritto (planning.settings.manage)."
+    },
+    "problem": {
+      "read": "La fabbrica non ha risposto come previsto. Riprova tra un momento.",
+      "forbidden": "Il tuo ruolo non può leggere questa parte per questo stabilimento.",
+      "offline": "La fabbrica non è raggiungibile: controlla la connessione, poi riprova.",
+      "gone": "Non c'è più: qualcuno l'ha rimosso o archiviato.",
+      "signedOut": "Sei stato disconnesso. Accedi di nuovo per continuare.",
+      "write": "La modifica non è stata salvata: la fabbrica l'ha rifiutata.",
+      "conflict": "Qualcun altro l'ha modificato nel frattempo: rileggi, poi fai la tua modifica.",
+      "writeForbidden": "Il tuo ruolo non può modificarlo per questo stabilimento.",
+      "invalid": "La modifica è stata rifiutata così com'è: controlla il valore.",
+      "unknown": "Non è arrivata risposta: la modifica potrebbe essere salvata o no. Rileggi per vedere."
+    }
+  },
+  "cal": {
+    "kind": {
+      "work": "Giorno lavorativo",
+      "off": "Giorno di riposo",
+      "holiday": "Festività",
+      "closure": "Chiusura",
+      "extra": "Turno extra",
+      "short": "Giornata ridotta",
+      "opened": "Aperto in un giorno festivo",
+      "noShifts": "Nessun turno impostato"
+    },
+    "from": "Da {name}",
+    "scope": {
+      "COMPANY": "la società",
+      "SITE": "lo stabilimento",
+      "LINE": "la linea",
+      "WORK_CENTRE": "il reparto",
+      "SUPPLIER": "il fornitore",
+      "companyOf": "{name} (società)"
+    },
+    "noAccess": {
+      "title": "Il tuo ruolo non può vedere i calendari"
+    },
+    "failed": "Impossibile caricare calendari e turni",
+    "yearFailed": "Impossibile caricare i giorni di questo calendario",
+    "elsewhere": {
+      "title": "Qualcun altro ha modificato i calendari",
+      "body": "Un calendario o uno schema di turni di questa società è cambiato in un'altra schermata. Ricarica per vederlo; non perdi nulla di tuo.",
+      "reload": "Ricarica"
+    },
+    "readOnly": {
+      "title": "Puoi guardare, non modificare",
+      "body": "Per gestire i calendari serve il diritto Calendari (calendars.manage). I giorni si aprono comunque per mostrare cosa sono."
+    },
+    "owner": {
+      "label": "Calendario di",
+      "group": {
+        "COMPANY": "Società (tutti gli stabilimenti)",
+        "SITE": "Stabilimento",
+        "LINE": "Linee",
+        "WORK_CENTRE": "Reparti"
+      },
+      "company": "{name} — tutti gli stabilimenti",
+      "named": "{code} · {name}"
+    },
+    "none": {
+      "title": "Ancora nessun calendario",
+      "body": "{name} e i calendari sopra non ne hanno: si usa il predefinito dello stabilimento (dal lunedì al venerdì, un turno 08:00–17:00) finché non ne imposti uno."
+    },
+    "follows": {
+      "title": "{name} segue i calendari sopra",
+      "body": "I suoi giorni vengono da {above}. Una modifica qui crea il suo calendario, che poi tiene settimana e giorni propri."
+    },
+    "gridLabel": "Calendario · {name}",
+    "month": {
+      "title": "{month}",
+      "body_one": "{count} giorno lavorativo · {hours} di tempo lavorativo",
+      "body_other": "{count} giorni lavorativi · {hours} di tempo lavorativo"
+    },
+    "recalculates": "Ricalcola subito la capacità: {lanes}",
+    "recalculatesNone": "Ricalcola subito la capacità (ancora nessuna linea o reparto in questo stabilimento).",
+    "chain": {
+      "default": "Nessun calendario: il predefinito della pianificazione",
+      "own_one": "Calendario proprio · {count} giorno datato",
+      "own_other": "Calendario proprio · {count} giorni datati",
+      "ownAbove_one": "Calendario proprio · {count} giorno datato · sopra: {above}",
+      "ownAbove_other": "Calendario proprio · {count} giorni datati · sopra: {above}",
+      "follows": "Segue {above}"
+    },
+    "cancel": "Annulla",
+    "words": {
+      "to": "a",
+      "and": "e"
+    },
+    "week": {
+      "title": "Settimana lavorativa e turni",
+      "inherited": "Lavora {days} · turni: {pattern}.",
+      "makeOwn": "Dai a {name} un calendario proprio",
+      "makeOwnHint": "Il calendario proprio parte dalla settimana di quello sopra; poi giorni, settimana e turni sono suoi.",
+      "days": "Giorni lavorativi",
+      "pattern": "Schema di turni",
+      "patternNone": "Nessuno proprio (da quello sopra)",
+      "patternFromAbove": "Usa {pattern}.",
+      "patternNamed": "{code} · {name}",
+      "patternDefault": "il predefinito della pianificazione (08:00–17:00, pausa 12:00–13:00)",
+      "held": {
+        "none": "Un calendario lavora almeno un giorno della settimana."
+      }
+    },
+    "follow": {
+      "open": "Torna a seguire i calendari sopra",
+      "title": "Torna a seguire i calendari sopra — {name}?",
+      "body_one": "{name} smette di usare il calendario proprio; il suo {count} giorno datato resta nello storico. I suoi giorni vengono poi dai calendari sopra.",
+      "body_other": "{name} smette di usare il calendario proprio; i suoi {count} giorni datati restano nello storico. I suoi giorni vengono poi dai calendari sopra.",
+      "confirm": "Segui i calendari sopra"
+    },
+    "day": {
+      "title": "{date} — {name}",
+      "minutes": "{hours} di tempo lavorativo",
+      "decidedBy": "Impostato da {by}. Una modifica qui vale solo per {name}.",
+      "noShifts": "Un giorno lavorativo in cui lo schema di turni non ha turni: non conta tempo lavorativo. Scegli uno schema con turni in questo giorno.",
+      "choice": "Questo giorno",
+      "choices": {
+        "week": "Come la settimana (nessuna eccezione)",
+        "extra": "Turno extra",
+        "short": "Giornata ridotta",
+        "open": "Lavorativo, con i turni della settimana",
+        "closure": "Chiuso (una chiusura)",
+        "holiday": "Festività"
+      },
+      "defaultName": {
+        "extra": "Turno extra",
+        "short": "Giornata ridotta",
+        "open": "Giorno lavorativo",
+        "closure": "Chiuso",
+        "holiday": "Festività"
+      },
+      "pattern": "Turni di quel giorno",
+      "patternPick": "Scegli uno schema di turni",
+      "noPattern": {
+        "extra": "Nessuno schema ha più tempo lavorativo in questo giorno: creane uno in Schemi di turni qui sotto.",
+        "short": "Nessuno schema ha meno tempo lavorativo in questo giorno: creane uno in Schemi di turni qui sotto."
+      },
+      "name": "Nome (il motivo)",
+      "note": "Nota",
+      "makesOwn": "Salvando, {name} riceve prima un calendario proprio.",
+      "save": "Salva eccezione",
+      "held": {
+        "pattern": "Scegli prima i turni del giorno.",
+        "name": "Dai prima un nome al giorno (il motivo).",
+        "same": "Nulla è cambiato per questo giorno."
+      }
+    },
+    "closure": {
+      "open": "Aggiungi chiusura",
+      "title": "Aggiungi una chiusura",
+      "add": "Aggiungi chiusura",
+      "from": "Dal",
+      "to": "Al",
+      "days_one": "{count} giorno",
+      "days_other": "{count} giorni",
+      "reason": "Motivo",
+      "reasonHint": "Indicato su ogni giorno della chiusura e sul calendario di stabilimento.",
+      "reasonPlaceholder": "Chiusura estiva di agosto",
+      "where": "Stabilimenti e linee",
+      "makesOwn": "riceve un calendario proprio",
+      "otherSite": "{code} · {name} — tutto lo stabilimento",
+      "impact": "Linee e ordini di lavoro coinvolti",
+      "impactIdle": "Scegli i giorni e dove: qui compaiono le linee e gli ordini di lavoro previsti in quei giorni.",
+      "impactFailed": "Il lavoro previsto non si può leggere ora; la chiusura si può aggiungere comunque.",
+      "laneBooked_one": "{count} ordine di lavoro previsto · {minutes} min in quei giorni",
+      "laneBooked_other": "{count} ordini di lavoro previsti · {minutes} min in quei giorni",
+      "laneFree": "nulla previsto in quei giorni",
+      "otherSiteLanes": "tutte le linee e i reparti di quello stabilimento",
+      "impactNone": "Nessuna linea o reparto coinvolto.",
+      "toBoard": "Sposta il lavoro previsto sul tabellone di pianificazione",
+      "recalculates": "Ricalcola subito la capacità di ogni linea coinvolta.",
+      "taken": {
+        "title_one": "{count} giorno è già impostato su un calendario",
+        "title_other": "{count} giorni sono già impostati su un calendario",
+        "keep": "Lascia quei giorni come sono; chiudi gli altri",
+        "replace": "Sostituiscili con la chiusura"
+      },
+      "held": {
+        "dates": "Scegli il primo e l'ultimo giorno.",
+        "order": "L'ultimo giorno viene prima del primo.",
+        "long": "Una chiusura dura al massimo 366 giorni.",
+        "reason": "Indica il motivo della chiusura.",
+        "where": "Scegli almeno un calendario.",
+        "taken": "Indica cosa fare dei giorni già impostati."
+      }
+    },
+    "patterns": {
+      "title": "Schemi di turni",
+      "hint": "Un turno, due turni, sabato mattina: un calendario ne usa uno; un turno extra o una giornata ridotta ne sceglie uno per un giorno.",
+      "count_one": "{count} schema",
+      "count_other": "{count} schemi",
+      "new": "Nuovo schema",
+      "archive_one": "Archivia {count} schema",
+      "archive_other": "Archivia {count} schemi",
+      "used_one": "{count} calendario",
+      "used_other": "{count} calendari",
+      "forCompany": "Questa società",
+      "forAll": "Tutte le società",
+      "status": {
+        "ACTIVE": "In uso",
+        "ARCHIVED": "Archiviato"
+      },
+      "col": {
+        "pattern": "Schema",
+        "shifts": "Turni",
+        "hours": "A settimana",
+        "used": "Usato da",
+        "for": "Per",
+        "status": "Stato"
+      },
+      "empty": {
+        "title": "Ancora nessuno schema di turni",
+        "body": "Senza, i calendari usano il predefinito della pianificazione: 08:00–17:00 con un'ora di pausa, dal lunedì al venerdì."
+      },
+      "held": {
+        "archived": "Già archiviato.",
+        "inUse_one": "Usato da {count} calendario: assegnagli prima un altro schema.",
+        "inUse_other": "Usato da {count} calendari: assegna loro prima un altro schema."
+      }
+    },
+    "pattern": {
+      "newTitle": "Nuovo schema di turni",
+      "editTitle": "Schema di turni {code}",
+      "save": "Salva schema",
+      "create": "Crea schema",
+      "code": "Codice",
+      "codeHint": "Lettere maiuscole, cifre o trattini (DUE-TURNI).",
+      "codeFixed": "Il codice di uno schema non cambia mai.",
+      "name": "Nome",
+      "description": "Descrizione",
+      "everyCompany": "Per tutte le società del gruppo (altrimenti solo questa società)",
+      "inUse_one": "Usato da {count} calendario: una modifica ne ricalcola subito la capacità.",
+      "inUse_other": "Usato da {count} calendari: una modifica ne ricalcola subito la capacità.",
+      "rows": "Turni e pause",
+      "shiftOn": "Turno {n} il",
+      "breakOn": "Pausa {n} il",
+      "dayOf": "{day} (riga {n})",
+      "kind": "Turno o pausa (riga {n})",
+      "label": "Nome (riga {n})",
+      "labelPlaceholder": "Mattino",
+      "start": "Inizio (riga {n})",
+      "end": "Fine (riga {n})",
+      "remove": "Rimuovi la riga {n}",
+      "removeShort": "Rimuovi",
+      "nextDay": "Finisce la mattina dopo (un turno di notte).",
+      "addShift": "Aggiungi un turno",
+      "addBreak": "Aggiungi una pausa",
+      "shiftWord": "Turno",
+      "breakWord": "Pausa",
+      "preview": "{week} a settimana · {days}",
+      "held": {
+        "problems_one": "Correggi prima {count} problema.",
+        "problems_other": "Correggi prima {count} problemi."
+      },
+      "problem": {
+        "code": "Usa da 1 a 20 lettere maiuscole, cifre o trattini.",
+        "codeTaken": "Un altro schema ha questo codice.",
+        "name": "Dai un nome allo schema.",
+        "noShift": "Uno schema ha almeno un turno.",
+        "days": "Scegli almeno un giorno della settimana.",
+        "time": "Scrivi un orario come HH:MM.",
+        "overlap": "Due turni si sovrappongono in un giorno: il tempo lavorativo conterebbe due volte.",
+        "segment": "Questo turno o pausa non torna: controlla gli orari (una pausa dentro il suo turno)."
+      }
+    },
+    "keys": {
+      "title": "Tasti del calendario",
+      "close": "Chiudi",
+      "open": "Invio o un clic — apri un giorno: la sua eccezione",
+      "range": "Maiusc + frecce, poi Invio — o un trascinamento sui giorni — seleziona giorni per una chiusura",
+      "month": "Frecce — sposta di giorno e di settimana; Pag su / Pag giù — di mese",
+      "escape": "Esc — lascia la selezione, chiudi una finestra",
+      "new": "c — un nuovo schema di turni (in Schemi di turni)"
+    },
+    "problem": {
+      "wholeCompany": "Il calendario della società e i suoi schemi valgono per tutti gli stabilimenti: per gestirli serve Calendari (calendars.manage) su tutti gli stabilimenti della società."
+    },
+    "notice": {
+      "daySaved": "Salvato. Capacità ricalcolata subito per: {lanes}.",
+      "dayRemoved": "Il giorno torna a seguire la settimana. Capacità ricalcolata subito per: {lanes}.",
+      "closureAdded": "Chiusura aggiunta a {where}. Capacità ricalcolata subito per: {lanes}.",
+      "closurePartly_one": "Chiusura aggiunta a {done}; {count} calendario l'ha rifiutata: {refused}.",
+      "closurePartly_other": "Chiusura aggiunta a {done}; {count} calendari l'hanno rifiutata: {refused}.",
+      "weekSaved": "Settimana e turni salvati. Capacità ricalcolata subito per: {lanes}.",
+      "made": "{name} ora ha un calendario proprio.",
+      "follows": "{name} torna a seguire i calendari sopra.",
+      "patternSaved": "Schema {code} salvato. I calendari che lo usano ricalcolano subito la capacità.",
+      "patternMade": "Schema {code} creato.",
+      "patternsArchived_one": "{count} schema archiviato · {refused} rifiutati.",
+      "patternsArchived_other": "{count} schemi archiviati · {refused} rifiutati."
+    }
+  },
+  "print": {
+    "title": "Calendario di stabilimento {year} — {site}",
+    "printed": "Stampato il {date} da {person}",
+    "previousYear": "L'anno prima",
+    "nextYear": "L'anno dopo",
+    "held": "Attendi il caricamento del calendario.",
+    "print": "Stampa",
+    "failed": "Impossibile caricare il calendario di stabilimento",
+    "week": "Lavora {days} · turni: {pattern}.",
+    "days": "Festività, chiusure ed eccezioni",
+    "daysNone": "Quest'anno nessun giorno è diverso dalla settimana.",
+    "lanes": "Linee e reparti con giorni diversi",
+    "lanesNone": "Tutte le linee e i reparti seguono i giorni dello stabilimento.",
+    "col": {
+      "date": "Giorno",
+      "kind": "Cosa",
+      "name": "Nome",
+      "hours": "Orari",
+      "lane": "Linea o reparto"
+    }
+  }
+}

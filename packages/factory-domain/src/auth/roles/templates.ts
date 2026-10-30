@@ -132,11 +132,24 @@ const RECEIVABLES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object
 const REFUNDS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   finance: ['payments.refund'],
 })
+/**
+ * B-W2a-62 (payables, FIN-136 / FIN-137; design finance.payables, the Finance area's people): finance registers, maps,
+ * matches, approves and pays supplier invoices; the buyer maps lines to its orders, sends and accepts the differences
+ * ("Differences go to the buyer before payment") and may type a foreign invoice, but never approves or pays. Approval is
+ * never by who registered the invoice (the API and the …_money_w2a_guards). Read-only gets payables.view through the
+ * registry; the owner every one through every().
+ */
+const PAYABLES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  finance: ['payables.view', 'payables.manage', 'payables.differences.accept', 'payables.approve', 'payables.pay'],
+  buyer: ['payables.view', 'payables.manage', 'payables.differences.accept'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
   // B-W2a-61
-  ...(audience === 'office' ? (REFUNDS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (REFUNDS_ADDS[key] ?? []) : []),
+  // B-W2a-62
+  ...(audience === 'office' ? (PAYABLES_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

@@ -104,6 +104,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/planning/mrp': 'planning.view', // GET /planning/runs/latest
       '/planning/board': 'planning.view', // GET /planning/schedule (B-W2a-45)
       '/planning/allocation': 'planning.view', // GET /planning/allocation (B-W2a-45)
+      '/planning/settings': 'planning.view', // GET /planning/settings (B-W2a-59)
       '/purchasing/suppliers': 'parties.view', // GET /parties
       '/purchasing/orders': 'purchasing.view', // GET /purchasing/orders
       '/purchasing/subcontracting': 'purchasing.view', // GET /purchasing/subcontracting/orders (B-W2a-56)
@@ -112,6 +113,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/lots': 'inventory.stock.view', // GET /inventory/lots
       '/warehouse/moves': 'inventory.stock.view', // GET /inventory/ledger
       '/warehouse/receipts': 'inventory.stock.view', // GET /inventory/receipts
+      '/warehouse/picking': 'inventory.stock.view', // GET /inventory/picking/pick-lists (B-W2a-58)
       '/warehouse/counts': 'inventory.counts.view', // GET /inventory/stock-counts
       '/warehouse/shipments': 'shipping.view', // GET /shipping/shipments
       '/warehouse/locations': 'inventory.locations.view', // GET /inventory/locations
@@ -119,6 +121,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/production/floor': 'workorders.view', // GET /production/scans/wip
       '/production/work-orders': 'workorders.view', // GET /production/work-orders
       '/production/reports': 'production.reports.view', // GET /production/reports/daily
+      '/production/cutting': 'production.cutting.view', // GET /production/cutting/cuts (B-W2a-60)
+      '/production/scrap': 'production.scrap.view', // GET /production/scrap (B-W2a-60)
       '/production/settings': 'production.settings.view', // GET /production/settings
       '/quality/inspections': 'quality.inspections.view', // GET /quality/inspections
       '/compliance/certificates': 'compliance.certificates.view', // GET /compliance/certificates
@@ -165,6 +169,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/lots',
       '/warehouse/moves',
       '/warehouse/receipts',
+      '/warehouse/picking',
       '/warehouse/counts',
       '/warehouse/shipments',
       '/warehouse/locations',
@@ -214,7 +219,8 @@ describe('the palette finds every page by its name, in Italian and English', () 
 describe('record links and list addresses (lib/records/record-links.ts)', () => {
   // Built record pages that are a record type's SECOND page: the supplier side of a party (its first is the customer
   // record) and a lot's tests & release (its first is Warehouse › Lots & traceability, which links it).
-  const SECOND_PAGES = new Set(['/purchasing/suppliers/[partyId]', '/compliance/tests/[id]'])
+  // B-W2a-60: a cut (/production/cutting/[id]) is a work order's cutting, a second page of the WorkOrder (no record type of its own in W2a).
+  const SECOND_PAGES = new Set(['/purchasing/suppliers/[partyId]', '/compliance/tests/[id]', '/production/cutting/[id]'])
   const shape = (address: string) => address.split('?')[0]!.replace(/\[[^\]/]+\]/g, '[id]')
 
   it('every record type with a built page is in RECORD_PAGES, and every RECORD_PAGES line is a built page in the map', () => {
