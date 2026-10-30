@@ -1,3 +1,4 @@
+import { depositDueDaysFor } from '../terms/store'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { DomainError, InvalidStateError } from '@nexus/factory-domain/core/errors'
 import { acceptanceMail, quoteDocumentNumber } from '@nexus/factory-domain/sales/quotes/document'
@@ -33,7 +34,7 @@ export interface AcceptedIds {
   readonly versionId: string
 }
 
-const VERSION_FACTS = { id: true, quoteId: true, partyId: true, revision: true, status: true, currency: true, language: true, depositPct: true, depositKind: true, depositAmount: true, documentSha256: true, sentById: true } as const
+const VERSION_FACTS = { id: true, quoteId: true, partyId: true, revision: true, status: true, currency: true, language: true, depositPct: true, depositKind: true, depositAmount: true, documentSha256: true, sentById: true, paymentTermsId: true } as const
 
 export interface AfterAccept {
   readonly deposit: DepositView | null
@@ -66,6 +67,8 @@ export async function afterAccept(caller: CommandCaller, ids: AcceptedIds, causa
         depositKind: version.depositKind,
         depositAmount: version.depositAmount,
         acceptedOn: businessDate(acceptance.acceptedAt),
+        // B-W2a-19: due after the days its payment terms' order instalment says (the PDF printed the same), else 7.
+        depositDueDays: await depositDueDaysFor(tx, version.paymentTermsId),
       },
       party?.profile ?? null,
     )

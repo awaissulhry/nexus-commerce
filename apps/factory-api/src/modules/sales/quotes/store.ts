@@ -82,6 +82,9 @@ export const VERSION_COLUMNS = {
   firmOffer: true,
   promiseDate: true,
   paymentTerms: true,
+  // B-W2a-19: the library's terms and the price list version the version keeps.
+  paymentTermsId: true,
+  priceListVersionId: true,
   termsText: true,
   termsVersion: true,
   depositPct: true,
@@ -190,10 +193,37 @@ export async function officeQuote(caller: CommandCaller, quoteId: string, permis
 
 // ---- the party as a quote reads it -----------------------------------------------------------------------------------
 
-const PARTY_COLUMNS = { id: true, companyId: true, code: true, legalName: true, kind: true, roles: true, status: true, language: true, paymentTerms: true } as const satisfies Prisma.PartySelect
+const PARTY_COLUMNS = {
+  id: true,
+  companyId: true,
+  code: true,
+  legalName: true,
+  kind: true,
+  roles: true,
+  status: true,
+  language: true,
+  paymentTerms: true,
+  // B-W2a-19 (SAL-012): the commercial terms a new quote copies.
+  paymentTermsId: true,
+  priceListId: true,
+  defaultDepositPct: true,
+} as const satisfies Prisma.PartySelect
 
 export interface QuoteParty {
-  readonly row: { readonly id: string; readonly companyId: string | null; readonly code: string; readonly legalName: string; readonly kind: PartyKind; readonly roles: PartyRole[]; readonly status: PartyStatus; readonly language: string; readonly paymentTerms: string | null }
+  readonly row: {
+    readonly id: string
+    readonly companyId: string | null
+    readonly code: string
+    readonly legalName: string
+    readonly kind: PartyKind
+    readonly roles: PartyRole[]
+    readonly status: PartyStatus
+    readonly language: string
+    readonly paymentTerms: string | null
+    readonly paymentTermsId: string | null
+    readonly priceListId: string | null
+    readonly defaultDepositPct: Prisma.Decimal | null
+  }
   readonly isCustomer: boolean
   /** The tax identity in force on the day, and its row. */
   readonly identityId: string | null

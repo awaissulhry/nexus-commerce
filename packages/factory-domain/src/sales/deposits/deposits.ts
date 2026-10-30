@@ -46,10 +46,11 @@ export interface DepositVersionFacts {
 }
 
 /** The deposit request an accepted version asks for, or null when it asks none (no percent, or nothing to pay). */
-export function depositRequestFor(version: DepositVersionFacts, acceptedOn: BusinessDate, profile: CustomerTaxProfile | null): DepositDraft | null {
+export function depositRequestFor(version: DepositVersionFacts, acceptedOn: BusinessDate, profile: CustomerTaxProfile | null, dueDays: number = DEPOSIT_DUE_DAYS): DepositDraft | null {
   if (version.depositPct === null || version.depositAmount === null || version.depositAmount <= 0) return null
   const kind = version.depositKind ?? 'ACCONTO'
-  const base = { kind, depositPct: version.depositPct, currency: version.currency, amount: version.depositAmount, dueDate: addDays(acceptedOn, DEPOSIT_DUE_DAYS) }
+  // B-W2a-19: `dueDays` from the quote's payment terms (their order instalment), else DEPOSIT_DUE_DAYS.
+  const base = { kind, depositPct: version.depositPct, currency: version.currency, amount: version.depositAmount, dueDate: addDays(acceptedOn, dueDays) }
   if (kind === 'CAPARRA') {
     return { ...base, fiscalDocument: 'NONE', fiscalRule: CAPARRA_RULE, reason: 'A caparra confirmatoria (c.c. art. 1385) is not a payment on the price: no deposit invoice when it is paid (accountant to confirm).' }
   }

@@ -1492,7 +1492,9 @@
     "home": "Home",
     "floorsync": "Sincronizzazione reparto",
     "calendars": "Calendari",
-    "reasons": "Elenchi delle causali"
+    "reasons": "Elenchi delle causali",
+    "paymentterms": "Condizioni di pagamento",
+    "pricelists": "Listini"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1656,6 +1658,10 @@
     "planning_firm": "Rendere fissi gli ordini pianificati",
     "planning_exceptions_manage": "Gestire le eccezioni della pianificazione",
     "reasons_view": "Vedere gli elenchi delle causali e quanto è usato ogni codice",
-    "reasons_manage": "Gestire gli elenchi delle causali di tutto il gruppo"
+    "reasons_manage": "Gestire gli elenchi delle causali di tutto il gruppo",
+    "paymentterms_view": "Vedere le condizioni di pagamento",
+    "paymentterms_manage": "Aggiungere e cambiare condizioni di pagamento",
+    "pricelists_view": "Vedere i listini e i loro prezzi",
+    "pricelists_manage": "Gestire listini, versioni e clienti"
   }
 }

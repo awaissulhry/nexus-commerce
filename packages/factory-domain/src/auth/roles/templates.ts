@@ -129,7 +129,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       // B-W2a-21 (standard vs actual): standards, the cost ledger, the costing method (step-up).
       'costing.standards.manage', 'costing.ledger.manage', 'costing.method.manage',
       // B-W2a-18: the reason lists (return and cancel reasons beside the sales settings).
-      'reasons.view'],
+      'reasons.view',
+      // B-W2a-19: the payment terms library (Finance settings) and the price lists (read).
+      'paymentterms.view', 'paymentterms.manage', 'pricelists.view'],
     grains: ['price', 'cost', 'margin', 'wages'],
   }),
   template('sales', {
@@ -139,7 +141,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     // (A1 §3.10).
     description: 'Customers, quotes and orders; sees selling prices and margin %, not costs.',
     requireMfa: true,
-    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send', 'orders.view', 'orders.manage', 'home.view', 'calendars.view'],
+    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send', 'orders.view', 'orders.manage', 'home.view', 'calendars.view',
+      // B-W2a-19: the customer price lists (keep them) and the payment terms library (pick from it).
+      'pricelists.view', 'pricelists.manage', 'paymentterms.view'],
     grains: ['price', 'margin'],
   }),
   template('planner', {

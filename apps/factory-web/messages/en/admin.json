@@ -1492,7 +1492,9 @@
     "home": "Home",
     "floorsync": "Floor sync",
     "calendars": "Calendars",
-    "reasons": "Reason lists"
+    "reasons": "Reason lists",
+    "paymentterms": "Payment terms",
+    "pricelists": "Price lists"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1656,6 +1658,10 @@
     "planning_firm": "Make planned orders firm",
     "planning_exceptions_manage": "Work the planning exceptions",
     "reasons_view": "See the reason lists and how often each code is used",
-    "reasons_manage": "Keep the reason lists of the whole group"
+    "reasons_manage": "Keep the reason lists of the whole group",
+    "paymentterms_view": "See the payment terms library",
+    "paymentterms_manage": "Add and change payment terms",
+    "pricelists_view": "See price lists and their prices",
+    "pricelists_manage": "Keep price lists, their versions and customers"
   }
 }
