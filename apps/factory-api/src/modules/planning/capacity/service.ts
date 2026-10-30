@@ -107,10 +107,11 @@ async function readSlots(db: Reader, site: SiteRow, workOrderIds: readonly strin
   if (!plan) return []
   const rows = await db.scheduleSlot.findMany({
     where: { planVersionId: plan.id, workOrderId: { in: [...workOrderIds] } },
-    select: { id: true, workOrderId: true, workOrderOperationId: true, lineId: true, workCentreId: true, startAt: true, endAt: true, minutes: true },
+    select: { id: true, workOrderId: true, workOrderOperationId: true, lineId: true, workCentreId: true, startAt: true, endAt: true, minutes: true, pieces: true },
     orderBy: [{ startAt: 'asc' }, { id: 'asc' }],
   })
-  return rows.map((row) => ({ id: row.id, workOrderId: row.workOrderId, operationId: row.workOrderOperationId, lineId: row.lineId, workCentreId: row.workCentreId, startAt: row.startAt, endAt: row.endAt, minutes: row.minutes.toString() }))
+  // B-W2a-34: a whole-order slot's garments (part of an order on a lane) split the work order's load by garments.
+  return rows.map((row) => ({ id: row.id, workOrderId: row.workOrderId, operationId: row.workOrderOperationId, lineId: row.lineId, workCentreId: row.workCentreId, startAt: row.startAt, endAt: row.endAt, minutes: row.minutes.toString(), pieces: row.pieces }))
 }
 
 const timed = (buckets: readonly Bucket[], timeZone: string): TimedBucket[] =>

@@ -59,6 +59,11 @@ export interface LoadSlot {
   readonly endAt: Date
   /** The standard minutes it booked when placed (a decimal string). */
   readonly minutes: string
+  /**
+   * B-W2a-34 (allocation, PLN-160): the garments a whole-order slot books (part of an order on a lane); null or left
+   * out: all of them. A whole-order slot on no line and no work centre is at a workshop (a party).
+   */
+  readonly pieces?: number | null
 }
 
 /** What a line does: the work centres of its active stations; null: every operation (no stations). */
@@ -93,6 +98,31 @@ function shares(slots: readonly LoadSlot[]): Map<string, Decimal> {
   return new Map(slots.map((slot, index) => [slot.id, total.gt(0) ? booked[index]!.div(total) : new Dec(1).div(slots.length)]))
 }
 
+/**
+ * B-W2a-34 (allocation, PLN-160): whole-order slots that name their garments, or sit at a workshop, split the work order
+ * by garments instead of placing all of it: each in-house one takes its garments' share of every operation without a
+ * bar of its own, on its lane at its time (a line slot on the line; the operation's work centre at the slot's time); a
+ * workshop's share is made outside and books no line or work centre of the site; the share no whole-order slot names
+ * stays where it would be without them (the work order's line, at the operation's due date).
+ */
+const isOutside = (slot: LoadSlot): boolean => slot.lineId === null && slot.workCentreId === null
+
+function splitsByGarments(whole: readonly LoadSlot[]): boolean {
+  return whole.some((slot) => (slot.pieces !== undefined && slot.pieces !== null) || isOutside(slot))
+}
+
+function garmentShares(whole: readonly LoadSlot[], garments: number): Map<string, Decimal> {
+  const named = whole.filter((slot) => slot.pieces !== undefined && slot.pieces !== null)
+  const unnamed = whole.filter((slot) => slot.pieces === undefined || slot.pieces === null)
+  const total = Math.max(1, garments)
+  const namedSum = named.reduce((sum, slot) => sum + slot.pieces!, 0)
+  const scale = namedSum > total ? new Dec(total).div(namedSum) : new Dec(1)
+  const out = new Map<string, Decimal>(named.map((slot) => [slot.id, new Dec(slot.pieces!).div(total).times(scale)]))
+  const rest = Dec.max(new Dec(0), new Dec(1).minus(Dec.min(new Dec(1), new Dec(namedSum).div(total))))
+  for (const [id, share] of shares(unnamed)) out.set(id, share.times(rest))
+  return out
+}
+
 /** Every part of the open work orders' load, by the rules above. */
 export function loadParts(workOrders: readonly LoadWorkOrder[], slots: readonly LoadSlot[], lines: readonly LineScope[]): LoadPart[] {
   const scopeOf = new Map(lines.map((line) => [line.lineId, line.workCentreIds]))
@@ -105,6 +135,10 @@ export function loadParts(workOrders: readonly LoadWorkOrder[], slots: readonly 
       const minutes = loadMinutes(operation.standardMinutes, pieces)
       if (pieces === 0 || minutes.lte(0)) continue
       const opSlots = own.filter((slot) => slot.operationId === operation.id)
+      if (opSlots.length === 0 && whole.length > 0 && splitsByGarments(whole)) {
+        parts.push(...garmentParts(workOrder, operation, pieces, minutes, whole, scopeOf))
+        continue
+      }
       const placedOn = opSlots.length > 0 ? opSlots : whole
       const share = shares(placedOn)
       const base = { workOrderId: workOrder.id, operationId: operation.id, pieces }
@@ -134,6 +168,42 @@ export function loadParts(workOrders: readonly LoadWorkOrder[], slots: readonly 
     }
   }
   return parts
+}
+
+/** One operation's parts when the work order's whole-order slots split it by garments (B-W2a-34, above). */
+function garmentParts(
+  workOrder: LoadWorkOrder,
+  operation: LoadOperation,
+  pieces: number,
+  minutes: Decimal,
+  whole: readonly LoadSlot[],
+  scopeOf: ReadonlyMap<string, readonly string[] | null>,
+): LoadPart[] {
+  const out: LoadPart[] = []
+  const share = garmentShares(whole, workOrder.pieces)
+  const base = { workOrderId: workOrder.id, operationId: operation.id, pieces }
+  const unplaced: Placement = workOrder.dueDate ? { placedBy: 'DUE_DATE', date: workOrder.dueDate } : { placedBy: 'NO_DATE' }
+  const does = (lineId: string) => {
+    if (!scopeOf.has(lineId)) return false
+    const scope = scopeOf.get(lineId)
+    return scope === null || scope === undefined || scope.includes(operation.workCentreId)
+  }
+  let named = new Dec(0)
+  for (const slot of whole) {
+    const part = share.get(slot.id)!
+    named = named.plus(part)
+    if (isOutside(slot) || part.lte(0)) continue
+    const placement: Placement = { placedBy: 'SLOT', slotId: slot.id, start: slot.startAt, end: slot.endAt }
+    out.push({ ...base, laneKind: 'WORK_CENTRE', laneId: operation.workCentreId, minutes: minutes.times(part), placement })
+    const lineId = slot.lineId ?? workOrder.lineId
+    if (lineId !== null && does(lineId)) out.push({ ...base, laneKind: 'LINE', laneId: lineId, minutes: minutes.times(part), placement })
+  }
+  const rest = new Dec(1).minus(named)
+  if (rest.gt(0)) {
+    out.push({ ...base, laneKind: 'WORK_CENTRE', laneId: operation.workCentreId, minutes: minutes.times(rest), placement: unplaced })
+    if (workOrder.lineId !== null && does(workOrder.lineId)) out.push({ ...base, laneKind: 'LINE', laneId: workOrder.lineId, minutes: minutes.times(rest), placement: unplaced })
+  }
+  return out
 }
 
 /** A bucket as instants: from its first day's local midnight to the day after its last. */

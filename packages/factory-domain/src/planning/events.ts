@@ -5,6 +5,9 @@ import { ITEM_PLANNING_METHODS } from './settings/items'
 import { LANE_KINDS } from './capacity/load'
 // B-W2a-22: MRP every day (firm planned orders, the exception list).
 import { MAX_EXCEPTIONS_PER_ACTION } from './exceptions/lifecycle'
+// B-W2a-34: the planning board (the working plan's changes, a published version).
+import { SCHEDULE_CHANGES } from './schedule/changes'
+import { SLOT_LIMITS } from './schedule/slots'
 
 /**
  * The planning module's events (plan A1 §3.4, §3.5; PLN-062; design 02 "What to buy & make", Live). apps/factory-api's
@@ -25,6 +28,14 @@ import { MAX_EXCEPTIONS_PER_ACTION } from './exceptions/lifecycle'
  *   planning.requirement_firmed      a line of the latest plan was made firm (or changed), or planned again
  *   planning.exceptions_found        a run refreshed the site's exception list: raised, still open, cleared
  *   planning.exceptions_changed      exceptions were acknowledged, snoozed or resolved by a person
+ *
+ * B-W2a-34 (the planning board; PLN-131, PLN-147, PLN-160; design planning.board "planning.board.moved (another planner)
+ * → the bar moves", floor.mywork "Dispatch published from the planning board → List changed · Show"):
+ *   planning.schedule_changed        the site's shared working plan changed: slots placed, moved or removed, work orders
+ *                                    allocated, or placed by their due dates (the board and the allocation board read
+ *                                    again; never the bar being dragged)
+ *   planning.schedule_published      a numbered version of the working plan was published to the floor: the floor
+ *                                    devices of the site get it too (their dispatch lists say "List changed")
  */
 const live = { permission: 'planning.view', fields: ['runId', 'siteId'] } as const
 const SETTINGS_FIELDS = ['horizonWeeks', 'dayBucketWeeks', 'weekBucketWeeks', 'defaultEfficiencyPct', 'scheduledRunTime'] as const
@@ -132,5 +143,42 @@ export const events = [
       exceptionIds: z.array(z.uuid()).min(1).max(MAX_EXCEPTIONS_PER_ACTION),
     }),
     live: { permission: 'planning.view', fields: ['siteId', 'change'] },
+  }),
+  // ---- B-W2a-34: the planning board -------------------------------------------------------------------------------
+  defineEvent({
+    type: 'planning.schedule_changed',
+    context: 'planning',
+    description: "The site's shared working plan changed: slots were placed, moved or removed, work orders allocated to lines or workshops, or placed by their due dates. The floor sees none of it until a publish.",
+    payload: z.strictObject({
+      siteId: z.uuid(),
+      planVersionId: z.uuid(),
+      /** The working plan's version after the change (a board that read an older one reads again). */
+      planVersion: z.number().int().min(1),
+      change: z.enum(SCHEDULE_CHANGES),
+      /** How many slots changed; `slotIds` and `workOrderIds` name the first 200. */
+      slots: z.number().int().min(0),
+      slotIds: z.array(z.uuid()).max(SLOT_LIMITS.perBatch),
+      workOrderIds: z.array(z.uuid()).min(1).max(SLOT_LIMITS.perBatch),
+    }),
+    live: { permission: 'planning.view', fields: ['siteId', 'planVersionId', 'planVersion', 'change'] },
+  }),
+  defineEvent({
+    type: 'planning.schedule_published',
+    context: 'planning',
+    description: "A numbered version of the site's working plan was published to the floor for the days it covers: the lines' and stations' dispatch lists change to it from its start.",
+    payload: z.strictObject({
+      siteId: z.uuid(),
+      planVersionId: z.uuid(),
+      number: z.number().int().min(1),
+      previousId: z.uuid().nullable(),
+      coversFrom: z.iso.date(),
+      coversTo: z.iso.date(),
+      effectiveFrom: z.iso.datetime(),
+      slots: z.number().int().min(0),
+      moved: z.number().int().min(0),
+      added: z.number().int().min(0),
+      removed: z.number().int().min(0),
+    }),
+    live: { permission: 'planning.view', floor: true, fields: ['siteId', 'planVersionId', 'number', 'effectiveFrom'] },
   }),
 ] as const
