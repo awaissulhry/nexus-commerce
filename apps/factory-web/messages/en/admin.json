@@ -1507,7 +1507,8 @@
     "views": "Views and exports",
     "search": "Search",
     "plant": "Plant",
-    "alerts": "Alerts and exception rules"
+    "alerts": "Alerts and exception rules",
+    "accounting": "Accounting"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1695,6 +1696,10 @@
     "planning_schedule_publish": "Publish the schedule to the floor",
     "alerts_view": "See the alerts of the records you see, and the exception rules",
     "alerts_handle": "Acknowledge, assign, snooze and resolve alerts",
-    "alerts_rules_manage": "Change and add exception rules"
+    "alerts_rules_manage": "Change and add exception rules",
+    "accounting_view": "See the accounting exports, the month's checks, Intrastat rows and the period locks",
+    "accounting_export": "Make and re-export the numbered accounting batch of a month",
+    "accounting_lock": "Lock a month (soft or hard) and lift a soft lock",
+    "accounting_unlock": "Lift a hard period lock (agree it with the accountant)"
   }
 }
