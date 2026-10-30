@@ -9,6 +9,8 @@ import { defineManifest } from '../../core/manifest'
 export const manifest = defineManifest({
   'GET /payments': { audiences: ['office'], permission: 'payments.view', scope: 'record' },
   'GET /payments/:paymentId': { audiences: ['office'], permission: 'payments.view', scope: 'record' },
+  // A customer's open deposit requests and invoices, oldest first (SCR-082 "Record a payment"; open-items.ts).
+  'GET /payments/open-items': { audiences: ['office'], permission: 'payments.view', scope: 'record' },
   'POST /payments': { audiences: ['office'], permission: 'payments.record', scope: 'record' },
   'POST /payments/deposit-received': { audiences: ['office'], permission: 'payments.record', scope: 'record' },
   'POST /payments/:paymentId/allocations': { audiences: ['office'], permission: 'payments.record', scope: 'record' },

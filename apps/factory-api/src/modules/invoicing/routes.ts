@@ -12,7 +12,9 @@ import {
   issueContract,
   listInvoicesContract,
   makeFilesContract,
+  relatedContract,
   replaceLinesContract,
+  settingsContract,
   updateDraftContract,
 } from './contract'
 import { createDepositDraft, createDraft, deleteDraft, replaceLines, updateDraft } from './drafts'
@@ -20,6 +22,8 @@ import { makeFilesRoute } from './invoice-files'
 import { getInvoice, listInvoices } from './invoices'
 import { issueChecks, issueInvoice } from './issue'
 import { manifest } from './manifest'
+import { invoiceRelated } from './related'
+import { financeSettings } from './settings'
 import { createCreditNote } from './credit-note/credit-note'
 import { creditNoteContract, fromDdtsContract, removeDeductionContract, settlementContract, shippedNotInvoicedContract } from './from-shipment/contract'
 import { removeDeduction } from './from-shipment/deductions'
@@ -47,6 +51,8 @@ export default defineRoutes('invoicing', manifest, async (app) => {
   app.get('/invoicing/invoices/:invoiceId', { schema: getInvoiceContract }, async (request) => getInvoice(request, request.params.invoiceId))
 
   app.get('/invoicing/invoices/:invoiceId/checks', { schema: checksContract }, async (request) => issueChecks(request, request.params.invoiceId))
+
+  app.get('/invoicing/invoices/:invoiceId/related', { schema: relatedContract }, async (request) => invoiceRelated(request, request.params.invoiceId))
 
   app.post('/invoicing/invoices', { schema: createDraftContract }, async (request, reply) => reply.code(201).send(await createDraft(request, request.body, idempotencyKeyFrom(request))))
 
@@ -81,6 +87,8 @@ export default defineRoutes('invoicing', manifest, async (app) => {
   app.delete('/invoicing/invoices/:invoiceId/deductions/:lineId', { schema: removeDeductionContract }, async (request) => removeDeduction(request, request.params.invoiceId, request.params.lineId, request.query, idempotencyKeyFrom(request)))
 
   app.post('/invoicing/invoices/:invoiceId/credit-note', { schema: creditNoteContract }, async (request, reply) => reply.code(201).send(await createCreditNote(request, request.params.invoiceId, request.body, idempotencyKeyFrom(request))))
+
+  app.get('/invoicing/settings', { schema: settingsContract }, async (request) => financeSettings(request))
 
   app.get('/invoicing/orders/:orderId/settlement', { schema: settlementContract }, async (request) => getSettlement(request, request.params.orderId))
 })

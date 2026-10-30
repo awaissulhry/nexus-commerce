@@ -145,6 +145,12 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/compliance/register',
   '/compliance/register/[id]',
   '/compliance/evidence/[kind]/[subject]',
+  // Finance (SCR-080 … SCR-083): invoices and the invoice record, payments and the payment record, finance settings.
+  '/finance/invoices',
+  '/finance/invoices/[id]',
+  '/finance/payments',
+  '/finance/payments/[id]',
+  '/finance/settings',
   // B-W0-27 Admin: All settings, Companies & sites, Devices & printers, Users, Roles & permissions, and their records.
   '/admin',
   '/admin/companies',

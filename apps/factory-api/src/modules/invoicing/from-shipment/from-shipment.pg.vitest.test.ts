@@ -304,10 +304,48 @@ describe('stage 15-invoice: deposit TD02 → 2 parcels shipped with a DDT → TD
     expect(await events('order.fully_settled', moneyA.shipping.quality.serialSalesOrderId)).toEqual([])
   })
 
+  it('the finance screens read it: the list row with its balance, the record beside it, the open items, the settings', async () => {
+    const so3 = moneyA.shipping.quality.serialSalesOrderId
+    const rows = (await as('GET', `/invoicing/invoices?partyId=${A.brand}`)).invoices
+    expect(rows.find((row: Json) => row.id === S.td24.id)).toMatchObject({ status: 'DELIVERED', grossTotal: 72480, paidAmount: 0, creditedAmount: 0, openAmount: 72480, dueDate: null, creditOfId: null, salesOrderId: so3 })
+    // A TD02 is paid through its deposit: it asks nothing itself.
+    expect(rows.find((row: Json) => row.id === S.td02.id)).toMatchObject({ docType: 'TD02', paidAmount: 0, openAmount: 0 })
+    const { related } = await as('GET', `/invoicing/invoices/${S.td24.id}/related`)
+    expect(related.ddts).toEqual([expect.objectContaining({ id: S.ddt.id, number: S.ddt.number, date: TODAY(), shipmentId: moneyA.shipping.draftShipmentId })])
+    expect(related.depositInvoices).toEqual([{ id: S.td02.id, number: S.td02.number, issueDate: S.td02.issueDate, status: 'DELIVERED', depositRequestId: ids.depositSo3 }])
+    expect(related.orders).toEqual([{ id: so3, number: 'SEED-SO-0003' }])
+    expect(related.depositRequests).toEqual([expect.objectContaining({ id: ids.depositSo3, orderId: so3, kind: 'ACCONTO', depositPct: '30', amount: 30000, paidAmount: 30000, fiscalDocument: 'TD02', status: 'PAID', depositInvoices: [expect.objectContaining({ id: S.td02.id, number: S.td02.number })] })])
+    expect(related).toMatchObject({ payments: [], creditOf: null, creditNotes: [] })
+    const { items } = await as('GET', `/payments/open-items?companyId=${A.companyA}&partyId=${A.brand}`)
+    expect(items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ target: 'INVOICE', id: S.td24.id, number: S.td24.number, docType: 'TD24', fiscalDocument: null, orderId: so3, orderNumber: 'SEED-SO-0003', amount: 72480, openAmount: 72480 }),
+      expect.objectContaining({ target: 'DEPOSIT_REQUEST', id: ids.depositSo2, number: null, fiscalDocument: 'TD02', amount: 20000, openAmount: 20000 }),
+    ]))
+    // Paid and deposit invoices are not open items; the oldest comes first.
+    expect(items.some((item: Json) => item.id === S.td02.id || item.id === ids.depositSo3)).toBe(false)
+    expect(items.map((item: Json) => item.date)).toEqual([...items.map((item: Json) => item.date)].sort())
+    const { settings } = await as('GET', '/invoicing/settings')
+    const company = settings.companies.find((entry: Json) => entry.id === A.companyA)
+    expect(company).toMatchObject({ identity: { vatNumber: 'IT12345670009', regimeFiscale: 'RF01', address: { city: 'Milano' } }, seller: { ready: true, problems: [] }, sdi: { state: 'ACTIVE', accounts: [expect.objectContaining({ mode: 'FAKE', status: 'ACTIVE' })] } })
+    expect(company.series).toEqual(expect.arrayContaining([{ kind: 'INVOICE', next: invoiceNumber(await invoiceSeriesNext()) }]))
+    expect(company.archive.archivedSends).toBeGreaterThanOrEqual(0)
+    // No money in the settings; another tenant's companies are not there.
+    expect(JSON.stringify(settings)).not.toMatch(/Amount/)
+    expect(settings.companies.some((entry: Json) => entry.id === B.companyA)).toBe(false)
+  })
+
   it('the balance payment, allocated to the TD24, settles the order: order.fully_settled once', async () => {
     const paid = await as('POST', '/payments', { companyId: A.companyA, partyId: A.brand, amount: 72480, receivedOn: TODAY(), externalRef: 'TRN-W151-0002', allocations: [{ invoiceId: S.td24.id }] }, 201)
     expect(paid.payment).toMatchObject({ allocated: 72480, unallocated: 0 })
     S.balancePayment = paid.payment
+    // What the payment is placed on, by name, and who placed it (the payments list's chips, the record's ledger).
+    expect(paid.payment.placedOn).toEqual([{ target: 'INVOICE', targetId: S.td24.id, amount: 72480, number: S.td24.number, docType: 'TD24', orderNumber: 'SEED-SO-0003' }])
+    expect(paid.payment.allocations[0].label).toEqual({ number: S.td24.number, docType: 'TD24', orderNumber: 'SEED-SO-0003' })
+    expect(paid.payment.people.map((person: Json) => person.id)).toContain(paid.payment.createdById)
+    expect((await as('GET', '/payments')).payments.find((row: Json) => row.id === paid.payment.id).placedOn).toEqual(paid.payment.placedOn)
+    expect((await as('GET', `/invoicing/invoices?partyId=${A.brand}&docType=TD24`)).invoices.find((row: Json) => row.id === S.td24.id)).toMatchObject({ paidAmount: 72480, openAmount: 0 })
+    expect((await as('GET', `/invoicing/invoices/${S.td24.id}/related`)).related.payments).toEqual([expect.objectContaining({ paymentId: paid.payment.id, externalRef: 'TRN-W151-0002', amount: 72480, reversed: false, reversalOfId: null })])
+    expect((await as('GET', `/payments/open-items?companyId=${A.companyA}&partyId=${A.brand}`)).items.some((item: Json) => item.id === S.td24.id)).toBe(false)
     const order = moneyA.shipping.quality.serialSalesOrderId
     expect((await as('GET', `/invoicing/invoices/${S.td24.id}`)).invoice).toMatchObject({ paidAmount: 72480, openAmount: 0, creditedAmount: 0, refundDueAmount: 0 })
     const { settlement } = await as('GET', `/invoicing/orders/${order}/settlement`)
@@ -322,7 +360,13 @@ describe('stage 15-invoice: deposit TD02 → 2 parcels shipped with a DDT → TD
   it('the payment taken back unsettles the order: order.unsettled once, what is missing in codes', async () => {
     const order = moneyA.shipping.quality.serialSalesOrderId
     const allocation = S.balancePayment.allocations[0]
-    await as('POST', `/payments/${S.balancePayment.id}/allocations/${allocation.id}/reverse`, { note: 'Allocated to the wrong document' })
+    const reversed = await as('POST', `/payments/${S.balancePayment.id}/allocations/${allocation.id}/reverse`, { note: 'Allocated to the wrong document' })
+    expect(reversed.payment.placedOn).toEqual([])
+    expect((await as('GET', `/invoicing/invoices/${S.td24.id}/related`)).related.payments).toEqual([
+      expect.objectContaining({ allocationId: allocation.id, reversed: true, reversalOfId: null }),
+      expect.objectContaining({ amount: -72480, reversalOfId: allocation.id, note: 'Allocated to the wrong document' }),
+    ])
+    expect((await as('GET', `/payments/open-items?companyId=${A.companyA}&partyId=${A.brand}`)).items.find((item: Json) => item.id === S.td24.id)).toMatchObject({ openAmount: 72480 })
     expect(await events('order.unsettled', order)).toEqual([{ payload: { orderId: order, partyId: A.brand, missing: ['BALANCE_DUE'] } }])
     expect(await events('order.fully_settled', order)).toHaveLength(1)
   })
@@ -449,6 +493,9 @@ describe('the walls: office only, the price grain, tenants and companies', () =>
       expect((await wall(session, 'POST', '/invoicing/invoices/from-ddts', { ddtIds: [S.ddt.id] })).status).toBe(403)
       expect((await wall(session, 'GET', `/invoicing/orders/${order()}/settlement`)).status).toBe(403)
       expect((await wall(session, 'POST', `/invoicing/invoices/${S.td24.id}/credit-note`, { reason: 'OTHER', full: true })).status).toBe(403)
+      expect((await wall(session, 'GET', `/invoicing/invoices/${S.td24.id}/related`)).status).toBe(403)
+      expect((await wall(session, 'GET', '/invoicing/settings')).status).toBe(403)
+      expect((await wall(session, 'GET', `/payments/open-items?companyId=${A.companyA}&partyId=${A.brand}`)).status).toBe(403)
     }
   })
 
@@ -458,6 +505,14 @@ describe('the walls: office only, the price grain, tenants and companies', () =>
     expect(body.settlement).not.toHaveProperty('missing')
     expect(body.settlement).not.toHaveProperty('balanceDueAmount')
     expect(body.settlement.invoices[0]).not.toHaveProperty('openAmount')
+    const row = (await wall('noPrice', 'GET', '/invoicing/invoices', undefined, 200)).body.invoices.find((entry: Json) => entry.id === S.td24.id)
+    for (const field of ['grossTotal', 'paidAmount', 'creditedAmount', 'openAmount']) expect(row).not.toHaveProperty(field)
+    expect(row).toHaveProperty('dueDate')
+    const related = (await wall('noPrice', 'GET', `/invoicing/invoices/${S.td24.id}/related`, undefined, 200)).body.related
+    expect(related.ddts).toHaveLength(1)
+    expect(related.depositRequests[0]).not.toHaveProperty('amount')
+    for (const payment of related.payments) expect(payment).not.toHaveProperty('amount')
+    expect((await wall('noPrice', 'GET', '/invoicing/settings', undefined, 200)).body.settings.companies.length).toBeGreaterThan(0)
     const queue = (await wall('noPrice', 'GET', '/invoicing/shipped-not-invoiced', undefined, 200)).body
     for (const customer of queue.customers) {
       expect(customer).not.toHaveProperty('valueAmount')
@@ -466,6 +521,10 @@ describe('the walls: office only, the price grain, tenants and companies', () =>
   })
 
   it('another company and another tenant see nothing of it', async () => {
+    expect((await wall('companyB', 'GET', `/invoicing/invoices/${S.td24.id}/related`)).status).toBe(404)
+    expect((await wall('companyB', 'GET', `/payments/open-items?companyId=${A.companyA}&partyId=${A.brand}`)).status).toBe(404)
+    expect((await wall('otherTenant', 'GET', `/invoicing/invoices/${S.td24.id}/related`)).status).toBe(404)
+    expect((await wall('companyB', 'GET', '/invoicing/settings', undefined, 200)).body.settings.companies.map((entry: Json) => entry.id)).toEqual([A.companyB])
     expect((await wall('companyB', 'GET', `/invoicing/orders/${order()}/settlement`)).status).toBe(404)
     expect((await wall('companyB', 'POST', '/invoicing/invoices/from-ddts', { ddtIds: [S.ddtB.id] })).status).toBe(404)
     expect((await wall('companyB', 'GET', '/invoicing/shipped-not-invoiced', undefined, 200)).body.customers).toEqual([])

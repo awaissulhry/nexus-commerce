@@ -1,0 +1,498 @@
+/*
+ * Finance (SCR-080 invoices, SCR-081 the invoice record, SCR-082 payments, SCR-083 finance settings) LAYOUT: the page
+ * heads, the sections, the record's band with its journey, the body with the optional thread beside it, card grids, the
+ * SDI timeline, the check list, the totals bridge, the placement of a payment. The controls are the design system's;
+ * this file only places them, with semantic tokens (no colours of its own). No page max-width (Owner rule 2026-10-29):
+ * pages fill the shell's main area; wide screens get more columns.
+ */
+.fw-fin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-fin-head,
+.fw-fin-meta-row,
+.fw-fin-card-head,
+.fw-fin-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-fin-inline,
+.fw-fin-actions,
+.fw-fin-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-fin-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-fin-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-fin-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-fin-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-fin-h2,
+.fw-fin-h3 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-fin-h2 {
+  font-size: var(--nds-font-size-md, var(--nds-font-size-sm));
+}
+
+.fw-fin-h3 {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-fin-list {
+  margin: 0;
+  padding: 0 0 0 var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+/* ---- list cells ---- */
+.fw-fin-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-fin-cell-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.fw-fin-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.fw-fin-link {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+
+.fw-fin-link:hover,
+.fw-fin-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-fin-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.fw-fin-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-fin-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+/* ---- the record ---- */
+.fw-fin-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-fin-title {
+  overflow-wrap: anywhere;
+}
+
+.fw-fin-title-sub {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-muted);
+}
+
+.fw-fin-keys {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: var(--nds-space-4);
+}
+
+.fw-fin-tablabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-fin-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--nds-danger);
+}
+
+/* The journey (composed stand-in for the design's JourneyStrip): one row of steps on a wide screen, wrapping below. */
+.fw-fin-journey {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-10, var(--nds-space-8));
+  min-width: 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-fin-journey-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-muted);
+}
+
+.fw-fin-journey-step.is-done,
+.fw-fin-journey-step.is-current {
+  color: var(--nds-text-strong);
+}
+
+.fw-fin-journey-step.is-current {
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-fin-journey-step.is-problem {
+  color: var(--nds-danger);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-fin-journey-sep {
+  color: var(--nds-text-muted);
+}
+
+.fw-fin-ico {
+  flex: none;
+  color: var(--nds-text-muted);
+}
+
+.fw-fin-ico.is-ok {
+  color: var(--nds-success);
+}
+
+.fw-fin-ico.is-blocked {
+  color: var(--nds-danger);
+}
+
+.fw-fin-ico.is-waiting {
+  color: var(--nds-warning);
+}
+
+.fw-fin-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-fin-body.has-dock {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+}
+
+@media (max-width: 1279px) {
+  .fw-fin-body.has-dock {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-fin-dock {
+    display: none;
+  }
+}
+
+.fw-fin-main,
+.fw-fin-stack,
+.fw-fin-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-fin-dialog {
+  gap: var(--nds-space-12);
+}
+
+.fw-fin-stack-tight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+/* Cards side by side on a wide screen (the width is used), one column below. */
+.fw-fin-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: var(--nds-space-14);
+  min-width: 0;
+  align-items: start;
+}
+
+/* Two wider cards side by side (settings: deposits beside the accountant's points), one under the other below 900 px. */
+.fw-fin-cards--two {
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+}
+
+@media (max-width: 899px) {
+  .fw-fin-cards--two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The lines beside the totals: one under the other until 1400 px. */
+.fw-fin-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  min-width: 0;
+  align-items: start;
+}
+
+@media (min-width: 1400px) {
+  .fw-fin-split {
+    grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  }
+}
+
+.fw-fin-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+/* ---- the check list and the steps (composed: a CheckList, the SDI timeline) ---- */
+.fw-fin-checks,
+.fw-fin-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-fin-check,
+.fw-fin-step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  padding-bottom: var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border-subtle, var(--nds-border));
+  min-width: 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-fin-check:last-child,
+.fw-fin-step:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.fw-fin-check > .fw-fin-ico,
+.fw-fin-step > .fw-fin-ico {
+  margin-top: 2px;
+}
+
+.fw-fin-step-body {
+  display: flex;
+  flex: 1 1 240px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-fin-step-body > b {
+  color: var(--nds-text-strong);
+}
+
+.fw-fin-step-time {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+/* ---- the totals bridge (composed stand-in for the design's Bridge) ---- */
+.fw-fin-bridge {
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  font-size: var(--nds-font-size-sm);
+  min-width: 0;
+}
+
+.fw-fin-bridge-row {
+  display: contents;
+}
+
+.fw-fin-bridge dt {
+  color: var(--nds-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.fw-fin-bridge dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-strong);
+}
+
+.fw-fin-bridge .is-total {
+  padding-top: var(--nds-space-6);
+  border-top: 1px solid var(--nds-border);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+/* ---- dialogs ---- */
+fieldset.fw-fin-choices {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-fin-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-4);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-fin-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-fin-done {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-10, var(--nds-space-8));
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+/* The edit of lines and the placement of a payment: one row per line / item, the amount at the end. */
+.fw-fin-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10, var(--nds-space-8));
+  min-width: 0;
+}
+
+.fw-fin-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-6) var(--nds-space-10, var(--nds-space-8));
+  padding-bottom: var(--nds-space-10, var(--nds-space-8));
+  border-bottom: 1px solid var(--nds-border-subtle, var(--nds-border));
+  min-width: 0;
+}
+
+.fw-fin-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+@media (min-width: 720px) {
+  .fw-fin-row.is-item {
+    grid-template-columns: minmax(0, 1fr) 150px;
+    align-items: center;
+  }
+
+  .fw-fin-row.is-line {
+    grid-template-columns: minmax(0, 1fr) 90px 120px 90px;
+    align-items: start;
+  }
+}
+
+.fw-fin-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-10, var(--nds-space-8));
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-fin-left b {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-fin-pdf {
+  min-width: 0;
+}
