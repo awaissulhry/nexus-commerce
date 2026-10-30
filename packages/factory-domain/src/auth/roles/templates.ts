@@ -143,13 +143,23 @@ const PAYABLES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.fr
   finance: ['payables.view', 'payables.manage', 'payables.differences.accept', 'payables.approve', 'payables.pay'],
   buyer: ['payables.view', 'payables.manage', 'payables.differences.accept'],
 })
+/**
+ * B-W2a-F4 (Owner answer 1A, 2026-10-30): asking a supplier for a receipt's missing documents is one narrow action of its
+ * own, NOT email.send: the warehouse and every template that keeps receipt discrepancies (buyer). Owner from every().
+ */
+const RECEIPT_DOCUMENTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  warehouse: ['inventory.receipts.documents.request'],
+  buyer: ['inventory.receipts.documents.request'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
   // B-W2a-61
   ...(audience === 'office' ? (REFUNDS_ADDS[key] ?? []) : []),
   // B-W2a-62
-  ...(audience === 'office' ? (PAYABLES_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PAYABLES_ADDS[key] ?? []) : []),
+  // B-W2a-F4
+  ...(audience === 'office' ? (RECEIPT_DOCUMENTS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

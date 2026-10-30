@@ -1,11 +1,12 @@
+import { documentRequestMail } from '@nexus/factory-domain/inventory/receipts/document-request'
 import { samplePdf } from '../../../../_shared/document-send/sample-pdf'
 import { at, COLOURS, MATERIALS, SUPPLIERS, uid, type Role } from '../../../../_shared/buying/fixtures'
 import { ROLES } from '../../../../_shared/buying/fixtures'
 import type { PickerReason } from '../../../../_shared/reasons/api'
 import { blankDraft, emptyWizard } from '../../../../admin/import/model'
 import { standInImporter, type SheetImport } from '../../../../products/styles/import/sheet-import'
-import type { Discrepancy, HideListSummary, ReportCheck, StoredPhoto, SupplierContact } from '../../daily-api'
-import { dailyCan, type ReceiptDailyCan } from '../../daily-model'
+import type { Discrepancy, HideListSummary, ReportCheck, RequestCheck, StoredPhoto } from '../../daily-api'
+import { dailyCan, wantedDocuments, type ReceiptDailyCan } from '../../daily-model'
 import type { ReceiptDailyModel } from '../../daily-state'
 import { LOTS, receipt } from '../fixtures'
 
@@ -19,10 +20,11 @@ import { LOTS, receipt } from '../fixtures'
 
 /** The W2a permissions each role's real template holds (factory-domain auth/roles/templates.ts). */
 const W2A: Record<Role, readonly string[]> = {
-  owner: ['inventory.discrepancies.manage', 'inventory.discrepancies.report', 'purchasing.claims.manage', 'purchasing.claims.return', 'email.send', 'imports.run', 'imports.apply', 'imports.view'],
-  buyer: ['inventory.discrepancies.manage', 'inventory.discrepancies.report', 'purchasing.claims.manage', 'email.send', 'imports.run', 'imports.apply', 'imports.view'],
+  owner: ['inventory.discrepancies.manage', 'inventory.discrepancies.report', 'inventory.receipts.documents.request', 'purchasing.claims.manage', 'purchasing.claims.return', 'email.send', 'imports.run', 'imports.apply', 'imports.view'],
+  buyer: ['inventory.discrepancies.manage', 'inventory.discrepancies.report', 'inventory.receipts.documents.request', 'purchasing.claims.manage', 'email.send', 'imports.run', 'imports.apply', 'imports.view'],
   planner: [],
-  warehouse: ['inventory.discrepancies.manage', 'inventory.discrepancies.report', 'purchasing.claims.manage', 'purchasing.claims.return', 'imports.run', 'imports.apply', 'imports.view'],
+  // B-W2a-F4: the request for missing documents is its own permission; the warehouse still has no email.send.
+  warehouse: ['inventory.discrepancies.manage', 'inventory.discrepancies.report', 'inventory.receipts.documents.request', 'purchasing.claims.manage', 'purchasing.claims.return', 'imports.run', 'imports.apply', 'imports.view'],
   sales: [],
   readOnly: ['imports.view'],
 }
@@ -108,16 +110,22 @@ export const CHECK: ReportCheck = {
     { contactId: uid('6061', 2), name: 'Ufficio ordini Demo', email: 'ordini@conceria-demo.example', roles: ['ORDERS'], language: 'it', suggested: false },
   ],
   language: 'it',
-  subject: 'Non conformità sulla consegna DDT-DEMO-562 — ricevimento GR-2026-0022',
-  message: 'Buongiorno, in allegato la segnalazione delle non conformità rilevate al ricevimento GR-2026-0022.',
+  subject: 'Difformità della consegna GR-2026-0022 (vs. DDT DDT-DEMO-562)',
+  message: 'Buongiorno, in allegato la segnalazione delle 2 difformità riscontrate alla consegna GR-2026-0022.',
 }
 
-export const REPORT_PDF = samplePdf(['ESEMPIO — Segnalazione non conformità', 'Ricevimento GR-2026-0022 · DDT DDT-DEMO-562', 'N. 10 Quantità mancante · 18,4 ft²', 'N. 20 Danneggiato · 1 pelle', 'Nessun prezzo'])
+export const REPORT_PDF = samplePdf(['ESEMPIO — Segnalazione difformità della consegna', 'Ricevimento GR-2026-0022 · DDT DDT-DEMO-562', 'N. 10 Quantità mancante · 18,4 ft²', 'N. 20 Danneggiato · 1 pelle', 'Nessun prezzo'])
 
-export const CONTACTS: SupplierContact[] = [
-  { id: uid('6061', 1), name: 'Ufficio qualità Demo', email: 'qualita@conceria-demo.example', roles: ['QUALITY'], language: 'it', status: 'ACTIVE' },
-  { id: uid('6061', 2), name: 'Ufficio ordini Demo', email: 'ordini@conceria-demo.example', roles: ['ORDERS'], language: 'it', status: 'ACTIVE' },
-]
+/** The request's check (B-W2a-F4) for GR-2026-0022 without a DDT: the Cr VI report, the delivery note; the tannery's contacts. */
+export const REQUEST_CHECK: RequestCheck = {
+  ready: true,
+  problems: [],
+  receipt: { id: R.id, number: R.number, status: 'POSTED', supplierDdtNumber: null, supplierDdtDate: null },
+  wanted: wantedDocuments({ supplierDdtNumber: null, ddtPhotos: [] }, LOTS),
+  recipients: CHECK.recipients,
+  language: 'it',
+  ...documentRequestMail({ language: 'it', receiptNumber: R.number, supplierDdtNumber: null, supplierDdtDate: null, asked: wantedDocuments({ supplierDdtNumber: null, ddtPhotos: [] }, LOTS) }),
+}
 
 export const DDT_PHOTOS: StoredPhoto[] = [photo(9, { id: uid('6802', 1), originalName: 'GR-2026-0022-ddt.jpg' })]
 

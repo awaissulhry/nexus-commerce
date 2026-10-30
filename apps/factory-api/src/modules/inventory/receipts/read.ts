@@ -60,7 +60,7 @@ export async function visibleReceipt(caller: CommandCaller, receiptId: string, p
 }
 
 /** A lot's holds while it is in quarantine, from what it carries. */
-function holdsOf(lot: Pick<LotRow, 'qualityStatus' | 'requiresCrViTest' | 'crViStatus' | 'qualityNote'>, isPpeComponent: boolean): HoldReason[] {
+export function holdsOf(lot: Pick<LotRow, 'qualityStatus' | 'requiresCrViTest' | 'crViStatus' | 'qualityNote'>, isPpeComponent: boolean): HoldReason[] {
   if (lot.qualityStatus !== 'QUARANTINE') return []
   const holds: HoldReason[] = []
   if (lot.requiresCrViTest && lot.crViStatus !== 'PASS') holds.push('CR_VI_TEST')
