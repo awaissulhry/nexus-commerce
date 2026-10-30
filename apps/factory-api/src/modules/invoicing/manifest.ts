@@ -36,4 +36,8 @@ export const manifest = defineManifest({
   'POST /invoicing/invoices/from-milestone': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
   // Finance settings as invoicing reads them (SCR-083; settings.ts): per company the caller may see invoices of.
   'GET /invoicing/settings': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  // B-W2a-61 (FIN-070; handlers in ./credit-note/from-return.ts): a customer return's credit notes, and their drafts from
+  // its decided lines (issued by the routes above, invoices.issue + step-up). No permission of their own.
+  'GET /invoicing/returns/:returnId/credit-notes': { audiences: ['office'], permission: 'invoices.view', scope: 'record' },
+  'POST /invoicing/returns/:returnId/credit-notes': { audiences: ['office'], permission: 'invoices.manage', scope: 'record' },
 })

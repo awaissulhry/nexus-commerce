@@ -36,7 +36,9 @@
       "suppliers": "Fornitori",
       "orders": "Ordini d'acquisto",
       "outside": "Lavorazioni esterne",
-      "subcontracting": "Ordini ai terzisti"
+      "subcontracting": "Ordini ai terzisti",
+      "sourcingClaims": "Offerte e reclami",
+      "claims": "Resi e reclami ai fornitori"
     },
     "plant": {
       "area": "Stabilimento",
@@ -73,12 +75,18 @@
       "settings": "Impostazioni",
       "floorRules": "Regole di reparto",
       "reports": "Report",
-      "reportsPage": "Report produzione"
+      "reportsPage": "Report produzione",
+      "cuttingRoom": "Sala taglio",
+      "cutting": "Taglio",
+      "floorControl": "Controllo reparto",
+      "scrap": "Scarti e rilavorazioni"
     },
     "quality": {
       "area": "Qualità",
       "main": "Principali",
-      "inspections": "Ispezioni"
+      "inspections": "Ispezioni",
+      "problems": "Problemi",
+      "complaints": "Reclami"
     },
     "compliance": {
       "area": "Conformità",
@@ -106,7 +114,9 @@
       "main": "Principali",
       "mrp": "Cosa comprare e produrre",
       "board": "Tabellone di pianificazione",
-      "allocation": "Linee e terzisti"
+      "allocation": "Linee e terzisti",
+      "settingsGroup": "Impostazioni",
+      "settings": "Impostazioni pianificazione"
     },
     "warehouse": {
       "area": "Magazzino",

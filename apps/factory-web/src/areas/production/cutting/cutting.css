@@ -1,0 +1,214 @@
+/*
+ * Production › Cutting room › Cutting (SCR-238) and a cut's record: LAYOUT only — the page head, the tiles, the list's
+ * cells, the record's band, tabs and cards, the pieces matrix and the dialogs. The controls are the design system's;
+ * semantic tokens only (no colours of its own). No page max-width (Owner rule 2026-10-29): the page fills the shell's
+ * main area; wide screens put the cards side by side.
+ */
+.fw-ct {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-ct-head,
+.fw-ct-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-ct-actions,
+.fw-ct-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ct-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ct-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-ct-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-ct-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+}
+
+/* ---- list cells ---- */
+.fw-ct-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-ct-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-ct-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-ct-link {
+  color: var(--nds-text-link);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.fw-ct-link:hover,
+.fw-ct-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-ct-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-ct-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ---- the record ---- */
+.fw-ct-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ct-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-ct-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-ct-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-ct-bars {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-ct-bar-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-ct-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-ct-list > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-width: 0;
+}
+
+/* ---- the pieces matrix (part × size) ---- */
+.fw-ct-matrix {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.fw-ct-pieces {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-ct-pieces .is-short {
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-ct-pieces .is-recut {
+  color: var(--nds-info-text);
+  font-size: var(--nds-font-size-xs);
+}
+
+/* ---- dialogs ---- */
+.fw-ct-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ct-dialog p {
+  margin: 0;
+}
+
+.fw-ct-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .fw-ct-head {
+    align-items: flex-start;
+  }
+}

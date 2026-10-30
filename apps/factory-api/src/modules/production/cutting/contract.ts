@@ -302,3 +302,66 @@ export const cutLogContract = defineContract({
     }),
   },
 })
+
+// ---- the cutting office (B-W2a-60; design production.cutting, SCR-238) ------------------------------------------------------------
+
+/** Where a work order's leather cutting stands: nothing cut yet, cutting, every garment cut, or held (the work order ON_HOLD). */
+export const CUT_STATES = ['WAITING', 'CUTTING', 'CUT', 'HELD'] as const
+/** The list's saved filters: open = waiting + cutting + held. */
+export const CUT_VIEWS = ['open', 'waiting', 'cutting', 'cut', 'held', 'all'] as const
+
+const pct = z.string().regex(/^-?\d{1,6}\.\d{2}$/).nullable()
+const areaOf = output({ uom: z.string(), area: decimal })
+
+export const cutsListContract = defineContract({
+  querystring: input({
+    siteId: id().optional(),
+    view: z.enum(CUT_VIEWS).default('open'),
+    /** Part of the work order's number, its batch number, or the style's code or name (any case). */
+    q: z.string().trim().min(1).max(60).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+  }),
+  response: {
+    200: output({
+      /** One cut per work order whose parts are cut from hides (W2a: leather by hide; fabric lays are W2b), most urgent first. */
+      cuts: z.array(
+        output({
+          workOrder: output({ id: id(), number: z.string(), batchNumber: z.string().nullable(), status, companyId: id(), siteId: id(), dueDate: businessDate().nullable(), priority: z.number().int(), holdReason: z.string().nullable() }),
+          style: style,
+          kind: z.literal('LEATHER'),
+          state: z.enum(CUT_STATES),
+          /** The leathers its parts are cut from. */
+          materials: z.array(output({ itemId: id(), itemColourId: id().nullable(), code: z.string(), name: z.string(), baseUom: z.string(), colourCode: z.string().nullable() })),
+          /** The lots of the hides cut for it (the shade lot: the dye batch). */
+          lots: z.array(output({ id: id(), code: z.string(), dyeBatch: z.string().nullable() })),
+          garments: output({ planned: z.number().int(), cut: z.number().int(), toCut: z.number().int() }),
+          /** Pieces: garments × the parts of each cell, and the pieces its live entries cut (recuts included). */
+          pieces: output({ planned: z.number().int(), cut: z.number().int() }),
+          /** The hides its live entries cut, and the area they used (per unit: never added across units). */
+          hides: output({ count: z.number().int(), used: z.array(areaOf) }),
+          /** Hides reserved whole for it and not issued yet (Allocate hides). */
+          allocated: z.number().int(),
+          yield: output({ yieldPct: pct, plannedPct: pct, variancePct: pct, plannedSource: z.enum(['STYLE', 'BOM']) }),
+          /** The cutting tables its entries were cut at (never who). */
+          stations: z.array(output({ id: id(), code: z.string() })),
+          lastCutAt: instant().nullable(),
+          /** Recuts asked for scrapped pieces and not cut yet (MES-130). */
+          recutsOpen: z.number().int(),
+        }),
+      ),
+      /** More cuts match than `limit`. */
+      more: z.boolean(),
+      tiles: output({
+        waiting: z.number().int(),
+        cutting: z.number().int(),
+        held: z.number().int(),
+        /** Today (Europe/Rome), live entries only. */
+        piecesToday: z.number().int(),
+        hidesToday: z.number().int(),
+        /** The area used today in square metres (each leather's unit converted). */
+        areaTodayM2: decimal,
+      }),
+      asOf: instant(),
+    }),
+  },
+})

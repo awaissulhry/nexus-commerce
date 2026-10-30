@@ -7,6 +7,7 @@ import {
   completeDdtPhotoContract,
   completeDiscrepancyPhotoContract,
   countReceiptsContract,
+  documentRequestCheckContract,
   expectedContract,
   getReceiptContract,
   hideListSummaryContract,
@@ -18,11 +19,13 @@ import {
   recordReceiptContract,
   removeDiscrepancyContract,
   reportCheckContract,
+  requestDocumentsContract,
   reverseReceiptContract,
   sendReportContract,
   settleDiscrepancyContract,
 } from './contract'
 import { changeDiscrepancy, listDiscrepancies, recordDiscrepancy, removeDiscrepancy, settleDiscrepancy } from './discrepancies'
+import { documentRequestCheck, requestDocuments } from './document-request'
 import { hideListSummary } from './hide-list-summary'
 import { manifest } from './manifest'
 import { announceDdtPhoto, announceDiscrepancyPhoto, completeDdtPhoto, completeDiscrepancyPhoto } from './photos'
@@ -88,6 +91,12 @@ export default defineRoutes('inventory.receipts', manifest, async (app) => {
   app.get('/inventory/receipts/:receiptId/discrepancy-report/check', { schema: reportCheckContract }, async (request) => reportCheck(request, request.params.receiptId, request.query))
   app.post('/inventory/receipts/:receiptId/discrepancy-report', { schema: sendReportContract }, async (request, reply) =>
     reply.code(201).send(await sendReport(request, request.params.receiptId, request.body, idempotencyKeyFrom(request))),
+  )
+
+  // B-W2a-F4: ask the supplier for the documents the receipt's lots wait for (one narrow mail, not email.send).
+  app.get('/inventory/receipts/:receiptId/documents/request', { schema: documentRequestCheckContract }, async (request) => documentRequestCheck(request, request.params.receiptId, request.query))
+  app.post('/inventory/receipts/:receiptId/documents/request', { schema: requestDocumentsContract }, async (request, reply) =>
+    reply.code(201).send(await requestDocuments(request, request.params.receiptId, request.body, idempotencyKeyFrom(request))),
   )
 
   // B-W2a-31 (SCM-248): a tannery hide list's totals against its order.

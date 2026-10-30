@@ -231,6 +231,9 @@
       },
       "alert": {
         "raised": "Alert on {record}: {title}"
+      },
+      "complaint": {
+        "safety": "Safety complaint {record}: {title}. It is in the PPE register; the owner acknowledges it on the complaint"
       }
     },
     "fallback": "News on {record}",

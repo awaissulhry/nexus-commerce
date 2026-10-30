@@ -2,15 +2,16 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Building2 } from 'lucide-react'
-import { Banner, Field, Modal } from '@nexus/ui/components'
+import { Building2, CalendarDays, MoreHorizontal } from 'lucide-react'
+import { Banner, Field, Menu, Modal } from '@nexus/ui/components'
 import { Button, Input, Select, Toggle } from '@nexus/ui/primitives'
 import { useT } from '../../../../lib/i18n/provider'
+import { WithMessages } from '../../../../record-panels/i18n'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../list-frame/model'
 import { SITE_KINDS, type CompanyWithSites, type SiteKind } from '../../shared/api'
 import { adminHref, shownOf } from '../../shared/model'
-import { AdminMessages, FrameState, ListKeysHelp, ListSearch, NoticeBanner, PageHead } from '../../shared/view/parts'
+import { FrameState, ListKeysHelp, ListSearch, NoticeBanner, PageHead } from '../../shared/view/parts'
 import {
   issueKey,
   newCompanyProblems,
@@ -53,14 +54,16 @@ export interface CompaniesActions {
  */
 export function CompaniesView({ model, actions }: { model: CompaniesViewModel; actions?: CompaniesActions }) {
   return (
-    <AdminMessages>
+    // AdminMessages' catalogues and, for "Holidays for all sites" (B-W2a-59), `admin-calendars`.
+    <WithMessages namespaces={['admin', 'records', 'admin-calendars']}>
       <Companies model={model} actions={actions} />
-    </AdminMessages>
+    </WithMessages>
   )
 }
 
 function Companies({ model, actions }: { model: CompaniesViewModel; actions?: CompaniesActions }) {
   const t = useT('admin')
+  const tc = useT('admin-calendars')
   const [dialog, setDialog] = useState<OrgDialog | null>(model.dialog ?? null)
   useEffect(() => setDialog(model.dialog ?? null), [model.dialog])
   const [help, setHelp] = useState(false)
@@ -120,6 +123,15 @@ function Companies({ model, actions }: { model: CompaniesViewModel; actions?: Co
         asOf={model.asOf}
         actions={
           <>
+            {/* B-W2a-59 (design admin.org page.h more): the company's working days and holidays, which every site inherits. */}
+            {model.can.viewCalendars && model.currentCompanyId && (
+              <Menu
+                align="right"
+                label={<MoreHorizontal size={16} aria-hidden />}
+                triggerProps={{ 'aria-label': tc('acal.more'), title: tc('acal.more'), className: 'nds-btn sm' }}
+                items={[{ id: 'holidays', label: tc('acal.holidaysAll'), description: tc('acal.holidaysAllHint'), icon: <CalendarDays size={14} aria-hidden />, href: `${href(`/companies/${model.currentCompanyId}`)}?tab=calendars` }]}
+              />
+            )}
             {model.can.viewSites && (
               <Button size="sm" onClick={() => open('new-site')} heldReason={!model.can.manageSites ? t('held.needs', { right: t('right.sites_manage') }) : noCompany ? t('org.held.noCompany') : null}>
                 {t('org.newSite')}

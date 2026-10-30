@@ -1525,7 +1525,8 @@
     "alerts": "Alerts and exception rules",
     "accounting": "Accounting",
     "security": "Security & health",
-    "receivables": "Receivables and reminders"
+    "receivables": "Receivables and reminders",
+    "payables": "Supplier invoices"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1638,6 +1639,7 @@
     "payments_view": "See the payments received",
     "payments_record": "Record and allocate payments",
     "payments_void": "Void a payment typed by mistake",
+    "payments_refund": "Record refunds to customers",
     "costing_view": "See a style's cost sheet",
     "costing_rates_manage": "Keep the cost per standard minute",
     "costing_standards_manage": "Prepare and freeze standard costs",
@@ -1721,6 +1723,7 @@
     "views_export": "Export a list to CSV or Excel",
     "inventory_discrepancies_manage": "Record and settle receipt discrepancies",
     "inventory_discrepancies_report": "Send the discrepancy report to the supplier",
+    "inventory_receipts_documents_request": "Ask the supplier for a receipt's missing documents",
     "search_rebuild": "Rebuild the search index of the whole group",
     "planning_schedule_manage": "Plan the schedule and allocate work to lines",
     "planning_schedule_publish": "Publish the schedule to the floor",
@@ -1748,6 +1751,11 @@
     "receivables_reminders_approve": "Approve and send payment reminders",
     "receivables_statements_send": "E-mail a customer its statement of account",
     "receivables_settings_manage": "Change the reminder ladder and the late-payment rule",
-    "receivables_reminders_switch": "Switch a company's payment reminders on or off"
+    "receivables_reminders_switch": "Switch a company's payment reminders on or off",
+    "payables_view": "See supplier invoices, their match and approval",
+    "payables_manage": "Register, map and dispute supplier invoices",
+    "payables_differences_accept": "Accept a difference of a supplier invoice in words",
+    "payables_approve": "Approve supplier invoices for payment",
+    "payables_pay": "Record that a supplier invoice was paid"
   }
 }

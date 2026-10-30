@@ -1,0 +1,471 @@
+{
+  "common": {
+    "cancel": "Annulla",
+    "dismiss": "Chiudi",
+    "done": "Fatto",
+    "retry": "Riprova"
+  },
+  "problem": {
+    "read": "Lettura non riuscita: riprova.",
+    "forbidden": "Il tuo ruolo non lo consente.",
+    "offline": "Il server non risponde: controlla la connessione e riprova.",
+    "gone": "Non esiste più (o appartiene a un’altra azienda).",
+    "changed": "Qualcuno l’ha modificato nel frattempo: è stato riletto. Controlla e riprova.",
+    "invalid": "Qualcosa nel modulo non è accettato: controlla i campi.",
+    "slowDown": "Troppi tentativi: attendi un momento e riprova.",
+    "write": "Salvataggio non riuscito: riprova."
+  },
+  "tab": {
+    "discrepancies": "Difformità di consegna",
+    "documents": "Controllo documenti",
+    "open_one": "{count} non ancora chiusa",
+    "open_other": "{count} non ancora chiuse"
+  },
+  "band": {
+    "claims": "Reclami al fornitore su questo ricevimento",
+    "discrepancies": "Difformità di questo ricevimento"
+  },
+  "tile": {
+    "discrepancies": "Difformità aperte"
+  },
+  "view": {
+    "discrepancies": "Con difformità aperte"
+  },
+  "col": {
+    "discrepancies": "Difformità",
+    "kind": "Cosa non va",
+    "line": "Riga",
+    "quantity": "Quantità",
+    "photos": "Foto",
+    "status": "Stato",
+    "claim": "Reclamo al fornitore",
+    "sentAt": "Segnalata",
+    "more": "Altro"
+  },
+  "list": {
+    "discOpen_one": "{count} aperta · {unsent} da segnalare",
+    "discOpen_other": "{count} aperte · {unsent} da segnalare",
+    "discClosed_one": "{count} chiusa",
+    "discClosed_other": "{count} chiuse"
+  },
+  "lines": {
+    "invoice": "Fattura del fornitore",
+    "invoiceWhere": "Abbinata a questo ricevimento in Amministrazione, nella pagina delle fatture fornitori (arriva con le schermate delle fatture fornitori).",
+    "discrepancies": "Difformità",
+    "discrepanciesValue": "{count} registrate · {open} non chiuse",
+    "rowMenu": "Azioni per la riga {seq}",
+    "newDiscrepancy": "Nuova difformità su questa riga"
+  },
+  "lots": {
+    "return": "Reso al fornitore",
+    "claims": "Reclami su questo lotto"
+  },
+  "kind": {
+    "SHORT": "Quantità mancante",
+    "OVER": "Quantità in eccesso",
+    "DAMAGED": "Danneggiato",
+    "WRONG_ITEM": "Articolo errato",
+    "WRONG_COLOUR": "Colore errato",
+    "MISSING_DOCUMENT": "Documento mancante",
+    "OTHER": "Altro"
+  },
+  "discStatus": {
+    "OPEN": "Aperta",
+    "SENT": "Segnalata",
+    "AGREED": "Concordata",
+    "CREDITED": "Accreditata",
+    "CLOSED": "Chiusa"
+  },
+  "discStatusWords": {
+    "OPEN": "Registrata, non ancora segnalata al fornitore.",
+    "SENT": "Segnalata al fornitore: in attesa della risposta.",
+    "AGREED": "Il fornitore ha accettato: in attesa dell’accredito o della sostituzione.",
+    "CREDITED": "Accreditata dal fornitore.",
+    "CLOSED": "Chiusa: non cambia più."
+  },
+  "uom": {
+    "PCS": "pz",
+    "PAIR": "paio",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "mezze pelli",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole"
+  },
+  "contactRole": {
+    "ORDERS": "ordini",
+    "INVOICES": "fatture",
+    "QUALITY": "qualità",
+    "DESIGN": "stile",
+    "OWNER": "titolare",
+    "RIDER": "pilota"
+  },
+  "language": {
+    "it": "Italiano",
+    "en": "Inglese"
+  },
+  "remedy": {
+    "CREDIT": "Un accredito",
+    "REPLACEMENT": "Una sostituzione"
+  },
+  "disc": {
+    "number": "N. {seq}",
+    "line": "Riga {seq} · {code} {name}{colour}",
+    "wholeDelivery": "La consegna nel suo insieme",
+    "photos_one": "{count} foto",
+    "photos_other": "{count} foto",
+    "noPhoto": "Nessuna foto",
+    "notSent": "Non ancora segnalata",
+    "rowMenu": "Azioni per la difformità {seq}",
+    "openDetail": "Apri",
+    "change": "Modifica",
+    "remove": "Elimina",
+    "failed": "Impossibile caricare le difformità",
+    "loading": "Caricamento delle difformità…",
+    "new": "Nuova difformità",
+    "sendReport": "Invia segnalazione",
+    "summaryNone": "Nessun problema registrato su questa consegna.",
+    "summary_one": "{count} difformità · {open} non chiuse · {unsent} da segnalare",
+    "summary_other": "{count} difformità · {open} non chiuse · {unsent} da segnalare",
+    "closedReceipt": "Questo ricevimento è stato stornato o annullato: non accetta nuove difformità. Quelle registrate si possono ancora chiudere.",
+    "tableLabel": "Difformità della consegna",
+    "count_one": "{count} difformità",
+    "count_other": "{count} difformità",
+    "bulk": {
+      "report_one": "Segnala {count} al fornitore",
+      "report_other": "Segnala {count} al fornitore",
+      "claim_one": "Reclama {count} al fornitore",
+      "claim_other": "Reclama {count} al fornitore"
+    },
+    "keyNew": "Nuova difformità",
+    "empty": {
+      "title": "Nessuna difformità",
+      "body": "Quantità mancante o in eccesso, merce danneggiata, articolo o colore errato, un documento mancante: registralo qui con le foto, poi segnalalo al fornitore."
+    },
+    "reportHint": "La segnalazione è un PDF senza prezzi, inviato al fornitore nella conversazione di questo ricevimento; anche la risposta arriva lì. Quelle aperte diventano Segnalate; una già segnalata viene reinviata come sollecito.",
+    "notReportable": {
+      "CLOSED": "Chiusa: non si segnala né si reclama di nuovo.",
+      "answered": "Il fornitore ha già risposto: chiudila dal dettaglio."
+    }
+  },
+  "detail": {
+    "title": "Difformità {seq} · {receipt}",
+    "position": "{n} di {count}",
+    "previous": "Precedente",
+    "next": "Successiva",
+    "first": "È la prima.",
+    "last": "È l’ultima.",
+    "reason": "Motivo",
+    "line": "Riga",
+    "quantity": "Quantità",
+    "recorded": "Registrata",
+    "sent": "Segnalata al fornitore",
+    "closed": "Chiusa",
+    "claims": "Reclami al fornitore",
+    "note": "Nota di chi ha ricevuto",
+    "resolution": "Come è stata chiusa",
+    "photos": "Foto",
+    "photosOf": "Foto della difformità {seq}"
+  },
+  "photo": {
+    "add": "Aggiungi foto",
+    "none": "Ancora nessuna foto.",
+    "alt": "{label}, foto {n}",
+    "openFull": "Apri la foto {n} in una nuova scheda",
+    "pending": "In verifica…",
+    "failed": "Impossibile mostrarla",
+    "loading": "Caricamento…",
+    "captureLabel": "Foto della difformità {seq}"
+  },
+  "docs": {
+    "ddtTitle": "Documento di trasporto del fornitore (DDT)",
+    "ddtPhoto": "Fotografa il DDT",
+    "ddtAnother": "Aggiungi un’altra foto",
+    "ddtNumber": "Numero DDT",
+    "ddtDate": "Data DDT",
+    "ddtNone": "Non registrato",
+    "ddtCapture": "Foto del DDT di {number}",
+    "ddtPhotos": "Foto del DDT",
+    "ddtHint": "La foto resta con il ricevimento, per l’ufficio e il tablet del ricevimento merci. Numero e data sono quelli inseriti al ricevimento.",
+    "wantedTitle": "Documenti che i lotti attendono",
+    "request": "Richiedi al fornitore",
+    "loading": "Lettura dei lotti…",
+    "none": {
+      "title": "Non manca nulla",
+      "body": "Questi materiali non richiedono altri documenti e il DDT è registrato."
+    },
+    "ask": {
+      "CR_VI_REPORT": "Rapporto di prova del cromo esavalente (Cr VI)",
+      "PPE_CERTIFICATE": "Certificato del componente DPI",
+      "DELIVERY_NOTE": "Il documento di trasporto del fornitore (DDT)"
+    },
+    "lotOf": "Lotto {code} · lotto fornitore {ref} · bagno {dye}",
+    "recordResult": "Registra il risultato in Conformità › Test e sostanze",
+    "missing": "Mancante",
+    "wantedHint": "Un lotto resta in quarantena finché i suoi documenti non ci sono e il controllo qualità non lo rilascia (Conformità › Test e sostanze).",
+    "released_one": "{count} lotto di questo ricevimento è già rilasciato.",
+    "released_other": "{count} lotti di questo ricevimento sono già rilasciati."
+  },
+  "held": {
+    "busy": "In corso…",
+    "loading": "Caricamento in corso…",
+    "noManage": "Il tuo ruolo non può registrare o chiudere difformità (inventory.discrepancies.manage).",
+    "noReport": "Il tuo ruolo non può inviare la segnalazione (inventory.discrepancies.report).",
+    "noUpload": "Il tuo ruolo non può caricare file (files.upload).",
+    "noReceive": "Il tuo ruolo non può ricevere merce (inventory.receive).",
+    "noClaims": "Il tuo ruolo non può preparare reclami ai fornitori (purchasing.claims.manage).",
+    "noImport": "Il tuo ruolo non può avviare importazioni (imports.run e files.upload).",
+    "receiptClosed": "Un ricevimento stornato o annullato non accetta nuove difformità.",
+    "receiptCancelled": "Un ricevimento annullato non accetta foto.",
+    "kind": "Indica cosa non va: scegli il motivo o il tipo.",
+    "ownReasonKind": "Questo motivo è dell’azienda: scegli anche il tipo di problema.",
+    "quantity": "La quantità è un numero maggiore di 0 con al massimo quattro decimali (12,5).",
+    "quantityUnit": "Indica quantità e unità insieme, oppure nessuna delle due.",
+    "noteNeeded": "Questo motivo richiede qualche parola: descrivi il problema.",
+    "noteLong": "Al massimo {max} caratteri.",
+    "closedNoChange": "Chiusa: quanto rilevato non cambia più.",
+    "sentNoChange": "Segnalata al fornitore: quanto rilevato non cambia più. Registrane una nuova se hai trovato altro.",
+    "sentNoRemove": "Segnalata o chiusa: non si elimina mai; chiudila indicando come si è risolta.",
+    "photosNoRemove": "Ha delle foto: chiudila spiegando perché invece di eliminarla.",
+    "closedNoPhoto": "Chiusa: non accetta altre foto.",
+    "photosFull": "Al massimo {max} foto.",
+    "closeNote": "Indica come si è risolta, o perché non si procede.",
+    "nothingOpen": "Nulla da segnalare: ogni difformità è già segnalata o chiusa.",
+    "selectionAnswered": "Il fornitore ha già risposto a quelle selezionate.",
+    "pickForClaim": "Seleziona le difformità oggetto del reclamo.",
+    "claimAnswered": "La difformità {seq} ha già avuto risposta o è chiusa.",
+    "claimNoLine": "La difformità {seq} riguarda la consegna nel suo insieme: un reclamo richiede la riga (modificala prima).",
+    "claimPursued": "La difformità {seq} è già seguita da {number}.",
+    "claimReason": "Scegli il motivo del reclamo.",
+    "sentAlready": "Inviata.",
+    "checkFailed": "Il controllo non è stato letto: riprova.",
+    "pickRecipient": "Scegli almeno un contatto del fornitore.",
+    "tooManyRecipients": "Al massimo {max} destinatari.",
+    "cc": "Indirizzo e-mail non valido: {list}",
+    "contactsFailed": "Impossibile controllare la richiesta.",
+    "pickDocument": "Scegli almeno un documento da richiedere.",
+    "nothingWanted": "I lotti non attendono documenti e il DDT è registrato.",
+    "noRequest": "Il tuo ruolo non può chiedere documenti ai fornitori (inventory.receipts.documents.request).",
+    "requestClosed": "Un ricevimento stornato o annullato non attende documenti."
+  },
+  "report": {
+    "title": "Invia segnalazione · {number}",
+    "subtitle": "A {supplier}, nella conversazione di questo ricevimento",
+    "send": "Invia al fornitore",
+    "which": "Cosa contiene la segnalazione",
+    "reminder": "già segnalata: inviata di nuovo come sollecito",
+    "checkFailed": "Impossibile controllare la segnalazione",
+    "checking": "Controllo della segnalazione…",
+    "to": "A (contatti del fornitore)",
+    "recipient": "{name} · {email} · {roles}",
+    "cc": "Copia a",
+    "ccHint": "Indirizzi e-mail separati da virgole.",
+    "language": "Lingua della segnalazione",
+    "subject": "Oggetto",
+    "message": "Messaggio",
+    "messageHint": "Lascialo vuoto per inviare il testo standard mostrato, nella lingua del fornitore; le tue parole lo sostituiscono.",
+    "what": "Il PDF non riporta prezzi. Resta con il ricevimento ed è condiviso con il fornitore; le difformità aperte diventano Segnalate.",
+    "preview": "Il PDF come verrà inviato",
+    "newTab": "Apri in una nuova scheda",
+    "previewLoading": "Preparazione dell’anteprima…",
+    "pdfTitle": "Segnalazione difformità {number}",
+    "sentTitle": "Segnalazione inviata · {number}",
+    "sentBody_one": "{count} difformità segnalata alle {time}.",
+    "sentBody_other": "{count} difformità segnalate alle {time}.",
+    "perRecipient": "Ogni destinatario",
+    "ccOf": "Copia: {address}",
+    "sentWhere_one": "La mail e il PDF sono nella conversazione del ricevimento (Attività); {moved} è passata a Segnalata.",
+    "sentWhere_other": "La mail e il PDF sono nella conversazione del ricevimento (Attività); {moved} sono passate a Segnalate.",
+    "openPdf": "Apri il PDF della segnalazione",
+    "delivery": {
+      "queued": "In attesa di invio",
+      "sent": "Inviata",
+      "delivered": "Consegnata",
+      "bounced": "Respinta: controlla l’indirizzo",
+      "failed": "Non inviata: riprova dalla conversazione"
+    },
+    "problem": {
+      "noContact": "Il fornitore non ha un contatto attivo con e-mail: aggiungilo in Acquisti › Fornitori.",
+      "selection": "Alcune hanno avuto risposta o sono state chiuse nel frattempo: seleziona di nuovo.",
+      "company": "La carta intestata dell’azienda non è completa (dati legali): completala in Sistema › Società e stabilimenti.",
+      "identity": "Nessun indirizzo di invio pronto per questa azienda: configuralo in Sistema › Connessioni e API.",
+      "other": "La segnalazione non si può inviare così: controlla il ricevimento."
+    }
+  },
+  "new": {
+    "title": "Nuova difformità",
+    "titleChange": "Modifica difformità",
+    "subtitle": "{number} · {supplier}",
+    "save": "Salva difformità",
+    "saveChange": "Salva modifiche",
+    "reason": "Motivo",
+    "reasonHint": "Dall’elenco delle difformità dell’azienda.",
+    "reasonNone": "— nessuno —",
+    "reasonsFailed": "L’elenco dei motivi non è stato letto: scegli il tipo.",
+    "kind": "Tipo di problema",
+    "kindPick": "Scegli…",
+    "kindOwnHint": "Motivo dell’azienda: indica di che tipo di problema si tratta.",
+    "line": "Riga",
+    "quantity": "Quanto",
+    "quantityHint": "Facoltativo: quantità e unità.",
+    "unit": "Unità",
+    "noUnit": "— unità —",
+    "note": "Nota",
+    "noteHint": "Cosa hai visto, al massimo {max} caratteri.",
+    "photos": "Foto",
+    "photoLabel": "Foto della difformità",
+    "photosNone": "Ancora nessuna foto: una foto del danno aiuta il fornitore a rispondere.",
+    "photosLater": "Le sue foto restano; quelle nuove si aggiungono al salvataggio.",
+    "photosReady": "Foto da caricare",
+    "photoReady": "Foto {n}",
+    "photoRemove": "Escludi la foto {n}",
+    "postedHint": "Il ricevimento è registrato: la giacenza non cambia; la difformità segue quanto dovuto dal fornitore.",
+    "openHint": "Registrata sul ricevimento; segnalata al fornitore con la segnalazione.",
+    "quantityWords": "{quantity} {unit}"
+  },
+  "settle": {
+    "menu": {
+      "AGREED": "Fornitore d’accordo",
+      "CREDITED": "Accredito ricevuto",
+      "CLOSED": "Chiudi…"
+    },
+    "title": {
+      "AGREED": "Difformità {seq}: il fornitore è d’accordo",
+      "CREDITED": "Difformità {seq}: accreditata",
+      "CLOSED": "Chiudi la difformità {seq}"
+    },
+    "body": {
+      "AGREED": "Il fornitore la accetta: sono dovuti l’accredito o la sostituzione.",
+      "CREDITED": "L’accredito del fornitore è arrivato.",
+      "CLOSED": "La chiusura è definitiva: indica come si è risolta, o perché non si procede."
+    },
+    "confirm": {
+      "AGREED": "Segna come concordata",
+      "CREDITED": "Segna come accreditata",
+      "CLOSED": "Chiudi difformità"
+    },
+    "note": "Nota (facoltativa)",
+    "noteClose": "Come si è risolta",
+    "noteHint": "Aggiunta a come si è risolta; il fornitore non la vede.",
+    "claimNote": "Reclami che la seguono: {numbers}. Un reclamo chiude le sue difformità quando si chiude."
+  },
+  "remove": {
+    "title": "Elimina la difformità {seq}",
+    "confirm": "Elimina",
+    "what": "Solo per una registrata per errore: mai segnalata e senza foto.",
+    "kept": "La cronologia del ricevimento conserva che è stata registrata ed eliminata."
+  },
+  "claim": {
+    "title_one": "Reclama {count} difformità al fornitore",
+    "title_other": "Reclama {count} difformità al fornitore",
+    "subtitle": "{supplier} · da {number}",
+    "confirm": "Crea il reclamo",
+    "reason": "Motivo del reclamo",
+    "reasonPick": "Scegli…",
+    "remedy": "Cosa chiedi",
+    "note": "Nota",
+    "noteHint": "Qualche parola per il fornitore (facoltativa salvo che il motivo la richieda).",
+    "what": "Un reclamo in bozza con una riga per difformità, in Acquisti › Resi e reclami ai fornitori: invialo al fornitore da lì. La merce resta qui (reclamo per accredito o sostituzione)."
+  },
+  "request": {
+    "title": "Richiedi documenti al fornitore",
+    "subtitle": "{supplier} · {number}",
+    "send": "Invia richiesta",
+    "loading": "Controllo della richiesta…",
+    "contactsFailed": "Impossibile controllare la richiesta",
+    "asked": "Cosa richiedi",
+    "languageHint": "Il fornitore la legge in questa lingua.",
+    "what": "La mail va nella conversazione di questo ricevimento: risposta e allegati del fornitore arrivano lì.",
+    "sentTitle": "Richiesta inviata",
+    "sentBody": "Inviata a {to}.",
+    "sentWhere": "È nella conversazione del ricevimento (Attività), dove arriverà la risposta.",
+    "toHint": "Solo i contatti del fornitore con un’e-mail; aggiungine uno in Acquisti › Fornitori.",
+    "note": "La tua nota",
+    "noteHint": "Facoltativa, al massimo {max} caratteri, sotto l’elenco con le tue parole. Nessun prezzo, nessuna nota interna.",
+    "preview": "Cosa riceve il fornitore",
+    "previewHint": "Il testo standard nella lingua del fornitore, con i documenti richiesti e la tua nota. Qui non si modifica."
+  },
+  "refused": {
+    "reason": "Quel motivo non è più in uso: scegline un altro.",
+    "kind": "Il tipo non corrisponde al motivo: scegli di nuovo.",
+    "line": "Quella riga non è più su questo ricevimento: scegli di nuovo.",
+    "quantity": "Quantità o unità non accettate: controlla entrambe.",
+    "note": "La nota è troppo lunga.",
+    "moved": "Nel frattempo è stata segnalata o chiusa: è stata riletta.",
+    "settleMove": "Non può passare a quello stato da quello attuale: è stata riletta.",
+    "cc": "Un indirizzo in copia non è accettato: controllalo.",
+    "reportMoved": "Le difformità sono cambiate nel frattempo: sono state rilette; controlla e invia di nuovo.",
+    "claimReason": "Quel motivo di reclamo non è accettato (non più in uso, o richiede una nota).",
+    "claimDiscrepancies": "Queste difformità non possono formare un reclamo (altro ricevimento, o non più visibili).",
+    "claimLines": "Una riga del reclamo richiede una quantità: indica prima la quantità della difformità.",
+    "photoStore": "La foto non ha raggiunto l’archivio file: riprova.",
+    "photoType": "Quel file non è una foto accettata (JPEG, PNG, WebP, HEIC).",
+    "requestContact": "Un contatto non è del fornitore (o non ha più un’e-mail): scegli di nuovo.",
+    "requestDocuments": "Un documento non manca più: chiudi la richiesta e riaprila.",
+    "requestNothing": "Non manca più nulla: non serve una richiesta.",
+    "requestClosed": "Nel frattempo il ricevimento è stato stornato o annullato: non attende documenti.",
+    "requestNote": "La nota contiene al massimo {max} caratteri."
+  },
+  "notice": {
+    "recorded": "Difformità {seq} registrata.",
+    "changed": "Difformità {seq} modificata.",
+    "savedPhotosFailed_one": "Difformità {seq} salvata, ma {count} foto non è stata caricata: aggiungila di nuovo dal dettaglio.",
+    "savedPhotosFailed_other": "Difformità {seq} salvata, ma {count} foto non sono state caricate: aggiungile di nuovo dal dettaglio.",
+    "settled": {
+      "AGREED": "Difformità {seq}: concordata con il fornitore.",
+      "CREDITED": "Difformità {seq}: accreditata.",
+      "CLOSED": "Difformità {seq} chiusa."
+    },
+    "removed": "Difformità {seq} eliminata.",
+    "claimMade": "Reclamo {number} creato in bozza: invialo al fornitore dal reclamo.",
+    "openClaim": "Apri {number}",
+    "ddtPhoto": "Foto del DDT salvata."
+  },
+  "hideList": {
+    "action": "Importa distinta pelli",
+    "everyCompany": "Tutte le aziende (non per una distinta pelli)",
+    "title": "La distinta pelli della conceria",
+    "failed": "Impossibile leggere i totali della distinta",
+    "loading": "Lettura dei totali della distinta…",
+    "forOrder": "per",
+    "counts": "{rows} righe · {toReceive} pelli da ricevere · {before} già ricevute · {errors} rifiutate",
+    "received": "Ricevuta come {number}: lotti per bagno, pelli una per una.",
+    "openReceipt": "Apri {number}",
+    "notYet": "Controllata, nulla ancora ricevuto: applicala nell’importazione (Sistema › Importa ed esporta la conserva).",
+    "linesLabel": "Totali per riga d’ordine",
+    "line": "Riga {seq} · {code}",
+    "brings": "{hides} pelli in {lots} lotti · {area} {unit}",
+    "against": "Prima {before} → dopo {after} su {expected} {unit} attesi (fino a {upTo} con ±{pct} %)",
+    "invoiceNote": "I totali rispetto alla fattura del fornitore si controllano in Amministrazione, nella pagina delle fatture fornitori (abbinamento a tre vie).",
+    "judge": {
+      "within": "Entro la tolleranza.",
+      "short": "Inferiore all’ordine: la riga resta aperta per il resto.",
+      "over": "Più dell’ordinato, entro quanto ammette la tolleranza.",
+      "overReason": "Oltre la tolleranza: ogni riga richiede il motivo della differenza, altrimenti la distinta è rifiutata."
+    },
+    "kind": {
+      "EXACT": "Esatta",
+      "WITHIN_TOLERANCE": "Entro tolleranza",
+      "SHORT": "Inferiore",
+      "OVER": "Superiore"
+    },
+    "status": {
+      "UPLOADED": "In lettura.",
+      "PLANNED": "Controllata (prova): nulla ancora scritto.",
+      "APPLYING": "Ricevimento in corso…",
+      "APPLIED": "Ricevuta.",
+      "FAILED": "Interrotta: vedi l’importazione per il motivo.",
+      "CANCELLED": "Annullata: nulla è stato ricevuto."
+    }
+  }
+}

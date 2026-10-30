@@ -1,0 +1,185 @@
+/*
+ * Planning settings › Calendars & shifts (SCR-124) LAYOUT: the owner row, the calendar beside the week and the month's
+ * numbers on wide screens, the shift patterns below, and the dialogs' field groups. The calendar, the list frame and the
+ * controls are the design system's; semantic tokens only; no page max-width (the page fills the main area).
+ */
+.fw-cal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-cal-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-cal-top .grow {
+  flex: 1 1 0;
+}
+
+.fw-cal-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cal-label {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-cal-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1200px) {
+  .fw-cal-cols {
+    grid-template-columns: minmax(0, 7fr) minmax(300px, 3fr);
+  }
+}
+
+.fw-cal-main,
+.fw-cal-side {
+  min-width: 0;
+}
+
+.fw-cal-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-cal-side > *,
+.fw-cal-form,
+.fw-cal-impact,
+.fw-cal-taken,
+.fw-cal-patterns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cal-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-cal-weekdays,
+.fw-cal-choices,
+.fw-cal-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fw-cal-choices,
+.fw-cal-targets {
+  flex-direction: column;
+}
+
+.fw-cal-weekdays legend,
+.fw-cal-choices legend,
+.fw-cal-targets legend {
+  margin-bottom: var(--nds-space-4);
+  padding: 0;
+}
+
+.fw-cal-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-cal-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+
+.fw-cal-impact {
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-cal-impact-list,
+.fw-cal-keys {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-cal-link {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-link);
+}
+
+.fw-cal-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-cal-cell-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-cal-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+
+.fw-cal-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-cal-row-fields {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(140px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) auto;
+  gap: var(--nds-space-8);
+  align-items: center;
+}
+
+@media (max-width: 720px) {
+  .fw-cal-row-fields {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.fw-cal-problem {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-danger-text);
+}

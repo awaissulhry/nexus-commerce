@@ -1,4 +1,4 @@
-import { CalendarRange, ChartGantt, ListChecks, Network } from 'lucide-react'
+import { CalendarRange, ChartGantt, ListChecks, Network, SlidersHorizontal } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -27,6 +27,12 @@ export const officeArea: OfficeAreaNav = {
           { id: 'planning-board', label: 'shell:nav.planning.board', href: '/planning/board', icon: ChartGantt, permission: 'planning.view' },
           { id: 'planning-allocation', label: 'shell:nav.planning.allocation', href: '/planning/allocation', icon: Network, permission: 'planning.view' },
         ],
+      },
+      // B-W2a-59: Settings › Planning settings (SCR-124 calendars & shifts, SCR-127 item planning settings).
+      {
+        id: 'planning-settings',
+        label: 'shell:nav.planning.settingsGroup',
+        items: [{ id: 'planning-settings-page', label: 'shell:nav.planning.settings', href: '/planning/settings', icon: SlidersHorizontal, permission: 'planning.view' }],
       },
     ],
   },

@@ -231,6 +231,9 @@
       },
       "alert": {
         "raised": "Avviso su {record}: {title}"
+      },
+      "complaint": {
+        "safety": "Reclamo di sicurezza {record}: {title}. È nel registro DPI; il titolare ne prende atto sul reclamo"
       }
     },
     "fallback": "Novità su {record}",

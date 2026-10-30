@@ -107,6 +107,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const claim = await client.supplierClaim.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
     return claim ? { companyId: claim.companyId, siteId: claim.siteId, partyId: claim.partyId } : null
   },
+  // modules/payables (SCR-153 the supplier invoice's Activity; B-W2a-62 the differences sent to the buyer): the company it
+  // is addressed to and the supplier or subcontractor that sent it.
+  SupplierInvoice: async (client, id) => {
+    const invoice = await client.supplierInvoice.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return invoice ? { companyId: invoice.companyId, siteId: null, partyId: invoice.partyId } : null
+  },
   // modules/sales/orders (SCR-039 Activity; B-W1-25): the selling company and the customer.
   SalesOrder: async (client, id) => {
     const order = await client.salesOrder.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
@@ -176,6 +182,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
   RepairOrder: async (client, id) => {
     const repair = await client.repairOrder.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
     return repair ? { companyId: repair.companyId, siteId: repair.siteId, partyId: repair.partyId } : null
+  },
+  // modules/quality/complaints (SCR-113 the Complaint's Activity tab; B-W2a-65): the company the complaint is made to and the
+  // customer, so its notes and the mail with the customer about it stay with that customer; no site (none is named).
+  Complaint: async (client, id) => {
+    const complaint = await client.complaint.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return complaint ? { companyId: complaint.companyId, siteId: null, partyId: complaint.partyId } : null
   },
 })
 

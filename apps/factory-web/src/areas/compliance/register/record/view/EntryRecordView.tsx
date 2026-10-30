@@ -181,6 +181,12 @@ function SourceText({ model }: { model: EntryRecordModel }) {
         {t('record.sourceLot')}
       </Link>
     )
+  if (link.kind === 'complaint')
+    return (
+      <Link className="fw-q-link" href={`${model.prefix}/quality/complaints/${encodeURIComponent(link.complaintId)}`}>
+        {t('source.Complaint')}
+      </Link>
+    )
   return <>{t(sourceKey(model.entry))}</>
 }
 

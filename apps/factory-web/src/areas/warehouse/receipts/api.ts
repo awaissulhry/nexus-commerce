@@ -38,6 +38,8 @@ const rowSchema = z.object({
   hides: z.number(),
   quantities: z.array(z.object({ uom, baseQuantity: z.string() })),
   postedAt: z.string().nullable(),
+  /** B-W2a-31: its discrepancies — every one, not closed yet, not reported yet (absent from an older API: none). */
+  discrepancies: z.object({ count: z.number(), open: z.number(), unsent: z.number() }).optional(),
   value,
 })
 export type ReceiptRow = z.infer<typeof rowSchema>
@@ -45,6 +47,8 @@ export type ReceiptRow = z.infer<typeof rowSchema>
 export interface ReceiptQuery {
   status?: ReceiptStatus | null
   waiting?: boolean
+  /** B-W2a-31: only receipts with a discrepancy not closed yet. */
+  discrepancies?: boolean
   postedFrom?: string | null
   q?: string
   siteId?: string | null
@@ -56,6 +60,7 @@ export function listReceipts(api: ApiClient, query: ReceiptQuery, signal?: Abort
     query: {
       status: query.status ?? undefined,
       waiting: query.waiting ? 'true' : undefined,
+      discrepancies: query.discrepancies ? 'open' : undefined,
       postedFrom: query.postedFrom ?? undefined,
       q: query.q?.trim() || undefined,
       siteId: query.siteId ?? undefined,
@@ -67,7 +72,7 @@ export function listReceipts(api: ApiClient, query: ReceiptQuery, signal?: Abort
   })
 }
 
-const countsSchema = z.object({ counts: z.object({ posted: z.number(), reversed: z.number(), waiting: z.number(), postedSince: z.number().nullable() }) })
+const countsSchema = z.object({ counts: z.object({ posted: z.number(), reversed: z.number(), waiting: z.number(), postedSince: z.number().nullable(), discrepanciesOpen: z.number().optional() }) })
 export type ReceiptCounts = z.infer<typeof countsSchema>['counts']
 
 export async function countReceipts(api: ApiClient, postedFrom: string, siteId?: string | null, signal?: AbortSignal): Promise<ReceiptCounts> {
@@ -150,6 +155,8 @@ const lineSchema = z.object({
     .nullable(),
   difference: differenceSchema.nullable(),
   lots: z.array(lotSchema),
+  /** B-W2a-31 (SCM-123): received in the supplier's unit (a roll, a box) with its factor; null: in the order line's unit. */
+  received: z.object({ quantity: z.string(), uom, factor: z.string() }).nullable().optional(),
   value,
 })
 export type ReceiptLine = z.infer<typeof lineSchema>
@@ -179,6 +186,10 @@ export const receiptSchema = z.object({
   createdAt: z.string(),
   summary: z.object({ lines: z.number(), lots: z.number(), lotsInQuarantine: z.number(), lotsReleased: z.number(), hides: z.number(), quantities: z.array(z.object({ uom, baseQuantity: z.string() })) }),
   lines: z.array(lineSchema),
+  /** B-W2a-31 (SCM-115): the supplier's delivery note photographed (the receipt's PHOTO files). */
+  ddtPhotos: z.array(z.object({ id: z.string(), originalName: z.string(), contentType: z.string(), sizeBytes: z.number(), status: z.string(), createdAt: z.string() })).default([]),
+  /** B-W2a-31 (SCM-118): its discrepancies — every one, not closed yet, not reported yet. */
+  discrepancies: z.object({ count: z.number(), open: z.number(), unsent: z.number() }).default({ count: 0, open: 0, unsent: 0 }),
   reversal: z.object({ possible: z.boolean(), location: z.string().nullable(), blockers: z.array(blockerSchema) }).nullable(),
   value,
 })
