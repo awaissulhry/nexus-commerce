@@ -1,0 +1,6 @@
+{
+  "$comment": "Type-checks the stack (stack.ts, handlers.ts) with the API's settings: cd apps/factory-web && npx tsc --noEmit -p tests/golden-flow/_harness/tsconfig.stack.json",
+  "extends": "../../../../factory-api/tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["./stack.ts", "./handlers.ts"]
+}

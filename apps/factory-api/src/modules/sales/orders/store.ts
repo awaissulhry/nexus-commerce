@@ -168,7 +168,8 @@ const unique = <T>(values: readonly T[]): T[] => [...new Set(values)]
 export async function readOrderFacts(db: Reader, order: Pick<OrderRow, 'id'>): Promise<OrderFacts> {
   const lines = await readLines(db, order.id)
   const lineIds = lines.map((line) => line.id)
-  const cells = lineIds.length > 0 ? await db.workOrderSize.findMany({ where: { salesOrderLineId: { in: lineIds } }, select: { id: true, workOrderId: true, salesOrderLineId: true, size: true, quantity: true } }) : []
+  // B-W2a-12: a REPAIR work order's cell repairs a garment the order sold; it is not the order's production.
+  const cells = lineIds.length > 0 ? await db.workOrderSize.findMany({ where: { salesOrderLineId: { in: lineIds }, workOrder: { kind: { not: 'REPAIR' } } }, select: { id: true, workOrderId: true, salesOrderLineId: true, size: true, quantity: true } }) : []
   const workOrders =
     cells.length > 0
       ? await db.workOrder.findMany({ where: { id: { in: unique(cells.map((cell) => cell.workOrderId)) } }, select: { id: true, number: true, status: true, siteId: true, releasedAt: true }, orderBy: { number: 'asc' } })

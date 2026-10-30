@@ -145,6 +145,14 @@ export async function reverse(caller: CommandCaller, moveId: string, body: { rea
   }
   const problems = reversalProblems(original, original.reversals[0]?.id ?? null)
   if (problems.length > 0) throw new InvalidStateError(problems.join(' '))
+  if (original.reason === 'SCRAP' && original.hideId) {
+    // A hide's write-off made it SCRAPPED, which the database keeps for good (…_production_leftovers_guards): putting its
+    // stock back would leave a scrapped hide in stock that nothing may issue (B-W2a-11).
+    const hide = await caller.withClient((client) => client.hide.findUnique({ where: { id: original.hideId! }, select: { code: true, state: true } }))
+    if (hide?.state === 'SCRAPPED') {
+      throw new InvalidStateError(`Hide ${hide.code} was written off and is SCRAPPED for good: its scrap is not reversed. A hide written off by mistake comes back only by a correction the database does not allow yet.`)
+    }
+  }
   const draft: MoveDraft = { ...reversalOf({ ...original, quantity: original.quantity.toString(), baseQuantity: original.baseQuantity.toString() }, body.note), uom: original.uom }
   const { result } = await command(caller, { name: 'inventory.reverse', idempotencyKey, input: { moveId, ...body } }, async (tools) => {
     const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.reverse', idempotencyKey), issuePath: () => 'body' })

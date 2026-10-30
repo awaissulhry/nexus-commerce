@@ -122,7 +122,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Finance',
     description: 'Invoices, payments and number series; sees prices, costs, margins and wages.',
     requireMfa: true,
-    permissions: ['numbering.view', 'numbering.manage', 'audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'product.materials.view', 'product.materials.cost', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'shipping.view', 'parties.view', 'parties.manage', 'parties.block', 'parties.vies', 'invoices.view', 'invoices.manage', 'invoices.issue', 'payments.view', 'payments.record', 'payments.void', 'costing.view', 'costing.rates.manage', 'quotes.view', 'quotes.approve', 'sales.settings.manage', 'companies.bank.view', 'companies.bank.manage', 'orders.view', 'orders.close', 'home.view', 'calendars.view'],
+    permissions: ['numbering.view', 'numbering.manage', 'audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'product.materials.view', 'product.materials.cost', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'shipping.view', 'parties.view', 'parties.manage', 'parties.block', 'parties.vies', 'invoices.view', 'invoices.manage', 'invoices.issue', 'payments.view', 'payments.record', 'payments.void', 'costing.view', 'costing.rates.manage', 'quotes.view', 'quotes.approve', 'sales.settings.manage', 'companies.bank.view', 'companies.bank.manage', 'orders.view', 'orders.close', 'home.view', 'calendars.view', 'inventory.counts.view', 'inventory.counts.signoff'],
     grains: ['price', 'cost', 'margin', 'wages'],
   }),
   template('sales', {
@@ -139,7 +139,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Planner',
     description: 'Plans work orders and capacity; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'inventory.locations.view', 'inventory.stock.view', 'shipping.view', 'planning.view', 'planning.run', 'planning.decide', 'purchasing.view', 'workorders.view', 'workorders.manage', 'workorders.release', 'orders.view', 'home.view', 'calendars.view', 'calendars.manage', 'calendars.suppliers.manage'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'inventory.locations.view', 'inventory.stock.view', 'inventory.reserve', 'shipping.view', 'planning.view', 'planning.run', 'planning.decide', 'purchasing.view', 'workorders.view', 'workorders.manage', 'workorders.release', 'orders.view', 'home.view', 'calendars.view', 'calendars.manage', 'calendars.suppliers.manage',
+      // B-W2a-16: planning settings and capacity (horizon, efficiency, people per line) and item parameters.
+      'planning.settings.manage', 'planning.items.manage'],
     grains: [],
   }),
   template('buyer', {
@@ -173,6 +175,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'planning.view',
       'planning.run',
       'planning.decide',
+      // B-W2a-16: lead times, safety stock, order minimum and step, preferred supplier per item and site.
+      'planning.items.manage',
       'purchasing.view',
       'purchasing.manage',
       'purchasing.send',
@@ -215,6 +219,12 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'inventory.issue.over',
       'inventory.receive',
       'inventory.opening.import',
+      'inventory.counts.view',
+      'inventory.counts.manage',
+      'inventory.counts.approve',
+      'inventory.reserve',
+      // B-W2a-12: report finished garments to stock.
+      'production.finish',
       'shipping.view',
       'shipping.manage',
       'shipping.pack',
@@ -271,6 +281,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'inventory.scrap',
       'inventory.issue',
       'inventory.issue.over',
+      'inventory.reserve',
       'shipping.view',
       'planning.view',
       'costing.view',
@@ -282,6 +293,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'production.scan',
       'production.scan.correct',
       'production.serials',
+      // B-W2a-12: report finished garments to stock.
+      'production.finish',
       'workorders.view',
       'workorders.manage',
       'workorders.release',

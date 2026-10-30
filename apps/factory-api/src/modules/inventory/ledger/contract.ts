@@ -2,8 +2,10 @@ import { z } from 'zod'
 import { amountMinor, currency, defineContract, id, input, instant, output, quantity, unitPrice } from '@nexus/factory-domain/core/contracts'
 import { STOCK_MOVE_REASONS } from '@nexus/factory-domain/inventory/ledger/moves'
 import { VALUATION_METHODS } from '@nexus/factory-domain/inventory/ledger/valuation'
+import { MAX_WRITE_OFF_LINES } from '@nexus/factory-domain/inventory/ledger/write-off'
 import { money } from '@nexus/factory-domain/money/marked'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
+import { fileView, presignedView } from '../../../platform/files/contract'
 
 /**
  * The stock ledger's contracts (SCM-189, SCM-191, SCM-192, SCM-193, SCM-195; A2 SCR-064). Quantities are decimal
@@ -201,3 +203,110 @@ export const listMovesContract = defineContract({
   }),
   response: { 200: output({ moves: z.array(moveRow), nextCursor: id().nullable() }) },
 })
+
+// ---- write-off (B-W2a-11; SCM-193) -------------------------------------------------------------------------------------------
+
+/** The value leaving stock per currency, from the moves' valuations (cost grain): `valued` of `moves` have one. */
+const writeOffValues = money.cost(
+  output({
+    valued: z.number().int(),
+    moves: z.number().int(),
+    byCurrency: z.array(output({ currency: currency(), amount: money.cost(amountMinor()) })),
+  }),
+)
+
+export const writeOffContract = defineContract({
+  body: input({
+    siteId: id(),
+    /** A code of the tenant's WRITE_OFF reason list (DAMAGED, EXPIRED, OBSOLETE, LOST, OTHER …). */
+    reasonCode: z.string().trim().min(1).max(40),
+    /** What happened; required when the reason needs detail. */
+    note: z.string().trim().max(500).nullish(),
+    reference: reference(),
+    lines: z
+      .array(
+        input({
+          /** A hide goes whole, from wherever it lies at the site: name it alone. */
+          hideId: id().optional(),
+          itemId: id().optional(),
+          itemColourId: id().nullish(),
+          lotId: id().nullish(),
+          fromLocationId: id().optional(),
+          quantity: quantity().optional(),
+          uom: uom.optional(),
+          baseQuantity: quantity().optional(),
+        }),
+      )
+      .min(1)
+      .max(MAX_WRITE_OFF_LINES),
+  }),
+  response: {
+    201: output({
+      writeOff: output({
+        /** Its first move's id: the record of its photos (StockWriteOff). */
+        id: id(),
+        siteId: id(),
+        reasonCode: z.string(),
+        reasonLabel: z.string(),
+        note: z.string().nullable(),
+        reference: z.string().nullable(),
+        moves: z.array(moveView),
+        hideIds: z.array(id()),
+        values: writeOffValues,
+      }),
+      /** The stock keys it leaves with more reserved than available (the reservations stay; release or move them). */
+      overReserved: z.array(output({ itemId: id(), itemColourId: id().nullable(), available: z.string(), reserved: z.string() })),
+    }),
+  },
+})
+
+const writeOffParams = input({ writeOffId: id() })
+
+export const writeOffRecordContract = defineContract({
+  params: writeOffParams,
+  response: {
+    200: output({
+      writeOff: output({
+        id: id(),
+        companyId: id(),
+        siteId: id(),
+        reasonCode: z.string(),
+        reasonLabel: output({ en: z.string(), it: z.string() }).nullable(),
+        note: z.string().nullable(),
+        reference: z.string().nullable(),
+        occurredAt: instant(),
+        createdBy: output({ id: id(), name: z.string() }).nullable(),
+        moves: z.array(
+          output({
+            id: id(),
+            item: output({ id: id(), code: z.string(), name: z.string(), baseUom: uom }),
+            itemColourId: id().nullable(),
+            lot: output({ id: id(), code: z.string() }).nullable(),
+            hide: output({ id: id(), code: z.string(), state: z.string() }).nullable(),
+            from: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
+            quantity: z.string(),
+            uom,
+            baseQuantity: z.string(),
+            reversedById: id().nullable(),
+          }),
+        ),
+        photos: z.array(output({ id: id(), originalName: z.string(), contentType: z.string(), sizeBytes: z.number().int(), status: z.string(), createdAt: instant() })),
+        values: writeOffValues,
+      }),
+    }),
+  },
+})
+
+export const announcePhotoContract = defineContract({
+  params: writeOffParams,
+  body: input({
+    originalName: z.string().min(1).max(500),
+    /** A picture: the PHOTO kind's types (JPEG, PNG, WebP, HEIC). */
+    contentType: z.string().min(1).max(200),
+    sizeBytes: z.number().int().min(1),
+    sha256: z.string(),
+  }),
+  response: { 201: output({ file: fileView, upload: presignedView }) },
+})
+
+export const completePhotoContract = defineContract({ params: input({ writeOffId: id(), fileId: id() }), response: { 200: output({ file: fileView }) } })
