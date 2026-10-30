@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { validateXML } from 'xmllint-wasm'
+import { dayWords, monthLabel, periodOfMonth } from '@nexus/factory-domain/accounting/periods'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
@@ -441,5 +442,69 @@ describe('the walls', () => {
     expect((await wall('companyTwo', 'GET', `/invoicing/invoices/${invoiceId}`)).status).toBe(404)
     expect((await wall('companyTwo', 'GET', '/invoicing/invoices')).body.invoices).toEqual([])
     expect((await wall('companyTwo', 'POST', '/payments', { companyId: c1(), partyId: ids.itCustomer, amount: 100, receivedOn: '2026-10-01', externalRef: 'TRN-0202' })).status).toBe(404)
+  })
+})
+
+describe('a write dated in a month closed for good (a HARD period lock) is refused in words, not a 500 (B-W2a-F1)', () => {
+  const today = businessDate(new Date())
+  const month = periodOfMonth(today.slice(0, 7))
+  const lockId = newId()
+  let financeId: string
+  let received: Json
+
+  beforeAll(async () => {
+    financeId = (await admin<{ id: string }>(`SELECT id FROM "User" WHERE email = 'fiona.finance@inv-a.example.com'`))[0]!.id
+    // A payment received today, recorded before the month is closed (the void below is dated in the lock).
+    received = (await as(finance, 'POST', '/payments', { companyId: c1(), partyId: ids.itCustomer, amount: 2500, receivedOn: today, externalRef: 'TRN-LOCK-0001' }, 201)).payment
+    // This month closed for good, as POST /accounting/locks closes one (the database's rules are real).
+    await admin(`INSERT INTO "PeriodLock" (id, "tenantId", "companyId", "periodStart", "periodEnd", level, "lockedAt", "lockedById", note) VALUES ($1, $2, $3, $4, $5, 'HARD', now(), $6, 'Closed for the test.')`, [
+      lockId,
+      tenant.id,
+      c1(),
+      month.start,
+      month.end,
+      financeId,
+    ])
+  })
+
+  afterAll(async () => {
+    await admin(`UPDATE "PeriodLock" SET status = 'UNLOCKED', "unlockedAt" = now(), "unlockedById" = $2, "unlockReason" = 'The test is over.', version = version + 1 WHERE id = $1`, [lockId, financeId])
+  })
+
+  const saysTheLock = (message: string) => {
+    expect(message.startsWith(`${monthLabel(month.month)} is closed for good for `)).toBe(true)
+    expect(message).toContain(`(a hard lock since ${dayWords(today)}, by fiona finance)`)
+    expect(message).toContain('Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month, with a reason')
+  }
+
+  it('records no payment received in it (payments.record): 409 at the value date, nothing written', async () => {
+    const answer = await finance.post('/payments', { companyId: c1(), partyId: ids.itCustomer, amount: 1000, receivedOn: today, externalRef: 'TRN-LOCK-0002' })
+    expect(answer.status, JSON.stringify(answer.body)).toBe(409)
+    saysTheLock(answer.body.error.message)
+    expect(answer.body.error.message).toContain(`the payment received on ${dayWords(today)} (bank reference `)
+    expect(answer.body.error.message).toContain(') is not recorded.')
+    expect(answer.body.error.issues).toEqual([{ path: 'body/receivedOn', message: 'Dated inside a month closed for good.' }])
+    expect(await admin(`SELECT id FROM "Payment" WHERE "externalRef" LIKE 'TRN%LOCK%0002'`)).toEqual([])
+  })
+
+  it('voids no payment received in it (payments.void): 409, the payment stays RECEIVED', async () => {
+    const answer = await finance.post(`/payments/${received.id}/void`, { reason: 'typed twice' })
+    expect(answer.status, JSON.stringify(answer.body)).toBe(409)
+    saysTheLock(answer.body.error.message)
+    expect(answer.body.error.message).toContain(') is not voided.')
+    expect((await admin('SELECT status FROM "Payment" WHERE id = $1', [received.id]))[0]!.status).toBe('RECEIVED')
+  })
+
+  it('issues no invoice today (invoices.issue): the lock is a problem of the issue, and no number is taken', async () => {
+    const draft = (await td01()).invoice
+    const before = await seriesNext()
+    await stepUp(h, finance, financeSecret)
+    const answer = await finance.post(`/invoicing/invoices/${draft.id}/issue`, {})
+    expect(answer.status, JSON.stringify(answer.body)).toBe(409)
+    const problem = (answer.body.error.issues as Json[]).find((issue) => issue.path === 'issueDate')
+    expect(problem?.message).toContain(`: the invoice is not issued today (${dayWords(today)}). Only someone`)
+    saysTheLock(problem!.message)
+    expect(await seriesNext()).toBe(before)
+    expect((await admin('SELECT status FROM "Invoice" WHERE id = $1', [draft.id]))[0]!.status).toBe('DRAFT')
   })
 })

@@ -4,7 +4,7 @@ import { intrastatFileRows, intrastatRowOf, isEuSale, type IntrastatLineFacts } 
 import { buyerOfBillTo, fileRows, paymentDocument, salesJournalDocument, type SalesInvoiceFacts } from './journals'
 import { canonicalJson, differenceOf, fingerprint, heldDocuments, parseManifest, type ExportDocument } from './manifest'
 import { packageProblems } from './packages'
-import { isYearEndPeriod, lockPhrases, monthLabel, periodOfDays, periodOfMonth, phraseMatches, yearEndMonthNumber } from './periods'
+import { dayWords, hardLockedWords, isYearEndPeriod, lockPhrases, monthLabel, periodOfDays, periodOfMonth, periodWords, phraseMatches, yearEndMonthNumber } from './periods'
 import { yearEndDocuments } from './year-end'
 
 /**
@@ -33,6 +33,18 @@ describe('periods (whole months, Europe/Rome days)', () => {
     expect(phraseMatches('2026-08', 'CHIUDI AGOSTO 2026')).toBe(true)
     expect(phraseMatches('2026-08', 'close September 2026')).toBe(false)
     expect(phraseMatches('2026-08', undefined)).toBe(false)
+  })
+
+  it('says a write refused by a hard lock in words: which month, which lock, who can lift it (B-W2a-F1)', () => {
+    expect([dayWords('2026-09-05'), dayWords('2026-12-31')]).toEqual(['5 Sep 2026', '31 Dec 2026'])
+    expect(periodWords(periodOfMonth('2026-09'))).toBe('September 2026')
+    expect(periodWords({ start: '2026-11-01', end: '2027-01-31' })).toBe('November 2026 to January 2027')
+    const lock = { start: '2026-09-01', end: '2026-09-30', company: 'Seed Company A S.r.l.', lockedOn: '2026-10-02', lockedBy: 'Fiona Neri' }
+    expect(hardLockedWords(lock, 'the payment received on 15 Sep 2026 is not recorded')).toBe(
+      'September 2026 is closed for good for Seed Company A S.r.l. (a hard lock since 2 Oct 2026, by Fiona Neri): the payment received on 15 Sep 2026 is not recorded. ' +
+        'Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.',
+    )
+    expect(hardLockedWords({ ...lock, lockedBy: null }, 'x')).toContain('(a hard lock since 2 Oct 2026): x.')
   })
 })
 

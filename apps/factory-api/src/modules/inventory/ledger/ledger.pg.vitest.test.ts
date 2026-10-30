@@ -378,3 +378,33 @@ describe('the tenant wall', () => {
     expect(await f.database.withScope(office, (client) => client.stockMove.count())).toBe(0)
   })
 })
+
+describe('a move dated in a month closed for good (a HARD period lock): 409 in words, not a 500 (B-W2a-F1)', () => {
+  it("refuses an office transfer dated inside the lock before the database's StockMove_period_lock; the same move dated now posts", async () => {
+    const lockId = newId()
+    await f.admin(`INSERT INTO "PeriodLock" (id, "tenantId", "companyId", "periodStart", "periodEnd", level, "lockedAt", "lockedById") VALUES ($1, $2, $3, '2026-01-01', '2026-01-31', 'HARD', '2026-02-03T09:00:00Z', $4)`, [
+      lockId,
+      ids.tenantA,
+      ids.companyA,
+      ids.user,
+    ])
+    try {
+      await adjust({ itemId: ids.protector, locationId: ids.store, direction: 'IN', quantity: '1' })
+      const before = await onHand(ids.store, ids.protector)
+      const body = { siteId: ids.siteA1, itemId: ids.protector, fromLocationId: ids.store, toLocationId: ids.bin1, quantity: '1', occurredAt: '2026-01-15T10:00:00.000Z' }
+      const response = await f.call('manager', 'POST', '/inventory/transfers', body, key())
+      expect(response.statusCode, response.body).toBe(409)
+      expect(response.json().error).toMatchObject({
+        message:
+          'January 2026 is closed for good for Pelli Inventate S.r.l. (a hard lock since 3 Feb 2026): the stock move (transfer) dated 15 Jan 2026 is not posted. ' +
+          'Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.',
+        issues: [{ path: 'body/occurredAt', message: 'Dated inside a month closed for good.' }],
+      })
+      expect(await onHand(ids.store, ids.protector)).toBe(before)
+      const now = await f.call('manager', 'POST', '/inventory/transfers', { ...body, occurredAt: undefined }, key())
+      expect(now.statusCode, now.body).toBe(201)
+    } finally {
+      await f.admin(`UPDATE "PeriodLock" SET status = 'UNLOCKED', "unlockedAt" = now(), "unlockedById" = $2, "unlockReason" = 'The test is over.', version = version + 1 WHERE id = $1`, [lockId, ids.user])
+    }
+  })
+})
