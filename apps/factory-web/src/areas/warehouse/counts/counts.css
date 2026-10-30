@@ -1,0 +1,275 @@
+/*
+ * Warehouse › Counts (SCR-132) LAYOUT: the page column, the list's head row, the record band, the approval panel's
+ * columns, the check list, the count cell of the Lines grid and the dialogs' forms. The controls are the design system's
+ * (stock.css holds the cells and numbers every stock screen shares); semantic tokens only, no colours of their own. No page
+ * max-width (Owner rule 2026-10-29): the pages fill the shell's main area; wide screens put cards side by side.
+ */
+.fw-cn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-cn-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-cn-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-cn-title {
+  overflow-wrap: anywhere;
+}
+
+.fw-cn-title-sub {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-muted);
+}
+
+.fw-cn-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-cn-chips,
+.fw-cn-actions,
+.fw-cn-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-cn-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-cn-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-cn-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-cn-text {
+  margin: 0;
+  color: var(--nds-text-strong);
+  line-height: 1.45;
+}
+
+.fw-cn-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-cn-stack.tight {
+  gap: var(--nds-space-8);
+}
+
+/* The approval tab: the steps and the decision beside the figures; one column below 1100 px. */
+.fw-cn-split {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (max-width: 1099px) {
+  .fw-cn-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-cn-h3 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-cn-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.fw-cn-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+/* The steps in words: one line per step, mark AND words (never colour alone). */
+.fw-cn-checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+
+.fw-cn-check {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: var(--nds-space-8);
+  align-items: start;
+}
+
+.fw-cn-check-icon {
+  margin-top: 2px;
+  color: var(--nds-text-muted);
+}
+
+.fw-cn-check.done .fw-cn-check-icon {
+  color: var(--nds-success);
+}
+
+.fw-cn-check.open .fw-cn-check-icon {
+  color: var(--nds-warning);
+}
+
+.fw-cn-check.failed .fw-cn-check-icon {
+  color: var(--nds-danger);
+}
+
+.fw-cn-check-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-cn-check-title {
+  color: var(--nds-text-strong);
+}
+
+.fw-cn-check-detail {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* The state word is read out; on screen the icon and the detail say it. */
+.fw-cn-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The Lines grid's count cell: the field fills the cell, its save state beside it. */
+.fw-cn-count {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  height: 100%;
+}
+
+.fw-cn-count-state {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  color: var(--nds-text-muted);
+}
+
+.fw-cn-count-state.failed {
+  color: var(--nds-danger);
+}
+
+.fw-cn-count-state.saved {
+  color: var(--nds-success);
+}
+
+.fw-cn-danger {
+  color: var(--nds-danger-text);
+}
+
+.fw-cn-success {
+  color: var(--nds-success-text);
+}
+
+/* Dialog forms: two columns of fields on a wide dialog, one on a phone. */
+.fw-cn-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--nds-space-12) var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-cn-form .wide {
+  grid-column: 1 / -1;
+}
+
+.fw-cn-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-cn-moves {
+  max-height: min(360px, 50dvh);
+  overflow: auto;
+}
+
+/* A frozen file's card (stand-in for the design's IssuedDocumentCard). */
+.fw-cn-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  min-width: 0;
+}
+
+.fw-cn-file-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
