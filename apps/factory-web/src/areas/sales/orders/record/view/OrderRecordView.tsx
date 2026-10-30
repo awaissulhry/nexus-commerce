@@ -11,7 +11,9 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
 import type { Order } from '../../api'
-import { createShipmentHref, dayInstant, depositGate, isFinal, mayCreateShipment, nextStep, promiseHeld, readyHeld, RECORD_TABS, STATUS_TONE, type RecordTab } from '../../model'
+import { amendHeld, closeLinesHeld, copyHeld, reopenHeld } from '../../daily-model'
+import { cancelHeld, createShipmentHref, dayInstant, depositGate, isFinal, mayCreateShipment, nextStep, promiseHeld, readyHeld, RECORD_TABS, STATUS_TONE, type RecordTab } from '../../model'
+import { ChangesTab } from '../changes/view/ChangesTab'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { OrderDialogs } from './Dialogs'
 import { DatesTab } from './DatesTab'
@@ -127,6 +129,7 @@ function ReadyRecord({ order, model, actions, panels }: { order: Order; model: O
     if (tab === 'production') return order.chain.workOrders.length
     if (tab === 'shipments') return order.chain.shipments.length
     if (tab === 'money') return order.chain.invoices.length + order.chain.depositRequests.length
+    if (tab === 'changes') return order.amendments.count
     return null
   }
   const tabs: TabItem[] = RECORD_TABS.map((tab) => ({
@@ -164,6 +167,23 @@ function ReadyRecord({ order, model, actions, panels }: { order: Order; model: O
   const held = (phrase: { key: string } | null) => (phrase ? t(phrase.key) : undefined)
   const promiseWait = promiseHeld(order, model.can)
   const readyWait = readyHeld(order, model.can)
+  // B-W2a-50: the order every day — amend, close and reopen lines, cancel, copy as a new quote (each held with its reason).
+  const amendWait = amendHeld(order, model.can)
+  const closeLinesWait = closeLinesHeld(order, model.can)
+  const reopenWait = reopenHeld(order, model.can)
+  const cancelWait = cancelHeld(order, model.can)
+  const copyWait = copyHeld(model.can)
+  const daily = [
+    ...(!isFinal(order) && model.can.manage
+      ? [
+          { id: 'amend', label: t('action.amend'), disabled: !!amendWait || !!model.amend, description: model.amend ? t('held.amending') : held(amendWait), onSelect: () => actions?.onAmendStart?.() },
+          { id: 'closeLines', label: t('action.closeLines'), disabled: !!closeLinesWait, description: held(closeLinesWait), onSelect: () => actions?.onDialog?.({ kind: 'closeLines' }) },
+          ...(order.lines.some((line) => line.closedShort) ? [{ id: 'reopenLines', label: t('action.reopenLines'), disabled: !!reopenWait, description: held(reopenWait), onSelect: () => actions?.onDialog?.({ kind: 'reopenLines' }) }] : []),
+        ]
+      : []),
+    ...(model.can.manageQuotes || model.can.viewQuotes ? [{ id: 'copyQuote', label: t('action.copyAsQuote'), disabled: !!copyWait, description: held(copyWait), onSelect: () => actions?.onDialog?.({ kind: 'copyQuote' }) }] : []),
+    ...(!isFinal(order) && model.can.manage ? [{ id: 'cancel', label: t('action.cancel'), tone: 'danger' as const, disabled: !!cancelWait, description: held(cancelWait), onSelect: () => actions?.onDialog?.({ kind: 'cancel' }) }] : []),
+  ]
   const more = [
     ...(!isFinal(order) && step.kind !== 'changePromise' ? [{ id: 'promise', label: t('action.promise'), disabled: !!promiseWait, description: held(promiseWait), onSelect: () => actions?.onDialog?.({ kind: 'promise' }) }] : []),
     ...(order.status === 'IN_PRODUCTION' ? [{ id: 'ready', label: t('action.ready'), disabled: !!readyWait, description: held(readyWait), onSelect: () => actions?.onDialog?.({ kind: 'ready' }) }] : []),
@@ -176,6 +196,7 @@ function ReadyRecord({ order, model, actions, panels }: { order: Order; model: O
         void navigator.clipboard?.writeText(order.number).catch(() => undefined)
       },
     },
+    ...daily,
   ]
 
   const activity = panels ?? (model.panelsPreview ? <RecordPanelsView model={model.panelsPreview} /> : null)
@@ -217,9 +238,16 @@ function ReadyRecord({ order, model, actions, panels }: { order: Order; model: O
               <Pill tone={depositRequest.dueDate < model.today ? 'danger' : 'warning'}>{t('record.depositOpen', { date: formatDate(dayInstant(depositRequest.dueDate), { locale }) })}</Pill>
             )}
             {gate.state === 'PAID' && <Pill tone="success">{t('record.depositPaid')}</Pill>}
-            {gate.state === 'MISSING' && <Pill tone="danger">{t('record.depositMissing')}</Pill>}
+            {gate.state === 'MISSING' && !isFinal(order) && <Pill tone="danger">{t('record.depositMissing')}</Pill>}
             {late && <Pill tone="danger">{t('record.late', { count: order.daysLate ?? 0 })}</Pill>}
             {order.customerRef && <Tag tone="neutral">{t('record.customerRef', { ref: order.customerRef })}</Tag>}
+            {order.amendments.count > 0 && order.amendments.latestRevision !== null && (
+              <Link className="fw-so-link fw-so-hint" href={`${recordHref}?tab=changes`}>
+                {t('record.amended', { revision: order.amendments.latestRevision })}
+              </Link>
+            )}
+            {order.reapprovalNeededAt && !isFinal(order) && <Pill tone="warning">{t('record.reapproval')}</Pill>}
+            {!order.chain.quote && <Tag tone="neutral">{t('record.typed')}</Tag>}
             {order.chain.quote &&
               (model.can.viewQuotes ? (
                 <Link className="fw-so-link fw-so-hint" href={`${model.prefix}/sales/quotes/${order.chain.quote.id}`}>
@@ -271,6 +299,7 @@ function ReadyRecord({ order, model, actions, panels }: { order: Order; model: O
           {model.tab === 'production' && <ProductionTab order={order} model={model} actions={actions} />}
           {model.tab === 'shipments' && <ShipmentsTab order={order} model={model} actions={actions} />}
           {model.tab === 'money' && <MoneyTab order={order} model={model} actions={actions} />}
+          {model.tab === 'changes' && <ChangesTab order={order} model={model} actions={actions} />}
           {model.tab === 'documents' && <DocumentsTab order={order} model={model} actions={actions} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-so-hint">{t('record.noPanels')}</p>)}
         </div>

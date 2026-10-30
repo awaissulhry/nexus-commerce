@@ -5,8 +5,8 @@ import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../../shell/design-data'
 import { officeNavFor } from '../../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../../shell/office/view/OfficeShellView'
-import type { VersionsAnswer } from '../../quotes/api'
-import type { DepositRequest, Order, OrderBoard, OrderLine, OrderRow, OrderStatus, OrderWorkOrder, Progress, SdiStatus, Settlement } from '../api'
+import type { PartyDetail, StyleDetail, StyleRow, VersionsAnswer } from '../../quotes/api'
+import type { Amendment, AmendmentsAnswer, AmendPreview, CancelCheck, DepositRequest, ManualPreview, Order, OrderBoard, OrderLine, OrderRow, OrderStatus, OrderWorkOrder, Progress, Schedule, SdiStatus, Settlement } from '../api'
 import { abilitiesOf, type OrderAbilities } from '../model'
 
 /**
@@ -22,13 +22,13 @@ export const PREFIX = '/w/DEMO'
 export const TODAY = '2026-10-29'
 export const at = (day: number, hour: number, minute = 0, month = 10) => new Date(Date.UTC(2026, month - 1, day, hour, minute)).toISOString()
 const uid = (block: string, n: number) => `0190f0e2-${block}-7000-8000-${String(n).padStart(12, '0')}`
-const COMPANY = DEMO_COMPANIES[0].id
+export const COMPANY = DEMO_COMPANIES[0].id
 
 // ---- roles ---------------------------------------------------------------------------------------------------------------------
 
 const COMMON = ['home.view', 'threads.read', 'threads.post', 'files.read', 'files.upload']
 export const ROLES = {
-  owner: [...OWNER_PERMISSIONS, ...COMMON, 'quotes.view', 'quotes.manage', 'orders.view', 'orders.manage', 'orders.close', 'payments.view', 'payments.record', 'invoices.view', 'invoices.manage', 'invoices.issue', 'workorders.view', 'workorders.manage', 'money.price', 'money.cost', 'money.margin', 'email.send'],
+  owner: [...OWNER_PERMISSIONS, ...COMMON, 'quotes.view', 'quotes.manage', 'orders.view', 'orders.manage', 'orders.close', 'payments.view', 'payments.record', 'invoices.view', 'invoices.manage', 'invoices.issue', 'workorders.view', 'workorders.manage', 'shipping.manage', 'money.price', 'money.cost', 'money.margin', 'email.send'],
   sales: [...COMMON, 'parties.view', 'quotes.view', 'quotes.manage', 'orders.view', 'orders.manage', 'invoices.view', 'payments.view', 'workorders.view', 'money.price', 'money.margin', 'email.send'],
   finance: [...COMMON, 'parties.view', 'quotes.view', 'orders.view', 'orders.close', 'payments.view', 'payments.record', 'invoices.view', 'invoices.manage', 'invoices.issue', 'money.price', 'money.cost', 'money.margin', 'email.send'],
   /** The production manager follows orders read-only (no money) and makes their work orders. */
@@ -142,7 +142,7 @@ export const DEPOSIT_ID = uid('3131', 1)
 export const TD02_ID = uid('2121', 1)
 export const PEOPLE = { sales: uid('3333', 11), finance: uid('3333', 12) }
 
-const progress = (ordered: number, made: Partial<Progress> = {}): Progress => ({ ordered, inWorkOrders: 0, made: null, released: 0, shipped: 0, invoiced: '0', toShip: ordered, ...made })
+const progress = (ordered: number, made: Partial<Progress> = {}): Progress => ({ ordered, inWorkOrders: 0, made: null, released: 0, shipped: 0, invoiced: '0', toShip: ordered, closedShort: 0, ...made })
 
 type Stage = 'new' | 'production' | 'partly' | 'shipped'
 
@@ -170,6 +170,7 @@ function line(seq: number, colour: { id: string; code: string; name: string }, s
       shipped: sum.shipped + entry.progress.shipped,
       invoiced: String(Number(sum.invoiced) + Number(entry.progress.invoiced)),
       toShip: sum.toShip + entry.progress.toShip,
+      closedShort: sum.closedShort + entry.progress.closedShort,
     }),
     progress(0, { toShip: 0 }),
   )
@@ -199,6 +200,7 @@ function line(seq: number, colour: { id: string; code: string; name: string }, s
     promiseDate: null,
     priority: null,
     siteId: null,
+    closedShort: null,
     version: 1,
     sizes: rows,
     progress: total,
@@ -206,7 +208,7 @@ function line(seq: number, colour: { id: string; code: string; name: string }, s
   }
 }
 
-const BLK = { id: uid('7979', 1), code: 'BLK', name: 'Nero' }
+export const BLK = { id: uid('7979', 1), code: 'BLK', name: 'Nero' }
 const RED = { id: uid('7979', 2), code: 'RED', name: 'Rosso' }
 
 export function deposit(over: Partial<DepositRequest> = {}): DepositRequest {
@@ -238,7 +240,7 @@ const actionsFor = (status: OrderStatus, settled: boolean): Order['actions'] => 
   const actions: Order['actions'] = []
   if (status !== 'CLOSED' && status !== 'CANCELLED') actions.push({ action: 'changePromise', allowed: true, needsReason: true, held: null })
   if (status === 'IN_PRODUCTION') actions.push({ action: 'markReady', allowed: true, needsReason: true, held: null })
-  if (status === 'CONFIRMED') actions.push({ action: 'cancel', allowed: true, needsReason: true, held: null })
+  if (status === 'CONFIRMED' || status === 'IN_PRODUCTION' || status === 'READY') actions.push({ action: 'cancel', allowed: true, needsReason: true, held: null })
   if (status === 'SHIPPED') actions.push({ action: 'close', allowed: true, needsReason: !settled, held: settled ? null : 'Not settled.' })
   return actions
 }
@@ -285,7 +287,7 @@ export function order(status: OrderStatus = 'CONFIRMED', over: Partial<Order> & 
     updatedAt: at(29, 9, 12),
     createdById: null,
     lines,
-    progress: { ordered: sum((entry) => entry.ordered), inWorkOrders: sum((entry) => entry.inWorkOrders), made: null, released: sum((entry) => entry.released), shipped: sum((entry) => entry.shipped), invoiced: String(sum((entry) => Number(entry.invoiced))), toShip: sum((entry) => entry.toShip) },
+    progress: { ordered: sum((entry) => entry.ordered), inWorkOrders: sum((entry) => entry.inWorkOrders), made: null, released: sum((entry) => entry.released), shipped: sum((entry) => entry.shipped), invoiced: String(sum((entry) => Number(entry.invoiced))), toShip: sum((entry) => entry.toShip), closedShort: sum((entry) => entry.closedShort) },
     chain: {
       quote: { id: QUOTE_ID, number: 'Q-2026-0188', versionId: VERSION_ID, revision: 2 },
       depositRequests: [status === 'CONFIRMED' ? deposit() : PAID],
@@ -320,8 +322,25 @@ export function order(status: OrderStatus = 'CONFIRMED', over: Partial<Order> & 
     ],
     settlement: { settled, missing: settled ? [] : status === 'SHIPPED' ? [{ code: 'BALANCE_DUE', message: '' }, { code: 'AT_SDI', message: '' }] : [{ code: 'NOT_SHIPPED', message: '' }, { code: 'NO_INVOICE', message: '' }], source: 'invoicing' },
     actions: actionsFor(status, settled),
+    paymentTermsId: uid('6565', 1),
+    reapprovalNeededAt: null,
+    dailyActions: dailyFor(status, shippedLater),
+    amendments: { count: 0, latestRevision: null, latestAt: null },
+    locked: true,
     ...rest,
   }
+}
+
+/** The API's daily actions by state (B-W2a-30 dailyActions; the screens say their own words). */
+function dailyFor(status: OrderStatus, _shipped: boolean): Order['dailyActions'] {
+  const amend = ['CONFIRMED', 'IN_PRODUCTION', 'READY'].includes(status)
+  const close = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'].includes(status) && status !== 'SHIPPED'
+  return [
+    { action: 'amend', allowed: amend, held: amend ? null : 'Shipped.' },
+    { action: 'closeLines', allowed: close, held: close ? null : 'State.' },
+    { action: 'reopenLines', allowed: false, held: 'No line is closed short.' },
+    { action: 'copyAsQuote', allowed: true, held: null },
+  ]
 }
 
 export const WORK_ORDERS: OrderWorkOrder[] = [
@@ -384,4 +403,243 @@ const conversation = panelsScreen.cases.find((item) => item.id === 'conversation
 
 export function panelsModel(): RecordPanelsViewModel {
   return { ...conversation, record: { type: 'SalesOrder', id: ORDER_ID, companyId: COMPANY, siteId: null }, title: 'SO-2026-0088 · Moto Demo S.r.l.', party: null }
+}
+
+// ---- B-W2a-50: the order every day (amendments, the schedule, the cancel's impact, a typed New order) ------------------------
+
+export const LINE_BLK = uid('7171', 10)
+export const LINE_RED = uid('7171', 20)
+export const STYLE_ID = uid('7777', 1)
+export const BRN = { id: uid('7979', 3), code: 'BRN', name: 'Marrone' }
+
+/** DEMO-JKT-01 as the style record answers it: its size range, three colourways (brown offers 48–54 only). */
+export const STYLE: StyleDetail = {
+  id: STYLE_ID,
+  code: 'DEMO-JKT-01',
+  name: 'Giacca pelle demo',
+  season: 'AI-26',
+  sizes: ['46', '48', '50', '52', '54', '56'],
+  ppeClass: 'AA',
+  ppeCategory: 'II',
+  mtmAllowed: false,
+  status: 'ACTIVE',
+  revisionState: 'RELEASED',
+  colourways: [
+    { id: BLK.id, code: BLK.code, name: BLK.name, colour: { hex: '#1f1f1f' }, status: 'ACTIVE', offeredSizes: ['46', '48', '50', '52', '54', '56'] },
+    { id: RED.id, code: RED.code, name: RED.name, colour: { hex: '#a3201c' }, status: 'ACTIVE', offeredSizes: ['46', '48', '50', '52', '54', '56'] },
+    { id: BRN.id, code: BRN.code, name: BRN.name, colour: { hex: '#6b4226' }, status: 'ACTIVE', offeredSizes: ['48', '50', '52', '54'] },
+  ],
+  matrix: { sizes: ['46', '48', '50', '52', '54', '56'].map((code) => ({ code, label: code })) },
+}
+
+export const STYLE_ROWS: StyleRow[] = [
+  { id: STYLE_ID, code: 'DEMO-JKT-01', name: 'Giacca pelle demo', season: 'AI-26', sizes: STYLE.sizes, ppeClass: 'AA', ppeCategory: 'II', mtmAllowed: false, status: 'ACTIVE', revisionState: 'RELEASED' },
+  { id: uid('7777', 2), code: 'DEMO-PNT-02', name: 'Pantalone pelle demo', season: 'AI-26', sizes: ['46', '48', '50', '52'], ppeClass: 'AA', ppeCategory: 'II', mtmAllowed: false, status: 'ACTIVE', revisionState: 'DRAFT' },
+]
+
+const snapLine = (id: string, seq: number, colourwayId: string, sizes: Array<[string, number]>, price: string) => {
+  const quantity = sizes.reduce((sum, [, n]) => sum + n, 0)
+  return { id, seq, styleId: STYLE_ID, colourwayId, quantity, unitPrice: price, netAmount: Math.round(Number(price) * 100) * quantity, closedShortQuantity: null, sizes: sizes.map(([size, n]) => ({ size, quantity: n, unitPrice: null })) }
+}
+const BLK_SIZES: Array<[string, number]> = [['48', 2], ['50', 2], ['52', 2], ['54', 2]]
+const RED_SIZES: Array<[string, number]> = [['50', 2], ['52', 2], ['54', 2]]
+
+/** Revision 1: two more black jackets in 50 and 52 (net 6,240.00 → 7,140.00: the customer accepts again). */
+const AMENDMENT_1: Amendment = {
+  id: uid('6161', 1),
+  revision: 1,
+  reason: 'Il cliente aggiunge due giacche nere nelle taglie centrali.',
+  createdAt: at(30, 11, 5),
+  createdById: PEOPLE.sales,
+  createdBy: 'Sara Vendite',
+  reacceptance: 'NEEDED',
+  diff: {
+    lines: [{ change: 'CHANGED', lineId: LINE_BLK, seq: 10, styleId: STYLE_ID, colourwayId: BLK.id, piecesBefore: 8, piecesAfter: 10, sizes: [{ size: '50', before: 2, after: 3 }, { size: '52', before: 2, after: 3 }], priceChanged: false, textChanged: false }],
+    header: [],
+    prices: [{ lineId: LINE_BLK, unitPrice: null, netBefore: 360000, netAfter: 450000 }],
+    netAmountBefore: 624000,
+    netAmountAfter: 714000,
+    grossAmountBefore: 761280,
+    grossAmountAfter: 871080,
+    reacceptanceNeeded: true,
+  },
+  before: { header: { customerRef: 'PO-ESEMPIO-88', requestedDate: '2026-12-10', netAmount: 624000, grossAmount: 761280 }, lines: [snapLine(LINE_BLK, 10, BLK.id, BLK_SIZES, '450'), snapLine(LINE_RED, 20, RED.id, RED_SIZES, '440')] },
+  after: { header: { customerRef: 'PO-ESEMPIO-88', requestedDate: '2026-12-10', netAmount: 714000, grossAmount: 871080 }, lines: [snapLine(LINE_BLK, 10, BLK.id, [['48', 2], ['50', 3], ['52', 3], ['54', 2]], '450'), snapLine(LINE_RED, 20, RED.id, RED_SIZES, '440')] },
+}
+
+/** Revision 2: the customer PO number corrected (no money change: nothing to accept again). */
+const AMENDMENT_2: Amendment = {
+  id: uid('6161', 2),
+  revision: 2,
+  reason: 'Numero d’ordine del cliente corretto.',
+  createdAt: at(30, 15, 40),
+  createdById: PEOPLE.sales,
+  createdBy: 'Sara Vendite',
+  reacceptance: 'NOT_NEEDED',
+  diff: { lines: [], header: [{ field: 'customerRef', before: 'PO-ESEMPIO-88', after: 'PO-ESEMPIO-88B' }], prices: [], netAmountBefore: 714000, netAmountAfter: 714000, grossAmountBefore: 871080, grossAmountAfter: 871080, reacceptanceNeeded: false },
+  before: AMENDMENT_1.after,
+  after: { ...AMENDMENT_1.after!, header: { ...AMENDMENT_1.after!.header, customerRef: 'PO-ESEMPIO-88B' } },
+}
+
+export const AMENDMENTS: AmendmentsAnswer = { orderId: ORDER_ID, number: 'SO-2026-0088', reapprovalNeededAt: at(30, 11, 5), amendments: [AMENDMENT_1, AMENDMENT_2] }
+export const NO_AMENDMENTS: AmendmentsAnswer = { orderId: ORDER_ID, number: 'SO-2026-0088', reapprovalNeededAt: null, amendments: [] }
+export const AMENDED_SUMMARY: Order['amendments'] = { count: 2, latestRevision: 2, latestAt: at(30, 15, 40) }
+
+/** The review of a draft: black 50 and 52 one more each, a brown colour added (net 6,240.00 → 8,040.00). */
+export const AMEND_PREVIEW: AmendPreview = {
+  ok: true,
+  revision: 1,
+  version: 4,
+  problems: [],
+  diff: {
+    lines: [
+      { change: 'CHANGED', lineId: LINE_BLK, seq: 10, styleId: STYLE_ID, colourwayId: BLK.id, piecesBefore: 8, piecesAfter: 10, sizes: [{ size: '50', before: 2, after: 3 }, { size: '52', before: 2, after: 3 }], priceChanged: false, textChanged: false },
+      { change: 'ADDED', lineId: uid('7171', 30), seq: 30, styleId: STYLE_ID, colourwayId: BRN.id, piecesBefore: 0, piecesAfter: 4, sizes: [{ size: '50', before: 0, after: 2 }, { size: '52', before: 0, after: 2 }], priceChanged: true, textChanged: false },
+    ],
+    header: [],
+    prices: [
+      { lineId: LINE_BLK, unitPrice: null, netBefore: 360000, netAfter: 450000 },
+      { lineId: uid('7171', 30), unitPrice: { before: null, after: '450' }, netBefore: 0, netAfter: 180000 },
+    ],
+    netAmountBefore: 624000,
+    netAmountAfter: 894000,
+    grossAmountBefore: 761280,
+    grossAmountAfter: 1090680,
+    reacceptanceNeeded: true,
+  },
+}
+
+/** The same review refused by the API: a size of a line under what its work orders make (said by place, in words). */
+export const AMEND_PREVIEW_PROBLEMS: AmendPreview = { ok: false, revision: 1, version: 4, problems: [{ path: 'body/lines/0/sizes', message: 'x' }, { path: 'body/lines', message: 'x' }], diff: null }
+
+export const SCHEDULE: Schedule = {
+  orderId: ORDER_ID,
+  number: 'SO-2026-0088',
+  currency: 'EUR',
+  grossAmount: 761280,
+  steps: [
+    { id: uid('6262', 1), seq: 1, kind: 'DEPOSIT', label: 'Deposit on the order', sharePct: '30', amount: 228384, dueDate: '2026-11-04', depositRequestId: DEPOSIT_ID, status: 'PAID', paidAt: at(29, 9, 12), statusNote: null, version: 2 },
+    { id: uid('6262', 2), seq: 2, kind: 'BEFORE_SHIPPING', label: 'Before shipping', sharePct: '70', amount: 532896, dueDate: '2026-12-10', depositRequestId: null, status: 'OPEN', paidAt: null, statusNote: null, version: 1 },
+  ],
+  cancelled: [],
+  openAmount: 532896,
+  paidAmount: 228384,
+}
+export const SCHEDULE_OPEN: Schedule = { ...SCHEDULE, steps: SCHEDULE.steps.map((step) => (step.kind === 'DEPOSIT' ? { ...step, status: 'OPEN' as const, paidAt: null } : step)), openAmount: 761280, paidAmount: 0 }
+export const SCHEDULE_OVERDUE: Schedule = { ...SCHEDULE_OPEN, steps: SCHEDULE_OPEN.steps.map((step) => (step.kind === 'DEPOSIT' ? { ...step, dueDate: '2026-10-26' } : step)) }
+export const SCHEDULE_REMADE: Schedule = { ...SCHEDULE, cancelled: [{ ...SCHEDULE.steps[1]!, id: uid('6262', 9), status: 'CANCELLED', statusNote: 'Remade by amendment 1.' }] }
+export const SCHEDULE_NONE: Schedule = { orderId: ORDER_ID, number: 'SO-2026-0088', currency: 'EUR', grossAmount: 761280, steps: [], cancelled: [], openAmount: 0, paidAmount: 0 }
+
+const WO_21 = { type: 'WorkOrder', id: uid('9191', 21), number: 'WO-00021' }
+const WO_22 = { type: 'WorkOrder', id: uid('9191', 22), number: 'WO-00022' }
+
+/** An order in production: the cancel changes its open steps and leaves its work orders, leather and stock behind. */
+export const CANCEL_CHECK: CancelCheck = {
+  orderId: ORDER_ID,
+  number: 'SO-2026-0088',
+  status: 'IN_PRODUCTION',
+  version: 4,
+  impact: {
+    cancellable: true,
+    blocks: [],
+    touches: [{ code: 'PAYMENT_STEPS_CANCELLED', message: 'x', refs: [{ type: 'SalesOrderMilestone', id: uid('6262', 2), number: null }], amount: 532896 }],
+    leavesBehind: [
+      { code: 'WORK_ORDERS_OPEN', message: 'x', refs: [WO_21, WO_22], amount: null },
+      { code: 'LEATHER_CUT', message: 'x', refs: [WO_21], amount: null },
+      { code: 'STOCK_RESERVED', message: 'x', refs: [{ type: 'Reservation', id: uid('6363', 1), number: null }, { type: 'Reservation', id: uid('6363', 2), number: null }], amount: null },
+      { code: 'DEPOSIT_PAID', message: 'x', refs: [{ type: 'DepositRequest', id: DEPOSIT_ID, number: null }, { type: 'Invoice', id: TD02_ID, number: TD02.number }], amount: 228384 },
+    ],
+  },
+  leatherCut: [{ workOrderId: WO_21.id, number: WO_21.number, hides: 3, area: '61.5' }],
+}
+
+/** An order the cancel stops at: a draft work order, a shipment being packed, an invoice issued. */
+export const CANCEL_BLOCKED: CancelCheck = {
+  ...CANCEL_CHECK,
+  status: 'READY',
+  impact: {
+    cancellable: false,
+    blocks: [
+      { code: 'DRAFT_WORK_ORDERS', message: 'x', refs: [{ type: 'WorkOrder', id: uid('9191', 23), number: 'WO-00023' }], amount: null },
+      { code: 'SHIPMENT_IN_PREPARATION', message: 'x', refs: [{ type: 'Shipment', id: uid('8181', 3), number: 'SH-2026-0052' }], amount: null },
+      { code: 'INVOICE_ISSUED', message: 'x', refs: [{ type: 'Invoice', id: uid('2121', 3), number: 'FA-2026-00060' }], amount: null },
+    ],
+    touches: [],
+    leavesBehind: CANCEL_CHECK.impact.leavesBehind.slice(0, 1),
+  },
+}
+
+/** A new confirmed order: its deposit request is OPEN and the order may still be cancelled at once. */
+export const CANCEL_CONFIRMED: CancelCheck = {
+  ...CANCEL_CHECK,
+  status: 'CONFIRMED',
+  impact: { cancellable: true, blocks: [], touches: [{ code: 'DEPOSITS_CANCELLED', message: 'x', refs: [{ type: 'DepositRequest', id: DEPOSIT_ID, number: null }], amount: 228384 }], leavesBehind: [] },
+  leatherCut: [],
+}
+
+/** Moto Demo S.r.l. as the party record answers it (a typed order's customer). */
+export const PARTY: PartyDetail = {
+  id: PARTIES[1]!.id,
+  code: 'MOTO-DEMO',
+  legalName: 'Moto Demo S.r.l.',
+  tradeName: 'Moto Demo',
+  status: 'ACTIVE',
+  country: 'IT',
+  taxMode: 'IT_B2B',
+  vatNumber: 'IT00000000000',
+  city: 'Bologna',
+  vies: { state: 'NOT_APPLICABLE' },
+  paymentTerms: 'Acconto 30 % all’ordine, saldo prima della spedizione',
+  addresses: [],
+  contacts: [{ id: uid('6464', 1), name: 'Anna Esempio', email: 'acquisti@moto-demo.example.com', roles: ['ORDERS'], status: 'ACTIVE' }],
+  taxIdentities: [{ id: uid('6767', 1), taxMode: 'IT_B2B', vatNumber: 'IT00000000000', fiscalCode: null, sdiRecipientCode: '0000000', pec: null, current: true }],
+  warnings: [],
+}
+
+export const PARTY_ROWS = [
+  { id: PARTY.id, code: PARTY.code, legalName: PARTY.legalName, tradeName: PARTY.tradeName, status: 'ACTIVE', country: 'IT', taxMode: 'IT_B2B', vatNumber: PARTY.vatNumber, city: PARTY.city, vies: { state: 'NOT_APPLICABLE' } },
+  { id: PARTIES[2]!.id, code: 'SQUADRA-FITT', legalName: 'Squadra Fittizia S.r.l.', tradeName: null, status: 'ACTIVE', country: 'DE', taxMode: 'EU_B2B', vatNumber: 'DE000000000', city: 'München', vies: { state: 'EXPIRED' } },
+  { id: PARTIES[0]!.id, code: 'ESEMPIO-RAC', legalName: 'Esempio Racing S.p.A.', tradeName: null, status: 'BLOCKED', country: 'IT', taxMode: 'IT_B2B', vatNumber: 'IT11111111111', city: 'Modena', vies: { state: 'NOT_APPLICABLE' } },
+]
+
+/** A typed order priced: black 8 at the list price 450, brown 4 typed at 430 (net 5,320.00; deposit 30 %). */
+export const MANUAL_PREVIEW: ManualPreview = {
+  ok: true,
+  number: 'SO-2026-0089',
+  problems: [],
+  order: {
+    currency: 'EUR',
+    taxMode: 'IT_B2B',
+    priceBasis: 'NET',
+    language: 'it',
+    contactId: uid('6464', 1),
+    paymentTermsId: uid('6565', 1),
+    paymentTerms: 'Acconto 30 % all’ordine, saldo prima della spedizione',
+    depositPct: '30',
+    depositAmount: 194712,
+    netAmount: 532000,
+    vatAmount: 117040,
+    grossAmount: 649040,
+    costAmount: 347040,
+    lines: [
+      { seq: 10, styleId: STYLE_ID, colourwayId: BLK.id, styleRevisionId: uid('7878', 3), description: null, quantity: 8, sizes: BLK_SIZES.map(([size, quantity]) => ({ size, quantity, unitPrice: null })), unitPrice: '450', netAmount: 360000, vatAmount: 79200, vatRatePct: '22.00', vatNature: null, costAmount: 232960 },
+      { seq: 20, styleId: STYLE_ID, colourwayId: BRN.id, styleRevisionId: uid('7878', 3), description: null, quantity: 4, sizes: [{ size: '50', quantity: 2, unitPrice: null }, { size: '52', quantity: 2, unitPrice: null }], unitPrice: '430', netAmount: 172000, vatAmount: 37840, vatRatePct: '22.00', vatNature: null, costAmount: 114080 },
+    ],
+    schedule: [
+      { seq: 1, kind: 'DEPOSIT', sharePct: '30', amount: 194712, dueDate: null },
+      { seq: 2, kind: 'BEFORE_SHIPPING', sharePct: '70', amount: 454328, dueDate: '2026-12-08' },
+    ],
+  },
+}
+
+/** The same typed order refused: no price list prices brown, and the customer has no delivery address. */
+export const MANUAL_PROBLEMS: ManualPreview = { ok: false, number: 'SO-2026-0089', problems: [{ path: 'body/lines/1/unitPrice', message: 'x' }, { path: 'body/shipToAddressId', message: 'x' }], order: null }
+
+/** The amendments as a role reads them: without the price grain the snapshots and every price are absent (sizes stay). */
+export function amendmentsFor(role: Role): AmendmentsAnswer {
+  if (canOf(role).price) return AMENDMENTS
+  return {
+    ...AMENDMENTS,
+    amendments: AMENDMENTS.amendments.map((entry) => ({ id: entry.id, revision: entry.revision, reason: entry.reason, createdAt: entry.createdAt, createdById: entry.createdById, createdBy: entry.createdBy, reacceptance: entry.reacceptance, diff: { lines: entry.diff.lines, header: entry.diff.header, reacceptanceNeeded: entry.diff.reacceptanceNeeded } })),
+  }
 }

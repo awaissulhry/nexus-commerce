@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Download, MoreHorizontal, Search } from 'lucide-react'
+import { Download, ExternalLink, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { Banner, EmptyState, Menu, MetricStrip, Modal, ProgressBar } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, SegmentedControl, Select, Tag } from '@nexus/ui/primitives'
@@ -15,6 +15,7 @@ import { money } from '../../../quotes/model'
 import type { OrderRow } from '../../api'
 import { dayInstant, depositTone, ROW_VIEWS, shippedPercent, STATUS_TONE, tileCount, TILES, type Layout, type RowView } from '../../model'
 import type { OrdersListActions, OrdersListModel } from '../list-model'
+import { NewOrderDialog } from './NewOrderDialog'
 import { OrdersBoard } from './OrdersBoard'
 import '../../orders.css'
 
@@ -25,8 +26,9 @@ export type { OrdersListActions, OrdersListModel } from '../list-model'
  * filters for both), the tiles (each a saved rows view: Late, Waiting for deposit, In production, Ready to ship), and
  * the shared list frame — search by number or customer PO; Rows ▾; select-all, shift range, x; Export N (CSV) while
  * rows are selected; live changes behind "N updates · Show" — each number a real link to the order studio, the deposit
- * in words, the promise with its days late, what left. In W1 an order comes only from an accepted quote (New order is
- * W2a). Money only with the price grain: the columns are absent, never zero.
+ * in words, the promise with its days late, what left. B-W2a-50: New order (c; the dialog: customer, contact, customer PO,
+ * the number it will get → the typed order's lines), the board in a new tab (left open on a second screen, it follows
+ * live). Money only with the price grain: the columns are absent, never zero.
  */
 export function OrdersListView({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
   return (
@@ -57,15 +59,20 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   useEffect(() => setSelected((current) => current.filter((id) => rowsKey.includes(id))), [rowsKey])
   useEffect(() => setSelected(model.selected ?? []), [model.selected])
 
-  // v: List ⇄ Board (the design's view key) — never while typing or inside a dialog. The list frame keeps / j k x Enter ?.
+  // v: List ⇄ Board (the design's view key); c: New order — never while typing or inside a dialog. The list frame keeps
+  // / j k x Enter ?.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (event.metaKey || event.ctrlKey || event.altKey || help) return
+      if (event.metaKey || event.ctrlKey || event.altKey || help || model.newOrder) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]') || target.isContentEditable)) return
       if (event.key === 'v') {
         event.preventDefault()
         actions?.onLayout?.(model.layout === 'list' ? 'board' : 'list')
+      }
+      if (event.key === 'c' && model.can.manage) {
+        event.preventDefault()
+        actions?.onNewOrder?.(true)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -73,7 +80,10 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   })
 
   const picked = (items ?? []).filter((row) => selected.includes(row.id))
-  const ownKeys: ListKey[] = [{ keys: ['v'], does: t('list.keyView') }]
+  const ownKeys: ListKey[] = [
+    { keys: ['v'], does: t('list.keyView') },
+    ...(model.can.manage ? [{ keys: ['c'], does: t('list.keyNew') }] : []),
+  ]
   const searchField = (
     <Input
       size="sm"
@@ -211,10 +221,19 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
         title={t('list.empty.title')}
         description={t('list.empty.body')}
         action={
-          model.can.viewQuotes ? (
-            <Button size="sm" asChild>
-              <Link href={`${model.prefix}/sales/quotes`}>{t('list.empty.quotes')}</Link>
-            </Button>
+          model.can.manage || model.can.viewQuotes ? (
+            <span className="fw-so-inline">
+              {model.can.manage && (
+                <Button size="sm" variant="primary" onClick={() => actions?.onNewOrder?.(true)}>
+                  {t('list.new')}
+                </Button>
+              )}
+              {model.can.viewQuotes && (
+                <Button size="sm" asChild>
+                  <Link href={`${model.prefix}/sales/quotes`}>{t('list.empty.quotes')}</Link>
+                </Button>
+              )}
+            </span>
           ) : undefined
         }
       />
@@ -231,16 +250,26 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           {' · '}
           {t(`live.${model.live}`)}
         </span>
-        <SegmentedControl
-          size="sm"
-          ariaLabel={t('list.layoutLabel')}
-          value={model.layout}
-          onChange={(value) => actions?.onLayout?.(value as Layout)}
-          options={[
-            { value: 'list', label: t('layout.list') },
-            { value: 'board', label: t('layout.board') },
-          ]}
-        />
+        <span className="fw-so-actions">
+          <SegmentedControl
+            size="sm"
+            ariaLabel={t('list.layoutLabel')}
+            value={model.layout}
+            onChange={(value) => actions?.onLayout?.(value as Layout)}
+            options={[
+              { value: 'list', label: t('layout.list') },
+              { value: 'board', label: t('layout.board') },
+            ]}
+          />
+          <Button size="sm" variant="quiet" asChild>
+            <a href={`${model.prefix}/sales/orders?view=board`} target="_blank" rel="noopener" title={t('board.newTabHint')}>
+              <ExternalLink size={14} aria-hidden /> <span>{t('board.newTab')}</span>
+            </a>
+          </Button>
+          <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewOrder?.(true)} aria-keyshortcuts="c">
+            <Plus size={14} aria-hidden /> {t('list.new')}
+          </Button>
+        </span>
       </div>
 
       {model.notice && (
@@ -300,6 +329,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
         />
       )}
       {model.rows !== 'open' && <p className="fw-so-hint">{t('list.viewing', { view: t(`rows.${model.rows}`) })}</p>}
+
+      {model.newOrder && <NewOrderDialog model={model.newOrder} actions={actions} />}
 
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('list.keysTitle')} size="sm">
