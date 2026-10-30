@@ -42,6 +42,13 @@ import { APPROVAL_REASONS } from './quotes/quotes'
  *   price_list.version_changed   a version was made (the next one, its prices copied), its planned days or note changed,
  *                                its prices edited, it was deleted (a draft) or ended (an active one)
  *   price_list.version_activated a draft went live from a day; the version in force then ended the day before
+ * B-W2a-30 (orders every day; live: orders.view):
+ *   sales_order.created          also for an order typed by the office (quoteId and versionId null)
+ *   sales_order.amended          a confirmed order was amended: its revision, the lines it changed, whether the customer
+ *                                must accept it again (never an amount: the screen reads the amendment)
+ *   sales_order.lines_closed     lines were closed short (what is left of them will not be made or shipped) or reopened
+ *   sales_order.schedule_changed its payment schedule was made, made again after an amendment, a step paid (its
+ *                                deposit) or cancelled with the order
  */
 const live = { permission: 'quotes.view', fields: ['quoteId', 'versionId'] } as const
 const orderLive = { permission: 'orders.view', fields: ['orderId', 'number'] } as const
@@ -225,5 +232,27 @@ export const events = [
     description: 'A price list version went live from a day (its prices fixed for good); the version in force then ended the day before.',
     payload: z.strictObject({ listId: z.uuid(), versionId: z.uuid(), revision: z.number().int(), validFrom: z.iso.date(), validTo: z.iso.date().nullable(), endedVersionId: z.uuid().nullable() }),
     live: { permission: 'pricelists.view', fields: ['listId', 'versionId', 'revision', 'validFrom', 'validTo'] },
+  }),
+  // B-W2a-30: orders every day (ids, the revision and what changed; never an amount).
+  defineEvent({
+    type: 'sales_order.amended',
+    context: 'sales',
+    description: 'A confirmed sales order was amended (its lines, sizes or prices): the amendment keeps the order before and after; the customer accepts again when the net total changed.',
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), amendmentId: z.uuid(), revision: z.number().int(), reacceptanceNeeded: z.boolean(), lineIds: z.array(z.uuid()) }),
+    live: { ...orderLive, fields: ['orderId', 'number', 'revision', 'reacceptanceNeeded'] },
+  }),
+  defineEvent({
+    type: 'sales_order.lines_closed',
+    context: 'sales',
+    description: "Lines of a sales order were closed short (what is left of them will not be made or shipped), or reopened.",
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), change: z.enum(['CLOSED', 'REOPENED']), lineIds: z.array(z.uuid()) }),
+    live: { ...orderLive, fields: ['orderId', 'number', 'change'] },
+  }),
+  defineEvent({
+    type: 'sales_order.schedule_changed',
+    context: 'sales',
+    description: "A sales order's payment schedule was made, made again after an amendment, a step paid with its deposit, or its open steps cancelled with the order.",
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), change: z.enum(['MADE', 'REMADE', 'PAID', 'CANCELLED']), milestoneIds: z.array(z.uuid()) }),
+    live: { ...orderLive, fields: ['orderId', 'number', 'change'] },
   }),
 ] as const

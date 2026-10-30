@@ -6,6 +6,7 @@ import { markMoney } from '@nexus/factory-domain/money/marked'
 import { orderFromVersion, type AcceptedLine } from '@nexus/factory-domain/sales/orders/orders'
 import type { CommandTools } from '../../../core/command'
 import { allocateNumber } from '../../../platform/numbering/allocate'
+import { makeScheduleInCommand } from './schedule'
 import { asDay, dayOrNull, hasOrderSeries } from './store'
 
 /**
@@ -21,6 +22,7 @@ import { asDay, dayOrNull, hasOrderSeries } from './store'
  *              VAT, costs, tax mode, currency, language, buyer and delivery address, payment terms, the promise date
  *              (also the first promise, never overwritten), the deposit gate (the version asked a deposit)
  *   deposits   the version's deposit requests that name no order yet are given this one (named once: the trigger)
+ *   schedule   B-W2a-30 (SAL-216): its payment schedule from the terms and the deposit request (./schedule)
  */
 
 export type OrderWait = 'NO_SALES_ORDER_SERIES'
@@ -226,6 +228,13 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string)
     }
   }
   const linked = await linkDeposits(tools, { id, companyId: quote.companyId }, version.id)
+  // B-W2a-30 (SAL-216): the payment schedule from the terms it was accepted with and its deposit request.
+  const deposit = await tx.depositRequest.findFirst({ where: { quoteVersionId: version.id, status: { in: ['OPEN', 'PAID'] } }, select: { id: true, amount: true, dueDate: true, depositPct: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+  const milestoneIds = await makeScheduleInCommand(
+    tools,
+    { id, number: number.formatted, companyId: quote.companyId, partyId: version.partyId, grossAmount: header.grossAmount, promiseDate: header.promiseDate === null ? null : asDay(header.promiseDate), paymentTermsId: version.paymentTermsId },
+    deposit,
+  )
   tools.audit({
     action: 'orders.make',
     recordType: 'SalesOrder',
@@ -249,6 +258,7 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string)
       grossAmount: markMoney('price', header.grossAmount),
       costAmount: markMoney('cost', header.costAmount),
       depositRequestIds: linked,
+      milestoneIds,
     },
   })
   tools.emit({
