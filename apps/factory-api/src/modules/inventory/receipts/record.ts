@@ -447,6 +447,8 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
       expected: expectedBaseOf({ quantity: line.quantity.toString(), baseQuantity: line.baseQuantity.toString(), confirmedQuantity: line.confirmedQuantity?.toString() ?? null }),
       received: after.received.get(line.id) ?? ZERO,
       tolerancePct: line.areaTolerancePct?.toString() ?? null,
+      // B-W2a-52: a cancelled or closed-short line takes no more goods: it counts as complete.
+      ended: line.cancelledAt !== null || line.closedShortAt !== null,
     })),
   )
   if (!floor) await setOrderReceiptProgress(tools, order, to, { id: receiptId, number, reversed: false })

@@ -139,7 +139,8 @@
     "back": "Back",
     "keep": "Keep it",
     "you": "you",
-    "colleague": "a colleague"
+    "colleague": "a colleague",
+    "close": "Close"
   },
   "problem": {
     "read": {
@@ -199,7 +200,8 @@
     "reopen": "Reopen to edit",
     "newLink": "Send a new link",
     "cancel": "Cancel quote…",
-    "copyNumber": "Copy number"
+    "copyNumber": "Copy number",
+    "duplicate": "Duplicate"
   },
   "tab": {
     "lines": "Lines",
@@ -246,7 +248,8 @@
     "waitingYours": "You asked: an approver (Finance or the Owner) decides. The lines are frozen meanwhile.",
     "waitingWho": "An approver decides here or from Home › Approvals; the person who asked never decides.",
     "accepted": "Accepted by the customer. The evidence and the deposit request are on the Documents tab.",
-    "noPanels": "The thread and files open with the quote."
+    "noPanels": "The thread and files open with the quote.",
+    "priceList": "List {code} · version {revision}"
   },
   "save": {
     "saving": "Saving…",
@@ -326,7 +329,8 @@
       "unitGross": "Unit price (VAT incl.)",
       "net": "Line net",
       "unitCost": "Unit cost",
-      "margin": "Margin %"
+      "margin": "Margin %",
+      "list": "List price"
     },
     "priceOf": "Unit price of {colour}",
     "pricePlaceholder": "e.g. 450.00",
@@ -335,7 +339,13 @@
     "belowFloor": "Under the floor",
     "autosave": "Saved shortly after you stop typing. A colour with no piece is not quoted.",
     "keys": "Keys: n — add a style (from anywhere on this tab) · arrows, Tab, Enter — move between cells · Esc — put a cell back · ⌘V — paste a block from a spreadsheet.",
-    "priceInvalid": "Not a price: type a number like 450.00 (or 450,00)."
+    "priceInvalid": "Not a price: type a number like 450.00 (or 450,00).",
+    "noList": "No list price",
+    "belowList": "{pct} off the list",
+    "aboveList": "{pct} over the list",
+    "useList": "Use list price",
+    "useListOf": "Use the list price for {colour}",
+    "backToList": "{colour} is back at its list price."
   },
   "summary": {
     "label": "The deal at a glance",
@@ -397,7 +407,11 @@
       "marginPct": "Margin %"
     },
     "negative": "Under cost",
-    "editOnLines": "Prices change on the Lines tab (one place to edit)."
+    "editOnLines": "Prices change on the Lines tab (one place to edit).",
+    "fromList": "List prices from",
+    "listVersion": "{code} · {name}, version {revision}",
+    "keepsVersion": "the quote keeps this version until it is revised.",
+    "noList": "No price list priced this quote: its prices are typed by hand."
   },
   "terms": {
     "party": {
@@ -467,7 +481,13 @@
     "problem": {
       "validPast": "The offer must stand at least until tomorrow.",
       "depositPct": "A percentage from 0 to 100."
-    }
+    },
+    "library": "Payment terms from the library",
+    "libraryHint": "The customer's terms come first; their printed name follows the document's language.",
+    "libraryFailed": "Couldn't read the payment terms library: the typed text stays.",
+    "libraryNone": "None: print the text below",
+    "typedHint": "Printed as typed (no library terms).",
+    "belowMinimum": "Under the customer's minimum order of {minimum}: {short} short."
   },
   "versions": {
     "loading": "Reading the versions…",
@@ -766,7 +786,63 @@
     "held": {
       "customer": "Pick a customer first.",
       "party": "This customer is {status}: no quote can go to them.",
-      "identity": "This customer has no tax identity in force: add it to the customer first."
-    }
+      "identity": "This customer has no tax identity in force: add it to the customer first.",
+      "past": "Pick the past quote first"
+    },
+    "startFrom": "Start from",
+    "from": {
+      "blank": "Blank",
+      "past": "A past quote"
+    },
+    "fromBody": {
+      "blank": "Add styles on the Lines tab.",
+      "past": "Its lines are copied for this customer, with this customer's terms and list prices."
+    },
+    "createFrom": "Create from {number}",
+    "pastSearch": "Past quote",
+    "pastHint": "This customer's quotes; type a number to find any quote.",
+    "pastPlaceholder": "e.g. 2026-00012",
+    "pastNone": "No quote found",
+    "pastFound_one": "{count} quote",
+    "pastFound_other": "{count} quotes",
+    "pastLine": "Version {revision} · {lines} lines · {units} pieces",
+    "pastOther": "Another customer"
+  },
+  "dup": {
+    "title": "Duplicate {number}",
+    "body": "A new draft quote with its own number, from today, with the lines copied. Sends, links and approvals are not copied.",
+    "version": "Version to copy",
+    "versionCurrent": "Version {revision} (current)",
+    "versionOther": "Version {revision} · {status}",
+    "for": "For",
+    "same": "The same customer · {name}",
+    "sameBody": "Keeps its terms, deposit, addresses, contact and language.",
+    "other": "Another customer",
+    "otherBody": "Takes that customer's own terms, list prices and addresses.",
+    "keeps": "Prices",
+    "keepsSame": "A line sold at its list price takes today's list price; a discounted or hand-typed price is kept.",
+    "keepsOther": "Lines at the list price take the new customer's list price; others keep their price: check them.",
+    "go": "Duplicate",
+    "held": {
+      "customer": "Pick the customer first",
+      "inactive": "That customer is not active"
+    },
+    "doneTitle": "{number} made",
+    "doneBody_one": "{number} is a new draft copied from {source}, with {count} line.",
+    "doneBody_other": "{number} is a new draft copied from {source}, with {count} lines.",
+    "droppedTitle_one": "{count} part was left out",
+    "droppedTitle_other": "{count} parts were left out",
+    "dropped": {
+      "mtm": "Line {line}: made-to-measure comes later, the unit is not copied.",
+      "size": "Line {line}: size {size} is no longer offered in its colourway.",
+      "noSizes": "Line {line}: none of its sizes is offered any more.",
+      "other": "Line {line}: its style or colourway is no longer offered."
+    },
+    "warning": {
+      "basis": "The source was priced on another basis (net or VAT included): check the prices kept as typed.",
+      "other": "Check the copied prices before sending."
+    },
+    "allCopied": "Every line was copied.",
+    "open": "Open {number}"
   }
 }

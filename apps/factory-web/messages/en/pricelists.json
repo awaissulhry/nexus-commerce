@@ -1,0 +1,486 @@
+{
+  "common": {
+    "back": "Back",
+    "close": "Close",
+    "dismiss": "Dismiss",
+    "retry": "Try again"
+  },
+  "kind": {
+    "BASE": "Base",
+    "CUSTOMER": "Customer",
+    "GROUP": "Group",
+    "CONTRACT": "Contract"
+  },
+  "kindHint": {
+    "BASE": "Prices every customer without a list of its own. One base list per company and currency.",
+    "CUSTOMER": "One customer's own prices; a style it lacks comes from the list it falls back to.",
+    "GROUP": "A discount group: every customer given this list is in the group.",
+    "CONTRACT": "Prices agreed in a contract, with their own dates."
+  },
+  "state": {
+    "DRAFT": "Draft",
+    "SCHEDULED": "Starts later",
+    "IN_FORCE": "Active",
+    "EXPIRED": "Expired",
+    "ARCHIVED": "Archived"
+  },
+  "versionState": {
+    "DRAFT": "Draft",
+    "IN_FORCE": "In force",
+    "STARTS": "Starts later",
+    "ENDED": "Ended"
+  },
+  "partyStatus": {
+    "PROSPECT": "Prospect",
+    "ACTIVE": "Active",
+    "BLOCKED": "Blocked",
+    "ARCHIVED": "Archived"
+  },
+  "validity": {
+    "range": "{from} – {to}",
+    "from": "From {from}",
+    "until": "Until {to}",
+    "none": "No days planned"
+  },
+  "live": {
+    "updated": "Updated {time}",
+    "notYet": "Not read yet",
+    "connecting": "Connecting",
+    "live": "Live",
+    "offline": "Offline — changes wait to be sent"
+  },
+  "noAccess": {
+    "title": "You don't have access to price lists",
+    "body": "Price lists need the right to see them (pricelists.view): the Sales, Finance and Owner roles have it."
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "new": "New price list"
+  },
+  "tile": {
+    "active": "Active",
+    "starting": "Starting in 30 days",
+    "ending": "Expiring in 30 days"
+  },
+  "rows": {
+    "active": "Active",
+    "drafts": "Drafts",
+    "expired": "Expired",
+    "all": "All",
+    "archived": "Archived"
+  },
+  "list": {
+    "intro": "Customer price lists by dated version: a quote takes its line prices from the list of its customer, and keeps the version it was priced with.",
+    "new": "New price list",
+    "table": "Price lists",
+    "search": "Search code or name",
+    "count_one": "{count} price list",
+    "count_other": "{count} price lists",
+    "rows": "Rows: {rows}",
+    "rowsHeading": "Saved rows",
+    "kindAll": "Kind: all",
+    "kindIs": "Kind: {kind}",
+    "activeFilters": "Filters in use",
+    "removeFilter": "Remove the filter {name}",
+    "clearAll": "Clear all",
+    "more": "More",
+    "exportView": "This view (CSV)",
+    "exportNothing": "Nothing to export in this view",
+    "exportOne": "Export (CSV)",
+    "open": "Open",
+    "openNewTab": "Open in new tab",
+    "openVersions": "Versions",
+    "rowMenu": "Actions for {name}",
+    "fallsBack": "falls back to {code}",
+    "versionShown": "Version {revision}",
+    "draftWaiting": "Draft waiting",
+    "failed": "Couldn't load price lists",
+    "noMatch": "No rows match these filters",
+    "empty": {
+      "title": "No price lists yet",
+      "body": "Make the base list first: it prices every customer without a list of its own.",
+      "bodyView": "A person with the right to keep price lists makes them."
+    },
+    "tileUnknown": "Couldn't count",
+    "col": {
+      "name": "Name",
+      "kind": "Kind",
+      "customers": "Customers",
+      "currency": "Currency",
+      "validity": "Valid from–to",
+      "styles": "Styles priced",
+      "version": "Version",
+      "state": "Status",
+      "more": "Actions"
+    },
+    "bulk": {
+      "export_one": "Export {count} (CSV)",
+      "export_other": "Export {count} (CSV)",
+      "archive_one": "Archive {count}",
+      "archive_other": "Archive {count}",
+      "exported_one": "{count} price list exported.",
+      "exported_other": "{count} price lists exported.",
+      "archived_one": "{count} price list archived.",
+      "archived_other": "{count} price lists archived.",
+      "archivedPartly": "{done} archived, {failed} refused: they price customers or a list falls back to them."
+    }
+  },
+  "csv": {
+    "code": "Code",
+    "name": "Name",
+    "kind": "Kind",
+    "currency": "Currency",
+    "customers": "Customers",
+    "validFrom": "Valid from",
+    "validTo": "Valid to",
+    "styles": "Styles priced",
+    "version": "Version",
+    "state": "Status"
+  },
+  "held": {
+    "busy": "Working on the last change",
+    "noManage": "Your role can see price lists, not change them",
+    "noPartiesManage": "Giving a list to customers also needs the right to change customers",
+    "noPrice": "Your role sees no selling prices: the prices are not shown",
+    "noStyles": "Your role cannot see styles to pick from",
+    "archived": "The list is archived: reactivate it first",
+    "noVersion": "The list has no version yet",
+    "activeVersion": "Version {revision} is in force: its prices stay as they are. Make the next version to change prices.",
+    "activeHasDraft": "Version {revision} is in force: its prices stay as they are. Change the prices on the draft.",
+    "oneDraft": "A draft waits already: one draft at a time",
+    "nothingToArchive": "None of these can be archived: they price customers",
+    "archiveCustomers_one": "{count} customer is priced from this list: give it another list first",
+    "archiveCustomers_other": "{count} customers are priced from this list: give them another list first",
+    "archiveFallback": "{lists} fall back to this list: change them first"
+  },
+  "new": {
+    "title": "New price list",
+    "body": "The list is made with its version 1 as a draft: nothing is in force until a version is activated.",
+    "name": "Name",
+    "code": "Code",
+    "codeHint": "Letters, digits, dots, dashes; unique.",
+    "kind": "Kind",
+    "currency": "Currency",
+    "currencyHint": "Fixed once the list exists.",
+    "company": "Belongs to",
+    "companyHint": "A list of every company can be used by each one.",
+    "everyCompany": "Every company",
+    "base": "Falls back to",
+    "baseHint": "A style missing here is priced from this list.",
+    "noBase": "None",
+    "validFrom": "Planned first day",
+    "validFromHint": "Kept as a plan: the version goes live when it is activated.",
+    "validTo": "Planned last day",
+    "note": "Note",
+    "create": "Create draft",
+    "fixFirst_one": "Fix {count} field first",
+    "fixFirst_other": "Fix {count} fields first",
+    "problem": {
+      "codeMissing": "Give the list a code",
+      "code": "Up to 40 letters, digits, dots, dashes or underscores",
+      "nameMissing": "Give the list a name",
+      "nameLong": "At most 200 characters",
+      "currency": "A currency code such as EUR or CHF",
+      "baseOfBase": "A base list falls back to nothing",
+      "fromPast": "Today or a later day",
+      "toBefore": "On or after the first day",
+      "noteLong": "At most 2000 characters"
+    },
+    "refused": {
+      "codeTaken": "That code is in use: choose another one.",
+      "codeOrBase": "That code is in use, or this company already has a base list in this currency (archive it first, or make a customer, group or contract list).",
+      "base": "That list cannot be the one it falls back to: it must be active, of this company or every company, and in the same currency.",
+      "company": "That company cannot have this list: choose another one.",
+      "fields": "Some fields were refused: check the code, the name and the days."
+    }
+  },
+  "archive": {
+    "titleMany_one": "Archive {count} price list",
+    "titleMany_other": "Archive {count} price lists",
+    "title": "Archive {code}",
+    "body": "An archived list prices nobody and is out of the pickers; its versions and the quotes priced from it stay as they are. It can be reactivated.",
+    "skipped_one": "{count} selected list is left out: it prices customers or is archived.",
+    "skipped_other": "{count} selected lists are left out: they price customers or are archived.",
+    "done": "{code} archived.",
+    "reactivated": "{code} is active again.",
+    "refused": "Not archived: customers are priced from it, or a list falls back to it.",
+    "refusedReactivate": "Not reactivated: the list it falls back to is archived, or it is a second base list."
+  },
+  "record": {
+    "back": "Price lists",
+    "backToList": "Back to price lists",
+    "name": "Price list",
+    "loading": "Reading the price list…",
+    "failed": "Couldn't load the price list",
+    "notFound": "Price list not found",
+    "notFoundBody": "It may have been removed, or it belongs to a company you cannot see.",
+    "tabsLabel": "Price list tabs",
+    "partFailed": "Couldn't load {part}",
+    "partLoading": "Reading {part}…",
+    "activate": "Activate version {revision}",
+    "nextVersion": "Make next version",
+    "more": "More actions",
+    "copyCode": "Copy code",
+    "toVersions": "Versions",
+    "archive": "Archive",
+    "reactivate": "Reactivate",
+    "everyCompany": "Every company",
+    "ownCompany": "This company",
+    "shown": "Version {revision}: {days}",
+    "fallsBack": "Falls back to",
+    "changed": "Someone else changed this list at {time}",
+    "reload": "Reload",
+    "archivedBanner": "Archived: it prices nobody. Reactivate it to change it.",
+    "readOnly": "You can view, not change",
+    "copied": "{code} copied.",
+    "copyFailed": "Couldn't copy {code}."
+  },
+  "tab": {
+    "prices": "Prices",
+    "customers": "Customers",
+    "versions": "Versions",
+    "activity": "Activity"
+  },
+  "prices": {
+    "version": "Version shown",
+    "versionDraft": "Version {revision} · draft",
+    "versionActive": "Version {revision}",
+    "days": "Days",
+    "status": "Status",
+    "activatedAt": "Activated on",
+    "toDraft": "Go to the draft",
+    "table": "Prices of version {revision}",
+    "count_one": "{count} price",
+    "count_other": "{count} prices",
+    "search": "Search style or colour",
+    "add": "Add a price",
+    "col": {
+      "style": "Style",
+      "colour": "Colourway",
+      "price": "Unit price (net)",
+      "cost": "Standard cost",
+      "margin": "Margin % at this price"
+    },
+    "everyColour": "Every colourway",
+    "priceOf": "Price of {style} {colour}",
+    "belowFloor": "Under the floor",
+    "cell": {
+      "saving": "Saving",
+      "failed": "Not saved"
+    },
+    "bulk": {
+      "raise_one": "Raise {count} by %",
+      "raise_other": "Raise {count} by %",
+      "remove_one": "Remove {count}",
+      "remove_other": "Remove {count}"
+    },
+    "empty": {
+      "title": "No prices yet",
+      "body": "Add styles: one price per style, or per colourway when it differs.",
+      "bodyView": "This version holds no prices."
+    },
+    "noMatch": "No price matches the search",
+    "autosave": "Each price is saved when you leave its cell (Enter or Tab). Esc puts back the saved one.",
+    "grainNote": "Standard cost and margin are not in your role: those columns are absent.",
+    "grainNoteCost": "Standard cost is not in your role: margin % only.",
+    "emptyCell": "A price for {style} was left empty: it stays as it was. Remove the row instead.",
+    "invalid": "The price of {style} is not a number above 0: it is not saved.",
+    "refused": "Not saved: the style or colourway is archived, or not of this list’s company."
+  },
+  "raise": {
+    "title_one": "Raise {count} price by %",
+    "title_other": "Raise {count} prices by %",
+    "pct": "Percent",
+    "pctHint": "5 raises by 5 %, -3 lowers by 3 %.",
+    "table": "The prices before and after",
+    "col": {
+      "row": "Style · colourway",
+      "now": "Now",
+      "next": "New",
+      "margin": "New margin %"
+    },
+    "rounding": "Rounded to the cent of {currency}.",
+    "go_one": "Save {count} price",
+    "go_other": "Save {count} prices",
+    "held": {
+      "pct": "Type the percent first",
+      "pctInvalid": "A percent above -100, not 0, with at most 4 decimals",
+      "nothing": "No price picked"
+    },
+    "done": "{count} prices changed by {pct} %."
+  },
+  "remove": {
+    "title_one": "Remove {count} price",
+    "title_other": "Remove {count} prices",
+    "body": "These rows leave the draft: a quote then finds no list price for them here.",
+    "bodyFallback": "These rows leave the draft: their styles are then priced from {base}.",
+    "done": "{count} prices removed from the draft."
+  },
+  "add": {
+    "title": "Add a price to version {revision}",
+    "style": "Style",
+    "styleHint": "Code or name.",
+    "stylePlaceholder": "e.g. JKT",
+    "searching": "Searching…",
+    "none": "No style found",
+    "found_one": "{count} style",
+    "found_other": "{count} styles",
+    "change": "Change",
+    "colour": "For",
+    "colourHint": "Every colourway, or one whose price differs (it wins over the style's).",
+    "price": "Net unit price ({currency})",
+    "priceHint": "Net per piece; a consumer quote adds VAT to it.",
+    "go": "Add the price",
+    "held": {
+      "style": "Pick a style first",
+      "taken": "This version prices it already: change it in the grid",
+      "price": "Type the price",
+      "priceInvalid": "A number above 0"
+    },
+    "done": "{style} added to the draft."
+  },
+  "customers": {
+    "intro": "Who gets this list as their default price list. One customer’s list is also changed on its record (Tax & terms).",
+    "introGroup": "The customers of this discount group: each gets this list as its default price list.",
+    "table": "Customers priced from this list",
+    "count_one": "{count} customer",
+    "count_other": "{count} customers",
+    "add": "Add customers",
+    "col": {
+      "customer": "Customer",
+      "code": "Code",
+      "status": "Status"
+    },
+    "bulk": {
+      "remove_one": "Remove {count}",
+      "remove_other": "Remove {count}"
+    },
+    "empty": {
+      "title": "Not assigned",
+      "body": "No customer has this list yet.",
+      "base": "A base list prices every customer without a list of its own: it needs nobody here."
+    },
+    "fallbackOf": "Lists that fall back to this one: {lists}.",
+    "addTitle": "Give {code} to customers",
+    "addBody": "Each customer picked gets this list as its default (in {currency}); new quotes take their prices from it.",
+    "search": "Customer",
+    "searchPlaceholder": "Name, code or VAT number",
+    "none": "No customer found",
+    "found_one": "{count} customer",
+    "found_other": "{count} customers",
+    "already": "Has this list",
+    "addGo_one": "Give it to {count} customer",
+    "addGo_other": "Give it to {count} customers",
+    "held": {
+      "pick": "Pick a customer first"
+    },
+    "removeTitle_one": "Take the list from {count} customer",
+    "removeTitle_other": "Take the list from {count} customers",
+    "removeBody": "They are then priced from the base list; their open quotes keep the version they were priced with.",
+    "added_one": "List given to {count} customer.",
+    "added_other": "List given to {count} customers.",
+    "removed_one": "List taken from {count} customer.",
+    "removed_other": "List taken from {count} customers.",
+    "refused": "Not changed: a customer of another company, archived, in another currency, or one your role may not change."
+  },
+  "versions": {
+    "intro": "Each version has its days; open quotes keep the version they were priced with.",
+    "table": "Versions",
+    "name": "Version {revision}",
+    "col": {
+      "version": "Version",
+      "days": "Valid from–to",
+      "status": "Status",
+      "prices": "Prices",
+      "changed": "Changed rows",
+      "actions": "Actions"
+    },
+    "activatedOn": "Activated on {date}",
+    "first": "First version",
+    "changedCount_one": "{count} row",
+    "changedCount_other": "{count} rows",
+    "openPrices": "Prices",
+    "activate": "Activate",
+    "compare": "Compare two versions",
+    "held": {
+      "compareOne": "Only one version so far"
+    },
+    "quotesKeep": "A version in force is kept for good: change prices on the next one, then activate it from a day.",
+    "made": "Version {revision} made as a draft with {count} prices copied.",
+    "refused": "Not made: a draft waits already, or the list is archived."
+  },
+  "activate": {
+    "title": "Activate version {revision}",
+    "body": "From its first day this version prices new quotes; the version in force then ends the day before.",
+    "from": "First day",
+    "fromHint": "Today or later, never back in time.",
+    "to": "Last day",
+    "toHint": "Leave empty to keep it open.",
+    "prices": "Prices in it",
+    "ends": "Ends",
+    "endsValue": "Version {revision} on {date}",
+    "endsNone": "Nothing else is in force on those days",
+    "starts": "In force",
+    "startsRange": "{from} – {to}",
+    "startsOpen": "From {from}, open",
+    "quotesKeep": "Quotes priced up to {before} keep the version they were priced with.",
+    "go": "Activate",
+    "held": {
+      "from": "Choose the first day",
+      "past": "From today ({today}) or a later day: never back in time",
+      "order": "The last day is on or after the first",
+      "later": "Version {revision} is active from {date}: start this one later, or end that one first",
+      "other": "These days cannot be activated: check them against the other versions",
+      "noPrices": "The draft has no prices yet: add styles first",
+      "noDraft": "No draft to activate"
+    },
+    "done": "Version {revision} is active from {from}.",
+    "doneEnded": "Version {revision} is active from {from}; version {ended} ends on {to}.",
+    "refused": "Not activated: the days clash with another version, or the draft changed meanwhile."
+  },
+  "compare": {
+    "title": "Compare two versions",
+    "before": "From",
+    "after": "To",
+    "same": "Pick two different versions.",
+    "loading": "Comparing…",
+    "summary_one": "{count} row changed from version {before} to version {after}.",
+    "summary_other": "{count} rows changed from version {before} to version {after}.",
+    "table": "Rows that changed",
+    "col": {
+      "row": "Style · colourway",
+      "change": "Change",
+      "before": "Before",
+      "after": "After",
+      "pct": "Change %"
+    },
+    "change": {
+      "ADDED": "Added",
+      "REMOVED": "Removed",
+      "CHANGED": "Changed",
+      "SAME": "Same"
+    }
+  },
+  "problem": {
+    "read": {
+      "signed_out": "Your session ended: sign in again.",
+      "forbidden": "Your role cannot see this.",
+      "not_found": "It is not there any more.",
+      "unavailable": "The server did not answer: try again in a moment.",
+      "rate_limited": "Too many requests: wait a moment.",
+      "contract": "The answer did not match this page: reload the page.",
+      "internal": "Something went wrong on the server."
+    },
+    "write": {
+      "moved": "Someone else changed it meanwhile: read again, nothing was overwritten.",
+      "refused": "Refused as it is: check the values.",
+      "signed_out": "Your session ended: sign in again.",
+      "forbidden": "Your role may not do this.",
+      "not_found": "It is not there any more.",
+      "step_up": "Confirm it is you with your authenticator first.",
+      "rate_limited": "Too many requests: wait a moment.",
+      "unavailable": "The server did not answer: nothing was changed, try again.",
+      "internal": "Something went wrong on the server: nothing was changed."
+    }
+  }
+}

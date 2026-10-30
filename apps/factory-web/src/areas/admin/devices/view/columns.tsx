@@ -8,13 +8,14 @@ import type { Translate } from '../../../../lib/i18n/messages'
 import type { Device, Printer } from '../../shared/api'
 import { adminHref, STATUS_TONE } from '../../shared/model'
 import { cellOf as cell } from '../../shared/view/cells'
-import { deviceTileMatch, type SiteChoice } from '../model'
+import { batteryOf, deviceTileMatch, isOutdated, type SiteChoice } from '../model'
 
 /**
  * SCR-013 devices: name (the Device record's link), kind, site, station, status ("In use" says someone is signed in,
- * never who: Statuto dei Lavoratori art. 4), last seen (marked when not seen for a day), app version.
+ * never who: Statuto dei Lavoratori art. 4), last seen (marked when not seen for a day), app version (marked when it is
+ * not the version the server serves now, B-W2a-42) and battery as the tablet last said it (low marked; W2a).
  */
-export function deviceColumns(ctx: { t: Translate; locale: Locale; prefix: string; sites: readonly SiteChoice[]; now: number }): ColDef<Device>[] {
+export function deviceColumns(ctx: { t: Translate; locale: Locale; prefix: string; sites: readonly SiteChoice[]; now: number; currentVersion?: string | null }): ColDef<Device>[] {
   const { t, locale } = ctx
   const site = (device: Device) => ctx.sites.find((item) => item.id === device.siteId)
   const station = (device: Device) => site(device)?.stations.find((item) => item.id === device.stationId)?.name ?? '—'
@@ -64,7 +65,49 @@ export function deviceColumns(ctx: { t: Translate; locale: Locale; prefix: strin
         ),
       ),
     },
-    { colId: 'version', headerName: t('devices.col.version'), valueGetter: ({ data }) => (data ? (data.appVersion ?? '—') : ''), minWidth: 120, flex: 0.6 },
+    {
+      colId: 'version',
+      headerName: t('devices.col.version'),
+      valueGetter: ({ data }) => (data ? (data.appVersion ?? '—') : ''),
+      minWidth: 150,
+      flex: 0.8,
+      cellRenderer: cell<Device>((device) =>
+        device.appVersion ? (
+          <div className="fw-adm-cell2">
+            <span className="fw-adm-code">{device.appVersion}</span>
+            {isOutdated(device, ctx.currentVersion) && (
+              <span className="nds-cell-sub">
+                <Tag tone="warning">{t('devices.outdatedTag')}</Tag>
+              </span>
+            )}
+          </div>
+        ) : (
+          '—'
+        ),
+      ),
+    },
+    {
+      colId: 'battery',
+      headerName: t('devices.col.battery'),
+      valueGetter: ({ data }) => {
+        const battery = data ? batteryOf(data) : null
+        return battery ? battery.percent : null
+      },
+      valueFormatter: ({ value }) => (typeof value === 'number' ? t('devices.battery.percent', { percent: value }) : '—'),
+      minWidth: 130,
+      flex: 0.6,
+      cellRenderer: cell<Device>((device) => {
+        const battery = batteryOf(device)
+        if (!battery) return '—'
+        return (
+          <span className="fw-adm-celltags">
+            <span>{t('devices.battery.percent', { percent: battery.percent })}</span>
+            {battery.charging && <Tag tone="info">{t('devices.battery.charging')}</Tag>}
+            {battery.low && <Tag tone="warning">{t('devices.battery.lowTag')}</Tag>}
+          </span>
+        )
+      }),
+    },
   ]
 }
 

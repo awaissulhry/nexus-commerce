@@ -10,6 +10,7 @@ import { useFloorKeys } from '../keys'
 import { numberKindsOf } from './actions'
 import { isLow, minutesOff, remainingOf, storageWord, type QueueItem } from './model'
 import type { QueueSnapshot } from './queue'
+import type { UpdateStep } from './update'
 import { SyncView, type RefusedRowModel, type SyncAction, type SyncViewModel } from './view/SyncView'
 
 /**
@@ -22,7 +23,10 @@ const today = (instant: string, now: Date) => new Date(instant).toDateString() =
 const summaryOfItem = (item: QueueItem) => (isFloorSyncKind(item.kind) ? summaryOf(item.kind, item.payload) : {})
 
 /** The view's model from the queue (exported for the tests). */
-export function syncModel(snapshot: QueueSnapshot, input: { workerId: string | null; numberKinds: readonly SyncViewModel['numbers'][number]['kind'][]; now: Date; frame: SyncViewModel['frame']; ui: Pick<SyncViewModel, 'open' | 'confirm' | 'showRecorded'> }): SyncViewModel {
+export function syncModel(
+  snapshot: QueueSnapshot,
+  input: { workerId: string | null; numberKinds: readonly SyncViewModel['numbers'][number]['kind'][]; now: Date; frame: SyncViewModel['frame']; ui: Pick<SyncViewModel, 'open' | 'confirm' | 'showRecorded'>; update?: UpdateStep },
+): SyncViewModel {
   const shareAll = snapshot.server?.subject === 'STATION'
   const mine = (item: QueueItem) => shareAll || (input.workerId !== null && item.workerId === input.workerId)
   const ordered = [...snapshot.items].sort((a, b) => a.seq - b.seq)
@@ -65,8 +69,12 @@ export function syncModel(snapshot: QueueSnapshot, input: { workerId: string | n
     open: input.ui.open,
     confirm: input.ui.confirm,
     problem: snapshot.problem,
+    update: UPDATE_WORD[input.update ?? 'none'],
   }
 }
+
+/** What a waiting new version of the app waits for, as the screen says it (B-W2a-42). */
+const UPDATE_WORD: Readonly<Record<UpdateStep, SyncViewModel['update']>> = { none: null, apply: null, waitQueue: 'queue', waitNetwork: 'network', waitScreen: 'screen' }
 
 export function FloorSync() {
   const store = useFloor()
@@ -88,7 +96,7 @@ export function FloorSync() {
   })
 
   if (!me) return null
-  const model = syncModel(queueSnapshot, { workerId: me.worker.id, numberKinds: numberKindsOf(me.permissions), now: new Date(), frame, ui })
+  const model = syncModel(queueSnapshot, { workerId: me.worker.id, numberKinds: numberKindsOf(me.permissions), now: new Date(), frame, ui, update: store.appUpdate.step })
 
   const onAction = async (action: SyncAction) => {
     switch (action.type) {

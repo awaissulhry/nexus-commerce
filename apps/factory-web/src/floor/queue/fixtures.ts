@@ -6,7 +6,8 @@ import { SyncView, type RefusedRowModel, type SyncRow, type SyncViewModel } from
  * SCR-023's cases (design floor.sync): this tablet's queue for the person signed in — online and all recorded, offline
  * with actions waiting, sending, refused with the reason and one fix, the refused action as a step screen and its discard
  * confirm, discard held without the network, label numbers running low, the clock off, storage low, other people's
- * actions counted. Made-up people, codes and times only (a "Demo" plant, the tenant tag 7K).
+ * actions counted, a new version of the app that waits for the queue to empty (B-W2a-42). Made-up people, codes and
+ * times only (a "Demo" plant, the tenant tag 7K).
  */
 
 const at = (minutes: number) => new Date(Date.parse('2026-10-29T08:00:00.000Z') + minutes * 60_000).toISOString()
@@ -143,6 +144,18 @@ export const designScreen = defineDesignScreen<SyncViewModel>({
       label: 'The last send did not reach the office',
       model: base({ frame: signedInFrame('sync.title', { queueButton: false, pending: 4, lastSentAt: at(38) }), lastSentAt: at(38), problem: 'unavailable', counts: { waiting: 4, refused: 0, recordedToday: 12, othersWaiting: 0, othersRefused: 0 }, waiting: WAITING }),
       note: 'The network is up but the server did not answer: the actions stay on the tablet and the queue tries again.',
+    },
+    {
+      id: 'update-waiting',
+      label: 'A new version waits for this queue to empty',
+      model: base({ frame: signedInFrame('sync.title', { queueButton: false, pending: 4 }), counts: { waiting: 4, refused: 0, recordedToday: 12, othersWaiting: 0, othersRefused: 0 }, waiting: WAITING, update: 'queue' }),
+      note: 'B-W2a-42, PLT-241: the app updates by itself once nothing waits (no queued scan is ever at risk), with the network, on a screen at rest.',
+    },
+    {
+      id: 'update-offline',
+      label: 'A new version waits for the network',
+      model: base({ frame: offlineFrame(0), online: false, update: 'network' }),
+      note: 'Offline the tablet could not open a new version: it waits until the network is back.',
     },
   ],
 })

@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto'
 import type { FastifyRequest } from 'fastify'
-import { DomainError, ForbiddenError, InvalidStateError, type Issue } from '@nexus/factory-domain/core/errors'
+import { arrivalDate } from '@nexus/factory-domain/calendars/suppliers'
+import { DomainError, ForbiddenError, InvalidStateError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { composeDocument } from '@nexus/factory-domain/documents/compose'
 import { legalProblems } from '@nexus/factory-domain/documents/legal'
@@ -8,6 +10,8 @@ import { markMoney } from '@nexus/factory-domain/money/marked'
 import { identityAt } from '@nexus/factory-domain/parties/tax'
 import { purchaseOrderDocument, purchaseOrderDocumentNumber, purchaseOrderMail, type SupplierOrder } from '@nexus/factory-domain/purchasing/document'
 import { newLinkProblem, supplierLanguageOf, type PurchaseOrderStatus, type SendCheck } from '@nexus/factory-domain/purchasing/orders'
+import { CONFIRM_DAYS, confirmByProblem, defaultConfirmBy } from '@nexus/factory-domain/purchasing/orders/delivery'
+import { MAX_CHANGE_NOTE, revisionMailOpening } from '@nexus/factory-domain/purchasing/revisions/revisions'
 import { PURCHASING_SEND } from '@nexus/factory-domain/purchasing/permissions'
 import { command, type CommandCaller } from '../../core/command'
 import { serverClock } from '../../core/time'
@@ -21,8 +25,10 @@ import { TAX_COLUMNS, taxFieldsOf } from '../parties/store'
 import { confirmLinkTerms, insertConfirmLink, mintConfirmLink, revokeConfirmLinks, type ConfirmLinkTerms, type MintedLink } from './confirm-links'
 import { deliverLinkMail, queueLinkMail } from './mail'
 import { detailInCommand, refreshTotal } from './orders'
-import { dayOf, decimal, officeContextOf, officeOrder, quantityText, readOrder, seesCost, senderOf, type Reader } from './store'
-import { checksOf, letterheadProblems, readFacts, siteAddressOf, type OrderFacts } from './views'
+import { draftChangesOf } from './revisions/read'
+import { writeRevisionInCommand } from './revisions/state'
+import { dayOf, decimal, officeContextOf, officeOrder, quantityText, readOrder, seesCost, senderOf, type OrderRow, type Reader } from './store'
+import { checksOf, isCancelledLine, letterheadProblems, readFacts, siteAddressOf, type OrderFacts } from './views'
 
 /**
  * Sending a purchase order (B-W1-30; SCM-054, SCM-055; A1 §2.5; PLAN §4.7 stage 08-buy; the design's Send dialog, SCR-037):
@@ -66,9 +72,13 @@ async function supplierParty(db: Reader, facts: OrderFacts, today: string): Prom
   }
 }
 
-/** The frozen order the PDF is painted from (prices included: the mailed commercial document). */
+/**
+ * The frozen order the PDF is painted from (prices included: the mailed commercial document). B-W2a-52: a cancelled line
+ * is not part of what is sent (the revision's mail says it is cancelled).
+ */
 function supplierOrderOf(facts: OrderFacts, supplier: DocumentParty, today: string): SupplierOrder {
   const { order } = facts
+  const sent = facts.lines.filter((line) => !isCancelledLine(line))
   return {
     number: order.number,
     revision: order.revision,
@@ -81,8 +91,8 @@ function supplierOrderOf(facts: OrderFacts, supplier: DocumentParty, today: stri
     incoterms: order.incoterms,
     paymentTerms: order.paymentTerms,
     note: order.note,
-    netAmount: facts.lines.reduce((sum, line) => sum + line.netAmount, 0),
-    lines: facts.lines.map((line) => {
+    netAmount: sent.reduce((sum, line) => sum + line.netAmount, 0),
+    lines: sent.map((line) => {
       const item = facts.items.get(line.itemId)!
       const colour = line.itemColourId ? facts.colours.get(line.itemColourId) : undefined
       return {
@@ -116,7 +126,21 @@ function supplierOrderOf(facts: OrderFacts, supplier: DocumentParty, today: stri
   }
 }
 
-const latestNeedOf = (facts: OrderFacts): string | null => facts.lines.map((line) => dayOf(line.needDate)!).sort().at(-1) ?? null
+const latestNeedOf = (facts: OrderFacts): string | null => facts.lines.filter((line) => !isCancelledLine(line)).map((line) => dayOf(line.needDate)!).sort().at(-1) ?? null
+
+/**
+ * B-W2a-52: the mail's opening of a later revision (what changed, the buyer's note), or the office's own words for the
+ * first one; and the day two of the supplier's open days after today (the default confirm-by deadline, SCM-087).
+ */
+async function sendWordsOf(db: Reader, order: OrderRow, facts: OrderFacts, language: 'it' | 'en', body: { readonly message?: string | null | undefined; readonly changeNote?: string | null | undefined }) {
+  const changes = order.revision > 1 ? await draftChangesOf(db, order.id, order.revision, language) : null
+  const message =
+    order.revision > 1
+      ? revisionMailOpening({ language, number: order.number, revision: order.revision, recipientName: facts.contact?.name ?? null, changes: changes?.words ?? [], changeNote: body.changeNote ?? null, message: body.message ?? null })
+      : (body.message ?? null)
+  const arrivalDay = facts.today ? arrivalDate(facts.supplierCalendar ?? null, facts.today, CONFIRM_DAYS).date : null
+  return { changes, message, arrivalDay }
+}
 
 const refusal = (checks: readonly SendCheck[]): DomainError => {
   const blocking = checks.filter((check) => check.severity === 'BLOCKS')
@@ -134,12 +158,13 @@ export async function sendCheck(caller: CommandCaller, orderId: string) {
   const today = businessDate(now)
   const companyLegal = legalProblems(await companyLegalOf(caller, order.companyId))
   return caller.withClient(async (client) => {
-    const facts = await readFacts(client, order)
+    const facts = await readFacts(client, order, today)
     const checks = checksOf(facts, today, companyLegal)
     const language = supplierLanguageOf(facts.contact?.language, facts.party.language)
     const terms = confirmLinkTerms(today, latestNeedOf(facts), now)
     const number = purchaseOrderDocumentNumber(order.number, order.revision)
-    const mail = purchaseOrderMail({ language, number, recipientName: facts.contact?.name ?? null, linkUntil: businessDate(terms.expiresAt), message: null, resend: false })
+    const words = await sendWordsOf(client, order, facts, language, {})
+    const mail = purchaseOrderMail({ language, number, recipientName: facts.contact?.name ?? null, linkUntil: businessDate(terms.expiresAt), message: words.message, resend: false })
     return {
       ready: checks.ready,
       checks: checks.checks,
@@ -149,6 +174,10 @@ export async function sendCheck(caller: CommandCaller, orderId: string) {
       linkExpiresAt: toUtcIso(terms.expiresAt),
       subject: mail.subject,
       message: mail.stored,
+      // B-W2a-52: the deadline the send sets unless the dialog gives one, and what a later revision changes.
+      confirmBy: toUtcIso(defaultConfirmBy(now, today, words.arrivalDay)),
+      revision: order.revision,
+      changes: words.changes?.words ?? null,
     }
   })
 }
@@ -193,6 +222,10 @@ export interface SendBody {
   readonly subject?: string | null | undefined
   /** The office's own words above the link paragraph; none: the standard text. */
   readonly message?: string | null | undefined
+  /** B-W2a-52 (SCM-087): when the supplier is asked to answer by; none: 48 hours, longer by its closed days. */
+  readonly confirmBy?: string | null | undefined
+  /** B-W2a-52 (SCM-058): a later revision's note to the supplier (what changed and why; kept with the revision). */
+  readonly changeNote?: string | null | undefined
 }
 
 interface SendPlan {
@@ -207,6 +240,18 @@ interface SendPlan {
   readonly link: MintedLink
   readonly terms: ConfirmLinkTerms
   readonly mail: ReturnType<typeof purchaseOrderMail>
+  readonly confirmBy: Date | null
+  readonly arrivalDay: string | null
+  readonly changes: string[] | null
+}
+
+/** B-W2a-52: the confirm-by time the body gives, checked; null when it gives none. */
+function confirmByOf(body: SendBody, now: Date, linkExpiresAt: Date | null): Date | null {
+  if (!body.confirmBy) return null
+  const at = new Date(body.confirmBy)
+  const problem = confirmByProblem(at, { now, sentAt: null, linkExpiresAt })
+  if (problem) throw new ValidationError(problem, [{ path: 'body/confirmBy', message: problem }])
+  return at
 }
 
 /** purchasing.send: the PDF, the confirm link and the mail (see the module comment). */
@@ -221,13 +266,16 @@ export async function sendOrder(request: FastifyRequest, orderId: string, body: 
   // receipt answers, or the version guard refuses).
   let plan: SendPlan | null = null
   let refused: DomainError | null = null
+  const changeNote = body.changeNote?.trim() ? body.changeNote.trim() : null
+  if (changeNote !== null && changeNote.length > MAX_CHANGE_NOTE) throw new ValidationError('The change note is too long.', [{ path: 'body/changeNote', message: `At most ${MAX_CHANGE_NOTE} characters.` }])
   if (order.version === body.version) {
     const companyLegal = legalProblems(await companyLegalOf(caller, order.companyId))
     const read = await caller.withClient(async (client) => {
-      const facts = await readFacts(client, order)
-      return { facts, supplier: await supplierParty(client, facts, today) }
+      const facts = await readFacts(client, order, today)
+      const language = supplierLanguageOf(facts.contact?.language, facts.party.language)
+      return { facts, supplier: await supplierParty(client, facts, today), words: await sendWordsOf(client, order, facts, language, { message: body.message, changeNote }) }
     })
-    const { facts, supplier } = read
+    const { facts, supplier, words } = read
     const checks = checksOf(facts, today, companyLegal)
     if (!checks.ready || !facts.contact?.email) refused = refusal(checks.checks)
     else {
@@ -248,9 +296,10 @@ export async function sendOrder(request: FastifyRequest, orderId: string, body: 
         partyId: order.partyId,
       })
       const terms = confirmLinkTerms(today, latestNeedOf(facts), now)
+      const confirmBy = confirmByOf(body, now, terms.expiresAt)
       const documentNumber = purchaseOrderDocumentNumber(order.number, order.revision)
-      const mail = purchaseOrderMail({ language: frozen.language, number: documentNumber, recipientName: facts.contact.name, linkUntil: businessDate(terms.expiresAt), message: body.message ?? null, resend: false })
-      plan = { supplier, to: facts.contact.email, file, pdf, fileName, layout: composed.layout, language: frozen.language, documentNumber, link: mintConfirmLink(context.tenantId, order.partyId), terms, mail }
+      const mail = purchaseOrderMail({ language: frozen.language, number: documentNumber, recipientName: facts.contact.name, linkUntil: businessDate(terms.expiresAt), message: words.message, resend: false })
+      plan = { supplier, to: facts.contact.email, file, pdf, fileName, layout: composed.layout, language: frozen.language, documentNumber, link: mintConfirmLink(context.tenantId, order.partyId), terms, mail, confirmBy, arrivalDay: words.arrivalDay, changes: words.changes?.words ?? null }
     }
   }
 
@@ -262,7 +311,7 @@ export async function sendOrder(request: FastifyRequest, orderId: string, body: 
       const { tx } = tools
       const current = (await readOrder(tx, order.id))!
       // The supplier's data as the document printed it (the parties module writes it outside the order's commands).
-      const facts = await readFacts(tx, current)
+      const facts = await readFacts(tx, current, businessDate(tools.now))
       const again = checksOf(facts, businessDate(tools.now), await letterheadProblems(tx, tools.context, current.companyId))
       if (!again.ready) throw refusal(again.checks)
       if (facts.contact?.email !== plan.to || !sameJson(await supplierParty(tx, facts, businessDate(tools.now)), plan.supplier)) {
@@ -270,7 +319,13 @@ export async function sendOrder(request: FastifyRequest, orderId: string, body: 
       }
       const file = await recordGeneratedFile(tools, plan.file, { details: { documentType: 'PURCHASE_ORDER', number: plan.documentNumber, layout: plan.layout, language: plan.language } })
       const netAmount = await refreshTotal(tools, current.id)
-      await tx.purchaseOrder.update({ where: { id: current.id }, data: { status: 'SENT', sentAt: tools.now, sentById: context.actorId, orderDate: new Date(`${businessDate(tools.now)}T00:00:00.000Z`) }, select: { id: true } })
+      // B-W2a-52 (SCM-087): the deadline for the supplier's answer, after the send time (the trigger checks it).
+      const confirmBy = plan.confirmBy ?? defaultConfirmBy(tools.now, businessDate(tools.now), plan.arrivalDay)
+      const late = confirmByProblem(confirmBy, { now: tools.now, sentAt: tools.now, linkExpiresAt: plan.terms.expiresAt })
+      if (late) throw new ValidationError(late, [{ path: 'body/confirmBy', message: late }])
+      await tx.purchaseOrder.update({ where: { id: current.id }, data: { status: 'SENT', sentAt: tools.now, sentById: context.actorId, confirmBy, orderDate: new Date(`${businessDate(tools.now)}T00:00:00.000Z`) }, select: { id: true } })
+      // B-W2a-52 (SCM-058): the revision row of this send (the state as sent, what it replaces, both prices, the PDF).
+      const revisionRow = await writeRevisionInCommand(tools, { orderId: current.id, documentFileId: file.id, changeNote, sentById: context.actorId })
       const revoked = await revokeConfirmLinks(tools, current, context.actorId)
       const link = await insertConfirmLink(tools, plan.link, current, { email: plan.to, terms: plan.terms, actorId: context.actorId })
       const mail = await queueLinkMail(tools, {
@@ -290,7 +345,22 @@ export async function sendOrder(request: FastifyRequest, orderId: string, body: 
         companyId: current.companyId,
         siteId: current.siteId,
         before: { status: current.status as PurchaseOrderStatus },
-        after: { status: 'SENT', revision: current.revision, lines: facts.lines.length, documentFileId: file.id, documentSha256: plan.file.sha256, linkId: link.linkId, linkExpiresAt: toUtcIso(link.expiresAt), revokedLinkIds: revoked, outboundId: mail.outbound.id, to: plan.to, netAmount: markMoney('cost', netAmount) },
+        after: {
+          status: 'SENT',
+          revision: current.revision,
+          lines: facts.lines.filter((line) => !isCancelledLine(line)).length,
+          documentFileId: file.id,
+          documentSha256: plan.file.sha256,
+          linkId: link.linkId,
+          linkExpiresAt: toUtcIso(link.expiresAt),
+          revokedLinkIds: revoked,
+          outboundId: mail.outbound.id,
+          to: plan.to,
+          netAmount: markMoney('cost', netAmount),
+          confirmBy: toUtcIso(confirmBy),
+          revisionId: revisionRow.id,
+          changeNote,
+        },
       })
       tools.emit({
         type: 'purchase_order.sent',
@@ -309,6 +379,9 @@ export async function sendOrder(request: FastifyRequest, orderId: string, body: 
           to: plan.to,
           link: { id: link.linkId, expiresAt: toUtcIso(link.expiresAt) },
           emailId: mail.outbound.id,
+          confirmBy: toUtcIso(confirmBy),
+          revisionId: revisionRow.id,
+          changes: plan.changes === null ? null : [...plan.changes],
         },
       }
     },
@@ -383,4 +456,63 @@ export async function sendNewLink(request: FastifyRequest, orderId: string, body
   )
   const delivery = replayed || !plan ? null : await deliverLinkMail(processEmail(), systemCallerOf(request)(context.tenantId), result.link.emailId, { text: plan.mail.withLink(officeAuthOf(request.server).link('/l', plan.link.token)), attachment: { filename: plan.fileName, content: plan.pdf } })
   return { ...result, delivery }
+}
+
+// ---- several at once (Send n) ---------------------------------------------------------------------------------------
+
+/** At most this many orders in one "Send n" (each is its own send: its own PDF, link, mail and command). */
+export const MAX_SEND_MANY = 50
+
+export interface SendManyBody {
+  readonly orders: readonly { readonly id: string; readonly version: number; readonly confirmBy?: string | null | undefined }[]
+  /** The office's own words, for every supplier (none: each one's standard text). */
+  readonly message?: string | null | undefined
+}
+
+/** A refusal in words (a fault that is not one — the database, the file store — is the request's own 500). */
+function refusedOf(error: unknown) {
+  if (!(error instanceof DomainError)) throw error
+  return { code: error.code, message: error.message, issues: (error.issues ?? []).map((issue) => ({ ...issue })) }
+}
+
+/** A repeat of the bulk request repeats each order's send with its own key (keys are at most 128 characters: a digest). */
+const keyOf = (bulkKey: string | undefined, orderId: string): string | undefined => (bulkKey === undefined ? undefined : `send-many.${createHash('sha256').update(`${bulkKey}|${orderId}`).digest('hex').slice(0, 48)}`)
+
+/**
+ * POST /purchasing/orders/send-many (B-W2a-52; design purchasing.orders grid "Bulk: Send n (the Send dialog with several
+ * suppliers)"; purchasing.send per order): each order is sent as the single send does (its checks, its PDF, its own link
+ * and mail, ONE command on it), one after the other; one that cannot go is refused alone with its reasons in words, the
+ * others go. Idempotent per order: a repeated request answers each order's first send from its receipt.
+ */
+export async function sendMany(request: FastifyRequest, body: SendManyBody, idempotencyKey?: string) {
+  const ids = body.orders.map((entry) => entry.id)
+  if (new Set(ids).size !== ids.length) throw new ValidationError('An order is named twice.', [{ path: 'body/orders', message: 'Name each order once.' }])
+  const outcomes = []
+  for (const entry of body.orders) {
+    try {
+      const answer = await sendOrder(request, entry.id, { version: entry.version, confirmBy: entry.confirmBy ?? null, message: body.message ?? null }, keyOf(idempotencyKey, entry.id))
+      outcomes.push({ id: entry.id, number: answer.order.number, outcome: 'SENT' as const, sent: answer.sent, delivery: answer.delivery, refused: null })
+    } catch (error) {
+      outcomes.push({ id: entry.id, number: null, outcome: 'REFUSED' as const, sent: null, delivery: null, refused: refusedOf(error) })
+    }
+  }
+  return { sent: outcomes.filter((entry) => entry.outcome === 'SENT').length, refused: outcomes.filter((entry) => entry.outcome === 'REFUSED').length, outcomes }
+}
+
+/**
+ * POST /purchasing/orders/send-checks (purchasing.view): the Send n dialog's cards, one per order — the supplier, the
+ * recipient, the checks and whether it is ready; an order the caller may not see is a card that says so.
+ */
+export async function sendChecksOf(caller: CommandCaller, body: { readonly orderIds: readonly string[] }) {
+  const cards = []
+  for (const orderId of [...new Set(body.orderIds)]) {
+    try {
+      const check = await sendCheck(caller, orderId)
+      const order = await officeOrder(caller, orderId)
+      cards.push({ id: orderId, number: order.number, partyId: order.partyId, status: order.status, version: order.version, ...check, refused: null })
+    } catch (error) {
+      cards.push({ id: orderId, number: null, partyId: null, status: null, version: null, ready: false, checks: [], recipient: null, documentNumber: null, language: null, linkExpiresAt: null, subject: null, message: null, confirmBy: null, revision: null, changes: null, refused: refusedOf(error) })
+    }
+  }
+  return { ready: cards.filter((card) => card.ready).length, cards }
 }

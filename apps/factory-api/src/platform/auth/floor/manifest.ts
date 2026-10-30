@@ -10,6 +10,8 @@ import { defineManifest, PUBLIC, SIGNED_IN } from '../../../core/manifest'
 export const manifest = defineManifest({
   'POST /floor/device/enrol': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
   'GET /floor/device': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
+  // B-W2a-42: the tablet's own state (app version, battery, queue count); the device token and CSRF, like the enrolment.
+  'POST /floor/device/state': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
   'POST /floor/sign-in': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
   'POST /floor/sign-out': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
   'POST /floor/switch': { audiences: ['floor'], permission: SIGNED_IN, scope: 'site' },

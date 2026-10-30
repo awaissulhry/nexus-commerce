@@ -506,3 +506,83 @@ fieldset.fw-so-choices {
   font-size: var(--nds-font-size-sm);
   line-height: 1.45;
 }
+
+/* ---- B-W2a-50: the order every day ---- */
+/* The amendment's bar (EditModeBar, composed: the DS one speaks English only): sticky under the band while scrolling. */
+.fw-so-amendbar {
+  position: sticky;
+  top: var(--nds-space-8);
+  z-index: var(--nds-z-actionbar);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  padding: var(--nds-space-10, var(--nds-space-8)) var(--nds-space-14);
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-raised);
+  box-shadow: var(--nds-shadow-pop);
+  min-width: 0;
+}
+
+.fw-so-amendbar-words {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-so-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10, var(--nds-space-8));
+}
+
+fieldset.fw-so-colours {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-so-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--nds-radius-sm);
+  border: 1px solid var(--nds-border);
+}
+
+.fw-so-price {
+  width: 120px;
+  max-width: 100%;
+}
+
+/* The cancel's impact: what stops it, what it changes, what it leaves behind. */
+.fw-so-impact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-so-impact li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2, 2px);
+}
+
+/* A line closed short: its tag and reason under the colour, wrapping (never cut). */
+.fw-so-closed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-6);
+  margin-top: var(--nds-space-4);
+  white-space: normal;
+}

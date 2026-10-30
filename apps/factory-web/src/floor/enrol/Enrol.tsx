@@ -18,8 +18,6 @@ import { EnrolView, type Binding, type Checks, type EnrolAction, type EnrolStep,
  * view's model, a log or the address bar.
  */
 
-const APP_VERSION = 'web-1'
-
 export function bindingOf(device: DeviceInfo): Binding {
   return {
     device: device.device.name,
@@ -54,7 +52,7 @@ export function FloorEnrol() {
         return setStep({ kind: 'scan', problem: 'codeInvalid' })
       }
       setStep({ kind: 'scan', busy: true })
-      const answer = await enrolDevice(store.api, code, APP_VERSION)
+      const answer = await enrolDevice(store.api, code, store.appUpdate.running)
       if (!answer.ok) {
         feedback('error')
         const problem = answer.problem === 'rateLimited' ? 'rateLimited' : answer.problem === 'unavailable' ? 'unavailable' : 'codeInvalid'
@@ -64,7 +62,7 @@ export function FloorEnrol() {
       enrolled.current = answer.value
       setStep({ kind: 'binding', binding: bindingOf(answer.value) })
     },
-    [feedback, store.api],
+    [feedback, store.api, store.appUpdate.running],
   )
 
   // The office's QR code opened as a link: its code is in the fragment, read once.

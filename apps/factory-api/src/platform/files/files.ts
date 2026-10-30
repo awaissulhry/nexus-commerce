@@ -36,6 +36,9 @@ import {
 import { assertGenericPath, type UploadPath } from './owned'
 import type { FilesRuntime } from './service'
 import { RetainedFileError } from './store'
+import { heldForScan, waitsForScan } from './scan/rules'
+import { scanFile } from './scan/scan'
+import { processScanner } from './scan/service'
 
 /**
  * Files on R2 (plan A1 §3.6; features COL-045, COL-050, PLT-011; PLAN §2.8), the flow:
@@ -77,6 +80,8 @@ const COMMON = {
   visibility: true,
   retainUntil: true,
   quarantineReason: true,
+  scanStatus: true,
+  scannedAt: true,
   availableAt: true,
   deletedAt: true,
   version: true,
@@ -86,12 +91,12 @@ const COMMON = {
 
 /** What each audience's role may read (its hidden columns left out: a forgotten one would fail loudly). */
 const SELECT_FOR = {
-  office: { ...COMMON, floorSiteId: true, partyId: true, legalHold: true },
+  office: { ...COMMON, floorSiteId: true, partyId: true, legalHold: true, scanEngine: true, scanFinding: true },
   floor: { ...COMMON, floorSiteId: true },
   partner: { ...COMMON, partyId: true },
 } as const satisfies Record<string, Prisma.StoredFileSelect>
 
-type Row = Prisma.StoredFileGetPayload<{ select: typeof COMMON }> & { floorSiteId?: string | null; partyId?: string | null; legalHold?: boolean }
+type Row = Prisma.StoredFileGetPayload<{ select: typeof COMMON }> & { floorSiteId?: string | null; partyId?: string | null; legalHold?: boolean; scanEngine?: string | null; scanFinding?: string | null }
 type OfficeRow = Prisma.StoredFileGetPayload<{ select: (typeof SELECT_FOR)['office'] }>
 
 const selectFor = (context: RequestContext): Prisma.StoredFileSelect =>
@@ -116,6 +121,10 @@ export function viewOf(row: Row): FileView {
     retainUntil: iso(row.retainUntil),
     ...('legalHold' in row ? { legalHold: row.legalHold } : {}),
     quarantineReason: row.quarantineReason as QuarantineReason | null,
+    scanStatus: row.scanStatus,
+    scannedAt: iso(row.scannedAt),
+    ...('scanEngine' in row ? { scanEngine: row.scanEngine ?? null } : {}),
+    ...('scanFinding' in row ? { scanFinding: row.scanFinding ?? null } : {}),
     availableAt: iso(row.availableAt),
     deletedAt: iso(row.deletedAt),
     version: row.version,
@@ -567,6 +576,9 @@ export async function completeUpload(runtime: FilesRuntime, caller: CommandCalle
   mayWrite(caller, FILES_UPLOAD, { companyId: before.companyId, floorSiteId: null, partyId: null })
   assertGenericPath(before.recordType, before.kind, path)
   if (before.status === 'AVAILABLE') return viewOf(before)
+  // B-W2a-42 (PLT-245): a file held for its virus scan is scanned again (the person's Try again).
+  const scanner = processScanner()
+  if (scanner && waitsForScan(before)) return (await scanFile(runtime, scanner, caller, fileId)).file
   if (before.status !== 'PENDING_UPLOAD') throw new InvalidStateError(`This file is ${before.status}; only a pending upload is confirmed.`)
   const object = await storeCall(() => runtime.storage.head(caller, before.storeAccountId, before.storageKey))
   if (!object) throw new ConflictError('The upload has not arrived yet: send the file to its upload URL, then confirm it.')
@@ -577,20 +589,22 @@ export async function completeUpload(runtime: FilesRuntime, caller: CommandCalle
     { name: 'files.completeUpload', idempotencyKey, input: { fileId }, record: { type: 'StoredFile', id: fileId, expectedVersion: before.version } },
     async ({ tx, audit, emit, now }) => {
       const current = await tx.storedFile.findUniqueOrThrow({ where: { id: fileId }, select: SELECT_FOR.office })
-      const to = reason === null ? 'AVAILABLE' : 'QUARANTINED'
+      // With a scanner, a matching upload waits QUARANTINED (`scan_pending`) until its scan says CLEAN (B-W2a-42).
+      const to = reason === null && !scanner ? 'AVAILABLE' : 'QUARANTINED'
       assertTransition(fileMachine, current.status, to, { legalHold: current.legalHold, retainUntil: current.retainUntil, now })
       const row = await tx.storedFile.update({
         where: { id: fileId },
-        data: reason === null ? { status: to, availableAt: now } : { status: to, quarantineReason: reason },
+        data: reason !== null ? { status: to, quarantineReason: reason } : scanner ? heldForScan() : { status: to, availableAt: now },
         select: SELECT_FOR.office,
       })
-      audit({ recordType: 'StoredFile', recordId: fileId, companyId: row.companyId, before: { status: current.status }, after: { status: row.status, quarantineReason: row.quarantineReason } })
-      if (reason === null) {
+      audit({ recordType: 'StoredFile', recordId: fileId, companyId: row.companyId, before: { status: current.status }, after: { status: row.status, quarantineReason: row.quarantineReason, ...(scanner ? { scanStatus: row.scanStatus } : {}) } })
+      if (row.status === 'AVAILABLE') {
         emit({ type: 'file.available', subject: fileId, companyId: row.companyId, payload: { fileId, recordType: row.recordType, recordId: row.recordId, kind: row.kind } })
       }
       return viewOf(row)
     },
   )
+  if (scanner && reason === null) return (await scanFile(runtime, scanner, caller, fileId)).file
   return result
 }
 

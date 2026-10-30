@@ -138,15 +138,19 @@ export function differenceWords(label: string, line: LineDifference, baseUom: Uo
   }
 }
 
-/** The order's state after its receipts: PARTLY_RECEIVED while a line is open, RECEIVED when none is; back to CONFIRMED or SENT when nothing is received. A closed or cancelled order keeps its state. */
+/**
+ * The order's state after its receipts: PARTLY_RECEIVED while a line is open, RECEIVED when none is; back to CONFIRMED or
+ * SENT when nothing is received. A closed or cancelled order keeps its state. B-W2a-52: a line cancelled or closed short
+ * (`ended`) takes no more goods, so it counts as complete (the order is RECEIVED once every other line is).
+ */
 export function orderStatusAfter(
   order: { readonly status: PurchaseOrderStatus; readonly confirmed: boolean },
-  lines: readonly { readonly expected: DecimalInput; readonly received: DecimalInput; readonly tolerancePct?: DecimalInput | null }[],
+  lines: readonly { readonly expected: DecimalInput; readonly received: DecimalInput; readonly tolerancePct?: DecimalInput | null; readonly ended?: boolean | undefined }[],
 ): PurchaseOrderStatus {
   if (!['SENT', 'CONFIRMED', 'PARTLY_RECEIVED', 'RECEIVED'].includes(order.status)) return order.status
   const anything = lines.some((line) => new Dec(line.received).greaterThan(0))
   if (!anything) return order.confirmed ? 'CONFIRMED' : 'SENT'
-  const complete = lines.every((line) => lineDifference({ expected: line.expected, receivedBefore: line.received, receiving: '0', tolerancePct: line.tolerancePct ?? null }).complete)
+  const complete = lines.every((line) => line.ended === true || lineDifference({ expected: line.expected, receivedBefore: line.received, receiving: '0', tolerancePct: line.tolerancePct ?? null }).complete)
   return complete ? 'RECEIVED' : 'PARTLY_RECEIVED'
 }
 

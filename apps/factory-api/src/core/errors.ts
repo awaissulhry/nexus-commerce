@@ -2,6 +2,7 @@ import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from
 import { hasZodFastifySchemaValidationErrors } from 'fastify-type-provider-zod'
 import { DomainError, type ErrorCode, type Issue } from '@nexus/factory-domain/core/errors'
 import type { ErrorBody } from '@nexus/factory-domain/core/contracts'
+import { reportError } from '../observability/tracker'
 
 /**
  * Error mapping (plan A1 §3.2): every failure leaves the API as `{ error: { code, message, requestId, issues? } }`
@@ -123,12 +124,21 @@ export function sendError(reply: FastifyReply, code: ErrorCode, message: string 
   return reply.code(STATUS_OF[code]).type('application/json; charset=utf-8').send(errorBodyFor(code, String(reply.request.id), message))
 }
 
+/** The audience and tenant of a request that had a context (an error report keeps no person). */
+function contextFields(request: FastifyRequest): { audience?: string; tenantId?: string } {
+  const context = (request as { factoryContext?: { audience: string; tenantId?: string } }).factoryContext
+  if (!context) return {}
+  return { audience: context.audience, ...(context.tenantId ? { tenantId: context.tenantId } : {}) }
+}
+
 /** Installs the error handler and the not-found handler on the root instance. */
 export function installErrorHandling(app: FastifyInstance): void {
   app.setErrorHandler((error: unknown, request: FastifyRequest, reply: FastifyReply) => {
     const mapped = mapError(error)
     if (mapped.unexpected) {
       request.log.error({ err: error }, 'request failed')
+      // B-W2a-42 (PLT-218): the redacted report; route pattern, never the URL.
+      reportError(error, { route: request.routeOptions?.url ?? null, method: request.method, statusCode: mapped.status, requestId: String(request.id), ...contextFields(request) })
     } else {
       request.log.info({ code: mapped.code, status: mapped.status }, 'request refused')
     }

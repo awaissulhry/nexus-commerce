@@ -127,6 +127,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   thread dock, step-up asked first when the session has none fresh), `list/` (list frame; Export N), `record/` (tabs
   `?tab=lines|dates|production|shipments|money|documents|activity`, dialogs), `_demo/fixtures.ts` (made-up data).
   "Make work orders" opens `/production/work-orders?new=1&order=<number>` (the dialog picks that order).
+  B-W2a-50 (the order every day): `daily-model.ts` (pure: the daily verbs held in words, close/reopen lines, the
+  amendment draft `DraftLine` and what it sends, the API's refusals by PLACE in words (`issueWords`), the cancel's impact
+  in words, schedule, before → after); `record/view/LinesEditor.tsx` = ONE lines editor for "Amend order" (Lines tab in
+  amend mode) and the typed New order; `record/view/DailyDialogs.tsx` (Review amendment, Close / Reopen lines, Cancel
+  with the impact and the typed number, Copy as new quote, Before → after — composed: the DS ReviewChangesModal,
+  ActionConfirm, ConfirmPhraseField and EditModeBar speak English only); `record/changes/` (SCR-107, `?tab=changes`);
+  `new/` the typed New order `/sales/orders/new?company=&party=&contact=&ref=` (no draft row: the page holds the lines,
+  session storage keeps them over a reload; Confirm = POST /sales/orders/manual); the list's New order dialog (`c`,
+  `?new=1`) and "Board in a new tab" (the board re-reads its lanes on live changes).
 - `src/areas/finance/` — Finance (area order 10, Italian "Amministrazione"; SCR-080 … SCR-083): `_shared/` (api.ts every call + zod,
   model.ts the pure rules — saved views ⇄ address = the API's own `?status=` `?docType=`, journey, next step held with its
   reason, the checks in words with where to fix, payment state, placement oldest first, CSV, problems —, hooks.ts live,

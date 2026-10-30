@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleCheck, Clock3, CloudOff, CloudUpload, HardDrive, Hash, OctagonAlert, RotateCcw, Send, Trash2, TriangleAlert, Users, X } from 'lucide-react'
+import { ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, CircleCheck, Clock3, CloudOff, CloudUpload, HardDrive, Hash, OctagonAlert, RefreshCw, RotateCcw, Send, Trash2, TriangleAlert, Users, X } from 'lucide-react'
 import { Modal } from '@nexus/ui/components'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, type FloorAction, type FloorActions } from '@nexus/ui/floor'
 import type { EventSummary } from '@nexus/factory-domain/floor-sync/rules'
@@ -19,7 +19,8 @@ import './sync.css'
  * with a fix" (each with its reason in words and ONE fix; a row opens as a step screen with Discard — with the network;
  * one that may pass later is sent again by itself, or now), "Waiting, in send order" (cannot be edited or deleted here),
  * "Recorded today" (collapsed). Other people's actions are counted, never shown (Statuto dei Lavoratori art. 4). The
- * main action is Send now, bottom right.
+ * main action is Send now, bottom right. A new version of the app that waits for this queue to empty says so here
+ * (B-W2a-42, PLT-241): nothing waiting is lost, it updates by itself afterwards.
  */
 
 export interface SyncRow {
@@ -59,6 +60,11 @@ export interface SyncViewModel {
   confirm: boolean
   /** The last send did not reach the office. */
   problem: 'signedOut' | 'unavailable' | null
+  /**
+   * A new version of the app waits (B-W2a-42, PLT-241): for this queue to empty, for the network, or for a screen at
+   * rest; null when none waits (or it is going on now).
+   */
+  update?: 'queue' | 'network' | 'screen' | null
 }
 
 export type SyncAction =
@@ -200,6 +206,14 @@ export function SyncView({ model, onAction, onFrame }: SyncViewProps) {
                 <TriangleAlert />
               </span>
               {t(`sync.problem.${model.problem}`)}
+            </p>
+          ) : null}
+          {model.update ? (
+            <p className="fw-floor-notice" data-tone="info" role="status">
+              <span className="fw-floor-inline-icon" aria-hidden="true">
+                <RefreshCw />
+              </span>
+              {t(`sync.update.${model.update}`)}
             </p>
           ) : null}
           {model.clock ? (

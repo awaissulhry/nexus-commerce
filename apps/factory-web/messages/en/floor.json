@@ -454,6 +454,11 @@
   },
   "sync": {
     "title": "Waiting to send",
+    "update": {
+      "queue": "A new version of the app waits for this queue to empty. It updates by itself afterwards; nothing waiting is lost.",
+      "network": "A new version of the app waits for the network. It updates by itself when the network is back.",
+      "screen": "A new version of the app waits until this screen is done. It updates by itself on the home screen."
+    },
     "actions": "Queue actions",
     "sendNow": "Send now",
     "sending": "Sending…",
