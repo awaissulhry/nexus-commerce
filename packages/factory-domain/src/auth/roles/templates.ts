@@ -98,9 +98,21 @@ const ALERTS_TEMPLATES: Readonly<Record<string, readonly Permission[]>> = Object
   floor_supervisor: ['alerts.view', 'alerts.handle'],
 })
 const alertsAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' ? (ALERTS_TEMPLATES[key] ?? []) : [])
+/**
+ * B-W2a-38 (production reports, MES-301 / MES-160; design production.reports): who reads the daily production report
+ * per line, style and size and has it e-mailed each morning, to themselves and (subscribe) to colleagues who may read
+ * it. Office only, never a floor role; one line per template.
+ */
+const REPORTS_TEMPLATES: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  planner: ['production.reports.view', 'production.reports.subscribe'],
+  production_manager: ['production.reports.view', 'production.reports.subscribe'],
+  quality_inspector: ['production.reports.view'],
+  floor_supervisor: ['production.reports.view', 'production.reports.subscribe'],
+})
+const reportsAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' ? (REPORTS_TEMPLATES[key] ?? []) : [])
 
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 

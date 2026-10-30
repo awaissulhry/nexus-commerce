@@ -132,6 +132,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   operations|quality|activity`, `?at=<seq>`; tabs in `cutting/`, `bundles/`, `progress/`), `wip/` Floor now
   (`/production/floor`); `_shared/` api, rules (`model.ts`), hooks, made-up fixtures. Totals per work order, operation
   and line only: no person's output and no station anywhere (Statuto art. 4, Owner F2); worker names only inside one record.
+  `reports/` (B-W2a-38) Production › Reports › Production reports (SCR-240 `/production/reports?site=&date=`: band with ⋯ Email me / Print, Daily production tiles + PerformanceGraph bars per lane + a SummaryTable per lane by style and size; `view/SubscribeDialog` = pop:prr-subscribe; `print/` = SCR-240-print `/production/reports/print` in a new tab; catalogue `production-reports`, also Floor now's `wip/view/LinesPanel` (fn-lines: a card per line sets `?line=`, [ / ] step)). Never a person: per line, work centre, style, size; per station only signed in / machine down (F2).
 - The buying office (one catalogue `buying`; shared parts `areas/_shared/buying/`: abilities with the cost grain, words for
   problems and quantities, live hook, sites from `/inventory/locations`, layout CSS, made-up fixtures): `areas/planning/mrp/`
   What to buy & make (SCR-055: `?site=` `?view=` `?q=` `?line=` the Why detail; one-click Draft PO with Undo, Draft POs per

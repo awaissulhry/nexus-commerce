@@ -58,7 +58,9 @@
       "floor": "Reparto ora",
       "workOrders": "Ordini di produzione",
       "settings": "Impostazioni",
-      "floorRules": "Regole di reparto"
+      "floorRules": "Regole di reparto",
+      "reports": "Report",
+      "reportsPage": "Report produzione"
     },
     "quality": {
       "area": "Qualità",

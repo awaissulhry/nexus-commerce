@@ -209,6 +209,13 @@ export const OFFICE: readonly TreeArea[] = [
         ],
       },
       {
+        label: 'Reports',
+        labelIt: 'Report',
+        hideLabel: false,
+        // W2a: B-W2a-38 Production reports (SCR-240).
+        pages: [{ id: 'production.reports', title: 'Production reports', titleIt: 'Report produzione', wave: 'W2a', href: '/production/reports' }],
+      },
+      {
         label: 'Settings',
         labelIt: 'Impostazioni',
         hideLabel: false,

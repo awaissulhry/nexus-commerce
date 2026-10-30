@@ -58,7 +58,9 @@
       "floor": "Floor now",
       "workOrders": "Work orders",
       "settings": "Settings",
-      "floorRules": "Floor rules & codes"
+      "floorRules": "Floor rules & codes",
+      "reports": "Reports",
+      "reportsPage": "Production reports"
     },
     "quality": {
       "area": "Quality",
