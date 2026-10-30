@@ -119,6 +119,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/purchasing/orders/[id]',
   // B-W1-29 part 2: What to buy & make (SCR-055).
   '/planning/mrp',
+  // B-W2a-45: Planning board (SCR-122) and Lines & subcontractors (SCR-126).
+  '/planning/board',
+  '/planning/allocation',
   // B-W1-32 part 2: Receipts (SCR-063), receiving against a PO with lots and hides one by one (SCR-061/062), a receipt.
   '/warehouse/receipts',
   '/warehouse/receipts/new',

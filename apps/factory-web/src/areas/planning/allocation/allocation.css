@@ -1,0 +1,129 @@
+/*
+ * Planning › Lines & subcontractors (SCR-126) LAYOUT: the band, the lanes' tiles (as many columns as the width takes),
+ * the board's section and the card dialog's form. The tiles, load bars, columns and cards are the design system's
+ * (Card, LoadBar, PlanningBoard in its columns layout); semantic tokens only. No page max-width (Owner rule 2026-10-29).
+ */
+.fw-al {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-al-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-al-scope,
+.fw-al-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-al-site,
+.fw-al-tile-name {
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-al-status,
+.fw-al-hint {
+  color: var(--nds-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.fw-al-lanes,
+.fw-al-board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-al-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-12);
+}
+
+.fw-al-h2,
+.fw-al-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-al-h3 {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-al-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-al-tile {
+  min-width: 0;
+}
+
+.fw-al-tile > * + * {
+  margin-top: var(--nds-space-6);
+}
+
+.fw-al-tile-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6);
+}
+
+.fw-al-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-al-dialog p {
+  margin: 0;
+}
+
+.fw-al-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+
+.fw-al-keys {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+}
+
+.fw-al-keys-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, max-content) 1fr;
+  gap: var(--nds-space-12);
+  align-items: baseline;
+}
+
+.fw-al-keys-row dt {
+  display: inline-flex;
+  gap: var(--nds-space-4);
+}
+
+.fw-al-keys-row dd {
+  margin: 0;
+}

@@ -1,4 +1,4 @@
-import { CalendarRange, ListChecks } from 'lucide-react'
+import { CalendarRange, ChartGantt, ListChecks, Network } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -21,7 +21,12 @@ export const officeArea: OfficeAreaNav = {
         label: 'shell:nav.planning.main',
         hideLabel: true,
         noCrumb: true,
-        items: [{ id: 'planning-mrp', label: 'shell:nav.planning.mrp', href: '/planning/mrp', icon: ListChecks, permission: 'planning.view' }],
+        items: [
+          { id: 'planning-mrp', label: 'shell:nav.planning.mrp', href: '/planning/mrp', icon: ListChecks, permission: 'planning.view' },
+          // B-W2a-45: Planning board (SCR-122; the design opens it in a window of its own) and Lines & subcontractors (SCR-126).
+          { id: 'planning-board', label: 'shell:nav.planning.board', href: '/planning/board', icon: ChartGantt, permission: 'planning.view' },
+          { id: 'planning-allocation', label: 'shell:nav.planning.allocation', href: '/planning/allocation', icon: Network, permission: 'planning.view' },
+        ],
       },
     ],
   },
