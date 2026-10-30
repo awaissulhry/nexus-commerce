@@ -1,12 +1,14 @@
 import { z } from 'zod'
-import { id, input, instant, output } from '../../core/contracts'
+import { id, input, instant, output, unitPrice } from '../../core/contracts'
 import { fitsDecimal } from '../../core/money'
+import { money } from '../../money/marked'
 import { bomRevisionView } from '../bom/contracts'
 import { localisedNames } from '../materials/contracts'
 import { REVISION_STATUSES } from '../styles/revisions'
 import { STYLE_STATUSES } from '../styles/rules'
 import { MAX_INSTRUCTIONS, MINUTES_INPUT_SCALE, MINUTES_PRECISION, MINUTES_SCALE, OPERATION_CODE, OPERATION_CODE_RULE, OPERATION_STATUSES, WORK_CENTRE_KINDS } from './operations'
 import { MAX_ROUTING_STEPS, ROUTING_ISSUE_CODES } from './rules'
+import { MAX_TRANSIT_DAYS } from './subcontract'
 
 /**
  * The operation library's and the routing's contracts (plan A1 D2; A2 SCR-049 "Libraries: operations", SCR-043
@@ -15,6 +17,9 @@ import { MAX_ROUTING_STEPS, ROUTING_ISSUE_CODES } from './rules'
  * (B-W1-16). Minutes travel as plain decimal strings ("96.5"); a typed value with more than 3 decimals is rounded half
  * up to 3 (factory-domain product/routing/operations minutesOf). Every routing write sends the REVISION's `version`
  * (COL-078): a revision's BOM and routing are one versioned record.
+ *
+ * W2a (PRD-120): a step's subcontract details (./subcontract) carry the workshop's fee per piece, marked `money.cost`:
+ * the API drops it from the answer of a caller without the cost grain and refuses a request that sends one without it.
  */
 
 const text = (max: number) => z.string().trim().min(1).max(max)
@@ -151,12 +156,26 @@ export const addStepsBody = input({
 })
 export type AddStepsBody = z.output<typeof addStepsBody>
 
+/**
+ * A step's subcontract details (PRD-120): the workshop (a party with the SUBCONTRACTOR role), its fee per piece in euros
+ * (the cost grain) and the days the pieces travel there and back. What is left out stays (another workshop starts with
+ * none); null clears the fee or the days.
+ */
+export const subcontractBody = input({
+  supplierId: id().optional(),
+  pricePerPiece: money.cost(unitPrice().nullable()),
+  transitDays: z.number().int().min(0).max(MAX_TRANSIT_DAYS).nullable().optional(),
+})
+export type SubcontractBody = z.output<typeof subcontractBody>
+
 /** A change to a step: only what it names. */
 export const updateStepBody = input({
   version: version(),
   standardMinutes: stepInput.standardMinutes.optional(),
   scanRequired: stepInput.scanRequired.optional(),
   instructions: stepInput.instructions.optional(),
+  /** W2a: the step's subcontract details; null takes the step back in-house. */
+  subcontract: subcontractBody.nullable().optional(),
 })
 export type UpdateStepBody = z.output<typeof updateStepBody>
 
@@ -209,6 +228,12 @@ export const stepView = output({
   /** The final operation: the last scanned step, where the batch or serial is given (B-W1-44). */
   final: z.boolean(),
   instructions: z.string().nullable(),
+  /** W2a (PRD-120): the workshop that does it, its fee per piece (the cost grain) and the transit days; null: in-house. */
+  subcontract: output({
+    supplier: output({ id: id(), code: z.string(), name: z.string() }),
+    pricePerPiece: money.cost(z.string().nullable()),
+    transitDays: z.number().int().nullable(),
+  }).nullable(),
   version: z.number().int(),
   createdAt: instant(),
   updatedAt: instant(),
@@ -222,6 +247,8 @@ export const routingMinutesView = output({
   bySize: z.array(output({ size: z.string(), minutes: z.string() })),
   steps: z.number().int(),
   scanPoints: z.number().int(),
+  /** W2a: steps an outside workshop does (PRD-120). */
+  subcontracted: z.number().int(),
 })
 
 /** The routing of one revision (SCR-043): its steps in order, its minutes, and what the release check will say. */

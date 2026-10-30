@@ -67,6 +67,9 @@ describe('a new style (PRD-001, PRD-048)', () => {
       ppeClass: 'A',
       mtmAllowed: false,
       measurementTemplateId: null,
+      hsCode: null,
+      originCountry: null,
+      netMassKg: null,
     })
   })
 

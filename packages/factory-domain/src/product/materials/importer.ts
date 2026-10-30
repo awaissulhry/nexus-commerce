@@ -56,7 +56,8 @@ const UOM_ALIASES: Readonly<Record<string, Uom>> = {
   rotolo: 'ROLL', rotoli: 'ROLL', rolls: 'ROLL', cono: 'CONE', coni: 'CONE', rocca: 'CONE', cones: 'CONE',
   scatola: 'BOX', scatole: 'BOX', confezione: 'BOX', boxes: 'BOX',
 }
-const unitCell = () => cell.oneOf(UOMS, UOM_ALIASES)
+/** A unit of measure as a sheet writes it (codes, symbols and Italian or English words): the BOM import's too. */
+export const unitCell = () => cell.oneOf(UOMS, UOM_ALIASES)
 
 const KIND_ALIASES = {
   pelle: 'LEATHER', pellame: 'LEATHER', tessuto: 'TEXTILE', fabric: 'TEXTILE', fodera: 'LINING', membrana: 'MEMBRANE',

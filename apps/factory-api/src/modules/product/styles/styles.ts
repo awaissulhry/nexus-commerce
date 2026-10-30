@@ -110,16 +110,16 @@ export async function getStyle(caller: CommandCaller, styleId: string): Promise<
 
 // ---- shared -------------------------------------------------------------------------------------------------------------
 
-const readScaleSizes = (client: FactoryClient | CommandTx, scaleId: string): Promise<ScaleSizes> =>
+export const readScaleSizes = (client: FactoryClient | CommandTx, scaleId: string): Promise<ScaleSizes> =>
   client.size.findMany({ where: { scaleId }, select: { code: true, seq: true, status: true } })
 
-async function codeTaken(tx: CommandTx, code: string, except?: string): Promise<boolean> {
+export async function codeTaken(tx: CommandTx, code: string, except?: string): Promise<boolean> {
   return (await tx.style.findFirst({ where: { code, ...(except ? { id: { not: except } } : {}) }, select: { id: true } })) !== null
 }
-const codeConflict = (code: string) => new ConflictError(`The style code ${code} is taken.`)
+export const codeConflict = (code: string) => new ConflictError(`The style code ${code} is taken.`)
 
 /** The columns a set of style fields writes; nameI18n set to null is left out here (cleared by clearStyleNames). */
-function columnsOf(fields: Partial<StyleFields>): Prisma.StyleUncheckedUpdateInput {
+export function columnsOf(fields: Partial<StyleFields>): Prisma.StyleUncheckedUpdateInput {
   const data: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(fields)) {
     if (value === undefined || (value === null && key === 'nameI18n')) continue

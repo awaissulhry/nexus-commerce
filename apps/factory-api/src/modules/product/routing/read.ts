@@ -2,6 +2,7 @@ import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { LocalisedNames } from '@nexus/factory-domain/product/materials/rules'
 import type { LibraryOperation, StepData } from '@nexus/factory-domain/product/routing/rules'
+import type { Subcontract } from '@nexus/factory-domain/product/routing/subcontract'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
 import type { CommandTx } from '../../../core/command'
 
@@ -10,6 +11,10 @@ import type { CommandTx } from '../../../core/command'
  * `RoutingOperation`, `Operation`): the columns every read names, no relation selects. A leaf module: the routing's store
  * and the BOM's (the release check and the BOM view's `releasable`, modules/product/bom) both read through it, so neither
  * imports the other's store.
+ *
+ * A step's subcontract details (W2a, PRD-120: workshop, fee per piece, transit days) are read on their own
+ * (`readSubcontracts`, office reads only): the fee is the cost grain and never part of the steps the rules and diffs
+ * see; the floor never reads RoutingOperation's fee (its grant leaves it out) and reads its work order's operations.
  */
 
 export const STEP_COLUMNS = {
@@ -101,4 +106,22 @@ export async function readOperations(client: FactoryClient | CommandTx, operatio
   const ids = [...new Set(operationIds)].filter(isUuid)
   const rows = ids.length === 0 ? [] : await client.operation.findMany({ where: { id: { in: ids } }, select: OPERATION_REF_COLUMNS })
   return new Map(rows.map((row) => [row.id, operationOf(row)]))
+}
+
+/** The subcontract columns of a step (office only: the floor's grant leaves pricePerPiece out). */
+export const SUBCONTRACT_COLUMNS = { id: true, supplierId: true, pricePerPiece: true, transitDays: true } as const satisfies Prisma.RoutingOperationSelect
+
+/** The subcontracted steps of one revision: their workshop, fee per piece and transit days, by step id. */
+export async function readSubcontracts(client: FactoryClient | CommandTx, revisionId: string): Promise<Map<string, Subcontract>> {
+  const rows = await client.routingOperation.findMany({ where: { revisionId, supplierId: { not: null } }, select: SUBCONTRACT_COLUMNS })
+  return new Map(
+    rows.map((row) => [row.id, { supplierId: row.supplierId!, pricePerPiece: row.pricePerPiece === null ? null : text(row.pricePerPiece), transitDays: row.transitDays }]),
+  )
+}
+
+/** The workshops these subcontracts name, by id (code and trade name, else legal name). */
+export async function readWorkshops(client: FactoryClient | CommandTx, subcontracts: Iterable<Subcontract>): Promise<Map<string, { id: string; code: string; name: string }>> {
+  const ids = [...new Set([...subcontracts].map((entry) => entry.supplierId))]
+  const rows = ids.length === 0 ? [] : await client.party.findMany({ where: { id: { in: ids } }, select: { id: true, code: true, legalName: true, tradeName: true } })
+  return new Map(rows.map((row) => [row.id, { id: row.id, code: row.code, name: row.tradeName ?? row.legalName }]))
 }
