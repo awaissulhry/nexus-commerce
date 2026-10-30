@@ -167,5 +167,16 @@ describe('the locations import (adapter)', () => {
         locationsImportAdapter.write(tools, { action: 'CREATE', key: { site: 'A1', code: 'A1-ORPHAN' }, recordId: null, before: {}, values: { site: 'A1', code: 'A1-ORPHAN', name: 'x', kind: 'BIN', parent: 'A1-NOPE' } }, scope),
       ),
     ).rejects.toThrow(/Parent A1-NOPE is not a location of the site yet/)
+    // B-W2a-25: a workshop's stock location names its workshop, which the sheet has no column for.
+    await expect(
+      command(caller, { name: 'test.applyLocations', input: { n: 4 } }, (tools) =>
+        locationsImportAdapter.write(tools, { action: 'CREATE', key: { site: 'A1', code: 'A1-TERZ' }, recordId: null, before: {}, values: { site: 'A1', code: 'A1-TERZ', name: 'x', kind: 'SUBCONTRACTOR' } }, scope),
+      ),
+    ).rejects.toThrow(/made on the locations page with its workshop/)
+    await expect(
+      command(caller, { name: 'test.applyLocations', input: { n: 5 } }, (tools) =>
+        locationsImportAdapter.write(tools, { action: 'UPDATE', key: { site: 'A1', code: 'A1-BIN-01' }, recordId: ids.bin1, before: { kind: 'BIN' }, values: { kind: 'SUBCONTRACTOR' } }, scope),
+      ),
+    ).rejects.toThrow(/made on the locations page with its workshop/)
   })
 })

@@ -84,6 +84,11 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const order = await client.purchaseOrder.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
     return order ? { companyId: order.companyId, siteId: order.siteId, partyId: order.partyId } : null
   },
+  // modules/purchasing/subcontracting (SCR-129 Activity; B-W2a-25): the company, the work order's site and the workshop.
+  SubcontractOrder: async (client, id) => {
+    const order = await client.subcontractOrder.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
+    return order ? { companyId: order.companyId, siteId: order.siteId, partyId: order.partyId } : null
+  },
   // modules/sales/orders (SCR-039 Activity; B-W1-25): the selling company and the customer.
   SalesOrder: async (client, id) => {
     const order = await client.salesOrder.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
@@ -117,6 +122,11 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
   GoodsReceipt: async (client, id) => {
     const receipt = await client.goodsReceipt.findUnique({ where: { id }, select: { companyId: true, siteId: true, supplierId: true } })
     return receipt ? { companyId: receipt.companyId, siteId: receipt.siteId, partyId: receipt.supplierId } : null
+  },
+  // modules/quality/holds (SCR-078 the Hold record's Activity tab; B-W2a-26): the hold's company and site; notes only.
+  QualityHold: async (client, id) => {
+    const hold = await client.qualityHold.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
+    return hold ? { companyId: hold.companyId, siteId: hold.siteId, partyId: null } : null
   },
 })
 

@@ -35,6 +35,13 @@ import { APPROVAL_REASONS } from './quotes/quotes'
  *   sales_order.status_changed  it moved: production started, ready, partly shipped, shipped, closed or cancelled; `by`
  *                               says whether a person or the system (following work orders, shipments, the settlement)
  *   sales_order.promise_changed its promise date (or some lines') changed; the first promise stays
+ * B-W2a-19 (the payment terms library and the price lists; live: paymentterms.view, pricelists.view):
+ *   payment_terms.changed        terms were added to the library, edited, archived or reactivated
+ *   price_list.changed           a price list was made, edited, archived or reactivated, or given to (or taken from)
+ *                                customers
+ *   price_list.version_changed   a version was made (the next one, its prices copied), its planned days or note changed,
+ *                                its prices edited, it was deleted (a draft) or ended (an active one)
+ *   price_list.version_activated a draft went live from a day; the version in force then ended the day before
  */
 const live = { permission: 'quotes.view', fields: ['quoteId', 'versionId'] } as const
 const orderLive = { permission: 'orders.view', fields: ['orderId', 'number'] } as const
@@ -189,5 +196,34 @@ export const events = [
     description: "A sales order's promise date (or some of its lines') changed; its first promise stays.",
     payload: z.strictObject({ orderId: z.uuid(), number: z.string(), promiseDate: z.iso.date(), previous: z.iso.date().nullable(), lineIds: z.array(z.uuid()) }),
     live: orderLive,
+  }),
+  // B-W2a-19: the payment terms library and the price lists (ids, codes and what changed; never a price).
+  defineEvent({
+    type: 'payment_terms.changed',
+    context: 'sales',
+    description: 'Payment terms were added to the library, edited, archived or reactivated (documents already made keep their own copy).',
+    payload: z.strictObject({ paymentTermsId: z.uuid(), code: z.string(), change: z.enum(['CREATED', 'UPDATED', 'ARCHIVED', 'REACTIVATED']), fields: z.array(z.string()) }),
+    live: { permission: 'paymentterms.view', fields: ['paymentTermsId', 'code', 'change'] },
+  }),
+  defineEvent({
+    type: 'price_list.changed',
+    context: 'sales',
+    description: 'A price list was made, edited, archived or reactivated, or given to customers or taken from them.',
+    payload: z.strictObject({ listId: z.uuid(), code: z.string(), change: z.enum(['CREATED', 'UPDATED', 'ARCHIVED', 'REACTIVATED', 'CUSTOMERS']), fields: z.array(z.string()), partyIds: z.array(z.uuid()) }),
+    live: { permission: 'pricelists.view', fields: ['listId', 'code', 'change'] },
+  }),
+  defineEvent({
+    type: 'price_list.version_changed',
+    context: 'sales',
+    description: "A price list version was made (its prices copied from another), its planned days or note changed, a draft's prices edited, a draft deleted or an active version ended.",
+    payload: z.strictObject({ listId: z.uuid(), versionId: z.uuid(), revision: z.number().int(), change: z.enum(['CREATED', 'UPDATED', 'PRICES', 'DELETED', 'ENDED']) }),
+    live: { permission: 'pricelists.view', fields: ['listId', 'versionId', 'revision', 'change'] },
+  }),
+  defineEvent({
+    type: 'price_list.version_activated',
+    context: 'sales',
+    description: 'A price list version went live from a day (its prices fixed for good); the version in force then ended the day before.',
+    payload: z.strictObject({ listId: z.uuid(), versionId: z.uuid(), revision: z.number().int(), validFrom: z.iso.date(), validTo: z.iso.date().nullable(), endedVersionId: z.uuid().nullable() }),
+    live: { permission: 'pricelists.view', fields: ['listId', 'versionId', 'revision', 'validFrom', 'validTo'] },
   }),
 ] as const

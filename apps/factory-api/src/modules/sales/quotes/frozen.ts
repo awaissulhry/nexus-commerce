@@ -128,6 +128,8 @@ export interface CustomerQuoteInput {
   readonly contact: { readonly name: string; readonly email: string | null } | null
   /** The day it was (or is being) sent. */
   readonly date: string
+  /** B-W2a-19: the days the deposit is due after acceptance (its payment terms' order instalment); default 7. */
+  readonly depositDueDays?: number | undefined
 }
 
 /**
@@ -194,6 +196,7 @@ export function customerQuoteOf(input: CustomerQuoteInput): CustomerQuote {
       noWithdrawal: version.noWithdrawal,
       termsText: version.termsText,
       termsVersion: version.termsVersion,
+      depositDueDays: input.depositDueDays,
     }),
   }
 }

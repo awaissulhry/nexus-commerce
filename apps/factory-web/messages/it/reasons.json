@@ -1,0 +1,223 @@
+{
+  "title": "Codici causale",
+  "lists": "Elenchi delle causali",
+  "table": "Causali: {list}",
+  "search": "Cerca codice o parole",
+  "new": "Nuova causale",
+  "count": "{active} attive · {inactive} non attive",
+  "wordsOnly": "Le causali di scarto e rilavorazione hanno le parole solo in italiano e in inglese: icone, colori, altre lingue del reparto e \"chiede una nota\" arriveranno più avanti per questi due elenchi.",
+  "list": {
+    "PAUSE": "Pause",
+    "DOWNTIME": "Fermi",
+    "HELP_CALL": "Chiamate di aiuto",
+    "ADJUSTMENT": "Rettifiche di magazzino",
+    "HOLD": "Blocchi",
+    "CANCEL": "Annullamenti",
+    "WRITE_OFF": "Svalutazioni",
+    "RETURN": "Resi",
+    "DISCREPANCY": "Problemi di consegna",
+    "CLAIM": "Reclami ai fornitori",
+    "DOWNGRADE": "Declassamenti",
+    "SCRAP": "Scarti",
+    "REWORK": "Rilavorazioni"
+  },
+  "listHint": {
+    "PAUSE": "Perché il lavoro si è fermato a una postazione: i riquadri di pausa del reparto.",
+    "DOWNTIME": "Perché una macchina o una linea si è fermata.",
+    "HELP_CALL": "Di cosa tratta una chiamata di aiuto dal reparto.",
+    "ADJUSTMENT": "Perché un conteggio o una giacenza differisce: ogni riga contata diversa ne indica una.",
+    "HOLD": "Perché la merce è stata bloccata.",
+    "CANCEL": "Perché un ordine, una riga o un documento è stato annullato.",
+    "WRITE_OFF": "Perché la merce è stata svalutata (danneggiata, scaduta, obsoleta, smarrita).",
+    "RETURN": "Perché un cliente ha reso la merce: ogni riga di reso ne indica una.",
+    "DISCREPANCY": "Cosa non andava in una consegna: mancante, in eccesso, errata o danneggiata.",
+    "CLAIM": "Perché reclamiamo verso un fornitore.",
+    "DOWNGRADE": "Perché la merce è passata a una qualità inferiore.",
+    "SCRAP": "Perché un capo va perso a un'operazione: i riquadri di scarto della schermata operazione.",
+    "REWORK": "Perché un capo torna indietro per essere rifatto: i riquadri di rilavorazione della schermata operazione."
+  },
+  "col": {
+    "code": "Codice",
+    "look": "Icona e colore",
+    "it": "Italiano",
+    "en": "Inglese",
+    "needsDetail": "Chiede una nota",
+    "active": "Attiva",
+    "used": "Usata"
+  },
+  "words": {
+    "fallback": "Vuoto: si legge l'inglese"
+  },
+  "active": {
+    "on": "Attiva",
+    "off": "Non attiva",
+    "label": "{code} è attiva"
+  },
+  "detail": {
+    "on": "Sì",
+    "off": "No",
+    "label": "{code} chiede una nota",
+    "ask": "Chiede una nota",
+    "askHint": "Una causale \"Altro\": l'ufficio aggiunge una nota, il reparto una foto."
+  },
+  "used": {
+    "count_one": "{count} registrazione",
+    "count_other": "{count} registrazioni",
+    "hint_one": "{count} registrazione indica questo codice: si può rendere non attivo, mai eliminare.",
+    "hint_other": "{count} registrazioni indicano questo codice: si può rendere non attivo, mai eliminare.",
+    "none": "Nessuna registrazione indica ancora questo codice."
+  },
+  "look": {
+    "change": "Icona e colore di {code}: {look}",
+    "noIcon": "Nessuna icona",
+    "noColour": "Nessun colore",
+    "icon": "Icona",
+    "iconHint": "Si vede sui riquadri del reparto prima delle parole.",
+    "colour": "Colore",
+    "colourHint": "Distingue i riquadri; il significato resta all'icona.",
+    "clearColour": "Nessun colore",
+    "noColourYet": "Non ha un colore",
+    "title": "Icona e colore · {code}",
+    "done": "Fatto"
+  },
+  "icon": {
+    "star": "Stella",
+    "heart": "Cuore",
+    "flag": "Bandiera",
+    "bookmark": "Segnalibro",
+    "sparkles": "Scintille",
+    "zap": "Fulmine",
+    "flame": "Fiamma",
+    "snowflake": "Fiocco di neve",
+    "sun": "Sole",
+    "leaf": "Foglia",
+    "gift": "Regalo",
+    "package": "Pacco",
+    "box": "Scatola",
+    "truck": "Camion",
+    "shirt": "Capo",
+    "award": "Premio",
+    "crown": "Corona",
+    "gem": "Gemma",
+    "shield": "Scudo",
+    "alert": "Avviso",
+    "clock": "Orologio",
+    "calendar": "Calendario",
+    "percent": "Percentuale",
+    "camera": "Fotocamera"
+  },
+  "colour": {
+    "Blue": "Blu",
+    "Green": "Verde",
+    "Emerald": "Smeraldo",
+    "Lime": "Lime",
+    "Amber": "Ambra",
+    "Orange": "Arancione",
+    "Red": "Rosso",
+    "Rose": "Rosa",
+    "Pink": "Rosa scuro",
+    "Fuchsia": "Fucsia",
+    "Purple": "Porpora",
+    "Violet": "Viola",
+    "Indigo": "Indaco",
+    "Teal": "Verde acqua",
+    "Stone": "Pietra",
+    "Grey": "Grigio"
+  },
+  "mark": {
+    "saving": "Salvataggio…",
+    "waiting": "In attesa della risposta…",
+    "saved": "Salvato",
+    "unknown": "Non si sa se è stato salvato: ricarica l'elenco prima di riprovare."
+  },
+  "state": {
+    "forbiddenTitle": "Non puoi vedere gli elenchi delle causali",
+    "errorTitle": "Impossibile caricare gli elenchi delle causali",
+    "retry": "Riprova",
+    "emptyTitle": "Ancora nessuna causale in questo elenco",
+    "emptyBody": "Aggiungi la prima causale, oppure quelle standard e cambiale con le tue parole.",
+    "emptyBodyView": "Nessuno ha ancora aggiunto una causale a questo elenco.",
+    "first": "Aggiungi la prima causale",
+    "noMatch": "Nessuna causale corrisponde alla ricerca",
+    "clearSearch": "Cancella la ricerca"
+  },
+  "standard": {
+    "add_one": "Aggiungi {count} causale standard",
+    "add_other": "Aggiungi {count} causali standard"
+  },
+  "changed": {
+    "title": "Modificato da un'altra persona",
+    "body": "Un'altra persona ha cambiato questo elenco da quando l'hai aperto.",
+    "reload": "Ricarica"
+  },
+  "readOnly": {
+    "title": "Puoi vedere, non cambiare",
+    "body": "Gestire gli elenchi delle causali richiede il permesso su tutte le società e tutti gli stabilimenti: sono di tutto il gruppo."
+  },
+  "held": {
+    "busy": "Attendi: l'ultima modifica è ancora in salvataggio",
+    "noCode": "Prima dai un codice",
+    "badCode": "Un codice ha da 2 a 40 lettere maiuscole, cifre e trattini bassi e comincia con una lettera",
+    "codeTaken": "Questo elenco ha già questo codice",
+    "noWords": "Scrivi la causale in italiano e in inglese",
+    "allActive": "Tutte le causali scelte sono già attive",
+    "allInactive": "Tutte le causali scelte sono già non attive",
+    "searching": "Cancella la ricerca per spostare le causali: l'ordine è dell'intero elenco",
+    "atTop": "Già in cima",
+    "atBottom": "Già in fondo",
+    "noManage": "Gestire gli elenchi delle causali richiede il permesso su tutte le società e tutti gli stabilimenti",
+    "loading": "L'elenco si sta ancora caricando"
+  },
+  "bulk": {
+    "off_one": "Rendi non attiva {count}",
+    "off_other": "Rendi non attive {count}",
+    "on_one": "Rendi attiva {count}",
+    "on_other": "Rendi attive {count}",
+    "up": "Sposta su",
+    "down": "Sposta giù"
+  },
+  "keys": {
+    "new": "Nuova causale",
+    "edit": "Modifica la cella, o apri icona e colore",
+    "cancel": "Esci dalla cella senza salvare",
+    "title": "Tasti dell'elenco delle causali"
+  },
+  "newDialog": {
+    "title": "Nuova causale · {list}",
+    "back": "Indietro",
+    "add": "Aggiungi codice",
+    "intro": "Il codice non cambia più una volta aggiunto (le registrazioni lo conservano). Le parole sono ciò che le persone leggono, ognuna nella sua lingua.",
+    "codeHint": "Lettere maiuscole, cifre e trattini bassi: TAGLIA_ERRATA.",
+    "languageHint": "Vuoto: il reparto legge le parole inglesi."
+  },
+  "problem": {
+    "tooLong": "Al massimo 80 caratteri",
+    "labelIt": "Scrivi la causale in italiano: le parole italiane non sono mai vuote",
+    "labelEn": "Scrivi la causale in inglese: le parole inglesi non sono mai vuote",
+    "codeTaken": "Questo elenco ha già questo codice",
+    "codeTakenInactive": "Questo elenco ha già questo codice, non attivo: rendilo di nuovo attivo invece di aggiungerlo",
+    "stale": "Qualcuno ha cambiato questa causale da quando l'hai letta: ricarica l'elenco e riprova",
+    "code": "Un codice ha da 2 a 40 lettere maiuscole, cifre e trattini bassi e comincia con una lettera",
+    "icon": "Scegli una delle icone proposte",
+    "colour": "Scegli uno dei colori proposti",
+    "language": "Queste parole non si possono tenere per quella lingua",
+    "order": "L'elenco è cambiato da quando l'hai letto: ricaricalo e sposta di nuovo le causali",
+    "invalid": "La modifica è stata rifiutata così com'è",
+    "forbidden": "Non puoi cambiare gli elenchi delle causali",
+    "gone": "Questa causale non è più nell'elenco: ricaricalo",
+    "signedOut": "Sei uscito: accedi di nuovo",
+    "offline": "Nexus Factory non è raggiungibile: controlla la connessione e riprova",
+    "failed": "Qualcosa non è andato: riprova",
+    "read": "Nexus Factory non ha risposto: riprova",
+    "readForbidden": "Vedere gli elenchi delle causali richiede il permesso di vederli."
+  },
+  "done": {
+    "on_one": "{count} causale di nuovo attiva: {codes}",
+    "on_other": "{count} causali di nuovo attive: {codes}",
+    "off_one": "{count} causale resa non attiva: {codes}. Le registrazioni conservano il codice.",
+    "off_other": "{count} causali rese non attive: {codes}. Le registrazioni conservano i codici.",
+    "standard_one": "{count} causale standard aggiunta: {codes}",
+    "standard_other": "{count} causali standard aggiunte: {codes}",
+    "created": "{code} aggiunta in fondo all'elenco."
+  }
+}

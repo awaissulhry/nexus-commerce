@@ -45,8 +45,15 @@ const assignable = FACTORY_PERMISSIONS.assignable.filter((definition) => definit
 const every = (filter: (risk: string) => boolean = () => true): Permission[] =>
   assignable.filter((definition) => filter(definition.risk)).map((definition) => definition.name)
 
+/**
+ * B-W2a-20 (tasks on any record, COL-037): every office template that writes notes on records (threads.post) makes and
+ * keeps tasks too. Listed here, one line per template, so the long permission lists below stay as their steps wrote them.
+ */
+const TASKS_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor'])
+const addedFor = (key: string, audience: RoleAudience): Permission[] => (audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage'] : [])
+
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...content.permissions].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 
@@ -115,6 +122,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'home.view',
       'calendars.view',
       'calendars.manage',
+      // B-W2a-18: the reason lists of the whole group.
+      'reasons.view',
+      'reasons.manage',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.manage', 'views.export',
     ],
@@ -127,6 +137,10 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     permissions: ['numbering.view', 'numbering.manage', 'audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'product.materials.view', 'product.materials.cost', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'shipping.view', 'parties.view', 'parties.manage', 'parties.block', 'parties.vies', 'invoices.view', 'invoices.manage', 'invoices.issue', 'payments.view', 'payments.record', 'payments.void', 'costing.view', 'costing.rates.manage', 'quotes.view', 'quotes.approve', 'sales.settings.manage', 'companies.bank.view', 'companies.bank.manage', 'orders.view', 'orders.close', 'home.view', 'calendars.view', 'inventory.counts.view', 'inventory.counts.signoff', 'production.scrap.view',
       // B-W2a-21 (standard vs actual): standards, the cost ledger, the costing method (step-up).
       'costing.standards.manage', 'costing.ledger.manage', 'costing.method.manage',
+      // B-W2a-18: the reason lists (return and cancel reasons beside the sales settings).
+      'reasons.view',
+      // B-W2a-19: the payment terms library (Finance settings) and the price lists (read).
+      'paymentterms.view', 'paymentterms.manage', 'pricelists.view',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export'],
     grains: ['price', 'cost', 'margin', 'wages'],
@@ -138,7 +152,11 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     // (A1 §3.10).
     description: 'Customers, quotes and orders; sees selling prices and margin %, not costs.',
     requireMfa: true,
-    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send', 'orders.view', 'orders.manage', 'home.view', 'calendars.view', 'views.save', 'views.export'],
+    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send', 'orders.view', 'orders.manage', 'home.view', 'calendars.view',
+      // B-W2a-19: the customer price lists (keep them) and the payment terms library (pick from it).
+      'pricelists.view', 'pricelists.manage', 'paymentterms.view',
+      // B-W2a-23: save views of a list; export a list.
+      'views.save', 'views.export'],
     grains: ['price', 'margin'],
   }),
   template('planner', {
@@ -203,6 +221,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'calendars.suppliers.manage',
       // B-W2a-10: the approved sources (supplier articles, units, prices, minimums, lead times).
       'purchasing.sources.manage',
+      // B-W2a-25: subcontract orders to the workshops (operations, fees, kit plan, issue, cancel, close).
+      'purchasing.subcontract.manage',
       // W2a B-W2a-13 (MES-057): the hide yield per supplier lot feeds the supplier's rating.
       'production.cutting.view',
       // B-W2a-23: save views of a list; export a list.
@@ -255,12 +275,17 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'shipping.labels.void',
       'parties.view',
       'purchasing.view',
+      // B-W2a-25: send a subcontract order's kit with its DDT, receive the goods back by bundle.
+      'purchasing.subcontract.kit',
+      'purchasing.subcontract.receive',
       'workorders.view',
       'orders.view',
       'quality.lots.view',
       'floorsync.view',
       'floorsync.discard',
       'home.view',
+      // B-W2a-26: sees what is on hold (design quality.holds: warehouse and supervisors read).
+      'quality.holds.view',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export',
     ],
@@ -331,6 +356,13 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'floorsync.discard',
       'home.view',
       'calendars.view',
+      // B-W2a-18: Floor rules & codes' reason lists (pause, scrap, rework, downtime, help calls …).
+      'reasons.view',
+      'reasons.manage',
+      // B-W2a-26 (MES-008): puts work orders and bundles on hold; reads the defect library.
+      'quality.holds.view',
+      'quality.holds.place',
+      'quality.defects.view',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export',
     ],
@@ -340,14 +372,24 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Quality inspector',
     description: 'Inspects lots and finished goods and releases them; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'compliance.certificates.manage', 'compliance.declarations.manage', 'compliance.labels.manage', 'compliance.register.view', 'compliance.register.manage', 'imports.view', 'imports.run', 'imports.apply', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'inventory.scrap', 'inventory.opening.import', 'parties.view', 'production.serials', 'workorders.view', 'quality.lots.view', 'quality.lots.test', 'quality.lots.documents', 'quality.lots.release', 'quality.lots.reject', 'quality.inspections.view', 'quality.inspections.record', 'quality.garments.release', 'quality.garments.reverse', 'home.view', 'production.rework', 'production.scrap.view', 'views.save', 'views.export'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'compliance.certificates.manage', 'compliance.declarations.manage', 'compliance.labels.manage', 'compliance.register.view', 'compliance.register.manage', 'imports.view', 'imports.run', 'imports.apply', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'inventory.scrap', 'inventory.opening.import', 'parties.view', 'production.serials', 'workorders.view', 'quality.lots.view', 'quality.lots.test', 'quality.lots.documents', 'quality.lots.release', 'quality.lots.reject', 'quality.inspections.view', 'quality.inspections.record', 'quality.garments.release', 'quality.garments.reverse', 'home.view', 'production.rework', 'production.scrap.view',
+      // B-W2a-26: keeps the defect library and disposition codes; places and releases holds (only quality releases).
+      'quality.defects.view', 'quality.defects.manage', 'quality.holds.view', 'quality.holds.place', 'quality.holds.release',
+      // B-W2a-23: save views of a list; export a list.
+      'views.save', 'views.export'],
     grains: [],
   }),
   template('floor_supervisor', {
     name: 'Floor supervisor',
     description: "Follows the lines of their sites from the Office, decides the floor's scan corrections and keeps their floor devices, workers, badges and PINs; sees no money.",
     requireMfa: false,
-    permissions: ['files.read', 'devices.view', 'devices.manage', 'devices.revoke', 'workers.view', 'workers.manage', 'workers.roles', 'workers.credentials', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'production.settings.view', 'production.scan.correct', 'workorders.view', 'floorsync.view', 'floorsync.discard', 'home.view', 'calendars.view', 'production.rework', 'production.scrap.view', 'production.cutting.view', 'views.save', 'views.export'],
+    permissions: ['files.read', 'devices.view', 'devices.manage', 'devices.revoke', 'workers.view', 'workers.manage', 'workers.roles', 'workers.credentials', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'production.settings.view', 'production.scan.correct', 'workorders.view', 'floorsync.view', 'floorsync.discard', 'home.view', 'calendars.view', 'production.rework', 'production.scrap.view', 'production.cutting.view',
+      // B-W2a-18: sees the floor's reason lists (Floor rules & codes).
+      'reasons.view',
+      // B-W2a-26 (MES-008): puts work orders and bundles on hold; reads the defect library.
+      'quality.holds.view', 'quality.holds.place', 'quality.defects.view',
+      // B-W2a-23: save views of a list; export a list.
+      'views.save', 'views.export'],
     grains: [],
   }),
   template('read_only', {

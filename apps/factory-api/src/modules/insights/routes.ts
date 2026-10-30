@@ -1,15 +1,19 @@
 import { defineRoutes } from '../../core/manifest'
 import { idempotencyKeyFrom } from '../../core/command'
-import { actOnRow, assignees, handledToday } from './actions'
+import { actOnRow, assignees, handledToday, snoozeRow } from './actions'
+import { comingUp } from './coming-up'
 import {
   acknowledgeContract,
   assignContract,
   assigneesContract,
+  comingUpContract,
   flowContract,
   handledContract,
   layoutContract,
+  nudgeContract,
   resolveContract,
   saveLayoutContract,
+  snoozeContract,
   todayContract,
   waitingContract,
 } from './contract'
@@ -17,7 +21,7 @@ import { flow } from './flow'
 import { getLayout, saveLayout } from './layout'
 import { manifest } from './manifest'
 import { today } from './today'
-import { waitingOnOthers } from './waiting'
+import { nudge, waitingOnOthers } from './waiting'
 
 /**
  * Home › Today (B-W1-52; ANA-037; A2 SCR-029 "Today", SCR-031 W1 "Overview"): the needs-attention list computed from the
@@ -46,4 +50,11 @@ export default defineRoutes('insights', manifest, async (app) => {
   app.get('/home/today/layout', { schema: layoutContract }, async (request) => getLayout(request))
 
   app.put('/home/today/layout', { schema: saveLayoutContract }, async (request) => saveLayout(request, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2a-20: Today's Snooze, Waiting on others' Nudge, Coming up.
+  app.post('/home/today/rows/:key/snooze', { schema: snoozeContract }, async (request) => snoozeRow(request, request.params.key, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/home/waiting-on-others/:key/nudge', { schema: nudgeContract }, async (request) => nudge(request, request.params.key, idempotencyKeyFrom(request)))
+
+  app.get('/home/coming-up', { schema: comingUpContract }, async (request) => comingUp(request, request.query))
 })

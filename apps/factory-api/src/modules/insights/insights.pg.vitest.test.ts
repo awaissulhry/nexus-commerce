@@ -313,7 +313,8 @@ describe('the owner: everything that waits, from every area and company, ranked'
       const pressed = await ok('owner', `/home/today?limit=200&kind=${entry.kind}`)
       expect(pressed.total, entry.kind).toBe(entry.count)
     }
-    expect((await get('owner', '/home/today?category=TASK')).status).toBe(400)
+    // W2a: TASK and MENTION are categories again (the person's own rows, B-W2a-20); a word that is none is refused.
+    expect((await get('owner', '/home/today?category=NOPE')).status).toBe(400)
   })
 
   it('every row comes as phrases for the reader’s language: keys and params, the English the same words', async () => {

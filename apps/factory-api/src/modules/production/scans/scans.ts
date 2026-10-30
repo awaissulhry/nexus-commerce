@@ -31,6 +31,7 @@ import { bundleFlowOf } from '../bundles/flow'
 import { lockBundleForScan, readBundle, readBundleByCode, type BundleRow } from '../bundles/store'
 import { floorRecordSubjectFor, hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
 import { startOnFirstWork } from '../work-orders/moves'
+import { holdOnScan } from '../../quality/holds/checks'
 import { floorOf, mayScan, ScanRefusedError, refuse, systemView } from './access'
 import { insertCorrectionRequest, readCorrectionRequests, type CorrectionRequest } from './corrections-store'
 import { readDefects, writeDefects } from './defects-store'
@@ -305,6 +306,16 @@ async function startsWorkOrder(caller: CommandCaller, workOrder: ScanHeader, sca
   }
 }
 
+/**
+ * W2a B-W2a-26 hook (modules/quality/holds/checks.ts): a scan of a bundle on hold, or of a work order on hold, is refused
+ * with the hold's reason before the database's triggers would (MES-008: "floor devices refuse to start it and show the
+ * reason"); not final: it passes once quality releases the hold.
+ */
+export async function refuseIfHeld(tools: CommandTools, bundleId: string, workOrderId: string): Promise<void> {
+  const held = await holdOnScan(tools.tx, tools.context, { bundleId, workOrderId })
+  if (held) refuse({ code: 'ON_HOLD', message: held.message, fix: held.fix, final: false })
+}
+
 // ---- report ----------------------------------------------------------------------------------------------------------------------
 
 async function reportedBefore(caller: CommandCaller, session: Session, input: ReportInput): Promise<Outcome | null> {
@@ -388,6 +399,7 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   const locked = await lockBundleForScan(tx, work.bundle.id, work.scanned)
   if (!locked) throw new NotFoundError('Not a bundle ticket of this site.')
   await lockBundleScans(tx, context.tenantId, locked.bundle.siteId, locked.bundle.id)
+  await refuseIfHeld(tools, locked.bundle.id, locked.bundle.workOrderId)
   const workOrder = (await readHeader(tx, locked.bundle.workOrderId))!
   const operations = await readOperations(tx, workOrder.id)
   const scans = await readBundleScans(tx, locked.bundle.id)
@@ -525,6 +537,7 @@ async function undo(caller: CommandCaller, session: Session, input: UndoInput): 
           const locked = await lockBundleForScan(tx, target.bundleId)
           if (!locked) throw new NotFoundError('Scan not found.')
           await lockBundleScans(tx, context.tenantId, target.siteId, target.bundleId)
+          await refuseIfHeld(tools, target.bundleId, target.workOrderId)
           const current = (await readHeader(tx, target.workOrderId))!
           const operations = await readOperations(tx, current.id)
           const scans = await readBundleScans(tx, target.bundleId)

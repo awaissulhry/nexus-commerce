@@ -1,0 +1,150 @@
+/*
+ * The shared reason list editor (B-W2a-18; SCR-242) LAYOUT: the list switch, the hint, the cells of the list frame
+ * (code, look, words, switches, save mark), the dialogs' forms. The grid, the pickers and the switches are the design
+ * system's; semantic tokens only. No max-width: the editor fills its host's width (Owner rule 2026-10-29).
+ */
+.fw-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-reasons-switch {
+  min-width: 0;
+}
+
+.fw-reasons-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-reasons-sub {
+  color: var(--nds-text-3);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-reasons-danger {
+  margin: 0;
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-reasons-actions,
+.fw-reasons-cell,
+.fw-reasons-look,
+.fw-reasons-swatches {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-reasons-cell {
+  flex-wrap: nowrap;
+  max-width: 100%;
+}
+
+.fw-reasons-words {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.fw-reasons-code {
+  font-family: var(--nds-font-mono);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-reasons-code.off {
+  color: var(--nds-text-3);
+}
+
+.fw-reasons-refused {
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-reasons-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-reasons-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-10) var(--nds-space-14);
+}
+
+@media (min-width: 720px) {
+  .fw-reasons-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.fw-reasons-pickers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+
+.fw-reasons-toggle {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+}
+
+.fw-reasons-toggle > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-reasons-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-reasons-keys {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+}
+
+.fw-reasons-keys > div {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
+  gap: var(--nds-space-10);
+  align-items: center;
+}
+
+.fw-reasons-keys dt {
+  display: inline-flex;
+  gap: var(--nds-space-4);
+}
+
+.fw-reasons-keys dd {
+  margin: 0;
+}
+
+.fw-reasons-look {
+  flex-wrap: nowrap;
+  max-width: 100%;
+}
+
+.fw-reasons-look .fw-reasons-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}

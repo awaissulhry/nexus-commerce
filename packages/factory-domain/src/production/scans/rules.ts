@@ -93,6 +93,8 @@ export const SCAN_REFUSALS = [
   'DECIDED_ALREADY',
   'SELF_APPROVAL',
   'TARGET_VOIDED',
+  // B-W2a-26 (MES-008): the bundle or its work order is on hold (apps/factory-api modules/quality/holds/checks.ts holdOnScan).
+  'ON_HOLD',
 ] as const
 export type ScanRefusalCode = (typeof SCAN_REFUSALS)[number]
 
