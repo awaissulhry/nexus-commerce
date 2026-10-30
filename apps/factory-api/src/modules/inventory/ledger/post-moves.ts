@@ -1,4 +1,5 @@
 import type { Prisma, StockMoveReason, StockValuationMethod, Uom } from '@nexus/factory-db'
+import { dayWords } from '@nexus/factory-domain/accounting/periods'
 import { ConflictError, ForbiddenError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
@@ -19,6 +20,7 @@ import { costBasis, lotUnitCost, valuationKey, valueOfMove, type CostBasis, type
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTools, CommandTx } from '../../../core/command'
+import { lockDayOf, refuseHardLocked } from '../../accounting/period-guard'
 import { postedBy, stockContextOf, type StockContext } from './access'
 
 /**
@@ -276,6 +278,15 @@ export async function postMoves(tools: CommandTools, drafts: readonly MoveDraft[
   if (new Set(keys).size !== keys.length) throw new ConflictError('Two moves of this batch have the same idempotency key.')
   const used = await tx.stockMove.findMany({ where: { idempotencyKey: { in: keys } }, select: { idempotencyKey: true } })
   if (used.length > 0) throw new ConflictError(`This move was posted already (idempotency key ${used[0]!.idempotencyKey}).`)
+  // B-W2a-F1: an office or system move dated inside a HARD period lock of its company is refused in words (409) before
+  // the database's StockMove_period_lock. The floor's moves are dated now and the floor reads no lock (the trigger skips them).
+  if (context.audience !== 'floor') {
+    await refuseHardLocked(
+      tx,
+      tools.context,
+      rows.map((row, index) => ({ companyId: row.companyId, day: lockDayOf(row.occurredAt), refused: `the stock move (${row.reason.toLowerCase().replace(/_/g, ' ')}) dated ${dayWords(lockDayOf(row.occurredAt))} is not posted`, path: `${at(index)}/occurredAt` })),
+    )
+  }
 
   // Never below zero: lock what the batch takes, read it, refuse before the insert.
   const takes: LocatedKey[] = rows.filter((row) => row.fromLocationId).map((row) => ({ ...keyOf(row), locationId: row.fromLocationId! }))

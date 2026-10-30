@@ -90,6 +90,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
     const PAGE_PERMISSION: Record<string, string> = {
       '/home/today': 'home.view', // GET /home/today
       '/home/approvals': 'quotes.view', // GET /sales/quote-approvals
+      '/home/tasks': 'home.view', // GET /tasks (B-W2a-40)
+      '/home/notifications': 'home.view', // GET /notifications (B-W2a-40)
       '/home/mail-to-sort': 'email.triage', // GET /email/inbound
       '/sales/customers': 'parties.view', // GET /parties
       '/sales/quotes': 'quotes.view', // GET /sales/quotes
@@ -99,6 +101,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/products/operations': 'product.routing.view', // GET /product/operations
       '/products/sizes': 'product.styles.view', // GET /product/size-scales
       '/planning/mrp': 'planning.view', // GET /planning/runs/latest
+      '/planning/board': 'planning.view', // GET /planning/schedule (B-W2a-45)
+      '/planning/allocation': 'planning.view', // GET /planning/allocation (B-W2a-45)
       '/purchasing/suppliers': 'parties.view', // GET /parties
       '/purchasing/orders': 'purchasing.view', // GET /purchasing/orders
       '/warehouse/stock': 'inventory.stock.view', // GET /inventory/stock
@@ -112,6 +116,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/shipping': 'shipping.settings.view', // GET /shipping/settings
       '/production/floor': 'workorders.view', // GET /production/scans/wip
       '/production/work-orders': 'workorders.view', // GET /production/work-orders
+      '/production/reports': 'production.reports.view', // GET /production/reports/daily
       '/production/settings': 'production.settings.view', // GET /production/settings
       '/quality/inspections': 'quality.inspections.view', // GET /quality/inspections
       '/compliance/certificates': 'compliance.certificates.view', // GET /compliance/certificates
@@ -163,6 +168,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
     expect(rows(sales).filter((row) => row.href.startsWith('/sales/') || row.href.startsWith('/home/')).map((row) => row.href)).toEqual([
       '/home/today',
       '/home/approvals',
+      '/home/tasks',
+      '/home/notifications',
       '/home/mail-to-sort',
       '/sales/customers',
       '/sales/quotes',

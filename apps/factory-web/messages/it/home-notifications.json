@@ -1,0 +1,246 @@
+{
+  "refused": {
+    "title": "Le notifiche non sono aperte per te",
+    "body": "I tuoi ruoli non includono la Home (home.view). Chiedi a un amministratore se ti serve."
+  },
+  "band": {
+    "label": "Notifiche: stato e azioni",
+    "reading": "Lettura…",
+    "unread_one": "{count} da leggere",
+    "unread_other": "{count} da leggere",
+    "unreadMore": "Più di {count} da leggere",
+    "preferences": "Preferenze",
+    "allRead": "Segna tutto letto in {tab}"
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In diretta",
+    "offline": "Offline"
+  },
+  "held": {
+    "offline": "Offline: aspetta finché torni in linea.",
+    "busy": "Si sta inviando una modifica.",
+    "unknown": "Il numero non è ancora noto.",
+    "nothingUnread": "Qui non c’è niente da leggere."
+  },
+  "tabs": {
+    "title": "Quali"
+  },
+  "tab": {
+    "ALL": {
+      "label": "Tutte",
+      "hint": "tutto ciò che ti è stato detto, compresi i record che segui"
+    },
+    "MENTION": {
+      "label": "Menzioni",
+      "hint": "note che ti hanno @menzionato"
+    },
+    "ASSIGNMENT": {
+      "label": "Assegnate a me",
+      "hint": "attività, avvisi e righe dati a te"
+    },
+    "APPROVAL": {
+      "label": "Approvazioni",
+      "hint": "richieste del tuo sì, e le tue richieste decise"
+    },
+    "SYSTEM": {
+      "label": "Sistema",
+      "hint": "avvisi delle regole di eccezione e lavori finiti"
+    }
+  },
+  "tiles": {
+    "unread_one": "{count} da leggere",
+    "unread_other": "{count} da leggere"
+  },
+  "list": {
+    "title": "Notifiche",
+    "label": "{tab}: notifiche",
+    "error": "Non è stato possibile caricare le tue notifiche.",
+    "more": "Mostra altre",
+    "loadingMore": "Caricamento…"
+  },
+  "count_one": "{count} notifica",
+  "count_other": "{count} notifiche",
+  "col": {
+    "what": "Notifica",
+    "record": "Record",
+    "when": "Quando",
+    "state": "Stato"
+  },
+  "category": {
+    "MENTION": "Menzione",
+    "ASSIGNMENT": "Assegnata a te",
+    "APPROVAL": "Approvazione",
+    "ALERT": "Avviso",
+    "FOLLOWING": "Un record che segui",
+    "SYSTEM": "Sistema"
+  },
+  "together_one": "{count} insieme",
+  "together_other": "{count} insieme",
+  "openRecord": "Apri {record}",
+  "when": {
+    "TODAY": "Oggi",
+    "YESTERDAY": "Ieri",
+    "EARLIER": "Prima"
+  },
+  "stateWord": {
+    "read": "Letta",
+    "unread": "Da leggere",
+    "done": "Fatta",
+    "doneAt": "Fatta {at}",
+    "snoozedUntil": "Rimandata fino a {at}",
+    "snoozedChange": "Rimandata finché qualcosa cambia"
+  },
+  "state": {
+    "label": "Quale stato",
+    "OPEN": "Da guardare",
+    "SNOOZED": "Rimandate",
+    "DONE": "Fatte"
+  },
+  "bulk": {
+    "read_one": "Segna letta {count}",
+    "read_other": "Segna lette {count}",
+    "done_one": "Fatta {count}",
+    "done_other": "Fatte {count}",
+    "snooze_one": "Rimanda {count}",
+    "snooze_other": "Rimanda {count}",
+    "wake_one": "Riporta ora {count}",
+    "wake_other": "Riporta ora {count}",
+    "back_one": "Rimetti nell’elenco {count}",
+    "back_other": "Rimetti nell’elenco {count}"
+  },
+  "snooze": {
+    "what_one": "{count} notifica",
+    "what_other": "{count} notifiche"
+  },
+  "empty": {
+    "title": "Nessuna notifica.",
+    "tabTitle": "Niente in {tab}.",
+    "body": "Ti vengono segnalate menzioni, assegnazioni, approvazioni e i record che segui.",
+    "SNOOZED": {
+      "title": "Niente di rimandato.",
+      "body": "Una notifica rimandata torna da sola alla sua ora, o quando qualcosa cambia sul suo record."
+    },
+    "DONE": {
+      "title": "Ancora niente di fatto.",
+      "body": "Ciò che segni come fatto (E) resta qui; da qui puoi rimetterlo nell’elenco."
+    }
+  },
+  "retry": "Riprova",
+  "dismiss": "Chiudi",
+  "undo": "Annulla",
+  "offline": {
+    "title": "Offline",
+    "body": "L’elenco resta leggibile; segnare letto, fatto o rimandato aspetta finché torni in linea."
+  },
+  "keys": {
+    "done": "Fatta (esce dall’elenco)",
+    "snooze": "Rimanda fino a un’ora o a nuove attività",
+    "mute": "Silenzia il record: niente più novità (una menzione ti raggiunge comunque)",
+    "allRead": "Segna tutto letto in questa scheda"
+  },
+  "keysTitle": "Tasti delle Notifiche",
+  "notice": {
+    "read_one": "{count} segnata come letta.",
+    "read_other": "{count} segnate come lette.",
+    "unread_one": "{count} segnata da leggere.",
+    "unread_other": "{count} segnate da leggere.",
+    "done_one": "{count} fatta: è uscita dall’elenco.",
+    "done_other": "{count} fatte: sono uscite dall’elenco.",
+    "undone": "Di nuovo nell’elenco.",
+    "back_one": "{count} di nuovo nell’elenco.",
+    "back_other": "{count} di nuovo nell’elenco.",
+    "woken_one": "{count} riportata ora.",
+    "woken_other": "{count} riportate ora.",
+    "snoozed_one": "{count} rimandata: torna alla sua ora.",
+    "snoozed_other": "{count} rimandate: tornano alla loro ora.",
+    "snoozedChange_one": "{count} rimandata finché qualcosa cambia sul suo record.",
+    "snoozedChange_other": "{count} rimandate finché qualcosa cambia sui loro record.",
+    "muted": "{record} silenziato: le sue novità non ti raggiungono più (una menzione sì).",
+    "muteNoRecord": "{record} non ha novità da silenziare.",
+    "muteForbidden": "Non puoi più seguire {record}.",
+    "allRead": "Tutto in questa scheda è segnato come letto."
+  },
+  "problem": {
+    "read": "Non è stato possibile leggere l’elenco. Riprova.",
+    "forbidden": "Non puoi farlo.",
+    "offline": "Nessuna connessione al server. Riprova quando torni in linea.",
+    "signedOut": "La sessione è finita. Accedi di nuovo.",
+    "failed": "Non è stato possibile inviarlo. Riprova.",
+    "changed": "Nel frattempo qualcosa è cambiato. L’elenco è stato riletto.",
+    "invalid": "Non è stato possibile farlo così. L’elenco è stato riletto."
+  },
+  "digest": {
+    "title": "Preferenze delle notifiche",
+    "body": "Silenzioso per impostazione: tutto resta nell’app e niente arriva per e-mail finché non attivi il riepilogo giornaliero. Il riepilogo è un’e-mail al giorno con ciò che non hai ancora guardato.",
+    "cancel": "Annulla",
+    "save": "Salva",
+    "on": "Riepilogo giornaliero per e-mail",
+    "onWords": "Riepilogo giornaliero attivo",
+    "offWords": "Riepilogo giornaliero spento: niente arriva per e-mail",
+    "time": "Inviato alle",
+    "timeHint": "Il fuso orario della tua azienda.",
+    "days": "In questi giorni",
+    "day": {
+      "1": "Lunedì",
+      "2": "Martedì",
+      "3": "Mercoledì",
+      "4": "Giovedì",
+      "5": "Venerdì",
+      "6": "Sabato",
+      "7": "Domenica"
+    },
+    "kinds": "Contiene",
+    "lastSent": "Ultimo invio {at}.",
+    "neverSent": "Mai inviato finora.",
+    "later": "Ogni tipo nell’app, per e-mail o push, subito o una volta al giorno, arriva più avanti; fino ad allora solo questo riepilogo raggiunge la tua e-mail.",
+    "problem": {
+      "time": "Scegli un’ora del giorno.",
+      "days": "Scegli almeno un giorno.",
+      "kinds": "Scegli almeno un tipo.",
+      "changed": "Le tue preferenze sono cambiate nel frattempo (in un’altra scheda?). Sono state rilette: guarda, poi salva.",
+      "invalid": "Queste preferenze non si possono salvare così."
+    },
+    "saved": {
+      "on": "Riepilogo giornaliero attivo: arriva per e-mail alle {time} nei giorni scelti.",
+      "off": "Riepilogo giornaliero spento: niente arriva per e-mail."
+    }
+  },
+  "w": {
+    "notifications": {
+      "mentioned": "{actor} ti ha menzionato su {record}",
+      "following": {
+        "note": "{actor} ha scritto una nota su {record}, che segui",
+        "mail_in": "È arrivata una risposta su {record}, che segui",
+        "mail_out": "{actor} ha inviato un messaggio su {record}, che segui"
+      },
+      "assigned": {
+        "today": "{actor} ti ha assegnato {record} su Oggi ({kind})",
+        "task": "{actor} ti ha assegnato l’attività \"{title}\" ({record})",
+        "job": "{actor} ti ha assegnato l’intervento {record}: \"{title}\"",
+        "alert": "{actor} ti ha assegnato l’avviso \"{title}\" su {record}"
+      },
+      "approval": {
+        "quote_requested": "{actor} ti chiede di approvare il preventivo {record}{figure}",
+        "quote_decided": "{actor} ha {status} la tua richiesta di approvazione del preventivo {record}",
+        "nudged": "{actor} ti ricorda: il preventivo {record} aspetta ancora la tua approvazione"
+      },
+      "plant": {
+        "reported": "Segnalato un problema sulla macchina {record}: {title}",
+        "unsafe": "{record} è stata segnalata non sicura ({title}): resta fuori uso finché un tecnico non la dichiara sicura"
+      },
+      "alert": {
+        "raised": "Avviso su {record}: {title}"
+      }
+    },
+    "fallback": "Novità su {record}",
+    "someone": "Qualcuno",
+    "system": "Il sistema",
+    "status": {
+      "APPROVED": "approvato",
+      "REJECTED": "rifiutato"
+    },
+    "margin": "margine {value} %",
+    "figure": " ({parts})"
+  }
+}

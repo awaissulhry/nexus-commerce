@@ -29,6 +29,7 @@ import { allocateNumber, assertNumberUniqueInTenant } from '../../../platform/nu
 import { asTenantSystem, assertFloorReady } from '../../production/serials/facts'
 import { readCells, type LabelHeader } from '../../production/serials/store'
 import { scanProgressOf } from '../../production/scans/progress'
+import { holdOnInspection } from '../holds/checks'
 import { finalWorkOrder, inspectorOf, mayOn, postedBy, signerOf, type Inspector } from './access'
 import { identityOf, MakerRefusedError, makerCheck, type Identity } from './facts'
 import { makersOf, readDefects, readInspection, readWorkOrderInspections, type DefectRow, type InspectionRow, type Reader } from './store'
@@ -200,6 +201,9 @@ export async function openInspection(caller: CommandCaller, body: OpenBody, idem
   const identity = await callerIdentity(caller)
   const { result } = await command(caller, { name: 'quality.inspection.open', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools
+    // B-W2a-F1 hook (quality/holds checks.ts): a work order ON_HOLD, in its hold's words (wave 5's Inspection_awaits_hold).
+    const held = await holdOnInspection(tx, tools.context, { workOrderId: header.id })
+    if (held) throw new InvalidStateError(held)
     const current = (await tx.workOrder.findUnique({ where: { id: header.id }, select: { status: true } }))?.status ?? header.status
     if (!(RELEASE_STATUSES as readonly string[]).includes(current)) throw new InvalidStateError(`Work order ${header.number} is ${current.toLowerCase()}: its garments are inspected while it is released, in progress or completed.`)
     const problems = planProblems(body, { pieces: await piecesOf(tx, header.id), finished: await finishedOf(tx, header) })

@@ -8,6 +8,8 @@
       "main": "Principali",
       "today": "Oggi",
       "approvals": "Approvazioni",
+      "tasks": "Le mie attività",
+      "notifications": "Notifiche",
       "mailToSort": "Posta da smistare"
     },
     "products": {
@@ -58,7 +60,9 @@
       "floor": "Reparto ora",
       "workOrders": "Ordini di produzione",
       "settings": "Impostazioni",
-      "floorRules": "Regole di reparto"
+      "floorRules": "Regole di reparto",
+      "reports": "Report",
+      "reportsPage": "Report produzione"
     },
     "quality": {
       "area": "Qualità",
@@ -85,7 +89,9 @@
     "planning": {
       "area": "Pianificazione",
       "main": "Principali",
-      "mrp": "Cosa comprare e produrre"
+      "mrp": "Cosa comprare e produrre",
+      "board": "Tabellone di pianificazione",
+      "allocation": "Linee e terzisti"
     },
     "warehouse": {
       "area": "Magazzino",
@@ -119,7 +125,16 @@
     },
     "userMenu": "{name}: profilo ed esci",
     "profile": "Il mio profilo",
-    "signOut": "Esci"
+    "signOut": "Esci",
+    "bell": {
+      "label": "Notifiche",
+      "count_one": "Notifiche: {count} da leggere",
+      "count_other": "Notifiche: {count} da leggere",
+      "countMore": "Notifiche: più di {count} da leggere",
+      "none": "Notifiche: niente da leggere",
+      "unknown": "Notifiche: il numero ora non è disponibile",
+      "open": "Apri le tue notifiche"
+    }
   },
   "banner": {
     "testMode": {

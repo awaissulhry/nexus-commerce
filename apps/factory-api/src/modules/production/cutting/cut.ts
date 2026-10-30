@@ -33,6 +33,7 @@ import { issueInCommand, type IssueResult } from '../../inventory/issue/issue'
 import { lockHideCuts, lockWorkOrderIssues } from '../../inventory/issue/store'
 import { LEDGER_SELECT, postMoves, type PostedMove } from '../../inventory/ledger/post-moves'
 import { stationBlock } from '../../plant/checks'
+import { holdOnCut } from '../../quality/holds/checks'
 import { floorRecordSubjectFor } from '../settings/subject'
 import {
   deviceStationOf,
@@ -244,6 +245,10 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
   await lockHideCuts(tx, context.tenantId, workOrder.siteId, hide.id)
   const lot = (await readLot(tx, hide.lotId))!
   const item = (await readItem(tx, hide.itemId))!
+  // B-W2a-F1 hook (quality/holds checks.ts): a held hide, lot or work order, in words before anything is issued (the
+  // database's CutLog_awaits_quality_hold and wave 5's CutLog_awaits_hold refuse the same).
+  const held = await holdOnCut(tx, context, { hideId: hide.id, lotId: hide.lotId, workOrderId: workOrder.id })
+  if (held) refused({ code: 'QUALITY_HOLD', message: held })
   const first = cuttableRefusal({ workOrder, hide, lot })
   if (first) refused(first)
   const stationId = await deviceStationOf(tx, context.deviceId)

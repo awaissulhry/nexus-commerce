@@ -285,7 +285,8 @@ describe('My lists: existing list routes only, five rows, a sixth says there are
 describe('navigation, pages, words and the design fixtures', () => {
   it('Today is Home’s first page for whoever holds home.view, and its pages are built', () => {
     const home = officeNavFor((permission) => permission === 'home.view' || permission === 'email.triage', OFFICE_NAV).areas.find((area) => area.id === 'home')!
-    expect(home.sections![0]!.items.map((row) => row.href)).toEqual(['/home/today', '/home/mail-to-sort'])
+    // W2a (B-W2a-40): My tasks and Notifications join Home in the tree's order.
+    expect(home.sections![0]!.items.map((row) => row.href)).toEqual(['/home/today', '/home/tasks', '/home/notifications', '/home/mail-to-sort'])
     expect(['/home/today', '/home/today/print'].every((page) => OFFICE_PAGES.has(page))).toBe(true)
   })
 
@@ -324,9 +325,9 @@ describe('navigation, pages, words and the design fixtures', () => {
   it('the design fixtures: the role switch and every state, made-up data only', () => {
     const ids = designScreen.cases.map((entry) => entry.id)
     for (const wanted of ['owner', 'owner-decide', 'owner-tile', 'owner-alerts', 'sales', 'buyer', 'inspector', 'finance', 'empty', 'loading', 'error', 'no-permission']) expect(ids).toContain(wanted)
-    // Always the design's three tiles.
+    // Always the design's three tiles (W1 cases); the W2a cases (B-W2a-40) the six of W2A_TILES, in that order.
     for (const entry of designScreen.cases) {
-      if (entry.model.queue.status === 'ready') expect(entry.model.queue.data.tiles.map((tile) => tile.tile), entry.id).toEqual(['ALL', 'APPROVAL', 'ALERT'])
+      if (entry.model.queue.status === 'ready') expect(entry.model.queue.data.tiles.map((tile) => tile.tile), entry.id).toEqual(entry.id.startsWith('w2a-') ? ['ALL', 'APPROVAL', 'DUE_TODAY', 'OVERDUE', 'MENTION', 'ALERT'] : ['ALL', 'APPROVAL', 'ALERT'])
     }
     const text = JSON.stringify(designScreen.cases)
     expect(text).not.toMatch(/@(?!example\.)[a-z0-9-]+\.(com|it|net)/i)

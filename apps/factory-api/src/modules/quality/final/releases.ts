@@ -20,6 +20,7 @@ import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { asTenantSystem, assertFloorReady } from '../../production/serials/facts'
 import { readCells, type LabelHeader } from '../../production/serials/store'
+import { holdOnRelease } from '../holds/checks'
 import { finalWorkOrder, inspectorOf, mayOn, officeOf, postedBy, signerOf } from './access'
 import { cellGate, cellText, documentBlockers, identityOf, inspectorSigner, makerCheck, ReleaseRefusedError, ruleInForce, type Identity } from './facts'
 import { callerIdentity, qualityNumber, signatureOf } from './inspections'
@@ -117,6 +118,10 @@ export async function releaseGarments(caller: CommandCaller, body: ReleaseBody, 
     const { tx, now } = tools
     await lockRelease(tx, context.tenantId, header.id)
     if (serialIds.length > 0) await lockSerials(tx, serialIds)
+    // B-W2a-F1 hook (quality/holds checks.ts): a hold of the work order or of a serial named, or the work order ON_HOLD, in
+    // words (the database's QualityRelease_ and GarmentSerial_awaits_quality_hold, and wave 5's QualityRelease_awaits_hold).
+    const held = await holdOnRelease(tx, tools.context, { workOrderId: header.id, serialIds })
+    if (held) throw new ReleaseRefusedError([{ code: held.subjectType === 'GarmentSerial' ? 'SERIALS' : 'WORK_ORDER', state: 'OPEN', message: held.message, fix: 'Quality releases the hold in the office (Quality › Holds); then release the garments.' }])
     const current = (await readInspection(tx, inspection.id))!
     const gate = await cellGate(tx, {
       tenantId: context.tenantId,

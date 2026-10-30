@@ -304,3 +304,154 @@
     width: 100%;
   }
 }
+
+/* ── B-W2a-40: tasks on the record, Follow / Followers, @mention, the New task dialog ─────────────────────────────── */
+.fw-rp-follow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+}
+
+.fw-rp-follow-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-rp-followers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: min(340px, 80vw);
+  max-width: 420px;
+}
+
+.fw-rp-followers-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.fw-rp-follower-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.fw-rp-follower {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-8);
+}
+
+.fw-rp-follower-name {
+  font-weight: 500;
+}
+
+.fw-rp-followers-me,
+.fw-rp-followers-add-row,
+.fw-rp-dialog-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-rp-followers-add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-rp-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+
+.fw-rp-tasks-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-rp-tasks-head p {
+  margin: 0;
+}
+
+.fw-rp-task-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-rp-task {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-8) 0;
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-rp-task:first-child {
+  border-top: 0;
+}
+
+.fw-rp-task-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-rp-task-title {
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+
+.fw-rp-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-12);
+}
+
+.fw-rp-task-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-rp-task-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-rp-task-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-rp-mentions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-rp-mentions p {
+  margin: 0;
+}
