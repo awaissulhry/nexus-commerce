@@ -1,0 +1,20 @@
+/* The photo capture lab (SCR-247): layout only. The part fills the width it is given (no page max-width); the phone case
+   draws it in a phone-wide column, as a link page on a phone. */
+.fw-photolab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+  padding: var(--nds-space-16);
+}
+.fw-photolab-part {
+  min-width: 0;
+}
+.fw-photolab-part.is-phone {
+  width: 100%;
+  max-width: 24.375rem;
+}
+.fw-photolab-result {
+  margin: 0;
+  color: var(--nds-text-2);
+}

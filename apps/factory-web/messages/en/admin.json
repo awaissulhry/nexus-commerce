@@ -1678,6 +1678,8 @@
     "views_save": "Save and share own views of a list",
     "views_manage": "Share views with everyone and set a role's default",
     "views_export": "Export a list to CSV or Excel",
+    "inventory_discrepancies_manage": "Record and settle receipt discrepancies",
+    "inventory_discrepancies_report": "Send the discrepancy report to the supplier",
     "search_rebuild": "Rebuild the search index of the whole group"
   }
 }

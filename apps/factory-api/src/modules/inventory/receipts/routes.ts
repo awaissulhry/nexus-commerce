@@ -1,9 +1,34 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
-import { countReceiptsContract, expectedContract, getReceiptContract, listReceiptsContract, receiptLotsContract, recordReceiptContract, reverseReceiptContract } from './contract'
+import {
+  announceDdtPhotoContract,
+  announceDiscrepancyPhotoContract,
+  changeDiscrepancyContract,
+  completeDdtPhotoContract,
+  completeDiscrepancyPhotoContract,
+  countReceiptsContract,
+  expectedContract,
+  getReceiptContract,
+  hideListSummaryContract,
+  listDiscrepanciesContract,
+  listReceiptsContract,
+  previewReportContract,
+  receiptLotsContract,
+  recordDiscrepancyContract,
+  recordReceiptContract,
+  removeDiscrepancyContract,
+  reportCheckContract,
+  reverseReceiptContract,
+  sendReportContract,
+  settleDiscrepancyContract,
+} from './contract'
+import { changeDiscrepancy, listDiscrepancies, recordDiscrepancy, removeDiscrepancy, settleDiscrepancy } from './discrepancies'
+import { hideListSummary } from './hide-list-summary'
 import { manifest } from './manifest'
+import { announceDdtPhoto, announceDiscrepancyPhoto, completeDdtPhoto, completeDiscrepancyPhoto } from './photos'
 import { countReceipts, expectedLines, getReceipt, listReceipts, receiptLots } from './read'
 import { recordReceipt } from './record'
+import { inlineDisposition, previewReport, reportCheck, sendReport } from './report'
 import { reverseReceipt } from './reverse'
 
 /**
@@ -29,4 +54,42 @@ export default defineRoutes('inventory.receipts', manifest, async (app) => {
   app.post('/inventory/receipts/:receiptId/reverse', { schema: reverseReceiptContract }, async (request, reply) =>
     reply.code(201).send(await reverseReceipt(request, request.params.receiptId, request.body, idempotencyKeyFrom(request))),
   )
+
+  // B-W2a-31 (SCM-115): the supplier's delivery note photo (office and floor).
+  app.post('/inventory/receipts/:receiptId/ddt-photos', { schema: announceDdtPhotoContract }, async (request, reply) =>
+    reply.code(201).send(await announceDdtPhoto(request, request.params.receiptId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.post('/inventory/receipts/:receiptId/ddt-photos/:fileId/complete', { schema: completeDdtPhotoContract }, async (request) => completeDdtPhoto(request, request.params.receiptId, request.params.fileId, idempotencyKeyFrom(request)))
+
+  // B-W2a-31 (SCM-118): discrepancies, their photos and the report to the supplier.
+  app.get('/inventory/receipts/:receiptId/discrepancies', { schema: listDiscrepanciesContract }, async (request) => listDiscrepancies(request, request.params.receiptId))
+  app.post('/inventory/receipts/:receiptId/discrepancies', { schema: recordDiscrepancyContract }, async (request, reply) =>
+    reply.code(201).send(await recordDiscrepancy(request, request.params.receiptId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.patch('/inventory/receipts/:receiptId/discrepancies/:discrepancyId', { schema: changeDiscrepancyContract }, async (request) =>
+    changeDiscrepancy(request, request.params.receiptId, request.params.discrepancyId, request.body, idempotencyKeyFrom(request)),
+  )
+  app.delete('/inventory/receipts/:receiptId/discrepancies/:discrepancyId', { schema: removeDiscrepancyContract }, async (request) =>
+    removeDiscrepancy(request, request.params.receiptId, request.params.discrepancyId, request.query, idempotencyKeyFrom(request)),
+  )
+  app.post('/inventory/receipts/:receiptId/discrepancies/:discrepancyId/status', { schema: settleDiscrepancyContract }, async (request) =>
+    settleDiscrepancy(request, request.params.receiptId, request.params.discrepancyId, request.body, idempotencyKeyFrom(request)),
+  )
+  app.post('/inventory/receipts/:receiptId/discrepancies/:discrepancyId/photos', { schema: announceDiscrepancyPhotoContract }, async (request, reply) =>
+    reply.code(201).send(await announceDiscrepancyPhoto(request, request.params.receiptId, request.params.discrepancyId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.post('/inventory/receipts/:receiptId/discrepancies/:discrepancyId/photos/:fileId/complete', { schema: completeDiscrepancyPhotoContract }, async (request) =>
+    completeDiscrepancyPhoto(request, request.params.receiptId, request.params.discrepancyId, request.params.fileId, idempotencyKeyFrom(request)),
+  )
+  app.get('/inventory/receipts/:receiptId/discrepancy-report', { schema: previewReportContract }, async (request, reply) => {
+    const { pdf, fileName } = await previewReport(request, request.params.receiptId, request.query)
+    return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
+  })
+  app.get('/inventory/receipts/:receiptId/discrepancy-report/check', { schema: reportCheckContract }, async (request) => reportCheck(request, request.params.receiptId, request.query))
+  app.post('/inventory/receipts/:receiptId/discrepancy-report', { schema: sendReportContract }, async (request, reply) =>
+    reply.code(201).send(await sendReport(request, request.params.receiptId, request.body, idempotencyKeyFrom(request))),
+  )
+
+  // B-W2a-31 (SCM-248): a tannery hide list's totals against its order.
+  app.get('/inventory/receipts/hide-lists/:importId', { schema: hideListSummaryContract }, async (request) => hideListSummary(request, request.params.importId))
 })

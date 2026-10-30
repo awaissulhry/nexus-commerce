@@ -1,6 +1,7 @@
 import { DomainError, ForbiddenError, InvalidStateError, ValidationError } from '@nexus/factory-domain/core/errors'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
+import { cancelBlocksOf, cancelImpact } from '@nexus/factory-domain/sales/orders/daily'
 import { followMoves, promiseProblems, promiseStateProblem, salesOrderMachine, type SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders'
 import { ORDERS_CLOSE, ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
@@ -8,6 +9,8 @@ import { command, type CommandCaller, type CommandTools } from '../../../core/co
 import { serverClock } from '../../../core/time'
 import { lockOrderLines } from '../../production/work-orders/store'
 import { assertMay, mayOn, officeContextOf } from './access'
+import { impactView, readCancelFacts } from './impact'
+import { cancelScheduleInCommand } from './schedule'
 import { orderSettlement } from './settlement'
 import { asDay, dayOrNull, lockOrder, moveFactsOf, readLines, readOrder, readOrderFacts, type OrderRow } from './store'
 import { orderView, type OrderView } from './views'
@@ -20,10 +23,12 @@ import { orderView, type OrderView } from './views'
  * audit row per move and `sales_order.status_changed`.
  *
  *   a person (office)   promise date (orders.manage; a reason; the first promise stays), ready by hand (orders.manage; a
- *                       reason, while quality release is not in use), cancel (orders.manage; a reason; CONFIRMED with no
- *                       released or draft work order: the lines' work-order locks are taken first, so no work order is
- *                       made for them meanwhile; its OPEN deposit requests are cancelled with it), close (settled:
- *                       orders.manage or orders.close; not settled: a reason AND orders.close)
+ *                       reason, while quality release is not in use), cancel (orders.manage; a reason; B-W2a-30: before
+ *                       anything shipped, with the impact check (./impact): no draft work order, no shipment being
+ *                       packed, no invoice of it; the lines' work-order locks are taken first, so no work order is made
+ *                       for them meanwhile; its OPEN deposit requests and payment steps are cancelled with it; what it
+ *                       leaves behind is answered), close (settled: orders.manage or orders.close; not settled: a reason
+ *                       AND orders.close)
  *   the system          `followOrder`: the moves the facts ask (production started, quality released everything, the
  *                       shipped quantities, a settled order that left in full closes), from the worker's handlers
  */
@@ -130,37 +135,67 @@ export async function markReady(caller: CommandCaller, orderId: string, body: { 
 // ---- cancel ----------------------------------------------------------------------------------------------------------------
 
 /**
- * orders.manage: CONFIRMED → CANCELLED with a reason, only before any work order of its lines is released and with no
- * draft left (cancel those first). The lines' work-order locks (modules/production/work-orders `lockOrderLines`, the lock
- * a new work order takes on them) come first, then the order's row, then the work orders of its lines FOR SHARE (a
- * release in flight finishes first and is seen): no work order is made, or released unseen, for a cancelled order. Its
- * OPEN deposit requests are cancelled with it; a PAID one stays (a refund is the money module's) and is named in the
- * answer.
+ * orders.manage: CONFIRMED, IN_PRODUCTION or READY → CANCELLED with a reason (B-W2a-30, SAL-211; W1 allowed only CONFIRMED
+ * without released work orders). The impact check (./impact, factory-domain `cancelImpact`) is read again under the
+ * order's lock and stops it at a draft work order (cancel those first: none is released for a cancelled order), a
+ * shipment being packed, or an invoice of the order (a fiscal document is never deleted: a credit note is Finance's).
+ * The lines' work-order locks (modules/production/work-orders `lockOrderLines`, the lock a new work order takes on them)
+ * come first, then the order's row, then the work orders of its lines FOR SHARE (a release in flight finishes first and
+ * is seen). Its OPEN deposit requests and OPEN payment steps are cancelled with it; what it leaves behind (open work
+ * orders and the leather they cut, reserved stock, purchase orders planning counted on, a paid deposit) is named in the
+ * answer and on the audit row: the people who own those decide. `confirmNumber`, when sent, must be the order's number
+ * (the design's typed confirmation).
  */
-export async function cancelOrder(caller: CommandCaller, orderId: string, body: { readonly version?: number | undefined; readonly reason: string }, idempotencyKey?: string): Promise<{ order: OrderView; paidDepositRequestIds: string[] }> {
+export async function cancelOrder(
+  caller: CommandCaller,
+  orderId: string,
+  body: { readonly version?: number | undefined; readonly reason: string; readonly confirmNumber?: string | undefined },
+  idempotencyKey?: string,
+): Promise<{ order: OrderView; paidDepositRequestIds: string[]; impact: ReturnType<typeof impactView> }> {
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
+  if (body.confirmNumber !== undefined && body.confirmNumber.trim() !== order.number) {
+    throw new ValidationError(`Type the order number ${order.number} to cancel it.`, [{ path: 'body/confirmNumber', message: `Type ${order.number} to confirm.` }])
+  }
   const { result } = await command(caller, { name: 'orders.cancel', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
     const { tx, now } = tools
     const lineIds = (await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
     await lockOrderLines(tx, context.tenantId, lineIds)
     const locked = await lockOrder(tx, order.id, body.version)
     if (lineIds.length > 0) await tx.$queryRaw`SELECT w.id FROM "WorkOrder" w WHERE w.id IN (SELECT c."workOrderId" FROM "WorkOrderSize" c WHERE c."salesOrderLineId" = ANY(${lineIds}::uuid[])) ORDER BY w.id FOR SHARE`
-    const facts = moveFactsOf(await readOrderFacts(tx, order))
+    const facts = await readOrderFacts(tx, order)
+    const impact = cancelImpact(await readCancelFacts(tx, { id: order.id, status: locked.status, quoteVersionId: order.quoteVersionId }, facts))
     const reason = reasonOf(body.reason)
-    assertTransition(salesOrderMachine, locked.status, 'CANCELLED', { ...facts, reason })
+    assertTransition(salesOrderMachine, locked.status, 'CANCELLED', { ...moveFactsOf(facts), reason, cancelBlocks: cancelBlocksOf(impact) })
     await tx.salesOrder.update({ where: { id: order.id }, data: { status: 'CANCELLED', cancelReason: reason!, closedAt: now, updatedAt: now, version: { increment: 1 } }, select: { id: true } })
     const requests = await tx.depositRequest.findMany({ where: { OR: [{ orderId: order.id }, ...(order.quoteVersionId ? [{ quoteVersionId: order.quoteVersionId }] : [])] }, select: { id: true, status: true }, orderBy: { id: 'asc' } })
     for (const request of requests.filter((row) => row.status === 'OPEN')) {
       const { count } = await tx.depositRequest.updateMany({ where: { id: request.id, status: 'OPEN' }, data: { status: 'CANCELLED', statusNote: `Order ${order.number} cancelled: ${reason}`, updatedAt: now, version: { increment: 1 } } })
       if (count === 1) tools.audit({ action: 'orders.cancelDeposit', recordType: 'DepositRequest', recordId: request.id, companyId: order.companyId, before: { status: 'OPEN' }, after: { status: 'CANCELLED', orderId: order.id }, reason: reason! })
     }
+    const steps = await cancelScheduleInCommand(tools, order, reason!)
     const paid = requests.filter((row) => row.status === 'PAID').map((row) => row.id)
-    tools.audit({ recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { status: locked.status }, after: { status: 'CANCELLED', cancelReason: reason, closedAt: toUtcIso(now), paidDepositRequestIds: paid }, reason: reason! })
+    const view = impactView(impact)
+    tools.audit({
+      recordType: 'SalesOrder',
+      recordId: order.id,
+      companyId: order.companyId,
+      before: { status: locked.status },
+      after: {
+        status: 'CANCELLED',
+        cancelReason: reason,
+        closedAt: toUtcIso(now),
+        paidDepositRequestIds: paid,
+        cancelledMilestoneIds: steps,
+        touches: impact.touches.map((item) => ({ code: item.code, refs: item.refs.map((ref) => ref.id) })),
+        leavesBehind: impact.leavesBehind.map((item) => ({ code: item.code, refs: item.refs.map((ref) => ref.number ?? ref.id) })),
+      },
+      reason: reason!,
+    })
     statusChanged(tools, order, locked.status, 'CANCELLED', 'person')
-    return { orderId: order.id, status: 'CANCELLED', paidDepositRequestIds: paid }
+    return { orderId: order.id, status: 'CANCELLED', paidDepositRequestIds: paid, impact: view }
   })
-  return { order: await recordAfter(caller, order.id), paidDepositRequestIds: result.paidDepositRequestIds }
+  return { order: await recordAfter(caller, order.id), paidDepositRequestIds: result.paidDepositRequestIds, impact: result.impact }
 }
 
 // ---- close -----------------------------------------------------------------------------------------------------------------

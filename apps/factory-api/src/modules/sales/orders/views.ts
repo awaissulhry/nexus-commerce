@@ -3,11 +3,13 @@ import { toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { linkState } from '@nexus/factory-domain/links/purposes'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
-import { daysLate, orderActions, type Progress, type SettlementAnswer } from '@nexus/factory-domain/sales/orders/orders'
+import { cancelBlocksOf, cancelImpact, dailyActions } from '@nexus/factory-domain/sales/orders/daily'
+import { CANCEL_STATUSES, daysLate, orderActions, type Progress, type SettlementAnswer } from '@nexus/factory-domain/sales/orders/orders'
 import { priceBasisOf, priceText } from '@nexus/factory-domain/sales/quotes/quotes'
 import { Dec, HUNDRED } from '@nexus/factory-domain/tax/decimal'
 import { serverClock } from '../../../core/time'
 import { depositViewOf, DEPOSIT_COLUMNS } from '../deposits/deposits'
+import { readCancelFacts } from './impact'
 import { dayOf, dayOrNull, moveFactsOf, readOrderFacts, type OrderRow, type Reader } from './store'
 
 /**
@@ -91,11 +93,16 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
   })
   const history = await promiseHistory(db, order.id)
   const placed = await depositFacts(db, deposits.map((row) => row.id), serverClock.now())
-  const peopleIds = [...new Set([order.createdById, ...history.map((entry) => entry.actorId)].filter((id): id is string => id !== null))]
+  const peopleIds = [...new Set([order.createdById, ...history.map((entry) => entry.actorId), ...facts.lines.map((line) => line.closedShortById)].filter((id): id is string => id !== null))]
   const people = peopleIds.length > 0 ? await db.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true }, orderBy: { id: 'asc' } }) : []
 
   const progressOf = (lineId: string, size: string | null) => facts.progress.rows.find((row) => row.lineId === lineId && row.size === size)
-  const strip = (row: Progress) => ({ ordered: row.ordered, inWorkOrders: row.inWorkOrders, made: row.made, released: row.released, shipped: row.shipped, invoiced: row.invoiced, toShip: row.toShip })
+  const strip = (row: Progress) => ({ ordered: row.ordered, inWorkOrders: row.inWorkOrders, made: row.made, released: row.released, shipped: row.shipped, invoiced: row.invoiced, toShip: row.toShip, closedShort: row.closedShort })
+  // B-W2a-30: the amendments so far (the Changes tab reads them whole: GET …/amendments) and the daily actions.
+  const amendments = await db.salesOrderAmendment.findMany({ where: { orderId: order.id }, select: { revision: true, createdAt: true }, orderBy: { revision: 'desc' } })
+  // The cancel action is held by what the impact check says stops it (a shipment being packed, an invoice).
+  const cancelBlocks = CANCEL_STATUSES.includes(order.status) ? cancelBlocksOf(cancelImpact(await readCancelFacts(db, order, facts))) : []
+  const shortLines = facts.lines.map((line) => ({ id: line.id, seq: line.seq, quantity: line.quantity, shipped: facts.progress.lines.find((entry) => entry.lineId === line.id)?.shipped ?? 0, closedShort: line.closedShortQuantity !== null }))
   const promiseDate = dayOrNull(order.promiseDate)
 
   return {
@@ -114,6 +121,7 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
     billTo: order.billTo as Record<string, unknown>,
     shipTo: order.shipTo as Record<string, unknown>,
     paymentTerms: order.paymentTerms,
+    paymentTermsId: order.paymentTermsId,
     requestedDate: dayOrNull(order.requestedDate),
     promiseDate,
     originalPromiseDate: dayOrNull(order.originalPromiseDate),
@@ -169,6 +177,10 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
         promiseDate: dayOrNull(line.promiseDate),
         priority: line.priority,
         siteId: line.siteId,
+        closedShort:
+          line.closedShortQuantity === null
+            ? null
+            : { quantity: line.closedShortQuantity, at: instantOrNull(line.closedShortAt), byId: line.closedShortById, reason: line.closeShortReason },
         version: line.version,
         sizes:
           sizes.length > 0
@@ -193,7 +205,11 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
     promiseHistory: history,
     people: people.map((user) => ({ id: user.id, name: user.displayName })),
     settlement: { settled: settlement.settled, missing: settlement.missing.map((entry) => ({ code: entry.code, message: entry.message })), source: settlement.source },
-    actions: orderActions(order.status, moveFactsOf(facts, settlement)),
+    actions: orderActions(order.status, { ...moveFactsOf(facts, settlement), cancelBlocks }),
+    dailyActions: dailyActions(order.status, shortLines),
+    amendments: { count: amendments.length, latestRevision: amendments[0]?.revision ?? null, latestAt: amendments[0] ? toUtcIso(amendments[0].createdAt) : null },
+    /** SAL-209: a confirmed order's lines change only through an amendment. */
+    locked: true,
   }
 }
 

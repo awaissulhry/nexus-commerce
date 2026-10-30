@@ -28,7 +28,7 @@ import { deliverLinkMail, queueLinkMail } from './mail'
 import { refreshVersion } from './pricing'
 import { detailInCommand, onQuote } from './quotes'
 import { quoteRulesFor } from './rules'
-import { grainsOf, officeContextOf, officeQuote, readCurrentVersion, readQuote, storedVat, treatmentFor, treatmentOfStored, type QuoteRow } from './store'
+import { grainsOf, officeContextOf, officeQuote, readCurrentVersion, readQuote, storedVat, treatmentFor, treatmentOfStored, type QuoteParty, type QuoteRow } from './store'
 import { forCaller, readFacts, type QuoteDetail } from './views'
 
 /**
@@ -67,6 +67,30 @@ const asAddress = (row: { name: string | null; line1: string; line2: string | nu
   contactName: row.contactName,
   phone: row.phone,
 })
+
+/**
+ * B-W2a-30 (SAL-202, an order typed by the office): the buyer and the delivery address of a party as a send freezes them
+ * (the tax identity in force, the VIES consultation that proved an EU VAT number, the addresses ACTIVE and the party's).
+ * Null where the address is missing (the caller says what is missing).
+ */
+export async function partySnapshotsOf(db: Reader, party: QuoteParty, taxMode: string, billToAddressId: string | null, shipToAddressId: string | null, now: Date): Promise<{ billTo: BillToSnapshot | null; shipTo: ShipToSnapshot | null }> {
+  const ids = [billToAddressId, shipToAddressId].filter((id): id is string => id !== null)
+  const addresses = ids.length > 0 ? await db.partyAddress.findMany({ where: { id: { in: ids } }, select: ADDRESS_COLUMNS }) : []
+  const usable = (id: string | null) => addresses.find((row) => row.id === id && row.partyId === party.row.id && row.status === 'ACTIVE') ?? null
+  const billRow = usable(billToAddressId)
+  const shipRow = usable(shipToAddressId)
+  let billTo: BillToSnapshot | null = null
+  if (billRow && party.identity) {
+    let consultation: string | null = null
+    if (taxMode === 'EU_B2B' && party.identityId) {
+      const identityRow = await db.partyTaxIdentity.findUnique({ where: { id: party.identityId }, select: TAX_COLUMNS })
+      const checksOf = await db.viesCheck.findMany({ where: { taxIdentityId: party.identityId }, select: VIES_COLUMNS })
+      consultation = identityRow ? (viesStanding(taxFieldsOf(identityRow), checksOf.map(viesFactsOf), now).proof?.consultationNumber ?? null) : null
+    }
+    billTo = billToSnapshot({ legalName: party.row.legalName, kind: party.row.kind, identity: party.identity, viesConsultationNumber: consultation, address: asAddress(billRow) })
+  }
+  return { billTo, shipTo: shipRow ? shipToSnapshot(asAddress(shipRow)) : null }
+}
 
 const SENDABLE: readonly QuoteVersionStatus[] = ['DRAFT', 'APPROVED']
 

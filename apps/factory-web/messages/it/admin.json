@@ -1678,6 +1678,8 @@
     "views_save": "Salvare e condividere le proprie viste di un elenco",
     "views_manage": "Condividere viste con tutti e impostare la vista predefinita di un ruolo",
     "views_export": "Esportare un elenco in CSV o Excel",
+    "inventory_discrepancies_manage": "Registrare e chiudere le differenze di ricevimento",
+    "inventory_discrepancies_report": "Inviare al fornitore il rapporto delle differenze",
     "search_rebuild": "Ricostruire l'indice di ricerca di tutto il gruppo"
   }
 }

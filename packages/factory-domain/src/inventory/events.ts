@@ -4,6 +4,8 @@ import { PURCHASE_ORDER_STATUSES } from '../purchasing/orders'
 import { HIDE_STATES } from './issue/rules'
 import { COUNT_ITEM_KINDS, STOCK_COUNT_KINDS, STOCK_COUNT_STATUSES } from './counts/rules'
 import { STOCK_MOVE_REASONS } from './ledger/moves'
+// B-W2a-31: receiving every day.
+import { DISCREPANCY_KINDS, DISCREPANCY_STATUSES } from './receipts/discrepancies'
 
 /**
  * The inventory module's events (plan A1 §3.4; SCM-189). apps/factory-api's modules/inventory/ledger `postMoves` emits
@@ -32,6 +34,11 @@ import { STOCK_MOVE_REASONS } from './ledger/moves'
  * once when its differences are posted (its COUNT moves also emit `inventory.moved`), `inventory.count_signed_off` once
  * when a year-end inventory is signed off with its valued list. They reach the counts screens (inventory.counts.view);
  * never a cost, never a person.
+ *
+ * Receiving every day (B-W2a-31, modules/inventory/receipts; SCM-118): `inventory.receipt_discrepancy_changed` once per
+ * discrepancy recorded, changed, removed or settled (agreed, credited, closed) on a receipt, and
+ * `inventory.receipt_discrepancies_reported` once per report sent to the supplier (the OPEN ones it names become SENT).
+ * They reach the receipt's Discrepancies tab and the Receipts tiles (inventory.stock.view); never a price or a person.
  */
 const decimal = () => z.string().regex(/^\d{1,14}\.\d{4}$/)
 
@@ -299,5 +306,37 @@ export const events = [
       rows: z.number().int().min(0),
     }),
     live: { permission: 'inventory.counts.view', fields: ['countId', 'number', 'inventoryDate'] },
+  }),
+  // B-W2a-31: receiving every day (discrepancies and their report to the supplier).
+  defineEvent({
+    type: 'inventory.receipt_discrepancy_changed',
+    context: 'inventory',
+    description: 'A discrepancy of a goods receipt was recorded, changed, removed, or settled (agreed, credited, closed).',
+    payload: z.strictObject({
+      receiptId: z.uuid(),
+      discrepancyId: z.uuid(),
+      seq: z.number().int().min(1),
+      kind: z.enum(DISCREPANCY_KINDS),
+      /** Its state after the change (REMOVED: deleted while OPEN). */
+      status: z.enum([...DISCREPANCY_STATUSES, 'REMOVED']),
+      change: z.enum(['RECORDED', 'CHANGED', 'REMOVED', 'SETTLED']),
+    }),
+    live: { permission: 'inventory.stock.view', fields: ['receiptId', 'discrepancyId', 'status', 'change'] },
+  }),
+  defineEvent({
+    type: 'inventory.receipt_discrepancies_reported',
+    context: 'inventory',
+    description: "A goods receipt's discrepancy report (a PDF without prices) was sent to the supplier on the receipt's thread.",
+    payload: z.strictObject({
+      receiptId: z.uuid(),
+      number: z.string(),
+      /** Every discrepancy the report named, and the OPEN ones it moved to SENT. */
+      discrepancyIds: z.array(z.uuid()).min(1),
+      sentIds: z.array(z.uuid()),
+      documentFileId: z.uuid(),
+      outboundId: z.uuid(),
+      recipients: z.number().int().min(1),
+    }),
+    live: { permission: 'inventory.stock.view', fields: ['receiptId', 'number', 'discrepancyIds'] },
   }),
 ] as const

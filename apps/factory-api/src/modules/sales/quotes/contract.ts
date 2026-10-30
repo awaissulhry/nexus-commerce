@@ -284,6 +284,28 @@ export const createQuoteContract = defineContract({
 
 export const updateQuoteContract = defineContract({ params: quoteParams, body: input({ version, ...headerFields }), response: { 200: one } })
 
+// B-W2a-30 (SAL-155): a new quote copied from a quote's version, or from an order's lines.
+const copyFields = {
+  /** Another customer of the company; none: the same one. */
+  partyId: id().optional(),
+  contactId: id().nullish(),
+  customerRef: text(MAX_TEXT.customerRef).nullish(),
+}
+const copyAnswer = output({
+  quote: quoteView,
+  /** What the copy left out, in words: archived styles or colourways, sizes no longer offered, made-to-measure units. */
+  dropped: z.array(output({ seq: z.number().int(), size: z.string().nullable(), reason: z.string() })),
+  warnings: z.array(z.string()),
+})
+
+export const duplicateQuoteContract = defineContract({
+  params: quoteParams,
+  body: input({ /** The version to copy; none: the current one. */ versionId: id().optional(), ...copyFields }),
+  response: { 201: copyAnswer },
+})
+
+export const copyOrderAsQuoteContract = defineContract({ params: input({ orderId: id() }), body: input(copyFields), response: { 201: copyAnswer } })
+
 export const addLineContract = defineContract({
   params: quoteParams,
   body: input({

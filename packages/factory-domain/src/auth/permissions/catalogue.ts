@@ -10,6 +10,8 @@ import { TASKS_DEFINITIONS, TASKS_PERMISSIONS } from '../../tasks/permissions'
 import type { Permission } from '../../core/permissions'
 import { INVENTORY_FLOOR_PERMISSIONS, INVENTORY_PERMISSIONS } from '../../inventory/permissions'
 import { INVENTORY_COUNTS_DEFINITIONS, INVENTORY_COUNTS_PERMISSIONS } from '../../inventory/counts/permissions'
+// B-W2a-31: receiving every day (discrepancies and the report to the supplier).
+import { INVENTORY_DISCREPANCIES_DEFINITIONS, INVENTORY_DISCREPANCIES_PERMISSIONS } from '../../inventory/receipts/permissions'
 import { INVENTORY_RESERVATION_PERMISSIONS } from '../../inventory/reservations/permissions'
 import { INVOICES_DEFINITIONS, INVOICES_PERMISSIONS } from '../../invoicing/permissions'
 import { LINK_SESSION_PERMISSIONS as LINK_SESSION_NAMES, LINKS_OFFICE_PERMISSIONS } from '../../links/permissions'
@@ -344,6 +346,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCT_ROUTING_DEFINITIONS,
   INVENTORY_DEFINITIONS,
   INVENTORY_COUNTS_DEFINITIONS,
+  // B-W2a-31: receiving every day.
+  INVENTORY_DISCREPANCIES_DEFINITIONS,
   SHIPPING_DEFINITIONS,
   SHIPPING_LABELS_DEFINITIONS,
   PARTIES_DEFINITIONS,
@@ -439,6 +443,8 @@ for (const name of TASKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name))
 for (const name of [...QUALITY_DEFECTS_PERMISSIONS, ...QUALITY_HOLDS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-23: saved views and exports.
 for (const name of VIEWS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-31: receiving every day.
+for (const name of INVENTORY_DISCREPANCIES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-32: global search.
 for (const name of SEARCH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

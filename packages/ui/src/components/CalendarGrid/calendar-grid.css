@@ -1,0 +1,442 @@
+/* CalendarGrid (CalendarGrid.tsx). Loaded with the component, never by the shared stylesheets: no page that does not
+   draw a calendar carries these rules. Semantic --nds-* tokens only (no raw colour, no numbered ramp), so both themes
+   come from the tokens.
+
+   Contrast, measured 2026-10-30 from tokens.css in both themes (light / dark):
+   - a kind's ground is its --nds-<tone>-soft and its text --nds-<tone>-text — the status pairs the contrast gate holds
+     at 7:1 (info 8.39 / 11.23, success 9.32 / 8.14, warning 9.05 / 7.75, danger 8.24 / 8.96); the same text on the plain
+     surface is 9.63 / 12.73 at worst for info, 8.88 for warning in dark — so the hatch, which alternates the soft ground
+     and the surface, never lowers the text below 7:1. A plain day is --nds-text on --nds-surface (15.48).
+   - the hatch and cross lines, dots, edge bar and dashed frame are the tone's accent --nds-<tone> (at least 3.18:1 against the surface in both
+     themes: a graphic, WCAG 1.4.11); a neutral kind draws them in --nds-text-2 (9.87 / 9.37). The day's number sits on
+     a solid chip of the soft ground, so no line crosses a digit.
+   A state is never said by colour alone: a day off is hatched, the others plain, cross-hatched, dotted, barred or
+   framed as the key says;
+   today has its word in the month and a bar under its number; a selected day an outline and the word "Selected" in its
+   name; an exception its kind in words. */
+
+.nds-cal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ─────────── Bar ─────────── */
+.nds-cal-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+.nds-cal-title {
+  flex: 1 1 10rem;
+  min-width: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+.nds-cal-nav,
+.nds-cal-switches {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.nds-cal-held {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+  margin: 0;
+  color: var(--nds-warning-text);
+}
+.nds-cal-held > svg {
+  flex: none;
+  margin-top: 2px;
+}
+.nds-cal-status {
+  margin: 0;
+  min-height: 1.4em;
+  color: var(--nds-text-2);
+}
+.nds-cal-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ─────────── Tones and patterns (cells, list rows, key swatches) ─────────── */
+.nds-cal [data-pattern] {
+  --nds-cal-soft: var(--nds-surface);
+  --nds-cal-fg: var(--nds-text);
+  --nds-cal-accent: var(--nds-text-2);
+}
+.nds-cal [data-tone='neutral'] {
+  --nds-cal-soft: var(--nds-surface-sunken);
+  --nds-cal-fg: var(--nds-text);
+  --nds-cal-accent: var(--nds-text-2);
+}
+.nds-cal [data-tone='info'] {
+  --nds-cal-soft: var(--nds-info-soft);
+  --nds-cal-fg: var(--nds-info-text);
+  --nds-cal-accent: var(--nds-info);
+}
+.nds-cal [data-tone='success'] {
+  --nds-cal-soft: var(--nds-success-soft);
+  --nds-cal-fg: var(--nds-success-text);
+  --nds-cal-accent: var(--nds-success);
+}
+.nds-cal [data-tone='warning'] {
+  --nds-cal-soft: var(--nds-warning-soft);
+  --nds-cal-fg: var(--nds-warning-text);
+  --nds-cal-accent: var(--nds-warning);
+}
+.nds-cal [data-tone='danger'] {
+  --nds-cal-soft: var(--nds-danger-soft);
+  --nds-cal-fg: var(--nds-danger-text);
+  --nds-cal-accent: var(--nds-danger);
+}
+.nds-cal [data-pattern] {
+  background-color: var(--nds-cal-soft);
+  color: var(--nds-cal-fg);
+}
+.nds-cal [data-pattern='hatch'] {
+  background-image: repeating-linear-gradient(135deg, var(--nds-cal-accent) 0 1.5px, var(--nds-cal-soft) 1.5px 7px);
+}
+.nds-cal [data-pattern='cross'] {
+  background-image: repeating-linear-gradient(45deg, var(--nds-cal-accent) 0 1.5px, transparent 1.5px 7px),
+    repeating-linear-gradient(135deg, var(--nds-cal-accent) 0 1.5px, var(--nds-cal-soft) 1.5px 7px);
+}
+.nds-cal [data-pattern='dots'] {
+  background-image: radial-gradient(var(--nds-cal-accent) 1.2px, transparent 1.6px);
+  background-size: 7px 7px;
+}
+.nds-cal [data-pattern='stripe'] {
+  box-shadow: inset 4px 0 0 var(--nds-cal-accent);
+}
+.nds-cal [data-pattern='outline'] {
+  outline: 2px dashed var(--nds-cal-accent);
+  outline-offset: -4px;
+}
+
+/* ─────────── Month ─────────── */
+.nds-cal-month {
+  min-width: 0;
+}
+.nds-cal-grid,
+.nds-cal-mini-grid {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: var(--nds-space-2);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.nds-cal-weekday {
+  padding: var(--nds-space-4) var(--nds-space-2);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+  text-align: start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nds-cal-mini-grid .nds-cal-weekday {
+  text-align: center;
+}
+.nds-cal-cell,
+.nds-cal-mcell {
+  padding: 0;
+  vertical-align: top;
+}
+.nds-cal-day,
+.nds-cal-mday {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.nds-cal-day {
+  align-items: flex-start;
+  min-height: 5.25rem;
+  padding: var(--nds-space-4);
+}
+.nds-cal-day-in {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  max-width: 100%;
+  min-width: 0;
+  padding: var(--nds-space-2) var(--nds-space-4);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-cal-soft);
+}
+.nds-cal-num {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.nds-cal-today {
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-cal-kind {
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-cal-kind,
+.nds-cal-reason,
+.nds-cal-detail {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--nds-font-size-xs);
+}
+@media (hover: hover) {
+  .nds-cal-day:hover,
+  .nds-cal-mday:hover {
+    border-color: var(--nds-text-2);
+  }
+}
+.nds-cal-day:focus-visible,
+.nds-cal-mday:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+  z-index: 1;
+}
+/* Today: a bar under the number (and its word in the month). */
+.nds-cal-day.is-today .nds-cal-num,
+.nds-cal-mday.is-today .nds-cal-num {
+  text-decoration: underline;
+  text-decoration-color: var(--nds-primary);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 3px;
+}
+.nds-cal-day.is-today,
+.nds-cal-mday.is-today {
+  border-color: var(--nds-primary);
+}
+/* Selected: an outline inside the day (and "Selected" in its name). */
+.nds-cal-day.is-selected,
+.nds-cal-mday.is-selected {
+  border-color: var(--nds-primary);
+  box-shadow: inset 0 0 0 2px var(--nds-primary);
+}
+.nds-cal-day.is-selected[data-pattern='stripe'],
+.nds-cal-mday.is-selected[data-pattern='stripe'] {
+  box-shadow: inset 4px 0 0 var(--nds-cal-accent), inset 0 0 0 2px var(--nds-primary);
+}
+.nds-cal-cell.is-out,
+.nds-cal-mcell.is-out {
+  background: transparent;
+}
+
+/* ─────────── Year: twelve small months, as many a row as fit ─────────── */
+.nds-cal-year {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: var(--nds-space-16) var(--nds-space-20);
+  min-width: 0;
+}
+.nds-cal-mini {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.nds-cal-mini-head {
+  display: flex;
+  align-items: center;
+  min-height: 1.75rem;
+}
+.nds-cal-mini-name {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-cal-mday {
+  align-items: center;
+  justify-content: center;
+  min-height: 1.75rem;
+  padding: var(--nds-space-2);
+}
+.nds-cal-mday .nds-cal-day-in {
+  padding: 0 var(--nds-space-2);
+}
+.nds-cal-mday .nds-cal-num {
+  font-size: var(--nds-font-size-xs);
+}
+
+/* ─────────── The list twin ─────────── */
+.nds-cal-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+.nds-cal-list-title {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-cal-list-empty {
+  margin: 0;
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px dashed var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  color: var(--nds-text-2);
+}
+.nds-cal-list-month {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.nds-cal-list-month-name {
+  margin: 0;
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+  text-transform: none;
+}
+.nds-cal-list-days {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-cal-list .nds-cal-list-day {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  /* The row is the surface; only its swatch carries the kind's ground and pattern. */
+  background: var(--nds-surface);
+  background-image: none;
+  box-shadow: none;
+  outline: none;
+  color: var(--nds-text);
+}
+.nds-cal-list-day.is-today {
+  border-color: var(--nds-primary);
+}
+.nds-cal-list-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.nds-cal-list-date {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-6);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-cal-list-kind,
+.nds-cal-list-detail {
+  color: var(--nds-text-2);
+}
+
+/* ─────────── Swatches (the key and the list) ─────────── */
+.nds-cal-swatch {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-sm);
+  background-color: var(--nds-surface);
+}
+.nds-cal-list-day[data-pattern] .nds-cal-swatch,
+.nds-cal-legend-item[data-pattern] .nds-cal-swatch {
+  background-color: var(--nds-cal-soft);
+}
+.nds-cal-list-day[data-pattern='hatch'] .nds-cal-swatch,
+.nds-cal-legend-item[data-pattern='hatch'] .nds-cal-swatch {
+  background-image: repeating-linear-gradient(135deg, var(--nds-cal-accent) 0 1.5px, var(--nds-cal-soft) 1.5px 5px);
+}
+.nds-cal-list-day[data-pattern='cross'] .nds-cal-swatch,
+.nds-cal-legend-item[data-pattern='cross'] .nds-cal-swatch {
+  background-image: repeating-linear-gradient(45deg, var(--nds-cal-accent) 0 1.5px, transparent 1.5px 5px),
+    repeating-linear-gradient(135deg, var(--nds-cal-accent) 0 1.5px, var(--nds-cal-soft) 1.5px 5px);
+}
+.nds-cal-list-day[data-pattern='outline'] .nds-cal-swatch,
+.nds-cal-legend-item[data-pattern='outline'] .nds-cal-swatch {
+  outline: 2px dashed var(--nds-cal-accent);
+  outline-offset: -4px;
+}
+.nds-cal-list-day[data-pattern='dots'] .nds-cal-swatch,
+.nds-cal-legend-item[data-pattern='dots'] .nds-cal-swatch {
+  background-image: radial-gradient(var(--nds-cal-accent) 1.2px, transparent 1.6px);
+  background-size: 6px 6px;
+}
+.nds-cal-list-day[data-pattern='stripe'] .nds-cal-swatch,
+.nds-cal-legend-item[data-pattern='stripe'] .nds-cal-swatch {
+  box-shadow: inset 4px 0 0 var(--nds-cal-accent);
+}
+.nds-cal-legend-item.is-today .nds-cal-swatch {
+  border: 2px solid var(--nds-primary);
+}
+
+/* ─────────── Key ─────────── */
+.nds-cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-width: 0;
+  color: var(--nds-text-2);
+}
+.nds-cal-legend-title {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+.nds-cal-legend-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-14);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nds-cal .nds-cal-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  /* The item is text on the page; only its swatch carries the kind's ground and pattern. */
+  background: none;
+  box-shadow: none;
+  outline: none;
+  color: var(--nds-text-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nds-cal-day,
+  .nds-cal-mday {
+    transition: none;
+  }
+}
