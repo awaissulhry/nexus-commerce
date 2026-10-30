@@ -110,6 +110,11 @@ const currentView = output({
   firmOffer: z.boolean(),
   promiseDate: z.string().nullable(),
   paymentTerms: z.string().nullable(),
+  /** B-W2a-19: the library's terms (FIN-075) and the price list version the quote keeps (SAL-165). */
+  paymentTermsId: id().nullable(),
+  priceList: notMoney(output({ listId: id(), code: z.string(), name: z.string(), versionId: id(), revision: z.number().int() }).nullable()),
+  /** The customer's minimum order (SAL-012) against the net total: what is missing, in the version's currency. */
+  belowMinimum: money.price(output({ minimum: z.number().int(), short: z.number().int() }).nullable()),
   termsText: z.string().nullable(),
   termsVersion: z.string().nullable(),
   depositPct: z.string().nullable(),
@@ -259,6 +264,8 @@ const headerFields = {
   firmOffer: z.boolean().optional(),
   promiseDate: businessDate().nullish(),
   paymentTerms: text(MAX_TEXT.paymentTerms).nullish(),
+  /** B-W2a-19: terms from the library (their printed name follows unless paymentTerms is sent); null: none. */
+  paymentTermsId: id().nullish(),
   termsText: text(MAX_TEXT.termsText).nullish(),
   termsVersion: text(MAX_TEXT.termsVersion).nullish(),
   /** Percent of the gross total asked at acceptance; null: none. */

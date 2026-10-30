@@ -1491,7 +1491,9 @@
     "quality": "Quality",
     "home": "Home",
     "floorsync": "Floor sync",
-    "calendars": "Calendars"
+    "calendars": "Calendars",
+    "paymentterms": "Payment terms",
+    "pricelists": "Price lists"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1648,6 +1650,10 @@
     "production_scrap_view": "See scrap and rework",
     "production_scrap": "Post scrap and ask for replacements",
     "production_scrap_approve": "Approve lower order quantities",
-    "production_cutting_view": "See the cutting room's yield"
+    "production_cutting_view": "See the cutting room's yield",
+    "paymentterms_view": "See the payment terms library",
+    "paymentterms_manage": "Add and change payment terms",
+    "pricelists_view": "See price lists and their prices",
+    "pricelists_manage": "Keep price lists, their versions and customers"
   }
 }

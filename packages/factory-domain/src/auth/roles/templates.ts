@@ -122,7 +122,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Finance',
     description: 'Invoices, payments and number series; sees prices, costs, margins and wages.',
     requireMfa: true,
-    permissions: ['numbering.view', 'numbering.manage', 'audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'product.materials.view', 'product.materials.cost', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'shipping.view', 'parties.view', 'parties.manage', 'parties.block', 'parties.vies', 'invoices.view', 'invoices.manage', 'invoices.issue', 'payments.view', 'payments.record', 'payments.void', 'costing.view', 'costing.rates.manage', 'quotes.view', 'quotes.approve', 'sales.settings.manage', 'companies.bank.view', 'companies.bank.manage', 'orders.view', 'orders.close', 'home.view', 'calendars.view', 'inventory.counts.view', 'inventory.counts.signoff', 'production.scrap.view'],
+    permissions: ['numbering.view', 'numbering.manage', 'audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'product.materials.view', 'product.materials.cost', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'shipping.view', 'parties.view', 'parties.manage', 'parties.block', 'parties.vies', 'invoices.view', 'invoices.manage', 'invoices.issue', 'payments.view', 'payments.record', 'payments.void', 'costing.view', 'costing.rates.manage', 'quotes.view', 'quotes.approve', 'sales.settings.manage', 'companies.bank.view', 'companies.bank.manage', 'orders.view', 'orders.close', 'home.view', 'calendars.view', 'inventory.counts.view', 'inventory.counts.signoff', 'production.scrap.view',
+      // B-W2a-19: the payment terms library (Finance settings) and the price lists (read).
+      'paymentterms.view', 'paymentterms.manage', 'pricelists.view'],
     grains: ['price', 'cost', 'margin', 'wages'],
   }),
   template('sales', {
@@ -132,7 +134,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     // (A1 §3.10).
     description: 'Customers, quotes and orders; sees selling prices and margin %, not costs.',
     requireMfa: true,
-    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send', 'orders.view', 'orders.manage', 'home.view', 'calendars.view'],
+    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send', 'orders.view', 'orders.manage', 'home.view', 'calendars.view',
+      // B-W2a-19: the customer price lists (keep them) and the payment terms library (pick from it).
+      'pricelists.view', 'pricelists.manage', 'paymentterms.view'],
     grains: ['price', 'margin'],
   }),
   template('planner', {

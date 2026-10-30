@@ -44,7 +44,10 @@ export function termsKindOf(taxMode: PartyTaxMode): TermsKind {
 /** The id of a default clause set, recorded as the terms version when the company has none of its own. */
 export const defaultTermsVersion = (kind: TermsKind): string => `default-${kind.toLowerCase()}-${DEFAULT_TERMS_REVISION}`
 
-/** Days the deposit is due after the acceptance (no setting yet: the design's "due N days after acceptance"). */
+/**
+ * Days the deposit is due after the acceptance when the quote's payment terms name none (the design's "due N days after
+ * acceptance"); B-W2a-19: terms with an order instalment give its days (sales/terms depositDueDaysOf).
+ */
 export const DEPOSIT_DUE_DAYS = 7
 
 export interface TermsInput {
@@ -58,6 +61,8 @@ export interface TermsInput {
   readonly noWithdrawal: boolean
   readonly termsText: string | null
   readonly termsVersion: string | null
+  /** B-W2a-19: the days the deposit is due after the acceptance (the payment terms' order instalment); default DEPOSIT_DUE_DAYS. */
+  readonly depositDueDays?: number | undefined
 }
 
 export const CLAUSE_CODES = ['PRICES', 'VALIDITY', 'DELIVERY', 'DEPOSIT', 'CAPARRA_BOTH_WAYS', 'NO_WITHDRAWAL', 'DUTIES', 'ACCEPTANCE', 'TERMS'] as const
@@ -82,9 +87,9 @@ const WORDS = {
     validity: (date: string) => `Offerta valida fino al ${date}.`,
     firm: (date: string) => `Offerta irrevocabile: ci impegniamo a mantenerla ferma fino al ${date} (art. 1329 c.c.).`,
     delivery: (date: string) => `Consegna prevista entro il ${date}.`,
-    acconto: (pct: string, amount: string, days: number) => `Acconto all'accettazione: ${pct} del totale, ${amount}, da versare con bonifico bancario entro ${days} giorni dall'accettazione.`,
+    acconto: (pct: string, amount: string, days: number) => `Acconto all'accettazione: ${pct} del totale, ${amount}, da versare con bonifico bancario ${days === 0 ? "il giorno dell'accettazione" : `entro ${days} giorni dall'accettazione`}.`,
     caparra: (pct: string, amount: string, days: number) =>
-      `Caparra confirmatoria (art. 1385 c.c.) all'accettazione: ${pct} del totale, ${amount}, da versare con bonifico bancario entro ${days} giorni dall'accettazione.`,
+      `Caparra confirmatoria (art. 1385 c.c.) all'accettazione: ${pct} del totale, ${amount}, da versare con bonifico bancario ${days === 0 ? "il giorno dell'accettazione" : `entro ${days} giorni dall'accettazione`}.`,
     caparraBothWays:
       "Caparra confirmatoria ai sensi dell'art. 1385 c.c.: in caso di recesso ingiustificato del cliente la caparra è trattenuta; in caso di inadempimento del venditore, il cliente ha diritto al doppio della caparra.",
     noWithdrawal: 'Diritto di recesso escluso ai sensi dell\'art. 59, c. 1, lett. c) del D.Lgs. 206/2005: beni confezionati su misura.',
@@ -98,9 +103,9 @@ const WORDS = {
     validity: (date: string) => `Offer valid until ${date}.`,
     firm: (date: string) => `Firm offer: we will not withdraw it before ${date} (Italian Civil Code, art. 1329).`,
     delivery: (date: string) => `Expected delivery by ${date}.`,
-    acconto: (pct: string, amount: string, days: number) => `Advance payment (acconto) at acceptance: ${pct} of the total, ${amount}, by bank transfer within ${days} days of acceptance.`,
+    acconto: (pct: string, amount: string, days: number) => `Advance payment (acconto) at acceptance: ${pct} of the total, ${amount}, by bank transfer ${days === 0 ? 'on the day of acceptance' : `within ${days} days of acceptance`}.`,
     caparra: (pct: string, amount: string, days: number) =>
-      `Confirmatory deposit (caparra confirmatoria, Italian Civil Code art. 1385) at acceptance: ${pct} of the total, ${amount}, by bank transfer within ${days} days of acceptance.`,
+      `Confirmatory deposit (caparra confirmatoria, Italian Civil Code art. 1385) at acceptance: ${pct} of the total, ${amount}, by bank transfer ${days === 0 ? 'on the day of acceptance' : `within ${days} days of acceptance`}.`,
     caparraBothWays:
       'Confirmatory deposit under art. 1385 of the Italian Civil Code: if the customer withdraws without cause, the deposit is kept; if the seller defaults, the customer is entitled to twice the deposit.',
     noWithdrawal: 'No right of withdrawal: the goods are made to the consumer\'s specifications (Italian Consumer Code, art. 59(1)(c)).',
@@ -123,7 +128,8 @@ export function quoteTerms(input: TermsInput): QuoteTerms {
   if (input.deposit && input.deposit.amount > 0) {
     const pct = formatPercent(input.deposit.pct, input.language)
     const amount = formatMoney(input.deposit.amount, input.currency, input.language)
-    add('DEPOSIT', input.deposit.kind === 'CAPARRA' ? words.caparra(pct, amount, DEPOSIT_DUE_DAYS) : words.acconto(pct, amount, DEPOSIT_DUE_DAYS))
+    const days = input.depositDueDays ?? DEPOSIT_DUE_DAYS
+    add('DEPOSIT', input.deposit.kind === 'CAPARRA' ? words.caparra(pct, amount, days) : words.acconto(pct, amount, days))
     if (input.deposit.kind === 'CAPARRA' && kind === 'CONSUMER') add('CAPARRA_BOTH_WAYS', words.caparraBothWays)
   }
   if (input.noWithdrawal && kind === 'CONSUMER') add('NO_WITHDRAWAL', words.noWithdrawal)

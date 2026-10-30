@@ -1491,7 +1491,9 @@
     "quality": "Qualità",
     "home": "Home",
     "floorsync": "Sincronizzazione reparto",
-    "calendars": "Calendari"
+    "calendars": "Calendari",
+    "paymentterms": "Condizioni di pagamento",
+    "pricelists": "Listini"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1648,6 +1650,10 @@
     "production_scrap_view": "Vedere scarti e rilavorazioni",
     "production_scrap": "Registrare scarti e chiedere sostituzioni",
     "production_scrap_approve": "Approvare riduzioni d'ordine",
-    "production_cutting_view": "Vedere la resa del taglio"
+    "production_cutting_view": "Vedere la resa del taglio",
+    "paymentterms_view": "Vedere le condizioni di pagamento",
+    "paymentterms_manage": "Aggiungere e cambiare condizioni di pagamento",
+    "pricelists_view": "Vedere i listini e i loro prezzi",
+    "pricelists_manage": "Gestire listini, versioni e clienti"
   }
 }

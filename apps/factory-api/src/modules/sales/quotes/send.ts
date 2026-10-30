@@ -1,3 +1,4 @@
+import { depositDueDaysFor } from '../terms/store'
 import type { FastifyRequest } from 'fastify'
 import type { Prisma } from '@nexus/factory-db'
 import { DomainError, InvalidStateError, NotFoundError, type Issue } from '@nexus/factory-domain/core/errors'
@@ -140,7 +141,7 @@ export async function readSendFacts(db: Reader, quote: QuoteRow, now: Date, comp
   if (preview ? billTo && shipTo && row.validUntil !== null : checks.ready && billTo && shipTo) {
     const lines = await readCustomerLines(db, version.id)
     const shown = preview ? { ...row, language: preview.language } : row
-    customer = customerQuoteOf({ quote, version: shown, lines, labels: await lineLabels(db, lines), billTo: billTo!, shipTo: shipTo!, contact, date: today })
+    customer = customerQuoteOf({ quote, version: shown, lines, labels: await lineLabels(db, lines), billTo: billTo!, shipTo: shipTo!, contact, date: today, depositDueDays: await depositDueDaysFor(db, version.paymentTermsId) })
   }
   return { checks, versionId: version.id, versionStatus: version.status, billTo, shipTo, contact, customer, today }
 }
@@ -446,6 +447,9 @@ export async function reviseQuote(caller: CommandCaller, quoteId: string, body: 
         firmOffer: source.firmOffer,
         promiseDate: source.promiseDate && dayOf(source.promiseDate)! >= today ? source.promiseDate : null,
         paymentTerms: source.paymentTerms,
+        // B-W2a-19: the revision keeps the library terms and the price list version of the version it revises.
+        paymentTermsId: from.paymentTermsId,
+        priceListVersionId: from.priceListVersionId,
         termsText: source.termsText,
         termsVersion: source.termsVersion,
         depositPct: from.depositPct,
