@@ -36,6 +36,10 @@ import {
 import { useCoalesced, useLive, useThreadDock } from '../../_shared/hooks'
 import { abilitiesOf, cellsBody, liveTouches, readProblem, releaseRefusalCodes, tabOf, writeProblem, type SizeLayer } from '../../_shared/model'
 import { PART_LOADING, type Loaded, type Part, type RecordDialog, type ReprintRun, type WorkOrderRecordModel } from './record-model'
+import { newIdempotencyKey } from '../../../../lib/api/client'
+import { useStepUp, isStepUpCancelled } from '../../../quality/_shared/hooks'
+import { getAvailability, getFinished, getHold, getReadiness, getScrap, getYield, holdReasons, listHolds, placeHold, releaseHold, reportFinished, reserveHides, splitBundle } from '../daily/api'
+import { beforeRelease, DAILY_NAMESPACE, dailyCan, dailyProblem, dailyReadProblem, FINISHABLE, LOADING, NO_DAILY, READINESS_STATUSES, type DailyDialog, type DailyModel } from '../daily/model'
 import { WorkOrderRecordView } from './view/WorkOrderRecordView'
 
 /**
@@ -47,7 +51,7 @@ import { WorkOrderRecordView } from './view/WorkOrderRecordView'
  */
 export function WorkOrderRecord({ workOrderId }: { workOrderId: string }) {
   return (
-    <WithMessages namespaces={['production', 'lists', 'records']}>
+    <WithMessages namespaces={['production', DAILY_NAMESPACE, 'lists', 'records']}>
       <RecordContainer workOrderId={workOrderId} />
     </WithMessages>
   )
@@ -90,14 +94,71 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   const dirty = useRef(new Set<'details' | 'sizes'>())
   const { dockOpen, toggleDock } = useThreadDock()
 
+  // B-W2a-46: the work order every day (holds, finished to stock, yield, scrap and rework, readiness, reserve, split).
+  const dcan = useMemo(() => dailyCan(session.permissions), [session.permissions])
+  const [daily, setDaily] = useState<DailyModel>(() => NO_DAILY(dcan))
+  const patchDailyNow = useCallback((patch: Partial<DailyModel>) => setDaily((current) => ({ ...current, ...patch })), [])
+  const patchDaily = patchDailyNow
+  const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
+  const dailyRef = useRef(daily)
+  dailyRef.current = daily
+
   const setValue = useCallback((next: WorkOrder) => {
     current.current = next
     setWorkOrder({ status: 'ready', value: next })
   }, [])
 
+  // Each read of the parts has a turn: an answer of an older read (a slow one before a write) never replaces a newer one.
+  const dailyTurn = useRef(0)
+  const loadDaily = useCallback(
+    (wo: WorkOrder) => {
+      const turn = ++dailyTurn.current
+      const patchDaily = (patch: Partial<DailyModel>) => {
+        if (turn === dailyTurn.current) patchDailyNow(patch)
+      }
+      const fail = (key: keyof DailyModel) => (error: unknown) => patchDaily({ [key]: { value: null, problem: dailyReadProblem(error) } } as Partial<DailyModel>)
+      if (dcan.holdsView) {
+        listHolds(api, { subjectType: 'WorkOrder', subjectId: wo.id, status: 'ALL' })
+          .then((value) => patchDaily({ holds: { value, problem: null } }))
+          .catch(fail('holds'))
+        if (!beforeRelease(wo))
+          listHolds(api, { subjectType: 'Bundle', siteId: wo.siteId })
+            .then((value) => patchDaily({ bundleHolds: value }))
+            .catch(() => patchDaily({ bundleHolds: null }))
+      }
+      if ((dcan.holdsView || dcan.holdsPlace) && !dailyRef.current.reasons)
+        holdReasons(api)
+          .then((value) => patchDaily({ reasons: value }))
+          .catch(() => undefined)
+      if (beforeRelease(wo)) return
+      if (READINESS_STATUSES.includes(wo.status) && wo.kind !== 'REPAIR') {
+        patchDaily({ readiness: LOADING })
+        getReadiness(api, [wo.id])
+          .then(([row]) => patchDaily({ readiness: { value: row ?? null, problem: null } }))
+          .catch(fail('readiness'))
+      }
+      if (FINISHABLE.includes(wo.status) || wo.status === 'ON_HOLD') {
+        patchDaily({ finished: dailyRef.current.finished?.value ? dailyRef.current.finished : LOADING })
+        getFinished(api, wo.id)
+          .then((value) => patchDaily({ finished: { value, problem: null } }))
+          .catch(fail('finished'))
+      }
+      patchDaily({ yield: dailyRef.current.yield?.value ? dailyRef.current.yield : LOADING })
+      getYield(api, wo.id)
+        .then((value) => patchDaily({ yield: { value, problem: null } }))
+        .catch(fail('yield'))
+      if (dcan.scrapView)
+        getScrap(api, wo.id)
+          .then((value) => patchDaily({ scrap: { value, problem: null } }))
+          .catch(fail('scrap'))
+    },
+    [api, dcan, patchDailyNow],
+  )
+
   const loadParts = useCallback(
     async (wo: WorkOrder) => {
-      if (wo.status === 'DRAFT') {
+      loadDaily(wo)
+      if (beforeRelease(wo)) {
         getReleaseCheck(api, wo.id)
           .then((value) => setCheck(part(value)))
           .catch((error: unknown) => setCheck({ value: null, problem: readProblem(error) }))
@@ -121,7 +182,7 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
           .then((value) => setQuality(part(value)))
           .catch((error: unknown) => setQuality({ value: null, problem: readProblem(error) }))
     },
-    [api, can.pick, can.quality],
+    [api, can.pick, can.quality, loadDaily],
   )
 
   const load = useCallback(async () => {
@@ -148,6 +209,44 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
       .then((value) => setPrinters(part(value)))
       .catch((error: unknown) => setPrinters({ value: null, problem: readProblem(error) }))
   }, [dialog, can.bundles, printers?.value, api, workOrderId])
+
+  // B-W2a-46: what a dialog reads when it opens (the hides of a material; the hold and its release checks).
+  const dialogKey = daily.dialog ? JSON.stringify(daily.dialog) : ''
+  useEffect(() => {
+    const open = dailyRef.current.dialog
+    const wo = current.current
+    if (!open || !wo) return
+    if (open.kind === 'reserve') {
+      patchDaily({ availability: LOADING })
+      getAvailability(api, { siteId: wo.siteId, itemId: open.itemId, itemColourId: open.itemColourId })
+        .then((value) => patchDaily({ availability: { value, problem: null } }))
+        .catch((error: unknown) => patchDaily({ availability: { value: null, problem: dailyReadProblem(error) } }))
+    }
+    if (open.kind === 'releaseHold') {
+      patchDaily({ holdRecord: LOADING })
+      getHold(api, open.holdId)
+        .then((value) => patchDaily({ holdRecord: { value, problem: null } }))
+        .catch((error: unknown) => patchDaily({ holdRecord: { value: null, problem: dailyReadProblem(error) } }))
+    }
+  }, [dialogKey, api, patchDaily])
+
+  /** One W2a write; success closes its dialog, says so and reads the work order again. */
+  const dailyWrite = useCallback(
+    async (run: () => Promise<unknown>, success: { key: string; params?: Record<string, string | number> }) => {
+      if (dailyRef.current.busy) return
+      patchDaily({ busy: true, problem: null })
+      try {
+        await run()
+        patchDaily({ busy: false, dialog: null, problem: null })
+        setNotice({ tone: 'success', words: { key: `${DAILY_NAMESPACE}:${success.key}`, ...(success.params ? { params: success.params } : {}) } })
+        await load()
+      } catch (error) {
+        if (isStepUpCancelled(error)) patchDaily({ busy: false })
+        else patchDaily({ busy: false, problem: dailyProblem(error) })
+      }
+    },
+    [patchDaily, load],
+  )
 
   // Live: this work order's events read it again (one read for a burst of scans); unsaved work → "changed · Reload".
   const reread = useCoalesced(() => void load(), 700)
@@ -211,6 +310,7 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     waitingAt,
     bundleOpen,
     cutOpen,
+    daily: { ...daily, can: dcan, stepUp },
   }
 
   const value = workOrder.status === 'ready' ? workOrder.value : null
@@ -308,6 +408,36 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
             .catch((error: unknown) => setBundleOpen((open) => (open && open.bundleId === bundleId ? { bundleId, scans: { value: null, problem: readProblem(error) } } : open)))
         },
         onOpenCut: setCutOpen,
+        daily: {
+          onDialog: (next: DailyDialog | null) => patchDaily({ dialog: next, problem: null }),
+          onRetry: () => {
+            const wo = current.current
+            if (wo) loadDaily(wo)
+          },
+          onPlaceHold: (input) =>
+            void dailyWrite(() => placeHold(api, input), { key: input.workOrderIds.length === 1 ? 'notice.held' : 'notice.heldMany', params: { count: input.workOrderIds.length } }),
+          onReleaseHold: (input) => {
+            const key = newIdempotencyKey()
+            void dailyWrite(() => guard('releaseHold.stepUpSentence', () => releaseHold(api, input.holdId, { version: input.version, note: input.note, notMakerStatement: input.notMakerStatement }, key)), { key: 'notice.holdReleased' })
+          },
+          onReport: (input) => {
+            const key = newIdempotencyKey()
+            const pieces = input.cells.reduce((sum, cell) => sum + cell.quantity, 0)
+            void dailyWrite(() => reportFinished(api, workOrderId, input, key), { key: 'notice.finished', params: { count: pieces } })
+          },
+          onReserve: (hideIds) => {
+            const wo = current.current
+            if (!wo) return
+            const key = newIdempotencyKey()
+            void dailyWrite(() => reserveHides(api, { siteId: wo.siteId, workOrderId: wo.id, hideIds }, key), { key: 'notice.reserved', params: { count: hideIds.length } })
+          },
+          onSplit: (input) => {
+            const key = newIdempotencyKey()
+            void dailyWrite(() => splitBundle(api, input.bundleId, { quantity: input.quantity, reason: input.reason, note: input.note, printerId: null }, key), { key: 'notice.split', params: { count: input.quantity } })
+          },
+          onStepUp: (code) => void submitStepUp(code),
+          onCancelStepUp: cancelStepUp,
+        },
         onWaitingAt: (seq) => {
           const query = new URLSearchParams(params?.toString() ?? '')
           query.set('tab', 'bundles')

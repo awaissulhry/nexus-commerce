@@ -1,0 +1,371 @@
+{
+  "common": {
+    "cancel": "Annulla",
+    "retry": "Riprova"
+  },
+  "status": {
+    "DRAFT": "Bozza",
+    "RELEASED": "Rilasciato",
+    "IN_PROGRESS": "In lavorazione",
+    "COMPLETED": "Completato",
+    "CLOSED": "Chiuso",
+    "CANCELLED": "Annullato",
+    "ON_HOLD": "In sospeso"
+  },
+  "part": {
+    "loading": "Lettura di {part}…",
+    "failed": "Non è stato possibile leggere {part}"
+  },
+  "readiness": {
+    "title": "Disponibilità materiali",
+    "column": "Disponibilità",
+    "NOT_ENOUGH": "Non basta",
+    "DELAYED": "In ritardo",
+    "REQUESTED": "Richiesto",
+    "EXPECTED": "Atteso",
+    "EXPECTED_on": "Atteso il {date}",
+    "NOT_BOOKED": "Non prenotato",
+    "RECEIVED": "Ricevuto",
+    "NOT_PLANNED": "Non pianificato",
+    "notPlannedShort": "Non pianificato",
+    "unknown": "—",
+    "short": "(mancano {quantity} {uom})",
+    "hint": {
+      "NOT_ENOUGH": "Una parte del materiale non è coperta da nulla: va acquistata, oppure si rilascia con il motivo del pianificatore.",
+      "DELAYED": "Una parte del materiale arriva in ritardo: un ordine d’acquisto è scaduto o arriva dopo il fabbisogno.",
+      "REQUESTED": "Una parte del materiale è solo in un ordine d’acquisto in bozza o in un ordine pianificato confermato: invia l’ordine.",
+      "EXPECTED": "Il materiale che oggi manca arriva in tempo con un ordine d’acquisto inviato.",
+      "NOT_BOOKED": "Le scorte ci sono ma non sono prenotate per questo ordine di produzione: prenotale.",
+      "RECEIVED": "Ogni materiale è prelevato o prenotato per questo ordine.",
+      "NOT_PLANNED": "Il piano non ha fabbisogni per questo ordine (il suo ordine non è pianificato, oppure è una riparazione): decidono i controlli sopra."
+    }
+  },
+  "holds": {
+    "title": "Blocchi",
+    "put": "Metti in sospeso",
+    "release": "Togli il blocco",
+    "none": "Nessun blocco riguarda questo ordine di produzione.",
+    "noRight": "I blocchi sono visibili a chi ha il ruolo dei blocchi qualità.",
+    "since_one": "dal {date} ({count} giorno)",
+    "since_other": "dal {date} ({count} giorni)",
+    "overdue": "Oltre il rilascio previsto",
+    "expected": "Rilascio previsto: {date}",
+    "banner": "In sospeso: {reason}. Torna a “{back}” quando il blocco viene tolto.",
+    "floorRefuses": "I tablet del reparto rifiutano il suo lavoro e mostrano il motivo; non gli si preleva nulla.",
+    "underRecord": "Il blocco viene da un altro documento (una non conformità): è quello a toglierlo.",
+    "hint": "Il blocco lo toglie la qualità (con un nuovo codice dell’autenticatore); chi lo ha messo non può toglierlo."
+  },
+  "hold": {
+    "title": "Metti {number} in sospeso",
+    "titleMany_one": "Metti in sospeso {count} ordine di produzione",
+    "titleMany_other": "Metti in sospeso {count} ordini di produzione",
+    "body": "Un blocco ferma il lavoro: rilascio, prelievi, taglio, mazzetti e scansioni aspettano finché la qualità non lo toglie.",
+    "reason": "Motivo",
+    "reasonPick": "Scegli un motivo…",
+    "reasonsLoading": "Lettura dei motivi di blocco…",
+    "note": "Nota",
+    "noteHint": "Cosa è successo, per chi segue il blocco.",
+    "noteNeeded": "Questo motivo richiede una nota.",
+    "floor": "I tablet del reparto rifiutano di avviarlo e mostrano il motivo.",
+    "releaseBy": "Per togliere il blocco servono il ruolo qualità e un nuovo codice dell’autenticatore.",
+    "go": "Metti in sospeso",
+    "goMany_one": "Metti in sospeso {count}",
+    "goMany_other": "Metti in sospeso {count}",
+    "held": {
+      "reasons": "I motivi di blocco sono ancora in lettura.",
+      "reason": "Scegli prima un motivo.",
+      "note": "Questo motivo richiede una nota di almeno 3 caratteri.",
+      "noteLong": "La nota supera i 500 caratteri."
+    }
+  },
+  "releaseHold": {
+    "title": "Togli il blocco",
+    "body": "Il lavoro torna dov’era quando è stato bloccato. Prima devono valere tutte le condizioni qui sotto.",
+    "checks": "Condizioni per togliere il blocco",
+    "statement": "Non ho realizzato nessuno dei capi bloccati.",
+    "note": "Nota",
+    "noteHint": "Perché si può proseguire (resta con il blocco).",
+    "stepUp": "Per togliere il blocco serve un nuovo codice dell’autenticatore.",
+    "stepUpSentence": "Togliere un blocco fa ripartire il lavoro: conferma che sei tu.",
+    "go": "Togli il blocco",
+    "held": {
+      "statement": "Firma prima la dichiarazione.",
+      "checks_one": "{count} condizione non è ancora soddisfatta.",
+      "checks_other": "{count} condizioni non sono ancora soddisfatte."
+    },
+    "check": {
+      "ACTIVE": {
+        "ok": "Il blocco è attivo.",
+        "open": "Il blocco non è più attivo."
+      },
+      "NOT_PLACER": {
+        "ok": "Non hai messo tu questo blocco.",
+        "open": "Hai messo tu questo blocco: lo toglie un’altra persona."
+      },
+      "NOT_MAKER": {
+        "ok": "Non hai realizzato nessuno dei capi bloccati.",
+        "open": "Hai lavorato sui capi bloccati: lo toglie un’altra persona."
+      },
+      "STATEMENT": {
+        "ok": "Hai firmato di non aver realizzato nessuno dei capi bloccati.",
+        "open": "Le registrazioni del reparto indicano solo la postazione: firma di non aver realizzato nessuno dei capi bloccati."
+      },
+      "CR_VI": {
+        "ok": "Il risultato del cromo VI del lotto è superato.",
+        "open": "Il lotto attende un risultato del cromo VI superato."
+      },
+      "REINSPECTION": {
+        "ok": "Un’ispezione è stata superata dopo il blocco.",
+        "open": "Deve essere superata un’ispezione dopo il blocco."
+      }
+    }
+  },
+  "stepUp": {
+    "title": "Conferma che sei tu",
+    "confirm": "Conferma",
+    "problem": {
+      "wrong": "Il codice è sbagliato o è già stato usato.",
+      "locked": "Troppi tentativi: aspetta un minuto e riprova.",
+      "unavailable": "Non è stato possibile controllare il codice: riprova."
+    }
+  },
+  "finished": {
+    "title": "Capi finiti a magazzino",
+    "report_one": "Carica {count} capo finito",
+    "report_other": "Carica {count} capi finiti",
+    "reportNone": "Carica capi finiti",
+    "pieces": "Capi",
+    "released": "Rilasciati dalla qualità",
+    "inStock": "Nei prodotti finiti",
+    "canReport": "Caricabili ora",
+    "reports": "Carichi a magazzino",
+    "col": {
+      "when": "Quando",
+      "place": "Ubicazione",
+      "pieces": "Capi",
+      "state": "Stato"
+    },
+    "reversed": "Stornato",
+    "open_one": "{count} ancora a magazzino",
+    "open_other": "{count} ancora a magazzino",
+    "noReports": "Nessun capo caricato nei prodotti finiti finora.",
+    "hint": "Vanno a magazzino solo i capi rilasciati dalla qualità, per taglia, con il numero di lotto di produzione.",
+    "hintSerial": "Vanno a magazzino solo i capi rilasciati dalla qualità, per taglia; ognuno mantiene la sua matricola."
+  },
+  "finish": {
+    "title": "Carica a magazzino i capi finiti di {number}",
+    "body": "I capi rilasciati di ogni taglia vanno in un’ubicazione dei prodotti finiti della sede. Un carico si può stornare in seguito.",
+    "cells": "Per taglia",
+    "col": {
+      "cell": "Taglia",
+      "released": "Rilasciati",
+      "inStock": "A magazzino",
+      "can": "Caricabili",
+      "now": "Ora"
+    },
+    "noSku": "Nessuno SKU ancora",
+    "quantityLabel": "Capi di {cell} da caricare",
+    "place": "Ubicazione prodotti finiti",
+    "placeHint": "Un’ubicazione dei prodotti finiti di {site}.",
+    "noPlace": "La sede non ha un’ubicazione per i prodotti finiti",
+    "note": "Nota",
+    "go_one": "Carica {count} capo finito",
+    "go_other": "Carica {count} capi finiti",
+    "held": {
+      "over": "Una taglia chiede più di quanto si può caricare ora.",
+      "none": "Indica almeno un capo.",
+      "place": "Scegli un’ubicazione dei prodotti finiti."
+    }
+  },
+  "yield": {
+    "title": "Resa",
+    "planned": {
+      "STYLE": "Piano: la resa pelle della revisione del modello",
+      "BOM": "Piano: quanto prevede lo sfrido della distinta base"
+    },
+    "yield": "Resa",
+    "plannedPct": "piano {pct}",
+    "waste": "Sfrido",
+    "used": "Superficie usata",
+    "pattern": "cartamodello {area}",
+    "remnant": "Ritagli",
+    "perHide": "Resa per pelle",
+    "lot": "lotto {lot}",
+    "barLabel": "Resa della pelle {hide}",
+    "low": "Sotto il piano",
+    "none": "Non è stato ancora tagliato nulla.",
+    "unmatched": "{area} tagliati come parti singole sono esclusi (il loro cartamodello non è noto).",
+    "noCutter": "Solo per pelle e lotto: mai per tagliatore."
+  },
+  "scrap": {
+    "title": "Scarti, rilavorazioni e blocchi",
+    "toQuality": "Qualità",
+    "noRight": "Scarti e rilavorazioni sono visibili a chi ha il ruolo degli scarti di produzione.",
+    "scrapped": "Scartati",
+    "rework": "Rilavorazioni",
+    "reworkOpen_one": "{count} ancora aperta",
+    "reworkOpen_other": "{count} ancora aperte",
+    "holds": "Blocchi",
+    "byOperation": "Per operazione e motivo",
+    "col": {
+      "operation": "Operazione",
+      "kind": "Tipo",
+      "reason": "Motivo",
+      "times": "Volte",
+      "pieces": "Capi"
+    },
+    "kind": {
+      "SCRAP": "Scarto",
+      "REWORK": "Rilavorazione"
+    },
+    "piecesOpen": "{pieces} ({open} aperti)",
+    "none": "Nessuno scarto e nessuna rilavorazione su questo ordine di produzione.",
+    "hint": "Contati dalle scansioni del reparto e dagli ordini di rilavorazione; per operazione, mai per persona."
+  },
+  "flow": {
+    "title": "Flusso delle operazioni",
+    "hint": "La pila in attesa davanti a ogni operazione.",
+    "waiting": "in attesa",
+    "waitingLabel_one": "{count} capo in attesa davanti a {code}",
+    "waitingLabel_other": "{count} capi in attesa davanti a {code}",
+    "good_one": "{count} buono",
+    "good_other": "{count} buoni",
+    "scrap_one": "{count} scarto",
+    "scrap_other": "{count} scarti",
+    "rework_one": "{count} da rilavorare",
+    "rework_other": "{count} da rilavorare",
+    "bottleneck": "Pila più grande"
+  },
+  "reserve": {
+    "button": "Prenota pelle…",
+    "title": "Prenota pelle: {material}",
+    "body": "Spunta le pelli da tenere da parte per questo ordine di produzione, intere ({needed} ancora da prelevare). Una pelle tenuta da un altro ordine, o non rilasciata, non si può spuntare.",
+    "tableLabel": "Pelli",
+    "count_one": "{count} pelle, {free} libere",
+    "count_other": "{count} pelli, {free} libere",
+    "col": {
+      "hide": "Pelle",
+      "area": "Superficie",
+      "state": "Stato"
+    },
+    "free": "Libera",
+    "picked_one": "{count} pelle · {area} {uom}",
+    "picked_other": "{count} pelli · {area} {uom}",
+    "go_one": "Prenota {count} pelle",
+    "go_other": "Prenota {count} pelli",
+    "held": {
+      "none": "Spunta almeno una pelle."
+    },
+    "why": {
+      "held": "Il suo lotto non è rilasciato",
+      "mine": "Prenotata per questo ordine",
+      "other": "Prenotata per un altro ordine",
+      "empty": "Non ne resta nulla"
+    },
+    "empty": {
+      "title": "Nessuna pelle di questo tipo nella sede",
+      "body": "Ricevi la pelle, oppure spostala da un’altra sede."
+    },
+    "hint": "Una prenotazione tiene le scorte per questo ordine di produzione: il reparto le preleva con la scansione."
+  },
+  "split": {
+    "menu": "Dividi…",
+    "title": "Dividi il mazzetto {code}",
+    "body": "Il mazzetto {code} ({cell}) contiene {quantity} capi. Quelli separati vanno in un mazzetto figlio con un cartellino proprio; la storia resta a entrambi.",
+    "quantity": "Capi da separare",
+    "quantityHint": "Da 1 a {max}: almeno uno resta.",
+    "reason": "Perché",
+    "reasons": {
+      "REWORK": "Rilavorazione",
+      "REWORKHint": "Tornano a un’operazione precedente.",
+      "RECUT": "Ritaglio",
+      "RECUTHint": "Pezzi da tagliare di nuovo.",
+      "HOLD": "Blocco",
+      "HOLDHint": "Messi da parte finché la qualità non decide."
+    },
+    "note": "Nota",
+    "ticket": "Il cartellino del mazzetto figlio si stampa sulla stampante di etichette della sede.",
+    "go": "Dividi",
+    "held": {
+      "quantity": "Separa da 1 a {max} capi.",
+      "reason": "Scegli il perché."
+    }
+  },
+  "print": {
+    "go": "Stampa",
+    "pick": {
+      "button": "Stampa lista di prelievo",
+      "title": "Lista di prelievo {number}",
+      "heading": "Lista di prelievo",
+      "none": "Non resta nulla da prelevare.",
+      "foot": "Il prelievo si fa con la scansione in reparto; la lista mostra solo le scorte utilizzabili."
+    },
+    "cutting": {
+      "button": "Stampa lista di taglio",
+      "title": "Lista di taglio {number}",
+      "heading": "Lista di taglio",
+      "foot": "Capi per variante colore e taglia, con le parti da tagliare."
+    },
+    "col": {
+      "material": "Materiale",
+      "toIssue": "Da prelevare",
+      "from": "Dove",
+      "cell": "Taglia",
+      "garments": "Capi",
+      "parts": "Parti"
+    }
+  },
+  "bulk": {
+    "hold_one": "Metti in sospeso {count}",
+    "hold_other": "Metti in sospeso {count}"
+  },
+  "bundles": {
+    "onHoldCol": "Bloccato",
+    "onHold": "Bloccato"
+  },
+  "held": {
+    "busy": "Attendi la modifica in corso.",
+    "loading": "Ancora in lettura.",
+    "noHoldPlace": "Per mettere blocchi serve il ruolo dei blocchi qualità.",
+    "noHoldRelease": "Per togliere blocchi serve il ruolo qualità.",
+    "alreadyHeld": "È già in sospeso.",
+    "notOpen": "È {status}.",
+    "bulkNotOpen_one": "{count} di questi non è aperto.",
+    "bulkNotOpen_other": "{count} di questi non sono aperti.",
+    "holdNotActive": "Il blocco non è più attivo.",
+    "notPlacer": "Hai messo tu questo blocco: lo toglie un’altra persona.",
+    "underRecord": "Il suo blocco viene da un altro documento: è quello a toglierlo.",
+    "noFinish": "Per caricare a magazzino serve il ruolo di chiusura produzione.",
+    "repairNoStock": "Il capo di una riparazione torna al cliente, mai a magazzino.",
+    "onHold": "È in sospeso.",
+    "noFinishedPlace": "La sede non ha un’ubicazione per i prodotti finiti.",
+    "nothingReleased": "La qualità non ha ancora rilasciato nessun capo.",
+    "allInStock": "Ogni capo rilasciato è già a magazzino.",
+    "noReserve": "Per prenotare serve il ruolo di prenotazione scorte.",
+    "noBundles": "Per dividere serve il ruolo dei mazzetti.",
+    "bundleVoid": "Il mazzetto è annullato.",
+    "bundleOne": "Un mazzetto di un solo capo non si può dividere."
+  },
+  "notice": {
+    "held": "Messo in sospeso: il reparto rifiuta il suo lavoro finché la qualità non toglie il blocco.",
+    "heldMany_one": "{count} ordine di produzione messo in sospeso.",
+    "heldMany_other": "{count} ordini di produzione messi in sospeso.",
+    "holdReleased": "Blocco tolto: il lavoro prosegue.",
+    "finished_one": "{count} capo caricato nei prodotti finiti.",
+    "finished_other": "{count} capi caricati nei prodotti finiti.",
+    "reserved_one": "{count} pelle prenotata per questo ordine di produzione.",
+    "reserved_other": "{count} pelli prenotate per questo ordine di produzione.",
+    "split_one": "{count} capo separato in un nuovo mazzetto.",
+    "split_other": "{count} capi separati in un nuovo mazzetto."
+  },
+  "problem": {
+    "conflict": "Qualcuno lo ha cambiato nel frattempo, oppure non è possibile nel suo stato attuale: la pagina lo rilegge.",
+    "forbidden": "Non puoi farlo qui.",
+    "invalid": "Qualcosa di quanto richiesto non è accettato: controlla i valori.",
+    "gone": "Non c’è più.",
+    "offline": "Il server della fabbrica non risponde: riprova.",
+    "write": "Non è stato possibile salvare: riprova.",
+    "read": "Non è stato possibile leggere: riprova.",
+    "forbiddenRead": "Non puoi vederlo."
+  }
+}

@@ -1,0 +1,371 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "retry": "Try again"
+  },
+  "status": {
+    "DRAFT": "Draft",
+    "RELEASED": "Released",
+    "IN_PROGRESS": "In progress",
+    "COMPLETED": "Completed",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled",
+    "ON_HOLD": "On hold"
+  },
+  "part": {
+    "loading": "Reading {part}…",
+    "failed": "{part} could not be read"
+  },
+  "readiness": {
+    "title": "Material readiness",
+    "column": "Readiness",
+    "NOT_ENOUGH": "Not enough",
+    "DELAYED": "Delayed",
+    "REQUESTED": "Requested",
+    "EXPECTED": "Expected",
+    "EXPECTED_on": "Expected {date}",
+    "NOT_BOOKED": "Not booked",
+    "RECEIVED": "Received",
+    "NOT_PLANNED": "Not planned",
+    "notPlannedShort": "Not planned",
+    "unknown": "—",
+    "short": "({quantity} {uom} short)",
+    "hint": {
+      "NOT_ENOUGH": "Some material is covered by nothing yet: buy it, or release with the planner’s reason.",
+      "DELAYED": "Some material comes late: a purchase order is past its date or arrives after the need.",
+      "REQUESTED": "Some material is only in a draft purchase order or a firm planned order: send the order.",
+      "EXPECTED": "Material short today arrives in time with a sent purchase order.",
+      "NOT_BOOKED": "The stock is there but not reserved for this work order: reserve it.",
+      "RECEIVED": "Every material is issued to it or reserved for it.",
+      "NOT_PLANNED": "The plan has no material need for it (its order is not planned, or it is a repair): the checks above decide."
+    }
+  },
+  "holds": {
+    "title": "Holds",
+    "put": "Put on hold",
+    "release": "Release the hold",
+    "none": "No hold names this work order.",
+    "noRight": "Holds are shown to people with the quality holds role.",
+    "since_one": "since {date} ({count} day)",
+    "since_other": "since {date} ({count} days)",
+    "overdue": "Past its expected release",
+    "expected": "Expected release: {date}",
+    "banner": "On hold: {reason}. It goes back to “{back}” when the hold is released.",
+    "floorRefuses": "Floor tablets refuse its work and show the reason; nothing is issued to it.",
+    "underRecord": "The hold comes from another record (a nonconformance): that record lifts it.",
+    "hint": "Quality releases a hold (with a fresh authenticator code); the person who placed it cannot release it."
+  },
+  "hold": {
+    "title": "Put {number} on hold",
+    "titleMany_one": "Put {count} work order on hold",
+    "titleMany_other": "Put {count} work orders on hold",
+    "body": "A hold stops the work: the release, issuing, cutting, bundles and scans wait until quality releases it.",
+    "reason": "Reason",
+    "reasonPick": "Choose a reason…",
+    "reasonsLoading": "Reading the hold reasons…",
+    "note": "Note",
+    "noteHint": "What happened, for the people who follow the hold.",
+    "noteNeeded": "This reason needs a note.",
+    "floor": "Floor tablets refuse to start it and show the reason.",
+    "releaseBy": "Releasing the hold needs the quality role and a fresh authenticator code.",
+    "go": "Put on hold",
+    "goMany_one": "Put {count} on hold",
+    "goMany_other": "Put {count} on hold",
+    "held": {
+      "reasons": "The hold reasons are still being read.",
+      "reason": "Choose a reason first.",
+      "note": "This reason needs a note of at least 3 characters.",
+      "noteLong": "The note is longer than 500 characters."
+    }
+  },
+  "releaseHold": {
+    "title": "Release the hold",
+    "body": "The work goes back to where it was held. Each condition below must hold first.",
+    "checks": "Conditions for the release",
+    "statement": "I made none of the held garments.",
+    "note": "Note",
+    "noteHint": "Why it may go on (kept with the hold).",
+    "stepUp": "Releasing asks for a fresh authenticator code.",
+    "stepUpSentence": "Releasing a hold lets the work go on: confirm it is you.",
+    "go": "Release the hold",
+    "held": {
+      "statement": "Sign the statement first.",
+      "checks_one": "{count} condition is not met yet.",
+      "checks_other": "{count} conditions are not met yet."
+    },
+    "check": {
+      "ACTIVE": {
+        "ok": "The hold is active.",
+        "open": "The hold is no longer active."
+      },
+      "NOT_PLACER": {
+        "ok": "You did not place this hold.",
+        "open": "You placed this hold: someone else releases it."
+      },
+      "NOT_MAKER": {
+        "ok": "You made none of the held garments.",
+        "open": "You worked on the held garments: someone else releases it."
+      },
+      "STATEMENT": {
+        "ok": "You signed that you made none of the held garments.",
+        "open": "The floor records name the station only: sign that you made none of the held garments."
+      },
+      "CR_VI": {
+        "ok": "The lot’s chromium VI result passed.",
+        "open": "The lot waits for a passed chromium VI result."
+      },
+      "REINSPECTION": {
+        "ok": "An inspection passed after the hold.",
+        "open": "An inspection must pass after the hold."
+      }
+    }
+  },
+  "stepUp": {
+    "title": "Confirm it is you",
+    "confirm": "Confirm",
+    "problem": {
+      "wrong": "That code is wrong or was used already.",
+      "locked": "Too many tries: wait a minute and try again.",
+      "unavailable": "The code could not be checked: try again."
+    }
+  },
+  "finished": {
+    "title": "Finished to stock",
+    "report_one": "Report {count} finished",
+    "report_other": "Report {count} finished",
+    "reportNone": "Report finished",
+    "pieces": "Garments",
+    "released": "Released by quality",
+    "inStock": "In finished goods",
+    "canReport": "Can go now",
+    "reports": "Reports to stock",
+    "col": {
+      "when": "When",
+      "place": "Place",
+      "pieces": "Garments",
+      "state": "State"
+    },
+    "reversed": "Taken back",
+    "open_one": "{count} still in stock",
+    "open_other": "{count} still in stock",
+    "noReports": "Nothing reported to finished goods yet.",
+    "hint": "Only garments quality released go into stock, per size, under the batch number.",
+    "hintSerial": "Only garments quality released go into stock, per size; each keeps its serial."
+  },
+  "finish": {
+    "title": "Report {number} finished to stock",
+    "body": "The released garments of each size go into a finished-goods place of the site. A report can be taken back later.",
+    "cells": "Per size",
+    "col": {
+      "cell": "Size",
+      "released": "Released",
+      "inStock": "In stock",
+      "can": "Can go",
+      "now": "Now"
+    },
+    "noSku": "No SKU yet",
+    "quantityLabel": "Garments of {cell} to report",
+    "place": "Finished-goods place",
+    "placeHint": "A finished-goods place of {site}.",
+    "noPlace": "The site has no finished-goods place",
+    "note": "Note",
+    "go_one": "Report {count} finished",
+    "go_other": "Report {count} finished",
+    "held": {
+      "over": "A size asks for more than can go now.",
+      "none": "Ask for at least one garment.",
+      "place": "Choose a finished-goods place."
+    }
+  },
+  "yield": {
+    "title": "Yield",
+    "planned": {
+      "STYLE": "Plan: the style revision’s hide yield",
+      "BOM": "Plan: what the BOM’s wastage expects"
+    },
+    "yield": "Yield",
+    "plannedPct": "plan {pct}",
+    "waste": "Waste",
+    "used": "Area used",
+    "pattern": "pattern {area}",
+    "remnant": "Remnants",
+    "perHide": "Yield per hide",
+    "lot": "lot {lot}",
+    "barLabel": "Yield of hide {hide}",
+    "low": "Below plan",
+    "none": "Nothing is cut yet.",
+    "unmatched": "{area} cut as single parts is left out (its pattern is not known).",
+    "noCutter": "Per hide and lot only: never per cutter."
+  },
+  "scrap": {
+    "title": "Scrap, rework and holds",
+    "toQuality": "Quality",
+    "noRight": "Scrap and rework are shown to people with the production scrap role.",
+    "scrapped": "Scrapped",
+    "rework": "Rework",
+    "reworkOpen_one": "{count} still open",
+    "reworkOpen_other": "{count} still open",
+    "holds": "Holds",
+    "byOperation": "Per operation and reason",
+    "col": {
+      "operation": "Operation",
+      "kind": "Kind",
+      "reason": "Reason",
+      "times": "Times",
+      "pieces": "Garments"
+    },
+    "kind": {
+      "SCRAP": "Scrap",
+      "REWORK": "Rework"
+    },
+    "piecesOpen": "{pieces} ({open} open)",
+    "none": "No scrap and no rework on this work order.",
+    "hint": "Counted from the floor’s scans and the rework orders; per operation, never per person."
+  },
+  "flow": {
+    "title": "Operation flow",
+    "hint": "The pile waiting before each operation.",
+    "waiting": "waiting",
+    "waitingLabel_one": "{count} garment waiting before {code}",
+    "waitingLabel_other": "{count} garments waiting before {code}",
+    "good_one": "{count} good",
+    "good_other": "{count} good",
+    "scrap_one": "{count} scrap",
+    "scrap_other": "{count} scrap",
+    "rework_one": "{count} rework",
+    "rework_other": "{count} rework",
+    "bottleneck": "Biggest pile"
+  },
+  "reserve": {
+    "button": "Reserve leather…",
+    "title": "Reserve leather: {material}",
+    "body": "Tick the hides to set aside for this work order, whole ({needed} still to issue). A hide another order holds, or one not released, cannot be ticked.",
+    "tableLabel": "Hides",
+    "count_one": "{count} hide, {free} free",
+    "count_other": "{count} hides, {free} free",
+    "col": {
+      "hide": "Hide",
+      "area": "Area",
+      "state": "State"
+    },
+    "free": "Free",
+    "picked_one": "{count} hide · {area} {uom}",
+    "picked_other": "{count} hides · {area} {uom}",
+    "go_one": "Reserve {count} hide",
+    "go_other": "Reserve {count} hides",
+    "held": {
+      "none": "Tick at least one hide."
+    },
+    "why": {
+      "held": "Its lot is not released",
+      "mine": "Reserved for this work order",
+      "other": "Reserved for another order",
+      "empty": "Nothing left on it"
+    },
+    "empty": {
+      "title": "No hide of this leather at the site",
+      "body": "Receive leather, or move some from another site."
+    },
+    "hint": "A reserve holds the stock for this work order: the floor issues it by scan."
+  },
+  "split": {
+    "menu": "Split…",
+    "title": "Split bundle {code}",
+    "body": "Bundle {code} ({cell}) holds {quantity} garments. The ones split off go into a child bundle with its own ticket; its history stays with both.",
+    "quantity": "Garments to split off",
+    "quantityHint": "1 to {max}: at least one stays.",
+    "reason": "Why",
+    "reasons": {
+      "REWORK": "Rework",
+      "REWORKHint": "They go back to an earlier operation.",
+      "RECUT": "Recut",
+      "RECUTHint": "Pieces to cut again.",
+      "HOLD": "Hold",
+      "HOLDHint": "Set aside until quality decides."
+    },
+    "note": "Note",
+    "ticket": "The child bundle’s ticket prints on the site’s label printer.",
+    "go": "Split",
+    "held": {
+      "quantity": "Split 1 to {max} garments.",
+      "reason": "Choose why."
+    }
+  },
+  "print": {
+    "go": "Print",
+    "pick": {
+      "button": "Print pick list",
+      "title": "Pick list {number}",
+      "heading": "Pick list",
+      "none": "Nothing left to issue.",
+      "foot": "Issue by scan on the floor; the list shows usable stock only."
+    },
+    "cutting": {
+      "button": "Print cutting list",
+      "title": "Cutting list {number}",
+      "heading": "Cutting list",
+      "foot": "Garments per colourway and size, with the parts to cut."
+    },
+    "col": {
+      "material": "Material",
+      "toIssue": "To issue",
+      "from": "Where",
+      "cell": "Size",
+      "garments": "Garments",
+      "parts": "Parts"
+    }
+  },
+  "bulk": {
+    "hold_one": "Hold {count}",
+    "hold_other": "Hold {count}"
+  },
+  "bundles": {
+    "onHoldCol": "On hold",
+    "onHold": "On hold"
+  },
+  "held": {
+    "busy": "Wait for the change in progress.",
+    "loading": "Still reading.",
+    "noHoldPlace": "Placing holds needs the quality holds role.",
+    "noHoldRelease": "Releasing holds needs the quality role.",
+    "alreadyHeld": "It is on hold already.",
+    "notOpen": "It is {status}.",
+    "bulkNotOpen_one": "{count} of them is not open.",
+    "bulkNotOpen_other": "{count} of them are not open.",
+    "holdNotActive": "The hold is no longer active.",
+    "notPlacer": "You placed this hold: someone else releases it.",
+    "underRecord": "Its hold comes from another record: that record lifts it.",
+    "noFinish": "Reporting to stock needs the production finish role.",
+    "repairNoStock": "A repair’s garment goes back to its customer, never into stock.",
+    "onHold": "It is on hold.",
+    "noFinishedPlace": "The site has no finished-goods place.",
+    "nothingReleased": "No garment is released by quality yet.",
+    "allInStock": "Every released garment is in stock already.",
+    "noReserve": "Reserving needs the stock reserve role.",
+    "noBundles": "Splitting needs the bundles role.",
+    "bundleVoid": "The bundle is void.",
+    "bundleOne": "A bundle of one garment cannot be split."
+  },
+  "notice": {
+    "held": "Put on hold: the floor refuses its work until quality releases it.",
+    "heldMany_one": "{count} work order put on hold.",
+    "heldMany_other": "{count} work orders put on hold.",
+    "holdReleased": "Hold released: the work goes on.",
+    "finished_one": "{count} garment reported to finished goods.",
+    "finished_other": "{count} garments reported to finished goods.",
+    "reserved_one": "{count} hide reserved for this work order.",
+    "reserved_other": "{count} hides reserved for this work order.",
+    "split_one": "{count} garment split off into a new bundle.",
+    "split_other": "{count} garments split off into a new bundle."
+  },
+  "problem": {
+    "conflict": "Someone changed it meanwhile, or it is not possible in its state now: the page reads it again.",
+    "forbidden": "You may not do this here.",
+    "invalid": "Something asked is not accepted: check the values.",
+    "gone": "It is no longer there.",
+    "offline": "The factory server cannot be reached: try again.",
+    "write": "It could not be saved: try again.",
+    "read": "It could not be read: try again.",
+    "forbiddenRead": "You may not see this."
+  }
+}

@@ -1,6 +1,8 @@
 import type { LiveState } from '../_shared/hooks'
 import type { OpenLines, OrderOption, ReleaseCheckCode, WorkOrderCounts, WorkOrderRow } from '../_shared/api'
 import type { ListView, Phrase, ProductionCan } from '../_shared/model'
+import type { ReadinessRow } from './daily/api'
+import type { DailyActions, DailyModel } from './daily/model'
 
 /** SCR-069 — the work orders list's view model (WorkOrdersListView draws it and fetches nothing). */
 export interface WorkOrdersListModel {
@@ -20,6 +22,10 @@ export interface WorkOrdersListModel {
   notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase } | null
   newOrder: NewWorkOrderModel | null
   release: BulkReleaseModel | null
+  /** B-W2a-46: the readiness word per row (null while unread or when the read failed: the column says "—"). */
+  readiness?: Readonly<Record<string, ReadinessRow>> | null
+  /** B-W2a-46: Hold N (one hold over the rows picked): who may, the HOLD reasons, the dialog. */
+  daily?: DailyModel
   /** Design cases: the starting selection and focused row, the keys panel. */
   selected?: string[]
   focusRow?: number
@@ -40,6 +46,8 @@ export interface WorkOrdersListActions {
   onDismissNotice?: () => void
   onNew?: (open: boolean) => void
   newOrder?: NewWorkOrderActions
+  /** B-W2a-46: Hold N and its dialog. */
+  daily?: DailyActions
 }
 
 /** "Release N work orders": each is checked again by the API; the ones that pass are released, the others stay drafts. */

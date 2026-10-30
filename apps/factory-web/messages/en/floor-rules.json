@@ -173,23 +173,6 @@
       "offline": "Scans, cuts and bundles wait on the tablet while offline and are sent in order; receipts, inspections, releases and garment labels need the network."
     },
     "codes": {
-      "fixedTitle": "The reasons the operation screen offers",
-      "fixedBody": "Each worker sees them in their own language (both languages are listed here). In this version the list is fixed for every company: editing it, with icons and colours, comes later.",
-      "tableLabel": "Scrap and rework reasons",
-      "count_one": "{count} reason · {scrap} scrap · {rework} rework",
-      "count_other": "{count} reasons · {scrap} scrap · {rework} rework",
-      "empty": "No reasons yet.",
-      "col": {
-        "kind": "Kind",
-        "code": "Code",
-        "it": "Italian",
-        "en": "English",
-        "order": "Order"
-      },
-      "kind": {
-        "SCRAP": "Scrap",
-        "REWORK": "Rework"
-      },
       "noAccess": {
         "title": "Your role may not read the reason codes",
         "body": "Reading them needs “production.scan”, which the production manager and the operators hold."
