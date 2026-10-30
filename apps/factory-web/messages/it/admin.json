@@ -1643,6 +1643,11 @@
     "floorsync_discard": "Scartare un'azione rifiutata di un tablet di reparto",
     "calendars_view": "Vedere i calendari aziendali",
     "calendars_manage": "Cambiare i calendari di azienda, stabilimento e linea",
-    "calendars_suppliers_manage": "Cambiare i calendari di fornitori e terzisti"
+    "calendars_suppliers_manage": "Cambiare i calendari di fornitori e terzisti",
+    "production_rework": "Mandare capi in rilavorazione e chiuderla",
+    "production_scrap_view": "Vedere scarti e rilavorazioni",
+    "production_scrap": "Registrare scarti e chiedere sostituzioni",
+    "production_scrap_approve": "Approvare riduzioni d'ordine",
+    "production_cutting_view": "Vedere la resa del taglio"
   }
 }
