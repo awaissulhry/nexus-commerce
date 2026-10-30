@@ -120,6 +120,8 @@ model Party {
   subcontractedOperations RoutingOperation[]
   subcontractorLocations  Location[]
   subcontractOrders       SubcontractOrder[]
+  // W2a schedule.prisma: as a workshop, its slots on the planning board.
+  scheduleSlots           ScheduleSlot[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the party's rows.

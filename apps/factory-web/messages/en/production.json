@@ -20,7 +20,8 @@
     "IN_PROGRESS": "In progress",
     "COMPLETED": "Completed",
     "CLOSED": "Closed",
-    "CANCELLED": "Cancelled"
+    "CANCELLED": "Cancelled",
+    "ON_HOLD": "On hold"
   },
   "list": {
     "tableLabel": "Work orders",

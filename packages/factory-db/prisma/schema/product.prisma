@@ -102,6 +102,9 @@ model Item {
   standardCost        Decimal?     @db.Decimal(18, 6)
   /// The currency of the standard cost, ISO 4217.
   currency            String       @default("EUR")
+  /// W2a (GAP-003): the SKU a FINISHED item is (exactly for that kind): one item per SKU, set when it is made and never
+  /// changed; its unit is PCS. Production receipts put the work order's finished garments into stock as this item.
+  variantId           String?      @db.Uuid
   /// Leather: the animal ("bovine", "goat", "kangaroo"), for the user information and the supplier documents.
   animalSpecies       String?
   /// Leather: how it was tanned; chrome tanning is why Cr VI is tested (REACH Annex XVII entry 47).
@@ -138,6 +141,9 @@ model Item {
 
   company         Company?              @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   defaultSupplier Party?                @relation(fields: [tenantId, defaultSupplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2a: the SKU a FINISHED item is (Restrict, not Prisma's SetNull default for an optional relation: that would also
+  // clear tenantId).
+  variant         Variant?              @relation(fields: [tenantId, variantId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   colours         ItemColour[]
   bomLines        BomLine[]
   // compliance.prisma: the certificates that cover it (a protector's EN 1621 certificate).
@@ -165,6 +171,8 @@ model Item {
   @@unique([tenantId, code])
   // The target of the tenant-safe references from BOM lines and the item's colours.
   @@unique([tenantId, id])
+  // W2a: one finished-goods item per SKU.
+  @@unique([tenantId, variantId])
 }
 
 enum ItemKind {
@@ -183,6 +191,9 @@ enum ItemKind {
   PACKAGING
   /// A part we make (a pre-assembled panel): sourcing MAKE.
   COMPONENT
+  /// W2a (GAP-003): a finished garment of one SKU (Item.variantId), counted in pieces: what production receipts put
+  /// into finished-goods stock. Not a material: the materials library leaves it out.
+  FINISHED
 }
 
 enum ItemSourcing {
@@ -493,10 +504,14 @@ model Variant {
   createdById String?      @db.Uuid
 
   colourway Colourway @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2a: its finished-goods item (one at most).
+  items     Item[]
 
   @@unique([tenantId, sku])
   @@unique([tenantId, gtin])
   @@unique([tenantId, styleId, colourwayId, size])
+  // W2a: the target of the finished-goods item's tenant-safe reference.
+  @@unique([tenantId, id])
 }
 
 /// One revision of a style's specification: its BOM, routing and garment label (A1 §2.5). DRAFT while edited;

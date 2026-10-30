@@ -109,7 +109,8 @@ export function fieldsOf(row: Prisma.ItemGetPayload<{ select: typeof FIELD_COLUM
     code: row.code,
     name: row.name,
     nameI18n: (row.nameI18n as LocalisedNames | null) ?? null,
-    kind: row.kind,
+    // W2a wave 5: never FINISHED here (a finished garment's item is no material, and no BOM line names one: …_production_w2a_guards).
+    kind: row.kind as MaterialFields['kind'],
     sourcing: row.sourcing,
     tracking: row.tracking,
     baseUom: row.baseUom,
@@ -175,7 +176,8 @@ export function materialRowView(row: MaterialRowData): MaterialRow {
     code: row.code,
     name: row.name,
     nameI18n: (row.nameI18n as LocalisedNames | null) ?? null,
-    kind: row.kind,
+    // W2a wave 5: never FINISHED here (a finished garment's item is no material, and no BOM line names one: …_production_w2a_guards).
+    kind: row.kind as MaterialFields['kind'],
     sourcing: row.sourcing,
     tracking: row.tracking,
     baseUom: row.baseUom,
@@ -262,7 +264,8 @@ export async function readMaterial(caller: CommandCaller, materialId: string): P
   const context = contextOf(caller)
   if (!isUuid(materialId)) throw new NotFoundError('Material not found.')
   const row = (await caller.withClient((client) => client.item.findUnique({ where: { id: materialId }, select: materialColumns(context) }))) as MaterialRowData | null
-  if (!row || !can(actorOf(context), PRODUCT_MATERIALS_VIEW, { companyId: row.companyId })) throw new NotFoundError('Material not found.')
+  // W2a wave 5: a finished garment's item (kind FINISHED) is not a material.
+  if (!row || (row.kind as string) === 'FINISHED' || !can(actorOf(context), PRODUCT_MATERIALS_VIEW, { companyId: row.companyId })) throw new NotFoundError('Material not found.')
   return row
 }
 

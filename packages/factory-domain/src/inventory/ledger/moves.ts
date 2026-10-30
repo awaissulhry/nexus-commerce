@@ -13,7 +13,8 @@ import { Dec, parseDecimal, ZERO, type Decimal, type DecimalInput } from '../../
  * call, so the caller gets this module's words instead. Decimals only (decimal.js), never a float.
  */
 
-export const STOCK_MOVE_REASONS = ['OPENING', 'RECEIPT', 'ISSUE', 'RETURN', 'TRANSFER', 'ADJUSTMENT', 'COUNT', 'SCRAP'] as const
+// W2a wave 5 (factory-db inventory.prisma): PRODUCTION_RECEIPT, finished garments of a work order into finished-goods stock.
+export const STOCK_MOVE_REASONS = ['OPENING', 'RECEIPT', 'ISSUE', 'RETURN', 'TRANSFER', 'ADJUSTMENT', 'COUNT', 'SCRAP', 'PRODUCTION_RECEIPT'] as const
 export type StockMoveReason = (typeof STOCK_MOVE_REASONS)[number]
 
 export const ITEM_TRACKINGS = ['NONE', 'LOT', 'HIDE', 'SERIAL'] as const
@@ -33,6 +34,7 @@ export const REASON_SIDES = Object.freeze({
   TRANSFER: 'INSIDE',
   ADJUSTMENT: 'ONE_SIDE',
   COUNT: 'ONE_SIDE',
+  PRODUCTION_RECEIPT: 'IN',
 } as const satisfies Record<StockMoveReason, 'IN' | 'OUT' | 'INSIDE' | 'ONE_SIDE'>)
 
 /** The reasons that say why (SCM-192: an adjustment, a count difference, a scrap); a reversal says why too. */

@@ -69,7 +69,8 @@
     "TRANSFER": "Trasferimento",
     "ADJUSTMENT": "Rettifica",
     "COUNT": "Differenza inventario",
-    "SCRAP": "Scarto"
+    "SCRAP": "Scarto",
+    "PRODUCTION_RECEIPT": "Carico prodotto finito"
   },
   "quality": {
     "QUARANTINE": "Quarantena",
@@ -105,7 +106,8 @@
     "QUARANTINE": "Scaffale quarantena",
     "PRODUCTION": "Bordo linea",
     "SHIPPING": "Spedizioni",
-    "SUBCONTRACTOR": "Terzista"
+    "SUBCONTRACTOR": "Terzista",
+    "FINISHED_GOODS": "Prodotti finiti"
   },
   "locationStatus": {
     "ACTIVE": "Attiva",

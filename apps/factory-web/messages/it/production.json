@@ -20,7 +20,8 @@
     "IN_PROGRESS": "In lavorazione",
     "COMPLETED": "Completato",
     "CLOSED": "Chiuso",
-    "CANCELLED": "Annullato"
+    "CANCELLED": "Annullato",
+    "ON_HOLD": "In sospeso"
   },
   "list": {
     "tableLabel": "Ordini di produzione",

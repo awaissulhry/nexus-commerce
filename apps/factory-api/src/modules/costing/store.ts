@@ -98,7 +98,8 @@ export async function readCostingMaterials(client: FactoryClient | CommandTx, it
         id: row.id,
         code: row.code,
         name: row.name,
-        kind: row.kind,
+        // W2a wave 5: never FINISHED here (a finished garment's item is no material, and no BOM line names one: …_production_w2a_guards).
+        kind: row.kind as CostingMaterial['kind'],
         units: { baseUom: row.baseUom, purchaseUom: row.purchaseUom, purchaseFactor: text(row.purchaseFactor), consumptionUom: row.consumptionUom, consumptionFactor: text(row.consumptionFactor) },
         standardCost: row.standardCost === null ? null : text(row.standardCost),
         currency: row.currency,

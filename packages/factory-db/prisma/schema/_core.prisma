@@ -251,6 +251,10 @@ model Site {
   // W2a claims.prisma, subcontract.prisma: the claims about goods at the site, the work it sends to workshops.
   supplierClaims     SupplierClaim[]
   subcontractOrders  SubcontractOrder[]
+  // W2a rework.prisma, schedule.prisma: its rework and replacements, its working plan and published plans.
+  reworkOrders        ReworkOrder[]
+  replacementRequests ReplacementRequest[]
+  planVersions        PlanVersion[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])
@@ -283,6 +287,9 @@ model Line {
   capacity LineCapacity[]
   // calendar.prisma: its calendar.
   workCalendars WorkCalendar[]
+  // W2a production.prisma, schedule.prisma: the work orders allocated to it, its slots on the planning board.
+  workOrders    WorkOrder[]
+  scheduleSlots ScheduleSlot[]
 
   @@unique([tenantId, siteId, code])
   @@unique([tenantId, siteId, id])
@@ -313,6 +320,8 @@ model WorkCentre {
   workOrderOperations WorkOrderOperation[]
   // calendar.prisma: its calendar (a workshop's).
   workCalendars       WorkCalendar[]
+  // W2a schedule.prisma: its slots on the planning board.
+  scheduleSlots       ScheduleSlot[]
 
   @@unique([tenantId, siteId, code])
   @@unique([tenantId, siteId, id])
