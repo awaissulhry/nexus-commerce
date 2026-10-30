@@ -62,6 +62,7 @@ export const STATUS_TONE: Readonly<Record<WorkOrderStatus, Tone>> = Object.freez
   COMPLETED: 'success',
   CLOSED: 'neutral',
   CANCELLED: 'danger',
+  ON_HOLD: 'danger',
 })
 
 // ---- the list: saved views and tiles -------------------------------------------------------------------------------------------

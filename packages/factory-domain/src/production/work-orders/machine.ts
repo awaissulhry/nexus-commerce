@@ -7,7 +7,8 @@ import { defineMachine, nextStates } from '../../state/machine'
  * moves and their times for every login.
  *
  *   DRAFT → RELEASED → IN_PROGRESS → COMPLETED → CLOSED; CANCELLED (with a reason) from DRAFT, RELEASED or IN_PROGRESS.
- *   CLOSED and CANCELLED are final. ON_HOLD (MES-008) is W2a.
+ *   CLOSED and CANCELLED are final. ON_HOLD (MES-008, W2a schema wave 5/7) is a state of the schema here; its hold and
+ *   lift moves (back to the status it was held from) are B-W2a-26's, so this machine has none yet.
  *
  * RELEASED needs the release check passed (./release: every blocker in words); CANCELLED needs a reason. Each move
  * sets its time in the same row update (the trigger refuses a status without its time): RELEASED the release and the
@@ -15,10 +16,12 @@ import { defineMachine, nextStates } from '../../state/machine'
  * `cancelledAt` with `cancelReason`.
  */
 
-export const WORK_ORDER_STATUSES = ['DRAFT', 'RELEASED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED'] as const
+// W2a wave 5 (factory-db production.prisma): ON_HOLD, held from DRAFT, RELEASED or IN_PROGRESS.
+export const WORK_ORDER_STATUSES = ['DRAFT', 'RELEASED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED', 'ON_HOLD'] as const
 export type WorkOrderStatus = (typeof WORK_ORDER_STATUSES)[number]
 
-export const WORK_ORDER_KINDS = ['SIZE_GRID', 'MADE_TO_MEASURE'] as const
+// W2a wave 5: REPAIR, a repair of returned garments (MES-019).
+export const WORK_ORDER_KINDS = ['SIZE_GRID', 'MADE_TO_MEASURE', 'REPAIR'] as const
 export type WorkOrderKind = (typeof WORK_ORDER_KINDS)[number]
 
 /** What a move's guard reads. */
@@ -62,10 +65,12 @@ export function moveChange(to: ManualMove, now: Date, reason?: string): Record<s
 }
 
 /** Released work orders still to be issued their material: what they still need is promised to them. */
-export const COMMITTED_STATUSES: readonly WorkOrderStatus[] = Object.freeze(['RELEASED', 'IN_PROGRESS'])
+// W2a wave 5: a held work order keeps what is promised to it (the hold is lifted back to where it was).
+export const COMMITTED_STATUSES: readonly WorkOrderStatus[] = Object.freeze(['RELEASED', 'IN_PROGRESS', 'ON_HOLD'])
 
 /** Work orders not finished yet: a due date in the past makes them late (MES-305). */
-export const OPEN_STATUSES: readonly WorkOrderStatus[] = Object.freeze(['DRAFT', 'RELEASED', 'IN_PROGRESS'])
+// W2a wave 5: a held work order is not finished either.
+export const OPEN_STATUSES: readonly WorkOrderStatus[] = Object.freeze(['DRAFT', 'RELEASED', 'IN_PROGRESS', 'ON_HOLD'])
 
 /** Whole days past the due date for an open work order (0 when on time, null without a due date or when finished). */
 export function daysLate(status: WorkOrderStatus, dueDate: BusinessDate | null, today: BusinessDate): number | null {

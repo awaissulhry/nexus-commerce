@@ -10,7 +10,8 @@ import { newIdempotencyKey } from '../../../lib/api/client'
  * from the codes. No money anywhere: the work order API carries none.
  */
 
-export const WORK_ORDER_STATUSES = ['DRAFT', 'RELEASED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED'] as const
+// W2a wave 5: ON_HOLD (factory-domain production/work-orders/machine).
+export const WORK_ORDER_STATUSES = ['DRAFT', 'RELEASED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED', 'ON_HOLD'] as const
 export type WorkOrderStatus = (typeof WORK_ORDER_STATUSES)[number]
 export const RELEASE_CHECKS = ['REVISION', 'LABEL_TEMPLATE', 'CERTIFICATE', 'WORK_CENTRES', 'BOM', 'CELLS', 'DEPOSIT', 'MATERIAL', 'BATCH_NUMBER'] as const
 export type ReleaseCheckCode = (typeof RELEASE_CHECKS)[number]

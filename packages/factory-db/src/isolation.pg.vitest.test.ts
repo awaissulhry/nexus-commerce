@@ -38,6 +38,7 @@ import { seed as seedReturns } from '../seed/returns'
 import { seed as seedReasons } from '../seed/reasons'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
+import { seed as seedSchedule } from '../seed/schedule'
 import { seed as seedSearch } from '../seed/search'
 import { seed as seedShipping } from '../seed/shipping'
 import { seed as seedSourcing } from '../seed/sourcing'
@@ -193,6 +194,9 @@ beforeAll(async () => {
   // The stock and planning schema of W2a (wave 4/7).
   await seedPlanning({ db: factory, namespace: 'iso-a' })
   await seedPlanning({ db: factory, namespace: 'iso-b' })
+  // The production and schedule schema of W2a (wave 5/7).
+  await seedSchedule({ db: factory, namespace: 'iso-a' })
+  await seedSchedule({ db: factory, namespace: 'iso-b' })
   // The quality, plant and shipping schema of W2a (wave 6/7).
   await seedHolds({ db: factory, namespace: 'iso-a' })
   await seedHolds({ db: factory, namespace: 'iso-b' })
@@ -311,6 +315,7 @@ it('covers every classified table and every runtime role', () => {
     'Payment',
     'PaymentAllocation',
     'PaymentTerms',
+    'PlanVersion',
     'PlanningException',
     'PlanningRun',
     'PlanningSettings',
@@ -344,6 +349,7 @@ it('covers every classified table and every runtime role', () => {
     'RecordFollower',
     'RepairOrder',
     'RepairStageEvent',
+    'ReplacementRequest',
     'ReportSubscription',
     'RequirementPegging',
     'Reservation',
@@ -351,6 +357,7 @@ it('covers every classified table and every runtime role', () => {
     'ReturnAuthorisation',
     'ReturnLine',
     'ReturnReceipt',
+    'ReworkOrder',
     'Role',
     'RoleAssignment',
     'RoutingOperation',
@@ -362,6 +369,7 @@ it('covers every classified table and every runtime role', () => {
     'SalesSettings',
     'SavedView',
     'ScanCorrectionRequest',
+    'ScheduleSlot',
     'ScrapReason',
     'SdiNotification',
     'SdiSubmission',
