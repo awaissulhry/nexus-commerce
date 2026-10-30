@@ -1,3 +1,4 @@
+import { dayWords } from '@nexus/factory-domain/accounting/periods'
 import { DomainError, InvalidStateError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import type { IssueProblem } from '@nexus/factory-domain/invoicing/checks'
@@ -12,6 +13,7 @@ import { allocateNumber } from '../../platform/numbering/allocate'
 import type { FilesRuntime } from '../../platform/files/service'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { refundDueAfter } from '@nexus/factory-domain/invoicing/credit-note/credit-note'
+import { hardLockOn } from '../accounting/period-guard'
 import { lockAll, lockMoney } from '../payments/locks'
 import { lockInvoicing } from './from-shipment/locks'
 import { ordersOfInvoices, settleOrders } from './from-shipment/settlement'
@@ -81,7 +83,10 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string): Pr
   const date = businessDate(now)
   const review = await reviewIssue(tx, invoice, lines, date, now)
   const kind = await seriesKindFor(tx, invoice.companyId, invoice.docType)
-  const problems = [...review.problems, ...(kind === null ? [noSeries(invoice.docType)] : [])]
+  // B-W2a-F1: today inside a HARD period lock of the company is a problem of the issue (409 in words, no number taken),
+  // before the database's Invoice_period_lock refuses it.
+  const locked = await hardLockOn(tx, context, [{ companyId: invoice.companyId, day: date, refused: `the invoice is not issued today (${dayWords(date)})`, path: 'issueDate' }])
+  const problems = [...review.problems, ...(kind === null ? [noSeries(invoice.docType)] : []), ...(locked ? [{ code: 'PERIOD_LOCKED', path: 'issueDate', message: locked.words }] : [])]
   if (problems.length > 0 || kind === null || !review.seller || !review.billTo) throw refusal(problems)
 
   // B-W1-51: a credit note on what is paid leaves a refund due (W2b), recorded on the audit row and by invoice.refund_due.

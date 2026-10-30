@@ -224,7 +224,7 @@ async function releasedWorkOrder(lineId: string): Promise<Json> {
   return released.workOrder
 }
 
-type Orders = 'main' | 'replay' | 'race' | 'raceA' | 'raceB' | 'station' | 'remnant' | 'consume' | 'consumeTwo' | 'closeLast' | 'undo' | 'correct'
+type Orders = 'main' | 'replay' | 'race' | 'raceA' | 'raceB' | 'station' | 'remnant' | 'consume' | 'consumeTwo' | 'closeLast' | 'undo' | 'correct' | 'held'
 const WO = {} as Record<Orders, Json>
 
 beforeAll(async () => {
@@ -274,7 +274,7 @@ beforeAll(async () => {
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   const line = await salesOrder(40)
-  for (const name of ['main', 'replay', 'race', 'raceA', 'raceB', 'station', 'remnant', 'consume', 'consumeTwo', 'closeLast', 'undo', 'correct'] as const) WO[name] = await releasedWorkOrder(line)
+  for (const name of ['main', 'replay', 'race', 'raceA', 'raceB', 'station', 'remnant', 'consume', 'consumeTwo', 'closeLast', 'undo', 'correct', 'held'] as const) WO[name] = await releasedWorkOrder(line)
 }, 300_000)
 
 afterAll(async () => {
@@ -776,5 +776,46 @@ describe('the work order record counts its cut garments; the walls hold', () => 
     expect((await call('floor', 'GET', `/production/cutting/work-orders/${WO.main.id}/cut-log`)).statusCode).toBe(403)
     expect((await call('manager', 'POST', cutUrl(WO.main.id), { clientEventId: clientEvent(), code: hides.H12!.code, lines: sets(WO.main) }, freshKey())).statusCode).toBe(403)
     expect(await onHand(A.bin, hides.H12!.id)).toBe('55.0000')
+  })
+})
+
+// ---- quality holds (B-W2a-F1) ------------------------------------------------------------------------------------------------------
+
+describe('a cut of a held hide, or of a hide of a held lot, is refused in words before the database (holdOnCut; B-W2a-F1)', () => {
+  beforeAll(async () => {
+    await addLot('HOLD', 'RELEASED', 'PASS', ['HOLD-H1', 'HOLD-H2'])
+  })
+  /** An ACTIVE hold placed by the office, as POST /quality/holds writes it (the …_quality_plant_w2a_guards are real). */
+  const placeHold = (subjectType: 'Hide' | 'Lot', subjectId: string) =>
+    admin(
+      `INSERT INTO "QualityHold" (id, "tenantId", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "reasonNote", "placedAt", "placedById", "createdById")
+       VALUES ($1, $2, $3, $4, $5, ARRAY[$6]::uuid[], 'QUALITY_CHECK', 'A grain crack seen at the table (made up).', '2026-11-21T09:00:00Z', $7, $7)`,
+      [newId(), A.tenant, A.companyA, A.siteA1, subjectType, subjectId, A.actor],
+    )
+  const collar = (code: string) => ({ clientEventId: clientEvent(), code, lines: [{ workOrderSizeId: WO.held.cells[0].id, parts: [{ part: 'Collar', pieces: 1 }] }], area: { area: '2.5', uom: 'FT2' } })
+  const entries = () => counts(`SELECT count(*)::int AS n FROM "CutLog"`, [])
+
+  it("a hide at the work order, held after its first cut: 409 QUALITY_HOLD in the hold's words, nothing logged", async () => {
+    const hide = hides['HOLD-H1']!
+    const first = await cut(WO.held.id, { code: hide.code, lines: sets(WO.held) })
+    expect(first.statusCode, first.body).toBe(201)
+    await placeHold('Hide', hide.id)
+    const before = await entries()
+    const error = await refused('floor', 'POST', cutUrl(WO.held.id), collar(hide.code), 409)
+    expect(refusalOf(error)).toBe('refusal/QUALITY_HOLD')
+    expect(error.message).toMatch(new RegExp(`^Hide ${hide.code} is on hold \\(.+, since 21 Nov 2026\\): it is not cut until quality releases the hold\\.$`))
+    expect(await entries()).toBe(before)
+  })
+
+  it("a hide at the work order whose lot is held: 409 in the lot's words, nothing logged", async () => {
+    const hide = hides['HOLD-H2']!
+    const first = await cut(WO.held.id, { code: hide.code, lines: sets(WO.held) })
+    expect(first.statusCode, first.body).toBe(201)
+    await placeHold('Lot', lots.HOLD!.id)
+    const before = await entries()
+    const error = await refused('floor', 'POST', cutUrl(WO.held.id), collar(hide.code), 409)
+    expect(refusalOf(error)).toBe('refusal/QUALITY_HOLD')
+    expect(error.message).toMatch(new RegExp(`^Lot ${lots.HOLD!.code} is on hold \\(.+, since 21 Nov 2026\\): its hides are not cut until quality releases the hold\\.$`))
+    expect(await entries()).toBe(before)
   })
 })

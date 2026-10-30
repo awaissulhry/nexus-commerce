@@ -93,3 +93,44 @@ export function phraseMatches(month: Month, typed: string | null | undefined): b
   const phrases = lockPhrases(month)
   return folded(typed) === folded(phrases.en) || folded(typed) === folded(phrases.it)
 }
+
+// ---- a write dated inside a hard lock (B-W2a-F1) ---------------------------------------------------------------------
+
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const
+
+/** A day as the refusals say it: `15 Sep 2026`. */
+export function dayWords(day: BusinessDate): string {
+  return `${Number(day.slice(8, 10))} ${SHORT_MONTHS[Number(day.slice(5, 7)) - 1]} ${day.slice(0, 4)}`
+}
+
+/** A lock's months: `September 2026`, or `September 2026 to November 2026` for a lock of several. */
+export function periodWords(period: Pick<Period, 'start' | 'end'>): string {
+  const first = monthOfDay(period.start)
+  const last = monthOfDay(period.end)
+  return first === last ? monthLabel(first) : `${monthLabel(first)} to ${monthLabel(last)}`
+}
+
+/** A LOCKED HARD period lock as the refusal names it. */
+export interface HardLockFacts {
+  readonly start: BusinessDate
+  readonly end: BusinessDate
+  /** The company's legal name. */
+  readonly company: string
+  /** The day it was locked (Europe/Rome). */
+  readonly lockedOn: BusinessDate
+  /** Who locked it (an office user's name), when known. */
+  readonly lockedBy: string | null
+}
+
+/**
+ * The words of a write refused by a HARD period lock (FIN-046), said by the write's command BEFORE the …_money_w2a_guards'
+ * factory_period_refuse_locked refuses it with a check_violation: which month, which lock, who can lift it. `refused`
+ * says what is not done ("the payment received on 15 Sep 2026 is not recorded").
+ */
+export function hardLockedWords(lock: HardLockFacts, refused: string): string {
+  const by = lock.lockedBy ? `, by ${lock.lockedBy}` : ''
+  return (
+    `${periodWords(lock)} is closed for good for ${lock.company} (a hard lock since ${dayWords(lock.lockedOn)}${by}): ${refused}. ` +
+    'Only someone who may lift a hard lock (accounting.unlock: the owner, by default) reopens the month, with a reason, in Finance › Accounting; agree it with the accountant first.'
+  )
+}
