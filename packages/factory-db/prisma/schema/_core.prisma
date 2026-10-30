@@ -206,6 +206,16 @@ model Site {
   // supply.prisma: the purchase orders delivered to it and its planning runs.
   purchaseOrders  PurchaseOrder[]
   planningRuns    PlanningRun[]
+  // W2a reservations.prisma, stockcount.prisma, planning.prisma: its reservations and stock counts; its planning settings,
+  // item parameters, line and work-centre capacity and planning exceptions; the item parameters of other sites it makes for.
+  reservations         Reservation[]
+  stockCounts          StockCount[]
+  planningSettings     PlanningSettings[]
+  itemPlannings        ItemPlanning[]
+  lineCapacities       LineCapacity[]
+  workCentreCapacities WorkCentreCapacity[]
+  planningExceptions   PlanningException[]
+  madeItemPlannings    ItemPlanning[]       @relation("ItemPlanningMakeSite")
   // inventory.prisma: its locations, goods receipts, lots, stock moves and their values.
   locations       Location[]
   goodsReceipts   GoodsReceipt[]
@@ -269,6 +279,8 @@ model Line {
 
   site     Site      @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   stations Station[]
+  // W2a planning.prisma: its planned efficiency and people (one row, the line's id).
+  capacity LineCapacity[]
   // calendar.prisma: its calendar.
   workCalendars WorkCalendar[]
 
@@ -295,6 +307,8 @@ model WorkCentre {
 
   site     Site      @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   stations Station[]
+  // W2a planning.prisma: its planned units and efficiency (one row, the work centre's id).
+  capacity WorkCentreCapacity[]
   // production.prisma: the work order operations mapped to it.
   workOrderOperations WorkOrderOperation[]
   // calendar.prisma: its calendar (a workshop's).

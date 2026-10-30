@@ -1,0 +1,104 @@
+// Reservations (W2a schema wave 4/7; plan W2A §5; features SCM-205, SCM-209, SCM-210): stock of a site held for a work
+// order or a sales order line, so that many orders share the same material and no two of them count on the same hides
+// (SCOPE W2a rule 1). apps/factory-api's modules/inventory/reservations writes them (B-W2a-11), always through command();
+// the office's pick lists (B-W2a-58) and the planning run's material readiness (B-W2a-22) read them.
+//
+// A reservation is one of three kinds:
+//   QUANTITY  a quantity of an item that is not tracked hide by hide (lining, thread, trims, protectors), in one colour
+//             (or an item without colours), from one lot or from any lot;
+//   AREA      an area of leather (an item tracked by HIDE), in one colour, from one lot (one dye batch) or any: the hides
+//             are chosen at cutting (SCM-209);
+//   HIDE      one named hide, whole, with its lot: a hide is held by one ACTIVE reservation at most (a partial unique
+//             index of …_stock_plan_w2a_guards).
+// Its quantity counts in the item's base unit, as the ledger's balances do. Available stock = on hand − reserved − held
+// (B-W2a-11), where reserved is the open quantity (quantity − issued) of the ACTIVE reservations. The database does not
+// hold "never more reserved than on hand": moves and reservations change apart, so the reservations module checks it
+// under the stock key's lock (B-W2a-11), and the stock grid says when a key is over-reserved.
+//
+// ACTIVE → ISSUED (all of it went to the work order) or RELEASED (let go with its reason, SCM-210; also the rest of a
+// partly issued one once its work order is done or cancelled). ISSUED and RELEASED are final. An issue to the demand's
+// work order raises issuedQuantity in the issuing command, the office's or the floor's.
+//
+// Who sees what (ownership/reservations.json): the office reads and writes; the floor of the site reads them (its issue
+// to a work order refuses, in words, a lot or hide reserved for another one, B-W2a-11) and records its issue against
+// the work order's own reservation (issuedQuantity, ACTIVE → ISSUED and nothing else: the …_stock_plan_w2a_guards
+// trigger); portal and link sessions read nothing. Nobody deletes a reservation (it is released).
+
+/// Stock of a site held for one work order or one sales order line (SCM-205, SCM-209): a quantity, an area of leather or
+/// one hide.
+model Reservation {
+  id               String            @id @db.Uuid
+  tenantId         String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that owns the stock: the site's.
+  companyId        String            @db.Uuid
+  siteId           String            @db.Uuid
+  kind             ReservationKind
+  itemId           String            @db.Uuid
+  /// The colour held, one of the item's (a lot's colour when a lot is named); null only for an item without colours.
+  itemColourId     String?           @db.Uuid
+  /// The lot it is held from: a lot of the site and item; null: any lot. Required for a HIDE.
+  lotId            String?           @db.Uuid
+  /// HIDE: the hide held, a hide of the lot.
+  hideId           String?           @db.Uuid
+  /// Above 0, in the item's base unit: pieces, metres, the area of leather (a HIDE's area when it was reserved).
+  quantity         Decimal           @db.Decimal(18, 4)
+  /// What of it went to the demand's work order, in the base unit: 0 up to the quantity.
+  issuedQuantity   Decimal           @default(0) @db.Decimal(18, 4)
+  /// What it is held for, exactly one: a work order of the site (not completed, closed or cancelled when reserved), or a
+  /// line of an open sales order of the company (before its work order exists; a line made at another site cannot be).
+  workOrderId      String?           @db.Uuid
+  salesOrderLineId String?           @db.Uuid
+  /// The order line's party (the order's customer): set exactly with the order line.
+  partyId          String?           @db.Uuid
+  /// When the demand needs it (the work order's start, the order line's date): who goes first when material is short.
+  needDate         DateTime?         @db.Date
+  status           ReservationStatus @default(ACTIVE)
+  /// ISSUED: when the last of it was issued.
+  issuedAt         DateTime?         @db.Timestamptz(3)
+  /// RELEASED: when, by whom and why (SCM-210); the reason is required.
+  releasedAt       DateTime?         @db.Timestamptz(3)
+  releasedById     String?           @db.Uuid
+  releaseReason    String?
+  note             String?
+  version          Int               @default(1)
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  /// Who reserved it.
+  createdById      String?           @db.Uuid
+
+  site           Site            @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  item           Item            @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and the other keys.
+  itemColour     ItemColour?     @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot            Lot?            @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  hide           Hide?           @relation(fields: [tenantId, siteId, lotId, hideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder      WorkOrder?      @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  salesOrderLine SalesOrderLine? @relation(fields: [tenantId, partyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // planning.prisma: the planning runs' pegging rows that count on it.
+  peggings       RequirementPegging[]
+
+  // The target of the pegging rows' reference: a reservation of the run's site.
+  @@unique([tenantId, siteId, id])
+  // What is held of one material at a site (the available stock, the stock grid's Reserved column).
+  @@index([tenantId, siteId, itemId, status])
+  @@index([tenantId, workOrderId])
+  @@index([tenantId, salesOrderLineId])
+}
+
+enum ReservationKind {
+  /// A quantity of an item not tracked hide by hide, from one lot or any.
+  QUANTITY
+  /// An area of leather, from one lot (one dye batch) or any; the hides are chosen at cutting.
+  AREA
+  /// One named hide, whole.
+  HIDE
+}
+
+/// ACTIVE → ISSUED | RELEASED; both final.
+enum ReservationStatus {
+  ACTIVE
+  /// All of it went to the work order.
+  ISSUED
+  /// Let go (SCM-210), with its reason: the rest is available again.
+  RELEASED
+}

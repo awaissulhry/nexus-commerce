@@ -1,0 +1,53 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/planning.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context: the nightly planning run) writes the planning settings, item parameters, line and work-centre capacity, pegging and exceptions through apps/factory-api's modules/planning (B-W2a-16, B-W2a-22), always through command(); the API keeps staff to the companies and sites their grants reach. Office only: the floor sees nothing of the plan until the planning board publishes it (Owner answer P3; the published plan is wave 5's), and portal and link sessions read nothing. No table holds a price, cost or a person's figure (capacity and efficiency are per line and work centre: Statuto dei Lavoratori art. 4). RequirementPegging is append-only (`@append-only`; the …_stock_plan_w2a_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login). Nobody deletes settings, capacity or an exception (they are changed or resolved); the office deletes an item's parameters, which then fall back to the item's defaults. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "PlanningSettings": {
+      "about": "The office sets a site's planning horizon, buckets, default efficiency and nightly run time (one row per site, its id the site's). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ItemPlanning": {
+      "about": "The office sets how a site plans an item: method, source, lead times, safety stock, reorder point, min/max and lot sizes; it removes a row to plan the item by its defaults again. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "LineCapacity": {
+      "about": "The office sets a line's planned efficiency and the people it plans with (one row per line, its id the line's). Office only: per line, never per person.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "WorkCentreCapacity": {
+      "about": "The office sets a work centre's planned units and efficiency (one row per work centre, its id the work centre's). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "RequirementPegging": {
+      "about": "A planning run writes the pegging of its requirements; the office reads it (Why, the pegging tree, material readiness). Nobody changes or removes a row.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "PlanningException": {
+      "about": "A planning run raises, moves on and clears exceptions; the office acknowledges, snoozes, assigns and resolves them. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

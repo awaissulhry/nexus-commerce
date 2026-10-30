@@ -143,6 +143,9 @@ model WorkOrder {
   cutLogs       CutLog[]
   bundles       Bundle[]
   scans         OperationScan[]
+  // W2a reservations.prisma, planning.prisma: the stock held for it, and the planning runs' pegging of its material.
+  reservations  Reservation[]
+  peggings      RequirementPegging[]
   // The floor's correction requests and refused scans about it (B-W1-42).
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]

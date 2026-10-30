@@ -1,0 +1,21 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/stockcount.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office writes stock counts and their lines through apps/factory-api's modules/inventory/counts (B-W2a-15), always through command(): it creates a count, freezes the expected quantities, types what was counted, asks for recounts, submits, approves or sends back, applies the differences as COUNT moves through the ledger, and signs off the year-end inventory. The floor reads and writes nothing here in W2a: counting by scan on the floor (floor.count, SCM-228) is W2b, which will add the floor's select and the lines' insert and update scoped by site (the lines carry no cost column for that reason). The count's value of its differences is a cost (`@grain cost`): office only. Portal and link sessions read nothing. From SUBMITTED on the lines are history (the …_stock_plan_w2a_guards triggers refuse every change but the move each line posts, for every login); nobody deletes a count (it is cancelled), and the office deletes a line only while its count is DRAFT or COUNTING. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "StockCount": {
+      "about": "The office opens a cycle count or the year-end inventory of a site, starts it (the snapshot), submits, approves or sends it back, applies its differences, signs off a year-end count and cancels one before it is applied. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "StockCountLine": {
+      "about": "The office writes a count's lines (the snapshot, the counts, recounts and reasons) while the count is DRAFT or COUNTING, deletes an added line then, and names the COUNT move a line posted while the count is APPROVED. Office only in W2a.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}
