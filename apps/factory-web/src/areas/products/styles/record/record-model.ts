@@ -1,5 +1,7 @@
 import type { RecordPanelsViewModel } from '../../../../record-panels/model'
+import type { WizardActions } from '../../../admin/import/view/ImportWizard'
 import type {
+  BomExportFormat,
   BomLineInput,
   BomView,
   BrandRow,
@@ -14,9 +16,15 @@ import type {
   RoutingView,
   ScaleRow,
   StyleComplianceView,
+  StepPatch,
   StylePatch,
   StyleView,
+  SubcontractPatch,
+  WorkshopRow,
 } from '../api'
+import type { DuplicateModel } from '../duplicate/duplicate-model'
+import type { DuplicateActions } from '../duplicate/view/DuplicateDialog'
+import type { SheetImport } from '../import/sheet-import'
 import type { Grains, StyleAbilities, StyleTab } from '../model'
 
 /** The style itself: read, or why not. */
@@ -50,6 +58,8 @@ export type StyleDialog =
   | { kind: 'removeLine'; lineId: string }
   | { kind: 'addOperations' }
   | { kind: 'removeStep'; stepId: string }
+  /** W2a: a routing step's subcontract details (design pop:styles.opDrawer "Subcontract details"). */
+  | { kind: 'subcontract'; stepId: string }
   | { kind: 'upload'; documentKind: 'DECLARATION_OF_CONFORMITY' | 'USER_INFORMATION'; language: string }
   | { kind: 'help' }
 
@@ -81,6 +91,8 @@ export interface StyleRecordViewModel {
     colours: ColourRow[] | null
     brands: BrandRow[] | null
     labels: LabelTemplateRow[] | null
+    /** W2a: the workshops a step may name (parties.view; null while unread or without the right). */
+    workshops: WorkshopRow[] | null
   }
   /** The materials of the BOM's colour-dependent lines (their colours fill the colour grid's choices). */
   materials: Record<string, MaterialView | null>
@@ -97,6 +109,14 @@ export interface StyleRecordViewModel {
   changed: { at: string } | null
   /** The thread beside the tab (Owner O1, ⌘J, 1280 px and wider). */
   dockOpen: boolean
+  /** The fields the last refused write named (`hsCode`, `body/netMassKg` …), for a form to point at. */
+  refused?: string[]
+  /** W2a: Duplicate style (the band's ⋯). */
+  duplicate: DuplicateModel | null
+  /** W2a: Import BOM (the BOM tab's toolbar; importer `product.bom`). */
+  bomImport: SheetImport | null
+  /** W2a: an export of the BOM being made (its format). */
+  exporting?: BomExportFormat | null
   /** Design cases: the record panels drawn from made-up data. */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: the identity form already being edited. */
@@ -141,7 +161,10 @@ export interface StyleRecordActions {
   // routing
   onOperationQuery?: (query: string, kind: string | null) => void
   onAddSteps?: (operationIds: string[]) => Promise<boolean>
-  onStep?: (stepId: string, patch: { standardMinutes?: string; scanRequired?: boolean; instructions?: string | null }) => Promise<boolean>
+  onStep?: (stepId: string, patch: StepPatch) => Promise<boolean>
+  /** W2a: a step's subcontract details; null takes it back in-house. */
+  onSubcontract?: (stepId: string, subcontract: SubcontractPatch | null) => Promise<boolean>
+  onLoadWorkshops?: () => void
   onRemoveStep?: (stepId: string) => Promise<boolean>
   onMoveStep?: (stepId: string, delta: -1 | 1) => void
   // cost
@@ -150,5 +173,11 @@ export interface StyleRecordActions {
   onUpload?: (input: { kind: 'DECLARATION_OF_CONFORMITY' | 'USER_INFORMATION'; language: string; number: string | null; file: File }) => Promise<boolean>
   onDownload?: (documentId: string, fileId: string) => void
   onAssignLabel?: (templateId: string | null) => Promise<boolean>
+  // W2a
+  onDuplicate?: () => void
+  duplicate?: DuplicateActions
+  onImportBom?: () => void
+  bomImport?: WizardActions
+  onExportBom?: (format: BomExportFormat) => void
   onGarmentTracking?: (tracking: StyleView['garmentTracking']) => Promise<boolean>
 }

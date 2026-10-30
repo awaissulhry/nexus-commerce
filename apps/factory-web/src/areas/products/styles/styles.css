@@ -810,3 +810,130 @@
 .fw-st-step-body {
   padding: 0 0 var(--nds-space-10) var(--nds-space-20);
 }
+
+/* ---- W2a: New style › Start from, Duplicate's parts, Subcontract's mode (cards in a row, wrapping) ---- */
+.fw-st-start,
+.fw-st-parts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-st-pick-button {
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.fw-st-pick-button:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: -2px;
+}
+
+/* The routing grid's Subcontracted column. */
+.fw-st-routing td:nth-child(7) {
+  min-width: 170px;
+}
+
+/* ---- W2a: the styles list below 720 px (design sec:styles.phone; DS gap D3, a card list) ---- */
+.fw-stc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-stc-bar,
+.fw-stc-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-stc-bar {
+  justify-content: space-between;
+}
+
+.fw-stc-search {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.fw-stc-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-stc-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-10);
+  min-width: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+
+.fw-stc-card.is-on {
+  border-color: var(--nds-primary);
+  background: var(--nds-primary-soft);
+}
+
+.fw-stc-thumb {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+
+.fw-stc-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-stc-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6);
+}
+
+.fw-stc-name {
+  overflow-wrap: anywhere;
+  color: var(--nds-text-2);
+}
+
+.fw-stc-price {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-stc-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+
+.fw-stc-search > * {
+  width: 100%;
+}

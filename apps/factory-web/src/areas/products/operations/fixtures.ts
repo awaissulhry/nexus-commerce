@@ -1,5 +1,6 @@
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { at, canFor, COMPANY_ID, NOW, PREFIX, uid } from '../library/demo'
+import { demoSheetImport } from '../styles/demo/fixtures'
 import type { OperationRow, OperationView } from './api'
 import { emptyDraft } from './model'
 import { OperationsListView, type NewOperationModel, type OperationsListViewModel } from './view/OperationsListView'
@@ -47,6 +48,8 @@ const base: OperationsListViewModel = {
   newOperation: null,
   busy: false,
   notice: null,
+  importHeld: null,
+  sheetImport: null,
 }
 const newOperation = (extra: Partial<NewOperationModel['draft']> = {}, more: Partial<NewOperationModel> = {}): NewOperationModel => ({
   draft: { ...emptyDraft(COMPANY_ID), ...extra },
@@ -80,6 +83,11 @@ export const designScreen = defineDesignScreen<OperationsListViewModel>({
     { id: 'new', label: 'New operation', model: { ...base, newOperation: newOperation() }, note: 'Create held until code, name and minutes are given; ⌘↵ creates.' },
     { id: 'new-filled', label: 'New operation, filled', model: { ...base, newOperation: newOperation({ code: 'DEMO-CUC-MANICA', name: 'Cucitura manica', nameIt: 'Cucitura manica', nameEn: 'Sew sleeve', machineType: 'Piana 1 ago', skill: 'Cucitrice', minutes: '7,25', instructions: 'Cucire con punto 3,5 mm; rinforzare a fine cucitura.' }) } },
     { id: 'new-refused', label: 'New operation: code taken', model: { ...base, newOperation: newOperation({ code: 'DEMO-CUC-SPALLA', name: 'Cucitura spalla', minutes: '6' }, { problem: 'problem.write.codeTaken', refused: ['code'] }) } },
+    { id: 'import', label: 'W2a: Import — the sheet', model: { ...base, sheetImport: demoSheetImport('product.operations', 'upload') }, note: 'Importer "Operations", keyed by code: new operations and changed names, departments (Italian names too), minutes, machines; nothing written before Apply.' },
+    { id: 'import-check', label: 'W2a: Import — the dry run', model: { ...base, sheetImport: demoSheetImport('product.operations', 'planned') }, note: '1 new, 3 changed (6,2 → 6,5 min), 1 refused row; routings keep their copied minutes (Where used offers the update).' },
+    { id: 'import-result', label: 'W2a: Import — applied', model: { ...base, sheetImport: demoSheetImport('product.operations', 'applied') } },
+    { id: 'import-held', label: 'W2a: Import held (quality reads)', model: { ...base, can: canFor('quality'), importHeld: 'held.noManage' }, note: 'Import and New operation held with their reason.' },
+    { id: 'import-held-right', label: 'W2a: Import held (no import right)', model: { ...base, importHeld: 'operations.import.held' } },
     { id: 'no-match', label: 'Nothing matches', model: { ...base, filters: { view: 'open', q: 'zzz', kind: '' }, rows: { items: [], more: false, count: 0, problem: null } } },
     { id: 'empty', label: 'No operations yet', model: { ...base, rows: { items: [], more: false, count: 0, problem: null }, tiles: { unused: 0, differs: 0 } } },
     { id: 'loading', label: 'Loading', model: { ...base, rows: { items: null, more: false, count: null, problem: null }, tiles: { unused: null, differs: null }, asOf: null } },

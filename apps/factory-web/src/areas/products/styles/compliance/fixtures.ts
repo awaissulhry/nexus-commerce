@@ -14,7 +14,7 @@ const LABELS = [
 ]
 const released = { style: { status: 'ready' as const, value: demoStyle() }, revisionId: REV.r2, bom: { status: 'ready' as const, value: demoBom({ revision: REVISIONS[1] }) } }
 const compliance = (overrides: Partial<StyleRecordViewModel> = {}, role: 'owner' | 'production' | 'product' = 'owner') => recordModel(role, { tab: 'compliance', ...released, compliance: { status: 'ready', value: demoCompliance() }, ...overrides })
-const draft = { revisionId: REV.r3, bom: { status: 'ready' as const, value: demoBom() }, compliance: { status: 'ready' as const, value: demoCompliance({ revision: REVISIONS[0], docs: 'missing', label: false }) }, libraries: { scales: null, colours: null, brands: null, labels: LABELS } }
+const draft = { revisionId: REV.r3, bom: { status: 'ready' as const, value: demoBom() }, compliance: { status: 'ready' as const, value: demoCompliance({ revision: REVISIONS[0], docs: 'missing', label: false }) }, libraries: { scales: null, colours: null, brands: null, labels: LABELS, workshops: null } }
 
 export const designScreen = defineDesignScreen<StyleRecordViewModel>({
   screen: 'SCR-045',
