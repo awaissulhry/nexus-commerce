@@ -1,0 +1,121 @@
+{
+  "acal": {
+    "tab": "Calendari",
+    "more": "Altre azioni",
+    "holidaysAll": "Festività per tutti gli stabilimenti",
+    "holidaysAllHint": "I giorni lavorativi e le festività della società, che ogni stabilimento eredita",
+    "title": "Giorni lavorativi e festività {year}",
+    "hint": "Festività nazionali italiane, il santo patrono, la chiusura di agosto: ogni stabilimento della società segue questi giorni.",
+    "gridLabel": "Calendario di {name} · {year}",
+    "failed": "Impossibile caricare i giorni lavorativi e le festività",
+    "readOnly": "Puoi vedere i giorni lavorativi e le festività della società; per gestirli serve il diritto Calendari su tutti gli stabilimenti della società.",
+    "inherit": "Gli stabilimenti ereditano questi giorni e possono aprire o chiudere una data sul proprio calendario (Pianificazione › Impostazioni pianificazione):",
+    "siteLink": "{code} · {name}",
+    "siteOwn_one": "calendario proprio, {count} data propria quest'anno",
+    "siteOwn_other": "calendario proprio, {count} date proprie quest'anno",
+    "siteFollows": "segue la società",
+    "none": {
+      "title": "Ancora nessun calendario della società",
+      "body": "Finché la società non ha un calendario, gli stabilimenti lavorano dal lunedì al venerdì, un turno. Impostalo per aggiungere le festività e le chiusure che ogni stabilimento segue.",
+      "create": "Imposta il calendario della società"
+    },
+    "list": {
+      "title": "Festività e chiusure",
+      "hint": "Ogni data impostata sul calendario della società, con gli stabilimenti che la decidono diversamente.",
+      "label": "Festività e chiusure {year}",
+      "empty": "Nessuna festività o chiusura impostata per il {year}",
+      "emptyBody": "Carica le festività italiane del {year}, o aggiungi il santo patrono e le chiusure."
+    },
+    "col": {
+      "date": "Data",
+      "name": "Nome",
+      "kind": "Tipo",
+      "sites": "Stabilimenti",
+      "actions": "Azioni",
+      "remove": "Rimuovi"
+    },
+    "span": "{from} – {to}",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "source": {
+      "national": "Elenco nazionale italiano",
+      "hand": "Aggiunta a mano"
+    },
+    "kind": {
+      "working": "Giorno lavorativo (aperto)"
+    },
+    "remove": "Rimuovi {name}",
+    "load": "Carica le festività italiane {year}",
+    "loadedAlready_one": "{count} giorno dell'elenco italiano è impostato per il {year}; caricando di nuovo si aggiunge solo ciò che manca.",
+    "loadedAlready_other": "{count} giorni dell'elenco italiano sono impostati per il {year}; caricando di nuovo si aggiunge solo ciò che manca.",
+    "sites": {
+      "all": "Tutti gli stabilimenti",
+      "allBut": "Tutti gli stabilimenti tranne {sites}",
+      "open": "{code} (aperto)",
+      "closed": "{code} (chiuso)"
+    },
+    "elsewhere": {
+      "title": "Modificato da qualcun altro",
+      "body": "Il calendario della società è cambiato nel frattempo su un'altra schermata. Ricarica per vederlo.",
+      "reload": "Ricarica"
+    },
+    "week": {
+      "title": "Settimana lavorativa",
+      "hint": "I giorni in cui la società lavora in una settimana normale. Uno stabilimento o una linea può avere una settimana propria.",
+      "days": "Giorni lavorativi",
+      "none": "Nessun giorno lavorativo",
+      "atLeastOne": "Tieni almeno un giorno lavorativo nella settimana."
+    },
+    "pattern": {
+      "label": "Schema turni",
+      "default": "Il predefinito della pianificazione: un turno, 08:00–17:00 con la pausa pranzo",
+      "where": "I turni si gestiscono per stabilimento e linea in Impostazioni pianificazione.",
+      "link": "Calendari e turni"
+    },
+    "add": {
+      "open": "Aggiungi festività",
+      "title": "Aggiungi una festività o una chiusura",
+      "subtitle": "Sul calendario di {name}: ogni stabilimento la segue",
+      "from": "Dal",
+      "to": "Al (facoltativo)",
+      "toHint": "Per una chiusura di più giorni, come la chiusura di agosto.",
+      "datePlaceholder": "Scegli una data",
+      "clear": "Cancella",
+      "name": "Nome",
+      "nameHint": "Come si chiama il giorno sul calendario e sulla stampa.",
+      "namePlaceholder": "Santo patrono, Chiusura estiva",
+      "kind": "Tipo",
+      "holiday": "Festività",
+      "closure": "Chiusura",
+      "capacity": "Ricalcola subito la capacità: nessuna linea della società lavora quel giorno, a meno che uno stabilimento o una linea lo apra.",
+      "conflictTitle_one": "{count} giorno è già impostato: aggiungi di nuovo per sostituirlo",
+      "conflictTitle_other": "{count} giorni sono già impostati: aggiungi di nuovo per sostituirli",
+      "replace_one": "Sostituisci {count} giorno",
+      "replace_other": "Sostituisci {count} giorni",
+      "go": "Aggiungi",
+      "cancel": "Annulla",
+      "needDate": "Scegli il primo giorno.",
+      "toBefore": "L'ultimo giorno viene prima del primo.",
+      "tooLong": "Un intervallo dura al massimo un anno.",
+      "needName": "Dai un nome al giorno.",
+      "conflict": "Alcuni giorni sono già impostati."
+    },
+    "problem": {
+      "wholeCompany": "Per gestire il calendario della società serve calendars.manage su tutti gli stabilimenti della società: il tuo diritto ne raggiunge solo alcuni."
+    },
+    "done": {
+      "created": "Il calendario della società è impostato: dal lunedì al venerdì, un turno. Ora aggiungi le festività.",
+      "week": "La settimana lavorativa è salvata; la capacità viene ricalcolata subito.",
+      "added_one": "{name}: {count} giorno aggiunto.",
+      "added_other": "{name}: {count} giorni aggiunti.",
+      "addedReplaced_one": "{name}: {count} giorno impostato, {replaced} sostituiti.",
+      "addedReplaced_other": "{name}: {count} giorni impostati, {replaced} sostituiti.",
+      "removed_one": "{name}: {count} giorno rimosso; gli stabilimenti lo lavorano di nuovo come dice la settimana.",
+      "removed_other": "{name}: {count} giorni rimossi; gli stabilimenti li lavorano di nuovo come dice la settimana.",
+      "loaded_one": "Festività italiane {year}: {count} aggiunta.",
+      "loaded_other": "Festività italiane {year}: {count} aggiunte.",
+      "loadedSkipped_one": "Festività italiane {year}: {count} aggiunta · {skipped} già impostate, mantenute.",
+      "loadedSkipped_other": "Festività italiane {year}: {count} aggiunte · {skipped} già impostate, mantenute."
+    }
+  }
+}

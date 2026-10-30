@@ -72,6 +72,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   PriceList: '/sales/price-lists/[id]',
   // Finance › Accounting export (SCR-156, B-W2a-51): a batch opens on its files tab (its checks, explanations and files).
   AccountingExport: '/finance/accounting/files?export=[id]',
+  // Planning › Planning settings (SCR-124, B-W2a-59): a calendar opens on Calendars & shifts, a shift pattern in its editor.
+  WorkCalendar: '/planning/settings?tab=calendars&cal=[id]',
+  ShiftPattern: '/planning/settings?tab=calendars&pattern=[id]',
 })
 
 /**
@@ -130,6 +133,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2a-45: the schedule's board and the allocation board.
   '/planning/schedule': '/planning/board',
   '/planning/allocation': '/planning/allocation',
+  // B-W2a-59: the planning settings of the sites (SCR-124, SCR-127).
+  '/planning/settings': '/planning/settings',
   // B-W2a-53: the plant's lists (the requests queue reads `?tile=`, the jobs `?view=`, the machines `?view=` and `?q=`).
   '/plant/requests': '/plant/requests',
   '/plant/jobs': '/plant/jobs',

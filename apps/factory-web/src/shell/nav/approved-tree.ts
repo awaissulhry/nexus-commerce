@@ -142,6 +142,13 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'planning.allocation', title: 'Lines & subcontractors', titleIt: 'Linee e terzisti', wave: 'W2a', href: '/planning/allocation' },
         ],
       },
+      // W2a: B-W2a-59 Planning settings (SCR-124, SCR-127).
+      {
+        label: 'Settings',
+        labelIt: 'Impostazioni',
+        hideLabel: false,
+        pages: [{ id: 'planning.settings', title: 'Planning settings', titleIt: 'Impostazioni pianificazione', wave: 'W2a', href: '/planning/settings' }],
+      },
     ],
   },
   {

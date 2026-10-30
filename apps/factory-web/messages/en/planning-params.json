@@ -1,0 +1,381 @@
+{
+  "pp": {
+    "cancel": "Cancel",
+    "none": "None",
+    "siteOption": "{code} · {name}",
+    "more": "Show 50 more",
+    "loadingMore": "Reading the next items…",
+    "clearFilters": "Clear the search and filters",
+    "weeks": "weeks",
+    "less": "One less",
+    "more_": "One more",
+    "pct": "{pct} %",
+    "inUnit": "In {unit} (the item's base unit).",
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "readOnly": {
+      "title": "You can read these settings, not change them"
+    },
+    "elsewhere": {
+      "title": "Changed by someone else",
+      "body": "Someone changed these settings on another screen. Reload to see theirs; what you typed here and did not save stays until you reload.",
+      "reload": "Reload"
+    },
+    "keys": {
+      "title": "Keys of this list",
+      "edit": "Change the cell (or open its choice)",
+      "cancel": "Leave the cell as it was",
+      "undo": "Take back the last change (while it is still yours)",
+      "newRule": "New reorder rule"
+    },
+    "held": {
+      "busy": "Saving: wait for the answer.",
+      "loading": "Still reading: wait a moment.",
+      "same": "Nothing to change: the values are the same."
+    },
+    "cell": {
+      "change": "Change {field} of {item}: now {value}"
+    },
+    "colour": {
+      "every": "Every colour"
+    },
+    "method": {
+      "ORDERS": "From orders",
+      "MANUAL": "By hand",
+      "REORDER_POINT": "Reorder point",
+      "MIN_MAX": "Min / max"
+    },
+    "methodHint": {
+      "ORDERS": "The plan buys or makes what the orders need, plus the safety stock.",
+      "MANUAL": "The plan shows the item but never suggests an order for it: someone orders it by hand.",
+      "REORDER_POINT": "When the stock position falls to the reorder point, the plan orders the lot size (as many lots as bring it above).",
+      "MIN_MAX": "When the stock position falls below the minimum, the plan orders up to the maximum."
+    },
+    "source": {
+      "own": "Item's own ({sourcing})",
+      "BUY": "Bought here",
+      "MAKE": "Made at a plant"
+    },
+    "sourcing": {
+      "BUY": "bought",
+      "MAKE": "made",
+      "MAKE_OR_BUY": "made or bought"
+    },
+    "default": {
+      "days_one": "from the item: {count} day",
+      "days_other": "from the item: {count} days",
+      "qty": "from the item: {qty} {unit}",
+      "supplier": "from the item: {name}"
+    },
+    "field": {
+      "method": "The planning method",
+      "source": "Where it comes from",
+      "supplierId": "The preferred supplier",
+      "makeSiteId": "The make site",
+      "buyLeadTimeDays": "The buying lead time",
+      "makeLeadTimeDays": "The making lead time",
+      "safetyLeadTimeDays": "The safety time",
+      "safetyStock": "The safety stock",
+      "reorderPoint": "The reorder point",
+      "lotSize": "The lot size",
+      "minStock": "The minimum stock",
+      "maxStock": "The maximum stock",
+      "minOrderQty": "The order minimum",
+      "orderMultiple": "The order step",
+      "maxOrderQty": "The order maximum",
+      "note": "The note",
+      "horizonWeeks": "How far the plan looks ahead",
+      "dayBucketWeeks": "Days up to the end of week",
+      "weekBucketWeeks": "Weeks up to the end of week",
+      "defaultEfficiencyPct": "Default planned efficiency",
+      "scheduledRunTime": "The nightly run",
+      "people": "People per shift",
+      "plannedEfficiencyPct": "The planned efficiency"
+    },
+    "col": {
+      "item": "Item",
+      "colour": "Colour",
+      "method": "Method",
+      "source": "Comes from",
+      "supplier": "Preferred supplier",
+      "makeSite": "Make site",
+      "buyLeadTimeDays": "Buying lead time",
+      "makeLeadTimeDays": "Making lead time",
+      "safetyLeadTimeDays": "Safety time",
+      "safetyStock": "Safety stock",
+      "minOrderQty": "Order minimum",
+      "orderMultiple": "Order step",
+      "maxOrderQty": "Order maximum",
+      "reorderPoint": "Reorder point",
+      "lotSize": "Lot size",
+      "minStock": "Min stock",
+      "maxStock": "Max stock",
+      "warehouse": "Warehouse",
+      "lane": "Line or work centre",
+      "kind": "Kind",
+      "stations": "Stations",
+      "plannedEfficiencyPct": "Planned %",
+      "effSource": "Planned % from",
+      "people": "People per shift",
+      "actual": "Actual, last 4 weeks"
+    },
+    "uom": {
+      "PCS": "pcs",
+      "PAIR": "pair",
+      "SET": "set",
+      "M": "m",
+      "CM": "cm",
+      "MM": "mm",
+      "M2": "m²",
+      "DM2": "dm²",
+      "FT2": "ft²",
+      "KG": "kg",
+      "G": "g",
+      "L": "l",
+      "HIDE": "hides",
+      "SIDE": "sides",
+      "ROLL": "rolls",
+      "CONE": "cones",
+      "BOX": "boxes"
+    },
+    "wcKind": {
+      "CUTTING": "Cutting",
+      "SEWING": "Sewing",
+      "ASSEMBLY": "Assembly",
+      "FINISHING": "Finishing",
+      "INSPECTION": "Inspection",
+      "PACKING": "Packing",
+      "SUBCONTRACT": "Subcontract"
+    },
+    "problem": {
+      "days": "{field} is a whole number of calendar days, 0 to 366.",
+      "quantity": "{field} is a quantity in the item's base unit: digits, with a point or comma for decimals.",
+      "decimals": "{field} has at most four decimals.",
+      "aboveZero": "{field} is above 0.",
+      "maxStock": "The maximum stock must be above the minimum ({min}).",
+      "maxOrder": "The order maximum may not be below the order minimum ({min}).",
+      "ropNeeds": "A reorder-point rule needs both the reorder point and the lot size.",
+      "ropOnly": "{field} belongs to the reorder-point method: change the method first.",
+      "minMaxNeeds": "A min/max rule needs both the minimum and the maximum stock.",
+      "minMaxOnly": "{field} belongs to the min/max method: change the method first.",
+      "supplierBuy": "A preferred supplier goes with an item bought here.",
+      "makeSiteMake": "A make site goes with an item made at a plant.",
+      "note": "A note has at most 500 characters.",
+      "invalidField": "{field} was refused as it is.",
+      "refusedField": "The factory refused {field} as it is: check the value.",
+      "percent": "Give a percent above 0 and at most 200, with at most two decimals (85 or 92.5).",
+      "people": "Give 1 to 500 people, or leave it empty for one per active station."
+    },
+    "cleared_one": "Saved. {fields} was cleared: it belongs to the method or source before.",
+    "cleared_other": "Saved. {fields} were cleared: they belong to the method or source before.",
+    "undo": {
+      "done": "The last change of {item} was taken back.",
+      "notOurs": "The last change can no longer be taken back: the row changed since."
+    },
+    "filter": {
+      "method": "Method",
+      "anyMethod": "Any method",
+      "configured": "Parameters",
+      "all": "All items",
+      "yes": "With parameters",
+      "no": "Defaults only"
+    },
+    "import": {
+      "label": "Import",
+      "held": "No importer for item parameters exists yet: type them here, or change many rows at once with Edit."
+    },
+    "items": {
+      "title": "Item parameters",
+      "table": "Item parameters of the site",
+      "search": "Search item code or name",
+      "hint": "How {site} plans each item and colour: lead times, safety stock, order minimum, step and maximum, bought or made. An item with no row follows its own defaults (shown faint). Quantities are in the item's base unit.",
+      "count_one": "{count} row",
+      "count_other": "{count} rows",
+      "failed": "Couldn't load item parameters",
+      "noMatch": "No item matches the search or the filters",
+      "empty": {
+        "title": "No items yet",
+        "body": "Items appear here once Products › Materials & trims has them."
+      }
+    },
+    "methodDialog": {
+      "title": "How {item} is planned",
+      "apply": "Save the method",
+      "clears": "Saving clears {fields}: it belongs to the method before."
+    },
+    "sourceDialog": {
+      "title": "Where {item} comes from",
+      "apply": "Save",
+      "noSupplier": "No preferred supplier",
+      "noMakeSite": "No make site",
+      "suppliersHint": "The item's own supplier and its approved sources.",
+      "suppliersFailed": "The approved sources could not be read: the item's own supplier is offered.",
+      "suppliersHeld": "Picking a preferred supplier needs the purchasing right (purchasing.view) to read the approved sources.",
+      "noPlants": "No plant of this company to make it at."
+    },
+    "bulk": {
+      "edit_one": "Edit {count}",
+      "edit_other": "Edit {count}",
+      "defaults_one": "Plan {count} by defaults",
+      "defaults_other": "Plan {count} by defaults",
+      "defaultsNone": "None of the selected rows has parameters of its own.",
+      "title_one": "Edit {count} row",
+      "title_other": "Edit {count} rows",
+      "hint": "Tick the fields to change. An empty value clears the field on every row.",
+      "newValue": "New value",
+      "daysHint": "Whole calendar days.",
+      "qtyHint": "In each item's base unit.",
+      "methodHint": "A reorder rule needs its own values: set it on the row or in Reorder rules.",
+      "keepMethod": "Keep each row's method",
+      "pickField": "Tick at least one field to change.",
+      "review": "Review the changes",
+      "reviewTitle_one": "Review the change of {count} row",
+      "reviewTitle_other": "Review the change of {count} rows",
+      "counts": "{write} will be saved · {refused} refused · {same} already so",
+      "change": "Change",
+      "result": "What happens",
+      "willSave": "Will be saved",
+      "same": "Already so: nothing to change",
+      "empty": "empty",
+      "back": "Back to the fields",
+      "apply_one": "Save {count} row",
+      "apply_other": "Save {count} rows",
+      "nothing": "No row has a change that can be saved.",
+      "done_one": "{count} row saved.",
+      "done_other": "{count} rows saved.",
+      "partly": "{saved} saved · {refused} refused"
+    },
+    "defaults": {
+      "title_one": "Plan {count} row by defaults?",
+      "title_other": "Plan {count} rows by defaults?",
+      "body": "The site's parameters of these rows are removed; the items are planned by their own defaults again. You can set them again at any time.",
+      "apply_one": "Plan {count} by defaults",
+      "apply_other": "Plan {count} by defaults",
+      "done_one": "{count} row now follows the item's defaults.",
+      "done_other": "{count} rows now follow the items' defaults."
+    },
+    "reorder": {
+      "title": "Reorder rules",
+      "table": "Reorder rules of the site",
+      "hint": "Reorder point or min/max per item and colour. Rules are kept per site: the warehouse is {site} as a whole (not one location inside it).",
+      "count_one": "{count} rule",
+      "count_other": "{count} rules",
+      "failed": "Couldn't load reorder rules",
+      "new": "New rule",
+      "notThisMethod": "Not used by this rule's method",
+      "empty": {
+        "title": "No reorder rules",
+        "body": "Items are planned from orders only."
+      },
+      "toOrders_one": "Plan {count} from orders",
+      "toOrders_other": "Plan {count} from orders",
+      "toOrdersTitle_one": "Plan {count} item from orders?",
+      "toOrdersTitle_other": "Plan {count} items from orders?",
+      "toOrdersBody": "Their reorder rules end and their reorder values are cleared; the plan orders what the orders need.",
+      "toOrdersDone_one": "{count} item is planned from orders now.",
+      "toOrdersDone_other": "{count} items are planned from orders now."
+    },
+    "rule": {
+      "title": "New reorder rule",
+      "item": "Item",
+      "itemHint": "Type a code or a name, then pick the item.",
+      "searching": "Searching…",
+      "searchFailed": "The search did not answer: try again.",
+      "pickItem": "Pick the item first.",
+      "hasRow": "This item already has parameters for this colour (planned: {method}): saving changes them.",
+      "add": "Add the rule",
+      "change": "Change to this rule",
+      "added": "Reorder rule added for {item}.",
+      "changed": "{item} now follows this reorder rule."
+    },
+    "horizon": {
+      "title": "Horizon & fences",
+      "bucketsTitle": "Horizon and buckets",
+      "runTitle": "Efficiency and the nightly run",
+      "hint": "The plan counts in days first, then weeks, then months up to its horizon.",
+      "isDefault": "This site uses the defaults (26 weeks; days for 2 weeks; weeks to week 13). Saving keeps its own settings.",
+      "horizonHint": "1 to 104 weeks; this week is week 1.",
+      "dayHint": "Days in the plan up to the end of this week (0: no day buckets).",
+      "weekHint": "Weeks up to the end of this week; months after it.",
+      "efficiencyHint": "For a line or work centre without its own planned %.",
+      "onDemand": "On demand only",
+      "nightly": "Every night",
+      "runAt": "Run at",
+      "runHint": "Time in the site's zone ({zone}).",
+      "onDemandHint": "The plan runs only when someone starts it.",
+      "preview": "The plan's buckets:",
+      "noPreview": "Fix the fields to see the buckets.",
+      "days_one": "{count} day to {to}",
+      "days_other": "{count} days to {to}",
+      "weeksTo_one": "{count} week to {to}",
+      "weeksTo_other": "{count} weeks to {to}",
+      "months_one": "{count} month to {to}",
+      "months_other": "{count} months to {to}",
+      "fencesLater": "Time fences (frozen, firming, forecast, capacity) come in a later version.",
+      "fixFirst_one": "Fix {count} field first.",
+      "fixFirst_other": "Fix {count} fields first.",
+      "failed": "Couldn't load horizon & fences",
+      "saved_one": "Saved: {count} setting changed. The next plan uses it.",
+      "saved_other": "Saved: {count} settings changed. The next plan uses them.",
+      "problem": {
+        "required": "Give a value.",
+        "horizon": "The plan looks {min} to {max} weeks ahead.",
+        "weeks": "Give 0 or more weeks.",
+        "dayAfterWeek": "Day buckets ({days} weeks) end before the week buckets do (week {weeks}).",
+        "weekAfterHorizon": "Week buckets (week {weeks}) end within the horizon ({horizon} weeks).",
+        "runTime": "The nightly run is a time HH:MM (02:00).",
+        "refused": "The factory refused this value: check it."
+      }
+    },
+    "lane": {
+      "line": "Line",
+      "workCentre": "Work centre · {kind}",
+      "workshop": "Workshop"
+    },
+    "effSource": {
+      "LANE": "Its own",
+      "SITE": "The site's default",
+      "DEFAULT": "100 % (no setting)"
+    },
+    "people": {
+      "planned_one": "{count} person per shift",
+      "planned_other": "{count} people per shift",
+      "stations_one": "One per station ({count})",
+      "stations_other": "One per station ({count})"
+    },
+    "units": {
+      "planned_one": "{count} at once",
+      "planned_other": "{count} at once"
+    },
+    "actual": {
+      "label": "Actual efficiency of {lane}, last 4 weeks",
+      "empty": "Nothing reported",
+      "none": "Not counted for a work centre",
+      "last": "Last week {pct} %",
+      "lastNone": "Last week: nothing available"
+    },
+    "efficiency": {
+      "title": "Line efficiency",
+      "table": "Line efficiency of the site",
+      "hint": "Planned efficiency per line, with the actual history next to it.",
+      "hintSite": "Planned efficiency per line, with the actual history next to it. Without its own %, a lane plans at the site's default ({pct} %).",
+      "hintDefault": "Planned efficiency per line, with the actual history next to it. Without its own %, a lane plans at {pct} % (no site default set).",
+      "count": "Lines: {lines} · work centres: {centres}",
+      "failed": "Couldn't load line efficiency",
+      "empty": {
+        "title": "No lines yet",
+        "body": "Lines and work centres are set up on the site.",
+        "action": "Production lines"
+      },
+      "privacy": "Efficiency is counted per line and work centre only, never per person.",
+      "bulk_one": "Set the planned % of {count}",
+      "bulk_other": "Set the planned % of {count}",
+      "bulkTitle_one": "Planned % of {count} lane",
+      "bulkTitle_other": "Planned % of {count} lanes",
+      "bulkHint": "Above 0 and at most 200.",
+      "bulkNeeds": "Type the percent first.",
+      "bulkApply_one": "Save for {count}",
+      "bulkApply_other": "Save for {count}"
+    }
+  }
+}

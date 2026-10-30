@@ -84,7 +84,8 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
   it('the buying office: What to buy & make (planning.view), Purchase orders (purchasing.view), Receipts (inventory.stock.view)', () => {
     expect(ids(officeNavFor(permissionCheck(['planning.view', 'purchasing.view', 'inventory.stock.view'])))).toEqual([
       // B-W2a-45: the Planning board and Lines & subcontractors read with planning.view too.
-      ['planning', ['planning-mrp', 'planning-board', 'planning-allocation']],
+      // B-W2a-59: Planning settings reads with planning.view too.
+      ['planning', ['planning-mrp', 'planning-board', 'planning-allocation', 'planning-settings-page']],
       // B-W2a-56: Subcontract orders read with purchasing.view too.
       ['purchasing', ['purchasing-orders', 'purchasing-subcontracting']],
       ['warehouse', ['warehouse-stock', 'warehouse-hides', 'warehouse-lots', 'warehouse-moves', 'warehouse-receipts', 'warehouse-picking']],
