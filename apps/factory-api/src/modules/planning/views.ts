@@ -1,14 +1,20 @@
 import type { Prisma } from '@nexus/factory-db'
+import { leadTimeWindow, orderByDate } from '@nexus/factory-domain/calendars/suppliers'
 import { toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { stockValue } from '@nexus/factory-domain/inventory/ledger/valuation'
 import { asMoney } from '@nexus/factory-domain/money/marked'
-import { hidesFor, orderByOf, type SupplyRules } from '@nexus/factory-domain/planning/buy'
+import { addDays, hidesFor, type SupplyRules } from '@nexus/factory-domain/planning/buy'
+import { itemPlanningFor } from '@nexus/factory-domain/planning/settings/items'
+import { sourceFor, sourceRules, type SourceFacts } from '@nexus/factory-domain/purchasing/sources/sources'
 import { readDecisionNote } from '@nexus/factory-domain/planning/decisions'
 import type { PlanWarning, RequirementSource } from '@nexus/factory-domain/planning/explode'
 import { whyLine } from '@nexus/factory-domain/planning/explain'
 import { COST_SCALE, QUANTITY_SCALE, toBase, unitCostIn } from '@nexus/factory-domain/product/units/units'
 import type { PurchaseOrderStatus } from '@nexus/factory-domain/purchasing/orders'
+import { supplierCalendarsFor, type LoadedSupplierCalendar } from '../../platform/calendars/service'
+import { activeSourcesOf } from '../purchasing/supplier-items/store'
 import type { LineView, RunView } from './contract'
+import { ITEM_PLANNING_COLUMNS, type ItemPlanningRow } from './inputs'
 import { dayOf, ITEM_COLUMNS, readSupplyRules, unitsOf, type ItemRow, type Reader } from './store'
 
 /**
@@ -16,6 +22,11 @@ import { dayOf, ITEM_COLUMNS, readSupplyRules, unitsOf, type ItemRow, type Reade
  * numbers, the suggestion in the purchase unit and in the base unit, about how many hides, the order-by day from the
  * supplier's terms as they are today, the netting as one line, the orders behind it, its decision, and, for a caller
  * with the cost grain only, the item's standard cost per suggested unit and the suggestion's expected value.
+ *
+ * B-W2a-22: a line's firm planned order (PLN-075: how much, by when, from whom, since when; carried from an earlier
+ * plan or made firm on this one), and the order-by day as the buyer's queue counts it (B-W2a-10): the need (the firm
+ * date when firm) less the site's safety lead days, less the lead time (the site's buy lead time, else the supplier's
+ * approved source's, else the item's or supplier's terms), walked back around the supplier's closed days (B-W2a-08).
  */
 
 export const RUN_COLUMNS = {
@@ -59,6 +70,14 @@ export const REQUIREMENT_COLUMNS = {
   decisionNote: true,
   purchaseOrderLineId: true,
   decidedAt: true,
+  // B-W2a-22: the firm planned order.
+  firmQuantity: true,
+  firmBaseQuantity: true,
+  firmDate: true,
+  firmSupplierId: true,
+  firmedAt: true,
+  firmedById: true,
+  createdAt: true,
 } as const satisfies Prisma.MaterialRequirementSelect
 export type RequirementRow = Prisma.MaterialRequirementGetPayload<{ select: typeof REQUIREMENT_COLUMNS }>
 
@@ -138,6 +157,12 @@ export interface LineContext {
   /** The purchase order each ordered line went into (by its purchase order line), for the "In draft PO-…" words. */
   readonly purchaseOrders: ReadonlyMap<string, { id: string; number: string; status: PurchaseOrderStatus }>
   readonly rulesOf: (itemId: string, supplierId: string | null) => SupplyRules
+  /** B-W2a-22: the site's item parameters, the approved sources, the suppliers' calendars and companies (order-by days). */
+  readonly itemPlanning: readonly (ItemPlanningRow & { siteId: string })[]
+  readonly sources: readonly SourceFacts[]
+  readonly calendars: ReadonlyMap<string, LoadedSupplierCalendar>
+  readonly companyOf: ReadonlyMap<string, string>
+  readonly supplierLeadTimes: ReadonlyMap<string, number | null>
 }
 
 export async function readLineContext(db: Reader, rows: readonly RequirementRow[], withCost: boolean): Promise<LineContext> {
@@ -145,8 +170,8 @@ export async function readLineContext(db: Reader, rows: readonly RequirementRow[
   const items = itemIds.length === 0 ? [] : await db.item.findMany({ where: { id: { in: itemIds } }, select: { ...ITEM_COLUMNS, ...(withCost ? { standardCost: true } : {}) } })
   const colourIds = [...new Set(rows.flatMap((row) => (row.itemColourId ? [row.itemColourId] : [])))]
   const colours = colourIds.length === 0 ? [] : await db.itemColour.findMany({ where: { id: { in: colourIds } }, select: { id: true, code: true, name: true } })
-  const supplierIds = [...new Set(rows.flatMap((row) => (row.supplierId ? [row.supplierId] : [])))]
-  const suppliers = supplierIds.length === 0 ? [] : await db.party.findMany({ where: { id: { in: supplierIds } }, select: { id: true, code: true, legalName: true, tradeName: true } })
+  const supplierIds = [...new Set(rows.flatMap((row) => [row.supplierId, row.firmSupplierId].filter((value): value is string => value !== null)))]
+  const suppliers = supplierIds.length === 0 ? [] : await db.party.findMany({ where: { id: { in: supplierIds } }, select: { id: true, code: true, legalName: true, tradeName: true, leadTimeDays: true } })
   const orderIds = [...new Set(rows.flatMap((row) => sourcesOf(row.sources).map((source) => source.orderId)))].filter((id) => id !== '')
   const orders = orderIds.length === 0 ? [] : await db.salesOrder.findMany({ where: { id: { in: orderIds } }, select: { id: true, number: true } })
   const orderLineIds = [...new Set(rows.flatMap((row) => (row.purchaseOrderLineId ? [row.purchaseOrderLineId] : [])))]
@@ -154,14 +179,56 @@ export async function readLineContext(db: Reader, rows: readonly RequirementRow[
     orderLineIds.length === 0
       ? []
       : await db.purchaseOrderLine.findMany({ where: { id: { in: orderLineIds } }, select: { id: true, purchaseOrder: { select: { id: true, number: true, status: true } } } })
-  return {
+  const siteIds = [...new Set(rows.map((row) => row.siteId))]
+  const sites = siteIds.length === 0 ? [] : await db.site.findMany({ where: { id: { in: siteIds } }, select: { id: true, companyId: true } })
+  const itemPlanning = itemIds.length === 0 ? [] : await db.itemPlanning.findMany({ where: { siteId: { in: siteIds }, itemId: { in: itemIds } }, select: { ...ITEM_PLANNING_COLUMNS, siteId: true }, orderBy: { id: 'asc' } })
+  const sources = await activeSourcesOf(db, itemIds)
+  const base: LineContext = {
     items: new Map(items.map((item) => [item.id, item])),
     colours: new Map(colours.map((colour) => [colour.id, colour])),
     suppliers: new Map(suppliers.map((party) => [party.id, { id: party.id, code: party.code, name: party.tradeName ?? party.legalName }])),
     orders: new Map(orders.map((order) => [order.id, order.number])),
     purchaseOrders: new Map(purchaseLines.map((line) => [line.id, { id: line.purchaseOrder.id, number: line.purchaseOrder.number, status: line.purchaseOrder.status }])),
     rulesOf: await readSupplyRules(db, items, supplierIds),
+    itemPlanning,
+    sources,
+    calendars: new Map(),
+    companyOf: new Map(sites.map((site) => [site.id, site.companyId])),
+    supplierLeadTimes: new Map(suppliers.map((party) => [party.id, party.leadTimeDays])),
   }
+  // The suppliers' closed days around every buy's need date (one read for all lines).
+  const windows = rows.flatMap((row) => {
+    const timing = orderTimingOf(row, base)
+    return timing && timing.lead !== null && timing.supplierId ? [leadTimeWindow(timing.target, timing.lead, 'back')] : []
+  })
+  if (windows.length === 0) return base
+  const calendars = await supplierCalendarsFor(db as Prisma.TransactionClient, supplierIds, {
+    from: windows.map((window) => window.from).sort()[0]!,
+    to: windows.map((window) => window.to).sort().reverse()[0]!,
+  })
+  return { ...base, calendars }
+}
+
+/** A buy line's order timing: the supplier, the day it must be there (less the site's safety days) and the lead time. */
+function orderTimingOf(row: RequirementRow, context: LineContext): { supplierId: string | null; target: BusinessDate; lead: number | null } | null {
+  if (row.action !== 'BUY') return null
+  const supplierId = row.firmedAt !== null ? (row.firmSupplierId ?? row.supplierId) : row.supplierId
+  const rule = itemPlanningFor(context.itemPlanning.filter((entry) => entry.siteId === row.siteId && entry.itemId === row.itemId), row.itemColourId)
+  const companyId = context.companyOf.get(row.siteId)
+  const source = supplierId && companyId ? sourceFor(context.sources, { companyId, itemId: row.itemId, itemColourId: row.itemColourId }, supplierId) : null
+  const lead = rule?.buyLeadTimeDays ?? (source ? sourceRules(source, context.supplierLeadTimes.get(supplierId!) ?? null).leadTimeDays : context.rulesOf(row.itemId, supplierId).leadTimeDays)
+  const need = dayOf(row.firmDate ?? row.needDate)
+  return { supplierId, target: addDays(need, -(rule?.safetyLeadTimeDays ?? 0)), lead }
+}
+
+/** The order-by day of a buy line, around its supplier's closed days. */
+function orderByOfLine(row: RequirementRow, context: LineContext, today: BusinessDate): LineView['orderBy'] {
+  const timing = orderTimingOf(row, context)
+  if (!timing) return null
+  if (timing.lead === null) return { date: timing.target, leadTimeDays: null, passed: timing.target < today, closedDaysSkipped: 0 }
+  const calendar = timing.supplierId ? (context.calendars.get(timing.supplierId)?.calendar ?? null) : null
+  const walk = orderByDate(calendar, timing.target, timing.lead)
+  return { date: walk.date, leadTimeDays: timing.lead, passed: walk.date < today, closedDaysSkipped: walk.skipped.length }
 }
 
 export function lineViewOf(row: RequirementRow, context: LineContext, today: BusinessDate, withCost: boolean): LineView {
@@ -177,7 +244,6 @@ export function lineViewOf(row: RequirementRow, context: LineContext, today: Bus
     netQuantity: quantityOf(row.netQuantity),
     needDate: dayOf(row.needDate),
   }
-  const rules = context.rulesOf(row.itemId, row.supplierId)
   // The stored suggestion is the run's; what it brings in the base unit follows from it (the item's factor).
   const brings = toBase(row.suggestedQuantity.toString(), row.suggestedUom, units, { scale: QUANTITY_SCALE, rounding: 'HALF_UP' }).toFixed(QUANTITY_SCALE)
   const sources = sourcesOf(row.sources)
@@ -198,7 +264,7 @@ export function lineViewOf(row: RequirementRow, context: LineContext, today: Bus
     suggestedUom: row.suggestedUom,
     suggestedBaseQuantity: quantityOf(brings),
     estimatedHides: hidesFor(brings, units),
-    orderBy: row.action === 'BUY' ? orderByOf(numbers.needDate, rules, today) : null,
+    orderBy: orderByOfLine(row, context, today),
     supplier: row.supplierId ? (context.suppliers.get(row.supplierId) ?? null) : null,
     why: whyLine(numbers),
     orders: orderIds.map((id) => ({ id, number: context.orders.get(id) ?? sources.find((source) => source.orderId === id)?.orderNumber ?? '' })),
@@ -209,6 +275,21 @@ export function lineViewOf(row: RequirementRow, context: LineContext, today: Bus
     purchaseOrderLineId: row.purchaseOrderLineId,
     purchaseOrder: row.purchaseOrderLineId ? (context.purchaseOrders.get(row.purchaseOrderLineId) ?? null) : null,
     decidedAt: row.decidedAt ? toUtcIso(row.decidedAt) : null,
+    // B-W2a-22 (PLN-075): the firm planned order; `carried` when it was made firm on an earlier plan.
+    firm:
+      row.firmedAt !== null && row.firmQuantity !== null && row.firmBaseQuantity !== null && row.firmDate !== null
+        ? {
+            quantity: quantityOf(row.firmQuantity),
+            uom: row.suggestedUom,
+            baseQuantity: quantityOf(row.firmBaseQuantity),
+            date: dayOf(row.firmDate),
+            supplier: row.firmSupplierId ? (context.suppliers.get(row.firmSupplierId) ?? null) : null,
+            firmedAt: toUtcIso(row.firmedAt),
+            firmedById: row.firmedById,
+            // A run writes a carried line firm (version 1); a planner's firm is an update (version 2 on).
+            carried: row.version === 1 || row.firmedAt.getTime() < row.createdAt.getTime(),
+          }
+        : null,
     ...(withCost ? { unitCost: asMoney('cost', unitCost), expectedAmount: asMoney('cost', expected) } : {}),
     currency: item.currency,
   }

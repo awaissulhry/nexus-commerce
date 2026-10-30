@@ -7,6 +7,7 @@ import { definePermissions } from '../auth/permissions/registry'
  * (the settings: the site's company and the site); a floor device packs at its own site only (can() pins it, row-level
  * security too). Declared in `auth/permissions/catalogue.ts` (FACTORY_PERMISSIONS). Nothing here carries money. The DDT
  * (B-W1-47) has its own two: issuing takes a fiscal number, cancelling annuls a legal document; both are the office's.
+ * B-W2a-17: the same two issue and cancel a DDT for another reason (a source record's goods, no shipment).
  */
 export const SHIPPING_DEFINITIONS = definePermissions('shipping', {
   view: { risk: 'read', description: 'See the shipments and their lines, parcels and serials, and what each sales order has released and not yet shipped.' },
@@ -14,8 +15,12 @@ export const SHIPPING_DEFINITIONS = definePermissions('shipping', {
   pack: { risk: 'write', description: 'Pack a shipment: parcels, which garments go in which parcel, serials, weights and sizes, packed and unpacked; print its packing list (a floor device: at its own site).' },
   'settings.view': { risk: 'read', description: "See each site's shipping settings: sender and return addresses, default carrier and service, packing printers, cut-off." },
   'settings.manage': { risk: 'write', description: "Change a site's shipping settings." },
-  'ddt.issue': { risk: 'write', description: "Issue a shipment's DDT (it takes the next number of the company's DDT series, kept for ever), and print its PDF again when it is missing." },
-  'ddt.cancel': { risk: 'write', description: 'Cancel an issued DDT with its reason: it keeps its number, and a new DDT replaces it.' },
+  'ddt.issue': {
+    risk: 'write',
+    description:
+      "Issue a DDT (it takes the next number of the company's DDT series, kept for ever): a shipment's, or one for goods that travel without a sales shipment (a subcontract kit, goods back to a supplier, a repaired garment, returned goods sent back); print its PDF again when it is missing.",
+  },
+  'ddt.cancel': { risk: 'write', description: 'Cancel an issued DDT (of a shipment or for another reason) with its reason: it keeps its number, and a new DDT replaces it.' },
 })
 
 export const SHIPPING_VIEW = 'shipping.view' satisfies Permission

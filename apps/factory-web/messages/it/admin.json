@@ -1651,6 +1651,8 @@
     "production_scrap_view": "Vedere scarti e rilavorazioni",
     "production_scrap": "Registrare scarti e chiedere sostituzioni",
     "production_scrap_approve": "Approvare riduzioni d'ordine",
-    "production_cutting_view": "Vedere la resa del taglio"
+    "production_cutting_view": "Vedere la resa del taglio",
+    "planning_firm": "Rendere fissi gli ordini pianificati",
+    "planning_exceptions_manage": "Gestire le eccezioni della pianificazione"
   }
 }

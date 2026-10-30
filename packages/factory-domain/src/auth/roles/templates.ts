@@ -145,7 +145,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       // B-W2a-16: planning settings and capacity (horizon, efficiency, people per line) and item parameters.
       'planning.settings.manage', 'planning.items.manage',
       // B-W2a-13: scrap and rework (see), approve a lower order quantity.
-      'production.scrap.view', 'production.scrap.approve'],
+      'production.scrap.view', 'production.scrap.approve',
+      // B-W2a-22: firm planned orders and the exception list of the runs.
+      'planning.firm', 'planning.exceptions.manage'],
     grains: [],
   }),
   template('buyer', {
@@ -181,6 +183,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'planning.decide',
       // B-W2a-16: lead times, safety stock, order minimum and step, preferred supplier per item and site.
       'planning.items.manage',
+      // B-W2a-22: firm planned orders and the exception list of the runs.
+      'planning.firm',
+      'planning.exceptions.manage',
       'purchasing.view',
       'purchasing.manage',
       'purchasing.send',

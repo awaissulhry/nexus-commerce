@@ -5,10 +5,11 @@ import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissi
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import { composeDocument, documentProblems } from '@nexus/factory-domain/documents/compose'
 import { cancelDdtProblems, ddtDocument, draftDdt, draftInvoicesWarning, invoicesOfDdt, issueStateProblems, type DdtDraft, type DdtFacts, type DdtRequest, type InvoiceOfDdt } from '@nexus/factory-domain/shipping/ddt'
+import { cancelSourceDdtProblems, DDT_SOURCE_TYPES, sourceDdtDocument, type DdtSourceType } from '@nexus/factory-domain/shipping/ddt/sources'
 import { SHIPPING_DDT_CANCEL, SHIPPING_DDT_ISSUE, SHIPPING_MANAGE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { shipmentMachine, type ShipmentStatus } from '@nexus/factory-domain/shipping/shipments'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
-import { command, IdempotencyKeyReusedError, type CommandCaller, type CommandTools } from '../../../core/command'
+import { command, IdempotencyKeyReusedError, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { ApiError } from '../../../core/errors'
 import { serverClock } from '../../../core/time'
@@ -23,7 +24,8 @@ import { tenantOf } from '../cells'
 import { shipmentDetail, officeShipment } from '../shipments/shipments'
 import { shipmentDocumentBlockers } from '../documents/read'
 import { lockedStatus, readShipment, shipmentFacts, type ShipmentHeader } from '../store'
-import { ddtView, expectedDdtNumber, issuedOf, languageOf, liveDdtOf, pdfFileIdOf, pdfFileIdsOf, readDdt, readDdtFacts, type DdtRow, type DdtView } from './store'
+import { isSourceDdt, lockSource, sourceDdtView, sourceIssuedOf, sourceLanguageOf, sourceNumbersOf, type SourceDdtRow } from './sources-store'
+import { ddtView, expectedDdtNumber, isShipmentDdt, issuedOf, languageOf, liveDdtOf, pdfFileIdOf, pdfFileIdsOf, readAnyDdt, readDdt, readDdtFacts, type AnyDdtRow, type DdtRow, type DdtView } from './store'
 
 /**
  * The DDT of a shipment (B-W1-47; LOG-054; DPR 472/1996; A2 SCR-067 Documents tab). Office only.
@@ -43,6 +45,9 @@ import { ddtView, expectedDdtNumber, issuedOf, languageOf, liveDdtOf, pdfFileIdO
  *   cancel    an append-only DdtCancellation under the shipment's lock (one per DDT); the shipment stays as it is (the
  *             guards allow no way back from SHIPPED): PACKED can be unpacked or take a new DDT, SHIPPED takes a
  *             replacement DDT with a new number.
+ *
+ * B-W2a-17 (LOG-056): the record, PDF, list and cancel routes take any DDT, a shipment's or one for another reason (a
+ * source record's goods: sources.ts issues them); a source's DDT is cancelled under the SOURCE's row lock.
  */
 
 /** The DDT's request as the routes pass it. */
@@ -233,18 +238,21 @@ export async function issueDdt(files: FilesRuntime, caller: CommandCaller, shipm
 async function ensurePdf(files: FilesRuntime, caller: CommandCaller, ddtId: string): Promise<{ file: FileView; created: boolean }> {
   const stored = await caller.withClient((client) => pdfFileIdOf(client, ddtId))
   if (stored) return { file: await getFile(caller, stored), created: false }
-  const { ddt, language, currency } = await caller.withClient(async (client) => {
-    const row = (await readDdt(client, ddtId))!
-    const order = await languageOf(client, row.shipment.salesOrderId)
+  const { ddt, document } = await caller.withClient(async (client) => {
+    const row = (await readAnyDdt(client, ddtId))!
     const company = await client.company.findUnique({ where: { id: row.companyId }, select: { currency: true } })
-    return { ddt: row, language: order, currency: company?.currency ?? 'EUR' }
+    const currency = company?.currency ?? 'EUR'
+    // A shipment's DDT speaks its order's language; one for another reason its party's (B-W2a-17).
+    if (isShipmentDdt(row)) return { ddt: row, document: ddtDocument(issuedOf(row), await languageOf(client, row.shipment.salesOrderId), currency) }
+    if (!isSourceDdt(row)) throw new InvalidStateError('This DDT names neither a shipment nor a source record.')
+    return { ddt: row, document: sourceDdtDocument(sourceIssuedOf(row), await sourceLanguageOf(client, row.partyId), currency) }
   })
   try {
     const { file } = await storeDocumentPdf(files, caller, {
       companyId: ddt.companyId,
       recordType: 'Ddt',
       recordId: ddt.id,
-      document: ddtDocument(issuedOf(ddt), language, currency),
+      document,
       visibility: ['FLOOR'],
       floorSiteId: ddt.siteId,
       idempotencyKey: `ddt-pdf.${ddt.id}`,
@@ -259,7 +267,7 @@ async function ensurePdf(files: FilesRuntime, caller: CommandCaller, ddtId: stri
 }
 
 /** The PDF after the issue's commit: a failure leaves the DDT issued and says why the file is missing. */
-async function printSafely(files: FilesRuntime, caller: CommandCaller, ddtId: string, onError?: (error: unknown) => void): Promise<{ file: FileView | null; pdfProblem: string | null }> {
+export async function printSafely(files: FilesRuntime, caller: CommandCaller, ddtId: string, onError?: (error: unknown) => void): Promise<{ file: FileView | null; pdfProblem: string | null }> {
   try {
     return { file: (await ensurePdf(files, caller, ddtId)).file, pdfProblem: null }
   } catch (error) {
@@ -269,10 +277,10 @@ async function printSafely(files: FilesRuntime, caller: CommandCaller, ddtId: st
   }
 }
 
-/** The DDT the office may see (else 404) and act on with `permission` (else 403). */
-async function officeDdt(caller: CommandCaller, ddtId: string, permission: Permission = SHIPPING_VIEW): Promise<DdtRow> {
+/** The DDT (a shipment's or one for another reason) the office may see (else 404) and act on with `permission` (else 403). */
+async function officeDdt(caller: CommandCaller, ddtId: string, permission: Permission = SHIPPING_VIEW): Promise<AnyDdtRow> {
   const context = officeContextOf(caller)
-  const row = await caller.withClient((client) => readDdt(client, ddtId))
+  const row = await caller.withClient((client) => readAnyDdt(client, ddtId))
   assertMay(context, SHIPPING_VIEW, permission, row, 'DDT')
   return row!
 }
@@ -293,13 +301,21 @@ export async function downloadDdtPdf(files: FilesRuntime, callers: Callers, ddtI
 
 // ---- reading --------------------------------------------------------------------------------------------------------
 
-export async function getDdt(caller: CommandCaller, ddtId: string): Promise<{ ddt: DdtView }> {
+export async function getDdt(caller: CommandCaller, ddtId: string) {
   const row = await officeDdt(caller, ddtId)
-  return { ddt: ddtView(row, await caller.withClient((client) => pdfFileIdOf(client, row.id))) }
+  const fileId = await caller.withClient((client) => pdfFileIdOf(client, row.id))
+  if (isShipmentDdt(row)) return { ddt: ddtView(row, fileId) }
+  if (!isSourceDdt(row)) throw new NotFoundError('DDT not found.')
+  const numbers = await caller.withClient((client) => sourceNumbersOf(client, [{ type: row.sourceType, id: row.sourceId }]))
+  return { ddt: sourceDdtView(row, fileId, numbers.get(`${row.sourceType}:${row.sourceId}`) ?? null) }
 }
 
 export interface ListDdtsQuery {
   readonly shipmentId?: string | undefined
+  /** B-W2a-17: the DDTs of one source record (both, or the type alone), or only shipments' (SHIPMENT) or sources' (SOURCE). */
+  readonly sourceType?: DdtSourceType | undefined
+  readonly sourceId?: string | undefined
+  readonly kind?: 'SHIPMENT' | 'SOURCE' | undefined
   readonly siteId?: string | undefined
   readonly partyId?: string | undefined
   readonly status?: 'LIVE' | 'CANCELLED' | undefined
@@ -309,15 +325,16 @@ export interface ListDdtsQuery {
   readonly limit: number
 }
 
-/** The DDTs the caller may see (its companies, sites and parties), newest first. */
+/** The DDTs the caller may see (its companies, sites and parties), shipments' and sources' (B-W2a-17), newest first. */
 export async function listDdts(caller: CommandCaller, query: ListDdtsQuery) {
   const context = officeContextOf(caller)
   const where: Prisma.DdtWhereInput = {
     AND: [
       scopeWhere(actorOf(context), SHIPPING_VIEW, { company: 'companyId', site: 'siteId', party: 'partyId' }) as Prisma.DdtWhereInput,
-      // A shipment's DDTs (a DDT for another reason, W2a wave 6/7, is B-W2a-17's to list).
-      { shipmentId: { not: null } },
+      query.kind === 'SHIPMENT' ? { shipmentId: { not: null } } : query.kind === 'SOURCE' ? { shipmentId: null } : {},
       query.shipmentId ? { shipmentId: query.shipmentId } : {},
+      query.sourceType ? { sourceType: query.sourceType } : {},
+      query.sourceId ? { sourceId: query.sourceId } : {},
       query.siteId ? { siteId: query.siteId } : {},
       query.partyId ? { partyId: query.partyId } : {},
       query.status === 'LIVE' ? { cancellations: { none: {} } } : query.status === 'CANCELLED' ? { cancellations: { some: {} } } : {},
@@ -339,6 +356,8 @@ export async function listDdts(caller: CommandCaller, query: ListDdtsQuery) {
         siteId: true,
         partyId: true,
         shipmentId: true,
+        sourceType: true,
+        sourceId: true,
         reason: true,
         transportBy: true,
         packages: true,
@@ -351,7 +370,9 @@ export async function listDdts(caller: CommandCaller, query: ListDdtsQuery) {
       },
     })
     // The same choice as the record's: the first stored print (store.ts pdfFileIdsOf).
-    return { found, pdf: await pdfFileIdsOf(client, found.map((row) => row.id)) }
+    const pdf = await pdfFileIdsOf(client, found.map((row) => row.id))
+    const sources = found.flatMap((row) => (row.sourceId !== null && (DDT_SOURCE_TYPES as readonly string[]).includes(row.sourceType ?? '') ? [{ type: row.sourceType as DdtSourceType, id: row.sourceId }] : []))
+    return { found, pdf, numbers: await sourceNumbersOf(client, sources) }
   })
   const page = rows.found.slice(0, query.limit)
   return {
@@ -366,8 +387,9 @@ export async function listDdts(caller: CommandCaller, query: ListDdtsQuery) {
         siteId: row.siteId,
         partyId: row.partyId,
         recipientName: typeof recipient?.name === 'string' ? recipient.name : '',
-        shipmentId: row.shipmentId!,
-        shipmentNumber: row.shipment!.number,
+        shipmentId: row.shipmentId,
+        shipmentNumber: row.shipment?.number ?? null,
+        source: row.sourceType !== null && row.sourceId !== null ? { type: row.sourceType as DdtSourceType, id: row.sourceId, number: rows.numbers.get(`${row.sourceType}:${row.sourceId}`) ?? '' } : null,
         reason: row.reason,
         transportBy: row.transportBy,
         packages: row.packages,
@@ -410,7 +432,10 @@ export async function shipShipment(caller: CommandCaller, shipmentId: string, bo
  * later) has a line naming it (409 naming the invoice); DRAFT invoices naming it come back as a warning.
  */
 export async function cancelDdt(caller: CommandCaller, ddtId: string, body: { version?: number | undefined; reason: string }, idempotencyKey?: string) {
-  const ddt = await officeDdt(caller, ddtId, SHIPPING_DDT_CANCEL)
+  const row = await officeDdt(caller, ddtId, SHIPPING_DDT_CANCEL)
+  if (isSourceDdt(row)) return cancelSourceDdt(caller, row, body, idempotencyKey)
+  if (!isShipmentDdt(row)) throw new NotFoundError('DDT not found.')
+  const ddt: DdtRow = row
   const { result } = await command(caller, { name: 'shipping.cancelDdt', idempotencyKey, input: { ddtId, ...body }, record: { type: 'Shipment', id: ddt.shipmentId, expectedVersion: body.version } }, async (tools) => {
     const shipment = await readShipment(tools.tx, ddt.shipmentId)
     if (!shipment) throw new InvalidStateError('The shipment is gone.')
@@ -437,7 +462,58 @@ export async function cancelDdt(caller: CommandCaller, ddtId: string, body: { ve
       ddt: ddtView((await readDdt(tools.tx, ddt.id))!, await pdfFileIdOf(tools.tx, ddt.id)),
       // A SHIPPED shipment travels without a live DDT until its replacement is issued.
       shipment: { ...state, needsDdt: state.status === 'SHIPPED' && shipment.ddtRequired },
+      source: null,
       // DRAFT invoices that still name the cancelled DDT: they are not issued until their lines name the replacement.
+      draftInvoiceIds: drafts,
+      warning: draftInvoicesWarning(drafts),
+    }
+  })
+  return result
+}
+
+/**
+ * shipping.ddt.cancel, a DDT for another reason (B-W2a-17): an append-only DdtCancellation under the SOURCE's row lock
+ * (sources-store.ts lockSource; `version`, when sent, is the source's as read: never bumped, a CLOSED RMA or a SHIPPED
+ * repair never changes). Refused once the source's transport is over (its state no longer takes a replacement) and
+ * while an issued invoice names the DDT (W1's rule and lock); DRAFT invoices come back as a warning. The source's lines
+ * keep the DDT they named (a replacement names the new one; a supplier claim line's DDT is set once: see the notes).
+ */
+async function cancelSourceDdt(caller: CommandCaller, ddt: SourceDdtRow, body: { version?: number | undefined; reason: string }, idempotencyKey?: string) {
+  const ref = { type: ddt.sourceType, id: ddt.sourceId }
+  const { result } = await command(caller, { name: 'shipping.cancelSourceDdt', idempotencyKey, input: { ddtId: ddt.id, ...body } }, async (tools) => {
+    const source = await lockSource(tools.tx, ref)
+    if (!source) throw new InvalidStateError('The source record of this DDT is gone.')
+    if (body.version !== undefined && body.version !== source.version) throw new StaleVersionError(source.type, source.id, source.version, body.version)
+    const cancelled = (await tools.tx.ddtCancellation.count({ where: { ddtId: ddt.id } })) > 0
+    const invoices = await tools.tx.$queryRaw<InvoiceOfDdt[]>`
+      SELECT i."id"::text AS "id", i."number", i."status"::text AS "status" FROM "Invoice" i
+       WHERE i."tenantId" = ${tenantOf(tools.context)}::uuid
+         AND EXISTS (SELECT 1 FROM "InvoiceLine" l WHERE l."tenantId" = i."tenantId" AND l."invoiceId" = i."id" AND l."ddtId" = ${ddt.id}::uuid)
+       ORDER BY i."id" FOR UPDATE`
+    const { issued, drafts } = invoicesOfDdt(invoices)
+    const problems = cancelSourceDdtProblems({ cancelled, source, invoiceNumbers: issued })
+    if (problems.length > 0) throw new InvalidStateError(problems.join(' '))
+    const cancellationId = newId()
+    await tools.tx.ddtCancellation.create({
+      data: { id: cancellationId, siteId: ddt.siteId, partyId: ddt.partyId, ddtId: ddt.id, reason: body.reason, cancelledAt: tools.now, createdById: actorIdOf(tools) },
+      select: { id: true },
+    })
+    tools.audit({
+      recordType: 'Ddt',
+      recordId: ddt.id,
+      companyId: ddt.companyId,
+      siteId: ddt.siteId,
+      before: { status: 'LIVE', number: ddt.number },
+      after: { status: 'CANCELLED', number: ddt.number, cancellationId, sourceType: source.type, sourceId: source.id, sourceState: source.state, draftInvoiceIds: drafts },
+      reason: body.reason,
+    })
+    tools.emit({ type: 'ddt.source_cancelled', subject: source.id, companyId: ddt.companyId, siteId: ddt.siteId, payload: { ddtId: ddt.id, sourceType: source.type, sourceId: source.id, number: ddt.number } })
+    const row = (await readAnyDdt(tools.tx, ddt.id)) as SourceDdtRow
+    return {
+      ddt: sourceDdtView(row, await pdfFileIdOf(tools.tx, ddt.id), source.number),
+      shipment: null,
+      // The goods left (the transport started): they travel without a live DDT until its replacement is issued.
+      source: { type: source.type, id: source.id, number: source.number, state: source.state, version: source.version, needsDdt: ddt.startAt.getTime() <= tools.now.getTime() },
       draftInvoiceIds: drafts,
       warning: draftInvoicesWarning(drafts),
     }

@@ -170,6 +170,13 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [{ id: 'warehouse.receipts', title: 'Receipts', titleIt: 'Ricevimenti', wave: 'W1', href: '/warehouse/receipts' }],
       },
       {
+        label: 'In the warehouse',
+        labelIt: 'In magazzino',
+        hideLabel: false,
+        // W2a: B-W2a-28 Counts (SCR-132). Picking & kits (B-W2a-58) joins before it with its step; Transfers is W2b.
+        pages: [{ id: 'warehouse.counts', title: 'Counts', titleIt: 'Inventari', wave: 'W2a', href: '/warehouse/counts' }],
+      },
+      {
         label: 'Outbound',
         labelIt: 'In uscita',
         hideLabel: false,

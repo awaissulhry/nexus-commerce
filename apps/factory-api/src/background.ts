@@ -14,6 +14,7 @@ import { invoiceFilesHandler } from './modules/invoicing/invoice-files'
 import { tellBuyerHandler } from './modules/purchasing/confirm/handler'
 import { afterAcceptanceHandler } from './modules/sales/quotes/after-acceptance'
 import { orderHandlers } from './modules/sales/orders/handlers'
+import { nightlyPlanCron } from './modules/planning/nightly'
 import { sdiArchiveHandler } from './modules/invoicing/sdi/archive'
 import { sdiCourtesyCopyHandler } from './modules/invoicing/sdi/copy'
 import { sdiPollCron, sdiPollHandler } from './modules/invoicing/sdi/poll'
@@ -115,7 +116,7 @@ if (mode === 'worker') {
   const workers = startEventWorkers({ kit, handlers: HANDLERS, database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
-  const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log })]
+  const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log })]
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

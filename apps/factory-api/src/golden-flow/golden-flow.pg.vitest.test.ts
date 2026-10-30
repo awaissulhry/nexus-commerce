@@ -425,7 +425,11 @@ describe('the golden flow: a brand size run from the customer to the paid invoic
     // The shoulder protectors are not short for the plan: the seeded order SEED-PO-0001 has them on order. None is on
     // hand at A1, though, so the buyer adds them to the new order by hand (next step).
     expect(await lines('product:item:protector')).toEqual([])
-    G.planLine = red
+    // B-W2a-22: the run carries the seeded plan's firm planned order of red leather (4 hides for the seeded order);
+    // the planner makes the line planned again, so the buyer buys what the plan suggests for every order.
+    expect(red!.firm).toMatchObject({ quantity: '4.0000', uom: 'HIDE', carried: true })
+    G.planLine = (await ok(P.planner, 'POST', `/planning/requirements/${red!.id}/unfirm`, { version: red!.version })).line
+    expect(G.planLine).toMatchObject({ firm: null, suggestedQuantity: red!.suggestedQuantity })
   })
 
   it('14 the buyer orders the leather from the plan, adds the protectors and sends the PO: PDF and confirm link to the supplier', async () => {
