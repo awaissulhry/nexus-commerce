@@ -170,7 +170,10 @@
     },
     "notice": {
       "uploaded": "File caricato. Compare nell'elenco e nella cronologia.",
-      "quarantined": "L'archivio ha rifiutato il file: è diverso da quanto annunciato. È in quarantena e non si può aprire."
+      "quarantined": "L'archivio ha rifiutato il file: è diverso da quanto annunciato. È in quarantena e non si può aprire.",
+      "infected": "Il controllo antivirus ha trovato una minaccia nel file. È trattenuto e non si apre mai.",
+      "scanPending": "Il file è trattenuto per il controllo antivirus: l'antivirus non ha risposto. Si apre quando il controllo lo dà pulito (riprova da solo).",
+      "scanFailed": "L'antivirus non è riuscito a controllare il file. È trattenuto: caricalo di nuovo o chiedi a un amministratore."
     },
     "dismiss": "Chiudi",
     "earlier_one": "{count} versione precedente",
@@ -188,6 +191,9 @@
       "size_mismatch": "Rifiutato: la dimensione è diversa da quella annunciata.",
       "type_mismatch": "Rifiutato: il formato è diverso da quello annunciato.",
       "checksum_mismatch": "Rifiutato: il contenuto è diverso da quello annunciato.",
+      "scan_pending": "Trattenuto per il controllo antivirus: si apre quando il controllo lo dà pulito.",
+      "virus_found": "Trattenuto: il controllo antivirus ha trovato una minaccia. Non si apre mai.",
+      "scan_failed": "Trattenuto: l'antivirus non è riuscito a controllarlo. Caricalo di nuovo o chiedi a un amministratore.",
       "unknown": "Rifiutato dall'archivio dei file."
     },
     "pending": "Il caricamento non è mai stato completato.",

@@ -59,6 +59,21 @@ export const enrolDeviceContract = defineContract({
 export const deviceContract = defineContract({ response: { 200: deviceInfo } })
 
 /**
+ * B-W2a-42 (PLT-241; design admin.devices "Battery", "App version", "actions waiting to sync"): what the tablet says of
+ * itself — the floor app's version, its battery when the browser tells it (else null), and how many actions wait in its
+ * offline queue (a count of the device's queue, never whose). Sent by the device itself, signed in or not.
+ */
+export const reportDeviceStateContract = defineContract({
+  body: input({
+    appVersion: z.string().trim().min(1).max(40),
+    batteryPercent: z.number().int().min(0).max(100).nullable(),
+    batteryCharging: z.boolean().nullable(),
+    queuedActions: z.number().int().min(0).max(100_000),
+  }),
+  response: { 200: output({ reportedAt: instant(), appUpdated: z.boolean() }) },
+})
+
+/**
  * A badge code (scanned) or a worker id (picked by name), and the PIN. The PIN may be left out only with a badge, at
  * a site whose floor settings say a badge alone signs in (`badgeOnlySignIn`); a sign-in by name always needs it.
  */
@@ -118,6 +133,11 @@ export const deviceView = output({
   enrolledAt: instant().nullable(),
   lastSeenAt: instant().nullable(),
   appVersion: z.string().nullable(),
+  /** B-W2a-42: what the tablet last said of itself (null until it reports): battery, charging, actions waiting to sync. */
+  batteryPercent: z.number().int().nullable(),
+  batteryCharging: z.boolean().nullable(),
+  queuedActions: z.number().int().nullable(),
+  statusReportedAt: instant().nullable(),
   revokedAt: instant().nullable(),
   /** Someone is signed in on it now (never who: the registry is not a presence board). */
   inUse: z.boolean(),

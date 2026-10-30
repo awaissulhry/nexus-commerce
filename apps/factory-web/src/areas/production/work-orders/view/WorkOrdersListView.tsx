@@ -2,19 +2,22 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, Download, MoreHorizontal, Plus, Rocket, Search, XCircle } from 'lucide-react'
+import { CheckCircle2, Download, MoreHorizontal, PauseCircle, Plus, Rocket, Search, XCircle } from 'lucide-react'
 import { Banner, EmptyState, Menu, MetricStrip, Modal, ProgressBar } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Input, Pill, Select, Spinner, Tag } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
 import { formatDate, formatTime } from '../../../../lib/i18n/format'
-import { useLocale, useT } from '../../../../lib/i18n/provider'
+import { useLocale, useScopedT, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import type { WorkOrderRow } from '../../_shared/api'
 import { LIST_VIEWS, percentOf, progressPhrase, STATUS_TONE, TILES, type ListView } from '../../_shared/model'
 import type { WorkOrdersListActions, WorkOrdersListModel } from '../list-model'
 import { NewWorkOrderDialog } from './NewWorkOrderDialog'
+import { bulkHoldHeld, DAILY_NAMESPACE, HOLDABLE } from '../daily/model'
+import { HoldDialog } from '../daily/view/DailyDialogs'
+import { ReadinessPill, say } from '../daily/view/DailyParts'
 import '../../_shared/production.css'
 
 export type { WorkOrdersListActions, WorkOrdersListModel } from '../list-model'
@@ -28,7 +31,7 @@ export type { WorkOrdersListActions, WorkOrdersListModel } from '../list-model'
  */
 export function WorkOrdersListView({ model, actions }: { model: WorkOrdersListModel; actions?: WorkOrdersListActions }) {
   return (
-    <WithMessages namespaces={['production', 'lists']}>
+    <WithMessages namespaces={['production', DAILY_NAMESPACE, 'lists']}>
       <WorkOrdersList model={model} actions={actions} />
     </WithMessages>
   )
@@ -74,6 +77,12 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
 
   const picked = (items ?? []).filter((row) => selected.includes(row.id))
   const notDraft = picked.filter((row) => row.status !== RELEASABLE).length
+  // B-W2a-46: the readiness word column, Hold N (wo-grid "'Hold' (W2a)"), notices of either catalogue.
+  const tw = useT(DAILY_NAMESPACE)
+  const notices = useScopedT('production')
+  const readiness = model.readiness ?? null
+  const daily = model.daily ?? null
+  const holdWait = daily ? say(tw, bulkHoldHeld(picked, daily.can)) : null
   const ownKeys: ListKey[] = [{ keys: ['c'], does: t('list.keyNew') }]
 
   const columns = useMemo<ColDef<WorkOrderRow>[]>(() => {
@@ -129,6 +138,11 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
           <span>—</span>
         )
       ) : null
+    const ReadinessCell = ({ data }: ICellRendererParams<WorkOrderRow>) => {
+      if (!data) return null
+      const row = readiness?.[data.id]
+      return row ? <ReadinessPill word={row.word} date={row.date} /> : <span>—</span>
+    }
     const MoreCell = ({ data }: ICellRendererParams<WorkOrderRow>) =>
       data ? (
         <Menu
@@ -150,12 +164,13 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       { colId: 'customer', headerName: t('col.customer'), minWidth: 160, flex: 1.4, cellRenderer: CustomerCell },
       { colId: 'pieces', headerName: t('col.pieces'), field: 'pieces', minWidth: 76, flex: 0.5, type: 'rightAligned' },
       { colId: 'progress', headerName: t('col.progress'), minWidth: 160, flex: 1.3, cellRenderer: ProgressCell },
+      { colId: 'readiness', headerName: tw('readiness.column'), minWidth: 130, flex: 0.9, cellRenderer: ReadinessCell },
       { colId: 'due', headerName: t('col.due'), field: 'dueDate', minWidth: 132, flex: 0.9, cellRenderer: DueCell },
       { colId: 'priority', headerName: t('col.priority'), field: 'priority', minWidth: 84, flex: 0.5, type: 'rightAligned' },
       { colId: 'site', headerName: t('col.site'), field: 'siteCode', minWidth: 80, flex: 0.5 },
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, model.prefix])
+  }, [t, tw, locale, model.prefix, readiness])
 
   const filtered = model.view !== 'all' || model.q.trim() !== ''
   const state = model.rows.problem ? (
@@ -213,7 +228,7 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       {model.notice && (
         <Banner
           tone={model.notice.tone}
-          title={t(model.notice.words.key, model.notice.words.params)}
+          title={notices(model.notice.words.key, model.notice.words.params)}
           action={
             actions?.onDismissNotice ? (
               <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
@@ -270,6 +285,19 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
               <Button size="sm" aria-label={t('bulk.export', { count: picked.length })} onClick={() => actions?.onExport?.(picked.map((row) => row.id))}>
                 <Download size={13} aria-hidden /> <SelectionLabel>{t('bulk.export', { count: picked.length })}</SelectionLabel>
               </Button>
+              {daily && (
+                <Button
+                  size="sm"
+                  aria-label={tw('bulk.hold', { count: picked.length })}
+                  heldReason={holdWait}
+                  onClick={() => {
+                    const open = picked.filter((row) => HOLDABLE.includes(row.status))
+                    actions?.daily?.onDialog?.({ kind: 'hold', workOrderIds: open.map((row) => row.id), numbers: open.map((row) => row.number) })
+                  }}
+                >
+                  <PauseCircle size={13} aria-hidden /> <SelectionLabel>{tw('bulk.hold', { count: picked.length })}</SelectionLabel>
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="primary"
@@ -294,6 +322,7 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
 
       {model.newOrder && <NewWorkOrderDialog model={model.newOrder} can={model.can} actions={actions} />}
       {model.release && <BulkReleaseDialog model={model} actions={actions} onDone={() => setSelected([])} />}
+      {daily?.dialog?.kind === 'hold' && <HoldDialog numbers={daily.dialog.numbers} workOrderIds={daily.dialog.workOrderIds} daily={daily} actions={actions?.daily} />}
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('list.keysTitle')} size="sm">
           <ul className="fw-pr-list">

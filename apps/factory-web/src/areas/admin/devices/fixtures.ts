@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { DEVICES, inShell, NOW, panels, PREFIX, PRINTERS, SITES, STATIONS } from '../shared/fixtures'
 import { failed, loaded, loading } from '../shared/model'
+import type { Device } from '../shared/api'
 import type { DeviceRecordModel, DevicesViewModel, SiteChoice } from './model'
 import { DeviceRecordView } from './view/DeviceRecordView'
 import { DevicesView } from './view/DevicesView'
@@ -13,17 +14,30 @@ import { DevicesView } from './view/DevicesView'
 
 type Case = { page: 'list'; model: DevicesViewModel } | { page: 'device'; model: DeviceRecordModel; dock?: boolean }
 
+/**
+ * B-W2a-42: what each tablet last said of itself (app version, battery, actions waiting to sync), and the version the
+ * server serves now: "Tablet cucito 2" runs 1.3.2 (outdated) with 3 actions waiting; "Tablet taglio 2" is low.
+ */
+const CURRENT_VERSION = '1.4.0'
+const REPORTED = DEVICES[0]!.lastSeenAt
+const STATE: Readonly<Record<number, Partial<Device>>> = {
+  0: { batteryPercent: 82, batteryCharging: true, queuedActions: 0, statusReportedAt: REPORTED },
+  1: { batteryPercent: 12, batteryCharging: false, queuedActions: 0, statusReportedAt: DEVICES[1]!.lastSeenAt },
+  2: { batteryPercent: 57, batteryCharging: false, queuedActions: 3, statusReportedAt: REPORTED },
+}
+const STATEFUL: Device[] = DEVICES.map((item, index) => ({ ...item, ...(STATE[index] ?? {}) }))
+
 const sites: SiteChoice[] = SITES.map((site) => ({ id: site.id, name: site.name, companyId: site.companyId, stations: site.id === SITES[0]!.id ? STATIONS.map((station) => ({ id: station.id, code: station.code, name: station.name })) : [] }))
 const CAN = { manage: true, revoke: true, viewPrinters: true, managePrinters: true }
 const ENROLMENT = { code: 'demo-enrolment-code', url: 'https://factory.example.com/floor/enrol#code=DEMO-ONLY', qrSvg: '', expiresAt: '2026-10-29T09:57:00.000Z' }
 const list = (over: Partial<DevicesViewModel> = {}): Case => ({
   page: 'list',
-  model: { prefix: PREFIX, mode: 'devices', devices: loaded(DEVICES), printers: loaded(PRINTERS), failedPrinters: 1, sites, tile: null, query: '', pages: 1, asOf: NOW, now: NOW, can: CAN, ...over },
+  model: { prefix: PREFIX, mode: 'devices', devices: loaded(STATEFUL), printers: loaded(PRINTERS), failedPrinters: 1, sites, tile: null, query: '', pages: 1, asOf: NOW, now: NOW, currentVersion: CURRENT_VERSION, can: CAN, ...over },
 })
 const device = (index: number, over: Partial<DeviceRecordModel> = {}, dock = false): Case => ({
   page: 'device',
   dock,
-  model: { prefix: PREFIX, tab: 'binding', device: DEVICES[index]!, site: sites.find((site) => site.id === DEVICES[index]!.siteId) ?? null, can: CAN, now: NOW, ...over },
+  model: { prefix: PREFIX, tab: 'binding', device: STATEFUL[index]!, site: sites.find((site) => site.id === DEVICES[index]!.siteId) ?? null, can: CAN, now: NOW, currentVersion: CURRENT_VERSION, ...over },
 })
 
 function DevicesDesign({ model }: { model: Case }) {
@@ -38,7 +52,7 @@ export const designScreen = defineDesignScreen<Case>({
   title: 'Devices & printers, and the Device record',
   view: DevicesDesign,
   cases: [
-    { id: 'devices', label: 'Devices', model: list(), note: '"In use" says someone is signed in, never who (Statuto dei Lavoratori art. 4). 1 / 2 switch lists; c enrols.' },
+    { id: 'devices', label: 'Devices', model: list(), note: '"In use" says someone is signed in, never who (Statuto dei Lavoratori art. 4). 1 / 2 switch lists; c enrols. W2a: the app version is marked when it is not the one the server serves; the battery as the tablet said it (low marked).' },
     { id: 'tile-not-seen', label: 'Tile: not seen for 24 h', model: list({ tile: 'notSeen' }) },
     { id: 'printers', label: 'Printers', model: list({ mode: 'printers' }) },
     { id: 'enrol-where', label: 'Enrol 1: where will it work?', model: list({ enrol: { step: 'where', siteId: SITES[0]!.id } }), note: 'Picking a station suggests the name. The mode (Operator, Cutting…) comes with the floor step.' },
@@ -67,6 +81,18 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'device-binding', label: 'Device: station & mode', model: device(0) },
     { id: 'device-status', label: 'Device: status and danger zone', model: device(0, { tab: 'status' }) },
     { id: 'device-silent', label: 'Device: not seen for 3 days', model: device(1, { tab: 'status' }) },
+    {
+      id: 'device-outdated',
+      label: 'Device: an older app version, 3 actions waiting',
+      model: device(2, { tab: 'status' }),
+      note: 'B-W2a-42, PLT-241: the tablet runs 1.3.2, the server serves 1.4.0; it updates by itself once its queue is empty. Battery and queue as the tablet last said them.',
+    },
+    {
+      id: 'device-not-reported',
+      label: 'Device: the tablet has not said its state yet',
+      model: { page: 'device', model: { prefix: PREFIX, tab: 'status', device: DEVICES[0]!, site: sites[0] ?? null, can: CAN, now: NOW, currentVersion: CURRENT_VERSION } },
+      note: 'A tablet on an older app (before the report) or a browser that never said it: "not reported", never a guess.',
+    },
     { id: 'device-new-code', label: 'Device: a new enrolment code', model: device(1, { enrol: { step: 'scan', device: DEVICES[1]!, enrolment: ENROLMENT } }) },
     { id: 'device-revoke', label: 'Device: revoke', model: device(0, { tab: 'status', revoking: true }) },
     { id: 'device-revoked', label: 'Device: revoked', model: device(4, { tab: 'status' }) },

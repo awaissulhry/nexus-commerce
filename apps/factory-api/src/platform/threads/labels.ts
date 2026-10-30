@@ -40,6 +40,8 @@ const LABELS: Readonly<Record<string, Labeller>> = Object.freeze({
   GoodsReceipt: async (client, id) => (await client.goodsReceipt.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   // B-W2a-44 (modules/purchasing/claims): a claim by its number.
   SupplierClaim: async (client, id) => (await client.supplierClaim.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
+  // B-W2a-47 (modules/quality/ncr): an NCR by its number.
+  Nonconformance: async (client, id) => (await client.nonconformance.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   // B-W2a-35 (modules/plant): a machine by its asset number, a request by its machine's, a job by its number.
   Machine: async (client, id) => (await client.machine.findUnique({ where: { id }, select: { assetNumber: true } }))?.assetNumber ?? null,
   MaintenanceRequest: async (client, id) => {

@@ -1,12 +1,11 @@
 import { createElement } from 'react'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
-import { W1_SCAN_REASONS } from '@nexus/factory-domain/production/scans/reasons'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { permissionCheck } from '../../../lib/session/session'
 import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../shell/design-data'
 import { officeNavFor } from '../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../shell/office/view/OfficeShellView'
-import type { NoticeAcks, RulesDetail, ScanReason, SiteRules } from './api'
+import type { NoticeAcks, RulesDetail, SiteRules } from './api'
 import { floorRulesCan, type Tab } from './model'
 import { FloorRulesView, type FloorRulesModel } from './view/FloorRulesView'
 
@@ -14,7 +13,8 @@ import { FloorRulesView, type FloorRulesModel } from './view/FloorRulesView'
  * Design cases of SCR-074, Production › Settings › Floor rules & codes (made-up data: an invented company, two sites
  * "STAB-N" and "MAG-S", a made-up agreement reference, invented people for "recorded by"). Roles from factory-domain's
  * templates: the owner, the production manager (changes the rules), the floor supervisor and read-only (see them), the
- * warehouse and sales (no permission). No worker is named anywhere (Owner answer W1).
+ * warehouse and sales (no permission). No worker is named anywhere (Owner answer W1). The Reason codes tab is SCR-088
+ * (./codes/fixtures.ts, B-W2a-46).
  */
 
 const PREFIX = '/w/DEMO'
@@ -33,9 +33,9 @@ const ROLES = {
   warehouse: template('warehouse'),
   sales: template('sales'),
 } as const
-type Role = keyof typeof ROLES
+export type Role = keyof typeof ROLES
 
-function inShell(page: ReturnType<typeof createElement>, role: Role) {
+export function inShell(page: ReturnType<typeof createElement>, role: Role) {
   const shell: OfficeShellViewModel = {
     nav: officeNavFor(permissionCheck([...ROLES[role]])),
     path: '/production/settings',
@@ -54,14 +54,13 @@ const rulesOf = (over: Partial<RulesDetail['rules']>): RulesDetail['rules'] => (
 const detailOf = (site: typeof NORTH, rules: RulesDetail['rules'], ready = true): RulesDetail => ({ site, rules, status: { readyForFloor: ready }, affected: AFFECTED })
 const entryOf = (detail: RulesDetail): SiteRules => ({ site: detail.site, rules: detail.rules, status: detail.status })
 
-const WORKER_SITE = detailOf(NORTH, rulesOf({}))
+export const WORKER_SITE = detailOf(NORTH, rulesOf({}))
 const STATION_SITE = detailOf(NORTH, rulesOf({ scanSubject: 'STATION', legalBasis: null }))
 const DEFAULT_SITE = detailOf(NORTH, rulesOf({ isDefault: true, legalBasis: null, standardBundleSize: 10, version: null, updatedAt: null }), false)
 const SOUTH_SITE = detailOf(SOUTH, rulesOf({ scanSubject: 'STATION', legalBasis: null, version: 1 }))
 const ACKS: NoticeAcks = { workers: { active: 36, acknowledged: 34, notAcknowledged: 2 }, versions: [{ noticeVersion: '2026-10', workers: 34 }, { noticeVersion: '2026-09', workers: 3 }] }
-const REASONS: ScanReason[] = W1_SCAN_REASONS.map((reason) => ({ kind: reason.kind, code: reason.code, label: reason.label, sortOrder: reason.sortOrder }))
 
-function base(role: Role, detail: RulesDetail = WORKER_SITE, over: Partial<FloorRulesModel> = {}, tab: Tab = 'rules'): { role: Role; model: FloorRulesModel } {
+export function base(role: Role, detail: RulesDetail = WORKER_SITE, over: Partial<FloorRulesModel> = {}, tab: Tab = 'rules'): { role: Role; model: FloorRulesModel } {
   return {
     role,
     model: {
@@ -73,7 +72,6 @@ function base(role: Role, detail: RulesDetail = WORKER_SITE, over: Partial<Floor
       siteId: detail.site.id,
       detail: { value: detail, problem: null },
       acks: { value: ACKS, problem: null },
-      reasons: { value: REASONS, problem: null },
       asOf: at(30, 9, 42),
       busy: null,
       notice: null,
@@ -113,9 +111,6 @@ export const designScreen = defineDesignScreen<{ role: Role; model: FloorRulesMo
     { id: 'read-only', label: 'Read-only: sees the rules and counts, no reason codes (no production.scan)', model: base('readOnly', STATION_SITE) },
     { id: 'two-sites', label: 'Two sites: the site picker', model: base('owner', WORKER_SITE, { sites: { status: 'ready', items: [entryOf(WORKER_SITE), entryOf(SOUTH_SITE)] } }) },
     { id: 'acks-failed', label: 'The notice counts could not be read (the rest shows)', model: base('owner', WORKER_SITE, { acks: { value: null, problem: 'fr.problem.offline' } }) },
-    { id: 'codes', label: 'Reason codes: the scrap and rework reasons of the operation screen (read only in W1)', model: base('production', WORKER_SITE, {}, 'codes') },
-    { id: 'codes-no-access', label: 'Reason codes without production.scan: the page says so', model: base('supervisor', WORKER_SITE, {}, 'codes') },
-    { id: 'codes-failed', label: 'Reason codes: the read failed (Try again)', model: base('production', WORKER_SITE, { reasons: { value: null, problem: 'fr.problem.read' } }, 'codes') },
     { id: 'loading', label: 'Loading', model: base('owner', WORKER_SITE, { sites: { status: 'loading' } }) },
     { id: 'error', label: 'The read failed: in words with Try again', model: base('owner', WORKER_SITE, { sites: { status: 'error', problem: 'fr.problem.offline' } }) },
     { id: 'no-sites', label: 'No site within the person’s access', model: base('owner', WORKER_SITE, { sites: { status: 'ready', items: [] } }) },

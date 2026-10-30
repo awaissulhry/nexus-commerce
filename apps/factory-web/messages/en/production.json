@@ -68,13 +68,15 @@
     "COMPLETED": "Completed",
     "CLOSED": "Closed",
     "CANCELLED": "Cancelled",
-    "all": "All"
+    "all": "All",
+    "ON_HOLD": "On hold"
   },
   "tile": {
     "draft": "Drafts to release",
     "released": "Released, not started",
     "inProgress": "In progress",
-    "late": "Late"
+    "late": "Late",
+    "onHold": "On hold"
   },
   "col": {
     "number": "Work order",
@@ -303,7 +305,8 @@
       "DEPOSIT": "Deposit",
       "MATERIAL": "Material",
       "BATCH_NUMBER": "Batch number",
-      "other": "other checks"
+      "other": "other checks",
+      "HOLDS": "Holds"
     },
     "REVISION": {
       "OK": "Rev {revision} is released; the release freezes it.",
@@ -342,11 +345,16 @@
     "MATERIAL": {
       "OK": "Usable stock at the site covers every material.",
       "BLOCKED": "Material is short at the site: wait for stock, or release with the planner’s reason.",
-      "OVERRIDDEN": "Material short, released by the planner’s reason."
+      "OVERRIDDEN": "Material short, released by the planner’s reason.",
+      "expected": "Short on hand today, but the plan expects it in time (or holds it for this work order)."
     },
     "BATCH_NUMBER": {
       "OK": "A batch number is given at the release and never changes.",
       "BLOCKED": "The company has no batch number series: an administrator sets one up in Admin › Documents & numbering."
+    },
+    "HOLDS": {
+      "OK": "No hold names it.",
+      "BLOCKED": "It is on hold: quality releases the hold before the release."
     }
   },
   "problem": {
@@ -360,7 +368,8 @@
       "unknown": "A material is short"
     },
     "workCentre": "No active {kind} work centre at {site}",
-    "other": "Another problem holds it"
+    "other": "Another problem holds it",
+    "hold": "On hold since {since}"
   },
   "reason": {
     "CR_VI_PENDING": "waits for its Cr VI result",

@@ -11,6 +11,7 @@ import { problemKey, problemNotice, type Notice } from '../shared/model'
 import { useRecordTab, useThreadDock } from '../shared/record-hooks'
 import { siteChoices, useEnrolWatch } from './DevicesPage'
 import { DEVICE_TABS, type EnrolModel, type SiteChoice } from './model'
+import { fetchFloorVersion } from './version'
 import { DeviceRecordView } from './view/DeviceRecordView'
 
 /**
@@ -35,9 +36,12 @@ export function DeviceRecord({ deviceId }: { deviceId: string }) {
   const [dialogProblem, setDialogProblem] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
   const [now, setNow] = useState(() => new Date().toISOString())
+  // B-W2a-42: the floor app version the server serves now.
+  const [currentVersion, setCurrentVersion] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setNow(new Date().toISOString())
+    void fetchFloorVersion().then(setCurrentVersion)
     try {
       const found = (await listDevices(api)).find((item) => item.id === deviceId) ?? null
       setDevice(found)
@@ -66,7 +70,7 @@ export function DeviceRecord({ deviceId }: { deviceId: string }) {
 
   return (
     <DeviceRecordView
-      model={{ prefix, tab, device, problem: device ? null : problem, site, can, enrol, revoking, busy, dialogProblem, notice, now, dockOpen }}
+      model={{ prefix, tab, device, problem: device ? null : problem, site, can, enrol, revoking, busy, dialogProblem, notice, now, currentVersion, dockOpen }}
       panels={device ? <RecordPanels record={{ type: 'Device', id: device.id, companyId: site?.companyId ?? null, siteId: device.siteId }} title={device.name} /> : null}
       actions={{
         onSave: async (draft) => {
