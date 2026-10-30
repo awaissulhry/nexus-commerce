@@ -1,3 +1,83 @@
+## Board view, calendar grid, reason grid, photo capture (factory gaps D19 D20 D21 + CalendarGrid) — 2026-10-30
+
+Four new parts in new files; nothing existing changes (no barrel, component, token, style or grid file is edited), and
+no Commerce page carries their code or CSS. Every word comes in as a prop (English defaults; month and weekday names
+from `Intl` in `locale`). None is in a barrel the web pulls into its pages: each folder is an entry point of its own,
+with its stylesheet imported by the component — `grid/views/board`, `components/CalendarGrid`, `floor/ReasonGrid`,
+`components/PhotoCapture` (`@/design-system/<folder>` in the web, `@nexus/ui/<folder>/index` by package path). Data
+in, events out: none calls an API or uploads anything.
+- **`BoardView`** (D19, `grid/views/board/`): a list's rows as a board by status — one lane per status with its count
+  (the server's `total` when given, "Showing 2 of 6" + Show more) and the app's line ("Oldest 12 days"), cards in the
+  list's sort with the number, title, the list's fields, marks, an aside (a due countdown) and a footer (a "decided"
+  bar). Moves by drag (`@dnd-kit/core`: mouse, long press on touch), by keyboard (one Tab stop for the board; arrows
+  move the focus; Space or M picks up, ← → choose the lane, Enter or Space drops, Escape cancels) and by the card's
+  Move to… menu (every other lane, the held ones with their reason). Refusals in order, in words: the board's
+  `heldReason` (read-only, offline; said at rest), the card's own `held`, the same lane, the lane's `held`, the app's
+  `moveHeld(card, lane)`. A move under way outlines the target lane and draws a ghost ("Drop here" / "Cannot drop here:
+  …"). `onMove` saves — or opens the app's dialog first (a drop on Closed asks for the signature) — and may return
+  `false` (or a promise of it): "was not moved". Never optimistic; the focus follows the card. Below `listBelow` px
+  (640) of its own width the lanes stack. Not an AG Grid view: it needs no grid module.
+- **`CalendarGrid`** (`components/CalendarGrid/`): a month (Monday first by default) or a year (twelve small months)
+  of ISO days on UTC midnights. Each day takes its own entry (`days`: kind, reason, detail), else the weekly pattern
+  (`weekKinds`), else it is not known (never guessed as working). Kinds carry a tone AND a pattern (hatch for a day off,
+  cross, dots, an edge bar, a dashed frame) — never colour alone; exceptions show their kind and reason in words; today
+  has its word; every day's name says its date, kind, reason, detail, today and selection; a key with the count of
+  each kind. Click or Enter: `onDayOpen(date, anchor)`; a drag (mouse, pen) or Shift + arrows then Enter:
+  `onRangeSelect({ from, to })`, Escape clears. One Tab stop; arrows by day and week, Home / End, Page Up / Down by
+  month; every step said in one live region. Read-only (`heldReason`): days still open, a selection refused with the
+  reason. `loading`: the given days first, skeletons for the rest. The list twin (`layout="list"`, a Calendar / List
+  switch, always below `listBelow` px (560)): the days that differ from the weekly pattern, grouped by month.
+- **`ReasonGrid`** (D20, `floor/ReasonGrid/`): the floor's icon reason grid — big tiles with an icon or an example
+  photo, a colour and a word. `pick` (a radio group: one Tab stop, arrows move and pick, ↑ ↓ by row; the picked tile has
+  a primary border, a thick bar, a tint and a tick) or `count` (each tap adds one, the count big on the tile, a − on the
+  tile takes one off, never under 0 or over `max`; the total written). Nine a page (three a row on a tablet, two on a
+  phone, by its own width), More reasons / Back, the focus to the new page's first tile, a picked reason opens its
+  page. A held reason stays in view, focusable, says why; a reason that needs a photo carries a camera and the words.
+  Sized by `--nds-density-*` (tablet-and-glove sized on the floor tier). Each change said in one live region.
+- **`PhotoCapture`** (D21, `components/PhotoCapture/`): a photo from the camera (`getUserMedia`, the rear camera,
+  started on a press or `autoStart`; every track stops after the shot, on Retake, Cancel and unmount) or a file (always
+  offered), with an outline guide (`frame` / `silhouette` / `none`) and "Keep faces out of the picture"; a blocked,
+  missing, busy or failed camera said in words with Try again. Markup: Arrow or Circle by drag or tap; by keyboard a
+  crosshair (arrows, Shift further, Enter sets start then end, Escape cancels); Undo mark (⌘Z) and Clear held with
+  their reason when empty; each mark numbered and listed in words ("Arrow 1 from top left to centre"). Use photo gives
+  `onCapture({ photo, marks, marked, width, height, source })`: a JPEG at most `maxSize` (2048) on the long edge
+  (re-encoded, so a file's metadata is gone), the marks as data (0..1) and a copy with the marks drawn in. The app's
+  `heldReason` / `useHeldReason` (a string or a rule on the marks) hold with the reason on screen. Uses `FloorButton`
+  (the density-aware button), so it is sized by the tier and brings `floor/floor.css`.
+- Rules in `boardViewModel.ts`, `calendarGridModel.ts`, `reasonGridModel.ts`, `photoCaptureModel.ts` (pure); tests
+  `boardView`, `calendarGrid`, `reasonGrid`, `photoCapture` (`*.vitest.test.ts`; each also holds that no barrel
+  re-exports its folder and no shared stylesheet carries its rules). Catalog: "Board view", "Calendar grid", "Reason
+  grid", "Photo capture" (`apps/web/src/app/design-system/_catalog/{board-view,calendar,floor,photo}/`).
+
+## Planning board and load bar (factory gap D18) — 2026-10-30
+
+New part in new files; nothing existing changes (one comment line in the patterns barrel), and no Commerce page
+carries its code or CSS. Every word comes in as
+a prop (English defaults). It is NOT in the patterns barrel (the web pulls it into its pages): `patterns/planning-board`
+is an entry point of its own (`@/design-system/patterns/planning-board` in the web, `@nexus/ui/patterns/planning-board/index`
+by package path); its stylesheet `planning-board.css` comes with the components. Data in, events out: it calls nothing.
+- **`PlanningBoard`**: resource lanes (lines, work centres, subcontractors) × time buckets (days, weeks), cards in
+  standard minutes that may span buckets (packed into tracks), a tray ("Not on the board") that takes drops, today and
+  closed buckets marked in words, held lanes with their reason, late cards striped with a "Late" tag, pins, marks and a
+  note in words. Layouts: `time` (lanes are rows) and `columns` (lanes are columns: the allocation board, the tray
+  first); either becomes a list with a Move dialog per card (lane, bucket, the load after the move) below `listBelow`
+  px (640) of its own width. Moves: drag (mouse; a long press on touch; `@dnd-kit/core`), keyboard (Space or M picks
+  up, arrows choose a lane and a bucket — the tray after the last lane —, Enter or Space drops, Escape cancels; arrows
+  move the focus between cards otherwise, one tab stop), the list's dialog, Undo / Redo (buttons, ⌘Z / ⌘⇧Z) only while
+  the card is where the move put it. While a move is under way the target cells show the load after the drop and a
+  ghost of the card. Checks with their reason: read-only (`heldReason`, said at rest and on the first attempt), pinned,
+  held lane, closed cell, the app's `dropHeld`, over capacity with `overload: 'block'`. Every step is said in one
+  always-mounted live region. `onMove(move)` carries from, to, how, the landing cells' load after and `over`; return
+  `false` when it did not happen. Each load cell opens a popover (how the capacity is made, the cards in it with their
+  minutes and share, Show on board).
+- **`LoadBar`**: booked against available standard minutes per lane and bucket — the percent written, "+640 min over"
+  in words and a hatched part past the capacity line (never colour alone), "—" when unknown, "No working time set" /
+  "No working time", a preview (`after`) marked and said with both loads; `sm` (a board cell) and `md` (a line); with
+  `detail` it is a `DetailPopover` button.
+- Rules in `planningBoardModel.ts` and `loadBarModel.ts` (pure); tests `planningBoard.vitest.test.ts`,
+  `loadBar.vitest.test.ts` (including: the patterns barrel does not re-export the folder; no shared stylesheet carries
+  its rules). Catalog: "Planning board" (`apps/web/src/app/design-system/_catalog/planning/`).
+
 ## Floor counts, label preview, sign and accept (factory gaps G6 G11 G12) — 2026-10-28
 
 New parts, new files only; nothing existing changes, and no Commerce page carries their code or CSS. Every word comes in

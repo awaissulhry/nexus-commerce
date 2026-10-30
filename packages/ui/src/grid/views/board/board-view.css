@@ -1,0 +1,307 @@
+/* BoardView (gap D19; BoardView.tsx). Loaded with the component, never by the shared stylesheets: no page that does not
+   draw a board carries these rules. Semantic --nds-* tokens only (no raw colour, no numbered ramp), so both themes come
+   from the tokens. Text pairs are the DS's 7:1 ones (--nds-text / --nds-text-2 on the surfaces; held words in
+   --nds-warning-text, not the note-warn pair, which is 2.1:1 in dark — see the planning board's measurement). A state is
+   never said by colour alone: a held lane has its lock and reason, a held card its lock and reason, a target lane an
+   outline and a ghost card with words ("Drop here" / "Cannot drop here: …"), a lane's tone only repeats its name. */
+
+.nds-bv {
+  --nds-bv-lane-min: 248px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  color: var(--nds-text);
+}
+
+.nds-bv-held {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: var(--nds-space-4) var(--nds-space-8);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-warning-soft);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+  align-self: flex-start;
+}
+.nds-bv-status {
+  margin: 0;
+  min-height: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.nds-bv-status:empty,
+.nds-bv-status > span:empty {
+  display: none;
+}
+
+/* ─────────── lanes ─────────── */
+
+.nds-bv-scroll {
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.nds-bv-lanes {
+  display: grid;
+  gap: var(--nds-space-12);
+  align-items: start;
+  min-width: 0;
+}
+.nds-bv.is-list .nds-bv-lanes {
+  grid-template-columns: minmax(0, 1fr);
+}
+.nds-bv-lane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-top: 3px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+}
+.nds-bv-lane[data-tone='info'] {
+  border-top-color: var(--nds-info);
+}
+.nds-bv-lane[data-tone='success'] {
+  border-top-color: var(--nds-success);
+}
+.nds-bv-lane[data-tone='warning'] {
+  border-top-color: var(--nds-warning);
+}
+.nds-bv-lane[data-tone='danger'] {
+  border-top-color: var(--nds-danger);
+}
+.nds-bv-lane.is-held {
+  border-style: dashed;
+  border-top-style: solid;
+}
+.nds-bv-lane.is-target {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+}
+.nds-bv-lane.is-held-target {
+  outline: 2px dashed var(--nds-text-2);
+  outline-offset: 1px;
+}
+
+.nds-bv-lane-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-2) var(--nds-space-8);
+  min-width: 0;
+}
+.nds-bv-lane-name {
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.nds-bv-lane-count {
+  min-width: 1.5em;
+  padding: 0 var(--nds-space-6);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--nds-text);
+}
+.nds-bv-lane-count:empty {
+  display: none;
+}
+.nds-bv-lane-detail {
+  flex-basis: 100%;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+.nds-bv-lane-held {
+  display: inline-flex;
+  flex-basis: 100%;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-warning-text);
+}
+.nds-bv-lane-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-height: 56px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+.nds-bv-lane-empty {
+  padding: var(--nds-space-12) var(--nds-space-8);
+  border: 1px dashed var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  text-align: center;
+}
+.nds-bv-lane-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+.nds-bv-skeleton {
+  list-style: none;
+}
+
+/* ─────────── cards ─────────── */
+
+.nds-bv-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-raised);
+  box-shadow: var(--nds-shadow-card);
+}
+.nds-bv-card:hover {
+  border-color: var(--nds-border-strong);
+}
+.nds-bv-card.is-moving {
+  opacity: 0.55;
+}
+.nds-bv-card.is-saving {
+  opacity: 0.75;
+}
+.nds-bv-card.is-overlay {
+  padding: var(--nds-space-8) var(--nds-space-10);
+  gap: var(--nds-space-4);
+  cursor: grabbing;
+  box-shadow: var(--nds-shadow-card), 0 8px 24px color-mix(in srgb, var(--nds-text) 18%, transparent);
+}
+.nds-bv-card-face {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  padding: var(--nds-space-8) var(--nds-space-10) var(--nds-space-4);
+  border-radius: var(--nds-radius-md) var(--nds-radius-md) 0 0;
+  color: var(--nds-text);
+  text-align: left;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+.nds-bv.is-list .nds-bv-card-face,
+.nds-bv-card.is-held .nds-bv-card-face {
+  cursor: pointer;
+}
+.nds-bv-card-face:focus-visible {
+  outline: none;
+  box-shadow: var(--nds-focus-ring);
+}
+.nds-bv-card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.nds-bv-card-label {
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.nds-bv-card-aside {
+  flex: none;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+.nds-bv-card-title {
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+.nds-bv-card-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-2) var(--nds-space-12);
+  font-size: var(--nds-font-size-xs);
+}
+.nds-bv-card-field {
+  display: inline-flex;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.nds-bv-card-field-label {
+  color: var(--nds-text-2);
+}
+.nds-bv-card-field-value {
+  color: var(--nds-text);
+  overflow-wrap: anywhere;
+}
+.nds-bv-card-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+}
+.nds-bv-card-held {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-warning-text);
+}
+.nds-bv-card-saving {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+.nds-bv-card-footer {
+  padding: 0 var(--nds-space-10) var(--nds-space-4);
+  min-width: 0;
+}
+.nds-bv-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-2) var(--nds-space-6) var(--nds-space-6);
+}
+
+/* Where a move lands: a ghost at the end of the target lane, with words. */
+.nds-bv-ghost {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 2px dashed var(--nds-primary);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-wash-primary);
+  list-style: none;
+}
+.nds-bv-ghost.is-held {
+  border-color: var(--nds-text-2);
+  background: var(--nds-surface);
+}
+.nds-bv-ghost-words {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text);
+}
+.nds-bv-ghost.is-held .nds-bv-ghost-words {
+  color: var(--nds-warning-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nds-bv-card,
+  .nds-bv-card-face {
+    transition: none;
+  }
+}

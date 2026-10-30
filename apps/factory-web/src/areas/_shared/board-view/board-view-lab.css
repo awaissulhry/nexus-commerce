@@ -1,0 +1,24 @@
+/* The board view lab (SCR-244): layout only. The board fills the width it is given (no page max-width). */
+.fw-bvlab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+  padding: var(--nds-space-16);
+}
+.fw-bvlab-note,
+.fw-bvlab-dialog {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+.fw-bvlab-dialog + .fw-bvlab-dialog {
+  margin-top: var(--nds-space-8);
+  color: var(--nds-text);
+}
+.fw-bvlab-decided {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}

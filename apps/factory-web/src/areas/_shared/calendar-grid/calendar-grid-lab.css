@@ -1,0 +1,12 @@
+/* The calendar grid lab (SCR-245): layout only. The calendar fills the width it is given (no page max-width). */
+.fw-callab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+  padding: var(--nds-space-16);
+}
+.fw-callab-note {
+  margin: 0;
+  color: var(--nds-text-2);
+}

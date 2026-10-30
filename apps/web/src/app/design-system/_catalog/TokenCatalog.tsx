@@ -154,6 +154,11 @@ import { ReviewPartsExample } from './ReviewPartsExample'
 import { BottomBarExample, BrandingExample } from './shell'
 import { PdfViewerExample, QrCodeExample } from './documents'
 import { SizeGridExample } from './size-grid/SizeGridExample'
+import { PlanningBoardExample } from './planning/PlanningBoardExample'
+import { BoardViewExample } from './board-view/BoardViewExample'
+import { CalendarGridExample } from './calendar/CalendarGridExample'
+import { ReasonGridExample } from './floor/ReasonGridExample'
+import { PhotoCaptureExample } from './photo/PhotoCaptureExample'
 
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
@@ -1536,6 +1541,11 @@ export function TokenCatalog() {
       <Section title="Floor counts" desc="Counting on the floor tier: the quantity pad (big number, − and +, digit pad, quick values), size buttons with what is left per size, and the AQL sample counter (gap G6; packages/ui/src/floor/QuantityPad, SizeButtons)."><FloorCountsExample /></Section>
       <Section title="Label preview" desc="Labels as data drawn to scale — bundle ticket, hide tag, garment PPE label, badge, carrier label — with Code 128 drawn here, QR and pictograms from the app, and the print state with retry (gap G11; packages/ui/src/components/LabelPreview)."><LabelPreviewExample /></Section>
       <Section title="Sign and accept" desc="Accept by typing your name: what is accepted, what it means, ticks, the typed name matched loosely, an optional email check, busy, done and held states, on the comfortable tier of a link page (gap G12; packages/ui/src/components/SignBlock)."><SignBlockExample /></Section>
+      <Section title="Planning board" desc="Resource lanes over days with work in standard minutes: drag or keyboard moves (Space or M, arrows, Enter, Escape) with the load after the drop, pins, held lanes, the tray, Undo / Redo, the allocation layout and the phone list; the load bar per lane and bucket says over capacity in words (gap D18; packages/ui/src/patterns/planning-board)."><PlanningBoardExample /></Section>
+      <Section title="Board view" desc="A list's rows as a board by status: one column per status with its count and the app's line, cards with the list's fields; drag, keyboard moves (Space or M, left and right, Enter, Escape) or the Move to… menu, every refusal in words (the board's, the card's, the column's, the app's rule), the app's dialog before a move, Show more, the stacked phone list (gap D19; packages/ui/src/grid/views/board)."><BoardViewExample /></Section>
+      <Section title="Calendar grid" desc="A month or a year of days with their state: working days, weekends, public holidays, closures and dated exceptions (an extra shift, a short day, a line closed), each with its tone and a pattern and named in words; today in words; a key with the count of each kind; click or Enter opens a day, a drag or Shift + arrows selects days; read-only holds the selection with its reason; the list of the days that differ from the weekly pattern is the screen-reader and phone twin (factory part CalendarGrid; packages/ui/src/components/CalendarGrid)."><CalendarGridExample /></Section>
+      <Section title="Reason grid" desc="The floor's icon reason grid on the floor tier: big tiles with an icon or an example photo, a colour and a word; pick one (a radio group) or count (each tap adds one, − takes one off), nine a page with More reasons, held reasons with their reason, a reason that needs a photo (gap D20; packages/ui/src/floor/ReasonGrid)."><ReasonGridExample /></Section>
+      <Section title="Photo capture" desc="A photo from the camera or a file with arrows and circles drawn on it: the outline guide and the faces hint, a blocked or missing camera said in words with Use a file, drag or tap to mark, a keyboard crosshair (arrows, Enter, Escape), Undo / Clear held with their reason, each mark numbered and listed in words; Use photo returns the photo, its marks and a marked copy — nothing is uploaded (gap D21; packages/ui/src/components/PhotoCapture)."><PhotoCaptureExample /></Section>
 
       <Section title="Radius">
         <Card>

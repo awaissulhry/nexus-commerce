@@ -1,0 +1,253 @@
+/*
+ * DS floor kit — ReasonGrid (gap D20). Every size reads `--nds-density-*`; colours are semantic `--nds-*` roles, paired
+ * as the contrast gate measures them (`--nds-<tone>-text` on `--nds-<tone>-soft` for the icon bubble, the accent stripe
+ * in `--nds-<tone>`, the words in `--nds-text` / `--nds-text-2` on the surface, held words in `--nds-warning-text`).
+ * A state is never colour alone: picked = primary border + a thick bar + a tick; a count = a big number; held = a dashed
+ * border, a lock and the reason; needs a photo = a camera and the words.
+ */
+.nds-floor-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+.nds-floor-reasons-label {
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-floor-reasons-empty {
+  margin: 0;
+  padding: var(--nds-density-pad-x);
+  border: 1px dashed var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  font-size: var(--nds-density-font-body);
+  color: var(--nds-text-2);
+}
+
+/* Three a row on a tablet, two on a phone, one in a narrow column — by the grid's own width (no viewport query). */
+.nds-floor-reasons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(min(100%, 9rem), calc((100% - 2 * var(--nds-density-target-gap)) / 3)), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+.nds-floor-reason-cell {
+  position: relative;
+  display: grid;
+  min-width: 0;
+}
+.nds-floor-reason {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'art . count'
+    'label label label'
+    'hint hint hint'
+    'mark mark mark';
+  grid-template-rows: auto 1fr auto auto;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-width: 0;
+  min-height: calc(var(--nds-density-control-h-primary) * 2);
+  padding: var(--nds-density-pad-x);
+  border: 2px solid var(--nds-border);
+  border-inline-start: var(--nds-space-8) solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  box-shadow: var(--nds-shadow-card);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) {
+  .nds-floor-reason:hover:not([aria-disabled='true']):not([aria-checked='true']) {
+    background: var(--nds-surface-hover);
+  }
+}
+.nds-floor-reason:active:not([aria-disabled='true']) {
+  transform: translateY(1px);
+}
+.nds-floor-reason:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-primary);
+  outline-offset: var(--nds-density-focus-offset);
+}
+
+.nds-floor-reason-art {
+  grid-area: art;
+  display: inline-flex;
+}
+.nds-floor-reason-icon {
+  width: calc(var(--nds-density-icon) * 2);
+  height: calc(var(--nds-density-icon) * 2);
+  padding: calc(var(--nds-density-icon) * 0.4);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+.nds-floor-reason-photo {
+  display: block;
+  width: calc(var(--nds-density-icon) * 3);
+  height: calc(var(--nds-density-icon) * 2.25);
+  object-fit: cover;
+  border-radius: var(--nds-density-radius);
+  border: 1px solid var(--nds-border);
+  background: var(--nds-surface-sunken);
+}
+.nds-floor-reason-count {
+  grid-area: count;
+  min-width: calc(var(--nds-density-font-numeral) * 1.3);
+  padding: 0 var(--nds-space-8);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-primary);
+  color: var(--nds-text-inverse);
+  font-size: var(--nds-density-font-numeral);
+  font-weight: var(--nds-font-weight-extrabold);
+  line-height: 1.15;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.nds-floor-reason-tick {
+  grid-area: count;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--nds-density-icon) * 1.4);
+  height: calc(var(--nds-density-icon) * 1.4);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-primary);
+  color: var(--nds-text-inverse);
+}
+.nds-floor-reason-tick > svg {
+  width: 70%;
+  height: 70%;
+}
+.nds-floor-reason-label {
+  grid-area: label;
+  align-self: end;
+  font-size: calc(var(--nds-density-font-body) * 1.2);
+  font-weight: var(--nds-font-weight-bold);
+  line-height: 1.2;
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+.nds-floor-reason-hint {
+  grid-area: hint;
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-floor-reason-mark,
+.nds-floor-reason-held {
+  grid-area: mark;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+.nds-floor-reason-held {
+  color: var(--nds-warning-text);
+}
+.nds-floor-reason-mark > svg,
+.nds-floor-reason-held > svg {
+  flex: none;
+  width: calc(var(--nds-density-icon) * 0.75);
+  height: calc(var(--nds-density-icon) * 0.75);
+}
+
+/* The minus sits on the tile's bottom corner, a target of its own (the density's smallest), apart from the tile's tap. */
+.nds-floor-reason-cell > .nds-floor-reason {
+  padding-block-end: calc(var(--nds-density-control-h-sm) + var(--nds-space-8));
+}
+.nds-floor-reason-cell:not([data-has-count]) > .nds-floor-reason {
+  padding-block-end: var(--nds-density-pad-x);
+}
+.nds-floor-reason-minus {
+  position: absolute;
+  inset-block-end: var(--nds-space-8);
+  inset-inline-end: var(--nds-space-8);
+  min-width: var(--nds-density-control-h-sm);
+}
+
+/* Tones: the stripe and the icon bubble. */
+.nds-floor-reason[data-tone='primary'] {
+  border-inline-start-color: var(--nds-primary);
+}
+.nds-floor-reason[data-tone='primary'] .nds-floor-reason-icon {
+  background: var(--nds-primary-soft);
+  color: var(--nds-primary);
+}
+.nds-floor-reason[data-tone='success'] {
+  border-inline-start-color: var(--nds-success);
+}
+.nds-floor-reason[data-tone='success'] .nds-floor-reason-icon {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.nds-floor-reason[data-tone='warning'] {
+  border-inline-start-color: var(--nds-warning);
+}
+.nds-floor-reason[data-tone='warning'] .nds-floor-reason-icon {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.nds-floor-reason[data-tone='danger'] {
+  border-inline-start-color: var(--nds-danger);
+}
+.nds-floor-reason[data-tone='danger'] .nds-floor-reason-icon {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.nds-floor-reason[data-tone='info'] {
+  border-inline-start-color: var(--nds-info);
+}
+.nds-floor-reason[data-tone='info'] .nds-floor-reason-icon {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+
+/* Picked: primary border, a thick bar under it, a tinted ground and the tick. */
+.nds-floor-reason[aria-checked='true'] {
+  border-color: var(--nds-primary);
+  border-block-end-width: var(--nds-space-8);
+  background: var(--nds-wash-primary);
+}
+/* Counted: the border says it too. */
+.nds-floor-reason-cell[data-has-count] > .nds-floor-reason {
+  border-color: var(--nds-primary);
+}
+/* Held: in view, announced, inert. */
+.nds-floor-reason[aria-disabled='true'] {
+  border-style: dashed;
+  background: var(--nds-surface-sunken);
+  cursor: default;
+}
+
+.nds-floor-reasons-total {
+  margin: 0;
+  font-size: var(--nds-density-font-body);
+  font-weight: var(--nds-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+.nds-floor-reasons-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-density-gap);
+}
+.nds-floor-reasons-page {
+  flex: 1 1 auto;
+  text-align: center;
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nds-floor-reason:active {
+    transform: none;
+  }
+}
