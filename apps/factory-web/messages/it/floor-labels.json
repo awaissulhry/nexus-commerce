@@ -1,0 +1,228 @@
+{
+  "bar": "Azioni",
+  "loading": "Lettura delle etichette dell’ordine…",
+  "noPermission": {
+    "title": "Le etichette capo non sono per il tuo ruolo",
+    "body": "Per stampare le etichette capo serve il permesso etichette a questa postazione. Chiedi al tuo capo reparto."
+  },
+  "scan": {
+    "title": "Per quale ordine di lavoro?",
+    "lead": "Scansiona il foglio di lavoro o il cartellino di un fascio all’ultima operazione, oppure l’etichetta seriale di un capo per ristamparla.",
+    "hint": "Foglio di lavoro, cartellino fascio o seriale",
+    "label": "Scansiona o digita il codice",
+    "read": "Letto: {code}",
+    "type": "Scrivi",
+    "camera": {
+      "start": "Fotocamera",
+      "stop": "Ferma la fotocamera",
+      "error": "Qui la fotocamera non si può usare. Digita il codice."
+    }
+  },
+  "note": {
+    "otherLabel": "{code} non è l’etichetta di un ordine, di un fascio o un seriale. Scansiona il foglio di lavoro o un cartellino fascio.",
+    "otherFactory": "{code} è un’etichetta di un’altra fabbrica.",
+    "typo": "{code} è stato letto male. Scansionalo di nuovo o digitalo.",
+    "notFound": "Niente in questa sede ha il codice {code}.",
+    "several": "Più ordini hanno il numero {code}: scansiona invece un cartellino fascio del tuo.",
+    "printed_one": "Inviata alla stampante: {count} etichetta ({sizes}).",
+    "printed_other": "Inviate alla stampante: {count} etichette ({sizes}).",
+    "reprinted_one": "Ristampata: {count} etichetta di {what}. Il motivo è registrato.",
+    "reprinted_other": "Ristampate: {count} etichette di {what}. Il motivo è registrato."
+  },
+  "strip": {
+    "batch": "lotto {batch}",
+    "noBatch": "senza numero di lotto",
+    "BATCH": "numero di lotto su ogni etichetta",
+    "SERIAL": "un seriale per capo"
+  },
+  "sizes": {
+    "titleBatch": "Quale taglia · etichette con il numero di lotto",
+    "titleSerial": "Quale taglia · un’etichetta seriale per capo",
+    "label": "Taglia",
+    "colour": "{colour} · {code}",
+    "of": "di {count} finiti",
+    "notScanned": "non scansionata",
+    "noneFinished": "nessuno finito",
+    "toLabel_one": "{count} da etichettare",
+    "toLabel_other": "{count} da etichettare",
+    "done": "Fatto",
+    "overLabelled_one": "{size}: {count} etichetta in più dei capi finiti ora (una scansione è stata annullata dopo la stampa). Avvisa l’ufficio.",
+    "overLabelled_other": "{size}: {count} etichette in più dei capi finiti ora (una scansione è stata annullata dopo la stampa). Avvisa l’ufficio.",
+    "labelled_one": "{size}: {count} etichetta stampata",
+    "labelled_other": "{size}: {count} etichette stampate",
+    "labelledSerial_one": "{size}: {count} capo ha il suo seriale",
+    "labelledSerial_other": "{size}: {count} capi hanno il loro seriale",
+    "again_one": "{count} ristampata",
+    "again_other": "{count} ristampate"
+  },
+  "gate": {
+    "title": "Controllo certificato · {size}",
+    "covered": "{standard} · certificato {number} valido fino al {until} · copre {style}, {size}.",
+    "coveredClass": "{standard} classe {ppeClass} · certificato {number} valido fino al {until} · copre {style}, {size}.",
+    "notRequired": "Questo modello non richiede un certificato DPI: le sue etichette si stampano così."
+  },
+  "preview": {
+    "code": "Codice a barre {value}",
+    "invalid": "Questo codice non si stampa come codice a barre: {value}",
+    "standIn": "Grafica provvisoria: marchio CE, pittogramma DPI e simboli di manutenzione sono segnaposto finché non c’è la grafica vera. Non definitiva.",
+    "serialStandIn": "Il seriale mostrato è un esempio: ogni capo riceve il suo alla stampa.",
+    "sample": "Mostrata come esempio: l’etichetta si stampa con il vero numero di lotto.",
+    "none": "L’etichetta di questa taglia non è su questo tablet: si vede quando torna la rete.",
+    "reading": "Lettura dell’etichetta di questa taglia…"
+  },
+  "printer": {
+    "one": "Stampa su {printer}.",
+    "pick": "Quale stampante di etichette?",
+    "none": "Questa sede non ha una stampante di etichette. Avvisa l’ufficio.",
+    "noneFits": "Nessuna stampante di etichette qui prende il formato di questa etichetta. Avvisa l’ufficio."
+  },
+  "print": {
+    "size_one": "Stampa {count} etichetta · {size}",
+    "size_other": "Stampa {count} etichette · {size}",
+    "all_one": "Stampa tutte ({count})",
+    "all_other": "Stampa tutte ({count})",
+    "allNone": "Stampa tutte",
+    "nothing": "Stampa"
+  },
+  "finish": "Fine",
+  "held": {
+    "offline": "La stampa richiede la rete: ogni etichetta capo è registrata subito dall’ufficio.",
+    "busy": "Attendi: l’ufficio sta rispondendo.",
+    "blocked": "Niente di questo ordine si stampa ora.",
+    "refused": "Questa taglia oggi non si stampa: vedi il controllo certificato.",
+    "noPrinter": "Nessuna stampante qui prende questa etichetta.",
+    "pickPrinter": "Scegli prima la stampante di etichette.",
+    "nothingFinished": "Niente di questa taglia è ancora finito all’ultima operazione.",
+    "scanSerial": "Ogni capo di questa taglia ha il suo seriale. Per ristamparne uno, scansiona la sua etichetta.",
+    "nothingLeft": "Ogni capo finito ha la sua etichetta."
+  },
+  "refused": {
+    "title_one": "{count} taglia non stampata",
+    "title_other": "{count} taglie non stampate",
+    "line": "{size}: {words}"
+  },
+  "jobs": {
+    "title": "Lavori di stampa",
+    "batch_one": "{what} · {count} etichetta",
+    "batch_other": "{what} · {count} etichette",
+    "batchAgain_one": "{what} · {count} etichetta ristampata",
+    "batchAgain_other": "{what} · {count} etichette ristampate",
+    "serial": "{what} · {serial}",
+    "retry": "Riprova {what}",
+    "notMade": "Etichette senza lavoro di stampa",
+    "problem": "{what}: {problem}"
+  },
+  "job": {
+    "QUEUED": "In coda",
+    "SENT": "Inviata",
+    "PRINTED": "Stampata",
+    "FAILED": "Non stampata"
+  },
+  "reprint": {
+    "title": "Ristampare le etichette?",
+    "open": "Ristampa",
+    "openSerial": "Ristampa {serial}",
+    "question_one": "È stata stampata {count} etichetta di {size}. Perché di nuovo?",
+    "question_other": "Sono state stampate {count} etichette di {size}. Perché di nuovo?",
+    "questionAt_one": "Alle {time} è stata stampata {count} etichetta di {size}. Perché di nuovo?",
+    "questionAt_other": "Alle {time} sono state stampate {count} etichette di {size}. Perché di nuovo?",
+    "cancel": "Annulla",
+    "serialQuestion": "L’etichetta di {serial} è già stata stampata. Perché di nuovo? Si stampa lo stesso seriale.",
+    "count": "Quante etichette di nuovo · {size}",
+    "unit": "etichette",
+    "range": "Da 1 a {max}: mai più di quelle stampate.",
+    "why": "Perché di nuovo?",
+    "reason": {
+      "DAMAGED": "Rovinata o sbavata",
+      "UNREADABLE": "Stampa illeggibile",
+      "LOST": "Etichetta persa",
+      "JAMMED": "Stampante inceppata"
+    },
+    "logged": "Ogni ristampa è registrata con il suo motivo."
+  },
+  "pad": {
+    "minus": "Uno in meno",
+    "plus": "Uno in più",
+    "clear": "Cancella",
+    "back": "Cancella l’ultima cifra",
+    "empty": "Digita quante"
+  },
+  "done": {
+    "title": "Etichette di {number} stampate",
+    "body_one": "{count} etichetta stampata in questa visita. Ogni stampa è registrata.",
+    "body_other": "{count} etichette stampate in questa visita. Ogni stampa è registrata.",
+    "next": "Prossimo ordine"
+  },
+  "notice": {
+    "stepUp": "Per questo serve il tuo PIN.",
+    "forbidden": "Il tuo ruolo non può farlo a questa postazione.",
+    "notFound": "Non è più in questa sede. Scansiona di nuovo l’ordine.",
+    "conflict": "È cambiato nel frattempo: è stato riletto. Controlla i numeri e riprova.",
+    "invalid": "L’ufficio non l’ha accettato così. Controlla i numeri e riprova.",
+    "signedOut": "Sei stato disconnesso. Accedi di nuovo.",
+    "rateLimited": "Troppi tentativi: attendi un momento e riprova.",
+    "unavailable": "L’ufficio non ha risposto. Riprova tra un momento."
+  },
+  "refusal": {
+    "FLOOR_NOT_READY": {
+      "title": "Qui le etichette non si possono ancora stampare",
+      "body": "Il lavoro di reparto qui attende l’ufficio: i passi privacy o le regole di reparto non sono completi. Avvisa l’ufficio."
+    },
+    "WORK_ORDER_NOT_OPEN": {
+      "title": "L’ordine {number} non è aperto alle etichette",
+      "body": "Solo un ordine rilasciato o in corso stampa etichette capo. Avvisa l’ufficio."
+    },
+    "NO_LABEL_TEMPLATE": {
+      "title": "Nessuna etichetta capo per {style}",
+      "body": "La revisione rilasciata del modello non indica un’etichetta. Avvisa la qualità."
+    },
+    "NO_BATCH_NUMBER": {
+      "title": "L’ordine {number} non ha un numero di lotto",
+      "body": "Ogni etichetta porta il numero di lotto. Avvisa l’ufficio."
+    },
+    "NO_FINAL_OPERATION": {
+      "title": "Il ciclo di {style} non ha un’ultima operazione",
+      "body": "Le etichette si stampano per i capi finiti all’ultima operazione scansionata. Avvisa l’ufficio."
+    },
+    "NOTHING_FINISHED": {
+      "title": "Niente della taglia {size} è ancora finito",
+      "body": "Le etichette si stampano per i capi finiti all’ultima operazione."
+    },
+    "NOTHING_TO_LABEL": {
+      "title": "Ogni capo finito della taglia {size} ha la sua etichetta",
+      "body": "Per stamparne una di nuovo, usa Ristampa."
+    },
+    "MORE_THAN_FINISHED": {
+      "title": "Più etichette dei capi finiti nella taglia {size}",
+      "body": "Le etichette non superano mai i capi finiti. I numeri sono stati riletti: controllali."
+    },
+    "CERTIFICATE": {
+      "title": "Nessun certificato valido copre la taglia {size} di {style}",
+      "body": "Le etichette non si possono stampare. Avvisa la qualità."
+    },
+    "TEMPLATE_NOT_ACTIVE": {
+      "title": "Il formato dell’etichetta è stato ritirato",
+      "body": "Con questo non si stampano etichette. Avvisa l’ufficio."
+    },
+    "LABEL_NOT_PRINTABLE": {
+      "title": "Questa etichetta così non si stampa",
+      "body": "Manca qualcosa o non ci sta. Avvisa la qualità."
+    },
+    "NO_PRINTER": {
+      "title": "Nessuna stampante qui prende questa etichetta",
+      "body": "Chiedi all’ufficio di configurare una stampante di etichette per questa sede."
+    },
+    "MORE_THAN_PRINTED": {
+      "title": "Più ristampe delle etichette stampate",
+      "body": "Abbassa il numero e riprova."
+    },
+    "SERIAL_VOID": {
+      "title": "Questo seriale è stato annullato",
+      "body": "Il suo capo ha un nuovo seriale: scansiona quell’etichetta."
+    },
+    "SERIAL_SHIPPED": {
+      "title": "Questo capo è già stato spedito",
+      "body": "La sua etichetta qui non si ristampa. Avvisa l’ufficio."
+    }
+  }
+}

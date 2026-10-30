@@ -1,0 +1,366 @@
+/*
+ * Admin › Privacy & notices (SCR-086) LAYOUT: the head row, the duties and the floor gate side by side on a wide screen,
+ * the notice texts, the DPIA steps, the register form in two columns. The controls are the design system's; semantic
+ * tokens only (no colours of its own). No page max-width (Owner rule 2026-10-29): the page fills the shell's main area;
+ * a text column inside a card may keep a reading width.
+ */
+.fw-pv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pv-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-pv-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-pv-intro {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pv-asof,
+.fw-pv-muted,
+.fw-pv-sub,
+.fw-pv-later,
+.fw-pv-loading {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pv-muted,
+.fw-pv-later,
+.fw-pv-loading {
+  margin: 0;
+}
+
+.fw-pv-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-pv-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-10);
+}
+
+.fw-pv-actions,
+.fw-pv-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* The duties and the floor gate: side by side when there is room, one under the other on a phone. */
+.fw-pv-top {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .fw-pv-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pv-card {
+  min-width: 0;
+}
+
+.fw-pv-duties,
+.fw-pv-sites {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  margin: 0 0 var(--nds-space-10);
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pv-duty {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--nds-space-10);
+  align-items: start;
+}
+
+.fw-pv-duty-icon {
+  display: inline-flex;
+  padding-top: 2px;
+  color: var(--nds-text-2);
+}
+
+.fw-pv-duty.is-done .fw-pv-duty-icon {
+  color: var(--nds-success);
+}
+
+.fw-pv-duty.is-needs .fw-pv-duty-icon {
+  color: var(--nds-warning);
+}
+
+.fw-pv-duty-body,
+.fw-pv-site,
+.fw-pv-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-pv-duty-line,
+.fw-pv-site-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-pv-duty-name,
+.fw-pv-site-name {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-pv-duty-gate,
+.fw-pv-warning {
+  color: var(--nds-warning-text);
+}
+
+.fw-pv-duty-law {
+  color: var(--nds-text-3);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pv-site-words {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pv-link {
+  color: var(--nds-text-link);
+  text-decoration: none;
+}
+
+.fw-pv-link:hover,
+.fw-pv-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-pv-site-words .fw-pv-link {
+  text-decoration: underline;
+}
+
+/* A link-looking button inside a two-line cell keeps to the start of the line. */
+.fw-pv-linkbtn {
+  align-self: flex-start;
+}
+
+.fw-pv-ack-line {
+  margin: 0;
+}
+
+.fw-pv-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pv-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pv-block-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-pv-h2,
+.fw-pv-h3,
+.fw-pv-h4 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pv-h2 {
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-pv-h3,
+.fw-pv-h4 {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pv-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-pv-cell .fw-pv-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-pv-mono,
+.fw-pv-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pv-code {
+  overflow-wrap: anywhere;
+}
+
+.fw-pv-copy {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+/* The DPIA: in force and the draft side by side on a wide screen (two equal columns, never an empty third); the
+ * versions under both. */
+.fw-pv-dpia {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .fw-pv-dpia {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-pv-wide {
+  grid-column: 1 / -1;
+}
+
+.fw-pv-scope {
+  margin: var(--nds-space-10) 0 0;
+  color: var(--nds-text-2);
+  white-space: pre-wrap;
+}
+
+.fw-pv-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+}
+
+.fw-pv-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-pv-step-n {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-pv-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--nds-space-10) var(--nds-space-14);
+}
+
+/* Dialogs. */
+.fw-pv-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pv-texts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: var(--nds-space-14);
+}
+
+.fw-pv-text,
+.fw-pv-add,
+.fw-pv-acks,
+.fw-pv-paper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pv-text-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-pv-textarea {
+  min-height: 240px;
+  width: 100%;
+}
+
+.fw-pv-textarea.short {
+  min-height: 84px;
+}
+
+.fw-pv-body {
+  max-height: 320px;
+  overflow: auto;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+  white-space: pre-wrap;
+}
+
+.fw-pv-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+}
+
+.fw-pv-drop {
+  min-width: 0;
+}
+
+.fw-pv-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

@@ -82,13 +82,22 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
     expect(ids(officeNavFor(permissionCheck(['planning.view', 'purchasing.view', 'inventory.stock.view'])))).toEqual([
       ['planning', ['planning-mrp']],
       ['purchasing', ['purchasing-orders']],
-      ['warehouse', ['warehouse-receipts']],
+      ['warehouse', ['warehouse-stock', 'warehouse-hides', 'warehouse-lots', 'warehouse-moves', 'warehouse-receipts']],
     ])
     // The warehouse role reads the orders it receives against (and the parties: Customers and Suppliers), not the plan.
     expect(ids(officeNavFor(permissionCheck(['purchasing.view', 'inventory.stock.view', 'parties.view'])))).toEqual([
       ['sales', ['sales-customers']],
       ['purchasing', ['purchasing-suppliers', 'purchasing-orders']],
-      ['warehouse', ['warehouse-receipts']],
+      ['warehouse', ['warehouse-stock', 'warehouse-hides', 'warehouse-lots', 'warehouse-moves', 'warehouse-receipts']],
+    ])
+  })
+
+  it('the stock screens: Warehouse › Main (inventory.stock.view) and Settings › Locations (inventory.locations.view), Production › Floor rules (production.settings.view), Admin › Privacy (privacy.view)', () => {
+    expect(ids(officeNavFor(permissionCheck(['inventory.locations.view'])))).toEqual([['warehouse', ['warehouse-locations']]])
+    expect(ids(officeNavFor(permissionCheck(['production.settings.view'])))).toEqual([['production', ['production-floor-rules']]])
+    expect(ids(officeNavFor(permissionCheck(['privacy.view'])))).toEqual([['admin', ['admin-privacy']]])
+    expect(ids(officeNavFor(permissionCheck(['inventory.stock.view', 'inventory.locations.view', 'shipping.settings.view'])))).toEqual([
+      ['warehouse', ['warehouse-stock', 'warehouse-hides', 'warehouse-lots', 'warehouse-moves', 'warehouse-receipts', 'warehouse-locations', 'warehouse-shipping']],
     ])
   })
 

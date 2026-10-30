@@ -1,0 +1,199 @@
+{
+  "fr": {
+    "busy": "Saving…",
+    "dismiss": "Dismiss",
+    "retry": "Try again",
+    "updated": "Updated {time}",
+    "site": "Site",
+    "siteOption": "{code} · {name}",
+    "tabs": "Parts of the floor rules",
+    "tab": {
+      "rules": "Floor rules",
+      "codes": "Reason codes"
+    },
+    "viewOnly": "Only the production manager or the Owner changes this.",
+    "noAccess": {
+      "title": "Your role may not see the floor rules",
+      "body": "Your role does not include “production.settings.view”. Ask an administrator if you need this page."
+    },
+    "noSites": {
+      "title": "No site to show",
+      "body": "Your role reaches no site of this company."
+    },
+    "ready": {
+      "title": "Ready for floor work?",
+      "yes": "Ready for floor work",
+      "no": "Not ready for floor work"
+    },
+    "status": {
+      "station": "Floor records name the station only, never the worker.",
+      "worker": "Floor records name the signed-in worker, on the legal basis recorded here.",
+      "waiting_one": "{count} worker has not acknowledged the notice: no floor record names them until they do.",
+      "waiting_other": "{count} workers have not acknowledged the notice: no floor record names them until they do.",
+      "noBasis": "Floor records would name workers, but no legal basis is on record: record it, or name the station only, before real floor work starts.",
+      "noBasisDefault": "This site has no floor rules yet and names workers by default, with no legal basis on record: record it, or name the station only, before real floor work starts."
+    },
+    "monitor": {
+      "title": "Who floor records name",
+      "intro": "Scans, cut logs and floor stock moves record who did the work, or only where. A change applies from now on; records already made keep what they recorded."
+    },
+    "subject": {
+      "WORKER": {
+        "title": "Name the signed-in worker",
+        "body": "Each floor record names the worker signed in on the tablet (and the station). Needs a legal basis on record, and each worker’s acknowledgement of the notice."
+      },
+      "STATION": {
+        "title": "Name the station only",
+        "body": "Floor records name the station, never a person. Traceability stays per station, work order and bundle."
+      }
+    },
+    "basis": {
+      "title": "Legal basis for naming workers",
+      "kind": "Basis",
+      "pick": "Choose the basis",
+      "UNION_AGREEMENT": "An agreement with the union representatives (RSU or RSA)",
+      "INL_AUTHORISATION": "The labour inspectorate’s authorisation (INL)",
+      "NOT_REQUIRED": "Counsel’s written opinion that neither is needed",
+      "reference": "Reference",
+      "referenceHint": "The agreement’s or the authorisation’s number and date, or the opinion’s author and date. The document itself belongs in the files.",
+      "onRecord": "On record: {kind} · {reference}",
+      "none": "No legal basis on record.",
+      "recordedBy": "Recorded by {name} on {when}",
+      "recordedAt": "Recorded on {when}",
+      "kept": "The legal basis stays on record; it is never removed."
+    },
+    "reason": {
+      "label": "Why floor records will name workers from now on",
+      "hint": "Kept in the audit log with the change."
+    },
+    "impact": {
+      "title": "What this change reaches",
+      "narrow": "From now on scans and cut logs at this site name the station only, never the worker.",
+      "widen": "From now on scans and cut logs at this site name the signed-in worker.",
+      "devices_one": "{count} floor tablet has no station: give it one (Admin › Devices & printers), or it records nothing.",
+      "devices_other": "{count} floor tablets have no station: give each one a station (Admin › Devices & printers), or they record nothing.",
+      "notAcknowledged_one": "{count} of {active} active workers has not acknowledged the notice: no record names them until they do (L. 300/1970 art. 4 c.3; GDPR art. 13).",
+      "notAcknowledged_other": "{count} of {active} active workers have not acknowledged the notice: no record names them until they do (L. 300/1970 art. 4 c.3; GDPR art. 13).",
+      "openOrders_one": "{count} open work order goes on that way.",
+      "openOrders_other": "{count} open work orders go on that way.",
+      "keep": "Records already made keep what they recorded: scans and cut logs are never changed."
+    },
+    "held": {
+      "basis": "Give the legal basis and its reference first.",
+      "basisKind": "Choose the legal basis.",
+      "reference": "Give the reference of the legal basis.",
+      "referenceLong": "Keep the reference to 200 characters.",
+      "reason": "Say why floor records will name workers from now on.",
+      "reasonLong": "Keep the reason to 500 characters."
+    },
+    "save": {
+      "region": "Unsaved changes",
+      "unsaved_one": "{count} unsaved change",
+      "unsaved_other": "{count} unsaved changes",
+      "discard": "Discard",
+      "apply": "Apply",
+      "applyCode": "Apply (asks a code)",
+      "lastChange": "Last changed {when}",
+      "default": "Not set yet: the site follows the default."
+    },
+    "confirm": {
+      "title": "Record stations only?",
+      "body": "From now on floor records name the station only. Records already made keep their names.",
+      "cancel": "Cancel",
+      "do": "Record stations only"
+    },
+    "stepUp": {
+      "title": "Confirm it is you",
+      "sentence": "Naming workers records more about people: type the 6-digit code from your authenticator app.",
+      "confirm": "Confirm and apply",
+      "wrong": "That code was not accepted. Type the code shown now.",
+      "locked": "Too many codes tried. Wait a few minutes.",
+      "unavailable": "The code could not be checked. Try again."
+    },
+    "done": {
+      "widened": "Floor records name the signed-in worker from now on.",
+      "narrowed": "Floor records name the station only from now on.",
+      "basisRecorded": "The legal basis is on record.",
+      "basisReplaced": "The legal basis was replaced; the earlier one stays in the audit log.",
+      "bundle": "The standard bundle size is saved.",
+      "saved": "Saved.",
+      "unchanged": "Nothing changed: the rules were already so."
+    },
+    "elsewhere": {
+      "title": "Changed by someone else meanwhile",
+      "body": "Reload to see the floor rules as they are now; what you typed is replaced.",
+      "reload": "Reload"
+    },
+    "problem": {
+      "read": "The server didn’t answer as expected. Try again.",
+      "write": "It was not saved. Try again.",
+      "changed": "The floor rules changed meanwhile: reload them and apply again.",
+      "invalid": "Something was not accepted. Check the fields and try again.",
+      "forbidden": "Your role may not do this at this site.",
+      "gone": "This site no longer exists, or it belongs to another company.",
+      "offline": "No connection to the server. Try again."
+    },
+    "law": {
+      "label": "The law behind this switch",
+      "title": "Statuto dei Lavoratori, L. 300/1970 art. 4 c.1",
+      "body": "Tools that could also monitor workers may be used only for organisational, production, safety or asset-protection needs, after an agreement with the union representatives or the labour inspectorate’s authorisation; workers are told beforehand how their data is used (art. 4 c.3; GDPR art. 13).",
+      "recorded": "On record: {kind} · {reference} · {when}",
+      "none": "No legal basis on record at this site."
+    },
+    "notice": {
+      "title": "Worker notice",
+      "counts": "{acknowledged} of {active} active workers acknowledged the notice in force.",
+      "noWorkers": "No active worker at this site yet.",
+      "waiting_one": "{count} cannot be named by a floor record until they acknowledge it.",
+      "waiting_other": "{count} cannot be named by a floor record until they acknowledge it.",
+      "version_one": "Version {version}: {count} worker",
+      "version_other": "Version {version}: {count} workers",
+      "countsOnly": "Counts only: this page never names a worker.",
+      "toPrivacy": "The notice’s text and versions: Admin › Privacy & notices"
+    },
+    "bundle": {
+      "title": "Standard bundle size",
+      "intro": "Garments per bundle when the cutter names no size.",
+      "suffix": "garments",
+      "less": "One fewer",
+      "more": "One more",
+      "save": "Save size",
+      "range": "Use a whole number from 1 to 500.",
+      "same": "This is the size already saved.",
+      "value_one": "{count} garment per bundle",
+      "value_other": "{count} garments per bundle",
+      "mtm": "A made-to-measure garment is always one per bundle."
+    },
+    "fixed": {
+      "title": "Fixed in this version",
+      "undo": "Undo on the tablet: {minutes} minutes after a report, or until the next scan.",
+      "bundleCode": "One bundle code, scanned at every operation.",
+      "idle": "Sign-out after {minutes} minutes without use, unless the site’s tablets are set to another time.",
+      "clock": "A tablet clock more than {minutes} minutes off is shown on the tablet.",
+      "offline": "Scans, cuts and bundles wait on the tablet while offline and are sent in order; receipts, inspections, releases and garment labels need the network."
+    },
+    "codes": {
+      "fixedTitle": "The reasons the operation screen offers",
+      "fixedBody": "Each worker sees them in their own language (both languages are listed here). In this version the list is fixed for every company: editing it, with icons and colours, comes later.",
+      "tableLabel": "Scrap and rework reasons",
+      "count_one": "{count} reason · {scrap} scrap · {rework} rework",
+      "count_other": "{count} reasons · {scrap} scrap · {rework} rework",
+      "empty": "No reasons yet.",
+      "col": {
+        "kind": "Kind",
+        "code": "Code",
+        "it": "Italian",
+        "en": "English",
+        "order": "Order"
+      },
+      "kind": {
+        "SCRAP": "Scrap",
+        "REWORK": "Rework"
+      },
+      "noAccess": {
+        "title": "Your role may not read the reason codes",
+        "body": "Reading them needs “production.scan”, which the production manager and the operators hold."
+      }
+    }
+  }
+}

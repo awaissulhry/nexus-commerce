@@ -462,7 +462,7 @@ function InspectionsContainer() {
         onDialog: openDialog,
         onOpenInspection: (row) => router.push(`${prefix}/quality/inspections/${encodeURIComponent(row.id)}`),
         onOpenRelease: (id) => writeAddress({ open: id }),
-        onOpenLot: (lot) => router.push(`${prefix}/compliance/tests/${encodeURIComponent(lot.id)}`),
+        onOpenLot: (lot) => router.push(`${prefix}/warehouse/lots/${encodeURIComponent(lot.id)}`),
         onRetryRelease: () => void loadDetail(),
         onExport: exportRows,
         onNewDraft: setNewDraft,

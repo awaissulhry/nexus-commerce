@@ -56,7 +56,7 @@ export interface TileRule {
 /**
  * In the order a station shows them; Scan anything last. Each tile's permission is the one its page's API needs (fail
  * closed). Built: Scan (B-W0-29); Operation, Cut a hide, Bundles, Pick & issue, Final inspection (the floor tasks:
- * SCR-090, 094, 095, 093, 097). Their pages: `TASK_ROUTES` (tasks/routes.ts).
+ * SCR-090, 094, 095, 093, 097), Garment labels (SCR-096). Their pages: `TASK_ROUTES` (tasks/routes.ts).
  */
 export const TILE_RULES: readonly TileRule[] = [
   // design floor.operation: sewing, cutting, packing; and the inspection bench, where a routing's scanned INSPECTION
@@ -66,7 +66,8 @@ export const TILE_RULES: readonly TileRule[] = [
   { key: 'bundles', permission: 'production.bundles', modes: ['cutting'], built: true, takesScans: true },
   { key: 'receive', permission: 'inventory.receive', modes: ['warehouse'], built: false, takesScans: true },
   { key: 'pick', permission: 'inventory.issue', modes: ['warehouse'], built: true, takesScans: true },
-  { key: 'labels', permission: 'print.labels', modes: ['packing'], built: false, takesScans: true },
+  // SCR-096: garment labels at the final operation (production.serials: the API's permission; the print goes through it).
+  { key: 'labels', permission: 'production.serials', modes: ['packing'], built: true, takesScans: true },
   { key: 'pack', permission: 'shipping.pack', modes: ['packing'], built: true, takesScans: true },
   { key: 'final', permission: 'quality.inspections.view', modes: ['inspection'], built: true, takesScans: true },
   { key: 'scan', permission: 'floor.work', modes: 'all', built: true, takesScans: true },

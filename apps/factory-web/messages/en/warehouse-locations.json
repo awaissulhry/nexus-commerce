@@ -1,0 +1,187 @@
+{
+  "lc": {
+    "busy": "Working…",
+    "dismiss": "Dismiss",
+    "top": "Top of the site",
+    "search": "Search or scan a place",
+    "showArchived": "Show archived",
+    "tableLabel": "Places of {site}",
+    "count_one": "{count} place · {active} active",
+    "count_other": "{count} places · {active} active",
+    "countOf": "{shown} of {count}",
+    "export_one": "Export {count}",
+    "export_other": "Export {count}",
+    "exportAll_one": "Export this view ({count} place)",
+    "exportAll_other": "Export this view ({count} places)",
+    "import": "Import locations",
+    "rowMenu": "Actions for {code}",
+    "inside_one": "{count} place",
+    "inside_other": "{count} places",
+    "col": {
+      "place": "Place",
+      "above": "Inside",
+      "code": "Code",
+      "kind": "Kind",
+      "status": "Status",
+      "stock": "Stock here",
+      "inside": "Inside"
+    },
+    "stock": {
+      "empty": "Empty",
+      "toMoves": "The moves behind this figure",
+      "lines_one": "{count} stock line",
+      "lines_other": "{count} stock lines",
+      "linesHides": "{lines} · {hides}",
+      "noAccess": "Your role does not see stock: what lies in each place is not shown.",
+      "nothingHere": "Nothing here.",
+      "tryInside": "Turn on “Include the places inside” to see what lies below it.",
+      "includeInside": "Include the places inside",
+      "tableLabel": "Stock at {code}",
+      "count_one": "{count} line · {totals}",
+      "count_other": "{count} lines · {totals}",
+      "noLot": "No lot",
+      "col": {
+        "material": "Material",
+        "lot": "Lot · hide",
+        "place": "Place",
+        "quality": "Quality",
+        "onHand": "On hand",
+        "held": "On hold",
+        "available": "Available"
+      }
+    },
+    "menu": {
+      "newInside": "New location inside",
+      "move": "Move under…",
+      "archive": "Archive",
+      "moves": "Open in Movements"
+    },
+    "held": {
+      "noManage": "Your role sees places but does not change them.",
+      "archived": "Archived: it takes no more stock and does not move.",
+      "hides_one": "Holds {count} hide: move it out first.",
+      "hides_other": "Holds {count} hides: move them out first.",
+      "stock_one": "Holds {count} stock line: move it out first.",
+      "stock_other": "Holds {count} stock lines: move them out first.",
+      "inside_one": "{count} active place sits inside: archive or move it first.",
+      "inside_other": "{count} active places sit inside: archive or move them first.",
+      "noSite": "Choose a site first."
+    },
+    "new": {
+      "button": "New location",
+      "title": "New location",
+      "inside": "Inside {place}",
+      "atTop": "At the top of {site}",
+      "top": "Top of {site}",
+      "parentHint": "The place it sits inside: a bin in a zone, a zone in a warehouse.",
+      "codeHint": "Printed on the bin label and scanned: capitals, digits, dots and dashes. It never changes.",
+      "codeMissing": "Give the code.",
+      "codeShape": "Use 1 to 40 capitals, digits, dots, dashes or underscores.",
+      "codeTaken": "This site already has a place with this code.",
+      "nameMissing": "Give the name.",
+      "nameLong": "Keep the name to 120 characters.",
+      "create": "Create location"
+    },
+    "field": {
+      "parent": "Inside",
+      "code": "Code",
+      "name": "Name",
+      "kind": "Kind"
+    },
+    "move": {
+      "title": "Move {code} under…",
+      "now": "Now inside {place}",
+      "under": "New place above it",
+      "hint": "Only places that are not this one or inside it.",
+      "pick": "Choose where it goes",
+      "stockStays": "Its stock stays where it is: only the tree changes.",
+      "do": "Move"
+    },
+    "archive": {
+      "title": "Archive {code}?",
+      "effect": "An archived place takes no more stock and nothing can be put inside it.",
+      "history": "Its moves and its code stay in the history; the code is never given to another place.",
+      "do": "Archive"
+    },
+    "done": {
+      "created": "Location {code} created.",
+      "moved": "{code} now sits inside {place}.",
+      "archived": "{code} archived: it takes no more stock."
+    },
+    "problem": {
+      "write": "It was not saved. Try again.",
+      "changed": "Someone changed this place meanwhile: it was read again. Check and try again.",
+      "notNow": "Not now: the place holds stock or active places inside, or it is archived.",
+      "parent": "That place cannot hold it: it is archived, or it is this place or one inside it.",
+      "forbidden": "Your role may not change places at this site.",
+      "gone": "This place no longer exists, or it belongs to another company.",
+      "offline": "No connection to the server. Try again."
+    },
+    "empty": {
+      "title": "No locations yet",
+      "body": "Add the warehouses, zones and bins of this site, or import them from a sheet.",
+      "bodyView": "Nobody has added the places of this site yet."
+    },
+    "noSites": {
+      "title": "No site to show",
+      "body": "Your role reaches no site of this company."
+    },
+    "keys": {
+      "title": "Keyboard shortcuts",
+      "new": "New location"
+    },
+    "tab": {
+      "overview": "Overview",
+      "stock": "Stock"
+    },
+    "record": {
+      "title": "{kind} {code} · {name}",
+      "where": "Where it is",
+      "back": "Locations",
+      "tabs": "Parts of the location",
+      "allPlaces": "All places of the site",
+      "notFound": "This location does not exist or is in another company",
+      "notFoundBody": "Go back to the list of places.",
+      "archivedTitle": "This place is archived",
+      "archivedBody": "It takes no more stock; its history and code stay. Its fields are shown as text.",
+      "placeTitle": "The place",
+      "codeFixed": "Printed bin labels show this code; it never changes.",
+      "insideTitle": "Places inside",
+      "nothingInside": "No place sits inside this one.",
+      "newInsideHint": "Add a place inside it from the list’s row menu.",
+      "hereTitle": "What lies here",
+      "quantity": "On hand",
+      "lines": "Stock lines",
+      "hides": "Hides",
+      "archiveTitle": "Archive",
+      "isArchived": "Archived: it takes no more stock.",
+      "archiveHeld": "It cannot be archived yet. {reason}",
+      "archiveFree": "Empty, with nothing active inside: it may be archived (⋯ Archive)."
+    },
+    "conflict": {
+      "title": "Changed by someone else meanwhile",
+      "body": "Your typing is still here. Reload reads the place again and replaces it.",
+      "reload": "Reload"
+    },
+    "save": {
+      "region": "Unsaved changes",
+      "unsaved_one": "{count} unsaved change",
+      "unsaved_other": "{count} unsaved changes",
+      "discard": "Discard",
+      "save": "Save",
+      "saved": "All changes saved · {time}",
+      "allSaved": "No unsaved changes."
+    },
+    "csv": {
+      "code": "Code",
+      "name": "Name",
+      "kind": "Kind",
+      "status": "Status",
+      "path": "Path",
+      "inside": "Active places inside",
+      "lines": "Stock lines",
+      "hides": "Hides",
+      "quantity": "On hand"
+    }
+  }
+}

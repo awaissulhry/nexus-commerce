@@ -35,10 +35,15 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
       { key: 'final', held: null },
       { key: 'scan', held: null },
     ])
-    // Garment labels at the packing station are a later step: said on the tile, never a dead tile. Pack is built (SCR-098).
+    // Garment labels at the packing station (SCR-096) ask production.serials, the permission of its API; Pack is built (SCR-098).
     expect(homeTiles('packing', OPERATOR, false)).toEqual([
       { key: 'operation', held: null },
-      { key: 'labels', held: 'coming' },
+      { key: 'pack', held: null },
+      { key: 'scan', held: null },
+    ])
+    expect(homeTiles('packing', [...OPERATOR, 'production.serials'], false)).toEqual([
+      { key: 'operation', held: null },
+      { key: 'labels', held: null },
       { key: 'pack', held: null },
       { key: 'scan', held: null },
     ])
@@ -46,7 +51,8 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
 
   it('drops a tile whose permission the person lacks (Receive needs an office permission)', () => {
     expect(homeTiles('warehouse', OPERATOR, false).map((tile) => tile.key)).toEqual(['pick', 'scan'])
-    expect(homeTiles('packing', ['floor.work', 'print.labels'], false).map((tile) => tile.key)).toEqual(['labels', 'scan'])
+    expect(homeTiles('packing', ['floor.work', 'print.labels'], false).map((tile) => tile.key)).toEqual(['scan'])
+    expect(homeTiles('packing', ['floor.work', 'production.serials'], false).map((tile) => tile.key)).toEqual(['labels', 'scan'])
     // A subcontract station: Scan only.
     expect(homeTiles(null, OPERATOR, false).map((tile) => tile.key)).toEqual(['scan'])
   })
@@ -61,8 +67,8 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
     expect(homeTiles('cutting', OPERATOR, true).map((tile) => tile.held)).toEqual(['notice', 'notice', 'notice', 'notice'])
   })
 
-  it('the floor tasks are built; receive and garment labels are later steps', () => {
-    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['operation', 'cut', 'bundles', 'pick', 'pack', 'final', 'scan'])
+  it('the floor tasks are built, garment labels too (SCR-096); receive is a later step', () => {
+    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['operation', 'cut', 'bundles', 'pick', 'labels', 'pack', 'final', 'scan'])
   })
 })
 

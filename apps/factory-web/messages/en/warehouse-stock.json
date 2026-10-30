@@ -1,0 +1,335 @@
+{
+  "st": {
+    "notYet": "Not read yet",
+    "adjust": "Adjust stock",
+    "adjustRow": "Adjust…",
+    "keyAdjust": "Adjust the focused row",
+    "held": {
+      "noAdjust": "Your role may not adjust stock.",
+      "pickOne": "Select one row (or press a on a row): Adjust works on one stock row at a time.",
+      "severalHides": "This row holds several hides: adjust one hide (Rows ▾ Leather, or the Hides page)."
+    },
+    "importOpening": "Import opening stock",
+    "exportView": "Export this view (CSV)",
+    "shortcuts": "Keyboard shortcuts",
+    "search": "Search or scan a material, lot, hide or place",
+    "viewLabel": "Rows",
+    "view": {
+      "material": "By material",
+      "lot": "By lot",
+      "location": "By place",
+      "leather": "Leather: one row per hide",
+      "quarantine": "On hold (not released)"
+    },
+    "tile": {
+      "quarantine": "Lots in quarantine",
+      "crvi": "Lots waiting for the Cr VI result",
+      "blocked": "Lots blocked or rejected"
+    },
+    "removeChip": "Remove the filter “{chip}”",
+    "tableLabel": "Stock",
+    "count_one": "{count} row",
+    "count_other": "{count} rows",
+    "col": {
+      "material": "Material",
+      "lot": "Lot · hide",
+      "quality": "Quality",
+      "location": "Place",
+      "onHand": "On hand",
+      "held": "On hold",
+      "available": "Available",
+      "actions": "Actions"
+    },
+    "noLot": "No lot",
+    "noQuality": "No quality step",
+    "tracking": {
+      "NONE": "Not tracked by lot",
+      "LOT": "By lot",
+      "HIDE": "Hide by hide",
+      "SERIAL": "By serial"
+    },
+    "onHandLink": "Open the moves behind this figure",
+    "rowMenu": "Actions for {material} at {place}",
+    "openLot": "Open lot {code}",
+    "openHide": "Open hide {code}",
+    "showMoves": "Show the moves",
+    "selectedTotals": "Selected: {totals}",
+    "totals": "On hand in this view: {totals}",
+    "totalValue": "value {value}",
+    "empty": {
+      "title": "No stock yet",
+      "body": "Stock comes in with receipts against purchase orders, or with the opening stock sheet.",
+      "receive": "Receive goods"
+    },
+    "notice": {
+      "show": "Show them",
+      "more_one": "{count} more notice",
+      "more_other": "{count} more notices",
+      "fewer": "Show fewer notices",
+      "crViFailed_one": "{count} lot failed its Cr VI test: it can never be issued and waits to be rejected.",
+      "crViFailed_other": "{count} lots failed their Cr VI test: they can never be issued and wait to be rejected.",
+      "crVi_one": "{count} lot waits for its Cr VI result: its stock cannot be issued.",
+      "crVi_other": "{count} lots wait for a Cr VI result: their stock cannot be issued.",
+      "quarantine_one": "{count} lot is in quarantine and waits for quality’s release.",
+      "quarantine_other": "{count} lots are in quarantine and wait for quality’s release.",
+      "truncated": "Too many rows for one answer: pick a site or a view to see them all.",
+      "unvalued_one": "{count} move is not valued yet: the values here leave it out.",
+      "unvalued_other": "{count} moves are not valued yet: the values here leave them out."
+    },
+    "csv": {
+      "material": "Material",
+      "materialName": "Material name",
+      "colour": "Colour",
+      "lot": "Lot",
+      "hide": "Hide",
+      "quality": "Quality",
+      "site": "Site",
+      "location": "Place",
+      "onHand": "On hand",
+      "unit": "Unit",
+      "hides": "Hides",
+      "held": "On hold",
+      "available": "Available",
+      "unitCost": "Unit cost",
+      "value": "Value",
+      "currency": "Currency"
+    }
+  },
+  "adj": {
+    "title": "Adjust stock",
+    "lot": "lot {code}",
+    "hide": "hide {code}",
+    "intro": "{site} · {place}: {quantity} {unit} on hand now. The stock changes only through this move, with its reason.",
+    "direction": "Found",
+    "down": "Less (down)",
+    "up": "More (up)",
+    "location": "Where it is",
+    "locationHint": "An increase can land in another place of the site.",
+    "quantity": "Quantity ({unit})",
+    "note": "Reason",
+    "noteHint": "Kept with the move for good: say what happened.",
+    "reference": "Reference",
+    "referenceHint": "A count sheet, a claim or a DDT number (optional).",
+    "unitCost": "Value at, per {unit}",
+    "unitCostHint": "Left empty: the lot’s cost, else the standard cost.",
+    "preview": {
+      "none": "Type the quantity to see the change.",
+      "row": "On hand {before} → {after} {unit} at {place}",
+      "other": "Adds {quantity} {unit} at {place}"
+    },
+    "keys": "⌘↵ posts",
+    "post": "Post adjustment",
+    "posting": "Posting…",
+    "held": {
+      "quantity": "Type a quantity above 0.",
+      "tooMuch": "Only {quantity} {unit} are there.",
+      "location": "Pick the place.",
+      "note": "Write the reason (up to 500 characters).",
+      "unitCost": "Type the cost as a number (up to 6 decimals)."
+    },
+    "problem": {
+      "notEnough": "That stock is not there any more (someone used it meanwhile): stock never goes below zero. Close and read the figures again.",
+      "changed": "It changed meanwhile. Close and try again.",
+      "invalid": "Something was not accepted: check the quantity, the unit and the reason.",
+      "forbidden": "Your role may not adjust stock here.",
+      "offline": "No connection: nothing was posted. Try again when the network is back.",
+      "gone": "That stock or place no longer exists.",
+      "write": "It was not posted. Try again."
+    },
+    "done": {
+      "down": "Adjustment posted: {code} down at {place}.",
+      "up": "Adjustment posted: {code} up at {place}."
+    }
+  },
+  "mv": {
+    "tableLabel": "Stock ledger",
+    "countAll_one": "{count} move",
+    "countAll_other": "{count} moves",
+    "countLoaded_one": "{count} move loaded · more as you scroll",
+    "countLoaded_other": "{count} moves loaded · more as you scroll",
+    "period": {
+      "label": "Period",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days",
+      "90d": "Last 90 days",
+      "365d": "Last 12 months",
+      "all": "All the ledger"
+    },
+    "reasonLabel": "Reason",
+    "allReasons": "All reasons",
+    "note": {
+      "label": "Note",
+      "any": "With or without a note",
+      "with": "With a note",
+      "without": "Without a note"
+    },
+    "reversed": {
+      "label": "Reversals",
+      "any": "Reversed or not",
+      "yes": "Reversed or reversing",
+      "no": "Neither"
+    },
+    "chips": "The stock this ledger shows",
+    "chip": {
+      "item": "Material {code}",
+      "colour": "Colour {code}",
+      "lot": "Lot {code}",
+      "hide": "Hide {code}",
+      "location": "Place {code}",
+      "reason": "Reason: {reason}"
+    },
+    "tile": {
+      "adjustments": "Adjustments",
+      "scraps": "Scraps",
+      "counts": "Count differences",
+      "reversals": "Reversals",
+      "unvalued": "Moves not valued yet"
+    },
+    "tileHint": {
+      "adjustments": "last 7 days",
+      "scraps": "last 30 days",
+      "counts": "last 30 days",
+      "reversals": "last 30 days",
+      "unvalued": "their value is missing from the totals"
+    },
+    "col": {
+      "when": "When",
+      "reason": "Reason",
+      "material": "Material",
+      "lot": "Lot · hide",
+      "from": "From",
+      "to": "To",
+      "quantity": "Quantity",
+      "balance": "Balance after",
+      "route": "From → to",
+      "documentNote": "Document · note",
+      "document": "Document",
+      "note": "Note",
+      "posted": "Posted by"
+    },
+    "clocks": "Happened {device} (the tablet’s clock for a floor move) · recorded {server}",
+    "reversalOf": "Reverses an earlier move",
+    "reversedBy": "Reversed",
+    "asEntered": "as entered: {quantity} {unit}",
+    "rowMenu": "Actions for {reason} of {material}",
+    "openMove": "Open the move",
+    "reverse": "Reverse move…",
+    "openDocument": "Open {number}",
+    "showKey": "Show this stock’s ledger",
+    "keyReverse": "Reverse the focused move (its detail first)",
+    "oneAtATime": "A reversal is one deliberate act: open a move to reverse it.",
+    "exportLoaded": "Export the loaded rows (CSV)",
+    "held": {
+      "noKey": "Open Movements from a stock figure (a material at a site) to adjust it here."
+    },
+    "empty": {
+      "title": "No moves yet",
+      "body": "Every receipt, issue, return, transfer, count and correction lands here, never edited."
+    },
+    "notice": {
+      "moreFailed": "The next rows couldn't be read. Scroll again to retry.",
+      "moreOffline": "No connection: the next rows wait for the network.",
+      "adjustSeveral_one": "This stock lies in {count} place: adjust it from Stock, one row at a time.",
+      "adjustSeveral_other": "This stock lies in {count} places (or several hides): adjust it from Stock, one row at a time.",
+      "adjustNone": "Nothing of this stock is on hand: adjust from a place in Stock.",
+      "adjustFailed": "The stock to adjust couldn't be read. Try again."
+    },
+    "why": {
+      "title": "Why is it this number",
+      "loading": "Explaining the figure…",
+      "wholeSite": "the whole site",
+      "tableLabel": "The figure by reason",
+      "col": {
+        "reason": "Reason",
+        "moves": "Moves",
+        "in": "In",
+        "out": "Out",
+        "net": "Net"
+      },
+      "sum": "Together",
+      "addsUp": "Adds up to the stock figure: {quantity} {unit} ✓",
+      "gap": "Does not add up by {gap} {unit}: that is a fault, not your mistake. Tell the administrator.",
+      "formula": "Receipts + returns − issues − scrap ± adjustments ± counts; transfers inside the site net 0. Press a reason to see its moves."
+    },
+    "method": {
+      "PURCHASE_PRICE": "At the purchase price",
+      "LOT_COST": "At the lot’s cost",
+      "STANDARD_COST": "At the standard cost",
+      "MANUAL": "At a typed cost"
+    },
+    "detail": {
+      "title": "{reason} · {material}",
+      "titleLoading": "A move",
+      "loading": "Reading the move…",
+      "previous": "Previous move",
+      "next": "Next move",
+      "first": "This is the first loaded move.",
+      "last": "This is the last loaded move.",
+      "position": "{at} of {count}",
+      "keys": "J / K previous and next · r reverse · Esc closes",
+      "what": "What moved",
+      "why": "Why, by whom and when",
+      "hide": "Hide",
+      "noNote": "No note",
+      "worker": "Worker: {name} (this site records workers)",
+      "stationOnly": "This site records the station only: no worker is named.",
+      "happened": "Happened",
+      "deviceClock": "by the tablet’s clock",
+      "recorded": "Recorded",
+      "key": "Idempotency key",
+      "method": "Valued",
+      "notValued": "Not valued (a transfer, no cost basis, or a floor move not valued yet).",
+      "reversal": "Reversal",
+      "reverses": "This move reverses",
+      "reversedBy": "Reversed by"
+    },
+    "csv": {
+      "when": "Happened",
+      "recorded": "Recorded",
+      "reason": "Reason",
+      "material": "Material",
+      "colour": "Colour",
+      "lot": "Lot",
+      "hide": "Hide",
+      "from": "From",
+      "to": "To",
+      "quantity": "Quantity as entered",
+      "unit": "Unit",
+      "baseQuantity": "Quantity (base unit)",
+      "delta": "Effect",
+      "document": "Document",
+      "reference": "Reference",
+      "note": "Note",
+      "postedBy": "Posted by",
+      "reversalOf": "Reverses",
+      "reversedBy": "Reversed by",
+      "method": "Valued",
+      "value": "Value",
+      "currency": "Currency"
+    }
+  },
+  "rev": {
+    "title": "Reverse this move",
+    "intro": "The reversal is a new move, the mirror of this one: the same quantity, from and to swapped. The original stays in the ledger, struck through and linked.",
+    "reach": "The stock goes back to where it was before this move. It is refused when later moves already used that stock.",
+    "note": "Reason",
+    "noteHint": "Kept with the reversal for good.",
+    "post": "Post reversal",
+    "posting": "Posting…",
+    "held": {
+      "note": "Write the reason first.",
+      "long": "The reason is longer than 500 characters."
+    },
+    "done": "Reversal posted: {reason} of {material}.",
+    "problem": {
+      "used": "Stock already used by later moves: this move cannot be reversed now. Reverse the later moves first, or adjust.",
+      "notNow": "This move cannot be reversed from the ledger (an issue or a return from its pick list, a receipt with its receipt).",
+      "changed": "It changed meanwhile (perhaps already reversed). Close and read it again.",
+      "forbidden": "Your role may not reverse moves.",
+      "offline": "No connection: nothing was posted. Try again when the network is back.",
+      "gone": "This move no longer exists, or belongs to another company.",
+      "invalid": "The reason was not accepted (1 to 500 characters).",
+      "write": "It was not posted. Try again."
+    }
+  }
+}

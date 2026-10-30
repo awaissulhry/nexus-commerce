@@ -23,8 +23,12 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // Quality › Inspections (SCR-076); a release is reviewed in its DetailModal on the list (design §2.3).
   Inspection: '/quality/inspections/[id]',
   QualityRelease: '/quality/inspections?open=[id]',
-  // Compliance › Tests & substances (SCR-054): a lot's tests, documents and release, until Warehouse › Lots is built.
-  Lot: '/compliance/tests/[id]',
+  // Warehouse › Lots & traceability (SCR-201): a lot's stock, trace and moves; its tests, documents and release stay in
+  // Compliance › Tests & substances (SCR-054), which the lot record links.
+  Lot: '/warehouse/lots/[id]',
+  // Warehouse › Hides (SCR-200) and Settings › Locations (SCR-065).
+  Hide: '/warehouse/hides/[id]',
+  Location: '/warehouse/locations/[id]',
   // Compliance › PPE register & recalls (SCR-113).
   PpeRegisterEntry: '/compliance/register/[id]',
   // Warehouse › Shipments (SCR-067): a shipment's record.
@@ -54,6 +58,12 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // The PO list reads `status` (one state, as the API) and `waitingOver48h`; Receipts reads `status`, `view=expected`.
   '/purchasing/orders': '/purchasing/orders',
   '/inventory/receipts': '/warehouse/receipts',
+  // The stock screens read the API's own filters from the address.
+  '/inventory/stock': '/warehouse/stock',
+  '/inventory/hides': '/warehouse/hides',
+  '/inventory/lots': '/warehouse/lots',
+  '/inventory/ledger': '/warehouse/moves',
+  '/inventory/locations': '/warehouse/locations',
   '/planning/runs/latest': '/planning/mrp',
 })
 

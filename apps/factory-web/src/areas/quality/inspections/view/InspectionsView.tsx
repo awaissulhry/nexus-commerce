@@ -104,7 +104,8 @@ function Inspections({ model, actions, stepUp }: { model: InspectionsListModel; 
   live.current = { actions }
   const inspectionHref = (id: string) => `${model.prefix}/quality/inspections/${encodeURIComponent(id)}`
   const releaseHref = (id: string) => `${model.prefix}/quality/inspections?view=reversed&open=${encodeURIComponent(id)}`
-  const lotHref = (id: string) => `${model.prefix}/compliance/tests/${encodeURIComponent(id)}`
+  // A lot on hold opens its Warehouse record (SCR-201: stock, trace, the checklist); its decisions link on to Tests & substances.
+  const lotHref = (id: string) => `${model.prefix}/warehouse/lots/${encodeURIComponent(id)}`
 
   const inspectionColumns = useMemo<ColDef<InspectionRow>[]>(() => {
     const NameCell = ({ data }: ICellRendererParams<InspectionRow>) =>

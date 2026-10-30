@@ -1,0 +1,199 @@
+{
+  "fr": {
+    "busy": "Salvataggio…",
+    "dismiss": "Chiudi",
+    "retry": "Riprova",
+    "updated": "Aggiornato alle {time}",
+    "site": "Sede",
+    "siteOption": "{code} · {name}",
+    "tabs": "Parti delle regole di reparto",
+    "tab": {
+      "rules": "Regole di reparto",
+      "codes": "Codici causale"
+    },
+    "viewOnly": "Solo il responsabile di produzione o il titolare modifica queste regole.",
+    "noAccess": {
+      "title": "Il tuo ruolo non può vedere le regole di reparto",
+      "body": "Il tuo ruolo non comprende “production.settings.view”. Chiedi a un amministratore se ti serve questa pagina."
+    },
+    "noSites": {
+      "title": "Nessuna sede da mostrare",
+      "body": "Il tuo ruolo non raggiunge nessuna sede di questa azienda."
+    },
+    "ready": {
+      "title": "Pronta per il lavoro in reparto?",
+      "yes": "Pronta per il reparto",
+      "no": "Non pronta per il reparto"
+    },
+    "status": {
+      "station": "Le registrazioni di reparto nominano solo la postazione, mai chi lavora.",
+      "worker": "Le registrazioni di reparto nominano chi ha fatto l’accesso, sulla base giuridica registrata qui.",
+      "waiting_one": "{count} persona non ha confermato l’informativa: nessuna registrazione la nomina finché non lo fa.",
+      "waiting_other": "{count} persone non hanno confermato l’informativa: nessuna registrazione le nomina finché non lo fanno.",
+      "noBasis": "Le registrazioni nominerebbero chi lavora, ma non c’è una base giuridica registrata: registrala, o nomina solo la postazione, prima di iniziare il lavoro vero in reparto.",
+      "noBasisDefault": "Questa sede non ha ancora regole e per impostazione nomina chi lavora, senza base giuridica registrata: registrala, o nomina solo la postazione, prima di iniziare il lavoro vero in reparto."
+    },
+    "monitor": {
+      "title": "Chi nominano le registrazioni di reparto",
+      "intro": "Scansioni, registri di taglio e movimenti di magazzino in reparto registrano chi ha lavorato, o solo dove. Una modifica vale da ora; le registrazioni già fatte restano come sono."
+    },
+    "subject": {
+      "WORKER": {
+        "title": "Nomina chi ha fatto l’accesso",
+        "body": "Ogni registrazione nomina la persona collegata al tablet (e la postazione). Serve una base giuridica registrata e la conferma dell’informativa da parte di ognuno."
+      },
+      "STATION": {
+        "title": "Nomina solo la postazione",
+        "body": "Le registrazioni nominano la postazione, mai una persona. La tracciabilità resta per postazione, ordine e fascio."
+      }
+    },
+    "basis": {
+      "title": "Base giuridica per nominare chi lavora",
+      "kind": "Base",
+      "pick": "Scegli la base",
+      "UNION_AGREEMENT": "Un accordo con le rappresentanze sindacali (RSU o RSA)",
+      "INL_AUTHORISATION": "L’autorizzazione dell’Ispettorato nazionale del lavoro (INL)",
+      "NOT_REQUIRED": "Il parere scritto di un legale che non serve né l’uno né l’altra",
+      "reference": "Riferimento",
+      "referenceHint": "Numero e data dell’accordo o dell’autorizzazione, oppure autore e data del parere. Il documento va tra i file.",
+      "onRecord": "Registrata: {kind} · {reference}",
+      "none": "Nessuna base giuridica registrata.",
+      "recordedBy": "Registrata da {name} il {when}",
+      "recordedAt": "Registrata il {when}",
+      "kept": "La base giuridica resta registrata; non viene mai tolta."
+    },
+    "reason": {
+      "label": "Perché da ora le registrazioni nomineranno chi lavora",
+      "hint": "Resta nel registro delle modifiche insieme alla modifica."
+    },
+    "impact": {
+      "title": "Cosa tocca questa modifica",
+      "narrow": "Da ora scansioni e registri di taglio in questa sede nominano solo la postazione, mai chi lavora.",
+      "widen": "Da ora scansioni e registri di taglio in questa sede nominano chi ha fatto l’accesso.",
+      "devices_one": "{count} tablet di reparto non ha una postazione: assegnala (Admin › Dispositivi e stampanti), altrimenti non registra nulla.",
+      "devices_other": "{count} tablet di reparto non hanno una postazione: assegnala a ognuno (Admin › Dispositivi e stampanti), altrimenti non registrano nulla.",
+      "notAcknowledged_one": "{count} delle {active} persone attive non ha confermato l’informativa: nessuna registrazione la nomina finché non lo fa (L. 300/1970 art. 4 c.3; GDPR art. 13).",
+      "notAcknowledged_other": "{count} delle {active} persone attive non hanno confermato l’informativa: nessuna registrazione le nomina finché non lo fanno (L. 300/1970 art. 4 c.3; GDPR art. 13).",
+      "openOrders_one": "{count} ordine di lavoro aperto prosegue così.",
+      "openOrders_other": "{count} ordini di lavoro aperti proseguono così.",
+      "keep": "Le registrazioni già fatte restano come sono: scansioni e registri di taglio non cambiano mai."
+    },
+    "held": {
+      "basis": "Indica prima la base giuridica e il suo riferimento.",
+      "basisKind": "Scegli la base giuridica.",
+      "reference": "Indica il riferimento della base giuridica.",
+      "referenceLong": "Tieni il riferimento entro 200 caratteri.",
+      "reason": "Spiega perché da ora le registrazioni nomineranno chi lavora.",
+      "reasonLong": "Tieni il motivo entro 500 caratteri."
+    },
+    "save": {
+      "region": "Modifiche non salvate",
+      "unsaved_one": "{count} modifica non salvata",
+      "unsaved_other": "{count} modifiche non salvate",
+      "discard": "Annulla modifiche",
+      "apply": "Applica",
+      "applyCode": "Applica (chiede un codice)",
+      "lastChange": "Ultima modifica {when}",
+      "default": "Non ancora impostata: la sede segue l’impostazione predefinita."
+    },
+    "confirm": {
+      "title": "Registrare solo le postazioni?",
+      "body": "Da ora le registrazioni di reparto nominano solo la postazione. Le registrazioni già fatte mantengono i nomi.",
+      "cancel": "Annulla",
+      "do": "Registra solo le postazioni"
+    },
+    "stepUp": {
+      "title": "Conferma la tua identità",
+      "sentence": "Nominare chi lavora registra di più sulle persone: inserisci il codice a 6 cifre dell’app di autenticazione.",
+      "confirm": "Conferma e applica",
+      "wrong": "Il codice non è stato accettato. Inserisci quello mostrato ora.",
+      "locked": "Troppi codici provati. Attendi qualche minuto.",
+      "unavailable": "Non è stato possibile verificare il codice. Riprova."
+    },
+    "done": {
+      "widened": "Da ora le registrazioni di reparto nominano chi ha fatto l’accesso.",
+      "narrowed": "Da ora le registrazioni di reparto nominano solo la postazione.",
+      "basisRecorded": "La base giuridica è registrata.",
+      "basisReplaced": "La base giuridica è stata sostituita; la precedente resta nel registro delle modifiche.",
+      "bundle": "La dimensione standard del fascio è salvata.",
+      "saved": "Salvato.",
+      "unchanged": "Nulla è cambiato: le regole erano già così."
+    },
+    "elsewhere": {
+      "title": "Modificate da qualcun altro nel frattempo",
+      "body": "Ricarica per vedere le regole come sono ora; quello che hai scritto viene sostituito.",
+      "reload": "Ricarica"
+    },
+    "problem": {
+      "read": "Il server non ha risposto come previsto. Riprova.",
+      "write": "Non è stato salvato. Riprova.",
+      "changed": "Le regole sono cambiate nel frattempo: ricaricale e applica di nuovo.",
+      "invalid": "Qualcosa non è stato accettato. Controlla i campi e riprova.",
+      "forbidden": "Il tuo ruolo non può farlo in questa sede.",
+      "gone": "Questa sede non esiste più, o appartiene a un’altra azienda.",
+      "offline": "Nessuna connessione al server. Riprova."
+    },
+    "law": {
+      "label": "La norma dietro questa scelta",
+      "title": "Statuto dei Lavoratori, L. 300/1970 art. 4 c.1",
+      "body": "Gli strumenti da cui può derivare anche un controllo a distanza si usano solo per esigenze organizzative, produttive, di sicurezza o di tutela del patrimonio, previo accordo con le rappresentanze sindacali o autorizzazione dell’Ispettorato; i lavoratori sono informati prima sull’uso dei dati (art. 4 c.3; GDPR art. 13).",
+      "recorded": "Registrata: {kind} · {reference} · {when}",
+      "none": "Nessuna base giuridica registrata in questa sede."
+    },
+    "notice": {
+      "title": "Informativa per chi lavora",
+      "counts": "{acknowledged} delle {active} persone attive hanno confermato l’informativa in vigore.",
+      "noWorkers": "Ancora nessuna persona attiva in questa sede.",
+      "waiting_one": "{count} non può essere nominata da una registrazione finché non conferma.",
+      "waiting_other": "{count} non possono essere nominate da una registrazione finché non confermano.",
+      "version_one": "Versione {version}: {count} persona",
+      "version_other": "Versione {version}: {count} persone",
+      "countsOnly": "Solo conteggi: questa pagina non nomina mai nessuno.",
+      "toPrivacy": "Testo e versioni dell’informativa: Admin › Privacy e informative"
+    },
+    "bundle": {
+      "title": "Dimensione standard del fascio",
+      "intro": "Capi per fascio quando chi taglia non indica una dimensione.",
+      "suffix": "capi",
+      "less": "Uno in meno",
+      "more": "Uno in più",
+      "save": "Salva dimensione",
+      "range": "Usa un numero intero da 1 a 500.",
+      "same": "È la dimensione già salvata.",
+      "value_one": "{count} capo per fascio",
+      "value_other": "{count} capi per fascio",
+      "mtm": "Un capo su misura è sempre uno per fascio."
+    },
+    "fixed": {
+      "title": "Fisse in questa versione",
+      "undo": "Annulla sul tablet: {minutes} minuti dopo una dichiarazione, o fino alla scansione successiva.",
+      "bundleCode": "Un solo codice fascio, scansionato a ogni operazione.",
+      "idle": "Uscita dopo {minutes} minuti senza uso, salvo un altro tempo impostato per i tablet della sede.",
+      "clock": "Un orologio del tablet sfasato di oltre {minutes} minuti viene segnalato sul tablet.",
+      "offline": "Scansioni, tagli e fasci attendono sul tablet quando è offline e partono in ordine; ricevimenti, ispezioni, rilasci ed etichette capo richiedono la rete."
+    },
+    "codes": {
+      "fixedTitle": "Le causali che offre la schermata di operazione",
+      "fixedBody": "Ognuno le vede nella propria lingua (qui sono elencate entrambe). In questa versione l’elenco è fisso per ogni azienda: la modifica, con icone e colori, arriverà più avanti.",
+      "tableLabel": "Causali di scarto e rilavorazione",
+      "count_one": "{count} causale · {scrap} scarto · {rework} rilavorazione",
+      "count_other": "{count} causali · {scrap} scarto · {rework} rilavorazione",
+      "empty": "Ancora nessuna causale.",
+      "col": {
+        "kind": "Tipo",
+        "code": "Codice",
+        "it": "Italiano",
+        "en": "Inglese",
+        "order": "Ordine"
+      },
+      "kind": {
+        "SCRAP": "Scarto",
+        "REWORK": "Rilavorazione"
+      },
+      "noAccess": {
+        "title": "Il tuo ruolo non può leggere i codici causale",
+        "body": "Per leggerli serve “production.scan”, che hanno il responsabile di produzione e gli operatori."
+      }
+    }
+  }
+}

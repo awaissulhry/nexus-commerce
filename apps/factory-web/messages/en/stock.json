@@ -1,0 +1,148 @@
+{
+  "problem": {
+    "read": "The server didn't answer as expected. Try again.",
+    "forbidden": "Your role may not see or do this.",
+    "offline": "No connection to the server. Check the network and try again.",
+    "gone": "It no longer exists, or it belongs to another company.",
+    "write": "It was not saved. Try again.",
+    "changed": "Someone changed it meanwhile: it was read again. Check and try again.",
+    "notEnough": "That stock is not there any more: stock never goes below zero. Read the figures again.",
+    "notNow": "This cannot be done in its present state.",
+    "invalid": "Something in it was not accepted. Check the fields and try again.",
+    "slowDown": "Too many tries at once. Wait a moment and try again.",
+    "retry": "Try again",
+    "noPermission": "Your role does not include “{permission}”. Ask an administrator if you need this page."
+  },
+  "live": {
+    "connecting": "Connecting to live updates…",
+    "live": "Live",
+    "offline": "Live updates paused",
+    "updated": "Updated {time}"
+  },
+  "common": {
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "close": "Close",
+    "cancel": "Cancel",
+    "back": "Back",
+    "unknown": "—",
+    "none": "None",
+    "export": "Export {count}",
+    "clearFilters": "Clear filters",
+    "noMatch": "No rows match these filters.",
+    "site": "Site",
+    "allSites": "All sites",
+    "more": "More actions",
+    "costHeld": "Needs cost access"
+  },
+  "uom": {
+    "PCS": "pcs",
+    "PAIR": "pair",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  },
+  "hides_one": "{count} hide",
+  "hides_other": "{count} hides",
+  "lots_one": "{count} lot",
+  "lots_other": "{count} lots",
+  "moves_one": "{count} move",
+  "moves_other": "{count} moves",
+  "dual": "{count} · {area}",
+  "reason": {
+    "OPENING": "Opening stock",
+    "RECEIPT": "Receipt",
+    "ISSUE": "Issue to work order",
+    "RETURN": "Return from work order",
+    "TRANSFER": "Transfer",
+    "ADJUSTMENT": "Adjustment",
+    "COUNT": "Count difference",
+    "SCRAP": "Scrap"
+  },
+  "quality": {
+    "QUARANTINE": "Quarantine",
+    "RELEASED": "Released",
+    "BLOCKED": "Blocked",
+    "REJECTED": "Rejected"
+  },
+  "crVi": {
+    "NOT_REQUIRED": "Not required",
+    "PENDING": "Cr VI pending",
+    "PASS": "Cr VI pass",
+    "FAIL": "Cr VI fail",
+    "value": "{value} < {limit} mg/kg",
+    "valueFail": "{value} ≥ {limit} mg/kg"
+  },
+  "evidence": {
+    "LOT_REPORT": "Lot report",
+    "SUPPLIER_REPORT": "Supplier report",
+    "missing": "Missing"
+  },
+  "hideState": {
+    "FULL": "Full",
+    "PARTLY_CUT": "Partly cut",
+    "REMNANT": "Remnant",
+    "CONSUMED": "Consumed",
+    "SCRAPPED": "Scrapped"
+  },
+  "locationKind": {
+    "WAREHOUSE": "Warehouse",
+    "ZONE": "Zone",
+    "BIN": "Bin",
+    "RECEIVING": "Goods in",
+    "QUARANTINE": "Quarantine shelf",
+    "PRODUCTION": "Line side",
+    "SHIPPING": "Shipping"
+  },
+  "locationStatus": {
+    "ACTIVE": "Active",
+    "ARCHIVED": "Archived"
+  },
+  "side": {
+    "SUPPLIER": "Supplier",
+    "WORK_ORDER": "Work order",
+    "OPENING": "Opening stock",
+    "COUNT": "Count",
+    "ADJUSTMENT": "Correction",
+    "SCRAP": "Scrap",
+    "OUTSIDE": "Outside the site"
+  },
+  "postedBy": {
+    "FLOOR": "Tablet · {device}",
+    "floorNoDevice": "A tablet",
+    "SYSTEM": "Nexus",
+    "officeNoName": "An office user"
+  },
+  "wait": {
+    "rejected": "Rejected: it leaves the stock (returned or scrapped).",
+    "blocked": "Blocked by quality: it cannot be issued.",
+    "crViFailed": "Cr VI at or above the limit: it can never be issued.",
+    "crVi": "Waits for its Cr VI result: its stock cannot be issued.",
+    "release": "Waits for quality's release."
+  },
+  "held": {
+    "noReverse": "Your role may not reverse moves.",
+    "isReversal": "This move is itself a reversal.",
+    "alreadyReversed": "Already reversed.",
+    "fromPickList": "An issue or a return is reversed from its work order's pick list.",
+    "fromReceipt": "A receipt's moves are reversed with the whole receipt (Warehouse › Receipts).",
+    "opening": "Opening stock is corrected with an adjustment, never reversed.",
+    "offline": "Offline: changes wait until the connection is back."
+  },
+  "money": {
+    "value": "Value",
+    "unitCost": "Unit cost"
+  }
+}

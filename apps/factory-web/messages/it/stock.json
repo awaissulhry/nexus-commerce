@@ -1,0 +1,148 @@
+{
+  "problem": {
+    "read": "Il server non ha risposto come previsto. Riprova.",
+    "forbidden": "Il tuo ruolo non può vedere o fare questo.",
+    "offline": "Nessuna connessione al server. Controlla la rete e riprova.",
+    "gone": "Non esiste più, o appartiene a un’altra azienda.",
+    "write": "Non è stato salvato. Riprova.",
+    "changed": "Qualcuno l’ha modificato nel frattempo: è stato riletto. Controlla e riprova.",
+    "notEnough": "Quella giacenza non c’è più: la giacenza non scende mai sotto zero. Rileggi i numeri.",
+    "notNow": "Non si può fare nello stato attuale.",
+    "invalid": "Qualcosa non è stato accettato. Controlla i campi e riprova.",
+    "slowDown": "Troppi tentativi insieme. Attendi un momento e riprova.",
+    "retry": "Riprova",
+    "noPermission": "Il tuo ruolo non comprende “{permission}”. Chiedi a un amministratore se ti serve questa pagina."
+  },
+  "live": {
+    "connecting": "Collegamento agli aggiornamenti…",
+    "live": "In tempo reale",
+    "offline": "Aggiornamenti sospesi",
+    "updated": "Aggiornato alle {time}"
+  },
+  "common": {
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "close": "Chiudi",
+    "cancel": "Annulla",
+    "back": "Indietro",
+    "unknown": "—",
+    "none": "Nessuno",
+    "export": "Esporta {count}",
+    "clearFilters": "Togli i filtri",
+    "noMatch": "Nessuna riga corrisponde a questi filtri.",
+    "site": "Sede",
+    "allSites": "Tutte le sedi",
+    "more": "Altre azioni",
+    "costHeld": "Serve l’accesso ai costi"
+  },
+  "uom": {
+    "PCS": "pz",
+    "PAIR": "paio",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "mezze pelli",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole"
+  },
+  "hides_one": "{count} pelle",
+  "hides_other": "{count} pelli",
+  "lots_one": "{count} lotto",
+  "lots_other": "{count} lotti",
+  "moves_one": "{count} movimento",
+  "moves_other": "{count} movimenti",
+  "dual": "{count} · {area}",
+  "reason": {
+    "OPENING": "Giacenza iniziale",
+    "RECEIPT": "Ricevimento",
+    "ISSUE": "Prelievo per ordine",
+    "RETURN": "Reso da ordine",
+    "TRANSFER": "Trasferimento",
+    "ADJUSTMENT": "Rettifica",
+    "COUNT": "Differenza inventario",
+    "SCRAP": "Scarto"
+  },
+  "quality": {
+    "QUARANTINE": "Quarantena",
+    "RELEASED": "Rilasciato",
+    "BLOCKED": "Bloccato",
+    "REJECTED": "Respinto"
+  },
+  "crVi": {
+    "NOT_REQUIRED": "Non richiesto",
+    "PENDING": "Cr VI in attesa",
+    "PASS": "Cr VI conforme",
+    "FAIL": "Cr VI non conforme",
+    "value": "{value} < {limit} mg/kg",
+    "valueFail": "{value} ≥ {limit} mg/kg"
+  },
+  "evidence": {
+    "LOT_REPORT": "Rapporto sul lotto",
+    "SUPPLIER_REPORT": "Rapporto del fornitore",
+    "missing": "Mancante"
+  },
+  "hideState": {
+    "FULL": "Intera",
+    "PARTLY_CUT": "Tagliata in parte",
+    "REMNANT": "Ritaglio",
+    "CONSUMED": "Consumata",
+    "SCRAPPED": "Scartata"
+  },
+  "locationKind": {
+    "WAREHOUSE": "Magazzino",
+    "ZONE": "Zona",
+    "BIN": "Cella",
+    "RECEIVING": "Ricevimento merci",
+    "QUARANTINE": "Scaffale quarantena",
+    "PRODUCTION": "Bordo linea",
+    "SHIPPING": "Spedizioni"
+  },
+  "locationStatus": {
+    "ACTIVE": "Attiva",
+    "ARCHIVED": "Archiviata"
+  },
+  "side": {
+    "SUPPLIER": "Fornitore",
+    "WORK_ORDER": "Ordine di lavoro",
+    "OPENING": "Giacenza iniziale",
+    "COUNT": "Inventario",
+    "ADJUSTMENT": "Rettifica",
+    "SCRAP": "Scarto",
+    "OUTSIDE": "Fuori sede"
+  },
+  "postedBy": {
+    "FLOOR": "Tablet · {device}",
+    "floorNoDevice": "Un tablet",
+    "SYSTEM": "Nexus",
+    "officeNoName": "Un utente d’ufficio"
+  },
+  "wait": {
+    "rejected": "Respinto: esce dalla giacenza (reso o scartato).",
+    "blocked": "Bloccato dalla qualità: non si può prelevare.",
+    "crViFailed": "Cr VI pari o sopra il limite: non si potrà mai prelevare.",
+    "crVi": "Attende il risultato Cr VI: la giacenza non si può prelevare.",
+    "release": "Attende il rilascio della qualità."
+  },
+  "held": {
+    "noReverse": "Il tuo ruolo non può stornare movimenti.",
+    "isReversal": "Questo movimento è già uno storno.",
+    "alreadyReversed": "Già stornato.",
+    "fromPickList": "Un prelievo o un reso si storna dalla lista di prelievo del suo ordine.",
+    "fromReceipt": "I movimenti di un ricevimento si stornano con l’intero ricevimento (Magazzino › Ricevimenti).",
+    "opening": "La giacenza iniziale si corregge con una rettifica, non si storna.",
+    "offline": "Offline: le modifiche attendono il ritorno della connessione."
+  },
+  "money": {
+    "value": "Valore",
+    "unitCost": "Costo unitario"
+  }
+}

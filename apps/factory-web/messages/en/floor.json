@@ -310,7 +310,8 @@
       "bundles": "Make bundles and print their tickets",
       "pick": "Issue materials to a work order",
       "final": "Check, sign and release garments",
-      "pack": "Scan garments into cartons, print labels and the DDT"
+      "pack": "Scan garments into cartons, print labels and the DDT",
+      "labels": "Print garment labels behind the certificate check"
     },
     "held": {
       "notice": "Read the notice first",

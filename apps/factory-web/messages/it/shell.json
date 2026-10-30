@@ -42,13 +42,16 @@
       "audit": "Registro attività",
       "connections": "Connessioni e API",
       "data": "Dati",
-      "import": "Importa ed esporta"
+      "import": "Importa ed esporta",
+      "privacy": "Privacy e informative"
     },
     "production": {
       "area": "Produzione",
       "main": "Principali",
       "floor": "Reparto ora",
-      "workOrders": "Ordini di produzione"
+      "workOrders": "Ordini di produzione",
+      "settings": "Impostazioni",
+      "floorRules": "Regole di reparto"
     },
     "quality": {
       "area": "Qualità",
@@ -74,7 +77,13 @@
       "outbound": "In uscita",
       "shipments": "Spedizioni",
       "settings": "Impostazioni",
-      "shipping": "Corrieri e spedizioni"
+      "shipping": "Corrieri e spedizioni",
+      "main": "Principale",
+      "stock": "Giacenze",
+      "hides": "Pelli",
+      "lots": "Lotti e tracciabilità",
+      "moves": "Movimenti",
+      "locations": "Ubicazioni"
     }
   },
   "topbar": {
