@@ -21,7 +21,7 @@ export const tabOf = (value: string | null | undefined): Tab => (TABS.includes(v
 export interface FloorRulesCan {
   view: boolean
   manage: boolean
-  /** The reason codes the operation screen offers (production.scan reads them). */
+  /** B-W2a-46 (SCR-088): the reason lists (reasons.view reads them; reasons.manage keeps them, the editor says which). */
   reasons: boolean
   /** Admin › Privacy & notices (the notice's text and versions). */
   privacy: boolean
@@ -29,7 +29,7 @@ export interface FloorRulesCan {
 
 export function floorRulesCan(permissions: readonly string[]): FloorRulesCan {
   const held = new Set(permissions)
-  return { view: held.has('production.settings.view'), manage: held.has('production.settings.manage'), reasons: held.has('production.scan'), privacy: held.has('privacy.view') }
+  return { view: held.has('production.settings.view'), manage: held.has('production.settings.manage'), reasons: held.has('reasons.view'), privacy: held.has('privacy.view') }
 }
 
 // ---- the monitoring switch ------------------------------------------------------------------------------------------------

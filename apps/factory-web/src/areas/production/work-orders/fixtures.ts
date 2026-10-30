@@ -4,6 +4,8 @@ import type { OpenLines, OrderOption } from '../_shared/api'
 import { at, canOf, COUNTS, inShell, LIST_ROWS, OPEN_ROWS, PREFIX, type Role } from '../_shared/fixtures'
 import { NO_NEW_ORDER, type NewWorkOrderModel, type WorkOrdersListModel } from './list-model'
 import { WorkOrdersListView } from './view/WorkOrdersListView'
+import { DAILY_ROLE_OF, dailyDemo } from './daily/demo/fixtures'
+import type { ReadinessRow } from './daily/api'
 
 /**
  * SCR-069 — Work orders (design production.workorders) with made-up data only: every state of the list (loading, error,
@@ -26,16 +28,25 @@ const base = (role: Role, over: Partial<WorkOrdersListModel> = {}): ListCase => 
     view: 'open',
     q: '',
     rows: { items: OPEN_ROWS, more: false, problem: null },
-    counts: COUNTS,
+    counts: { ...COUNTS, onHold: 1 },
     asOf: at(29, 9, 42),
     live: 'live',
     updates: 0,
     notice: null,
     newOrder: null,
     release: null,
+    // B-W2a-46: the readiness word per row, Hold N.
+    readiness: READINESS_ROWS,
+    daily: dailyDemo(DAILY_ROLE_OF[role]),
     ...over,
   },
 })
+
+const WORDS: ReadinessRow['word'][] = ['NOT_BOOKED', 'EXPECTED', 'NOT_ENOUGH', 'RECEIVED', 'REQUESTED', 'DELAYED', 'NOT_PLANNED']
+const READINESS_ROWS: Record<string, ReadinessRow> = Object.fromEntries(
+  LIST_ROWS.map((row, index) => [row.id, { workOrderId: row.id, word: WORDS[index % WORDS.length]!, date: WORDS[index % WORDS.length] === 'EXPECTED' ? '2026-11-04' : null, open: index % 3, materials: [], asOf: '2026-10-30' }]),
+)
+const HELD_ROWS = [{ ...OPEN_ROWS[1]!, status: 'ON_HOLD' as const }]
 
 const ORDER_OPTIONS: OrderOption[] = [
   { id: '0190f0e2-5151-7000-8000-000000000001', number: 'SO-DEMO-0042', partyName: 'Moto Demo S.r.l.', customerRef: 'PO-ESEMPIO-7', status: 'IN_PRODUCTION', units: 64 },
@@ -118,5 +129,12 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'new-over', label: 'New work order: a size asks more than is open: Create held, the cell says why', model: base('manager', { newOrder: chosen({ grid: { 'line-1': { '48': 5, '50': 4, '52': 4, '54': 2 }, 'line-2': { '50': 3, '52': 3 } } }) }) },
     { id: 'new-failed', label: 'New work order: the API refused it (the order changed meanwhile)', model: base('manager', { newOrder: chosen({ problem: { key: 'error.conflict' } }) }) },
     { id: 'new-none', label: 'New work order: no confirmed order matches', model: base('manager', { newOrder: { ...NO_NEW_ORDER, query: 'ZZZ', orders: [] } }) },
+    // ---- B-W2a-46: readiness word, On hold, Hold N ----
+    { id: 'w2a-readiness', label: 'W2a · The Readiness column (the plan’s word per work order) and the On hold tile', model: base('manager') },
+    { id: 'w2a-on-hold', label: 'W2a · The On hold view (tile pressed)', model: base('manager', { view: 'ON_HOLD', rows: { items: HELD_ROWS, more: false, problem: null } }) },
+    { id: 'w2a-hold-many', label: 'W2a · Two rows selected: Hold 2 — one hold over both, the reason asked', model: base('manager', { selected: OPEN_ROWS.slice(0, 2).map((row) => row.id), daily: { ...dailyDemo('manager'), dialog: { kind: 'hold', workOrderIds: OPEN_ROWS.slice(0, 2).map((row) => row.id), numbers: OPEN_ROWS.slice(0, 2).map((row) => row.number) }, draft: { reasonCode: 'CUSTOMER_REQUEST', note: 'Il cliente sospende la stagione' } } }) },
+    { id: 'w2a-hold-many-held', label: 'W2a · Hold N held: a selected work order is not open (completed), in words', model: base('manager', { view: 'all', rows: { items: LIST_ROWS, more: false, problem: null }, selected: LIST_ROWS.filter((row) => ['COMPLETED', 'IN_PROGRESS'].includes(row.status)).slice(0, 2).map((row) => row.id) }) },
+    { id: 'w2a-hold-many-no-right', label: 'W2a · Sales: Hold N held (quality.holds.place)', model: base('sales', { selected: OPEN_ROWS.slice(0, 1).map((row) => row.id) }) },
+    { id: 'w2a-held-notice', label: 'W2a · After Hold 2: the notice', model: base('manager', { notice: { tone: 'success', words: { key: 'production-work-orders:notice.heldMany', params: { count: 2 } } } }) },
   ],
 })

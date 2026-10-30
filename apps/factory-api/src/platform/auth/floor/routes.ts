@@ -17,6 +17,7 @@ import {
   listWorkersContract,
   putSettingsContract,
   renewEnrolmentContract,
+  reportDeviceStateContract,
   resetPinContract,
   revokeBadgeContract,
   revokeDeviceContract,
@@ -27,7 +28,7 @@ import {
   workerStatusContract,
 } from './contract'
 import { deviceCookieOf } from './cookies'
-import { deviceInfo, enrolDevice } from './device'
+import { deviceInfo, enrolDevice, reportDeviceState } from './device'
 import { manifest } from './manifest'
 import { createDevice, editDevice, getSettings, listDevices, putSettings, renewEnrolment, revokeDevice } from './registry'
 import { changePin, floorMe, floorSignIn, floorSignOut, floorStepUp, switchOperator } from './sign-in'
@@ -38,6 +39,7 @@ import { createWorker, editWorker, issueBadge, listWorkers, resetPin, revokeBadg
  * The floor (an enrolled device):
  *   POST /floor/device/enrol    the one-time code of the Office's QR code → the device token (HttpOnly cookie)
  *   GET  /floor/device          the device, its site and station, the language, whether someone is signed in, the roster
+ *   POST /floor/device/state    the tablet's own state: app version, battery, actions waiting (B-W2a-42; signed in or not)
  *   POST /floor/sign-in         badge code (or worker id) + PIN → the floor session cookie (409 if another operator is on);
  *                               a badge alone where the site's settings allow it (Owner answer F1 a)
  *   POST /floor/switch          from a signed-in device: the next worker's badge (or name) + PIN; the current one ends
@@ -74,6 +76,7 @@ export default defineRoutes('auth-floor', manifest, async (app) => {
 
   app.post('/floor/device/enrol', { schema: enrolDeviceContract, config: perAddress(limits.tokenUse) }, (request, reply) => enrolDevice(auth(), request, reply, request.body))
   app.get('/floor/device', { schema: deviceContract }, (request) => deviceInfo(auth(), request))
+  app.post('/floor/device/state', { schema: reportDeviceStateContract, config: perDevice(limits.floorSignIn) }, (request) => reportDeviceState(auth(), request, request.body))
   app.post('/floor/sign-in', { schema: signInContract, config: perDevice(limits.floorSignIn) }, (request, reply) => floorSignIn(auth(), request, reply, request.body))
   app.post('/floor/switch', { schema: switchContract, config: perDevice(limits.floorSignIn) }, (request, reply) => switchOperator(auth(), request, reply, request.body))
   app.post('/floor/sign-out', { schema: signOutContract }, (request, reply) => floorSignOut(auth(), request, reply))

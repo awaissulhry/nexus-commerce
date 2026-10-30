@@ -88,7 +88,23 @@ const SHIPPING_DAILY_ADDS: Readonly<Record<string, readonly Permission[]>> = Obj
   finance: ['shipping.freight.manage', 'shipping.evidence.manage'],
   warehouse: ['shipping.evidence.manage'],
 })
-const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? [])]
+/**
+ * B-W2a-47 (nonconformances, QHS-080 … QHS-091; design quality.ncr): whoever finds a problem raises an NCR from where
+ * they work (the warehouse at a lot or a receipt, the buyer at a supplier claim, sales at a return, the floor
+ * supervisor at a bundle); quality follows it up, approves another person's decisions and closes it with an
+ * e-signature; the production manager follows up and approves too (rework and scrap of the work orders); the planner
+ * reads them. Office only; owner and read-only take theirs from every().
+ */
+const NCR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  quality_inspector: ['quality.ncr.view', 'quality.ncr.raise', 'quality.ncr.manage', 'quality.ncr.approve', 'quality.ncr.close'],
+  production_manager: ['quality.ncr.view', 'quality.ncr.raise', 'quality.ncr.manage', 'quality.ncr.approve'],
+  floor_supervisor: ['quality.ncr.view', 'quality.ncr.raise'],
+  warehouse: ['quality.ncr.view', 'quality.ncr.raise'],
+  buyer: ['quality.ncr.view', 'quality.ncr.raise'],
+  sales: ['quality.ncr.view', 'quality.ncr.raise'],
+  planner: ['quality.ncr.view'],
+})
+const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

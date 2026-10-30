@@ -43,6 +43,12 @@ export const HEADER = {
   closedAt: true,
   cancelledAt: true,
   cancelReason: true,
+  // B-W2a-46: the work order's own hold (wave 5): why, since when, from which status, under which record.
+  heldFromStatus: true,
+  heldAt: true,
+  holdReason: true,
+  holdRecordType: true,
+  holdRecordId: true,
   version: true,
   createdAt: true,
   updatedAt: true,

@@ -1,6 +1,7 @@
 import nodeCron, { type ScheduledTask } from 'node-cron'
 import type { Redis } from 'ioredis'
 import { BUSINESS_TIME_ZONE } from '@nexus/factory-domain/core/time'
+import { reportError } from '../observability/tracker'
 import type { Log } from './queue'
 
 /**
@@ -100,6 +101,7 @@ export async function runTick(job: CronJob, scheduledAt: Date, settings: CronSet
     return 'ran'
   } catch (error) {
     settings.log.error({ cron: job.name, err: error }, 'cron tick failed')
+    reportError(error, { cron: job.name }) // B-W2a-42 (PLT-218)
     return 'failed'
   }
 }

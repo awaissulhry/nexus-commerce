@@ -112,6 +112,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/sales/quotes/[id]',
   '/sales/orders',
   '/sales/orders/[id]',
+  // B-W2a-50: a typed New order (its lines on the screen until "Confirm order").
+  '/sales/orders/new',
   '/purchasing/suppliers',
   '/purchasing/suppliers/[partyId]',
   // B-W1-30/31 part 2: Purchase orders (SCR-058) and the PO studio (SCR-059).

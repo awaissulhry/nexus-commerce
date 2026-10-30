@@ -1,6 +1,8 @@
 import type { Issue } from '@nexus/factory-domain/core/errors'
 import { defineMachine } from '@nexus/factory-domain/state/machine'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+// B-W2a-42: the virus scan's reasons (held for the scan, a virus found, the scan failed).
+import { SCAN_QUARANTINE_REASONS } from './scan/rules'
 
 /**
  * The rules of files on R2 (plan A1 §3.6; PLAN §2.8; features COL-045, COL-050), pure: what each kind may hold and how
@@ -15,7 +17,8 @@ export const FILE_STATUSES = ['PENDING_UPLOAD', 'AVAILABLE', 'QUARANTINED', 'DEL
 export type FileStatus = (typeof FILE_STATUSES)[number]
 export const FILE_AUDIENCES = ['OFFICE', 'FLOOR', 'PARTNER', 'LINK'] as const
 export type FileAudience = (typeof FILE_AUDIENCES)[number]
-export const QUARANTINE_REASONS = ['size_mismatch', 'type_mismatch', 'checksum_mismatch'] as const
+export const QUARANTINE_REASONS = ['size_mismatch', 'type_mismatch', 'checksum_mismatch', ...SCAN_QUARANTINE_REASONS] as const
+export const FILE_SCAN_STATUSES = ['NOT_SCANNED', 'PENDING', 'CLEAN', 'INFECTED', 'FAILED'] as const
 export type QuarantineReason = (typeof QUARANTINE_REASONS)[number]
 
 const MIB = 1_048_576

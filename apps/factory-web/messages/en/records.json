@@ -170,7 +170,10 @@
     },
     "notice": {
       "uploaded": "File uploaded. It shows in the list and the history.",
-      "quarantined": "The file store refused the file: it differs from what was announced. It is quarantined and cannot be opened."
+      "quarantined": "The file store refused the file: it differs from what was announced. It is quarantined and cannot be opened.",
+      "infected": "The virus scan found a threat in the file. It is held and never opened.",
+      "scanPending": "The file is held for its virus scan: the scanner did not answer. It opens once the scan says it is clean (it is tried again by itself).",
+      "scanFailed": "The virus scanner could not check the file. It is held: upload it again, or ask an administrator."
     },
     "dismiss": "Dismiss",
     "earlier_one": "{count} earlier version",
@@ -188,6 +191,9 @@
       "size_mismatch": "Refused: its size differs from what was announced.",
       "type_mismatch": "Refused: its type differs from what was announced.",
       "checksum_mismatch": "Refused: its content differs from what was announced.",
+      "scan_pending": "Held for the virus scan: it opens once the scan says it is clean.",
+      "virus_found": "Held: the virus scan found a threat. It is never opened.",
+      "scan_failed": "Held: the virus scanner could not check it. Upload it again, or ask an administrator.",
       "unknown": "Refused by the file store."
     },
     "pending": "The upload was never finished.",

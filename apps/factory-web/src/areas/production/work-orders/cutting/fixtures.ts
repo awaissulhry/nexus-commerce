@@ -1,6 +1,7 @@
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { cutLogOf } from '../../_shared/fixtures'
 import { recordCase, RecordDesign, type RecordCase } from '../record/fixtures'
+import { dailyFor, YIELD } from '../daily/demo/fixtures'
 
 /**
  * SCR-071 — the work order's Cutting tab (design wo-cutlog, wo-cutplan; MES-056) with made-up data only: cut against
@@ -31,5 +32,11 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'draft', label: 'A draft: nothing is cut before the release', model: recordCase('manager', 'DRAFT', { tab: 'cutting' }) },
     { id: 'team-leader', label: 'Team leader: reads the log; Correct is held (production.cut.correct)', model: cutting('teamLeader', { cutOpen: ID(3) }) },
     { id: 'sales', label: 'Sales (read-only)', model: cutting('sales') },
+    // ---- B-W2a-46: yield (wo-yield) and the cutting list (wo-docs) ----
+    { id: 'w2a-yield', label: 'W2a · Yield: area in, pattern, remnant, waste %; planned vs actual; a bar per hide (never by cutter)', model: cutting('manager'), note: 'Scroll below the cut log: Yield, then Print cutting list.' },
+    { id: 'w2a-yield-none', label: 'W2a · Yield before any cut', model: cutting('manager', { daily: dailyFor('manager', 'IN_PROGRESS', { yield: { value: { ...YIELD, hides: [] }, problem: null } }) }) },
+    { id: 'w2a-yield-loading', label: 'W2a · Yield loading', model: cutting('manager', { daily: dailyFor('manager', 'IN_PROGRESS', { yield: { value: null, problem: null } }) }) },
+    { id: 'w2a-yield-error', label: 'W2a · Yield could not be read (Try again)', model: cutting('manager', { daily: dailyFor('manager', 'IN_PROGRESS', { yield: { value: null, problem: 'problem.read' } }) }) },
+    { id: 'w2a-print-cutting', label: 'W2a · Print cutting list: garments per colourway and size, with the parts', model: cutting('manager', { daily: dailyFor('manager', 'IN_PROGRESS', { dialog: { kind: 'print', what: 'cutting' } }) }) },
   ],
 })

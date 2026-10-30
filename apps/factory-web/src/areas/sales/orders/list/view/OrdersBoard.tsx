@@ -11,7 +11,7 @@ import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { money } from '../../../quotes/model'
 import type { OrderRow } from '../../api'
-import { boardLanes, dayInstant, depositTone, laneCount, laneValue, offBoard, shippedPercent } from '../../model'
+import { boardLanes, createShipmentHref, dayInstant, depositTone, laneCount, laneValue, offBoard, shippedPercent } from '../../model'
 import type { OrdersListActions, OrdersListModel } from '../list-model'
 
 /**
@@ -20,7 +20,8 @@ import type { OrdersListActions, OrdersListModel } from '../list-model'
  * the promise with its days late, the deposit, what left). Cards never drag: each state has one writer (SAL-204), and a
  * card's own verb is the one move a person makes from there (Make work orders on a confirmed order). Each card is a real
  * link; j / k walk the cards, Enter opens. The same saved rows and search as the list; closed and cancelled orders are
- * counted under the board with a way to the list.
+ * counted under the board with a way to the list. B-W2a-50 (re-checked against the W2a design): the board follows live
+ * changes by itself (open it in a new tab for a second screen), and a ready order's card offers Create shipment.
  */
 export function OrdersBoard({ model, actions, search, rowsSelect, onHelp }: { model: OrdersListModel; actions?: OrdersListActions; search: ReactNode; rowsSelect: ReactNode; onHelp: () => void }) {
   const t = useT('orders')
@@ -194,6 +195,11 @@ function BoardCard({ row, model }: { row: OrderRow; model: OrdersListModel }) {
       {row.status === 'CONFIRMED' && model.can.makeWorkOrders && row.deposit.state !== 'OPEN' && row.deposit.state !== 'MISSING' && (
         <Button size="sm" variant="secondary" asChild>
           <Link href={`${model.prefix}/production/work-orders?new=1&order=${encodeURIComponent(row.number)}`}>{t('step.makeWorkOrders')}</Link>
+        </Button>
+      )}
+      {row.status === 'READY' && model.can.createShipment && (
+        <Button size="sm" variant="secondary" asChild>
+          <Link href={createShipmentHref(model.prefix, row.id)}>{t('action.createShipment')}</Link>
         </Button>
       )}
     </article>

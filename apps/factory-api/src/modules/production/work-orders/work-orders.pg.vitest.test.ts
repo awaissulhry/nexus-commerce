@@ -357,7 +357,7 @@ describe('a work order from order lines (MES-001, MES-002)', () => {
     const { counts } = await ok('viewer', 'GET', '/production/work-orders/counts')
     const all = (await ok('viewer', 'GET', '/production/work-orders?limit=200')).workOrders
     const of = (status: string) => all.filter((row: Json) => row.status === status).length
-    expect(counts).toEqual({ draft: of('DRAFT'), released: of('RELEASED'), inProgress: of('IN_PROGRESS'), completed: of('COMPLETED'), open: open.workOrders.length, late: 0 })
+    expect(counts).toEqual({ draft: of('DRAFT'), released: of('RELEASED'), inProgress: of('IN_PROGRESS'), completed: of('COMPLETED'), open: open.workOrders.length, late: 0, onHold: of('ON_HOLD') })
     expect((await ok('viewer', 'GET', `/production/work-orders/counts?siteId=${A.siteA1}`)).counts.draft).toBe(all.filter((row: Json) => row.status === 'DRAFT' && row.siteId === A.siteA1).length)
   })
 
@@ -440,6 +440,8 @@ describe('the release (MES-005, MES-076; A1 §2.5)', () => {
       ['DEPOSIT', 'NOT_REQUIRED'],
       ['MATERIAL', 'OK'],
       ['BATCH_NUMBER', 'OK'],
+      // B-W2a-46 (MES-004): no hold names it.
+      ['HOLDS', 'OK'],
     ])
     expect(checkOf(check, 'CERTIFICATE').message).toBe("Certificate TEST-CERT-0001 (valid to 2030-12-31) covers every cell's colourway and size.")
     expect(check.materials.find((line: Json) => line.itemId === A.leather)).toMatchObject({ planned: '148.96', issued: '0', short: '0' })
@@ -629,7 +631,7 @@ describe('the walls (A1 §2.2): tenant, company, site; the floor reads and never
     expect(seenByB.some((row) => row.companyId === A.companyA || row.companyId === A.companyB)).toBe(false)
     expect((await ok('companyB', 'GET', '/production/work-orders')).workOrders.every((row: Json) => row.companyId === A.companyB)).toBe(true)
     expect((await ok('otherSite', 'GET', '/production/work-orders')).workOrders).toEqual([])
-    expect((await ok('otherSite', 'GET', '/production/work-orders/counts')).counts).toEqual({ draft: 0, released: 0, inProgress: 0, completed: 0, open: 0, late: 0 })
+    expect((await ok('otherSite', 'GET', '/production/work-orders/counts')).counts).toEqual({ draft: 0, released: 0, inProgress: 0, completed: 0, open: 0, late: 0, onHold: 0 })
     expect((await ok('otherTenant', 'GET', '/production/work-orders?q=WO-00')).workOrders.map((row: Json) => row.id)).not.toContain(workOrder.id)
     expect((await refused('companyB', 'POST', '/production/work-orders', { lines: [{ salesOrderLineId: order.lineIds[0]! }] }, 404)).message).toBe('Sales order line not found.')
     expect((await refused('companyB', 'GET', `/production/work-orders/open-lines?salesOrderId=${order.orderId}`, undefined, 404)).message).toBe('Sales order not found.')
