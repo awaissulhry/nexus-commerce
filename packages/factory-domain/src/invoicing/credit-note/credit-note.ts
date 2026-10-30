@@ -22,7 +22,8 @@ import { amountText, DOC_TYPE_WORDS, lineProblems, MAX_CAUSALE, MAX_DESCRIPTION,
  *                     invoices deduct from it and its credit notes (the …_money_guards trigger holds both at issue).
  *   why               a reason (a code, in Italian words on the causale), with free words.
  *   money back        when the invoice is paid beyond what it is worth after the credit, a refund is due: computed and
- *                     recorded (audit and the invoice.refund_due event); refunds themselves are W2b.
+ *                     recorded (audit and the invoice.refund_due event); the refund itself, or carrying the excess to the
+ *                     customer's credit balance, is B-W2a-61's (payments/refunds.ts). From a customer return: from-return.ts.
  * VAT: the credited lines' own treatments (never decided again: the note reverses what the invoice charged).
  */
 
@@ -74,7 +75,7 @@ export interface CreditedInvoice {
   readonly creditedGross: MinorUnits
   /** TD02: what issued invoices deduct from it (net, positive). */
   readonly deductedNet: MinorUnits
-  /** What is paid on it: TD01/TD24 its allocations; TD02 its share of the deposit request's payments. */
+  /** What is paid on it: TD01/TD24 its allocations; TD02 its share of the deposit request's payments; less the PAID refunds of its credit notes (B-W2a-61). */
   readonly paid: MinorUnits
 }
 

@@ -18,4 +18,16 @@ export const manifest = defineManifest({
   'POST /payments/:paymentId/void': { audiences: ['office'], permission: 'payments.void', scope: 'record' },
   'POST /payments/deposit-requests/:depositRequestId/link': { audiences: ['office'], permission: 'payments.record', scope: 'record' },
   'GET /payments/link/deposit': { audiences: ['link'], permission: 'links.open', scope: 'record' },
+  // B-W2a-61 (FIN-127, FIN-122; refunds.ts, credit-balance.ts): refunds to customers (money out: payments.refund; a refund
+  // recorded as paid by mistake is voided with payments.void) and the customer's credit balance.
+  'GET /payments/refunds': { audiences: ['office'], permission: 'payments.view', scope: 'record' },
+  'GET /payments/refunds/open': { audiences: ['office'], permission: 'payments.view', scope: 'record' },
+  'GET /payments/refunds/:refundId': { audiences: ['office'], permission: 'payments.view', scope: 'record' },
+  'POST /payments/refunds': { audiences: ['office'], permission: 'payments.refund', scope: 'record' },
+  'PATCH /payments/refunds/:refundId': { audiences: ['office'], permission: 'payments.refund', scope: 'record' },
+  'POST /payments/refunds/:refundId/paid': { audiences: ['office'], permission: 'payments.refund', scope: 'record' },
+  'POST /payments/refunds/:refundId/cancel': { audiences: ['office'], permission: 'payments.refund', scope: 'record' },
+  'POST /payments/refunds/:refundId/void': { audiences: ['office'], permission: 'payments.void', scope: 'record' },
+  'GET /payments/credit-balance': { audiences: ['office'], permission: 'payments.view', scope: 'record' },
+  'POST /payments/release-overpayment': { audiences: ['office'], permission: 'payments.record', scope: 'record' },
 })

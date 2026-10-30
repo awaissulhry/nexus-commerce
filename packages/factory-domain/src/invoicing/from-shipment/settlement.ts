@@ -17,7 +17,8 @@ import { amountText, DOC_TYPE_WORDS, type InvoiceDocType } from '../invoices'
  *                paid without its deposit invoice when its request asks for one;
  *   money        the balance (the invoices' gross less their credit notes less what is paid on them, less the deposits
  *                paid on requests that issue no TD02) is 0, and no refund is due (a credit note on a paid invoice
- *                leaves a refund due; refunds are W2b).
+ *                leaves a refund due until it is refunded — B-W2a-61: a PAID refund of its credit notes gives the money
+ *                back — or the excess is carried to the customer's credit balance).
  * A CANCELLED order is never settled. Each missing piece is said in words (`missing`), with a code.
  */
 
@@ -43,6 +44,8 @@ export interface SettlementInvoice {
   /** TD01/TD24: the gross of its issued credit notes, and what payments pay on it. */
   readonly creditedGross: MinorUnits
   readonly paid: MinorUnits
+  /** B-W2a-61: what PAID refunds of its credit notes gave back (0 when absent). */
+  readonly refunded?: MinorUnits
 }
 
 export interface SettlementDepositInvoice {
@@ -56,6 +59,8 @@ export interface SettlementDepositInvoice {
   readonly creditedGross: MinorUnits
   /** What issued invoices deduct from it (net, positive). */
   readonly deductedNet: MinorUnits
+  /** B-W2a-61: what PAID refunds of its credit notes gave back (0 when absent). */
+  readonly refunded?: MinorUnits
 }
 
 export interface SettlementFacts {
@@ -195,21 +200,22 @@ export function orderSettlement(facts: SettlementFacts): OrderSettlement {
     const issued = facts.depositInvoices.filter((invoice) => invoice.depositRequestId === request.id && invoice.status !== 'REJECTED')
     const invoicedGross = issued.reduce((sum, invoice) => sum + invoice.grossTotal - invoice.creditedGross, 0)
     const credited = issued.reduce((sum, invoice) => sum + invoice.creditedGross, 0)
-    const excess = request.paid - invoicedGross
+    const refunded = issued.reduce((sum, invoice) => sum + (invoice.refunded ?? 0), 0)
+    const excess = request.paid - refunded - invoicedGross
     if (excess > 0 && credited > 0) refundDue += Math.min(excess, credited)
     else if (excess > 0) add('DEPOSIT_NOT_INVOICED', `${amountText(excess, currency)} paid on a deposit request has no deposit invoice yet (DPR 633/1972 art. 6 c.4).`)
   }
 
   // The balance.
   const invoices = facts.invoices.map((invoice) => {
-    const open = invoice.grossTotal - invoice.creditedGross - invoice.paid
+    const open = invoice.grossTotal - invoice.creditedGross - (invoice.paid - (invoice.refunded ?? 0))
     return { ...invoice, open: Math.max(0, open), refundDue: Math.max(0, -open) }
   })
   const openSum = invoices.reduce((sum, invoice) => sum + invoice.open, 0)
   refundDue += invoices.reduce((sum, invoice) => sum + invoice.refundDue, 0)
   const balanceDue = Math.max(0, openSum - depositsPaidWithoutInvoice)
   if (balanceDue > 0) add('BALANCE_DUE', `${amountText(balanceDue, currency)} is still to be paid on the order's invoices.`)
-  if (refundDue > 0) add('REFUND_DUE', `A refund of ${amountText(refundDue, currency)} is due to the customer (a credit note on what was paid; refunds are W2b).`)
+  if (refundDue > 0) add('REFUND_DUE', `A refund of ${amountText(refundDue, currency)} is due to the customer (a credit note on what was paid): record it in Payments › Refunds, or carry it to the customer's credit balance.`)
 
   return {
     orderId: facts.order.id,
