@@ -142,6 +142,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const job = await client.maintenanceJob.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
     return job ? { companyId: job.companyId, siteId: job.siteId, partyId: null } : null
   },
+  // modules/sales/returns (SCR-112 the Return's Activity tab; B-W2a-43): the selling company, the site the goods come back
+  // to and the customer, so the return's notes and the customer's mail about it stay with that customer.
+  ReturnAuthorisation: async (client, id) => {
+    const rma = await client.returnAuthorisation.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
+    return rma ? { companyId: rma.companyId, siteId: rma.siteId, partyId: rma.partyId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}

@@ -257,140 +257,147 @@ export async function createManualOrder(caller: CommandCaller, body: ManualOrder
   const context = officeContextOf(caller)
   assertMay(context, ORDERS_MANAGE, { companyId: body.companyId, partyId: body.partyId }, 'Customer')
   const picked = body.paymentTermsId ? await termsForParty(caller, body.paymentTermsId, body.companyId, 'body/paymentTermsId') : null
-  const { result } = await command(caller, { name: 'orders.makeManual', idempotencyKey, input: body }, async (tools) => {
-    const { tx, now } = tools
-    const today = businessDate(now)
-    if (!(await hasOrderSeries(tx, body.companyId))) throw new ConflictError('The company has no active SALES_ORDER number series: an administrator adds one under Numbering, then the order can be made.')
-    const plan = await planManualOrder(tx, body, now, picked)
-    if (isIssueList(plan)) throw invalid(plan)
-    const id = newId()
-    const number = await allocateNumber(tools, { companyId: body.companyId, kind: 'SALES_ORDER' }, { type: 'SalesOrder', id, date: today })
-    const actorId = actorIdOf(tools)
-    const stamp = { createdAt: now, updatedAt: now, createdById: actorId }
-    const depositAsked = plan.depositAmount !== null && plan.depositAmount > 0
-    await tx.salesOrder.create({
+  const { result } = await command(caller, { name: 'orders.makeManual', idempotencyKey, input: body }, (tools) => makeManualOrderInCommand(tools, body, picked))
+  return { order: await recordAfter(caller, result.orderId) }
+}
+
+/**
+ * The manual order's work INSIDE a command (the route's, or another flow's: B-W2a-43's replacement order of a customer
+ * return): the plan (refused in words), the SALES_ORDER number, the CONFIRMED order and its lines, the deposit request
+ * when one is asked, the payment schedule, the audit row and sales_order.created. The caller checked orders.manage.
+ */
+export async function makeManualOrderInCommand(tools: CommandTools, body: ManualOrderBody, picked: { id: string } | null): Promise<{ orderId: string; number: string }> {
+  const { tx, now } = tools
+  const today = businessDate(now)
+  if (!(await hasOrderSeries(tx, body.companyId))) throw new ConflictError('The company has no active SALES_ORDER number series: an administrator adds one under Numbering, then the order can be made.')
+  const plan = await planManualOrder(tx, body, now, picked)
+  if (isIssueList(plan)) throw invalid(plan)
+  const id = newId()
+  const number = await allocateNumber(tools, { companyId: body.companyId, kind: 'SALES_ORDER' }, { type: 'SalesOrder', id, date: today })
+  const actorId = actorIdOf(tools)
+  const stamp = { createdAt: now, updatedAt: now, createdById: actorId }
+  const depositAsked = plan.depositAmount !== null && plan.depositAmount > 0
+  await tx.salesOrder.create({
+    data: {
+      id,
+      companyId: body.companyId,
+      partyId: plan.party.row.id,
+      number: number.formatted,
+      quoteVersionId: null,
+      customerRef: plan.customerRef,
+      status: 'CONFIRMED',
+      orderDate: asDay(today),
+      currency: plan.currency,
+      language: plan.language,
+      taxMode: plan.taxMode,
+      billTo: plan.billTo as Prisma.InputJsonValue,
+      shipTo: plan.shipTo as Prisma.InputJsonValue,
+      paymentTerms: plan.paymentTerms,
+      paymentTermsId: plan.paymentTermsId,
+      requestedDate: plan.requestedDate === null ? null : asDay(plan.requestedDate),
+      promiseDate: plan.promiseDate === null ? null : asDay(plan.promiseDate),
+      originalPromiseDate: plan.promiseDate === null ? null : asDay(plan.promiseDate),
+      priority: 0,
+      noWithdrawal: false,
+      depositRequired: depositAsked,
+      netAmount: plan.priced.netAmount,
+      vatAmount: plan.priced.vatAmount,
+      grossAmount: plan.priced.grossAmount,
+      costAmount: plan.priced.costAmount,
+      internalNote: plan.internalNote,
+      ...stamp,
+    },
+    select: { id: true },
+  })
+  for (const line of plan.priced.lines) {
+    const lineId = newId()
+    await tx.salesOrderLine.create({
       data: {
-        id,
+        id: lineId,
         companyId: body.companyId,
+        orderId: id,
         partyId: plan.party.row.id,
-        number: number.formatted,
-        quoteVersionId: null,
-        customerRef: plan.customerRef,
-        status: 'CONFIRMED',
-        orderDate: asDay(today),
-        currency: plan.currency,
-        language: plan.language,
-        taxMode: plan.taxMode,
-        billTo: plan.billTo as Prisma.InputJsonValue,
-        shipTo: plan.shipTo as Prisma.InputJsonValue,
-        paymentTerms: plan.paymentTerms,
-        paymentTermsId: plan.paymentTermsId,
-        requestedDate: plan.requestedDate === null ? null : asDay(plan.requestedDate),
-        promiseDate: plan.promiseDate === null ? null : asDay(plan.promiseDate),
-        originalPromiseDate: plan.promiseDate === null ? null : asDay(plan.promiseDate),
-        priority: 0,
-        noWithdrawal: false,
-        depositRequired: depositAsked,
-        netAmount: plan.priced.netAmount,
-        vatAmount: plan.priced.vatAmount,
-        grossAmount: plan.priced.grossAmount,
-        costAmount: plan.priced.costAmount,
-        internalNote: plan.internalNote,
+        seq: line.seq,
+        kind: 'SIZE_GRID',
+        styleId: line.styleId,
+        styleRevisionId: line.styleRevisionId,
+        colourwayId: line.colourwayId,
+        description: line.description,
+        note: line.note,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        netAmount: line.netAmount,
+        vatRatePct: line.vatRatePct,
+        vatNature: line.vatNature,
+        vatAmount: line.vatAmount,
+        unitCost: line.unitCost,
+        costAmount: line.costAmount,
         ...stamp,
       },
       select: { id: true },
     })
-    for (const line of plan.priced.lines) {
-      const lineId = newId()
-      await tx.salesOrderLine.create({
+    await tx.salesOrderLineSize.createMany({ data: line.sizes.map((size) => ({ id: newId(), lineId, partyId: plan.party.row.id, size: size.size, quantity: size.quantity, unitPrice: size.unitPrice, ...stamp })) })
+  }
+  // The deposit (B-W1-24's rules: its legal kind and fiscal decision), named on the order: no quote version.
+  let deposit: { id: string; amount: number; dueDate: Date; depositPct: Prisma.Decimal | null } | null = null
+  if (depositAsked) {
+    const draft = depositRequestFor({ depositPct: plan.depositPct, depositKind: plan.depositKind, depositAmount: plan.depositAmount, currency: plan.currency }, today, plan.party.profile, depositDueDaysOf(plan.instalments, DEPOSIT_DUE_DAYS))
+    if (draft) {
+      const requestId = newId()
+      deposit = await tx.depositRequest.create({
         data: {
-          id: lineId,
+          id: requestId,
           companyId: body.companyId,
-          orderId: id,
           partyId: plan.party.row.id,
-          seq: line.seq,
-          kind: 'SIZE_GRID',
-          styleId: line.styleId,
-          styleRevisionId: line.styleRevisionId,
-          colourwayId: line.colourwayId,
-          description: line.description,
-          note: line.note,
-          quantity: line.quantity,
-          unitPrice: line.unitPrice,
-          netAmount: line.netAmount,
-          vatRatePct: line.vatRatePct,
-          vatNature: line.vatNature,
-          vatAmount: line.vatAmount,
-          unitCost: line.unitCost,
-          costAmount: line.costAmount,
-          ...stamp,
+          orderId: id,
+          kind: draft.kind,
+          depositPct: draft.depositPct,
+          currency: draft.currency,
+          amount: draft.amount,
+          dueDate: asDay(draft.dueDate),
+          fiscalDocument: draft.fiscalDocument,
+          fiscalRule: draft.fiscalRule,
+          createdAt: now,
+          updatedAt: now,
+          createdById: actorId,
         },
-        select: { id: true },
+        select: { id: true, amount: true, dueDate: true, depositPct: true },
       })
-      await tx.salesOrderLineSize.createMany({ data: line.sizes.map((size) => ({ id: newId(), lineId, partyId: plan.party.row.id, size: size.size, quantity: size.quantity, unitPrice: size.unitPrice, ...stamp })) })
+      tools.audit({
+        action: 'sales.deposits.request',
+        recordType: 'DepositRequest',
+        recordId: requestId,
+        companyId: body.companyId,
+        after: { orderId: id, kind: draft.kind, depositPct: draft.depositPct, currency: draft.currency, amount: markMoney('price', draft.amount), dueDate: draft.dueDate, fiscalDocument: draft.fiscalDocument, fiscalRule: draft.fiscalRule, reason: draft.reason, status: 'OPEN' },
+      })
     }
-    // The deposit (B-W1-24's rules: its legal kind and fiscal decision), named on the order: no quote version.
-    let deposit: { id: string; amount: number; dueDate: Date; depositPct: Prisma.Decimal | null } | null = null
-    if (depositAsked) {
-      const draft = depositRequestFor({ depositPct: plan.depositPct, depositKind: plan.depositKind, depositAmount: plan.depositAmount, currency: plan.currency }, today, plan.party.profile, depositDueDaysOf(plan.instalments, DEPOSIT_DUE_DAYS))
-      if (draft) {
-        const requestId = newId()
-        deposit = await tx.depositRequest.create({
-          data: {
-            id: requestId,
-            companyId: body.companyId,
-            partyId: plan.party.row.id,
-            orderId: id,
-            kind: draft.kind,
-            depositPct: draft.depositPct,
-            currency: draft.currency,
-            amount: draft.amount,
-            dueDate: asDay(draft.dueDate),
-            fiscalDocument: draft.fiscalDocument,
-            fiscalRule: draft.fiscalRule,
-            createdAt: now,
-            updatedAt: now,
-            createdById: actorId,
-          },
-          select: { id: true, amount: true, dueDate: true, depositPct: true },
-        })
-        tools.audit({
-          action: 'sales.deposits.request',
-          recordType: 'DepositRequest',
-          recordId: requestId,
-          companyId: body.companyId,
-          after: { orderId: id, kind: draft.kind, depositPct: draft.depositPct, currency: draft.currency, amount: markMoney('price', draft.amount), dueDate: draft.dueDate, fiscalDocument: draft.fiscalDocument, fiscalRule: draft.fiscalRule, reason: draft.reason, status: 'OPEN' },
-        })
-      }
-    }
-    const steps = await makeScheduleInCommand(tools, { id, number: number.formatted, companyId: body.companyId, partyId: plan.party.row.id, grossAmount: plan.priced.grossAmount, promiseDate: plan.promiseDate === null ? null : asDay(plan.promiseDate), paymentTermsId: plan.paymentTermsId }, deposit)
-    tools.audit({
-      action: 'orders.makeManual',
-      recordType: 'SalesOrder',
-      recordId: id,
-      companyId: body.companyId,
-      after: {
-        number: number.formatted,
-        partyId: plan.party.row.id,
-        status: 'CONFIRMED',
-        quoteVersionId: null,
-        taxMode: plan.taxMode,
-        currency: plan.currency,
-        paymentTermsId: plan.paymentTermsId,
-        promiseDate: plan.promiseDate,
-        depositRequired: depositAsked,
-        depositRequestId: deposit?.id ?? null,
-        milestoneIds: steps,
-        lines: plan.priced.lines.length,
-        pieces: plan.priced.lines.reduce((sum, line) => sum + line.quantity, 0),
-        netAmount: markMoney('price', plan.priced.netAmount),
-        grossAmount: markMoney('price', plan.priced.grossAmount),
-        costAmount: markMoney('cost', plan.priced.costAmount),
-      },
-    })
-    tools.emit({ type: 'sales_order.created', subject: id, companyId: body.companyId, payload: { orderId: id, number: number.formatted, quoteId: null, versionId: null, partyId: plan.party.row.id, depositRequestIds: deposit ? [deposit.id] : [] } })
-    return { orderId: id }
+  }
+  const steps = await makeScheduleInCommand(tools, { id, number: number.formatted, companyId: body.companyId, partyId: plan.party.row.id, grossAmount: plan.priced.grossAmount, promiseDate: plan.promiseDate === null ? null : asDay(plan.promiseDate), paymentTermsId: plan.paymentTermsId }, deposit)
+  tools.audit({
+    action: 'orders.makeManual',
+    recordType: 'SalesOrder',
+    recordId: id,
+    companyId: body.companyId,
+    after: {
+      number: number.formatted,
+      partyId: plan.party.row.id,
+      status: 'CONFIRMED',
+      quoteVersionId: null,
+      taxMode: plan.taxMode,
+      currency: plan.currency,
+      paymentTermsId: plan.paymentTermsId,
+      promiseDate: plan.promiseDate,
+      depositRequired: depositAsked,
+      depositRequestId: deposit?.id ?? null,
+      milestoneIds: steps,
+      lines: plan.priced.lines.length,
+      pieces: plan.priced.lines.reduce((sum, line) => sum + line.quantity, 0),
+      netAmount: markMoney('price', plan.priced.netAmount),
+      grossAmount: markMoney('price', plan.priced.grossAmount),
+      costAmount: markMoney('cost', plan.priced.costAmount),
+    },
   })
-  return { order: await recordAfter(caller, result.orderId) }
+  tools.emit({ type: 'sales_order.created', subject: id, companyId: body.companyId, payload: { orderId: id, number: number.formatted, quoteId: null, versionId: null, partyId: plan.party.row.id, depositRequestIds: deposit ? [deposit.id] : [] } })
+  return { orderId: id, number: number.formatted }
 }
 

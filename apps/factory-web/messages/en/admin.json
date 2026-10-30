@@ -1704,6 +1704,11 @@
     "accounting_lock": "Lock a month (soft or hard) and lift a soft lock",
     "accounting_unlock": "Lift a hard period lock (agree it with the accountant)",
     "security_view": "See whether every part works, the sign-in rules, backups and restore drills",
-    "security_drills_record": "Record a restore drill"
+    "security_drills_record": "Record a restore drill",
+    "sales_returns_view": "See customer returns",
+    "sales_returns_manage": "Open and change customer returns",
+    "sales_returns_receive": "Receive returned goods at the dock",
+    "sales_returns_inspect": "Grade returned goods",
+    "sales_returns_decide": "Decide what happens to returned goods"
   }
 }

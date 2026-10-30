@@ -4,6 +4,8 @@ import { PARTY_TAX_MODES } from '../parties/tax'
 import { SALES_ORDER_STATUSES } from './orders/orders'
 import { LINK_QUOTE_STATES } from './quotes/acceptance'
 import { APPROVAL_REASONS } from './quotes/quotes'
+// B-W2a-43: customer returns.
+import { RETURN_STATUSES } from './returns/rules'
 
 /**
  * The sales module's events (plan A1 §3.4, §3.5; B-W1-21 quotes). apps/factory-api's modules/sales emits them in the
@@ -49,10 +51,26 @@ import { APPROVAL_REASONS } from './quotes/quotes'
  *   sales_order.lines_closed     lines were closed short (what is left of them will not be made or shipped) or reopened
  *   sales_order.schedule_changed its payment schedule was made, made again after an amendment, a step paid (its
  *                                deposit) or cancelled with the order
+ * B-W2a-43 (customer returns; live: sales.returns.view; the dock's events also reach the floor of the RMA's site):
+ *   return.authorised            an RMA was made (AUTHORISED, numbered), with the lines that come back and the deadline
+ *   return.lines_changed         lines were added, changed or removed before the goods arrived
+ *   return.changed               its owner, deadline, customer reference or note changed (which fields)
+ *   return.received              goods arrived at the dock (a receipt): the lines and pieces received
+ *   return.graded                received lines were graded (grade, cause, condition)
+ *   return.decided               graded lines were decided (what the customer gets, where the goods go); `inspected`
+ *                                says the RMA became INSPECTED; the stock moves the outcomes posted
+ *   return.credit_due            decided lines carry a credit: the credit note waits (B-W2a-61 listens; it reads the
+ *                                lines' credit values itself, never from the payload)
+ *   return.status_changed        it moved (received, inspected, more goods came, closed, cancelled)
+ *   return.replacement_ordered   the replacement order was made for its REPLACE lines
+ *   return_policy.changed        a company's or the tenant's return policy changed (which fields)
  */
 const live = { permission: 'quotes.view', fields: ['quoteId', 'versionId'] } as const
 const orderLive = { permission: 'orders.view', fields: ['orderId', 'number'] } as const
 const orderStatus = z.enum(SALES_ORDER_STATUSES)
+// B-W2a-43: customer returns.
+const returnLive = { permission: 'sales.returns.view', fields: ['returnId', 'number'] } as const
+const returnStatus = z.enum(RETURN_STATUSES)
 const ids = { quoteId: z.uuid(), versionId: z.uuid() }
 
 export const events = [
@@ -254,5 +272,76 @@ export const events = [
     description: "A sales order's payment schedule was made, made again after an amendment, a step paid with its deposit, or its open steps cancelled with the order.",
     payload: z.strictObject({ orderId: z.uuid(), number: z.string(), change: z.enum(['MADE', 'REMADE', 'PAID', 'CANCELLED']), milestoneIds: z.array(z.uuid()) }),
     live: { ...orderLive, fields: ['orderId', 'number', 'change'] },
+  }),
+  // B-W2a-43: customer returns (ids, numbers and what changed; never an amount, a price or a credit value).
+  defineEvent({
+    type: 'return.authorised',
+    context: 'sales',
+    description: 'A customer return (RMA) was made and authorised: what comes back, from which invoiced or shipped lines, and by when the goods are due.',
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), partyId: z.uuid(), salesOrderId: z.uuid().nullable(), lineIds: z.array(z.uuid()), goodsDueBy: z.iso.date().nullable() }),
+    live: { ...returnLive, floor: true },
+  }),
+  defineEvent({
+    type: 'return.lines_changed',
+    context: 'sales',
+    description: "Lines of a customer return were added, changed or removed before the goods arrived (the dock's expected lines change).",
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), change: z.enum(['ADDED', 'CHANGED', 'REMOVED']), lineIds: z.array(z.uuid()) }),
+    live: { ...returnLive, floor: true, fields: ['returnId', 'number', 'change'] },
+  }),
+  defineEvent({
+    type: 'return.changed',
+    context: 'sales',
+    description: "A customer return's owner, deadline for the goods, customer reference or internal note changed.",
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), fields: z.array(z.string()) }),
+    live: returnLive,
+  }),
+  defineEvent({
+    type: 'return.received',
+    context: 'sales',
+    description: "A customer return's goods arrived at the dock: the receipt (parcels, condition, the customer's DDT) and the pieces of each line.",
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), receiptId: z.uuid(), lineIds: z.array(z.uuid()), pieces: z.number().int(), first: z.boolean() }),
+    live: { ...returnLive, floor: true },
+  }),
+  defineEvent({
+    type: 'return.graded',
+    context: 'sales',
+    description: "Received lines of a customer return were graded: the garments' grade, the cause found and their condition.",
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()) }),
+    live: { ...returnLive, floor: true },
+  }),
+  defineEvent({
+    type: 'return.decided',
+    context: 'sales',
+    description: 'Graded lines of a customer return were decided: what the customer gets and where the goods go (the stock moves it posted); the return is inspected once every received line is decided.',
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), lineIds: z.array(z.uuid()), inspected: z.boolean(), moveIds: z.array(z.uuid()) }),
+    live: { ...returnLive, floor: true, fields: ['returnId', 'number', 'inspected'] },
+  }),
+  defineEvent({
+    type: 'return.credit_due',
+    context: 'sales',
+    description: "Decided lines of a customer return carry a credit for the customer: the credit note can be made (the lines' credit values are read from the return).",
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), partyId: z.uuid(), lineIds: z.array(z.uuid()) }),
+    live: returnLive,
+  }),
+  defineEvent({
+    type: 'return.status_changed',
+    context: 'sales',
+    description: 'A customer return moved: goods received, inspected and decided, more goods came, closed with its finish reason, or cancelled.',
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), from: returnStatus, to: returnStatus }),
+    live: { ...returnLive, floor: true, fields: ['returnId', 'number', 'from', 'to'] },
+  }),
+  defineEvent({
+    type: 'return.replacement_ordered',
+    context: 'sales',
+    description: "The replacement order of a customer return was made (a sales order of the same customer) for its lines decided Replace.",
+    payload: z.strictObject({ returnId: z.uuid(), number: z.string(), orderId: z.uuid(), orderNumber: z.string(), lineIds: z.array(z.uuid()) }),
+    live: { ...returnLive, fields: ['returnId', 'number', 'orderId', 'orderNumber'] },
+  }),
+  defineEvent({
+    type: 'return_policy.changed',
+    context: 'sales',
+    description: "A company's or the tenant's return policy changed: the return window, the days for the goods, who pays the freight back, the restocking fee or the conditions.",
+    payload: z.strictObject({ companyId: z.uuid().nullable(), fields: z.array(z.string()) }),
+    live: { permission: 'sales.returns.view', fields: ['companyId', 'fields'] },
   }),
 ] as const
