@@ -148,6 +148,8 @@ model WorkOrder {
   scanRefusals           FloorScanRefusal[]
   // quality.prisma: its final inspections.
   inspections   Inspection[]
+  // returns.prisma: the repairs it is the repair work order of.
+  repairOrders  RepairOrder[]
 
   @@unique([tenantId, companyId, number])
   @@unique([tenantId, batchNumber])

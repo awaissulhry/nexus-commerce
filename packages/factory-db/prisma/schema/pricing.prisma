@@ -1,0 +1,189 @@
+// Pricing and payment terms (W2a plan §5 schema wave 2/7; features FIN-075, SAL-165, SAL-012; design finance.settings
+// "Payment terms", sales.pricelists, sales.customers customer.tax.terms): the payment terms library, and the price lists
+// with their dated versions and the price of each style in them. apps/factory-api's modules/sales/terms and
+// modules/sales/pricelists write them (B-W2a-19), always through command().
+//
+// A payment terms entry is how a customer pays: the text printed on quotes, orders and invoices, the FatturaPA payment
+// method, and its instalments (what share is due when), from which the order's payment schedule (sales.prisma
+// SalesOrderMilestone) and an invoice's due dates are computed. A customer's default terms and price list are on its
+// Party row (parties.prisma); a quote version and an order keep the terms they were made with (sales.prisma).
+//
+// A price list (base, a customer's, a group's or a contract) is a header and its versions. A version is dated: a DRAFT
+// is edited; activating it fixes its prices for good and gives it its validity (from a day, to a day or open), and the
+// ACTIVE versions of one list never overlap (the …_sales_w2a_guards triggers, for every login). An open quote keeps the
+// version its list prices came from (QuoteVersion.priceListVersionId). A style missing from a list is priced from the
+// list it falls back to (baseListId). One entry per style and colourway in a version is the pricelists module's rule, not
+// a unique key: a unique key of ids alone cannot be copied by the generated isolation tests (src/isolation.pg.vitest.test.ts).
+//
+// Money (A1 §2.1, §2.6): unit prices Decimal(18,6) with the price grain, in the list's currency. No cost is stored here:
+// the margin a price row shows is computed from the style's standard cost when read (design "Every price row shows its
+// margin at today's standard cost").
+//
+// Who sees what (ownership/pricing.json): the office reads and writes; the floor and the portal read nothing here (a
+// customer reads its prices on its own documents; a price list PDF and the portal's catalogue are W2b). Master data in
+// use is archived (status ARCHIVED), never deleted; only a DRAFT version and the entries of a DRAFT version are deleted.
+
+/// One entry of the payment terms library (FIN-075): "Bonifico bancario 30 gg d.f.f.m.", "30% all'ordine, saldo prima
+/// della spedizione", "Ri.Ba. 60 gg". Tenant-wide, or a company's own. An edit never rewrites a document: each keeps its
+/// own copy (the printed text; the invoice's DatiPagamento with its due dates). Archived, never deleted.
+model PaymentTerms {
+  id                      String       @id @db.Uuid
+  tenantId                String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose library it is; null: tenant-wide, for every company of the tenant.
+  companyId               String?      @db.Uuid
+  /// Short code, unique in the tenant (lists, imports): `BB30FM`.
+  code                    String
+  /// The name the office reads and the text printed on documents in the company's language.
+  name                    String
+  /// The printed text in other languages, ISO 639-1 → text: { "en": "Bank transfer 30 days end of month" }.
+  nameI18n                Json?
+  /// FatturaPA ModalitaPagamento: MP05 bank transfer, MP12 Ri.Ba., MP01 cash, MP08 card, MP19 SEPA direct debit …
+  method                  String
+  /// What share is due when, in order, the shares totalling 100: [{ "sharePct": "30.0000", "from": "ORDER", "days": 0 },
+  /// { "sharePct": "70.0000", "from": "BEFORE_SHIPPING", "days": 0 }]. `from`: ORDER (on the order: a deposit),
+  /// BEFORE_SHIPPING, DELIVERY or INVOICE (the invoice's date); `days` after it, 0 to 366; `endOfMonth` (optional,
+  /// false by default): the due date moves to the last day of its month ("30 gg d.f.f.m." is INVOICE, 30, true). One
+  /// instalment is FatturaPA TP02 (or TP03 when it falls due on the order), more are TP01.
+  instalments             Json
+  /// The early-payment discount (FatturaPA ScontoPagamentoAnticipato): percent off, above 0 and below 100, for paying
+  /// within that many days of the invoice's date; both or neither.
+  earlyPaymentDiscountPct Decimal?     @db.Decimal(7, 4)
+  earlyPaymentDays        Int?
+  status                  MasterStatus @default(ACTIVE)
+  version                 Int          @default(1)
+  createdAt               DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById             String?      @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company       Company?       @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // parties.prisma: the customers whose default terms these are.
+  parties       Party[]
+  // sales.prisma: the quote versions and sales orders made with them.
+  quoteVersions QuoteVersion[]
+  salesOrders   SalesOrder[]
+
+  @@unique([tenantId, code])
+  // The target of the tenant-safe references from parties, quote versions and orders.
+  @@unique([tenantId, id])
+}
+
+/// A price list (SAL-165; design sales.pricelists): the base list, a customer's, a group of customers' or a contract's,
+/// in one currency, with its dated versions. Tenant-wide, or a company's own. A customer is priced from the list on its
+/// Party row (priceListId); a style missing here from the list it falls back to. Archived, never deleted.
+model PriceList {
+  id          String        @id @db.Uuid
+  tenantId    String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The selling company whose list it is; null: tenant-wide.
+  companyId   String?       @db.Uuid
+  /// Short code, unique in the tenant (lists, imports).
+  code        String
+  name        String
+  kind        PriceListKind
+  /// ISO 4217: the currency of every price of the list.
+  currency    String        @default("EUR")
+  /// The list a style missing here is priced from (a customer's list over the base list); never itself, of the same
+  /// currency. Null: none.
+  baseListId  String?       @db.Uuid
+  /// For the office only.
+  /// @internal
+  note        String?
+  status      MasterStatus  @default(ACTIVE)
+  version     Int           @default(1)
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?       @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company      Company?           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  baseList     PriceList?         @relation("PriceListBase", fields: [tenantId, baseListId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  fallbackOf   PriceList[]        @relation("PriceListBase")
+  versions     PriceListVersion[]
+  // parties.prisma: the customers priced from it by default.
+  parties      Party[]
+
+  @@unique([tenantId, code])
+  // The target of the tenant-safe references from its versions, the lists that fall back to it and the parties.
+  @@unique([tenantId, id])
+}
+
+/// What a price list is for (design sales.pricelists "Kind").
+enum PriceListKind {
+  /// The company's list prices: what a customer without a list of its own pays.
+  BASE
+  /// One customer's prices.
+  CUSTOMER
+  /// The prices of a group of customers (a discount group: each customer of the group has it on its Party row).
+  GROUP
+  /// The prices agreed in a contract with a customer.
+  CONTRACT
+}
+
+/// One dated version of a price list (design pricelist.versions): DRAFT while its prices are edited; ACTIVE from its
+/// validFrom (to its validTo, or open) once activated, when its prices are fixed for good. The ACTIVE versions of a list
+/// never overlap; activating the next one ends the previous one the day before (the pricelists module, in one command;
+/// the …_sales_w2a_guards trigger refuses an overlap). Only a DRAFT is deleted.
+model PriceListVersion {
+  id            String                 @id @db.Uuid
+  tenantId      String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  listId        String                 @db.Uuid
+  /// 1, 2, 3 … per list.
+  revision      Int
+  /// DRAFT → ACTIVE; never back.
+  status        PriceListVersionStatus @default(DRAFT)
+  /// Its validity, in the company's time zone: from a day (required once ACTIVE), to a day (null: open). From ACTIVE on
+  /// only validTo changes (never before validFrom).
+  validFrom     DateTime?              @db.Date
+  validTo       DateTime?              @db.Date
+  /// When and by whom it was activated; set exactly when ACTIVE.
+  activatedAt   DateTime?              @db.Timestamptz(3)
+  activatedById String?                @db.Uuid
+  /// What changed against the previous version, as the office writes it.
+  note          String?
+  version       Int                    @default(1)
+  createdAt     DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?                @db.Uuid
+
+  list          PriceList        @relation(fields: [tenantId, listId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  entries       PriceListEntry[]
+  // sales.prisma: the quote versions whose list prices came from it (an open quote keeps its version).
+  quoteVersions QuoteVersion[]
+
+  @@unique([tenantId, listId, revision])
+  // The target of the tenant-safe references from its entries and the quote versions.
+  @@unique([tenantId, id])
+  // A list's versions by validity (the price at a date; "starting / expiring in 30 days").
+  @@index([tenantId, listId, status, validFrom])
+}
+
+enum PriceListVersionStatus {
+  DRAFT
+  ACTIVE
+}
+
+/// The price of one style (and colourway, when it differs) in one version of a price list (design pricelist.prices).
+/// Written and removed only while its version is a DRAFT. One per style and colourway in a version: the pricelists
+/// module's rule (see the head of this file).
+model PriceListEntry {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  versionId   String   @db.Uuid
+  styleId     String   @db.Uuid
+  /// The colourway it prices when it differs from the style's other colourways; null: every colourway of the style.
+  colourwayId String?  @db.Uuid
+  /// The net unit price per piece, in the list's currency; above 0.
+  /// @grain price
+  unitPrice   Decimal  @db.Decimal(18, 6)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  listVersion PriceListVersion @relation(fields: [tenantId, versionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  style       Style            @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and styleId.
+  colourway   Colourway?       @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, versionId, styleId])
+}
