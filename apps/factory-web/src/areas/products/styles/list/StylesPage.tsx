@@ -6,10 +6,11 @@ import { useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { useLiveChanges } from '../../../../record-panels/live'
-import { archiveStyle, countStyles, createStyle, listBrands, listScales, listStyles, startRevision } from '../api'
-import { abilitiesOf, STYLE_TILES, stylesCsv, viewOf, viewQuery } from '../model'
+import { archiveStyle, basePriceLists, countStyles, createStyle, listBrands, listScales, listStyles, priceEntries, startRevision } from '../api'
+import { useDuplicate } from '../duplicate/use-duplicate'
+import { abilitiesOf, grainsOf, STYLE_TILES, stylesCsv, viewOf, viewQuery } from '../model'
 import { readProblem, writeProblem } from '../problems'
-import type { NewStyleDraft, NewStyleModel, StyleFilters, StylesListViewModel } from './list-model'
+import { pickBaseList, pricesByStyle, type ListPrices, type NewStyleDraft, type NewStyleModel, type StyleFilters, type StylesListViewModel } from './list-model'
 import { StylesListView } from './view/StylesListView'
 
 const PRODUCT_TYPES = ['JACKET', 'TROUSERS', 'SUIT', 'GLOVES', 'VEST', 'OTHER']
@@ -70,6 +71,7 @@ function StylesContainer() {
   const filters = useMemo(() => filtersOf(params), [params])
   const prefix = pathname.replace(/\/products\/styles\/?$/, '')
   const can = useMemo(() => abilitiesOf(session.permissions), [session.permissions])
+  const grains = useMemo(() => grainsOf(session.permissions), [session.permissions])
   const companyId = session.company?.id ?? null
   const [rows, setRows] = useState<StylesListViewModel['rows']>({ items: null, more: false, count: null, problem: null })
   const [cursor, setCursor] = useState<string | null>(null)
@@ -80,6 +82,36 @@ function StylesContainer() {
   const [busy, setBusy] = useState(false)
   const [newStyle, setNewStyle] = useState<NewStyleModel | null>(null)
   const readSeq = useRef(0)
+  const [prices, setPrices] = useState<ListPrices>({ state: 'hidden' })
+  const duplicate = useDuplicate(api, () => {
+    void load()
+    loadTiles()
+  })
+
+  // The list prices (W2a): the BASE list in force for this company, read once; only with the right and a grain to show.
+  const wantsPrices = can.prices && (grains.price || grains.margin)
+  useEffect(() => {
+    if (!wantsPrices) {
+      setPrices({ state: 'hidden' })
+      return
+    }
+    let live = true
+    setPrices({ state: 'loading' })
+    basePriceLists(api, companyId)
+      .then(async (lists) => {
+        const list = pickBaseList(lists, companyId)
+        if (!list || !list.shownVersion) {
+          if (live) setPrices({ state: 'none' })
+          return
+        }
+        const entries = await priceEntries(api, list.id, list.shownVersion.id)
+        if (live) setPrices({ state: 'ready', list: { id: list.id, code: list.code, name: list.name, currency: list.currency }, byStyle: pricesByStyle(entries) })
+      })
+      .catch((error: unknown) => live && setPrices({ state: 'error', problem: readProblem(error) }))
+    return () => {
+      live = false
+    }
+  }, [api, companyId, wantsPrices])
 
   const query = useCallback(
     (from: StyleFilters, at: string | null) => ({ ...viewQuery(from.view), q: from.q, productType: from.type || undefined, ppeCategory: from.ppe || undefined, cursor: at }),
@@ -237,6 +269,9 @@ function StylesContainer() {
   const model: StylesListViewModel = {
     prefix,
     can,
+    grains,
+    prices,
+    duplicate: duplicate.model,
     filters,
     rows,
     tiles,
@@ -262,6 +297,13 @@ function StylesContainer() {
         onExport: exportCsv,
         onArchiveMany: archiveMany,
         onNewStyle: openNew,
+        onStartFrom: (from) => {
+          if (from !== 'copy') return
+          openNew(false)
+          duplicate.open(null)
+        },
+        onDuplicate: (row) => duplicate.open({ id: row.id, code: row.code, name: row.name }),
+        duplicate: duplicate.actions,
         onNewDraft: (draft) => setNewStyle((current) => (current ? { ...current, draft, refused: [] } : current)),
         onCreate: () => void create(),
         onDismissNotice: () => setNotice(null),

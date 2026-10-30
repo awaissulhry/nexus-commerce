@@ -184,7 +184,7 @@ describe('the forms say only what the API accepts', () => {
 
   it('the identity form sends only what changed', () => {
     const style = demoStyle()
-    const same = { code: style.code, name: style.name, productType: style.productType, season: style.season ?? '', brandPartyId: null, description: style.description ?? '', mtmAllowed: false, ppe: { ppeCategory: style.ppeCategory, ppeStandard: style.ppeStandard, ppeClass: style.ppeClass } }
+    const same = { code: style.code, name: style.name, productType: style.productType, season: style.season ?? '', brandPartyId: null, description: style.description ?? '', mtmAllowed: false, ppe: { ppeCategory: style.ppeCategory, ppeStandard: style.ppeStandard, ppeClass: style.ppeClass }, customs: { hsCode: style.hsCode ?? '', originCountry: style.originCountry ?? '', netMassKg: style.netMassKg ?? '' } }
     expect(identityPatch(style, same)).toEqual({})
     expect(identityPatch(style, { ...same, name: ' Giacca Nuova ', season: '' })).toEqual({ name: 'Giacca Nuova', season: null })
     expect(identityPatch(style, { ...same, ppe: { ppeCategory: 'CATEGORY_II', ppeStandard: 'EN 17092-3:2020', ppeClass: 'AA' } })).toEqual({ ppeCategory: 'CATEGORY_II', ppeStandard: 'EN 17092-3:2020', ppeClass: 'AA' })

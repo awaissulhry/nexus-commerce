@@ -133,7 +133,8 @@
     "archive": "Archivia il modello…",
     "reactivate": "Riattiva il modello",
     "copyCode": "Copia il codice",
-    "keys": "Scorciatoie da tastiera"
+    "keys": "Scorciatoie da tastiera",
+    "duplicate": "Duplica…"
   },
   "save": {
     "saving": "Salvataggio…",
@@ -202,7 +203,9 @@
     "stepRemoved": "Operazione tolta dal ciclo in bozza.",
     "uploaded": "Il file firmato è caricato ed è in vigore per la revisione.",
     "trackingSaved": "La numerazione dei capi è salvata.",
-    "labelNamed": "La revisione indica la sua etichetta capo."
+    "labelNamed": "La revisione indica la sua etichetta capo.",
+    "subcontractSaved": "Dettagli del terzista salvati.",
+    "inHouse": "La fase è di nuovo fatta internamente."
   },
   "identity": {
     "title": "Identità",
@@ -616,7 +619,9 @@
       "ppe": "DPI",
       "ready": "Completezza",
       "updated": "Aggiornato",
-      "more": "Azioni"
+      "more": "Azioni",
+      "price": "Prezzo di listino",
+      "margin": "Margine %"
     },
     "rev": {
       "released": "Rev {revision} rilasciata",
@@ -641,6 +646,22 @@
       "archiveHeld_other": "{count} sono già archiviati: toglili dalla selezione.",
       "archiveTitle_one": "Archiviare {count} modello?",
       "archiveTitle_other": "Archiviare {count} modelli?"
+    },
+    "duplicate": "Duplica…",
+    "price": {
+      "from": "da {price}",
+      "fromShort": "per variante",
+      "is": "{price}",
+      "none": "Senza prezzo",
+      "list": "Prezzi di listino: {code} · {name}",
+      "noList": "Nessun listino base in vigore: i prezzi di listino restano vuoti finché non ce n’è uno.",
+      "failed": "Non è stato possibile leggere i prezzi di listino."
+    },
+    "margin": {
+      "pct": "{pct} %",
+      "unknown": "Non noto",
+      "unknownHint": "Il costo standard della taglia base non è ancora noto.",
+      "belowFloor": "Sotto la soglia"
     }
   },
   "completeness": {
@@ -680,6 +701,23 @@
       "code": "Scrivi un codice: da 1 a 24 lettere maiuscole o cifre, con . _ - all’interno.",
       "name": "Scrivi un nome.",
       "scale": "Scegli una scala taglie."
+    },
+    "startFrom": "Parti da",
+    "from": {
+      "blank": "Vuoto",
+      "copy": "Copia di un modello",
+      "template": "Modello base",
+      "commerce": "Prodotto di Nexus Commerce"
+    },
+    "fromWhen": {
+      "template": "Più avanti",
+      "commerce": "W2b"
+    },
+    "fromHint": {
+      "blank": "Scrivi qui il modello; varianti, distinta e ciclo seguono nel suo studio.",
+      "copy": "Scegli un modello e le parti da copiare: distinta, misure, ciclo, etichetta.",
+      "template": "I modelli base arrivano più avanti.",
+      "commerce": "Partire da un prodotto di Nexus Commerce arriva con W2b."
     }
   },
   "compliance": {
@@ -1054,6 +1092,25 @@
         "qty": "Scrivi una quantità sopra 0.",
         "wastage": "Lo scarto va da 0 a 60 %."
       }
+    },
+    "import": {
+      "open": "Importa distinta",
+      "held": {
+        "noImports": "Il tuo ruolo non può caricare fogli.",
+        "goToDraft": "Le righe vanno in una bozza: vai alla revisione {revision} (bozza) per importare.",
+        "startFirst": "Le righe vanno in una bozza: prima avvia la revisione {revision}."
+      }
+    },
+    "export": {
+      "title": "Esporta",
+      "making": "Preparazione del file…",
+      "label": "Esporta la distinta della revisione {revision}",
+      "xlsx": "Excel (XLSX)",
+      "csv": "CSV",
+      "pdf": "Scheda distinta (PDF)",
+      "xlsxHint": "Le colonne dell’importazione: modificalo e reimportalo.",
+      "csvHint": "Le stesse colonne in un file CSV.",
+      "pdfHint": "Un foglio interno da stampare (senza prezzi)."
     }
   },
   "routing": {
@@ -1069,7 +1126,10 @@
       "scansHint_one": "su {count} operazione",
       "scansHint_other": "su {count} operazioni",
       "labour": "Manodopera per capo",
-      "labourHint": "Minuti × costo al minuto ÷ efficienza"
+      "labourHint": "Minuti × costo al minuto ÷ efficienza",
+      "subcontracted": "Operazioni a terzisti",
+      "subcontractedHint_one": "su {count} operazione, fatte da un terzista",
+      "subcontractedHint_other": "su {count} operazioni, fatte da terzisti"
     },
     "issuesTitle_one": "{count} cosa da sistemare nel ciclo",
     "issuesTitle_other": "{count} cose da sistemare nel ciclo",
@@ -1093,7 +1153,8 @@
       "machine": "Macchina · abilità",
       "minutes": "Minuti standard",
       "scanned": "Scansionata",
-      "actions": "Azioni"
+      "actions": "Azioni",
+      "subcontracted": "Terzista"
     },
     "final": "finale",
     "archivedOp": "archiviata nella libreria",
@@ -1217,5 +1278,192 @@
     "BATCH_why": "Il lotto dell’ordine di lavoro su ogni etichetta del lotto.",
     "SERIAL": "Un seriale per capo",
     "SERIAL_why": "Ogni capo riceve il suo seriale all’operazione finale; richiami e traccia delle prove seguono ognuno."
+  },
+  "phone": {
+    "selectAll": "Seleziona tutti i modelli caricati",
+    "selected_one": "{count} selezionato",
+    "selected_other": "{count} selezionati",
+    "done": "Fine",
+    "filters": "Filtri",
+    "filtersN": "Filtri ({count})",
+    "select": "Seleziona",
+    "nothingToSelect": "Non c’è nessun modello da selezionare.",
+    "selectOne": "Seleziona {code}",
+    "skus_one": "{count} SKU",
+    "skus_other": "{count} SKU",
+    "filtersTitle": "Filtra i modelli",
+    "showResults": "Mostra i modelli"
+  },
+  "duplicate": {
+    "title": "Duplica {code}",
+    "pickTitle": "Nuovo modello: copia di un modello",
+    "doneTitle": "{code} è stato creato",
+    "subtitle": "Un nuovo modello in bozza con codice e nome propri.",
+    "openCopy": "Apri {code}",
+    "go": "Duplica",
+    "pickIntro": "Scegli il modello da copiare: arrivano identità, gamma taglie, DPI, dati doganali e varianti, e le parti che spunti dopo.",
+    "pickSearch": "Cerca un modello (codice, nome o stagione)",
+    "pickSearching": "Ricerca in corso…",
+    "pickNone": "Nessun modello corrisponde.",
+    "pickList": "Modelli da copiare",
+    "after": "La copia si apre in bozza (revisione 1); si rilascia con il suo controllo.",
+    "source": "Copia di",
+    "repick": "Un altro modello",
+    "partsFrom": "Parti dalla",
+    "revision": "revisione {revision} ({status})",
+    "noRevision": "nessuna revisione ancora",
+    "code": "Nuovo codice",
+    "refusedCode": "Questo codice è già usato o non è valido: scegline un altro.",
+    "name": "Nome",
+    "seasonHint": "Vuoto mantiene la stagione del modello copiato.",
+    "parts": "Parti da copiare",
+    "reading": "Lettura di cosa può prendere la copia…",
+    "offerFailed": "Non è stato possibile leggere cosa può prendere la copia.",
+    "later": "W2b",
+    "notNow": "Non ora",
+    "refusedPart": "Rifiutata",
+    "always": "Copiati sempre: identità, gamma taglie, DPI, dati doganali, tracciatura dei capi e le varianti attive. Non copiati: SKU (creati su richiesta), nomi per lingua, immagini.",
+    "linked": "La copia parte in bozza collegata all’originale: la sua revisione 1 e la sua cronologia dicono da dove è copiata.",
+    "skus": "Crea subito i suoi SKU",
+    "skusHint_one": "Uno SKU per taglia della sua {count} variante; altrimenti dopo da Varianti e taglie.",
+    "skusHint_other": "Uno SKU per taglia di ognuna delle sue {count} varianti; altrimenti dopo da Varianti e taglie.",
+    "done": "{code} è un nuovo modello in bozza, copiato da {from}.",
+    "doneRevision": "Le sue parti vengono dalla revisione {revision} e sono nella sua revisione 1 (bozza).",
+    "doneNoRevision": "Nessuna parte richiedeva una revisione: avvia la revisione 1 nel suo studio.",
+    "copied": {
+      "parts": "Parti copiate",
+      "identityOnly": "Solo identità e varianti",
+      "colourways": "Varianti",
+      "bomLines": "Righe di distinta",
+      "routingSteps": "Fasi del ciclo",
+      "label": "Etichetta del capo",
+      "skus": "SKU creati"
+    },
+    "notesTitle_one": "{count} cosa è stata lasciata fuori",
+    "notesTitle_other": "{count} cose sono state lasciate fuori",
+    "doneNext": "Poi: controlla la copia, cambia ciò che è diverso, rilascia la sua revisione 1.",
+    "part": {
+      "BOM": "Distinta base",
+      "MEASUREMENTS": "Misure (su misura)",
+      "ROUTING": "Ciclo di lavoro",
+      "LABELS": "Etichetta del capo",
+      "PICTURES": "Immagini e schizzi",
+      "OPTIONS": "Opzioni"
+    },
+    "holds": {
+      "bom_one": "{count} riga della revisione {revision}, con taglie e colori",
+      "bom_other": "{count} righe della revisione {revision}, con taglie e colori",
+      "bomHidden": "Le righe di distinta della revisione (il tuo ruolo non ne legge il numero)",
+      "routing_one": "{count} fase della revisione {revision}, con minuti, punti di scansione e terzisti",
+      "routing_other": "{count} fasi della revisione {revision}, con minuti, punti di scansione e terzisti",
+      "routingHidden": "Le fasi del ciclo della revisione (il tuo ruolo non ne legge il numero)",
+      "label": "L’etichetta condivisa della revisione {revision}",
+      "measurements": "Su misura ammesso, con il suo modello di misure"
+    },
+    "reason": {
+      "PICTURES": "Schizzi e immagini del modello si copiano quando arriva la galleria (W2b).",
+      "OPTIONS": "Le opzioni del modello si copiano quando arrivano i gruppi di opzioni (W2b).",
+      "noRight": {
+        "BOM": "Copiare la distinta richiede il permesso di modificare le distinte: non nel tuo ruolo.",
+        "ROUTING": "Copiare il ciclo richiede il permesso di modificare i cicli: non nel tuo ruolo.",
+        "LABELS": "Copiare l’etichetta richiede il permesso di gestire le etichette: non nel tuo ruolo.",
+        "MEASUREMENTS": "Non nel tuo ruolo."
+      },
+      "notMtm": "{code} non è su misura.",
+      "noRevision": "{code} non ha ancora revisioni: niente da copiare.",
+      "noLines": "La revisione {revision} non ha righe di distinta.",
+      "noSteps": "La revisione {revision} non ha fasi di ciclo.",
+      "ownLabel": "L’etichetta {label} è propria di {code}: creane una per la copia in Conformità › Etichette e marcature.",
+      "retiredLabel": "L’etichetta {label} è ritirata.",
+      "noLabel": "La revisione {revision} non indica un’etichetta del capo.",
+      "other": "Ora non si può copiare."
+    },
+    "note": {
+      "sizes": "Le taglie {sizes} sono archiviate nella scala: la gamma della copia le lascia fuori.",
+      "colourways_one": "{count} variante archiviata non è stata copiata.",
+      "colourways_other": "{count} varianti archiviate non sono state copiate.",
+      "colour": "Variante {code}: il suo colore di libreria è archiviato o di un’altra azienda, quindi la copia non ne ha.",
+      "lines_one": "{count} riga di distinta di una variante archiviata non è stata copiata.",
+      "lines_other": "{count} righe di distinta di varianti archiviate non sono state copiate.",
+      "other": "Qualcos’altro è stato lasciato fuori: lo dice la cronologia della copia."
+    },
+    "held": {
+      "source": "Prima scegli il modello da copiare.",
+      "reading": "Lettura di cosa può prendere la copia.",
+      "offer": "Non è stato possibile leggere cosa può prendere la copia: riprova.",
+      "code": "Scrivi un nuovo codice: da 1 a 24 lettere maiuscole o cifre, con . _ - all’interno.",
+      "sameCode": "La copia ha bisogno di un codice proprio.",
+      "name": "Scrivi un nome."
+    },
+    "problem": {
+      "part": "Una parte non si può più copiare (è cambiata nel frattempo): le parti sono state rilette."
+    }
+  },
+  "customs": {
+    "title": "Dogana e origine",
+    "intro": "Ciò che i documenti di esportazione e l’Intrastat leggono per ogni capo del modello.",
+    "hsCode": "Codice doganale (SA / NC)",
+    "hsCodeHint": "6 cifre (SA), 8 (NC, quelle dell’Intrastat) o 10 (TARIC); punti e spazi vanno bene.",
+    "origin": "Paese di origine",
+    "originHint": "Dove è prodotto il capo (origine non preferenziale), mai \"UE\".",
+    "notOnRecord": "Non indicato",
+    "netMass": "Massa netta per capo",
+    "netMassHint": "Chilogrammi di un capo senza imballo, fino a 3 decimali.",
+    "kg": "{kg} kg",
+    "problem": {
+      "hsCode": "Scrivi 6, 8 o 10 cifre.",
+      "chapter": "Le prime due cifre non sono un capitolo del Sistema armonizzato (da 01 a 97, senza 77).",
+      "eu": "Indica il paese, non l’UE.",
+      "origin": "Scegli un paese dalla lista.",
+      "netMass": "Scrivi i chilogrammi sopra 0, con al massimo 3 decimali."
+    },
+    "held_one": "{count} campo doganale da sistemare prima",
+    "held_other": "{count} campi doganali da sistemare prima",
+    "refused": "Il server ha rifiutato questo valore: controllalo e salva di nuovo."
+  },
+  "subcontract": {
+    "inHouse": "Interna",
+    "make": "Affida a un terzista…",
+    "change": "Modifica…",
+    "details": "Dettagli",
+    "feeNotInRole": "compenso: non nel tuo ruolo",
+    "feeIs": "{fee} al pezzo",
+    "feePerOrder": "compenso concordato per ordine",
+    "noDays": "giorni di transito non indicati",
+    "days_one": "{count} giorno andata e ritorno",
+    "days_other": "{count} giorni andata e ritorno",
+    "title": "Dettagli del terzista · {step}",
+    "who": "Chi la fa",
+    "mode": {
+      "in": "Internamente",
+      "inHint": "Le nostre linee fanno la fase.",
+      "out": "Un terzista",
+      "outHint": "La fa un laboratorio esterno; i pezzi vanno e tornano."
+    },
+    "workshop": "Terzista",
+    "workshopHint": "Un terzista dell’azienda del modello o di ogni azienda.",
+    "workshopHintAll": "Questo modello è di ogni azienda: solo un terzista di ogni azienda.",
+    "noParties": "Scegliere un altro terzista richiede l’elenco clienti e fornitori: non nel tuo ruolo.",
+    "loading": "Lettura dei terzisti…",
+    "pick": "Scegli un terzista",
+    "noneYet": "Nessun terzista può ancora lavorare questo modello: aggiungine uno in Clienti e fornitori.",
+    "fee": "Compenso al pezzo",
+    "feeHint": "In euro, al pezzo; vuoto se si concorda a ogni ordine.",
+    "transit": "Giorni di transito",
+    "transitHint": "Giorni di viaggio dei pezzi, andata e ritorno (da 0 a 365).",
+    "daysUnit": "giorni",
+    "otherStarts": "Un altro terzista parte senza compenso e senza giorni di transito, se non li indichi.",
+    "backInHouse": "Salvando la fase torna da {code}: compenso e giorni si tolgono.",
+    "floor": "In reparto si vede il terzista, mai il compenso.",
+    "held": {
+      "fix_one": "{count} campo da sistemare prima",
+      "fix_other": "{count} campi da sistemare prima",
+      "same": "Ancora nulla di cambiato."
+    },
+    "problem": {
+      "workshop": "Scegli il terzista.",
+      "fee": "Scrivi un compenso di 0 o più, con al massimo 6 decimali.",
+      "days": "Scrivi giorni interi da 0 a 365."
+    }
   }
 }

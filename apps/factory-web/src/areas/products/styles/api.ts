@@ -5,7 +5,23 @@ import { complianceDocumentDetail, styleComplianceView, type ComplianceDocumentD
 import { materialRow, materialView, type MaterialRow, type MaterialView } from '@nexus/factory-domain/product/materials/contracts'
 import { operationRow, routingView, type OperationRow, type RoutingView } from '@nexus/factory-domain/product/routing/contracts'
 import { scaleRow, type ScaleRow } from '@nexus/factory-domain/product/sizes/contracts'
-import { colourRow, generatedSkus, revisionView, styleRow, styleView, type ColourRow, type GeneratedSkus, type RevisionView, type StyleRow, type StyleView } from '@nexus/factory-domain/product/styles/contracts'
+import {
+  colourRow,
+  duplicatedView,
+  duplicateOfferView,
+  generatedSkus,
+  revisionView,
+  styleRow,
+  styleView,
+  type ColourRow,
+  type DuplicatedView,
+  type DuplicateOfferView,
+  type GeneratedSkus,
+  type RevisionView,
+  type StyleRow,
+  type StyleView,
+} from '@nexus/factory-domain/product/styles/contracts'
+import type { CopyablePart } from '@nexus/factory-domain/product/styles/copy'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { presignedSchema, type Presigned } from '../../../record-panels/api'
 
@@ -20,7 +36,7 @@ import { presignedSchema, type Presigned } from '../../../record-panels/api'
  * Every write sends the version it was made on (COL-078) and an idempotency key; a 409 reads the record again.
  */
 
-export type { BomView, ColourRow, ComplianceDocumentDetail, CostDiffView, CostSheetView, GeneratedSkus, MaterialRow, MaterialView, OperationRow, RevisionView, RoutingView, ScaleRow, StyleComplianceView, StyleRow, StyleView }
+export type { BomView, ColourRow, ComplianceDocumentDetail, CostDiffView, CostSheetView, DuplicatedView, DuplicateOfferView, GeneratedSkus, MaterialRow, MaterialView, OperationRow, RevisionView, RoutingView, ScaleRow, StyleComplianceView, StyleRow, StyleView }
 export type BomLine = BomView['lines'][number]
 export type RoutingStep = RoutingView['steps'][number]
 export type CostCell = CostSheetView['cells'][number]
@@ -97,7 +113,13 @@ export function createStyle(api: ApiClient, input: NewStyleInput): Promise<Style
   return api.post('/product/styles', { body: input, schema: oneStyle, ...key() }).then((answer) => answer.style)
 }
 
-export type StylePatch = Partial<Pick<NewStyleInput, 'code' | 'name' | 'productType' | 'season' | 'brandPartyId' | 'sizeScaleId' | 'sizes' | 'baseSize' | 'ppeCategory' | 'ppeStandard' | 'ppeClass' | 'mtmAllowed'>> & { description?: string | null }
+export type StylePatch = Partial<Pick<NewStyleInput, 'code' | 'name' | 'productType' | 'season' | 'brandPartyId' | 'sizeScaleId' | 'sizes' | 'baseSize' | 'ppeCategory' | 'ppeStandard' | 'ppeClass' | 'mtmAllowed'>> & {
+  description?: string | null
+  /** W2a customs (PRD-018): HS 6 / CN 8 / TARIC 10 digits, the ISO country of origin, kg per garment; null clears. */
+  hsCode?: string | null
+  originCountry?: string | null
+  netMassKg?: string | null
+}
 
 export function updateStyle(api: ApiClient, style: Pick<StyleView, 'id' | 'version'>, patch: StylePatch): Promise<StyleView> {
   return api.request('PATCH', stylePath(style.id), { body: { ...patch, version: style.version }, schema: oneStyle, ...key() }).then((answer) => answer.style)
@@ -114,6 +136,31 @@ export function reactivateStyle(api: ApiClient, style: Pick<StyleView, 'id' | 'v
 /** How the garments are numbered on their labels (Q31): the batch number, or one serial per garment. */
 export function setGarmentTracking(api: ApiClient, style: Pick<StyleView, 'id' | 'version'>, tracking: StyleView['garmentTracking']): Promise<StyleView> {
   return api.request('PUT', `${stylePath(style.id)}/garment-tracking`, { body: { version: style.version, tracking }, schema: oneStyle, ...key() }).then((answer) => answer.style)
+}
+
+// ---- copy a style (W2a, PRD-011; design pop:styles.duplicate) ----------------------------------------------------------
+
+const oneOffer = z.object({ offer: duplicateOfferView })
+
+/** What a copy of the style can take (its revision's parts, each available or why not) and what it would leave out. */
+export function getDuplicateOffer(api: ApiClient, styleId: string, fromRevisionId?: string | null): Promise<DuplicateOfferView> {
+  return api.get(`${stylePath(styleId)}/duplicate`, { query: { fromRevisionId: fromRevisionId ?? undefined }, schema: oneOffer }).then((answer) => answer.offer)
+}
+
+export interface DuplicateInput {
+  code: string
+  name: string
+  /** Left out: the source's season. */
+  season?: string | null
+  parts: CopyablePart[]
+  fromRevisionId?: string
+  changeNote?: string
+  generateSkus?: boolean
+}
+
+/** The copy: a new DRAFT style with the parts picked in its revision 1 (the answer's style is the copy). */
+export function duplicateStyle(api: ApiClient, styleId: string, input: DuplicateInput): Promise<DuplicatedView> {
+  return api.post(`${stylePath(styleId)}/duplicate`, { body: input, schema: duplicatedView, ...key() })
 }
 
 // ---- colourways and SKUs (SCR-041) ------------------------------------------------------------------------------------
@@ -200,6 +247,15 @@ export function listBrands(api: ApiClient): Promise<BrandRow[]> {
   return api.get('/parties', { query: { role: 'BRAND', status: 'ACTIVE', limit: 200 }, schema: brandPage }).then((answer) => answer.parties)
 }
 
+/** A workshop (a party with the SUBCONTRACTOR role) a routing step may name; its company decides where it may work. */
+const workshopRow = z.object({ id: z.string(), companyId: z.string().nullable(), code: z.string(), legalName: z.string(), tradeName: z.string().nullable() })
+export type WorkshopRow = z.infer<typeof workshopRow>
+const workshopPage = z.object({ parties: z.array(workshopRow) })
+
+export function listWorkshops(api: ApiClient): Promise<WorkshopRow[]> {
+  return api.get('/parties', { query: { role: 'SUBCONTRACTOR', status: 'ACTIVE', limit: 200 }, schema: workshopPage }).then((answer) => answer.parties)
+}
+
 const materialPage = z.object({ materials: z.array(materialRow), nextCursor: z.string().nullable(), count: z.number().int() })
 
 export function findMaterials(api: ApiClient, q: string, companyId: string | null): Promise<MaterialRow[]> {
@@ -273,6 +329,13 @@ export function updateRevision(api: ApiClient, styleId: string, revision: { id: 
   return api.request('PATCH', revisionPath(styleId, revision.id), { body: { ...patch, version: revision.version }, schema: oneBom, ...key() }).then((answer) => answer.bom)
 }
 
+export type BomExportFormat = 'xlsx' | 'csv' | 'pdf'
+
+/** The BOM as a file (W2a, PRD-090): the import's columns (xlsx / csv, numbers as `numberFormat` writes them) or the PDF sheet. */
+export function exportBom(api: ApiClient, styleId: string, revisionId: string, format: BomExportFormat, locale: 'it' | 'en'): Promise<Uint8Array> {
+  return api.bytes(`${revisionPath(styleId, revisionId)}/bom/export`, { query: { format, numberFormat: locale, language: locale } })
+}
+
 // ---- the routing (SCR-043) ------------------------------------------------------------------------------------------------
 
 const oneRouting = z.object({ routing: routingView })
@@ -287,12 +350,28 @@ export function addSteps(api: ApiClient, styleId: string, revision: { id: string
     .then((answer) => answer.routing)
 }
 
+/** A step's subcontract details (W2a, PRD-120): the workshop, its fee per piece (the cost grain) and the transit days. */
+export interface SubcontractPatch {
+  supplierId?: string
+  /** Sent only by a person with the cost grain (the API refuses it otherwise). */
+  pricePerPiece?: string | null
+  transitDays?: number | null
+}
+
+export interface StepPatch {
+  standardMinutes?: string
+  scanRequired?: boolean
+  instructions?: string | null
+  /** null: the step goes back in-house. */
+  subcontract?: SubcontractPatch | null
+}
+
 export function updateStep(
   api: ApiClient,
   styleId: string,
   revision: { id: string; version: number },
   stepId: string,
-  patch: { standardMinutes?: string; scanRequired?: boolean; instructions?: string | null },
+  patch: StepPatch,
 ): Promise<RoutingView> {
   return api
     .request('PATCH', `${revisionPath(styleId, revision.id)}/routing/steps/${enc(stepId)}`, { body: { ...patch, version: revision.version }, schema: oneRouting, ...key() })
@@ -382,4 +461,40 @@ export function listLabelTemplates(api: ApiClient): Promise<LabelTemplateRow[]> 
 
 export function assignLabel(api: ApiClient, styleId: string, revision: { id: string; version: number }, labelTemplateId: string | null): Promise<unknown> {
   return api.request('PUT', `${revisionPath(styleId, revision.id)}/label`, { body: { labelTemplateId, version: revision.version }, ...key() })
+}
+
+// ---- list prices (W2a, B-W2a-19: the base price list in force) --------------------------------------------------------
+
+/** A price list row (sales/pricelists contract, the fields read here). */
+const priceListRow = z.object({
+  id: z.string(),
+  companyId: z.string().nullable(),
+  code: z.string(),
+  name: z.string(),
+  kind: z.string(),
+  currency: z.string(),
+  state: z.string(),
+  shownVersion: z.object({ id: z.string(), revision: z.number().int() }).nullable(),
+})
+export type PriceListRow = z.infer<typeof priceListRow>
+const priceLists = z.object({ lists: z.array(priceListRow) })
+
+/** A price of a version: the style's own (colourwayId null) or a colourway's; money fields only with their grain. */
+const priceEntry = z.object({
+  styleId: z.string(),
+  colourwayId: z.string().nullable(),
+  unitPrice: z.string().optional(),
+  marginPct: z.string().nullable().optional(),
+  belowFloor: z.boolean().optional(),
+})
+export type PriceEntry = z.infer<typeof priceEntry>
+const versionEntries = z.object({ entries: z.array(priceEntry) })
+
+/** The BASE price lists in force for the company (its own and every company's). */
+export function basePriceLists(api: ApiClient, companyId: string | null): Promise<PriceListRow[]> {
+  return api.get('/sales/price-lists', { query: { companyId: companyId ?? undefined, kind: 'BASE', state: 'IN_FORCE' }, schema: priceLists }).then((answer) => answer.lists)
+}
+
+export function priceEntries(api: ApiClient, listId: string, versionId: string): Promise<PriceEntry[]> {
+  return api.get(`/sales/price-lists/${enc(listId)}/versions/${enc(versionId)}`, { schema: versionEntries }).then((answer) => answer.entries)
 }

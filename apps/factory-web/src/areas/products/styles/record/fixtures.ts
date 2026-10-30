@@ -1,5 +1,6 @@
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { demoBom, demoCompliance, demoStyle, newStyle, recordModel, REV, REVISIONS, SCALES, SIZES } from '../demo/fixtures'
+import { demoBom, demoCompliance, demoDuplicated, demoOffer, demoStyle, newStyle, recordModel, REV, REVISIONS, SCALES, SIZES, STYLE_ID } from '../demo/fixtures'
+import { draftFor } from '../duplicate/duplicate-model'
 import type { StyleRecordViewModel } from './record-model'
 import { StyleRecordView } from './view/StyleRecordView'
 
@@ -13,6 +14,8 @@ import { StyleRecordView } from './view/StyleRecordView'
 const owner = recordModel('owner')
 const released = [REVISIONS[1]!, REVISIONS[2]!]
 const ready = recordModel('owner', { bom: { status: 'ready', value: demoBom({ complete: true }) } })
+const offer = demoOffer()
+const duplicate = { source: { id: STYLE_ID, code: 'DEMO-JKT-01', name: 'Giacca Touring Demo' }, pick: null, offer: { status: 'ready' as const, value: offer }, draft: { ...draftFor(offer), code: 'DEMO-JKT-01-SS', name: 'Giacca Touring Demo Estiva', season: 'SS28' }, busy: false, problem: null, refused: [], done: null }
 
 export const designScreen = defineDesignScreen<StyleRecordViewModel>({
   screen: 'SCR-041',
@@ -50,6 +53,14 @@ export const designScreen = defineDesignScreen<StyleRecordViewModel>({
     { id: 'error', label: 'Could not open', model: recordModel('owner', { style: { status: 'error', problem: 'problem.read.unavailable' } }) },
     { id: 'not-found', label: 'Not found', model: recordModel('owner', { style: { status: 'not_found' } }) },
     { id: 'no-permission', label: 'No access', model: recordModel('sales', { style: { status: 'forbidden' } }) },
+    { id: 'customs', label: 'W2a: customs and origin', model: owner, note: 'On the identity card: HS / CN code 4203 10 00, origin Italy (IT), net mass 1,85 kg per garment — what Intrastat and the export papers read.' },
+    { id: 'customs-editing', label: 'W2a: customs being changed', model: recordModel('owner', { identityDraft: { hsCode: '6201.40', originCountry: 'RO', netMassKg: '2,1' } }), note: 'Dots and spaces are fine (kept as digits); either decimal sign; the save bar counts the changes.' },
+    { id: 'customs-invalid', label: 'W2a: customs refused before the save', model: recordModel('owner', { identityDraft: { hsCode: '7701', originCountry: 'EU', netMassKg: '0' } }), note: 'Said at each field in our words (not a chapter of the HS; a country, not the EU; above 0 kg); Save held with the count.' },
+    { id: 'customs-refused', label: 'W2a: customs refused by the server', model: recordModel('owner', { notice: { key: 'problem.write.invalid', tone: 'danger' }, refused: ['body/hsCode'], save: { state: 'failed', at: null } }) },
+    { id: 'customs-sales', label: 'W2a: customs (sales reads)', model: recordModel('sales'), note: 'Drawn as text with the rest of the identity.' },
+    { id: 'customs-empty', label: 'W2a: no customs data yet', model: recordModel('owner', { style: { status: 'ready', value: newStyle() }, revisionId: REV.r1, bom: { status: 'ready', value: demoBom({ revision: { ...REVISIONS[2]!, status: 'DRAFT' }, empty: true }) }, compliance: { status: 'idle' } }) },
+    { id: 'duplicate', label: 'W2a: Duplicate style (band ⋯)', model: recordModel('owner', { duplicate }), note: 'The same dialog as the list\'s; parts from the released revision 2.' },
+    { id: 'duplicate-done', label: 'W2a: the copy is made', model: recordModel('owner', { duplicate: { ...duplicate, done: demoDuplicated() } }), note: 'Open the copy; what it left out in our words.' },
     { id: 'compliance-docs', label: 'Release with documents missing', model: recordModel('owner', { bom: { status: 'ready', value: demoBom({ complete: true }) }, compliance: { status: 'ready', value: demoCompliance({ docs: 'missing' }) }, dialog: { kind: 'release' } }), note: 'The DoC and leaflet stop shipping, the certificate gap stops production of size 58: said in the check, not refused.' },
   ],
 })
