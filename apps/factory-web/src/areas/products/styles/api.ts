@@ -413,6 +413,32 @@ export function getCompliance(api: ApiClient, styleId: string, revisionId: strin
   return api.get(`${stylePath(styleId)}/compliance`, { query: { revisionId: revisionId ?? undefined }, schema: oneCompliance }).then((answer) => answer.compliance)
 }
 
+// ---- W2a (B-W2a-66): changes that may need the notified body (PRD-285; Reg. (EU) 2016/425 Annex V 7.2) ----------------------
+
+/** A local copy of the API's contract (apps/factory-api modules/compliance/type-changes contract.ts styleChangesView). */
+const typeChangeRevision = z.object({ id: z.string(), revision: z.number().int(), status: z.string() })
+export const typeChangeSchema = z.object({ kind: z.enum(['OUTER_LEATHER', 'THICKNESS', 'PROTECTOR', 'SEAMS', 'LINING', 'OTHER']), what: z.string(), before: z.string(), after: z.string(), bomLineId: z.string().nullable() })
+export type TypeChange = z.infer<typeof typeChangeSchema>
+const styleTypeChanges = z.object({
+  styleId: z.string(),
+  revision: typeChangeRevision.nullable(),
+  certificates: z.array(
+    z.object({
+      certificate: z.object({ id: z.string(), number: z.string(), standard: z.string(), status: z.string(), notifiedBodyName: z.string(), notifiedBodyNumber: z.string() }),
+      comparedRevision: typeChangeRevision.nullable(),
+      changes: z.array(typeChangeSchema),
+      reviews: z.array(z.object({ id: z.string(), status: z.enum(['OPEN', 'NOTIFIED', 'APPROVED', 'REFUSED', 'NOT_NEEDED']), holdsLabel: z.boolean(), answeredOn: z.string().nullable(), answerReference: z.string().nullable(), notifiedAt: z.string().nullable() })),
+      labelHeld: z.boolean(),
+    }),
+  ),
+})
+export type StyleTypeChanges = z.infer<typeof styleTypeChanges>
+
+/** `GET /compliance/type-changes/styles/:styleId?revisionId=`: per covering certificate what the revision changes (a draft: now). */
+export function getTypeChanges(api: ApiClient, styleId: string, revisionId: string | null): Promise<StyleTypeChanges> {
+  return api.get(`/compliance/type-changes/styles/${encodeURIComponent(styleId)}`, { query: { revisionId: revisionId ?? undefined }, schema: z.object({ changes: styleTypeChanges }) }).then((answer) => answer.changes)
+}
+
 const announced = z.object({ document: z.object({ id: z.string() }).passthrough(), file: z.object({ id: z.string() }).passthrough(), upload: presignedSchema })
 
 export interface DocumentUpload {

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { BadgeCheck, Download, MoreHorizontal, Plus, Search, X } from 'lucide-react'
 import { Banner, EmptyState, Menu, MetricStrip, type MenuItemDef } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, FilterChip, Input, Select, Skeleton } from '@nexus/ui/primitives'
+import { Button, FilterChip, Input, Select, Skeleton, Tag } from '@nexus/ui/primitives'
 import { useT } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
@@ -66,7 +66,8 @@ function CertificatesList({ model, actions }: { model: CertificatesListModel; ac
   const can = model.can
   const dialog = model.dialog
   const all = useMemo(() => model.rows.value ?? [], [model.rows.value])
-  const rows = useMemo(() => filterRows(all, model.filters), [all, model.filters])
+  const waiting = useMemo(() => model.waiting?.value ?? {}, [model.waiting?.value])
+  const rows = useMemo(() => filterRows(all, model.filters, waiting), [all, model.filters, waiting])
   const selectedRows = rows.filter((row) => model.selected.includes(row.id))
   const [query, setQuery] = useState(model.filters.q)
   useEffect(() => setQuery(model.filters.q), [model.filters.q])
@@ -142,6 +143,17 @@ function CertificatesList({ model, actions }: { model: CertificatesListModel; ac
         </span>
       ) : null
     const StatusCell = ({ data }: ICellRendererParams<Certificate>) => (data ? <StatusPill status={data.status} /> : null)
+    // W2a (B-W2a-66): a change to the approved type waiting for the notified body (the reviews of the Renewals tab).
+    const ChangesCell = ({ data }: ICellRendererParams<Certificate>) => {
+      if (!data) return null
+      const count = model.waiting?.value ? (model.waiting.value[data.id] ?? 0) : null
+      if (count === null || count === 0) return <span className="fw-q-hint">{count === null ? '—' : t('list.changesNone')}</span>
+      return (
+        <Link className="fw-q-link" href={certificateHref(model.prefix, data.id, 'tab=renewals')} tabIndex={-1}>
+          <Tag tone="warning">{t('list.changesWaiting', { count })}</Tag>
+        </Link>
+      )
+    }
     const ActionsCell = ({ data }: ICellRendererParams<Certificate>) =>
       data ? <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('row.menu', { number: data.number }) }} items={rowItems(data)} /> : null
     const rowItems = (certificate: Certificate): MenuItemDef[] => {
@@ -151,6 +163,13 @@ function CertificatesList({ model, actions }: { model: CertificatesListModel; ac
         { id: 'tab', label: t('row.openNewTab'), href, target: '_blank' },
         { id: 'coverage', label: t('row.coverage'), href: certificateHref(model.prefix, certificate.id, 'tab=coverage') },
         { id: 'check', label: t('row.check'), href: certificateHref(model.prefix, certificate.id, 'tab=coverage&act=check') },
+        // W2a (B-W2a-66): Start renewal opens the Renewals tab with its dialog.
+        {
+          id: 'renew',
+          label: t('row.renew'),
+          href: certificateHref(model.prefix, certificate.id, 'tab=renewals&act=renew'),
+          ...(!model.can.manage ? { disabled: true, description: t('held.manage') } : certificate.status !== 'VALID' && certificate.status !== 'SUSPENDED' ? { disabled: true, description: t('ren.held.notRenewable') } : {}),
+        },
         { id: 'copy', label: t('row.copy'), onSelect: () => live.current.actions?.onCopy?.(certificate.number) },
       ]
     }
@@ -163,10 +182,11 @@ function CertificatesList({ model, actions }: { model: CertificatesListModel; ac
       { colId: 'covers', headerName: t('list.col.covers'), sortable: false, flex: 1, minWidth: 150, valueGetter: (params) => (params.data ? t('list.covers', { count: params.data.coverageCount }) : '') },
       column('valid', t('list.col.valid'), ValidCell, { flex: 1.6, minWidth: 210 }),
       column('status', t('list.col.status'), StatusCell, { flex: 0.9, minWidth: 120 }),
+      column('changes', t('list.col.changes'), ChangesCell, { flex: 1, minWidth: 150 }),
       { ...column('actions', t('list.col.actions'), ActionsCell, { width: 72, minWidth: 72 }), suppressHeaderMenuButton: true },
     ]
     // The cells close over the words, the people's names and today: a change of these rebuilds them.
-  }, [t, day, model.prefix, model.companies, model.brands, model.today])
+  }, [t, day, model.prefix, model.companies, model.brands, model.today, model.waiting, model.can.manage])
 
   if (!can.view) return <NoAccess title={t('noAccess.title')} body={t('noAccess.body')} />
 

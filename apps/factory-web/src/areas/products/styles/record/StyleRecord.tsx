@@ -9,6 +9,9 @@ import { WithMessages } from '../../../../record-panels/i18n'
 import { useLiveChanges } from '../../../../record-panels/live'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { putToStore, storeUrl } from '../../../../record-panels/store'
+import { createTask, listAssignees, taskReadProblem } from '../../../../record-panels/tasks/api'
+import { checklistLines, type Assignable } from '../../../../record-panels/tasks/model'
+import type { PanelRead } from '../../../../record-panels/model'
 import {
   addBomLine,
   addColourway,
@@ -26,6 +29,7 @@ import {
   generateSkus,
   getBom,
   getCompliance,
+  getTypeChanges,
   getCostSheet,
   getMaterial,
   getRouting,
@@ -58,6 +62,7 @@ import {
   type MaterialView,
   type RoutingView,
   type StyleComplianceView,
+  type StyleTypeChanges,
   type StyleView,
 } from '../api'
 import { useDuplicate } from '../duplicate/use-duplicate'
@@ -107,6 +112,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const [routing, setRouting] = useState<Part<RoutingView>>({ status: 'idle' })
   const routingRef = useRef<RoutingView | null>(null)
   const [compliance, setCompliance] = useState<Part<StyleComplianceView>>({ status: 'idle' })
+  const [typeChanges, setTypeChanges] = useState<Part<StyleTypeChanges>>({ status: 'idle' })
+  const [taskPeople, setTaskPeople] = useState<PanelRead<readonly Assignable[]> | null>(null)
   const [cost, setCost] = useState<Part<CostSheetView>>({ status: 'idle' })
   const [costCompare, setCostCompare] = useState<CostDiffView | null>(null)
   const [costCell, setCostCell] = useState<{ colourwayId: string; size: string } | null>(null)
@@ -201,6 +208,10 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
         getCompliance(api, styleId, id)
           .then((next) => setCompliance({ status: 'ready', value: next }))
           .catch((error: unknown) => setCompliance({ status: 'error', problem: readProblem(error) }))
+        // W2a (B-W2a-66): what the revision changes against the certified type (Changes that may need the notified body).
+        getTypeChanges(api, styleId, id)
+          .then((next) => setTypeChanges({ status: 'ready', value: next }))
+          .catch((error: unknown) => setTypeChanges({ status: 'error', problem: readProblem(error) }))
       }
     },
     [api, styleId, can.bomView, can.routingView, can.complianceView, can.costView, setBomValue, setRoutingValue],
@@ -435,6 +446,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     cost,
     costCompare,
     compliance,
+    typeChanges,
+    taskPeople,
     libraries,
     materials,
     materialSearch,
@@ -464,6 +477,13 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
         onDialog: (next) => {
           // A new material search starts empty (never the last dialog's results under an empty box).
           if (next?.kind === 'bomLine' && next.lineId === null) setMaterialSearch({ query: '', results: null, problem: null })
+          // W2a: who may keep a task on the style ("Tell Compliance").
+          if (next?.kind === 'tellCompliance') {
+            setTaskPeople({ status: 'loading' })
+            listAssignees(api, { type: 'Style', id: styleId })
+              .then((people) => setTaskPeople({ status: 'ready', data: people }))
+              .catch((error: unknown) => setTaskPeople({ status: 'error', problem: taskReadProblem(error) }))
+          }
           setDialog(next)
         },
         onDismissNotice: () => setNotice(null),
@@ -601,6 +621,12 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
             await confirmDocument(api, styleId, announced.documentId, announced.fileId)
             setCompliance({ status: 'ready', value: await getCompliance(api, styleId, revisionId) })
           }, { key: 'notice.uploaded', tone: 'success' }),
+        onTellCompliance: (draft) =>
+          run(async () => {
+            const checklist = checklistLines(draft.checklist).map((text) => ({ text }))
+            await createTask(api, { title: draft.title, description: draft.description.trim() || null, record: { type: 'Style', id: styleId }, assigneeId: draft.assigneeId, dueDate: draft.dueDate || null, checklist })
+            setDialog(null)
+          }, { key: 'notice.toldCompliance', tone: 'success' }),
         onDownload: (documentId, fileId) => {
           documentDownload(api, styleId, documentId, fileId)
             .then((download) => {

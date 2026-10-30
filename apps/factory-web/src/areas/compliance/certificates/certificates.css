@@ -292,3 +292,112 @@
     display: none;
   }
 }
+
+/* ---- W2a (B-W2a-66): the Renewals tab ------------------------------------------------------------------------------------
+ * The composed ValidityBar (design "(new)": not in the DS yet): the five years as a track, the elapsed part, the renewal
+ * window as a band, a mark per alert stage and today; every mark is also said in words below it (Timeline, banner). The
+ * changes list's "before → after" (a composed ChangeValue). Layout and semantic tokens only. */
+
+.fw-ce-ren-bar {
+  display: grid;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-6) 0;
+}
+
+.fw-ce-ren-track {
+  position: relative;
+  height: var(--nds-space-10);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-sunken);
+  border: 1px solid var(--nds-border);
+  overflow: hidden;
+}
+
+.fw-ce-ren-elapsed {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--nds-success-soft);
+}
+
+.fw-ce-ren-window {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--nds-warning-soft);
+  border-left: 2px solid var(--nds-warning-border);
+  border-right: 2px solid var(--nds-warning-border);
+}
+
+.fw-ce-ren-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-1px);
+  background: var(--nds-warning-strong);
+}
+
+.fw-ce-ren-mark.is-today {
+  width: 3px;
+  background: var(--nds-text-strong);
+}
+
+.fw-ce-ren-ends {
+  display: flex;
+  justify-content: space-between;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ce-ren-h {
+  margin: 0 0 var(--nds-space-6);
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-ce-ren-steps {
+  margin: var(--nds-space-6) 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--nds-space-4);
+}
+
+.fw-ce-ren-steps li {
+  display: flex;
+  gap: var(--nds-space-4);
+  align-items: flex-start;
+}
+
+.fw-ce-ren-steps li.is-done .fw-ce-ren-tick {
+  color: var(--nds-success-text);
+}
+
+.fw-ce-ren-tick {
+  flex: none;
+  margin-top: var(--nds-space-2);
+  color: var(--nds-text-2);
+}
+
+.fw-ce-ren-log {
+  margin-top: var(--nds-space-8);
+}
+
+.fw-ce-ren-preview {
+  padding: var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-ce-ren-preview p {
+  margin: 0 0 var(--nds-space-4);
+}
+
+.fw-ce-change {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-2) var(--nds-space-4);
+}
