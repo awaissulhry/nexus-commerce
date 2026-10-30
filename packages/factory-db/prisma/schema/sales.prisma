@@ -680,6 +680,9 @@ model SalesOrderLine {
   sizes              SalesOrderLineSize[]
   // production.prisma: the work order cells that make it.
   workOrderSizes     WorkOrderSize[]
+  // W2a reservations.prisma, planning.prisma: the stock held for it before its work order, and the planning runs' pegging.
+  reservations       Reservation[]
+  peggings           RequirementPegging[]
   // shipping.prisma: the shipment lines that ship it.
   shipmentLines      ShipmentLine[]
   // money.prisma: the invoice lines that bill it.

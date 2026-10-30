@@ -69,7 +69,8 @@
     "TRANSFER": "Transfer",
     "ADJUSTMENT": "Adjustment",
     "COUNT": "Count difference",
-    "SCRAP": "Scrap"
+    "SCRAP": "Scrap",
+    "PRODUCTION_RECEIPT": "Finished goods from a work order"
   },
   "quality": {
     "QUARANTINE": "Quarantine",
@@ -105,7 +106,8 @@
     "QUARANTINE": "Quarantine shelf",
     "PRODUCTION": "Line side",
     "SHIPPING": "Shipping",
-    "SUBCONTRACTOR": "Subcontractor"
+    "SUBCONTRACTOR": "Subcontractor",
+    "FINISHED_GOODS": "Finished goods"
   },
   "locationStatus": {
     "ACTIVE": "Active",

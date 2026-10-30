@@ -1,0 +1,22 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/rework.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office writes rework orders and replacement requests through apps/factory-api's modules/production/{rework,scrap} (B-W2a-13), always through command(). Rework is scanned on the floor (MES-126; the design's floor operation screen counts rework, and the rework's own scans finish it): the floor's scan command opens a rework order for the garments it counted as rework and moves it on, on its own site only. A replacement (a recut or a lowered order quantity, MES-130) is the office's: the cutting room's recut list is read through the office API, and the cut that replaces it is linked by the office or by the system handler after the floor's cut event. No cost, price or wages column here, and no worker is named (Owner answer F2). Nobody deletes a row (cancelled instead); the …_production_w2a_guards triggers hold the states for every login. Portal and link sessions get nothing. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "ReworkOrder": {
+      "about": "The office opens, edits (while OPEN), moves and cancels rework. The floor reads its own site's rework, opens it from a scan's rework count and moves it on (IN_PROGRESS, DONE with good and scrap): rework is scanned on the floor.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    },
+    "ReplacementRequest": {
+      "about": "The office asks for a recut or a lower order quantity, approves or refuses a reduction (another person), records the cut that replaced a recut, cancels. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

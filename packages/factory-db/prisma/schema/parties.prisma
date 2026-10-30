@@ -88,7 +88,10 @@ model Party {
   depositRequests     DepositRequest[]
   // supply.prisma: as a supplier, its purchase orders and the requirements it is suggested for.
   purchaseOrders       PurchaseOrder[]
-  materialRequirements MaterialRequirement[]
+  materialRequirements MaterialRequirement[] @relation("MaterialRequirementSupplier")
+  // W2a supply.prisma, planning.prisma: the firm planned orders that buy from it, the item parameters that prefer it.
+  firmRequirements     MaterialRequirement[] @relation("MaterialRequirementFirmSupplier")
+  itemPlannings        ItemPlanning[]        @relation("ItemPlanningSupplier")
   // inventory.prisma: as a supplier, the goods received from it and its lots.
   goodsReceipts        GoodsReceipt[]
   lots                 Lot[]
@@ -117,6 +120,8 @@ model Party {
   subcontractedOperations RoutingOperation[]
   subcontractorLocations  Location[]
   subcontractOrders       SubcontractOrder[]
+  // W2a schedule.prisma: as a workshop, its slots on the planning board.
+  scheduleSlots           ScheduleSlot[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the party's rows.

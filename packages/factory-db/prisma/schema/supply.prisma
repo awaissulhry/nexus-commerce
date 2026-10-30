@@ -21,7 +21,8 @@
 // BOMs of the open orders per size and colour and nets them against usable (RELEASED) stock and open purchase orders.
 // Each MaterialRequirement is one item (and colour) of a run: its numbers are a snapshot, fixed when written; only its
 // decision changes (ORDERED with the purchase order line that buys it, or IGNORED) once the run is DONE. Reservations
-// are not kept (PLAN §1.3: SCM-205, 209, 210 are W2a).
+// are reservations.prisma's (W2a wave 4). W2a (B-W2a-22): the planner may make a requirement a firm planned order (its
+// firm columns), which the next run carries; each run's pegging and exceptions are planning.prisma's.
 //
 // Money (A1 §2.1, §2.6): purchase prices are costs (`@grain cost`): unit prices Decimal(18,6), amounts Int minor units
 // of the order's currency. Quantities are Decimal(18,4) with their unit (enum Uom): a line is bought in its own unit
@@ -249,6 +250,8 @@ model PurchaseOrderLine {
   item          Item                  @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   itemColour    ItemColour?           @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
   requirements  MaterialRequirement[]
+  // W2a planning.prisma: the planning runs' pegging rows that count on it.
+  peggings      RequirementPegging[]
   // inventory.prisma: the receipt lines received against it.
   receiptLines  GoodsReceiptLine[]
 
@@ -285,6 +288,9 @@ model PlanningRun {
 
   site         Site                  @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   requirements MaterialRequirement[]
+  // W2a planning.prisma: the exceptions it found first, and those it found last.
+  firstExceptions PlanningException[] @relation("PlanningExceptionFirstRun")
+  lastExceptions  PlanningException[] @relation("PlanningExceptionLastRun")
 
   // The target of the requirements' reference: on the run's own site.
   @@unique([tenantId, siteId, id])
@@ -350,6 +356,19 @@ model MaterialRequirement {
   purchaseOrderLineId String?             @db.Uuid
   decidedAt           DateTime?           @db.Timestamptz(3)
   decidedById         String?             @db.Uuid
+  /// W2a (PLN-075, B-W2a-22): a firm planned order. The planner fixed the suggestion: how much (in `suggestedUom`, and
+  /// in the base unit, both above 0), by when, from which supplier (a BUY only), who and when; all four amounts and dates
+  /// or none. The next run keeps it as planned supply and carries it instead of planning it again. Never on an IGNORED
+  /// line; fixed while the line is ORDERED (the …_stock_plan_w2a_guards trigger).
+  firmQuantity        Decimal?            @db.Decimal(18, 4)
+  firmBaseQuantity    Decimal?            @db.Decimal(18, 4)
+  firmDate            DateTime?           @db.Date
+  firmSupplierId      String?             @db.Uuid
+  firmedAt            DateTime?           @db.Timestamptz(3)
+  firmedById          String?             @db.Uuid
+  /// W2a: the firm line of an earlier run of the site that this line carries (the same material, colour and action);
+  /// written with the line, never changed. A carried line is firm.
+  firmCarriedFromId   String?             @db.Uuid
   version             Int                 @default(1)
   createdAt           DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
@@ -358,10 +377,20 @@ model MaterialRequirement {
   run               PlanningRun        @relation(fields: [tenantId, siteId, runId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   item              Item               @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   itemColour        ItemColour?        @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
-  supplier          Party?             @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplier          Party?             @relation("MaterialRequirementSupplier", fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   purchaseOrderLine PurchaseOrderLine? @relation(fields: [tenantId, siteId, purchaseOrderLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2a planning.prisma: the firm planned order's supplier, the firm line it carries and the lines that carry it, its
+  // pegging and the exceptions that name it. Restrict, not Prisma's SetNull default: that would also clear tenantId.
+  firmSupplier      Party?                @relation("MaterialRequirementFirmSupplier", fields: [tenantId, firmSupplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  firmCarriedFrom   MaterialRequirement?  @relation("MaterialRequirementFirmCarry", fields: [tenantId, siteId, firmCarriedFromId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  firmCarriedInto   MaterialRequirement[] @relation("MaterialRequirementFirmCarry")
+  peggings          RequirementPegging[]
+  exceptions        PlanningException[]
 
   @@unique([tenantId, runId, seq])
+  // W2a: the targets of the references from planning.prisma (pegging names its run too) and of a carried firm line.
+  @@unique([tenantId, siteId, id])
+  @@unique([tenantId, siteId, runId, id])
 }
 
 enum RequirementAction {
