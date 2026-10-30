@@ -1,0 +1,216 @@
+// Receivables (W2a plan §5 schema wave 7/7; features FIN-109, FIN-110, FIN-111, FIN-122, FIN-127; design
+// finance.receivables "Reminders to approve", finance.payments "Refund" and the tile "Refunds to make"): what the company
+// pays back to a customer, the reminders the ladder prepares for overdue invoices, and the ladder itself.
+// apps/factory-api's modules/receivables (B-W2a-55: ledger, statement, ageing, the reminder ladder a person approves) and
+// modules/payments (B-W2a-61: refunds, one payment to many invoices, a credit balance) write them, always through
+// command().
+//
+// A refund (FIN-127) pays money back to a party: what a credit note (money.prisma Invoice TD04) credits on an invoice
+// that was already paid (W1's `invoice.refund_due`), or what a payment received left unplaced (an overpayment: the credit
+// balance of FIN-122). It is DUE when the office knows it must pay it, PAID once the bank transfer is made (its date and
+// the bank's reference), CANCELLED when it is not paid after all (the customer keeps the credit), VOIDED when a PAID one
+// was typed by mistake. A credit note's refunds never pass its gross total; a payment's allocations and refunds together
+// never pass its amount (the …_money_w2a_guards triggers, under the money locks of …_money_guards; the allocation check
+// of W1 is redefined to count the refunds).
+//
+// A payment reminder (FIN-110, FIN-111) is prepared by the ladder (B-W2a-55, on the date timers of wave 1/7) for one
+// customer at one level of the ladder, covering one or more of its open invoices; a person approves it (or skips it with
+// a reason) and only then is it sent: an e-mail (email-out's EmailOutbound row of recordType "PaymentReminder"), a
+// letter (its PDF a StoredFile of the reminder) or a call (its outcome in words). Nothing reaches a customer while the
+// company's reminders are switched off (ReceivablesSettings.remindersEnabled, off by default: the Owner's switch, W2a
+// plan §2), and the wording and the late-payment interest (D.Lgs. 231/2002) are the accountant's (GATE-ACCOUNTANT): the
+// schema holds the answer once it is given and never assumes one.
+//
+// Who sees what (ownership/receivables.json): the office reads and writes; the floor, portal and link sessions read none
+// of it (no W2a portal page shows a refund or a reminder). Nothing is deleted: a refund is cancelled or voided, a
+// reminder skipped or cancelled, the settings changed.
+
+/// Money the company pays back to a party (FIN-127; design finance.payments "Refund", tile "Refunds to make"): for a
+/// credit note on what was paid, or for a payment's unplaced part (a credit balance, FIN-122). One bank transfer out.
+model Refund {
+  id            String        @id @db.Uuid
+  tenantId      String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that pays it back, and the party it pays.
+  companyId     String        @db.Uuid
+  partyId       String        @db.Uuid
+  /// Exactly one of them: the issued credit note (TD04) of the company to the party it refunds, or the payment received
+  /// from the party whose unplaced part it pays back.
+  creditNoteId  String?       @db.Uuid
+  paymentId     String?       @db.Uuid
+  method        PaymentMethod @default(BANK_TRANSFER)
+  /// Above 0, minor units of the currency (the source's currency).
+  /// @grain price
+  amount        Int
+  /// ISO 4217.
+  currency      String        @default("EUR")
+  /// By when it must be paid back (e.g. 14 days from a consumer's withdrawal, D.Lgs. 206/2005 art. 56), when there is a
+  /// deadline.
+  dueDate       DateTime?     @db.Date
+  /// DUE → PAID | CANCELLED; PAID → VOIDED (typed by mistake). CANCELLED and VOIDED are final.
+  status        RefundStatus  @default(DUE)
+  /// Set exactly from PAID on: the date the transfer left the bank (value date), the bank's reference (CRO / TRN; unique
+  /// in the company), when and by whom it was recorded.
+  paidOn        DateTime?     @db.Date
+  externalRef   String?
+  paidAt        DateTime?     @db.Timestamptz(3)
+  paidById      String?       @db.Uuid
+  /// Set exactly when CANCELLED (the customer keeps the credit, or it was settled otherwise) and why.
+  cancelledAt   DateTime?     @db.Timestamptz(3)
+  cancelReason  String?
+  /// Set exactly when VOIDED (a PAID refund typed by mistake) and why.
+  voidedAt      DateTime?     @db.Timestamptz(3)
+  voidReason    String?
+  /// For the office only.
+  /// @internal
+  internalNote  String?
+  version       Int           @default(1)
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?       @db.Uuid
+
+  company    Company  @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party      Party    @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and
+  // partyId.
+  creditNote Invoice? @relation("RefundCreditNote", fields: [tenantId, companyId, partyId, creditNoteId], references: [tenantId, companyId, buyerPartyId, id], onDelete: Restrict, onUpdate: Restrict)
+  payment    Payment? @relation(fields: [tenantId, companyId, partyId, paymentId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A bank reference is recorded once per company (a refund paid is never counted twice).
+  @@unique([tenantId, companyId, externalRef])
+  @@index([tenantId, partyId, status])
+  @@index([tenantId, creditNoteId])
+  @@index([tenantId, paymentId])
+}
+
+enum RefundStatus {
+  /// Known to be owed, not paid yet ("Refunds to make").
+  DUE
+  /// The transfer is made.
+  PAID
+  /// Not paid after all (the customer keeps the credit); final.
+  CANCELLED
+  /// A PAID refund typed by mistake; final (the right one is a new row).
+  VOIDED
+}
+
+/// A reminder of overdue (or soon due) invoices to one customer at one level of the ladder (FIN-110, FIN-111; design
+/// finance.receivables "Reminders to approve"): prepared by the ladder, approved by a person (or skipped with a reason),
+/// then sent. What it covers and how much is fixed when it is prepared; its text may be edited until it is approved.
+model PaymentReminder {
+  id             String                @id @db.Uuid
+  tenantId       String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company owed, and the customer reminded.
+  companyId      String                @db.Uuid
+  partyId        String                @db.Uuid
+  /// The step of the ladder (ReceivablesSettings.ladder): 1, 2, 3 …
+  level          Int
+  action         ReminderAction
+  /// The issued TD01 / TD24 invoices of the company to the party it covers (at least one, each once): the ladder's
+  /// "invoices" column. No reference (a list); the …_money_w2a_guards trigger checks each when the reminder is made.
+  invoiceIds     String[]              @db.Uuid
+  /// What was open on them when it was prepared, minor units, above 0; and the late-payment interest added, when the
+  /// company's rule (decided by the accountant) adds one.
+  /// @grain price
+  amountDue      Int
+  /// @grain price
+  interestAmount Int?
+  currency       String                @default("EUR")
+  /// The oldest due date among its invoices (the ageing of the reminder).
+  oldestDueDate  DateTime              @db.Date
+  /// The customer's language (it, en …) and the text in it: the subject and body of an e-mail or a letter, edited by the
+  /// office while PREPARED (the ladder's template, the accountant's wording).
+  language       String                @default("it")
+  subject        String?
+  body           String?
+  /// PREPARED → APPROVED → SENT; PREPARED → SKIPPED; PREPARED | APPROVED → CANCELLED (the invoices were paid, credited or
+  /// disputed meanwhile). SENT, SKIPPED and CANCELLED are final.
+  status         PaymentReminderStatus @default(PREPARED)
+  /// The person who approved it, and when (from APPROVED on).
+  approvedAt     DateTime?             @db.Timestamptz(3)
+  approvedById   String?               @db.Uuid
+  /// When it went out (SENT): the e-mail queued, the letter printed, or the call made, and for a call what was said.
+  sentAt         DateTime?             @db.Timestamptz(3)
+  callNote       String?
+  /// Set exactly when SKIPPED: who skipped it, when and why ("payment being processed", "promise to pay" …).
+  skippedAt      DateTime?             @db.Timestamptz(3)
+  skippedById    String?               @db.Uuid
+  skipReason     String?
+  /// Set exactly when CANCELLED, and why.
+  cancelledAt    DateTime?             @db.Timestamptz(3)
+  cancelReason   String?
+  version        Int                   @default(1)
+  createdAt      DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?               @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party   Party   @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId, status])
+  @@index([tenantId, partyId, level])
+}
+
+/// How a reminder reaches the customer.
+enum ReminderAction {
+  EMAIL
+  LETTER
+  CALL
+}
+
+enum PaymentReminderStatus {
+  PREPARED
+  APPROVED
+  SENT
+  SKIPPED
+  CANCELLED
+}
+
+/// The late-payment interest rule of a company (D.Lgs. 231/2002): the accountant decides it (GATE-ACCOUNTANT).
+enum LateInterestMode {
+  /// Not decided yet: no interest is computed, and the reminders cannot be switched on.
+  UNDECIDED
+  /// No interest is charged.
+  NONE
+  /// The legal rate of D.Lgs. 231/2002 art. 5 (the ECB rate plus the points the law sets), computed by the domain.
+  STATUTORY
+  /// The rate agreed with the customers (lateInterestAgreedPct).
+  AGREED
+}
+
+/// The receivables settings of a company, or the tenant-wide ones (FIN-110, FIN-111; design finance.receivables, W2a plan
+/// §2 "Owner switch" and GATE-ACCOUNTANT): the reminder ladder, whether reminders may reach customers, and the
+/// late-payment rule. The row's id is the company's id, or the tenant's own id for the tenant-wide row (as
+/// CostingSettings); the company's row wins. No row: no reminder is prepared.
+model ReceivablesSettings {
+  /// The company's id; the tenant's id for the tenant-wide row (companyId null).
+  id                    String           @id @db.Uuid
+  tenantId              String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// null: the tenant-wide settings.
+  companyId             String?          @db.Uuid
+  /// The Owner's switch: reminders reach customers only when true (off by default; turned on after go-live, W2a plan
+  /// §2). While false the ladder may prepare reminders, none is sent.
+  remindersEnabled      Boolean          @default(false)
+  /// The ladder, its steps in order: [{ "level": 1, "offsetDays": -3, "action": "EMAIL", "template": "BEFORE_DUE" },
+  /// { "level": 2, "offsetDays": 7, … }, …]: a step is prepared offsetDays after an invoice's due date (negative: before
+  /// it). Levels 1, 2, 3 … in order, days strictly increasing (−60 to 365), at most 10 steps. The template key names the
+  /// wording (the accountant's) the domain fills in the customer's language.
+  ladder                Json             @default("[]")
+  /// The late-payment interest rule (D.Lgs. 231/2002), and the agreed yearly rate when AGREED (above 0, at most 100).
+  lateInterestMode      LateInterestMode @default(UNDECIDED)
+  lateInterestAgreedPct Decimal?         @db.Decimal(7, 4)
+  /// The fixed compensation for recovery costs a reminder may claim (D.Lgs. 231/2002 art. 6), minor units, when the
+  /// accountant says it is claimed; null: none.
+  /// @grain price
+  recoveryChargeAmount  Int?
+  /// No reminder for less than this open amount (minor units), when set.
+  /// @grain price
+  minimumAmount         Int?
+  version               Int              @default(1)
+  createdAt             DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById           String?          @db.Uuid
+
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, companyId])
+}

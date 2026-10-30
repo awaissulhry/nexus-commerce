@@ -29,7 +29,8 @@ export type InvoiceDocType = (typeof INVOICE_DOC_TYPES)[number]
 export const INVOICE_STATUSES = ['DRAFT', 'ISSUED', 'SENT', 'DELIVERED', 'NOT_DELIVERABLE', 'REJECTED', 'ERROR'] as const
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number]
 
-export const INVOICE_LINE_KINDS = ['GOODS', 'SERVICE', 'DEPOSIT_DEDUCTION'] as const
+// W2a (factory-db money.prisma InvoiceLineKind, wave 7/7): CHARGE, an accessory charge (freight, packaging, samples, a fee).
+export const INVOICE_LINE_KINDS = ['GOODS', 'SERVICE', 'DEPOSIT_DEDUCTION', 'CHARGE'] as const
 export type InvoiceLineKind = (typeof INVOICE_LINE_KINDS)[number]
 
 export const PRICE_BASES = ['NET', 'GROSS'] as const satisfies readonly PriceBasis[]

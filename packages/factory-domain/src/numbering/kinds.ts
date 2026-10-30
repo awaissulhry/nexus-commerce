@@ -39,6 +39,8 @@ export const NUMBER_KINDS = [
   // W2a wave 6 (factory-db numbering.prisma): nonconformance reports (NCR-…) and maintenance jobs (MJ-…).
   'NCR',
   'MAINTENANCE_JOB',
+  // W2a wave 7 (factory-db numbering.prisma): accounting export batches (EXP-…).
+  'ACCOUNTING_EXPORT',
 ] as const
 export type NumberKind = (typeof NUMBER_KINDS)[number]
 
@@ -180,6 +182,7 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   COUNT: 'CNT',
   NCR: 'NCR',
   MAINTENANCE_JOB: 'MJ',
+  ACCOUNTING_EXPORT: 'EXP',
 }
 
 /** The pattern a new series gets when the admin types none: `FT-{YYYY}-{N:5}` (yearly) or `LOT-{N:6}` (never resets). */

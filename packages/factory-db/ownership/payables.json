@@ -1,0 +1,29 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/payables.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker, in the tenant's system context: the passive invoices the SDI provider delivers) records supplier and subcontractor invoices, maps their lines to purchase and subcontract orders, matches them against the receipts and the order's price, approves and marks them paid through apps/factory-api's modules/payables (B-W2a-62), always through command(); the API keeps staff to the companies their grants reach and purchase prices to the cost grain (A1 §2.6). The floor reads nothing here (no money on the floor). No portal or link session reads a supplier invoice in W2a (the supplier portal is W2b): no partner grant, although the tables carry the supplier's partyId for it. The office deletes only a typed (not SDI) line and a match row while the invoice is not approved (the …_money_w2a_guards triggers); a supplier invoice is voided (a typed one) or answered by a credit note (an SDI one), never deleted. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "SupplierInvoice": {
+      "about": "The office (or the worker, for SDI's deliveries) records a supplier invoice or credit note, corrects a typed one, disputes it, has it approved by another person, marks it paid, or voids one typed by mistake. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "SupplierInvoiceLine": {
+      "about": "The office (or the worker) records the lines as received or typed and maps each to a purchase order line or a subcontract order; a typed line may be changed or removed until the invoice is approved, an SDI line only remapped. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "SupplierInvoiceMatch": {
+      "about": "The office (the match) writes the three-way match of each mapped line, replaces it when the match is redone, and records a person's acceptance of a difference, until the invoice is approved. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}

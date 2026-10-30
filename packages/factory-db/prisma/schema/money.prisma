@@ -46,6 +46,11 @@
 // quantities Decimal(18,4); every money column is grain price. The totals are the lines' (+ the VAT summary's
 // rounding), checked at issue; the VAT of each rate is computed by factory-domain's computeVat (SDI checks it again).
 //
+// W2a (wave 7/7; FIN-058, FIN-060, FIN-070): an invoice line may be a CHARGE (freight, packaging, samples, a fee: its
+// chargeKind), a credit note's line names the return line it credits (returns.prisma ReturnLine; never more pieces than
+// came back), and a line may bill a step of the order's payment schedule (sales.prisma SalesOrderMilestone). Refunds of
+// what a credit note credits on a paid invoice, or of a payment's unplaced part, are receivables.prisma Refund rows.
+//
 // Who sees what (ownership/money.json): the office reads and writes (the API keeps money to the price grain and staff
 // to their companies); the floor reads nothing here; a portal or link session (DOCUMENT_VIEW) reads only its OWN party's
 // issued invoices (a draft has no partner key), their lines, sends and notifications, its payments and their
@@ -140,6 +145,8 @@ model Invoice {
   /// The lines of other invoices that deduct this deposit invoice (TD02).
   deductedBy     InvoiceLine[]   @relation("InvoiceDepositDeduction")
   submissions    SdiSubmission[]
+  // receivables.prisma (W2a): the refunds of what this credit note credits on a paid invoice.
+  refunds        Refund[]        @relation("RefundCreditNote")
   allocations    PaymentAllocation[]
 
   // Never the same number twice in a series period (a draft has none).
@@ -236,6 +243,16 @@ model InvoiceLine {
   ddtId            String?         @db.Uuid
   /// DEPOSIT_DEDUCTION only, and required there: the issued deposit invoice (TD02) it deducts.
   depositInvoiceId String?         @db.Uuid
+  /// W2a (FIN-060): CHARGE only, and required there: what the accessory charge bills (freight, packaging, samples, a
+  /// fee). A FREIGHT charge may name the DDT whose transport it bills.
+  chargeKind       InvoiceChargeKind?
+  /// W2a (FIN-070): a credit note's line crediting what came back: the return line (returns.prisma) of the buyer, of a
+  /// return of the company; when the return line names the invoice line it returns, the credit note credits that
+  /// invoice. Never more credited than returned (checked at the issue).
+  returnLineId     String?         @db.Uuid
+  /// W2a (FIN-058): the step of the order's payment schedule (sales.prisma SalesOrderMilestone) the line bills (or a
+  /// credit note's line credits): a milestone of the company and of the invoice's order.
+  milestoneId      String?         @db.Uuid
   version          Int             @default(1)
   createdAt        DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
@@ -248,6 +265,9 @@ model InvoiceLine {
   ddt            Ddt?            @relation(fields: [tenantId, buyerPartyId, ddtId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   // returns.prisma: the return lines of what it billed.
   returnLines    ReturnLine[]    @relation("ReturnLineInvoiceLine")
+  // W2a wave 7/7: the return line a credit note's line credits, and the payment-schedule step a line bills.
+  returnLine     ReturnLine?          @relation("InvoiceLineReturnLine", fields: [tenantId, buyerPartyId, returnLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  milestone      SalesOrderMilestone? @relation("InvoiceLineMilestone", fields: [tenantId, buyerPartyId, milestoneId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, invoiceId, seq])
   // The target of the return lines' reference (returns.prisma): a line billed to the same buyer.
@@ -257,6 +277,8 @@ model InvoiceLine {
   @@index([tenantId, salesOrderLineId])
   @@index([tenantId, ddtId])
   @@index([tenantId, depositInvoiceId])
+  @@index([tenantId, returnLineId])
+  @@index([tenantId, milestoneId])
 }
 
 /// What a line bills (factory-domain FatturaPaLine kind, and the supply kind its VAT treatment depends on).
@@ -265,6 +287,22 @@ enum InvoiceLineKind {
   SERVICE
   /// A deposit invoice deducted (Storno acconto): a negative amount with the TD02's VAT treatment.
   DEPOSIT_DEDUCTION
+  /// W2a (FIN-060): an accessory charge (FatturaPA TipoCessionePrestazione AC, spesa accessoria; DPR 633/1972 art. 12):
+  /// its kind in chargeKind; it bills no order line or size (the shipped-not-invoiced queue counts GOODS lines).
+  CHARGE
+}
+
+/// What a CHARGE line bills (W2a, FIN-060). Additive.
+enum InvoiceChargeKind {
+  /// The transport of the goods (the shipment's freight rule, wave 6/7).
+  FREIGHT
+  PACKAGING
+  /// Samples sent at the customer's charge.
+  SAMPLES
+  /// A fee (an urgent order, a small-order surcharge …).
+  FEE
+  /// Anything else, said in the line's description.
+  OTHER
 }
 
 /// One send of an issued invoice to SDI through the company's SDI provider (FIN-084; B-W1-50): the file name (unique:
@@ -417,6 +455,8 @@ model Payment {
 
   company     Company             @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   party       Party               @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // receivables.prisma (W2a): what is paid back of its unplaced part (a credit balance).
+  refunds     Refund[]
   allocations PaymentAllocation[]
 
   @@unique([tenantId, companyId, externalRef])

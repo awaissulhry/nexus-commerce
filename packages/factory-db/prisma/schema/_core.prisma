@@ -135,6 +135,17 @@ model Company {
   // money.prisma: its invoices and the payments it received.
   invoices             Invoice[]
   payments             Payment[]
+  // W2a receivables.prisma, payables.prisma, cost-ledger.prisma, accounting.prisma (wave 7/7): its refunds, payment
+  // reminders and receivables settings, the supplier invoices it received, its standard costs, accounting exports and
+  // period locks.
+  refunds              Refund[]
+  paymentReminders     PaymentReminder[]
+  receivablesSettings  ReceivablesSettings[]
+  supplierInvoices     SupplierInvoice[]
+  /// @not-money the relation to its standard costs (the rows carry the grain)
+  standardCosts        StandardCost[]
+  accountingExports    AccountingExport[]
+  periodLocks          PeriodLock[]
   // costing.prisma: its own labour rates and costing settings (tenant-wide rows have none).
   labourRates          LabourRate[]
   /// @not-money the relation to its costing settings rows (an overhead percentage, no amount)

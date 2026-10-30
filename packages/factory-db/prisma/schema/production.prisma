@@ -162,6 +162,9 @@ model WorkOrder {
   cutLogs       CutLog[]
   bundles       Bundle[]
   scans         OperationScan[]
+  // W2a cost-ledger.prisma (wave 7/7): its cost ledger (material, labour, subcontract, overhead, completion).
+  /// @not-money the relation to the cost ledger (the rows carry the grain)
+  costEntries   WorkOrderCostEntry[]
   // W2a reservations.prisma, planning.prisma: the stock held for it, and the planning runs' pegging of its material.
   reservations  Reservation[]
   peggings      RequirementPegging[]
@@ -593,6 +596,9 @@ model OperationScan {
   // W2a rework.prisma: the rework its rework count opened, the replacements of its scrap.
   reworkOrders        ReworkOrder[]
   replacementRequests ReplacementRequest[]
+  // W2a cost-ledger.prisma (wave 7/7): the labour (or scrap) it posted to its work order's cost ledger.
+  /// @not-money the relation to the cost ledger (the rows carry the grain)
+  costEntries        WorkOrderCostEntry[]
   worker      Worker?            @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   station     Station?           @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   device      Device?            @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)

@@ -1,0 +1,195 @@
+// The cost ledger (W2a plan §5 schema wave 7/7; features FIN-024, FIN-025, FIN-026, FIN-027, FIN-033, FIN-038; design
+// finance.costing "Standard cost per item", "Work orders: standard vs actual", "Cost ledger"): the frozen standard cost
+// of an item for a period, and every cost a work order takes on or gives off. apps/factory-api's modules/costing
+// (B-W2a-21: standard vs actual; B-W2a-29: margins and stock value) writes them, always through command().
+//
+// A standard cost is what one base unit of an item should cost in a period (a material's purchase standard, or a
+// finished item's material + labour + subcontract + overhead from its cost sheet): prepared as a DRAFT, then FROZEN for
+// the period; a frozen standard never changes, but its end (validTo) is set once, when the next one takes over. Frozen
+// standards of a company and item never overlap (the …_money_w2a_guards trigger, under a lock).
+//
+// A work-order cost entry is one valuation event of a work order: material issued or returned (its stock move), scrap,
+// labour earned (a scan: earned standard minutes × the rate in force, per work order and operation, never per person:
+// Statuto dei Lavoratori art. 4), subcontract work (its subcontract order, or the subcontractor's invoice line),
+// overhead applied, the completion that moves the value out to finished goods, or an adjustment in words. The ledger is
+// append-only for every login (`@append-only`): a wrong entry is taken back by a reversal (its opposite amount, once,
+// with a reason). Each entry records the costing method in force for its company (costing.prisma CostingSettings: the
+// accountant's choice, locked once used) and the frozen standard it compares with (the variance by reason). An entry
+// dated inside a hard-locked period (accounting.prisma PeriodLock) is refused.
+//
+// Money (A1 §2.1, §2.6): amounts are Int minor units of the company's currency, unit costs Decimal(18,6), quantities and
+// minutes Decimal(18,4); every money column is grain cost.
+//
+// Who sees what (ownership/cost-ledger.json): the office reads and writes (the API keeps the cost grain to finance,
+// buyers and production managers); the floor, portal and link sessions read none of it (no money on the floor: A1 §2.6).
+// Nothing is deleted but a DRAFT standard.
+
+/// The frozen standard cost of an item for a period (FIN-024, FIN-025; design finance.costing "Standard cost per item"),
+/// per base unit of the item, in the company's currency.
+model StandardCost {
+  id              String              @id @db.Uuid
+  tenantId        String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose standard it is (the costing method is per company).
+  companyId       String              @db.Uuid
+  itemId          String              @db.Uuid
+  /// The period (Europe/Rome days): from validFrom, to validTo (null: until the next one takes over).
+  validFrom       DateTime            @db.Date
+  validTo         DateTime?           @db.Date
+  /// DRAFT (prepared, free to change) → FROZEN (fixed for the period; only its end is set, once).
+  status          StandardCostStatus  @default(DRAFT)
+  source          StandardCostSource
+  /// ISO 4217: the company's currency.
+  currency        String              @default("EUR")
+  /// Per base unit of the item, 0 or more; unitCost is their sum.
+  /// @grain cost
+  materialCost    Decimal             @default(0) @db.Decimal(18, 6)
+  /// @grain cost
+  labourCost      Decimal             @default(0) @db.Decimal(18, 6)
+  /// @grain cost
+  subcontractCost Decimal             @default(0) @db.Decimal(18, 6)
+  /// @grain cost
+  overheadCost    Decimal             @default(0) @db.Decimal(18, 6)
+  /// @grain cost
+  unitCost        Decimal             @db.Decimal(18, 6)
+  /// The standard minutes per unit the labour is priced on (a made item), when it has labour.
+  labourMinutes   Decimal?            @db.Decimal(18, 4)
+  /// How it was built (a ROLLUP: the cost sheet's waterfall at the freeze, its revision and rates; PURCHASE: the price
+  /// list or order it came from), an object.
+  /// @grain cost
+  breakdown       Json?
+  note            String?
+  /// Set exactly from FROZEN on: who froze it, and when.
+  frozenAt        DateTime?           @db.Timestamptz(3)
+  frozenById      String?             @db.Uuid
+  version         Int                 @default(1)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?             @db.Uuid
+
+  company Company              @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  item    Item                 @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  /// @not-money a relation: the ledger rows carry the grain
+  costEntries WorkOrderCostEntry[]
+
+  // One standard per company, item and first day (frozen ones never overlap: the …_money_w2a_guards trigger).
+  @@unique([tenantId, companyId, itemId, validFrom])
+  // The target of the cost ledger's reference: a standard of the same company.
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, itemId, status])
+}
+
+enum StandardCostStatus {
+  DRAFT
+  FROZEN
+}
+
+/// Where a standard cost comes from.
+enum StandardCostSource {
+  /// The cost sheet of a made item (BOM × material standards + routing minutes × rates + overhead).
+  ROLLUP
+  /// A purchased material: its supplier's price.
+  PURCHASE
+  /// Typed by finance.
+  MANUAL
+}
+
+/// The costing method of a company (c.c. art. 2426; costing.prisma CostingSettings.costingMethod): the accountant's
+/// choice (GATE-ACCOUNTANT).
+enum CostingMethod {
+  /// Not chosen yet: values may be computed, none is relied on (the plan's placeholder).
+  UNDECIDED
+  STANDARD
+  MOVING_AVERAGE
+  FIFO
+}
+
+/// What a work-order cost entry records.
+enum WorkOrderCostKind {
+  /// Material issued to the work order (+) or returned from it (−): its stock move.
+  MATERIAL
+  /// Material or pieces scrapped on the work order: a SCRAP move or a scan's scrap.
+  SCRAP
+  /// Labour earned: a scan's standard minutes × the rate in force.
+  LABOUR
+  /// A subcontractor's work: its subcontract order, or its invoice line.
+  SUBCONTRACT
+  /// Overhead applied.
+  OVERHEAD
+  /// The value moved out to finished goods (−).
+  COMPLETION
+  /// A correction in words (a reason).
+  ADJUSTMENT
+}
+
+/// One valuation event of a work order (FIN-026, FIN-027, FIN-033, FIN-038; design finance.costing "Cost ledger"):
+/// append-only; a mistake is reversed by a new row, never edited.
+/// @append-only
+model WorkOrderCostEntry {
+  id                    String            @id @db.Uuid
+  tenantId              String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The work order's company and site.
+  companyId             String            @db.Uuid
+  siteId                String            @db.Uuid
+  workOrderId           String            @db.Uuid
+  kind                  WorkOrderCostKind
+  /// When the event happened (the move's or scan's time): the date the period lock reads (Europe/Rome).
+  occurredAt            DateTime          @db.Timestamptz(3)
+  /// MATERIAL, SCRAP, COMPLETION: the item and its quantity in base units (signed as the amount).
+  itemId                String?           @db.Uuid
+  quantity              Decimal?          @db.Decimal(18, 4)
+  /// LABOUR: the standard minutes earned (signed as the amount).
+  minutes               Decimal?          @db.Decimal(18, 4)
+  /// The cost per base unit or per minute applied, and the frozen standard's, when there is one (the variance).
+  /// @grain cost
+  unitCost              Decimal?          @db.Decimal(18, 6)
+  /// @grain cost
+  standardUnitCost      Decimal?          @db.Decimal(18, 6)
+  /// Minor units: above 0 adds cost to the work order, below 0 takes it off (a return, a completion, a reversal).
+  /// @grain cost
+  amount                Int
+  /// ISO 4217: the company's currency.
+  currency              String            @default("EUR")
+  /// The company's costing method when it was posted (the accountant's choice; UNDECIDED until then).
+  /// @not-money which method valued it, not an amount
+  costingMethod         CostingMethod
+  /// The frozen standard it compares with.
+  /// @not-money a reference
+  standardCostId        String?           @db.Uuid
+  /// What it comes from: the stock move (MATERIAL, SCRAP, COMPLETION), the scan (LABOUR, SCRAP), the subcontract order
+  /// or the subcontractor's invoice line (SUBCONTRACT); a record of another W2a wave by type and id (a rework order …).
+  stockMoveId           String?           @db.Uuid
+  operationScanId       String?           @db.Uuid
+  subcontractOrderId    String?           @db.Uuid
+  supplierInvoiceLineId String?           @db.Uuid
+  sourceType            String?
+  sourceId              String?           @db.Uuid
+  /// A reversal: the entry of the same work order and kind it takes back (its opposite amount, once).
+  reversalOfId          String?           @db.Uuid
+  /// Why (required on a reversal and an ADJUSTMENT).
+  reason                String?
+  /// One entry per source event (e.g. `move:<id>`, `scan:<id>:<operation>`): a repeat is refused.
+  idempotencyKey        String
+  createdAt             DateTime          @default(now()) @db.Timestamptz(3)
+  createdById           String?           @db.Uuid
+
+  workOrder           WorkOrder            @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId, siteId
+  // and workOrderId.
+  item                Item?                @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  /// @not-money a relation
+  standardCost        StandardCost?        @relation(fields: [tenantId, companyId, standardCostId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  stockMove           StockMove?           @relation(fields: [tenantId, siteId, stockMoveId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  operationScan       OperationScan?       @relation(fields: [tenantId, siteId, operationScanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  subcontractOrder    SubcontractOrder?    @relation(fields: [tenantId, siteId, workOrderId, subcontractOrderId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplierInvoiceLine SupplierInvoiceLine? @relation(fields: [tenantId, supplierInvoiceLineId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversalOf          WorkOrderCostEntry?  @relation("WorkOrderCostEntryReversal", fields: [tenantId, workOrderId, reversalOfId], references: [tenantId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversals           WorkOrderCostEntry[] @relation("WorkOrderCostEntryReversal")
+
+  @@unique([tenantId, idempotencyKey])
+  // The target of the reversals' reference: an entry of the same work order.
+  @@unique([tenantId, workOrderId, id])
+  @@index([tenantId, workOrderId, occurredAt])
+  @@index([tenantId, companyId, occurredAt])
+  @@index([tenantId, stockMoveId])
+  @@index([tenantId, operationScanId])
+}

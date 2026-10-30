@@ -151,6 +151,11 @@ model Item {
   // supply.prisma: the purchase order lines that buy it and the planning runs' requirements of it.
   purchaseOrderLines   PurchaseOrderLine[]
   materialRequirements MaterialRequirement[]
+  // W2a cost-ledger.prisma (wave 7/7): its frozen standard costs, and the work-order cost entries that name it.
+  /// @not-money the relation to its standard costs (the rows carry the grain)
+  standardCosts        StandardCost[]
+  /// @not-money the relation to the cost ledger (the rows carry the grain)
+  costEntries          WorkOrderCostEntry[]
   // W2a reservations.prisma, stockcount.prisma, planning.prisma: its reservations, the counts of it (whole, or a line),
   // its planning parameters per site and the planning exceptions about it.
   reservations         Reservation[]
