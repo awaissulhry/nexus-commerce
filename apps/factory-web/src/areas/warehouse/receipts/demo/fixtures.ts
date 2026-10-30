@@ -148,6 +148,8 @@ export const receipt = (over: Partial<Receipt> = {}): Receipt => ({
   createdAt: at(29, 8, 20),
   summary: { lines: 2, lots: 2, lotsInQuarantine: 1, lotsReleased: 1, hides: 9, quantities: [{ uom: 'FT2', baseQuantity: '212.4000' }, { uom: 'PCS', baseQuantity: '24.0000' }] },
   lines: LINES,
+  ddtPhotos: [],
+  discrepancies: { count: 0, open: 0, unsent: 0 },
   reversal: { possible: true, location: 'N-RCV', blockers: [] },
   value: { currency: 'EUR', valueAmount: 104_808 },
   ...over,

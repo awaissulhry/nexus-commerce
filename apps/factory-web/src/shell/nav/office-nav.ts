@@ -126,6 +126,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/purchasing/subcontracting',
   '/purchasing/subcontracting/[id]',
   '/purchasing/subcontracting/[id]/job-sheet',
+  // B-W2a-63: Returns & claims (SCR-131) and a supplier claim.
+  '/purchasing/claims',
+  '/purchasing/claims/[id]',
   // B-W1-29 part 2: What to buy & make (SCR-055).
   '/planning/mrp',
   // B-W2a-45: Planning board (SCR-122) and Lines & subcontractors (SCR-126).
@@ -223,6 +226,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-38: Production › Reports › Production reports (SCR-240) and its print page (a new tab, no navigation row).
   '/production/reports',
   '/production/reports/print',
+  // B-W2a-60: Production › Cutting room › Cutting (SCR-238) and a cut; Floor control › Scrap & rework (SCR-140).
+  '/production/cutting',
+  '/production/cutting/[id]',
+  '/production/scrap',
   // B-W2a-53: Plant › Maintenance — Machine requests (SCR-148) and their print for the shift, Maintenance jobs (SCR-149),
   // a job and its job sheet, Machines & tools (SCR-150), a machine and the tag sheet.
   '/plant/requests',

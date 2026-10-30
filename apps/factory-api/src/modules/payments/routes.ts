@@ -4,12 +4,35 @@ import { requireStepUp } from '../../platform/auth/office/account'
 import { officeAuthOf } from '../../platform/auth/sessions/office-auth'
 import { processEmail } from '../../platform/email-out/service'
 import { processFiles } from '../../platform/files/service'
-import { allocateContract, depositLinkViewContract, depositReceivedContract, getPaymentContract, listPaymentsContract, openItemsContract, recordPaymentContract, reverseContract, sendDepositLinkContract, voidContract } from './contract'
+import {
+  allocateContract,
+  cancelRefundContract,
+  changeRefundContract,
+  creditBalanceContract,
+  depositLinkViewContract,
+  depositReceivedContract,
+  getPaymentContract,
+  getRefundContract,
+  listPaymentsContract,
+  listRefundsContract,
+  openItemsContract,
+  openRefundsContract,
+  payRefundContract,
+  recordPaymentContract,
+  recordRefundContract,
+  releaseOverpaymentContract,
+  reverseContract,
+  sendDepositLinkContract,
+  voidContract,
+  voidRefundContract,
+} from './contract'
+import { creditBalance, releaseOverpayment } from './credit-balance'
 import { depositLinkView, sendDepositLink } from './deposit-link'
 import { depositReceived } from './deposits'
 import { manifest } from './manifest'
 import { openItems } from './open-items'
 import { allocatePayment, getPayment, listPayments, recordPayment, reverseAllocation, voidPayment } from './payments'
+import { cancelRefund, changeRefund, getRefund, listRefunds, openRefunds, payRefund, recordRefund, voidRefund } from './refunds'
 
 /**
  * Payments received (B-W1-28; FIN-121, FIN-066; Q12; A2 SCR-082): bank transfers typed by the office, what they pay
@@ -20,6 +43,27 @@ export default defineRoutes('payments', manifest, async (app) => {
   app.get('/payments', { schema: listPaymentsContract }, async (request) => listPayments(request, request.query))
 
   app.get('/payments/open-items', { schema: openItemsContract }, async (request) => openItems(request, request.query))
+
+  // B-W2a-61: refunds (FIN-127) and the credit balance (FIN-122). Literal paths before /payments/:paymentId.
+  app.get('/payments/refunds', { schema: listRefundsContract }, async (request) => listRefunds(request, request.query))
+
+  app.get('/payments/refunds/open', { schema: openRefundsContract }, async (request) => openRefunds(request, request.query))
+
+  app.get('/payments/refunds/:refundId', { schema: getRefundContract }, async (request) => getRefund(request, request.params.refundId))
+
+  app.post('/payments/refunds', { schema: recordRefundContract }, async (request, reply) => reply.code(201).send(await recordRefund(request, request.body, idempotencyKeyFrom(request))))
+
+  app.patch('/payments/refunds/:refundId', { schema: changeRefundContract }, async (request) => changeRefund(request, request.params.refundId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/payments/refunds/:refundId/paid', { schema: payRefundContract }, async (request) => payRefund(request, request.params.refundId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/payments/refunds/:refundId/cancel', { schema: cancelRefundContract }, async (request) => cancelRefund(request, request.params.refundId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/payments/refunds/:refundId/void', { schema: voidRefundContract }, async (request) => voidRefund(request, request.params.refundId, request.body, idempotencyKeyFrom(request)))
+
+  app.get('/payments/credit-balance', { schema: creditBalanceContract }, async (request) => creditBalance(request, request.query))
+
+  app.post('/payments/release-overpayment', { schema: releaseOverpaymentContract }, async (request) => releaseOverpayment(request, request.body, idempotencyKeyFrom(request)))
 
   app.get('/payments/:paymentId', { schema: getPaymentContract }, async (request) => getPayment(request, request.params.paymentId))
 

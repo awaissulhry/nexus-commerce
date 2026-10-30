@@ -108,6 +108,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/purchasing/suppliers': 'parties.view', // GET /parties
       '/purchasing/orders': 'purchasing.view', // GET /purchasing/orders
       '/purchasing/subcontracting': 'purchasing.view', // GET /purchasing/subcontracting/orders (B-W2a-56)
+      '/purchasing/claims': 'purchasing.view', // GET /purchasing/claims (B-W2a-63)
       '/warehouse/stock': 'inventory.stock.view', // GET /inventory/stock
       '/warehouse/hides': 'inventory.stock.view', // GET /inventory/hides
       '/warehouse/lots': 'inventory.stock.view', // GET /inventory/lots
@@ -121,6 +122,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/production/floor': 'workorders.view', // GET /production/scans/wip
       '/production/work-orders': 'workorders.view', // GET /production/work-orders
       '/production/reports': 'production.reports.view', // GET /production/reports/daily
+      '/production/cutting': 'production.cutting.view', // GET /production/cutting/cuts (B-W2a-60)
+      '/production/scrap': 'production.scrap.view', // GET /production/scrap (B-W2a-60)
       '/production/settings': 'production.settings.view', // GET /production/settings
       '/quality/inspections': 'quality.inspections.view', // GET /quality/inspections
       '/quality/complaints': 'quality.complaints.view', // GET /quality/complaints (B-W2a-65)
@@ -220,7 +223,8 @@ describe('the palette finds every page by its name, in Italian and English', () 
 describe('record links and list addresses (lib/records/record-links.ts)', () => {
   // Built record pages that are a record type's SECOND page: the supplier side of a party (its first is the customer
   // record) and a lot's tests & release (its first is Warehouse › Lots & traceability, which links it).
-  const SECOND_PAGES = new Set(['/purchasing/suppliers/[partyId]', '/compliance/tests/[id]'])
+  // B-W2a-60: a cut (/production/cutting/[id]) is a work order's cutting, a second page of the WorkOrder (no record type of its own in W2a).
+  const SECOND_PAGES = new Set(['/purchasing/suppliers/[partyId]', '/compliance/tests/[id]', '/production/cutting/[id]'])
   const shape = (address: string) => address.split('?')[0]!.replace(/\[[^\]/]+\]/g, '[id]')
 
   it('every record type with a built page is in RECORD_PAGES, and every RECORD_PAGES line is a built page in the map', () => {

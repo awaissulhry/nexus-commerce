@@ -1,0 +1,425 @@
+{
+  "page": {
+    "noAccess": {
+      "title": "You cannot open Cutting",
+      "body": "This needs the permission {permission}. Ask an administrator to give it to your role."
+    },
+    "keyNew": "New cut order",
+    "new": "New cut order",
+    "tickets": "Print tickets",
+    "more": "More actions",
+    "export": "Export all (CSV)",
+    "shortcuts": "Keyboard shortcuts"
+  },
+  "common": {
+    "updated": "Updated {time}",
+    "notYet": "Not read yet",
+    "dismiss": "Dismiss",
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "clearFilters": "Clear filters",
+    "more": "Show more",
+    "shortcuts": "Keyboard shortcuts",
+    "noReason": "no reason given",
+    "count_one": "{count} cut",
+    "count_other": "{count} cuts",
+    "countMore_one": "{count} cut shown, more match",
+    "countMore_other": "{count} cuts shown, more match"
+  },
+  "live": {
+    "connecting": "Connecting to live updates",
+    "live": "Live",
+    "offline": "Offline: figures as last read"
+  },
+  "tiles": {
+    "label": "Cutting today"
+  },
+  "tile": {
+    "waiting": "Waiting to cut",
+    "cutting": "Cutting now",
+    "piecesToday": "Pieces cut today",
+    "areaToday": "Area used today (hides · m²)",
+    "yieldToday": "Yield today vs plan",
+    "todayHint": "Today, every table of your sites",
+    "areaHint": "Hides cut today and their area in square metres",
+    "yieldHint": "Pattern area over the area cut, against the BOM’s plan"
+  },
+  "state": {
+    "WAITING": "Waiting to cut",
+    "CUTTING": "Cutting",
+    "CUT": "Cut",
+    "HELD": "On hold"
+  },
+  "kind": {
+    "LEATHER": "Leather"
+  },
+  "view": {
+    "open": "Open cuts",
+    "waiting": "Waiting to cut",
+    "cutting": "Cutting now",
+    "cut": "All cut",
+    "held": "On hold",
+    "all": "All cuts"
+  },
+  "col": {
+    "cut": "Cut",
+    "kind": "Kind",
+    "material": "Material and colour",
+    "lot": "Shade lot",
+    "state": "Status",
+    "pieces": "Pieces cut / planned",
+    "hides": "Hides",
+    "yield": "Yield vs plan",
+    "table": "Table",
+    "date": "Last cut",
+    "more": "More",
+    "workOrder": "Work order",
+    "style": "Style",
+    "garments": "Garments",
+    "piecesPlanned": "Pieces planned"
+  },
+  "list": {
+    "tableLabel": "Cuts",
+    "search": "Search work order, batch or style",
+    "viewLabel": "Rows",
+    "due": "due {date}",
+    "allocated_one": "{count} hide allocated",
+    "allocated_other": "{count} hides allocated",
+    "recuts_one": "{count} recut to cut",
+    "recuts_other": "{count} recuts to cut",
+    "piecesOf": "{cut} / {planned}",
+    "garments": "{cut} of {planned} garments",
+    "hides_one": "{count} hide",
+    "hides_other": "{count} hides",
+    "yieldUnknown": "Single parts only",
+    "noPlan": "no plan",
+    "plan": "plan {pct}",
+    "rowMenu": "Actions for {number}",
+    "workOrder": "Open the work order",
+    "failed": "The cuts could not be read",
+    "noMatch": {
+      "title": "No rows match these filters",
+      "body": "Clear the filters to see every open cut."
+    },
+    "empty": {
+      "title": "No cut orders yet",
+      "body": "A released work order with leather parts appears here. Start with New cut order."
+    },
+    "loadingSlow": "Still loading…",
+    "hint": "One cut is one work order’s leather, cut hide by hide at the cutting table. Fabric lays, markers and cut orders of several work orders come later (W2b)."
+  },
+  "bulk": {
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)"
+  },
+  "csv": {
+    "cut": "Cut",
+    "kind": "Kind",
+    "style": "Style",
+    "material": "Material and colour",
+    "lot": "Shade lot",
+    "state": "Status",
+    "piecesPlanned": "Pieces planned",
+    "piecesCut": "Pieces cut",
+    "hides": "Hides",
+    "area": "Area used",
+    "yieldPct": "Yield %",
+    "plannedPct": "Planned %",
+    "table": "Table",
+    "lastCut": "Last cut"
+  },
+  "held": {
+    "permission": "This needs the permission {permission}.",
+    "busy": "Working…",
+    "loading": "Still loading",
+    "reason": "Say why in at least 3 characters.",
+    "tickets": {
+      "one": "Select one cut to open its tickets."
+    },
+    "recut": {
+      "done": "This recut is not open any more.",
+      "noEntry": "No cut log entry has pieces of {part} for {cell} yet: the cutting table cuts it first."
+    },
+    "ticket": {
+      "voided": "This bundle is void.",
+      "scanned_one": "Scanned once already: a bundle is voided only before its first scan.",
+      "scanned_other": "Scanned {count} times already: a bundle is voided only before its first scan."
+    }
+  },
+  "newCut": {
+    "title": "New cut order",
+    "body": "Pick the work order to cut. Each released work order is one cut of one leather and colour; its hides are allocated next.",
+    "tableLabel": "Work orders waiting to cut",
+    "count_one": "{count} work order waiting, no hide allocated",
+    "count_other": "{count} work orders waiting, no hide allocated",
+    "picked_one": "{count} work order picked",
+    "picked_other": "{count} work orders picked",
+    "go": "Create cut order",
+    "table": "The table is the cutting tablet’s station: every cut records the table it was cut at.",
+    "fabric": "Fabric cut orders that group several work orders by lay come later (W2b).",
+    "empty": {
+      "title": "Nothing waits to be cut",
+      "body": "Every released work order with leather parts has hides allocated or is being cut."
+    },
+    "why": {
+      "material": "Another leather: this cut order cuts {material}."
+    },
+    "held": {
+      "none": "Pick a work order first.",
+      "many": "One work order per cut today: cut orders of several work orders come with fabric lays (W2b)."
+    }
+  },
+  "alloc": {
+    "open": "Allocate hides…",
+    "title": "Allocate hides · {number}",
+    "material": "Leather",
+    "body": "{garments} garments, {pieces} pieces still to cut. Each hide picked is reserved whole for this work order; the cutting table’s first cut of it issues it.",
+    "tableLabel": "Hides of this leather",
+    "col": {
+      "hide": "Hide",
+      "area": "Area",
+      "state": "May it be taken?"
+    },
+    "count": "{count} hides, {free} free",
+    "picked": "{count} picked · {area} {uom}",
+    "free": "Free",
+    "reserve": {
+      "why": {
+        "held": "On hold or not released",
+        "mine": "Already allocated to this cut",
+        "other": "Reserved for another work order or order",
+        "empty": "Nothing left of it in stock"
+      }
+    },
+    "go_one": "Allocate {count} hide",
+    "go_other": "Allocate {count} hides",
+    "held": {
+      "none": "Pick at least one free hide.",
+      "cut": "Every garment of this cut is cut."
+    },
+    "heldWorkOrder": "This work order is on hold ({reason}). Hides may be allocated; the cutting table cuts nothing for it until quality releases the hold.",
+    "failed": "The hides could not be read",
+    "empty": {
+      "title": "No hide of this leather here",
+      "body": "No hide of this leather and colour is in stock at the work order’s site."
+    },
+    "hint": "A hide on hold or of a lot that is not released cannot be allocated, and the table refuses to cut it in the same words."
+  },
+  "notice": {
+    "allocated_one": "{count} hide allocated to {number}.",
+    "allocated_other": "{count} hides allocated to {number}.",
+    "recutDone": "The recut is marked cut.",
+    "reprinted": "The ticket was printed again with a new code; the old code scans as replaced.",
+    "voided": "The bundle is void: its ticket no longer scans."
+  },
+  "problem": {
+    "read": "The read failed. Try again.",
+    "forbidden": "You may not see this.",
+    "gone": "This no longer exists.",
+    "offline": "The factory server cannot be reached. Check the connection and try again.",
+    "write": "This was not saved. Try again.",
+    "changed": "Someone changed this meanwhile. It was read again: check and try again.",
+    "invalid": "The request was refused as it is. Check the fields.",
+    "alloc": {
+      "hide": "A hide picked cannot be reserved any more (taken, on hold or used). Read the hides again.",
+      "reserved": "A hide picked was reserved meanwhile for another work order or order. The hides were read again: pick another.",
+      "notInStock": "A hide picked is no longer in stock at this site. The hides were read again.",
+      "lotHeld": "A hide picked is of a lot that is not released: quality releases it first."
+    },
+    "recut": {
+      "notRecut": "This is not a recut.",
+      "notOfCell": "That cut log entry has no pieces of this size and part.",
+      "state": "This recut is not open any more."
+    }
+  },
+  "record": {
+    "back": "Cutting",
+    "backToList": "Back to Cutting",
+    "title": "Cut",
+    "titleOf": "Cut · {number}",
+    "tabs": "Sections of the cut",
+    "loading": "Reading the cut…",
+    "state": {
+      "forbidden": {
+        "title": "You cannot open this cut",
+        "body": "Its work order belongs to a company or site you may not see."
+      },
+      "missing": {
+        "title": "This cut does not exist",
+        "body": "Its work order was not found. It may belong to another company."
+      },
+      "error": {
+        "title": "The cut could not be read",
+        "body": "Try again in a moment."
+      }
+    },
+    "openWorkOrder": "Open the work order’s cutting",
+    "copyNumber": "Copy the number",
+    "office": "office",
+    "held": {
+      "title": "On hold: the cutting table cuts nothing for this work order",
+      "body": "Why: {reason}. A cut of it, of a held hide or of a hide of a held lot is refused at the table in these words until quality releases the hold."
+    }
+  },
+  "tab": {
+    "lay": "Lay or hides",
+    "pieces": "Pieces",
+    "yield": "Yield",
+    "tickets": "Tickets"
+  },
+  "part": {
+    "failed": "{part} could not be read",
+    "loading": "Reading {part}…"
+  },
+  "lay": {
+    "hides": "Hides",
+    "count_one": "{count} hide",
+    "count_other": "{count} hides",
+    "col": {
+      "hide": "Hide",
+      "grade": "Grade",
+      "shade": "Shade",
+      "before": "Area before",
+      "used": "Used",
+      "remnant": "Remnant",
+      "waste": "Waste",
+      "state": "State"
+    },
+    "lot": "lot {lot}",
+    "empty": {
+      "title": "No hide cut yet",
+      "body": "The hides the cutting table cuts for this work order appear here, with their area."
+    },
+    "balance": "Area of each hide",
+    "noBalance": "Nothing was issued to this work order yet.",
+    "issued": "Lot {lot} · {area} {uom} issued",
+    "area": {
+      "cut": "Cut",
+      "waste": "Waste",
+      "returned": "Back to stock",
+      "left": "Left"
+    },
+    "allocated": "Allocated, not cut yet",
+    "noAllocated": "No hide is allocated and waiting.",
+    "allocatedHint": "Allocated hides are reserved whole for this work order; the same-shade check of a lay comes later (W2b).",
+    "lays": "Lays (fabric)",
+    "laysLater": "Markers, plies, rolls by shade and width come with fabric cutting (W2b). Leather is cut hide by hide."
+  },
+  "hideState": {
+    "FULL": "Whole",
+    "PARTLY_CUT": "Partly cut",
+    "REMNANT": "Remnant",
+    "CONSUMED": "Used up",
+    "SCRAPPED": "Scrapped"
+  },
+  "pieces": {
+    "title": "Pieces by part and size",
+    "part": "Part",
+    "extraPart": "{part} (outside the BOM)",
+    "cell": "{cut} / {planned}",
+    "short": "{count} short",
+    "recut": "{count} to recut",
+    "none": "No part of this work order is cut from hides.",
+    "hint": "Cut / planned per part and size; planned is one piece of each part per garment (the BOM has no piece count per part yet)."
+  },
+  "recuts": {
+    "title": "Recuts",
+    "none": "No recut is asked for this work order.",
+    "what": "{quantity} × {part} · {cell}",
+    "whole": "whole garments",
+    "status": {
+      "OPEN": "To cut",
+      "DONE": "Cut"
+    },
+    "markCut": "Mark cut…",
+    "hint": "Scrap & rework asks a recut for scrapped pieces; the cutting table cuts it as single parts, then the office links the entry that cut it.",
+    "dialog": {
+      "title": "Mark the recut as cut",
+      "entry": "Cut by the entry",
+      "entryHint": "A cut of this size with pieces of this part.",
+      "noEntry": "No entry fits yet",
+      "go": "Mark cut"
+    },
+    "held": {
+      "entry": "Pick the entry that cut it."
+    }
+  },
+  "yield": {
+    "title": "Yield per hide",
+    "overall": "Yield {pct}",
+    "plan": {
+      "STYLE": "plan {pct} (the style)",
+      "BOM": "plan {pct} (the BOM’s wastage)"
+    },
+    "used": "Area used",
+    "pattern": "Pattern area",
+    "remnant": "Remnants",
+    "waste": "Waste",
+    "unmatched": "{area} cut as single parts is left out of the yield: their pattern is not known.",
+    "none": "Nothing was cut for this work order yet.",
+    "series": {
+      "yield": "Yield %",
+      "planned": "Planned %"
+    },
+    "byLot": "Per lot and supplier",
+    "col": {
+      "lot": "Lot",
+      "supplier": "Supplier",
+      "hides": "Hides",
+      "used": "Used",
+      "pattern": "Pattern",
+      "yield": "Yield"
+    },
+    "hint": "Per hide, lot and supplier; never by cutter. The reconciliation of issued, used and returned comes later (W2b)."
+  },
+  "tickets": {
+    "title": "Bundle tickets",
+    "count_one": "{count} active bundle",
+    "count_other": "{count} active bundles",
+    "col": {
+      "code": "Ticket",
+      "cell": "Size",
+      "part": "Part",
+      "garments": "Garments",
+      "status": "State and print",
+      "reprints": "Printed again because",
+      "scans": "Scans"
+    },
+    "whole": "whole garment",
+    "replaced": "replaces {codes}",
+    "status": {
+      "ACTIVE": "Active",
+      "VOID": "Void"
+    },
+    "print": {
+      "QUEUED": "Queued",
+      "SENT": "Sent to the printer",
+      "PRINTED": "Printed",
+      "FAILED": "Print failed",
+      "PDF": "PDF label",
+      "UNKNOWN": "Print state hidden"
+    },
+    "rowMenu": "Actions for {code}",
+    "reprint": "Print again…",
+    "void": "Void…",
+    "empty": {
+      "title": "No tickets yet",
+      "body": "Bundles are made at the cutting table after the cut; their tickets appear here."
+    },
+    "hint": "A ticket printed again gets a new code and the old one scans as replaced; the reason is kept.",
+    "reprintTitle": "Print {code} again",
+    "reprintBody": "The bundle gets a new code; the old ticket will scan as replaced.",
+    "printer": "Label printer",
+    "noPrinter": "No label printer at this site",
+    "reason": "Why",
+    "reprintGo": "Print again",
+    "held": {
+      "printer": "Pick a label printer."
+    },
+    "voidTitle": "Void {code}",
+    "voidBody": "{garments} garments of {cell} go back to “cut, not bundled”; the ticket {code} no longer scans.",
+    "voidGo": "Void the bundle"
+  }
+}

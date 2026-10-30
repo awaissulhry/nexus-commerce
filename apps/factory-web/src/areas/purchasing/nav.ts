@@ -1,4 +1,4 @@
-import { Factory, FileText, ShoppingCart, Truck } from 'lucide-react'
+import { Factory, FileText, ShoppingCart, Truck, Undo2 } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -30,6 +30,12 @@ export const officeArea: OfficeAreaNav = {
         id: 'purchasing-outside',
         label: 'shell:nav.purchasing.outside',
         items: [{ id: 'purchasing-subcontracting', label: 'shell:nav.purchasing.subcontracting', href: '/purchasing/subcontracting', icon: Factory, permission: 'purchasing.view' }],
+      },
+      // B-W2a-63: Sourcing & claims › Returns & claims (SCR-131). RFQs & sourcing (W2b) joins before it with its step.
+      {
+        id: 'purchasing-claims',
+        label: 'shell:nav.purchasing.sourcingClaims',
+        items: [{ id: 'purchasing-claims', label: 'shell:nav.purchasing.claims', href: '/purchasing/claims', icon: Undo2, permission: 'purchasing.view' }],
       },
     ],
   },

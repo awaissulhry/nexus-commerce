@@ -110,9 +110,10 @@ export function planAllocations(unallocated: MinorUnits, asks: readonly Allocati
   return { allocations, left, issues }
 }
 
-/** Why a payment cannot be voided now (empty: it can). */
-export function voidProblems(payment: { readonly status: PaymentStatus; readonly allocated: MinorUnits }): string[] {
+/** Why a payment cannot be voided now (empty: it can). B-W2a-61: a live refund of its unplaced part holds it too. */
+export function voidProblems(payment: { readonly status: PaymentStatus; readonly allocated: MinorUnits; readonly refunded?: MinorUnits | undefined }): string[] {
   if (payment.status === 'VOIDED') return ['The payment is voided already.']
   if (payment.allocated !== 0) return ['The payment still pays something: reverse its allocations first, then void it.']
+  if ((payment.refunded ?? 0) > 0) return ['Part of the payment is refunded or due to be: cancel or void the refund first, then void the payment.']
   return []
 }

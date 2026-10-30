@@ -5,6 +5,7 @@ import { deductionProblems } from '@nexus/factory-domain/invoicing/from-shipment
 import { ddtInvoiceProblems, type DdtFacts } from '@nexus/factory-domain/invoicing/from-shipment/shipped'
 import type { InvoiceRow, LineRow, Reader } from '../store'
 import { creditedInvoiceOf, depositInvoicesOf, freightBilledOf, freightOf, invoicedOf, readDdts, shippedOf } from './store'
+import { returnCreditIssueProblems } from '../credit-note/checks'
 
 /**
  * The checks of B-W1-51 that the issue adds to the invoice core's (facts.ts reviewIssue: the "Before you issue" panel,
@@ -83,6 +84,8 @@ export async function shippedAndMoneyProblems(db: Reader, invoice: InvoiceRow, l
   if (invoice.docType === 'TD04') {
     const credited = invoice.creditOfId ? await creditedInvoiceOf(db, invoice.creditOfId, invoice.id) : null
     problems.push(...creditProblems({ causale: invoice.causale, netTotal: invoice.netTotal, grossTotal: invoice.grossTotal }, credited))
+    // B-W2a-61 (FIN-070): the customer return lines it credits.
+    problems.push(...(await returnCreditIssueProblems(db, invoice, lines)))
   }
   return problems
 }

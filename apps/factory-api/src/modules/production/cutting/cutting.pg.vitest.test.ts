@@ -103,6 +103,10 @@ const SESSIONS: Record<string, SessionContext> = {
   /** The team leader on the cutting tablet: has not acknowledged the information notice. */
   floorLead: floor(A.siteA1, A.deviceA1, A.leadA1, A.companyA),
   floorB1: floor(A.siteB1, A.deviceB1, A.operatorB1, A.companyB),
+  /** B-W2a-60: the cutting office (production.cutting.view only), and who allocates hides (inventory.reserve). */
+  cuttingOffice: office(A.tenant, [grant(['production.cutting.view'])]),
+  reserver: office(A.tenant, [grant(['inventory.reserve', 'inventory.stock.view'])]),
+  cuttingB: office(A.tenant, [grant(['production.cutting.view'], [A.companyB])]),
 }
 
 type Json = Record<string, any>
@@ -224,7 +228,7 @@ async function releasedWorkOrder(lineId: string): Promise<Json> {
   return released.workOrder
 }
 
-type Orders = 'main' | 'replay' | 'race' | 'raceA' | 'raceB' | 'station' | 'remnant' | 'consume' | 'consumeTwo' | 'closeLast' | 'undo' | 'correct' | 'held'
+type Orders = 'main' | 'replay' | 'race' | 'raceA' | 'raceB' | 'station' | 'remnant' | 'consume' | 'consumeTwo' | 'closeLast' | 'undo' | 'correct' | 'held' | 'office' | 'officeHeld'
 const WO = {} as Record<Orders, Json>
 
 beforeAll(async () => {
@@ -274,7 +278,7 @@ beforeAll(async () => {
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   const line = await salesOrder(40)
-  for (const name of ['main', 'replay', 'race', 'raceA', 'raceB', 'station', 'remnant', 'consume', 'consumeTwo', 'closeLast', 'undo', 'correct', 'held'] as const) WO[name] = await releasedWorkOrder(line)
+  for (const name of ['main', 'replay', 'race', 'raceA', 'raceB', 'station', 'remnant', 'consume', 'consumeTwo', 'closeLast', 'undo', 'correct', 'held', 'office', 'officeHeld'] as const) WO[name] = await releasedWorkOrder(line)
 }, 300_000)
 
 afterAll(async () => {
@@ -817,5 +821,96 @@ describe('a cut of a held hide, or of a hide of a held lot, is refused in words 
     expect(refusalOf(error)).toBe('refusal/QUALITY_HOLD')
     expect(error.message).toMatch(new RegExp(`^Lot ${lots.HOLD!.code} is on hold \\(.+, since 21 Nov 2026\\): its hides are not cut until quality releases the hold\\.$`))
     expect(await entries()).toBe(before)
+  })
+})
+
+// ---- the cutting office (B-W2a-60) ---------------------------------------------------------------------------------------------
+
+describe('the cutting office (B-W2a-60, SCR-238): one cut per work order, where it stands, and a held work order refused in words', () => {
+  beforeAll(async () => {
+    await addLot('OFFICE', 'RELEASED', 'PASS', ['OF-H1', 'OF-H2', 'OF-H3'])
+  })
+  const cuts = async (query: string, session = 'cuttingOffice') => ok(session, 'GET', `/production/cutting/cuts${query}`)
+  const rowOf = (answer: Json, workOrderId: string): Json | undefined => (answer.cuts as Json[]).find((row) => row.workOrder.id === workOrderId)
+
+  it('lists a released work order as WAITING, then CUTTING after a set is cut: garments, pieces, hides, area, lot, table, allocated hides, tiles', async () => {
+    const parts = (await ok('floor', 'GET', `/production/cutting/work-orders/${WO.office.id}`)).cells[0].materials[0].parts as string[]
+    expect(parts.length).toBeGreaterThan(0)
+    const waiting = rowOf(await cuts(`?view=all&q=${WO.office.number}`), WO.office.id)
+    expect(waiting).toMatchObject({
+      kind: 'LEATHER',
+      state: 'WAITING',
+      style: { code: 'SEED-JKT-02' },
+      garments: { planned: 2, cut: 0, toCut: 2 },
+      pieces: { planned: 2 * parts.length, cut: 0 },
+      hides: { count: 0, used: [] },
+      allocated: 0,
+      lots: [],
+      stations: [],
+      lastCutAt: null,
+      recutsOpen: 0,
+    })
+    expect(waiting!.materials).toEqual([expect.objectContaining({ itemId: A.leather, colourCode: 'BLK' })])
+    expect(rowOf(await cuts('?view=waiting'), WO.office.id)).toBeDefined()
+
+    // Allocate hides: OF-H2 reserved whole for the work order (POST /inventory/reservations).
+    await ok('reserver', 'POST', '/inventory/reservations', { siteId: A.siteA1, workOrderId: WO.office.id, lines: [{ hideId: hides['OF-H2']!.id }] }, 201, freshKey())
+    // One set cut at the cutting table from OF-H1.
+    const first = await cut(WO.office.id, { code: hides['OF-H1']!.code, lines: sets(WO.office) })
+    expect(first.statusCode, first.body).toBe(201)
+    const answer = await cuts(`?q=${WO.office.number}`)
+    const cutting = rowOf(answer, WO.office.id)
+    expect(cutting).toMatchObject({
+      state: 'CUTTING',
+      garments: { planned: 2, cut: 1, toCut: 1 },
+      pieces: { planned: 2 * parts.length, cut: parts.length },
+      hides: { count: 1, used: [{ uom: 'FT2', area: '48.1600' }] },
+      allocated: 1,
+      lots: [{ id: lots.OFFICE!.id, code: lots.OFFICE!.code, dyeBatch: '7731' }],
+      stations: [{ id: A.station, code: 'CUT-01' }],
+      recutsOpen: 0,
+    })
+    expect(cutting!.lastCutAt).toEqual(expect.any(String))
+    expect(cutting!.yield).toEqual(expect.objectContaining({ plannedSource: expect.stringMatching(/^(STYLE|BOM)$/) }))
+    expect(rowOf(await cuts('?view=waiting'), WO.office.id)).toBeUndefined()
+    expect(rowOf(await cuts('?view=cutting'), WO.office.id)).toBeDefined()
+    // Today's tiles: the set's pieces, its hide and its area in m² (48.16 ft² = 4.4742 m²) at least.
+    expect(answer.tiles.piecesToday).toBeGreaterThanOrEqual(parts.length)
+    expect(answer.tiles.hidesToday).toBeGreaterThanOrEqual(1)
+    expect(Number(answer.tiles.areaTodayM2)).toBeGreaterThanOrEqual(4.4742)
+    // No money, and never who cut (Statuto dei Lavoratori art. 4; SCM-255).
+    expect(keysOf(answer).filter((name) => MONEY.test(name))).toEqual([])
+    expect(keysOf(answer).filter((name) => /worker|createdBy|person/i.test(name))).toEqual([])
+  })
+
+  it('answers only the office holding production.cutting.view, inside its companies', async () => {
+    expect((await call('viewer', 'GET', '/production/cutting/cuts')).statusCode).toBe(403)
+    expect((await call('floor', 'GET', '/production/cutting/cuts')).statusCode).toBe(403)
+    expect((await call('manager', 'GET', '/production/cutting/cuts')).statusCode).toBe(403)
+    expect(rowOf(await cuts('?view=all', 'cuttingB'), WO.office.id)).toBeUndefined()
+  })
+
+  it("a work order on hold is HELD with its reason, and a cut for it is refused in the hold's words before the database (holdOnCut), nothing issued", async () => {
+    const workOrder = WO.officeHeld
+    const holdId = newId()
+    await admin(
+      `INSERT INTO "QualityHold" (id, "tenantId", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "reasonNote", "placedAt", "placedById", "createdById")
+       VALUES ($1, $2, $3, $4, 'WorkOrder', ARRAY[$5]::uuid[], 'QUALITY_CHECK', 'Shade differs from the approved sample (made up).', '2026-11-21T09:00:00Z', $6, $6)`,
+      [holdId, A.tenant, A.companyA, A.siteA1, workOrder.id, A.actor],
+    )
+    await admin(
+      `UPDATE "WorkOrder" SET "heldFromStatus" = status, status = 'ON_HOLD', "heldAt" = now(), "holdReason" = 'Shade differs from the approved sample (made up)', "holdRecordType" = 'QualityHold', "holdRecordId" = $2 WHERE id = $1`,
+      [workOrder.id, holdId],
+    )
+    const held = rowOf(await cuts(`?view=held&q=${workOrder.number}`), workOrder.id)
+    expect(held).toMatchObject({ state: 'HELD', workOrder: { status: 'ON_HOLD', holdReason: 'Shade differs from the approved sample (made up)' } })
+    expect((await cuts('')).tiles.held).toBeGreaterThanOrEqual(1)
+    const entries = await counts(`SELECT count(*)::int AS n FROM "CutLog" WHERE "workOrderId" = $1`, [workOrder.id])
+    const error = await refused('floor', 'POST', cutUrl(workOrder.id), { clientEventId: clientEvent(), code: hides['OF-H3']!.code, lines: sets(workOrder) }, 409)
+    expect(refusalOf(error)).toBe('refusal/QUALITY_HOLD')
+    expect(error.message).toMatch(new RegExp(`^Work order ${workOrder.number} is on hold \\(.+, since 21 Nov 2026\\): nothing is cut for it until quality releases the hold\\.$`))
+    // Nothing logged and nothing issued: the hide is still in the store.
+    expect(await counts(`SELECT count(*)::int AS n FROM "CutLog" WHERE "workOrderId" = $1`, [workOrder.id])).toBe(entries)
+    expect(await onHand(A.bin, hides['OF-H3']!.id)).toBe('55.0000')
   })
 })

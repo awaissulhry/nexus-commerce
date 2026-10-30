@@ -4,6 +4,7 @@ import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { phrase, type BuyingCan, type Loaded, type Part, type Phrase } from '../../_shared/buying/model'
 import type { LiveState } from '../../_shared/buying/hooks'
 import type { RecordPanelsViewModel } from '../../../record-panels/model'
+import type { ReceiptDailyActions, ReceiptDailyModel, HideListActions, HideListModel } from './daily-state'
 import type { ExpectedLine, LineBody, LotWithHides, Receipt, ReceiptBody, ReceiptCounts, ReceiptRow, ReceiptStatus, Recorded, Uom } from './api'
 
 /**
@@ -19,7 +20,10 @@ import type { ExpectedLine, LineBody, LotWithHides, Receipt, ReceiptBody, Receip
 
 export const RECEIPT_TONE = Object.freeze({ OPEN: 'neutral', POSTED: 'success', REVERSED: 'danger', CANCELLED: 'neutral' } as const)
 
-export const RECEIPT_VIEWS = ['expected', 'posted', 'today', 'waiting', 'reversed', 'all'] as const
+/** B-W2a-63: `discrepancies` = receipts with a discrepancy not closed yet (the API's `?discrepancies=open`). */
+export const RECEIPT_VIEWS = ['expected', 'posted', 'today', 'waiting', 'discrepancies', 'reversed', 'all'] as const
+/** The views whose words are the `warehouse-receipts` catalogue's (W2a), not `buying`'s. */
+export const DAILY_VIEWS: readonly ReceiptView[] = Object.freeze(['discrepancies'])
 export type ReceiptView = (typeof RECEIPT_VIEWS)[number]
 
 export function receiptViewOf(params: { get(name: string): string | null } | null, canReceive: boolean): ReceiptView {
@@ -29,6 +33,7 @@ export function receiptViewOf(params: { get(name: string): string | null } | nul
   if (status === 'POSTED') return 'posted'
   if (status === 'REVERSED') return 'reversed'
   if (params?.get('waiting') === 'true') return 'waiting'
+  if (params?.get('discrepancies') === 'open') return 'discrepancies'
   return canReceive ? 'expected' : 'all'
 }
 
@@ -36,6 +41,7 @@ export function receiptQuery(view: ReceiptView, q: string, postedFrom: string, c
   return {
     status: view === 'posted' || view === 'today' ? ('POSTED' as ReceiptStatus) : view === 'reversed' ? ('REVERSED' as ReceiptStatus) : null,
     waiting: view === 'waiting',
+    discrepancies: view === 'discrepancies',
     postedFrom: view === 'today' ? postedFrom : null,
     q,
     cursor,
@@ -43,10 +49,12 @@ export function receiptQuery(view: ReceiptView, q: string, postedFrom: string, c
 }
 
 /** The tiles: saved views with their counts (Expected counts the open order lines; the others the counts route). */
-export const RECEIPT_TILES: readonly { id: string; view: ReceiptView; count: (counts: ReceiptCounts | null, expected: number | null) => number | null; needs?: keyof BuyingCan }[] = Object.freeze([
+export const RECEIPT_TILES: readonly { id: string; view: ReceiptView; count: (counts: ReceiptCounts | null, expected: number | null) => number | null; needs?: keyof BuyingCan; daily?: boolean }[] = Object.freeze([
   { id: 'expected', view: 'expected', count: (_counts, expected) => expected, needs: 'receive' },
   { id: 'today', view: 'today', count: (counts) => counts?.postedSince ?? null },
   { id: 'waiting', view: 'waiting', count: (counts) => counts?.waiting ?? null },
+  // B-W2a-63 (design rc-metrics "Discrepancies open (W2a)"): not closed yet; an API without the count draws '—'.
+  { id: 'discrepancies', view: 'discrepancies', count: (counts) => counts?.discrepanciesOpen ?? null, daily: true },
   { id: 'reversed', view: 'reversed', count: (counts) => counts?.reversed ?? null },
 ])
 
@@ -333,6 +341,8 @@ export interface ReceiptsListModel {
   focusRow?: number
   helpOpen?: boolean
   timeZone?: string
+  /** B-W2a-63: the tannery hide list (Import hide list on the band, its totals after). */
+  hideList?: HideListModel
 }
 
 export interface ReceiptsListActions {
@@ -345,6 +355,7 @@ export interface ReceiptsListActions {
   onReceive?: (orderId: string | null, lineIds?: string[]) => void
   onExport?: (ids: string[]) => void
   onDismissNotice?: () => void
+  hideList?: HideListActions
 }
 
 export interface ReceiveModel {
@@ -368,8 +379,11 @@ export interface ReceiveActions {
   onAnother?: () => void
 }
 
-export type ReceiptTab = 'lines' | 'lots' | 'activity'
-export const RECEIPT_TABS: readonly ReceiptTab[] = Object.freeze(['lines', 'lots', 'activity'])
+/** B-W2a-63 adds Documents check (the DDT photo, Request from supplier) and Discrepancies, in the design's order. */
+export type ReceiptTab = 'lines' | 'lots' | 'documents' | 'discrepancies' | 'activity'
+export const RECEIPT_TABS: readonly ReceiptTab[] = Object.freeze(['lines', 'lots', 'documents', 'discrepancies', 'activity'])
+/** The tabs whose words are the `warehouse-receipts` catalogue's (W2a). */
+export const DAILY_TABS: readonly ReceiptTab[] = Object.freeze(['documents', 'discrepancies'])
 export const receiptTabOf = (value: string | null | undefined): ReceiptTab => ((RECEIPT_TABS as readonly string[]).includes(value ?? '') ? (value as ReceiptTab) : 'lines')
 
 export interface ReceiptRecordModel {
@@ -390,6 +404,8 @@ export interface ReceiptRecordModel {
   panelsPreview?: RecordPanelsViewModel
   selected?: readonly string[]
   timeZone?: string
+  /** B-W2a-63: discrepancies, the report, the DDT photo, Request from supplier (absent: the W1 tabs only). */
+  daily?: ReceiptDailyModel
 }
 
 export interface ReceiptRecordActions {
@@ -401,4 +417,5 @@ export interface ReceiptRecordActions {
   onDismissNotice?: () => void
   onRetryLots?: () => void
   onExportHides?: (ids: string[]) => void
+  daily?: ReceiptDailyActions
 }

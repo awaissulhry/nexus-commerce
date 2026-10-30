@@ -54,6 +54,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   GoodsReceipt: '/warehouse/receipts/[id]',
   // Purchasing › Subcontract orders (SCR-128, B-W2a-56): an order sent to a workshop.
   SubcontractOrder: '/purchasing/subcontracting/[id]',
+  // Purchasing › Returns & claims (SCR-131, B-W2a-63): a supplier claim or a return to the supplier.
+  SupplierClaim: '/purchasing/claims/[id]',
   // Admin (B-W0-27/28): a company, a site (its address names its company: `[companyId]` is the record's own company), a
   // device or printer, an office user, a floor worker, a role, a connection.
   Company: '/admin/companies/[id]',
@@ -74,6 +76,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   PriceList: '/sales/price-lists/[id]',
   // Finance › Accounting export (SCR-156, B-W2a-51): a batch opens on its files tab (its checks, explanations and files).
   AccountingExport: '/finance/accounting/files?export=[id]',
+  // Production › Scrap & rework (SCR-140, B-W2a-60): a rework order opens in its row's detail on the list.
+  ReworkOrder: '/production/scrap?open=rework:[id]',
   // Planning › Planning settings (SCR-124, B-W2a-59): a calendar opens on Calendars & shifts, a shift pattern in its editor.
   WorkCalendar: '/planning/settings?tab=calendars&cal=[id]',
   ShiftPattern: '/planning/settings?tab=calendars&pattern=[id]',
@@ -123,6 +127,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/inventory/receipts': '/warehouse/receipts',
   // B-W2a-56: the subcontract orders (the page reads `?view=`, `?q=`; `?show=stock` is the stock at the workshops).
   '/purchasing/subcontracting/orders': '/purchasing/subcontracting',
+  // B-W2a-63: the claims (the page reads `?view=`, `?status=`, `?kind=`, `?receipt=`, `?lot=`, `?q=`).
+  '/purchasing/claims': '/purchasing/claims',
   // The stock screens read the API's own filters from the address.
   '/inventory/stock': '/warehouse/stock',
   // B-W2a-58: the pick lists across work orders (SCR-237).
@@ -145,6 +151,9 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/plant/machines': '/plant/machines',
   // B-W2a-49: the price lists (SCR-106) read `?rows=`, `?kind=` and `?q=`.
   '/sales/price-lists': '/sales/price-lists',
+  // B-W2a-60: the cuts across work orders (SCR-238, `?view=`, `?q=`) and scrap & rework (SCR-140, `?view=`, `?period=`).
+  '/production/cutting/cuts': '/production/cutting',
+  '/production/scrap': '/production/scrap',
 })
 
 export interface RecordRef {

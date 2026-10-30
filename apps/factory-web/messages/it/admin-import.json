@@ -231,6 +231,10 @@
       "product_operations": {
         "name": "Operazioni",
         "fills": "La libreria delle operazioni per codice: nome (italiano e inglese), reparto, minuti standard, macchina, competenza e istruzioni. I cicli mantengono i minuti copiati."
+      },
+      "inventory_hideList": {
+        "name": "Distinta pelli della conceria",
+        "fills": "Le pelli di una consegna della conceria, una riga per pelle, per un nostro ordine d'acquisto: ricevute come un unico ricevimento (lotti per bagno, pelli una per una con le superfici). Controlla i totali rispetto all'ordine prima di ricevere."
       }
     },
     "keys": {

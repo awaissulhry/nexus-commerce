@@ -231,6 +231,10 @@
       "product_operations": {
         "name": "Operations",
         "fills": "The operation library by code: name (Italian and English), department, standard minutes, machine, skill and instructions. Routings keep their copied minutes."
+      },
+      "inventory_hideList": {
+        "name": "Tannery's hide list",
+        "fills": "The hides of one delivery from the tannery, one row per hide, for one of our purchase orders: received as one goods receipt (lots by dye batch, hides one by one with their areas). Check the totals against the order before receiving."
       }
     },
     "keys": {

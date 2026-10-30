@@ -1,0 +1,466 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "dismiss": "Dismiss",
+    "done": "Done",
+    "retry": "Try again"
+  },
+  "problem": {
+    "read": "Couldn't read it: try again.",
+    "forbidden": "Your role may not do this.",
+    "offline": "No answer from the server: check the connection and try again.",
+    "gone": "It no longer exists (or belongs to another company).",
+    "changed": "Someone changed it meanwhile: it was read again. Check and try once more.",
+    "invalid": "Something in the form is not accepted: check the fields.",
+    "slowDown": "Too many attempts: wait a moment and try again.",
+    "write": "Couldn't save it: try again."
+  },
+  "tab": {
+    "discrepancies": "Discrepancies",
+    "documents": "Documents check",
+    "open_one": "{count} not closed yet",
+    "open_other": "{count} not closed yet"
+  },
+  "band": {
+    "claims": "Supplier claims about this receipt",
+    "discrepancies": "Discrepancies of this receipt"
+  },
+  "tile": {
+    "discrepancies": "Discrepancies open"
+  },
+  "view": {
+    "discrepancies": "With discrepancies open"
+  },
+  "col": {
+    "discrepancies": "Discrepancies",
+    "kind": "What was wrong",
+    "line": "Line",
+    "quantity": "Quantity",
+    "photos": "Photos",
+    "status": "Status",
+    "claim": "Supplier claim",
+    "sentAt": "Reported",
+    "more": "More"
+  },
+  "list": {
+    "discOpen_one": "{count} open · {unsent} not reported",
+    "discOpen_other": "{count} open · {unsent} not reported",
+    "discClosed_one": "{count} closed",
+    "discClosed_other": "{count} closed"
+  },
+  "lines": {
+    "invoice": "Supplier invoice",
+    "invoiceWhere": "Matched with this receipt in Finance, on the supplier invoices page (it comes with the supplier invoice screens).",
+    "discrepancies": "Discrepancies",
+    "discrepanciesValue": "{count} recorded · {open} not closed",
+    "rowMenu": "Actions for line {seq}",
+    "newDiscrepancy": "New discrepancy on this line"
+  },
+  "lots": {
+    "return": "Return to supplier",
+    "claims": "Claims about this lot"
+  },
+  "kind": {
+    "SHORT": "Short",
+    "OVER": "Over",
+    "DAMAGED": "Damaged",
+    "WRONG_ITEM": "Wrong item",
+    "WRONG_COLOUR": "Wrong colour",
+    "MISSING_DOCUMENT": "Missing document",
+    "OTHER": "Other"
+  },
+  "discStatus": {
+    "OPEN": "Open",
+    "SENT": "Reported",
+    "AGREED": "Agreed",
+    "CREDITED": "Credited",
+    "CLOSED": "Closed"
+  },
+  "discStatusWords": {
+    "OPEN": "Recorded, not reported to the supplier yet.",
+    "SENT": "Reported to the supplier: waiting for the answer.",
+    "AGREED": "The supplier agreed: waiting for the credit or the replacement.",
+    "CREDITED": "Credited by the supplier.",
+    "CLOSED": "Closed: it changes no more."
+  },
+  "uom": {
+    "PCS": "pcs",
+    "PAIR": "pair",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  },
+  "contactRole": {
+    "ORDERS": "orders",
+    "INVOICES": "invoices",
+    "QUALITY": "quality",
+    "DESIGN": "design",
+    "OWNER": "owner",
+    "RIDER": "rider"
+  },
+  "language": {
+    "it": "Italian",
+    "en": "English"
+  },
+  "remedy": {
+    "CREDIT": "A credit",
+    "REPLACEMENT": "A replacement"
+  },
+  "disc": {
+    "number": "No. {seq}",
+    "line": "Line {seq} · {code} {name}{colour}",
+    "wholeDelivery": "The delivery as a whole",
+    "photos_one": "{count} photo",
+    "photos_other": "{count} photos",
+    "noPhoto": "No photo",
+    "notSent": "Not reported yet",
+    "rowMenu": "Actions for discrepancy {seq}",
+    "openDetail": "Open",
+    "change": "Change",
+    "remove": "Remove",
+    "failed": "Couldn't load the discrepancies",
+    "loading": "Loading the discrepancies…",
+    "new": "New discrepancy",
+    "sendReport": "Send report",
+    "summaryNone": "Nothing wrong recorded on this delivery.",
+    "summary_one": "{count} discrepancy · {open} not closed · {unsent} not reported",
+    "summary_other": "{count} discrepancies · {open} not closed · {unsent} not reported",
+    "closedReceipt": "This receipt was reversed or cancelled: it takes no new discrepancy. The ones recorded can still be settled.",
+    "tableLabel": "Discrepancies of the delivery",
+    "count_one": "{count} discrepancy",
+    "count_other": "{count} discrepancies",
+    "bulk": {
+      "report_one": "Report {count} to the supplier",
+      "report_other": "Report {count} to the supplier",
+      "claim_one": "Claim {count} from the supplier",
+      "claim_other": "Claim {count} from the supplier"
+    },
+    "keyNew": "New discrepancy",
+    "empty": {
+      "title": "No discrepancies",
+      "body": "Short, over, damaged, the wrong item or colour, a missing document: record it here with its photos, then report it to the supplier."
+    },
+    "reportHint": "The report is a PDF without prices, mailed to the supplier on this receipt’s thread; its answer arrives there too. Open ones become Reported; one already reported goes again as a reminder.",
+    "notReportable": {
+      "CLOSED": "Closed: it is not reported or claimed again.",
+      "answered": "The supplier answered it already: settle it from its detail."
+    }
+  },
+  "detail": {
+    "title": "Discrepancy {seq} · {receipt}",
+    "position": "{n} of {count}",
+    "previous": "Previous",
+    "next": "Next",
+    "first": "This is the first one.",
+    "last": "This is the last one.",
+    "reason": "Reason",
+    "line": "Line",
+    "quantity": "Quantity",
+    "recorded": "Recorded",
+    "sent": "Reported to the supplier",
+    "closed": "Closed",
+    "claims": "Supplier claims",
+    "note": "What the receiver noted",
+    "resolution": "How it was settled",
+    "photos": "Photos",
+    "photosOf": "Photos of discrepancy {seq}"
+  },
+  "photo": {
+    "add": "Add photo",
+    "none": "No photo yet.",
+    "alt": "{label}, photo {n}",
+    "openFull": "Open photo {n} in a new tab",
+    "pending": "Being checked…",
+    "failed": "Couldn't show it",
+    "loading": "Loading…",
+    "captureLabel": "Photo of discrepancy {seq}"
+  },
+  "docs": {
+    "ddtTitle": "Supplier’s delivery note (DDT)",
+    "ddtPhoto": "Photograph the DDT",
+    "ddtAnother": "Add another photo",
+    "ddtNumber": "DDT number",
+    "ddtDate": "DDT date",
+    "ddtNone": "Not recorded",
+    "ddtCapture": "Photo of the delivery note of {number}",
+    "ddtPhotos": "Photos of the delivery note",
+    "ddtHint": "The photo stays with the receipt, for the office and the goods-in tablet. The number and date are the ones typed at receiving.",
+    "wantedTitle": "Documents the lots wait for",
+    "request": "Request from supplier",
+    "loading": "Reading the lots…",
+    "none": {
+      "title": "Nothing is missing",
+      "body": "These materials need no more documents, and the delivery note is recorded."
+    },
+    "ask": {
+      "CR_VI_REPORT": "Hexavalent chromium (Cr VI) test report",
+      "PPE_CERTIFICATE": "Certificate of the PPE component",
+      "DELIVERY_NOTE": "The supplier’s delivery note (DDT)"
+    },
+    "lotOf": "Lot {code} · supplier lot {ref} · dye batch {dye}",
+    "recordResult": "Record the result in Compliance › Tests & substances",
+    "missing": "Missing",
+    "wantedHint": "A lot stays in quarantine until its documents are there and the quality step releases it (Compliance › Tests & substances).",
+    "released_one": "{count} lot of this receipt is released already.",
+    "released_other": "{count} lots of this receipt are released already."
+  },
+  "held": {
+    "busy": "Working…",
+    "loading": "Still loading…",
+    "noManage": "Your role may not record or settle discrepancies (inventory.discrepancies.manage).",
+    "noReport": "Your role may not send the discrepancy report (inventory.discrepancies.report).",
+    "noUpload": "Your role may not upload files (files.upload).",
+    "noReceive": "Your role may not receive goods (inventory.receive).",
+    "noClaims": "Your role may not prepare supplier claims (purchasing.claims.manage).",
+    "noEmail": "Your role may not e-mail suppliers (email.send): ask a buyer.",
+    "noParties": "Your role may not read the supplier’s contacts (parties.view).",
+    "noImport": "Your role may not run imports (imports.run and files.upload).",
+    "receiptClosed": "A reversed or cancelled receipt takes no new discrepancy.",
+    "receiptCancelled": "A cancelled receipt takes no photo.",
+    "kind": "Say what was wrong: pick the reason or the kind.",
+    "ownReasonKind": "This reason is your company’s own: pick the kind of problem too.",
+    "quantity": "The quantity is a number above 0 with at most four decimals (12,5).",
+    "quantityUnit": "Give the quantity and its unit together, or neither.",
+    "noteNeeded": "This reason needs a few words: say what is wrong.",
+    "noteLong": "At most {max} characters.",
+    "closedNoChange": "Closed: what was found no longer changes.",
+    "sentNoChange": "Reported to the supplier: what was found no longer changes. Record a new one if more was found.",
+    "sentNoRemove": "Reported or closed: it is never removed; close it with what settled it.",
+    "photosNoRemove": "It has photos: close it with why instead of removing it.",
+    "closedNoPhoto": "Closed: it takes no more photos.",
+    "photosFull": "At most {max} photos.",
+    "closeNote": "Say what settled it, or why it is not pursued.",
+    "nothingOpen": "Nothing is open to report: every discrepancy was reported or closed.",
+    "selectionAnswered": "The supplier answered the ones selected already.",
+    "pickForClaim": "Select the discrepancies the claim is about.",
+    "claimAnswered": "Discrepancy {seq} was answered or closed already.",
+    "claimNoLine": "Discrepancy {seq} is about the delivery as a whole: a claim needs the line (change it first).",
+    "claimPursued": "Discrepancy {seq} is pursued already by {number}.",
+    "claimReason": "Pick the claim’s reason.",
+    "sentAlready": "Sent.",
+    "checkFailed": "The check could not be read: try again.",
+    "pickRecipient": "Pick at least one of the supplier’s contacts.",
+    "tooManyRecipients": "At most {max} recipients.",
+    "cc": "Not an e-mail address: {list}",
+    "contactsFailed": "The supplier’s contacts could not be read.",
+    "pickDocument": "Pick at least one document to ask for.",
+    "subject": "Write a subject.",
+    "body": "Write the message.",
+    "nothingWanted": "The lots wait for no document and the delivery note is recorded."
+  },
+  "report": {
+    "title": "Send discrepancy report · {number}",
+    "subtitle": "To {supplier}, on this receipt’s thread",
+    "send": "Send to supplier",
+    "which": "What the report names",
+    "reminder": "reported before: goes again as a reminder",
+    "checkFailed": "Couldn't check the report",
+    "checking": "Checking the report…",
+    "to": "To (the supplier’s contacts)",
+    "recipient": "{name} · {email} · {roles}",
+    "cc": "Copy to",
+    "ccHint": "E-mail addresses, separated by commas.",
+    "language": "Language of the report",
+    "subject": "Subject",
+    "message": "Message",
+    "messageHint": "Leave it empty to send the standard text shown, in the supplier’s language; your words replace it.",
+    "what": "The PDF has no prices. It is kept with the receipt and shared with the supplier; the open discrepancies become Reported.",
+    "preview": "The PDF as it will leave",
+    "newTab": "Open in a new tab",
+    "previewLoading": "Making the preview…",
+    "pdfTitle": "Discrepancy report {number}",
+    "sentTitle": "Report sent · {number}",
+    "sentBody_one": "{count} discrepancy reported at {time}.",
+    "sentBody_other": "{count} discrepancies reported at {time}.",
+    "perRecipient": "Each recipient",
+    "ccOf": "Copy: {address}",
+    "sentWhere_one": "The mail and its PDF are on the receipt’s thread (Activity); {moved} moved to Reported.",
+    "sentWhere_other": "The mail and its PDF are on the receipt’s thread (Activity); {moved} moved to Reported.",
+    "openPdf": "Open the report PDF",
+    "delivery": {
+      "queued": "Waiting to be sent",
+      "sent": "Sent",
+      "delivered": "Delivered",
+      "bounced": "Bounced: check the address",
+      "failed": "Not sent: try again from the thread"
+    },
+    "problem": {
+      "noContact": "The supplier has no active contact with an e-mail: add one in Purchasing › Suppliers.",
+      "selection": "Some of these were answered or closed meanwhile: pick again.",
+      "company": "The company’s letterhead is not complete (legal details): fix it in Admin › Companies & sites.",
+      "identity": "No sending address is ready for this company: set one up in Admin › Connections & API.",
+      "other": "The report cannot be sent as it stands: check the receipt."
+    }
+  },
+  "new": {
+    "title": "New discrepancy",
+    "titleChange": "Change discrepancy",
+    "subtitle": "{number} · {supplier}",
+    "save": "Save discrepancy",
+    "saveChange": "Save changes",
+    "reason": "Reason",
+    "reasonHint": "From your company’s discrepancy list.",
+    "reasonNone": "— none —",
+    "reasonsFailed": "The reason list couldn't be read: pick the kind.",
+    "kind": "Kind of problem",
+    "kindPick": "Pick one…",
+    "kindOwnHint": "Your own reason: say which kind of problem it is.",
+    "line": "Line",
+    "quantity": "How much",
+    "quantityHint": "Optional: the quantity and its unit.",
+    "unit": "Unit",
+    "noUnit": "— unit —",
+    "note": "Note",
+    "noteHint": "What you saw, at most {max} characters.",
+    "photos": "Photos",
+    "photoLabel": "Photo of the discrepancy",
+    "photosNone": "No photo yet: a photo of the damage helps the supplier answer.",
+    "photosLater": "Its photos stay; new ones are added when you save.",
+    "photosReady": "Photos to upload",
+    "photoReady": "Photo {n}",
+    "photoRemove": "Leave out photo {n}",
+    "postedHint": "The receipt is posted: the stock does not change; the discrepancy follows what is owed by the supplier.",
+    "openHint": "Recorded on the receipt; reported to the supplier with the report.",
+    "quantityWords": "{quantity} {unit}"
+  },
+  "settle": {
+    "menu": {
+      "AGREED": "Supplier agreed",
+      "CREDITED": "Credit received",
+      "CLOSED": "Close…"
+    },
+    "title": {
+      "AGREED": "Discrepancy {seq}: the supplier agreed",
+      "CREDITED": "Discrepancy {seq}: credited",
+      "CLOSED": "Close discrepancy {seq}"
+    },
+    "body": {
+      "AGREED": "The supplier accepts it: the credit or the replacement is owed.",
+      "CREDITED": "The supplier’s credit for it arrived.",
+      "CLOSED": "Closed is final: say what settled it, or why it is not pursued."
+    },
+    "confirm": {
+      "AGREED": "Mark as agreed",
+      "CREDITED": "Mark as credited",
+      "CLOSED": "Close discrepancy"
+    },
+    "note": "Note (optional)",
+    "noteClose": "What settled it",
+    "noteHint": "Added to how it was settled; the supplier does not see it.",
+    "claimNote": "Claims that pursue it: {numbers}. A claim closes its discrepancies when it closes."
+  },
+  "remove": {
+    "title": "Remove discrepancy {seq}",
+    "confirm": "Remove",
+    "what": "Only for one recorded by mistake: it was never reported and has no photo.",
+    "kept": "The receipt’s history keeps that it was recorded and removed."
+  },
+  "claim": {
+    "title_one": "Claim {count} discrepancy from the supplier",
+    "title_other": "Claim {count} discrepancies from the supplier",
+    "subtitle": "{supplier} · from {number}",
+    "confirm": "Make the claim",
+    "reason": "Reason of the claim",
+    "reasonPick": "Pick one…",
+    "remedy": "What you ask for",
+    "note": "Note",
+    "noteHint": "A few words for the supplier (optional unless the reason needs them).",
+    "what": "A draft claim with one line per discrepancy, in Purchasing › Returns & claims: send it to the supplier from there. The goods stay here (a claim for credit or replacement)."
+  },
+  "request": {
+    "title": "Request documents from the supplier",
+    "subtitle": "{supplier} · {number}",
+    "send": "Send request",
+    "loading": "Reading the supplier’s contacts…",
+    "contactsFailed": "Couldn't read the supplier’s contacts",
+    "asked": "What you ask for",
+    "languageHint": "The supplier reads it in this language; the text follows until you change it.",
+    "body": "Message",
+    "bodyHint": "The standard words in the supplier’s language; change them as you like. No price, no internal note.",
+    "what": "The mail goes on this receipt’s thread: the supplier’s answer and its attachments arrive there.",
+    "sentTitle": "Request sent",
+    "sentBody": "Sent to {to}.",
+    "sentWhere": "It is on the receipt’s thread (Activity), where the answer will arrive."
+  },
+  "refused": {
+    "reason": "That reason is no longer in use: pick another.",
+    "kind": "The kind does not match the reason: pick again.",
+    "line": "That line is not on this receipt any more: pick again.",
+    "quantity": "The quantity or its unit is not accepted: check both.",
+    "note": "The note is too long.",
+    "moved": "It was reported or closed meanwhile: it was read again.",
+    "settleMove": "It cannot move there from where it is now: it was read again.",
+    "cc": "A copy address is not accepted: check it.",
+    "reportMoved": "The discrepancies moved meanwhile: they were read again; check the report and send again.",
+    "claimReason": "That claim reason is not accepted (no longer in use, or it needs a note).",
+    "claimDiscrepancies": "These discrepancies cannot make one claim (another receipt, or no longer visible).",
+    "claimLines": "A line of the claim needs a quantity: give the discrepancy its quantity first.",
+    "photoStore": "The photo couldn't reach the file store: try again.",
+    "photoType": "That file is not a photo the receipt takes (JPEG, PNG, WebP, HEIC).",
+    "requestTo": "An address is not accepted: check the contacts."
+  },
+  "notice": {
+    "recorded": "Discrepancy {seq} recorded.",
+    "changed": "Discrepancy {seq} changed.",
+    "savedPhotosFailed_one": "Discrepancy {seq} saved, but {count} photo did not upload: add it again from its detail.",
+    "savedPhotosFailed_other": "Discrepancy {seq} saved, but {count} photos did not upload: add them again from its detail.",
+    "settled": {
+      "AGREED": "Discrepancy {seq}: agreed with the supplier.",
+      "CREDITED": "Discrepancy {seq}: credited.",
+      "CLOSED": "Discrepancy {seq} closed."
+    },
+    "removed": "Discrepancy {seq} removed.",
+    "claimMade": "Claim {number} made as a draft: send it to the supplier from the claim.",
+    "openClaim": "Open {number}",
+    "ddtPhoto": "Photo of the delivery note saved."
+  },
+  "hideList": {
+    "action": "Import hide list",
+    "everyCompany": "Every company (not for a hide list)",
+    "title": "The tannery’s hide list",
+    "failed": "Couldn't read the list’s totals",
+    "loading": "Reading the list’s totals…",
+    "forOrder": "for",
+    "counts": "{rows} rows · {toReceive} hides to receive · {before} received before · {errors} refused",
+    "received": "Received as {number}: lots by dye batch, hides one by one.",
+    "openReceipt": "Open {number}",
+    "notYet": "Checked, nothing received yet: apply it in the import (Admin › Import & export keeps it).",
+    "linesLabel": "Totals per order line",
+    "line": "Line {seq} · {code}",
+    "brings": "{hides} hides in {lots} lots · {area} {unit}",
+    "against": "Before {before} → after {after} of {expected} {unit} expected (up to {upTo} at ±{pct} %)",
+    "invoiceNote": "The totals against the supplier’s invoice are checked in Finance, on the supplier invoices page (three-way match).",
+    "judge": {
+      "within": "Within the tolerance.",
+      "short": "Short of the order: the line stays open for the rest.",
+      "over": "More than ordered, within what the tolerance allows.",
+      "overReason": "Beyond the tolerance: every row needs the difference reason, else the list is refused."
+    },
+    "kind": {
+      "EXACT": "Exact",
+      "WITHIN_TOLERANCE": "Within tolerance",
+      "SHORT": "Short",
+      "OVER": "Over"
+    },
+    "status": {
+      "UPLOADED": "Being read.",
+      "PLANNED": "Checked (dry run): nothing written yet.",
+      "APPLYING": "Being received…",
+      "APPLIED": "Received.",
+      "FAILED": "Stopped: see the import for why.",
+      "CANCELLED": "Cancelled: nothing was received."
+    }
+  }
+}
