@@ -101,13 +101,17 @@
       "covers": "Covers",
       "valid": "Valid",
       "status": "Status",
-      "actions": "Actions"
+      "actions": "Actions",
+      "changes": "Change waiting"
     },
     "class": "class {class}",
     "level": "level {class}",
     "covers_one": "{count} style or part",
     "covers_other": "{count} styles or parts",
-    "validRange": "{from} – {to}"
+    "validRange": "{from} – {to}",
+    "changesNone": "None",
+    "changesWaiting_one": "{count} waiting",
+    "changesWaiting_other": "{count} waiting"
   },
   "row": {
     "menu": "Actions for {number}",
@@ -115,7 +119,8 @@
     "openNewTab": "Open in a new tab",
     "coverage": "Coverage",
     "check": "Check a garment with this certificate",
-    "copy": "Copy number"
+    "copy": "Copy number",
+    "renew": "Start renewal"
   },
   "noAccess": {
     "title": "Not for your role",
@@ -127,7 +132,8 @@
     "expiring": "Expiring in 180 days",
     "suspended": "Suspended or withdrawn",
     "drafts": "Drafts not registered",
-    "expired": "Expired"
+    "expired": "Expired",
+    "changes": "Changes waiting for the notified body"
   },
   "tile": {
     "valid": "Valid",
@@ -315,7 +321,8 @@
     "coverage": "Coverage",
     "body": "Notified body",
     "files": "Files",
-    "activity": "Activity"
+    "activity": "Activity",
+    "renewals": "Renewals"
   },
   "action": {
     "register": "Register…",
@@ -594,5 +601,256 @@
     "register": "Register (a draft)",
     "thread": "The thread beside the record",
     "help": "All shortcuts"
+  },
+  "ren": {
+    "title": "Validity and renewal",
+    "intro": "Five years at most (Reg. (EU) 2016/425 Annex V). The review is asked of the notified body {opens} to {closes} months before the last valid day; the alerts come 180, 90 and 30 days before it.",
+    "failed": "The renewal could not be read",
+    "more": "More renewal steps",
+    "bar": {
+      "label": "Valid from {from} to {to}; today {today}; the renewal window and the alerts are marked.",
+      "today": "Today, {date}",
+      "stage": "{days} days before the end: {date}"
+    },
+    "window": {
+      "BEFORE": "The renewal window opens on {opens} and closes on {closes} (the certificate ends on {date}).",
+      "OPEN": "The renewal window is open: ask the notified body by {closes} (it opened on {opens}; the certificate ends on {date}).",
+      "CLOSED": "The renewal window closed on {closes}: the certificate ends on {date}. Whether a late application is still taken is the notified body's decision.",
+      "ENDED": "The certificate ended on {date}: a renewal is a new certificate from the notified body.",
+      "law": "12 to 6 months before the end, as PRD-283 reads Reg. (EU) 2016/425 Annex V; your notified body's own dates win."
+    },
+    "stages": {
+      "title": "Expiry alerts",
+      "none": "No rule watches this certificate's expiry: the alerts are switched off for its company.",
+      "where": "The alerts are exception rules: their days, whom they tell and switching them off are set in the alert rules."
+    },
+    "stage": {
+      "name": "{days} days before the end",
+      "on": "on {date}",
+      "onWorking": "on {date} (working days)",
+      "tells": "tells {role} by the bell",
+      "tellsNobody": "tells nobody by role",
+      "builtIn": "ships with the factory",
+      "firedQuiet": "fired on {date}; an earlier alert was still open",
+      "cancelled": "stopped: no alert from this rule now",
+      "state": {
+        "off": "Switched off",
+        "waiting": "Waiting",
+        "fired": "Fired",
+        "cancelled": "Stopped",
+        "notSet": "Not set yet"
+      },
+      "alert": {
+        "OPEN_one": "alert open since {date}, {count} person told",
+        "OPEN_other": "alert open since {date}, {count} people told",
+        "ACKNOWLEDGED_one": "alert seen, raised on {date}, {count} person told",
+        "ACKNOWLEDGED_other": "alert seen, raised on {date}, {count} people told",
+        "RESOLVED_one": "alert raised on {date} and resolved, {count} person told",
+        "RESOLVED_other": "alert raised on {date} and resolved, {count} people told"
+      }
+    },
+    "renewal": {
+      "title": "The renewal",
+      "notStarted": "Not started. Start renewal makes a task with the usual steps for the notified body.",
+      "none": "This certificate counts no more: a new one is added as a new certificate.",
+      "started": "Started",
+      "startedBy": "{date} by {name}",
+      "task": "Task",
+      "taskState": "{title}: {state}, {done} of {total} steps done, for {assignee}",
+      "taskHidden": "Its task is not yours to see.",
+      "due": "Apply by",
+      "applied": "Applied",
+      "appliedOn": "{date}, reference {reference}",
+      "appliedLate": "{date}, reference {reference} (after the window)",
+      "notApplied": "Not recorded yet",
+      "nobody": "Nobody yet",
+      "steps": "The task's steps",
+      "stepDone": "done {date} by {name}",
+      "stepIsDone": "Done:",
+      "stepIsOpen": "To do:",
+      "renewedBy": "Renewed by {number}, valid {from} – {to}: this one is no longer warned about.",
+      "openSuccessor": "Open the new certificate",
+      "renews": "This certificate renews",
+      "notCarried_one": "{count} style this certificate covers is not covered by the new one yet",
+      "notCarried_other": "{count} styles this certificate covers are not covered by the new one yet",
+      "notCarriedFix": "Add their coverage on the new certificate (Coverage tab), or the gate refuses them once this one ends."
+    },
+    "task": {
+      "OPEN": "open",
+      "DONE": "done",
+      "CANCELLED": "cancelled"
+    },
+    "log": {
+      "title": "What was done",
+      "STARTED": "{date}: renewal started by {name} (apply by {detail})",
+      "APPLIED": "{date}: application to the notified body recorded by {name} (sent {detail})",
+      "RENEWED": "{date}: {detail} linked as the renewal by {name}"
+    },
+    "start": {
+      "open": "Start renewal",
+      "title": "Start the renewal of {number}",
+      "what": "A task on this certificate with the usual steps, due on {closes}, the window's last day (it opened on {opens}).",
+      "assignee": "For",
+      "me": "Me",
+      "peopleFailed": "Who may keep it could not be read: the task is yours.",
+      "language": "Words of the task",
+      "it": "Italian",
+      "en": "English",
+      "preview": "The task as it will be made",
+      "due": "due {date}",
+      "bodyList": "The usual steps: what the notified body asks for (samples, tests, fees) is its own list and wins.",
+      "nothingSent": "Nothing is sent to the notified body from here.",
+      "confirm": "Start renewal"
+    },
+    "applied": {
+      "open": "Record the application",
+      "title": "The application for {number}",
+      "what": "The day the application for review went to {body}. Typed in: nothing is sent from here.",
+      "day": "Sent on",
+      "reference": "Notified body's reference",
+      "referenceHint": "If it gave one.",
+      "late": "This day is outside the window ({opens} – {closes}): it is recorded; the notified body decides whether it still takes it.",
+      "note": "Note",
+      "confirm": "Record the application"
+    },
+    "link": {
+      "open": "Link the new certificate",
+      "title": "The renewal of {number}",
+      "what": "The notified body's new certificate, once registered: the same holder, valid from a later day. The link is set once and never changes.",
+      "pick": "New certificate",
+      "choose": "Choose…",
+      "none": "No registered certificate can renew this one yet",
+      "noneFix": "Add the new certificate (Certificates › Add certificate) with its PDF and register it; it shows here.",
+      "until": "valid until {date}",
+      "from": "valid {from} – {to}",
+      "after": "After the link this certificate's alerts stop; its garments stay covered until its last valid day.",
+      "confirm": "Link as the renewal"
+    },
+    "changes": {
+      "title": "Changes to the approved type",
+      "intro": "Changes of a covered style's outer leather, thickness, protector model, seams or lining since this certificate's type examination (Reg. (EU) 2016/425 Annex V 7.2). The new revision prints no class label until the notified body's answer is recorded.",
+      "heldBanner_one": "{count} revision prints no class label until the notified body's answer is recorded.",
+      "heldBanner_other": "{count} revisions print no class label until the notified body's answer is recorded.",
+      "count_one": "{count} change",
+      "count_other": "{count} changes",
+      "failed": "The changes could not be read",
+      "empty": "No changes since issue",
+      "emptyBody": "A released revision of a covered style that changes the approved type shows here.",
+      "revision": "Revision {revision} (compared with {compared})",
+      "to": "becomes",
+      "more_one": "+ {count} more change",
+      "more_other": "+ {count} more changes",
+      "labelHeld": "Its class label is held",
+      "told": "Told on {date}",
+      "answered": "Answered on {date}, {reference}",
+      "noFile": "No answer file",
+      "files_one": "{count} file",
+      "files_other": "{count} files",
+      "menu": "Actions for {code} revision {revision}",
+      "col": {
+        "revision": "Style revision",
+        "change": "What changed",
+        "needed": "Notified body",
+        "status": "Status",
+        "file": "Answer file",
+        "actions": "Actions"
+      },
+      "revisionOnly": "Revision {revision} (what it was compared with is not recorded)"
+    },
+    "needed": {
+      "OPEN": "To decide: tell it, or not needed",
+      "NOTIFIED": "Its answer is awaited",
+      "APPROVED": "Approved as an addition",
+      "REFUSED": "Refused: a new examination is needed",
+      "NOT_NEEDED": "Not needed"
+    },
+    "status": {
+      "OPEN": "Waiting",
+      "NOTIFIED": "Told the notified body",
+      "APPROVED": "Approved addition",
+      "REFUSED": "Refused",
+      "NOT_NEEDED": "Not needed"
+    },
+    "kind": {
+      "OUTER_LEATHER": "Outer leather",
+      "THICKNESS": "Thickness",
+      "PROTECTOR": "Protector model",
+      "SEAMS": "Seams",
+      "LINING": "Lining",
+      "OTHER": "Other"
+    },
+    "verb": {
+      "notify": "Tell the notified body…",
+      "notNeeded": "Not needed…",
+      "answer": "Record the answer…",
+      "none": "Nothing to do"
+    },
+    "notify": {
+      "title": "{code} revision {revision}: tell the notified body",
+      "what": "Record that notified body {body} was told of this change to the approved type of {number}. Typed in: nothing is sent from here.",
+      "note": "How it was told",
+      "nothingSent": "Nothing is sent to the notified body from here. The class label stays held until its answer is recorded.",
+      "confirm": "Record as told"
+    },
+    "notNeeded": {
+      "title": "{code} revision {revision}: not needed",
+      "what": "The change does not touch what the type examination of {number} covered: the notified body is not told and the class label prints again.",
+      "reason": "Why",
+      "reasonHint": "Kept with the technical file; the notified body may ask for it.",
+      "confirm": "Decide: not needed"
+    },
+    "answer": {
+      "title": "{code} revision {revision}: the notified body's answer",
+      "what": "Record the answer of notified body {body} about this change to {number}, with its letter.",
+      "decision": "The answer",
+      "APPROVED": "Approved",
+      "REFUSED": "Refused",
+      "day": "Answered on",
+      "reference": "Its reference (the addition's number)",
+      "file": "The answer (PDF)",
+      "fileHint": "The notified body's letter or the addition to the certificate.",
+      "filed": "On file: {name}",
+      "note": "Note",
+      "confirm": "Record the answer"
+    },
+    "decision": {
+      "kept": "Kept 10 years after the certificate's last valid day with the technical documentation (Reg. (EU) 2016/425 art. 8(3))."
+    },
+    "held": {
+      "renewed": "Already renewed: the new certificate is linked.",
+      "notRenewable": "Only a valid or suspended certificate is renewed.",
+      "notLinkable": "Only a registered certificate is renewed.",
+      "started": "The renewal is started: its task is still open.",
+      "noCandidate": "No registered certificate of the same holder, valid from a later day, yet.",
+      "pick": "Choose the new certificate.",
+      "day": "Choose the day.",
+      "future": "The day has not come yet.",
+      "beforeTold": "The answer cannot come before the notified body was told.",
+      "reason": "Say why.",
+      "file": "Choose the notified body's answer (PDF).",
+      "upload": "Your role does not upload files (files.upload)."
+    },
+    "write": {
+      "refused": "The renewal step was refused."
+    },
+    "done": {
+      "exported_one": "Exported {count} change (CSV).",
+      "exported_other": "Exported {count} changes (CSV)."
+    },
+    "csv": {
+      "style": "Style",
+      "revision": "Revision",
+      "compared": "Compared with",
+      "kind": "What",
+      "before": "Before",
+      "after": "After",
+      "status": "Status",
+      "answered": "Answered",
+      "reference": "Reference"
+    },
+    "answerMeans": {
+      "APPROVED": "The change is an addition to the certificate: the class label prints again.",
+      "REFUSED": "The changed revision needs a new type examination: its class label stays held."
+    }
   }
 }

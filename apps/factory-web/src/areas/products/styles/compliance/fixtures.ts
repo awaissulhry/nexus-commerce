@@ -1,5 +1,5 @@
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { demoBom, demoCompliance, demoStyle, recordModel, REV, REVISIONS } from '../demo/fixtures'
+import { CAN, demoBom, demoCompliance, demoStyle, demoTypeChanges, recordModel, REV, REVISIONS } from '../demo/fixtures'
 import type { StyleRecordViewModel } from '../record/record-model'
 import { StyleRecordView } from '../record/view/StyleRecordView'
 
@@ -29,5 +29,12 @@ export const designScreen = defineDesignScreen<StyleRecordViewModel>({
     { id: 'not-ppe', label: 'Not PPE', model: compliance({ style: { status: 'ready', value: demoStyle({ ppe: { ppeCategory: 'NOT_PPE', ppeStandard: null, ppeClass: null } }) }, compliance: { status: 'ready', value: demoCompliance({ notPpe: true }) } }) },
     { id: 'loading', label: 'Loading', model: compliance({ compliance: { status: 'loading' } }) },
     { id: 'error', label: 'Could not load', model: compliance({ compliance: { status: 'error', problem: 'problem.read.unavailable' } }) },
+    // W2a (B-W2a-66): Changes that may need the notified body (design style.cp.change).
+    { id: 'w2a-changes-draft', label: 'W2a Draft revision 3 changes the protector and the lining', model: compliance({ ...draft, typeChanges: { status: 'ready', value: demoTypeChanges('draft') } }), note: 'Found now against the type CERT-DEMO-0001 approved (revision 2); Tell Compliance makes a task on the style.' },
+    { id: 'w2a-changes-held', label: 'W2a Released revision 2: its class label is held', model: compliance({ typeChanges: { status: 'ready', value: demoTypeChanges('released') } }), note: 'The notified body was told; the label waits for its answer.' },
+    { id: 'w2a-tell', label: 'W2a Tell Compliance: the New task dialog, filled', model: compliance({ ...draft, typeChanges: { status: 'ready', value: demoTypeChanges('draft') }, dialog: { kind: 'tellCompliance', certificateId: demoTypeChanges('draft').certificates[0]!.certificate.id }, taskPeople: { status: 'ready', data: [{ id: '0190f0e2-3333-7000-8000-000000000001', name: 'Giulia Demo', me: true }, { id: '0190f0e2-3333-7000-8000-000000000002', name: 'Marco Demo', me: false }] } }) },
+    { id: 'w2a-changes-none', label: 'W2a Nothing relevant changed: the section is hidden', model: compliance({ ...draft, typeChanges: { status: 'ready', value: demoTypeChanges('none') } }) },
+    { id: 'w2a-changes-no-task', label: 'W2a Without the right to make tasks: Tell Compliance held', model: compliance({ ...draft, typeChanges: { status: 'ready', value: demoTypeChanges('draft') }, can: { ...CAN.owner, tellCompliance: false } }) },
+    { id: 'w2a-changes-failed', label: 'W2a The changes could not be read', model: compliance({ typeChanges: { status: 'error', problem: 'problem.read.unavailable' } }) },
   ],
 })

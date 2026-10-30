@@ -52,6 +52,8 @@ import { confirmationRemindersCron } from './modules/purchasing/reminders/daily'
 // B-W2a-55: the payment reminder ladder (prepares reminders on its timers; a person approves and sends each one).
 import { ladderCron, ladderHandlers } from './modules/receivables/ladder'
 import { payablesHandlers, sdiPickupCron } from './modules/payables/sdi'
+// B-W2a-66: the certificate renewal stages.
+import { renewalStagesCron } from './modules/compliance/renewals/stages'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -168,6 +170,8 @@ if (mode === 'worker') {
   crons.push(ladderCron({ database, log }))
   // B-W2a-62: every 15 minutes, the supplier invoices SDI delivered (per company whose SDI intermediary is chosen: the FAKE locally).
   crons.push(sdiPickupCron({ database, log }))
+  // B-W2a-66: the certificate renewal stages (the 180- and 90-day CERTIFICATE_EXPIRING rules, made once per tenant).
+  crons.push(renewalStagesCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

@@ -12,6 +12,7 @@ import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, type CommandCaller } from '../../../core/command'
 import { readOperations, readSteps } from '../routing/read'
+import { openTypeChangeReviewsInCommand } from '../../compliance/type-changes/detect'
 import {
   assertMayWrite,
   bomStyleOf,
@@ -249,6 +250,8 @@ export async function releaseRevision(caller: CommandCaller, styleId: string, re
       before: { status: locked.status, ...(previous ? { revision: { id: previous.id, revision: previous.revision, status: 'RELEASED' } } : {}) },
       after: { status: styleStatus, revision: { id: revisionId, revision: row.revision, status: 'RELEASED' } },
     })
+    // B-W2a-66 (PRD-285, Annex V 7.2): a change to the approved type of a covering certificate opens its review (and holds the class label).
+    await openTypeChangeReviewsInCommand(tools, { styleId, revisionId, revision: row.revision, previousRevisionId: previous?.id ?? null, companyId: locked.companyId })
     tools.emit({
       type: 'style.revision_released',
       subject: styleId,

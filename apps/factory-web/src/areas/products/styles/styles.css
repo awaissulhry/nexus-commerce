@@ -937,3 +937,26 @@
 .fw-stc-search > * {
   width: 100%;
 }
+
+/* W2a (B-W2a-66): Compliance › Changes that may need the notified body: each change as before → after (a composed
+ * ChangeValue), wrapping on a phone. */
+.fw-st-changes {
+  margin: var(--nds-space-4) 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--nds-space-4);
+}
+
+.fw-st-changes li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-2) var(--nds-space-4);
+}
+
+.fw-st-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}

@@ -2,12 +2,13 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { CircleCheck, CircleMinus, CircleX, Download, Upload } from 'lucide-react'
+import { ArrowRight, CircleCheck, CircleMinus, CircleX, Download, ListTodo, Upload } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, FileDropzone, KeyValue, Modal, SummaryTable } from '@nexus/ui/components'
 import { Button, Input, Pill, RadioCard, Select, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
-import type { CoverageCell, LanguageStatus, StyleComplianceView, StyleView } from '../../api'
+import { TaskNewDialog } from '../../../../../record-panels/view/TaskNewDialog'
+import type { CoverageCell, LanguageStatus, StyleComplianceView, StyleTypeChanges, StyleView } from '../../api'
 import { CELL_TONE, CHECK_TONE, documentFileProblem, revisionInView } from '../../model'
 import type { StyleRecordActions, StyleRecordViewModel } from '../../record/record-model'
 
@@ -42,12 +43,14 @@ export function ComplianceTab({ style, model, actions }: { style: StyleView; mod
         <ClassCard compliance={compliance} style={style} model={model} />
       </div>
       <CoverageCard compliance={compliance} model={model} />
+      <TypeChangesCard model={model} actions={actions} />
       <DocumentsCard compliance={compliance} model={model} actions={actions} />
       <div className="fw-st-pair">
         <LabelCard compliance={compliance} style={style} model={model} actions={actions} />
         <TrackingCard style={style} model={model} actions={actions} />
       </div>
       {dialog && <UploadDialog compliance={compliance} model={model} actions={actions} kind={dialog.documentKind} language={dialog.language} />}
+      {model.dialog?.kind === 'tellCompliance' && model.typeChanges.status === 'ready' && <TellComplianceDialog style={style} changes={model.typeChanges.value} certificateId={model.dialog.certificateId} model={model} actions={actions} />}
     </div>
   )
 }
@@ -110,6 +113,100 @@ function ClassCard({ compliance, style, model }: { compliance: StyleComplianceVi
         ]}
       />
     </Card>
+  )
+}
+
+// ---- W2a (B-W2a-66): changes that may need the notified body ------------------------------------------------------------------
+
+const REVIEW_TONE = { OPEN: 'warning', NOTIFIED: 'info', APPROVED: 'success', REFUSED: 'danger', NOT_NEEDED: 'neutral' } as const
+
+/**
+ * Style › Compliance › Changes that may need the notified body (design style.cp.change, W2a; PRD-285, Reg. (EU) 2016/425
+ * Annex V 7.2): what the revision in view changes in the outer leather, its thickness, a protector model, the seams or the
+ * lining against the type each covering certificate approved (a draft: found now; a released revision: its review), each
+ * change as before → after (a composed ChangeValue), whether its class label is held, and "Tell Compliance" (a task on
+ * the style). Hidden when nothing relevant changed.
+ */
+function TypeChangesCard({ model, actions }: { model: StyleRecordViewModel; actions?: StyleRecordActions }) {
+  const t = useT('products')
+  const part = model.typeChanges
+  if (part.status === 'error')
+    return <Banner tone="warning" title={t('typeChange.failed')} action={<Button size="sm" onClick={() => actions?.onReload?.()}>{t('common.retry')}</Button>} />
+  if (part.status !== 'ready') return null
+  const relevant = part.value.certificates.filter((entry) => entry.changes.length > 0 || entry.reviews.some((review) => review.holdsLabel))
+  if (relevant.length === 0) return null
+  const revision = part.value.revision
+  const held = !model.can.tellCompliance ? t('typeChange.held.task') : null
+  return (
+    <Card header={t('typeChange.title')} description={t(revision?.status === 'DRAFT' ? 'typeChange.introDraft' : 'typeChange.introReleased', { revision: revision?.revision ?? '—' })}>
+      <div className="fw-st-stack">
+        {relevant.map((entry) => {
+          const review = entry.reviews[0] ?? null
+          return (
+            <Banner
+              key={entry.certificate.id}
+              tone={entry.labelHeld ? 'warning' : 'info'}
+              title={t(entry.labelHeld ? 'typeChange.banner.held' : review ? 'typeChange.banner.reviewed' : 'typeChange.banner.found', { number: entry.certificate.number, body: entry.certificate.notifiedBodyNumber, compared: entry.comparedRevision?.revision ?? '—' })}
+              action={
+                <span className="fw-st-inline">
+                  <Button size="sm" asChild>
+                    <Link href={`${model.prefix}/compliance/certificates/${encodeURIComponent(entry.certificate.id)}?tab=renewals`}>{t('typeChange.open')}</Link>
+                  </Button>
+                  {!review && (
+                    <Button size="sm" variant="primary" heldReason={held} onClick={() => actions?.onDialog?.({ kind: 'tellCompliance', certificateId: entry.certificate.id })}>
+                      <ListTodo size={14} aria-hidden /> {t('typeChange.tell')}
+                    </Button>
+                  )}
+                </span>
+              }
+            >
+              <ul className="fw-st-changes" aria-label={t('typeChange.list', { number: entry.certificate.number })}>
+                {entry.changes.map((change, index) => (
+                  <li key={index}>
+                    <strong>{t(`typeChange.kind.${change.kind}`)}</strong> <span className="fw-st-code">{change.before}</span> <ArrowRight size={12} aria-label={t('typeChange.to')} /> <span className="fw-st-code">{change.after}</span>
+                  </li>
+                ))}
+              </ul>
+              {review && (
+                <p className="fw-st-inline">
+                  <Pill tone={REVIEW_TONE[review.status]} dot>
+                    {t(`typeChange.status.${review.status}`)}
+                  </Pill>
+                  <span className="fw-st-hint">{t(review.holdsLabel ? 'typeChange.labelHeld' : 'typeChange.labelFree')}</span>
+                </p>
+              )}
+              {!review && <p className="fw-st-hint">{t('typeChange.atRelease')}</p>}
+            </Banner>
+          )
+        })}
+      </div>
+      <p className="fw-st-hint">{t('typeChange.law')}</p>
+    </Card>
+  )
+}
+
+/** "Tell Compliance": the ONE New task dialog, filled with the change (a task on the style, for a person who keeps it). */
+function TellComplianceDialog({ style, changes, certificateId, model, actions }: { style: StyleView; changes: StyleTypeChanges; certificateId: string; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
+  const t = useT('products')
+  const entry = changes.certificates.find((item) => item.certificate.id === certificateId)
+  if (!entry) return null
+  const revision = changes.revision?.revision ?? '—'
+  const lines = entry.changes.map((change) => `${t(`typeChange.kind.${change.kind}`)}: ${change.before} → ${change.after}`)
+  return (
+    <TaskNewDialog
+      recordLabel={`${style.code} · ${style.name}`}
+      people={model.taskPeople ?? { status: 'loading' }}
+      me={null}
+      held={model.can.tellCompliance ? null : t('typeChange.held.task')}
+      busy={model.busy}
+      initial={{
+        title: t('typeChange.task.title', { code: style.code, revision }),
+        description: [t('typeChange.task.description', { number: entry.certificate.number, body: entry.certificate.notifiedBodyNumber, revision, compared: entry.comparedRevision?.revision ?? '—' }), ...lines].join('\n'),
+        checklist: [t('typeChange.task.step1', { body: entry.certificate.notifiedBodyNumber }), t('typeChange.task.step2')].join('\n'),
+      }}
+      onCreate={(draft) => actions?.onTellCompliance?.(draft)}
+      onClose={() => actions?.onDialog?.(null)}
+    />
   )
 }
 

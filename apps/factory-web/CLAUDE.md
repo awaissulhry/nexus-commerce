@@ -73,7 +73,10 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   routings), Sizes & measurements (size scales; the scale record with its sizes' body measures). Shared parts, rules,
   role cases and the `library` catalogue's test in `products/library/`. Each folder: `api.ts`, `model.ts`, the page
   container, `view/`, `record/`, `fixtures.ts` (made-up data).
-- `src/areas/compliance/certificates/` (SCR-050 register, SCR-051 the record with coverage and the lapse check) and
+- `src/areas/compliance/certificates/` (SCR-050 register, SCR-051 the record with coverage and the lapse check; B-W2a-66: the
+  Renewals tab `?tab=renewals&act=renew|applied|link` in `renewals/` — api, model, `use-renewals.ts` container hook, view, made-up
+  fixtures — and the register's "Change waiting" column and `?view=changes`; the style compliance tab's "Changes that may need the
+  notified body" + Tell Compliance (the ONE New task dialog)) and
   `src/areas/compliance/labels/` (SCR-053 list, `SCR-053-label` the PPE label builder: the preview re-rendered as you
   type with factory-domain's `renderLabel` over the values the API's preview answers; CE mark, pictogram and care
   symbols are named stand-ins). Catalogues `certificates`, `labels`.
