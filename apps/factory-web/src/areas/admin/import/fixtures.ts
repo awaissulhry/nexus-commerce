@@ -6,6 +6,8 @@ import { failed, loaded, loading } from '../shared/model'
 import type { ImportJob, Importer, ImportRow, Layout } from './api'
 import { blankDraft, emptyWizard, type ImportViewModel, type WizardModel } from './model'
 import { ImportView } from './view/ImportView'
+import type { FirstLoadStep, FirstLoadStepView } from './guided/api'
+import { firstLoadLoading, type FirstLoadModel } from './guided/model'
 
 /**
  * SCR-017 Import & export with made-up data: "Demo" companies, example.com people, invented codes, sheets and API
@@ -181,6 +183,93 @@ const people = Object.fromEntries(USERS.map((user) => [user.id, user.displayName
 const companies = DEMO_COMPANIES.map((item) => ({ id: item.id, name: item.name }))
 const ALL = { view: true, run: true, apply: true, people: true }
 
+// ---- the guided first load (B-W2a-41): made-up sheets and counts ----
+
+const IMPORTER_OF: Readonly<Record<FirstLoadStep, string | null>> = { customers: 'parties.parties', suppliers: 'parties.parties', materials: 'product.materials', openingStock: 'inventory.opening', openOrders: null }
+const stepView = (step: FirstLoadStep, over: Partial<FirstLoadStepView> = {}): FirstLoadStepView => ({
+  step,
+  importerKey: IMPORTER_OF[step],
+  state: 'waiting',
+  waitingFor: null,
+  job: null,
+  runningJobId: null,
+  reconciliation: null,
+  matches: null,
+  differences: [],
+  done: null,
+  canImport: true,
+  canMarkDone: true,
+  ...over,
+})
+const PARTIES_JOB = { id: uid(41), fileName: 'clienti-fornitori-demo.xlsx', companyId: null, appliedAt: at(27, 11, 40), rowCount: 186 }
+const PARTIES = { rows: 186, loaded: 186, refused: 0, skipped: 0, roles: { customers: 142, suppliers: 44 } }
+const MATERIALS_JOB = { id: uid(42), fileName: 'materiali-demo.csv', companyId: null, appliedAt: at(28, 10, 5), rowCount: 120 }
+const MATERIALS = { rows: 120, loaded: 120, refused: 0, skipped: 0 }
+const OPENING_JOB = { id: uid(43), fileName: 'giacenze-iniziali-demo.xlsx', companyId: company, appliedAt: at(29, 9, 36), rowCount: 15 }
+const OPENING_OFF = {
+  rows: 15,
+  loaded: 11,
+  refused: 3,
+  skipped: 1,
+  quantities: [
+    { unit: 'FT2', sheet: '1284.5000', loaded: '1176.3227' },
+    { unit: 'M', sheet: '240.0000', loaded: '240.0000' },
+  ],
+  value: { sheet: 8421050, loaded: 7790310, atStandard: 41200, rowsAtStandard: 2, tolerance: 11, currency: 'EUR' },
+}
+const OPENING_OFF_DIFFS = [
+  { path: 'difference/refused', message: '3 rows were refused: fix them in the sheet (download the refused rows) and import again.' },
+  { path: 'difference/skipped', message: '1 row was skipped because the record changed after the dry run: import the sheet again.' },
+  { path: 'difference/quantity/FT2', message: 'FT2: 1284.5000 in the sheet, 1176.3227 loaded.' },
+  { path: 'difference/value', message: 'Stock value: 84210.50 EUR in the sheet, 77903.10 EUR loaded.' },
+]
+const doneOn = (day: number, hour: number, over: Partial<NonNullable<FirstLoadStepView['done']>> = {}) => ({ at: at(day, hour, 0), byId: USERS[0]!.id, nothing: false, stillMatches: true, ...over })
+const PARTIES_DONE = (step: 'customers' | 'suppliers') => stepView(step, { state: 'done', job: PARTIES_JOB, reconciliation: PARTIES, matches: true, done: doneOn(27, 12) })
+const MATERIALS_DONE = stepView('materials', { state: 'done', job: MATERIALS_JOB, reconciliation: MATERIALS, matches: true, done: doneOn(28, 11) })
+const OPENING_DONE = stepView('openingStock', {
+  state: 'done',
+  job: OPENING_JOB,
+  reconciliation: { rows: 15, loaded: 15, refused: 0, skipped: 0, quantities: [{ unit: 'FT2', sheet: '1284.5000', loaded: '1284.5000' }], value: { sheet: 8421050, loaded: 8421047, atStandard: 0, rowsAtStandard: 0, tolerance: 15, currency: 'EUR' } },
+  matches: true,
+  done: doneOn(29, 10),
+})
+
+const firstLoad = (steps: FirstLoadStepView[], over: Partial<FirstLoadModel> = {}): FirstLoadModel => ({ ...firstLoadLoading(company), steps, complete: steps.every((step) => step.done !== null), ...over })
+const FIRST_START = firstLoad([
+  stepView('customers', { state: 'todo' }),
+  stepView('suppliers', { waitingFor: 'customers' }),
+  stepView('materials', { waitingFor: 'customers' }),
+  stepView('openingStock', { waitingFor: 'customers' }),
+  stepView('openOrders', { waitingFor: 'customers' }),
+])
+const FIRST_MID = firstLoad([
+  PARTIES_DONE('customers'),
+  PARTIES_DONE('suppliers'),
+  stepView('materials', { state: 'ready', job: MATERIALS_JOB, reconciliation: MATERIALS, matches: true }),
+  stepView('openingStock', { waitingFor: 'materials' }),
+  stepView('openOrders', { waitingFor: 'materials' }),
+])
+const MISMATCH_STEPS = [
+  PARTIES_DONE('customers'),
+  PARTIES_DONE('suppliers'),
+  MATERIALS_DONE,
+  stepView('openingStock', { state: 'mismatch', job: OPENING_JOB, reconciliation: OPENING_OFF, matches: false, differences: OPENING_OFF_DIFFS }),
+  stepView('openOrders', { waitingFor: 'openingStock' }),
+]
+const FIRST_MISMATCH = firstLoad(MISMATCH_STEPS)
+const { value: _value, ...OPENING_NO_COST } = OPENING_OFF
+const FIRST_MISMATCH_NO_COST = firstLoad(MISMATCH_STEPS.map((step) => (step.step === 'openingStock' ? { ...step, reconciliation: OPENING_NO_COST, differences: OPENING_OFF_DIFFS.filter((item) => item.path !== 'difference/value') } : step)))
+const FIRST_RUNNING = firstLoad(MISMATCH_STEPS.map((step) => (step.step === 'openingStock' ? stepView('openingStock', { state: 'running', runningJobId: uid(44) }) : step)))
+const FIRST_OPEN_ORDERS = firstLoad([PARTIES_DONE('customers'), PARTIES_DONE('suppliers'), MATERIALS_DONE, OPENING_DONE, stepView('openOrders', { state: 'held' })])
+const FIRST_DONE = firstLoad([
+  PARTIES_DONE('customers'),
+  PARTIES_DONE('suppliers'),
+  { ...MATERIALS_DONE, reconciliation: { ...MATERIALS, loaded: 118 }, matches: false, differences: [{ path: 'difference/missing', message: "2 rows' records are not there any more (archived or moved since the import)." }], done: doneOn(28, 11, { stillMatches: false }) },
+  OPENING_DONE,
+  stepView('openOrders', { state: 'done', done: doneOn(29, 11, { nothing: true, stillMatches: null }) }),
+])
+const FIRST_NO_RIGHT = firstLoad(FIRST_START.steps!.map((step) => ({ ...step, canImport: false, canMarkDone: false })))
+
 const page = (over: Partial<ImportViewModel> = {}): ImportViewModel => ({
   prefix: PREFIX,
   can: ALL,
@@ -190,6 +279,7 @@ const page = (over: Partial<ImportViewModel> = {}): ImportViewModel => ({
   people,
   asOf: at(29, 9, 42),
   wizard: null,
+  firstLoad: FIRST_START,
   ...over,
 })
 
@@ -207,7 +297,7 @@ export const designScreen = defineDesignScreen<ImportViewModel>({
   title: 'Import & export',
   view: ImportDesign,
   cases: [
-    { id: 'page', label: 'What to load, and recent imports', model: page(), note: 'Cards in our words per importer, with the last import and the opening-stock templates; every job with its counts, who and when; a stopped apply can be applied again.' },
+    { id: 'page', label: 'What to load, first load and recent imports', model: page(), note: 'Cards in our words per importer, each with its last import and its template (Excel, CSV); the first load at its start; every job with its counts, who and when; a stopped apply can be applied again.' },
     { id: 'page-no-run', label: 'May see imports, not run them', model: page({ can: { ...ALL, run: false, apply: false } }), note: 'Import a sheet and each card are held with the reason.' },
     { id: 'page-recent-empty', label: 'No imports yet', model: page({ jobs: loaded([]) }) },
     { id: 'page-none-open', label: 'No importer open to this person', model: page({ importers: loaded([]), jobs: loaded([]) }) },
@@ -234,9 +324,32 @@ export const designScreen = defineDesignScreen<ImportViewModel>({
       }),
       note: 'Each import is one call: what was cancelled, and each one refused with the reason.',
     },
-    { id: 'loading', label: 'Loading', model: page({ importers: loading(), jobs: loading(), asOf: null }) },
-    { id: 'error', label: 'The API did not answer', model: page({ importers: failed('problem.unavailable'), jobs: failed('problem.unavailable'), asOf: null }) },
-    { id: 'no-access', label: 'No right to see imports', model: page({ can: { view: false, run: false, apply: false, people: false } }) },
+    { id: 'templates', label: 'Templates (More menu): every import\'s template', model: page({ templatesOpen: true }), note: 'Excel (with a sheet that explains the columns) and CSV per importer, in the person\'s number format; money columns only with their grain.' },
+    { id: 'first-start', label: 'First load: at the start', model: page({ firstLoad: FIRST_START }), note: 'Customers to load; every later step waits, held with the step it waits for.' },
+    { id: 'first-mid', label: 'First load: customers and suppliers done, materials match', model: page({ firstLoad: FIRST_MID }), note: 'One parties sheet holds both; materials match, so Done is the primary action.' },
+    {
+      id: 'first-mismatch',
+      label: 'First load: opening stock does not match',
+      model: page({ firstLoad: FIRST_MISMATCH }),
+      note: 'Rows, quantities per unit and the stock value (cost grain) side by side; each difference in words; Done held with the reason.',
+    },
+    { id: 'first-mismatch-no-cost', label: 'First load: the same, without the cost grain', model: page({ firstLoad: FIRST_MISMATCH_NO_COST }), note: 'No value line: the API sends none to a person who does not see costs.' },
+    { id: 'first-running', label: 'First load: an import under way', model: page({ firstLoad: FIRST_RUNNING }), note: 'Open the import under way; Done held until it is applied.' },
+    { id: 'first-open-orders', label: 'First load: open orders have no import', model: page({ firstLoad: FIRST_OPEN_ORDERS }), note: 'Import held with the reason; Nothing to load once they are entered as sales orders.' },
+    { id: 'first-done', label: 'First load: all done', model: page({ firstLoad: FIRST_DONE }), note: 'When each step was done; materials no longer match since (two records archived).' },
+    { id: 'first-no-right', label: 'First load: no right to import or mark done', model: page({ firstLoad: FIRST_NO_RIGHT }), note: 'Every action held with the right it needs.' },
+    { id: 'first-confirm-done', label: 'First load: mark materials done', model: page({ firstLoad: { ...FIRST_MID, confirm: { step: 'materials', nothing: false, reason: '' } } }) },
+    {
+      id: 'first-confirm-nothing',
+      label: 'First load: nothing to load for open orders',
+      model: page({ firstLoad: { ...FIRST_OPEN_ORDERS, confirm: { step: 'openOrders', nothing: true, reason: 'No order is taken before the go-live.' } } }),
+    },
+    { id: 'first-done-notice', label: 'First load: after Done', model: page({ firstLoad: { ...FIRST_MID, notice: { key: 'imp.first.notice.done', tone: 'success', params: { n: 2 } } } }) },
+    { id: 'first-loading', label: 'First load: loading', model: page({ firstLoad: firstLoadLoading(company) }) },
+    { id: 'first-error', label: 'First load: could not be read (the rest works)', model: page({ firstLoad: { ...firstLoadLoading(company), problem: 'problem.unavailable' } }) },
+    { id: 'loading', label: 'Loading', model: page({ importers: loading(), jobs: loading(), asOf: null, firstLoad: firstLoadLoading(company) }) },
+    { id: 'error', label: 'The API did not answer', model: page({ importers: failed('problem.unavailable'), jobs: failed('problem.unavailable'), asOf: null, firstLoad: { ...firstLoadLoading(company), problem: 'problem.unavailable' } }) },
+    { id: 'no-access', label: 'No right to see imports', model: page({ can: { view: false, run: false, apply: false, people: false }, firstLoad: null }), note: 'The first load is absent with the rest of the page.' },
     { id: 'upload-picker', label: 'Wizard 1: Import a sheet (choose what)', model: page({ wizard: wizard({}, blankDraft('', company, 'it')) }) },
     { id: 'upload-empty', label: 'Wizard 1: opening stock, nothing chosen yet', model: page({ wizard: wizard() }), note: 'The templates (Excel, CSV) in the person’s number format; the reports note.' },
     { id: 'upload-file', label: 'Wizard 1: a sheet chosen', model: page({ wizard: wizard({ draft: { ...opening, file: { name: 'giacenze-iniziali-demo.xlsx', size: 48213 } } }) }) },

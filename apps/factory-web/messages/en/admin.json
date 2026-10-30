@@ -1558,6 +1558,8 @@
     "email_send": "Send mail from a record's thread",
     "email_manage": "Manage the sending domains and identities",
     "email_triage": "Sort received mail",
+    "email_delivery_view": "See the mail delivery log and the blocked addresses",
+    "email_delivery_unblock": "Unblock an address mail is refused to",
     "integrations_view": "See the outside services and their calls",
     "integrations_manage": "Pause and resume outside services",
     "compliance_certificates_view": "See the EU type-examination certificates",

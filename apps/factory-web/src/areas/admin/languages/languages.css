@@ -68,13 +68,49 @@
   color: var(--nds-text-link);
 }
 
-/* The floor languages across the full-width card: as many columns as fit. */
-.fw-adm-langs-columns {
+/*
+ * The floor languages (B-W2a-41) across the full-width card: one block per site, as many columns as fit (one on a
+ * phone); in each block its languages as rows (the remove button at the row's end) and the add picker under them.
+ */
+.fw-adm-langs-sites {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  column-gap: var(--nds-space-24);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  gap: var(--nds-space-16) var(--nds-space-24);
 }
 
-.fw-adm-langs-columns > .fw-adm-langs-row:first-child {
-  border-top: 1px solid var(--nds-border-subtle);
+.fw-adm-langs-site-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-adm-langs-site-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-adm-langs-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-adm-langs-row-end {
+  margin-left: auto;
+}
+
+.fw-adm-langs-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  min-width: 0;
 }
