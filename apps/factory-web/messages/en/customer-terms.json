@@ -1,0 +1,124 @@
+{
+  "common": {
+    "retry": "Try again"
+  },
+  "terms": {
+    "title": "Commercial terms",
+    "intro": "The defaults a new quote or order of this customer takes.",
+    "edit": "Edit",
+    "close": "Close",
+    "save": "Save terms",
+    "saved": "Commercial terms saved. Open quotes keep theirs; new quotes and orders take these.",
+    "unsaved_one": "{count} change not saved",
+    "unsaved_other": "{count} changes not saved",
+    "fixFirst_one": "Fix {count} field first",
+    "fixFirst_other": "Fix {count} fields first",
+    "failed": "Couldn't load terms",
+    "viewOnly": "You can view, not change",
+    "none": "None",
+    "noList": "None: priced from the base list",
+    "baseList": "None (the base list prices it)",
+    "noGroup": "No discount group",
+    "chain": "Falls back: {chain}",
+    "archivedTerms": "archived",
+    "typedOnly": "Typed on the customer, not from the library",
+    "useTyped": "None from the library (prints “{text}”)",
+    "depositFromTerms": "{pct} from its payment terms",
+    "depositSettings": "From the sales settings",
+    "noPrice": "The minimum order value is not in your role (no selling prices).",
+    "currencyHint": "Its quotes and price list are in this currency.",
+    "paymentHint": "What is paid when; the deposit follows the order instalment.",
+    "listHint": "Active lists in {currency} of this company or every company.",
+    "groupHint": "Read only: a customer joins a discount group by getting the group's list (or a list that falls back to it).",
+    "carrierHint": "The carrier code its shipments use first (e.g. BRT, GLS).",
+    "depositHint": "Percent of the gross total; empty: from its payment terms, else the sales settings.",
+    "minimumHint": "Net, in {currency}; a quote under it says so.",
+    "languageHint": "The language its quotes, PDFs and mails are written in.",
+    "invoicingHint": "TD01 an invoice per shipment, TD24 one deferred invoice a month.",
+    "choicesFailed": "Couldn't read the payment terms or the price lists to pick from: the other fields still save.",
+    "held": {
+      "notCustomer": "Commercial terms are for customers",
+      "archived": "Archived: reactivate it to change its terms",
+      "noManage": "Your role can see customers, not change them",
+      "noTerms": "Your role cannot read the payment terms library",
+      "noListsManage": "Giving a price list needs the right to keep price lists"
+    },
+    "problem": {
+      "currency": "A currency code such as EUR or CHF",
+      "language": "A two-letter language code",
+      "deposit": "A percent from 0 to 100",
+      "minimum": "An amount with at most two decimals",
+      "carrier": "At most 50 characters",
+      "incoterm": "One of the Incoterms 2020 rules"
+    },
+    "refused": {
+      "moved": "Someone else changed this customer meanwhile: read again, nothing was overwritten.",
+      "forbidden": "Your role may not give this list or these terms.",
+      "list": "That price list cannot be this customer's: it must be active, of its company or every company, and in its currency.",
+      "terms": "Those payment terms cannot be used: archived, or of another company.",
+      "currency": "The currency does not fit its price list: change both together.",
+      "fields": "Some fields were refused: check them.",
+      "unavailable": "The server did not answer: nothing was changed, try again.",
+      "internal": "Something went wrong on the server: nothing was changed."
+    }
+  },
+  "termsField": {
+    "currency": "Currency",
+    "paymentTerms": "Payment terms",
+    "priceList": "Price list",
+    "discountGroup": "Discount group",
+    "incoterm": "Incoterms",
+    "carrier": "Preferred carrier",
+    "deposit": "Default deposit %",
+    "minimum": "Minimum order value",
+    "language": "Document language",
+    "invoicing": "Invoicing"
+  },
+  "language": {
+    "it": "Italian",
+    "en": "English",
+    "other": "Other ({code})"
+  },
+  "invoicing": {
+    "PER_SHIPMENT": "An invoice per shipment (TD01)",
+    "MONTHLY": "A deferred invoice a month (TD24)"
+  },
+  "kind": {
+    "BASE": "base",
+    "CUSTOMER": "customer",
+    "GROUP": "group",
+    "CONTRACT": "contract"
+  },
+  "incoterm": {
+    "EXW": "EXW · Ex Works",
+    "FCA": "FCA · Free Carrier",
+    "CPT": "CPT · Carriage Paid To",
+    "CIP": "CIP · Carriage and Insurance Paid To",
+    "DAP": "DAP · Delivered at Place",
+    "DPU": "DPU · Delivered at Place Unloaded",
+    "DDP": "DDP · Delivered Duty Paid",
+    "FAS": "FAS · Free Alongside Ship",
+    "FOB": "FOB · Free on Board",
+    "CFR": "CFR · Cost and Freight",
+    "CIF": "CIF · Cost, Insurance and Freight"
+  },
+  "import": {
+    "action": "Import",
+    "everyCompany": "Every company",
+    "held": {
+      "manage": "Your role can see customers, not change them",
+      "run": "Importing needs the right to run imports and upload files"
+    }
+  },
+  "problem": {
+    "read": {
+      "signed_out": "Your session ended: sign in again.",
+      "forbidden": "Your role cannot see this.",
+      "not_found": "It is not there any more.",
+      "unavailable": "The server did not answer: try again in a moment.",
+      "rate_limited": "Too many requests: wait a moment.",
+      "contract": "The answer did not match this page: reload the page.",
+      "internal": "Something went wrong on the server."
+    }
+  }
+}

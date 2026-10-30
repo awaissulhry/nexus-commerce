@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { isApiError } from '../../../lib/api/errors'
@@ -48,17 +48,17 @@ import { PartiesListView } from './view/PartiesListView'
  * selection at a time, exports the view as CSV, and listens to the live stream: changes wait behind "N updates · Show"
  * (rows never move under the cursor). `?view=` keeps the view in the address; `?new=1` opens New.
  */
-export function PartiesList({ side }: { side: Side }) {
+export function PartiesList({ side, headActions }: { side: Side; headActions?: (reload: () => void) => ReactNode }) {
   return (
     <WithMessages namespaces={['parties']}>
-      <PartiesListContainer side={side} />
+      <PartiesListContainer side={side} headActions={headActions} />
     </WithMessages>
   )
 }
 
 const VIEWS = new Set<string>(['open', 'active', 'prospects', 'brands', 'invoice', 'vies', 'blocked', 'archived', 'all', 'suppliers', 'subcontractors', 'carriers'])
 
-function PartiesListContainer({ side }: { side: Side }) {
+function PartiesListContainer({ side, headActions }: { side: Side; headActions?: (reload: () => void) => ReactNode }) {
   const config = SIDES[side]
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -351,6 +351,12 @@ function PartiesListContainer({ side }: { side: Side }) {
 
   return (
     <PartiesListView
+      headActions={
+        headActions?.(() => {
+          void load()
+          void loadTiles()
+        })
+      }
       model={{
         side,
         prefix,

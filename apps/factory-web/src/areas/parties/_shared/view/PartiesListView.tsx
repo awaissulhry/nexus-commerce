@@ -67,15 +67,15 @@ export interface PartiesListActions {
  * with the header select-all box and shift-click ranges, and the footer with Show more and the keys icon. Fetches
  * nothing: the container (PartiesList.tsx) reads and writes.
  */
-export function PartiesListView({ model, actions }: { model: PartiesListModel; actions?: PartiesListActions }) {
+export function PartiesListView({ model, actions, headActions }: { model: PartiesListModel; actions?: PartiesListActions; headActions?: ReactNode }) {
   return (
     <PartiesMessages>
-      <PartiesList model={model} actions={actions} />
+      <PartiesList model={model} actions={actions} headActions={headActions} />
     </PartiesMessages>
   )
 }
 
-function PartiesList({ model, actions }: { model: PartiesListModel; actions?: PartiesListActions }) {
+function PartiesList({ model, actions, headActions }: { model: PartiesListModel; actions?: PartiesListActions; headActions?: ReactNode }) {
   const t = useT('parties')
   const locale = useLocale()
   const config = SIDES[model.side]
@@ -370,9 +370,13 @@ function PartiesList({ model, actions }: { model: PartiesListModel; actions?: Pa
         intro={t(`${side}.intro`)}
         status={<Freshness asOf={model.asOf} live={model.live} />}
         actions={
-          <Button size="sm" variant="primary" onClick={() => open({ kind: 'new' })} heldReason={manageHeld}>
-            {t(`${side}.new.action`)}
-          </Button>
+          <>
+            {/* A side's own band actions (Customers: Import, B-W2a-49), before New. */}
+            {headActions}
+            <Button size="sm" variant="primary" onClick={() => open({ kind: 'new' })} heldReason={manageHeld}>
+              {t(`${side}.new.action`)}
+            </Button>
+          </>
         }
       />
       <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />

@@ -90,6 +90,13 @@ export const OFFICE: readonly TreeArea[] = [
           },
         ],
       },
+      // W2a: B-W2a-49 Price lists & contracts (SCR-106). After-sales (sales.returns) joins before it with its step.
+      {
+        label: 'Pricing',
+        labelIt: 'Prezzi',
+        hideLabel: false,
+        pages: [{ id: 'sales.pricelists', title: 'Price lists & contracts', titleIt: 'Listini e contratti', wave: 'W2a', href: '/sales/price-lists' }],
+      },
     ],
   },
   {
