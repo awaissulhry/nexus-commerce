@@ -284,6 +284,19 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'finance.payments', title: 'Payments', titleIt: 'Incassi', wave: 'W1', href: '/finance/payments' },
         ],
       },
+      // W2a: B-W2a-51 Accounting export (SCR-156) and Finance reports (SCR-239: the stock valuation).
+      {
+        label: 'Close',
+        labelIt: 'Chiusura',
+        hideLabel: false,
+        pages: [{ id: 'finance.accounting', title: 'Accounting export', titleIt: 'Esportazione contabile', wave: 'W2a', href: '/finance/accounting' }],
+      },
+      {
+        label: 'Reports',
+        labelIt: 'Report',
+        hideLabel: false,
+        pages: [{ id: 'finance.reports', title: 'Finance reports', titleIt: 'Report amministrazione', wave: 'W2a', href: '/finance/reports' }],
+      },
       {
         label: 'Settings',
         labelIt: 'Impostazioni',

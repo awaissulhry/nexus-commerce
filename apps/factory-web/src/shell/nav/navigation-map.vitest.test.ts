@@ -125,6 +125,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/compliance/register': 'compliance.register.view', // GET /compliance/register
       '/finance/invoices': 'invoices.view', // GET /invoicing/invoices
       '/finance/payments': 'payments.view', // GET /payments
+      '/finance/accounting': 'accounting.view', // GET /accounting/exports (B-W2a-51)
+      '/finance/reports': 'inventory.stock.view', // GET /costing/valuation (B-W2a-51)
       '/finance/settings': 'invoices.view', // GET /invoicing/settings
       '/admin': 'companies.view', // the checklist reads the companies
       '/admin/companies': 'companies.view',
@@ -146,10 +148,11 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
 
   it('the Owner sees every row; the warehouse and sales roles see only theirs, in the same order', () => {
     expect(rows(owner).map((row) => row.id)).toEqual(rows(OFFICE_NAV).map((row) => row.id))
-    // The warehouse role: all of Warehouse, what it receives and ships against, no Finance; of Admin only Import & export
-    // (the opening stock import).
+    // The warehouse role: all of Warehouse, what it receives and ships against; of Finance only Finance reports (the stock
+    // valuation's quantities, B-W2a-51); of Admin only Import & export (the opening stock import).
     const warehouse = officeNavFor(permissionCheck(templateOf('warehouse')!.permissions))
-    expect(warehouse.areas.map((area) => area.id)).toEqual(['home', 'sales', 'products', 'purchasing', 'warehouse', 'production', 'compliance', 'admin'])
+    expect(warehouse.areas.map((area) => area.id)).toEqual(['home', 'sales', 'products', 'purchasing', 'warehouse', 'production', 'compliance', 'finance', 'admin'])
+    expect(rows(warehouse).filter((row) => row.href.startsWith('/finance/')).map((row) => row.href)).toEqual(['/finance/reports'])
     expect(rows(warehouse).filter((row) => row.href.startsWith('/warehouse/') || row.href.startsWith('/admin')).map((row) => row.href)).toEqual([
       '/warehouse/stock',
       '/warehouse/hides',
