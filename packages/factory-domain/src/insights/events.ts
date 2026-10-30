@@ -10,6 +10,9 @@ import { defineEvent } from '../events/define'
  *   attention.assigned       a row was assigned to a person who may act on it, or taken back (assigneeId null)
  *   attention.resolved       a row was resolved with a note: it leaves Today for everyone until its condition changes
  *   attention.acknowledged   a row was acknowledged: it stays, marked, while its condition holds
+ *   attention.snoozed        (W2a) a row was snoozed until a time, or until its condition changes: it leaves Today
+ *   attention.nudged         (W2a) a person reminded the people they wait on (Waiting on others › Nudge): the
+ *                            notification centre tells those who may decide; once a day at most
  */
 
 const row = {
@@ -45,6 +48,30 @@ export const events = [
     context: 'insights',
     description: 'A row of Today was acknowledged: it stays, marked, while its condition holds.',
     payload: z.strictObject(row),
+    live,
+  }),
+  defineEvent({
+    type: 'attention.snoozed',
+    context: 'insights',
+    description: 'A row of Today was snoozed until a time, or until its condition changes: it leaves Today meanwhile.',
+    payload: z.strictObject({ ...row, until: z.string().nullable() }),
+    live,
+  }),
+  defineEvent({
+    type: 'attention.nudged',
+    context: 'insights',
+    description: 'A person reminded the people they wait on (an approval they asked for): those who may decide are told.',
+    payload: z.strictObject({
+      /** The waiting row's key (`<kind>:<record id>`). */
+      key: z.string(),
+      kind: z.string(),
+      recordType: z.string(),
+      recordId: z.uuid(),
+      /** The note the reminder wrote on the record's thread. */
+      messageId: z.uuid(),
+      /** Who nudged (the asker). */
+      byId: z.uuid(),
+    }),
     live,
   }),
 ] as const

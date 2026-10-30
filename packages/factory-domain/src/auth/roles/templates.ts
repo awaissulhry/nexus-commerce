@@ -45,8 +45,15 @@ const assignable = FACTORY_PERMISSIONS.assignable.filter((definition) => definit
 const every = (filter: (risk: string) => boolean = () => true): Permission[] =>
   assignable.filter((definition) => filter(definition.risk)).map((definition) => definition.name)
 
+/**
+ * B-W2a-20 (tasks on any record, COL-037): every office template that writes notes on records (threads.post) makes and
+ * keeps tasks too. Listed here, one line per template, so the long permission lists below stay as their steps wrote them.
+ */
+const TASKS_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor'])
+const addedFor = (key: string, audience: RoleAudience): Permission[] => (audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage'] : [])
+
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...content.permissions].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 

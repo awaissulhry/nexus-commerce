@@ -1,15 +1,20 @@
-import type { Prisma } from '@nexus/factory-db'
+import type { FactoryClient, Prisma } from '@nexus/factory-db'
+import { DomainError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
-import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { businessDayStart, toUtcIso } from '@nexus/factory-domain/core/time'
+import { cleanBody } from '@nexus/factory-domain/threads/rules'
 import { matchesScope } from '@nexus/factory-domain/insights/attention'
-import { WAITING_KINDS, WAITING_RULES, waitingFor, waitingKindsFor, type WaitingCandidate } from '@nexus/factory-domain/insights/waiting'
+import { NUDGE_KINDS, NUDGE_REFUSALS, nudgeNote, nudgeRefusal, WAITING_KINDS, WAITING_RULES, waitingFor, waitingKindsFor, type NudgeRefusal, type WaitingCandidate } from '@nexus/factory-domain/insights/waiting'
 import { approvalRequestWords, poConfirmationWords, quoteAnswerWords } from '@nexus/factory-domain/insights/words'
 import { PURCHASING_VIEW } from '@nexus/factory-domain/purchasing/permissions'
 import { QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
-import type { CommandCaller } from '../../core/command'
+import { command, type CommandCaller, type CommandTx } from '../../core/command'
+import { ruleContext } from '../../platform/notifications/fan-out'
+import { quoteDeciders } from '../../platform/notifications/rules/approvals'
+import { ensureThread, writeMessage } from '../../platform/threads/threads'
 import { dayOrNull, partyNames, SOURCE_LIMIT } from './sources/common'
 import { amountsView } from './today'
-import { scopeFilterOf, viewerOf } from './viewer'
+import { officeContextOf, scopeFilterOf, viewerOf } from './viewer'
 
 /**
  * GET /home/waiting-on-others (B-W1-52; design home.today `waiting-on`): what the person asked for or sent and still
@@ -102,6 +107,8 @@ export async function waitingOnOthers(caller: CommandCaller, query: { readonly c
     return found
   })
   const items = waitingFor(viewer, candidates).filter((item) => matchesScope(item, filter))
+  // W2a: may the person nudge it now (an approval they asked for, not nudged today)?
+  const nudged = await caller.withClient((db) => nudgedToday(db, me, items.filter((item) => NUDGE_KINDS.includes(item.kind)).map((item) => item.record.id), businessDayStart(viewer.today)))
   return {
     asOf: toUtcIso(viewer.now),
     counts: { total: items.length, byKind: WAITING_KINDS.filter((kind) => kinds.includes(kind)).map((kind) => ({ kind, label: WAITING_RULES[kind].label, count: items.filter((item) => item.kind === kind).length })) },
@@ -118,7 +125,54 @@ export async function waitingOnOthers(caller: CommandCaller, query: { readonly c
       ageDays: item.ageDays,
       due: item.due,
       figures: amountsView(item.amounts),
+      /** W2a: Nudge (POST …/:key/nudge): allowed now, or the refusal's code (OUTSIDE, TODAY_ALREADY). */
+      nudge: NUDGE_KINDS.includes(item.kind) ? (nudged.has(item.record.id) ? { allowed: false, refusal: 'TODAY_ALREADY' as const } : { allowed: true, refusal: null }) : { allowed: false, refusal: 'OUTSIDE' as const },
     })),
     live: { events: [...new Set(kinds.flatMap((kind) => WAITING_RULES[kind].live))].sort() },
   }
+}
+
+// ---- Nudge (W2a, B-W2a-20; design home.today waiting-on "Nudge (sends a reminder in the record's thread, once a day at most)")
+
+/** The nudges the person made today, by record id (the audit rows `insights.nudge` of the record, by them, since the day began). */
+export async function nudgedToday(db: FactoryClient | CommandTx, personId: string, recordIds: readonly string[], dayStart: Date): Promise<Set<string>> {
+  if (recordIds.length === 0) return new Set()
+  const rows = await db.auditLog.findMany({ where: { action: 'insights.nudge', actorId: personId, recordId: { in: [...new Set(recordIds)] }, at: { gte: dayStart } }, select: { recordId: true } })
+  return new Set(rows.map((row) => row.recordId))
+}
+
+const nudgeRefused = (code: NudgeRefusal) => new DomainError('conflict', NUDGE_REFUSALS[code], [{ path: `nudge/${code}`, message: NUDGE_REFUSALS[code] }])
+
+/**
+ * POST /home/waiting-on-others/:key/nudge: remind the people I wait on, once a business day per record. Only an approval
+ * I asked for (a customer or supplier is reminded from its record's mail, behind its module's rules). ONE command: a
+ * reminder note on the record's thread (written by the system, naming me), the audit row `insights.nudge` on the record
+ * (what "once a day" reads), and `attention.nudged`, which tells each person who may decide (platform/notifications).
+ */
+export async function nudge(caller: CommandCaller, key: string, idempotencyKey?: string) {
+  const viewer = viewerOf(caller)
+  const context = officeContextOf(caller)
+  const answer = await waitingOnOthers(caller, {})
+  const item = answer.items.find((entry) => entry.key === key)
+  if (!item) throw new NotFoundError('This is not something you wait on (any more).')
+  if (!NUDGE_KINDS.includes(item.kind)) throw nudgeRefused('OUTSIDE')
+  const { result } = await command(caller, { name: 'insights.nudge', idempotencyKey, input: { key } }, async (tools) => {
+    const { tx, now } = tools
+    if ((await nudgedToday(tx, context.actorId, [item.record.id], businessDayStart(viewer.today))).size > 0) throw nudgeRefused('TODAY_ALREADY')
+    const deciders = await quoteDeciders(ruleContext(tx, context.tenantId, now), item.record.id)
+    const refusal = nudgeRefusal(item.kind, false, deciders.length)
+    if (refusal !== null) throw nudgeRefused(refusal)
+    const me = await tx.user.findUnique({ where: { id: context.actorId }, select: { displayName: true } })
+    const { thread } = await ensureThread(tools, { type: item.record.type, id: item.record.id }, context.actorId)
+    const message = await writeMessage(tools, thread, {
+      direction: 'INTERNAL_NOTE',
+      channel: 'APP',
+      author: { kind: 'SYSTEM', id: null, name: null },
+      bodyText: cleanBody(nudgeNote({ label: item.record.label, ageDays: item.ageDays, byName: me?.displayName ?? 'a colleague' })),
+    })
+    tools.audit({ action: 'insights.nudge', recordType: item.record.type, recordId: item.record.id, companyId: item.companyId, siteId: item.siteId, after: { key, kind: item.kind, messageId: message.id, deciders: deciders.length } })
+    tools.emit({ type: 'attention.nudged', subject: item.record.id, companyId: item.companyId, siteId: item.siteId, payload: { key, kind: item.kind, recordType: item.record.type, recordId: item.record.id, messageId: message.id, byId: context.actorId } })
+    return { key, nudgedAt: toUtcIso(now), messageId: message.id, told: deciders.length }
+  })
+  return result
 }

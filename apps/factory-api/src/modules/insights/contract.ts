@@ -3,7 +3,8 @@ import { defineContract, id, input, instant, output } from '@nexus/factory-domai
 import { ACTION_VERBS, LOG_VERBS, NOTE_MAX, PANEL_WIDTHS, TODAY_SECTIONS } from '@nexus/factory-domain/insights/actions'
 import { AMOUNT_FIELDS, ATTENTION_KINDS, CATEGORIES, DECIDE_MODES, GROUPS, SEVERITIES } from '@nexus/factory-domain/insights/attention'
 import { FLOW_LENSES } from '@nexus/factory-domain/insights/flow'
-import { WAITING_KINDS } from '@nexus/factory-domain/insights/waiting'
+import { COMING_KINDS } from '@nexus/factory-domain/insights/coming-up'
+import { NUDGE_REFUSALS, WAITING_KINDS } from '@nexus/factory-domain/insights/waiting'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 
 /**
@@ -45,6 +46,8 @@ const rowActions = output({
   assigned: output({ to: person, by: person, at: instant() }).nullable(),
   /** Acknowledged in the row's present condition. */
   acknowledged: output({ by: person, at: instant() }).nullable(),
+  /** W2a: the reader may snooze it (an alert): POST /home/today/rows/:key/snooze. */
+  snoozable: z.boolean(),
 })
 
 const item = output({
@@ -87,6 +90,22 @@ export const todayContract = defineContract({
     kind: z.enum(ATTENTION_KINDS).optional(),
     /** One of the design's tiles: APPROVAL (the decisions to review) or ALERT (late, on hold, rejected, a duty open). */
     category: z.enum(CATEGORIES).optional(),
+    /** W2a tiles "Due today" and "Overdue": rows due today, or overdue (any kind). */
+    due: z.enum(['TODAY', 'OVERDUE']).optional(),
+    /**
+     * W2a (B-W2a-20): a comma-separated list of TASKS (my tasks due today or overdue) and MENTIONS (notes that mentioned
+     * me): their rows, and the tiles DUE_TODAY, OVERDUE and MENTION. Without it the answer is W1's.
+     */
+    include: z
+      .string()
+      .max(40)
+      .optional()
+      .transform((value, context) => {
+        if (value === undefined || value.trim() === '') return undefined
+        const parts = [...new Set(value.split(',').map((part) => part.trim()))]
+        if (parts.some((part) => part !== 'TASKS' && part !== 'MENTIONS')) context.addIssue({ code: 'custom', message: 'Expected TASKS, MENTIONS.' })
+        return parts as ('TASKS' | 'MENTIONS')[]
+      }),
     ...scopeQuery,
     cursor: z.string().min(1).max(500).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -101,7 +120,7 @@ export const todayContract = defineContract({
         /** Overdue or urgent. */
         now: z.number().int(),
         /** The design's three tiles, always: ALL (every row), APPROVAL, ALERT; `complete` false: a count is a lower bound. */
-        tiles: z.array(output({ tile: z.enum(['ALL', ...CATEGORIES]), count: z.number().int(), complete: z.boolean() })),
+        tiles: z.array(output({ tile: z.enum(['ALL', ...CATEGORIES, 'DUE_TODAY', 'OVERDUE']), count: z.number().int(), complete: z.boolean() })),
         /** Per kind the reader acts on (0 is an answer), for a deep link's chip. */
         byKind: z.array(output({ kind: z.enum(ATTENTION_KINDS), label: z.string(), count: z.number().int(), complete: z.boolean() })),
       }),
@@ -148,6 +167,13 @@ export const acknowledgeContract = defineContract({
   params: rowParams,
   body: input({ condition, version: actionVersion }),
   response: { 200: actedRow },
+})
+
+/** W2a (design home.today popup snooze): `until` null = until something changes on the record. */
+export const snoozeContract = defineContract({
+  params: rowParams,
+  body: input({ condition, version: actionVersion, until: instant().nullable() }),
+  response: { 200: output({ key: z.string(), condition: z.string(), snoozed: output({ at: instant(), until: instant().nullable() }), version: z.number().int() }) },
 })
 
 export const assigneesContract = defineContract({
@@ -260,6 +286,36 @@ export const waitingContract = defineContract({
           ageDays: z.number().int(),
           due: z.string().nullable(),
           figures,
+          /** W2a: Nudge now, or why not (OUTSIDE: a customer or supplier; TODAY_ALREADY: once a day). */
+          nudge: output({ allowed: z.boolean(), refusal: z.enum(Object.keys(NUDGE_REFUSALS) as [keyof typeof NUDGE_REFUSALS, ...(keyof typeof NUDGE_REFUSALS)[]]).nullable() }),
+        }),
+      ),
+      live,
+    }),
+  },
+})
+
+export const nudgeContract = defineContract({
+  params: rowParams,
+  response: { 200: output({ key: z.string(), nudgedAt: instant(), messageId: id(), /** How many people who may decide were told. */ told: z.number().int() }) },
+})
+
+/** W2a (B-W2a-20 for B-W2a-40; design home.today `coming-up`). */
+export const comingUpContract = defineContract({
+  querystring: input(scopeQuery),
+  response: {
+    200: output({
+      asOf: instant(),
+      today: z.string(),
+      calendar: output({ scope: z.enum(['COMPANY', 'SITE', 'LINE', 'WORK_CENTRE']), id: id() }).nullable(),
+      kinds: z.array(z.enum(COMING_KINDS)),
+      complete: z.array(output({ kind: z.enum(COMING_KINDS), complete: z.boolean() })),
+      days: z.array(
+        output({
+          date: z.string(),
+          /** False: a closed day something lands on anyway. */
+          working: z.boolean(),
+          items: z.array(output({ kind: z.enum(COMING_KINDS), record, companyId: id().nullable(), siteId: id().nullable(), partyId: id().nullable(), sentence: z.string(), words: phraseRef })),
         }),
       ),
       live,

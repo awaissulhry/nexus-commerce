@@ -104,3 +104,36 @@ export function waitingFor(viewer: Viewer, candidates: readonly WaitingCandidate
     })
     .sort((a, b) => a.since.getTime() - b.since.getTime() || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
 }
+
+// ---- Nudge (W2a, B-W2a-20; design home.today waiting-on "Nudge (sends a reminder in the record's thread, once a day at
+// most)") ------------------------------------------------------------------------------------------------------------------
+
+/**
+ * The waits a person may nudge from Today: an approval they asked for (the people who may decide it are told, and a
+ * reminder note goes on the record's thread). A purchase order or a quote waits on the SUPPLIER or the CUSTOMER: a
+ * reminder to them is a mail to a real party, which W2a sends only through its module behind the Owner's switch
+ * (B-W2a-52 PO confirmation reminders), never from here.
+ */
+export const NUDGE_KINDS: readonly WaitingKind[] = Object.freeze(['APPROVAL_REQUEST'])
+
+/** The refusals of a nudge, in words (the API answers 409 `nudge/<CODE>`). */
+export const NUDGE_REFUSALS = {
+  OUTSIDE: 'This waits on a customer or supplier: remind them from the record (its mail), not from Today.',
+  TODAY_ALREADY: 'You reminded them today already. Nudge again tomorrow.',
+  NOBODY: 'Nobody may decide this now: ask an administrator who should.',
+} as const
+export type NudgeRefusal = keyof typeof NUDGE_REFUSALS
+
+/** Why this wait cannot be nudged now (null: it can): its kind, and once a business day per person and record. */
+export function nudgeRefusal(kind: WaitingKind, nudgedToday: boolean, deciders: number): NudgeRefusal | null {
+  if (!NUDGE_KINDS.includes(kind)) return 'OUTSIDE'
+  if (nudgedToday) return 'TODAY_ALREADY'
+  if (deciders === 0) return 'NOBODY'
+  return null
+}
+
+/** The reminder note the nudge writes on the record's thread (internal, by the system; no amount, no person's figure). */
+export function nudgeNote(input: { readonly label: string; readonly ageDays: number; readonly byName: string }): string {
+  const since = input.ageDays === 0 ? 'since today' : input.ageDays === 1 ? 'for 1 day' : `for ${input.ageDays} days`
+  return `Reminder from ${input.byName}: ${input.label} still waits for an approval (${since}).`
+}

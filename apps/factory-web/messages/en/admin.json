@@ -1494,7 +1494,8 @@
     "calendars": "Calendars",
     "reasons": "Reason lists",
     "paymentterms": "Payment terms",
-    "pricelists": "Price lists"
+    "pricelists": "Price lists",
+    "tasks": "Tasks"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1645,6 +1646,7 @@
     "quality_garments_release": "Release inspected garments for shipping",
     "quality_garments_reverse": "Take released garments back before they ship",
     "home_view": "See Today",
+    "tasks_manage": "Make tasks on records and assign them",
     "floorsync_view": "See refused actions from floor tablets",
     "floorsync_discard": "Discard a refused floor tablet action",
     "calendars_view": "See the business calendars",
