@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed, type CoreSeed } from '../seed/_core'
+import { seed as seedAlerts } from '../seed/alerts'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
+import { seed as seedCalendar } from '../seed/calendar'
+import { seed as seedCollab } from '../seed/collab'
 import { seed as seedCompliance } from '../seed/compliance'
 import { seed as seedCosting } from '../seed/costing'
 import { seed as seedEmail } from '../seed/email'
@@ -18,6 +21,7 @@ import { seed as seedLinks } from '../seed/links'
 import { seed as seedMoney } from '../seed/money'
 import { seed as seedNumbering } from '../seed/numbering'
 import { seed as seedNumberingBlocks } from '../seed/numbering-blocks'
+import { seed as seedOps } from '../seed/ops'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
 import { seed as seedPrint } from '../seed/print'
@@ -26,11 +30,14 @@ import { seed as seedProduct } from '../seed/product'
 import { seed as seedProduction } from '../seed/production'
 import { seed as seedQuality } from '../seed/quality'
 import { seed as seedQualityLab } from '../seed/quality-lab'
+import { seed as seedReasons } from '../seed/reasons'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
+import { seed as seedSearch } from '../seed/search'
 import { seed as seedShipping } from '../seed/shipping'
 import { seed as seedSupply } from '../seed/supply'
 import { seed as seedThreads } from '../seed/threads'
+import { seed as seedViews } from '../seed/views'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels } from './ownership'
 import { PLATFORM_ROLE, POLICY_KEYS, RUNTIME_LOGIN, RUNTIME_ROLES, WALL, type PolicyKeyName, type RuntimeRole } from './roles'
@@ -163,6 +170,11 @@ beforeAll(async () => {
   await seedQualityLab({ db: factory, namespace: 'iso-b' })
   await seedInsights({ db: factory, namespace: 'iso-a' })
   await seedInsights({ db: factory, namespace: 'iso-b' })
+  // The platform schema of W2a (wave 1/7).
+  for (const seedPlatform of [seedCalendar, seedReasons, seedCollab, seedViews, seedAlerts, seedSearch, seedOps]) {
+    await seedPlatform({ db: factory, namespace: 'iso-a' })
+    await seedPlatform({ db: factory, namespace: 'iso-b' })
+  }
 }, 60_000)
 
 afterAll(async () => {
@@ -172,6 +184,9 @@ afterAll(async () => {
 
 it('covers every classified table and every runtime role', () => {
   expect(classified.map(({ model }) => model.name).sort()).toEqual([
+    'Alert',
+    'AlertEvent',
+    'AlertRule',
     'AttentionAction',
     'AttentionActionLog',
     'AuditLog',
@@ -181,6 +196,7 @@ it('covers every classified table and every runtime role', () => {
     'BomLineSize',
     'Bundle',
     'BundleReprint',
+    'CalendarDay',
     'Certificate',
     'CertificateCoverage',
     'Colour',
@@ -195,8 +211,10 @@ it('covers every classified table and every runtime role', () => {
     'DepositRequest',
     'Device',
     'DeviceEnrolment',
+    'DueTimer',
     'EmailIdentity',
     'EmailOutbound',
+    'ExportJob',
     'FloorRefusedAction',
     'FloorScanRefusal',
     'FloorSession',
@@ -234,6 +252,9 @@ it('covers every classified table and every runtime role', () => {
     'MeasurementProfile',
     'MeasurementTemplate',
     'Message',
+    'MessageMention',
+    'Notification',
+    'NotificationDelivery',
     'NumberAllocation',
     'NumberBlock',
     'NumberBlockUse',
@@ -271,6 +292,10 @@ it('covers every classified table and every runtime role', () => {
     'QuoteLine',
     'QuoteLineSize',
     'QuoteVersion',
+    'ReasonCode',
+    'RecordFollower',
+    'ReportSubscription',
+    'RestoreDrill',
     'Role',
     'RoleAssignment',
     'RoutingOperation',
@@ -278,12 +303,16 @@ it('covers every classified table and every runtime role', () => {
     'SalesOrderLine',
     'SalesOrderLineSize',
     'SalesSettings',
+    'SavedView',
     'ScanCorrectionRequest',
     'ScrapReason',
     'SdiNotification',
     'SdiSubmission',
+    'SearchEntry',
     'SecretValue',
     'Session',
+    'ShiftPattern',
+    'ShiftSegment',
     'Shipment',
     'ShipmentLine',
     'ShippingSettings',
@@ -298,6 +327,7 @@ it('covers every classified table and every runtime role', () => {
     'Style',
     'StyleRevision',
     'Suppression',
+    'Task',
     'Tenant',
     'Thread',
     'TodayLayout',
@@ -305,6 +335,7 @@ it('covers every classified table and every runtime role', () => {
     'User',
     'Variant',
     'ViesCheck',
+    'WorkCalendar',
     'WorkCentre',
     'WorkOrder',
     'WorkOrderMaterial',

@@ -1,0 +1,37 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/alerts.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office only: apps/factory-api's alerts (B-W2a-33) keep the rules, and the clustered scheduler (tenant system context) evaluates them, raises and clears alerts and fires timers, all through command(); people acknowledge, assign, snooze and resolve alerts in the office; the modules set and cancel their timers inside their own commands. The floor and portal/link sessions read and write nothing here in W2a. AlertEvent is append-only (`@append-only`; the …_platform_w2a_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login); a rule is switched off, an alert resolved, a timer cancelled, never deleted (the triggers refuse DELETE for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "AlertRule": {
+      "about": "The office edits the built-in rules and its own (numbers, place, recipients, channels, cooldown, on or off); the scheduler reads them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "Alert": {
+      "about": "The scheduler raises and clears alerts; the office reads them and acknowledges, assigns, snoozes and resolves them with a note.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "AlertEvent": {
+      "about": "The history of each alert: the scheduler and the office add one row per thing done and read it; nobody changes or removes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "DueTimer": {
+      "about": "The modules set and cancel the timers of their records' dates; the scheduler reads the due ones and fires them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

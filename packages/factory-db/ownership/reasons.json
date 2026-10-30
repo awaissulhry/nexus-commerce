@@ -1,0 +1,14 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/reasons.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office keeps the reason lists through command() (B-W2a-18: words, icon, colour, order, active; a code never changes, a code no longer used is set inactive); the floor reads them for its reason tiles (pause, downtime, help call, returns in: B-W2a-74, B-W2a-73, B-W2a-76): tenant-wide, nothing personal or secret, so no site key. The partner reads none. Never deleted (the …_platform_w2a_guards triggers refuse DELETE for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "ReasonCode": {
+      "about": "The office adds and edits reasons of each list and sets them inactive; every floor device reads the tenant's lists.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    }
+  }
+}

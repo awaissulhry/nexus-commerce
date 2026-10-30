@@ -1,0 +1,37 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/calendar.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office only: apps/factory-api's planning settings (B-W2a-08) keep calendars, days and shift patterns through command(), and the working-time service reads them in the office or the tenant's system context (the board, capacity, invoice deadlines, the MRP's order-by date). The floor reads none of them in W2a (a worker's own shifts are People, W2b), the partner none (a supplier's closed days are ours to keep). A calendar and a shift pattern are archived, never deleted (the …_platform_w2a_guards triggers refuse DELETE for every login); a day or a segment is removed when the exception or the stretch is taken back. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "WorkCalendar": {
+      "about": "The office sets up the calendar of a company, site, line, workshop or supplier (its working week and shift pattern) and archives it; planning reads it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "CalendarDay": {
+      "about": "The office adds, changes and takes back a calendar's dated exceptions (holidays, closures, extra working days); planning reads them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "ShiftPattern": {
+      "about": "The office keeps the tenant's and its companies' shift patterns and archives them; planning reads them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ShiftSegment": {
+      "about": "The office writes a pattern's shifts and breaks per weekday (a pattern is saved whole, in one command: segments added, changed and removed); planning reads them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}

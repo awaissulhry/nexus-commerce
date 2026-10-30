@@ -56,6 +56,18 @@ model StoredFile {
   /// Why a confirmed upload did not match what was announced (QUARANTINED): size_mismatch, type_mismatch,
   /// checksum_mismatch.
   quarantineReason String?
+  /// The virus scan (PLT-245, B-W2a-42): NOT_SCANNED without a scanner (and every file stored before it), else
+  /// PENDING while the scanner checks it (an upload waits QUARANTINED, reason `scan_pending`), then CLEAN (it may be
+  /// AVAILABLE), INFECTED or FAILED (it stays or becomes QUARANTINED). A rescan (new signatures) moves CLEAN or FAILED
+  /// back to PENDING; INFECTED is final.
+  scanStatus       FileScanStatus @default(NOT_SCANNED)
+  /// The verdict's time and the scanner that gave it ("ClamAV 1.4.1/27450"): set exactly with a verdict. Hidden from
+  /// the floor and partner roles.
+  scannedAt        DateTime?      @db.Timestamptz(3)
+  scanEngine       String?
+  /// INFECTED: what it found (the signature's name); FAILED: why it could not scan. Hidden from the floor and partner
+  /// roles.
+  scanFinding      String?
   /// When the upload was confirmed (AVAILABLE).
   availableAt      DateTime?      @db.Timestamptz(3)
   /// When it was deleted (DELETED).
@@ -84,6 +96,9 @@ model StoredFile {
   // privacy.prisma: the notice language and the DPIA whose PDF it is.
   privacyNoticeTexts PrivacyNoticeText[] @relation("PrivacyNoticeTextFile")
   privacyDpias       PrivacyDpia[]       @relation("PrivacyDpiaFile")
+  // views.prisma, ops.prisma: the export whose file it is, the restore drill it is the evidence of.
+  exportJobs         ExportJob[]
+  restoreDrills      RestoreDrill[]
 
   @@unique([tenantId, storageKey])
   // The target of the tenant-safe references from other rows (a company's logo, a document's PDF).
@@ -115,6 +130,18 @@ enum FileStatus {
   AVAILABLE
   QUARANTINED
   DELETED
+}
+
+/// The virus scan of a file (PLT-245): NOT_SCANNED → PENDING → CLEAN | INFECTED | FAILED; CLEAN | FAILED → PENDING
+/// (a rescan). INFECTED is final.
+enum FileScanStatus {
+  /// No scanner was on when it was stored (or a document the system made).
+  NOT_SCANNED
+  PENDING
+  CLEAN
+  INFECTED
+  /// The scanner could not read it (an encrypted archive, a time-out).
+  FAILED
 }
 
 /// Who may see a file (COL-050).

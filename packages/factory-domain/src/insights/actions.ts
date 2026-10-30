@@ -25,7 +25,7 @@ export const ACTION_VERBS = ['ASSIGN', 'RESOLVE', 'ACKNOWLEDGE'] as const
 export type ActionVerb = (typeof ACTION_VERBS)[number]
 
 /** The history's verbs (factory-db AttentionVerb). */
-export const LOG_VERBS = ['ASSIGNED', 'UNASSIGNED', 'RESOLVED', 'ACKNOWLEDGED'] as const
+export const LOG_VERBS = ['ASSIGNED', 'UNASSIGNED', 'RESOLVED', 'ACKNOWLEDGED', 'SNOOZED'] as const
 export type LogVerb = (typeof LOG_VERBS)[number]
 
 /** A resolve note: what was done, in words (the same bounds as a rejection's reason). */

@@ -1,0 +1,13 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/search.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office only: apps/factory-api's search (B-W2a-32) writes entries from the outbox handlers (the worker, in the tenant's system context) and removes an entry with its record; the office reads them, and the API filters them by the reader's view permission and company, site and party scopes. The floor finds records by scanning their codes (W0 scan anything), not here; the partner reads none. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "SearchEntry": {
+      "about": "The indexers write, rewrite and remove one entry per record; the office searches them.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}
