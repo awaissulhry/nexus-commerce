@@ -1,0 +1,66 @@
+// Coded reason lists (W2a schema wave 1/7; B-W2a-18; feature PLT-116; design production.settings "Reason codes" with
+// its popup fr-newcode, floor.reasons "Pick the reason", sales.settings return reasons): why a worker paused, why a
+// machine stopped, why stock was written off, why goods came back. One code, shown in each reader's language, with an
+// icon and a colour for the floor tiles (icons first, words second: MES-125, QHS-007).
+//
+// Two lists keep their own tables and are edited through the same editor (B-W2a-18): the operation screen's scrap and
+// rework reasons (production.prisma ScrapReason, W1: the scans reference them) and the defect library (DefectCode, wave
+// 6/7: two levels, severity, garment zone and picture). Records of other modules keep the code they chose (text plus
+// their list), never a reference here, so no other wave waits for this one; a code never changes, a code no longer used
+// is set inactive, never deleted.
+
+/// One reason of one list.
+model ReasonCode {
+  id          String     @id @db.Uuid
+  tenantId    String     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  list        ReasonList
+  /// Upper-case letters, digits and underscores (factory-domain checks it); unique per list. Never changes (records
+  /// keep it).
+  code        String
+  labelIt     String
+  labelEn     String
+  /// The words in the other floor languages of the tenant's sites (Site.floorLocales): { "ro": "…", "ur": "…" }.
+  labelI18n   Json       @default("{}")
+  /// The design system's tag icon (IconPicker id); null: the plain dot.
+  icon        String?
+  /// A swatch of the design system's ColorSwatchPicker ("#RRGGBB"); null: none.
+  colour      String?
+  /// An "Other" reason: the person adds a note (office) or a photo (floor).
+  needsDetail Boolean    @default(false)
+  /// Tiles and pickers show the list in this order (lower first).
+  sortOrder   Int        @default(0)
+  active      Boolean    @default(true)
+  version     Int        @default(1)
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?    @db.Uuid
+
+  @@unique([tenantId, list, code])
+}
+
+/// The lists (additive: a new list is a migration). Scrap and rework of the operation screen are ScrapReason; defects
+/// are the defect library.
+enum ReasonList {
+  /// Why work paused at a station (the floor).
+  PAUSE
+  /// Why a machine or a line stopped.
+  DOWNTIME
+  /// What a help call is about (the floor).
+  HELP_CALL
+  /// Why a count or a stock figure was adjusted.
+  ADJUSTMENT
+  /// Why goods were put on hold.
+  HOLD
+  /// Why an order, a line or a document was cancelled.
+  CANCEL
+  /// Why stock was written off.
+  WRITE_OFF
+  /// Why a customer returned goods.
+  RETURN
+  /// What was wrong with a delivery (short, over, wrong, damaged).
+  DISCREPANCY
+  /// Why we claim against a supplier.
+  CLAIM
+  /// Why goods were downgraded to a lower quality.
+  DOWNGRADE
+}

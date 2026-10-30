@@ -1,0 +1,235 @@
+// Working together on any record (W2a schema wave 1/7; B-W2a-20, B-W2a-40; features COL-006, COL-011, COL-037, PLT-138,
+// PLT-142, PLT-152; design home.notifications, home.tasks, shell.panels popups task-new and followers, home.today
+// "Needs me" and popup snooze):
+//
+//   Notification          one thing the system told one office user: made by the fan-out from an outbox event (an
+//                         @mention, an assignment, an approval, an alert, activity on a record they follow), one row per
+//                         person per event; read, done and snoozed by its person.
+//   NotificationDelivery  the delivery log: one row per attempt to bring a notification outside the app (an e-mail now,
+//                         a push in W2b), sent, skipped or failed. Append-only.
+//   RecordFollower        who follows a record and why (its creator, its assignee, mentioned, or chose to); a muted
+//                         follow keeps the person out of the record's news.
+//   MessageMention        one @mention of an office user in a thread's internal note, written with the note (Message
+//                         keeps the list too; this is the index "where was I mentioned" reads). Append-only.
+//   Task                  a task or reminder, on a record or of its own, with a due date, a checklist and an assignee.
+//
+// Records are named by recordType + recordId (as threads), so these tables wait for no module. People are named by user
+// id only, never by a name copied in, and nothing here counts per person beyond a person's own list (Statuto dei
+// Lavoratori art. 4; Owner answer W1). A notification's sentence is built for its reader at read time from its message
+// key and params; the fan-out puts in params only what that reader may see (no price without the grain, PLT-152). The
+// hand-written migration …_platform_w2a_guards holds the rules Prisma does not model.
+
+/// One thing the system told one person. Its sentence, record and event never change; its person reads it, marks it
+/// done, snoozes it. Kept (its deliveries name it).
+model Notification {
+  id           String               @id @db.Uuid
+  tenantId     String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The office user it is for.
+  userId       String               @db.Uuid
+  /// The record's company (the company tag of a person who works for several); null: a tenant-wide record.
+  companyId    String?              @db.Uuid
+  category     NotificationCategory
+  /// The outbox event it came from: its type (`thread.user_mentioned`) and id. One row per person per event, so a
+  /// replayed event makes none.
+  eventType    String
+  eventId      String               @db.Uuid
+  /// The record it is about, its label when it was made (`ORD-2026-0042`) and the place on the record it opens at
+  /// (`message:<id>`, `field:<name>`), if any.
+  recordType   String
+  recordId     String               @db.Uuid
+  recordLabel  String
+  anchor       String?
+  /// The sentence: a message key of the factory web (`notifications.mentioned`) and its values, cut to what the reader
+  /// may see when it was made. People in it are user ids.
+  messageKey   String
+  params       Json                 @default("{}")
+  /// The office user who caused it; null: the system or the floor.
+  actorId      String?              @db.Uuid
+  /// Notifications of one record and kind close together share a key and are shown as one (PLT-142).
+  groupKey     String?
+  readAt       DateTime?            @db.Timestamptz(3)
+  /// Done (E): off the list, kept.
+  doneAt       DateTime?            @db.Timestamptz(3)
+  /// Snoozed (H) at a time, until a time, or (until null) until there is new activity on the record.
+  snoozedAt    DateTime?            @db.Timestamptz(3)
+  snoozedUntil DateTime?            @db.Timestamptz(3)
+  version      Int                  @default(1)
+  createdAt    DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user       User                   @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  deliveries NotificationDelivery[]
+
+  @@unique([tenantId, userId, eventType, eventId])
+  // The target of the deliveries' tenant-safe reference.
+  @@unique([tenantId, id])
+  // A person's list, newest first (the bell and home.notifications).
+  @@index([tenantId, userId, createdAt])
+  @@index([tenantId, recordType, recordId])
+}
+
+/// The tabs of home.notifications.
+enum NotificationCategory {
+  /// Someone @mentioned the person.
+  MENTION
+  /// Something was assigned to the person (a task, an alert, a row of Today).
+  ASSIGNMENT
+  /// An approval waits for the person, or one they asked for was decided.
+  APPROVAL
+  /// An alert rule fired for the person.
+  ALERT
+  /// News of a record the person follows.
+  FOLLOWING
+  /// The system (an export is ready, a report was sent).
+  SYSTEM
+}
+
+/// One attempt to bring a notification outside the app. Never changed or removed (the triggers, for every login).
+/// @append-only
+model NotificationDelivery {
+  id              String                 @id @db.Uuid
+  tenantId        String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  notificationId  String                 @db.Uuid
+  channel         NotificationChannel
+  outcome         NotificationDeliveryOutcome
+  /// EMAIL sent: the mail (EmailOutbound) that carried it. No reference: a log keeps none.
+  emailOutboundId String?                @db.Uuid
+  /// SKIPPED or FAILED: why, in words ("the person turned e-mail off", "no address").
+  detail          String?
+  at              DateTime               @db.Timestamptz(3)
+  requestId       String
+  createdAt       DateTime               @default(now()) @db.Timestamptz(3)
+
+  notification Notification @relation(fields: [tenantId, notificationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, notificationId])
+}
+
+enum NotificationChannel {
+  EMAIL
+  /// A push to the person's device (W2b).
+  PUSH
+}
+
+enum NotificationDeliveryOutcome {
+  SENT
+  /// Not sent on purpose (the person's choice, quiet by default).
+  SKIPPED
+  FAILED
+}
+
+/// Who follows a record, and why. Unfollowing removes the row; muting keeps it, so the person is not added again.
+model RecordFollower {
+  id          String       @id @db.Uuid
+  tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  recordType  String
+  recordId    String       @db.Uuid
+  /// The office user who follows it.
+  userId      String       @db.Uuid
+  /// Why they first followed it. Never changes.
+  reason      FollowReason
+  /// Muted (M): no news of the record reaches them; a mention of them still does.
+  muted       Boolean      @default(false)
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?      @db.Uuid
+
+  user User @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, recordType, recordId, userId])
+  // What a person follows.
+  @@index([tenantId, userId])
+}
+
+enum FollowReason {
+  /// Made the record.
+  CREATOR
+  /// Was assigned something on it.
+  ASSIGNEE
+  /// Was @mentioned on it.
+  MENTIONED
+  /// Chose to follow it.
+  CHOSE
+}
+
+/// One @mention of an office user in an internal note: the note's own thread, record, author and time, and one of the
+/// people the note lists in its mentionedUserIds. Written with the note, in its command (one per person mentioned).
+/// Never changed or removed (the triggers, for every login).
+/// @append-only
+model MessageMention {
+  id         String   @id @db.Uuid
+  tenantId   String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  messageId  String   @db.Uuid
+  threadId   String   @db.Uuid
+  /// The thread's record.
+  recordType String
+  recordId   String   @db.Uuid
+  /// The office user mentioned.
+  userId     String   @db.Uuid
+  /// The note's author (an office user); null when the note names none.
+  authorId   String?  @db.Uuid
+  /// The note's time.
+  at         DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  message Message @relation(fields: [tenantId, messageId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  thread  Thread  @relation(fields: [tenantId, threadId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  user    User    @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // Where a person was mentioned, newest first.
+  @@index([tenantId, userId, at])
+  @@index([tenantId, messageId])
+}
+
+/// A task or reminder, on a record or of its own. Cancelled, never deleted.
+model Task {
+  id           String     @id @db.Uuid
+  tenantId     String     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The record's company, site and party (the task's own company for one without a record): the lists' scopes.
+  companyId    String?    @db.Uuid
+  siteId       String?    @db.Uuid
+  partyId      String?    @db.Uuid
+  title        String
+  description  String?
+  /// The record it is on, and its label when the task was made; all three or none. Never changes.
+  recordType   String?
+  recordId     String?    @db.Uuid
+  recordLabel  String?
+  /// The office user it is assigned to, who assigned it and when; all three or none.
+  assigneeId   String?    @db.Uuid
+  assignedById String?    @db.Uuid
+  assignedAt   DateTime?  @db.Timestamptz(3)
+  /// The day it is due, and the time on that day (HH:MM, the person's zone) when it has one.
+  dueDate      DateTime?  @db.Date
+  dueTime      String?
+  /// The checklist, in order: [{ id, text, done, doneAt?, doneById? }] (factory-domain checks the items).
+  checklist    Json       @default("[]")
+  status       TaskStatus @default(OPEN)
+  /// DONE or CANCELLED: when and by whom.
+  closedAt     DateTime?  @db.Timestamptz(3)
+  closedById   String?    @db.Uuid
+  /// Snoozed on Today until then (an OPEN task only).
+  snoozedUntil DateTime?  @db.Timestamptz(3)
+  version      Int        @default(1)
+  createdAt    DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?    @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  assignee User? @relation(fields: [tenantId, assigneeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // My tasks: a person's open tasks by due date.
+  @@index([tenantId, assigneeId, status, dueDate])
+  // A record's tasks (its side panel).
+  @@index([tenantId, recordType, recordId])
+  // Created by me.
+  @@index([tenantId, createdById])
+}
+
+/// OPEN → DONE | CANCELLED; either back to OPEN (Undo, reopen).
+enum TaskStatus {
+  OPEN
+  DONE
+  CANCELLED
+}

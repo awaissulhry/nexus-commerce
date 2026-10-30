@@ -107,6 +107,9 @@ model Party {
   repairOrders         RepairOrder[]
   complaints           Complaint[]
 
+  // calendar.prisma: as a supplier or subcontractor, its calendar (its closed days).
+  workCalendars       WorkCalendar[]
+
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the party's rows.
   @@unique([tenantId, id])

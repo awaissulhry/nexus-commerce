@@ -1,0 +1,43 @@
+// Operations proof (W2a schema wave 1/7; B-W2a-36; features PLT-213, PLT-214, PLT-216; design admin.security "Backups
+// and restore drills" with its popup drill): a restore drill must be proven, not assumed. The backups themselves live
+// at the database provider and the second EU copy (B-W0-32); what is kept here is the record that a restore was tried
+// and what it showed. A live drill needs the off-site backups (GATE-SPEND); the record and a local drill do not.
+
+/// One restore drill: a backup restored somewhere other than production, and the key totals of the restored copy
+/// compared with the source by checksum. Never changed or removed (the triggers, for every login): a mistake is a new
+/// drill.
+/// @append-only
+model RestoreDrill {
+  id              String             @id @db.Uuid
+  tenantId        String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The day it was done.
+  drilledOn       DateTime           @db.Date
+  /// Where the backup was restored to ("staging", "a local copy"): never production.
+  environment     String
+  /// The point in time of the backup that was restored.
+  backupAt        DateTime?          @db.Timestamptz(3)
+  /// What was compared: [{ key, source, restored, match }], one per key total (orders, stock value, invoices …), as
+  /// checksums of the totals, never the totals themselves. A PASSED drill matches on every key.
+  checks          Json
+  result          RestoreDrillResult
+  /// How long the restore took, in minutes (the recovery time it proves).
+  durationMinutes Int?
+  notes           String?
+  /// Its evidence (the restore log, a screenshot): a StoredFile of this drill.
+  evidenceFileId  String?            @db.Uuid
+  /// The office user who did it.
+  performedById   String             @db.Uuid
+  requestId       String
+  createdAt       DateTime           @default(now()) @db.Timestamptz(3)
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  evidenceFile StoredFile? @relation(fields: [tenantId, evidenceFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The last drill first (the panel; the due reminder).
+  @@index([tenantId, drilledOn])
+}
+
+enum RestoreDrillResult {
+  PASSED
+  FAILED
+}

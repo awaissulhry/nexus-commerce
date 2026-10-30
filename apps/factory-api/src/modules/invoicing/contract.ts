@@ -135,7 +135,16 @@ export const listInvoicesContract = defineContract({
           vatTotal: money.price(z.number().int()),
           grossTotal: money.price(z.number().int()),
           depositRequestId: id().nullable(),
+          /** A credit note's invoice; the sales order it bills (when one). */
+          creditOfId: id().nullable(),
+          salesOrderId: id().nullable(),
           filesPending: z.boolean(),
+          /** What payments pay on it, its issued credit notes, what it still asks (0 for a draft, a TD02, a TD04). */
+          paidAmount: money.price(z.number().int()),
+          creditedAmount: money.price(z.number().int()),
+          openAmount: money.price(z.number().int()),
+          /** The payment terms' due date, when the invoice has one. */
+          dueDate: z.string().nullable(),
           version: z.number().int(),
           createdAt: instant(),
         }),
@@ -204,3 +213,92 @@ const issued = output({ invoice: invoiceView, filesPending: z.boolean(), filesPr
 export const issueContract = defineContract({ params: invoiceParams, body: input({ version }), response: { 200: issued } })
 
 export const makeFilesContract = defineContract({ params: invoiceParams, response: { 200: one } })
+
+/**
+ * The records an invoice record shows beside its own (A2 SCR-081): the DDTs it cites, the deposit invoices it deducts,
+ * the invoice it credits, its credit notes, the payments placed on it, its orders and their deposit requests.
+ */
+export const relatedContract = defineContract({
+  params: invoiceParams,
+  response: {
+    200: output({
+      related: output({
+        ddts: z.array(output({ id: id(), number: z.string(), date: z.string(), shipmentId: id(), shipmentNumber: z.string() })),
+        depositInvoices: z.array(output({ id: id(), number: z.string().nullable(), issueDate: z.string().nullable(), status, depositRequestId: id().nullable() })),
+        creditOf: output({ id: id(), docType, number: z.string().nullable(), issueDate: z.string().nullable(), status }).nullable(),
+        creditNotes: z.array(output({ id: id(), number: z.string().nullable(), issueDate: z.string().nullable(), status, grossTotal: money.price(z.number().int()) })),
+        payments: z.array(
+          output({
+            allocationId: id(),
+            paymentId: id(),
+            externalRef: z.string(),
+            receivedOn: z.string(),
+            paymentStatus: z.string(),
+            amount: money.price(z.number().int()),
+            /** A reversal row takes back the allocation it names; `reversed`: a later row took this one back. */
+            reversalOfId: id().nullable(),
+            reversed: z.boolean(),
+            note: z.string().nullable(),
+            createdAt: instant(),
+          }),
+        ),
+        orders: z.array(output({ id: id(), number: z.string() })),
+        depositRequests: z.array(
+          output({
+            id: id(),
+            orderId: id().nullable(),
+            kind: z.string(),
+            depositPct: z.string().nullable(),
+            currency: z.string(),
+            amount: money.price(z.number().int()),
+            paidAmount: money.price(z.number().int()),
+            dueDate: z.string(),
+            fiscalDocument: z.string(),
+            status: z.string(),
+            paidAt: instant().nullable(),
+            depositInvoices: z.array(output({ id: id(), number: z.string().nullable(), status, issueDate: z.string().nullable() })),
+          }),
+        ),
+      }),
+    }),
+  },
+})
+
+/**
+ * Finance settings as invoicing reads them (A2 SCR-083; settings.ts): per company the seller data an invoice header
+ * takes and what is missing, the SDI connection, the legal archive, the next number of each fiscal series. No money.
+ */
+export const settingsContract = defineContract({
+  response: {
+    200: output({
+      settings: output({
+        asOf: businessDate(),
+        companies: z.array(
+          output({
+            id: id(),
+            code: z.string(),
+            legalName: z.string(),
+            identity: output({
+              vatNumber: z.string().nullable(),
+              fiscalCode: z.string().nullable(),
+              regimeFiscale: z.string().nullable(),
+              reaOffice: z.string().nullable(),
+              reaNumber: z.string().nullable(),
+              shareCapital: z.string().nullable(),
+              soleShareholder: z.boolean(),
+              inLiquidation: z.boolean(),
+              address: output({ line1: z.string(), line2: z.string().nullable(), postalCode: z.string(), city: z.string(), province: z.string().nullable(), country: z.string() }).nullable(),
+            }).nullable(),
+            seller: output({ ready: z.boolean(), problems: z.array(output({ path: z.string(), message: z.string() })) }),
+            sdi: output({
+              state: z.enum(['NONE', 'ACTIVE', 'PAUSED', 'SEVERAL']),
+              accounts: z.array(output({ id: id(), label: z.string(), mode: z.enum(['LIVE', 'SANDBOX', 'FAKE']), status: z.enum(['ACTIVE', 'PAUSED', 'DISABLED']) })),
+            }),
+            archive: output({ archivedSends: z.number().int(), lastArchivedAt: instant().nullable() }),
+            series: z.array(output({ kind: z.enum(['INVOICE', 'DEPOSIT_INVOICE', 'CREDIT_NOTE']), next: z.string().nullable() })),
+          }),
+        ),
+      }),
+    }),
+  },
+})

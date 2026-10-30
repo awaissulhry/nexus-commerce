@@ -37,6 +37,13 @@ model Device {
   lastSeenAt       DateTime?    @db.Timestamptz(3)
   /// The floor app's version, as the device reports it.
   appVersion       String?
+  /// Its state as the device last reported it (B-W2a-42; design admin.devices "Battery", "actions waiting to sync"):
+  /// the battery in percent (0-100) and whether it charges, the actions in its offline queue (0 or more; the floor app
+  /// updates itself only when it is empty), and when it said so (set whenever any of them is). Never who used it.
+  batteryPercent   Int?
+  batteryCharging  Boolean?
+  queuedActions    Int?
+  statusReportedAt DateTime?    @db.Timestamptz(3)
   /// The open floor session, if any: the one operator signed in on it.
   currentSessionId String?      @db.Uuid
   revokedAt        DateTime?    @db.Timestamptz(3)

@@ -3,7 +3,8 @@
 // (apps/factory-api modules/insights, factory-domain insights/attention); what people DID about a row is kept here:
 //
 //   AttentionAction     one row per Today row key (`<kind>:<record id>[:<sub key>]`): who the alert is assigned to, and
-//                       the CONDITION it was resolved with a note or acknowledged in. A condition is the row's
+//                       the CONDITION it was resolved with a note, acknowledged or snoozed in (W2a: snoozed until a time
+//                       or until the condition changes). A condition is the row's
 //                       fingerprint (factory-domain insights/attention conditionOf: its state, due date, since when it
 //                       waits and the codes that make it), so a resolved alert leaves Today for everyone until its
 //                       condition changes, and comes back then; an acknowledgement marks the row while its condition
@@ -48,6 +49,12 @@ model AttentionAction {
   acknowledgedCondition String?
   acknowledgedById      String?   @db.Uuid
   acknowledgedAt        DateTime? @db.Timestamptz(3)
+  /// Snoozed (Today's H, W2a): the condition it was snoozed in, by whom and when (all three or none), and until when
+  /// (null: until the row's condition changes). The row's, for everyone who sees it, as an acknowledgement is.
+  snoozedUntil          DateTime? @db.Timestamptz(3)
+  snoozedCondition      String?
+  snoozedById           String?   @db.Uuid
+  snoozedAt             DateTime? @db.Timestamptz(3)
   version               Int       @default(1)
   createdAt             DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
@@ -89,6 +96,8 @@ model AttentionActionLog {
   assigneeId  String?       @db.Uuid
   /// RESOLVED: what was done (required).
   note        String?
+  /// SNOOZED: until when (null: until the row's condition changes).
+  snoozedUntil DateTime?    @db.Timestamptz(3)
   at          DateTime      @db.Timestamptz(3)
   requestId   String
   createdAt   DateTime      @default(now()) @db.Timestamptz(3)
@@ -106,6 +115,8 @@ enum AttentionVerb {
   UNASSIGNED
   RESOLVED
   ACKNOWLEDGED
+  /// Snoozed until a time or until the row's condition changes (W2a).
+  SNOOZED
 }
 
 /// One person's arrangement of Today ("Arrange Today", saved on the server per person): factory-domain

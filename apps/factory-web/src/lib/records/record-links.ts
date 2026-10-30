@@ -31,6 +31,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Lot: '/compliance/tests/[id]',
   // Compliance › PPE register & recalls (SCR-113).
   PpeRegisterEntry: '/compliance/register/[id]',
+  // Finance › Invoices (SCR-081: invoices, deposit invoices, credit notes) and Payments (SCR-082: a payment's placements).
+  Invoice: '/finance/invoices/[id]',
+  Payment: '/finance/payments/[id]',
   // Compliance › Certificates (SCR-051) and Labels & marking (SCR-053).
   Certificate: '/compliance/certificates/[id]',
   LabelTemplate: '/compliance/labels/[id]',
@@ -61,6 +64,9 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/quality/inspections': '/quality/inspections',
   '/quality/lots': '/compliance/tests',
   '/compliance/register': '/compliance/register',
+  // The invoice list reads the API's own filters from the address (`?status=REJECTED`, `?docType=TD04`).
+  '/invoicing/invoices': '/finance/invoices',
+  '/payments': '/finance/payments',
   // The shipments list (SCR-066) reads `?rows=` and `?q=` from the address.
   '/shipping/shipments': '/warehouse/shipments',
   // The PO list reads `status` (one state, as the API) and `waitingOver48h`; Receipts reads `status`, `view=expected`.

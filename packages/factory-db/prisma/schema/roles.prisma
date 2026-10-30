@@ -37,6 +37,9 @@ model Role {
   assignments RoleAssignment[]
   // floor-auth.prisma: the floor workers holding this (floor) role.
   workerRoles WorkerRole[]
+  // views.prisma, alerts.prisma: the saved views shared with its holders, the alert rules that tell them.
+  savedViews  SavedView[]
+  alertRules  AlertRule[]
 
   @@unique([tenantId, key])
   // The target of the tenant-safe references from the assignments.

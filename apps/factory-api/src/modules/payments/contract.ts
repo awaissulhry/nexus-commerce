@@ -16,6 +16,9 @@ const target = z.enum(ALLOCATION_TARGETS)
 
 const allocationInput = input({ depositRequestId: id().optional(), invoiceId: id().optional(), amount: money.price(amountMinor()) })
 
+/** What a target is called: an invoice's number and type (and its order), a deposit request's order number. */
+const targetLabel = output({ number: z.string().nullable(), docType: z.string().nullable(), orderNumber: z.string().nullable() })
+
 const allocationView = output({
   id: id(),
   target,
@@ -27,7 +30,11 @@ const allocationView = output({
   note: z.string().nullable(),
   createdAt: instant(),
   createdById: id().nullable(),
+  label: targetLabel.nullable(),
 })
+
+/** Per target, what the payment pays on it now (its allocations less their reversals, above 0). */
+const placedOnView = z.array(output({ target, targetId: id(), amount: money.price(z.number().int()), number: z.string().nullable(), docType: z.string().nullable(), orderNumber: z.string().nullable() }))
 
 export const paymentView = output({
   id: id(),
@@ -47,8 +54,11 @@ export const paymentView = output({
   allocated: money.price(z.number().int()),
   unallocated: money.price(z.number().int()),
   allocations: z.array(allocationView),
+  placedOn: placedOnView,
   createdAt: instant(),
   createdById: id().nullable(),
+  /** Who recorded it and placed it (names inside the one record). */
+  people: z.array(output({ id: id(), name: z.string() })),
 })
 
 const one = output({ payment: paymentView })
@@ -81,6 +91,7 @@ export const listPaymentsContract = defineContract({
           receivedOn: z.string(),
           externalRef: z.string(),
           status,
+          placedOn: placedOnView,
           createdAt: instant(),
         }),
       ),
@@ -180,6 +191,38 @@ export const depositLinkViewContract = defineContract({
         text: z.string(),
       }),
       expiresAt: instant(),
+    }),
+  },
+})
+
+/**
+ * A customer's open items, oldest first (A2 SCR-082 "Record a payment", step 2 "where it goes"): its OPEN deposit
+ * requests and its issued TD01/TD24 invoices that still ask money, each with what is still open (the cap of an
+ * allocation). A TD02 is paid through its deposit request; a TD04 asks nothing.
+ */
+export const openItemsContract = defineContract({
+  querystring: input({ companyId: id(), partyId: id() }),
+  response: {
+    200: output({
+      items: z.array(
+        output({
+          target,
+          id: id(),
+          /** The invoice's number; a deposit request has none (its order's number names it). */
+          number: z.string().nullable(),
+          docType: z.string().nullable(),
+          /** A deposit request: the document its payment brings (TD02, or NONE by its VAT rule). */
+          fiscalDocument: z.enum(['TD02', 'NONE']).nullable(),
+          orderId: id().nullable(),
+          orderNumber: z.string().nullable(),
+          /** The invoice's issue date, the request's creation day. */
+          date: z.string(),
+          dueDate: z.string().nullable(),
+          currency: z.string(),
+          amount: money.price(z.number().int()),
+          openAmount: money.price(z.number().int()),
+        }),
+      ),
     }),
   },
 })

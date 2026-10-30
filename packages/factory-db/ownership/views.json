@@ -1,0 +1,29 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/views.prisma (rules: src/ownership.ts; roles: src/roles.ts). Office only: apps/factory-api's list toolbar (B-W2a-23) keeps saved views and runs exports through command() (the export itself in the worker, in the tenant's system context), and the report pack (B-W2a-38, B-W2a-79) keeps subscriptions and sends them from the scheduler. The floor and portal/link sessions read and write nothing here. A saved view and a subscription are removed by their owner (unsubscribe); an export is never deleted (it expires and its file is deleted). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "SavedView": {
+      "about": "The office saves, changes, shares and removes views of its lists and reads the ones it may see (its own, everyone's, its roles').",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "ExportJob": {
+      "about": "The office asks for an export of a list; the worker runs it (progress, file, e-mailed link) and expires it; the person reads their own.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ReportSubscription": {
+      "about": "The office subscribes people to reports, changes, pauses and removes the subscriptions; the scheduler reads them and notes the last sending.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    }
+  }
+}

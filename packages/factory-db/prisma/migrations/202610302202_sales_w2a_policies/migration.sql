@@ -66,6 +66,32 @@ GRANT EXECUTE ON FUNCTION pg_catalog.set_config(text, text, boolean) TO "factory
 
 -- 4. Walled tables
 GRANT USAGE ON SCHEMA "public" TO "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+-- "public"."Alert"
+ALTER TABLE "public"."Alert" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."Alert" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'Alert' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'Alert'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."Alert" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE ON TABLE "public"."Alert" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."Alert" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."Alert" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."Alert" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."AlertEvent"
+ALTER TABLE "public"."AlertEvent" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."AlertEvent" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'AlertEvent' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'AlertEvent'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."AlertEvent" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT ON TABLE "public"."AlertEvent" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."AlertEvent" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."AlertEvent" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."AlertRule"
+ALTER TABLE "public"."AlertRule" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."AlertRule" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'AlertRule' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'AlertRule'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."AlertRule" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE ON TABLE "public"."AlertRule" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."AlertRule" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."AlertRule" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."AlertRule" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."AttentionAction"
 ALTER TABLE "public"."AttentionAction" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."AttentionAction" FORCE ROW LEVEL SECURITY;
@@ -166,6 +192,16 @@ CREATE POLICY "factory_floor_runtime_select" ON "public"."BundleReprint" AS PERM
 CREATE POLICY "factory_floor_runtime_insert" ON "public"."BundleReprint" AS PERMISSIVE FOR INSERT TO "factory_floor_runtime" WITH CHECK ("siteId" = NULLIF(current_setting('factory.site_id', true), '')::uuid AND "tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_select" ON "public"."BundleReprint" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."BundleReprint" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."CalendarDay"
+ALTER TABLE "public"."CalendarDay" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."CalendarDay" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'CalendarDay' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'CalendarDay'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."CalendarDay" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."CalendarDay" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."CalendarDay" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."CalendarDay" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."CalendarDay" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_delete" ON "public"."CalendarDay" AS PERMISSIVE FOR DELETE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."Certificate"
 ALTER TABLE "public"."Certificate" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."Certificate" FORCE ROW LEVEL SECURITY;
@@ -329,6 +365,15 @@ CREATE POLICY "factory_floor_runtime_update" ON "public"."DeviceEnrolment" AS PE
 CREATE POLICY "factory_runtime_select" ON "public"."DeviceEnrolment" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."DeviceEnrolment" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_update" ON "public"."DeviceEnrolment" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."DueTimer"
+ALTER TABLE "public"."DueTimer" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."DueTimer" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'DueTimer' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'DueTimer'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."DueTimer" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE ON TABLE "public"."DueTimer" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."DueTimer" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."DueTimer" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."DueTimer" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."EmailIdentity"
 ALTER TABLE "public"."EmailIdentity" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."EmailIdentity" FORCE ROW LEVEL SECURITY;
@@ -347,6 +392,15 @@ GRANT SELECT, INSERT, UPDATE ON TABLE "public"."EmailOutbound" TO "factory_runti
 CREATE POLICY "factory_runtime_select" ON "public"."EmailOutbound" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."EmailOutbound" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_update" ON "public"."EmailOutbound" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."ExportJob"
+ALTER TABLE "public"."ExportJob" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."ExportJob" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'ExportJob' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'ExportJob'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."ExportJob" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE ON TABLE "public"."ExportJob" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."ExportJob" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."ExportJob" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."ExportJob" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."FloorRefusedAction"
 ALTER TABLE "public"."FloorRefusedAction" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."FloorRefusedAction" FORCE ROW LEVEL SECURITY;
@@ -750,6 +804,31 @@ GRANT SELECT, INSERT ON TABLE "public"."Message" TO "factory_runtime";
 CREATE POLICY "factory_partner_runtime_select" ON "public"."Message" AS PERMISSIVE FOR SELECT TO "factory_partner_runtime" USING ("partyId" = NULLIF(current_setting('factory.party_id', true), '')::uuid AND "tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_select" ON "public"."Message" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."Message" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."MessageMention"
+ALTER TABLE "public"."MessageMention" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."MessageMention" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'MessageMention' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'MessageMention'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."MessageMention" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT ON TABLE "public"."MessageMention" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."MessageMention" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."MessageMention" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."Notification"
+ALTER TABLE "public"."Notification" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."Notification" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'Notification' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'Notification'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."Notification" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE ON TABLE "public"."Notification" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."Notification" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."Notification" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."Notification" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."NotificationDelivery"
+ALTER TABLE "public"."NotificationDelivery" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."NotificationDelivery" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'NotificationDelivery' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'NotificationDelivery'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."NotificationDelivery" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT ON TABLE "public"."NotificationDelivery" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."NotificationDelivery" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."NotificationDelivery" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."NumberAllocation"
 ALTER TABLE "public"."NumberAllocation" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."NumberAllocation" FORCE ROW LEVEL SECURITY;
@@ -1208,6 +1287,27 @@ CREATE POLICY "factory_partner_runtime_update" ON "public"."QuoteVersion" AS PER
 CREATE POLICY "factory_runtime_select" ON "public"."QuoteVersion" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."QuoteVersion" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_update" ON "public"."QuoteVersion" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."ReasonCode"
+ALTER TABLE "public"."ReasonCode" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."ReasonCode" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'ReasonCode' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'ReasonCode'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."ReasonCode" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT ON TABLE "public"."ReasonCode" TO "factory_floor_runtime";
+GRANT SELECT, INSERT, UPDATE ON TABLE "public"."ReasonCode" TO "factory_runtime";
+CREATE POLICY "factory_floor_runtime_select" ON "public"."ReasonCode" AS PERMISSIVE FOR SELECT TO "factory_floor_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_select" ON "public"."ReasonCode" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."ReasonCode" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."ReasonCode" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."RecordFollower"
+ALTER TABLE "public"."RecordFollower" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."RecordFollower" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'RecordFollower' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'RecordFollower'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."RecordFollower" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."RecordFollower" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."RecordFollower" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."RecordFollower" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."RecordFollower" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_delete" ON "public"."RecordFollower" AS PERMISSIVE FOR DELETE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."RepairOrder"
 ALTER TABLE "public"."RepairOrder" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."RepairOrder" FORCE ROW LEVEL SECURITY;
@@ -1225,6 +1325,24 @@ REVOKE ALL ON TABLE "public"."RepairStageEvent" FROM PUBLIC, "factory_floor_runt
 GRANT SELECT, INSERT ON TABLE "public"."RepairStageEvent" TO "factory_runtime";
 CREATE POLICY "factory_runtime_select" ON "public"."RepairStageEvent" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."RepairStageEvent" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."ReportSubscription"
+ALTER TABLE "public"."ReportSubscription" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."ReportSubscription" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'ReportSubscription' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'ReportSubscription'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."ReportSubscription" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."ReportSubscription" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."ReportSubscription" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."ReportSubscription" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."ReportSubscription" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_delete" ON "public"."ReportSubscription" AS PERMISSIVE FOR DELETE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."RestoreDrill"
+ALTER TABLE "public"."RestoreDrill" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."RestoreDrill" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'RestoreDrill' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'RestoreDrill'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."RestoreDrill" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT ON TABLE "public"."RestoreDrill" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."RestoreDrill" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."RestoreDrill" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."ReturnAuthorisation"
 ALTER TABLE "public"."ReturnAuthorisation" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."ReturnAuthorisation" FORCE ROW LEVEL SECURITY;
@@ -1354,6 +1472,16 @@ GRANT SELECT, INSERT, UPDATE ON TABLE "public"."SalesSettings" TO "factory_runti
 CREATE POLICY "factory_runtime_select" ON "public"."SalesSettings" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."SalesSettings" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_update" ON "public"."SalesSettings" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."SavedView"
+ALTER TABLE "public"."SavedView" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."SavedView" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'SavedView' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'SavedView'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."SavedView" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."SavedView" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."SavedView" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."SavedView" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."SavedView" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_delete" ON "public"."SavedView" AS PERMISSIVE FOR DELETE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."ScanCorrectionRequest"
 ALTER TABLE "public"."ScanCorrectionRequest" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."ScanCorrectionRequest" FORCE ROW LEVEL SECURITY;
@@ -1398,6 +1526,16 @@ CREATE POLICY "factory_partner_runtime_select" ON "public"."SdiSubmission" AS PE
 CREATE POLICY "factory_runtime_select" ON "public"."SdiSubmission" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."SdiSubmission" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_update" ON "public"."SdiSubmission" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."SearchEntry"
+ALTER TABLE "public"."SearchEntry" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."SearchEntry" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'SearchEntry' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'SearchEntry'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."SearchEntry" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."SearchEntry" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."SearchEntry" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."SearchEntry" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."SearchEntry" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_delete" ON "public"."SearchEntry" AS PERMISSIVE FOR DELETE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."SecretValue"
 ALTER TABLE "public"."SecretValue" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."SecretValue" FORCE ROW LEVEL SECURITY;
@@ -1417,6 +1555,25 @@ GRANT SELECT, INSERT, UPDATE ON TABLE "public"."Session" TO "factory_runtime";
 CREATE POLICY "factory_runtime_select" ON "public"."Session" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."Session" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_update" ON "public"."Session" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."ShiftPattern"
+ALTER TABLE "public"."ShiftPattern" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."ShiftPattern" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'ShiftPattern' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'ShiftPattern'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."ShiftPattern" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE ON TABLE "public"."ShiftPattern" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."ShiftPattern" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."ShiftPattern" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."ShiftPattern" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."ShiftSegment"
+ALTER TABLE "public"."ShiftSegment" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."ShiftSegment" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'ShiftSegment' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'ShiftSegment'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."ShiftSegment" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."ShiftSegment" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."ShiftSegment" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."ShiftSegment" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."ShiftSegment" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_delete" ON "public"."ShiftSegment" AS PERMISSIVE FOR DELETE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."Shipment"
 ALTER TABLE "public"."Shipment" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."Shipment" FORCE ROW LEVEL SECURITY;
@@ -1535,8 +1692,8 @@ ALTER TABLE "public"."StoredFile" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."StoredFile" FORCE ROW LEVEL SECURITY;
 DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'StoredFile' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'StoredFile'); END LOOP; END $$;
 REVOKE ALL ON TABLE "public"."StoredFile" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
-GRANT SELECT ("availableAt", "companyId", "contentType", "createdAt", "createdById", "deletedAt", "floorSiteId", "id", "kind", "originalName", "quarantineReason", "recordId", "recordType", "retainUntil", "sha256", "sizeBytes", "status", "storageKey", "storeAccountId", "tenantId", "updatedAt", "version", "visibility") ON TABLE "public"."StoredFile" TO "factory_floor_runtime";
-GRANT SELECT ("availableAt", "companyId", "contentType", "createdAt", "deletedAt", "id", "kind", "originalName", "partyId", "quarantineReason", "recordId", "recordType", "retainUntil", "sha256", "sizeBytes", "status", "storageKey", "storeAccountId", "tenantId", "updatedAt", "version", "visibility") ON TABLE "public"."StoredFile" TO "factory_partner_runtime";
+GRANT SELECT ("availableAt", "companyId", "contentType", "createdAt", "createdById", "deletedAt", "floorSiteId", "id", "kind", "originalName", "quarantineReason", "recordId", "recordType", "retainUntil", "scanStatus", "scannedAt", "sha256", "sizeBytes", "status", "storageKey", "storeAccountId", "tenantId", "updatedAt", "version", "visibility") ON TABLE "public"."StoredFile" TO "factory_floor_runtime";
+GRANT SELECT ("availableAt", "companyId", "contentType", "createdAt", "deletedAt", "id", "kind", "originalName", "partyId", "quarantineReason", "recordId", "recordType", "retainUntil", "scanStatus", "scannedAt", "sha256", "sizeBytes", "status", "storageKey", "storeAccountId", "tenantId", "updatedAt", "version", "visibility") ON TABLE "public"."StoredFile" TO "factory_partner_runtime";
 GRANT SELECT, INSERT, UPDATE ON TABLE "public"."StoredFile" TO "factory_runtime";
 CREATE POLICY "factory_floor_runtime_select" ON "public"."StoredFile" AS PERMISSIVE FOR SELECT TO "factory_floor_runtime" USING ("floorSiteId" = NULLIF(current_setting('factory.site_id', true), '')::uuid AND "tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_partner_runtime_select" ON "public"."StoredFile" AS PERMISSIVE FOR SELECT TO "factory_partner_runtime" USING ("partyId" = NULLIF(current_setting('factory.party_id', true), '')::uuid AND "tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
@@ -1574,6 +1731,15 @@ GRANT SELECT, INSERT, UPDATE ON TABLE "public"."Suppression" TO "factory_runtime
 CREATE POLICY "factory_runtime_select" ON "public"."Suppression" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."Suppression" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_update" ON "public"."Suppression" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."Task"
+ALTER TABLE "public"."Task" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."Task" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'Task' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'Task'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."Task" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE ON TABLE "public"."Task" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."Task" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."Task" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."Task" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."Tenant"
 ALTER TABLE "public"."Tenant" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."Tenant" FORCE ROW LEVEL SECURITY;
@@ -1641,6 +1807,15 @@ REVOKE ALL ON TABLE "public"."ViesCheck" FROM PUBLIC, "factory_floor_runtime", "
 GRANT SELECT, INSERT ON TABLE "public"."ViesCheck" TO "factory_runtime";
 CREATE POLICY "factory_runtime_select" ON "public"."ViesCheck" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."ViesCheck" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."WorkCalendar"
+ALTER TABLE "public"."WorkCalendar" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."WorkCalendar" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'WorkCalendar' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'WorkCalendar'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."WorkCalendar" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT, UPDATE ON TABLE "public"."WorkCalendar" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."WorkCalendar" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."WorkCalendar" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_update" ON "public"."WorkCalendar" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."WorkCentre"
 ALTER TABLE "public"."WorkCentre" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."WorkCentre" FORCE ROW LEVEL SECURITY;

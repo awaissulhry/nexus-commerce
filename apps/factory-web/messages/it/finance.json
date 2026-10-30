@@ -1,0 +1,1209 @@
+{
+  "action": {
+    "copyNumber": "Copia il numero",
+    "creditNote": "Crea una nota di credito",
+    "deleteDraft": "Elimina la bozza",
+    "downloadPdf": "Scarica il PDF di cortesia",
+    "downloadXml": "Scarica l’XML (legale)",
+    "makeFiles": "Prepara i file",
+    "sendCopy": "Invia copia"
+  },
+  "bank": {
+    "bic": "BIC",
+    "edit": "Modifica",
+    "explain": "Stampato su ogni fattura e sulla pagina di acconto del cliente.",
+    "holder": "Intestatario",
+    "iban": "IBAN",
+    "name": "Banca",
+    "noRight": "Il conto bancario è visibile ai ruoli con il permesso sul conto.",
+    "none": {
+      "body": "Aggiungilo: fatture e pagina di acconto lo stampano.",
+      "title": "Ancora nessun conto bancario"
+    },
+    "problem": {
+      "both": "Intestatario e IBAN vanno insieme (entrambi vuoti eliminano il conto).",
+      "iban": "Un IBAN: due lettere, due cifre di controllo e il conto (spazi ammessi).",
+      "ibanCheck": "Le cifre di controllo dell’IBAN non tornano: confrontalo con quello della banca."
+    },
+    "save": "Salva il conto bancario",
+    "stepUp": "Il salvataggio chiede un nuovo codice dell’app di autenticazione.",
+    "title": "Conto bancario",
+    "updated": "Aggiornato"
+  },
+  "basis": {
+    "GROSS": "Prezzi IVA inclusa",
+    "NET": "Prezzi IVA esclusa"
+  },
+  "bulk": {
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)",
+    "invoiceDdts_one": "Fattura {count} DDT",
+    "invoiceDdts_other": "Fattura {count} DDT"
+  },
+  "check": {
+    "BUYER": "L’identità fiscale del cliente non basta per la FatturaPA.",
+    "CREDIT_OF": "Manca la fattura stornata, oppure non si può stornare.",
+    "CREDIT_OVER": "La nota di credito supera quanto ancora stornabile sulla fattura.",
+    "CREDIT_REASON": "La nota di credito richiede il motivo.",
+    "CURRENCY": "La valuta della fattura non corrisponde.",
+    "DDT_CANCELLED": "Un DDT di questa fattura è stato annullato.",
+    "DDT_INVOICED": "Questa merce è già su un’altra fattura emessa.",
+    "DDT_NOT_CARRIED": "Una riga fattura merce che il DDT non ha trasportato.",
+    "DDT_NOT_SHIPPED": "Un DDT di questa fattura non è ancora spedito.",
+    "DEDUCTION_OVER": "L’acconto è detratto più di quanto fatturato.",
+    "DEDUCTION_STATE": "Una fattura di acconto detratta non è emessa o è stata scartata.",
+    "DEPOSIT_CURRENCY": "L’acconto è in un’altra valuta.",
+    "DEPOSIT_MISSING": "Manca la richiesta di acconto di questa fattura di acconto.",
+    "DEPOSIT_OVER_REQUEST": "La fattura di acconto supera quanto pagato sulla richiesta.",
+    "DEPOSIT_STATE": "La richiesta di acconto non è in uno stato che permette la fattura di acconto.",
+    "DEPOSIT_ZERO": "Sull’acconto non è ancora stato pagato nulla.",
+    "FATTURAPA": "Il file FatturaPA verrebbe scartato: un testo contiene caratteri non ammessi, oppure un valore non è consentito.",
+    "LINE": "Una riga non è completa (descrizione, quantità, prezzo o IVA).",
+    "NO_LINES": "La fattura non ha righe.",
+    "NO_VIES_PROOF": "Una vendita UE senza IVA richiede una verifica VIES valida della partita IVA del cliente.",
+    "OTHER": "Un controllo non è superato.",
+    "PARTY_ARCHIVED": "Il cliente è archiviato.",
+    "PARTY_BLOCKED": "Il cliente è bloccato: non gli si può emettere fattura.",
+    "PARTY_WARNING": "I dati del cliente non bastano per una fattura (codice SDI o PEC, partita IVA, indirizzo).",
+    "SELLER": "I dati della nostra azienda non bastano per una fattura (partita IVA, regime fiscale, indirizzo).",
+    "SERIES": "L’azienda non ha una numerazione attiva per questo documento: la apre un amministratore.",
+    "TOTALS": "I totali non tornano: salva di nuovo le righe."
+  },
+  "checks": {
+    "allPass": "Tutti i controlli sono superati. Avrà il numero {number} con la data di oggi.",
+    "explain": "Lo SDI scarta i file con dati mancanti o sbagliati. Controlliamo prima le stesse regole, così lo scarto è raro.",
+    "failCount_one": "{count} controllo da sistemare prima di poter emettere la fattura.",
+    "failCount_other": "{count} controlli da sistemare prima di poter emettere la fattura.",
+    "fix": {
+      "company": "Impostazioni contabilità",
+      "deduction": "Se la detrazione è sbagliata, toglila nelle righe qui sotto",
+      "lines": "Modifica le righe",
+      "none": "Nulla da cambiare",
+      "party": "Correggi sul cliente",
+      "series": "Numerazioni",
+      "text": "Modifica il testo"
+    },
+    "title": "Prima di emettere"
+  },
+  "col": {
+    "amount": "Importo",
+    "customer": "Cliente",
+    "ddt": "DDT",
+    "deadline": "Scadenza di legge",
+    "depositPaid": "Acconto pagato",
+    "draft": "Bozza",
+    "due": "Scadenza",
+    "gross": "Totale",
+    "more": "Altro",
+    "net": "Imponibile",
+    "notPlaced": "Da collocare",
+    "number": "Numero",
+    "orders": "Ordini",
+    "payment": "Incasso",
+    "placedOn": "Collocato su",
+    "receivedOn": "Ricevuto il",
+    "reference": "Riferimento bancario",
+    "sdi": "SDI",
+    "state": "Stato",
+    "suggested": "Tipo suggerito",
+    "toInvoice": "Da fatturare",
+    "type": "Tipo",
+    "value": "Valore",
+    "vat": "IVA"
+  },
+  "common": {
+    "cancel": "Annulla",
+    "dismiss": "Chiudi",
+    "done": "Fatto",
+    "retry": "Riprova",
+    "working": "In corso…"
+  },
+  "credit": {
+    "after": "Si apre la bozza; controllala ed emettila per inviarla allo SDI.",
+    "amount": "Importo IVA inclusa",
+    "amountHint": "Mai sopra quanto ancora stornabile",
+    "body": "Una nota di credito (TD04) corregge una fattura emessa: è una nuova bozza che controlli ed emetti come ogni fattura. Gli importi sono positivi.",
+    "creditable": "Ancora stornabile: {amount}",
+    "go": "Crea la bozza di nota di credito",
+    "linesLabel": "Righe da stornare",
+    "mode": "Cosa storna",
+    "modes": {
+      "amount": "Un importo",
+      "amountHint": "Un importo IVA inclusa all’IVA della fattura (un abbuono).",
+      "full": "L’intera fattura",
+      "fullHint": "Ogni riga, al suo prezzo.",
+      "lines": "Alcune righe",
+      "linesHint": "Righe scelte, una quantità fino a quella fatturata, al prezzo o meno."
+    },
+    "pickReason": "Scegli il motivo",
+    "problem": {
+      "amount": "Scrivi un importo sopra 0.",
+      "fullAfterPart": "L’intera fattura non si può stornare dopo uno storno parziale.",
+      "lineValues": "Una riga scelta richiede quantità e prezzo.",
+      "lines": "Scegli almeno una riga.",
+      "over": "Più di quanto ancora stornabile.",
+      "reason": "Scegli il motivo.",
+      "text": "Indica il motivo a parole."
+    },
+    "quantity": "Quantità (al massimo {max})",
+    "reason": "Motivo",
+    "text": "A parole",
+    "textHint": "Stampato dopo il motivo nella nota di credito",
+    "title": "Nota di credito per {number}",
+    "unitPrice": "Prezzo unitario",
+    "unitPriceHint": "Il prezzo fatturato o meno"
+  },
+  "creditReason": {
+    "BILLING_ERROR": "Errore di fatturazione",
+    "DEFECT": "Merce difettosa",
+    "DEPOSIT_REFUND": "Restituzione acconto",
+    "OTHER": "Altro",
+    "PRICE_REDUCTION": "Riduzione di prezzo (abbuono)",
+    "RETURN": "Reso merce"
+  },
+  "csv": {
+    "amount": "Importo",
+    "customer": "Cliente",
+    "date": "Data",
+    "due": "Scadenza",
+    "gross": "Totale",
+    "left": "Da collocare",
+    "net": "Imponibile",
+    "number": "Numero",
+    "open": "Da incassare",
+    "paid": "Incassato",
+    "placed": "Collocato",
+    "placedOn": "Collocato su",
+    "reference": "Riferimento bancario",
+    "status": "Stato",
+    "type": "Tipo",
+    "vat": "IVA"
+  },
+  "deadline": {
+    "late": {
+      "TD01_one": "in ritardo di {count} giorno",
+      "TD01_other": "in ritardo di {count} giorni",
+      "TD24_one": "in ritardo di {count} giorno",
+      "TD24_other": "in ritardo di {count} giorni"
+    },
+    "left": {
+      "TD01_one": "manca {count} giorno",
+      "TD01_other": "mancano {count} giorni",
+      "TD24_one": "manca {count} giorno",
+      "TD24_other": "mancano {count} giorni"
+    }
+  },
+  "delete": {
+    "body": "La bozza per {customer} non ha numero: eliminarla non lascia buchi. La sua merce torna in \"Spedito, da fatturare\".",
+    "go": "Elimina la bozza",
+    "title": "Eliminare questa bozza?"
+  },
+  "depositKind": {
+    "ACCONTO": "Acconto",
+    "CAPARRA": "Caparra confirmatoria"
+  },
+  "details": {
+    "causaleHint": "Stampata in fattura; la FatturaPA ammette solo lettere latine semplici.",
+    "dueHint": "Pagamento con bonifico all’IBAN dell’azienda.",
+    "go": "Salva",
+    "problem": {
+      "date": "Una data del calendario."
+    },
+    "title": "Testo e scadenza della bozza"
+  },
+  "docType": {
+    "TD01": "Fattura",
+    "TD02": "Fattura di acconto",
+    "TD04": "Nota di credito",
+    "TD24": "Fattura differita"
+  },
+  "docs": {
+    "col": {
+      "action": "Apri",
+      "document": "Documento",
+      "what": "Cos’è"
+    },
+    "copy": "Copia inviata per e-mail",
+    "copyWhat": "Inviata al cliente il {date}",
+    "ddt": "DDT {number} del {date}",
+    "ddtWhat": "Il documento di trasporto della spedizione {shipment}, citato in fattura",
+    "download": "Scarica",
+    "draft": {
+      "body": "Si creano all’emissione: l’XML legale e il PDF di cortesia.",
+      "title": "Ancora nessun documento"
+    },
+    "filesPending": "La fattura è emessa; l’XML e il PDF sono ancora in preparazione.",
+    "mail": {
+      "other": "In invio",
+      "sent": "Inviata"
+    },
+    "notYet": "Non ancora",
+    "openShipment": "Apri la spedizione",
+    "pdf": "{number} (copia di cortesia)",
+    "pdfFailed": "Impossibile aprire il PDF: scaricalo.",
+    "pdfLoading": "Apertura del PDF…",
+    "pdfWhat": "Una copia di cortesia da leggere e stampare; dice di essere una copia",
+    "title": "Documenti",
+    "view": "Visualizza",
+    "xml": "{number}.xml",
+    "xmlWhat": "La fattura legale: il file FatturaPA che riceve lo SDI"
+  },
+  "fix": {
+    "causaleHint": "La causale stampata in fattura.",
+    "elsewhere": "Correggi i dati del cliente o della nostra azienda dove si trovano, poi torna e reinvia:",
+    "go": "Reinvia allo SDI",
+    "lines": "Le righe della fattura",
+    "notReady": "Salvato. I controlli del reinvio non sono ancora superati: sistema quanto elencato, poi invia di nuovo.",
+    "problemLines": "Prima sistema le righe.",
+    "resendChecks": "Cosa trova ancora il reinvio",
+    "same": "Stesso numero e stessa data; inviala entro il {date}.",
+    "sameNoDate": "Stesso numero e stessa data.",
+    "title": "Correggi e reinvia {number}",
+    "willCorrect": "La correzione viene salvata, poi la fattura torna allo SDI.",
+    "willResend": "Qui non cambia nulla: si rileggono i dati del cliente e i nostri e la fattura torna allo SDI."
+  },
+  "fromDdts": {
+    "body": "Una bozza per cliente: scegli i DDT e il tipo, poi controllala ed emettila dalla sua scheda.",
+    "customer": "Cliente",
+    "ddtCount_one": "{count} DDT",
+    "ddtCount_other": "{count} DDT",
+    "ddts": "DDT da fatturare",
+    "deferredNote": "Più DDT formano una fattura differita (TD24).",
+    "deposit": "Acconto pagato su questi ordini",
+    "depositHint": "La sua fattura di acconto viene detratta nella bozza",
+    "go": "Crea la bozza di fattura",
+    "noneLeft": "Ogni DDT di questo cliente è fatturato o in bozza.",
+    "orders": "Ordini",
+    "pickCustomer": "Scegli il cliente",
+    "td01Not": "Solo per un DDT entro i suoi 12 giorni.",
+    "td24Not": "Troppo tardi per la differita di questo mese: una fattura immediata per DDT.",
+    "title": "Fattura la merce spedita",
+    "type": "Tipo",
+    "typeWhy": {
+      "TD01": "Emessa ora, entro 12 giorni dal DDT.",
+      "TD24": "Una fattura per i DDT del mese, entro il 15 del mese dopo; elenca ogni DDT."
+    },
+    "value": "Valore ai prezzi dell’ordine",
+    "valueHint": "IVA esclusa; la bozza calcola l’IVA"
+  },
+  "held": {
+    "allPlaced": "È tutto collocato.",
+    "busy": "Attendi: si sta salvando l’ultima modifica.",
+    "checksFail_one": "Prima {count} controllo da sistemare.",
+    "checksFail_other": "Prima {count} controlli da sistemare.",
+    "checksReading": "Si stanno leggendo i controlli.",
+    "creditNothingLeft": "Non resta nulla da stornare.",
+    "creditOfCredit": "Una nota di credito non si storna di nuovo.",
+    "creditOfDraft": "Una bozza si corregge direttamente, non con una nota di credito.",
+    "creditOfRejected": "Una fattura scartata si corregge e si reinvia, non si storna.",
+    "ddtInDraft": "Già in una bozza di fattura: apri la bozza.",
+    "lateEach": "Troppo tardi per una differita: fattura ogni DDT a parte.",
+    "noBank": "Modificare il conto bancario richiede il permesso sul conto.",
+    "noCompany": "Apri prima un’azienda.",
+    "noDdt": "Scegli almeno un DDT.",
+    "noEmail": "Scrivere ai clienti richiede il permesso e-mail.",
+    "noIssue": "Emettere e inviare le fatture spetta all’amministrazione.",
+    "noManage": "Creare e modificare le bozze spetta all’amministrazione.",
+    "noRecord": "Registrare gli incassi spetta all’amministrazione.",
+    "noVoid": "Annullare un incasso richiede il permesso di annullarlo.",
+    "nothingChanged": "Nessuna modifica ancora.",
+    "nothingShipped": "Nessuna merce spedita attende la fattura.",
+    "oneCustomer": "Una fattura per cliente: scegli i DDT di un solo cliente.",
+    "oneMonth": "Una fattura differita prende i DDT di un solo mese.",
+    "payDraft": "Una bozza si incassa dopo l’emissione.",
+    "payNotPayable": "Questo documento non si incassa da solo.",
+    "payNothingOpen": "Non resta nulla da incassare.",
+    "pickCustomer": "Scegli il cliente.",
+    "sdiNotNow": "Lo SDI non può riceverla ora: vedi il suo stato.",
+    "voidPlaced": "Prima riprendi i collocamenti: un incasso si annulla solo quando non è collocato nulla.",
+    "voided": "L’incasso è annullato."
+  },
+  "invoiceStatus": {
+    "DELIVERED": "Consegnata",
+    "DRAFT": "Bozza",
+    "ERROR": "Invio non riuscito",
+    "ISSUED": "Emessa",
+    "NOT_DELIVERABLE": "Non consegnata",
+    "REJECTED": "Scartata dallo SDI",
+    "SENT": "Presso lo SDI"
+  },
+  "issue": {
+    "alsoSend": "Inviala subito allo SDI",
+    "checksPass": "Tutti i controlli prima dell’emissione sono superati.",
+    "customer": "Cliente",
+    "date": "Data",
+    "final": "Una fattura emessa non può essere modificata né eliminata. Gli errori si correggono con una nota di credito.",
+    "go": "Emetti e invia",
+    "goOnly": "Emetti",
+    "number": "Numero che riceverà",
+    "numberHint": "Preso all’emissione: il prossimo della numerazione",
+    "title": "Emettere la fattura e inviarla allo SDI?",
+    "titleOnly": "Emettere la fattura?",
+    "total": "Totale",
+    "what": {
+      "copy": "Se lo SDI non riesce a consegnarla, il cliente riceve il PDF di cortesia per e-mail.",
+      "locked": "La fattura viene bloccata con il suo numero e la sua data.",
+      "sdi": "Lo SDI riceve l’XML tramite l’intermediario."
+    },
+    "working": "Emissione e invio in corso…",
+    "workingOnly": "Emissione in corso…"
+  },
+  "item": {
+    "deposit": "Acconto dell’ordine {order}",
+    "depositNoOrder": "Acconto",
+    "invoice": "Fattura {number}"
+  },
+  "journey": {
+    "checks": "Controlli",
+    "delivered": "Consegnata",
+    "draft": "Bozza",
+    "issued": "Emessa",
+    "issuedNumber": "Emessa {number}",
+    "label": "A che punto è la fattura",
+    "notDelivered": "Non consegnata: cassetto fiscale",
+    "paid": "Pagata",
+    "rejected": "Scartata dallo SDI",
+    "sdi": "Accettata dallo SDI",
+    "state": {
+      "current": "ora",
+      "done": "fatto",
+      "problem": "da sistemare",
+      "skipped": "non per questo documento",
+      "todo": "non ancora"
+    }
+  },
+  "lines": {
+    "basis": "Prezzi",
+    "causale": "Causale",
+    "col": {
+      "description": "Descrizione",
+      "discount": "Sconto",
+      "net": "Imponibile",
+      "quantity": "Quantità",
+      "unitPrice": "Prezzo unitario",
+      "vat": "IVA"
+    },
+    "ddtRef": "DDT {number}",
+    "deduction": "Acconto detratto: fattura di acconto {number}",
+    "deductionSub": "Acconto detratto",
+    "due": "Scadenza",
+    "edit": "Modifica righe",
+    "editDetails": "Testo e scadenza",
+    "empty": {
+      "body": "Crea la fattura dalla merce spedita: le righe arrivano dai DDT.",
+      "title": "Nessuna riga"
+    },
+    "field": {
+      "description": "Riga {n}: descrizione",
+      "discount": "Sconto %",
+      "quantity": "Quantità",
+      "size": "Taglia {size}",
+      "unitPrice": "Prezzo unitario"
+    },
+    "issuedBanner": "Emessa il {date}: non può cambiare. Si corregge solo con una nota di credito.",
+    "method": "Con bonifico bancario",
+    "openTd02": "Apri la fattura di acconto",
+    "problem": {
+      "description": "Indica cosa fattura la riga.",
+      "discount": "Uno sconto sopra 0 e sotto 100.",
+      "long": "Al massimo 1.000 caratteri.",
+      "price": "Un prezzo da 0 in su, al massimo 6 decimali.",
+      "quantity": "Una quantità sopra 0, al massimo 4 decimali."
+    },
+    "refs": "Ordine del cliente",
+    "rejectedBanner": "Scartata dallo SDI: si considera non emessa. Correggila e inviala di nuovo entro il {date} con lo stesso numero e la stessa data.",
+    "rejectedBannerNoDate": "Scartata dallo SDI: si considera non emessa. Correggila e inviala di nuovo con lo stesso numero e la stessa data.",
+    "relatedPart": "i DDT e gli acconti",
+    "removeDeduction": "Togli la detrazione",
+    "title": "Righe"
+  },
+  "linesDialog": {
+    "body": "La detrazione dell’acconto resta com’è; i totali vengono ricalcolati.",
+    "go": "Salva le righe",
+    "title": "Modifica le righe"
+  },
+  "list": {
+    "clearFilters": "Mostra tutte le fatture",
+    "countMore_one": "{count} fattura mostrata, altre da caricare",
+    "countMore_other": "{count} fatture mostrate, altre da caricare",
+    "count_one": "{count} fattura",
+    "count_other": "{count} fatture",
+    "createdOn": "Creata il {date}",
+    "draft": "Bozza",
+    "empty": {
+      "body": "Le fatture nascono dalla merce spedita: scegli i DDT in \"Spedito, da fatturare\".",
+      "title": "Ancora nessuna fattura"
+    },
+    "failed": "Impossibile caricare le fatture",
+    "filesPending": "File in preparazione",
+    "keyInvoiceShipped": "Fattura la merce spedita",
+    "keysTitle": "Scorciatoie da tastiera",
+    "more": "Mostra altre",
+    "noMatch": {
+      "body": "Nessuna fattura è in questa vista ora.",
+      "title": "Niente in questa vista"
+    },
+    "notYet": "Non ancora letto",
+    "open": "Apri",
+    "openAmount": "{amount} da incassare",
+    "openNewTab": "Apri in una nuova scheda",
+    "rowMenu": "Altro per {number}",
+    "rowsLabel": "Righe",
+    "title": "Tutte le fatture",
+    "updated": "Aggiornato alle {time}"
+  },
+  "live": {
+    "connecting": "Collegamento agli aggiornamenti",
+    "live": "In tempo reale",
+    "offline": "Offline: aggiorna per vedere le modifiche"
+  },
+  "match": {
+    "amountFor": "Importo per {item}",
+    "depositSub": "Richiesto il {date} · scade il {due} · aperto {open}",
+    "depositSubNoDue": "Richiesto il {date} · aperto {open}",
+    "failed": "Impossibile caricare le voci aperte",
+    "invoiceSub": "Emessa il {date} · scade il {due} · aperto {open}",
+    "invoiceSubNoDue": "Emessa il {date} · aperto {open}",
+    "label": "Voci aperte, dalla più vecchia",
+    "left": "Da collocare",
+    "loading": "Lettura delle voci aperte del cliente…",
+    "none": {
+      "body": "Il denaro resta sull’incasso, da collocare quando arriva una fattura.",
+      "title": "Nulla di aperto per questo cliente"
+    },
+    "problem": {
+      "fix": "Prima sistema gli importi.",
+      "none": "Scegli dove va.",
+      "over": "Più di quanto chiede ancora.",
+      "tooMuch": "Si colloca più di quanto contiene l’incasso.",
+      "zero": "Scrivi un importo sopra 0."
+    },
+    "suggest": "Suggerisci (dalla più vecchia)",
+    "title": "Dove va"
+  },
+  "money": {
+    "asked": "Richiesto",
+    "col": {
+      "amount": "Importo",
+      "creditNote": "Nota di credito",
+      "date": "Ricevuto",
+      "payment": "Incasso",
+      "status": "Stato"
+    },
+    "creditNotesTitle": "Note di credito di questa fattura",
+    "creditOf": "Questa nota di credito corregge la fattura",
+    "credited": "Note di credito",
+    "deductedHere": "Detratto in questa fattura: {amount} (IVA inclusa)",
+    "deposit": "{kind} · ordine {order}",
+    "depositsExplain": "La fattura di acconto (TD02) si emette quando arriva l’anticipo; la fattura finale lo sottrae, così il cliente non paga mai due volte.",
+    "depositsTitle": "Acconti",
+    "document": "Documento emesso",
+    "dueOn": "Scade il {date}",
+    "gross": "Totale fattura",
+    "noDeposit": {
+      "body": "Gli ordini di questa fattura non hanno chiesto acconti.",
+      "title": "Nessun acconto su questo ordine"
+    },
+    "noFiscal": "Nessun documento fiscale (la regola IVA non lo chiede)",
+    "noPayments": {
+      "body": "Registra il bonifico del cliente: viene collocato qui.",
+      "notPayable": "Questo documento non si incassa da solo.",
+      "title": "Ancora nessun incasso"
+    },
+    "notPaid": "Non ancora pagato",
+    "open": "Ancora da incassare",
+    "overdue_one": "Scaduta da {count} giorno",
+    "overdue_other": "Scaduta da {count} giorni",
+    "paid": "Incassato",
+    "paidAt": "Pagato il",
+    "paidOnDeposit": "Pagato",
+    "paymentsTitle": "Incassi collocati",
+    "placed": "Collocato",
+    "reversal": "Ripreso: {note}",
+    "reversed": "Ripreso in seguito",
+    "td02": "Fattura di acconto {number}",
+    "td02Draft": "Fattura di acconto (bozza)",
+    "td02PaidBy": "Una fattura di acconto si paga tramite la sua richiesta di acconto.",
+    "td02Waits": "La fattura di acconto attende il pagamento",
+    "title": "Acconti e incassi"
+  },
+  "natura": {
+    "N1": "Esclusa (art. 15)",
+    "N2_1": "Servizio a un’impresa estera: fuori campo IVA (inversione contabile)",
+    "N2_2": "Non soggetta, altri casi",
+    "N3_1": "Esportazione: senza IVA italiana",
+    "N3_2": "Cessione a un’impresa UE: senza IVA italiana",
+    "N3_3": "Cessione verso San Marino: senza IVA italiana",
+    "N3_4": "Assimilata all’esportazione: senza IVA italiana",
+    "N3_5": "Dichiarazione d’intento del cliente: senza IVA italiana",
+    "N3_6": "Non imponibile, altri casi",
+    "N4": "Esente",
+    "N5": "Regime del margine: IVA non esposta",
+    "N6_9": "Inversione contabile: l’IVA la versa il cliente",
+    "N7": "IVA assolta in un altro Stato UE"
+  },
+  "notice": {
+    "bankSaved": "Il conto bancario è salvato.",
+    "created": "La bozza di fattura è pronta.",
+    "deductionRemoved": "La detrazione è stata tolta.",
+    "detailsSaved": "Testo e scadenza sono salvati.",
+    "filesMade": "XML e PDF sono pronti.",
+    "issued": "La fattura {number} è emessa.",
+    "issuedFilesPending": "La fattura {number} è emessa; XML e PDF sono ancora in preparazione.",
+    "issuedNotSent": "La fattura {number} è emessa, non ancora inviata allo SDI: inviala da qui.",
+    "issuedSendFailed": "La fattura {number} è emessa, ma l’invio allo SDI non è riuscito: vedi la scheda SDI e inviala di nuovo.",
+    "issuedSent": "La fattura {number} è emessa e inviata allo SDI.",
+    "linesSaved": "Le righe sono salvate; totali e controlli vengono riletti.",
+    "placed": "L’incasso è collocato.",
+    "resent": "Inviata di nuovo allo SDI con lo stesso numero e la stessa data.",
+    "sent": "Inviata allo SDI: la risposta arriva da sola.",
+    "takenBack": "Il collocamento è stato ripreso.",
+    "voided": "L’incasso è annullato."
+  },
+  "part": {
+    "failed": "Impossibile caricare {part}",
+    "loading": "Caricamento di {part}…"
+  },
+  "pay": {
+    "BY_DEPOSIT": "Pagata con l’acconto",
+    "CREDIT": "Nulla da incassare",
+    "NONE": "—",
+    "OVERDUE_one": "Scaduta da {count} giorno",
+    "OVERDUE_other": "Scaduta da {count} giorni",
+    "PAID": "Pagata",
+    "PART_PAID": "Pagata in parte",
+    "UNPAID": "Da incassare"
+  },
+  "payRows": {
+    "all": "Tutti gli incassi",
+    "received": "Ricevuti",
+    "voided": "Annullati"
+  },
+  "payTile": {
+    "month": "Incassato questo mese",
+    "monthCount_one": "{count} incasso",
+    "monthCount_other": "{count} incassi",
+    "notPlaced": "Non ancora collocato",
+    "notPlacedCapped_one": "{count} incasso tra gli ultimi 200",
+    "notPlacedCapped_other": "{count} incassi tra gli ultimi 200",
+    "notPlacedCount_one": "{count} incasso con denaro da collocare",
+    "notPlacedCount_other": "{count} incassi con denaro da collocare"
+  },
+  "payment": {
+    "back": "Incassi",
+    "backToList": "Torna agli incassi",
+    "bankLine": "Estratto conto",
+    "bankTitle": "Riga bancaria",
+    "byHand": "A mano da {name} il {date}",
+    "col": {
+      "action": "Azione",
+      "amount": "Importo",
+      "target": "Collocato su",
+      "when": "Quando, da chi"
+    },
+    "copyReference": "Copia il riferimento",
+    "left": "Da collocare",
+    "loading": "Caricamento dell’incasso…",
+    "meta": "Ricevuto il {date} · {method}",
+    "noBankLine": "Nessuna riga bancaria collegata: l’importazione dalla banca arriverà dopo.",
+    "nothing": {
+      "body": "Collocalo su acconti e fatture del cliente.",
+      "title": "Non ancora collocato",
+      "voided": "Un incasso annullato non è collocato da nessuna parte."
+    },
+    "placeBody": "{amount} non è ancora collocato.",
+    "placeGo": "Colloca",
+    "placeRest": "Colloca il resto",
+    "placeTitle": "Colloca il resto di {reference}",
+    "placed": "Collocato",
+    "placedRow": "Collocato",
+    "reason": "Motivo",
+    "reasonNeeded": "Indica il motivo (almeno 3 caratteri).",
+    "recordedBy": "Registrato",
+    "reversal": "Ripreso: {note}",
+    "reversed": "Ripreso in seguito",
+    "someone": "Un collega",
+    "state": {
+      "error": {
+        "body": "Riprova tra poco.",
+        "title": "Impossibile caricare l’incasso"
+      },
+      "forbidden": {
+        "body": "Il tuo ruolo non mostra gli incassi di questa azienda o di questo cliente.",
+        "title": "Nessun accesso a questo incasso"
+      },
+      "not_found": {
+        "body": "Appartiene a un’altra azienda, oppure l’indirizzo è sbagliato.",
+        "title": "Incasso non trovato"
+      }
+    },
+    "system": "Il sistema",
+    "tab": {
+      "allocation": "Collocamento",
+      "bank": "Riga bancaria"
+    },
+    "tabsLabel": "Schede dell’incasso",
+    "takeBack": "Riprendi",
+    "takeBackBody": "Il registro non cambia mai: una riga di ripresa lo annulla, con il tuo motivo. Un acconto pagato conserva il suo incasso.",
+    "takeBackGo": "Riprendi",
+    "takeBackTitle": "Riprendere il collocamento su {target}?",
+    "title": "Incasso",
+    "void": "Annulla (registrato per errore)",
+    "voidBody": "Solo per un incasso registrato per errore: non è collocato nulla. Resta in elenco come annullato.",
+    "voidGo": "Annulla l’incasso",
+    "voidTitle": "Annullare l’incasso {reference}?",
+    "voidedBanner": "Annullato il {date}: {reason}",
+    "what": "Cosa è arrivato",
+    "where": "Dove è andato"
+  },
+  "paymentStatus": {
+    "RECEIVED": "Ricevuto",
+    "VOIDED": "Annullato"
+  },
+  "payments": {
+    "countMore_one": "{count} incasso mostrato, altri da caricare",
+    "countMore_other": "{count} incassi mostrati, altri da caricare",
+    "count_one": "{count} incasso",
+    "count_other": "{count} incassi",
+    "empty": {
+      "body": "Registra un bonifico quando arriva: viene collocato su acconti e fatture.",
+      "title": "Nessun incasso registrato"
+    },
+    "failed": "Impossibile caricare gli incassi",
+    "keyRecord": "Registra incasso",
+    "method": {
+      "BANK_TRANSFER": "Bonifico bancario"
+    },
+    "nothingPlaced": "Non ancora collocato",
+    "rowMenu": "Altro per {reference}",
+    "title": "Incassi",
+    "voided": "Annullato"
+  },
+  "placed": {
+    "NOT_PLACED": "Da collocare",
+    "PARTLY": "Collocato in parte",
+    "PLACED": "Collocato",
+    "VOIDED": "Annullato"
+  },
+  "problem": {
+    "read": {
+      "forbidden": "Il tuo ruolo non mostra questo.",
+      "internal": "Qualcosa è andato storto da parte nostra.",
+      "not_found": "Non trovato.",
+      "rate_limited": "Troppe richieste: attendi un momento.",
+      "signed_out": "La sessione è scaduta: accedi di nuovo.",
+      "unavailable": "Il server non ha risposto: riprova tra poco."
+    },
+    "write": {
+      "allocation": "Una voce non chiede più tanto (qualcuno vi ha collocato denaro): rileggi e colloca quanto resta.",
+      "checks": "Un controllo prima dell’emissione ora non è superato: vedi l’elenco.",
+      "creditOver": "Più di quanto ancora stornabile sulla fattura.",
+      "ddts": "Qualcuno ha fatturato questi DDT nel frattempo, oppure sono in una bozza: l’elenco viene riletto.",
+      "forbidden": "Il tuo ruolo non lo consente.",
+      "iban": "L’IBAN non è valido.",
+      "internal": "Qualcosa è andato storto da parte nostra: non è cambiato nulla.",
+      "invalid": "Qualcosa che hai scritto non è accettato: controlla i campi.",
+      "moved": "Qualcuno l’ha modificato nel frattempo: viene riletto, controlla e riprova.",
+      "not_found": "Non c’è più.",
+      "rate_limited": "Troppi tentativi: attendi un momento.",
+      "reference": "Questo riferimento bancario è già registrato: un bonifico conta una volta sola.",
+      "signed_out": "La sessione è scaduta: accedi di nuovo.",
+      "state": "Il suo stato ora non lo consente: viene riletto.",
+      "step_up": "Serve un nuovo codice dell’app di autenticazione.",
+      "unavailable": "Il server non ha risposto: riprova tra poco."
+    }
+  },
+  "record": {
+    "back": "Fatture",
+    "backToList": "Torna alle fatture",
+    "changed": "Qualcuno ha modificato questa fattura alle {time}.",
+    "dock": "Conversazione",
+    "dockHint": "La conversazione della fattura accanto alla scheda (⌘J)",
+    "dockLabel": "Conversazione, file e storico",
+    "draftTitle": "Bozza · {type}",
+    "issuedOn": "Emessa il {date}",
+    "loading": "Caricamento della fattura…",
+    "more": "Altre azioni",
+    "noPanels": "La conversazione non è disponibile qui.",
+    "order": "Ordine {number}",
+    "readOnly": "Puoi leggere questa fattura; l’amministrazione emette le fatture e registra gli incassi.",
+    "reload": "Ricarica",
+    "resendBy_one": "Reinviare entro il {date} (manca {count} giorno lavorativo)",
+    "resendBy_other": "Reinviare entro il {date} (mancano {count} giorni lavorativi)",
+    "resendOverdue": "Il tempo per reinviarla è scaduto il {date}",
+    "sendCopyHint": "Scrivi al cliente dalla conversazione e allega il PDF di cortesia",
+    "state": {
+      "error": {
+        "body": "Riprova tra poco.",
+        "title": "Impossibile caricare la fattura"
+      },
+      "forbidden": {
+        "body": "Il tuo ruolo non mostra le fatture di questa azienda o di questo cliente.",
+        "title": "Nessun accesso a questa fattura"
+      },
+      "not_found": {
+        "body": "Appartiene a un’altra azienda, oppure l’indirizzo è sbagliato.",
+        "title": "Fattura non trovata"
+      }
+    },
+    "tabsLabel": "Schede della fattura",
+    "title": "Fattura",
+    "typeChip": "{type} · {code}"
+  },
+  "recordPay": {
+    "amount": "Importo",
+    "back": "Torna all’incasso",
+    "body": "Un bonifico, come lo mostra la banca. Il riferimento assicura che conti una volta sola.",
+    "customer": "Cliente",
+    "customerHint": "Nome, codice o partita IVA",
+    "customers": "Clienti trovati",
+    "done": "{amount} registrati con riferimento {reference}.",
+    "go": "Registra {amount} e collocalo",
+    "goEmpty": "Registra l’incasso",
+    "goOnAccount": "Registra {amount} in acconto",
+    "issueTd02": "Emetti subito la fattura di acconto (TD02)",
+    "issueTd02Hint": "L’acconto è pagato per intero: la fattura di acconto si emette nello stesso passaggio (un nuovo codice).",
+    "issueTd02Off": "La fattura di acconto attende: emettila dopo dall’acconto.",
+    "leftOnAccount": "{amount} resta sull’incasso.",
+    "method": "Metodo",
+    "next": "Avanti: dove va",
+    "noCustomer": "Nessun cliente con quel nome.",
+    "notPlaced": "Non ancora collocato: resta in acconto.",
+    "note": "Nota (per l’ufficio)",
+    "openPayment": "Apri l’incasso",
+    "pick": "Scegli",
+    "placedOn": "Collocati su: {list}.",
+    "problem": {
+      "amount": "Un importo sopra 0, al massimo due decimali.",
+      "date": "Una data del calendario.",
+      "future": "Non dopo oggi.",
+      "party": "Scegli il cliente.",
+      "reference": "Serve il riferimento bancario: assicura che un bonifico conti una volta sola.",
+      "referenceChars": "Solo lettere, cifre e / . _ : -.",
+      "referenceLong": "Al massimo 140 caratteri."
+    },
+    "receivedOn": "Ricevuto il",
+    "reference": "Riferimento bancario (CRO o TRN)",
+    "referenceHint": "Come nell’estratto conto",
+    "restOnAccount": "{amount} resta sull’incasso, da collocare dopo.",
+    "searching": "Ricerca in corso…",
+    "td02ByFinance": "La fattura di acconto la emette l’amministrazione.",
+    "td02FilesPending": "La fattura di acconto {number} è emessa; i file sono in preparazione.",
+    "td02Issued": "La fattura di acconto {number} è emessa.",
+    "td02Later": "L’acconto è pagato; la fattura di acconto attende l’emissione.",
+    "title": "Registra un incasso",
+    "titleDone": "Incasso registrato",
+    "titleStep2": "Dove va il denaro di {customer}"
+  },
+  "rejected": {
+    "banner": "La fattura {number} ({customer}) è stata scartata dallo SDI. Si considera non emessa: correggila e inviala di nuovo entro il {date} con lo stesso numero e la stessa data.",
+    "bannerNoDate": "La fattura {number} ({customer}) è stata scartata dallo SDI. Si considera non emessa: correggila e inviala di nuovo con lo stesso numero e la stessa data.",
+    "bannerOverdue": "La fattura {number} ({customer}) è stata scartata dallo SDI e il tempo per reinviarla è scaduto il {date}: correggila e inviala subito con lo stesso numero e la stessa data.",
+    "fixNow": "Correggi ora"
+  },
+  "requestStatus": {
+    "CANCELLED": "Annullato",
+    "OPEN": "In attesa di pagamento",
+    "PAID": "Pagato",
+    "WAIVED": "Rinunciato"
+  },
+  "rows": {
+    "all": "Tutte le fatture",
+    "atSdi": "Presso lo SDI",
+    "creditNotes": "Note di credito",
+    "custom": "Il filtro dell’indirizzo",
+    "depositInvoices": "Fatture di acconto",
+    "drafts": "Bozze",
+    "notDelivered": "Non consegnate",
+    "rejected": "Scartate dallo SDI"
+  },
+  "sdi": {
+    "about": "Lo SDI è il postino delle fatture dell’Agenzia delle Entrate: in Italia la fattura è il file XML che lo SDI accetta; il PDF è solo una copia di cortesia.",
+    "archive": "Conservazione a norma",
+    "archived": "Conservata a norma il {date}",
+    "archivedShort": "Il {date}",
+    "copyMissing": "Nessun contatto ha un indirizzo e-mail: invia una copia dalla conversazione.",
+    "copySent": "Abbiamo inviato una copia al cliente per e-mail il {date}.",
+    "deadlineOverdue": "Il tempo per reinviarla è scaduto il {date}: inviala subito.",
+    "deadline_one": "Correggila e inviala di nuovo entro il {date} (manca {count} giorno lavorativo), con lo stesso numero e la stessa data.",
+    "deadline_other": "Correggila e inviala di nuovo entro il {date} (mancano {count} giorni lavorativi), con lo stesso numero e la stessa data.",
+    "draft": {
+      "body": "Con \"Controlla ed emetti\" parte allo SDI.",
+      "title": "Non ancora inviata"
+    },
+    "errorCode": "Codice SDI {code}: {text}",
+    "explain": {
+      "AT_SDI": "Lo SDI ha ricevuto il file e lo sta controllando e consegnando: risponde in pochi minuti, al massimo in cinque giorni.",
+      "DELIVERED": "Lo SDI ha consegnato la fattura al cliente. È emessa e definitiva.",
+      "DRAFT": "Una bozza non ha numero e non viene inviata. Lo SDI la riceve dopo l’emissione.",
+      "ERROR": "L’invio non si è concluso: il file potrebbe non essere arrivato allo SDI.",
+      "NOT_DELIVERED": "Lo SDI non ha raggiunto l’indirizzo del cliente. La fattura resta emessa a norma e attende nel cassetto fiscale del cliente.",
+      "NOT_SENT": "La fattura ha il suo numero, ma lo SDI non l’ha ancora ricevuta.",
+      "REJECTED": "Lo SDI ha scartato il file: la fattura si considera non emessa. Correggila e inviala di nuovo con lo stesso numero e la stessa data.",
+      "SENDING": "Il file sta andando allo SDI tramite l’intermediario."
+    },
+    "failure": {
+      "NOT_SENT": "Il file non è stato inviato.",
+      "NO_ANSWER": "L’intermediario non ha risposto.",
+      "OTHER": "L’invio non si è concluso.",
+      "REFUSED": "L’intermediario ha rifiutato il file prima dello SDI: non è mai arrivato allo SDI."
+    },
+    "failureUncertain": "Potrebbe essere arrivato allo SDI: chiediamo all’intermediario prima di inviare di nuovo.",
+    "fixWhere": {
+      "company": "Si corregge nei dati della nostra azienda, poi si invia di nuovo.",
+      "lines": "Si corregge nelle righe qui.",
+      "none": "Nulla da cambiare: inviala di nuovo.",
+      "party": "Si corregge sul cliente, poi si invia di nuovo.",
+      "text": "Si corregge nel testo della fattura qui."
+    },
+    "identifier": "Identificativo SDI {id}",
+    "next": {
+      "CHECK_COPY": "Il cliente la trova nel cassetto fiscale; abbiamo inviato una copia per e-mail. Inviane un’altra se la chiede.",
+      "FIX_AND_RESEND": "Correggila e inviala di nuovo con lo stesso numero e la stessa data.",
+      "ISSUE": "Controllala ed emettila, poi va allo SDI.",
+      "NONE": "Nient’altro da fare.",
+      "SEND": "Inviala allo SDI.",
+      "SEND_AGAIN": "Inviala di nuovo: prima chiediamo all’intermediario, così non parte mai due volte.",
+      "WAIT": "Nulla da fare: la risposta dello SDI arriva da sola."
+    },
+    "noErrorList": "Lo SDI non ha indicato errori.",
+    "noSends": {
+      "body": "L’invio allo SDI comincia qui.",
+      "title": "Non ancora inviata allo SDI"
+    },
+    "notArchived": "Non ancora: dopo la consegna",
+    "notification": {
+      "AT": "Impossibile recapitare: messa nel cassetto fiscale",
+      "DT": "Nessuna risposta dall’ente pubblico in 15 giorni",
+      "MC": "Non consegnata: nel cassetto fiscale del cliente",
+      "NE": "L’ente pubblico ha risposto",
+      "NS": "Scartata dallo SDI",
+      "RC": "Consegnata al cliente"
+    },
+    "numberDate": "Numero e data",
+    "reason": "Perché lo SDI l’ha scartata",
+    "send": {
+      "DELIVERED": "Consegnata",
+      "FAILED": "Non riuscito",
+      "NOT_DELIVERABLE": "Non consegnata",
+      "REJECTED": "Scartata",
+      "SENDING": "In invio",
+      "SENT": "Presso lo SDI"
+    },
+    "sent": "Inviata allo SDI tramite l’intermediario",
+    "sentAgain": "Inviata di nuovo (tentativo {attempt}), stesso numero e stessa data",
+    "source": {
+      "poll": "chiesto all’intermediario",
+      "webhook": "avviso dello SDI"
+    },
+    "state": {
+      "AT_SDI": "Presso lo SDI",
+      "DELIVERED": "Consegnata",
+      "DRAFT": "Non ancora inviata",
+      "ERROR": "Invio non riuscito",
+      "NOT_DELIVERED": "Non consegnata",
+      "NOT_SENT": "Emessa, non inviata",
+      "REJECTED": "Scartata",
+      "SENDING": "In invio"
+    },
+    "timeline": "Passaggi SDI",
+    "title": "Dove si trova la fattura",
+    "unknownError": "Un errore che lo SDI non ha spiegato."
+  },
+  "sdiError": {
+    "c00001": "Lo SDI non ha accettato il nome del file.",
+    "c00002": "Lo SDI ha già un file con questo nome; il prossimo invio usa un nome nuovo.",
+    "c00102": "La firma del file non è valida (la appone l’intermediario).",
+    "c00200": "Il file non rispetta il formato FatturaPA.",
+    "c00301": "La partita IVA della nostra azienda non è valida per l’Agenzia delle Entrate.",
+    "c00305": "La partita IVA del cliente non è valida per l’Agenzia delle Entrate.",
+    "c00306": "Il codice fiscale del cliente non è valido per l’Agenzia delle Entrate.",
+    "c00311": "Il codice destinatario del cliente non esiste.",
+    "c00312": "Il codice destinatario del cliente non è attivo.",
+    "c00400": "Una riga allo 0% di IVA non ha la natura.",
+    "c00401": "Una riga con IVA sopra lo 0% ha una natura; solo le righe allo 0% la hanno.",
+    "c00403": "La data della fattura è successiva al giorno in cui lo SDI l’ha ricevuta.",
+    "c00404": "Lo SDI ha già una fattura con questo numero e questa data di questa azienda (un doppione).",
+    "c00409": "La stessa fattura compare due volte nel file.",
+    "c00418": "La fattura ha una data precedente alla fattura a cui si riferisce.",
+    "c00421": "L’IVA di un’aliquota non è calcolata come la calcola lo SDI.",
+    "c00422": "L’imponibile di un’aliquota non è la somma delle sue righe.",
+    "c00423": "Il totale di una riga non è quantità × prezzo unitario meno lo sconto.",
+    "c00424": "Un’aliquota IVA non è scritta come percentuale.",
+    "c00425": "Il numero della fattura non contiene cifre.",
+    "c00427": "Il codice destinatario del cliente ha una lunghezza sbagliata per una fattura tra imprese (7 caratteri).",
+    "c00429": "Un riepilogo IVA allo 0% non ha la natura.",
+    "c00430": "Un riepilogo IVA sopra lo 0% ha una natura.",
+    "c00443": "Le aliquote delle righe e quelle del riepilogo non corrispondono.",
+    "c00444": "Le nature delle righe e quelle del riepilogo non corrispondono."
+  },
+  "send": {
+    "body": "La fattura del {date} va allo SDI tramite l’intermediario. La risposta arriva da sola.",
+    "bodyAgain": "L’ultimo invio non si è concluso. Prima chiediamo all’intermediario, così la fattura del {date} non parte mai due volte.",
+    "sending": "Invio in corso…",
+    "title": "Inviare {number} allo SDI?",
+    "titleAgain": "Inviare di nuovo {number}?"
+  },
+  "settings": {
+    "accountant": {
+      "explain": "Questi punti sono una nostra lettura, non ancora confermata. Le fatture li seguono già; la risposta del commercialista cambia un’impostazione, non il codice.",
+      "point": {
+        "foreignConsumer": "Un privato estero senza identificativo fiscale: quale convenzione accetta la FatturaPA (non serve per il primo cliente, un’impresa).",
+        "progressive": "Il progressivo di 5 caratteri del file può ripetersi dopo migliaia di fatture; l’invio sceglie un nome libero. Da verificare con l’intermediario reale.",
+        "resendDays": "Una fattura scartata si reinvia entro 5 giorni lavorativi (sabato escluso) oppure 5 giorni."
+      },
+      "rule": {
+        "EU_B2C_GOODS_ITALIAN_VAT": "I consumatori UE pagano l’IVA italiana finché ogni azienda resta sotto la soglia UE di 10.000 euro per le vendite a distanza.",
+        "STAMP_DUTY": "Quali nature senza IVA sono esenti dal bollo da 2,00 euro (ora N3.1, N3.2 e i codici di inversione contabile)."
+      },
+      "title": "Per il commercialista"
+    },
+    "archive": {
+      "count": "Fatture conservate",
+      "explain": "Ogni fattura elettronica consegnata dallo SDI è conservata per il periodo di legge; anche la nostra copia dell’XML resta qui.",
+      "intermediary": "Presso l’intermediario, dopo la consegna dello SDI",
+      "last": "Ultima conservazione",
+      "never": "Ancora nessuna",
+      "title": "Conservazione a norma",
+      "where": "Dove"
+    },
+    "company": {
+      "address": "Sede legale",
+      "byAdmin": "Lo modifica un amministratore in Amministrazione › Aziende.",
+      "capital": "Capitale sociale",
+      "change": "Modifica in Amministrazione › Aziende",
+      "legalName": "Ragione sociale",
+      "missing": "Cosa manca ancora per fatturare",
+      "notReady": "Dati mancanti",
+      "rea": "REA",
+      "ready": "Pronta per fatturare",
+      "regime": "Regime fiscale",
+      "regimeValue": "{code}",
+      "taxCode": "Codice fiscale",
+      "title": "Azienda e fisco",
+      "vat": "Partita IVA"
+    },
+    "companyLabel": "Azienda",
+    "deposits": {
+      "col": {
+        "customer": "Cliente",
+        "document": "Documento dopo il pagamento",
+        "status": "Regola"
+      },
+      "explain": "Quale documento segue al pagamento di un acconto. Da verificare una volta con il commercialista; poi il sistema lo applica a ogni ordine.",
+      "rule": {
+        "DEPOSIT_EU_B2B_GOODS": {
+          "what": "Nessuna fattura di acconto: la cessione avviene all’inizio del trasporto",
+          "who": "Impresa UE, merce (VIES valida)"
+        },
+        "DEPOSIT_EU_B2B_SERVICES": {
+          "what": "Fattura di acconto (TD02, N2.1) al pagamento",
+          "who": "Impresa UE, servizi"
+        },
+        "DEPOSIT_EU_B2C": {
+          "what": "Fattura di acconto (TD02) come per un italiano",
+          "who": "Consumatore UE"
+        },
+        "DEPOSIT_EXPORT": {
+          "what": "Fattura di acconto (TD02, N3.1) al pagamento",
+          "who": "Cliente fuori dall’UE"
+        },
+        "DEPOSIT_INVOICE_IT": {
+          "what": "Fattura di acconto (TD02) il giorno del pagamento",
+          "who": "Cliente italiano"
+        }
+      },
+      "title": "Acconti"
+    },
+    "explain": "Ciò che serve a ogni fattura, per azienda, letto dove lo legge la fatturazione.",
+    "failed": "Impossibile caricare le impostazioni contabilità",
+    "loading": "Caricamento delle impostazioni contabilità…",
+    "missing": {
+      "address": "La sede legale: via, CAP e città",
+      "other": "Un campo dell’azienda",
+      "regime": "Il regime fiscale (RF01 per il regime ordinario)",
+      "vatNumber": "La partita IVA (IT e 11 cifre)"
+    },
+    "noCompany": {
+      "body": "Il tuo ruolo non raggiunge le fatture di nessuna azienda.",
+      "title": "Nessuna azienda da mostrare"
+    },
+    "sdi": {
+      "byAdmin": "Il collegamento lo gestisce un amministratore in Amministrazione › Collegamenti.",
+      "col": {
+        "connection": "Collegamento",
+        "mode": "Modalità",
+        "state": "Stato"
+      },
+      "explain": "Le fatture arrivano allo SDI tramite un intermediario accreditato, un collegamento per azienda.",
+      "intermediary": "L’intermediario è ancora da scegliere con il commercialista; fino ad allora le risposte sono simulate.",
+      "mode": {
+        "FAKE": "Simulata (nulla esce)",
+        "LIVE": "Reale",
+        "SANDBOX": "Area di prova dell’intermediario"
+      },
+      "open": "Apri Amministrazione › Collegamenti",
+      "state": {
+        "ACTIVE": "Collegata",
+        "NONE": "Non configurata",
+        "PAUSED": "In pausa",
+        "SEVERAL": "Più di un collegamento"
+      },
+      "status": {
+        "ACTIVE": "Attivo",
+        "PAUSED": "In pausa"
+      },
+      "title": "Fatturazione elettronica (SDI)"
+    },
+    "series": {
+      "byAdmin": "Le numerazioni le gestisce un amministratore in Amministrazione › Documenti e numerazioni.",
+      "col": {
+        "kind": "Documento",
+        "next": "Prossimo numero"
+      },
+      "kind": {
+        "CREDIT_NOTE": "Note di credito",
+        "DEPOSIT_INVOICE": "Fatture di acconto",
+        "INVOICE": "Fatture"
+      },
+      "none": "Nessuna numerazione attiva: la apre un amministratore",
+      "open": "Apri Amministrazione › Documenti e numerazioni",
+      "title": "Numerazioni",
+      "usesInvoice": "Numerate nella serie delle fatture"
+    },
+    "state": {
+      "forbidden": {
+        "body": "Il tuo ruolo non mostra le fatture di questa azienda.",
+        "title": "Nessun accesso alle impostazioni contabilità"
+      },
+      "not_found": {
+        "body": "L’indirizzo è sbagliato.",
+        "title": "Niente qui"
+      }
+    },
+    "terms": {
+      "due": "Scadenza",
+      "dueValue": "Indicata su ogni fattura",
+      "iban": "Conto",
+      "ibanValue": "Il conto bancario dell’azienda",
+      "later": "Un elenco di termini (30/60 giorni fine mese, Ri.Ba.) arriverà con un passo successivo.",
+      "method": "Metodo in fattura",
+      "methodValue": "Bonifico bancario (MP05)",
+      "title": "Termini di pagamento"
+    },
+    "testMode": "Fatturazione elettronica in prova: nulla va allo SDI. Le risposte sono simulate finché non si sceglie l’intermediario.",
+    "unverified": "In attesa del commercialista",
+    "verified": "Confermata",
+    "wording": {
+      "case": {
+        "EU_B2B_SERVICES": "Servizi a un’impresa di un altro Stato UE",
+        "EXPORT": "Merce spedita fuori dall’UE",
+        "EXTRA_EU_SERVICES": "Servizi a un’impresa fuori dall’UE",
+        "INTRA_EU_SUPPLY": "Merce a un’impresa di un altro Stato UE con verifica VIES valida"
+      },
+      "col": {
+        "code": "Codice",
+        "meaning": "Quando",
+        "printed": "Stampato in fattura"
+      },
+      "explain": "Quando una riga non ha IVA, la fattura dice perché e in base a quale norma. Questa è la dicitura stampata oggi.",
+      "title": "Nature IVA e diciture"
+    }
+  },
+  "shipType": {
+    "TD01": "Fattura immediata",
+    "TD24": "Fattura differita mensile"
+  },
+  "shipped": {
+    "count_one": "{count} DDT",
+    "count_other": "{count} DDT",
+    "ddt": "DDT {number}",
+    "dueBy": "entro il {date}",
+    "empty": {
+      "body": "Nessuna merce spedita attende la fattura.",
+      "title": "Ogni spedizione è fatturata"
+    },
+    "explain": "In Italia si fattura subito (entro 12 giorni dal DDT) oppure una volta al mese per tutte le consegne (entro il 15 del mese dopo), elencando i DDT.",
+    "failed": "Impossibile caricare lo spedito da fatturare",
+    "inDraft_one": "{count} capo in bozza",
+    "inDraft_other": "{count} capi in bozza",
+    "lines_one": "{count} riga",
+    "lines_other": "{count} righe",
+    "noDeposit": "Nessun acconto",
+    "openDraft": "Apri la bozza",
+    "pieces_one": "{count} capo",
+    "pieces_other": "{count} capi",
+    "title": "Spedito, da fatturare"
+  },
+  "step": {
+    "fix": "Correggi e reinvia",
+    "invoiceShipped": "Fattura la merce spedita",
+    "issue": "Controlla ed emetti",
+    "recordPayment": "Registra incasso",
+    "send": "Invia allo SDI",
+    "sendAgain": "Invia di nuovo"
+  },
+  "stepUp": {
+    "confirm": "Conferma",
+    "problem": {
+      "locked": "Troppi codici provati: attendi qualche minuto.",
+      "unavailable": "Impossibile verificare il codice ora: riprova.",
+      "wrong": "Codice non accettato: scrivi quello più recente."
+    },
+    "sentence": {
+      "bank": "Il conto bancario è stampato su ogni fattura: scrivi il codice della tua app di autenticazione.",
+      "fix": "Correggere una fattura scartata e reinviarla: scrivi il codice della tua app di autenticazione.",
+      "issue": "Emettere una fattura le assegna il numero per sempre: scrivi il codice della tua app di autenticazione.",
+      "sdi": "Inviare una fattura allo SDI la rende valida: scrivi il codice della tua app di autenticazione.",
+      "td02": "Emettere la fattura di acconto le assegna il numero per sempre: scrivi il codice della tua app di autenticazione."
+    },
+    "title": "Conferma che sei tu"
+  },
+  "tab": {
+    "activity": "Attività",
+    "checksFail": "Controlli da sistemare",
+    "documents": "Documenti",
+    "lines": "Righe e IVA",
+    "money": "Acconti e incassi",
+    "rejected": "Scartata dallo SDI",
+    "sdi": "Stato SDI"
+  },
+  "tile": {
+    "atSdi": "In attesa presso lo SDI",
+    "drafts": "Bozze",
+    "fixIn5": "Correggere entro 5 giorni lavorativi",
+    "notDelivered": "Non consegnate (cassetto fiscale)",
+    "oldest_one": "La più vecchia da {count} giorno",
+    "oldest_other": "La più vecchia da {count} giorni",
+    "rejected": "Scartate dallo SDI",
+    "shipped": "Spedito, da fatturare"
+  },
+  "totals": {
+    "col": {
+      "taxable": "Imponibile",
+      "treatment": "Aliquota o natura",
+      "vat": "IVA"
+    },
+    "credit": "Totale nota di credito",
+    "credited": "Note di credito",
+    "deposit": "Acconto detratto",
+    "goods": "Merce",
+    "gross": "Totale fattura",
+    "noGrain": "Gli importi sono visibili ai ruoli che vedono i prezzi.",
+    "open": "Ancora da incassare",
+    "paid": "Incassato",
+    "refundDue": "Una nota di credito restituisce {amount} già pagati: è dovuto un rimborso.",
+    "stamp": "Imposta di bollo",
+    "summary": "Riepilogo IVA",
+    "taxable": "Imponibile",
+    "title": "Totali",
+    "vat": "IVA"
+  },
+  "vat": {
+    "otherCode": "Natura {code} (vedi la norma stampata in fattura).",
+    "printed": "Stampato in fattura: {text}",
+    "vies": "La partita IVA del cliente era valida al VIES il {date}.",
+    "whyLabel": "Perché senza IVA: {code}",
+    "whyTitle": "Perché senza IVA?"
+  }
+}

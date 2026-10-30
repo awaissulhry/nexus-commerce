@@ -68,6 +68,14 @@
       "certificates": "Certificates",
       "labels": "Labels & marking"
     },
+    "finance": {
+      "area": "Finance",
+      "main": "Main",
+      "invoices": "Invoices",
+      "payments": "Payments",
+      "settingsGroup": "Settings",
+      "settings": "Finance settings"
+    },
     "planning": {
       "area": "Planning",
       "main": "Main",

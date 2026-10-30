@@ -97,12 +97,49 @@ export const allocationView = (row: AllocationRow) => ({
   createdById: row.createdById,
 })
 
+/** What a target is called on a screen: an invoice's number and type, a deposit request's order number. */
+export interface TargetLabel {
+  readonly number: string | null
+  readonly docType: string | null
+  readonly orderNumber: string | null
+}
+
+/** The labels of the targets these allocations name (two reads, whatever their count). */
+export async function targetLabels(db: Reader, rows: readonly Pick<AllocationRow, 'invoiceId' | 'depositRequestId'>[]): Promise<Map<string, TargetLabel>> {
+  const invoiceIds = [...new Set(rows.flatMap((row) => (row.invoiceId ? [row.invoiceId] : [])))]
+  const requestIds = [...new Set(rows.flatMap((row) => (row.depositRequestId ? [row.depositRequestId] : [])))]
+  const invoices = invoiceIds.length === 0 ? [] : await db.invoice.findMany({ where: { id: { in: invoiceIds } }, select: { id: true, number: true, docType: true, salesOrder: { select: { number: true } } } })
+  const requests = requestIds.length === 0 ? [] : await db.depositRequest.findMany({ where: { id: { in: requestIds } }, select: { id: true, order: { select: { number: true } } } })
+  return new Map<string, TargetLabel>([
+    ...invoices.map((invoice) => [invoice.id, { number: invoice.number, docType: invoice.docType, orderNumber: invoice.salesOrder?.number ?? null }] as const),
+    ...requests.map((request) => [request.id, { number: null, docType: null, orderNumber: request.order?.number ?? null }] as const),
+  ])
+}
+
+/**
+ * What a payment is placed on now: per target, the allocations less their reversals, above 0, in the order first
+ * placed (the list's "placed on" chips, A2 SCR-082).
+ */
+export function placedOn(rows: readonly Pick<AllocationRow, 'invoiceId' | 'depositRequestId' | 'amount'>[], labels: ReadonlyMap<string, TargetLabel>) {
+  const sums = new Map<string, { target: 'INVOICE' | 'DEPOSIT_REQUEST'; targetId: string; amount: number }>()
+  for (const row of rows) {
+    const targetId = (row.invoiceId ?? row.depositRequestId)!
+    const entry = sums.get(targetId) ?? { target: row.invoiceId ? ('INVOICE' as const) : ('DEPOSIT_REQUEST' as const), targetId, amount: 0 }
+    entry.amount += row.amount
+    sums.set(targetId, entry)
+  }
+  return [...sums.values()].filter((entry) => entry.amount > 0).map((entry) => ({ target: entry.target, targetId: entry.targetId, amount: asMoney('price', entry.amount), ...(labels.get(entry.targetId) ?? { number: null, docType: null, orderNumber: null }) }))
+}
+
 /** The payment record: its facts, its allocations (with which ones are reversed) and what it has left. */
 export async function paymentDetail(db: Reader, payment: PaymentRow) {
   const allocations = await db.paymentAllocation.findMany({ where: { paymentId: payment.id }, select: ALLOCATION_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
   const party = await db.party.findUnique({ where: { id: payment.partyId }, select: { code: true, legalName: true } })
   const reversed = new Set(allocations.flatMap((row) => (row.reversalOfId ? [row.reversalOfId] : [])))
   const allocated = allocations.reduce((sum, row) => sum + row.amount, 0)
+  const labels = await targetLabels(db, allocations)
+  const peopleIds = [...new Set([payment.createdById, ...allocations.map((row) => row.createdById)].filter((id): id is string => id !== null))]
+  const people = peopleIds.length === 0 ? [] : await db.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true }, orderBy: { id: 'asc' } })
   return {
     id: payment.id,
     version: payment.version,
@@ -120,9 +157,12 @@ export async function paymentDetail(db: Reader, payment: PaymentRow) {
     internalNote: payment.internalNote,
     allocated: asMoney('price', allocated),
     unallocated: asMoney('price', payment.status === 'VOIDED' ? 0 : payment.amount - allocated),
-    allocations: allocations.map((row) => ({ ...allocationView(row), reversed: reversed.has(row.id) })),
+    allocations: allocations.map((row) => ({ ...allocationView(row), reversed: reversed.has(row.id), label: labels.get((row.invoiceId ?? row.depositRequestId)!) ?? null })),
+    placedOn: placedOn(allocations, labels),
     createdAt: toUtcIso(payment.createdAt),
     createdById: payment.createdById,
+    /** Who recorded it and who placed it (names, inside the one record). */
+    people: people.map((user) => ({ id: user.id, name: user.displayName })),
   }
 }
 

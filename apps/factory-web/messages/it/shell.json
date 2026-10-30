@@ -68,6 +68,14 @@
       "certificates": "Certificati",
       "labels": "Etichette e marcature"
     },
+    "finance": {
+      "area": "Contabilità",
+      "main": "Principali",
+      "invoices": "Fatture",
+      "payments": "Incassi",
+      "settingsGroup": "Impostazioni",
+      "settings": "Impostazioni contabilità"
+    },
     "planning": {
       "area": "Pianificazione",
       "main": "Principali",
