@@ -35,6 +35,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // Warehouse › Hides (SCR-200) and Settings › Locations (SCR-065).
   Hide: '/warehouse/hides/[id]',
   Location: '/warehouse/locations/[id]',
+  // Warehouse › Counts (SCR-132): a cycle count or the year-end inventory.
+  StockCount: '/warehouse/counts/[id]',
   // Compliance › PPE register & recalls (SCR-113).
   PpeRegisterEntry: '/compliance/register/[id]',
   // Finance › Invoices (SCR-081: invoices, deposit invoices, credit notes) and Payments (SCR-082: a payment's placements).
@@ -102,6 +104,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/inventory/lots': '/warehouse/lots',
   '/inventory/ledger': '/warehouse/moves',
   '/inventory/locations': '/warehouse/locations',
+  // Counts (SCR-132) reads `?view=`, `?q=` and `?site=`.
+  '/inventory/stock-counts': '/warehouse/counts',
   '/planning/runs/latest': '/planning/mrp',
 })
 

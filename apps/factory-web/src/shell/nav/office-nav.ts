@@ -184,6 +184,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/warehouse/locations/[id]',
   '/production/settings',
   '/admin/privacy',
+  // B-W2a-28: Warehouse › Counts (SCR-132) and a count.
+  '/warehouse/counts',
+  '/warehouse/counts/[id]',
 ])
 
 /** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */
