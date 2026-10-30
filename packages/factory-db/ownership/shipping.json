@@ -1,23 +1,23 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/shipping.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context: Sendcloud's tracking webhooks and polls) keeps the shipping settings, plans and ships shipments, issues and cancels DDTs and records tracking through apps/factory-api's modules/shipping (B-W1-46 to B-W1-49), always through command(); the API keeps staff to the companies, sites and parties their grants reach. The floor (factory_floor_runtime) works on its OWN site only: it reads the site's shipping settings, shipments, lines, parcels, DDTs and their cancellations, and packs: it adds, changes and removes the lines and parcels of a DRAFT shipment, weighs and labels parcels until they leave, and moves a shipment DRAFT ⇄ PACKED (nothing else: the …_quality_shipping_guards triggers). A portal or one-off link session (factory_partner_runtime; the DOCUMENT_VIEW link of B-W1-49) reads only its OWN party's shipments, lines, parcels, DDTs, cancellations and tracking (every table here but the settings carries the party's partyId), never an internal column nor which office user wrote a row. No table here has a cost, price, margin or wages column. Ddt, DdtCancellation and TrackingEvent are append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes them. Nobody deletes settings or a shipment (cancelled); lines and parcels are removed only while their shipment is a DRAFT. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/shipping.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context: Sendcloud's tracking webhooks and polls) keeps the shipping settings, plans and ships shipments, issues and cancels DDTs and records tracking through apps/factory-api's modules/shipping (B-W1-46 to B-W1-49), always through command(); the API keeps staff to the companies, sites and parties their grants reach. The floor (factory_floor_runtime) works on its OWN site only: it reads the site's shipping settings, shipments, lines, parcels, DDTs and their cancellations, and packs: it adds, changes and removes the lines and parcels of a DRAFT shipment, weighs and labels parcels until they leave, and moves a shipment DRAFT ⇄ PACKED (nothing else: the …_quality_shipping_guards triggers). A portal or one-off link session (factory_partner_runtime; the DOCUMENT_VIEW link of B-W1-49) reads only its OWN party's shipments, lines, parcels, DDTs, cancellations and tracking (every table here but the settings carries the party's partyId), never an internal column nor which office user wrote a row. No table here has a cost, margin or wages column; the freight figures (W2a wave 6/7: the settings' freight rule, the shipment's freight charge) are prices: the floor never reads them (hidden), a portal or link session reads its own shipment's charge. A DDT for another reason (W2a: no shipment, a source record) is read like any other DDT. Ddt, DdtCancellation and TrackingEvent are append-only (`@append-only`; the triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes them. Nobody deletes settings or a shipment (cancelled); lines and parcels are removed only while their shipment is a DRAFT. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "ShippingSettings": {
-      "about": "The office keeps each site's shipping settings (LOG-117): sender and return addresses, default carrier account and service, packing printers, cut-off. The floor reads its own site's row (the packing screen).",
+      "about": "The office keeps each site's shipping settings (LOG-117): sender and return addresses, default carrier account and service, packing printers, cut-off, and the freight rule (W2a, LOG-105). The floor reads its own site's row without the freight figures (the packing screen).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
-        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["freightAmount", "freightFreeFrom"] }
       }
     },
     "Shipment": {
-      "about": "The office plans a shipment from a sales order, buys its labels, ships it with its DDT, records delivery or return, and cancels it. The site's floor reads its shipments and moves one DRAFT ⇄ PACKED (only that). A portal or link session reads its own party's shipments without the internal columns.",
+      "about": "The office plans a shipment from a sales order, buys its labels, ships it with its DDT, records delivery or return, sets the freight charged (W2a) and the state of its intra-EU transport evidence (W2a), and cancels it. The site's floor reads its shipments without the freight charge and moves one DRAFT ⇄ PACKED (only that). A portal or link session reads its own party's shipments (with the freight charged to it) without the internal columns and who checked the transport evidence.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
-        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"] },
-        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["integrationAccountId", "internalNote", "createdById"] }
+        "factory_floor_runtime": { "privileges": ["select", "update"], "scopedBy": ["site"], "hiddenColumns": ["freightCharge"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["integrationAccountId", "internalNote", "transportEvidenceById", "transportEvidenceNote", "createdById"] }
       }
     },
     "ShipmentLine": {
@@ -41,7 +41,7 @@
       }
     },
     "Ddt": {
-      "about": "The office issues a DDT for a packed or shipped shipment (B-W1-47). The site's floor reads its DDTs (it hands them to the driver). A portal or link session reads its own party's DDTs without the internal note. Nobody changes or removes a DDT.",
+      "about": "The office issues a DDT for a packed or shipped shipment (B-W1-47), or for goods of another source record (W2a, B-W2a-17: a subcontract kit, a supplier claim's return, a repair, a return). The site's floor reads its DDTs (it hands them to the driver). A portal or link session reads its own party's DDTs without the internal note. Nobody changes or removes a DDT.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {

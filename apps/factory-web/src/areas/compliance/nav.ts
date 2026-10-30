@@ -2,14 +2,14 @@ import { BadgeCheck, FlaskConical, ScrollText, ShieldCheck, Tag } from 'lucide-r
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
- * Compliance (A2 §1.3 row 9; design 01 "Compliance / Conformità", Owner answer T1: its own area): what proves a garment
+ * Compliance (design 01 area 9 "Compliance / Conformità", Owner answer T1: its own area): what proves a garment
  * may be sold — here the material tests of each lot with the chromium VI release (SCR-054) and the PPE register of
  * complaints, non-conformities and recalls (SCR-113); the product screens step adds the EN 17092 / protector certificate
  * register (SCR-050/051) and the PPE garment labels (SCR-053), in the approved tree's order. Declarations join later.
  * Labels are message keys (`shell:` = messages/<locale>/shell.json).
  */
 export const officeArea: OfficeAreaNav = {
-  order: 10,
+  order: 9,
   area: {
     id: 'compliance',
     label: 'shell:nav.compliance.area',

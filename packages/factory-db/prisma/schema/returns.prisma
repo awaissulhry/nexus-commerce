@@ -179,6 +179,8 @@ model ReturnLine {
   receipt         ReturnReceipt?      @relation(fields: [tenantId, siteId, returnId, receiptId], references: [tenantId, siteId, returnId, id], onDelete: Restrict, onUpdate: Restrict)
   replacementLine SalesOrderLine?     @relation("ReturnLineReplacement", fields: [tenantId, partyId, replacementLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   repairOrders    RepairOrder[]
+  // W2a money.prisma (wave 7/7): the credit note lines that credit it.
+  creditLines     InvoiceLine[]   @relation("InvoiceLineReturnLine")
 
   @@unique([tenantId, returnId, seq])
   // The target of the references from the repair orders (and the money module's credit note lines, wave 7/7): a line of

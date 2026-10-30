@@ -17,7 +17,7 @@ describe('the schema reader', () => {
   it('reads relations, native types, defaults and unique keys', () => {
     const station = loadSchema().find((model) => model.name === 'Station')!
     expect(station.file).toBe('_core.prisma')
-    expect(station.fields.filter((field) => field.relation).map((field) => field.name)).toEqual(['site', 'line', 'workCentre', 'labelPrinter', 'devices', 'cutLogs', 'operationScans', 'scanCorrectionRequests', 'scanRefusals', 'refusedActions'])
+    expect(station.fields.filter((field) => field.relation).map((field) => field.name)).toEqual(['site', 'line', 'workCentre', 'labelPrinter', 'devices', 'cutLogs', 'operationScans', 'machines', 'maintenanceRequests', 'scanCorrectionRequests', 'scanRefusals', 'refusedActions'])
     expect(station.fields.find((field) => field.name === 'lineId')).toMatchObject({ type: 'String', nativeType: 'Uuid', optional: true })
     expect(station.fields.find((field) => field.name === 'workCentreId')).toMatchObject({ type: 'String', nativeType: 'Uuid', optional: false })
     expect(station.fields.find((field) => field.name === 'tenantId')?.defaultValue).toMatch(/^dbgenerated\(".*factory\.tenant_id.*"\)$/)

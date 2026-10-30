@@ -135,6 +135,17 @@ model Company {
   // money.prisma: its invoices and the payments it received.
   invoices             Invoice[]
   payments             Payment[]
+  // W2a receivables.prisma, payables.prisma, cost-ledger.prisma, accounting.prisma (wave 7/7): its refunds, payment
+  // reminders and receivables settings, the supplier invoices it received, its standard costs, accounting exports and
+  // period locks.
+  refunds              Refund[]
+  paymentReminders     PaymentReminder[]
+  receivablesSettings  ReceivablesSettings[]
+  supplierInvoices     SupplierInvoice[]
+  /// @not-money the relation to its standard costs (the rows carry the grain)
+  standardCosts        StandardCost[]
+  accountingExports    AccountingExport[]
+  periodLocks          PeriodLock[]
   // costing.prisma: its own labour rates and costing settings (tenant-wide rows have none).
   labourRates          LabourRate[]
   /// @not-money the relation to its costing settings rows (an overhead percentage, no amount)
@@ -232,6 +243,13 @@ model Site {
   // quality.prisma: the lab results and supplier documents of its lots.
   labResults              LabResult[]
   lotDocuments            LotDocument[]
+  // W2a holds.prisma, ncr.prisma, plant.prisma: the goods it has on hold, its nonconformances, its machines, their
+  // requests and maintenance jobs.
+  qualityHolds            QualityHold[]
+  nonconformances         Nonconformance[]
+  machines                Machine[]
+  maintenanceRequests     MaintenanceRequest[]
+  maintenanceJobs         MaintenanceJob[]
   // production.prisma: its garment label prints (B-W1-44) and bundle ticket reprints.
   garmentLabelPrints      GarmentLabelPrint[]
   bundleReprints          BundleReprint[]
@@ -318,6 +336,8 @@ model WorkCentre {
   capacity WorkCentreCapacity[]
   // production.prisma: the work order operations mapped to it.
   workOrderOperations WorkOrderOperation[]
+  // W2a plant.prisma: its machines.
+  machines            Machine[]
   // calendar.prisma: its calendar (a workshop's).
   workCalendars       WorkCalendar[]
   // W2a schedule.prisma: its slots on the planning board.
@@ -370,6 +390,9 @@ model Station {
   // production.prisma: the cut logs and scans that name the station (a site that records stations, not workers).
   cutLogs        CutLog[]
   operationScans OperationScan[]
+  // W2a plant.prisma: the machines standing at it and the requests it reported.
+  machines            Machine[]
+  maintenanceRequests MaintenanceRequest[]
   // B-W1-42: correction requests asked and refused scans sent at the station.
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]

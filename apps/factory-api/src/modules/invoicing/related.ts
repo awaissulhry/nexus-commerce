@@ -25,7 +25,8 @@ async function relatedOf(db: Reader, invoice: { id: string; creditOfId: string |
   const depositInvoiceIds = [...new Set(lines.flatMap((line) => (line.depositInvoiceId ? [line.depositInvoiceId] : [])))]
   const orderLineIds = [...new Set(lines.flatMap((line) => (line.salesOrderLineId ? [line.salesOrderLineId] : [])))]
 
-  const ddts = ddtIds.length === 0 ? [] : await db.ddt.findMany({ where: { id: { in: ddtIds } }, select: { id: true, number: true, documentDate: true, shipmentId: true, shipment: { select: { number: true } } }, orderBy: [{ documentDate: 'asc' }, { number: 'asc' }] })
+  // A shipment's DDTs (an invoice bills goods shipped; a DDT for another reason, W2a wave 6/7, is B-W2a-54's to show).
+  const ddts = ddtIds.length === 0 ? [] : await db.ddt.findMany({ where: { id: { in: ddtIds }, shipmentId: { not: null } }, select: { id: true, number: true, documentDate: true, shipmentId: true, shipment: { select: { number: true } } }, orderBy: [{ documentDate: 'asc' }, { number: 'asc' }] })
   const deposits = depositInvoiceIds.length === 0 ? [] : await db.invoice.findMany({ where: { id: { in: depositInvoiceIds } }, select: { id: true, number: true, issueDate: true, status: true, depositRequestId: true }, orderBy: { issueDate: 'asc' } })
   const creditOf = invoice.creditOfId ? await db.invoice.findUnique({ where: { id: invoice.creditOfId }, select: { id: true, docType: true, number: true, issueDate: true, status: true } }) : null
   const creditNotes = await db.invoice.findMany({ where: { creditOfId: invoice.id, docType: 'TD04' }, select: { id: true, number: true, issueDate: true, status: true, grossTotal: true }, orderBy: { createdAt: 'asc' } })
@@ -45,7 +46,7 @@ async function relatedOf(db: Reader, invoice: { id: string; creditOfId: string |
   const td02s = requestIds.length === 0 ? [] : await db.invoice.findMany({ where: { depositRequestId: { in: requestIds }, docType: 'TD02' }, select: { id: true, number: true, status: true, issueDate: true, depositRequestId: true }, orderBy: { createdAt: 'asc' } })
 
   return {
-    ddts: ddts.map((ddt) => ({ id: ddt.id, number: ddt.number, date: day(ddt.documentDate)!, shipmentId: ddt.shipmentId, shipmentNumber: ddt.shipment.number })),
+    ddts: ddts.map((ddt) => ({ id: ddt.id, number: ddt.number, date: day(ddt.documentDate)!, shipmentId: ddt.shipmentId!, shipmentNumber: ddt.shipment!.number })),
     depositInvoices: deposits.map((deposit) => ({ id: deposit.id, number: deposit.number, issueDate: day(deposit.issueDate), status: deposit.status, depositRequestId: deposit.depositRequestId })),
     creditOf: creditOf ? { id: creditOf.id, docType: creditOf.docType, number: creditOf.number, issueDate: day(creditOf.issueDate), status: creditOf.status } : null,
     creditNotes: creditNotes.map((note) => ({ id: note.id, number: note.number, issueDate: day(note.issueDate), status: note.status, grossTotal: asMoney('price', note.grossTotal) })),

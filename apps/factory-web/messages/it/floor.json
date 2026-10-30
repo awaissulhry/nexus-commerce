@@ -64,7 +64,7 @@
     "checking": "Controllo del codice…",
     "scan": {
       "title": "Scansiona il codice di configurazione",
-      "where": "In ufficio: Amministrazione › Dispositivi e stampanti › il dispositivo › Codice di configurazione. Avvicina il tablet al codice QR.",
+      "where": "In ufficio: Sistema › Dispositivi e stampanti › il dispositivo › Codice di configurazione. Avvicina il tablet al codice QR.",
       "label": "Codice di configurazione",
       "hint": "Il codice vale una volta, per 15 minuti.",
       "read": "Codice letto",
@@ -104,7 +104,7 @@
       "station": "Postazione",
       "mode": "Modalità",
       "language": "Lingua prima dell'accesso",
-      "office": "Si cambia in ufficio: Amministrazione › Dispositivi e stampanti."
+      "office": "Si cambia in ufficio: Sistema › Dispositivi e stampanti."
     },
     "install": {
       "title": "Installa come app",

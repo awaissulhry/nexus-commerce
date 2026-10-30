@@ -1,0 +1,29 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/receivables.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker and scheduler, in the tenant's system context: the reminder ladder on the date timers) records refunds, prepares, approves and sends payment reminders and keeps the receivables settings through apps/factory-api's modules/receivables (B-W2a-55) and modules/payments (B-W2a-61), always through command(); the API keeps staff to the companies their grants reach and money to the price grain (A1 §2.6). The floor reads nothing here (no money on the floor). No portal or link session reads a refund, a reminder or the settings in W2a (the customer portal is W2b): no partner grant. Nobody deletes a refund (cancelled or voided), a reminder (skipped or cancelled) or the settings (changed): the …_money_w2a_guards triggers refuse DELETE and TRUNCATE for every login. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Refund": {
+      "about": "The office records a refund due (a credit note on what was paid, or a payment's unplaced part), marks it paid with the bank's reference, cancels it, or voids a paid one typed by mistake. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "PaymentReminder": {
+      "about": "The ladder (the office or the system) prepares a reminder of a customer's open invoices; a person edits its text, approves or skips it; it is sent (or cancelled when the invoices were paid meanwhile). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "ReceivablesSettings": {
+      "about": "The office keeps the reminder ladder, the Owner's switch and the late-payment rule of each company and the tenant-wide ones. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

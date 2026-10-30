@@ -1,0 +1,255 @@
+// The defect library, the disposition codes and quality holds (W2a schema wave 6/7; B-W2a-26; features QHS-001,
+// QHS-005, QHS-074, MES-008; design quality.defects "Defect library" and "Disposition codes", quality.holds with its
+// popups qh-place and qh-release, floor.final "Hold lot", floor.reasons "Pick the reason"). apps/factory-api's
+// modules/quality/{defects,holds} write them (B-W2a-26), always through command(); the floor places a hold at the bench
+// and confirms its quarantine move through floorCommand.
+//
+// The defect library has two levels: a category (no parent) and its defects (a parent category, never deeper). A defect
+// carries its default class (CRITICAL, MAJOR, MINOR), the zone of the garment it is usually found in (the ids of
+// factory-domain's garment zone map), the stages it applies to, an icon and a colour for the floor tiles and the picture
+// they show. A code never changes (inspections, NCRs and reports keep it); a code in use is set inactive (retired), and
+// only a code nothing names is deleted (the references refuse it otherwise). The operation screen's scrap and rework
+// reasons stay production.prisma's ScrapReason (W1); the other reason lists are reasons.prisma's ReasonCode (wave 1/7).
+//
+// A disposition code is an outcome (use as is, rework, repair, regrade, return to the supplier, quarantine, scrap) with
+// the stock move it posts and the follow-up record it opens, and when a decision with it needs a person's approval (by
+// the NCR's severity, or by its value: the cost grain). ncr.prisma's disposition lines name them.
+//
+// A quality hold puts goods on hold: one or more records of one kind of the hold's site (lots, hides, work orders,
+// bundles, garment serials, shipments, parcels), with the reason (the HOLD reason list's code), who placed it (an office
+// user, a floor worker at the bench, or the system: none), the record that caused it (an inspection, an NCR, a Cr VI
+// result, a certificate: type and id), the owner, the expected release, and the move to quarantine. ACTIVE → RELEASED
+// (signed by someone who made none of the goods) | CLOSED (decided in its NCR: rejected, reworked, scrapped). While a
+// hold is ACTIVE its goods are refused, for every login (the …_quality_plant_w2a_guards triggers): a held lot or hide is
+// not issued or cut, a held bundle is not scanned, a held work order's garments, a held serial, a held parcel or
+// shipment are not released, packed or shipped. A held work order's floor work waits on the work order's own ON_HOLD
+// status (production.prisma, wave 5/7), which the hold's command sets beside it.
+//
+// Who sees what (ownership/holds.json): the office reads and writes. The floor reads the defect library (the bench's
+// and the reason tiles' pickers) and its site's holds (every floor write the hold guards check reads them), places a
+// hold at the bench, confirms the quarantine move and releases with the inspector's PIN; it never sees a disposition
+// code (an NCR's decision is the office's). Portal and link sessions read nothing here.
+
+/// A stage of the factory a defect is found at, or an NCR was found at.
+enum QualityStage {
+  /// Incoming goods at the dock (a supplier's lot).
+  INCOMING
+  /// Stock on the shelf.
+  STOCK
+  CUTTING
+  /// In-line, at an operation (sewing, assembly, finishing).
+  IN_LINE
+  /// The final inspection of the garments.
+  FINAL
+  PACKING
+  /// Found by the customer (a complaint, a return).
+  CUSTOMER
+  AUDIT
+}
+
+/// One code of the defect library (QHS-001): a category (no parent) or a defect of a category. Never moves to another
+/// category; retired (inactive), never deleted while an inspection defect or an NCR names it.
+model DefectCode {
+  id            String         @id @db.Uuid
+  tenantId      String         @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The category of a defect; null: this code is a category. A category's parent is never a defect (two levels).
+  parentId      String?        @db.Uuid
+  /// Upper-case letters, digits, hyphens and underscores ("SEAM-OPEN"; factory-domain checks it); unique in the tenant.
+  /// Never changes (inspection defects copy it).
+  code          String
+  labelIt       String
+  labelEn       String
+  /// The words in the other floor languages of the tenant's sites (Site.floorLocales): { "ro": "…" }.
+  labelI18n     Json           @default("{}")
+  /// The design system's tag icon (IconPicker id) and a swatch ("#RRGGBB") for the floor's tiles; null: none.
+  icon          String?
+  colour        String?
+  /// The example picture the tiles show: a file of this code (StoredFile recordType "DefectCode"); its good and bad
+  /// example photos are files of the code too. The floor sees it where the file is shared with its site's floor.
+  pictureFileId String?        @db.Uuid
+  /// A defect's default class (CRITICAL: a safety or legal defect, never accepted); a category has none.
+  severity      DefectClass?
+  /// Where on the garment it is usually found: a zone id of factory-domain's garment zone map ("SLEEVE_L"); null: any.
+  zone          String?
+  /// The stages it applies to (the pickers of those stages offer it); empty: every stage.
+  stages        QualityStage[] @default([])
+  /// An "Other" defect: the person adds a note (office) or a photo (floor).
+  needsDetail   Boolean        @default(false)
+  /// Pickers and tiles show the library in this order (lower first).
+  sortOrder     Int            @default(0)
+  /// Retired codes leave the pickers and stay on what names them.
+  active        Boolean        @default(true)
+  version       Int            @default(1)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?        @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  parent            DefectCode?        @relation("DefectCodeCategory", fields: [tenantId, parentId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  defects           DefectCode[]       @relation("DefectCodeCategory")
+  picture           StoredFile?        @relation("DefectCodePicture", fields: [tenantId, pictureFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // quality.prisma, ncr.prisma: the inspection defects and the nonconformances that name it.
+  inspectionDefects InspectionDefect[]
+  nonconformances   Nonconformance[]
+
+  @@unique([tenantId, code])
+  // The target of the tenant-safe references from its defects, inspection defects and NCRs.
+  @@unique([tenantId, id])
+}
+
+/// What a disposition decides about the goods (QHS-005; design quality.defects "Disposition codes").
+enum DispositionOutcome {
+  /// Used as they are (never on a major or critical nonconformance, QHS-002).
+  USE_AS_IS
+  /// Made again by the factory (a rework order), then inspected again.
+  REWORK
+  REPAIR
+  /// Kept as second quality.
+  REGRADE
+  /// Sent back to the supplier (a supplier claim and its return).
+  RETURN_TO_SUPPLIER
+  /// Moved to a quarantine place.
+  QUARANTINE
+  /// Scrapped (a scrap move).
+  SCRAP
+}
+
+/// The record a disposition opens.
+enum DispositionFollowUp {
+  /// A rework order of the work order (rework.prisma, wave 5/7).
+  REWORK_ORDER
+  /// A repair (returns.prisma RepairOrder, or a work order of kind REPAIR).
+  REPAIR_ORDER
+  /// A supplier claim (claims.prisma SupplierClaim) and the goods' return.
+  SUPPLIER_CLAIM
+}
+
+/// A disposition code (QHS-005): an outcome, the stock move it posts and the record it opens, and its approval rule. The
+/// code, outcome, move and follow-up never change once written (decisions keep them); a code no longer used is set
+/// inactive, and only a code no disposition line names is deleted.
+model DispositionCode {
+  id               String               @id @db.Uuid
+  tenantId         String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Upper-case letters, digits and underscores (factory-domain checks it); unique in the tenant.
+  code             String
+  labelIt          String
+  labelEn          String
+  labelI18n        Json                 @default("{}")
+  icon             String?
+  colour           String?
+  outcome          DispositionOutcome
+  /// The stock move a decision with it posts (the ledger's reasons: SCRAP, TRANSFER to a quarantine or second-quality
+  /// place, ADJUSTMENT out for a return to the supplier); null: none (use as is, rework, repair).
+  stockMoveReason  StockMoveReason?
+  /// The record it opens; null: none.
+  followUp         DispositionFollowUp?
+  /// The garments are inspected again before they are released (rework, repair).
+  reinspection     Boolean              @default(false)
+  /// A decision with it needs a person's approval (four eyes: not who decided) when the NCR's severity is this class
+  /// or worse; null: never by severity.
+  approvalSeverity DefectClass?
+  /// … or when the goods it decides are worth this much or more, in the company's currency (minor units; every company
+  /// of a tenant shares it today); null: never by value.
+  /// @grain cost
+  approvalAmount   Int?
+  sortOrder        Int                  @default(0)
+  active           Boolean              @default(true)
+  version          Int                  @default(1)
+  createdAt        DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?              @db.Uuid
+
+  // ncr.prisma: the decisions made with it.
+  dispositionLines NcrDispositionLine[]
+
+  @@unique([tenantId, code])
+  // The target of the disposition lines' tenant-safe reference.
+  @@unique([tenantId, id])
+}
+
+/// ACTIVE → RELEASED | CLOSED; both final.
+enum QualityHoldStatus {
+  ACTIVE
+  /// Released for use, signed by someone who made none of the goods.
+  RELEASED
+  /// Decided in its NCR (rejected, reworked, scrapped): the hold ends with the NCR's disposition.
+  CLOSED
+}
+
+/// The move of held stock to a quarantine place (QHS-078).
+enum HoldQuarantine {
+  /// Nothing to move (a work order, a serial, a shipment), or the stock stays where it is.
+  NOT_NEEDED
+  /// The move is asked (a floor task); the goods still lie where they were.
+  ASKED
+  /// The goods lie in the quarantine place (the floor confirmed the move).
+  MOVED
+}
+
+/// A quality hold (QHS-074, MES-008; design quality.holds): goods of one site on hold, with why, by whom, until when
+/// and the move to quarantine. ACTIVE → RELEASED | CLOSED; a released or closed hold never changes. Never deleted.
+model QualityHold {
+  id                     String            @id @db.Uuid
+  tenantId               String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The site the goods are at, and its company.
+  companyId              String            @db.Uuid
+  siteId                 String            @db.Uuid
+  /// What it holds: one record type (Lot, Hide, WorkOrder, Bundle, GarmentSerial, Shipment, Parcel) and one or more of
+  /// its ids, distinct, every one a row of the hold's site (no foreign key: an array's elements cannot have one; the
+  /// trigger checks them). Never changes: a hold of more goods is a new hold.
+  subjectType            String
+  subjectIds             String[]          @db.Uuid
+  /// Why: a code of the HOLD reason list (reasons.prisma ReasonCode, kept as text), and words.
+  reasonCode             String
+  reasonNote             String?
+  /// The record that caused it (Inspection, Nonconformance, LabResult, Certificate, QualityReleaseReversal, Complaint):
+  /// its type and id, both or neither; neither: placed by hand.
+  sourceType             String?
+  sourceId               String?           @db.Uuid
+  status                 QualityHoldStatus @default(ACTIVE)
+  /// Who placed it: an office user or a floor worker of the site (at the bench), at most one; neither: the system (a
+  /// failed inspection, a Cr VI fail, a certificate suspended or expired, a reversed release).
+  placedAt               DateTime          @db.Timestamptz(3)
+  placedById             String?           @db.Uuid
+  placedByWorkerId       String?           @db.Uuid
+  /// The office user who follows it up, and when it is expected to be released.
+  ownerId                String?           @db.Uuid
+  expectedReleaseOn      DateTime?         @db.Date
+  /// The move to quarantine: asked, then done (with when, and the place: a QUARANTINE location of the site).
+  quarantine             HoldQuarantine    @default(NOT_NEEDED)
+  quarantineLocationId   String?           @db.Uuid
+  quarantineMovedAt      DateTime?         @db.Timestamptz(3)
+  /// The NCR that decides the goods (rejection, rework, scrap): set once, while ACTIVE; a CLOSED hold has it.
+  ncrId                  String?           @db.Uuid
+  /// RELEASED: when, by whom (an office user, or a floor worker with the PIN: exactly one), the conditions as checked in
+  /// words, and the SHA-256 (hex) of what they signed (the e-signature); the releaser made none of the held garments.
+  releasedAt             DateTime?         @db.Timestamptz(3)
+  releasedById           String?           @db.Uuid
+  releasedByWorkerId     String?           @db.Uuid
+  releaseNote            String?
+  releaseSignatureSha256 String?
+  /// The releaser's signed statement that they made none of the garments: required where the floor records do not name
+  /// every maker (the site records the station, MES-278), as for a final inspection.
+  notMakerStatement      Boolean           @default(false)
+  /// CLOSED: when, by whom, and why (the NCR's disposition).
+  closedAt               DateTime?         @db.Timestamptz(3)
+  closedById             String?           @db.Uuid
+  closeNote              String?
+  note                   String?
+  version                Int               @default(1)
+  createdAt              DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById            String?           @db.Uuid
+
+  site               Site            @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  placedByWorker     Worker?         @relation("QualityHoldPlacedBy", fields: [tenantId, siteId, placedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  releasedByWorker   Worker?         @relation("QualityHoldReleasedBy", fields: [tenantId, siteId, releasedByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  quarantineLocation Location?       @relation(fields: [tenantId, siteId, quarantineLocationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  ncr                Nonconformance? @relation(fields: [tenantId, siteId, ncrId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, status])
+  @@index([tenantId, ncrId])
+  // What is on hold: the guards' and the API's lookup of the ACTIVE holds of a record.
+  @@index([subjectIds(ops: ArrayOps)], type: Gin)
+}

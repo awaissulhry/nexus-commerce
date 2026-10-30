@@ -15,14 +15,14 @@ describe('the Office navigation (PLT-160: one declaration per area)', () => {
       [1, 'home'],
       [2, 'sales'],
       [3, 'products'],
-      [5, 'planning'],
-      [6, 'purchasing'],
-      [7, 'warehouse'],
-      [8, 'production'],
-      [9, 'quality'],
-      [10, 'compliance'],
-      [11, 'finance'],
-      [14, 'admin'],
+      [4, 'planning'],
+      [5, 'purchasing'],
+      [6, 'warehouse'],
+      [7, 'production'],
+      [8, 'quality'],
+      [9, 'compliance'],
+      [10, 'finance'],
+      [13, 'admin'],
     ])
     expect(OFFICE_NAV.view).toBe('office')
   })
@@ -116,9 +116,9 @@ describe('labels, crumbs, palette pages and the phone bar come from the same man
 
   it('draws every label in the language (keys never reach the screen)', () => {
     expect(nav.areas.map((area) => area.label)).toEqual(['Home', 'Sales', 'Purchasing', 'Admin'])
-    expect(nav.areas[3]?.sections?.map((s) => s.label)).toEqual(['Admin', 'Organisation', 'Access', 'Platform', 'Data'])
+    expect(nav.areas[3]?.sections?.map((s) => s.label)).toEqual(['Main', 'Organisation', 'Access', 'Platform', 'Data'])
     const it = translateNav(OFFICE_NAV, createScopedTranslator('it', messagesFor('it', ['shell']), 'shell'))
-    expect(it.areas.map((area) => area.label)).toEqual(['Home', 'Vendite', 'Prodotti', 'Pianificazione', 'Acquisti', 'Magazzino', 'Produzione', 'Qualità', 'Conformità', 'Contabilità', 'Amministrazione'])
+    expect(it.areas.map((area) => area.label)).toEqual(['Home', 'Vendite', 'Prodotti', 'Pianificazione', 'Acquisti', 'Magazzino', 'Produzione', 'Qualità', 'Conformità', 'Amministrazione', 'Sistema'])
     expect(JSON.stringify(nav)).not.toContain('shell:')
   })
 

@@ -2,13 +2,13 @@ import { Activity, ClipboardList, Factory, SlidersHorizontal } from 'lucide-reac
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
- * Production (A2 §1.3 row 8, §1.4 "Production"; design 01 production: Main › Floor now, Work orders). Labels are message
+ * Production (design 01 area 7 "Production / Produzione"; A2 §1.4 "Production": Main › Floor now, Work orders). Labels are message
  * keys (`shell:` = messages/<locale>/shell.json). Each row's permission is the one its page's API needs: workorders.view
  * (planner, production manager, sales, warehouse, quality inspector, floor supervisor, read-only; the owner). The later
  * pages (Dispatch, Cutting, Bundles, Labour & corrections, Scrap & rework …, Floor rules) join with their steps.
  */
 export const officeArea: OfficeAreaNav = {
-  order: 8,
+  order: 7,
   area: {
     id: 'production',
     label: 'shell:nav.production.area',

@@ -1,0 +1,31 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/holds.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office keeps the defect library and the disposition codes and places, follows and releases quality holds through apps/factory-api's modules/quality/{defects,holds} (B-W2a-26), always through command(); the API keeps staff to the companies and sites their grants reach. The floor (factory_floor_runtime) reads the defect library, tenant-wide (the inspection bench's defect picker and the reason tiles of floor.reasons, B-W2a-26/B-W2a-18: words, icon, colour, nothing personal or secret), and its site's holds: every floor write the …_quality_plant_w2a_guards check against a hold (an issue or a cut of a held lot or hide, a scan of a held bundle, a release or packing of held garments) reads them under the floor's own role; it places a hold at the bench (floor.final \"Hold lot\", by the signed-in worker), confirms the quarantine move (floor.move) and releases a hold with the inspector's PIN; the guard keeps it to those changes. The floor never reads a disposition code (an NCR's decision, with its approval amount at the cost grain, is the office's). Portal and link sessions read nothing here (no portal in W2a). A defect or disposition code nothing names may be deleted (the references refuse the rest: retire it instead); a hold is released or closed, never deleted. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "DefectCode": {
+      "about": "The office keeps the two-level defect library (categories and their defects: words, icon, picture, default class, zone, stages) and retires codes; every floor device reads the tenant's library for the bench's and the reason tiles' pickers.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
+    },
+    "DispositionCode": {
+      "about": "The office keeps the disposition codes (outcome, the stock move and follow-up record each makes, the approval rule by severity or value); NCR decisions name them. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "QualityHold": {
+      "about": "The office places, follows and releases holds and closes them through their NCR. The site's floor reads its holds (the hold guards of its issues, cuts, scans, releases and packing read them), places a hold at the bench, confirms the move to quarantine and releases with the inspector's PIN.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}

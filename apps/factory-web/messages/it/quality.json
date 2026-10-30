@@ -305,7 +305,7 @@
     },
     "noAccess": {
       "title": "Le ispezioni non sono aperte al tuo ruolo",
-      "body": "Serve quality.inspections.view; lo concede il titolare o un amministratore in Amministrazione › Ruoli."
+      "body": "Serve quality.inspections.view; lo concede il titolare o un amministratore in Sistema › Ruoli e permessi."
     }
   },
   "view": {
@@ -844,7 +844,7 @@
     },
     "noAccess": {
       "title": "La catena delle prove non è aperta al tuo ruolo",
-      "body": "Serve quality.inspections.view; lo concede il titolare o un amministratore in Amministrazione › Ruoli."
+      "body": "Serve quality.inspections.view; lo concede il titolare o un amministratore in Sistema › Ruoli e permessi."
     },
     "badAddress": {
       "title": "Questo indirizzo non indica un capo o un lotto",

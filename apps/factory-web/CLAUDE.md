@@ -104,7 +104,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   thread dock, step-up asked first when the session has none fresh), `list/` (list frame; Export N), `record/` (tabs
   `?tab=lines|dates|production|shipments|money|documents|activity`, dialogs), `_demo/fixtures.ts` (made-up data).
   "Make work orders" opens `/production/work-orders?new=1&order=<number>` (the dialog picks that order).
-- `src/areas/finance/` — Finance (area order 11, Italian "Contabilità"; SCR-080 … SCR-083): `_shared/` (api.ts every call + zod,
+- `src/areas/finance/` — Finance (area order 10, Italian "Amministrazione"; SCR-080 … SCR-083): `_shared/` (api.ts every call + zod,
   model.ts the pure rules — saved views ⇄ address = the API's own `?status=` `?docType=`, journey, next step held with its
   reason, the checks in words with where to fix, payment state, placement oldest first, CSV, problems —, hooks.ts live,
   step-up asked first, thread dock; parts.tsx the named stand-ins JourneyStrip, CheckList, Bridge, DialogFrame;
@@ -150,7 +150,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - Navigation: `src/areas/<area>/nav.ts` exports `officeArea = { order, area }` (the DS `AreaNavArea`; labels are
   `shell:`-style message keys; each row's `permission` is the one its page's API needs). The rail, sub-sidebar, crumbs,
   phone bottom bar and palette all read it; `officeNavFor(can)` filters it per person. A permission not yet declared in
-  factory-domain must be in `PENDING_PERMISSIONS` (shell/nav/office-nav.ts) until its step declares it.
+  factory-domain must be in `PENDING_PERMISSIONS` (shell/nav/office-nav.ts) until its step declares it. `order` and the
+  words are the approved tree's (`shell/nav/approved-tree.ts`, its W0/W1 part: Admin is "Sistema" in Italian, Finance
+  "Amministrazione"); `shell/nav/navigation-map.vitest.test.ts` walks it against the rail, every overlay, the palette,
+  RECORD_PAGES/LIST_PAGES, the floor tiles and scan router, the link registry (`links/_nav/link-types.ts`: purpose ×
+  record type → link task page, else the link frame) and every "Area › Page" pointer in the catalogues. A page that
+  ships adds its tree entry there.
 - Views never import each other (`check-view-boundaries`): Office (`app/(office)`, `shell/{office,nav,switcher,palette}`,
   `areas`), Links (`app/(links)`, `shell/links`), Floor, Portal. Share through `src/lib`. No `@nexus/factory-db`.
 - UI text: `messages/<locale>/<area>.json` (it, en), found by themselves; every key in both languages with the same

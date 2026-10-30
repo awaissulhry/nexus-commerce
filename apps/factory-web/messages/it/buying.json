@@ -754,8 +754,8 @@
       "NO_CONTACT": "Nessun contatto scelto per ricevere l’ordine.",
       "CONTACT_NOT_ORDERS": "Il contatto non riceve ordini (dagli il ruolo Ordini, o scegline un altro).",
       "NO_CONTACT_EMAIL": "Il contatto non ha un indirizzo email.",
-      "COMPANY_LEGAL": "La carta intestata della nostra azienda non è completa (Amministrazione › Aziende).",
-      "NO_DELIVERY_ADDRESS": "Lo stabilimento di consegna non ha un indirizzo (Amministrazione › Stabilimenti).",
+      "COMPANY_LEGAL": "La carta intestata della nostra azienda non è completa (Sistema › Società e stabilimenti).",
+      "NO_DELIVERY_ADDRESS": "Lo stabilimento di consegna non ha un indirizzo (Sistema › Società e stabilimenti).",
       "NO_LINES": "L’ordine non ha ancora righe.",
       "LINE_NOT_PRICED": "Una riga non ha prezzo.",
       "NEED_DATE_PAST": "La data di fabbisogno di una riga è nel passato.",
@@ -932,7 +932,7 @@
         "decline": "Rifiutarlo con un motivo",
         "noAccount": "Nessun account necessario; il link non mostra prezzi"
       },
-      "previewNeeds": "Il PDF non si può ancora creare: i dati legali della società per l’intestazione non sono completi (ragione sociale, sede legale, partita IVA, codice fiscale, REA). Si impostano in Impostazioni › Società e stabilimenti.",
+      "previewNeeds": "Il PDF non si può ancora creare: i dati legali della società per l’intestazione non sono completi (ragione sociale, sede legale, partita IVA, codice fiscale, REA). Si impostano in Sistema › Società e stabilimenti.",
       "previewNeedsCost": "Il PDF riporta i prezzi, quindi lo vede solo chi vede i costi. Il fornitore lo riceve con la mail.",
       "refused": "L’ordine non si può inviare così: un controllo non è più superato. I controlli sono stati riletti."
     },
@@ -1296,7 +1296,7 @@
       "hides": "Una pelle non è stata accettata: serve una superficie maggiore di 0 (al massimo 4 decimali) in m², dm² o ft², lo spessore in mm.",
       "lots": "Un lotto non è stato accettato: controlla la quantità.",
       "receivedAt": "L’ora di ricevimento è nel futuro.",
-      "series": "Questa azienda non ha ancora la serie dei ricevimenti o dei lotti: Amministrazione › Documenti e numerazione.",
+      "series": "Questa azienda non ha ancora la serie dei ricevimenti o dei lotti: Sistema › Documenti e numerazioni.",
       "order": "L’ordine non accetta più questa merce (modificato, annullato o già ricevuto): è stato riletto."
     },
     "result": {

@@ -4,7 +4,9 @@
  * are company-free; the caller adds `/w/<company>`. Every opener is a real link, so ⌘-click opens a new tab.
  *
  * A step that builds a record page (or a list page) adds ONE line here, and its page's address to OFFICE_PAGES
- * (shell/nav/office-nav.ts): the opener follows by itself. `[id]` stands for the record's id; a `?…` part is kept.
+ * (shell/nav/office-nav.ts): the opener follows by itself. `[id]` stands for the record's id, `[companyId]` for its
+ * company (a record that lives under its company's page); a `?…` part is kept. The navigation test
+ * (shell/nav/navigation-map.vitest.test.ts) holds that every built record page has its line here.
  */
 
 /**
@@ -46,6 +48,24 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // Purchasing › the PO studio (SCR-059); Warehouse › a goods receipt (SCR-063).
   PurchaseOrder: '/purchasing/orders/[id]',
   GoodsReceipt: '/warehouse/receipts/[id]',
+  // Admin (B-W0-27/28): a company, a site (its address names its company: `[companyId]` is the record's own company), a
+  // device or printer, an office user, a floor worker, a role, a connection.
+  Company: '/admin/companies/[id]',
+  Site: '/admin/companies/[companyId]/sites/[id]',
+  Device: '/admin/devices/[id]',
+  User: '/admin/users/[id]',
+  Worker: '/admin/users/floor/[id]',
+  Role: '/admin/roles/[id]',
+  IntegrationAccount: '/admin/connections/[id]',
+})
+
+/**
+ * A Today row whose work is done on a page other than its record's: attention kind → that page (`[id]` = the row's
+ * record id). A company's open privacy duties are worked on Admin › Privacy & notices for that company, not on the
+ * company's record.
+ */
+export const ATTENTION_PAGES: Readonly<Record<string, string>> = Object.freeze({
+  PRIVACY_DUTY: '/admin/privacy?company=[id]',
 })
 
 /** An API list route → the web page that shows it (with the same query). */
@@ -112,13 +132,20 @@ export function hasRecordPage(type: string, built: ReadonlySet<string>): boolean
   return page !== undefined && isBuilt(page, built)
 }
 
+/** The record's own page address, or null when its page needs what the reference lacks (a site without its company). */
+function ownPage(page: string, record: RecordRef): string | null {
+  if (page.includes('[companyId]') && !record.companyId) return null
+  return page.replace('[companyId]', encodeURIComponent(record.companyId ?? '')).replace('[id]', encodeURIComponent(record.id))
+}
+
 /**
  * The company-free address a record opens at: its own page when built, else its panels (with what the panels need to
  * show it: its label, company and site).
  */
 export function recordAddress(record: RecordRef, built: ReadonlySet<string>): string {
   const page = RECORD_PAGES[record.type]
-  if (page && hasRecordPage(record.type, built)) return page.replace('[id]', encodeURIComponent(record.id))
+  const own = page && hasRecordPage(record.type, built) ? ownPage(page, record) : null
+  if (own) return own
   const query = new URLSearchParams()
   if (record.label) query.set('label', record.label)
   if (record.companyId) query.set('company', record.companyId)
@@ -137,4 +164,11 @@ export function listAddress(apiList: string | null, query: Readonly<Record<strin
   if (!page || !isBuilt(page, built)) return null
   const qs = new URLSearchParams(query ?? {}).toString()
   return `${page}${qs ? `?${qs}` : ''}`
+}
+
+/** Where a Today row opens: its kind's own page when built (ATTENTION_PAGES), else its record (`recordAddress`). */
+export function attentionAddress(kind: string, record: RecordRef, built: ReadonlySet<string>): string {
+  const page = ATTENTION_PAGES[kind]
+  if (page && isBuilt(page, built)) return page.replace('[id]', encodeURIComponent(record.id))
+  return recordAddress(record, built)
 }

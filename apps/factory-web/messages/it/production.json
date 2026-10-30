@@ -312,7 +312,7 @@
     },
     "LABEL_TEMPLATE": {
       "OK": "L'etichetta {label} è attiva.",
-      "none": "La revisione non indica un'etichetta del capo: impostala in Prodotti › Etichette.",
+      "none": "La revisione non indica un'etichetta del capo: impostala in Conformità › Etichette e marcature.",
       "notActive": "L'etichetta {label} non è attiva: il rilascio la richiede attiva."
     },
     "CERTIFICATE": {
@@ -346,7 +346,7 @@
     },
     "BATCH_NUMBER": {
       "OK": "Il numero di lotto viene assegnato al rilascio e non cambia mai.",
-      "BLOCKED": "L'azienda non ha una serie per i lotti: un amministratore la imposta in Admin › Numerazione."
+      "BLOCKED": "L'azienda non ha una serie per i lotti: un amministratore la imposta in Sistema › Documenti e numerazioni."
     }
   },
   "problem": {
