@@ -8,6 +8,10 @@ import { RecordPanels } from '../../../record-panels/RecordPanels'
 import { listCompanies, listRoles, listUsers, roleCatalogue, type PermissionCatalogue, type Role, type User } from '../shared/api'
 import { failed, loaded, loading, problemKey, type Loaded, type ScopeOption } from '../shared/model'
 import { useRecordTab, useThreadDock } from '../shared/record-hooks'
+import { isStepUpCancelled, useStepUp } from '../shared/step-up'
+import { changeTwoFactor, previewTwoFactor, twoFactorRoles, type TwoFactorRole } from '../security/api'
+import { LOADING, NO_DIALOG, type Dialog, type Read } from '../security/model'
+import { AdminMessages, StepUp } from '../shared/view/parts'
 import { ROLE_TABS } from './model'
 import { RoleRecordView } from './view/RoleRecordView'
 
@@ -29,6 +33,22 @@ export function RoleRecord({ roleId }: { roleId: string }) {
   const [catalogue, setCatalogue] = useState<PermissionCatalogue | null>(null)
   const [holders, setHolders] = useState<Loaded<User>>(loading())
   const [companies, setCompanies] = useState<ScopeOption[]>([])
+  // B-W2a-36: Scope rules › Two-factor (GET /admin/security/two-factor, roles.view).
+  const [twoFactor, setTwoFactor] = useState<Read<TwoFactorRole>>(held.has('roles.view') ? LOADING : { state: 'no-right' })
+  const [canChange, setCanChange] = useState(false)
+  const [dialog, setDialog] = useState<Dialog>(NO_DIALOG)
+  const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
+  const loadTwoFactor = useCallback(() => {
+    if (!held.has('roles.view')) return
+    twoFactorRoles(api).then(
+      (list) => {
+        const found = list.roles.find((item) => item.id === roleId)
+        setCanChange(list.canChange)
+        setTwoFactor(found ? { state: 'ok', value: found } : { state: 'no-right' })
+      },
+      (error: unknown) => setTwoFactor({ state: 'failed', problem: problemKey(error) }),
+    )
+  }, [api, held, roleId])
 
   const load = useCallback(async () => {
     try {
@@ -53,11 +73,27 @@ export function RoleRecord({ roleId }: { roleId: string }) {
   }, [api, held, roleId])
   useEffect(() => {
     void load()
-  }, [load])
+    loadTwoFactor()
+  }, [load, loadTwoFactor])
+
+  const saveTwoFactor = async () => {
+    if (dialog.kind !== 'twoFactor' || dialog.busy || dialog.preview.state !== 'ok' || dialog.preview.value.refusals.length > 0) return
+    const { changes, requireMfa, reason } = dialog
+    setDialog({ ...dialog, busy: true, problem: null })
+    try {
+      await guard(requireMfa ? 'stepUp.sentence.twoFactorAsk' : 'stepUp.sentence.twoFactorStop', () => changeTwoFactor(api, changes, reason.trim() || undefined))
+      setDialog(NO_DIALOG)
+      void load()
+      loadTwoFactor()
+    } catch (error) {
+      setDialog((current) => (current.kind === 'twoFactor' ? { ...current, busy: false, problem: isStepUpCancelled(error) ? null : 'sec.problem.failed' } : current))
+    }
+  }
 
   return (
+    <>
     <RoleRecordView
-      model={{ prefix, tab, role, problem: role ? null : problem, catalogue, holders, companies, dockOpen }}
+      model={{ prefix, tab, role, problem: role ? null : problem, catalogue, holders, companies, dockOpen, twoFactor: { role: twoFactor, canChange, dialog } }}
       panels={role ? <RecordPanels record={{ type: 'Role', id: role.id, companyId: null }} title={role.name} /> : null}
       actions={{
         onOpen: (path) => router.push(path),
@@ -66,7 +102,26 @@ export function RoleRecord({ roleId }: { roleId: string }) {
           setProblem(null)
           void load()
         },
+        twoFactor: {
+          onRetry: loadTwoFactor,
+          onSave: (requireMfa) => {
+            if (twoFactor.state !== 'ok') return
+            const changes = [{ roleId: twoFactor.value.id, version: twoFactor.value.version, requireMfa }]
+            setDialog({ kind: 'twoFactor', changes, requireMfa, preview: LOADING, busy: false, problem: null, reason: '' })
+            previewTwoFactor(api, changes).then(
+              (value) => setDialog((current) => (current.kind === 'twoFactor' ? { ...current, preview: { state: 'ok', value } } : current)),
+              (error: unknown) => setDialog((current) => (current.kind === 'twoFactor' ? { ...current, preview: { state: 'failed', problem: problemKey(error) } } : current)),
+            )
+          },
+          onTwoFactorReason: (reason) => setDialog((current) => (current.kind === 'twoFactor' ? { ...current, reason } : current)),
+          onTwoFactorSave: () => void saveTwoFactor(),
+          onDialogClose: () => setDialog(NO_DIALOG),
+        },
       }}
     />
+    <AdminMessages>
+      <StepUp model={stepUp} onSubmit={(code) => void submitStepUp(code)} onClose={cancelStepUp} />
+    </AdminMessages>
+    </>
   )
 }

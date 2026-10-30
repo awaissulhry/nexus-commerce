@@ -90,7 +90,9 @@
       "deactivate": "Deactivating a person needs a fresh code from your authenticator app.",
       "password": "Forcing a new password needs a fresh code from your authenticator app.",
       "badge": "A worker's badge needs a fresh code from your authenticator app.",
-      "pin": "Resetting a worker's PIN needs a fresh code from your authenticator app."
+      "pin": "Resetting a worker's PIN needs a fresh code from your authenticator app.",
+      "twoFactorAsk": "Asking two-factor of a role needs a fresh code from your authenticator app.",
+      "twoFactorStop": "No longer asking two-factor of a role needs a fresh code from your authenticator app."
     },
     "problem": {
       "wrong": "That code is wrong or was already used. Type the next one.",
@@ -1229,8 +1231,7 @@
     "mfa": {
       "title": "Two-factor",
       "on": "Required: the role gives nothing until two-factor is proved in the session.",
-      "off": "Not required by this role.",
-      "later": "Switching it per role comes in W2a (Security & health)."
+      "off": "Not required by this role."
     },
     "floorHolders": "A floor role is held by floor workers ({count} now); see them in Users › Floor.",
     "nobody": "Nobody has this role.",
@@ -1497,7 +1498,8 @@
     "pricelists": "Price lists",
     "tasks": "Tasks",
     "views": "Views and exports",
-    "search": "Search"
+    "search": "Search",
+    "security": "Security & health"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1682,6 +1684,8 @@
     "inventory_discrepancies_report": "Send the discrepancy report to the supplier",
     "search_rebuild": "Rebuild the search index of the whole group",
     "planning_schedule_manage": "Plan the schedule and allocate work to lines",
-    "planning_schedule_publish": "Publish the schedule to the floor"
+    "planning_schedule_publish": "Publish the schedule to the floor",
+    "security_view": "See whether every part works, the sign-in rules, backups and restore drills",
+    "security_drills_record": "Record a restore drill"
   }
 }

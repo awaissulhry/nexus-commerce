@@ -3,6 +3,8 @@ import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { CATALOGUE, COMPANIES, inShell, NOW, panels, PREFIX, ROLES, USERS } from '../shared/fixtures'
 import { failed, loaded, loading } from '../shared/model'
 import type { RoleRecordModel, RolesViewModel } from './model'
+import type { TwoFactorRole } from '../security/api'
+import type { RoleTwoFactorModel } from '../security/view/RoleTwoFactor'
 import { RoleRecordView } from './view/RoleRecordView'
 import { RolesView } from './view/RolesView'
 
@@ -17,6 +19,28 @@ const role = (index: number, over: Partial<RoleRecordModel> = {}, dock = false):
   dock,
   model: { prefix: PREFIX, tab: 'permissions', role: ROLES[index]!, catalogue: CATALOGUE, holders: loaded(USERS), companies, ...over },
 })
+
+// B-W2a-36: Scope rules › Two-factor, made-up holders.
+const twoFactorOf = (index: number, over: Partial<TwoFactorRole> = {}): TwoFactorRole => {
+  const base = ROLES[index]!
+  return {
+    id: base.id,
+    key: base.key,
+    name: base.name,
+    system: base.system,
+    requireMfa: base.requireMfa,
+    lock: null,
+    templateAsks: false,
+    version: base.version,
+    holders: [
+      { userId: USERS[3]!.id, name: USERS[3]!.displayName, twoFactor: false },
+      { userId: USERS[1]!.id, name: USERS[1]!.displayName, twoFactor: true },
+    ],
+    heldByMe: false,
+    ...over,
+  }
+}
+const tf = (role: TwoFactorRole, over: Partial<RoleTwoFactorModel> = {}): RoleTwoFactorModel => ({ role: { state: 'ok', value: role }, canChange: true, dialog: { kind: 'none' }, ...over })
 
 function RolesDesign({ model }: { model: Case }) {
   if (model.page === 'list') return inShell('/admin/roles', createElement(RolesView, { model: model.model }))
@@ -40,7 +64,22 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'error', label: 'The API did not answer', model: list({ roles: failed('problem.unavailable'), asOf: null }) },
     { id: 'role-permissions', label: 'Role: what it can do', model: role(3), note: 'Sentences first, then every permission by area with its risk mark; ready-made roles are read-only.' },
     { id: 'role-custom', label: 'Role: a custom copy behind its template', model: role(5) },
-    { id: 'role-rules', label: 'Role: rules that always apply', model: role(3, { tab: 'rules' }) },
+    { id: 'role-rules', label: 'Role: rules that always apply, and two-factor', model: role(3, { tab: 'rules', twoFactor: tf(twoFactorOf(3)) }), note: 'B-W2a-36: the switch, the people without two-factor, Save (who it affects first, then a fresh code).' },
+    { id: 'role-two-factor-on', label: 'Role: two-factor switched on, not saved yet', model: role(3, { tab: 'rules', twoFactor: tf(twoFactorOf(3), { draft: true }) }) },
+    { id: 'role-two-factor-fixed', label: 'Role: a ready-made role that always asks', model: role(1, { tab: 'rules', twoFactor: tf(twoFactorOf(1, { requireMfa: true, lock: 'template', templateAsks: true })) }), note: 'Held with its reason.' },
+    { id: 'role-two-factor-mine', label: 'Role: a role you hold', model: role(3, { tab: 'rules', twoFactor: tf(twoFactorOf(3, { heldByMe: true })) }) },
+    {
+      id: 'role-two-factor-dialog',
+      label: 'Role: asking two-factor, who it affects',
+      model: role(3, {
+        tab: 'rules',
+        twoFactor: tf(twoFactorOf(3), {
+          draft: true,
+          dialog: { kind: 'twoFactor', requireMfa: true, changes: [{ roleId: ROLES[3]!.id, version: ROLES[3]!.version, requireMfa: true }], preview: { state: 'ok', value: { affected: [{ userId: USERS[3]!.id, name: USERS[3]!.displayName, twoFactor: false }], openSessions: 1, refusals: [] } }, busy: false, problem: null, reason: '' },
+        }),
+      }),
+    },
+    { id: 'role-two-factor-loading', label: 'Role: two-factor loading', model: role(3, { tab: 'rules', twoFactor: { role: { state: 'loading' }, canChange: true, dialog: { kind: 'none' } } }) },
     { id: 'role-users', label: 'Role: who has it', model: role(2, { tab: 'users' }) },
     { id: 'role-users-none', label: 'Role: nobody has it', model: role(3, { tab: 'users', holders: loaded([]) }) },
     { id: 'role-floor', label: 'Role: a floor role', model: role(9, { tab: 'users' }) },

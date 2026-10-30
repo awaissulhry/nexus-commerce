@@ -90,7 +90,9 @@
       "deactivate": "Disattivare una persona richiede un codice nuovo dall'app di autenticazione.",
       "password": "Imporre una nuova password richiede un codice nuovo dall'app di autenticazione.",
       "badge": "Il badge di un operatore richiede un codice nuovo dall'app di autenticazione.",
-      "pin": "Azzerare il PIN di un operatore richiede un codice nuovo dall'app di autenticazione."
+      "pin": "Azzerare il PIN di un operatore richiede un codice nuovo dall'app di autenticazione.",
+      "twoFactorAsk": "Chiedere il doppio fattore a un ruolo richiede un codice nuovo dalla tua app di autenticazione.",
+      "twoFactorStop": "Non chiedere più il doppio fattore a un ruolo richiede un codice nuovo dalla tua app di autenticazione."
     },
     "problem": {
       "wrong": "Il codice è sbagliato o è già stato usato. Inserisci il prossimo.",
@@ -1229,8 +1231,7 @@
     "mfa": {
       "title": "Doppio fattore",
       "on": "Richiesto: il ruolo non dà nulla finché nella sessione non è provato il doppio fattore.",
-      "off": "Non richiesto da questo ruolo.",
-      "later": "Cambiarlo per ruolo arriva in W2a (Sicurezza e stato del sistema)."
+      "off": "Non richiesto da questo ruolo."
     },
     "floorHolders": "Un ruolo di reparto è degli operatori ({count} ora); li trovi in Utenti › Reparto.",
     "nobody": "Nessuno ha questo ruolo.",
@@ -1497,7 +1498,8 @@
     "pricelists": "Listini",
     "tasks": "Attività",
     "views": "Viste ed esportazioni",
-    "search": "Ricerca"
+    "search": "Ricerca",
+    "security": "Sicurezza e stato del sistema"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1682,6 +1684,8 @@
     "inventory_discrepancies_report": "Inviare al fornitore il rapporto delle differenze",
     "search_rebuild": "Ricostruire l'indice di ricerca di tutto il gruppo",
     "planning_schedule_manage": "Pianificare il programma e assegnare il lavoro alle linee",
-    "planning_schedule_publish": "Pubblicare il programma al reparto"
+    "planning_schedule_publish": "Pubblicare il programma al reparto",
+    "security_view": "Vedere se ogni parte funziona, le regole di accesso, backup e prove di ripristino",
+    "security_drills_record": "Registrare una prova di ripristino"
   }
 }
