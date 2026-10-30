@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { defineEvent } from '../events/define'
+import { DDT_REASONS } from '../documents/model'
+import { DDT_SOURCE_TYPES } from './ddt/sources'
 import { TRACKING_SOURCES, TRACKING_STATUSES } from './labels/tracking'
 import { SHIPMENT_STATUSES } from './shipments'
 
@@ -23,6 +25,10 @@ import { SHIPMENT_STATUSES } from './shipments'
  *                                 shared with its party (B-W1-49)
  *   shipment.documents_link_sent  a link to them was mailed to the party: when the goods left, by the office, or because
  *                                 the party asked for a new one
+ *   ddt.source_issued         a DDT for another reason was issued (B-W2a-17, LOG-056: no shipment; a subcontract kit, goods
+ *                             back to a supplier, a repaired garment, returned goods sent back), `replacement` when it
+ *                             replaces a cancelled one whose goods left
+ *   ddt.source_cancelled      such a DDT was cancelled (it keeps its number; a new one replaces it)
  */
 const status = z.enum(SHIPMENT_STATUSES)
 
@@ -113,5 +119,20 @@ export const events = [
     description: "A link to a shipment's documents was mailed to its party's contacts.",
     payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), links: z.number().int().min(1), reason: z.enum(DOCUMENT_LINK_REASONS) }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'links', 'reason'] },
+  }),
+  // B-W2a-17 (LOG-056): DDTs for other reasons (shipping/ddt/sources).
+  defineEvent({
+    type: 'ddt.source_issued',
+    context: 'shipping',
+    description: "A DDT for goods that travel without a sales shipment (a subcontract kit, goods back to a supplier, a repaired garment, returned goods sent back) was issued with the next number of its company's DDT series.",
+    payload: z.strictObject({ ddtId: z.uuid(), sourceType: z.enum(DDT_SOURCE_TYPES), sourceId: z.uuid(), number: z.string(), documentDate: z.iso.date(), reason: z.enum(DDT_REASONS), replacement: z.boolean() }),
+    live: { permission: 'shipping.view', fields: ['ddtId', 'sourceType', 'sourceId', 'number'] },
+  }),
+  defineEvent({
+    type: 'ddt.source_cancelled',
+    context: 'shipping',
+    description: 'A DDT for another reason (no shipment) was cancelled with its reason; it keeps its number.',
+    payload: z.strictObject({ ddtId: z.uuid(), sourceType: z.enum(DDT_SOURCE_TYPES), sourceId: z.uuid(), number: z.string() }),
+    live: { permission: 'shipping.view', fields: ['ddtId', 'sourceType', 'sourceId', 'number'] },
   }),
 ] as const
