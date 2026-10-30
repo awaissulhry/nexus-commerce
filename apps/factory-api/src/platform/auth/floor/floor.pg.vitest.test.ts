@@ -576,7 +576,7 @@ describe('revocation ends sessions', () => {
     expect((await me(device)).body).toMatchObject({ pinMustChange: true, permissions: [] })
     expect((await device.browser.post('/floor/pin', { currentPin: reset.body.pin, newPin: '123456' })).status).toBe(400)
     expect((await device.browser.post('/floor/pin', { currentPin: reset.body.pin, newPin: '905218' })).body).toEqual({ status: 'changed' })
-    expect((await me(device)).body).toMatchObject({ pinMustChange: false, permissions: ['floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.receive', 'inventory.transfer', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'production.scan', 'production.serials', 'shipping.pack'] })
+    expect((await me(device)).body).toMatchObject({ pinMustChange: false, permissions: ['floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.receive', 'inventory.transfer', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'production.rework', 'production.scan', 'production.serials', 'shipping.pack'] })
     expect((await device.browser.post('/floor/sign-out')).status).toBe(200)
     expect((await signIn(device, ola, reset.body.pin)).status).toBe(401)
     expect((await signIn(device, ola, '905218')).status).toBe(200)
@@ -588,12 +588,12 @@ describe('floor grants come from floor roles, with at most wages', () => {
     const device = await tablet(p1)
     const pia = await worker(p1, 'Pia Test', ['team_leader'])
     expect((await signIn(device, pia)).status).toBe(200)
-    expect((await me(device)).body.permissions).toEqual(['floor.lead', 'floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.receive', 'inventory.transfer', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'production.scan', 'production.serials', 'quality.inspections.view', 'shipping.pack'])
+    expect((await me(device)).body.permissions).toEqual(['floor.lead', 'floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.receive', 'inventory.transfer', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'production.rework', 'production.scan', 'production.serials', 'quality.inspections.view', 'shipping.pack'])
     await stepped(office)
     expect((await send(office, 'PUT', `/auth/floor/workers/${pia.id}/roles`, { roleIds: [] })).status).toBe(200)
     expect((await me(device)).body.permissions).toEqual([])
     expect((await send(office, 'PUT', `/auth/floor/workers/${pia.id}/roles`, { roleIds: [await roleId(alpha, 'operator')] })).body.roles.map((role: { key: string }) => role.key)).toEqual(['operator'])
-    expect((await me(device)).body.permissions).toEqual(['floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.receive', 'inventory.transfer', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'production.scan', 'production.serials', 'shipping.pack'])
+    expect((await me(device)).body.permissions).toEqual(['floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.receive', 'inventory.transfer', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'production.rework', 'production.scan', 'production.serials', 'shipping.pack'])
   })
 
   it('drops every grain but wages, and refuses office roles for workers and floor roles for people', async () => {

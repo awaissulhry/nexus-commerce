@@ -94,7 +94,7 @@ export class BundleRefusedError extends ConflictError {
   }
 }
 
-const refused = (refusal: BundleRefusal): never => {
+export const refused = (refusal: BundleRefusal): never => {
   throw new BundleRefusedError(refusal)
 }
 const at = (value: Date | null) => (value ? toUtcIso(value) : null)
@@ -147,6 +147,7 @@ export function bundleView(row: BundleRow, cells: ReadonlyMap<string, CellLabel>
     cutLogIds: [...row.cutLogIds],
     deviceId: row.deviceId,
     clientEventId: row.clientEventId,
+    parentBundleId: row.parentBundleId,
     version: row.version,
     createdAt: toUtcIso(row.createdAt),
   }
@@ -166,8 +167,9 @@ export function cellView(counts: CellBundles, label: CellLabel | undefined) {
   }
 }
 
-const activeCounts = (rows: readonly Pick<BundleRow, 'workOrderSizeId' | 'part' | 'quantity' | 'status'>[]): BundleCount[] =>
-  rows.filter((row) => row.status === 'ACTIVE').map((row) => ({ cellId: row.workOrderSizeId, part: row.part, quantity: row.quantity }))
+// A bundle split off another (W2a B-W2a-13) carries garments its parent still counts (the parent keeps its quantity as cut).
+const activeCounts = (rows: readonly Pick<BundleRow, 'workOrderSizeId' | 'part' | 'quantity' | 'status' | 'parentBundleId'>[]): BundleCount[] =>
+  rows.filter((row) => row.status === 'ACTIVE' && row.parentBundleId === null).map((row) => ({ cellId: row.workOrderSizeId, part: row.part, quantity: row.quantity }))
 
 /** Each cell's cut, bundled and still-to-bundle garments, from the cut log (B-W1-40's cutForBundles) and the bundles. */
 export async function countsOf(db: Reader, workOrder: Pick<BundleHeader, 'id' | 'styleId'>, bundles?: readonly BundleCount[]) {
@@ -197,7 +199,7 @@ export function ticketOf(base: Awaited<ReturnType<typeof ticketBase>>, row: Pick
 
 // ---- the printer and the tickets -----------------------------------------------------------------------------------------------
 
-interface TicketPrinter {
+export interface TicketPrinter {
   readonly printer: PrinterRow | null
   /** Why no ticket is queued (no label printer: the tickets print as PDF). */
   readonly problem: string | null
@@ -211,7 +213,7 @@ const NO_PRINTER = 'No label printer is chosen: print the tickets as PDF.'
  * the label printer of the floor device's station (MES-184: Station.labelPrinterId), else the site's only ACTIVE label
  * printer (several: the caller chooses).
  */
-async function ticketPrinter(caller: CommandCaller, workOrder: BundleHeader, printerId: string | null | undefined): Promise<TicketPrinter> {
+export async function ticketPrinter(caller: CommandCaller, workOrder: BundleHeader, printerId: string | null | undefined): Promise<TicketPrinter> {
   const context = workerOf(caller)
   if (printerId === null) return { printer: null, problem: NO_PRINTER }
   if (printerId === undefined && context.audience === 'floor') {
@@ -250,7 +252,7 @@ export interface TicketAnswer {
  * bundle's (a replayed request after a reprint) or whose bundle is void is never printed: two tickets of one code, or a
  * replaced code on paper, would defeat MES-073.
  */
-async function printTickets(caller: CommandCaller, target: TicketPrinter, tickets: readonly { readonly bundleId: string; readonly ticket: BundleTicket }[]): Promise<TicketAnswer[]> {
+export async function printTickets(caller: CommandCaller, target: TicketPrinter, tickets: readonly { readonly bundleId: string; readonly ticket: BundleTicket }[]): Promise<TicketAnswer[]> {
   const context = workerOf(caller)
   const tag = tenantTag(context.tenantId)
   const current = new Map(
@@ -285,7 +287,7 @@ async function printTickets(caller: CommandCaller, target: TicketPrinter, ticket
  * The site's floor is ready for real work (B-W1-36, B-W1-37), or a 409 in the gate's words. The gate reads the DPIA and
  * the legal basis, which the floor role may not: it runs in the tenant's system context (codes.ts asTenantSystem).
  */
-async function assertFloorReady(caller: CommandCaller, context: FloorContext, siteId: string): Promise<void> {
+export async function assertFloorReady(caller: CommandCaller, context: FloorContext, siteId: string): Promise<void> {
   const refusal = bundlesReadyRefusal(await asTenantSystem(caller, context).withClient((client) => floorReadinessFor(client, siteId, serverClock.now())))
   if (refusal) refused(refusal)
 }
@@ -475,7 +477,7 @@ async function namedBundle(caller: CommandCaller, bundleId: string): Promise<{ b
   return { bundle, workOrder }
 }
 
-const postedBy = (context: Worker) => (context.audience === 'floor' ? 'FLOOR' : 'OFFICE')
+export const postedBy = (context: Worker) => (context.audience === 'floor' ? 'FLOOR' : 'OFFICE')
 
 export interface ReprintInput {
   /** Why: lost, damaged, unreadable … (BundleReprint.reason; the audit row keeps it too). */
@@ -556,6 +558,10 @@ export async function voidBundle(caller: CommandCaller, bundleId: string, body: 
     const workOrder = (await readHeader(tx, bundle.workOrderId))!
     const refusal = voidRefusal({ bundle, workOrder, scans: await countScans(tx, bundle.id) })
     if (refusal) refused(refusal)
+    // W2a B-W2a-13: a bundle an open rework travels in is not voided (cancel the rework first).
+    if ((await tx.reworkOrder.count({ where: { bundleId: bundle.id, status: { in: ['OPEN', 'IN_PROGRESS'] } } })) > 0) {
+      refused({ code: 'IN_REWORK', message: `Bundle ${bundle.code} carries an open rework: cancel or finish the rework before the bundle is voided.` })
+    }
     await tx.bundle.update({ where: { id: bundle.id }, data: { status: 'VOID', voidedAt: tools.now, voidReason: reason, version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
     const scope = { companyId: workOrder.companyId, siteId: workOrder.siteId }
     tools.audit({ recordType: 'Bundle', recordId: bundle.id, ...scope, before: { status: bundle.status }, after: { status: 'VOID', code: bundle.code, quantity: bundle.quantity }, reason })
