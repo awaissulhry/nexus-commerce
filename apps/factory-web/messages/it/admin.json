@@ -1491,7 +1491,8 @@
     "quality": "Qualità",
     "home": "Home",
     "floorsync": "Sincronizzazione reparto",
-    "calendars": "Calendari"
+    "calendars": "Calendari",
+    "reasons": "Elenchi delle causali"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1648,6 +1649,8 @@
     "production_scrap_view": "Vedere scarti e rilavorazioni",
     "production_scrap": "Registrare scarti e chiedere sostituzioni",
     "production_scrap_approve": "Approvare riduzioni d'ordine",
-    "production_cutting_view": "Vedere la resa del taglio"
+    "production_cutting_view": "Vedere la resa del taglio",
+    "reasons_view": "Vedere gli elenchi delle causali e quanto è usato ogni codice",
+    "reasons_manage": "Gestire gli elenchi delle causali di tutto il gruppo"
   }
 }

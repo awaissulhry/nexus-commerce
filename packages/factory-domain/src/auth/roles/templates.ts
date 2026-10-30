@@ -115,6 +115,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'home.view',
       'calendars.view',
       'calendars.manage',
+      // B-W2a-18: the reason lists of the whole group.
+      'reasons.view',
+      'reasons.manage',
     ],
     grains: [],
   }),
@@ -122,7 +125,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Finance',
     description: 'Invoices, payments and number series; sees prices, costs, margins and wages.',
     requireMfa: true,
-    permissions: ['numbering.view', 'numbering.manage', 'audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'product.materials.view', 'product.materials.cost', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'shipping.view', 'parties.view', 'parties.manage', 'parties.block', 'parties.vies', 'invoices.view', 'invoices.manage', 'invoices.issue', 'payments.view', 'payments.record', 'payments.void', 'costing.view', 'costing.rates.manage', 'quotes.view', 'quotes.approve', 'sales.settings.manage', 'companies.bank.view', 'companies.bank.manage', 'orders.view', 'orders.close', 'home.view', 'calendars.view', 'inventory.counts.view', 'inventory.counts.signoff', 'production.scrap.view'],
+    permissions: ['numbering.view', 'numbering.manage', 'audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'product.materials.view', 'product.materials.cost', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'shipping.view', 'parties.view', 'parties.manage', 'parties.block', 'parties.vies', 'invoices.view', 'invoices.manage', 'invoices.issue', 'payments.view', 'payments.record', 'payments.void', 'costing.view', 'costing.rates.manage', 'quotes.view', 'quotes.approve', 'sales.settings.manage', 'companies.bank.view', 'companies.bank.manage', 'orders.view', 'orders.close', 'home.view', 'calendars.view', 'inventory.counts.view', 'inventory.counts.signoff', 'production.scrap.view',
+      // B-W2a-18: the reason lists (return and cancel reasons beside the sales settings).
+      'reasons.view'],
     grains: ['price', 'cost', 'margin', 'wages'],
   }),
   template('sales', {
@@ -314,6 +319,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'floorsync.discard',
       'home.view',
       'calendars.view',
+      // B-W2a-18: Floor rules & codes' reason lists (pause, scrap, rework, downtime, help calls …).
+      'reasons.view',
+      'reasons.manage',
     ],
     grains: [],
   }),
@@ -328,7 +336,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Floor supervisor',
     description: "Follows the lines of their sites from the Office, decides the floor's scan corrections and keeps their floor devices, workers, badges and PINs; sees no money.",
     requireMfa: false,
-    permissions: ['files.read', 'devices.view', 'devices.manage', 'devices.revoke', 'workers.view', 'workers.manage', 'workers.roles', 'workers.credentials', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'production.settings.view', 'production.scan.correct', 'workorders.view', 'floorsync.view', 'floorsync.discard', 'home.view', 'calendars.view', 'production.rework', 'production.scrap.view', 'production.cutting.view'],
+    permissions: ['files.read', 'devices.view', 'devices.manage', 'devices.revoke', 'workers.view', 'workers.manage', 'workers.roles', 'workers.credentials', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'production.settings.view', 'production.scan.correct', 'workorders.view', 'floorsync.view', 'floorsync.discard', 'home.view', 'calendars.view', 'production.rework', 'production.scrap.view', 'production.cutting.view',
+      // B-W2a-18: sees the floor's reason lists (Floor rules & codes).
+      'reasons.view'],
     grains: [],
   }),
   template('read_only', {
