@@ -1,4 +1,6 @@
 import { CALENDARS_DEFINITIONS, CALENDARS_PERMISSIONS } from '../../calendars/permissions'
+// B-W2a-18: the reason lists (reasons.view, reasons.manage).
+import { REASONS_DEFINITIONS, REASONS_PERMISSIONS } from '../../reasons/permissions'
 import { CERTIFICATES_PERMISSIONS } from '../../compliance/certificates/permissions'
 import { REGISTER_PERMISSIONS } from '../../compliance/register/permissions'
 import { COSTING_DEFINITIONS, COSTING_PERMISSIONS } from '../../costing/permissions'
@@ -15,6 +17,9 @@ import { PARTIES_DEFINITIONS, PARTIES_PERMISSIONS } from '../../parties/permissi
 import { PAYMENTS_DEFINITIONS, PAYMENTS_PERMISSIONS } from '../../payments/permissions'
 import { PLANNING_DEFINITIONS, PLANNING_PERMISSIONS } from '../../planning/permissions'
 import { PLANNING_SETTINGS_DEFINITIONS, PLANNING_SETTINGS_PERMISSIONS } from '../../planning/settings/permissions'
+// B-W2a-22: MRP every day (planning.firm, planning.exceptions.manage).
+import { PLANNING_EXCEPTIONS_DEFINITIONS, PLANNING_EXCEPTIONS_PERMISSIONS } from '../../planning/exceptions/permissions'
+import { PLANNING_FIRM_DEFINITIONS, PLANNING_FIRM_PERMISSIONS } from '../../planning/mrp/permissions'
 import { PURCHASING_DEFINITIONS, PURCHASING_PERMISSIONS } from '../../purchasing/permissions'
 import { PURCHASING_SOURCES_DEFINITIONS, PURCHASING_SOURCES_PERMISSIONS } from '../../purchasing/sources/permissions'
 import { QUALITY_FINAL_DEFINITIONS, QUALITY_FINAL_FLOOR_PERMISSIONS, QUALITY_FINAL_PERMISSIONS } from '../../quality/final/permissions'
@@ -334,6 +339,9 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PARTIES_DEFINITIONS,
   PLANNING_DEFINITIONS,
   PLANNING_SETTINGS_DEFINITIONS,
+  // B-W2a-22: firm planned orders and the exception list.
+  PLANNING_FIRM_DEFINITIONS,
+  PLANNING_EXCEPTIONS_DEFINITIONS,
   PURCHASING_DEFINITIONS,
   INVOICES_DEFINITIONS,
   PAYMENTS_DEFINITIONS,
@@ -362,6 +370,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   CALENDARS_DEFINITIONS,
   // B-W2a-10: approved sources (purchasing.sources.manage).
   PURCHASING_SOURCES_DEFINITIONS,
+  // B-W2a-18: the reason lists.
+  REASONS_DEFINITIONS,
   // B-W2a-19: paymentterms.view | manage, pricelists.view | manage.
   PAYMENT_TERMS_DEFINITIONS,
   PRICE_LISTS_DEFINITIONS,
@@ -394,6 +404,10 @@ for (const name of PRODUCTION_COMPLETION_PERMISSIONS) {
 }
 // B-W2a-16: planning settings and capacity.
 for (const name of PLANNING_SETTINGS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-22: MRP every day.
+for (const name of [...PLANNING_FIRM_PERMISSIONS, ...PLANNING_EXCEPTIONS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-18: the reason lists.
+for (const name of REASONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-19: payment terms and price lists.
 for (const name of [...PAYMENT_TERMS_PERMISSIONS, ...PRICE_LISTS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

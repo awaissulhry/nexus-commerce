@@ -243,8 +243,9 @@ describe("the plan's Draft PO with an approved source", () => {
     await ok('buyer', 'POST', '/planning/runs', { siteId: A.siteA1 }, 201)
     plan = await ok('buyer', 'GET', `/planning/runs/latest?siteId=${A.siteA1}`)
     const black = lineOf(A.leather, A.leatherBLK)
-    // The plan's own suggestion: 186.48 ft² short = 4 hides, the material's minimum of 5 (its default supplier's terms).
-    expect(black).toMatchObject({ netQuantity: '186.4800', suggestedQuantity: '5.0000', suggestedUom: 'HIDE', supplier: { id: A.supplier } })
+    // B-W2a-22: the run itself follows P2's approved source, so the plan line and the PO line agree: 186.48 ft² short →
+    // ft², at least 100 in steps of 50 → 200 ft².
+    expect(black).toMatchObject({ netQuantity: '186.4800', suggestedQuantity: '200.0000', suggestedUom: 'FT2', supplier: { id: A.supplier } })
     const drafted = await ok('buyer', 'POST', '/purchasing/from-plan', { lines: [{ id: black.id, version: black.version }] })
     const order = (await ok('buyer', 'GET', `/purchasing/orders/${drafted.orders[0].id}`)).order
     // P2's source: ft², at least 100 in steps of 50 → 200 ft² at 4.00 = 800.00; its article code, the colour's code.
@@ -257,10 +258,12 @@ describe("the plan's Draft PO with an approved source", () => {
 
   it('refuses a supplier that is not one of the material’s approved sources once it has some (the plan line’s default supplier included)', async () => {
     const protector = lineOf(A.protector)
-    expect(protector.supplier.id).toBe(A.supplier)
-    const refusal = await refused('buyer', 'POST', '/purchasing/from-plan', { lines: [{ id: protector.id, version: protector.version }] }, 400)
+    // B-W2a-22: the run already takes the best approved source (S2, company A's own PRIMARY), not the material's default
+    // supplier (P2).
+    expect(protector.supplier.id).toBe(S2)
+    const refusal = await refused('buyer', 'POST', '/purchasing/from-plan', { lines: [{ id: protector.id, version: protector.version, supplierId: A.supplier }] }, 400)
     expect(refusal.issues).toEqual([{ path: 'body/lines/0/supplierId', message: 'Seed Leather Supplier S.p.A. is not an approved source of SEED-PRO-300: pick one of its sources, or add this supplier to them first.' }])
-    // An approved one: S3 (every company), in steps of 24 at 6.20.
+    // Another approved one: S3 (every company), in steps of 24 at 6.20.
     const drafted = await ok('buyer', 'POST', '/purchasing/from-plan', { lines: [{ id: protector.id, version: protector.version, supplierId: S3 }] })
     const order = (await ok('buyer', 'GET', `/purchasing/orders/${drafted.orders[0].id}`)).order
     expect(order).toMatchObject({ partyId: S3, lines: [expect.objectContaining({ quantity: '24.0000', uom: 'PCS', unitPrice: '6.200000' })] })

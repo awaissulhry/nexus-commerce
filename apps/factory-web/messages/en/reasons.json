@@ -1,0 +1,223 @@
+{
+  "title": "Reason codes",
+  "lists": "Reason lists",
+  "table": "{list} reasons",
+  "search": "Search code or words",
+  "new": "New reason",
+  "count": "{active} active · {inactive} inactive",
+  "wordsOnly": "Scrap and rework reasons keep their words in Italian and English only: icons, colours, other floor languages and \"asks for a note\" come later for these two lists.",
+  "list": {
+    "PAUSE": "Pause",
+    "DOWNTIME": "Downtime",
+    "HELP_CALL": "Help calls",
+    "ADJUSTMENT": "Stock adjustments",
+    "HOLD": "Holds",
+    "CANCEL": "Cancellations",
+    "WRITE_OFF": "Write-offs",
+    "RETURN": "Returns",
+    "DISCREPANCY": "Delivery problems",
+    "CLAIM": "Supplier claims",
+    "DOWNGRADE": "Downgrades",
+    "SCRAP": "Scrap",
+    "REWORK": "Rework"
+  },
+  "listHint": {
+    "PAUSE": "Why work paused at a station: the floor's pause tiles.",
+    "DOWNTIME": "Why a machine or a line stopped.",
+    "HELP_CALL": "What a help call from the floor is about.",
+    "ADJUSTMENT": "Why a count or a stock figure differs: every counted line that differs names one.",
+    "HOLD": "Why goods were put on hold.",
+    "CANCEL": "Why an order, a line or a document was cancelled.",
+    "WRITE_OFF": "Why stock was written off (damaged, expired, obsolete, lost).",
+    "RETURN": "Why a customer sent goods back: each return line names one.",
+    "DISCREPANCY": "What was wrong with a delivery: short, over, wrong or damaged.",
+    "CLAIM": "Why we claim against a supplier.",
+    "DOWNGRADE": "Why goods went down to a lower quality.",
+    "SCRAP": "Why a garment is lost at an operation: the operation screen's scrap tiles.",
+    "REWORK": "Why a garment goes back to be made again: the operation screen's rework tiles."
+  },
+  "col": {
+    "code": "Code",
+    "look": "Icon and colour",
+    "it": "Italian",
+    "en": "English",
+    "needsDetail": "Asks for a note",
+    "active": "Active",
+    "used": "Used"
+  },
+  "words": {
+    "fallback": "Empty: English shown"
+  },
+  "active": {
+    "on": "Active",
+    "off": "Inactive",
+    "label": "{code} is active"
+  },
+  "detail": {
+    "on": "Yes",
+    "off": "No",
+    "label": "{code} asks for a note",
+    "ask": "Asks for a note",
+    "askHint": "An \"Other\" reason: the office adds a note, the floor a photo."
+  },
+  "used": {
+    "count_one": "{count} record",
+    "count_other": "{count} records",
+    "hint_one": "{count} record names this code: it can be set inactive, never deleted.",
+    "hint_other": "{count} records name this code: it can be set inactive, never deleted.",
+    "none": "No record names this code yet."
+  },
+  "look": {
+    "change": "Icon and colour of {code}: {look}",
+    "noIcon": "No icon",
+    "noColour": "No colour",
+    "icon": "Icon",
+    "iconHint": "Shown on the floor's tiles before the words.",
+    "colour": "Colour",
+    "colourHint": "Tells the tiles apart; the icon still carries the meaning.",
+    "clearColour": "No colour",
+    "noColourYet": "It has no colour",
+    "title": "Icon and colour · {code}",
+    "done": "Done"
+  },
+  "icon": {
+    "star": "Star",
+    "heart": "Heart",
+    "flag": "Flag",
+    "bookmark": "Bookmark",
+    "sparkles": "Sparkles",
+    "zap": "Lightning",
+    "flame": "Flame",
+    "snowflake": "Snowflake",
+    "sun": "Sun",
+    "leaf": "Leaf",
+    "gift": "Gift",
+    "package": "Package",
+    "box": "Box",
+    "truck": "Truck",
+    "shirt": "Garment",
+    "award": "Award",
+    "crown": "Crown",
+    "gem": "Gem",
+    "shield": "Shield",
+    "alert": "Warning",
+    "clock": "Clock",
+    "calendar": "Calendar",
+    "percent": "Percent",
+    "camera": "Camera"
+  },
+  "colour": {
+    "Blue": "Blue",
+    "Green": "Green",
+    "Emerald": "Emerald",
+    "Lime": "Lime",
+    "Amber": "Amber",
+    "Orange": "Orange",
+    "Red": "Red",
+    "Rose": "Rose",
+    "Pink": "Pink",
+    "Fuchsia": "Fuchsia",
+    "Purple": "Purple",
+    "Violet": "Violet",
+    "Indigo": "Indigo",
+    "Teal": "Teal",
+    "Stone": "Stone",
+    "Grey": "Grey"
+  },
+  "mark": {
+    "saving": "Saving…",
+    "waiting": "Waiting for the answer…",
+    "saved": "Saved",
+    "unknown": "Not known whether it was saved: reload the list before trying again."
+  },
+  "state": {
+    "forbiddenTitle": "You can't see the reason lists",
+    "errorTitle": "Couldn't load the reason lists",
+    "retry": "Try again",
+    "emptyTitle": "No reasons in this list yet",
+    "emptyBody": "Add the first reason, or the standard ones and change them to your words.",
+    "emptyBodyView": "Nobody has added a reason to this list yet.",
+    "first": "Add the first reason",
+    "noMatch": "No reason matches this search",
+    "clearSearch": "Clear the search"
+  },
+  "standard": {
+    "add_one": "Add {count} standard reason",
+    "add_other": "Add {count} standard reasons"
+  },
+  "changed": {
+    "title": "Changed by someone else",
+    "body": "Another person changed this list since you opened it.",
+    "reload": "Reload"
+  },
+  "readOnly": {
+    "title": "You can view, not change",
+    "body": "Keeping the reason lists needs the right to keep them over every company and site: they are the whole group's."
+  },
+  "held": {
+    "busy": "Wait: the last change is still being saved",
+    "noCode": "Give it a code first",
+    "badCode": "A code is 2 to 40 capital letters, digits and underscores, starting with a letter",
+    "codeTaken": "This list already has this code",
+    "noWords": "Say the reason in Italian and in English",
+    "allActive": "Every reason chosen is already active",
+    "allInactive": "Every reason chosen is already inactive",
+    "searching": "Clear the search to move reasons: the order is the whole list's",
+    "atTop": "Already at the top",
+    "atBottom": "Already at the bottom",
+    "noManage": "Keeping the reason lists needs the right to keep them over every company and site",
+    "loading": "The list is still loading"
+  },
+  "bulk": {
+    "off_one": "Set {count} inactive",
+    "off_other": "Set {count} inactive",
+    "on_one": "Set {count} active",
+    "on_other": "Set {count} active",
+    "up": "Move up",
+    "down": "Move down"
+  },
+  "keys": {
+    "new": "New reason",
+    "edit": "Edit the cell, or open the icon and colour",
+    "cancel": "Leave the cell without saving",
+    "title": "Keys of the reason list"
+  },
+  "newDialog": {
+    "title": "New reason · {list}",
+    "back": "Back",
+    "add": "Add code",
+    "intro": "The code never changes once added (records keep it). The words are what people read, each in their own language.",
+    "codeHint": "Capital letters, digits and underscores: WRONG_SIZE.",
+    "languageHint": "Empty: the floor reads the English words."
+  },
+  "problem": {
+    "tooLong": "At most 80 characters",
+    "labelIt": "Say the reason in Italian: the Italian words are never empty",
+    "labelEn": "Say the reason in English: the English words are never empty",
+    "codeTaken": "This list already has this code",
+    "codeTakenInactive": "This list already has this code, set inactive: set it active again instead of adding it",
+    "stale": "Someone changed this reason since you read it: reload the list and try again",
+    "code": "A code is 2 to 40 capital letters, digits and underscores, starting with a letter",
+    "icon": "Pick one of the icons offered",
+    "colour": "Pick one of the colours offered",
+    "language": "These words could not be kept for that language",
+    "order": "The list changed since you read it: reload it and move the reasons again",
+    "invalid": "The change was refused as it is",
+    "forbidden": "You may not change the reason lists",
+    "gone": "This reason is no longer in the list: reload it",
+    "signedOut": "You were signed out: sign in again",
+    "offline": "Nexus Factory can't be reached: check the connection and try again",
+    "failed": "Something went wrong: try again",
+    "read": "Nexus Factory didn't answer: try again",
+    "readForbidden": "Seeing the reason lists needs the right to see them."
+  },
+  "done": {
+    "on_one": "{count} reason set active again: {codes}",
+    "on_other": "{count} reasons set active again: {codes}",
+    "off_one": "{count} reason set inactive: {codes}. Records keep the code.",
+    "off_other": "{count} reasons set inactive: {codes}. Records keep the codes.",
+    "standard_one": "{count} standard reason added: {codes}",
+    "standard_other": "{count} standard reasons added: {codes}",
+    "created": "{code} added at the end of the list."
+  }
+}

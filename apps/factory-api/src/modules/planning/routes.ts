@@ -24,6 +24,14 @@ import {
 import { createItemParameters, deleteItemParameters, editItemParameters, getItemParameters, listItemParameters, reorderRules } from './settings/items'
 import { editLineCapacity, editWorkCentreCapacity, listLanes } from './settings/lanes'
 import { editSettings, getSettings, listSettings } from './settings/settings'
+// B-W2a-22: MRP every day (firm planned orders, pegging, readiness, the shortage list, the exception list).
+import { firmContract, unfirmContract } from './contract'
+import { firmLine, unfirmLine } from './firm'
+import { peggingContract, pegging } from './pegging/pegging'
+import { readinessContract, shortagesContract, workOrderReadinessContract } from './readiness/contract'
+import { readiness, shortages, workOrderReadiness } from './readiness/readiness'
+import { acknowledgeExceptionsContract, getExceptionContract, listExceptionsContract, resolveExceptionContract, snoozeExceptionContract } from './exceptions/contract'
+import { acknowledgeExceptions, getException, listExceptions, resolveException, snoozeException } from './exceptions/exceptions'
 
 /**
  * What to buy and make (B-W1-29; PLN-062 to PLN-066; A2 SCR-055, design 02): run the plan for a site, read the latest
@@ -35,6 +43,12 @@ import { editSettings, getSettings, listSettings } from './settings/settings'
  * rules, its lanes' planned efficiency and people, and Capacity & load (available against booked standard minutes per
  * lane and bucket, and the orders behind a cell). The route folder has its own routes file, so the parts' routes are
  * listed here (as purchasing lists ./confirm's).
+ *
+ * B-W2a-22 (PLN-071, PLN-075, PLN-085, PLN-086, PLN-193; design planning.mrp "Short on open work orders" and the Why
+ * drawer's pegging, planning.exceptions, warehouse.picking's readiness word): firm a line of the latest plan (or make it
+ * planned again), the pegging of a requirement, order line, work order, purchase order line or reservation, the
+ * readiness of the site's work orders and the shortage list with its fixes (computed now), and the exception list of
+ * the runs (acknowledge, snooze, resolve).
  */
 export default defineRoutes('planning', manifest, async (app) => {
   app.post('/planning/runs', { schema: runPlanContract }, async (request, reply) => reply.code(201).send(await runPlan(request, request.body, idempotencyKeyFrom(request))))
@@ -61,4 +75,17 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.patch('/planning/work-centres/:workCentreId/capacity', { schema: editWorkCentreCapacityContract }, async (request) => editWorkCentreCapacity(request, request.params.workCentreId, request.body, idempotencyKeyFrom(request)))
   app.get('/planning/capacity', { schema: capacityContract }, async (request) => capacity(request, request.query))
   app.get('/planning/capacity/cell', { schema: capacityCellContract }, async (request) => capacityCell(request, request.query))
+
+  // ---- B-W2a-22: MRP every day -------------------------------------------------------------------------------------
+  app.post('/planning/requirements/:requirementId/firm', { schema: firmContract }, async (request) => firmLine(request, request.params.requirementId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/requirements/:requirementId/unfirm', { schema: unfirmContract }, async (request) => unfirmLine(request, request.params.requirementId, request.body, idempotencyKeyFrom(request)))
+  app.get('/planning/pegging', { schema: peggingContract }, async (request) => pegging(request, request.query))
+  app.get('/planning/readiness', { schema: readinessContract }, async (request) => readiness(request, request.query))
+  app.get('/planning/work-orders/:workOrderId/readiness', { schema: workOrderReadinessContract }, async (request) => workOrderReadiness(request, request.params.workOrderId))
+  app.get('/planning/shortages', { schema: shortagesContract }, async (request) => shortages(request, request.query))
+  app.get('/planning/exceptions', { schema: listExceptionsContract }, async (request) => listExceptions(request, request.query))
+  app.post('/planning/exceptions/acknowledge', { schema: acknowledgeExceptionsContract }, async (request) => acknowledgeExceptions(request, request.body, idempotencyKeyFrom(request)))
+  app.get('/planning/exceptions/:exceptionId', { schema: getExceptionContract }, async (request) => getException(request, request.params.exceptionId))
+  app.post('/planning/exceptions/:exceptionId/snooze', { schema: snoozeExceptionContract }, async (request) => snoozeException(request, request.params.exceptionId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/exceptions/:exceptionId/resolve', { schema: resolveExceptionContract }, async (request) => resolveException(request, request.params.exceptionId, request.body, idempotencyKeyFrom(request)))
 })
