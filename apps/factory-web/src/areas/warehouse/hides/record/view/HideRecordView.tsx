@@ -2,19 +2,25 @@
 
 import { useMemo } from 'react'
 import Link from 'next/link'
-import { MoreHorizontal, Printer } from 'lucide-react'
+import { Bookmark, MoreHorizontal, Printer, Trash2 } from 'lucide-react'
 import { Banner, Card, EmptyState, KeyValue, Menu, type TabItem } from '@nexus/ui/components'
 import { type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { formatDate, formatDateTime, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale } from '../../../../../lib/i18n/provider'
+import { recordAddress } from '../../../../../lib/records/record-links'
+import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import type { CutRow, HideRecord } from '../../../../_shared/stock/api'
 import { convertArea, decimalValue, lotWaitKey, movesHref, otherAreaUnit, quantity } from '../../../../_shared/stock/model'
 import { CrViPill, HideStatePill, QualityPill } from '../../../../_shared/stock/parts'
 import { AreaBar, LotsMessages, MovesTable, PartState, RecordFrame, useWords } from '../../../lots/shared/parts'
 import { HIDE_TABS, nextStepKey, tagHeldKey, type HideRecordActions, type HideRecordModel, type HideTab } from '../../model'
 import { PrintTagsDialog } from '../../print/PrintTagsDialog'
+import { holdOfHide, holdReasonWords, reserveSelectionHeld, scrapSelectionHeld } from '../../../lots/shared/daily'
+import { demandLabel, demandRecord } from '../../../stock/daily/model'
+import { ReserveDialog } from '../../../stock/daily/ReserveDialog'
+import { WriteOffDialog } from '../../../stock/daily/WriteOffDialog'
 
 export type { HideRecordActions, HideRecordModel } from '../../model'
 
@@ -25,6 +31,8 @@ export type { HideRecordActions, HideRecordModel } from '../../model'
  * bar with words, the lot's quality, Cr VI and the next step), Cuts (the cut log, append-only: every cut with its work
  * order, area, remnant, pieces, station and device; the worker only where the site records workers) and Moves (the
  * ledger rows that name this hide, with the running balance). Consumed or scrapped: read only, said in a Banner.
+ * B-W2a-64 (design hd-side): the next step also says "Held: <the hold's reason>" for a quality hold and "Reserved for
+ * <work order>" (a link) for a reservation; Reserve to a work order… and Scrap… from the band, held with the reason.
  */
 export function HideRecordView({ model, actions }: { model: HideRecordModel; actions?: HideRecordActions }) {
   return (
@@ -45,6 +53,8 @@ function HideRecordBody({ model, actions }: { model: HideRecordModel; actions?: 
   const keyHref = hide ? movesHref(model.prefix, { siteId: hide.siteId, itemId: hide.item.id, lotId: hide.lot.id, hideId: hide.id }) : ''
   const lotHref = hide ? `${model.prefix}/warehouse/lots/${encodeURIComponent(hide.lot.id)}` : ''
   const tagHeld = !model.can.printLabels ? t('hd.print.noRight') : hide && tagHeldKey(hide) ? t(tagHeldKey(hide)!) : null
+  const reserveHeld = hide ? reserveSelectionHeld([hide], model.daily) ?? (hide.reservedFor ? 'hd.daily.held.reservedAlready' : null) : null
+  const scrapHeld = hide ? scrapSelectionHeld([hide], model.daily) : null
 
   const tabs: TabItem[] = HIDE_TABS.map((tab: HideTab) => ({
     id: tab,
@@ -75,6 +85,12 @@ function HideRecordBody({ model, actions }: { model: HideRecordModel; actions?: 
           <span className="fw-st-actions">
             <Button size="sm" heldReason={tagHeld} onClick={() => actions?.print?.onOpen?.([hide.id])}>
               <Printer size={14} aria-hidden /> {t('hd.printTag')}
+            </Button>
+            <Button size="sm" heldReason={reserveHeld ? t(reserveHeld) : null} onClick={() => actions?.onReserve?.()}>
+              <Bookmark size={14} aria-hidden /> {t('hd.daily.reserveOne')}
+            </Button>
+            <Button size="sm" variant="danger-outline" heldReason={scrapHeld ? t(scrapHeld) : null} onClick={() => actions?.onScrap?.()}>
+              <Trash2 size={14} aria-hidden /> {t('hd.daily.scrapOne')}
             </Button>
             <Menu
               label={<MoreHorizontal size={16} aria-label={t('rec.more')} />}
@@ -118,6 +134,8 @@ function HideRecordBody({ model, actions }: { model: HideRecordModel; actions?: 
         </div>
       )}
       {model.print && hide && <PrintTagsDialog dialog={model.print} hides={[hide]} actions={actions?.print} />}
+      {model.reserve && <ReserveDialog model={model.reserve} actions={actions?.reserve} />}
+      {model.writeOff && <WriteOffDialog model={model.writeOff} actions={actions?.writeOff} />}
     </RecordFrame>
   )
 }
@@ -132,7 +150,10 @@ function Overview({ value, model, lotHref }: { value: HideRecord; model: HideRec
   const other = otherAreaUnit(hide.areaUom)
   const converted = other ? convertArea(decimalValue(hide.area) ?? 0, hide.areaUom, other) : null
   const wait = lotWaitKey({ qualityStatus: lot.qualityStatus, crVi: { required: lot.crVi.status !== 'NOT_REQUIRED', status: lot.crVi.status } })
-  const next = nextStepKey(value)
+  const hold = holdOfHide(model.holds, hide)
+  const next = nextStepKey(value, !!hold)
+  const reserved = hide.reservedFor
+  const reservedHref = reserved ? `${model.prefix}${recordAddress(demandRecord(reserved.demand), OFFICE_PAGES)}` : null
   return (
     <div className="fw-wl-split">
       <div className="fw-wl-stack">
@@ -200,8 +221,14 @@ function Overview({ value, model, lotHref }: { value: HideRecord; model: HideRec
             {lot.crVi.status !== 'NOT_REQUIRED' && <CrViPill status={lot.crVi.status} value={lot.crVi.valueMgKg} limit={lot.crVi.limitMgKg} />}
           </span>
           <p className="fw-wl-text">
-            <b>{t(next, { reason: wait ? t(`stock:${wait}`) : '' })}</b>
+            <b>{t(next, { reason: hold ? holdReasonWords(hold, model.holdReasons, locale) : wait ? t(`stock:${wait}`) : '', demand: reserved ? demandLabel(reserved.demand) : '' })}</b>
           </p>
+          {hold && <p className="fw-wl-hint">{t('hd.daily.holdSince', { date: formatDate(hold.placedAt, place), what: t(hold.subjectType === 'Hide' ? 'hd.daily.holdOfHide' : 'hd.daily.holdOfLot') })}</p>}
+          {reserved && reservedHref && (
+            <Link className="fw-st-link" href={reservedHref}>
+              {t('hd.daily.openDemand', { demand: demandLabel(reserved.demand) })}
+            </Link>
+          )}
           {lot.qualityNote && <p className="fw-wl-hint">{t('lt.side.note', { note: lot.qualityNote })}</p>}
           <KeyValue
             dense

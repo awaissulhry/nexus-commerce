@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Download, MoreHorizontal, SlidersHorizontal, X } from 'lucide-react'
+import { Download, MoreHorizontal, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu, MetricStrip, Modal, SummaryTable } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, Select, Spinner } from '@nexus/ui/primitives'
+import { Button, Input, Select, Spinner } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
 import { formatDateTime, formatTime } from '../../../../lib/i18n/format'
@@ -17,7 +17,10 @@ import { money, quantity, reverseHeldKey, signed } from '../../../_shared/stock/
 import { NoAccess, Qty, ReadFailed, ReasonTag, StockMessages } from '../../../_shared/stock/parts'
 import { AdjustDialog } from '../../stock/adjust/AdjustDialog'
 import type { AdjustActions } from '../../stock/adjust/model'
-import { explainsFigure, hasKey, MOVE_TILES, PERIODS, runningBalances, sideKey, tileActive, tileCount, tileFilter, type MovesAddress, type MovesPageActions, type MovesPageModel, type Period } from '../model'
+import type { WriteOffActions } from '../../stock/daily/dialog-model'
+import { DAILY_NAMESPACE, reasonLabel } from '../../stock/daily/model'
+import { WriteOffDialog } from '../../stock/daily/WriteOffDialog'
+import { explainsFigure, hasKey, MOVE_TILES, PERIODS, runningBalances, sideKey, tileActive, tileCount, tileFilter, writeOffHeldKey, type MovesAddress, type MovesPageActions, type MovesPageModel, type Period } from '../model'
 import { MoveDetailModal, ReverseDialog } from './MoveDialogs'
 import '../../../_shared/stock/stock.css'
 import '../../stock/stock-pages.css'
@@ -31,20 +34,24 @@ export type { MovesPageActions, MovesPageModel } from '../model'
  * with their running balance. Tiles are saved filters (adjustments, scraps, count differences, reversals; moves not
  * valued yet with the cost grain only). No edit anywhere: a move is reversed one at a time from its detail, with the
  * mirror shown first. A floor move names its tablet, never a worker (Owner answer W1); values with the cost grain only.
+ * B-W2a-64: Write off… (the shared dialog: reason, photo, an NCR, the value leaving stock), the Write-offs tile and the
+ * count differences tile (30 days), the text search across the whole ledger, the filter's whole count, and a write-off's
+ * reason in words on its row.
  */
-export function MovesView({ model, actions, adjustActions }: { model: MovesPageModel; actions?: MovesPageActions; adjustActions?: AdjustActions }) {
+export function MovesView({ model, actions, adjustActions, writeOffActions }: { model: MovesPageModel; actions?: MovesPageActions; adjustActions?: AdjustActions; writeOffActions?: WriteOffActions }) {
   return (
-    <StockMessages extra={['warehouse-stock']}>
-      <Moves model={model} actions={actions} adjustActions={adjustActions} />
+    <StockMessages extra={['warehouse-stock', DAILY_NAMESPACE]}>
+      <Moves model={model} actions={actions} adjustActions={adjustActions} writeOffActions={writeOffActions} />
     </StockMessages>
   )
 }
 
 const focusedRowId = (): string | null => (typeof document === 'undefined' ? null : ((document.activeElement as HTMLElement | null)?.closest('.ag-row')?.getAttribute('row-id') ?? null))
 
-function Moves({ model, actions, adjustActions }: { model: MovesPageModel; actions?: MovesPageActions; adjustActions?: AdjustActions }) {
+function Moves({ model, actions, adjustActions, writeOffActions }: { model: MovesPageModel; actions?: MovesPageActions; adjustActions?: AdjustActions; writeOffActions?: WriteOffActions }) {
   const t = useT('warehouse-stock')
   const s = useT('stock')
+  const d = useT(DAILY_NAMESPACE)
   const lists = useT('lists')
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -57,12 +64,21 @@ function Moves({ model, actions, adjustActions }: { model: MovesPageModel; actio
   const rowOf = (id: string | null) => (id ? (model.rows?.find((row) => row.id === id) ?? null) : null)
   const latest = useRef(actions)
   latest.current = actions
+  const [query, setQuery] = useState(address.q)
+  useEffect(() => setQuery(address.q), [address.q])
+  const typed = useRef(false)
+  useEffect(() => {
+    if (!typed.current) return
+    const timer = setTimeout(() => latest.current?.onAddress?.({ q: query }), 300)
+    return () => clearTimeout(timer)
+  }, [query])
+  const writeOffReasons = useMemo(() => model.writeOffReasons ?? [], [model.writeOffReasons])
 
   // r: reverse the focused move (its detail, where the reversal is shown first); a: adjust.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (event.metaKey || event.ctrlKey || event.altKey || help || model.detail || model.reverse || model.adjust) return
+      if (event.metaKey || event.ctrlKey || event.altKey || help || model.detail || model.reverse || model.adjust || model.writeOff) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"]') || target.isContentEditable)) return
       if (event.key === 'r') {
         const row = rowOf(focusedRowId())
@@ -106,6 +122,8 @@ function Moves({ model, actions, adjustActions }: { model: MovesPageModel; actio
               <button type="button" className="fw-stk-reason-button" onClick={() => actions?.onOpen?.(data.reversedById)}>
                 {t('mv.reversedBy')}
               </button>
+            ) : data.writeOff ? (
+              t('mv.writeOff', { reason: reasonLabel(writeOffReasons, data.writeOff.reasonCode, locale) })
             ) : (
               ''
             )}
@@ -164,9 +182,11 @@ function Moves({ model, actions, adjustActions }: { model: MovesPageModel; actio
     const DocumentCell = ({ data }: ICellRendererParams<LedgerRow>) => {
       if (!data) return null
       const href = docHref(data)
-      const extra = data.note ?? (href && data.reference && data.reference !== data.document?.number ? data.reference : null)
+      // A write-off's note is kept as "<CODE>: <note>": its own note is shown (the reason is in the reason cell).
+      const note = data.writeOff ? data.writeOff.note : data.note
+      const extra = note ?? (href && data.reference && data.reference !== data.document?.number ? data.reference : null)
       return (
-        <span className="fw-st-cell" title={[data.document?.number ?? data.reference, data.note].filter(Boolean).join(' · ') || undefined}>
+        <span className="fw-st-cell" title={[data.document?.number ?? data.reference, note].filter(Boolean).join(' · ') || undefined}>
           {href && data.document ? (
             <Link className="fw-st-link" href={href}>
               {data.document.number}
@@ -218,7 +238,7 @@ function Moves({ model, actions, adjustActions }: { model: MovesPageModel; actio
       { colId: 'more', headerName: t('st.col.actions'), minWidth: 80, maxWidth: 80, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, s, locale, model.prefix, can, balances, address.item, address.lot, address.hide, address.location])
+  }, [t, s, locale, model.prefix, can, balances, address.item, address.lot, address.hide, address.location, writeOffReasons])
 
   if (!can.stockView) {
     return (
@@ -238,9 +258,15 @@ function Moves({ model, actions, adjustActions }: { model: MovesPageModel; actio
   if (address.location) chips.push({ name: 'location', label: t('mv.chip.location', { code: explain?.location?.code ?? (firstRow?.to.location?.id === address.location ? firstRow.to.location.code : firstRow?.from.location?.code) ?? '…' }) })
   for (const reason of address.reasons) chips.push({ name: 'reasons', reason, label: t('mv.chip.reason', { reason: s(`reason.${reason}`) }) })
 
-  const filtered = chips.length > 0 || address.note !== null || address.reversed !== null || address.period !== (hasKey(address) ? 'all' : '30d')
+  const filtered = chips.length > 0 || address.note !== null || address.reversed !== null || address.writeOffs !== null || address.q.trim() !== '' || address.period !== (hasKey(address) ? 'all' : '30d')
   const clearFilters = (
-    <Button size="sm" onClick={() => actions?.onAddress?.({ item: null, colour: null, lot: null, hide: null, location: null, reasons: [], note: null, reversed: null, period: '30d' })}>
+    <Button
+      size="sm"
+      onClick={() => {
+        setQuery('')
+        actions?.onAddress?.({ item: null, colour: null, lot: null, hide: null, location: null, reasons: [], note: null, reversed: null, writeOffs: null, q: '', period: '30d' })
+      }}
+    >
       {s('common.clearFilters')}
     </Button>
   )
@@ -264,6 +290,27 @@ function Moves({ model, actions, adjustActions }: { model: MovesPageModel; actio
     )
   ) : undefined
 
+  const search = (
+    <Input
+      size="sm"
+      type="search"
+      leadingIcon={<Search size={13} aria-hidden />}
+      aria-label={t('mv.search')}
+      placeholder={t('mv.search')}
+      value={query}
+      onChange={(event) => {
+        typed.current = true
+        setQuery(event.target.value)
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          typed.current = false
+          latest.current?.onAddress?.({ q: query })
+        }
+      }}
+    />
+  )
   const tools = (
     <span className="fw-st-actions">
       <Select size="sm" aria-label={t('mv.period.label')} value={address.period} onChange={(event) => actions?.onAddress?.({ period: event.target.value as Period })}>
@@ -301,7 +348,15 @@ function Moves({ model, actions, adjustActions }: { model: MovesPageModel; actio
     ...(can.adjust ? [{ keys: ['a'], does: t('st.keyAdjust') }] : []),
   ]
   const adjustHeld = !can.adjust ? t('st.held.noAdjust') : !explainsFigure(address) ? t('mv.held.noKey') : null
-  const count = model.rows ? (model.done ? t('mv.countAll', { count: model.rows.length }) : t('mv.countLoaded', { count: model.rows.length })) : '—'
+  const writeOffHeld = writeOffHeldKey(address, can)
+  const total = model.rowCount ?? null
+  const count = model.rows
+    ? model.done
+      ? t('mv.countAll', { count: total ?? model.rows.length })
+      : total !== null
+        ? t('mv.countOf', { loaded: model.rows.length, count: total })
+        : t('mv.countLoaded', { count: model.rows.length })
+    : '—'
 
   return (
     <div className="fw-st">
@@ -335,6 +390,9 @@ function Moves({ model, actions, adjustActions }: { model: MovesPageModel; actio
               { id: 'keys', label: t('st.shortcuts'), onSelect: () => setHelp(true) },
             ]}
           />
+          <Button size="sm" heldReason={writeOffHeld ? d(writeOffHeld) : null} onClick={() => actions?.onWriteOff?.()}>
+            <Trash2 size={14} aria-hidden /> {t('mv.writeOffOpen')}
+          </Button>
           <Button size="sm" variant="primary" heldReason={adjustHeld} onClick={() => actions?.onAdjust?.()} aria-keyshortcuts="a">
             <SlidersHorizontal size={14} aria-hidden /> {t('st.adjust')}
           </Button>
@@ -353,10 +411,18 @@ function Moves({ model, actions, adjustActions }: { model: MovesPageModel; actio
             label: t(`mv.tile.${tile}`),
             value: value === null ? '—' : String(value),
             hint: t(`mv.tileHint.${tile}`),
-            ...(filter ? { active: tileActive(tile, address), onClick: () => actions?.onAddress?.(tileActive(tile, address) ? { reasons: [], reversed: null, period: hasKey(address) ? 'all' : '30d' } : filter) } : {}),
+            ...(filter ? { active: tileActive(tile, address), onClick: () => actions?.onAddress?.(tileActive(tile, address) ? { reasons: [], reversed: null, writeOffs: null, period: hasKey(address) ? 'all' : '30d' } : filter) } : {}),
           }
         })}
       />
+
+      {address.writeOffs && (
+        <div className="fw-stk-chips">
+          <Button size="sm" variant="tonal" aria-label={t('st.removeChip', { chip: t('mv.chip.writeOffs') })} onClick={() => actions?.onAddress?.({ writeOffs: null })}>
+            {t('mv.chip.writeOffs')} <X size={12} aria-hidden />
+          </Button>
+        </div>
+      )}
 
       {chips.length > 0 && (
         <div className="fw-stk-chips" aria-label={t('mv.chips')}>
@@ -385,6 +451,7 @@ function Moves({ model, actions, adjustActions }: { model: MovesPageModel; actio
             {model.loadingMore && <Spinner size={12} />}
           </span>
         }
+        search={search}
         tools={tools}
         selection={{
           selected,
@@ -410,6 +477,7 @@ function Moves({ model, actions, adjustActions }: { model: MovesPageModel; actio
       {model.detail && <MoveDetailModal model={model} actions={actions} />}
       {model.reverse && <ReverseDialog model={model} actions={actions} />}
       {model.adjust && <AdjustDialog model={model.adjust} actions={adjustActions} />}
+      {model.writeOff && <WriteOffDialog model={model.writeOff} actions={writeOffActions} />}
 
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('st.shortcuts')} size="sm">
