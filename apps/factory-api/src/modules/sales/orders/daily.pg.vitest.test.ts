@@ -175,7 +175,14 @@ describe('manual order entry (SAL-202): an order without a quote, for repeat bus
     })
     expect(manual.billTo).toMatchObject({ taxMode: 'IT_B2B' })
     expect(manual.shipTo).toHaveProperty('line1')
-    expect(manual.chain.depositRequests).toEqual([expect.objectContaining({ orderId: manual.id, quoteVersionId: null, status: 'OPEN', amount: 105_408, depositPct: '30' })])
+    expect(manual.chain.depositRequests).toEqual([
+      expect.objectContaining({ orderId: manual.id, quoteVersionId: null, status: 'OPEN', amount: 105_408, depositPct: '30', stepKind: 'DEPOSIT' }),
+      // B-W2a-F2: the balance before shipping has its own request — an advance (TD02 when paid before the goods leave),
+      // of the step's amount, due on its day, with the deposit's fiscal rule.
+      expect.objectContaining({ orderId: manual.id, quoteVersionId: null, status: 'OPEN', kind: 'ACCONTO', amount: 245_952, depositPct: '70', dueDate: PROMISE, fiscalDocument: 'TD02', stepKind: 'BEFORE_SHIPPING' }),
+    ])
+    // The orders list and the release gate read the deposit only: the balance's request is not "the deposit".
+    expect((await ok('sales', 'GET', `/sales/orders?q=${manual.number}`)).orders[0].deposit).toEqual({ state: 'OPEN', dueDate: manual.chain.depositRequests[0].dueDate })
     expect(manual.dailyActions.map((action: Json) => [action.action, action.allowed])).toEqual([['amend', true], ['closeLines', true], ['reopenLines', false], ['copyAsQuote', true]])
     const audit = await one(`SELECT after FROM "AuditLog" WHERE action = 'orders.makeManual' AND "recordId" = $1`, [manual.id])
     expect(audit.after).toMatchObject({ number: manual.number, quoteVersionId: null, depositRequired: true, lines: 2, pieces: 7 })
@@ -187,9 +194,9 @@ describe('manual order entry (SAL-202): an order without a quote, for repeat bus
 describe('the payment schedule (SAL-216)', () => {
   it('the deposit and the balance before shipping, with their state; the deposit step follows its request', async () => {
     const schedule = await ok('sales', 'GET', `${orderUrl(manual.id)}/schedule`)
-    expect(schedule.steps.map((step: Json) => [step.seq, step.kind, step.amount, step.status, step.dueDate])).toEqual([
-      [10, 'DEPOSIT', 105_408, 'OPEN', manual.chain.depositRequests[0].dueDate],
-      [20, 'BEFORE_SHIPPING', 245_952, 'OPEN', PROMISE],
+    expect(schedule.steps.map((step: Json) => [step.seq, step.kind, step.amount, step.status, step.dueDate, step.depositRequestId])).toEqual([
+      [10, 'DEPOSIT', 105_408, 'OPEN', manual.chain.depositRequests[0].dueDate, manual.chain.depositRequests[0].id],
+      [20, 'BEFORE_SHIPPING', 245_952, 'OPEN', PROMISE, manual.chain.depositRequests[1].id],
     ])
     expect(schedule).toMatchObject({ grossAmount: 351_360, openAmount: 351_360, paidAmount: 0, cancelled: [] })
     // A viewer without the price grain sees the steps, not their amounts.
@@ -269,6 +276,12 @@ describe('amendments (SAL-209, SAL-217): a confirmed order changes only through 
       ['BEFORE_SHIPPING', 'OPEN', 400_892],
     ])
     expect(schedule.cancelled.map((step: Json) => [step.kind, step.statusNote])).toEqual([['BEFORE_SHIPPING', 'Amendment 1: the schedule was made again for the new total.']])
+    // B-W2a-F2: the old balance's request (nothing paid on it) is cancelled with its step; the new balance has its own.
+    const requests = await admin<{ status: string; amount: number; statusNote: string | null }>('SELECT status::text AS status, amount, "statusNote" FROM "DepositRequest" WHERE id = ANY($1::uuid[]) ORDER BY "createdAt", id', [[schedule.cancelled[0].depositRequestId, schedule.steps[1].depositRequestId]])
+    expect(requests).toEqual([
+      { status: 'CANCELLED', amount: 245_952, statusNote: 'Amendment 1: the schedule was made again for the new total.' },
+      { status: 'OPEN', amount: 400_892, statusNote: null },
+    ])
     expect((await events('sales_order.amended', manual.id)).map((event) => event.payload)).toEqual([expect.objectContaining({ revision: 1, reacceptanceNeeded: true })])
     // The append-only ledger: nobody changes an amendment, the owner included.
     await expect(admin(`UPDATE "SalesOrderAmendment" SET reason = 'x' WHERE "orderId" = $1`, [manual.id])).rejects.toThrow(/append-only/)
@@ -311,9 +324,10 @@ describe('the cancel with its impact check (SAL-211)', () => {
     const second = (await ok('sales', 'POST', '/sales/orders/manual', { ...MANUAL, customerRef: 'PO-REPEAT-78', lines: [MANUAL.lines[0]] }, 201)).order
     const check = await ok('sales', 'GET', `${orderUrl(second.id)}/cancel-check`)
     expect(check.impact).toMatchObject({ cancellable: true, blocks: [], leavesBehind: [] })
-    expect(check.impact.touches.map((item: Json) => [item.code, item.amount])).toEqual([
-      ['DEPOSITS_CANCELLED', 61_488],
-      ['PAYMENT_STEPS_CANCELLED', 204_960],
+    // B-W2a-F2: the deposit and the balance's own request, both open, are cancelled with it.
+    expect(check.impact.touches.map((item: Json) => [item.code, item.amount, item.message])).toEqual([
+      ['DEPOSITS_CANCELLED', 204_960, 'The deposit and the balance before shipping not paid yet are cancelled with the order: the customer is no longer asked for them.'],
+      ['PAYMENT_STEPS_CANCELLED', 204_960, '2 open step(s) of the payment schedule are cancelled.'],
     ])
     const wrong = await refused('sales', 'POST', `${orderUrl(second.id)}/cancel`, { version: second.version, reason: 'Duplicate order.', confirmNumber: 'SO-WRONG' }, 400)
     expect(wrong.issues).toEqual([{ path: 'body/confirmNumber', message: `Type ${second.number} to confirm.` }])
@@ -323,7 +337,7 @@ describe('the cancel with its impact check (SAL-211)', () => {
     const schedule = await ok('sales', 'GET', `${orderUrl(second.id)}/schedule`)
     expect(schedule.steps).toEqual([])
     expect(schedule.cancelled.map((step: Json) => step.statusNote)).toEqual([`Order ${second.number} cancelled: Duplicate order.`, `Order ${second.number} cancelled: Duplicate order.`])
-    expect((await one('SELECT status FROM "DepositRequest" WHERE "orderId" = $1', [second.id])).status).toBe('CANCELLED')
+    expect(await admin('SELECT status::text AS status FROM "DepositRequest" WHERE "orderId" = $1', [second.id])).toEqual([{ status: 'CANCELLED' }, { status: 'CANCELLED' }])
   })
 
   it('SEED-SO-0001: a paid deposit and its deposit invoice are left behind, named; the cancelled order copies as a new quote', async () => {

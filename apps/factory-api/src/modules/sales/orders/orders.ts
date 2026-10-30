@@ -9,6 +9,7 @@ import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/p
 import { command, type CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
+import { ORDER_DEPOSIT_ONLY } from '../deposits/deposits'
 import { assertMay, officeContextOf } from './access'
 import { makeOrderInCommand } from './make'
 import { officeOrder, recordAfter } from './moves'
@@ -53,7 +54,8 @@ export interface ListQuery extends ListFilters {
 }
 
 const lateWhere = (today: BusinessDate): Prisma.SalesOrderWhereInput => ({ status: { in: [...OPEN_STATUSES] }, promiseDate: { lt: asDay(today) } })
-const depositOpenWhere: Prisma.SalesOrderWhereInput = { depositRequired: true, depositRequests: { some: { status: 'OPEN' } } }
+// B-W2a-F2: the deposit's requests only (a before-shipping step's own request is the balance, not the deposit).
+const depositOpenWhere: Prisma.SalesOrderWhereInput = { depositRequired: true, depositRequests: { some: { status: 'OPEN', ...ORDER_DEPOSIT_ONLY } } }
 
 function whereOf(context: OfficeContext, filters: ListFilters, today: BusinessDate): Prisma.SalesOrderWhereInput {
   return {
@@ -89,7 +91,7 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
     const page = rows.slice(0, query.limit)
     const ids = page.map((row) => row.id)
     const lines = ids.length > 0 ? await client.salesOrderLine.groupBy({ by: ['orderId'], where: { orderId: { in: ids } }, _sum: { quantity: true }, _count: { _all: true } }) : []
-    const deposits = ids.length > 0 ? await client.depositRequest.findMany({ where: { orderId: { in: ids } }, select: { orderId: true, status: true, dueDate: true }, orderBy: { dueDate: 'asc' } }) : []
+    const deposits = ids.length > 0 ? await client.depositRequest.findMany({ where: { orderId: { in: ids }, ...ORDER_DEPOSIT_ONLY }, select: { orderId: true, status: true, dueDate: true }, orderBy: { dueDate: 'asc' } }) : []
     const shipments = ids.length > 0 ? await client.shipment.findMany({ where: { salesOrderId: { in: ids }, status: { in: [...LEFT] } }, select: { id: true, salesOrderId: true } }) : []
     const shipped = shipments.length > 0 ? await client.shipmentLine.groupBy({ by: ['shipmentId'], where: { shipmentId: { in: shipments.map((row) => row.id) } }, _sum: { quantity: true } }) : []
     const versionIds = page.flatMap((row) => (row.quoteVersionId ? [row.quoteVersionId] : []))

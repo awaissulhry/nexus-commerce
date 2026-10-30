@@ -25,6 +25,7 @@ import { repairNotRequired, repairWorkCentreCheck } from '@nexus/factory-domain/
 // B-W2a-46 (MES-004): the release's W2a blockers, holds and the plan's readiness.
 import { holdsCheck, materialReadinessCheck } from '@nexus/factory-domain/production/work-orders/blockers'
 import { materialReadinessOf, readReleaseBlockers, type PlanCache, type ReleaseBlockerFacts } from './release/blockers'
+import { ORDER_DEPOSIT_ONLY } from '../../sales/deposits/deposits'
 import type { UnusableReason } from '@nexus/factory-domain/planning/usable'
 import { decimalOf, decimalText } from '@nexus/factory-domain/product/units/units'
 import { ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
@@ -234,12 +235,16 @@ export async function readGates(db: Reader, styleId: string, cells: readonly Cel
   })
 }
 
-/** Each order's deposit requests: by the order, or by the accepted version it was made from (before the order existed). */
+/**
+ * Each order's deposit requests: by the order, or by the accepted version it was made from (before the order existed).
+ * The deposit's only (B-W2a-F2: a before-shipping step's own request is the balance paid before the goods leave, which
+ * production does not wait for).
+ */
 export async function readDeposits(db: Reader, orders: readonly OrderRow[]): Promise<DepositFacts[]> {
   if (orders.length === 0) return []
   const versionIds = orders.flatMap((order) => (order.quoteVersionId ? [order.quoteVersionId] : []))
   const requests = await db.depositRequest.findMany({
-    where: { OR: [{ orderId: { in: orders.map((order) => order.id) } }, ...(versionIds.length > 0 ? [{ quoteVersionId: { in: versionIds } }] : [])] },
+    where: { AND: [{ OR: [{ orderId: { in: orders.map((order) => order.id) } }, ...(versionIds.length > 0 ? [{ quoteVersionId: { in: versionIds } }] : [])] }, ORDER_DEPOSIT_ONLY] },
     select: { id: true, orderId: true, quoteVersionId: true, status: true, dueDate: true },
     orderBy: { dueDate: 'asc' },
   })

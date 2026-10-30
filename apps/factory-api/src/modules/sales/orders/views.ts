@@ -93,6 +93,12 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
   })
   const history = await promiseHistory(db, order.id)
   const placed = await depositFacts(db, deposits.map((row) => row.id), serverClock.now())
+  // B-W2a-F2: which step of the schedule names each request (the deposit, or a before-shipping step's own).
+  const stepKinds = new Map(
+    (deposits.length > 0 ? await db.salesOrderMilestone.findMany({ where: { depositRequestId: { in: deposits.map((row) => row.id) } }, select: { depositRequestId: true, kind: true } }) : []).flatMap((row) =>
+      row.depositRequestId && (row.kind === 'DEPOSIT' || row.kind === 'BEFORE_SHIPPING') ? [[row.depositRequestId, row.kind] as const] : [],
+    ),
+  )
   const peopleIds = [...new Set([order.createdById, ...history.map((entry) => entry.actorId), ...facts.lines.map((line) => line.closedShortById)].filter((id): id is string => id !== null))]
   const people = peopleIds.length > 0 ? await db.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true }, orderBy: { id: 'asc' } }) : []
 
@@ -196,7 +202,7 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
         const view = depositViewOf(row)
         // The percentage as the database holds it ("30.0000" → "30"; deposits.ts's own text turns a whole "30" into "3").
         const depositPct = row.depositPct === null ? null : decimalText(row.depositPct.toString())
-        return { ...view, depositPct, amount: asMoney('price', view.amount), paidAmount: asMoney('price', placed.paid.get(row.id) ?? 0), link: placed.links.get(row.id) ?? null }
+        return { ...view, depositPct, amount: asMoney('price', view.amount), paidAmount: asMoney('price', placed.paid.get(row.id) ?? 0), link: placed.links.get(row.id) ?? null, stepKind: stepKinds.get(row.id) ?? null }
       }),
       workOrders: facts.workOrders.map((row) => ({ id: row.id, number: row.number, status: row.status, siteId: row.siteId, releasedAt: instantOrNull(row.releasedAt) })),
       shipments: facts.shipments.map((row) => ({ id: row.id, number: row.number, status: row.status, shippedAt: instantOrNull(row.shippedAt), deliveredAt: instantOrNull(row.deliveredAt) })),
