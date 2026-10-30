@@ -1491,7 +1491,8 @@
     "quality": "Qualità",
     "home": "Home",
     "floorsync": "Sincronizzazione reparto",
-    "calendars": "Calendari"
+    "calendars": "Calendari",
+    "views": "Viste ed esportazioni"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1653,6 +1654,9 @@
     "production_scrap_approve": "Approvare riduzioni d'ordine",
     "production_cutting_view": "Vedere la resa del taglio",
     "planning_firm": "Rendere fissi gli ordini pianificati",
-    "planning_exceptions_manage": "Gestire le eccezioni della pianificazione"
+    "planning_exceptions_manage": "Gestire le eccezioni della pianificazione",
+    "views_save": "Salvare e condividere le proprie viste di un elenco",
+    "views_manage": "Condividere viste con tutti e impostare la vista predefinita di un ruolo",
+    "views_export": "Esportare un elenco in CSV o Excel"
   }
 }

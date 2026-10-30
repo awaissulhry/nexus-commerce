@@ -43,6 +43,8 @@ import { COMPANY_BANK_DEFINITIONS, COMPANY_BANK_PERMISSIONS } from '../../sales/
 import { ORDERS_DEFINITIONS, ORDERS_PERMISSIONS } from '../../sales/orders/permissions'
 import { QUOTES_DEFINITIONS, QUOTES_PERMISSIONS, SALES_SETTINGS_DEFINITIONS, SALES_SETTINGS_PERMISSIONS } from '../../sales/quotes/permissions'
 import { SHIPPING_DEFINITIONS, SHIPPING_FLOOR_PERMISSIONS, SHIPPING_PERMISSIONS } from '../../shipping/permissions'
+// B-W2a-23: saved views and the export of any list (views.save, views.manage, views.export).
+import { VIEWS_DEFINITIONS, VIEWS_PERMISSIONS } from '../../views/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -365,6 +367,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   CALENDARS_DEFINITIONS,
   // B-W2a-10: approved sources (purchasing.sources.manage).
   PURCHASING_SOURCES_DEFINITIONS,
+  // B-W2a-23: saved views and exports.
+  VIEWS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -396,6 +400,8 @@ for (const name of PRODUCTION_COMPLETION_PERMISSIONS) {
 for (const name of PLANNING_SETTINGS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-22: MRP every day.
 for (const name of [...PLANNING_FIRM_PERMISSIONS, ...PLANNING_EXCEPTIONS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-23: saved views and exports.
+for (const name of VIEWS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

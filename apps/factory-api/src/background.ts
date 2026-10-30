@@ -22,6 +22,8 @@ import { shipDocumentsHandler } from './modules/shipping/documents/handler'
 import { trackingPollCron, trackingPollHandler } from './modules/shipping/labels/poll'
 import { emailInHandlers } from './platform/email-in/handlers'
 import { emailSendHandler } from './platform/email-out/outbound'
+import { exportExpiryCron } from './platform/exports/expire'
+import { exportHandlers } from './platform/exports/worker'
 import { assertNoFakeAccountsInProduction } from './platform/gateway/boot'
 import { importHandlers } from './platform/imports/worker'
 import { inboundHandler } from './platform/inbound/process'
@@ -55,7 +57,7 @@ const MODES = ['worker', 'scheduler'] as const
 type Mode = (typeof MODES)[number]
 
 /** The handlers of published events, one list for the worker. Modules add theirs here (dispatch.ts defineHandler). */
-const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler(), startOnIssueHandler(), invoiceFilesHandler(), sdiPollHandler(), sdiArchiveHandler(), sdiCourtesyCopyHandler(), trackingPollHandler(), afterAcceptanceHandler(), shipDocumentsHandler(), ...orderHandlers(), tellBuyerHandler(), ...costingHandlers()]
+const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler(), startOnIssueHandler(), invoiceFilesHandler(), sdiPollHandler(), sdiArchiveHandler(), sdiCourtesyCopyHandler(), trackingPollHandler(), afterAcceptanceHandler(), shipDocumentsHandler(), ...orderHandlers(), tellBuyerHandler(), ...costingHandlers(), ...exportHandlers()]
 
 const mode = process.argv[2] as Mode
 if (!MODES.includes(mode)) {
@@ -116,7 +118,7 @@ if (mode === 'worker') {
   const workers = startEventWorkers({ kit, handlers: HANDLERS, database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
-  const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log })]
+  const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

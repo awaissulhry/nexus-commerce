@@ -115,6 +115,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'home.view',
       'calendars.view',
       'calendars.manage',
+      // B-W2a-23: save views of a list; export a list.
+      'views.save', 'views.manage', 'views.export',
     ],
     grains: [],
   }),
@@ -124,7 +126,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     requireMfa: true,
     permissions: ['numbering.view', 'numbering.manage', 'audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'product.materials.view', 'product.materials.cost', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'shipping.view', 'parties.view', 'parties.manage', 'parties.block', 'parties.vies', 'invoices.view', 'invoices.manage', 'invoices.issue', 'payments.view', 'payments.record', 'payments.void', 'costing.view', 'costing.rates.manage', 'quotes.view', 'quotes.approve', 'sales.settings.manage', 'companies.bank.view', 'companies.bank.manage', 'orders.view', 'orders.close', 'home.view', 'calendars.view', 'inventory.counts.view', 'inventory.counts.signoff', 'production.scrap.view',
       // B-W2a-21 (standard vs actual): standards, the cost ledger, the costing method (step-up).
-      'costing.standards.manage', 'costing.ledger.manage', 'costing.method.manage'],
+      'costing.standards.manage', 'costing.ledger.manage', 'costing.method.manage',
+      // B-W2a-23: save views of a list; export a list.
+      'views.save', 'views.export'],
     grains: ['price', 'cost', 'margin', 'wages'],
   }),
   template('sales', {
@@ -134,7 +138,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     // (A1 §3.10).
     description: 'Customers, quotes and orders; sees selling prices and margin %, not costs.',
     requireMfa: true,
-    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send', 'orders.view', 'orders.manage', 'home.view', 'calendars.view'],
+    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send', 'orders.view', 'orders.manage', 'home.view', 'calendars.view', 'views.save', 'views.export'],
     grains: ['price', 'margin'],
   }),
   template('planner', {
@@ -147,7 +151,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       // B-W2a-13: scrap and rework (see), approve a lower order quantity.
       'production.scrap.view', 'production.scrap.approve',
       // B-W2a-22: firm planned orders and the exception list of the runs.
-      'planning.firm', 'planning.exceptions.manage'],
+      'planning.firm', 'planning.exceptions.manage',
+      // B-W2a-23: save views of a list; export a list.
+      'views.save', 'views.export'],
     grains: [],
   }),
   template('buyer', {
@@ -199,6 +205,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'purchasing.sources.manage',
       // W2a B-W2a-13 (MES-057): the hide yield per supplier lot feeds the supplier's rating.
       'production.cutting.view',
+      // B-W2a-23: save views of a list; export a list.
+      'views.save', 'views.export',
     ],
     grains: ['cost'],
   }),
@@ -253,6 +261,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'floorsync.view',
       'floorsync.discard',
       'home.view',
+      // B-W2a-23: save views of a list; export a list.
+      'views.save', 'views.export',
     ],
     grains: [],
   }),
@@ -321,6 +331,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'floorsync.discard',
       'home.view',
       'calendars.view',
+      // B-W2a-23: save views of a list; export a list.
+      'views.save', 'views.export',
     ],
     grains: [],
   }),
@@ -328,14 +340,14 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Quality inspector',
     description: 'Inspects lots and finished goods and releases them; sees no money.',
     requireMfa: false,
-    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'compliance.certificates.manage', 'compliance.declarations.manage', 'compliance.labels.manage', 'compliance.register.view', 'compliance.register.manage', 'imports.view', 'imports.run', 'imports.apply', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'inventory.scrap', 'inventory.opening.import', 'parties.view', 'production.serials', 'workorders.view', 'quality.lots.view', 'quality.lots.test', 'quality.lots.documents', 'quality.lots.release', 'quality.lots.reject', 'quality.inspections.view', 'quality.inspections.record', 'quality.garments.release', 'quality.garments.reverse', 'home.view', 'production.rework', 'production.scrap.view'],
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'compliance.certificates.manage', 'compliance.declarations.manage', 'compliance.labels.manage', 'compliance.register.view', 'compliance.register.manage', 'imports.view', 'imports.run', 'imports.apply', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'inventory.scrap', 'inventory.opening.import', 'parties.view', 'production.serials', 'workorders.view', 'quality.lots.view', 'quality.lots.test', 'quality.lots.documents', 'quality.lots.release', 'quality.lots.reject', 'quality.inspections.view', 'quality.inspections.record', 'quality.garments.release', 'quality.garments.reverse', 'home.view', 'production.rework', 'production.scrap.view', 'views.save', 'views.export'],
     grains: [],
   }),
   template('floor_supervisor', {
     name: 'Floor supervisor',
     description: "Follows the lines of their sites from the Office, decides the floor's scan corrections and keeps their floor devices, workers, badges and PINs; sees no money.",
     requireMfa: false,
-    permissions: ['files.read', 'devices.view', 'devices.manage', 'devices.revoke', 'workers.view', 'workers.manage', 'workers.roles', 'workers.credentials', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'production.settings.view', 'production.scan.correct', 'workorders.view', 'floorsync.view', 'floorsync.discard', 'home.view', 'calendars.view', 'production.rework', 'production.scrap.view', 'production.cutting.view'],
+    permissions: ['files.read', 'devices.view', 'devices.manage', 'devices.revoke', 'workers.view', 'workers.manage', 'workers.roles', 'workers.credentials', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'product.materials.view', 'product.styles.view', 'product.routing.view', 'inventory.locations.view', 'inventory.stock.view', 'inventory.transfer', 'production.settings.view', 'production.scan.correct', 'workorders.view', 'floorsync.view', 'floorsync.discard', 'home.view', 'calendars.view', 'production.rework', 'production.scrap.view', 'production.cutting.view', 'views.save', 'views.export'],
     grains: [],
   }),
   template('read_only', {
