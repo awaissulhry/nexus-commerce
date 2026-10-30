@@ -176,7 +176,7 @@ describe('the seeds and the walls', () => {
     await expect(sql(floor, `SELECT "freightCharge" FROM "Shipment" LIMIT 1`)).rejects.toThrow(DENIED)
     await expect(sql(floor, `SELECT "freightAmount" FROM "ShippingSettings" LIMIT 1`)).rejects.toThrow(DENIED)
     await expect(run(floor, `UPDATE "Shipment" SET "freightCharge" = 0 WHERE id = $1::uuid`, A.sh2)).rejects.toThrow(DENIED)
-    expect((await sql(floor, `SELECT "assetNumber" FROM "Machine" ORDER BY "assetNumber"`)).map((row) => row.assetNumber)).toEqual(['SEED-CP-01', 'SEED-SEW-L1-01'])
+    expect((await sql(floor, `SELECT "assetNumber" FROM "Machine" ORDER BY "assetNumber"`)).map((row) => row.assetNumber)).toEqual(['SEED-CP-01', 'SEED-CT-01', 'SEED-SEW-L1-01'])
     expect((await sql(floor, `SELECT code FROM "DefectCode" WHERE code = 'GRAIN-CRACK'`)).length).toBe(1)
     await expect(sql(partner(), `SELECT "transportEvidenceById" FROM "Shipment" LIMIT 1`)).rejects.toThrow(DENIED)
     await expect(sql(partner(), `SELECT "transportEvidenceNote" FROM "Shipment" LIMIT 1`)).rejects.toThrow(DENIED)
