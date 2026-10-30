@@ -70,6 +70,7 @@ enum NumberKind {
   INVOICE
   DEPOSIT_INVOICE
   CREDIT_NOTE
+  /// A return authorisation's number (RMA-…; returns.prisma ReturnAuthorisation.number).
   RETURN
   LOT
   BATCH
@@ -87,6 +88,10 @@ enum NumberKind {
   INSPECTION
   /// A quality release's number (REL-…; quality.prisma QualityRelease.number). A floor document kind too.
   RELEASE
+  /// A repair order's number (REP-…; returns.prisma RepairOrder.number).
+  REPAIR
+  /// A customer complaint's number (CMP-…; complaints.prisma Complaint.number).
+  COMPLAINT
   /// W2a wave 3: a supplier claim's number (CLM-…; claims.prisma SupplierClaim.number).
   CLAIM
   /// W2a wave 3: a subcontract order's number (SC-…; subcontract.prisma SubcontractOrder.number).

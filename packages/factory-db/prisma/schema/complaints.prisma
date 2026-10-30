@@ -1,0 +1,130 @@
+// Customer complaints (W2a plan §5 schema wave 2/7; features SAL-416, QHS-113, QHS-115; design quality.complaints and its
+// record "Complaint"): what a customer reported, triaged by quality with its category, severity, owner and answer due,
+// escalated when it is about safety. apps/factory-api's modules/quality/complaints (B-W2a-65) writes them, always
+// through command().
+//
+// A complaint is numbered from its company's COMPLAINT series when it is logged (by the office, from a mail, a return or
+// a call; the portal and the claim link come with W2b). Triage gives it a category, a severity, an owner and the day the
+// answer is due. A SAFETY complaint (Reg. (EU) 2016/425 art. 8(4), QHS-115) alerts the owner and quality at once and
+// opens an entry of the PPE register (quality.prisma PpeRegisterEntry, opened by W1's openRegisterEntryFor with source
+// { type: "Complaint", id }: one entry per complaint, the register's partial unique index); it closes only once that
+// entry exists, and its alert stays until the owner acknowledged it (the …_sales_w2a_guards triggers, for every login).
+// Its photos are StoredFile rows with recordType "Complaint"; the mail with the customer is its record thread. An NCR or
+// a CAPA links to it from its side (recordType + recordId, wave 6/7 and later); the investigation and the answer letter
+// are W2b.
+//
+// Who sees what (ownership/complaints.json): the office reads and writes; the floor and the portal read nothing here (the
+// customer's claims pages and links are W2b). Never deleted: a complaint logged by mistake is closed with its reason.
+
+/// A customer complaint (SAL-416): the customer's words, what it is about (an order, a shipment, a style, a serial or a
+/// batch, as reported), its triage and its state. NEW → TRIAGED → INVESTIGATING → ANSWERED → CLOSED (CLOSED, with a
+/// reason, from any; final). From TRIAGED on (but CLOSED) it has its category, severity, owner and answer due.
+model Complaint {
+  id                     String             @id @db.Uuid
+  tenantId               String             @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company the complaint is made to (the maker or seller: its PPE register).
+  companyId              String             @db.Uuid
+  /// The customer, and the person who complained when known.
+  partyId                String             @db.Uuid
+  contactId              String?            @db.Uuid
+  /// The number from the company's COMPLAINT series, unique in the company ("CMP-2026-0012").
+  number                 String
+  /// The customer's own reference.
+  customerRef            String?
+  channel                ComplaintChannel
+  /// When it was received.
+  receivedAt             DateTime           @db.Timestamptz(3)
+  /// What happened, in the customer's words.
+  description            String
+  /// What it is about, as reported: the order (of the same company and customer), the shipment (of the same company and
+  /// customer: the trigger checks it, a shipment has no key without its site), the return it came with, the style, size,
+  /// serial and batch number (kept as reported, never refused: they may be wrong).
+  salesOrderId           String?            @db.Uuid
+  shipmentId             String?            @db.Uuid
+  returnId               String?            @db.Uuid
+  styleId                String?            @db.Uuid
+  size                   String?
+  serial                 String?
+  batchNumber            String?
+  status                 ComplaintStatus    @default(NEW)
+  /// The triage (QHS-113): set from TRIAGED on, by whom and when.
+  category               ComplaintCategory?
+  severity               ComplaintSeverity?
+  /// The office user who follows it up.
+  ownerId                String?            @db.Uuid
+  /// The day the answer to the customer is due.
+  answerDueOn            DateTime?          @db.Date
+  triagedAt              DateTime?          @db.Timestamptz(3)
+  triagedById            String?            @db.Uuid
+  /// The safety escalation (QHS-115): when it was found to be about safety (set once, kept if the category changes
+  /// later), and when the owner acknowledged the alert (only after it was raised, set once).
+  safetyRaisedAt         DateTime?          @db.Timestamptz(3)
+  safetyAcknowledgedAt   DateTime?          @db.Timestamptz(3)
+  safetyAcknowledgedById String?            @db.Uuid
+  /// When the customer was answered: set from ANSWERED on (the answer letter is W2b).
+  answeredAt             DateTime?          @db.Timestamptz(3)
+  /// Set exactly when CLOSED.
+  closedAt               DateTime?          @db.Timestamptz(3)
+  closeReason            String?
+  /// For the office only.
+  /// @internal
+  internalNote           String?
+  version                Int                @default(1)
+  createdAt              DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime           @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById            String?            @db.Uuid
+
+  company      Company              @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party        Party                @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and partyId.
+  contact      PartyContact?        @relation(fields: [tenantId, partyId, contactId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  salesOrder   SalesOrder?          @relation(fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  rma          ReturnAuthorisation? @relation(fields: [tenantId, companyId, partyId, returnId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  style        Style?               @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // returns.prisma: the repairs made for it.
+  repairOrders RepairOrder[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the repair orders' reference: a complaint of the same customer.
+  @@unique([tenantId, partyId, id])
+  // The complaints list and its tiles (new to triage, answer due, safety open).
+  @@index([tenantId, status, answerDueOn])
+  @@index([tenantId, partyId])
+}
+
+/// How a complaint came in (design cmp-grid "Channel").
+enum ComplaintChannel {
+  PHONE
+  EMAIL
+  /// The customer's portal (W2b).
+  PORTAL
+  /// A claim link (W2b).
+  LINK
+  /// With a returned garment.
+  RETURN
+  /// In person (a fair, a visit).
+  VISIT
+}
+
+/// What a complaint is about (design cmp-triage).
+enum ComplaintCategory {
+  /// The garment may not protect (PPE Reg. 2016/425 art. 8(4)): the alert and the PPE register.
+  SAFETY
+  FUNCTION
+  COSMETIC
+  FIT
+}
+
+enum ComplaintSeverity {
+  MINOR
+  MAJOR
+  CRITICAL
+}
+
+enum ComplaintStatus {
+  NEW
+  TRIAGED
+  INVESTIGATING
+  ANSWERED
+  CLOSED
+}

@@ -384,6 +384,11 @@ model Style {
   workOrders          WorkOrder[]
   // quality.prisma: the PPE register's entries about it.
   ppeRegisterEntries  PpeRegisterEntry[]
+  // pricing.prisma, returns.prisma, complaints.prisma: its prices in price lists, its repairs and complaints.
+  /// @not-money the relation to its price list entries
+  priceListEntries    PriceListEntry[]
+  repairOrders        RepairOrder[]
+  complaints          Complaint[]
   // W2a compliance.prisma: the changes to its approved type under review.
   typeChangeReviews   TypeChangeReview[]
 
@@ -446,6 +451,10 @@ model Colourway {
   salesOrderLines SalesOrderLine[]
   // production.prisma: the work order cells made in it.
   workOrderSizes  WorkOrderSize[]
+  // pricing.prisma, returns.prisma: its own prices in price lists, its repairs.
+  /// @not-money the relation to its price list entries
+  priceListEntries PriceListEntry[]
+  repairOrders     RepairOrder[]
 
   @@unique([tenantId, styleId, code])
   // The target of the references from the style's SKUs, BOM lines and grid cells: a colourway of the same style.

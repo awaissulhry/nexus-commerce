@@ -60,6 +60,17 @@ model User {
   // insights.prisma: Today's alerts assigned to the person, and the person's arrangement of Today (one: its id is theirs).
   attentionAssigned AttentionAction[] @relation("AttentionAssignee")
   todayLayouts      TodayLayout[]
+  // collab.prisma: the person's notifications, the records they follow, their @mentions, the tasks assigned to them.
+  notifications       Notification[]
+  followedRecords     RecordFollower[]
+  mentions            MessageMention[]
+  assignedTasks       Task[]
+  // views.prisma: their saved views, their exports and the reports sent to them.
+  savedViews          SavedView[]
+  exportJobs          ExportJob[]
+  reportSubscriptions ReportSubscription[]
+  // alerts.prisma: the alerts assigned to them.
+  assignedAlerts      Alert[]
 
   @@unique([tenantId, email])
   // The target of the tenant-safe references from the auth rows.
