@@ -145,6 +145,8 @@ model Company {
   privacyNotices       PrivacyNotice[]
   privacyDpias         PrivacyDpia[]
   processingActivities ProcessingActivity[]
+  // W2a sourcing.prisma: the approved sources held for the company only.
+  supplierItems        SupplierItem[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.
@@ -213,6 +215,9 @@ model Site {
   shippingSettings   ShippingSettings[]
   shipments          Shipment[]
   ddts               Ddt[]
+  // W2a claims.prisma, subcontract.prisma: the claims about goods at the site, the work it sends to workshops.
+  supplierClaims     SupplierClaim[]
+  subcontractOrders  SubcontractOrder[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])

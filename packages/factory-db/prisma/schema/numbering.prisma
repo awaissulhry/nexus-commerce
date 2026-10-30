@@ -87,6 +87,10 @@ enum NumberKind {
   INSPECTION
   /// A quality release's number (REL-…; quality.prisma QualityRelease.number). A floor document kind too.
   RELEASE
+  /// W2a wave 3: a supplier claim's number (CLM-…; claims.prisma SupplierClaim.number).
+  CLAIM
+  /// W2a wave 3: a subcontract order's number (SC-…; subcontract.prisma SubcontractOrder.number).
+  SUBCONTRACT
 }
 
 enum NumberReset {

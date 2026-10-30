@@ -84,6 +84,8 @@ model StoredFile {
   // privacy.prisma: the notice language and the DPIA whose PDF it is.
   privacyNoticeTexts PrivacyNoticeText[] @relation("PrivacyNoticeTextFile")
   privacyDpias       PrivacyDpia[]       @relation("PrivacyDpiaFile")
+  // W2a sourcing.prisma: the purchase order revisions whose PDF it is.
+  purchaseOrderRevisions PurchaseOrderRevision[] @relation("PurchaseOrderRevisionDocument")
 
   @@unique([tenantId, storageKey])
   // The target of the tenant-safe references from other rows (a company's logo, a document's PDF).

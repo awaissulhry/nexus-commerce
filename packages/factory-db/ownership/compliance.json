@@ -35,6 +35,15 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] }
       }
+    },
+    "TypeChangeReview": {
+      "about": "W2a (B-W2a-66): the office opens a review when a new revision of a certified style changes its approved type, records that the notified body was told and its answer, or decides that no notification is needed; never deleted. The floor reads them: a revision's garments print their class label only once its review is APPROVED or NOT_NEEDED (the label gate).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"] }
+      }
     }
   }
 }

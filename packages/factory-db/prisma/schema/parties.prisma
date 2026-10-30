@@ -80,6 +80,14 @@ model Party {
   // money.prisma: the invoices it is the buyer of and the payments it made.
   invoices             Invoice[]
   payments             Payment[]
+  // W2a: as a supplier, its approved sources, the discrepancies of its deliveries and the claims to it; as a
+  // workshop, the routing steps it does, its stock locations and its subcontract orders.
+  supplierItems           SupplierItem[]
+  receiptDiscrepancies    ReceiptDiscrepancy[]
+  supplierClaims          SupplierClaim[]
+  subcontractedOperations RoutingOperation[]
+  subcontractorLocations  Location[]
+  subcontractOrders       SubcontractOrder[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the party's rows.

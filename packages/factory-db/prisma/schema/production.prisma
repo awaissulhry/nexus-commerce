@@ -148,6 +148,8 @@ model WorkOrder {
   scanRefusals           FloorScanRefusal[]
   // quality.prisma: its final inspections.
   inspections   Inspection[]
+  // W2a subcontract.prisma: the work sent out of it to workshops.
+  subcontractOrders SubcontractOrder[]
 
   @@unique([tenantId, companyId, number])
   @@unique([tenantId, batchNumber])
@@ -260,6 +262,8 @@ model WorkOrderOperation {
   workCentre       WorkCentre       @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   scans            OperationScan[]
   correctionRequests ScanCorrectionRequest[]
+  // W2a subcontract.prisma: the subcontract orders that send it out.
+  subcontractOperations SubcontractOperation[]
 
   @@unique([tenantId, workOrderId, seq])
   // The target of the scans' reference: an operation of the scan's site and work order.

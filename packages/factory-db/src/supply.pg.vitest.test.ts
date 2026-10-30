@@ -371,6 +371,8 @@ describe('the partner wall', () => {
       'PurchaseOrder.proposalDecidedById',
       'PurchaseOrder.proposalDecisionNote',
       'PurchaseOrder.sentById',
+      'PurchaseOrderLine.cancelledById',
+      'PurchaseOrderLine.closedShortById',
       'PurchaseOrderLine.createdById',
       'PurchaseOrderLine.netAmount',
       'PurchaseOrderLine.unitPrice',
