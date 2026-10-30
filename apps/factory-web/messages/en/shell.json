@@ -46,13 +46,16 @@
       "audit": "Audit log",
       "connections": "Connections & API",
       "data": "Data",
-      "import": "Import & export"
+      "import": "Import & export",
+      "privacy": "Privacy & notices"
     },
     "production": {
       "area": "Production",
       "main": "Main",
       "floor": "Floor now",
-      "workOrders": "Work orders"
+      "workOrders": "Work orders",
+      "settings": "Settings",
+      "floorRules": "Floor rules & codes"
     },
     "quality": {
       "area": "Quality",
@@ -88,7 +91,13 @@
       "outbound": "Outbound",
       "shipments": "Shipments",
       "settings": "Settings",
-      "shipping": "Carriers & shipping"
+      "shipping": "Carriers & shipping",
+      "main": "Main",
+      "stock": "Stock",
+      "hides": "Hides",
+      "lots": "Lots & traceability",
+      "moves": "Movements",
+      "locations": "Locations"
     }
   },
   "topbar": {

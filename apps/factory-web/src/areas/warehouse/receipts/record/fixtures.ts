@@ -43,7 +43,7 @@ export const designScreen = defineDesignScreen<LotsCase>({
   title: 'Lots & hides of a receipt (quality hold, hides one by one)',
   view: ReceiptDesign,
   cases: [
-    { id: 'lots', label: 'A leather lot in quarantine (Cr VI pending, limit 3 mg/kg) with its nine hides; a protector lot released at receipt', model: lotsCase('warehouse'), note: 'The lot code opens the lot record in Compliance › Tests & substances, where the quality step releases it.' },
+    { id: 'lots', label: 'A leather lot in quarantine (Cr VI pending, limit 3 mg/kg) with its nine hides; a protector lot released at receipt', model: lotsCase('warehouse'), note: 'The lot code opens the lot record in Warehouse › Lots & traceability (its stock and trace); the quality step releases it in Compliance › Tests & substances, which that record links.' },
     { id: 'held', label: 'Held by the receiver for a quality check', model: lotsCase('warehouse', lotsWith({ requiresCrViTest: false, crViStatus: 'NOT_REQUIRED', holds: ['QUALITY_HOLD'] })) },
     { id: 'ppe', label: 'A certified PPE component: its certificate is checked first', model: lotsCase('warehouse', [LOTS[0]!, { ...LOTS[1]!, ...lotOf(45, { code: 'LA-000045', qualityStatus: 'QUARANTINE', requiresCrViTest: false, crViStatus: 'NOT_REQUIRED', crViLimitMgKg: null, holds: ['PPE_CERTIFICATE'], baseQuantity: '24.0000', hideCount: 0, dyeBatch: null, shade: null }), lineSeq: 20, hides: [], onHand: '24.0000' }]) },
     { id: 'released', label: 'Released by the quality step (Cr VI pass)', model: lotsCase('warehouse', lotsWith({ qualityStatus: 'RELEASED', crViStatus: 'PASS', holds: [] })) },
@@ -52,7 +52,7 @@ export const designScreen = defineDesignScreen<LotsCase>({
     { id: 'partly-cut', label: 'Some hides partly cut (what lies of them now)', model: lotsCase('warehouse', lotsWith({ qualityStatus: 'RELEASED', crViStatus: 'PASS', holds: [], hides: LOTS[0]!.hides.map((hide, index) => (index < 3 ? { ...hide, state: index === 0 ? 'CONSUMED' : 'PARTLY_CUT', onHand: index === 0 ? '0.0000' : '9.4000' } : hide)) })) },
     { id: 'hides-selected', label: 'Hides selected: Export N (CSV)', model: lotsCase('warehouse', LOTS, { selected: LOTS[0]!.hides.slice(0, 4).map((hide) => hide.id) }) },
     { id: 'buyer', label: 'Buyer: the same, values on the Lines tab only', model: lotsCase('buyer') },
-    { id: 'read-only', label: 'Read-only: the lot code is not a link without quality.lots.view', model: receiptCase('readOnly', receipt(), { tab: 'lots', can: { ...canOf('readOnly'), lots: false } }) },
+    { id: 'read-only', label: 'Read-only: the lot code still opens the lot record (inventory.stock.view); its quality decisions need quality.lots.view', model: receiptCase('readOnly', receipt(), { tab: 'lots', can: { ...canOf('readOnly'), lots: false } }) },
     { id: 'no-lots', label: 'A receipt counted by quantity only (no lots)', model: lotsCase('warehouse', []) },
     { id: 'loading', label: 'The lots loading', model: lotsCase('warehouse', LOTS, { lots: { value: null, problem: null } }) },
     { id: 'error', label: "The lots couldn't be read", model: lotsCase('warehouse', LOTS, { lots: { value: null, problem: 'problem.offline' } }) },

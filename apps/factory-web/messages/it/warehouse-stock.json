@@ -1,0 +1,335 @@
+{
+  "st": {
+    "notYet": "Non ancora letto",
+    "adjust": "Rettifica giacenza",
+    "adjustRow": "Rettifica…",
+    "keyAdjust": "Rettifica la riga attiva",
+    "held": {
+      "noAdjust": "Il tuo ruolo non può rettificare la giacenza.",
+      "pickOne": "Seleziona una riga (o premi a su una riga): la rettifica lavora su una riga di giacenza alla volta.",
+      "severalHides": "Questa riga contiene più pelli: rettifica una pelle (Righe ▾ Pelli, o la pagina Pelli)."
+    },
+    "importOpening": "Importa la giacenza iniziale",
+    "exportView": "Esporta questa vista (CSV)",
+    "shortcuts": "Scorciatoie da tastiera",
+    "search": "Cerca o scansiona materiale, lotto, pelle o ubicazione",
+    "viewLabel": "Righe",
+    "view": {
+      "material": "Per materiale",
+      "lot": "Per lotto",
+      "location": "Per ubicazione",
+      "leather": "Pelli: una riga per pelle",
+      "quarantine": "In sospeso (non rilasciato)"
+    },
+    "tile": {
+      "quarantine": "Lotti in quarantena",
+      "crvi": "Lotti in attesa del risultato Cr VI",
+      "blocked": "Lotti bloccati o respinti"
+    },
+    "removeChip": "Togli il filtro “{chip}”",
+    "tableLabel": "Giacenze",
+    "count_one": "{count} riga",
+    "count_other": "{count} righe",
+    "col": {
+      "material": "Materiale",
+      "lot": "Lotto · pelle",
+      "quality": "Qualità",
+      "location": "Ubicazione",
+      "onHand": "Giacenza",
+      "held": "In sospeso",
+      "available": "Disponibile",
+      "actions": "Azioni"
+    },
+    "noLot": "Senza lotto",
+    "noQuality": "Nessun controllo qualità",
+    "tracking": {
+      "NONE": "Non gestito a lotti",
+      "LOT": "A lotti",
+      "HIDE": "Pelle per pelle",
+      "SERIAL": "A matricola"
+    },
+    "onHandLink": "Apri i movimenti dietro questo numero",
+    "rowMenu": "Azioni per {material} in {place}",
+    "openLot": "Apri il lotto {code}",
+    "openHide": "Apri la pelle {code}",
+    "showMoves": "Mostra i movimenti",
+    "selectedTotals": "Selezionate: {totals}",
+    "totals": "Giacenza in questa vista: {totals}",
+    "totalValue": "valore {value}",
+    "empty": {
+      "title": "Ancora nessuna giacenza",
+      "body": "La giacenza entra con i ricevimenti sugli ordini d’acquisto, o con il foglio della giacenza iniziale.",
+      "receive": "Ricevi merce"
+    },
+    "notice": {
+      "show": "Mostrali",
+      "more_one": "Ancora {count} avviso",
+      "more_other": "Ancora {count} avvisi",
+      "fewer": "Mostra meno avvisi",
+      "crViFailed_one": "{count} lotto non ha superato il test Cr VI: non si potrà mai prelevare e attende di essere respinto.",
+      "crViFailed_other": "{count} lotti non hanno superato il test Cr VI: non si potranno mai prelevare e attendono di essere respinti.",
+      "crVi_one": "{count} lotto attende il risultato Cr VI: la sua giacenza non si può prelevare.",
+      "crVi_other": "{count} lotti attendono il risultato Cr VI: la loro giacenza non si può prelevare.",
+      "quarantine_one": "{count} lotto è in quarantena e attende il rilascio della qualità.",
+      "quarantine_other": "{count} lotti sono in quarantena e attendono il rilascio della qualità.",
+      "truncated": "Troppe righe per una sola risposta: scegli una sede o una vista per vederle tutte.",
+      "unvalued_one": "{count} movimento non è ancora valorizzato: i valori qui non lo comprendono.",
+      "unvalued_other": "{count} movimenti non sono ancora valorizzati: i valori qui non li comprendono."
+    },
+    "csv": {
+      "material": "Materiale",
+      "materialName": "Nome materiale",
+      "colour": "Colore",
+      "lot": "Lotto",
+      "hide": "Pelle",
+      "quality": "Qualità",
+      "site": "Sede",
+      "location": "Ubicazione",
+      "onHand": "Giacenza",
+      "unit": "Unità",
+      "hides": "Pelli",
+      "held": "In sospeso",
+      "available": "Disponibile",
+      "unitCost": "Costo unitario",
+      "value": "Valore",
+      "currency": "Valuta"
+    }
+  },
+  "adj": {
+    "title": "Rettifica giacenza",
+    "lot": "lotto {code}",
+    "hide": "pelle {code}",
+    "intro": "{site} · {place}: {quantity} {unit} in giacenza ora. La giacenza cambia solo con questo movimento, con il suo motivo.",
+    "direction": "Trovato",
+    "down": "Meno (in diminuzione)",
+    "up": "Di più (in aumento)",
+    "location": "Dove si trova",
+    "locationHint": "Un aumento può andare in un’altra ubicazione della sede.",
+    "quantity": "Quantità ({unit})",
+    "note": "Motivo",
+    "noteHint": "Resta per sempre con il movimento: di’ cosa è successo.",
+    "reference": "Riferimento",
+    "referenceHint": "Un foglio di conta, un reclamo o un numero di DDT (facoltativo).",
+    "unitCost": "Valorizza a, per {unit}",
+    "unitCostHint": "Se vuoto: il costo del lotto, altrimenti il costo standard.",
+    "preview": {
+      "none": "Scrivi la quantità per vedere la variazione.",
+      "row": "Giacenza {before} → {after} {unit} in {place}",
+      "other": "Aggiunge {quantity} {unit} in {place}"
+    },
+    "keys": "⌘↵ registra",
+    "post": "Registra la rettifica",
+    "posting": "Registrazione…",
+    "held": {
+      "quantity": "Scrivi una quantità sopra 0.",
+      "tooMuch": "Ce ne sono solo {quantity} {unit}.",
+      "location": "Scegli l’ubicazione.",
+      "note": "Scrivi il motivo (fino a 500 caratteri).",
+      "unitCost": "Scrivi il costo come numero (fino a 6 decimali)."
+    },
+    "problem": {
+      "notEnough": "Quella giacenza non c’è più (qualcuno l’ha usata nel frattempo): la giacenza non scende mai sotto zero. Chiudi e rileggi i numeri.",
+      "changed": "È cambiato nel frattempo. Chiudi e riprova.",
+      "invalid": "Qualcosa non è stato accettato: controlla quantità, unità e motivo.",
+      "forbidden": "Il tuo ruolo non può rettificare la giacenza qui.",
+      "offline": "Nessuna connessione: non è stato registrato nulla. Riprova quando torna la rete.",
+      "gone": "Quella giacenza o ubicazione non esiste più.",
+      "write": "Non è stata registrata. Riprova."
+    },
+    "done": {
+      "down": "Rettifica registrata: {code} in diminuzione in {place}.",
+      "up": "Rettifica registrata: {code} in aumento in {place}."
+    }
+  },
+  "mv": {
+    "tableLabel": "Libro dei movimenti",
+    "countAll_one": "{count} movimento",
+    "countAll_other": "{count} movimenti",
+    "countLoaded_one": "{count} movimento caricato · altri scorrendo",
+    "countLoaded_other": "{count} movimenti caricati · altri scorrendo",
+    "period": {
+      "label": "Periodo",
+      "7d": "Ultimi 7 giorni",
+      "30d": "Ultimi 30 giorni",
+      "90d": "Ultimi 90 giorni",
+      "365d": "Ultimi 12 mesi",
+      "all": "Tutto il libro"
+    },
+    "reasonLabel": "Causale",
+    "allReasons": "Tutte le causali",
+    "note": {
+      "label": "Nota",
+      "any": "Con o senza nota",
+      "with": "Con una nota",
+      "without": "Senza nota"
+    },
+    "reversed": {
+      "label": "Storni",
+      "any": "Stornati o no",
+      "yes": "Stornati o di storno",
+      "no": "Né l’uno né l’altro"
+    },
+    "chips": "La giacenza che questo libro mostra",
+    "chip": {
+      "item": "Materiale {code}",
+      "colour": "Colore {code}",
+      "lot": "Lotto {code}",
+      "hide": "Pelle {code}",
+      "location": "Ubicazione {code}",
+      "reason": "Causale: {reason}"
+    },
+    "tile": {
+      "adjustments": "Rettifiche",
+      "scraps": "Scarti",
+      "counts": "Differenze inventariali",
+      "reversals": "Storni",
+      "unvalued": "Movimenti non ancora valorizzati"
+    },
+    "tileHint": {
+      "adjustments": "ultimi 7 giorni",
+      "scraps": "ultimi 30 giorni",
+      "counts": "ultimi 30 giorni",
+      "reversals": "ultimi 30 giorni",
+      "unvalued": "il loro valore manca dai totali"
+    },
+    "col": {
+      "when": "Quando",
+      "reason": "Causale",
+      "material": "Materiale",
+      "lot": "Lotto · pelle",
+      "from": "Da",
+      "to": "A",
+      "quantity": "Quantità",
+      "balance": "Saldo dopo",
+      "route": "Da → a",
+      "documentNote": "Documento · nota",
+      "document": "Documento",
+      "note": "Nota",
+      "posted": "Registrato da"
+    },
+    "clocks": "Avvenuto {device} (l’orologio del tablet per un movimento di reparto) · registrato {server}",
+    "reversalOf": "Storna un movimento precedente",
+    "reversedBy": "Stornato",
+    "asEntered": "come inserito: {quantity} {unit}",
+    "rowMenu": "Azioni per {reason} di {material}",
+    "openMove": "Apri il movimento",
+    "reverse": "Storna il movimento…",
+    "openDocument": "Apri {number}",
+    "showKey": "Mostra il libro di questa giacenza",
+    "keyReverse": "Storna il movimento attivo (prima il suo dettaglio)",
+    "oneAtATime": "Uno storno è un atto deliberato: apri un movimento per stornarlo.",
+    "exportLoaded": "Esporta le righe caricate (CSV)",
+    "held": {
+      "noKey": "Apri i Movimenti da un numero di giacenza (un materiale in una sede) per rettificarlo qui."
+    },
+    "empty": {
+      "title": "Ancora nessun movimento",
+      "body": "Ogni ricevimento, prelievo, reso, trasferimento, conta e correzione arriva qui, mai modificato."
+    },
+    "notice": {
+      "moreFailed": "Le righe successive non si sono potute leggere. Scorri di nuovo per riprovare.",
+      "moreOffline": "Nessuna connessione: le righe successive attendono la rete.",
+      "adjustSeveral_one": "Questa giacenza è in {count} ubicazione: rettificala da Giacenze, una riga alla volta.",
+      "adjustSeveral_other": "Questa giacenza è in {count} ubicazioni (o in più pelli): rettificala da Giacenze, una riga alla volta.",
+      "adjustNone": "Nulla di questa giacenza è presente: rettifica da un’ubicazione in Giacenze.",
+      "adjustFailed": "Non è stato possibile leggere la giacenza da rettificare. Riprova."
+    },
+    "why": {
+      "title": "Perché è questo numero",
+      "loading": "Spiegazione del numero…",
+      "wholeSite": "tutta la sede",
+      "tableLabel": "Il numero per causale",
+      "col": {
+        "reason": "Causale",
+        "moves": "Movimenti",
+        "in": "Entrate",
+        "out": "Uscite",
+        "net": "Netto"
+      },
+      "sum": "Insieme",
+      "addsUp": "Torna con il numero di giacenza: {quantity} {unit} ✓",
+      "gap": "Non torna di {gap} {unit}: è un guasto, non un tuo errore. Avvisa l’amministratore.",
+      "formula": "Ricevimenti + resi − prelievi − scarti ± rettifiche ± conte; i trasferimenti interni alla sede valgono 0. Premi una causale per vederne i movimenti."
+    },
+    "method": {
+      "PURCHASE_PRICE": "Al prezzo d’acquisto",
+      "LOT_COST": "Al costo del lotto",
+      "STANDARD_COST": "Al costo standard",
+      "MANUAL": "A un costo scritto"
+    },
+    "detail": {
+      "title": "{reason} · {material}",
+      "titleLoading": "Un movimento",
+      "loading": "Lettura del movimento…",
+      "previous": "Movimento precedente",
+      "next": "Movimento successivo",
+      "first": "Questo è il primo movimento caricato.",
+      "last": "Questo è l’ultimo movimento caricato.",
+      "position": "{at} di {count}",
+      "keys": "J / K precedente e successivo · r storna · Esc chiude",
+      "what": "Cosa si è mosso",
+      "why": "Perché, da chi e quando",
+      "hide": "Pelle",
+      "noNote": "Nessuna nota",
+      "worker": "Lavoratore: {name} (questa sede registra i lavoratori)",
+      "stationOnly": "Questa sede registra solo la postazione: nessun lavoratore è nominato.",
+      "happened": "Avvenuto",
+      "deviceClock": "secondo l’orologio del tablet",
+      "recorded": "Registrato",
+      "key": "Chiave di idempotenza",
+      "method": "Valorizzato",
+      "notValued": "Non valorizzato (un trasferimento, nessuna base di costo, o un movimento di reparto non ancora valorizzato).",
+      "reversal": "Storno",
+      "reverses": "Questo movimento storna",
+      "reversedBy": "Stornato da"
+    },
+    "csv": {
+      "when": "Avvenuto",
+      "recorded": "Registrato",
+      "reason": "Causale",
+      "material": "Materiale",
+      "colour": "Colore",
+      "lot": "Lotto",
+      "hide": "Pelle",
+      "from": "Da",
+      "to": "A",
+      "quantity": "Quantità inserita",
+      "unit": "Unità",
+      "baseQuantity": "Quantità (unità base)",
+      "delta": "Effetto",
+      "document": "Documento",
+      "reference": "Riferimento",
+      "note": "Nota",
+      "postedBy": "Registrato da",
+      "reversalOf": "Storna",
+      "reversedBy": "Stornato da",
+      "method": "Valorizzato",
+      "value": "Valore",
+      "currency": "Valuta"
+    }
+  },
+  "rev": {
+    "title": "Storna questo movimento",
+    "intro": "Lo storno è un nuovo movimento, lo specchio di questo: stessa quantità, da e a scambiati. L’originale resta nel libro, barrato e collegato.",
+    "reach": "La giacenza torna dov’era prima di questo movimento. È rifiutato se movimenti successivi hanno già usato quella giacenza.",
+    "note": "Motivo",
+    "noteHint": "Resta per sempre con lo storno.",
+    "post": "Registra lo storno",
+    "posting": "Registrazione…",
+    "held": {
+      "note": "Scrivi prima il motivo.",
+      "long": "Il motivo supera i 500 caratteri."
+    },
+    "done": "Storno registrato: {reason} di {material}.",
+    "problem": {
+      "used": "Giacenza già usata da movimenti successivi: questo movimento non si può stornare ora. Storna prima i movimenti successivi, o rettifica.",
+      "notNow": "Questo movimento non si storna dal libro (un prelievo o un reso dalla sua lista di prelievo, un ricevimento con il suo ricevimento).",
+      "changed": "È cambiato nel frattempo (forse già stornato). Chiudi e rileggilo.",
+      "forbidden": "Il tuo ruolo non può stornare movimenti.",
+      "offline": "Nessuna connessione: non è stato registrato nulla. Riprova quando torna la rete.",
+      "gone": "Questo movimento non esiste più, o appartiene a un’altra azienda.",
+      "invalid": "Il motivo non è stato accettato (da 1 a 500 caratteri).",
+      "write": "Non è stato registrato. Riprova."
+    }
+  }
+}

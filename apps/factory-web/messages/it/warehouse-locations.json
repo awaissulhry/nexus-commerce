@@ -1,0 +1,187 @@
+{
+  "lc": {
+    "busy": "In corso…",
+    "dismiss": "Chiudi",
+    "top": "In cima alla sede",
+    "search": "Cerca o scansiona un’ubicazione",
+    "showArchived": "Mostra archiviate",
+    "tableLabel": "Ubicazioni di {site}",
+    "count_one": "{count} ubicazione · {active} attive",
+    "count_other": "{count} ubicazioni · {active} attive",
+    "countOf": "{shown} di {count}",
+    "export_one": "Esporta {count}",
+    "export_other": "Esporta {count}",
+    "exportAll_one": "Esporta questa vista ({count} ubicazione)",
+    "exportAll_other": "Esporta questa vista ({count} ubicazioni)",
+    "import": "Importa ubicazioni",
+    "rowMenu": "Azioni per {code}",
+    "inside_one": "{count} ubicazione",
+    "inside_other": "{count} ubicazioni",
+    "col": {
+      "place": "Ubicazione",
+      "above": "Dentro",
+      "code": "Codice",
+      "kind": "Tipo",
+      "status": "Stato",
+      "stock": "Giacenza qui",
+      "inside": "Interne"
+    },
+    "stock": {
+      "empty": "Vuota",
+      "toMoves": "I movimenti dietro questo numero",
+      "lines_one": "{count} riga di giacenza",
+      "lines_other": "{count} righe di giacenza",
+      "linesHides": "{lines} · {hides}",
+      "noAccess": "Il tuo ruolo non vede la giacenza: il contenuto delle ubicazioni non è mostrato.",
+      "nothingHere": "Qui non c’è niente.",
+      "tryInside": "Attiva “Includi le ubicazioni interne” per vedere cosa c’è sotto.",
+      "includeInside": "Includi le ubicazioni interne",
+      "tableLabel": "Giacenza in {code}",
+      "count_one": "{count} riga · {totals}",
+      "count_other": "{count} righe · {totals}",
+      "noLot": "Senza lotto",
+      "col": {
+        "material": "Materiale",
+        "lot": "Lotto · pelle",
+        "place": "Ubicazione",
+        "quality": "Qualità",
+        "onHand": "Giacenza",
+        "held": "Bloccata",
+        "available": "Disponibile"
+      }
+    },
+    "menu": {
+      "newInside": "Nuova ubicazione interna",
+      "move": "Sposta sotto…",
+      "archive": "Archivia",
+      "moves": "Apri nei movimenti"
+    },
+    "held": {
+      "noManage": "Il tuo ruolo vede le ubicazioni ma non le modifica.",
+      "archived": "Archiviata: non riceve più giacenza e non si sposta.",
+      "hides_one": "Contiene {count} pelle: spostala prima.",
+      "hides_other": "Contiene {count} pelli: spostale prima.",
+      "stock_one": "Contiene {count} riga di giacenza: spostala prima.",
+      "stock_other": "Contiene {count} righe di giacenza: spostale prima.",
+      "inside_one": "Dentro c’è {count} ubicazione attiva: archiviala o spostala prima.",
+      "inside_other": "Dentro ci sono {count} ubicazioni attive: archiviale o spostale prima.",
+      "noSite": "Scegli prima una sede."
+    },
+    "new": {
+      "button": "Nuova ubicazione",
+      "title": "Nuova ubicazione",
+      "inside": "Dentro {place}",
+      "atTop": "In cima a {site}",
+      "top": "In cima a {site}",
+      "parentHint": "L’ubicazione che la contiene: un ripiano in una zona, una zona in un magazzino.",
+      "codeHint": "Stampato sull’etichetta e scansionato: maiuscole, cifre, punti e trattini. Non cambia mai.",
+      "codeMissing": "Indica il codice.",
+      "codeShape": "Usa da 1 a 40 maiuscole, cifre, punti, trattini o trattini bassi.",
+      "codeTaken": "Questa sede ha già un’ubicazione con questo codice.",
+      "nameMissing": "Indica il nome.",
+      "nameLong": "Tieni il nome entro 120 caratteri.",
+      "create": "Crea ubicazione"
+    },
+    "field": {
+      "parent": "Dentro",
+      "code": "Codice",
+      "name": "Nome",
+      "kind": "Tipo"
+    },
+    "move": {
+      "title": "Sposta {code} sotto…",
+      "now": "Ora dentro {place}",
+      "under": "Nuova ubicazione che la contiene",
+      "hint": "Solo ubicazioni che non sono questa né sono al suo interno.",
+      "pick": "Scegli dove va",
+      "stockStays": "La giacenza resta dov’è: cambia solo l’albero.",
+      "do": "Sposta"
+    },
+    "archive": {
+      "title": "Archiviare {code}?",
+      "effect": "Un’ubicazione archiviata non riceve più giacenza e dentro non si può mettere altro.",
+      "history": "I suoi movimenti e il codice restano nello storico; il codice non va mai a un’altra ubicazione.",
+      "do": "Archivia"
+    },
+    "done": {
+      "created": "Ubicazione {code} creata.",
+      "moved": "{code} ora è dentro {place}.",
+      "archived": "{code} archiviata: non riceve più giacenza."
+    },
+    "problem": {
+      "write": "Non è stato salvato. Riprova.",
+      "changed": "Qualcuno ha modificato questa ubicazione nel frattempo: è stata riletta. Controlla e riprova.",
+      "notNow": "Non ora: l’ubicazione contiene giacenza o ubicazioni attive, oppure è archiviata.",
+      "parent": "Quell’ubicazione non può contenerla: è archiviata, oppure è questa o una al suo interno.",
+      "forbidden": "Il tuo ruolo non può modificare ubicazioni in questa sede.",
+      "gone": "Questa ubicazione non esiste più, o appartiene a un’altra azienda.",
+      "offline": "Nessuna connessione al server. Riprova."
+    },
+    "empty": {
+      "title": "Ancora nessuna ubicazione",
+      "body": "Aggiungi magazzini, zone e ripiani di questa sede, o importali da un foglio.",
+      "bodyView": "Nessuno ha ancora aggiunto le ubicazioni di questa sede."
+    },
+    "noSites": {
+      "title": "Nessuna sede da mostrare",
+      "body": "Il tuo ruolo non raggiunge nessuna sede di questa azienda."
+    },
+    "keys": {
+      "title": "Scorciatoie da tastiera",
+      "new": "Nuova ubicazione"
+    },
+    "tab": {
+      "overview": "Panoramica",
+      "stock": "Giacenza"
+    },
+    "record": {
+      "title": "{kind} {code} · {name}",
+      "where": "Dove si trova",
+      "back": "Ubicazioni",
+      "tabs": "Parti dell’ubicazione",
+      "allPlaces": "Tutte le ubicazioni della sede",
+      "notFound": "Questa ubicazione non esiste o è di un’altra azienda",
+      "notFoundBody": "Torna all’elenco delle ubicazioni.",
+      "archivedTitle": "Questa ubicazione è archiviata",
+      "archivedBody": "Non riceve più giacenza; storico e codice restano. I campi sono mostrati come testo.",
+      "placeTitle": "L’ubicazione",
+      "codeFixed": "Le etichette stampate mostrano questo codice; non cambia mai.",
+      "insideTitle": "Ubicazioni interne",
+      "nothingInside": "Dentro questa non c’è nessuna ubicazione.",
+      "newInsideHint": "Aggiungi un’ubicazione interna dal menu della riga nell’elenco.",
+      "hereTitle": "Cosa c’è qui",
+      "quantity": "Giacenza",
+      "lines": "Righe di giacenza",
+      "hides": "Pelli",
+      "archiveTitle": "Archiviazione",
+      "isArchived": "Archiviata: non riceve più giacenza.",
+      "archiveHeld": "Non si può ancora archiviare. {reason}",
+      "archiveFree": "Vuota e senza ubicazioni attive dentro: si può archiviare (⋯ Archivia)."
+    },
+    "conflict": {
+      "title": "Modificata da qualcun altro nel frattempo",
+      "body": "Quello che hai scritto è ancora qui. Ricarica rilegge l’ubicazione e lo sostituisce.",
+      "reload": "Ricarica"
+    },
+    "save": {
+      "region": "Modifiche non salvate",
+      "unsaved_one": "{count} modifica non salvata",
+      "unsaved_other": "{count} modifiche non salvate",
+      "discard": "Annulla modifiche",
+      "save": "Salva",
+      "saved": "Tutte le modifiche salvate · {time}",
+      "allSaved": "Nessuna modifica da salvare."
+    },
+    "csv": {
+      "code": "Codice",
+      "name": "Nome",
+      "kind": "Tipo",
+      "status": "Stato",
+      "path": "Percorso",
+      "inside": "Ubicazioni attive interne",
+      "lines": "Righe di giacenza",
+      "hides": "Pelli",
+      "quantity": "Giacenza"
+    }
+  }
+}

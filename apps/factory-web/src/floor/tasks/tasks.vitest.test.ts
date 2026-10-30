@@ -62,7 +62,7 @@ describe('Home\'s scan router: the job for this station, with the label loaded',
     expect(taskOfTile('operation')).toBe('operation')
     expect(taskOfTile('scan')).toBeNull()
     expect(taskOfTile('receive')).toBe('receive')
-    expect(taskOfTile('labels')).toBeNull()
+    expect(taskOfTile('labels')).toBe('labels')
     expect(Object.values(TASK_ROUTES).every((path) => path.startsWith('/floor/'))).toBe(true)
   })
 })

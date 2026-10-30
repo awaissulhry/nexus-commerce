@@ -1,0 +1,96 @@
+/*
+ * The warehouse stock screens (Stock SCR-060, Movements SCR-064, Locations SCR-065, Hides SCR-200, Lots & traceability
+ * SCR-201) — shared LAYOUT only: the page column, the head row, cells with a sub line, numbers, leather's two numbers,
+ * card grids. The controls are the design system's; semantic tokens only (no colours of their own). No page max-width
+ * (Owner rule 2026-10-29): pages fill the shell's main area; wide screens use the width.
+ */
+.fw-st {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-st-head,
+.fw-st-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-st-inline,
+.fw-st-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-st-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-st-sub {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-st-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-st-num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fw-st-num.strong {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-st-dual {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-st-link {
+  color: var(--nds-text-link);
+  text-decoration: none;
+}
+
+.fw-st-link:hover,
+.fw-st-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-st-warning {
+  color: var(--nds-warning-text);
+}
+
+.fw-st-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-st-struck {
+  text-decoration: line-through;
+  color: var(--nds-text-2);
+}

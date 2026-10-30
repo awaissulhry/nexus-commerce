@@ -23,11 +23,13 @@ import { Button, Skeleton, Spinner } from '@nexus/ui/primitives'
 import { useT } from '../lib/i18n/provider'
 import { WithMessages } from '../record-panels/i18n'
 import { ListKeysInfo } from './ListKeysInfo'
-import { gridLayout, isListKey, listKeys, nextRowIndex, ownsKeys, sameIds, toggleId, type ListKey } from './model'
+import { FIT_ROWS, gridLayout, isListKey, listKeys, nextRowIndex, ownsKeys, sameIds, toggleId, type ListKey } from './model'
 import './list-frame.css'
 
 /** AG's own selection column (the row checkboxes and the header's select-all). */
 const SELECTION_COLUMN = 'ag-Grid-SelectionColumn'
+/** The long grid reads its next page this many rows before its end. */
+const ENDLESS_AHEAD = 40
 
 export interface ListFrameSelection {
   /** The selected rows' ids (the page owns them: the bulk actions read them). */
@@ -75,6 +77,12 @@ export interface ListFrameProps<T> {
   /** Drawn in place of the grid (a failed read, nothing yet, nothing matching); the toolbar stays. */
   state?: ReactNode
   rowKind?: GridRowKind
+  /**
+   * Movements only (Owner answer W2 B): ONE long grid of a fixed height that scrolls inside, its header in view, loading
+   * the next page by itself as the reader nears the end (no "Show more", no page numbers). Every other list keeps pages
+   * of 50.
+   */
+  endless?: { onNearEnd: () => void; loading: boolean; done: boolean } | null
   /** Design cases: the row that has the focus, the keys panel open. */
   focusRow?: number
   keysOpen?: boolean
@@ -97,7 +105,7 @@ export function ListFrame<T>(props: ListFrameProps<T>) {
   )
 }
 
-function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', focusRow, keysOpen }: ListFrameProps<T>) {
+function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, focusRow, keysOpen }: ListFrameProps<T>) {
   const t = useT('lists')
   const frameRef = useRef<HTMLDivElement>(null)
   const apiRef = useRef<GridApi<T> | null>(null)
@@ -201,6 +209,16 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
   )
 
   const getRowId = useCallback((params: { data: T }) => rowId(params.data), [rowId])
+
+  // The long grid asks for its next page when the last rows come into view (once per page: `loading` holds it).
+  const endlessRef = useRef(endless)
+  endlessRef.current = endless
+  const onBodyScroll = useCallback(() => {
+    const api = apiRef.current
+    const wants = endlessRef.current
+    if (!api || api.isDestroyed() || !wants || wants.loading || wants.done) return
+    if (api.getLastDisplayedRowIndex() >= api.getDisplayedRowCount() - ENDLESS_AHEAD) wants.onNearEnd()
+  }, [])
   const rowSelection = useMemo(
     () =>
       selection
@@ -288,11 +306,15 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
       </div>
     )
   else {
-    const layout = gridLayout(rows.length)
+    // The long grid keeps its fixed height only while it has more than one page or more to read: a short, complete ledger
+    // is as tall as its rows, like every list (no empty band).
+    const long = !!endless && !(endless.done && rows.length <= FIT_ROWS)
+    const layout = long ? { domLayout: 'normal' as const, fit: false } : gridLayout(rows.length)
     body = (
-      <div className={layout.fit ? 'fw-list-grid fit' : 'fw-list-grid'} role="region" aria-label={label}>
+      <div className={long ? 'fw-list-grid endless' : layout.fit ? 'fw-list-grid fit' : 'fw-list-grid'} role="region" aria-label={label}>
         <NexusGrid<T>
           domLayout={layout.domLayout}
+          {...(long ? { onBodyScroll, onModelUpdated: onBodyScroll } : {})}
           rows={rowKind}
           rowData={rows as T[]}
           columnDefs={columns}

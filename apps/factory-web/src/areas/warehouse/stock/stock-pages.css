@@ -1,0 +1,141 @@
+/*
+ * Warehouse › Stock (SCR-060) and Movements (SCR-064) LAYOUT: the head row, the notices, the totals line, the "why is
+ * it this number" panel, the stock-key chips, dialog forms and the move's detail. The controls are the design system's;
+ * semantic tokens only. No page max-width (Owner rule 2026-10-29): the pages fill the shell's main area.
+ */
+.fw-stk-status {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-stk-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-stk-totals {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-stk-totals b {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-stk-notices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-stk-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-stk-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-stk-preview {
+  margin: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-stk-why {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-stk-why-sum {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-stk-why-figure {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-stk-reason-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nds-text-link);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.fw-stk-reason-button:hover,
+.fw-stk-reason-button:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-stk-detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-stk-detail h3 {
+  margin: 0 0 var(--nds-space-12);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-stk-mirror {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--nds-space-6) var(--nds-space-12);
+  margin: 0;
+}
+
+.fw-stk-mirror dt {
+  color: var(--nds-text-2);
+}
+
+.fw-stk-mirror dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-stk-keys {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 760px) {
+  .fw-stk-why {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

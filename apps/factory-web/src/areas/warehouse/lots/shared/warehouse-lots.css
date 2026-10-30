@@ -1,0 +1,304 @@
+/*
+ * Warehouse › Hides (SCR-200) and Lots & traceability (SCR-201) LAYOUT: the record band, the body with the optional
+ * thread beside it, side-by-side cards, the check list, the trace columns and the hide's area bar. The controls are the
+ * design system's (stock.css holds the cells and numbers every stock screen shares); semantic tokens only. No page
+ * max-width (Owner rule 2026-10-29): the pages fill the shell's main area, wide screens put cards side by side.
+ */
+.fw-wl-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-wl-title {
+  overflow-wrap: anywhere;
+}
+
+.fw-wl-title-sub {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-muted);
+}
+
+.fw-wl-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-wl-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-wl-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-wl-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-wl-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-wl-text {
+  margin: 0;
+  color: var(--nds-text-strong);
+  line-height: 1.45;
+}
+
+.fw-wl-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-wl-stack.tight {
+  gap: var(--nds-space-8);
+}
+
+.fw-wl-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-wl-body.has-dock {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+}
+
+@media (max-width: 1279px) {
+  .fw-wl-body.has-dock {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-wl-dock {
+    display: none;
+  }
+}
+
+/* A record's overview: the main column and its side panel; one column below 1100 px. */
+.fw-wl-split {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (max-width: 1099px) {
+  .fw-wl-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Cards side by side on wide screens (no holes: auto-fit). */
+.fw-wl-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-wl-h3 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-wl-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-wl-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.fw-wl-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+/* The gate in words: one line per check, mark AND words (never colour alone). */
+.fw-wl-checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-wl-check {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: var(--nds-space-8);
+  align-items: start;
+}
+
+.fw-wl-check-words {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-wl-ico {
+  margin-top: 2px;
+  color: var(--nds-text-muted);
+}
+
+.fw-wl-ico.is-ok {
+  color: var(--nds-success);
+}
+
+.fw-wl-ico.is-open {
+  color: var(--nds-warning);
+}
+
+.fw-wl-ico.is-blocked {
+  color: var(--nds-danger);
+}
+
+/* The hide's area bar (stand-in for the missing DS AreaBalanceBar): segments with their words beside them. */
+.fw-wl-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-wl-area-bar {
+  display: flex;
+  width: 100%;
+  height: 14px;
+  border-radius: var(--nds-radius-sm);
+  overflow: hidden;
+  background: var(--nds-surface-sunken);
+  border: 1px solid var(--nds-border);
+}
+
+.fw-wl-area-seg {
+  height: 100%;
+}
+
+.fw-wl-area-seg.cut {
+  background: var(--nds-info);
+}
+
+.fw-wl-area-seg.stock {
+  background: var(--nds-success);
+}
+
+.fw-wl-area-seg.elsewhere {
+  background: var(--nds-warning);
+}
+
+.fw-wl-area-legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-16);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-strong);
+}
+
+.fw-wl-area-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-wl-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.fw-wl-swatch.cut {
+  background: var(--nds-info);
+}
+
+.fw-wl-swatch.stock {
+  background: var(--nds-success);
+}
+
+.fw-wl-swatch.elsewhere {
+  background: var(--nds-warning);
+}
+
+/* The trace: came from ← lot → went to, as columns on a wide screen. */
+.fw-wl-trace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (max-width: 1099px) {
+  .fw-wl-trace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-wl-print-jobs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-wl-print-job {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-wl-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-14);
+}
