@@ -1,0 +1,282 @@
+{
+  "title": "Fonti approvate",
+  "intro": "Cosa ci vende {supplier} e a quali condizioni. Scrivi in una cella: si salva quando la lasci.",
+  "everyColour": "Tutti i colori",
+  "everyCompany": "Tutte le aziende",
+  "uom": {
+    "PCS": "pz",
+    "PAIR": "paio",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "mezze pelli",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole"
+  },
+  "unit": {
+    "factor": "1 {unit} = {factor} {base}",
+    "notUsable": "Unità non più convertita",
+    "notUsableNote": "Una fonte la cui unità il materiale non converte più si acquista nell’unità del materiale finché non viene cambiata."
+  },
+  "price": {
+    "per": "{currency} per {unit}",
+    "none": "Nessun prezzo"
+  },
+  "lead": {
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "usual_one": "Quello abituale del fornitore: {count} giorno",
+    "usual_other": "Quello abituale del fornitore: {count} giorni",
+    "none": "Non noto"
+  },
+  "preference": {
+    "PRIMARY": "Principale",
+    "BACKUP": "Riserva"
+  },
+  "last": {
+    "none": "Mai acquistato"
+  },
+  "status": {
+    "ACTIVE": "Approvata",
+    "ARCHIVED": "Archiviata"
+  },
+  "col": {
+    "material": "Materiale",
+    "company": "Azienda",
+    "article": "Loro codice",
+    "colourCode": "Loro codice colore",
+    "description": "Loro descrizione",
+    "unit": "Unità d’acquisto",
+    "price": "Prezzo",
+    "moq": "Ordine minimo",
+    "multiple": "Multiplo di confezione",
+    "lead": "Tempo di consegna",
+    "preference": "Principale / riserva",
+    "last": "Ultimo acquisto",
+    "status": "Stato",
+    "supplier": "Fornitore",
+    "colour": "Colore",
+    "pack": "Confezione"
+  },
+  "noAccess": {
+    "title": "Le fonti approvate sono degli Acquisti",
+    "body": "Il tuo ruolo non può leggerle: serve purchasing.view. Chiedi a un amministratore."
+  },
+  "held": {
+    "noManage": "Il tuo ruolo non può cambiare le fonti approvate (purchasing.sources.manage).",
+    "supplierArchived": "Il fornitore è archiviato: non è più una fonte approvata.",
+    "busy": "Attendi: l’ultima modifica si sta ancora salvando.",
+    "archived": "Archiviata: ripristinala per cambiarla."
+  },
+  "list": {
+    "failed": "Impossibile caricare le fonti approvate",
+    "noMatch": "Nessuna fonte corrisponde alla ricerca",
+    "empty": {
+      "title": "Ancora nessun articolo",
+      "body": "Aggiungi cosa ci vende questo fornitore: il materiale, il loro codice, l’unità, il prezzo, il minimo, il multiplo e il tempo di consegna. L’importazione di un listino arriva più avanti."
+    },
+    "emptyView": {
+      "archived": "Nessuna fonte archiviata",
+      "all": "Ancora nessuna fonte"
+    },
+    "label": "Fonti approvate di {supplier}",
+    "count_one": "{count} fonte",
+    "count_other": "{count} fonti",
+    "countMore_one": "{count} fonte mostrata, altre da leggere",
+    "countMore_other": "{count} fonti mostrate, altre da leggere",
+    "search": "Cerca materiale o codice",
+    "viewLabel": "Quali fonti",
+    "more": "Mostra altre"
+  },
+  "view": {
+    "active": "Approvate",
+    "archived": "Archiviate",
+    "all": "Tutte"
+  },
+  "add": {
+    "open": "Aggiungi una fonte",
+    "title": "Aggiungi una fonte di {supplier}",
+    "submit": "Aggiungi",
+    "noMaterials": "Per trovare un materiale serve product.materials.view: chiedi a un amministratore.",
+    "otherMaterial": "Un altro materiale",
+    "material": "Materiale",
+    "materialHint": "Solo materiali attivi.",
+    "materialSearch": "Codice o nome",
+    "noMaterial": "Nessun materiale attivo corrisponde.",
+    "colour": "Colore",
+    "colourHint": "La fonte di un colore si usa prima di quella di tutti i colori.",
+    "company": "Vale per",
+    "companyHint": "Una fonte di tutte le aziende richiede un ruolo su tutte le aziende.",
+    "companyOneHint": "Questo fornitore rifornisce una sola azienda.",
+    "thisCompany": "Questa azienda ({company})",
+    "unit": "Unità d’acquisto",
+    "unitHint": "Qualsiasi unità che il materiale converte; di norma la sua ({unit}).",
+    "unitDefault": "Quella del materiale ({unit})",
+    "preference": "Principale o riserva",
+    "preferenceHint": "Una principale per materiale, colore e azienda.",
+    "price": "Prezzo per unità",
+    "priceHint": "Nella valuta qui sotto; vuoto: ancora nessun prezzo.",
+    "currency": "Valuta",
+    "leadHint": "Vuoto: il tempo di consegna abituale del fornitore.",
+    "note": "Nota",
+    "noCost": "Il tuo ruolo non vede i costi: il prezzo lo aggiunge un acquirente che vede i costi.",
+    "primaryNote": "L’attuale fonte principale di questo materiale, colore e azienda diventa una riserva.",
+    "held": {
+      "material": "Scegli prima il materiale.",
+      "oneCompany": "Questo fornitore rifornisce una sola azienda: la sua fonte vale per quell’azienda.",
+      "noCompany": "Apri prima un’azienda: una fonte vale per un’azienda o per tutte.",
+      "noCost": "Il tuo ruolo non vede i costi: lascia vuoto il prezzo.",
+      "currency": "Un codice valuta di tre lettere (EUR)."
+    },
+    "refused": {
+      "archived": "Il fornitore o il materiale è archiviato: non può essere una fonte approvata.",
+      "duplicate": "Questo fornitore ha già una fonte approvata di questo materiale per questa azienda e questo colore: cambia quella.",
+      "everyCompany": "Una fonte di tutte le aziende la tiene solo un ruolo su tutte le aziende: scegli questa azienda.",
+      "company": "Il fornitore o il materiale appartiene a un’azienda: la fonte vale per quell’azienda.",
+      "notSupplier": "Questa parte non ha il ruolo di fornitore: assegnaglielo prima.",
+      "colour": "Scegli un colore attivo di questo materiale.",
+      "gone": "Il fornitore o il materiale non esiste più."
+    }
+  },
+  "bulk": {
+    "archive_one": "Archivia {count}",
+    "archive_other": "Archivia {count}",
+    "restore_one": "Ripristina {count}",
+    "restore_other": "Ripristina {count}",
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)",
+    "noneActive": "Nessuna delle fonti scelte è approvata.",
+    "noneArchived": "Nessuna delle fonti scelte è archiviata.",
+    "done": {
+      "archive_one": "{count} fonte archiviata.",
+      "archive_other": "{count} fonti archiviate.",
+      "restore_one": "{count} fonte approvata di nuovo.",
+      "restore_other": "{count} fonti approvate di nuovo."
+    },
+    "refusedRow": "{label}: {why}",
+    "refused": {
+      "archiveState": "è già archiviata.",
+      "restoreState": "non si può approvare di nuovo: il fornitore o il materiale è archiviato, oppure è già approvata.",
+      "restoreDuplicate": "il fornitore ne ha già un’altra fonte approvata per questa azienda e questo colore: archivia prima quella."
+    }
+  },
+  "common": {
+    "retry": "Riprova",
+    "clearSearch": "Cancella la ricerca",
+    "dismiss": "Chiudi",
+    "cancel": "Annulla",
+    "loading": "Caricamento…"
+  },
+  "readOnly": {
+    "title": "Sola lettura",
+    "body": "Il tuo ruolo legge le fonti approvate ma non può cambiarle: serve purchasing.sources.manage (l’acquirente)."
+  },
+  "noCost": "I prezzi non sono mostrati: il tuo ruolo non vede i costi.",
+  "cell": {
+    "label": "{field} di {material}",
+    "saving": "Salvataggio…",
+    "saved": "Salvato",
+    "refused": {
+      "supplierArticleCode": "Il loro codice ha al massimo 60 caratteri.",
+      "supplierColourCode": "Il loro codice colore ha al massimo 60 caratteri.",
+      "description": "La descrizione ha al massimo 300 caratteri.",
+      "purchaseUom": "Il materiale non converte questa unità.",
+      "unitPrice": "Un prezzo di 0 o più, al massimo sei decimali.",
+      "minOrderQty": "Un minimo sopra 0, al massimo quattro decimali.",
+      "orderMultiple": "Un multiplo sopra 0, al massimo quattro decimali.",
+      "leadTimeDays": "Giorni interi, da 0 a 366.",
+      "preference": "Scegli principale o riserva.",
+      "currency": "Un codice valuta di tre lettere (EUR).",
+      "note": "La nota ha al massimo 1000 caratteri."
+    },
+    "tooLong": "Al massimo {max} caratteri.",
+    "badPrice": "Un prezzo di 0 o più, al massimo sei decimali.",
+    "badQuantity": "Sopra 0, al massimo quattro decimali.",
+    "badDays": "Giorni interi, da 0 a {max}.",
+    "changed": "Cambiata da qualcun altro: riletta, riscrivila.",
+    "archived": "Archiviata nel frattempo: ripristinala per cambiarla.",
+    "unitNotConverted": "Il materiale non converte questa unità nella sua unità di base.",
+    "forbidden": "Il tuo ruolo non può cambiare questa fonte (una fonte di tutte le aziende richiede un ruolo su tutte le aziende)."
+  },
+  "field": {
+    "supplierArticleCode": "Loro codice",
+    "supplierColourCode": "Loro codice colore",
+    "description": "Loro descrizione",
+    "purchaseUom": "Unità d’acquisto",
+    "unitPrice": "Prezzo",
+    "minOrderQty": "Ordine minimo",
+    "orderMultiple": "Multiplo di confezione",
+    "leadTimeDays": "Tempo di consegna in giorni",
+    "preference": "Principale o riserva"
+  },
+  "problem": {
+    "write": "Non salvato: riprova.",
+    "invalid": "Non salvato: controlla cosa hai scritto.",
+    "gone": "Non esiste più.",
+    "offline": "Nessuna risposta dal server: riprova tra poco.",
+    "read": "La lettura non è riuscita: riprova.",
+    "forbidden": "Il tuo ruolo non può leggerlo.",
+    "changed": "Cambiato da qualcun altro: rileggi.",
+    "slowDown": "Troppi tentativi: attendi un momento."
+  },
+  "archive": {
+    "title_one": "Archiviare {count} fonte?",
+    "title_other": "Archiviare {count} fonti?",
+    "submit_one": "Archivia {count}",
+    "submit_other": "Archivia {count}",
+    "body": "Una fonte archiviata non viene più proposta negli acquisti: il fornitore non è più approvato per essa. Resta conservata e si può approvare di nuovo.",
+    "reason": "Motivo",
+    "reasonHint": "Resta nella cronologia (facoltativo)."
+  },
+  "restore": {
+    "title_one": "Approvare di nuovo {count} fonte?",
+    "title_other": "Approvare di nuovo {count} fonti?",
+    "submit_one": "Approva di nuovo {count}",
+    "submit_other": "Approva di nuovo {count}",
+    "body": "Ognuna torna come fonte di riserva. Le condizioni sono quelle di quando è stata archiviata."
+  },
+  "notice": {
+    "demoted": "{supplier} ora è la riserva per {material}.",
+    "changed": "{material} è stato cambiato da qualcun altro: la riga è stata riletta.",
+    "added": "Fonte di {material} aggiunta.",
+    "addedDemoted": "Fonte di {material} aggiunta come principale: {supplier} ora è la riserva."
+  },
+  "keys": {
+    "add": "Aggiungi una fonte",
+    "title": "Scorciatoie da tastiera"
+  },
+  "csv": {
+    "material": "Materiale",
+    "colour": "Colore",
+    "company": "Azienda",
+    "articleCode": "Loro codice",
+    "colourCode": "Loro codice colore",
+    "description": "Loro descrizione",
+    "unit": "Unità",
+    "price": "Prezzo",
+    "currency": "Valuta",
+    "moq": "Ordine minimo",
+    "multiple": "Multiplo",
+    "lead": "Tempo di consegna (giorni)",
+    "preference": "Principale / riserva",
+    "status": "Stato"
+  },
+  "prices": {
+    "title": "Prezzi dei fornitori",
+    "intro": "I fornitori approvati di questo materiale con prezzo, minimo, confezione e tempo di consegna. Si tengono negli Acquisti, in Articoli e prezzi di ogni fornitore.",
+    "noAccess": "I prezzi dei fornitori sono degli Acquisti: il tuo ruolo ha bisogno di purchasing.view per leggerli.",
+    "failed": "Impossibile caricare i prezzi dei fornitori",
+    "onlyDefault": "Solo il fornitore predefinito: {supplier}. Ancora nessuna fonte approvata.",
+    "openSupplier": "Apri il fornitore",
+    "none": "Ancora nessuna fonte approvata e nessun fornitore predefinito."
+  }
+}

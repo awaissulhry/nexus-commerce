@@ -9,19 +9,24 @@ import { editText, moneyText } from '../../../styles/model'
 import { ReadField, SaveBar } from '../../../library/parts'
 import type { MaterialView } from '../../api'
 import { costInput } from '../../model'
+import { SupplierPricesSection } from '../../../../purchasing/suppliers/sources/view/SupplierPricesSection'
 import type { MaterialRecordActions, MaterialRecordViewModel } from '../record-model'
 
 /**
  * SCR-048 Suppliers & prices: the standard purchase price per base unit (GAP-006: what quotes and cost sheets use until
  * supplier price lists exist) — shown and set only with the cost grain, set with product.materials.cost, with a reason
  * kept in the audit row — and the default supplier with their article code (product.materials.manage). A material we
- * only make has no supplier.
+ * only make has no supplier. Below them (B-W2a-69) the Supplier prices: Purchasing's approved sources of the material,
+ * read only (kept on the supplier's Items & prices tab).
  */
 export function SuppliersTab({ material, model, actions }: { material: MaterialView; model: MaterialRecordViewModel; actions?: MaterialRecordActions }) {
   return (
-    <div className="fw-lib-pair">
-      {model.can.seesCost ? <CostCard material={material} model={model} actions={actions} /> : <NoCostCard />}
-      <SupplierCard material={material} model={model} actions={actions} />
+    <div className="fw-lib-stack">
+      <div className="fw-lib-pair">
+        {model.can.seesCost ? <CostCard material={material} model={model} actions={actions} /> : <NoCostCard />}
+        <SupplierCard material={material} model={model} actions={actions} />
+      </div>
+      {model.supplierPrices && material.sourcing !== 'MAKE' && <SupplierPricesSection model={model.supplierPrices} onRetry={actions?.onRetrySupplierPrices} />}
     </div>
   )
 }

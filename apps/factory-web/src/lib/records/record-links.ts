@@ -123,6 +123,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/inventory/receipts': '/warehouse/receipts',
   // B-W2a-56: the subcontract orders (the page reads `?view=`, `?q=`; `?show=stock` is the stock at the workshops).
   '/purchasing/subcontracting/orders': '/purchasing/subcontracting',
+  // B-W2a-69: Requests to buy (the page reads `?view=`, `?kind=`, `?site=`, `?q=`, `?group=`, `?open=`).
+  '/purchasing/requests': '/purchasing/requests',
   // B-W2a-63: the claims (the page reads `?view=`, `?status=`, `?kind=`, `?receipt=`, `?lot=`, `?q=`).
   '/purchasing/claims': '/purchasing/claims',
   // The stock screens read the API's own filters from the address.
