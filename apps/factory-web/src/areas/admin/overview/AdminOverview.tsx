@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
@@ -8,6 +9,8 @@ import { listCompanies, listDevices, listIdentities, listPrinters, listRoles, li
 import { problemKey } from '../shared/model'
 import { listAccounts } from '../connections/api'
 import { listImports } from '../import/api'
+import { readAttention, type Attention } from '../security/api'
+import type { Read as SecurityRead } from '../security/model'
 import { OPENING_STOCK, READ_RIGHTS, setupSteps, STEP_READ, type OverviewFacts, type Read, type ReadName } from './model'
 import { AdminOverviewView } from './view/AdminOverviewView'
 
@@ -36,6 +39,15 @@ export function AdminOverview() {
     imports: CHECKING,
   })
   const [checkedAt, setCheckedAt] = useState<string | null>(null)
+  // B-W2a-36: Needs attention (any office session; each kind only where the person may read it).
+  const [attention, setAttention] = useState<SecurityRead<Attention>>({ state: 'loading' })
+  const router = useRouter()
+  const readAttentionList = useCallback(() => {
+    readAttention(api).then(
+      (value) => setAttention({ state: 'ok', value }),
+      (error: unknown) => setAttention({ state: 'failed', problem: problemKey(error) }),
+    )
+  }, [api])
 
   const readOne = useCallback(
     async (name: ReadName) => {
@@ -68,9 +80,10 @@ export function AdminOverview() {
   )
 
   const readAll = useCallback(async () => {
+    readAttentionList()
     await Promise.all((Object.keys(READ_RIGHTS) as ReadName[]).map((name) => readOne(name)))
     setCheckedAt(new Date().toISOString())
-  }, [readOne])
+  }, [readOne, readAttentionList])
 
   useEffect(() => {
     void readAll()
@@ -84,8 +97,10 @@ export function AdminOverview() {
   const steps = setupSteps({ me: session.user.id, ...facts } as OverviewFacts, prefix, OFFICE_PAGES)
   return (
     <AdminOverviewView
-      model={{ prefix, steps, checkedAt, showAll: false }}
+      model={{ prefix, steps, checkedAt, showAll: false, attention }}
       actions={{
+        onAttentionRetry: readAttentionList,
+        onOpen: (href) => router.push(href),
         onRecheck: () => void readAll(),
         onRetry: (stepId) => {
           const read = STEP_READ[stepId as keyof typeof STEP_READ]

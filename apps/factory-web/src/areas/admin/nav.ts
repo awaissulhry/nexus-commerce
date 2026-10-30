@@ -1,4 +1,4 @@
-import { Building2, FileClock, FileLock, Hash, Languages, ListChecks, PlugZap, Settings, ShieldCheck, Tablet, Upload, Users } from 'lucide-react'
+import { Building2, FileClock, FileLock, Hash, HeartPulse, Languages, ListChecks, PlugZap, Settings, ShieldCheck, Tablet, Upload, Users } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -50,6 +50,8 @@ export const officeArea: OfficeAreaNav = {
         items: [
           { id: 'admin-users', label: 'shell:nav.admin.users', href: '/admin/users', icon: Users, permission: 'users.view' },
           { id: 'admin-roles', label: 'shell:nav.admin.roles', href: '/admin/roles', icon: ShieldCheck, permission: 'roles.view' },
+          // B-W2a-36 (SCR-166): status, sign-in rules with two-factor per role, backups and restore drills, protection.
+          { id: 'admin-security', label: 'shell:nav.admin.security', href: '/admin/security', icon: HeartPulse, permission: 'security.view' },
         ],
       },
       {

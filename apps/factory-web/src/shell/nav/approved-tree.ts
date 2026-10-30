@@ -314,6 +314,8 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'admin.users', title: 'Users', titleIt: 'Utenti', wave: 'W0', href: '/admin/users' },
           { id: 'admin.roles', title: 'Roles & permissions', titleIt: 'Ruoli e permessi', wave: 'W0', href: '/admin/roles' },
+          // W2a: B-W2a-36 Security & health (SCR-166).
+          { id: 'admin.security', title: 'Security & health', titleIt: 'Sicurezza e stato del sistema', wave: 'W2a', href: '/admin/security' },
         ],
       },
       {

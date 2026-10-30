@@ -7,6 +7,7 @@ import { Button } from '@nexus/ui/primitives'
 import { useT } from '../../../../lib/i18n/provider'
 import { AdminMessages, PageHead } from '../../shared/view/parts'
 import { SetupChecklist } from '../../shared/view/SetupChecklist'
+import { AttentionSection } from '../../security/view/AttentionSection'
 import { doneCount, type OverviewViewModel } from '../model'
 
 export type { OverviewViewModel } from '../model'
@@ -14,6 +15,9 @@ export type { OverviewViewModel } from '../model'
 export interface OverviewActions {
   onRecheck?: () => void
   onRetry?: (stepId: string) => void
+  /** B-W2a-36: Needs attention read again; Enter on a row opens its page. */
+  onAttentionRetry?: () => void
+  onOpen?: (href: string) => void
 }
 
 /**
@@ -61,6 +65,7 @@ function Overview({ model, actions }: { model: OverviewViewModel; actions?: Over
         />
       )}
       {open && <SetupChecklist title={t('overview.title')} steps={model.steps} onRetry={actions?.onRetry} />}
+      {model.attention && <AttentionSection attention={model.attention} prefix={model.prefix} onRetry={actions?.onAttentionRetry} onOpen={actions?.onOpen} />}
       <p className="fw-adm-hint">{t('overview.later')}</p>
     </div>
   )

@@ -64,7 +64,23 @@ const PLANT_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freez
   floor_inspector: ['plant.report'],
   team_leader: ['plant.report'],
 })
-const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? [])]
+/**
+ * B-W2a-43 (customer returns; design sales.returns, floor.returnsin): sales makes the RMA and decides what the customer
+ * gets (credit values with its price grain); the warehouse receives at the dock and grades with the quality inspector;
+ * finance and production read them (finance makes the credit note, B-W2a-61). On the floor the dock's operator and team
+ * leader receive, the floor inspector receives and grades. Owner and read-only take theirs from every().
+ */
+const RETURNS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  sales: ['sales.returns.view', 'sales.returns.manage', 'sales.returns.decide'],
+  finance: ['sales.returns.view'],
+  warehouse: ['sales.returns.view', 'sales.returns.receive', 'sales.returns.inspect'],
+  quality_inspector: ['sales.returns.view', 'sales.returns.inspect'],
+  production_manager: ['sales.returns.view'],
+  operator: ['sales.returns.receive'],
+  team_leader: ['sales.returns.receive'],
+  floor_inspector: ['sales.returns.receive', 'sales.returns.inspect'],
+})
+const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -160,6 +176,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'views.save', 'views.manage', 'views.export',
       // B-W2a-32: rebuild the search index.
       'search.rebuild',
+      // B-W2a-36: Security & health; record a restore drill.
+      'security.view', 'security.drills.record',
     ],
     grains: [],
   }),
