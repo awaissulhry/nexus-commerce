@@ -189,6 +189,8 @@ export function dutyState(duty: EntryDetail['duties'][number]): 'OK' | 'OPEN' | 
 export type SourceLink =
   | { readonly kind: 'release'; readonly releaseId: string; readonly label: string }
   | { readonly kind: 'lot'; readonly lotId: string }
+  // B-W2a-65: an entry a customer complaint opened (a safety one at its triage) opens that complaint.
+  | { readonly kind: 'complaint'; readonly complaintId: string }
   | { readonly kind: 'none' }
 
 export function sourceLink(entry: Pick<Entry, 'source' | 'lotIds'>, releases: readonly ReversedRelease[] | null): SourceLink {
@@ -202,6 +204,7 @@ export function sourceLink(entry: Pick<Entry, 'source' | 'lotIds'>, releases: re
     if (release) return { kind: 'release', releaseId: release.id, label: release.releaseNumber ?? release.number }
   }
   if (entry.source.type === 'LabResult' && entry.lotIds[0]) return { kind: 'lot', lotId: entry.lotIds[0] }
+  if (entry.source.type === 'Complaint') return { kind: 'complaint', complaintId: entry.source.id }
   return { kind: 'none' }
 }
 

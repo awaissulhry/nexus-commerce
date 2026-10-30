@@ -1,4 +1,4 @@
-import { ClipboardCheck } from 'lucide-react'
+import { ClipboardCheck, MessageSquareWarning } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -26,6 +26,12 @@ export const officeArea: OfficeAreaNav = {
           // SCR-075 / SCR-076: final inspections, releases, reversals and what is on hold (quality.inspections.view).
           { id: 'quality-inspections', label: 'shell:nav.quality.inspections', href: '/quality/inspections', icon: ClipboardCheck, permission: 'quality.inspections.view' },
         ],
+      },
+      // B-W2a-65: Quality › Problems › Complaints (SCR-113 W2a part; quality.complaints.view).
+      {
+        id: 'quality-problems',
+        label: 'shell:nav.quality.problems',
+        items: [{ id: 'quality-complaints', label: 'shell:nav.quality.complaints', href: '/quality/complaints', icon: MessageSquareWarning, permission: 'quality.complaints.view' }],
       },
     ],
   },

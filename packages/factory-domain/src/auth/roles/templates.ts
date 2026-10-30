@@ -128,9 +128,23 @@ const NCR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze(
 const RECEIVABLES_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   finance: ['receivables.view', 'receivables.reminders.manage', 'receivables.reminders.approve', 'receivables.statements.send', 'receivables.settings.manage'],
 })
+/**
+ * B-W2a-65 (customer complaints; SAL-416, QHS-113, QHS-115; design quality.complaints): sales logs what the customer said
+ * (the intake is SAL's) and follows its complaints; quality triages, investigates, answers and closes them (a safety one
+ * alerts the owner and quality and opens its PPE register entry); the production manager reads them and logs one found
+ * on the floor. The owner's acknowledgement of a safety alert (quality.complaints.acknowledge) is the owner's alone,
+ * through every(); read-only reads them through the registry.
+ */
+const COMPLAINTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  sales: ['quality.complaints.view', 'quality.complaints.log'],
+  quality_inspector: ['quality.complaints.view', 'quality.complaints.log', 'quality.complaints.manage'],
+  production_manager: ['quality.complaints.view', 'quality.complaints.log'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
-  ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
+  // B-W2a-65
+  ...(audience === 'office' ? (COMPLAINTS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

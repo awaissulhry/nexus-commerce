@@ -29,6 +29,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // Quality › Inspections (SCR-076); a release is reviewed in its DetailModal on the list (design §2.3).
   Inspection: '/quality/inspections/[id]',
   QualityRelease: '/quality/inspections?open=[id]',
+  // Quality › Complaints (SCR-113 W2a part, B-W2a-65): a complaint's record (a new one is triaged from the list's DetailModal).
+  Complaint: '/quality/complaints/[id]',
   // Warehouse › Lots & traceability (SCR-201): a lot's stock, trace and moves; its tests, documents and release stay in
   // Compliance › Tests & substances (SCR-054), which the lot record links.
   Lot: '/warehouse/lots/[id]',
@@ -104,6 +106,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/production/work-orders': '/production/work-orders',
   // The pages read the API's own filters from the address (`?onHold=true`, `?waitingRelease=true`, `?status=OPEN`).
   '/quality/inspections': '/quality/inspections',
+  // B-W2a-65: the complaints list reads `?view=`, `?q=` and the API's own filters (`?partyId=`, `?salesOrderId=`, …).
+  '/quality/complaints': '/quality/complaints',
   '/quality/lots': '/compliance/tests',
   '/compliance/register': '/compliance/register',
   // The invoice list reads the API's own filters from the address (`?status=REJECTED`, `?docType=TD04`).

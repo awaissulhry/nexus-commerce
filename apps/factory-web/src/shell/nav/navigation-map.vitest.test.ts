@@ -123,6 +123,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/production/reports': 'production.reports.view', // GET /production/reports/daily
       '/production/settings': 'production.settings.view', // GET /production/settings
       '/quality/inspections': 'quality.inspections.view', // GET /quality/inspections
+      '/quality/complaints': 'quality.complaints.view', // GET /quality/complaints (B-W2a-65)
       '/compliance/certificates': 'compliance.certificates.view', // GET /compliance/certificates
       '/compliance/labels': 'compliance.certificates.view', // GET /compliance/labels
       '/compliance/tests': 'quality.lots.view', // GET /quality/lots
@@ -174,9 +175,11 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/shipping',
       '/admin/import',
     ])
-    // The sales role: all of Sales, Home's approvals and mail, no Quality, Compliance or Planning.
+    // The sales role: all of Sales, Home's approvals and mail; of Quality only Complaints (B-W2a-65: sales logs them); no
+    // Compliance or Planning.
     const sales = officeNavFor(permissionCheck(templateOf('sales')!.permissions))
-    expect(sales.areas.map((area) => area.id)).toEqual(['home', 'sales', 'products', 'purchasing', 'warehouse', 'production', 'finance', 'admin'])
+    expect(sales.areas.map((area) => area.id)).toEqual(['home', 'sales', 'products', 'purchasing', 'warehouse', 'production', 'quality', 'finance', 'admin'])
+    expect(rows(sales).filter((row) => row.href.startsWith('/quality/')).map((row) => row.href)).toEqual(['/quality/complaints'])
     expect(rows(sales).filter((row) => row.href.startsWith('/sales/') || row.href.startsWith('/home/')).map((row) => row.href)).toEqual([
       '/home/today',
       '/home/approvals',

@@ -267,6 +267,13 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: true,
         pages: [{ id: 'quality.inspections', title: 'Inspections', titleIt: 'Ispezioni', wave: 'W1', href: '/quality/inspections' }],
       },
+      // W2a: B-W2a-65 Complaints (SCR-113 W2a part).
+      {
+        label: 'Problems',
+        labelIt: 'Problemi',
+        hideLabel: false,
+        pages: [{ id: 'quality.complaints', title: 'Complaints', titleIt: 'Reclami', wave: 'W2a', href: '/quality/complaints' }],
+      },
     ],
   },
   {

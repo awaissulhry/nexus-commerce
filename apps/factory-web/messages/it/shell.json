@@ -78,7 +78,9 @@
     "quality": {
       "area": "Qualità",
       "main": "Principali",
-      "inspections": "Ispezioni"
+      "inspections": "Ispezioni",
+      "problems": "Problemi",
+      "complaints": "Reclami"
     },
     "compliance": {
       "area": "Conformità",
