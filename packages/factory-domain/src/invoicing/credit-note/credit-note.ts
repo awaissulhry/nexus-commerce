@@ -43,7 +43,7 @@ export const CREDIT_REASON_WORDS: Readonly<Record<CreditReason, { readonly it: s
 export interface CreditedLine {
   readonly id: string
   readonly seq: number
-  readonly kind: 'GOODS' | 'SERVICE' | 'DEPOSIT_DEDUCTION'
+  readonly kind: 'GOODS' | 'SERVICE' | 'DEPOSIT_DEDUCTION' | 'CHARGE'
   readonly description: string
   readonly itemCode: string | null
   /** Decimal strings. */

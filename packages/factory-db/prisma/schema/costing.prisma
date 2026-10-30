@@ -46,7 +46,8 @@ model LabourRate {
 }
 
 /// The costing settings of a company, or the tenant-wide ones (FIN-001; the design's "overhead rule from Finance
-/// settings"): the overhead percentage the cost sheet adds on material + labour. The row's id is the company's id, or
+/// settings"): the overhead percentage the cost sheet adds on material + labour.
+/// W2a adds the costing method (standard, moving average or FIFO; c.c. art. 2426) and its lock. The row's id is the company's id, or
 /// the tenant's own id for the tenant-wide row, so there is at most one of each (as ShippingSettings is keyed by its
 /// site). No row: the sheet has no overhead line.
 model CostingSettings {
@@ -57,6 +58,14 @@ model CostingSettings {
   companyId   String?  @db.Uuid
   /// Percent on material + labour, 0 to 100.
   overheadPct Decimal  @default(0) @db.Decimal(7, 4)
+  /// W2a (FIN-033, c.c. art. 2426; design finance.settings "Costing"): the costing method, the accountant's choice
+  /// (GATE-ACCOUNTANT); UNDECIDED until it is given (cost-ledger.prisma CostingMethod). Locked once a value relies on it.
+  /// @not-money which method values stock and work orders, not an amount
+  costingMethod    CostingMethod @default(UNDECIDED)
+  /// Set once, together, when the method is first used (a work-order cost entry or a stock value relied on): from then
+  /// on the method never changes (the …_money_w2a_guards trigger; the screen holds it "with that reason").
+  methodLockedAt   DateTime?     @db.Timestamptz(3)
+  methodLockedById String?       @db.Uuid
   version     Int      @default(1)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)

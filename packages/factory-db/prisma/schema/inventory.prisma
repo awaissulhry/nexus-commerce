@@ -190,6 +190,8 @@ model GoodsReceiptLine {
   itemColour        ItemColour?        @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
   lots              Lot[]
   moves             StockMove[]
+  // W2a payables.prisma (wave 7/7): the supplier invoice lines matched against it (three-way match).
+  supplierInvoiceMatches SupplierInvoiceMatch[]
   // W2a claims.prisma: the discrepancies and claim lines about it.
   discrepancies     ReceiptDiscrepancy[]
   claimLines        SupplierClaimLine[]
@@ -417,6 +419,9 @@ model StockMove {
   stockCountLines StockCountLine[]
   device       Device?           @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   valuations   StockValuation[]
+  // W2a cost-ledger.prisma (wave 7/7): the work-order cost entries it posted (an issue, a return, a scrap).
+  /// @not-money the relation to the cost ledger (the rows carry the grain)
+  costEntries  WorkOrderCostEntry[]
   // W2a claims.prisma, subcontract.prisma: the claim line it returned, the kit line it sent.
   claimLines   SupplierClaimLine[]
   kitLines     SubcontractKitLine[]

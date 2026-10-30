@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed, type CoreSeed } from '../seed/_core'
+import { seed as seedAccounting } from '../seed/accounting'
 import { seed as seedAlerts } from '../seed/alerts'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
@@ -34,6 +35,7 @@ import { seed as seedQuality } from '../seed/quality'
 import { seed as seedQualityLab } from '../seed/quality-lab'
 import { seed as seedReturns } from '../seed/returns'
 import { seed as seedReasons } from '../seed/reasons'
+import { seed as seedReceivables } from '../seed/receivables'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
 import { seed as seedSearch } from '../seed/search'
@@ -191,6 +193,11 @@ beforeAll(async () => {
   // The stock and planning schema of W2a (wave 4/7).
   await seedPlanning({ db: factory, namespace: 'iso-a' })
   await seedPlanning({ db: factory, namespace: 'iso-b' })
+  // The money schema of W2a (wave 7/7).
+  for (const seedMoneyW2a of [seedReceivables, seedAccounting]) {
+    await seedMoneyW2a({ db: factory, namespace: 'iso-a' })
+    await seedMoneyW2a({ db: factory, namespace: 'iso-b' })
+  }
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -201,6 +208,8 @@ afterAll(async () => {
 
 it('covers every classified table and every runtime role', () => {
   expect(classified.map(({ model }) => model.name).sort()).toEqual([
+    'AccountingExport',
+    'AccountingExportFile',
     'Alert',
     'AlertEvent',
     'AlertRule',
@@ -292,7 +301,9 @@ it('covers every classified table and every runtime role', () => {
     'PasswordReset',
     'Payment',
     'PaymentAllocation',
+    'PaymentReminder',
     'PaymentTerms',
+    'PeriodLock',
     'PlanningException',
     'PlanningRun',
     'PlanningSettings',
@@ -322,7 +333,9 @@ it('covers every classified table and every runtime role', () => {
     'QuoteVersion',
     'ReasonCode',
     'ReceiptDiscrepancy',
+    'ReceivablesSettings',
     'RecordFollower',
+    'Refund',
     'RepairOrder',
     'RepairStageEvent',
     'ReportSubscription',
@@ -358,6 +371,7 @@ it('covers every classified table and every runtime role', () => {
     'Size',
     'SizeScale',
     'StaffNoticeAck',
+    'StandardCost',
     'Station',
     'StockCount',
     'StockCountLine',
@@ -371,6 +385,9 @@ it('covers every classified table and every runtime role', () => {
     'SubcontractOrder',
     'SupplierClaim',
     'SupplierClaimLine',
+    'SupplierInvoice',
+    'SupplierInvoiceLine',
+    'SupplierInvoiceMatch',
     'SupplierItem',
     'Suppression',
     'Task',
@@ -386,6 +403,7 @@ it('covers every classified table and every runtime role', () => {
     'WorkCentre',
     'WorkCentreCapacity',
     'WorkOrder',
+    'WorkOrderCostEntry',
     'WorkOrderMaterial',
     'WorkOrderOperation',
     'WorkOrderSize',

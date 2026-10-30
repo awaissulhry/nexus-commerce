@@ -254,6 +254,9 @@ model PurchaseOrderLine {
   peggings      RequirementPegging[]
   // inventory.prisma: the receipt lines received against it.
   receiptLines  GoodsReceiptLine[]
+  // W2a payables.prisma (wave 7/7): the supplier invoice lines that bill it, and their three-way matches.
+  supplierInvoiceLines   SupplierInvoiceLine[]
+  supplierInvoiceMatches SupplierInvoiceMatch[]
 
   @@unique([tenantId, purchaseOrderId, seq])
   // The target of the receipt lines' and requirements' references: on the line's own site.

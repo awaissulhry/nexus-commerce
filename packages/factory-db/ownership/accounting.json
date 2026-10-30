@@ -1,0 +1,29 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/accounting.prisma (rules: src/ownership.ts; roles: src/roles.ts). Finance prepares, exports and cancels accounting exports, stores their files and locks or lifts periods through apps/factory-api's modules/accounting (B-W2a-39), always through command(); the API keeps staff to the companies their grants reach. The floor, portal and link sessions read none of it (the floor's stock moves are dated now; the API's floor paths read a lock through the tenant's system view). An exported batch and its files never change; nobody deletes an export (cancelled while a DRAFT), a file (only the job's files of a DRAFT) or a lock (lifted): the …_money_w2a_guards triggers. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "AccountingExport": {
+      "about": "Finance prepares an export of a company's period (packages, checks, documents), exports it with its number, or cancels a draft; an exported one never changes (a re-export amends it). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "AccountingExportFile": {
+      "about": "The export job records each file of a DRAFT export (and removes them when the job is run again); the files of an exported batch never change. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "delete"] }
+      }
+    },
+    "PeriodLock": {
+      "about": "Finance locks whole months of a company (SOFT or HARD), lifts a lock with a reason, and locks it again. Office only (the office and the worker read it in the triggers that refuse a write dated in a hard lock).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}
