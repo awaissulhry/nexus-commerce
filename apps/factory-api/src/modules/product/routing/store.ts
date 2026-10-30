@@ -8,12 +8,14 @@ import { MINUTES_ROUND, routingMinutes } from '@nexus/factory-domain/product/rou
 import { sameMinutes } from '@nexus/factory-domain/product/routing/operations'
 import { PRODUCT_ROUTING_VIEW } from '@nexus/factory-domain/product/routing/permissions'
 import { editRefusal, finalStepOf, routingIssues, type StepData, type StepFields } from '@nexus/factory-domain/product/routing/rules'
+import type { Subcontract } from '@nexus/factory-domain/product/routing/subcontract'
+import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import type { CommandCaller, CommandTools, CommandTx } from '../../../core/command'
 import { actorOf, type RequestContext } from '../../../core/context'
 import { ApiError } from '../../../core/errors'
 import { bumpRevision, findRevision, lockStyleRow, revisionViewOf, STYLE_COLUMNS, type BomStyleRow, type LockedStyle, type RevisionRow } from '../bom/store'
 import { contextOf, mayWrite } from '../materials/store'
-import { readOperations, readSteps, type OperationFacts, type StepRecord } from './read'
+import { readOperations, readSteps, readSubcontracts, readWorkshops, type OperationFacts, type StepRecord } from './read'
 
 /**
  * The routing's rows (factory-db `RoutingOperation`) and what they name (`Style`, `StyleRevision`, `Operation`): the
@@ -34,7 +36,7 @@ import { readOperations, readSteps, type OperationFacts, type StepRecord } from 
  */
 
 export { contextOf }
-export { OPERATION_REF_COLUMNS, readOperations, readSteps, STEP_COLUMNS, type OperationFacts, type StepRecord } from './read'
+export { OPERATION_REF_COLUMNS, readOperations, readSteps, readSubcontracts, STEP_COLUMNS, type OperationFacts, type StepRecord } from './read'
 
 // ---- who may see and write ----------------------------------------------------------------------------------------------
 
@@ -67,13 +69,18 @@ export interface LoadedRouting {
   readonly steps: readonly StepRecord[]
   readonly operations: ReadonlyMap<string, OperationFacts>
   readonly sizeLabels: ReadonlyMap<string, string | null>
+  /** W2a: the subcontracted steps' details, by step id, and the workshops they name. */
+  readonly subcontracts: ReadonlyMap<string, Subcontract>
+  readonly workshops: ReadonlyMap<string, { readonly id: string; readonly code: string; readonly name: string }>
 }
 
 export async function loadRouting(client: FactoryClient | CommandTx, style: BomStyleRow, revision: RevisionRow): Promise<LoadedRouting> {
   const steps = await readSteps(client, revision.id)
   const operations = await readOperations(client, steps.map((step) => step.operationId))
   const sizes = await client.size.findMany({ where: { scaleId: style.sizeScaleId, code: { in: style.sizes } }, select: { code: true, label: true } })
-  return { style, revision, steps, operations, sizeLabels: new Map(sizes.map((size) => [size.code, size.label])) }
+  const subcontracts = await readSubcontracts(client, revision.id)
+  const workshops = await readWorkshops(client, subcontracts.values())
+  return { style, revision, steps, operations, sizeLabels: new Map(sizes.map((size) => [size.code, size.label])), subcontracts, workshops }
 }
 
 // ---- the view -----------------------------------------------------------------------------------------------------------
@@ -87,6 +94,7 @@ export function routingViewOf(loaded: LoadedRouting): RoutingView {
   const stepViews: StepView[] = steps.map((step) => {
     const operation = operations.get(step.operationId)
     if (!operation) throw new ApiError('internal_error', `Routing step operation ${step.operationId} was not read.`)
+    const subcontract = loaded.subcontracts.get(step.id)
     return {
       id: step.id,
       seq: step.seq,
@@ -108,6 +116,13 @@ export function routingViewOf(loaded: LoadedRouting): RoutingView {
       scanRequired: step.scanRequired,
       final: final?.id === step.id,
       instructions: step.instructions,
+      subcontract: subcontract
+        ? {
+            supplier: loaded.workshops.get(subcontract.supplierId) ?? { id: subcontract.supplierId, code: '', name: '' },
+            pricePerPiece: asMoney('cost', subcontract.pricePerPiece),
+            transitDays: subcontract.transitDays,
+          }
+        : null,
       version: step.version,
       createdAt: toUtcIso(step.createdAt),
       updatedAt: toUtcIso(step.updatedAt),
@@ -119,7 +134,7 @@ export function routingViewOf(loaded: LoadedRouting): RoutingView {
     style: { id: style.id, code: style.code, name: style.name, companyId: style.companyId, status: style.status },
     sizes: style.sizes.map((code) => ({ code, label: loaded.sizeLabels.get(code) ?? code })),
     steps: stepViews,
-    minutes: { ...minutes, byKind: minutes.byKind.map((entry) => ({ ...entry })), bySize: minutes.bySize.map((entry) => ({ ...entry })) },
+    minutes: { ...minutes, byKind: minutes.byKind.map((entry) => ({ ...entry })), bySize: minutes.bySize.map((entry) => ({ ...entry })), subcontracted: loaded.subcontracts.size },
     finalStepId: final?.id ?? null,
     issues: check.blockers.map((issue) => ({ ...issue })),
     warnings: check.warnings.map((issue) => ({ ...issue })),
@@ -169,6 +184,19 @@ export async function lockOperations(tx: CommandTx, operationIds: readonly strin
 export const fitsStyle = (operation: Pick<OperationFacts, 'companyId'>, styleCompanyId: string | null): boolean => operation.companyId === null || operation.companyId === styleCompanyId
 
 /**
+ * A subcontracted step's workshop (W2a, PRD-120): a party with the SUBCONTRACTOR role, not blocked or archived, of the
+ * style's company or of every company. Answers the problems, paths under `at`.
+ */
+export async function workshopProblems(tx: CommandTx, supplierId: string, styleCompanyId: string | null, at = 'body/subcontract/supplierId'): Promise<Issue[]> {
+  const party = await tx.party.findUnique({ where: { id: supplierId }, select: { code: true, roles: true, status: true, companyId: true } })
+  if (!party) return [{ path: at, message: 'No such workshop.' }]
+  if (!party.roles.includes('SUBCONTRACTOR')) return [{ path: at, message: `${party.code} is not a workshop: give the party the SUBCONTRACTOR role first.` }]
+  if (party.status === 'BLOCKED' || party.status === 'ARCHIVED') return [{ path: at, message: `Workshop ${party.code} is ${party.status.toLowerCase()}.` }]
+  if (party.companyId !== null && party.companyId !== styleCompanyId) return [{ path: at, message: `Workshop ${party.code} belongs to another company than the style's.` }]
+  return []
+}
+
+/**
  * A draft revision's steps are named by work order operations only by mistake (a work order is released with a RELEASED
  * revision); while one does, its steps keep their places: a clear 409 before the reference's refusal.
  */
@@ -198,13 +226,23 @@ export function auditedStep(step: StepFields): Record<string, unknown> {
   }
 }
 
+/** A step's subcontract details as the audit row keeps them (the fee marked with its grain). */
+export function auditedSubcontract(subcontract: Subcontract | null): Record<string, unknown> | null {
+  return subcontract === null ? null : { supplierId: subcontract.supplierId, pricePerPiece: markMoney('cost', subcontract.pricePerPiece), transitDays: subcontract.transitDays }
+}
+
 const removed = (count: number, expected: number, what: string): void => {
   // Row-level security without a DELETE policy removes nothing and says nothing: never let that pass as done.
   if (count !== expected) throw new ApiError('internal_error', `The database removed ${count} of ${expected} ${what}.`)
 }
 
-/** Inserts new steps of a draft, as planned. */
-export async function insertSteps(tools: CommandTools, target: { readonly styleId: string; readonly revisionId: string }, steps: readonly StepData[]): Promise<void> {
+/** Inserts new steps of a draft, as planned (a copied step with its source's subcontract details, by the new step's id). */
+export async function insertSteps(
+  tools: CommandTools,
+  target: { readonly styleId: string; readonly revisionId: string },
+  steps: readonly StepData[],
+  subcontracts: ReadonlyMap<string, Subcontract> = new Map(),
+): Promise<void> {
   if (steps.length === 0) return
   const { tx, now } = tools
   const createdById = tools.context.audience === 'office' ? tools.context.actorId : null
@@ -222,12 +260,20 @@ export async function insertSteps(tools: CommandTools, target: { readonly styleI
       standardMinutes: step.standardMinutes,
       scanRequired: step.scanRequired,
       instructions: step.instructions,
+      ...subcontractColumns(subcontracts.get(step.id) ?? null),
       createdAt: now,
       updatedAt: now,
       createdById,
     })),
   })
 }
+
+/** The subcontract columns of a step's row (all null: in-house). */
+export const subcontractColumns = (subcontract: Subcontract | null) => ({
+  supplierId: subcontract?.supplierId ?? null,
+  pricePerPiece: subcontract?.pricePerPiece ?? null,
+  transitDays: subcontract?.transitDays ?? null,
+})
 
 /** Removes steps of a draft. */
 export async function deleteSteps(tools: CommandTools, stepIds: readonly string[]): Promise<void> {

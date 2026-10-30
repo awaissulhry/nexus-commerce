@@ -157,6 +157,7 @@ describe("the seed jacket's routing (PRD-110, PRD-111)", () => {
       ],
       steps: 4,
       scanPoints: 4,
+      subcontracted: 0,
     })
     expect(routing.steps.map((step: Json) => step.operation.id)).toEqual([CUT, SEW, QC, PACK])
     expect(routing).toMatchObject({ finalStepId: seedStep('SEED-PACK'), issues: [], warnings: [], editable: true })
@@ -226,6 +227,7 @@ describe('a routing built through the API: cut, sew, finish, inspect (PRD-109, P
       bySize: ['50', '52', '54'].map((size) => ({ size, minutes: '124.75' })),
       steps: 4,
       scanPoints: 3,
+      subcontracted: 0,
     })
     expect(routing).toMatchObject({ finalStepId: stepOf(routing, 'SEED-FIN-QC').id, issues: [], warnings: [], revision: { version: 4 } })
     expect(routing.steps.filter((step: Json) => step.final).map((step: Json) => step.code)).toEqual(['SEED-FIN-QC'])

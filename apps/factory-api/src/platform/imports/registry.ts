@@ -7,6 +7,9 @@ import { locationsImportAdapter } from '../../modules/inventory/locations/import
 import { partiesImportAdapter } from '../../modules/parties/importer'
 import { openingStockImportAdapter } from '../../modules/inventory/opening/importer'
 import { materialsImportAdapter } from '../../modules/product/materials/importer'
+// W2a (B-W2a-09): the BOM lines of styles' drafts and the operation library.
+import { bomImportAdapter } from '../../modules/product/bom/importer'
+import { operationsImportAdapter } from '../../modules/product/operations/importer'
 
 /**
  * The importers this process runs (plan A1 W0-22; feature PLT-176): each is an importer of factory-domain (its columns,
@@ -89,7 +92,14 @@ export interface ImportAdapter {
 export const defineImportAdapter = (adapter: ImportAdapter): ImportAdapter => Object.freeze({ ...adapter })
 
 /** The process's importers. Each module that brings an importer adds its adapter here. */
-export const IMPORTERS: readonly ImportAdapter[] = Object.freeze([materialsImportAdapter, locationsImportAdapter, partiesImportAdapter, openingStockImportAdapter])
+export const IMPORTERS: readonly ImportAdapter[] = Object.freeze([
+  materialsImportAdapter,
+  locationsImportAdapter,
+  partiesImportAdapter,
+  openingStockImportAdapter,
+  bomImportAdapter,
+  operationsImportAdapter,
+])
 
 let configured: ImporterRegistry<ImportAdapter> | undefined
 let fromList: ImporterRegistry<ImportAdapter> | undefined

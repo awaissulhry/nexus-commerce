@@ -10,6 +10,7 @@ import { isOffered, missingCells, type MatrixOffer } from '@nexus/factory-domain
 import { PRODUCT_STYLES_VIEW } from '@nexus/factory-domain/product/styles/permissions'
 import { revisionState, type RevisionSummary } from '@nexus/factory-domain/product/styles/revisions'
 import { garmentTracking, styleWarnings, type StyleFields } from '@nexus/factory-domain/product/styles/rules'
+import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { StaleVersionError, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf, type RequestContext } from '../../../core/context'
 import { contextOf, mayWrite } from '../materials/store'
@@ -46,6 +47,9 @@ const FIELD_COLUMNS = {
   ppeClass: true,
   mtmAllowed: true,
   measurementTemplateId: true,
+  hsCode: true,
+  originCountry: true,
+  netMassKg: true,
 } as const satisfies Prisma.StyleSelect
 
 /**
@@ -182,6 +186,9 @@ export function fieldsOf(row: Prisma.StyleGetPayload<{ select: typeof FIELD_COLU
     ppeClass: row.ppeClass,
     mtmAllowed: row.mtmAllowed,
     measurementTemplateId: row.measurementTemplateId,
+    hsCode: row.hsCode,
+    originCountry: row.originCountry,
+    netMassKg: row.netMassKg === null ? null : decimalText(row.netMassKg.toString()),
   }
 }
 
@@ -223,6 +230,9 @@ export function styleRowView(row: StyleRowData, facts: RowFacts): StyleRow {
     ppeStandard: row.ppeStandard,
     ppeClass: row.ppeClass,
     mtmAllowed: row.mtmAllowed,
+    hsCode: row.hsCode,
+    originCountry: row.originCountry,
+    netMassKg: row.netMassKg === null ? null : decimalText(row.netMassKg.toString()),
     status: row.status,
     version: row.version,
     updatedAt: toUtcIso(row.updatedAt),

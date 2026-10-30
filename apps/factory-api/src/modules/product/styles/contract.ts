@@ -5,6 +5,10 @@ import {
   colourwayBody,
   createRevisionBody,
   createStyleBody,
+  duplicatedView,
+  duplicateOfferQuery,
+  duplicateOfferView,
+  duplicateStyleBody,
   generatedSkus,
   garmentTrackingBody,
   generateSkusBody,
@@ -46,6 +50,9 @@ export const updateColourwayContract = defineContract({ params: input({ styleId:
 
 export const generateSkusContract = defineContract({ params: style, body: generateSkusBody, response: { 200: generatedSkus } })
 export const updateSkuContract = defineContract({ params: input({ styleId: id(), skuId: id() }), body: updateSkuBody, response: one })
+
+export const duplicateOfferContract = defineContract({ params: style, querystring: duplicateOfferQuery, response: { 200: output({ offer: duplicateOfferView }) } })
+export const duplicateStyleContract = defineContract({ params: style, body: duplicateStyleBody, response: { 201: duplicatedView } })
 
 export const listRevisionsContract = defineContract({ params: style, response: { 200: output({ revisions: z.array(revisionView) }) } })
 export const createRevisionContract = defineContract({ params: style, body: createRevisionBody, response: { 201: output({ revision: revisionView }) } })

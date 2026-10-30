@@ -111,10 +111,24 @@ export async function copyRevision(caller: CommandCaller, styleId: string, sourc
       )
       if (cells.length > 0) await tx.bomLineColour.createMany({ data: cells })
     }
-    // The routing (B-W1-14) travels with the revision: its steps are copied as they are.
+    // The routing (B-W1-14) travels with the revision: its steps are copied as they are, a subcontracted step (W2a,
+    // PRD-120) with its workshop, fee per piece and transit days (office columns: the floor never reads the fee).
     const routing = await tx.routingOperation.findMany({
       where: { revisionId: sourceId },
-      select: { seq: true, operationId: true, code: true, name: true, nameI18n: true, workCentreKind: true, standardMinutes: true, scanRequired: true, instructions: true },
+      select: {
+        seq: true,
+        operationId: true,
+        code: true,
+        name: true,
+        nameI18n: true,
+        workCentreKind: true,
+        standardMinutes: true,
+        scanRequired: true,
+        instructions: true,
+        supplierId: true,
+        pricePerPiece: true,
+        transitDays: true,
+      },
       orderBy: { seq: 'asc' },
     })
     if (routing.length > 0) {
