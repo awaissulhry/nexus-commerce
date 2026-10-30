@@ -22,6 +22,8 @@ import { PLANNING_EXCEPTIONS_DEFINITIONS, PLANNING_EXCEPTIONS_PERMISSIONS } from
 import { PLANNING_FIRM_DEFINITIONS, PLANNING_FIRM_PERMISSIONS } from '../../planning/mrp/permissions'
 import { PURCHASING_DEFINITIONS, PURCHASING_PERMISSIONS } from '../../purchasing/permissions'
 import { PURCHASING_SOURCES_DEFINITIONS, PURCHASING_SOURCES_PERMISSIONS } from '../../purchasing/sources/permissions'
+// B-W2a-25: subcontracting (purchasing.subcontract.manage | kit | receive).
+import { PURCHASING_SUBCONTRACT_DEFINITIONS, PURCHASING_SUBCONTRACT_PERMISSIONS } from '../../purchasing/subcontracting/permissions'
 import { QUALITY_FINAL_DEFINITIONS, QUALITY_FINAL_FLOOR_PERMISSIONS, QUALITY_FINAL_PERMISSIONS } from '../../quality/final/permissions'
 import { QUALITY_LAB_DEFINITIONS, QUALITY_LAB_PERMISSIONS } from '../../quality/lab/permissions'
 import { PRODUCT_BOM_DEFINITIONS, PRODUCT_BOM_PERMISSIONS } from '../../product/bom/permissions'
@@ -367,6 +369,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   CALENDARS_DEFINITIONS,
   // B-W2a-10: approved sources (purchasing.sources.manage).
   PURCHASING_SOURCES_DEFINITIONS,
+  // B-W2a-25: subcontracting (purchasing.subcontract.manage | kit | receive).
+  PURCHASING_SUBCONTRACT_DEFINITIONS,
   // B-W2a-18: the reason lists.
   REASONS_DEFINITIONS,
   MONEY_PERMISSIONS,
@@ -398,6 +402,8 @@ for (const name of PRODUCTION_COMPLETION_PERMISSIONS) {
 }
 // B-W2a-16: planning settings and capacity.
 for (const name of PLANNING_SETTINGS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-25: subcontracting.
+for (const name of PURCHASING_SUBCONTRACT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-22: MRP every day.
 for (const name of [...PLANNING_FIRM_PERMISSIONS, ...PLANNING_EXCEPTIONS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-18: the reason lists.

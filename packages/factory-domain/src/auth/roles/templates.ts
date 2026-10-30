@@ -202,6 +202,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'calendars.suppliers.manage',
       // B-W2a-10: the approved sources (supplier articles, units, prices, minimums, lead times).
       'purchasing.sources.manage',
+      // B-W2a-25: subcontract orders to the workshops (operations, fees, kit plan, issue, cancel, close).
+      'purchasing.subcontract.manage',
       // W2a B-W2a-13 (MES-057): the hide yield per supplier lot feeds the supplier's rating.
       'production.cutting.view',
     ],
@@ -252,6 +254,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'shipping.labels.void',
       'parties.view',
       'purchasing.view',
+      // B-W2a-25: send a subcontract order's kit with its DDT, receive the goods back by bundle.
+      'purchasing.subcontract.kit',
+      'purchasing.subcontract.receive',
       'workorders.view',
       'orders.view',
       'quality.lots.view',
