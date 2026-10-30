@@ -9,6 +9,7 @@ import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { PURCHASE_ORDER_STATUSES } from '@nexus/factory-domain/purchasing/orders'
 import { DISCREPANCY_KINDS, DISCREPANCY_LIMITS, DISCREPANCY_STATUSES, SETTLE_STATUSES } from '@nexus/factory-domain/inventory/receipts/discrepancies'
 import { IMPORT_STATUSES } from '@nexus/factory-domain/imports/job'
+import { DOCUMENT_ASKS, DOCUMENT_REQUEST_LIMITS } from '@nexus/factory-domain/inventory/receipts/document-request'
 import { fileView, presignedView } from '../../../platform/files/contract'
 import { moveView } from '../ledger/contract'
 
@@ -543,6 +544,61 @@ export const hideListSummaryContract = defineContract({
       ),
       /** The receipt the apply made. */
       receipt: output({ id: id(), number: z.string(), status: z.enum(GOODS_RECEIPT_STATUSES) }).nullable(),
+    }),
+  },
+})
+
+// ---- B-W2a-F4: "Request from supplier", the receipt's missing documents ------------------------------------------------------
+
+const wantedDocumentView = output({
+  /** `<lotId>:<ask>` or `receipt:DELIVERY_NOTE`: what the request's `documents` name. */
+  key: z.string(),
+  ask: z.enum(DOCUMENT_ASKS),
+  lot: output({ id: id(), code: z.string(), supplierLotRef: z.string().nullable(), dyeBatch: z.string().nullable() }).nullable(),
+})
+
+export const documentRequestCheckContract = defineContract({
+  params: receiptParams,
+  querystring: input({ language: z.enum(['it', 'en']).optional() }),
+  response: {
+    200: output({
+      ready: z.boolean(),
+      problems: z.array(output({ path: z.string(), message: z.string() })),
+      receipt: output({ id: id(), number: z.string(), status: z.enum(GOODS_RECEIPT_STATUSES), supplierDdtNumber: z.string().nullable(), supplierDdtDate: businessDate().nullable() }),
+      /** What the delivery still waits for (the Documents check's list). */
+      wanted: z.array(wantedDocumentView),
+      /** The supplier's active contacts with an e-mail: the only recipients the request takes. */
+      recipients: z.array(output({ contactId: id(), name: z.string(), email: z.string(), roles: z.array(z.string()), language: z.string().nullable(), suggested: z.boolean() })),
+      language: z.enum(['it', 'en']),
+      /** The standard subject and text for every wanted document, in `language` (no note). */
+      subject: z.string(),
+      body: z.string(),
+    }),
+  },
+})
+
+export const requestDocumentsContract = defineContract({
+  params: receiptParams,
+  body: input({
+    contactIds: z.array(id()).min(1).max(DOCUMENT_REQUEST_LIMITS.recipients),
+    /** Keys of `wanted` (default every one). */
+    documents: z.array(z.string().trim().min(1).max(80)).min(1).max(100).optional(),
+    language: z.enum(['it', 'en']).optional(),
+    note: z.string().trim().max(DOCUMENT_REQUEST_LIMITS.note).nullish(),
+  }),
+  response: {
+    201: output({
+      request: output({
+        emailId: id(),
+        threadId: id(),
+        messageId: id(),
+        to: z.array(z.string()),
+        language: z.enum(['it', 'en']),
+        subject: z.string(),
+        documents: z.array(z.string()),
+        status: z.string(),
+        sentAt: instant(),
+      }),
     }),
   },
 })

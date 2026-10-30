@@ -1,18 +1,21 @@
 import { DISCREPANCY_KINDS, DISCREPANCY_LIMITS, type DiscrepancyKind, type DiscrepancyStatus, type SettleStatus } from '@nexus/factory-domain/inventory/receipts/discrepancies'
+import { DOCUMENT_REQUEST_LIMITS, documentRequestMail, wantedDocuments as wantedOf, type WantedDocument } from '@nexus/factory-domain/inventory/receipts/document-request'
+import { isBusinessDate } from '@nexus/factory-domain/core/time'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { PickerReason } from '../../_shared/reasons/api'
 import type { Part } from '../../_shared/buying/model'
 import type { LotWithHides, Receipt, Uom } from './api'
-import type { ClaimFromBody, Discrepancy, DiscrepancyBody, HideListSummary, Recipient, ReportBody, ReportCheck, ReportSent, SupplierContact, ThreadEmail } from './daily-api'
+import type { ClaimFromBody, Discrepancy, DiscrepancyBody, HideListSummary, Recipient, ReportBody, ReportCheck, ReportSent, RequestBody, RequestCheck, ThreadEmail } from './daily-api'
 
 /**
  * The receipt every day (B-W2a-63 on B-W2a-31; design warehouse.receipts rec "Discrepancies", "Documents check", pop
  * rc-disc-new and rc-disc-send, tab rc-tab-disc; SCM-115, SCM-118, SCM-248), pure: who may do what, the New discrepancy
  * draft and why its Save is held, the moves a person makes by hand (agreed, credited, closed), which discrepancies a
- * report or a claim may name, the report's recipients and the send, "Request from supplier" (the documents the lots wait
- * for, in the supplier's language), the tannery hide list's totals in words, and every refusal by the path the API names
- * — never the API's English. Words are keys of the `warehouse-receipts` catalogue.
+ * report or a claim may name, the report's recipients and the send, "Request from supplier" (B-W2a-F4: the documents the
+ * lots wait for, the supplier's own contacts, the standard text in the supplier's language with a short note), the
+ * tannery hide list's totals in words, and every refusal by the path the API names — never the API's English. Words
+ * are keys of the `warehouse-receipts` catalogue.
  */
 
 export const NAMESPACE = 'warehouse-receipts'
@@ -39,10 +42,8 @@ export interface ReceiptDailyCan {
   claimsView: boolean
   /** purchasing.claims.manage: a claim from discrepancies. */
   claims: boolean
-  /** email.send: "Request from supplier" (a mail on the receipt's thread). */
-  email: boolean
-  /** parties.view: the supplier's contacts. */
-  parties: boolean
+  /** inventory.receipts.documents.request: "Request from supplier" (B-W2a-F4; the narrow request, not email.send). */
+  request: boolean
   /** imports.run + files.upload: the tannery hide list. */
   importRun: boolean
   importApply: boolean
@@ -58,8 +59,7 @@ export function dailyCan(permissions: readonly string[]): ReceiptDailyCan {
     receive: held.has('inventory.receive'),
     claimsView: held.has('purchasing.view'),
     claims: held.has('purchasing.claims.manage'),
-    email: held.has('email.send'),
-    parties: held.has('parties.view'),
+    request: held.has('inventory.receipts.documents.request'),
     importRun: held.has('imports.run') && held.has('files.upload') && held.has('inventory.receive'),
     importApply: held.has('imports.apply'),
     importView: held.has('imports.view'),
@@ -370,108 +370,73 @@ export function claimDraftHeld(draft: ClaimDraft, reasons: readonly PickerReason
 
 export const claimBody = (draft: ClaimDraft): ClaimFromBody => ({ reasonCode: draft.reasonCode, reasonNote: draft.note.trim() || null, remedy: draft.remedy, discrepancyIds: draft.ids })
 
-// ---- "Request from supplier" (Documents check) --------------------------------------------------------------------------------
+// ---- "Request from supplier" (Documents check; B-W2a-F4) ---------------------------------------------------------------------
 
-export const DOCUMENT_ASKS = ['CR_VI_REPORT', 'PPE_CERTIFICATE', 'DELIVERY_NOTE'] as const
-export type DocumentAsk = (typeof DOCUMENT_ASKS)[number]
-
-export interface Wanted {
-  /** `${lotId}:${ask}` or `receipt:DELIVERY_NOTE`. */
-  key: string
-  ask: DocumentAsk
-  lot: { id: string; code: string; supplierLotRef: string | null; dyeBatch: string | null } | null
-}
+export type Wanted = WantedDocument
 
 /**
- * The documents this delivery still waits for, from what the receipt knows: a lot in quarantine for its chromium VI
- * result wants the supplier's test report; a certified PPE component, its certificate; a receipt with no DDT number and
- * no photo, the supplier's delivery note. (The full per-lot documents list is Compliance › Tests & substances'.)
+ * The documents this delivery still waits for (factory-domain inventory/receipts/document-request: the same rule the
+ * API applies): a lot in quarantine for its Cr VI result, a PPE component's certificate, a missing DDT.
  */
-export function wantedDocuments(receipt: Pick<Receipt, 'supplierDdtNumber' | 'ddtPhotos'>, lots: readonly LotWithHides[]): Wanted[] {
-  const wanted: Wanted[] = []
-  for (const lot of lots) {
-    if (lot.qualityStatus !== 'QUARANTINE') continue
-    const ref = { id: lot.id, code: lot.code, supplierLotRef: lot.supplierLotRef, dyeBatch: lot.dyeBatch }
-    if (lot.holds.includes('CR_VI_TEST') && lot.crViStatus === 'PENDING') wanted.push({ key: `${lot.id}:CR_VI_REPORT`, ask: 'CR_VI_REPORT', lot: ref })
-    if (lot.holds.includes('PPE_CERTIFICATE')) wanted.push({ key: `${lot.id}:PPE_CERTIFICATE`, ask: 'PPE_CERTIFICATE', lot: ref })
-  }
-  if (!receipt.supplierDdtNumber && receipt.ddtPhotos.length === 0) wanted.push({ key: 'receipt:DELIVERY_NOTE', ask: 'DELIVERY_NOTE', lot: null })
-  return wanted
-}
+export const wantedDocuments = (receipt: Pick<Receipt, 'supplierDdtNumber' | 'ddtPhotos'>, lots: readonly LotWithHides[]): Wanted[] => wantedOf({ supplierDdtNumber: receipt.supplierDdtNumber, ddtPhotoCount: receipt.ddtPhotos.length }, lots)
 
 export interface RequestDraft {
-  /** What the delivery waits for (the Documents tab's list); `asked` names the ones the mail asks for. */
+  /** What the delivery waits for (the Documents tab's list, then the check's); `asked` names the ones the mail asks for. */
   wanted: Wanted[]
-  contacts: Part<SupplierContact[]>
+  /** The API's check: the supplier's contacts (the only recipients), the documents, the supplier's language. */
+  check: Part<RequestCheck>
+  /** Contact ids. */
   to: string[]
   asked: string[]
   language: 'it' | 'en'
-  subject: string
-  /** The text as the person leaves it; '' until the contacts are read (then the standard words in the language). */
-  body: string
-  /** The person changed the text: a language switch no longer rewrites it. */
-  edited: boolean
+  /** A short note of one's own under the standard text. */
+  note: string
   sentTo: string[] | null
 }
 
-export const requestDraft = (wanted: Wanted[]): RequestDraft => ({ wanted, contacts: { value: null, problem: null }, to: [], asked: wanted.map((entry) => entry.key), language: 'it', subject: '', body: '', edited: false, sentTo: null })
+export const requestDraft = (wanted: Wanted[]): RequestDraft => ({ wanted, check: { value: null, problem: null }, to: [], asked: wanted.map((entry) => entry.key), language: 'it', note: '', sentTo: null })
 
-/** The language the supplier reads: its first picked contact's, else Italian. */
-export function requestLanguage(contacts: readonly SupplierContact[], to: readonly string[]): 'it' | 'en' {
-  const first = contacts.find((contact) => to.includes(contact.id))
-  return first?.language?.toLowerCase().startsWith('en') ? 'en' : 'it'
+/** The check arrived: its documents, the suggested contact (and every other quality contact), the supplier's language. */
+export function withRequestCheck(draft: RequestDraft, check: RequestCheck): RequestDraft {
+  const quality = check.recipients.filter((recipient) => recipient.roles.includes('QUALITY')).map((recipient) => recipient.contactId)
+  const suggested = check.recipients.filter((recipient) => recipient.suggested).map((recipient) => recipient.contactId)
+  const before = new Set(draft.asked)
+  const kept = check.wanted.filter((entry) => before.has(entry.key)).map((entry) => entry.key)
+  return { ...draft, check: { value: check, problem: null }, wanted: check.wanted, asked: kept.length > 0 ? kept : check.wanted.map((entry) => entry.key), to: quality.length > 0 ? quality : suggested, language: check.language }
 }
 
-/**
- * The request's standard words in the SUPPLIER's language (Italian or English), not the page's: a mail the supplier
- * reads. The person may change them before sending. No price, no internal note (Owner answer C2).
- */
-const REQUEST_WORDS = {
-  it: {
-    subject: (receipt: string, ddt: string | null) => `Documenti mancanti — ${ddt ? `vostro DDT ${ddt}, ` : ''}nostro ricevimento ${receipt}`,
-    hello: 'Buongiorno,',
-    intro: (receipt: string, ddt: string | null, date: string | null) => `per la merce ricevuta${ddt ? ` con il vostro DDT ${ddt}${date ? ` del ${date}` : ''}` : ''} (nostro ricevimento ${receipt}) ci mancano i seguenti documenti:`,
-    CR_VI_REPORT: 'il rapporto di prova del cromo esavalente (Cr VI)',
-    PPE_CERTIFICATE: 'il certificato del componente DPI',
-    DELIVERY_NOTE: 'una copia del documento di trasporto (DDT)',
-    lot: (code: string, ref: string | null, dye: string | null) => ` — lotto ${ref ? `vostro ${ref}, ` : ''}${dye ? `bagno ${dye}, ` : ''}nostro ${code}`,
-    outro: 'I lotti restano in quarantena finché non li riceviamo. Potete rispondere a questa e-mail allegandoli.',
-    thanks: 'Grazie e cordiali saluti',
-  },
-  en: {
-    subject: (receipt: string, ddt: string | null) => `Missing documents — ${ddt ? `your delivery note ${ddt}, ` : ''}our receipt ${receipt}`,
-    hello: 'Hello,',
-    intro: (receipt: string, ddt: string | null, date: string | null) => `for the goods we received${ddt ? ` with your delivery note ${ddt}${date ? ` of ${date}` : ''}` : ''} (our receipt ${receipt}) we are missing these documents:`,
-    CR_VI_REPORT: 'the hexavalent chromium (Cr VI) test report',
-    PPE_CERTIFICATE: 'the certificate of the PPE component',
-    DELIVERY_NOTE: 'a copy of the delivery note (DDT)',
-    lot: (code: string, ref: string | null, dye: string | null) => ` — lot ${ref ? `your ${ref}, ` : ''}${dye ? `dye batch ${dye}, ` : ''}our ${code}`,
-    outro: 'The lots stay in quarantine until we have them. You can answer this e-mail with the documents attached.',
-    thanks: 'Thank you and kind regards',
-  },
-} as const
+/** The documents asked, in the receipt's order. */
+const askedOf = (draft: RequestDraft): Wanted[] => draft.wanted.filter((entry) => draft.asked.includes(entry.key))
 
-/** The request's subject and text in the supplier's language, from what is asked. */
-export function requestText(language: 'it' | 'en', receipt: { number: string; supplierDdtNumber: string | null; ddtDay: string | null }, asked: readonly Wanted[]): { subject: string; body: string } {
-  const words = REQUEST_WORDS[language]
-  const lines = asked.map((entry) => `- ${words[entry.ask]}${entry.lot ? words.lot(entry.lot.code, entry.lot.supplierLotRef, entry.lot.dyeBatch) : ''}`)
-  return {
-    subject: words.subject(receipt.number, receipt.supplierDdtNumber),
-    body: [words.hello, '', words.intro(receipt.number, receipt.supplierDdtNumber, receipt.ddtDay), ...lines, '', words.outro, '', words.thanks].join('\n'),
-  }
+/** The subject and text the supplier gets (the API composes the same from the same rule): a preview, not editable. */
+export function requestPreview(draft: RequestDraft, receipt: Pick<Receipt, 'number' | 'supplierDdtNumber' | 'supplierDdtDate'>): { subject: string; body: string } {
+  const day = receipt.supplierDdtDate && isBusinessDate(receipt.supplierDdtDate) ? receipt.supplierDdtDate : null
+  return documentRequestMail({ language: draft.language, receiptNumber: receipt.number, supplierDdtNumber: receipt.supplierDdtNumber, supplierDdtDate: day, asked: askedOf(draft), note: draft.note })
+}
+
+export const requestBody = (draft: RequestDraft): RequestBody => ({ contactIds: [...draft.to], documents: askedOf(draft).map((entry) => entry.key), language: draft.language, note: draft.note.trim() || null })
+
+/** A receipt waits for documents while it is open or posted. */
+const takesRequest = (receipt: Pick<Receipt, 'status'>): boolean => receipt.status === 'OPEN' || receipt.status === 'POSTED'
+
+/** Why "Request from supplier" is held on the Documents tab (null: it may open). */
+export function requestOpenHeld(receipt: Pick<Receipt, 'status'>, wanted: readonly Wanted[] | null, can: ReceiptDailyCan): Say | null {
+  if (!can.request) return say('held.noRequest')
+  if (!takesRequest(receipt)) return say('held.requestClosed')
+  if (wanted === null) return say('held.loading')
+  if (wanted.length === 0) return say('held.nothingWanted')
+  return null
 }
 
 export function requestHeld(draft: RequestDraft, can: ReceiptDailyCan, busy: boolean): Say | null {
-  if (!can.email) return say('held.noEmail')
-  if (!can.parties) return say('held.noParties')
+  if (!can.request) return say('held.noRequest')
   if (draft.sentTo) return say('held.sentAlready')
   if (busy) return say('held.busy')
-  if (!draft.contacts.value) return say(draft.contacts.problem ? 'held.contactsFailed' : 'held.loading')
-  if (draft.contacts.value.length === 0) return say('report.problem.noContact')
+  if (!draft.check.value) return say(draft.check.problem ? 'held.contactsFailed' : 'held.loading')
+  if (draft.check.value.recipients.length === 0) return say('report.problem.noContact')
   if (draft.to.length === 0) return say('held.pickRecipient')
-  if (draft.asked.length === 0) return say('held.pickDocument')
-  if (!draft.subject.trim()) return say('held.subject')
-  if (!draft.body.trim()) return say('held.body')
+  if (askedOf(draft).length === 0) return say('held.pickDocument')
+  if (draft.note.trim().length > DOCUMENT_REQUEST_LIMITS.note) return say('refused.requestNote', { max: DOCUMENT_REQUEST_LIMITS.note })
   return null
 }
 
@@ -581,7 +546,12 @@ export function photoProblem(error: unknown): Say {
 
 export function requestProblem(error: unknown): Say {
   const paths = pathsOf(error)
-  if (has(paths, 'to')) return say('refused.requestTo')
+  if (isApiError(error) && error.code === 'invalid_state') return say('refused.requestClosed')
+  if (has(paths, 'contactIds/')) return say('refused.requestContact')
+  if (has(paths, 'contactIds')) return say('report.problem.noContact')
+  if (has(paths, 'documents/')) return say('refused.requestDocuments')
+  if (has(paths, 'documents')) return say('refused.requestNothing')
+  if (has(paths, 'note')) return say('refused.requestNote', { max: DOCUMENT_REQUEST_LIMITS.note })
   if (has(paths, 'identity')) return say('report.problem.identity')
   return kindSay(error)
 }

@@ -224,8 +224,6 @@
     "noUpload": "Il tuo ruolo non può caricare file (files.upload).",
     "noReceive": "Il tuo ruolo non può ricevere merce (inventory.receive).",
     "noClaims": "Il tuo ruolo non può preparare reclami ai fornitori (purchasing.claims.manage).",
-    "noEmail": "Il tuo ruolo non può inviare e-mail ai fornitori (email.send): chiedi a un buyer.",
-    "noParties": "Il tuo ruolo non può leggere i contatti del fornitore (parties.view).",
     "noImport": "Il tuo ruolo non può avviare importazioni (imports.run e files.upload).",
     "receiptClosed": "Un ricevimento stornato o annullato non accetta nuove difformità.",
     "receiptCancelled": "Un ricevimento annullato non accetta foto.",
@@ -254,11 +252,11 @@
     "pickRecipient": "Scegli almeno un contatto del fornitore.",
     "tooManyRecipients": "Al massimo {max} destinatari.",
     "cc": "Indirizzo e-mail non valido: {list}",
-    "contactsFailed": "Non è stato possibile leggere i contatti del fornitore.",
+    "contactsFailed": "Impossibile controllare la richiesta.",
     "pickDocument": "Scegli almeno un documento da richiedere.",
-    "subject": "Scrivi un oggetto.",
-    "body": "Scrivi il messaggio.",
-    "nothingWanted": "I lotti non attendono documenti e il DDT è registrato."
+    "nothingWanted": "I lotti non attendono documenti e il DDT è registrato.",
+    "noRequest": "Il tuo ruolo non può chiedere documenti ai fornitori (inventory.receipts.documents.request).",
+    "requestClosed": "Un ricevimento stornato o annullato non attende documenti."
   },
   "report": {
     "title": "Invia segnalazione · {number}",
@@ -383,16 +381,19 @@
     "title": "Richiedi documenti al fornitore",
     "subtitle": "{supplier} · {number}",
     "send": "Invia richiesta",
-    "loading": "Lettura dei contatti del fornitore…",
-    "contactsFailed": "Impossibile leggere i contatti del fornitore",
+    "loading": "Controllo della richiesta…",
+    "contactsFailed": "Impossibile controllare la richiesta",
     "asked": "Cosa richiedi",
-    "languageHint": "Il fornitore la legge in questa lingua; il testo si aggiorna finché non lo modifichi.",
-    "body": "Messaggio",
-    "bodyHint": "Il testo standard nella lingua del fornitore; modificalo come vuoi. Nessun prezzo, nessuna nota interna.",
+    "languageHint": "Il fornitore la legge in questa lingua.",
     "what": "La mail va nella conversazione di questo ricevimento: risposta e allegati del fornitore arrivano lì.",
     "sentTitle": "Richiesta inviata",
     "sentBody": "Inviata a {to}.",
-    "sentWhere": "È nella conversazione del ricevimento (Attività), dove arriverà la risposta."
+    "sentWhere": "È nella conversazione del ricevimento (Attività), dove arriverà la risposta.",
+    "toHint": "Solo i contatti del fornitore con un’e-mail; aggiungine uno in Acquisti › Fornitori.",
+    "note": "La tua nota",
+    "noteHint": "Facoltativa, al massimo {max} caratteri, sotto l’elenco con le tue parole. Nessun prezzo, nessuna nota interna.",
+    "preview": "Cosa riceve il fornitore",
+    "previewHint": "Il testo standard nella lingua del fornitore, con i documenti richiesti e la tua nota. Qui non si modifica."
   },
   "refused": {
     "reason": "Quel motivo non è più in uso: scegline un altro.",
@@ -409,7 +410,11 @@
     "claimLines": "Una riga del reclamo richiede una quantità: indica prima la quantità della difformità.",
     "photoStore": "La foto non ha raggiunto l’archivio file: riprova.",
     "photoType": "Quel file non è una foto accettata (JPEG, PNG, WebP, HEIC).",
-    "requestTo": "Un indirizzo non è accettato: controlla i contatti."
+    "requestContact": "Un contatto non è del fornitore (o non ha più un’e-mail): scegli di nuovo.",
+    "requestDocuments": "Un documento non manca più: chiudi la richiesta e riaprila.",
+    "requestNothing": "Non manca più nulla: non serve una richiesta.",
+    "requestClosed": "Nel frattempo il ricevimento è stato stornato o annullato: non attende documenti.",
+    "requestNote": "La nota contiene al massimo {max} caratteri."
   },
   "notice": {
     "recorded": "Difformità {seq} registrata.",
