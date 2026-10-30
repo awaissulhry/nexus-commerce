@@ -45,6 +45,9 @@ import { REPLACEMENT_KINDS, REPLACEMENT_STATUSES } from './scrap/rules'
  *   production.garment_labels_reprinted  labels printed again (the same batch or serials); the reason stays in the log
  *   production.garment_serial_voided     a MADE serial voided (a spoilt label, a garment scrapped): its cell has one
  *                                        more garment to label
+ *   production.report_subscription_changed  B-W2a-38: someone subscribed to the daily production report by e-mail, or a
+ *                                           subscription changed or was turned off (the report page's state refreshes)
+ *   production.daily_report_sent            B-W2a-38: the scheduler e-mailed one person's daily production report
  */
 export const MONITORING_CHANGES = ['WIDENED', 'NARROWED', 'BASIS_RECORDED', 'BASIS_REPLACED'] as const
 
@@ -453,5 +456,32 @@ export const events = [
       reworkOrderId: z.uuid().nullable(),
     }),
     live: scrapLive,
+  }),
+  // B-W2a-38: production reports (the daily report's subscriptions and its morning mail). Ids, the report's key, the day
+  // and counts only: no figure, no name, no e-mail address (the recipient is an office user's id, never a floor worker).
+  defineEvent({
+    type: 'production.report_subscription_changed',
+    context: 'production',
+    description: 'Someone was subscribed to a production report e-mailed each morning, or a subscription was changed or turned off.',
+    payload: z.strictObject({
+      reportKey: z.string(),
+      siteId: z.uuid().nullable(),
+      subscriptionIds: z.array(z.uuid()).min(1),
+      change: z.enum(['SUBSCRIBED', 'CHANGED', 'TURNED_OFF']),
+    }),
+    live: { permission: 'production.reports.view', fields: ['reportKey'] },
+  }),
+  defineEvent({
+    type: 'production.daily_report_sent',
+    context: 'production',
+    description: "One person's daily production report was e-mailed by the scheduler (they, or a colleague for them, subscribed).",
+    payload: z.strictObject({
+      subscriptionId: z.uuid(),
+      userId: z.uuid(),
+      reportKey: z.string(),
+      day: z.iso.date(),
+      emailOutboundId: z.uuid(),
+      lanes: z.number().int().min(0),
+    }),
   }),
 ] as const

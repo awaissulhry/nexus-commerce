@@ -1,5 +1,7 @@
 import type { SetupStep } from '../shared/view/SetupChecklist'
 import { adminHref } from '../shared/model'
+import type { Attention } from '../security/api'
+import type { Read as SecurityRead } from '../security/model'
 
 /**
  * Admin › All settings (design 02 admin.overview; Owner O2: the "Get the factory ready" checklist ships in W0, read-only,
@@ -83,6 +85,8 @@ export interface OverviewViewModel {
   checkedAt: string | null
   /** Every step done: the list folds away until "Show set-up". */
   showAll: boolean
+  /** B-W2a-36: Needs attention (GET /admin/security/attention); absent: the section is not drawn (W0 fixtures). */
+  attention?: SecurityRead<Attention>
 }
 
 /** A step whose read is not ready: checking, failed, or not the person's. */

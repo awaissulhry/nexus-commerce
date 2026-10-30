@@ -212,6 +212,13 @@ export const OFFICE: readonly TreeArea[] = [
         ],
       },
       {
+        label: 'Reports',
+        labelIt: 'Report',
+        hideLabel: false,
+        // W2a: B-W2a-38 Production reports (SCR-240).
+        pages: [{ id: 'production.reports', title: 'Production reports', titleIt: 'Report produzione', wave: 'W2a', href: '/production/reports' }],
+      },
+      {
         label: 'Settings',
         labelIt: 'Impostazioni',
         hideLabel: false,
@@ -317,6 +324,8 @@ export const OFFICE: readonly TreeArea[] = [
         pages: [
           { id: 'admin.users', title: 'Users', titleIt: 'Utenti', wave: 'W0', href: '/admin/users' },
           { id: 'admin.roles', title: 'Roles & permissions', titleIt: 'Ruoli e permessi', wave: 'W0', href: '/admin/roles' },
+          // W2a: B-W2a-36 Security & health (SCR-166).
+          { id: 'admin.security', title: 'Security & health', titleIt: 'Sicurezza e stato del sistema', wave: 'W2a', href: '/admin/security' },
         ],
       },
       {

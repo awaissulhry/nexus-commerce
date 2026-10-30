@@ -1,5 +1,6 @@
 import type { PermissionCatalogue, Role, User } from '../shared/api'
 import { matches, type Loaded, type ScopeOption } from '../shared/model'
+import type { RoleTwoFactorModel } from '../security/view/RoleTwoFactor'
 
 /**
  * SCR-012 Roles & permissions (design 02 admin.roles; PLT-029, PLT-030, PLT-034): the ready-made roles (kept equal to
@@ -57,6 +58,8 @@ export interface RoleRecordModel {
   holders: Loaded<User>
   companies: readonly ScopeOption[]
   dockOpen?: boolean
+  /** B-W2a-36: Scope rules › Two-factor (the switch, with who it affects); absent: the W0 read-only words. */
+  twoFactor?: RoleTwoFactorModel
 }
 
 /** The rules every role keeps whatever it holds (A1 §2.3, §3.11; PLT-033, PLT-035): message keys, read-only. */

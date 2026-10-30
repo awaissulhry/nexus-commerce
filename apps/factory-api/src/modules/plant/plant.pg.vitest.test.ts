@@ -27,8 +27,10 @@ import { stationBlock } from './checks'
  * throwaway PostgreSQL 17 database from the migrations (the runtime logins: row-level security, the column grants and the
  * …_quality_plant_w2a_guards triggers are real), the factory-db seeds of two tenants up to the plant (plant A1 names
  * workers and its operator acknowledged the notice; the seeded lockstitch SEED-SEW-L1-01 at sewing station 1, the
- * clicking press SEED-CP-01 locked as unsafe with its PLANNED job), the numbering seed (MAINTENANCE_JOB series), a
- * made-up sewing tablet at SEW-01, and real people: a maintenance technician and a floor supervisor with two-factor, a
+ * clicking press SEED-CP-01 locked as unsafe with its PLANNED job, the cutting table SEED-CT-01 running beside it at
+ * CUT-01; the production seed's SEED-WO-0001 in progress with its bundles), the numbering seed (MAINTENANCE_JOB series),
+ * made-up tablets at SEW-01 (the reports), at CUT-01 and SEW-02 (the floor's scans: B-W2a-35b, a station whose machines
+ * are all do-not-use takes no scan), and real people: a maintenance technician and a floor supervisor with two-factor, a
  * floor technician signed in by badge and PIN on an enrolled tablet. Every name and number is made up. Run with
  * `node scripts/factory/run-pg-tests.mjs modules/plant`.
  */
@@ -49,8 +51,15 @@ const A = {
   sew1Station: idOf(ns.a, 'site:A1:station:SEW-01'),
   sew2Station: idOf(ns.a, 'site:A1:station:SEW-02'),
   b1Station: idOf(ns.a, 'site:B1:station:SEW-01'),
+  cutStation: idOf(ns.a, 'site:A1:station:CUT-01'),
   operatorA1: idOf(ns.a, 'worker:A1:operator'),
   sewTablet: newId(),
+  /** B-W2a-35b: made-up tablets that scan at the cutting table and at sewing station 2. */
+  cutTablet: newId(),
+  sew2Tablet: newId(),
+  wo1: idOf(ns.a, 'production:work-order:WO-0001'),
+  /** SEED-BN-0001 (1 garment): its sewing report was undone, its cutting never reported. */
+  bundle1: idOf(ns.a, 'production:bundle:WO-0001:1'),
 }
 const B = { tenant: idOf(ns.b, 'tenant') }
 const TENANT: TestTenant = { id: A.tenant, slug: ns.a, companies: [{ id: A.companyA, code: 'A' }, { id: A.companyB, code: 'B' }] }
@@ -58,7 +67,7 @@ const PIN = '482913'
 
 const grant = (permissions: Permission[], companies: Grant['companies'] = 'all'): Grant => ({ permissions, companies, sites: 'all', parties: 'all' })
 const office = (tenantId: string, grants: Grant[], actorId: string = newId()): SessionContext => ({ audience: 'office', tenantId, actorId, grants })
-const floor = (permissions: Permission[]): SessionContext => ({ audience: 'floor', tenantId: A.tenant, actorId: A.operatorA1, siteId: A.siteA1, deviceId: A.sewTablet, grants: [{ permissions, companies: [A.companyA], sites: [A.siteA1], parties: 'all' }] })
+const floor = (permissions: Permission[], deviceId: string = A.sewTablet): SessionContext => ({ audience: 'floor', tenantId: A.tenant, actorId: A.operatorA1, siteId: A.siteA1, deviceId, grants: [{ permissions, companies: [A.companyA], sites: [A.siteA1], parties: 'all' }] })
 const MANAGE: Permission[] = ['plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage']
 const SESSIONS: Record<string, SessionContext> = {
   manager: office(A.tenant, [grant(MANAGE)], A.actor),
@@ -69,6 +78,8 @@ const SESSIONS: Record<string, SessionContext> = {
   otherTenant: office(B.tenant, [grant(MANAGE)]),
   operator: floor(['floor.work', 'plant.report']),
   noReport: floor(['floor.work']),
+  cutScanner: floor(['floor.work', 'production.scan'], A.cutTablet),
+  sew2Scanner: floor(['floor.work', 'production.scan'], A.sew2Tablet),
 }
 
 type Json = Record<string, any>
@@ -169,6 +180,8 @@ beforeAll(async () => {
     applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId: newId() }),
   )
   await admin(`INSERT INTO "Device" (id, "tenantId", "companyId", "siteId", "stationId", name, kind, status, "enrolledAt") VALUES ($1, $2, $3, $4, $5, 'Sewing tablet 1', 'TABLET', 'ACTIVE', now())`, [A.sewTablet, A.tenant, A.companyA, A.siteA1, A.sew1Station])
+  await admin(`INSERT INTO "Device" (id, "tenantId", "companyId", "siteId", "stationId", name, kind, status, "enrolledAt") VALUES ($1, $2, $3, $4, $5, 'Cutting tablet 2', 'TABLET', 'ACTIVE', now())`, [A.cutTablet, A.tenant, A.companyA, A.siteA1, A.cutStation])
+  await admin(`INSERT INTO "Device" (id, "tenantId", "companyId", "siteId", "stationId", name, kind, status, "enrolledAt") VALUES ($1, $2, $3, $4, $5, 'Sewing tablet 2', 'TABLET', 'ACTIVE', now())`, [A.sew2Tablet, A.tenant, A.companyA, A.siteA1, A.sew2Station])
   maintenance = await signedIn(`maintenance-${run}@example.test`, 'maintenance')
   supervisor = await signedIn(`supervisor-${run}@example.test`, 'floor_supervisor')
   const technician = await technicianOnTablet()
@@ -328,6 +341,7 @@ describe('a report from the station (QHS-178)', () => {
 describe('H1: anyone marks a machine unsafe at once; only a technician signs it safe', () => {
   let unsafe: Json
   let job: Json
+  let blockedScan: Json
 
   it('an unsafe report locks the machine in the same transaction and says so at the station', async () => {
     mark = new Date()
@@ -343,6 +357,25 @@ describe('H1: anyone marks a machine unsafe at once; only a technician signs it 
     expect(await fanOutSince(['maintenance_request.reported'])).toBeGreaterThanOrEqual(1)
     const told = await admin<{ category: string; messageKey: string; recordType: string }>(`SELECT category::text, "messageKey", "recordType" FROM "Notification" WHERE "userId" = $1 AND "eventType" = 'maintenance_request.reported'`, [maintenance.id])
     expect(told).toEqual([{ category: 'ALERT', messageKey: 'notifications.plant.unsafe', recordType: 'Machine' }])
+  })
+
+  it("B-W2a-35b: the station's scans are refused in its words while every machine there is do-not-use; one usable machine keeps a station working", async () => {
+    const operations = await admin<{ id: string; seq: number }>('SELECT id::text, seq FROM "WorkOrderOperation" WHERE "workOrderId" = $1 ORDER BY seq', [A.wo1])
+    const [cut, sew] = [operations.find((op) => op.seq === 10)!, operations.find((op) => op.seq === 20)!]
+    // The cutting table (CUT-01): the seeded press is locked as unsafe, the cutting table beside it runs: the bundle is reported there.
+    const cutScan = { clientScanId: `plant-${run}-cut-1`, bundleId: A.bundle1, workOrderOperationId: cut.id, good: 1 }
+    const cutAnswer = await call('cutScanner', 'POST', '/production/scans', cutScan, cutScan.clientScanId)
+    expect(cutAnswer.statusCode, cutAnswer.body).toBe(201)
+    expect(cutAnswer.json().scan).toMatchObject({ goodQuantity: 1, operation: { seq: 10 } })
+    // Sewing station 2: its only machine was just marked unsafe: refused in the station's words, not final (it may pass when sent again).
+    blockedScan = { clientScanId: `plant-${run}-sew-1`, bundleId: A.bundle1, workOrderOperationId: sew.id, good: 1 }
+    const answer = await call('sew2Scanner', 'POST', '/production/scans', blockedScan, blockedScan.clientScanId)
+    expect(answer.statusCode, answer.body).toBe(409)
+    const error = answer.json().error
+    expect(refusalOf(error)).toBe('refusal/MACHINE_UNSAFE')
+    expect(error.message).toBe(`Machine ${sew2.assetNumber} is marked do not use (unsafe): do not work on it.`)
+    expect(fixOf(error)).toContain('signs it safe')
+    expect(await admin('SELECT id FROM "OperationScan" WHERE "clientScanId" = $1', [blockedScan.clientScanId])).toEqual([])
   })
 
   it('is neither closed nor merged before the sign-safe; a job is made of it (P1, safety, numbered)', async () => {
@@ -379,6 +412,10 @@ describe('H1: anyone marks a machine unsafe at once; only a technician signs it 
     expect(signed).toMatchObject({ request: { signedSafe: { by: { kind: 'WORKER', id: null, name: null }, note: 'Guard refitted and tested.' }, locking: false }, machine: { status: 'UNDER_MAINTENANCE', locked: false } })
     const [row] = await admin<{ signedSafeByWorkerId: string }>('SELECT "signedSafeByWorkerId"::text FROM "MaintenanceRequest" WHERE id = $1', [unsafe.id])
     expect(row!.signedSafeByWorkerId).toBe(technicianId)
+    // B-W2a-35b: signed safe, the machine is no longer do-not-use: the station takes the refused scan when it is sent again.
+    const again = await call('sew2Scanner', 'POST', '/production/scans', blockedScan, blockedScan.clientScanId)
+    expect(again.statusCode, again.body).toBe(201)
+    expect(again.json().scan).toMatchObject({ clientScanId: blockedScan.clientScanId, goodQuantity: 1, operation: { seq: 20 } })
     expect(refusalOf((await technicianTablet.send('POST', `/plant/requests/${unsafe.id}/sign-safe`, { version: 3, note: 'Again.' }, { headers: { 'idempotency-key': freshKey() } })).body.error)).toBe('refusal/SIGNED_ALREADY')
     const back = await as(technicianTablet, 'POST', `/plant/jobs/${job.id}/hand-back`, { version: job.version, workDone: 'Refitted the guard.', machineAfter: 'RUNNING' })
     expect(back).toMatchObject({ job: { status: 'HANDED_BACK', handedBack: { machineAfter: 'RUNNING', by: { kind: 'WORKER' } } }, machine: { status: 'RUNNING' } })

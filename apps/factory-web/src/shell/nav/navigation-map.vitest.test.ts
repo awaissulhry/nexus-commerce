@@ -114,6 +114,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/warehouse/shipping': 'shipping.settings.view', // GET /shipping/settings
       '/production/floor': 'workorders.view', // GET /production/scans/wip
       '/production/work-orders': 'workorders.view', // GET /production/work-orders
+      '/production/reports': 'production.reports.view', // GET /production/reports/daily
       '/production/settings': 'production.settings.view', // GET /production/settings
       '/quality/inspections': 'quality.inspections.view', // GET /quality/inspections
       '/compliance/certificates': 'compliance.certificates.view', // GET /compliance/certificates
@@ -128,6 +129,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/admin/devices': 'devices.view',
       '/admin/users': 'users.view',
       '/admin/roles': 'roles.view',
+      '/admin/security': 'security.view', // GET /admin/security (B-W2a-36)
       '/admin/documents': 'numbering.view', // GET /numbering/series
       '/admin/languages': 'companies.view',
       '/admin/connections': 'integrations.view', // GET /integrations/accounts

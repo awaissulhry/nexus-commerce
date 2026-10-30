@@ -64,7 +64,23 @@ const PLANT_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freez
   floor_inspector: ['plant.report'],
   team_leader: ['plant.report'],
 })
-const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? [])]
+/**
+ * B-W2a-43 (customer returns; design sales.returns, floor.returnsin): sales makes the RMA and decides what the customer
+ * gets (credit values with its price grain); the warehouse receives at the dock and grades with the quality inspector;
+ * finance and production read them (finance makes the credit note, B-W2a-61). On the floor the dock's operator and team
+ * leader receive, the floor inspector receives and grades. Owner and read-only take theirs from every().
+ */
+const RETURNS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  sales: ['sales.returns.view', 'sales.returns.manage', 'sales.returns.decide'],
+  finance: ['sales.returns.view'],
+  warehouse: ['sales.returns.view', 'sales.returns.receive', 'sales.returns.inspect'],
+  quality_inspector: ['sales.returns.view', 'sales.returns.inspect'],
+  production_manager: ['sales.returns.view'],
+  operator: ['sales.returns.receive'],
+  team_leader: ['sales.returns.receive'],
+  floor_inspector: ['sales.returns.receive', 'sales.returns.inspect'],
+})
+const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -82,9 +98,21 @@ const ALERTS_TEMPLATES: Readonly<Record<string, readonly Permission[]>> = Object
   floor_supervisor: ['alerts.view', 'alerts.handle'],
 })
 const alertsAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' ? (ALERTS_TEMPLATES[key] ?? []) : [])
+/**
+ * B-W2a-38 (production reports, MES-301 / MES-160; design production.reports): who reads the daily production report
+ * per line, style and size and has it e-mailed each morning, to themselves and (subscribe) to colleagues who may read
+ * it. Office only, never a floor role; one line per template.
+ */
+const REPORTS_TEMPLATES: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  planner: ['production.reports.view', 'production.reports.subscribe'],
+  production_manager: ['production.reports.view', 'production.reports.subscribe'],
+  quality_inspector: ['production.reports.view'],
+  floor_supervisor: ['production.reports.view', 'production.reports.subscribe'],
+})
+const reportsAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' ? (REPORTS_TEMPLATES[key] ?? []) : [])
 
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 
@@ -160,6 +188,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'views.save', 'views.manage', 'views.export',
       // B-W2a-32: rebuild the search index.
       'search.rebuild',
+      // B-W2a-36: Security & health; record a restore drill.
+      'security.view', 'security.drills.record',
     ],
     grains: [],
   }),
@@ -260,6 +290,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'purchasing.sources.manage',
       // B-W2a-25: subcontract orders to the workshops (operations, fees, kit plan, issue, cancel, close).
       'purchasing.subcontract.manage',
+      // B-W2a-44: claims to suppliers (from discrepancies, lots or typed), sent by e-mail, answered, closed.
+      'purchasing.claims.manage',
       // B-W2a-31: what was wrong with a delivery, its report to the supplier and its answer.
       'inventory.discrepancies.manage',
       'inventory.discrepancies.report',
@@ -318,6 +350,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       // B-W2a-25: send a subcontract order's kit with its DDT, receive the goods back by bundle.
       'purchasing.subcontract.kit',
       'purchasing.subcontract.receive',
+      // B-W2a-44: claims to suppliers, and the goods of a return sent back with the return DDT (Return to supplier).
+      'purchasing.claims.manage',
+      'purchasing.claims.return',
       'workorders.view',
       'orders.view',
       'quality.lots.view',

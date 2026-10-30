@@ -32,6 +32,8 @@ import { floorReadinessFor } from '../../../platform/privacy/read'
 import { issueInCommand, type IssueResult } from '../../inventory/issue/issue'
 import { lockHideCuts, lockWorkOrderIssues } from '../../inventory/issue/store'
 import { LEDGER_SELECT, postMoves, type PostedMove } from '../../inventory/ledger/post-moves'
+import { stationBlock } from '../../plant/checks'
+import { holdOnCut } from '../../quality/holds/checks'
 import { floorRecordSubjectFor } from '../settings/subject'
 import {
   deviceStationOf,
@@ -78,7 +80,9 @@ import {
  *   correct    the office: a mirror entry of any live entry, with the reason.
  * Before a cut, the site's floor must be ready (platform/privacy floorReadinessFor: a stored DPIA, a published worker
  * notice, and a legal basis on record where the site names workers), read as the tenant's system caller (the floor
- * reads neither the DPIA nor the legal basis); refused in the gate's words (409 FLOOR_NOT_READY).
+ * reads neither the DPIA nor the legal basis); refused in the gate's words (409 FLOOR_NOT_READY). A cutting station whose
+ * machines are all do-not-use cuts nothing until a technician signs one safe (plant/checks.ts stationBlock; Owner answer
+ * H1): 409 MACHINE_UNSAFE in the station's words, before anything is issued.
  * Who an entry names is the site's floor rules' (production/settings subject.ts): the signed-in worker who acknowledged
  * the information notice, or only the device's station; at a station site the entry and its pieces name no creator
  * either (the audit row keeps the actor, office only). Every write records an audit row on the entry, one on the work
@@ -241,10 +245,18 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
   await lockHideCuts(tx, context.tenantId, workOrder.siteId, hide.id)
   const lot = (await readLot(tx, hide.lotId))!
   const item = (await readItem(tx, hide.itemId))!
+  // B-W2a-F1 hook (quality/holds checks.ts): a held hide, lot or work order, in words before anything is issued (the
+  // database's CutLog_awaits_quality_hold and wave 5's CutLog_awaits_hold refuse the same).
+  const held = await holdOnCut(tx, context, { hideId: hide.id, lotId: hide.lotId, workOrderId: workOrder.id })
+  if (held) refused({ code: 'QUALITY_HOLD', message: held })
   const first = cuttableRefusal({ workOrder, hide, lot })
   if (first) refused(first)
+  const stationId = await deviceStationOf(tx, context.deviceId)
+  // W2a B-W2a-35b hook (plant/checks.ts, Owner answer H1): a cutting station whose machines are all do-not-use cuts nothing (before anything is issued).
+  const unsafe = await stationBlock(tx, stationId)
+  if (unsafe) refused({ code: 'MACHINE_UNSAFE', message: `${unsafe.message} ${unsafe.fix}`.trim() })
   // Who it names: the site's floor rules (409 in words, before anything is issued; the trigger checks the same).
-  const subject = await floorRecordSubjectFor(tx, { siteId: workOrder.siteId, workerId: context.actorId, stationId: await deviceStationOf(tx, context.deviceId) })
+  const subject = await floorRecordSubjectFor(tx, { siteId: workOrder.siteId, workerId: context.actorId, stationId })
   const createdById = subject.workerId ? context.actorId : null
   const occurredAt = body.occurredAt ? parseInstant(body.occurredAt)! : undefined
 

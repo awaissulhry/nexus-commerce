@@ -20,6 +20,7 @@ import type { FloorContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import type { PrintJobView } from '../../../platform/print/contract'
 import { queueModuleLabel } from '../../../platform/print/jobs'
+import { holdOnLabels } from '../../quality/holds/checks'
 import { deviceStationOf, scanWorkOrderLock } from '../scans/store'
 import { floorRecordSubjectFor } from '../settings/subject'
 import {
@@ -205,12 +206,22 @@ interface PrintResult {
   readonly refused: LabelRefusal[]
 }
 
+/**
+ * B-W2a-F1 hook (quality/holds checks.ts): garment labels of a work order ON_HOLD are neither printed nor printed again,
+ * in the hold's words (wave 5's GarmentLabelPrint_awaits_hold refuses the same).
+ */
+async function refuseHeldLabels(tools: CommandTools, workOrderId: string): Promise<void> {
+  const held = await holdOnLabels(tools.tx, tools.context, { workOrderId })
+  if (held) refuse({ code: 'WORK_ORDER_NOT_OPEN', message: held, fix: 'Quality lifts the hold in the office (Quality › Holds); then print the labels.', cellId: null })
+}
+
 async function printInCommand(tools: CommandTools, workOrderId: string, body: PrintInput, languages: ReadonlyMap<string, string>): Promise<PrintResult> {
   const context = tools.context as FloorContext
   const { tx } = tools
   await scanWorkOrderLock(tx, context.tenantId, workOrderId)
   const header = await readHeader(tx, workOrderId)
   if (!header || !mayLabel(context, PRODUCTION_SERIALS, header)) throw new NotFoundError('Work order not found.')
+  await refuseHeldLabels(tools, header.id)
   const cellIds = (await readCells(tx, header.id)).map((cell) => cell.id)
   await lockLabelCells(tx, context.tenantId, header.siteId, body.cells ? body.cells.map((cell) => cell.workOrderSizeId).filter((id) => cellIds.includes(id)) : cellIds)
   // Who the serials name: the site's floor rules (409 in words; at a station site nobody).
@@ -337,6 +348,7 @@ export async function reprintCellLabels(caller: CommandCaller, workOrderId: stri
     await scanWorkOrderLock(tx, context.tenantId, workOrderId)
     const current = await readHeader(tx, workOrderId)
     if (!current || !mayLabel(context, PRODUCTION_SERIALS, current)) throw new NotFoundError('Work order not found.')
+    await refuseHeldLabels(tools, current.id)
     await lockLabelCells(tx, context.tenantId, current.siteId, [body.workOrderSizeId])
     const createdById = await namedBy(tools, current.siteId)
     const facts = await labelFacts(tx, current)
@@ -384,6 +396,7 @@ export async function reprintSerial(caller: CommandCaller, serialId: string, bod
     const serial = await lockSerial(tx, serialId)
     if (!serial) throw new NotFoundError('Serial not found.')
     const current = (await readHeader(tx, serial.workOrderId))!
+    await refuseHeldLabels(tools, current.id)
     const refusal = serialReprintRefusal({ workOrder: current, serial: { serial: serial.serial, status: serial.status as GarmentSerialStatus, workOrderSizeId: serial.workOrderSizeId } })
     if (refusal) refuse(refusal)
     const createdById = await namedBy(tools, current.siteId)

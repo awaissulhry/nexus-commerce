@@ -44,6 +44,7 @@
       "access": "Accessi",
       "users": "Utenti",
       "roles": "Ruoli e permessi",
+      "security": "Sicurezza e stato del sistema",
       "platform": "Piattaforma",
       "documents": "Documenti e numerazioni",
       "languages": "Lingue e formati",
@@ -59,7 +60,9 @@
       "floor": "Reparto ora",
       "workOrders": "Ordini di produzione",
       "settings": "Impostazioni",
-      "floorRules": "Regole di reparto"
+      "floorRules": "Regole di reparto",
+      "reports": "Report",
+      "reportsPage": "Report produzione"
     },
     "quality": {
       "area": "Qualità",

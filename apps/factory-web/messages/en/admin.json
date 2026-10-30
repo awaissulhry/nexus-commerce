@@ -90,7 +90,9 @@
       "deactivate": "Deactivating a person needs a fresh code from your authenticator app.",
       "password": "Forcing a new password needs a fresh code from your authenticator app.",
       "badge": "A worker's badge needs a fresh code from your authenticator app.",
-      "pin": "Resetting a worker's PIN needs a fresh code from your authenticator app."
+      "pin": "Resetting a worker's PIN needs a fresh code from your authenticator app.",
+      "twoFactorAsk": "Asking two-factor of a role needs a fresh code from your authenticator app.",
+      "twoFactorStop": "No longer asking two-factor of a role needs a fresh code from your authenticator app."
     },
     "problem": {
       "wrong": "That code is wrong or was already used. Type the next one.",
@@ -1237,8 +1239,7 @@
     "mfa": {
       "title": "Two-factor",
       "on": "Required: the role gives nothing until two-factor is proved in the session.",
-      "off": "Not required by this role.",
-      "later": "Switching it per role comes in W2a (Security & health)."
+      "off": "Not required by this role."
     },
     "floorHolders": "A floor role is held by floor workers ({count} now); see them in Users › Floor.",
     "nobody": "Nobody has this role.",
@@ -1508,7 +1509,8 @@
     "search": "Search",
     "plant": "Plant",
     "alerts": "Alerts and exception rules",
-    "accounting": "Accounting"
+    "accounting": "Accounting",
+    "security": "Security & health"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1609,6 +1611,8 @@
     "purchasing_subcontract_manage": "Prepare, issue, cancel and close subcontract orders",
     "purchasing_subcontract_kit": "Send a subcontract order's kit with its DDT",
     "purchasing_subcontract_receive": "Receive goods back from a workshop",
+    "purchasing_claims_manage": "Prepare, send, answer and close supplier claims",
+    "purchasing_claims_return": "Send the goods of a return back to the supplier with the return DDT",
     "invoices_view": "See invoices and credit notes",
     "invoices_manage": "Prepare draft invoices",
     "invoices_issue": "Issue an invoice (it can never change again)",
@@ -1672,6 +1676,8 @@
     "production_scrap_view": "See scrap and rework",
     "production_scrap": "Post scrap and ask for replacements",
     "production_scrap_approve": "Approve lower order quantities",
+    "production_reports_view": "See the daily production report per line, style and size",
+    "production_reports_subscribe": "E-mail the production report to colleagues",
     "production_cutting_view": "See the cutting room's yield",
     "planning_firm": "Make planned orders firm",
     "planning_exceptions_manage": "Work the planning exceptions",
@@ -1700,6 +1706,13 @@
     "accounting_view": "See the accounting exports, the month's checks, Intrastat rows and the period locks",
     "accounting_export": "Make and re-export the numbered accounting batch of a month",
     "accounting_lock": "Lock a month (soft or hard) and lift a soft lock",
-    "accounting_unlock": "Lift a hard period lock (agree it with the accountant)"
+    "accounting_unlock": "Lift a hard period lock (agree it with the accountant)",
+    "security_view": "See whether every part works, the sign-in rules, backups and restore drills",
+    "security_drills_record": "Record a restore drill",
+    "sales_returns_view": "See customer returns",
+    "sales_returns_manage": "Open and change customer returns",
+    "sales_returns_receive": "Receive returned goods at the dock",
+    "sales_returns_inspect": "Grade returned goods",
+    "sales_returns_decide": "Decide what happens to returned goods"
   }
 }
