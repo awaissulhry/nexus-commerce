@@ -308,6 +308,7 @@
       "operation": "Segnala un fascio alla tua operazione",
       "cut": "Controlla una pelle e registra il taglio",
       "bundles": "Crea i fasci e stampa i cartellini",
+      "receive": "Ricevi la merce e stampa i cartellini delle pelli",
       "pick": "Consegna i materiali a un ordine di lavoro",
       "final": "Controlla, firma e rilascia i capi",
       "pack": "Scansiona i capi nei cartoni, stampa etichette e DDT"

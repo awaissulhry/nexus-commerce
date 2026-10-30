@@ -61,8 +61,8 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
     expect(homeTiles('cutting', OPERATOR, true).map((tile) => tile.held)).toEqual(['notice', 'notice', 'notice', 'notice'])
   })
 
-  it('the floor tasks are built; receive and garment labels are later steps', () => {
-    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['operation', 'cut', 'bundles', 'pick', 'pack', 'final', 'scan'])
+  it('the floor tasks are built; garment labels are a later step', () => {
+    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['operation', 'cut', 'bundles', 'receive', 'pick', 'pack', 'final', 'scan'])
   })
 })
 

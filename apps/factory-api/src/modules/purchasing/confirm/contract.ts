@@ -35,7 +35,17 @@ const linkPage = {
 
 export const openLinkOrderContract = defineContract({ response: { 200: output(linkPage) } })
 
-const endState = output({ ...linkPage, outcome: z.enum(ANSWER_OUTCOMES), summary: z.string().nullable(), done: z.string() })
+/** The supplier's own confirmation PDF, uploaded through the link before answering (SCM-090; design links.po "answer"). */
+const supplierFile = output({ id: id(), originalName: z.string(), sizeBytes: z.number().int(), status: z.enum(['PENDING_UPLOAD', 'AVAILABLE', 'QUARANTINED', 'DELETED']) })
+
+const endState = output({
+  ...linkPage,
+  outcome: z.enum(ANSWER_OUTCOMES),
+  summary: z.string().nullable(),
+  done: z.string(),
+  /** The supplier's confirmation PDF that went with the answer (null: none). */
+  confirmationFile: supplierFile.nullable(),
+})
 
 export const confirmLinkOrderContract = defineContract({
   body: input({
@@ -58,6 +68,8 @@ export const confirmLinkOrderContract = defineContract({
     supplierRef: text(2 * MAX_TEXT.code).nullable().optional(),
     note: text(2 * MAX_TEXT.note).nullable().optional(),
     typedName: text(400).nullable().optional(),
+    /** The supplier's confirmation PDF, uploaded through this link first (POST …/confirmation, then …/complete). */
+    confirmationFileId: id().nullable().optional(),
   }),
   response: { 200: endState },
 })
@@ -65,6 +77,28 @@ export const confirmLinkOrderContract = defineContract({
 export const declineLinkOrderContract = defineContract({
   body: input({ version, reason: z.enum(DECLINE_REASONS), note: text(2 * MAX_TEXT.note).nullable().optional(), typedName: text(400).nullable().optional() }),
   response: { 200: endState },
+})
+
+/** POST /link/purchase-order/confirmation: announce the supplier's confirmation PDF; the answer holds the presigned PUT. */
+export const announceConfirmationContract = defineContract({
+  body: input({
+    originalName: z.string().trim().min(1).max(200),
+    contentType: z.string().trim().min(1).max(100),
+    sizeBytes: z.number().int().min(1),
+    sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  }),
+  response: {
+    201: output({
+      file: supplierFile,
+      upload: output({ method: z.string(), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: instant() }),
+    }),
+  },
+})
+
+/** POST /link/purchase-order/confirmation/:fileId/complete: the store holds it (AVAILABLE, or QUARANTINED when it differs). */
+export const completeConfirmationContract = defineContract({
+  params: input({ fileId: id() }),
+  response: { 200: output({ file: supplierFile }) },
 })
 
 export const renewLinkOrderContract = defineContract({ body: input({}).optional(), response: { 202: output({ status: z.literal('requested'), message: z.string() }) } })

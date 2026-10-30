@@ -23,7 +23,7 @@ const version = z.number().int().min(1)
 
 // ---- record ----------------------------------------------------------------------------------------------------------------
 
-const hideInput = input({
+export const hideInput = input({
   /** The tannery's own number on the hide. */
   supplierCode: code().nullish(),
   /** As measured at the dock, above 0. */
@@ -37,7 +37,7 @@ const hideInput = input({
   defects: text(1000).nullish(),
 })
 
-const lotInput = input({
+export const lotInput = input({
   /** The supplier's batch number. */
   supplierLotRef: code().nullish(),
   /** The tannery's dye batch (one shade). */
@@ -53,7 +53,7 @@ const lotInput = input({
   hides: z.array(hideInput).max(RECEIPT_LIMITS.hidesPerLot).optional(),
 })
 
-const lineInput = input({
+export const lineInput = input({
   purchaseOrderLineId: id(),
   /** An untracked material: how much came, in `uom`. */
   quantity: quantity().optional(),
