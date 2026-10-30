@@ -145,10 +145,12 @@
     "clearFilters": "Clear filters",
     "empty": {
       "title": "No orders yet",
-      "body": "An order appears here when a customer accepts a quote.",
+      "body": "Orders appear here when a customer accepts a quote, or when the office types one with New order.",
       "quotes": "Go to Quotes"
     },
-    "viewing": "Showing: {view}"
+    "viewing": "Showing: {view}",
+    "new": "New order",
+    "keyNew": "New order"
   },
   "col": {
     "number": "Number",
@@ -213,7 +215,9 @@
       "OPEN": "Deposit open",
       "PAID": "Deposit paid",
       "WAIVED": "Deposit waived"
-    }
+    },
+    "newTab": "Board in a new tab",
+    "newTabHint": "Leave it open on a second screen: it follows every change by itself."
   },
   "tab": {
     "lines": "Lines",
@@ -223,7 +227,8 @@
     "money": "Invoices & payments",
     "documents": "Documents",
     "activity": "Activity",
-    "depositOpen": "A deposit is open"
+    "depositOpen": "A deposit is open",
+    "changes": "Changes"
   },
   "step": {
     "makeWorkOrders": "Make work orders",
@@ -235,7 +240,12 @@
     "ready": "Mark ready…",
     "openQuote": "Open quote {number}",
     "copyNumber": "Copy the number",
-    "createShipment": "Create shipment"
+    "createShipment": "Create shipment",
+    "amend": "Amend order",
+    "closeLines": "Close remaining lines…",
+    "reopenLines": "Reopen lines…",
+    "copyAsQuote": "Copy as new quote…",
+    "cancel": "Cancel order…"
   },
   "record": {
     "back": "Orders",
@@ -273,7 +283,10 @@
     "closed": "Closed on {date}: nothing on it changes any more.",
     "closedNoDate": "Closed: nothing on it changes any more.",
     "readOnly": "Read-only: your role follows orders and changes none.",
-    "noPanels": "The thread, files and history open with the record."
+    "noPanels": "The thread, files and history open with the record.",
+    "amended": "Amended · rev {revision}",
+    "reapproval": "Waiting for the customer to accept the change",
+    "typed": "Typed by the office"
   },
   "held": {
     "busy": "Working on the last change…",
@@ -284,7 +297,7 @@
     "closeState": "Only a shipped order is closed",
     "noClose": "Closing needs the right to manage or close orders",
     "notSettled": "Not settled yet: closing it anyway needs the right to close unsettled orders",
-    "cancelState": "Only a confirmed order is cancelled",
+    "cancelState": "Only an order that has not shipped anything is cancelled: a return is the way back",
     "cancelWorkOrders": "Its lines have work orders: cancel the drafts first; a released one keeps the order",
     "readyState": "Only an order in production is marked ready",
     "final": "A closed or cancelled order never changes",
@@ -293,7 +306,17 @@
     "noQuote": "This deposit belongs to no quote: its page goes with the quote",
     "noPrice": "Amounts are shown to people who see prices",
     "noIssue": "Sending to SDI needs the right to issue invoices",
-    "sdiNotNow": "It cannot be sent now: see its state"
+    "sdiNotNow": "It cannot be sent now: see its state",
+    "amending": "The lines are being amended: review or discard the amendment first",
+    "amendShipped": "Its lines are fixed once anything shipped: a later change is a return",
+    "amendMtm": "This order has a made-to-measure unit: it is not amended here yet",
+    "amendState": "This order takes no amendment now",
+    "closeLinesState": "Only an order that is not fully shipped closes lines",
+    "closeLinesNone": "Nothing is left to close: every line shipped in full or is closed already",
+    "closeLinesOnly": "Nothing has shipped and this is the only open line: cancel the order instead",
+    "reopenState": "A closed or cancelled order keeps its closed lines",
+    "reopenNone": "No line is closed short",
+    "noQuotes": "Making quotes needs the sales right to manage quotes"
   },
   "summary": {
     "label": "The order at a glance",
@@ -353,7 +376,7 @@
     "open": "Open the deposit"
   },
   "lines": {
-    "readOnly": "What the customer ordered, as accepted. An order changes through an amendment (later).",
+    "readOnly": "What the customer ordered, as accepted. The lines change only through an amendment (Amend order).",
     "show": "Show",
     "vatNature": "VAT {nature}",
     "orderDate": "As the order",
@@ -371,7 +394,9 @@
       "net": "Net",
       "vat": "VAT",
       "promise": "Promise"
-    }
+    },
+    "closedShort_one": "Closed short: {count} piece",
+    "closedShort_other": "Closed short: {count} pieces"
   },
   "layer": {
     "ordered": "Ordered",
@@ -665,7 +690,11 @@
     "promise": "The promise date changed; the first promise stays on record.",
     "ready": "The order is ready to ship.",
     "closed": "The order is closed.",
-    "sdiSent": "Sent to SDI: its answer appears here when it comes."
+    "sdiSent": "Sent to SDI: its answer appears here when it comes.",
+    "amended": "Amendment {revision} applied.",
+    "amendedReaccept": "Amendment {revision} applied. The net total changed: the customer must accept the order again — tell them.",
+    "reopened": "The lines were reopened.",
+    "cancelled": "The order was cancelled."
   },
   "stepUp": {
     "title": "Confirm it's you",
@@ -701,6 +730,408 @@
       "unavailable": "The factory server is not answering: nothing was changed.",
       "step_up": "Your authenticator code is needed.",
       "internal": "Something went wrong on the server: nothing was changed."
+    }
+  },
+  "amend": {
+    "start": "Amend order",
+    "title": "Amendment {revision} — not applied",
+    "count_one": "{count} change",
+    "count_other": "{count} changes",
+    "barLabel": "Amendment draft",
+    "discard": "Discard",
+    "review": "Review",
+    "how": "Change the sizes and prices below, add a colour or a style, or set a line to 0 to remove it. Nothing changes until you review and apply the amendment.",
+    "header": "Order details",
+    "customerRef": "Customer PO",
+    "requestedDate": "Requested by the customer",
+    "requestedHint": "Today or later; empty: none.",
+    "reviewTitle": "Review amendment {revision} of {number}",
+    "reading": "Checking the amendment with the factory server…",
+    "failed": "The amendment could not be checked.",
+    "problems_one": "{count} thing stops the amendment:",
+    "problems_other": "{count} things stop the amendment:",
+    "summary_one": "{count} line changes.",
+    "summary_other": "{count} lines change.",
+    "summaryMoney": "Net {before} → {after} ({delta}).",
+    "reaccept": "The net total changes: the customer must accept the order again. The order shows “waiting for the customer”; the acceptance link is not there yet, so tell the customer yourself.",
+    "noReaccept": "The net total does not change: the customer does not need to accept again.",
+    "tableLabel": "Lines old → new",
+    "field": {
+      "customerRef": "Customer PO",
+      "requestedDate": "Requested date"
+    },
+    "reason": "Why the order changes",
+    "reasonHint": "It stays with the amendment, in the Changes tab.",
+    "apply": "Apply amendment",
+    "held": {
+      "price": "A typed price is not a price: check it",
+      "workOrders": "A size is below what work orders already make",
+      "empty": "An order keeps at least one line: to stop the whole order, cancel it",
+      "nothing": "Nothing changes yet",
+      "reading": "Checking the amendment first",
+      "failed": "The check failed: try again",
+      "problems": "Fix what stops the amendment first",
+      "reason": "Say why the order changes"
+    }
+  },
+  "editor": {
+    "add": {
+      "title": "Add a style",
+      "style": "Style",
+      "styleHint": "Type its code or name, pick it, then the colours to add: their rows open in its grid.",
+      "placeholder": "Search styles",
+      "searching": "Searching styles…",
+      "none": "No style matches.",
+      "found_one": "{count} style",
+      "found_other": "{count} styles",
+      "estimate": "Draft costs only",
+      "noCost": "No cost sheet yet",
+      "change": "Choose another style",
+      "colours": "Colours to add",
+      "go_one": "Add {count} colour",
+      "go_other": "Add {count} colours"
+    },
+    "held": {
+      "style": "Pick a style first",
+      "colour": "Pick at least one colour"
+    },
+    "empty": {
+      "title": "No lines yet",
+      "amend": "Add a style above: an order keeps at least one line.",
+      "new": "Add a style above, pick its colours and type the pieces per size."
+    },
+    "gridCaption": "Pieces of {style} by colour and size",
+    "pricesOf": "Prices of {style}",
+    "priceOf": "Unit price of {colour}",
+    "priceKept": "As accepted",
+    "priceList": "List: {price}",
+    "priceListUnknown": "Customer's list price",
+    "col": {
+      "change": "Change"
+    },
+    "change": {
+      "added": "Added",
+      "removed": "Removed",
+      "changed": "Changed",
+      "none": "Unchanged",
+      "empty": "Type its sizes"
+    },
+    "underWorkOrders": "Size {size}: work orders already make {made}",
+    "styleReading": "Reading the style…",
+    "styleUnread": "The style could not be read: only its sizes on the order",
+    "lockedLabel": "Lines kept as they are",
+    "lockedClosed_one": "{colour}: closed short ({count} piece): reopen it first to change it",
+    "lockedClosed_other": "{colour}: closed short ({count} pieces): reopen it first to change it",
+    "lockedMtm": "{colour}: a made-to-measure unit, kept as it is"
+  },
+  "issue": {
+    "state": "The order does not take this change in its state now.",
+    "lines": "A line that work orders make, closed short, or that a shipment or invoice names cannot be removed: close it short or lower its sizes instead.",
+    "reason": "Say why the order changes.",
+    "party": "This customer cannot take an order now (not active, or no customer role).",
+    "contact": "The contact is not an active contact of this customer.",
+    "billTo": "The customer has no invoice address in force: add one to the customer first.",
+    "shipTo": "The customer has no delivery address in force: add one to the customer first.",
+    "promiseDate": "The promise date is today or later.",
+    "requestedDate": "The requested date is today or later.",
+    "customerRef": "The customer PO is too long.",
+    "deposit": "The deposit is above 0 and at most 100 percent, or none.",
+    "number": "The company has no number series for orders: an administrator adds one under Numbering.",
+    "terms": "The payment terms are not in force.",
+    "text": "A text is too long.",
+    "other": "Something is not accepted: check the order.",
+    "line": {
+      "sizes": "{line}: check its sizes (a size not offered for this colour, or below what work orders make).",
+      "price": "{line}: type its unit price (no price list prices it for this customer).",
+      "catalogue": "{line}: this style or colour cannot be ordered now (archived, or not offered).",
+      "moved": "{line}: the order changed meanwhile: read it again.",
+      "text": "{line}: a text is too long.",
+      "other": "{line}: check this line."
+    }
+  },
+  "closeLines": {
+    "title": "Close remaining lines of {number}",
+    "body": "What is left of these lines will not be made or shipped. What shipped stays as it is.",
+    "lines": "Lines to close",
+    "line_one": "Line {line} · {style} {colour} — {count} piece left",
+    "line_other": "Line {line} · {style} {colour} — {count} pieces left",
+    "pieces_one": "{count} piece will not be made or shipped.",
+    "pieces_other": "{count} pieces will not be made or shipped.",
+    "inWorkOrders_one": "Work orders still make {count} piece of these lines: Production decides whether to finish it into stock.",
+    "inWorkOrders_other": "Work orders still make {count} pieces of these lines: Production decides whether to finish them into stock.",
+    "reason": "Why",
+    "reasonHint": "For example: the customer does not want the rest.",
+    "reversal": "You can reopen closed lines later (Reopen lines).",
+    "go_one": "Close {count} line",
+    "go_other": "Close {count} lines",
+    "done_one": "{count} line closed ({pieces} pieces will not be made or shipped).",
+    "done_other": "{count} lines closed ({pieces} pieces will not be made or shipped).",
+    "stillMade_one": "Work orders still make {count} piece of them: Production decides.",
+    "stillMade_other": "Work orders still make {count} pieces of them: Production decides.",
+    "problem": {
+      "none": "Choose at least one line",
+      "all": "Nothing has shipped: closing every line would leave an empty order. Cancel the order instead",
+      "reason": "Say why the lines close"
+    }
+  },
+  "reopen": {
+    "title": "Reopen lines of {number}",
+    "body": "The pieces closed short are made and shipped again.",
+    "lines": "Lines to reopen",
+    "line_one": "Line {line} · {style} {colour} — {count} piece closed short",
+    "line_other": "Line {line} · {style} {colour} — {count} pieces closed short",
+    "closedOn": "Closed on {date}.",
+    "reason": "Why",
+    "go_one": "Reopen {count} line",
+    "go_other": "Reopen {count} lines",
+    "held": {
+      "none": "Choose at least one line",
+      "reason": "Say why the lines reopen"
+    }
+  },
+  "cancel": {
+    "title": "Cancel order {number}",
+    "reading": "Checking what the cancellation would touch…",
+    "failed": "What the cancellation would touch could not be read: {problem}",
+    "blocked": "This order cannot be cancelled yet: first deal with what stops it.",
+    "blocks": "Stops it",
+    "stopsTitle": "What stops the cancellation",
+    "changesTitle": "What the cancellation changes",
+    "leavesTitle": "What it leaves behind (the people who own it decide)",
+    "nothing": "Nothing else is touched.",
+    "reason": "Reason",
+    "reasonHint": "It stays on the order and in its history.",
+    "type": "Type the order number {number} to confirm",
+    "typeHint": "Capital letters and dashes count.",
+    "typeWrong": "This is not the order's number.",
+    "reversal": "There is no way back: a cancelled order stays as it is. To start again, copy it as a new quote.",
+    "go": "Cancel order",
+    "held": {
+      "reading": "Checking what the cancellation would touch first",
+      "blocked": "Something stops the cancellation: see above",
+      "reason": "Write the reason first",
+      "number": "Type {number} to confirm"
+    },
+    "keep": "Keep the order",
+    "open": "Open:"
+  },
+  "impact": {
+    "STATE_final": "The order is closed or cancelled: it never changes.",
+    "STATE_shipped": "Goods left: a shipped order is not cancelled (a return or a credit note is the way back).",
+    "DRAFT_WORK_ORDERS": "Its draft work orders are cancelled first in Production ({refs}).",
+    "SHIPMENT_IN_PREPARATION": "Shipments being packed for it are cancelled first in the warehouse ({refs}).",
+    "SHIPPED": "Goods left with {refs}: a shipped order is not cancelled (a return is the way back).",
+    "INVOICE_DRAFT_one": "A draft invoice of the order is removed first in Finance.",
+    "INVOICE_DRAFT_other": "{count} draft invoices of the order are removed first in Finance.",
+    "INVOICE_ISSUED": "Invoices of the order were issued ({refs}): a fiscal document is never deleted; Finance issues a credit note first.",
+    "DEPOSITS_CANCELLED_one": "The deposit not paid yet is cancelled with the order: the customer is no longer asked for it.",
+    "DEPOSITS_CANCELLED_other": "{count} deposits not paid yet are cancelled with the order: the customer is no longer asked for them.",
+    "PAYMENT_STEPS_CANCELLED_one": "{count} open step of the payment schedule is cancelled.",
+    "PAYMENT_STEPS_CANCELLED_other": "{count} open steps of the payment schedule are cancelled.",
+    "WORK_ORDERS_OPEN": "Work orders stay open ({refs}): Production finishes them into stock or cancels them.",
+    "LEATHER_CUT_one": "Leather was already cut for it: {count} hide on {refs}.",
+    "LEATHER_CUT_other": "Leather was already cut for it: {count} hides on {refs}.",
+    "STOCK_RESERVED_one": "{count} reservation of stock stays until the planner releases it.",
+    "STOCK_RESERVED_other": "{count} reservations of stock stay until the planner releases them.",
+    "PURCHASE_ORDERS": "Planning counted on purchase orders for it ({refs}): they stay open; the buyer decides.",
+    "DEPOSIT_PAID": "The deposit was paid: it stays; a refund is Finance's.",
+    "DEPOSIT_PAID_invoiced": "The deposit was paid and invoiced ({refs}): it stays; a refund or a credit note is Finance's.",
+    "PAYMENT_STEPS_PAID_one": "{count} paid step of the payment schedule stays paid: a refund is Finance's.",
+    "PAYMENT_STEPS_PAID_other": "{count} paid steps of the payment schedule stay paid: a refund is Finance's."
+  },
+  "copy": {
+    "title": "Copy {number} as a new quote",
+    "body": "A new draft quote for {customer} with this order's lines.",
+    "prices": "A line sold at the list price takes today's list price; a price typed by hand stays.",
+    "left": "Styles, colours or sizes no longer offered are left out (counted after the copy).",
+    "orderStays": "This order does not change.",
+    "go": "Copy as new quote",
+    "done": "Quote {number} made as a draft.",
+    "dropped_one": "{count} line or size was left out (no longer offered).",
+    "dropped_other": "{count} lines or sizes were left out (no longer offered).",
+    "open": "Open quote {number}"
+  },
+  "schedule": {
+    "title": "Payment schedule",
+    "label": "Payment steps",
+    "empty": "Paid on invoice terms; no milestones.",
+    "open": "Still open: {amount}",
+    "stepShare": "{kind} · {share}",
+    "kind": {
+      "DEPOSIT": "Deposit on the order",
+      "BEFORE_SHIPPING": "Before shipping",
+      "ON_DELIVERY": "On delivery",
+      "ON_INVOICE": "On the invoice"
+    },
+    "status": {
+      "OPEN": "Open",
+      "PAID": "Paid",
+      "WAIVED": "Waived",
+      "CANCELLED": "Cancelled"
+    },
+    "when": {
+      "DEPOSIT": "Due as the deposit request says",
+      "BEFORE_SHIPPING": "Due before the goods leave",
+      "ON_DELIVERY": "Due on delivery",
+      "ON_INVOICE": "Due as the invoice says"
+    },
+    "overdue": "Overdue",
+    "due": "Due {date}",
+    "dueDeposit": "Due {date} (the deposit request)",
+    "paidOn": "Paid on {date}",
+    "cancelled_one": "{count} earlier step was replaced when an amendment remade the schedule.",
+    "cancelled_other": "{count} earlier steps were replaced when an amendment remade the schedule."
+  },
+  "changes": {
+    "title": "Amendments",
+    "subtitle": "Each change to the confirmed order, numbered, with the order before and after.",
+    "tableLabel": "Amendments of this order",
+    "empty": {
+      "title": "No changes since confirmation",
+      "body": "An amendment appears here once it is applied (Lines › Amend order).",
+      "final": "The order never changed after its confirmation."
+    },
+    "waiting": "Waiting for the customer to accept the changed order (since {date}). The acceptance link is not there yet: tell the customer yourself.",
+    "col": {
+      "revision": "Revision",
+      "madeBy": "Made by",
+      "reason": "Reason",
+      "lines": "Lines",
+      "money": "Money change",
+      "reacceptance": "Customer",
+      "open": "Snapshot",
+      "line": "Line",
+      "change": "Change",
+      "sizes": "Sizes old → new",
+      "pieces": "Pieces",
+      "price": "Unit price",
+      "before": "Before",
+      "after": "After",
+      "net": "Net"
+    },
+    "revision": "Rev {revision}",
+    "when": "{date} at {time}",
+    "someone": "Someone",
+    "headerOnly": "Order details only",
+    "count": {
+      "CHANGED_one": "{count} line changed",
+      "CHANGED_other": "{count} lines changed",
+      "ADDED_one": "{count} line added",
+      "ADDED_other": "{count} lines added",
+      "REMOVED_one": "{count} line removed",
+      "REMOVED_other": "{count} lines removed"
+    },
+    "piecesMoved": "Pieces {before} → {after}",
+    "reaccept": {
+      "NEEDED": "Must accept again",
+      "NOT_NEEDED": "Not needed"
+    },
+    "open": "Before → after",
+    "openOf": "Before → after of revision {revision}",
+    "line": "Line {line}",
+    "lineWhat": "Line {line} · {what}",
+    "kind": {
+      "ADDED": "Added",
+      "REMOVED": "Removed",
+      "CHANGED": "Changed",
+      "same": "Unchanged"
+    },
+    "sizesSame": "Sizes unchanged",
+    "pieces": "{before} → {after}",
+    "priceSame": "Unchanged",
+    "madeBy": "Made by",
+    "byAt": "{name}, {date}",
+    "reason": "Reason",
+    "money": "Net",
+    "reacceptance": "Customer re-acceptance"
+  },
+  "compare": {
+    "title": "Revision {revision} of {number}: before → after",
+    "tableLabel": "The order's lines before and after",
+    "noSnapshot": "The frozen snapshot is not available: the sizes come from the change itself."
+  },
+  "newOrder": {
+    "title": "New order",
+    "body": "Typed by the office (for example an order by phone or e-mail). Its lines are typed next; nothing is saved until Confirm order.",
+    "company": "Selling company",
+    "customer": "Customer",
+    "customerHint": "Name, code, VAT number or tax code.",
+    "customerPlaceholder": "Search customers",
+    "searching": "Searching customers…",
+    "none": "No customer matches.",
+    "found_one": "{count} customer",
+    "found_other": "{count} customers",
+    "viesWarning": "VIES not valid",
+    "change": "Choose another customer",
+    "code": "Code",
+    "taxMode": "Tax mode",
+    "terms": "Payment terms",
+    "termsNone": "The customer's default",
+    "warnings_one": "The customer has {count} warning: see their record.",
+    "warnings_other": "The customer has {count} warnings: see their record.",
+    "contact": "Contact",
+    "contactHint": "The orders contact is picked when there is one.",
+    "contactDefault": "The customer's default",
+    "noEmail": "no e-mail",
+    "customerRef": "Customer PO",
+    "customerRefHint": "Their order number, printed on the documents.",
+    "numberLoading": "Reading the next number…",
+    "numberUnknown": "The number is given when the order is confirmed.",
+    "number": "It will get number {number} (unless another order takes it first).",
+    "create": "Create draft order",
+    "partyStatus": {
+      "PROSPECT": "a prospect",
+      "ACTIVE": "active",
+      "BLOCKED": "blocked",
+      "ARCHIVED": "archived"
+    },
+    "taxModes": {
+      "IT_B2B": "Italian business",
+      "IT_B2C": "Italian consumer",
+      "EU_B2B": "EU business",
+      "EU_B2C": "EU consumer",
+      "EXTRA_EU": "Outside the EU"
+    },
+    "held": {
+      "customer": "Pick a customer first",
+      "party": "This customer is {status}: no order is taken from them",
+      "identity": "This customer has no tax identity in force: add it to the customer first",
+      "lines": "Add a line with at least one piece",
+      "pricing": "Pricing the order first",
+      "previewFailed": "The order could not be priced: try again",
+      "problems": "Fix what the summary lists first"
+    },
+    "pageTitle": "New order",
+    "reading": "Reading the customer…",
+    "state": {
+      "missing": {
+        "title": "No customer chosen",
+        "body": "Start a new order from the orders list: the dialog asks the customer first."
+      },
+      "error": {
+        "title": "The customer could not be read"
+      }
+    },
+    "startAgain": "Start a new order",
+    "discard": "Discard",
+    "confirm": "Confirm order",
+    "draft": "Draft — not confirmed",
+    "contactIs": "Contact: {name}",
+    "nothingSaved": "Nothing is saved until Confirm order: the lines stay in this tab, even if it reloads. Confirm makes the order confirmed at once, with its deposit request.",
+    "details": "Dates and note",
+    "requested": "Requested by the customer",
+    "requestedHint": "Today or later; empty: none.",
+    "promise": "Promise date",
+    "promiseHint": "Today or later; empty: given later.",
+    "note": "Internal note",
+    "noteHint": "Staff only; never printed.",
+    "pricing": "Pricing…",
+    "depositValue": "{pct} · {amount}",
+    "scheduleLater": "The steps show once the order is priced.",
+    "problems_one": "{count} thing stops the order",
+    "problems_other": "{count} things stop the order",
+    "problem": {
+      "past": "A date is today or later."
     }
   }
 }

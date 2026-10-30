@@ -1,6 +1,7 @@
 import type { CompanyRef } from '../../../../lib/session/session'
 import type { PartyDetail, PartyRow, QuoteListRow } from '../api'
-import type { Grains, ListFilters, QuoteAbilities, QuoteTile, TileCount, Tone } from '../model'
+import type { DuplicateActions, DuplicateDone, DuplicateModel } from '../duplicate/model'
+import type { Grains, ListFilters, QuoteAbilities, QuoteTile, StartFrom, TileCount, Tone } from '../model'
 
 /** The quotes list's view model (SCR-034; design sales.quotes): the container (QuotesPage.tsx) fills it. */
 
@@ -20,6 +21,20 @@ export interface NewQuoteModel {
   number: string | null | undefined
   busy: boolean
   problem: string | null
+  /** B-W2a-49 "Start from" (design pop:quotes.new): Blank, or a past quote copied for this customer. */
+  startFrom?: StartFrom
+  past?: PastQuotePick
+}
+
+/** Start from a past quote: the chosen customer's quotes first, or any quote found by its number. */
+export interface PastQuotePick {
+  query: string
+  /** null: not read yet. */
+  results: QuoteListRow[] | null
+  problem: string | null
+  chosenId: string
+  /** The copy's answer, said before the new quote opens (what was left out). */
+  done: DuplicateDone | null
 }
 
 export interface QuotesListViewModel {
@@ -40,12 +55,21 @@ export interface QuotesListViewModel {
   notice: { key: string; tone: Tone; params?: Record<string, string | number> } | null
   /** A bulk action runs (the dialog's button is held meanwhile). */
   busy?: boolean
+  /** B-W2a-49: Duplicate a quote (row ⋯); null: closed. */
+  duplicate?: DuplicateModel | null
   /** Design cases: the rows ticked, the row that has the focus. */
   selected?: readonly string[]
   focusRow?: number
 }
 
-export interface QuotesListActions {
+export interface QuotesListActions extends DuplicateActions {
+  /** Row ⋯ Duplicate: opens the dialog for that quote. */
+  onDuplicateStart?: (row: QuoteListRow) => void
+  /** New quote › Start from. */
+  onStartFrom?: (startFrom: StartFrom) => void
+  onPastSearch?: (query: string) => void
+  onPastPick?: (quoteId: string) => void
+  onPastOpen?: (quoteId: string) => void
   onFilters?: (filters: ListFilters) => void
   onTile?: (tile: QuoteTile) => void
   onMore?: () => void

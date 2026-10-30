@@ -127,6 +127,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   thread dock, step-up asked first when the session has none fresh), `list/` (list frame; Export N), `record/` (tabs
   `?tab=lines|dates|production|shipments|money|documents|activity`, dialogs), `_demo/fixtures.ts` (made-up data).
   "Make work orders" opens `/production/work-orders?new=1&order=<number>` (the dialog picks that order).
+  B-W2a-50 (the order every day): `daily-model.ts` (pure: the daily verbs held in words, close/reopen lines, the
+  amendment draft `DraftLine` and what it sends, the API's refusals by PLACE in words (`issueWords`), the cancel's impact
+  in words, schedule, before → after); `record/view/LinesEditor.tsx` = ONE lines editor for "Amend order" (Lines tab in
+  amend mode) and the typed New order; `record/view/DailyDialogs.tsx` (Review amendment, Close / Reopen lines, Cancel
+  with the impact and the typed number, Copy as new quote, Before → after — composed: the DS ReviewChangesModal,
+  ActionConfirm, ConfirmPhraseField and EditModeBar speak English only); `record/changes/` (SCR-107, `?tab=changes`);
+  `new/` the typed New order `/sales/orders/new?company=&party=&contact=&ref=` (no draft row: the page holds the lines,
+  session storage keeps them over a reload; Confirm = POST /sales/orders/manual); the list's New order dialog (`c`,
+  `?new=1`) and "Board in a new tab" (the board re-reads its lanes on live changes).
 - `src/areas/finance/` — Finance (area order 10, Italian "Amministrazione"; SCR-080 … SCR-083): `_shared/` (api.ts every call + zod,
   model.ts the pure rules — saved views ⇄ address = the API's own `?status=` `?docType=`, journey, next step held with its
   reason, the checks in words with where to fix, payment state, placement oldest first, CSV, problems —, hooks.ts live,
@@ -135,6 +144,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (`?tab=lines|money|sdi|documents|activity`; issue = P1 confirm then send; fix and resend; credit note), `payments/list`
   (Record a payment: two steps; `?new=1&invoice=<id>`), `payments/record` (`?tab=allocation|bank`), `settings`,
   `_demo/fixtures.ts` (made-up data). `RECORD_PAGES.Invoice|Payment` and `LIST_PAGES['/invoicing/invoices'|'/payments']`.
+  B-W2a-51: `finance/accounting/` Close › Accounting export (SCR-156 `/finance/accounting`: the Exports list; the wizard
+  `?new=1` / `?month=&step=period|checks|contents|intrastat|review|export`; `?lock=` the lock dialog; `files/` the Export
+  files tab SCR-156-files `/finance/accounting/files?export=|exports=`, `RECORD_PAGES.AccountingExport`) and
+  `finance/reports/` Reports › Finance reports (SCR-239 `/finance/reports?asOf=&site=&category=&q=&group=`: the stock
+  valuation, "How this lot is valued" in the value cell; `print/` SCR-239-print); catalogues `finance-accounting`,
+  `finance-reports`. Words of the accountant's open questions ("to confirm with the accountant") are said on screen.
 - `src/areas/production/` — Production (SCR-069 … SCR-073): `work-orders/` the list (list frame; Export N, Release N) and
   New work order (`?new=1`), `work-orders/record/` the work order studio (`?tab=overview|materials|cutting|bundles|
   operations|quality|activity`, `?at=<seq>`; tabs in `cutting/`, `bundles/`, `progress/`), `wip/` Floor now

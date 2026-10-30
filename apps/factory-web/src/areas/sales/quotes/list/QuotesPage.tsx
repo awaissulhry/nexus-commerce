@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { useLiveChanges } from '../../../../record-panels/live'
-import { cancelQuote, createQuote, findCustomers, getParty, listQuotes, nextNumber, QUOTE_STATUSES, type QuoteListRow, type QuoteStatus } from '../api'
+import { cancelQuote, createQuote, duplicateQuote, findCustomers, getParty, listQuotes, nextNumber, QUOTE_STATUSES, type QuoteListRow, type QuoteStatus } from '../api'
+import { useDuplicate } from '../duplicate/use-duplicate'
 import { abilitiesOf, filtersOfTile, grainsOf, quotesCsv, romeToday, tileCount, type ListFilters, type QuoteTile, type TileCount } from '../model'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
@@ -80,6 +81,7 @@ function QuotesContainer() {
   const [newQuote, setNewQuote] = useState<NewQuoteModel | null>(params?.get('new') === '1' && can.manage ? emptyNew(session.companies, companyId) : null)
   const filtersRef = useRef(filters)
   filtersRef.current = filters
+  const duplicate = useDuplicate(api, companyId || null, (id) => router.push(`${prefix}/sales/quotes/${id}?tab=lines`))
 
   const load = useCallback(
     async (more = false, after: string | null = null) => {
@@ -184,18 +186,42 @@ function QuotesContainer() {
     getParty(api, partyId)
       .then((party) => {
         const orders = party.contacts.find((contact) => contact.status === 'ACTIVE' && contact.roles.includes('ORDERS') && contact.email)
-        setNewQuote((current) => (current ? { ...current, party, partyProblem: null, contactId: orders?.id ?? '' } : current))
+        setNewQuote((current) => (current ? { ...current, party, partyProblem: null, contactId: orders?.id ?? '', startFrom: 'blank', past: undefined } : current))
       })
       .catch((error: unknown) => setNewQuote((current) => (current ? { ...current, partyProblem: readProblem(error), problem: readProblem(error) } : current)))
+  }
+
+  // B-W2a-49 New quote › Start from a past quote: this customer's quotes, or any quote found by its number.
+  const pastSeq = useRef(0)
+  const readPast = (query: string) => {
+    const party = newQuote?.party
+    if (!party) return
+    const mine = ++pastSeq.current
+    setNewQuote((current) => (current?.past ? { ...current, past: { ...current.past, query, results: null, problem: null } } : current))
+    listQuotes(api, query.trim() ? { q: query } : { partyId: party.id })
+      .then((page) => mine === pastSeq.current && setNewQuote((current) => (current?.past ? { ...current, past: { ...current.past, results: page.quotes } } : current)))
+      .catch((error: unknown) => mine === pastSeq.current && setNewQuote((current) => (current?.past ? { ...current, past: { ...current.past, problem: readProblem(error) } } : current)))
   }
 
   const create = () => {
     const draft = newQuote
     if (!draft?.party) return
     setNewQuote({ ...draft, busy: true, problem: null })
+    const open = (id: string) => router.push(`${prefix}/sales/quotes/${id}?tab=lines`)
+    const failed = (error: unknown) => setNewQuote((current) => (current ? { ...current, busy: false, problem: writeProblem(error).key } : current))
+    const source = draft.startFrom === 'past' ? (draft.past?.results?.find((row) => row.id === draft.past?.chosenId) ?? null) : null
+    if (source) {
+      duplicateQuote(api, source.id, { ...(source.partyId !== draft.party.id ? { partyId: draft.party.id } : {}), contactId: draft.contactId || null, customerRef: draft.customerRef.trim() || null })
+        .then((answer) => {
+          if (answer.dropped.length === 0 && answer.warnings.length === 0) return open(answer.quote.id)
+          setNewQuote((current) => (current?.past ? { ...current, busy: false, past: { ...current.past, done: { quoteId: answer.quote.id, number: answer.quote.number, lines: answer.quote.lines.length, dropped: answer.dropped, warnings: answer.warnings } } } : current))
+        })
+        .catch(failed)
+      return
+    }
     createQuote(api, { companyId: draft.companyId, partyId: draft.party.id, contactId: draft.contactId || null, customerRef: draft.customerRef.trim() || null })
-      .then((quote) => router.push(`${prefix}/sales/quotes/${quote.id}?tab=lines`))
-      .catch((error: unknown) => setNewQuote((current) => (current ? { ...current, busy: false, problem: writeProblem(error).key } : current)))
+      .then((quote) => open(quote.id))
+      .catch(failed)
   }
 
   const model: QuotesListViewModel = {
@@ -212,6 +238,7 @@ function QuotesContainer() {
     newQuote,
     notice,
     busy,
+    duplicate: duplicate.model,
   }
 
   const cancelMany = async (ids: readonly string[], reason: string): Promise<boolean> => {
@@ -281,6 +308,15 @@ function QuotesContainer() {
         onOpen: (id) => router.push(`${prefix}/sales/quotes/${id}`),
         onExport: exportCsv,
         onCancelMany: cancelMany,
+        ...duplicate.actions,
+        onDuplicateStart: (row) => duplicate.open({ id: row.id, number: row.number, partyId: row.partyId, partyName: row.partyName, revision: row.revision, versions: [] }),
+        onStartFrom: (startFrom) => {
+          setNewQuote((current) => (current ? { ...current, startFrom, past: startFrom === 'past' ? (current.past ?? { query: '', results: null, problem: null, chosenId: '', done: null }) : current.past } : current))
+          if (startFrom === 'past' && !newQuote?.past) setTimeout(() => readPast(''), 0)
+        },
+        onPastSearch: readPast,
+        onPastPick: (quoteId) => setNewQuote((current) => (current?.past ? { ...current, past: { ...current.past, chosenId: quoteId } } : current)),
+        onPastOpen: (quoteId) => router.push(`${prefix}/sales/quotes/${quoteId}?tab=lines`),
       }}
     />
   )

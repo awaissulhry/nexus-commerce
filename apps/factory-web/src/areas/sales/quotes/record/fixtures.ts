@@ -8,6 +8,7 @@ import type { ApprovalRow, PartyDetail, QuoteDetail, QuoteLine, QuoteVersionRow,
 import type { Grains, QuoteAbilities } from '../model'
 import type { QuoteRecordViewModel } from './record-model'
 import { sendItems } from './send-model'
+import { duplicateOf } from '../duplicate/model'
 import { QuoteRecordView } from './view/QuoteRecordView'
 
 /**
@@ -399,6 +400,19 @@ export function sendModel(overrides: Partial<DocumentSendModel> = {}, locale: Lo
 const sentQuote = quote({ status: 'SENT', current: { status: 'SENT' } })
 const acceptedQuote = quote({ status: 'ACCEPTED', current: { status: 'ACCEPTED' } })
 
+// B-W2a-49: a quote priced from the customer's list (version 1 kept), the black line at its list price, the red one 2.2 %
+// under it; the customer's library terms; 500.00 short of its minimum order.
+const PRICE_LIST = { listId: '0190f0e2-6105-7000-8000-000000000002', code: 'MODA-DEMO', name: 'Moda Demo S.r.l. — 2026', versionId: '0190f0e2-6106-7000-8000-000000000021', revision: 1 }
+const listed = (detail: QuoteDetail): QuoteDetail => ({
+  ...detail,
+  current: { ...detail.current, priceList: PRICE_LIST, paymentTermsId: '0190f0e2-6120-7000-8000-000000000001', paymentTerms: 'Acconto 30% all’ordine, saldo a 30 gg d.f.f.m.', belowMinimum: { minimum: 1100000, short: 476000 } },
+  lines: detail.lines.map((entry) => ({ ...entry, listUnitPrice: entry.colourway.code === 'RED' ? '450' : entry.unitPrice ?? null })),
+})
+const LIBRARY = [
+  { id: '0190f0e2-6120-7000-8000-000000000001', companyId: null, code: 'DEP30', name: 'Acconto 30% all’ordine, saldo a 30 gg d.f.f.m.', nameI18n: null, method: 'MP05', deposit: { sharePct: '30', days: 0 }, summary: { it: '30 % all’ordine (subito), 70 % a 30 giorni fine mese dalla fattura, bonifico', en: '30 % with the order (at once), 70 % 30 days end of month from the invoice, bank transfer' }, status: 'ACTIVE' as const, customers: 3, version: 1 },
+  { id: '0190f0e2-6120-7000-8000-000000000002', companyId: null, code: 'BB60', name: 'Bonifico 60 gg', nameI18n: null, method: 'MP05', deposit: null, summary: { it: '100 % a 60 giorni dalla fattura, bonifico', en: '100 % 60 days from the invoice, bank transfer' }, status: 'ACTIVE' as const, customers: 5, version: 1 },
+]
+
 export const designScreen = defineDesignScreen<QuoteRecordViewModel>({
   screen: 'SCR-035',
   title: 'Quote record: lines, price & margin, terms, versions, approval, documents',
@@ -433,6 +447,20 @@ export const designScreen = defineDesignScreen<QuoteRecordViewModel>({
     { id: 'dock', label: 'Thread beside the tab (wide screens, ⌘J)', model: model({ dockOpen: true }), note: 'Owner O1: at 1280 px and wider; narrower, the button opens Activity.' },
     { id: 'changed', label: 'Changed by someone else (unsaved work kept)', model: model({ changed: { at: at(29, 9, 30) }, drafts: { [STYLE_ID]: { [BLK]: { '50': 3, '52': 4, '54': 2 } } } }) },
     { id: 'viewer', label: 'A viewer: read only', model: model({ can: CAN.viewer, grains: GRAINS.priceOnly, quote: ready(withoutCost(quote({ current: { marginPct: undefined, marginFloorPct: undefined, marginFloorBreached: undefined } }))) }) },
+    // B-W2a-49: list price on the lines (SAL-165), the library terms (FIN-075), the minimum order, Duplicate (SAL-155).
+    { id: 'list-price', label: 'W2a: Lines — the list price per colour line (red 2.2 % under it)', model: model({ grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost(listed(quote()))) }), note: 'The band links the price list version the quote keeps; "Use list price" puts the red line back on it.' },
+    { id: 'list-price-tab', label: 'W2a: Price & margin — priced from the customer list, version kept', model: model({ tab: 'price', quote: ready(listed(quote())) }) },
+    { id: 'terms-library', label: 'W2a: Terms — payment terms from the library, under the minimum order', model: model({ tab: 'terms', grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost(listed(quote()))), library: { items: LIBRARY, problem: null, allowed: true } }), note: 'Picking terms from the library prints their name; "None" keeps a typed text.' },
+    { id: 'terms-library-none', label: 'W2a: Terms — no library terms (the typed text)', model: model({ tab: 'terms', grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost(quote())), library: { items: LIBRARY, problem: null, allowed: true } }) },
+    {
+      id: 'duplicate',
+      label: 'W2a: Duplicate (band ⋯) — an older version, for another customer',
+      model: model({
+        grains: GRAINS.sales,
+        can: CAN.sales,
+        duplicate: { ...duplicateOf({ id: QUOTE_ID, number: 'Q-2026-0142', partyId: PARTY_ID, partyName: 'Squadra Corse Fittizia S.r.l.', revision: 2, versions: [{ id: '0190f0e2-9999-7000-8000-100000000002', revision: 2, status: 'DRAFT' }, { id: SENT_VERSION.id, revision: 1, status: 'SENT' }] }), versionId: SENT_VERSION.id, target: 'other', party: { id: '0190f0e2-6666-7000-8000-000000000002', code: 'C-DEMO-02', legalName: 'Rennteam Beispiel GmbH', tradeName: null, status: 'ACTIVE', country: 'DE', taxMode: 'EU_B2B', vatNumber: 'DE000000000', city: 'München', vies: { state: 'VALID' } } },
+      }),
+    },
     { id: 'loading', label: 'Loading', model: model({ quote: { status: 'loading' } }) },
     { id: 'error', label: 'Error', model: model({ quote: { status: 'error', problem: 'problem.read.unavailable' } }) },
     { id: 'not-found', label: 'Not found', model: model({ quote: { status: 'not_found' } }) },

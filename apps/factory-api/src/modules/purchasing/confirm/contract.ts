@@ -31,6 +31,8 @@ const linkPage = {
   declineReasons: z.array(z.enum(DECLINE_REASONS)),
   document: z.string(),
   expiresAt: instant(),
+  /** B-W2a-52: a later revision (2 on): what changed since the one before, in the supplier's words, and the buyer's note. */
+  revision: output({ revision: z.number().int(), sentAt: instant(), changeNote: z.string().nullable(), changes: z.array(z.string()) }).nullable(),
 }
 
 export const openLinkOrderContract = defineContract({ response: { 200: output(linkPage) } })
@@ -161,4 +163,11 @@ export const refuseProposalContract = defineContract({
   params: input({ purchaseOrderId: id() }),
   body: input({ version, note: text(2 * MAX_TEXT.reason).nullable().optional() }),
   response: { 200: output({ order: decided, next: z.string() }) },
+})
+
+/** B-W2a-52: the buyer's counter-proposal: the proposal refused and the next revision a draft to send. */
+export const counterProposalContract = defineContract({
+  params: input({ purchaseOrderId: id() }),
+  body: input({ version, note: text(2 * MAX_TEXT.reason).nullable().optional() }),
+  response: { 200: output({ order: decided, revision: z.number().int() }) },
 })

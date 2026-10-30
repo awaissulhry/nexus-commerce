@@ -50,6 +50,8 @@ export interface OrderAbilities {
   viewWorkOrders: boolean
   makeWorkOrders: boolean
   viewQuotes: boolean
+  /** Copy an order as a new quote (B-W2a-30). */
+  manageQuotes: boolean
   /** Plan a shipment from the order's released garments (Warehouse › Shipments: shipping.manage). */
   createShipment: boolean
   price: boolean
@@ -70,6 +72,7 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
     viewWorkOrders: held.has('workorders.view'),
     makeWorkOrders: held.has('workorders.manage'),
     viewQuotes: held.has('quotes.view'),
+    manageQuotes: held.has('quotes.manage'),
     createShipment: held.has('shipping.manage'),
     price: held.has('money.price'),
     cost: held.has('money.cost'),
@@ -252,7 +255,8 @@ export function ordersCsv(rows: readonly OrderRow[], price: boolean, words: { he
 
 // ---- the record ---------------------------------------------------------------------------------------------------------
 
-export const RECORD_TABS = ['lines', 'dates', 'production', 'shipments', 'money', 'documents', 'activity'] as const
+/** The record's tabs; `changes` (B-W2a-50, SCR-107) lists the amendments since confirmation. */
+export const RECORD_TABS = ['lines', 'dates', 'production', 'shipments', 'money', 'changes', 'documents', 'activity'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
 export const tabOf = (asked: string | null | undefined): RecordTab => ((RECORD_TABS as readonly string[]).includes(asked ?? '') ? (asked as RecordTab) : 'lines')
@@ -324,12 +328,14 @@ export function settlementWords(order: Pick<Order, 'settlement'>): string[] {
   return seen.map((code) => `settlement.${code}`)
 }
 
-/** Why "Cancel order" waits (the API's rule: CONFIRMED, no released or draft work order). */
+/**
+ * Why "Cancel order…" waits (B-W2a-30: confirmed, in production or ready — nothing shipped yet). What else stops it (a
+ * draft work order, a shipment being packed, an invoice) is the dialog's impact check, said there in words.
+ */
 export function cancelHeld(order: Order, can: OrderAbilities): Phrase | null {
   if (!can.manage) return phrase('held.noManage')
-  const action = actionOf(order, 'cancel')
-  if (!action) return phrase('held.cancelState')
-  if (!action.allowed) return phrase('held.cancelWorkOrders')
+  if (isFinal(order)) return phrase('held.final')
+  if (!actionOf(order, 'cancel')) return phrase('held.cancelState')
   return null
 }
 

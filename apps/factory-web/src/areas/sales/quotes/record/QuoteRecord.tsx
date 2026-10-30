@@ -37,6 +37,8 @@ import {
   type QuoteDetail,
   type StyleDetail,
 } from '../api'
+import { listPaymentTerms, type PaymentTermsRow } from '../../customers/terms/api'
+import { useDuplicate } from '../duplicate/use-duplicate'
 import { abilitiesOf, grainsOf, lineWrites, parsePrice, romeToday, tabOf, type QuoteTab } from '../model'
 import { readProblem, writeProblem } from '../problems'
 import type { ComposerState, Loaded, QuoteDialog, QuoteNotice, QuoteRecordViewModel, SaveState } from './record-model'
@@ -105,6 +107,10 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
 
   const tabHref = useCallback((next: QuoteTab) => `${prefix}/sales/quotes/${quoteId}?tab=${next}`, [prefix, quoteId])
+  // B-W2a-49: Duplicate (band ⋯) and the payment terms library for Terms & delivery (paymentterms.view).
+  const duplicate = useDuplicate(api, companyId, (id) => router.push(`${prefix}/sales/quotes/${id}?tab=lines`))
+  const termsAllowed = session.permissions.includes('paymentterms.view')
+  const [library, setLibrary] = useState<{ items: PaymentTermsRow[] | null; problem: string | null }>({ items: null, problem: null })
 
   const setValue = useCallback((next: QuoteDetail) => {
     quoteRef.current = next
@@ -156,6 +162,14 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
     if (value) setPreviewLanguage(value.current.language === 'en' ? 'en' : 'it')
     // Only when another quote opens (the person's own choice stays while they work on this one).
   }, [value?.id])
+
+  const quoteCompany = value?.companyId ?? null
+  useEffect(() => {
+    if (tab !== 'terms' || !termsAllowed || !quoteCompany || library.items !== null) return
+    listPaymentTerms(api, quoteCompany)
+      .then((items) => setLibrary({ items, problem: null }))
+      .catch((error: unknown) => setLibrary({ items: [], problem: readProblem(error) }))
+  }, [api, tab, termsAllowed, quoteCompany, library.items])
 
   // The customer (contacts, addresses, tax identity) for Terms & delivery.
   const partyId = value?.partyId ?? null
@@ -486,6 +500,8 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
     changed,
     today: romeToday(),
     dockOpen,
+    library: { ...library, allowed: termsAllowed },
+    duplicate: duplicate.model,
   }
 
   return (
@@ -542,6 +558,24 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
         },
         onDismissNotice: () => setNotice(null),
         onDock: toggleDock,
+        ...duplicate.actions,
+        onDuplicateStart: () => {
+          const current = quoteRef.current
+          if (!current) return
+          duplicate.open({
+            id: current.id,
+            number: current.number,
+            partyId: current.partyId,
+            partyName: current.party.legalName,
+            revision: current.currentRevision,
+            versions: (versions.items ?? []).map((version) => ({ id: version.id, revision: version.revision, status: version.status })).sort((a, b) => b.revision - a.revision),
+          })
+        },
+        onUseListPrice: (lineId) => {
+          const line = quoteRef.current?.lines.find((entry) => entry.id === lineId)
+          if (!line?.listUnitPrice) return
+          void enqueue(() => runWrite((quote) => editLine(api, quote, line.id, { unitPrice: line.listUnitPrice ?? null }), { key: 'lines.backToList', tone: 'success', params: { colour: line.colourway.code } }))
+        },
       }}
       sendActions={{
         onField: (field, text) => setSend((current) => (current ? { ...current, fields: { ...current.fields, [field]: text } } : current)),

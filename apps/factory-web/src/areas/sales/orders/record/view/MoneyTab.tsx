@@ -1,15 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { Banknote, CheckCircle2, Circle, Clock, Send } from 'lucide-react'
-import { Card, EmptyState, KeyValue, MetricStrip, SummaryTable } from '@nexus/ui/components'
+import { Banknote, CalendarClock, CheckCircle2, Circle, Clock, Send } from 'lucide-react'
+import { Card, EmptyState, KeyValue, MetricStrip, SummaryTable, Timeline } from '@nexus/ui/components'
 import { Button, Pill, Spinner } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { money, percent } from '../../../quotes/model'
-import type { ChainInvoice, DepositRequest, Order } from '../../api'
+import type { ChainInvoice, DepositRequest, Milestone, Order } from '../../api'
+import { isOverdue, MILESTONE_TONE } from '../../daily-model'
 import { dayInstant, depositInvoicesOf, depositSteps, linkHeld, paymentHeld, SDI_TONE, sdiSendHeld, stillToPay, type DepositStepState, type Tone } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { PartState } from './OrderRecordView'
@@ -53,6 +54,7 @@ export function MoneyTab({ order, model, actions }: { order: Order; model: Order
 
       <div className="fw-so-cards fw-so-cards--wide">
         <div className="fw-so-stack">
+          <ScheduleCard order={order} model={model} actions={actions} />
           {requests.length === 0 ? (
             <Card padded>
               <EmptyState title={t('deposit.none.title')} description={t(order.depositRequired ? 'deposit.none.missing' : 'deposit.none.body')} />
@@ -64,6 +66,65 @@ export function MoneyTab({ order, model, actions }: { order: Order; model: Order
         <InvoicesCard order={order} model={model} actions={actions} />
       </div>
     </div>
+  )
+}
+
+/**
+ * The payment schedule (design `order.money.schedule`, SAL-216; B-W2a-50): the deposit and the balance steps as the
+ * terms share them — each step, its share, its amount (price grain), its due day and its state (open, overdue, paid,
+ * waived); steps an amendment replaced are counted under it. No steps: paid on invoice terms. Read-only here: the
+ * reminder (B-W2a-55) and the payments are Finance's.
+ */
+export function ScheduleCard({ model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const locale = useLocale()
+  const part = model.schedule
+  if (!part || !part.value) return <PartState problem={part?.problem ?? null} label={t('schedule.title')} onRetry={() => actions?.onRetryPart?.('schedule')} />
+  const schedule = part.value
+  const currency = schedule.currency
+  const day = (value: string) => formatDate(dayInstant(value), { locale })
+  const stepWords = (step: Milestone) => {
+    const share = step.sharePct ? percent(step.sharePct, locale) : null
+    const kind = t(`schedule.kind.${step.kind}`)
+    return share ? t('schedule.stepShare', { kind, share }) : kind
+  }
+  return (
+    <Card padded>
+      <div className="fw-so-card-head">
+        <h2 className="fw-so-h2">
+          <CalendarClock size={16} aria-hidden /> {t('schedule.title')}
+        </h2>
+        {model.can.price && schedule.steps.length > 0 && <span className="fw-so-hint">{t('schedule.open', { amount: money(schedule.openAmount, currency, locale) })}</span>}
+      </div>
+      {schedule.steps.length === 0 ? (
+        <p className="fw-so-hint">{t('schedule.empty')}</p>
+      ) : (
+        <Timeline
+          label={t('schedule.label')}
+          steps={schedule.steps.map((step) => {
+            const overdue = isOverdue(step, model.today)
+            return {
+              key: step.id,
+              tone: overdue ? 'info' : MILESTONE_TONE[step.status],
+              label: (
+                <span className="fw-so-inline">
+                  <span>{stepWords(step)}</span>
+                  {model.can.price && <strong>{money(step.amount, currency, locale)}</strong>}
+                  <Pill tone={overdue ? 'danger' : MILESTONE_TONE[step.status]}>{overdue ? t('schedule.overdue') : t(`schedule.status.${step.status}`)}</Pill>
+                </span>
+              ),
+              detail:
+                step.status === 'PAID' && step.paidAt
+                  ? t('schedule.paidOn', { date: formatDate(step.paidAt, { locale }) })
+                  : step.dueDate
+                    ? t(step.kind === 'DEPOSIT' ? 'schedule.dueDeposit' : 'schedule.due', { date: day(step.dueDate) })
+                    : t(`schedule.when.${step.kind}`),
+            }
+          })}
+        />
+      )}
+      {schedule.cancelled.length > 0 && <p className="fw-so-hint">{t('schedule.cancelled', { count: schedule.cancelled.length })}</p>}
+    </Card>
   )
 }
 

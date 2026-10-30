@@ -4,10 +4,12 @@ import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { baseQuantityOf, defaultUnitPrice, estimatedHidesOf, inUnit, LEATHER_KIND, LINE_SEQ_STEP, lineAmount, lineProblems, MAX_LINES, type LineFields } from '@nexus/factory-domain/purchasing/orders'
 import { PURCHASING_MANAGE } from '@nexus/factory-domain/purchasing/permissions'
+import { priceIn, sourceFor } from '@nexus/factory-domain/purchasing/sources/sources'
 import type { Uom } from '@nexus/factory-domain/product/units/units'
 import type { CommandCaller, CommandTools } from '../../core/command'
 import { assertDraft, detailInCommand, onOrder, refreshTotal, reopenPlanLines } from './orders'
 import { actorIdOf, dayOf, dayValue, decimal, ITEM_COLUMNS, LINE_COLUMNS, officeOrder, quantityText, unitsOf, type ItemRow, type LineRow, type OrderRow } from './store'
+import { activeSourcesOf } from './supplier-items/store'
 import type { OrderDetail } from './views'
 
 /**
@@ -75,16 +77,24 @@ function computed(order: Pick<OrderRow, 'currency'>, item: ItemRow, line: Requir
 }
 
 /**
- * Inside a command on a DRAFT order: a new line (the caller checked the order). Defaults come from the material, its
- * colour and the supplier; the line takes the next place (10, 20 …).
+ * Inside a command on a DRAFT order: a new line (the caller checked the order). Defaults come from the order's supplier's
+ * approved source of the material (B-W2a-52, the B-W2a-10 note: its unit, its price in the line's unit, its article and
+ * colour codes; purchasing/sources sourceFor + priceIn), else from the material, its colour and its default supplier; the
+ * line takes the next place (10, 20 …).
  */
 export async function insertLine(tools: CommandTools, order: OrderRow, item: ItemRow, input: LineInput & { readonly quantity: string; readonly needDate: string }): Promise<LineRow> {
   const { tx } = tools
   const count = await tx.purchaseOrderLine.count({ where: { purchaseOrderId: order.id } })
   if (count >= MAX_LINES) throw new ConflictError(`An order holds at most ${MAX_LINES} lines: start another one.`)
   const colour = await colourFor(tools, item, input.itemColourId)
-  const uom = (input.uom ?? item.purchaseUom) as Uom
-  const priced = input.unitPrice ?? defaultUnitPrice({ standardCost: decimal(item.standardCost), currency: item.currency, units: unitsOf(item) }, uom, order.currency) ?? '0'
+  const source = sourceFor(await activeSourcesOf(tx, [item.id]), { companyId: order.companyId, itemId: item.id, itemColourId: colour?.id ?? null }, order.partyId)
+  const own = source && source.partyId === order.partyId ? source : null
+  const uom = (input.uom ?? own?.purchaseUom ?? item.purchaseUom) as Uom
+  const priced =
+    input.unitPrice ??
+    (own ? priceIn(own, uom, unitsOf(item), order.currency) : null) ??
+    defaultUnitPrice({ standardCost: decimal(item.standardCost), currency: item.currency, units: unitsOf(item) }, uom, order.currency) ??
+    '0'
   const leather = leatherDefaults(item)
   const fields = {
     ...leather,
@@ -107,8 +117,8 @@ export async function insertLine(tools: CommandTools, order: OrderRow, item: Ite
       itemId: item.id,
       itemColourId: colour?.id ?? null,
       description: blankToNull(input.description),
-      supplierArticleCode: input.supplierArticleCode === undefined ? (item.defaultSupplierId === order.partyId ? item.supplierArticleCode : null) : blankToNull(input.supplierArticleCode),
-      supplierColourCode: input.supplierColourCode === undefined ? (colour?.supplierColourCode ?? null) : blankToNull(input.supplierColourCode),
+      supplierArticleCode: input.supplierArticleCode === undefined ? (own?.supplierArticleCode ?? (item.defaultSupplierId === order.partyId ? item.supplierArticleCode : null)) : blankToNull(input.supplierArticleCode),
+      supplierColourCode: input.supplierColourCode === undefined ? (own?.supplierColourCode ?? colour?.supplierColourCode ?? null) : blankToNull(input.supplierColourCode),
       quantity: fields.quantity,
       uom,
       baseQuantity: numbers.baseQuantity,

@@ -1,15 +1,15 @@
 import { Suspense } from 'react'
 import type { Metadata } from 'next'
-import { PartyRecord } from '../../../../../../../areas/parties/_shared/PartyRecord'
+import { CustomerRecord } from '../../../../../../../areas/sales/customers/record/CustomerRecord'
 
 export const metadata: Metadata = { title: 'Customer · Nexus Factory' }
 
-/** Sales › Customers › a customer (SCR-033; `?tab=overview|addresses|tax|orders|documents|activity`). */
+/** Sales › Customers › a customer (SCR-033; `?tab=overview|addresses|tax|orders|documents|activity`; Tax & terms holds the Commercial terms). */
 export default async function CustomerPage({ params }: { params: Promise<{ partyId: string }> }) {
   const { partyId } = await params
   return (
     <Suspense>
-      <PartyRecord side="customers" partyId={decodeURIComponent(partyId)} />
+      <CustomerRecord partyId={decodeURIComponent(partyId)} />
     </Suspense>
   )
 }
