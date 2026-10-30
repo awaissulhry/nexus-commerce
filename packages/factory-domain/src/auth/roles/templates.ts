@@ -144,7 +144,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       // B-W2a-19: the payment terms library (Finance settings) and the price lists (read).
       'paymentterms.view', 'paymentterms.manage', 'pricelists.view',
       // B-W2a-23: save views of a list; export a list.
-      'views.save', 'views.export'],
+      'views.save', 'views.export',
+      // B-W2a-39: the accounting exports and the period locks (lifting a hard lock, accounting.unlock, stays the owner's).
+      'accounting.view', 'accounting.export', 'accounting.lock'],
     grains: ['price', 'cost', 'margin', 'wages'],
   }),
   template('sales', {

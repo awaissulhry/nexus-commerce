@@ -1497,7 +1497,8 @@
     "pricelists": "Listini",
     "tasks": "Attività",
     "views": "Viste ed esportazioni",
-    "search": "Ricerca"
+    "search": "Ricerca",
+    "accounting": "Contabilità"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1682,6 +1683,10 @@
     "inventory_discrepancies_report": "Inviare al fornitore il rapporto delle differenze",
     "search_rebuild": "Ricostruire l'indice di ricerca di tutto il gruppo",
     "planning_schedule_manage": "Pianificare il programma e assegnare il lavoro alle linee",
-    "planning_schedule_publish": "Pubblicare il programma al reparto"
+    "planning_schedule_publish": "Pubblicare il programma al reparto",
+    "accounting_view": "Vedere le esportazioni contabili, i controlli del mese, le righe Intrastat e le chiusure di periodo",
+    "accounting_export": "Creare e riesportare il lotto contabile numerato di un mese",
+    "accounting_lock": "Chiudere un mese (provvisoria o definitiva) e riaprire una chiusura provvisoria",
+    "accounting_unlock": "Riaprire una chiusura definitiva (d'accordo con il commercialista)"
   }
 }
