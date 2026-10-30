@@ -34,12 +34,14 @@ import { netMaterial, type LotFacts, type OpenPurchase, type StockEntry } from '
  */
 
 export const PLANNED_ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION'] as const
-export const WORK_ORDER_STATUSES = ['DRAFT', 'RELEASED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED'] as const
+// W2a wave 5 (factory-db production.prisma): ON_HOLD.
+export const WORK_ORDER_STATUSES = ['DRAFT', 'RELEASED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED', 'ON_HOLD'] as const
 export type WorkOrderStatus = (typeof WORK_ORDER_STATUSES)[number]
 /** Work orders whose pieces are made: they need nothing more. */
 export const MADE_WORK_ORDER_STATUSES: readonly WorkOrderStatus[] = Object.freeze(['COMPLETED', 'CLOSED'])
 /** Work orders that still need material: what was issued to them is taken off their cells. */
-export const OPEN_WORK_ORDER_STATUSES: readonly WorkOrderStatus[] = Object.freeze(['DRAFT', 'RELEASED', 'IN_PROGRESS'])
+// W2a wave 5: a held work order still needs its material (the hold is lifted back to where it was).
+export const OPEN_WORK_ORDER_STATUSES: readonly WorkOrderStatus[] = Object.freeze(['DRAFT', 'RELEASED', 'IN_PROGRESS', 'ON_HOLD'])
 
 export const ITEM_SOURCINGS = ['BUY', 'MAKE', 'MAKE_OR_BUY'] as const
 export type ItemSourcing = (typeof ITEM_SOURCINGS)[number]

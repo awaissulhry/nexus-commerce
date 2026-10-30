@@ -1,0 +1,124 @@
+// The planning board's plans (W2a schema wave 5/7, plan W2A §5; features PLN-129 backward scheduling, PLN-131 the
+// board, PLN-132 order and resource views, PLN-147 publish to the floor, PLN-160 allocation to lines and subcontractors,
+// MES-021 the dispatch list; the design's planning.board and planning.allocation; Owner answer P3): per site one shared
+// WORKING plan, which every move on the board changes at once (each slot with its version check), and the PUBLISHED
+// versions v1, v2 …, the working plan as it was sent to the floor. apps/factory-api's modules/planning/schedule and
+// modules/production/dispatch write and read them (B-W2a-34), always through command().
+//
+// P3: the floor sees nothing until Publish. The floor's policies hold it: the floor role reads only PUBLISHED versions
+// and their slots (ownership/schedule.json onlyValues kind / planKind), never the working plan. A slot carries its plan's
+// kind (planKind), and its reference to the plan includes it, so the two can never differ.
+//
+// Publish: one command inserts a PUBLISHED version (number above every earlier one of the site, the range it covers,
+// when the floor starts working to it), copies the working plan's slots into it, then sets publishedAt; from then on
+// the version and its slots never change and are never removed (the …_production_w2a_guards triggers, for every
+// login): the history of what the floor was given. A PUBLISHED version is never left without publishedAt at commit (a
+// deferred check). The board's change feed and what-if plans are W2b; until then the audit log holds each move.
+//
+// A slot books one work order (the allocation board's card) or one of its operations (a bar of the board) on one lane:
+// a line or a work centre of the site, or a workshop (a party with the SUBCONTRACTOR role), from a start to an end, with
+// the standard minutes it books (SAM × pieces) when placed; a planner may keep it on an overbooked lane with a reason.
+// Load per lane is a sum of slots; no figure per person (Owner answer F2: output per line only).
+//
+// Who sees what (ownership/schedule.json): the office reads and writes; the floor reads its own site's published plans;
+// portal and link sessions read nothing. The working plan is never deleted (one per site, a partial unique index); its
+// slots are moved and removed freely.
+
+/// One plan of a site (P3): the shared WORKING plan, or a PUBLISHED version of it as sent to the floor.
+model PlanVersion {
+  id            String          @id @db.Uuid
+  tenantId      String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String          @db.Uuid
+  siteId        String          @db.Uuid
+  /// Fixed when it is made: the site's one WORKING plan, or a PUBLISHED version.
+  kind          PlanVersionKind
+  /// PUBLISHED: its number on the site (v1, v2 …), above every earlier one; null for the working plan.
+  number        Int?
+  /// PUBLISHED: the published version it follows (what the publish dialog's diff compares with), of the site and with
+  /// a lower number; null for the first one and for the working plan.
+  previousId    String?         @db.Uuid
+  /// PUBLISHED: the days it covers at the site (the publish dialog's range: tomorrow, the next five working days or
+  /// custom), from ≤ to; required once published.
+  coversFrom    DateTime?       @db.Date
+  coversTo      DateTime?       @db.Date
+  /// PUBLISHED: when the floor starts working to it ("New schedule v13 from 06:00"); required once published.
+  effectiveFrom DateTime?       @db.Timestamptz(3)
+  /// PUBLISHED: set once, when its slots are all in (by its end of transaction at the latest); from then on it and its
+  /// slots never change. With who published it.
+  publishedAt   DateTime?       @db.Timestamptz(3)
+  publishedById String?         @db.Uuid
+  note          String?
+  version       Int             @default(1)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?         @db.Uuid
+
+  site     Site           @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  previous PlanVersion?   @relation("PlanVersionPrevious", fields: [tenantId, siteId, previousId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  next     PlanVersion[]  @relation("PlanVersionPrevious")
+  slots    ScheduleSlot[]
+
+  @@unique([tenantId, siteId, number])
+  // The target of the next version's reference: a plan of the same site.
+  @@unique([tenantId, siteId, id])
+  // The target of the slots' reference: a plan of the slot's site and of the slot's planKind.
+  @@unique([tenantId, siteId, kind, id])
+}
+
+enum PlanVersionKind {
+  /// The site's shared working plan: every move on the board changes it at once; the floor never reads it (P3).
+  WORKING
+  /// A version sent to the floor; frozen once published.
+  PUBLISHED
+}
+
+/// One booking on the planning board: a work order, or one of its operations, on one lane (a line, a work centre or a
+/// workshop of the site's plan) from a start to an end. Moved and removed freely in the working plan; a copy in each
+/// published version, frozen there.
+model ScheduleSlot {
+  id                   String          @id @db.Uuid
+  tenantId             String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  siteId               String          @db.Uuid
+  planVersionId        String          @db.Uuid
+  /// Its plan's kind (the reference keeps them equal): the floor reads only PUBLISHED slots (P3).
+  planKind             PlanVersionKind
+  /// A work order of the site, not CLOSED or CANCELLED when it is placed.
+  workOrderId          String          @db.Uuid
+  /// The operation it books (a bar of the board); null: the whole work order (a card of the allocation board).
+  workOrderOperationId String?         @db.Uuid
+  /// The lane, exactly one: a line or a work centre of the site (ACTIVE when placed there), or a workshop (a party with
+  /// the SUBCONTRACTOR role).
+  lineId               String?         @db.Uuid
+  workCentreId         String?         @db.Uuid
+  partyId              String?         @db.Uuid
+  /// From startAt to endAt (later), as placed or moved.
+  startAt              DateTime        @db.Timestamptz(3)
+  endAt                DateTime        @db.Timestamptz(3)
+  /// The garments it books, from 1; null: all of the work order's (part of an order may go to another lane).
+  pieces               Int?
+  /// The standard minutes it books (SAM × pieces) when placed or moved, from 0: the lane's load is their sum.
+  minutes              Decimal         @db.Decimal(12, 3)
+  /// Why a planner kept it on an overbooked lane (the drop warning's "Keep with a reason"); null: not kept over.
+  overloadReason       String?
+  note                 String?
+  version              Int             @default(1)
+  createdAt            DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?         @db.Uuid
+  /// The office user who placed or moved it last (the board's "Moved by … at …" on a version conflict).
+  updatedById          String?         @db.Uuid
+
+  plan       PlanVersion         @relation(fields: [tenantId, siteId, planKind, planVersionId], references: [tenantId, siteId, kind, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder  WorkOrder           @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and
+  // workOrderId.
+  operation  WorkOrderOperation? @relation(fields: [tenantId, siteId, workOrderId, workOrderOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  line       Line?               @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  workCentre WorkCentre?         @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  party      Party?              @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A plan's slots by lane and time (the board, the dispatch list per line and station); a work order's slots.
+  @@index([tenantId, planVersionId, startAt])
+  @@index([tenantId, workOrderId])
+}

@@ -114,7 +114,8 @@ function materialOf(row: MaterialRow, colours: readonly ItemColourRow[]): Materi
     id: row.id,
     code: row.code,
     name: row.name,
-    kind: row.kind,
+    // W2a wave 5: never FINISHED here (a finished garment's item is no material, and no BOM line names one: …_production_w2a_guards).
+    kind: row.kind as BomMaterial['kind'],
     status: row.status,
     companyId: row.companyId,
     units: { baseUom: row.baseUom, purchaseUom: row.purchaseUom, purchaseFactor: text(row.purchaseFactor), consumptionUom: row.consumptionUom, consumptionFactor: text(row.consumptionFactor) },
