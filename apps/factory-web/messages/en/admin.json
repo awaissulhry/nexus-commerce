@@ -1491,7 +1491,8 @@
     "quality": "Quality",
     "home": "Home",
     "floorsync": "Floor sync",
-    "calendars": "Calendars"
+    "calendars": "Calendars",
+    "reasons": "Reason lists"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1653,6 +1654,8 @@
     "production_scrap_approve": "Approve lower order quantities",
     "production_cutting_view": "See the cutting room's yield",
     "planning_firm": "Make planned orders firm",
-    "planning_exceptions_manage": "Work the planning exceptions"
+    "planning_exceptions_manage": "Work the planning exceptions",
+    "reasons_view": "See the reason lists and how often each code is used",
+    "reasons_manage": "Keep the reason lists of the whole group"
   }
 }

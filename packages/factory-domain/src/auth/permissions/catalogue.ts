@@ -1,4 +1,6 @@
 import { CALENDARS_DEFINITIONS, CALENDARS_PERMISSIONS } from '../../calendars/permissions'
+// B-W2a-18: the reason lists (reasons.view, reasons.manage).
+import { REASONS_DEFINITIONS, REASONS_PERMISSIONS } from '../../reasons/permissions'
 import { CERTIFICATES_PERMISSIONS } from '../../compliance/certificates/permissions'
 import { REGISTER_PERMISSIONS } from '../../compliance/register/permissions'
 import { COSTING_DEFINITIONS, COSTING_PERMISSIONS } from '../../costing/permissions'
@@ -365,6 +367,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   CALENDARS_DEFINITIONS,
   // B-W2a-10: approved sources (purchasing.sources.manage).
   PURCHASING_SOURCES_DEFINITIONS,
+  // B-W2a-18: the reason lists.
+  REASONS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -396,6 +400,8 @@ for (const name of PRODUCTION_COMPLETION_PERMISSIONS) {
 for (const name of PLANNING_SETTINGS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-22: MRP every day.
 for (const name of [...PLANNING_FIRM_PERMISSIONS, ...PLANNING_EXCEPTIONS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-18: the reason lists.
+for (const name of REASONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }
