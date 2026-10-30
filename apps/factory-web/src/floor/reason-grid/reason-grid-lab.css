@@ -1,0 +1,19 @@
+/* The reason grid lab (SCR-246): layout only. The floor's one job stays centred on the tablet (allowed by the page-width
+   rule); the frame itself fills the width it is given and pads the job (no second inline padding here). */
+.fw-rglab {
+  min-width: 0;
+}
+.fw-rglab-job {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  width: 100%;
+  max-width: 64rem;
+  margin-inline: auto;
+  padding-block: var(--nds-density-gap);
+}
+.fw-rglab-note {
+  margin: 0;
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
