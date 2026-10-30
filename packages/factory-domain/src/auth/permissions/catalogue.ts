@@ -23,6 +23,8 @@ import { PLANNING_SETTINGS_DEFINITIONS, PLANNING_SETTINGS_PERMISSIONS } from '..
 // B-W2a-22: MRP every day (planning.firm, planning.exceptions.manage).
 import { PLANNING_EXCEPTIONS_DEFINITIONS, PLANNING_EXCEPTIONS_PERMISSIONS } from '../../planning/exceptions/permissions'
 import { PLANNING_FIRM_DEFINITIONS, PLANNING_FIRM_PERMISSIONS } from '../../planning/mrp/permissions'
+// B-W2a-34: the planning board (planning.schedule.manage, planning.schedule.publish).
+import { PLANNING_SCHEDULE_DEFINITIONS, PLANNING_SCHEDULE_PERMISSIONS } from '../../planning/schedule/permissions'
 import { PURCHASING_DEFINITIONS, PURCHASING_PERMISSIONS } from '../../purchasing/permissions'
 import { PURCHASING_SOURCES_DEFINITIONS, PURCHASING_SOURCES_PERMISSIONS } from '../../purchasing/sources/permissions'
 // B-W2a-25: subcontracting (purchasing.subcontract.manage | kit | receive).
@@ -356,6 +358,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2a-22: firm planned orders and the exception list.
   PLANNING_FIRM_DEFINITIONS,
   PLANNING_EXCEPTIONS_DEFINITIONS,
+  // B-W2a-34: the planning board's working plan and its publication.
+  PLANNING_SCHEDULE_DEFINITIONS,
   PURCHASING_DEFINITIONS,
   INVOICES_DEFINITIONS,
   PAYMENTS_DEFINITIONS,
@@ -433,6 +437,8 @@ for (const name of PLANNING_SETTINGS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDec
 for (const name of PURCHASING_SUBCONTRACT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-22: MRP every day.
 for (const name of [...PLANNING_FIRM_PERMISSIONS, ...PLANNING_EXCEPTIONS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-34: the planning board.
+for (const name of PLANNING_SCHEDULE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-18: the reason lists.
 for (const name of REASONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-19: payment terms and price lists.

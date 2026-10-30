@@ -1680,6 +1680,8 @@
     "views_export": "Export a list to CSV or Excel",
     "inventory_discrepancies_manage": "Record and settle receipt discrepancies",
     "inventory_discrepancies_report": "Send the discrepancy report to the supplier",
-    "search_rebuild": "Rebuild the search index of the whole group"
+    "search_rebuild": "Rebuild the search index of the whole group",
+    "planning_schedule_manage": "Plan the schedule and allocate work to lines",
+    "planning_schedule_publish": "Publish the schedule to the floor"
   }
 }

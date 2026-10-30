@@ -76,6 +76,30 @@ describe('load in standard minutes (PLN-116)', () => {
     ])
   })
 
+  it('B-W2a-34: parts of an order on lanes split it by garments; a workshop part books nothing on the site', () => {
+    // 7 garments: 3 on L2 (whole-order part), 2 at a workshop, the other 2 with the work order's line L1, on the due date.
+    const slots = [slot({ id: 'p2', lineId: 'L2', pieces: 3, minutes: '180' }), slot({ id: 'w', pieces: 2, minutes: '0' })]
+    const parts = loadParts([workOrder({ lineId: 'L1' })], slots, [...lines, { lineId: 'L2', workCentreIds: [sew] }])
+    expect(parts.map((part) => [part.laneKind, part.laneId, part.operationId, part.minutes.toFixed(2), part.placement.placedBy === 'SLOT' ? part.placement.slotId : part.placement.placedBy])).toEqual([
+      // Cutting: 3/7 at L2's time (L2 does not cut), 2/7 left on the due date; the workshop's 2/7 nowhere.
+      ['WORK_CENTRE', cut, 'op-cut', '37.50', 'p2'],
+      ['WORK_CENTRE', cut, 'op-cut', '25.00', 'DUE_DATE'],
+      // Sewing (5 still to do, 300 min): 3/7 on L2, 2/7 with L1 on the due date.
+      ['WORK_CENTRE', sew, 'op-sew', '128.57', 'p2'],
+      ['LINE', 'L2', 'op-sew', '128.57', 'p2'],
+      ['WORK_CENTRE', sew, 'op-sew', '85.71', 'DUE_DATE'],
+      ['LINE', 'L1', 'op-sew', '85.71', 'DUE_DATE'],
+    ])
+    // Parts that name more than the order are scaled down to it; a bar of its own still places the whole operation.
+    const over = loadParts([workOrder()], [slot({ id: 'a', lineId: 'L1', pieces: 7 }), slot({ id: 'b', lineId: 'L2', pieces: 7 })], [...lines, { lineId: 'L2', workCentreIds: [sew] }])
+    expect(over.filter((part) => part.laneKind === 'LINE').map((part) => part.minutes.toFixed(1))).toEqual(['150.0', '150.0'])
+    const bar = loadParts([workOrder()], [slot({ id: 'p', lineId: 'L2', pieces: 3 }), slot({ id: 'bar', operationId: 'op-sew', lineId: 'L1', minutes: '300' })], lines)
+    expect(bar.filter((part) => part.operationId === 'op-sew').map((part) => [part.laneKind, part.laneId, part.minutes.toFixed(1)])).toEqual([
+      ['WORK_CENTRE', sew, '300.0'],
+      ['LINE', 'L1', '300.0'],
+    ])
+  })
+
   it('spreads a slot over the buckets by the working minutes, else by the clock', () => {
     const buckets: TimedBucket[] = [
       { key: 'd17', from: '2026-11-17', to: '2026-11-17', start: new Date('2026-11-16T23:00:00Z'), end: new Date('2026-11-17T23:00:00Z') },

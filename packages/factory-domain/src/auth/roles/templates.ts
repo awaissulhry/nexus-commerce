@@ -172,6 +172,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'production.scrap.view', 'production.scrap.approve',
       // B-W2a-22: firm planned orders and the exception list of the runs.
       'planning.firm', 'planning.exceptions.manage',
+      // B-W2a-34: the planning board (moves into the shared working plan, allocation) and publishing it to the floor.
+      'planning.schedule.manage', 'planning.schedule.publish',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export'],
     grains: [],
