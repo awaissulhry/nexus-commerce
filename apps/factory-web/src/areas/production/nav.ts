@@ -1,4 +1,4 @@
-import { Activity, BarChart3, ClipboardList, Factory, SlidersHorizontal } from 'lucide-react'
+import { Activity, BarChart3, ClipboardList, Factory, Recycle, Scissors, SlidersHorizontal } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -27,6 +27,18 @@ export const officeArea: OfficeAreaNav = {
           // SCR-069 … SCR-072: the list and the work order studio.
           { id: 'production-work-orders', label: 'shell:nav.production.workOrders', href: '/production/work-orders', icon: ClipboardList, permission: 'workorders.view' },
         ],
+      },
+      {
+        // B-W2a-60: Cutting room › Cutting (SCR-238, design production.cutting): one cut per work order, the tiles, yield.
+        id: 'production-cutting-room',
+        label: 'shell:nav.production.cuttingRoom',
+        items: [{ id: 'production-cutting', label: 'shell:nav.production.cutting', href: '/production/cutting', icon: Scissors, permission: 'production.cutting.view' }],
+      },
+      {
+        // B-W2a-60: Floor control › Scrap & rework (SCR-140, design production.scrap): pareto, rows, replacements.
+        id: 'production-floor-control',
+        label: 'shell:nav.production.floorControl',
+        items: [{ id: 'production-scrap', label: 'shell:nav.production.scrap', href: '/production/scrap', icon: Recycle, permission: 'production.scrap.view' }],
       },
       {
         // B-W2a-38: Reports (design production.reports): the daily production report, per line, style and size.

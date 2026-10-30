@@ -16,7 +16,8 @@ import { ApiError } from '../../core/errors'
  * then waits for an existing invoice's row.
  */
 
-export type MoneyLock = 'payment' | 'deposit' | 'invoice'
+/** B-W2a-61: 'return-line' — a customer return's line a credit note credits (…_money_w2a_guards: after the invoices'). */
+export type MoneyLock = 'payment' | 'deposit' | 'invoice' | 'return-line'
 
 export function tenantOf(context: RequestContext): string {
   if (context.audience === 'platform') throw new ApiError('internal_error', 'A money command runs in a tenant.')

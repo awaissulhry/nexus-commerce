@@ -1,0 +1,425 @@
+{
+  "page": {
+    "noAccess": {
+      "title": "Non puoi aprire Taglio",
+      "body": "Serve il permesso {permission}. Chiedi a un amministratore di darlo al tuo ruolo."
+    },
+    "keyNew": "Nuovo ordine di taglio",
+    "new": "Nuovo ordine di taglio",
+    "tickets": "Stampa cartellini",
+    "more": "Altre azioni",
+    "export": "Esporta tutto (CSV)",
+    "shortcuts": "Scorciatoie da tastiera"
+  },
+  "common": {
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "dismiss": "Chiudi",
+    "retry": "Riprova",
+    "cancel": "Annulla",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "clearFilters": "Togli i filtri",
+    "more": "Mostra altri",
+    "shortcuts": "Scorciatoie da tastiera",
+    "noReason": "senza motivo indicato",
+    "count_one": "{count} taglio",
+    "count_other": "{count} tagli",
+    "countMore_one": "{count} taglio mostrato, altri corrispondono",
+    "countMore_other": "{count} tagli mostrati, altri corrispondono"
+  },
+  "live": {
+    "connecting": "Collegamento agli aggiornamenti in diretta",
+    "live": "In diretta",
+    "offline": "Non in linea: dati dell’ultima lettura"
+  },
+  "tiles": {
+    "label": "Taglio di oggi"
+  },
+  "tile": {
+    "waiting": "Da tagliare",
+    "cutting": "In taglio ora",
+    "piecesToday": "Pezzi tagliati oggi",
+    "areaToday": "Area usata oggi (pelli · m²)",
+    "yieldToday": "Resa di oggi rispetto al piano",
+    "todayHint": "Oggi, tutti i tavoli dei tuoi stabilimenti",
+    "areaHint": "Pelli tagliate oggi e la loro area in metri quadrati",
+    "yieldHint": "Area del modello sull’area tagliata, rispetto al piano della distinta"
+  },
+  "state": {
+    "WAITING": "Da tagliare",
+    "CUTTING": "In taglio",
+    "CUT": "Tagliato",
+    "HELD": "Bloccato"
+  },
+  "kind": {
+    "LEATHER": "Pelle"
+  },
+  "view": {
+    "open": "Tagli aperti",
+    "waiting": "Da tagliare",
+    "cutting": "In taglio ora",
+    "cut": "Tutto tagliato",
+    "held": "Bloccati",
+    "all": "Tutti i tagli"
+  },
+  "col": {
+    "cut": "Taglio",
+    "kind": "Tipo",
+    "material": "Materiale e colore",
+    "lot": "Lotto di tonalità",
+    "state": "Stato",
+    "pieces": "Pezzi tagliati / previsti",
+    "hides": "Pelli",
+    "yield": "Resa rispetto al piano",
+    "table": "Tavolo",
+    "date": "Ultimo taglio",
+    "more": "Altro",
+    "workOrder": "Ordine di produzione",
+    "style": "Modello",
+    "garments": "Capi",
+    "piecesPlanned": "Pezzi previsti"
+  },
+  "list": {
+    "tableLabel": "Tagli",
+    "search": "Cerca ordine, lotto di produzione o modello",
+    "viewLabel": "Righe",
+    "due": "consegna {date}",
+    "allocated_one": "{count} pelle assegnata",
+    "allocated_other": "{count} pelli assegnate",
+    "recuts_one": "{count} ritaglio da fare",
+    "recuts_other": "{count} ritagli da fare",
+    "piecesOf": "{cut} / {planned}",
+    "garments": "{cut} di {planned} capi",
+    "hides_one": "{count} pelle",
+    "hides_other": "{count} pelli",
+    "yieldUnknown": "Solo parti singole",
+    "noPlan": "nessun piano",
+    "plan": "piano {pct}",
+    "rowMenu": "Azioni per {number}",
+    "workOrder": "Apri l’ordine di produzione",
+    "failed": "Non è stato possibile leggere i tagli",
+    "noMatch": {
+      "title": "Nessuna riga corrisponde a questi filtri",
+      "body": "Togli i filtri per vedere tutti i tagli aperti."
+    },
+    "empty": {
+      "title": "Ancora nessun ordine di taglio",
+      "body": "Un ordine di produzione rilasciato con parti in pelle compare qui. Inizia con Nuovo ordine di taglio."
+    },
+    "loadingSlow": "Ancora in caricamento…",
+    "hint": "Un taglio è la pelle di un ordine di produzione, tagliata pelle per pelle al tavolo di taglio. Stese di tessuto, piazzamenti e ordini di taglio di più ordini arrivano più avanti (W2b)."
+  },
+  "bulk": {
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)"
+  },
+  "csv": {
+    "cut": "Taglio",
+    "kind": "Tipo",
+    "style": "Modello",
+    "material": "Materiale e colore",
+    "lot": "Lotto di tonalità",
+    "state": "Stato",
+    "piecesPlanned": "Pezzi previsti",
+    "piecesCut": "Pezzi tagliati",
+    "hides": "Pelli",
+    "area": "Area usata",
+    "yieldPct": "Resa %",
+    "plannedPct": "Piano %",
+    "table": "Tavolo",
+    "lastCut": "Ultimo taglio"
+  },
+  "held": {
+    "permission": "Serve il permesso {permission}.",
+    "busy": "In corso…",
+    "loading": "Ancora in caricamento",
+    "reason": "Scrivi il motivo in almeno 3 caratteri.",
+    "tickets": {
+      "one": "Seleziona un taglio per aprire i suoi cartellini."
+    },
+    "recut": {
+      "done": "Questo ritaglio non è più aperto.",
+      "noEntry": "Nessuna registrazione di taglio ha ancora pezzi di {part} per {cell}: prima lo taglia il tavolo di taglio."
+    },
+    "ticket": {
+      "voided": "Questo fascio è annullato.",
+      "scanned_one": "Già scansionato una volta: un fascio si annulla solo prima della prima scansione.",
+      "scanned_other": "Già scansionato {count} volte: un fascio si annulla solo prima della prima scansione."
+    }
+  },
+  "newCut": {
+    "title": "Nuovo ordine di taglio",
+    "body": "Scegli l’ordine di produzione da tagliare. Ogni ordine rilasciato è un taglio di una pelle e un colore; dopo si assegnano le pelli.",
+    "tableLabel": "Ordini di produzione da tagliare",
+    "count_one": "{count} ordine da tagliare, senza pelli assegnate",
+    "count_other": "{count} ordini da tagliare, senza pelli assegnate",
+    "picked_one": "{count} ordine scelto",
+    "picked_other": "{count} ordini scelti",
+    "go": "Crea l’ordine di taglio",
+    "table": "Il tavolo è la postazione del tablet di taglio: ogni taglio registra il tavolo dove è stato fatto.",
+    "fabric": "Gli ordini di taglio del tessuto che raggruppano più ordini per stesa arrivano più avanti (W2b).",
+    "empty": {
+      "title": "Niente da tagliare",
+      "body": "Ogni ordine rilasciato con parti in pelle ha già pelli assegnate o è in taglio."
+    },
+    "why": {
+      "material": "Altra pelle: questo ordine di taglio taglia {material}."
+    },
+    "held": {
+      "none": "Scegli prima un ordine di produzione.",
+      "many": "Per ora un ordine di produzione per taglio: gli ordini di taglio di più ordini arrivano con le stese di tessuto (W2b)."
+    }
+  },
+  "alloc": {
+    "open": "Assegna pelli…",
+    "title": "Assegna pelli · {number}",
+    "material": "Pelle",
+    "body": "{garments} capi, {pieces} pezzi ancora da tagliare. Ogni pelle scelta è riservata intera a questo ordine; il primo taglio al tavolo la preleva.",
+    "tableLabel": "Pelli di questo materiale",
+    "col": {
+      "hide": "Pelle",
+      "area": "Area",
+      "state": "Si può prendere?"
+    },
+    "count": "{count} pelli, {free} libere",
+    "picked": "{count} scelte · {area} {uom}",
+    "free": "Libera",
+    "reserve": {
+      "why": {
+        "held": "Bloccata o non rilasciata",
+        "mine": "Già assegnata a questo taglio",
+        "other": "Riservata a un altro ordine",
+        "empty": "Non ne resta nulla a magazzino"
+      }
+    },
+    "go_one": "Assegna {count} pelle",
+    "go_other": "Assegna {count} pelli",
+    "held": {
+      "none": "Scegli almeno una pelle libera.",
+      "cut": "Ogni capo di questo taglio è già tagliato."
+    },
+    "heldWorkOrder": "Questo ordine è bloccato ({reason}). Si possono assegnare pelli; il tavolo non taglia nulla per lui finché la qualità non toglie il blocco.",
+    "failed": "Non è stato possibile leggere le pelli",
+    "empty": {
+      "title": "Nessuna pelle di questo materiale qui",
+      "body": "Nessuna pelle di questo materiale e colore è a magazzino nello stabilimento dell’ordine."
+    },
+    "hint": "Una pelle bloccata o di un lotto non rilasciato non si può assegnare, e il tavolo rifiuta di tagliarla con le stesse parole."
+  },
+  "notice": {
+    "allocated_one": "{count} pelle assegnata a {number}.",
+    "allocated_other": "{count} pelli assegnate a {number}.",
+    "recutDone": "Il ritaglio risulta tagliato.",
+    "reprinted": "Il cartellino è stato ristampato con un nuovo codice; il vecchio codice risulta sostituito.",
+    "voided": "Il fascio è annullato: il suo cartellino non si scansiona più."
+  },
+  "problem": {
+    "read": "La lettura non è riuscita. Riprova.",
+    "forbidden": "Non puoi vedere questo.",
+    "gone": "Non esiste più.",
+    "offline": "Il server della fabbrica non risponde. Controlla la connessione e riprova.",
+    "write": "Non è stato salvato. Riprova.",
+    "changed": "Qualcuno l’ha cambiato nel frattempo. È stato riletto: controlla e riprova.",
+    "invalid": "La richiesta così non è accettata. Controlla i campi.",
+    "alloc": {
+      "hide": "Una pelle scelta non si può più riservare (presa, bloccata o usata). Rileggi le pelli.",
+      "reserved": "Una pelle scelta è stata riservata nel frattempo a un altro ordine. Le pelli sono state rilette: scegline un’altra.",
+      "notInStock": "Una pelle scelta non è più a magazzino in questo stabilimento. Le pelli sono state rilette.",
+      "lotHeld": "Una pelle scelta è di un lotto non rilasciato: prima lo rilascia la qualità."
+    },
+    "recut": {
+      "notRecut": "Questo non è un ritaglio.",
+      "notOfCell": "Quella registrazione di taglio non ha pezzi di questa taglia e parte.",
+      "state": "Questo ritaglio non è più aperto."
+    }
+  },
+  "record": {
+    "back": "Taglio",
+    "backToList": "Torna a Taglio",
+    "title": "Taglio",
+    "titleOf": "Taglio · {number}",
+    "tabs": "Sezioni del taglio",
+    "loading": "Lettura del taglio…",
+    "state": {
+      "forbidden": {
+        "title": "Non puoi aprire questo taglio",
+        "body": "Il suo ordine appartiene a una società o a uno stabilimento che non puoi vedere."
+      },
+      "missing": {
+        "title": "Questo taglio non esiste",
+        "body": "Il suo ordine di produzione non è stato trovato. Forse appartiene a un’altra società."
+      },
+      "error": {
+        "title": "Non è stato possibile leggere il taglio",
+        "body": "Riprova tra un momento."
+      }
+    },
+    "openWorkOrder": "Apri il taglio dell’ordine di produzione",
+    "copyNumber": "Copia il numero",
+    "office": "ufficio",
+    "held": {
+      "title": "Bloccato: il tavolo di taglio non taglia nulla per questo ordine",
+      "body": "Motivo: {reason}. Un taglio dell’ordine, di una pelle bloccata o di una pelle di un lotto bloccato viene rifiutato al tavolo con queste parole finché la qualità non toglie il blocco."
+    }
+  },
+  "tab": {
+    "lay": "Stesa o pelli",
+    "pieces": "Pezzi",
+    "yield": "Resa",
+    "tickets": "Cartellini"
+  },
+  "part": {
+    "failed": "Non è stato possibile leggere {part}",
+    "loading": "Lettura di {part}…"
+  },
+  "lay": {
+    "hides": "Pelli",
+    "count_one": "{count} pelle",
+    "count_other": "{count} pelli",
+    "col": {
+      "hide": "Pelle",
+      "grade": "Scelta",
+      "shade": "Tonalità",
+      "before": "Area iniziale",
+      "used": "Usata",
+      "remnant": "Ritaglio",
+      "waste": "Scarto",
+      "state": "Stato"
+    },
+    "lot": "lotto {lot}",
+    "empty": {
+      "title": "Ancora nessuna pelle tagliata",
+      "body": "Qui compaiono le pelli che il tavolo di taglio taglia per questo ordine, con la loro area."
+    },
+    "balance": "Area di ogni pelle",
+    "noBalance": "Ancora nulla prelevato per questo ordine.",
+    "issued": "Lotto {lot} · {area} {uom} prelevati",
+    "area": {
+      "cut": "Tagliata",
+      "waste": "Scarto",
+      "returned": "Tornata a magazzino",
+      "left": "Rimasta"
+    },
+    "allocated": "Assegnate, non ancora tagliate",
+    "noAllocated": "Nessuna pelle assegnata in attesa.",
+    "allocatedHint": "Le pelli assegnate sono riservate intere a questo ordine; il controllo della stessa tonalità in una stesa arriva più avanti (W2b).",
+    "lays": "Stese (tessuto)",
+    "laysLater": "Piazzamenti, strati, rotoli per tonalità e altezza arrivano con il taglio del tessuto (W2b). La pelle si taglia pelle per pelle."
+  },
+  "hideState": {
+    "FULL": "Intera",
+    "PARTLY_CUT": "In parte tagliata",
+    "REMNANT": "Ritaglio",
+    "CONSUMED": "Esaurita",
+    "SCRAPPED": "Scartata"
+  },
+  "pieces": {
+    "title": "Pezzi per parte e taglia",
+    "part": "Parte",
+    "extraPart": "{part} (fuori distinta)",
+    "cell": "{cut} / {planned}",
+    "short": "{count} mancanti",
+    "recut": "{count} da ritagliare",
+    "none": "Nessuna parte di questo ordine si taglia dalle pelli.",
+    "hint": "Tagliati / previsti per parte e taglia; previsto è un pezzo di ogni parte per capo (la distinta non ha ancora il numero di pezzi per parte)."
+  },
+  "recuts": {
+    "title": "Ritagli",
+    "none": "Nessun ritaglio chiesto per questo ordine.",
+    "what": "{quantity} × {part} · {cell}",
+    "whole": "capi interi",
+    "status": {
+      "OPEN": "Da tagliare",
+      "DONE": "Tagliato"
+    },
+    "markCut": "Segna tagliato…",
+    "hint": "Scarti e rilavorazioni chiede un ritaglio per i pezzi scartati; il tavolo di taglio lo taglia come parti singole, poi l’ufficio collega la registrazione che lo ha tagliato.",
+    "dialog": {
+      "title": "Segna il ritaglio come tagliato",
+      "entry": "Tagliato dalla registrazione",
+      "entryHint": "Un taglio di questa taglia con pezzi di questa parte.",
+      "noEntry": "Ancora nessuna registrazione adatta",
+      "go": "Segna tagliato"
+    },
+    "held": {
+      "entry": "Scegli la registrazione che lo ha tagliato."
+    }
+  },
+  "yield": {
+    "title": "Resa per pelle",
+    "overall": "Resa {pct}",
+    "plan": {
+      "STYLE": "piano {pct} (del modello)",
+      "BOM": "piano {pct} (dallo sfrido della distinta)"
+    },
+    "used": "Area usata",
+    "pattern": "Area del modello",
+    "remnant": "Ritagli",
+    "waste": "Scarto",
+    "unmatched": "{area} tagliati come parti singole restano fuori dalla resa: il loro modello non è noto.",
+    "none": "Ancora nulla tagliato per questo ordine.",
+    "series": {
+      "yield": "Resa %",
+      "planned": "Piano %"
+    },
+    "byLot": "Per lotto e fornitore",
+    "col": {
+      "lot": "Lotto",
+      "supplier": "Fornitore",
+      "hides": "Pelli",
+      "used": "Usata",
+      "pattern": "Modello",
+      "yield": "Resa"
+    },
+    "hint": "Per pelle, lotto e fornitore; mai per tagliatore. La riconciliazione di prelevato, usato e reso arriva più avanti (W2b)."
+  },
+  "tickets": {
+    "title": "Cartellini dei fasci",
+    "count_one": "{count} fascio attivo",
+    "count_other": "{count} fasci attivi",
+    "col": {
+      "code": "Cartellino",
+      "cell": "Taglia",
+      "part": "Parte",
+      "garments": "Capi",
+      "status": "Stato e stampa",
+      "reprints": "Ristampato perché",
+      "scans": "Scansioni"
+    },
+    "whole": "capo intero",
+    "replaced": "sostituisce {codes}",
+    "status": {
+      "ACTIVE": "Attivo",
+      "VOID": "Annullato"
+    },
+    "print": {
+      "QUEUED": "In coda",
+      "SENT": "Inviato alla stampante",
+      "PRINTED": "Stampato",
+      "FAILED": "Stampa non riuscita",
+      "PDF": "Etichetta PDF",
+      "UNKNOWN": "Stato di stampa nascosto"
+    },
+    "rowMenu": "Azioni per {code}",
+    "reprint": "Ristampa…",
+    "void": "Annulla…",
+    "empty": {
+      "title": "Ancora nessun cartellino",
+      "body": "I fasci si fanno al tavolo di taglio dopo il taglio; qui compaiono i loro cartellini."
+    },
+    "hint": "Un cartellino ristampato ha un nuovo codice e il vecchio risulta sostituito; il motivo resta.",
+    "reprintTitle": "Ristampa {code}",
+    "reprintBody": "Il fascio prende un nuovo codice; il vecchio cartellino risulterà sostituito.",
+    "printer": "Stampante di etichette",
+    "noPrinter": "Nessuna stampante di etichette in questo stabilimento",
+    "reason": "Motivo",
+    "reprintGo": "Ristampa",
+    "held": {
+      "printer": "Scegli una stampante di etichette."
+    },
+    "voidTitle": "Annulla {code}",
+    "voidBody": "{garments} capi di {cell} tornano a «tagliati, non in fascio»; il cartellino {code} non si scansiona più.",
+    "voidGo": "Annulla il fascio"
+  }
+}

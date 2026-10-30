@@ -74,6 +74,11 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   PriceList: '/sales/price-lists/[id]',
   // Finance › Accounting export (SCR-156, B-W2a-51): a batch opens on its files tab (its checks, explanations and files).
   AccountingExport: '/finance/accounting/files?export=[id]',
+  // Production › Scrap & rework (SCR-140, B-W2a-60): a rework order opens in its row's detail on the list.
+  ReworkOrder: '/production/scrap?open=rework:[id]',
+  // Planning › Planning settings (SCR-124, B-W2a-59): a calendar opens on Calendars & shifts, a shift pattern in its editor.
+  WorkCalendar: '/planning/settings?tab=calendars&cal=[id]',
+  ShiftPattern: '/planning/settings?tab=calendars&pattern=[id]',
 })
 
 /**
@@ -122,6 +127,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/purchasing/claims': '/purchasing/claims',
   // The stock screens read the API's own filters from the address.
   '/inventory/stock': '/warehouse/stock',
+  // B-W2a-58: the pick lists across work orders (SCR-237).
+  '/inventory/picking/pick-lists': '/warehouse/picking',
   '/inventory/hides': '/warehouse/hides',
   '/inventory/lots': '/warehouse/lots',
   '/inventory/ledger': '/warehouse/moves',
@@ -132,12 +139,17 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2a-45: the schedule's board and the allocation board.
   '/planning/schedule': '/planning/board',
   '/planning/allocation': '/planning/allocation',
+  // B-W2a-59: the planning settings of the sites (SCR-124, SCR-127).
+  '/planning/settings': '/planning/settings',
   // B-W2a-53: the plant's lists (the requests queue reads `?tile=`, the jobs `?view=`, the machines `?view=` and `?q=`).
   '/plant/requests': '/plant/requests',
   '/plant/jobs': '/plant/jobs',
   '/plant/machines': '/plant/machines',
   // B-W2a-49: the price lists (SCR-106) read `?rows=`, `?kind=` and `?q=`.
   '/sales/price-lists': '/sales/price-lists',
+  // B-W2a-60: the cuts across work orders (SCR-238, `?view=`, `?q=`) and scrap & rework (SCR-140, `?view=`, `?period=`).
+  '/production/cutting/cuts': '/production/cutting',
+  '/production/scrap': '/production/scrap',
 })
 
 export interface RecordRef {

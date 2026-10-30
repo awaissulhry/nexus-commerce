@@ -1,0 +1,263 @@
+{
+  "page": {
+    "noAccess": {
+      "title": "Non puoi aprire Scarti e rilavorazioni",
+      "body": "Serve il permesso {permission}. Chiedi a un amministratore di darlo al tuo ruolo."
+    },
+    "pareto": "Pareto per motivo",
+    "approve": "Approva",
+    "approveN_one": "Approva {count}",
+    "approveN_other": "Approva {count}",
+    "more": "Altre azioni",
+    "export": "Esporta tutto (CSV)",
+    "shortcuts": "Scorciatoie da tastiera",
+    "detailKeys": "nel dettaglio di una riga: approva, rifiuta, riga precedente e successiva"
+  },
+  "common": {
+    "updated": "Aggiornato alle {time}",
+    "notYet": "Non ancora letto",
+    "dismiss": "Chiudi",
+    "retry": "Riprova",
+    "cancel": "Annulla",
+    "open": "Apri",
+    "clearFilters": "Togli i filtri",
+    "more": "Mostra altre",
+    "shortcuts": "Scorciatoie da tastiera",
+    "countOf": "{count} di {total}"
+  },
+  "live": {
+    "connecting": "Collegamento agli aggiornamenti in diretta",
+    "live": "In diretta",
+    "offline": "Non in linea: dati dell’ultima lettura"
+  },
+  "tiles": {
+    "label": "Scarti e rilavorazioni"
+  },
+  "tile": {
+    "scrapToday": "Scarti di oggi (pezzi)",
+    "reworkOpen": "Rilavorazioni aperte",
+    "toApprove": "Riduzioni da approvare",
+    "recuts": "Sostituzioni da tagliare",
+    "downgraded": "Declassati a seconda scelta",
+    "downgradedLater": "Arriva più avanti (W2b)"
+  },
+  "view": {
+    "all": "Tutte le righe",
+    "today": "Scarti di oggi",
+    "rework": "Rilavorazioni aperte",
+    "approve": "In attesa di approvazione",
+    "recuts": "Ritagli da fare"
+  },
+  "period": {
+    "7": "Ultimi 7 giorni",
+    "30": "Ultimi 30 giorni",
+    "90": "Ultimi 90 giorni",
+    "all": "Sempre"
+  },
+  "kind": {
+    "SCRAP": "Scarto",
+    "REWORK": "Rilavorazione"
+  },
+  "rework": {
+    "OPEN": "Aperta",
+    "IN_PROGRESS": "In rilavorazione",
+    "DONE": "Fatta",
+    "CANCELLED": "Annullata"
+  },
+  "pareto": {
+    "title": "Per motivo",
+    "dimension": "Raggruppa per",
+    "by": {
+      "reason": "Motivo",
+      "operation": "Fase",
+      "style": "Modello"
+    },
+    "pieces": "Pezzi",
+    "cumulative": "Cumulata %",
+    "filter": "Filtra l’elenco con una barra",
+    "barValue": "{pieces} · {cumulative} %",
+    "other": "Altro",
+    "otherHeld": "I gruppi più piccoli insieme: scegline uno nell’elenco.",
+    "none": "Nulla di scartato o rilavorato in queste righe.",
+    "hint": "Pezzi delle righe mostrate (periodo e filtri sopra), dal più grande; una barra filtra l’elenco."
+  },
+  "col": {
+    "date": "Data",
+    "workOrder": "Ordine di produzione",
+    "bundle": "Fascio, taglia e parte",
+    "operation": "Fase",
+    "pieces": "Pezzi",
+    "kind": "Tipo",
+    "reason": "Motivo",
+    "lot": "Lotto / pelle e area",
+    "replacement": "Sostituzione",
+    "approval": "Approvazione",
+    "station": "Postazione",
+    "value": "Valore (costo)",
+    "more": "Altro"
+  },
+  "list": {
+    "tableLabel": "Scarti e rilavorazioni",
+    "search": "Cerca ordine, fascio, motivo o lotto",
+    "viewLabel": "Righe",
+    "kindLabel": "Tipo",
+    "kindAll": "Scarti e rilavorazioni",
+    "periodLabel": "Periodo",
+    "sizePart": "{size} · {part}",
+    "whole": "capo intero",
+    "rowMenu": "Azioni per {number}",
+    "workOrder": "Apri l’ordine di produzione",
+    "failed": "Non è stato possibile leggere scarti e rilavorazioni",
+    "noMatch": {
+      "title": "Nessuna riga corrisponde a questi filtri",
+      "body": "Togli i filtri per vedere tutte le righe del periodo."
+    },
+    "empty": {
+      "title": "Ancora nessuno scarto",
+      "body": "Qui compaiono gli scarti e le rilavorazioni dichiarati alle fasi e ogni ordine di rilavorazione."
+    },
+    "loadingSlow": "Ancora in caricamento…",
+    "hint": "{period}: le ultime 500 righe; i filtri e il pareto lavorano su queste. Per ordine, fascio, fase e postazione, mai per persona."
+  },
+  "replacement": {
+    "chip": "{kind} {quantity} · {status}",
+    "kind": {
+      "RECUT": "Ritaglio",
+      "REDUCE": "Riduzione"
+    },
+    "status": {
+      "OPEN": "aperta",
+      "APPROVED": "approvata",
+      "REFUSED": "rifiutata",
+      "DONE": "fatta",
+      "CANCELLED": "annullata"
+    }
+  },
+  "approval": {
+    "OPEN": "In attesa",
+    "APPROVED": "Approvata",
+    "REFUSED": "Rifiutata",
+    "DONE": "Fatta",
+    "CANCELLED": "Annullata"
+  },
+  "bulk": {
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)"
+  },
+  "csv": {
+    "date": "Data",
+    "workOrder": "Ordine di produzione",
+    "bundle": "Fascio",
+    "operation": "Fase",
+    "size": "Taglia",
+    "part": "Parte",
+    "pieces": "Pezzi",
+    "kind": "Tipo",
+    "reason": "Motivo",
+    "lot": "Lotto / pelle e area",
+    "replacement": "Sostituzione",
+    "station": "Postazione",
+    "value": "Valore (costo)",
+    "currency": "Valuta"
+  },
+  "held": {
+    "permission": "Serve il permesso {permission}.",
+    "busy": "In corso…",
+    "loading": "Ancora in caricamento",
+    "reason": "Scrivi il motivo in almeno 3 caratteri.",
+    "noReduction": "Niente attende una decisione su questa riga.",
+    "ownAsk": "L’hai chiesta tu: approva o rifiuta un’altra persona.",
+    "approve": {
+      "none": "Seleziona righe con una riduzione da approvare.",
+      "nothing": "Nessuna riga selezionata ha una riduzione che puoi approvare."
+    }
+  },
+  "item": {
+    "noun": "riga",
+    "title": {
+      "SCRAP_one": "Scarto di {count} pezzo · {number}",
+      "SCRAP_other": "Scarto di {count} pezzi · {number}",
+      "REWORK_one": "Rilavorazione di {count} pezzo · {number}",
+      "REWORK_other": "Rilavorazione di {count} pezzi · {number}"
+    },
+    "reason": "Motivo",
+    "operation": "Fase",
+    "bundle": "Fascio",
+    "station": "Postazione",
+    "noStation": "non registrata",
+    "workOrder": "Ordine di produzione",
+    "value": "Valore",
+    "valueHint": "al costo del prelievo delle pelli",
+    "leather": "Pelle che conteneva",
+    "col": {
+      "lot": "Lotto",
+      "hide": "Pelle",
+      "area": "Area",
+      "value": "Valore"
+    },
+    "leatherNone": "Nessuna pelle indicata: il taglio del fascio non è collegato a una pelle.",
+    "leatherRework": "Una rilavorazione riporta indietro i capi; il suo scarto compare nella sua riga.",
+    "leatherHint": "La pelle è uscita dal magazzino quando è stata prelevata per l’ordine; questo è ciò che contenevano questi capi.",
+    "replacements": "Cosa lo sostituisce",
+    "noReplacement": "Ancora nulla chiesto.",
+    "askedBy": "Chiesta da {name}: {reason}",
+    "approve": "Approva",
+    "refuse": "Rifiuta…",
+    "refuseGo": "Rifiuta",
+    "refuseNote": "Perché viene rifiutata",
+    "refuseHint": "Chi l’ha chiesta lo legge.",
+    "noPhoto": "Le dichiarazioni di scarto del reparto non hanno ancora una foto."
+  },
+  "replace": {
+    "open": "Sostituisci…",
+    "title": "Sostituisci la quantità scartata",
+    "body": "{left} di {pieces} capi di {cell} hanno ancora bisogno di una sostituzione.",
+    "how": "Come",
+    "kind": {
+      "RECUT": "Chiedi un ritaglio",
+      "RECUTHint": "Un fabbisogno di ritaglio sul taglio ({part}); il tavolo lo taglia come parti singole.",
+      "REDUCE": "Riduci la quantità dell’ordine",
+      "REDUCEHint": "La approva un’altra persona; poi la riga d’ordine si chiude con la quantità ridotta."
+    },
+    "quantity": "Capi",
+    "quantityHint": "Al massimo {max}",
+    "reason": "Motivo",
+    "go": {
+      "RECUT": "Chiedi il ritaglio",
+      "REDUCE": "Chiedi la riduzione"
+    },
+    "held": {
+      "rework": "Una rilavorazione riporta indietro i capi: sostituisci ciò che il suo scarto ha perso, nella riga dello scarto.",
+      "notOpen": "L’ordine {number} è {status}: si sostituisce solo per un ordine rilasciato o in corso.",
+      "covered": "Ogni capo di questa riga è già sostituito.",
+      "quantity": "Tra 1 e {max} capi."
+    }
+  },
+  "notice": {
+    "approved_one": "{count} riduzione approvata.",
+    "approved_other": "{count} riduzioni approvate.",
+    "refused": "La riduzione è rifiutata; chi l’ha chiesta legge il motivo.",
+    "asked": {
+      "RECUT_one": "Chiesto un ritaglio di {count} capo per {number}: è nell’elenco della sala taglio.",
+      "RECUT_other": "Chiesto un ritaglio di {count} capi per {number}: è nell’elenco della sala taglio.",
+      "REDUCE_one": "Chiesta una riduzione di {count} capo per {number}: la approva un’altra persona.",
+      "REDUCE_other": "Chiesta una riduzione di {count} capi per {number}: la approva un’altra persona."
+    }
+  },
+  "problem": {
+    "read": "La lettura non è riuscita. Riprova.",
+    "forbidden": "Non puoi farlo.",
+    "gone": "Non esiste più.",
+    "offline": "Il server della fabbrica non risponde. Controlla la connessione e riprova.",
+    "write": "Non è stato salvato. Riprova.",
+    "changed": "Qualcuno l’ha cambiato nel frattempo. È stato riletto: controlla e riprova.",
+    "invalid": "La richiesta così non è accettata. Controlla i campi.",
+    "notOpen": "L’ordine non è aperto: si sostituisce solo per un ordine rilasciato o in corso.",
+    "moreThanScrapped": "Più di quanto scartato: sostituzioni precedenti ne coprono già una parte.",
+    "moreThanCell": "Più capi di quanti ne abbia la taglia.",
+    "noScrap": "Lì non è stato scartato nulla da sostituire.",
+    "notAPart": "Quella parte non è una parte di questo capo.",
+    "selfDecision": "L’hai chiesta tu: decide un’altra persona.",
+    "wrongState": "Nel frattempo è stata decisa. Le righe sono state rilette."
+  }
+}

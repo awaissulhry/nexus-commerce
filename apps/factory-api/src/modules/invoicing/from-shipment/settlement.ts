@@ -63,7 +63,10 @@ export async function settlementOf(db: Reader, orderId: string): Promise<OrderSe
     select: { invoiceId: true, depositRequestId: true, amount: true },
   })
   const deductions = deposits.length > 0 ? await db.invoiceLine.findMany({ where: { depositInvoiceId: { in: deposits.map((deposit) => deposit.id) }, invoice: { status: { not: 'DRAFT' } } }, select: { depositInvoiceId: true, netAmount: true } }) : []
+  // B-W2a-61: what PAID refunds of the credit notes gave back.
+  const refunds = credits.length > 0 ? await db.refund.findMany({ where: { status: 'PAID', creditNoteId: { in: credits.map((credit) => credit.id) } }, select: { creditNoteId: true, amount: true } }) : []
   const sum = <T>(rows: readonly T[], value: (row: T) => number) => rows.reduce((total, row) => total + value(row), 0)
+  const refundedOn = (invoiceId: string) => sum(refunds.filter((refund) => credits.some((credit) => credit.id === refund.creditNoteId && credit.creditOfId === invoiceId)), (refund) => refund.amount)
 
   const facts: SettlementFacts = {
     order: { id: order.id, number: order.number, status: order.status, currency: order.currency },
@@ -85,6 +88,7 @@ export async function settlementOf(db: Reader, orderId: string): Promise<OrderSe
       grossTotal: invoice.grossTotal,
       creditedGross: sum(credits.filter((credit) => credit.creditOfId === invoice.id), (credit) => credit.grossTotal),
       paid: sum(allocations.filter((row) => row.invoiceId === invoice.id), (row) => row.amount),
+      refunded: refundedOn(invoice.id),
     })),
     depositRequests: requests.map((request) => ({ id: request.id, status: request.status, fiscalDocument: request.fiscalDocument, amount: request.amount, paid: sum(allocations.filter((row) => row.depositRequestId === request.id), (row) => row.amount) })),
     depositInvoices: deposits.map((deposit) => ({
@@ -97,6 +101,7 @@ export async function settlementOf(db: Reader, orderId: string): Promise<OrderSe
       creditedNet: sum(credits.filter((credit) => credit.creditOfId === deposit.id), (credit) => credit.netTotal),
       creditedGross: sum(credits.filter((credit) => credit.creditOfId === deposit.id), (credit) => credit.grossTotal),
       deductedNet: -sum(deductions.filter((line) => line.depositInvoiceId === deposit.id), (line) => line.netAmount),
+      refunded: refundedOn(deposit.id),
     })),
     creditNotes: credits.map((credit) => ({ id: credit.id, number: credit.number, status: credit.status, creditOfId: credit.creditOfId! })),
   }

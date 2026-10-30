@@ -20,7 +20,7 @@ import { actorOf } from '../../../core/context'
 import { allocateNumber } from '../../../platform/numbering/allocate'
 import { readSteps } from '../../product/routing/read'
 import { officeContextOf } from './access'
-import { asDay, clearDraftSpec, hasSeries, lockedStatus, readOrderLines, readReleasedRevision, readWorkOrder, REVISION_COLUMNS, SITE_COLUMNS, STYLE_COLUMNS, type LineRow, type Reader, type RevisionRow } from './store'
+import { asDay, clearDraftMaterials, hasSeries, lockedStatus, readOrderLines, readReleasedRevision, readWorkOrder, REVISION_COLUMNS, SITE_COLUMNS, STYLE_COLUMNS, syncDraftOperations, type LineRow, type Reader, type RevisionRow } from './store'
 import { workOrderView, type WorkOrderView } from './views'
 import { officeWorkOrder, onWorkOrder, todayOfCommand } from './work-orders'
 
@@ -249,8 +249,14 @@ export async function setRepairSteps(caller: CommandCaller, workOrderId: string,
     if (!revision) throw new InvalidStateError(`Work order ${current.number} names no revision.`)
     const operations = await plannedSteps(tx, revision, current.siteId, body.routingSeqs)
     const before = await tx.workOrderOperation.findMany({ where: { workOrderId: current.id }, select: { routingSeq: true }, orderBy: { seq: 'asc' } })
-    await clearDraftSpec(tx, current.id)
-    await tx.workOrderOperation.createMany({ data: operationRows(operations, current, revision.id, actorIdOf(tools)) })
+    // B-W2a-F3: a step that stays keeps its operation's row (the planning board's bars that book it stay); a step left
+    // out is refused while a bar books it.
+    await clearDraftMaterials(tx, current.id)
+    await syncDraftOperations(tx, current, revision.id, operations, actorIdOf(tools), {
+      doing: 'Leaving out these steps',
+      then: 'change the steps',
+      published: 'keep those steps on the repair',
+    })
     tools.audit({ recordType: 'WorkOrder', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { steps: before.map((op) => op.routingSeq) }, after: { steps: operations.map((op) => op.routingSeq) } })
     tools.emit({ type: 'workorder.changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { workOrderId: current.id, number: current.number, changes: ['steps'], cells: 1, pieces: 1 } })
     return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, current.id))!, todayOfCommand(tools)) }

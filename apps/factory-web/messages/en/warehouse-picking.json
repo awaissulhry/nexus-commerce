@@ -1,0 +1,231 @@
+{
+  "col": {
+    "workOrder": "Work order",
+    "style": "Style",
+    "cutDate": "Cut",
+    "readiness": "Readiness",
+    "lines": "Lines",
+    "kitPlace": "Kit place",
+    "kit": "Kit",
+    "team": "Picked by",
+    "started": "Started",
+    "finished": "Finished",
+    "actions": "Actions"
+  },
+  "view": {
+    "all": "All pick lists",
+    "today": "To pick today",
+    "waiting": "Waiting for material",
+    "complete": "Kits complete"
+  },
+  "tile": {
+    "today": "To pick today",
+    "waiting": "Waiting for material",
+    "complete": "Kits complete"
+  },
+  "tileHint": {
+    "today": "Cut today or earlier, kit not complete",
+    "waiting": "Short, delayed, requested or still expected",
+    "complete": "Every line picked in full"
+  },
+  "band": {
+    "create": "Create pick lists",
+    "printSelected_one": "Print {count} pick list",
+    "printSelected_other": "Print {count} pick lists",
+    "printShown_one": "Print {count} pick list",
+    "printShown_other": "Print {count} pick lists"
+  },
+  "held": {
+    "noReserve": "Your role may not reserve stock (inventory.reserve).",
+    "nothingToPrint": "No pick list is shown to print.",
+    "CR_VI_PENDING": "Lot {lot}: no chromium VI test result yet",
+    "CR_VI_FAILED": "Lot {lot}: failed the chromium VI test",
+    "QUALITY_HOLD": "Lot {lot}: in quarantine",
+    "BLOCKED": "Lot {lot}: blocked after its release",
+    "REJECTED": "Lot {lot}: rejected",
+    "holdLot": "Lot {lot} is on hold ({reason}, since {since}): its stock is not picked until quality releases the hold",
+    "holdHide": "Hide {hide} of lot {lot} is on hold ({reason}, since {since}): it is not picked until quality releases the hold"
+  },
+  "list": {
+    "tableLabel": "Pick lists per work order",
+    "search": "Search work order or style",
+    "viewLabel": "Saved rows",
+    "notYet": "Not read yet",
+    "count_one": "{count} of {total} work order",
+    "count_other": "{count} of {total} work orders",
+    "countMore_one": "{count} of {total} work order",
+    "countMore_other": "{count} of {total} work orders",
+    "showMore": "Show more",
+    "failed": "The pick lists couldn't be read",
+    "noMatch": "No rows match these filters",
+    "empty": "No pick lists yet",
+    "emptyBody": "No work order is released for picking. Create pick lists for the released work orders, or release one in Production › Work orders.",
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "due": "due {date}",
+    "notPlanned": "not on the plan yet",
+    "lines": "{picked} of {all}",
+    "linesTitle": "{picked} of {all} lines picked in full",
+    "onHold": "On hold",
+    "onHoldWhy": "On hold: {reason}",
+    "hasList": "Pick list made",
+    "noList": "No pick list",
+    "office": "the office",
+    "rowMenu": "More for {number}",
+    "openList": "Open the pick list",
+    "printOne": "Print this pick list",
+    "openWorkOrder": "Open the work order",
+    "foot": "Quantities only. A kit is complete when every line is picked in full; the floor's scans and the office's issues count, returns count back. Who picked is said by team, never by person."
+  },
+  "kit": {
+    "status": {
+      "OPEN": "Open",
+      "PARTLY": "Partly",
+      "COMPLETE": "Complete"
+    },
+    "place": "Kit place:",
+    "placeNone": "Not recorded",
+    "placeLater": "Not recorded yet: a kit's staging place comes with a later step.",
+    "mark": "Mark kit complete",
+    "markShort_one": "{count} line is still short: the kit is complete once it is picked.",
+    "markShort_other": "{count} lines are still short: the kit is complete once they are picked.",
+    "markRecordLater": "Every line is picked: the kit already reads Complete. Marking a kit by hand needs a kit record, which comes with a later step.",
+    "check": "Kit complete check",
+    "checkList_one": "Pick list made: {count} reservation",
+    "checkList_other": "Pick list made: {count} reservations",
+    "checkNoList": "No pick list yet: nothing is reserved for this work order",
+    "lineDone": "{material}: picked in full",
+    "lineShort": "{material}: {short} still to pick",
+    "allDone": "Every line is picked: the kit is complete",
+    "notAllDone_one": "{count} line still short",
+    "notAllDone_other": "{count} lines still short"
+  },
+  "ready": {
+    "word": {
+      "NOT_ENOUGH": "Not enough",
+      "DELAYED": "Delayed",
+      "REQUESTED": "Requested",
+      "EXPECTED": "Expected",
+      "EXPECTED_ON": "Expected {date}",
+      "NOT_BOOKED": "Not booked",
+      "RECEIVED": "Received",
+      "NOT_PLANNED": "Not planned"
+    },
+    "reason": {
+      "NOT_ENOUGH": "{material}: {short} short and nothing ordered for it yet.",
+      "DELAYED": "{material}: comes late ({date}), after it is needed.",
+      "DELAYED_PO": "{material}: {po} was due {date} or arrives after it is needed.",
+      "REQUESTED": "{material}: asked for (a draft purchase order or a firm planned order), not ordered yet.",
+      "EXPECTED": "{material}: {onOrder} expected by {date}.",
+      "EXPECTED_PO": "{material}: {onOrder} expected by {date} on {po}.",
+      "NOT_BOOKED": "{material}: {inStock} in stock, not reserved for it yet: create its pick list.",
+      "RECEIVED": "{material}: reserved for it or issued.",
+      "NOT_PLANNED": "{material}: the plan has no need for it."
+    },
+    "why": "Why {word} for {number}",
+    "title": "Why '{word}'",
+    "noMaterials": "The plan has no material need for this work order: its order is not planned, its style has no released BOM, or it is a repair.",
+    "openPo": "Open {po}",
+    "buy": "Buy (What to buy & make)",
+    "foot": "Readiness is the plan's, computed now: stock on hold is never counted."
+  },
+  "sheet": {
+    "title": "Pick list {number}",
+    "reading": "Reading the pick list…",
+    "noun": "pick list",
+    "cut": "cut {date}",
+    "print": "Print",
+    "tableLabel": "The lines of {number}, by bin path",
+    "col": {
+      "where": "Where to take it",
+      "material": "Material",
+      "needed": "Needed",
+      "picked": "Picked",
+      "short": "Short"
+    },
+    "allPicked": "Picked in full",
+    "nothingUsable": "Nothing usable in stock at this site",
+    "hide": "hide {hide}",
+    "lot": "lot {lot}",
+    "anyLot": "any lot",
+    "reserved": "(reserved)",
+    "proposed": "(proposed)",
+    "heldTitle": "Stock that may not be picked",
+    "started": "Started {at}",
+    "finished": "Finished {at}",
+    "noLines": "No material is planned for this work order: nothing to pick."
+  },
+  "create": {
+    "title": "Create pick lists",
+    "subtitle": "Released work orders without a pick list, by cut date",
+    "body": "Tick the work orders: each one gets what it still needs reserved, the oldest stock first, in this order — the work order cut first is served first when material is short. Stock on hold is never reserved.",
+    "tableLabel": "Work orders without a pick list",
+    "count_one": "{count} work order",
+    "count_other": "{count} work orders",
+    "picked_one": "{count} ticked",
+    "picked_other": "{count} ticked",
+    "go_one": "Create {count} pick list",
+    "go_other": "Create {count} pick lists",
+    "busy": "Reserving…",
+    "heldNone": "Tick at least one work order.",
+    "empty": "Every released work order has its pick list",
+    "emptyBody": "Nothing waits: new released work orders show here.",
+    "done": "Done",
+    "heldOnHold": "On hold: its pick list waits until the hold is lifted.",
+    "heldHasList": "It has its pick list already.",
+    "heldComplete": "Its kit is complete.",
+    "summary_one": "{created} of {count} pick list made",
+    "summary_other": "{created} of {count} pick lists made",
+    "resultsLabel": "What each work order got",
+    "col": {
+      "outcome": "Outcome",
+      "short": "Still short"
+    },
+    "result": {
+      "created_one": "{number}: pick list made ({count} reserved)",
+      "created_other": "{number}: pick list made ({count} reserved)",
+      "createdShort_one": "{number}: pick list made ({count} reserved); some material stays short",
+      "createdShort_other": "{number}: pick list made ({count} reserved); some material stays short",
+      "nothing": "{number}: nothing new to reserve, its need is reserved or issued already",
+      "nothingShort": "{number}: nothing could be reserved, the usable stock does not cover it"
+    },
+    "refusal": {
+      "ON_HOLD": "{number}: on hold, its pick list waits until the hold is lifted",
+      "NOT_RELEASED": "{number}: not released, a pick list is made for a released work order",
+      "NOT_FOUND": "{number}: not a work order of this site",
+      "NOT_AVAILABLE": "{number}: the stock was taken meanwhile by another demand; read again and try once more",
+      "LOT_NOT_AVAILABLE": "{number}: a lot was taken meanwhile by another demand; read again and try once more",
+      "HIDE_RESERVED": "{number}: a hide was reserved meanwhile for another demand; read again and try once more",
+      "HIDE_NOT_IN_STOCK": "{number}: a hide left the stock meanwhile; read again and try once more",
+      "LOT_HELD": "{number}: a lot was put on hold meanwhile",
+      "OTHER": "{number}: not made, try again"
+    },
+    "notice": "Create pick lists: {created} of {count} made"
+  },
+  "print": {
+    "title_one": "Pick list for {count} work order",
+    "title_other": "Pick lists for {count} work orders",
+    "meta": "{company} · read {at}",
+    "how": "One walk through the store for every work order below, place by place by bin path; then each work order's lines. Tick each pick as you take it.",
+    "held": "Nothing to print yet.",
+    "button": "Print or save as PDF",
+    "reading": "Reading the pick lists…",
+    "empty": "No work order asked",
+    "emptyBody": "Open the paper from Picking & kits with the work orders ticked.",
+    "walkTitle": "The walk, by bin path",
+    "walkNone": "Nothing left to pick: every line is picked in full.",
+    "col": {
+      "place": "Place",
+      "workOrder": "Work order",
+      "material": "Material",
+      "take": "Take",
+      "quantity": "Quantity",
+      "tick": "Taken"
+    }
+  },
+  "keys": {
+    "title": "Keys of Picking & kits",
+    "create": "Create pick lists",
+    "print": "Print the ticked pick lists (or the ones shown)"
+  }
+}
