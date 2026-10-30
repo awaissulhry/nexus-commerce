@@ -114,6 +114,7 @@
       "moves": "Movements",
       "locations": "Locations",
       "inTheWarehouse": "In the warehouse",
+      "picking": "Picking & kits",
       "counts": "Counts"
     },
     "frame": {

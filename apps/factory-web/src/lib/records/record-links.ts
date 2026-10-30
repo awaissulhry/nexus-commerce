@@ -109,6 +109,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/inventory/receipts': '/warehouse/receipts',
   // The stock screens read the API's own filters from the address.
   '/inventory/stock': '/warehouse/stock',
+  // B-W2a-58: the pick lists across work orders (SCR-237).
+  '/inventory/picking/pick-lists': '/warehouse/picking',
   '/inventory/hides': '/warehouse/hides',
   '/inventory/lots': '/warehouse/lots',
   '/inventory/ledger': '/warehouse/moves',
