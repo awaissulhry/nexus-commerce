@@ -77,6 +77,13 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       // W2a wave 4: stock counts and the year-end inventory are numbered from it (apps/factory-api modules/inventory/counts):
       // without one, opening a count is refused. Eight f's as above.
       { id: `ffffffff${id(`series:${company}:COUNT:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'COUNT', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'CNT-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // W2a wave 6: nonconformance reports and maintenance jobs are numbered from these (apps/factory-api modules/quality/ncr,
+      // modules/plant): without them, raising an NCR or making a job is refused. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:NCR:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'NCR', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'NCR-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      { id: `ffffffff${id(`series:${company}:MAINTENANCE_JOB:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'MAINTENANCE_JOB', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'MJ-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
+      // W2a wave 7: accounting exports are numbered from it (apps/factory-api modules/accounting): without one, an export
+      // cannot be made. Eight f's as above.
+      { id: `ffffffff${id(`series:${company}:ACCOUNTING_EXPORT:MAIN:${YEAR}`).slice(8)}`, companyId, kind: 'ACCOUNTING_EXPORT', code: 'MAIN', scopeKey: YEAR, reset: 'YEARLY', pattern: 'EXP-{YYYY}-{N:4}', fiscal: false, createdById: actorId },
     )
     if (company === 'A') {
       allocations.push({

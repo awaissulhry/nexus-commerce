@@ -25,9 +25,15 @@ export const overviewContract = defineContract({
     locationId: id().optional(),
     /** Only held stock (a lot that is not RELEASED). */
     held: flag().optional(),
+    /** Only stock of a material and colour that open reservations hold at its site (B-W2a-11, the Reserved tile). */
+    reserved: flag().optional(),
+    /** The stock as it was at this instant (SCM-197): moves that happened up to it. Held, reserved and available are then null. */
+    asOf: instant().optional(),
   }),
   response: {
     200: output({
+      /** The instant the figures are as of; null: now. */
+      asOf: instant().nullable(),
       /** Per site, location, item, colour, lot and hide; only stock that is there (on hand not 0). */
       rows: z.array(
         output({
@@ -39,9 +45,12 @@ export const overviewContract = defineContract({
           lot: output({ id: id(), code: z.string(), qualityStatus: z.enum(LOT_QUALITY_STATUSES) }).nullable(),
           hide: output({ id: id(), code: z.string() }).nullable(),
           onHand: z.string(),
-          /** The stock of a lot that is not RELEASED. */
-          held: z.string(),
-          available: z.string(),
+          /** The stock of a lot that is not RELEASED; null as of a past date. */
+          held: z.string().nullable(),
+          /** What a hide's own HIDE reservation holds of this row (B-W2a-11; other reservations hold a site's stock, see `items` and `reservations`); null as of a past date. */
+          reserved: z.string().nullable(),
+          /** On hand − held − reserved (this row's); null as of a past date. */
+          available: z.string().nullable(),
           /** Per base unit: the lot's cost, else the item's standard cost; null when there is none. */
           unitCost: money.cost(unitPrice().nullable()),
           /** On hand × unit cost, in minor units of the item's currency. */
@@ -56,15 +65,23 @@ export const overviewContract = defineContract({
           item,
           colour: named.nullable(),
           onHand: z.string(),
-          held: z.string(),
-          available: z.string(),
+          held: z.string().nullable(),
+          /** What open reservations hold at the sites shown; null as of a past date. */
+          reserved: z.string().nullable(),
+          /** On hand − held − reserved; negative when over-reserved; null as of a past date. */
+          available: z.string().nullable(),
+          overReserved: z.boolean().nullable(),
           hides: z.number().int(),
-          heldHides: z.number().int(),
+          heldHides: z.number().int().nullable(),
           locations: z.number().int(),
           /** The sum of the rows' values; null when one has no cost. */
           value: money.cost(amountMinor().nullable()),
           currency: currency().optional(),
         }),
+      ),
+      /** What open reservations hold per site, material, colour and lot (null: any lot); `stale` ACTIVE ones of done demands hold nothing. Empty as of a past date. */
+      reservations: z.array(
+        output({ siteId: id(), itemId: id(), itemColourId: id().nullable(), lotId: id().nullable(), reserved: z.string(), reservations: z.number().int(), stale: z.number().int() }),
       ),
       /** More rows than one answer holds: narrow the filters. */
       truncated: z.boolean(),

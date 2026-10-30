@@ -256,7 +256,10 @@
       "COMPLAINT": "Reclamo del cliente",
       "CLAIM": "Reclamo al fornitore",
       "SUBCONTRACT": "Ordine al terzista",
-      "COUNT": "Inventario"
+      "COUNT": "Inventario",
+      "NCR": "Non conformità",
+      "MAINTENANCE_JOB": "Intervento di manutenzione",
+      "ACCOUNTING_EXPORT": "Esportazione contabile"
     },
     "record": {
       "Invoice": "Fattura",

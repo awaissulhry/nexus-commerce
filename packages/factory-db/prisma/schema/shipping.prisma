@@ -26,11 +26,21 @@
 // customer's carrier. A parcel carries its tracking number and its carrier label (a file of the row); tracking events
 // are append-only.
 //
+// W2a (schema wave 6/7; B-W2a-17, B-W2a-48; LOG-056, LOG-105, LOG-090): a DDT for another reason has no shipment but a
+// source record (a subcontract order's kit sent to the workshop on conto lavorazione, a supplier claim's return, a repair
+// going back to its customer, a return sent back unchanged: type and id), with every W1 DDT rule (the company's DDT
+// series, gapless per year, frozen once issued, every DPR 472/1996 field; the …_quality_plant_w2a_guards trigger names
+// the reasons each source may give). A shipment carries the freight charged to the customer (a site's freight rule
+// gives it, the office may change it; the invoice charges it, B-W2a-54) and, for a sale to another EU country, the
+// state of its transport evidence (art. 41 DL 331/93, Reg. (EU) 282/2011 art. 45a: the POD, CMR and carrier invoice are
+// files of the shipment). A quality hold (holds.prisma) on a shipment, a parcel, a work order or a serial keeps the
+// goods from being packed and from leaving.
+//
 // Who sees what (ownership/shipping.json): the office reads and writes; the floor reads its OWN site's settings,
 // shipments, lines, parcels, DDTs and their cancellations, packs (lines and parcels of a DRAFT shipment; DRAFT ⇄
-// PACKED); a portal or link session (DOCUMENT_VIEW) reads its OWN party's shipments, lines, parcels, DDTs, cancellations
-// and tracking, never an internal note nor who in the office wrote a row. No table here has a cost, price, margin or
-// wages column (freight is the money module's).
+// PACKED), and never reads a freight figure; a portal or link session (DOCUMENT_VIEW) reads its OWN party's shipments
+// (with the freight charged to it), lines, parcels, DDTs, cancellations and tracking, never an internal note nor who in
+// the office wrote a row. No table here has a cost, margin or wages column; the freight figures are prices.
 
 /// Who carries the goods (trasporto a cura del; DPR 472/1996), as factory-domain documents DDT_TRANSPORT_BY.
 enum TransportBy {
@@ -68,6 +78,14 @@ model ShippingSettings {
   documentPrinterId      String?      @db.Uuid
   /// The time of day (HH:MM, the site's zone) after which a parcel leaves the next working day.
   cutOffTime             String?
+  /// W2a (LOG-105): the freight a shipment from the site charges its customer by default: NONE, a flat amount PER_SHIPMENT
+  /// or PER_PARCEL (in the company's currency, minor units, 0 or more; exactly with a charging rule), free from an order
+  /// value (net, minor units; null: never free). A customer's own terms (Party incoterm) are the API's to weigh.
+  freightRule            FreightRule  @default(NONE)
+  /// @grain price
+  freightAmount          Int?
+  /// @grain price
+  freightFreeFrom        Int?
   version                Int          @default(1)
   createdAt              DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
@@ -81,6 +99,26 @@ model ShippingSettings {
   documentPrinter    Printer?            @relation("ShippingDocumentPrinter", fields: [tenantId, companyId, siteId, documentPrinterId], references: [tenantId, companyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([tenantId, siteId])
+}
+
+/// How a site charges freight by default (W2a, LOG-105).
+enum FreightRule {
+  /// No freight charged (the default; the office may still type one on a shipment).
+  NONE
+  PER_SHIPMENT
+  PER_PARCEL
+}
+
+/// The state of a shipment's intra-EU transport evidence (W2a, LOG-090; art. 41 DL 331/93, Reg. (EU) 282/2011 art. 45a).
+enum TransportEvidenceStatus {
+  /// Not an intra-EU supply (a domestic or export sale), or not decided.
+  NOT_NEEDED
+  /// The goods left for another EU country; no evidence yet.
+  AWAITED
+  /// Some evidence is on file, not enough (two non-contradictory items from independent parties).
+  PARTIAL
+  /// Enough evidence on file (checked by a person).
+  COMPLETE
 }
 
 /// A shipment (LOG-001, LOG-039; A1 §2.4 F Shipment): released garments of one sales order sent from one site to the
@@ -128,6 +166,18 @@ model Shipment {
   /// For the office and the packers only: the partner role can neither read nor write it.
   /// @internal
   internalNote         String?
+  /// W2a (LOG-105): the freight charged to the customer for it, in the order's currency (minor units, 0 or more; the
+  /// site's rule gives it, the office may change it until the shipment is cancelled); null: none decided.
+  /// @grain price
+  freightCharge        Int?
+  /// W2a (LOG-090): the state of its intra-EU transport evidence (anything but NOT_NEEDED only once it left), and
+  /// COMPLETE's time and checker (exactly then).
+  transportEvidence          TransportEvidenceStatus @default(NOT_NEEDED)
+  transportEvidenceAt        DateTime?               @db.Timestamptz(3)
+  transportEvidenceById      String?                 @db.Uuid
+  /// What is on file and what is missing, for the office only.
+  /// @internal
+  transportEvidenceNote      String?
   version              Int            @default(1)
   createdAt            DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -238,7 +288,9 @@ model Parcel {
 }
 
 /// A transport document (DDT, Documento di trasporto; DPR 472/1996; LOG-054; A1 §2.4 F TransportDocument): issued for a
-/// PACKED or SHIPPED shipment with a number from the company's DDT series, and frozen: the data printed on its PDF.
+/// PACKED or SHIPPED shipment — or, W2a (LOG-056), for goods of another source record (a subcontract order, a supplier
+/// claim, a repair, a return: exactly one of the two) — with a number from the company's DDT series, and frozen: the
+/// data printed on its PDF.
 /// Never changed or removed (the triggers, for every login); cancelled by a DdtCancellation row, which keeps its number
 /// (a new DDT replaces it).
 /// @append-only
@@ -248,9 +300,14 @@ model Ddt {
   /// The shipment's company (the sender) and site (where the transport starts).
   companyId      String       @db.Uuid
   siteId         String       @db.Uuid
-  /// The recipient: the shipment's party (the partner role's policy key).
+  /// The recipient: the shipment's (or the source's) party (the partner role's policy key).
   partyId        String       @db.Uuid
-  shipmentId     String       @db.Uuid
+  /// The shipment it carries; null: a DDT for another reason (W2a), with its source.
+  shipmentId     String?      @db.Uuid
+  /// W2a (LOG-056): the record whose goods it carries when it has no shipment (SubcontractOrder, SupplierClaim,
+  /// RepairOrder, ReturnAuthorisation), of its company, site and party: type and id, exactly without a shipment.
+  sourceType     String?
+  sourceId       String?      @db.Uuid
   /// The number series (a company's DDT series, NumberKind DDT, for the year) and the number it gave, as printed;
   /// unique in the series. allocateNumber's NumberAllocation row (recordType "Ddt") holds the same number.
   numberSeriesId String       @db.Uuid
@@ -295,7 +352,8 @@ model Ddt {
   createdById    String?      @db.Uuid
 
   site          Site              @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
-  shipment      Shipment          @relation(fields: [tenantId, siteId, partyId, shipmentId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and partyId.
+  shipment      Shipment?         @relation(fields: [tenantId, siteId, partyId, shipmentId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   numberSeries  NumberSeries      @relation(fields: [tenantId, companyId, numberSeriesId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   cancellations DdtCancellation[]
   // money.prisma: the invoice lines of the goods it carried (TD24).
@@ -311,6 +369,8 @@ model Ddt {
   // The target of the invoice lines' reference: the same party.
   @@unique([tenantId, partyId, id])
   @@index([tenantId, shipmentId])
+  // A source record's DDTs (W2a).
+  @@index([tenantId, sourceType, sourceId])
 }
 
 /// Why the goods travel (causale del trasporto), as factory-domain documents DDT_REASONS.

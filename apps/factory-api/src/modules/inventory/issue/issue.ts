@@ -13,6 +13,7 @@ import { actorOf } from '../../../core/context'
 import { mayAt, postedBy, stockContextOf, type StockContext } from '../ledger/access'
 import { InsufficientStockError, LEDGER_SELECT, postMoves, type LedgerRow, type MoveDraft, type PostedMove } from '../ledger/post-moves'
 import { latestMoveOf, PickRefusedError, pickingWorkOrder, readGroup } from './picking'
+import { giveBackIssue, reservedForIssue, ReservedForOtherError } from '../reservations/consume'
 import {
   itemUnitsOf,
   lockHideCuts,
@@ -231,6 +232,16 @@ export async function issueInCommand(tools: CommandTools, workOrderId: string, b
     takes.push({ locationId: balance.locationId, baseQuantity: quantityText(take) })
     left = left.minus(take)
   }
+  // B-W2a-11: stock another work order's (or order line's) reservation holds is refused in words; after the moves the
+  // issue counts against this work order's own reservations (modules/inventory/reservations/consume.ts).
+  const reserved = await reservedForIssue(
+    tools,
+    { workOrder, itemId: item.id, itemColourId, label, baseUom: item.baseUom, lot: lot ? { id: lot.id, code: lot.code } : null, hide: hide ? { id: hide.id, code: hide.code } : null },
+    decision.baseQuantity,
+  ).catch((error: unknown) => {
+    if (error instanceof ReservedForOtherError) refused({ code: 'RESERVED_FOR_OTHER', message: error.words })
+    throw error
+  })
   const occurredAt = body.occurredAt ? parseInstant(body.occurredAt)! : undefined
   const asEntered = requested && takes.length === 1 && requested.uom !== item.baseUom
   const drafts: MoveDraft[] = takes.map((take) => ({
@@ -257,6 +268,7 @@ export async function issueInCommand(tools: CommandTools, workOrderId: string, b
   }
 
   const baseQuantity = sumOf(moves)
+  await reserved.consume(moves.map((move) => move.id), baseQuantity)
   const startsWorkOrder = workOrder.status === 'RELEASED'
   const issue = {
     id: moves[0]!.id,
@@ -471,6 +483,26 @@ async function reverseGroup(tools: CommandTools, original: LedgerRow, options: {
     ...reversalOf({ ...move, quantity: move.quantity.toString(), baseQuantity: move.baseQuantity.toString() }, options.note),
     uom: move.uom,
   }))
+  if (original.reason === 'ISSUE') {
+    // B-W2a-11: what the issue counted against the work order's reservations goes back to those still ACTIVE.
+    const item = (await readItems(tx, [original.itemId])).get(original.itemId)
+    const lot = original.lotId ? (await readLots(tx, [original.lotId])).get(original.lotId) : undefined
+    const hide = original.hideId ? (await readHides(tx, [original.hideId])).get(original.hideId) : undefined
+    await giveBackIssue(
+      tools,
+      {
+        workOrder,
+        itemId: original.itemId,
+        itemColourId: original.itemColourId,
+        label: item?.code ?? original.itemId,
+        baseUom: item?.baseUom ?? '',
+        lot: lot ? { id: lot.id, code: lot.code } : null,
+        hide: hide ? { id: hide.id, code: hide.code } : null,
+      },
+      sumOf(picked),
+      moves.map((move) => move.id),
+    )
+  }
   const posted = await postMoves(tools, drafts, { key: options.key, issuePath: () => 'body' })
   tools.audit({
     action: options.undo ? 'inventory.undoIssue' : 'inventory.reverseIssue',

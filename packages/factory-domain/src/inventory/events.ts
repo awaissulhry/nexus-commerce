@@ -182,6 +182,51 @@ export const events = [
     }),
     live: { permission: 'inventory.stock.view', fields: ['jobId', 'line', 'itemId', 'lotId', 'lotCode', 'qualityStatus'] },
   }),
+  // ---- B-W2a-11 (SCM-205, SCM-209, SCM-210, SCM-193): reservations and write-offs -----------------------------------------
+  // modules/inventory/reservations emits `inventory.reserved` once per request (its reservations, all for one work order
+  // or one order line) and `inventory.reservations_released` once per release (one or many, with the reason); an issue
+  // that counts against a work order's reservations emits only its own `inventory.issued` and `inventory.moved`.
+  // modules/inventory/ledger's write-off emits `inventory.written_off` once (its SCRAP moves also `inventory.moved`).
+  defineEvent({
+    type: 'inventory.reserved',
+    context: 'inventory',
+    description: 'Stock of a site was reserved for a work order or a sales order line: quantities, areas of leather or named hides.',
+    payload: z.strictObject({
+      reservationIds: z.array(z.uuid()).min(1),
+      workOrderId: z.uuid().nullable(),
+      salesOrderLineId: z.uuid().nullable(),
+      itemIds: z.array(z.uuid()).min(1),
+      hideIds: z.array(z.uuid()),
+    }),
+    live: { permission: 'inventory.stock.view', fields: ['reservationIds', 'workOrderId', 'salesOrderLineId', 'itemIds', 'hideIds'] },
+  }),
+  defineEvent({
+    type: 'inventory.reservations_released',
+    context: 'inventory',
+    description: 'Reservations were released with the reason: what they still held is available again.',
+    payload: z.strictObject({
+      reservationIds: z.array(z.uuid()).min(1),
+      workOrderIds: z.array(z.uuid()),
+      salesOrderLineIds: z.array(z.uuid()),
+      itemIds: z.array(z.uuid()).min(1),
+      hideIds: z.array(z.uuid()),
+    }),
+    live: { permission: 'inventory.stock.view', fields: ['reservationIds', 'workOrderIds', 'itemIds', 'hideIds'] },
+  }),
+  defineEvent({
+    type: 'inventory.written_off',
+    context: 'inventory',
+    description: 'Stock was written off with a reason (damaged, expired, obsolete, lost): it left the site as scrap.',
+    payload: z.strictObject({
+      writeOffId: z.uuid(),
+      reasonCode: z.string().min(1),
+      moveIds: z.array(z.uuid()).min(1),
+      itemIds: z.array(z.uuid()).min(1),
+      hideIds: z.array(z.uuid()),
+      lotIds: z.array(z.uuid()),
+    }),
+    live: { permission: 'inventory.stock.view', fields: ['writeOffId', 'reasonCode', 'moveIds', 'itemIds', 'hideIds', 'lotIds'] },
+  }),
   // ---- stock counts (B-W2a-15) ----
   defineEvent({
     type: 'inventory.count_changed',

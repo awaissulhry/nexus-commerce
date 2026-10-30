@@ -1,0 +1,290 @@
+// Payables (W2a plan §5 schema wave 7/7; features FIN-136, FIN-137; design finance.payables "Supplier invoices" and its
+// tiles New from SDI, Differences to check, To approve, Due this week; "Add foreign invoice"): the invoices suppliers
+// and subcontractors send the company, their lines mapped to what was ordered, and the three-way match of each line
+// against the purchase order and the goods received. apps/factory-api's modules/payables (B-W2a-62) writes them, always
+// through command(): the passive FatturaPA read through the SDI port (the FAKE provider until the contract, GATE-SPEND
+// Q21), an invoice that arrived by e-mail, or a foreign one typed in from its PDF.
+//
+// A supplier invoice is a document received: its number, date, amounts and lines are what the supplier wrote. One that
+// came through SDI is a legal document (its XML a StoredFile of FISCAL_ARCHIVE kind): what it says never changes, only
+// how its lines are mapped and matched, and it is never voided (a wrong one is answered by the supplier's credit note).
+// One typed in (MANUAL, EMAIL) may be corrected until it is approved, and voided when it was typed by mistake (a
+// duplicate). Its lines are mapped to a purchase order line or a subcontract order; each mapped line is matched
+// against the receipts of its order line (quantity) and the order's price: SupplierInvoiceMatch rows, each within the
+// tolerance or not. A person approves it for payment (never the one who registered it: separation of duties), only
+// when every difference outside the tolerance was accepted in words; then it is paid (the date and the bank reference;
+// the payment proposal is W2b). Its due date drives the "Due this week" tile.
+//
+// Money (A1 §2.1, §2.6): amounts are Int minor units of the invoice's currency, unit prices Decimal(18,6), quantities
+// Decimal(18,4); every money column is grain cost (what the company pays: a purchase price).
+//
+// Who sees what (ownership/payables.json): the office reads and writes (the API keeps the cost grain to finance and
+// buyers); the floor, portal and link sessions read none of it (the supplier portal is W2b). Nothing is deleted but a
+// typed line or a match row before approval.
+
+/// An invoice (or credit note) a supplier or subcontractor sent the company (FIN-136, FIN-137): from SDI, by e-mail, or
+/// typed in from a foreign supplier's PDF; matched, approved by a person, paid.
+model SupplierInvoice {
+  id                String                     @id @db.Uuid
+  tenantId          String                     @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company it is addressed to (CessionarioCommittente).
+  companyId         String                     @db.Uuid
+  /// The supplier or subcontractor that sent it (CedentePrestatore).
+  partyId           String                     @db.Uuid
+  source            SupplierInvoiceSource
+  kind              SupplierInvoiceKind        @default(INVOICE)
+  /// FatturaPA TipoDocumento as received (TD01, TD04, TD24 …); null for a foreign invoice typed in.
+  docType           String?
+  /// The supplier's number and date, as printed (Numero, Data).
+  number            String
+  issueDate         DateTime                   @db.Date
+  /// The day the company received it (SDI's delivery, the e-mail, the post): the date the purchases journal and the
+  /// period lock read.
+  receivedOn        DateTime                   @db.Date
+  /// SDI only (and required there): IdentificativoSdI, unique, and the file name SDI delivered.
+  sdiIdentifier     String?
+  sdiFileName       String?
+  /// ISO 4217 (Divisa).
+  currency          String                     @default("EUR")
+  /// The document's sums as the supplier wrote them, minor units, 0 or more (a credit note's too): taxable
+  /// (ImponibileImporto), VAT (Imposta) and the total (ImportoTotaleDocumento).
+  /// @grain cost
+  netTotal          Int                        @default(0)
+  /// @grain cost
+  vatTotal          Int                        @default(0)
+  /// @grain cost
+  grossTotal        Int                        @default(0)
+  /// A withholding tax held back from the payment (DatiRitenuta, e.g. a professional's invoice), and the stamp duty
+  /// (DatiBollo), when there is one.
+  /// @grain cost
+  withholdingAmount Int?
+  /// @grain cost
+  stampDutyAmount   Int?
+  /// The VAT summary as received (DatiRiepilogo): [{ "rate": "22.00" | null, "nature": "N6.1" | null, "taxable": 80000,
+  /// "vat": 17600 }], minor units.
+  /// @grain cost
+  vatSummary        Json                       @default("[]")
+  /// The payment terms as received (DatiPagamento): { "condition": "TP02", "installments": [{ "method": "MP05",
+  /// "amount": 97600, "dueDate": "2026-12-31", "iban": "…" }] }, minor units.
+  /// @grain cost
+  paymentTerms      Json?
+  /// The (first) due date of the payment: the "Due this week" tile.
+  dueDate           DateTime?                  @db.Date
+  /// CREDIT_NOTE only, when it says so: the supplier's invoice it credits.
+  creditOfId        String?                    @db.Uuid
+  /// The FatturaPA XML (SDI: required once approved) and the PDF (an e-mailed or typed invoice, or the courtesy copy):
+  /// StoredFile rows of the invoice.
+  xmlFileId         String?                    @db.Uuid
+  pdfFileId         String?                    @db.Uuid
+  /// RECEIVED → APPROVED | DISPUTED | VOIDED; DISPUTED → RECEIVED | VOIDED; APPROVED → PAID | RECEIVED (approval
+  /// withdrawn before payment). PAID and VOIDED are final; an SDI invoice is never VOIDED.
+  status            SupplierInvoiceStatus      @default(RECEIVED)
+  /// The match of its lines (the API's verdict over SupplierInvoiceMatch): the grid's "match" column.
+  matchStatus       SupplierInvoiceMatchStatus @default(PENDING)
+  matchedAt         DateTime?                  @db.Timestamptz(3)
+  /// Set exactly from APPROVED on: the person who approved it for payment (never its registrant), when, and a note.
+  approvedAt        DateTime?                  @db.Timestamptz(3)
+  approvedById      String?                    @db.Uuid
+  approvalNote      String?
+  /// Set exactly while DISPUTED: who disputes it, since when and why (a credit note is asked of the supplier).
+  disputedAt        DateTime?                  @db.Timestamptz(3)
+  disputedById      String?                    @db.Uuid
+  disputeReason     String?
+  /// Set exactly when PAID: the date the transfer left the bank and the bank's reference.
+  paidOn            DateTime?                  @db.Date
+  paymentRef        String?
+  /// Set exactly when VOIDED (typed by mistake, or a duplicate of another arrival) and why.
+  voidedAt          DateTime?                  @db.Timestamptz(3)
+  voidReason        String?
+  /// For the office only.
+  /// @internal
+  internalNote      String?
+  version           Int                        @default(1)
+  createdAt         DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                   @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?                    @db.Uuid
+
+  company  Company           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party    Party             @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, companyId and
+  // partyId.
+  creditOf SupplierInvoice?  @relation("SupplierInvoiceCredit", fields: [tenantId, companyId, partyId, creditOfId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  credits  SupplierInvoice[] @relation("SupplierInvoiceCredit")
+  xmlFile  StoredFile?       @relation("SupplierInvoiceXml", fields: [tenantId, xmlFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  pdfFile  StoredFile?       @relation("SupplierInvoicePdf", fields: [tenantId, pdfFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines    SupplierInvoiceLine[]
+  matches  SupplierInvoiceMatch[]
+
+  // An invoice SDI delivered is recorded once.
+  @@unique([tenantId, sdiIdentifier])
+  // The same supplier's number on the same date is recorded once (a number repeats across years: the API also refuses
+  // the same number twice in a year).
+  @@unique([tenantId, companyId, partyId, number, issueDate])
+  // The targets of the references from its lines and matches (the same supplier) and from its credit notes (the same
+  // company and supplier).
+  @@unique([tenantId, partyId, id])
+  @@unique([tenantId, companyId, partyId, id])
+  @@index([tenantId, companyId, status])
+  @@index([tenantId, partyId, issueDate])
+  @@index([tenantId, dueDate])
+}
+
+/// Where a supplier invoice came from.
+enum SupplierInvoiceSource {
+  /// The passive FatturaPA delivered by SDI (through the company's SDI provider).
+  SDI
+  /// Sent by e-mail (a PDF, mail to sort) and typed in.
+  EMAIL
+  /// Typed in from a paper or foreign invoice ("Add foreign invoice").
+  MANUAL
+}
+
+enum SupplierInvoiceKind {
+  INVOICE
+  /// A credit note of the supplier (TD04): it reduces what the company owes.
+  CREDIT_NOTE
+}
+
+enum SupplierInvoiceStatus {
+  RECEIVED
+  APPROVED
+  PAID
+  DISPUTED
+  VOIDED
+}
+
+/// The grid's "match" column.
+enum SupplierInvoiceMatchStatus {
+  /// Not matched yet.
+  PENDING
+  /// Every mapped line matches its order and receipts within the tolerance.
+  MATCHED
+  /// A difference outside the tolerance: a person accepts it in words, or disputes the invoice.
+  DIFFERENCES
+  /// No line is on a purchase or subcontract order (a service, a utility).
+  NO_PO
+  /// The goods invoiced have not (all) arrived yet.
+  WAITING_GOODS
+}
+
+/// What a supplier invoice line is for.
+enum SupplierInvoiceLineKind {
+  /// Material on a purchase order line.
+  GOODS
+  /// Work of a subcontractor on a subcontract order (terzista).
+  SUBCONTRACT
+  SERVICE
+  /// An accessory charge (freight, packaging …): landed cost.
+  CHARGE
+}
+
+/// One line of a supplier invoice (FatturaPA DettaglioLinee as received, or typed), and the order it is mapped to: a
+/// purchase order line, or a subcontract order. An SDI line's figures never change; its mapping does until approval.
+model SupplierInvoiceLine {
+  id                  String                  @id @db.Uuid
+  tenantId            String                  @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The invoice's supplier (its references).
+  partyId             String                  @db.Uuid
+  invoiceId           String                  @db.Uuid
+  /// NumeroLinea: 1, 2, 3 … in the invoice.
+  seq                 Int
+  kind                SupplierInvoiceLineKind @default(GOODS)
+  /// Descrizione and CodiceArticolo, as the supplier wrote them.
+  description         String
+  itemCode            String?
+  /// Quantita and UnitaMisura as printed (above 0 when given).
+  quantity            Decimal?                @db.Decimal(18, 4)
+  uom                 String?
+  /// PrezzoUnitario, and a percentage discount (above 0, below 100).
+  /// @grain cost
+  unitPrice           Decimal?                @db.Decimal(18, 6)
+  discountPct         Decimal?                @db.Decimal(7, 4)
+  /// PrezzoTotale without VAT, minor units (negative on a discount line, as SDI allows).
+  /// @grain cost
+  netAmount           Int
+  /// AliquotaIVA, and the Natura when 0 (N1 … N7, e.g. N6.1 reverse charge).
+  vatRatePct          Decimal                 @db.Decimal(5, 2)
+  vatNature           String?
+  /// The mapping (at most one of them): the purchase order line it bills, or the subcontract order whose work it bills;
+  /// siteId is that order's site (null while not mapped). Set by the office or the API's suggestion, changed until
+  /// approval.
+  siteId              String?                 @db.Uuid
+  purchaseOrderLineId String?                 @db.Uuid
+  subcontractOrderId  String?                 @db.Uuid
+  version             Int                     @default(1)
+  createdAt           DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?                 @db.Uuid
+
+  invoice           SupplierInvoice        @relation(fields: [tenantId, partyId, invoiceId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and partyId.
+  purchaseOrderLine PurchaseOrderLine?     @relation(fields: [tenantId, siteId, purchaseOrderLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  subcontractOrder  SubcontractOrder?      @relation(fields: [tenantId, siteId, partyId, subcontractOrderId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  matches           SupplierInvoiceMatch[]
+  // cost-ledger.prisma: the work-order cost entries a subcontract line's actual cost posted.
+  /// @not-money a relation: the ledger rows carry the grain
+  costEntries       WorkOrderCostEntry[]
+
+  @@unique([tenantId, invoiceId, seq])
+  // The targets of the matches' reference (the same supplier) and of the cost ledger's.
+  @@unique([tenantId, partyId, id])
+  @@unique([tenantId, id])
+  @@index([tenantId, purchaseOrderLineId])
+  @@index([tenantId, subcontractOrderId])
+}
+
+/// The three-way match of one supplier invoice line (FIN-137): against one goods receipt line of the purchase order
+/// line it is mapped to (or nothing received yet), or against its subcontract order; quantity invoiced vs received,
+/// price invoiced vs ordered, the value of the difference, and whether it is within the tolerance. A difference outside
+/// it is accepted in words by a person before the invoice is approved. Written again when the match is redone, until
+/// the invoice is approved.
+model SupplierInvoiceMatch {
+  id                   String           @id @db.Uuid
+  tenantId             String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The site of the order matched, and the invoice's supplier.
+  siteId               String           @db.Uuid
+  partyId              String           @db.Uuid
+  invoiceId            String           @db.Uuid
+  invoiceLineId        String           @db.Uuid
+  /// Exactly one of them: the line's purchase order line (with the receipt line matched, null when nothing was received
+  /// yet), or the line's subcontract order.
+  purchaseOrderLineId  String?          @db.Uuid
+  goodsReceiptLineId   String?          @db.Uuid
+  subcontractOrderId   String?          @db.Uuid
+  /// In the order line's unit (the receipt line's `quantity`; pieces for subcontract work): 0 or more.
+  invoicedQuantity     Decimal          @db.Decimal(18, 4)
+  receivedQuantity     Decimal          @db.Decimal(18, 4)
+  /// The order's price and the invoice's, per the order line's unit.
+  /// @grain cost
+  orderedUnitPrice     Decimal          @db.Decimal(18, 6)
+  /// @grain cost
+  invoicedUnitPrice    Decimal          @db.Decimal(18, 6)
+  /// What the invoice asks beyond (or below) what was received at the order's price, minor units.
+  /// @grain cost
+  differenceAmount     Int
+  /// The tolerances applied (percent, 0 to 100) and the verdict.
+  quantityTolerancePct Decimal          @db.Decimal(7, 4)
+  /// @not-money a percentage, not an amount
+  priceTolerancePct    Decimal          @db.Decimal(7, 4)
+  withinTolerance      Boolean
+  /// A difference outside the tolerance accepted by a person, with why (exactly together; only outside the tolerance).
+  acceptedAt           DateTime?        @db.Timestamptz(3)
+  acceptedById         String?          @db.Uuid
+  acceptNote           String?
+  version              Int              @default(1)
+  createdAt            DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?          @db.Uuid
+
+  invoice           SupplierInvoice     @relation(fields: [tenantId, partyId, invoiceId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  invoiceLine       SupplierInvoiceLine @relation(fields: [tenantId, partyId, invoiceLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and
+  // partyId.
+  purchaseOrderLine PurchaseOrderLine?  @relation(fields: [tenantId, siteId, purchaseOrderLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  goodsReceiptLine  GoodsReceiptLine?   @relation(fields: [tenantId, siteId, goodsReceiptLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  subcontractOrder  SubcontractOrder?   @relation(fields: [tenantId, siteId, partyId, subcontractOrderId], references: [tenantId, siteId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, invoiceId])
+  @@index([tenantId, invoiceLineId])
+  @@index([tenantId, goodsReceiptLineId])
+}

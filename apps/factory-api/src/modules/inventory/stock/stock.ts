@@ -1,7 +1,7 @@
 import type { FactoryClient, Prisma, StockMoveReason } from '@nexus/factory-db'
 import { ValidationError } from '@nexus/factory-domain/core/errors'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
-import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { parseInstant, toUtcIso } from '@nexus/factory-domain/core/time'
 import {
   balancesFromSums,
   changesSiteStock,
@@ -14,19 +14,21 @@ import {
 } from '@nexus/factory-domain/inventory/ledger/moves'
 import { lotUnitCost, stockValue } from '@nexus/factory-domain/inventory/ledger/valuation'
 import { INVENTORY_STOCK_VIEW } from '@nexus/factory-domain/inventory/permissions'
+import { openOf } from '@nexus/factory-domain/inventory/reservations/rules'
 import { figuresOf, itemTotals, reconcileBalances, type LotQualityStatus } from '@nexus/factory-domain/inventory/stock/overview'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { officeContextOf, seesCost, siteFor } from '../ledger/access'
+import { demandOpen, readDemands, RESERVATION_COLUMNS } from '../reservations/store'
 
 /**
  * The stock overview, the stock card and the ledger check (SCM-190, SCM-191, SCM-198, SCM-258, SCM-280, QHS-073; A2
  * SCR-060, SCR-064; PLAN §4.7 end check), office reads. Balances are sums of the ledger (StockMove, indexed per stock
  * key), never a stored figure: on hand per site, location, item, colour, lot and hide; held = the stock of a lot that is
- * not RELEASED; available = on hand − held. Values only for a caller with the cost grain: a lot's stock at the lot's cost
- * (its valuations' moving average), other stock at the item's standard cost.
+ * not RELEASED; available = on hand − held − reserved (B-W2a-11: the open reservations). Values only for a caller with the
+ * cost grain: a lot's stock at the lot's cost (its valuations' moving average), other stock at the item's standard cost.
  */
 
 const SCOPE = { company: 'companyId', site: 'siteId' } as const
@@ -56,11 +58,31 @@ export interface OverviewQuery {
   readonly locationId?: string | undefined
   /** Only held stock (a lot not RELEASED). */
   readonly held?: boolean | undefined
+  /** Only stock of a material and colour that open reservations hold (B-W2a-11). */
+  readonly reserved?: boolean | undefined
+  /** The stock as it was at this instant (SCM-197): moves that happened up to it (`occurredAt`, the device's time for a floor scan). */
+  readonly asOf?: string | undefined
 }
 
-/** SCR-060: the stock the caller may see, per location and stock key, with the totals per item and colour. */
+const keyOfSite = (row: { siteId: string; itemId: string; itemColourId: string | null }) => `${row.siteId}|${row.itemId}|${row.itemColourId ?? '-'}`
+
+/**
+ * SCR-060: the stock the caller may see, per location and stock key, with the totals per item and colour.
+ *
+ * Reserved (B-W2a-11; design "Available = on hand − reserved − on hold"): reservations hold a site's stock of a material
+ * and colour (or of one lot, or one hide), not a place. A row's `reserved` is exact only for a hide an ACTIVE HIDE
+ * reservation holds (its row is that hide's); the totals per item and colour carry what the site's open reservations
+ * hold, and `reservations` lists it per site, material, colour and lot (null: any lot) for the screen to place. Only
+ * reservations of open demands count (`stale` ones are counted apart).
+ *
+ * As of a date (SCM-197): the balances of the moves that happened up to `asOf`; nothing is held or reserved "as of" a
+ * past instant here (a lot's quality and a reservation have no history of their own): those figures are null, and the
+ * values are the lot's cost from the valuations of the moves up to that instant (else the item's standard cost today:
+ * there is no standard cost history until the money schema's StandardCost, wave 7).
+ */
 export async function stockOverview(caller: CommandCaller, query: OverviewQuery) {
   const context = officeContextOf(caller)
+  const asOf = query.asOf ? parseInstant(query.asOf) : null
   const where: Prisma.StockMoveWhereInput = {
     AND: [
       scopeWhere(actorOf(context), INVENTORY_STOCK_VIEW, SCOPE) as Prisma.StockMoveWhereInput,
@@ -70,6 +92,7 @@ export async function stockOverview(caller: CommandCaller, query: OverviewQuery)
       query.lotId ? { lotId: query.lotId } : {},
       query.hideId ? { hideId: query.hideId } : {},
       query.locationId ? { OR: [{ toLocationId: query.locationId }, { fromLocationId: query.locationId }] } : {},
+      asOf ? { occurredAt: { lte: asOf } } : {},
     ],
   }
   const withCost = seesCost(context)
@@ -87,8 +110,12 @@ export async function stockOverview(caller: CommandCaller, query: OverviewQuery)
       client.hide.findMany({ where: { id: { in: [...new Set(balances.flatMap((balance) => (balance.hideId ? [balance.hideId] : [])))] } }, select: { id: true, code: true } }),
       client.location.findMany({ where: { id: { in: [...new Set(balances.map((balance) => balance.locationId))] } }, select: { id: true, code: true, name: true } }),
       client.site.findMany({ where: { id: { in: [...new Set(balances.map((balance) => balance.siteId))] } }, select: { id: true, code: true } }),
-      withCost && lotIds.length > 0 ? client.stockValuation.findMany({ where: { lotId: { in: lotIds } }, select: { siteId: true, lotId: true, quantity: true, unitCost: true } }) : Promise.resolve([]),
+      withCost && lotIds.length > 0
+        ? client.stockValuation.findMany({ where: { lotId: { in: lotIds }, ...(asOf ? { move: { occurredAt: { lte: asOf } } } : {}) }, select: { siteId: true, lotId: true, quantity: true, unitCost: true } })
+        : Promise.resolve([]),
     ])
+    // The ACTIVE reservations of these sites' materials, and whether their demand is still open (now only).
+    const reservedNow = asOf ? null : await openReservationsOf(client, balances)
     const itemOf = new Map(items.map((item) => [item.id, item]))
     const lotOf = new Map(lots.map((lot) => [lot.id, lot]))
     const named = <Row extends { id: string }>(rows: readonly Row[]) => new Map(rows.map((row) => [row.id, row]))
@@ -97,7 +124,9 @@ export async function stockOverview(caller: CommandCaller, query: OverviewQuery)
     const locationOf = named(locations)
     const siteOf = named(sites)
     const statusOf = (lotId: string) => lotOf.get(lotId)?.qualityStatus as LotQualityStatus | undefined
-    const shown = query.held ? balances.filter((balance) => balance.lotId && statusOf(balance.lotId) !== 'RELEASED') : balances
+    const shown = balances.filter(
+      (balance) => (!query.held || (balance.lotId && statusOf(balance.lotId) !== 'RELEASED')) && (!query.reserved || (reservedNow?.bySite.get(keyOfSite(balance))?.greaterThan(0) ?? false)),
+    )
 
     const lotCosts = new Map<string, Decimal | null>()
     const unitCostOf = (balance: Balance): Decimal | null => {
@@ -123,6 +152,8 @@ export async function stockOverview(caller: CommandCaller, query: OverviewQuery)
       const lot = balance.lotId ? lotOf.get(balance.lotId) : undefined
       const figures = figuresOf(balance.onHand, lot?.qualityStatus as LotQualityStatus | undefined)
       const value = withCost ? valueOf(balance) : null
+      // A hide's own HIDE reservation holds this row exactly (never more than the row holds).
+      const reserved = reservedNow ? Dec.min(balance.onHand, reservedNow.byHide.get(balance.hideId ?? '') ?? ZERO) : null
       return {
         siteId: balance.siteId,
         siteCode: siteOf.get(balance.siteId)?.code ?? '',
@@ -132,8 +163,9 @@ export async function stockOverview(caller: CommandCaller, query: OverviewQuery)
         lot: lot ? { id: lot.id, code: lot.code, qualityStatus: lot.qualityStatus } : null,
         hide: balance.hideId ? (hideOf.get(balance.hideId) ?? null) : null,
         onHand: quantityText(figures.onHand),
-        held: quantityText(figures.held),
-        available: quantityText(figures.available),
+        held: asOf ? null : quantityText(figures.held),
+        reserved: reserved ? quantityText(reserved) : null,
+        available: reserved ? quantityText(figures.available.minus(reserved)) : null,
         ...(withCost ? { unitCost: asMoney('cost', value?.unitCost ?? null), value: asMoney('cost', value?.value ?? null) } : {}),
       }
     })
@@ -147,15 +179,53 @@ export async function stockOverview(caller: CommandCaller, query: OverviewQuery)
               return one === null || sum === null ? null : sum + one.value
             }, 0)
         : null
+      // What the open reservations hold of it at the sites shown (a reservation holds a site's stock, not a place).
+      const sitesShown = new Set(shown.filter((balance) => balance.itemId === total.itemId && balance.itemColourId === total.itemColourId).map((balance) => balance.siteId))
+      const reserved = reservedNow ? [...sitesShown].reduce<Decimal>((sum, siteId) => sum.plus(reservedNow.bySite.get(keyOfSite({ siteId, itemId: total.itemId, itemColourId: total.itemColourId })) ?? ZERO), ZERO) : null
+      const available = reserved ? new Dec(total.available).minus(reserved) : null
       return {
         ...total,
+        held: asOf ? null : total.held,
+        available: available ? quantityText(available) : null,
+        reserved: reserved ? quantityText(reserved) : null,
+        overReserved: available ? available.isNegative() : null,
+        heldHides: asOf ? null : total.heldHides,
         item: { id: item.id, code: item.code, name: item.name, baseUom: item.baseUom, tracking: item.tracking },
         colour: total.itemColourId ? (colourOf.get(total.itemColourId) ?? null) : null,
         ...(withCost ? { value: asMoney('cost', value), currency: item.currency } : {}),
       }
     })
-    return { rows, items: perItem, truncated: shown.length > ROW_LIMIT }
+    return { asOf: asOf ? toUtcIso(asOf) : null, rows, items: perItem, reservations: reservedNow?.list ?? [], truncated: shown.length > ROW_LIMIT }
   })
+}
+
+/** The open reservations of the sites and materials of some balances: per site, item and colour, per hide, and per lot as a list. */
+async function openReservationsOf(client: FactoryClient, balances: readonly Balance[]) {
+  const bySite = new Map<string, Decimal>()
+  const byHide = new Map<string, Decimal>()
+  const groups = new Map<string, { siteId: string; itemId: string; itemColourId: string | null; lotId: string | null; reserved: Decimal; reservations: number; stale: number }>()
+  const siteIds = [...new Set(balances.map((balance) => balance.siteId))]
+  const itemIds = [...new Set(balances.map((balance) => balance.itemId))]
+  if (siteIds.length === 0) return { bySite, byHide, list: [] }
+  const rows = await client.reservation.findMany({ where: { status: 'ACTIVE', siteId: { in: siteIds }, itemId: { in: itemIds } }, select: RESERVATION_COLUMNS })
+  const demands = await readDemands(client, rows, { withOrders: true })
+  for (const row of rows) {
+    const id = `${keyOfSite(row)}|${row.lotId ?? '-'}`
+    const group = groups.get(id) ?? { siteId: row.siteId, itemId: row.itemId, itemColourId: row.itemColourId, lotId: row.lotId, reserved: ZERO, reservations: 0, stale: 0 }
+    if (!demandOpen(row, demands)) {
+      group.stale += 1
+      groups.set(id, group)
+      continue
+    }
+    const open = openOf({ quantity: row.quantity.toString(), issuedQuantity: row.issuedQuantity.toString() })
+    group.reserved = group.reserved.plus(open)
+    group.reservations += 1
+    groups.set(id, group)
+    bySite.set(keyOfSite(row), (bySite.get(keyOfSite(row)) ?? ZERO).plus(open))
+    if (row.kind === 'HIDE' && row.hideId) byHide.set(row.hideId, (byHide.get(row.hideId) ?? ZERO).plus(open))
+  }
+  const list = [...groups.values()].map((group) => ({ ...group, reserved: quantityText(group.reserved) }))
+  return { bySite, byHide, list }
 }
 
 // ---- the stock card (SCM-191) ------------------------------------------------------------------------------------------

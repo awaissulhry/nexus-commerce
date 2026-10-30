@@ -849,6 +849,8 @@ model SalesOrderMilestone {
   depositRequest DepositRequest? @relation(fields: [tenantId, companyId, partyId, depositRequestId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, orderId, seq])
+  // W2a money.prisma (wave 7/7): the invoice lines that bill (or credit) this step.
+  invoiceLines   InvoiceLine[]    @relation("InvoiceLineMilestone")
   // The target of the money module's references (wave 7/7: the invoice lines that bill a step): a step of the same buyer.
   @@unique([tenantId, partyId, id])
   // Open steps by due date.

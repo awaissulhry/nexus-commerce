@@ -151,6 +151,11 @@ model Item {
   // supply.prisma: the purchase order lines that buy it and the planning runs' requirements of it.
   purchaseOrderLines   PurchaseOrderLine[]
   materialRequirements MaterialRequirement[]
+  // W2a cost-ledger.prisma (wave 7/7): its frozen standard costs, and the work-order cost entries that name it.
+  /// @not-money the relation to its standard costs (the rows carry the grain)
+  standardCosts        StandardCost[]
+  /// @not-money the relation to the cost ledger (the rows carry the grain)
+  costEntries          WorkOrderCostEntry[]
   // W2a reservations.prisma, stockcount.prisma, planning.prisma: its reservations, the counts of it (whole, or a line),
   // its planning parameters per site and the planning exceptions about it.
   reservations         Reservation[]
@@ -158,6 +163,8 @@ model Item {
   stockCountLines      StockCountLine[]
   itemPlannings        ItemPlanning[]
   planningExceptions   PlanningException[]
+  // W2a ncr.prisma: the nonconformances about it (a material).
+  nonconformances      Nonconformance[]
   // inventory.prisma: its receipt lines, lots, stock moves and their values.
   goodsReceiptLines    GoodsReceiptLine[]
   lots                 Lot[]
@@ -407,6 +414,8 @@ model Style {
   workOrders          WorkOrder[]
   // quality.prisma: the PPE register's entries about it.
   ppeRegisterEntries  PpeRegisterEntry[]
+  // W2a ncr.prisma: the nonconformances about it.
+  nonconformances     Nonconformance[]
   // pricing.prisma, returns.prisma, complaints.prisma: its prices in price lists, its repairs and complaints.
   /// @not-money the relation to its price list entries
   priceListEntries    PriceListEntry[]
@@ -474,6 +483,8 @@ model Colourway {
   salesOrderLines SalesOrderLine[]
   // production.prisma: the work order cells made in it.
   workOrderSizes  WorkOrderSize[]
+  // W2a ncr.prisma: the nonconformances about it.
+  nonconformances Nonconformance[]
   // pricing.prisma, returns.prisma: its own prices in price lists, its repairs.
   /// @not-money the relation to its price list entries
   priceListEntries PriceListEntry[]

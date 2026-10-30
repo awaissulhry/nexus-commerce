@@ -75,6 +75,12 @@ model SubcontractOrder {
   workOrder  WorkOrder              @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   operations SubcontractOperation[]
   kitLines   SubcontractKitLine[]
+  // W2a payables.prisma, cost-ledger.prisma (wave 7/7): the subcontractor's invoice lines that bill it, their matches,
+  // and the work-order cost entries of its work.
+  supplierInvoiceLines   SupplierInvoiceLine[]
+  supplierInvoiceMatches SupplierInvoiceMatch[]
+  /// @not-money the relation to the cost ledger (the rows carry the grain)
+  costEntries            WorkOrderCostEntry[]
 
   @@unique([tenantId, companyId, number])
   // The target of the operations' reference: an operation of the order's own work order.
