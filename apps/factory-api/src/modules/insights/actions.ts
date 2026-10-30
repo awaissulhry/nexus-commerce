@@ -11,6 +11,8 @@ import {
   resolveNoteProblem,
   responsibleFor,
   rowActionsOf,
+  snoozeRefusal,
+  snoozeTimeProblem,
   takesActions,
   type ActionRefusal,
   type ActionVerb,
@@ -22,6 +24,8 @@ import { QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
 import { command, StaleVersionError, type CommandCaller, type CommandTx } from '../../core/command'
 import type { OfficeContext } from '../../core/context'
 import { heldRoles } from '../../platform/auth/roles/access'
+import { followInCommand } from '../../platform/threads/followers'
+import { resolveRecord } from '../../platform/threads/records'
 import { countHandled, lockAction, peopleNames, readAction, readHandled, writeAction, writeLog, type ActionChange, type ActionIdentity, type ActionRow, type LogEntry } from './actions-store'
 import { SOURCES } from './sources'
 import { officeContextOf, viewerOf } from './viewer'
@@ -111,6 +115,8 @@ export function actionsView(actions: RowActions, names: ReadonlyMap<string, stri
     verbs: [...actions.verbs],
     assigned: actions.assigned ? { to: person(actions.assigned.toId), by: person(actions.assigned.byId), at: toUtcIso(actions.assigned.at) } : null,
     acknowledged: actions.acknowledged ? { by: person(actions.acknowledged.byId), at: toUtcIso(actions.acknowledged.at) } : null,
+    /** W2a: the reader may snooze it (POST /home/today/rows/:key/snooze). */
+    snoozable: actions.snoozable,
   }
 }
 
@@ -181,6 +187,10 @@ export async function actOnRow(caller: CommandCaller, key: string, verb: ActionV
     }
     const row = await writeAction(tx, existing, identity, change, { id: newId(), actorId: context.actorId, now })
     await writeLog(tx, row.id, identity, entry, newId())
+    // W2a (B-W2a-20): the assignee follows the row's record (ASSIGNEE) when it has a thread, unless they have a follow row.
+    if (verb === 'ASSIGN' && assigneeId !== null && (await resolveRecord(tx, item.record.type, item.record.id))) {
+      await followInCommand(tools, { type: item.record.type, id: item.record.id, companyId: item.companyId, siteId: item.siteId }, assigneeId, 'ASSIGNEE', context.actorId)
+    }
     const after = { key, verb: entry.verb, condition: item.condition, ...(entry.assigneeId ? { assigneeId: entry.assigneeId } : {}), ...(note ? { note } : {}) }
     tools.audit({ recordType: 'AttentionAction', recordId: row.id, companyId: item.companyId, siteId: item.siteId, ...(existing ? { before: auditView(existing) } : {}), after, ...(note ? { reason: note } : {}) })
     // The row's record keeps it on its timeline (the resolve note says what was done about it).
@@ -192,6 +202,65 @@ export async function actOnRow(caller: CommandCaller, key: string, verb: ActionV
     else tools.emit({ type: 'attention.acknowledged', ...event, payload })
     const names = await peopleNames(tx, [row.assignedToId, row.assignedById, row.acknowledgedById])
     return { key, condition: item.condition, resolved: verb === 'RESOLVE', actions: actionsView(rowActionsOf(item, row), names, context.actorId) }
+  }).catch((error: unknown) => {
+    if ((error as { code?: unknown } | null)?.code === 'P2002') throw new ConflictError('Someone acted on this row at the same moment. Read Today again.')
+    throw error
+  })
+  return result
+}
+
+// ---- Snooze (W2a, B-W2a-20; design home.today popup snooze) -----------------------------------------------------------------
+
+export interface SnoozeBody {
+  readonly condition: string
+  readonly version: number
+  /** Until then; null: until something changes on the record (the row's condition). */
+  readonly until: string | null
+}
+
+/**
+ * POST /home/today/rows/:key/snooze: the row leaves Today (for everyone, as an acknowledgement is the row's) until the
+ * time, or until its condition changes. ONE command: the action row's snooze and its SNOOZED history row together (the
+ * database checks at commit that every snooze is in the history), audit rows on the action and the record, the event.
+ */
+export async function snoozeRow(caller: CommandCaller, key: string, body: SnoozeBody, idempotencyKey?: string) {
+  const context = officeContextOf(caller)
+  const viewer = viewerOf(caller)
+  const { candidate, item } = await rowFor(caller, viewer, key)
+  const until = body.until === null ? null : new Date(body.until)
+  const identity: ActionIdentity = {
+    rowKey: key,
+    kind: item.kind,
+    recordType: item.record.type,
+    recordId: item.record.id,
+    subKey: candidate.subKey ?? null,
+    companyId: item.companyId,
+    siteId: item.siteId,
+    partyId: item.partyId,
+  }
+  const { result } = await command(caller, { name: 'insights.snoozeRow', idempotencyKey, input: { key, ...body } }, async (tools) => {
+    const { tx, now } = tools
+    const existing = await lockAction(tx, key)
+    const refusal = snoozeRefusal(item, existing ?? undefined, { condition: body.condition })
+    if (refusal !== null) throw refused(refusal)
+    const problem = snoozeTimeProblem(until, now)
+    if (problem !== null) throw new ValidationError(problem, [{ path: 'body/until', message: problem }])
+    if ((existing?.version ?? 0) !== body.version) throw new StaleVersionError('AttentionAction', existing?.id ?? key, existing?.version ?? 0, body.version)
+    const change: ActionChange = { snoozedCondition: item.condition, snoozedById: context.actorId, snoozedAt: now, snoozedUntil: until }
+    // The history row first, in the same transaction (the deferred check reads it at commit).
+    const row = await writeAction(tx, existing, identity, change, { id: newId(), actorId: context.actorId, now })
+    await writeLog(tx, row.id, identity, { verb: 'SNOOZED', condition: item.condition, recordLabel: item.record.label, actorId: context.actorId, assigneeId: null, note: null, snoozedUntil: until, at: now, requestId: context.requestId }, newId())
+    const after = { key, verb: 'SNOOZED', condition: item.condition, until: until ? toUtcIso(until) : null }
+    tools.audit({ recordType: 'AttentionAction', recordId: row.id, companyId: item.companyId, siteId: item.siteId, ...(existing ? { before: auditView(existing) } : {}), after })
+    tools.audit({ recordType: item.record.type, recordId: item.record.id, companyId: item.companyId, siteId: item.siteId, after })
+    tools.emit({
+      type: 'attention.snoozed',
+      subject: row.id,
+      companyId: item.companyId,
+      siteId: item.siteId,
+      payload: { actionId: row.id, key, kind: item.kind, recordType: item.record.type, recordId: item.record.id, condition: item.condition, until: until ? toUtcIso(until) : null },
+    })
+    return { key, condition: item.condition, snoozed: { at: toUtcIso(now), until: until ? toUtcIso(until) : null }, version: row.version }
   }).catch((error: unknown) => {
     if ((error as { code?: unknown } | null)?.code === 'P2002') throw new ConflictError('Someone acted on this row at the same moment. Read Today again.')
     throw error

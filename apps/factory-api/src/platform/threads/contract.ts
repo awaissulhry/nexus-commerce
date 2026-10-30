@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { grainedJson } from '@nexus/factory-domain/money/marked'
 import { AUTHOR_KINDS, MAX_ATTACHMENTS, MAX_BODY_LENGTH, MAX_MENTIONS, MESSAGE_AUDIENCES, MESSAGE_CHANNELS, MESSAGE_DIRECTIONS, RECORD_TYPE, THREAD_STATUSES } from '@nexus/factory-domain/threads/rules'
+import { FOLLOW_REASONS } from '@nexus/factory-domain/threads/followers'
 import { TIMELINE_KINDS } from '@nexus/factory-domain/threads/timeline'
 import { FILE_AUDIENCES, FILE_KINDS, FILE_STATUSES } from '../files/rules'
 
@@ -181,4 +182,47 @@ export const timelineContract = defineContract({
       }),
   }),
   response: { 200: output({ entries: z.array(timelineEntry), nextCursor: z.string().nullable() }) },
+})
+
+// ---- followers (B-W2a-20; COL-011; design shell.panels popup followers) ------------------------------------------------
+
+const followersView = output({
+  record: output({ type: z.string(), id: id() }),
+  /** Every follower, muted ones included (the list shows at most 200). */
+  count: z.number().int(),
+  /** My own follow: the band's Follow toggle. */
+  me: output({ following: z.boolean(), muted: z.boolean(), reason: z.enum(FOLLOW_REASONS).nullable() }),
+  followers: z.array(
+    output({
+      userId: id(),
+      name: z.string(),
+      me: z.boolean(),
+      /** Why they first followed it: made it, were given something on it, were mentioned, chose to (or were added). */
+      reason: z.enum(FOLLOW_REASONS),
+      /** Muted: the record's news does not reach them (a mention still does). */
+      muted: z.boolean(),
+      since: instant(),
+      /** The colleague who added them, when someone else did. */
+      addedBy: output({ id: id(), name: z.string() }).nullable(),
+    }),
+  ),
+})
+
+export const followersContract = defineContract({ params: recordParams, response: { 200: followersView } })
+
+export const setMyFollowContract = defineContract({
+  params: recordParams,
+  body: input({
+    /** False: unfollow (the follow is removed; a later mention follows again). */
+    following: z.boolean(),
+    /** True: keep following without the record's news (M on a notification); nothing follows me again on its own. */
+    muted: z.boolean().default(false),
+  }),
+  response: { 200: followersView },
+})
+
+export const addFollowerContract = defineContract({
+  params: recordParams,
+  body: input({ /** An active colleague who may read the record's thread. */ userId: id() }),
+  response: { 200: followersView },
 })

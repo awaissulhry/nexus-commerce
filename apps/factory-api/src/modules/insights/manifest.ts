@@ -18,4 +18,8 @@ export const manifest = defineManifest({
   'POST /home/today/rows/:key/acknowledge': { audiences: ['office'], permission: 'home.view', scope: 'record' },
   'GET /home/today/layout': { audiences: ['office'], permission: 'home.view', scope: 'record' },
   'PUT /home/today/layout': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  // B-W2a-20: Snooze (an alert row, the record's act right), Nudge (my own waits), Coming up (my next working days).
+  'POST /home/today/rows/:key/snooze': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  'POST /home/waiting-on-others/:key/nudge': { audiences: ['office'], permission: 'home.view', scope: 'record' },
+  'GET /home/coming-up': { audiences: ['office'], permission: 'home.view', scope: 'record' },
 })

@@ -1491,7 +1491,8 @@
     "quality": "Qualità",
     "home": "Home",
     "floorsync": "Sincronizzazione reparto",
-    "calendars": "Calendari"
+    "calendars": "Calendari",
+    "tasks": "Attività"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1639,6 +1640,7 @@
     "quality_garments_release": "Rilasciare i capi ispezionati per la spedizione",
     "quality_garments_reverse": "Ritirare i capi rilasciati prima della spedizione",
     "home_view": "Vedere Oggi",
+    "tasks_manage": "Creare attività sui record e assegnarle",
     "floorsync_view": "Vedere le azioni rifiutate dei tablet di reparto",
     "floorsync_discard": "Scartare un'azione rifiutata di un tablet di reparto",
     "calendars_view": "Vedere i calendari aziendali",

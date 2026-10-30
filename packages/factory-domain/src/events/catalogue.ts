@@ -15,6 +15,8 @@ import { events as parties } from '../parties/events'
 import { events as payments } from '../payments/events'
 import { events as planning } from '../planning/events'
 import { events as threads } from '../threads/events'
+import { events as notifications } from '../notifications/events'
+import { events as tasks } from '../tasks/events'
 import { events as print } from '../print/events'
 import { events as privacy } from '../privacy/events'
 import { events as purchasing } from '../purchasing/events'
@@ -125,7 +127,7 @@ export function createCatalogue(definitions: readonly EventDefinition[]): EventC
  * production: floor rules and work orders; purchasing: purchase orders); floor-sync: the floor tablets' refused queued actions;
  * calendars: the business calendars and shift patterns.
  */
-export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...purchasing, ...invoicing, ...payments, ...costing, ...production, ...sales, ...privacy, ...quality, ...floorSync, ...insights, ...calendars] as const satisfies readonly EventDefinition[]
+export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...purchasing, ...invoicing, ...payments, ...costing, ...production, ...sales, ...privacy, ...quality, ...floorSync, ...insights, ...calendars, ...notifications, ...tasks] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

@@ -40,4 +40,13 @@ export const events = [
       authorId: z.uuid().nullable(),
     }),
   }),
+  // B-W2a-20 (COL-011): someone followed, unfollowed or muted a record, or was added as its follower. The record's side
+  // panel and the band's Follow toggle read its followers again. It names the record only.
+  defineEvent({
+    type: 'thread.followers_changed',
+    context: 'threads',
+    description: "A record's followers changed (someone followed, unfollowed or muted it, or was added).",
+    payload: z.strictObject({ recordType: z.string(), recordId: z.uuid() }),
+    live: { permission: 'threads.read', fields: ['recordType', 'recordId'] },
+  }),
 ] as const
