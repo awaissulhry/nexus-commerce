@@ -126,6 +126,8 @@ export const DDT_SELECT = {
   siteId: true,
   partyId: true,
   shipmentId: true,
+  sourceType: true,
+  sourceId: true,
   numberSeriesId: true,
   number: true,
   documentDate: true,
@@ -153,17 +155,25 @@ export const DDT_SELECT = {
 } as const satisfies Prisma.DdtSelect
 
 /**
- * A shipment's DDT (W1): these routes issue, show and cancel only these. A DDT for another reason (W2a schema wave 6/7:
- * no shipment, a source record) is B-W2a-17's; until then it reads as missing here.
+ * Any DDT: a shipment's (W1) or one for another reason (B-W2a-17: no shipment, a source record's goods; its own reads
+ * and view are sources-store.ts and sources.ts).
  */
-type DdtPayload = Prisma.DdtGetPayload<{ select: typeof DDT_SELECT }>
-export type DdtRow = DdtPayload & { readonly shipmentId: string; readonly shipment: NonNullable<DdtPayload['shipment']> }
+export type AnyDdtRow = Prisma.DdtGetPayload<{ select: typeof DDT_SELECT }>
+/** A shipment's DDT (W1): the shipment routes issue it; the record, PDF and cancel routes take any DDT. */
+export type DdtRow = AnyDdtRow & { readonly shipmentId: string; readonly shipment: NonNullable<AnyDdtRow['shipment']> }
+
+export const isShipmentDdt = (row: AnyDdtRow): row is DdtRow => row.shipmentId !== null && row.shipment !== null
+
+/** Any DDT, or null (missing, or out of the caller's scope). */
+export async function readAnyDdt(db: CommandTx, ddtId: string): Promise<AnyDdtRow | null> {
+  if (!isUuid(ddtId)) return null
+  return db.ddt.findUnique({ where: { id: ddtId }, select: DDT_SELECT })
+}
 
 /** The shipment's DDT, or null (missing, out of the caller's scope, or a DDT for another reason). */
 export async function readDdt(db: CommandTx, ddtId: string): Promise<DdtRow | null> {
-  if (!isUuid(ddtId)) return null
-  const row = await db.ddt.findUnique({ where: { id: ddtId }, select: DDT_SELECT })
-  return row && row.shipmentId !== null && row.shipment !== null ? (row as DdtRow) : null
+  const row = await readAnyDdt(db, ddtId)
+  return row && isShipmentDdt(row) ? row : null
 }
 
 /**
@@ -243,8 +253,8 @@ const referencesOf = (value: unknown): DocumentReference[] =>
     return { kind: text(reference.kind) as DocumentReference['kind'], number: text(reference.number) ?? '', date: text(reference.date) }
   })
 
-/** The frozen DDT as the documents builder takes it. */
-export function issuedOf(row: DdtRow): IssuedDdt {
+/** What any frozen DDT prints but its lines (a shipment's and a source's lines differ). */
+export function printedOf(row: AnyDdtRow) {
   return {
     number: row.number,
     documentDate: day(row.documentDate),
@@ -261,10 +271,14 @@ export function issuedOf(row: DdtRow): IssuedDdt {
     sender: partyOf(row.sender),
     recipient: partyOf(row.recipient),
     destination: destinationOf(row.destination),
-    lines: linesOf(row.lines),
     documentRefs: referencesOf(row.documentRefs),
     remarks: row.remarks,
   }
+}
+
+/** The frozen DDT as the documents builder takes it. */
+export function issuedOf(row: DdtRow): IssuedDdt {
+  return { ...printedOf(row), lines: linesOf(row.lines) }
 }
 
 /** The office's view of a DDT: what it says, whether it is live, its cancellation and its PDF. */
@@ -282,6 +296,8 @@ export function ddtView(row: DdtRow, fileId: string | null) {
     partyId: row.partyId,
     shipmentId: row.shipmentId,
     shipmentNumber: row.shipment.number,
+    // B-W2a-17: a shipment's DDT has no source record.
+    source: null,
     numberSeriesId: row.numberSeriesId,
     internalNote: row.internalNote,
     issuedAt: toUtcIso(row.issuedAt),
