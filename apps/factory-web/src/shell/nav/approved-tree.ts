@@ -230,6 +230,19 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'production.workorders', title: 'Work orders', titleIt: 'Ordini di produzione', wave: 'W1', href: '/production/work-orders' },
         ],
       },
+      // W2a: B-W2a-60 Cutting (SCR-238) and Scrap & rework (SCR-140).
+      {
+        label: 'Cutting room',
+        labelIt: 'Sala taglio',
+        hideLabel: false,
+        pages: [{ id: 'production.cutting', title: 'Cutting', titleIt: 'Taglio', wave: 'W2a', href: '/production/cutting' }],
+      },
+      {
+        label: 'Floor control',
+        labelIt: 'Controllo reparto',
+        hideLabel: false,
+        pages: [{ id: 'production.scrap', title: 'Scrap & rework', titleIt: 'Scarti e rilavorazioni', wave: 'W2a', href: '/production/scrap' }],
+      },
       {
         label: 'Reports',
         labelIt: 'Report',

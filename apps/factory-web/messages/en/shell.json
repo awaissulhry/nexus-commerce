@@ -66,7 +66,11 @@
       "settings": "Settings",
       "floorRules": "Floor rules & codes",
       "reports": "Reports",
-      "reportsPage": "Production reports"
+      "reportsPage": "Production reports",
+      "cuttingRoom": "Cutting room",
+      "cutting": "Cutting",
+      "floorControl": "Floor control",
+      "scrap": "Scrap & rework"
     },
     "quality": {
       "area": "Quality",

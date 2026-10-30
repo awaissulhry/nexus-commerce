@@ -151,7 +151,8 @@ export const scrapListContract = defineContract({
           /** What it comes from: a scan's scrap line, or a rework (its order, or its scrap when done). */
           source: output({ type: z.enum(['SCAN', 'REWORK']), id: id() }),
           at: instant(),
-          workOrder: output({ id: id(), number: z.string(), status: z.enum(WORK_ORDER_STATUSES) }),
+          /** B-W2a-60: the work order's style (the page's pareto by style). */
+          workOrder: output({ id: id(), number: z.string(), status: z.enum(WORK_ORDER_STATUSES), style: output({ id: id(), code: z.string(), name: z.string() }).nullable() }),
           bundle: output({ id: id(), code: z.string() }).nullable(),
           operation: output({ id: id(), seq: z.number().int(), code: z.string(), name: z.string() }).nullable(),
           cell: output({ id: id(), colourwayCode: z.string(), size: z.string() }),

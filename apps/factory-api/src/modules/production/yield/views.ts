@@ -104,22 +104,29 @@ function hideRows(entries: readonly EntryRow[], figures: ReadonlyMap<string, Yie
   })
 }
 
+/**
+ * A work order's yield (its hides, its totals against its style's plan), with no permission checked: the caller checked
+ * the work order. GET …/work-orders/:id below, and B-W2a-60's cutting office list (cutting/office.ts, one row per work order).
+ */
+export async function workOrderYieldOf(db: Reader, workOrder: { readonly id: string; readonly styleRevisionId: string | null }) {
+  const entries = await liveEntries(db, { workOrderId: workOrder.id })
+  const figures = await yieldEntries(db, entries)
+  const rows = hideRows(entries, figures, await hideFacts(db, entries))
+  const planned = workOrder.styleRevisionId ? (await db.styleRevision.findUnique({ where: { id: workOrder.styleRevisionId }, select: { plannedHideYieldPct: true } }))?.plannedHideYieldPct : null
+  return {
+    plannedSource: planned ? ('STYLE' as const) : ('BOM' as const),
+    overall: yieldFigures(addTotals(rows.map((row) => row.totals)), planned ? planned.toString() : null),
+    hides: rows.map((row) => row.view),
+  }
+}
+
 /** GET /production/yield/work-orders/:workOrderId: the work order's hides, its totals against its style's plan. */
 export async function workOrderYield(caller: CommandCaller, workOrderId: string) {
   const context = officeOf(caller)
   return caller.withClient(async (db) => {
     const workOrder = await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, number: true, status: true, styleId: true, styleRevisionId: true } })
     if (!workOrder || !can(actorOf(context), WORKORDERS_VIEW, workOrder)) throw new NotFoundError('Work order not found.')
-    const entries = await liveEntries(db, { workOrderId: workOrder.id })
-    const figures = await yieldEntries(db, entries)
-    const rows = hideRows(entries, figures, await hideFacts(db, entries))
-    const planned = workOrder.styleRevisionId ? (await db.styleRevision.findUnique({ where: { id: workOrder.styleRevisionId }, select: { plannedHideYieldPct: true } }))?.plannedHideYieldPct : null
-    return {
-      workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status },
-      plannedSource: planned ? ('STYLE' as const) : ('BOM' as const),
-      overall: yieldFigures(addTotals(rows.map((row) => row.totals)), planned ? planned.toString() : null),
-      hides: rows.map((row) => row.view),
-    }
+    return { workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status }, ...(await workOrderYieldOf(db, workOrder)) }
   })
 }
 
