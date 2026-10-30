@@ -98,9 +98,21 @@ const ALERTS_TEMPLATES: Readonly<Record<string, readonly Permission[]>> = Object
   floor_supervisor: ['alerts.view', 'alerts.handle'],
 })
 const alertsAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' ? (ALERTS_TEMPLATES[key] ?? []) : [])
+/**
+ * B-W2a-38 (production reports, MES-301 / MES-160; design production.reports): who reads the daily production report
+ * per line, style and size and has it e-mailed each morning, to themselves and (subscribe) to colleagues who may read
+ * it. Office only, never a floor role; one line per template.
+ */
+const REPORTS_TEMPLATES: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  planner: ['production.reports.view', 'production.reports.subscribe'],
+  production_manager: ['production.reports.view', 'production.reports.subscribe'],
+  quality_inspector: ['production.reports.view'],
+  floor_supervisor: ['production.reports.view', 'production.reports.subscribe'],
+})
+const reportsAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' ? (REPORTS_TEMPLATES[key] ?? []) : [])
 
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 
@@ -278,6 +290,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'purchasing.sources.manage',
       // B-W2a-25: subcontract orders to the workshops (operations, fees, kit plan, issue, cancel, close).
       'purchasing.subcontract.manage',
+      // B-W2a-44: claims to suppliers (from discrepancies, lots or typed), sent by e-mail, answered, closed.
+      'purchasing.claims.manage',
       // B-W2a-31: what was wrong with a delivery, its report to the supplier and its answer.
       'inventory.discrepancies.manage',
       'inventory.discrepancies.report',
@@ -336,6 +350,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       // B-W2a-25: send a subcontract order's kit with its DDT, receive the goods back by bundle.
       'purchasing.subcontract.kit',
       'purchasing.subcontract.receive',
+      // B-W2a-44: claims to suppliers, and the goods of a return sent back with the return DDT (Return to supplier).
+      'purchasing.claims.manage',
+      'purchasing.claims.return',
       'workorders.view',
       'orders.view',
       'quality.lots.view',

@@ -8,8 +8,14 @@ import { z } from 'zod'
  *
  * What people do about an alert (API insights/actions, #904): Assign (to someone who may act on it), Resolve with a note
  * (the row leaves Today for everyone until its condition changes), Acknowledge (the row stays, marked), "Handled today"
- * and "Arrange Today" (saved on the server per person). Snooze is W2a: not drawn. Waiting on others, key numbers and
- * coming up are W2.
+ * and "Arrange Today" (saved on the server per person).
+ *
+ * W2a (B-W2a-40, on the API of B-W2a-20 and B-W2a-33): the screen asks `include=TASKS,MENTIONS,ALERTS` — my tasks due
+ * today or overdue (TASK_DUE: Done · Snooze), the notes that mentioned me (MENTION: Done · Snooze, through the
+ * notification), my open alerts of the exception rules (RULE_ALERT: handled in the alert itself; they replace the W1
+ * order-promise and PO-not-confirmed checks) — and the tiles Due today · Overdue · Mentions; an alert row the reader may
+ * snooze (`actions.snoozable`) takes Snooze; "Coming up" (GET /home/coming-up) lists my next five working days. Waiting
+ * on others and key numbers are later steps.
  */
 
 // ---- the API's answers ---------------------------------------------------------------------------------------------------
@@ -32,19 +38,51 @@ export const rowActionsSchema = z.object({
   verbs: z.array(z.enum(ROW_VERBS)),
   assigned: z.object({ to: personSchema, by: personSchema, at: z.string() }).nullable(),
   acknowledged: z.object({ by: personSchema, at: z.string() }).nullable(),
+  /** W2a: the reader may snooze the row (an alert): POST /home/today/rows/:key/snooze. Absent in a W1 answer. */
+  snoozable: z.boolean().optional(),
 })
 export type RowActions = z.infer<typeof rowActionsSchema>
 
 /** The design's tiles (home.today focus-strip, W1): every row, Approvals (the reviews), Alerts on my records. */
 export const TILES = ['ALL', 'APPROVAL', 'ALERT'] as const
-export type Tile = (typeof TILES)[number]
+/**
+ * W2a (design "Needs me now · Approvals · Due today · Overdue · Mentions"): the W2a tiles, with "Alerts on my records"
+ * kept last until Home › Alerts (B-W2a-78) takes the alerts (a filter W1 people use; nothing is lost on the way).
+ */
+export const W2A_TILES = ['ALL', 'APPROVAL', 'DUE_TODAY', 'OVERDUE', 'MENTION', 'ALERT'] as const
+export type Tile = (typeof W2A_TILES)[number]
+/** A pressed tile (`?tile=`): a filter of the list. */
 export type Category = Exclude<Tile, 'ALL'>
+export const isCategory = (value: string | null): value is Category => value !== null && value !== 'ALL' && (W2A_TILES as readonly string[]).includes(value)
+
+/** The row categories (the API's): a decision, an alert, a task of mine, a mention of me. */
+export const ROW_CATEGORIES = ['APPROVAL', 'ALERT', 'TASK', 'MENTION'] as const
+export type RowCategory = (typeof ROW_CATEGORIES)[number]
+
+/** What Today asks for besides W1's rows (B-W2a-20, B-W2a-33). */
+export const TODAY_INCLUDE = ['TASKS', 'MENTIONS', 'ALERTS'] as const
+
+/** A pressed tile as the API's filter: a category, or a due day ("Due today", "Overdue"). */
+export function tileQuery(tile: Category | null): { readonly category?: 'APPROVAL' | 'ALERT' | 'MENTION'; readonly due?: 'TODAY' | 'OVERDUE' } {
+  if (tile === 'DUE_TODAY') return { due: 'TODAY' }
+  if (tile === 'OVERDUE') return { due: 'OVERDUE' }
+  if (tile === null) return {}
+  return { category: tile }
+}
+
+/** Whether a row belongs under a pressed tile (the design index filters in the view; the API filters for the page). */
+export function inTile(item: Pick<TodayItem, 'category' | 'due'>, tile: Category | null): boolean {
+  if (tile === null) return true
+  if (tile === 'DUE_TODAY') return item.due !== null && item.due.days === 0
+  if (tile === 'OVERDUE') return item.due !== null && item.due.days < 0
+  return item.category === tile
+}
 
 export const todayItemSchema = z.object({
   key: z.string(),
   kind: z.string(),
   state: z.string(),
-  category: z.enum(['APPROVAL', 'ALERT']),
+  category: z.enum(ROW_CATEGORIES),
   severity,
   severityWord: z.string(),
   group,
@@ -80,7 +118,8 @@ export const todaySchema = z.object({
   counts: z.object({
     total: z.number().int(),
     now: z.number().int(),
-    tiles: z.array(z.object({ tile: z.enum(TILES), count: z.number().int(), complete: z.boolean() })),
+    // W2a: TASK and MENTION are categories the API may count too; the screen draws the tiles it knows.
+    tiles: z.array(z.object({ tile: z.enum(['ALL', ...ROW_CATEGORIES, 'DUE_TODAY', 'OVERDUE']), count: z.number().int(), complete: z.boolean() })),
     byKind: z.array(z.object({ kind: z.string(), label: z.string(), count: z.number().int(), complete: z.boolean() })),
   }),
   total: z.number().int(),
@@ -281,6 +320,10 @@ export interface Notice {
 export interface TodayViewModel {
   /** The person may open Today (home.view); else the page says so and loads nothing. */
   readonly access: 'open' | 'refused'
+  /** The tiles "Your day" draws, in order (W2a: W2A_TILES; absent: the W1 three). */
+  readonly tileSet?: readonly Tile[]
+  /** Coming up (W2a; GET /home/coming-up): absent or null, the section is not drawn. */
+  readonly comingUp?: Loaded<ComingUpView> | null
   /** The read's clock (AsOf renders the same on the server and the client). */
   readonly now: number
   readonly live: LiveState
@@ -299,6 +342,8 @@ export interface TodayViewModel {
   readonly open: string | null
   /** Quote approval reviews by row key. */
   readonly reviews: Readonly<Record<string, ReviewState>>
+  /** W2a: an exception rule's alert opened here: where its record opens (by row key), read when the row opens. */
+  readonly alertRecords?: Readonly<Record<string, Loaded<string>>>
   readonly busy: boolean
   readonly notice: Notice | null
   /** The person's arrangement of Today (the design's order until they save one). */
@@ -315,6 +360,7 @@ export type TodayDialog =
   | { readonly kind: 'resolve'; readonly key: string }
   | { readonly kind: 'handled'; readonly list: Loaded<HandledView> }
   | { readonly kind: 'arrange' }
+  | { readonly kind: 'snooze'; readonly key: string }
 
 // ---- rules of the screen -----------------------------------------------------------------------------------------------------
 
@@ -500,3 +546,95 @@ export function panelRows<P extends { readonly width: PanelWidth }>(panels: read
   if (row.length > 0) rows.push(row)
   return rows
 }
+
+// ---- W2a: my own rows (tasks, mentions), Snooze, Coming up -------------------------------------------------------------
+
+/** What a row of mine takes on Today besides the alert verbs: Done (e) and Snooze (h). */
+export type OwnVerb = 'DONE' | 'SNOOZE'
+
+/** The kinds whose rows are the person's own (W2a): a task due, a mention. */
+export const OWN_KINDS: ReadonlySet<string> = new Set(['TASK_DUE', 'MENTION'])
+
+/** Whether the row takes the verb: a task or a mention Done and Snooze; an alert Snooze when the reader may snooze it. */
+export function offersVerb(item: Pick<TodayItem, 'kind' | 'category' | 'actions'>, verb: OwnVerb): boolean {
+  if (OWN_KINDS.has(item.kind)) return true
+  return verb === 'SNOOZE' && item.category === 'ALERT' && item.actions.snoozable === true
+}
+
+/** Why the person cannot use Done or Snooze on the row now (a message key of `home`), or null. */
+export function ownVerbHeld(item: Pick<TodayItem, 'kind' | 'category' | 'actions'>, verb: OwnVerb, state: { readonly live: LiveState; readonly busy: boolean }): string | null {
+  if (!offersVerb(item, verb)) return 'today.actions.held.review'
+  if (state.live === 'offline') return 'today.actions.held.offline'
+  if (state.busy) return 'today.actions.held.busy'
+  return null
+}
+
+/** What a snooze of this row goes through: the task, the mention's notification, or Today's alert row. */
+export type SnoozeTarget = { readonly kind: 'task'; readonly taskId: string } | { readonly kind: 'notification'; readonly notificationId: string } | { readonly kind: 'row'; readonly key: string }
+
+/** The task or notification behind a row of mine (a task row's record is the task; a mention's key ends with its notification). */
+export function snoozeTarget(item: Pick<TodayItem, 'kind' | 'key' | 'record'>): SnoozeTarget {
+  if (item.kind === 'TASK_DUE') return { kind: 'task', taskId: item.record.id }
+  if (item.kind === 'MENTION') return { kind: 'notification', notificationId: item.key.slice(item.key.lastIndexOf(':') + 1) }
+  return { kind: 'row', key: item.key }
+}
+
+/** "Until something changes": an alert row (its condition) and a mention (new activity on the record) have one; a task has not. */
+export const snoozesUntilChange = (item: Pick<TodayItem, 'kind'>): boolean => item.kind !== 'TASK_DUE'
+
+/** The list's and the modal's keys for my own rows: e done, h snooze (design: "E — done / acknowledge", "H — snooze"). */
+export function ownVerbKey(key: string, modifiers: { readonly alt: boolean; readonly ctrl: boolean; readonly meta: boolean; readonly inField: boolean }): OwnVerb | null {
+  if (modifiers.alt || modifiers.ctrl || modifiers.meta || modifiers.inField) return null
+  if (key === 'e') return 'DONE'
+  if (key === 'h') return 'SNOOZE'
+  return null
+}
+
+const comingItemSchema = z.object({
+  kind: z.string(),
+  record: z.object({ type: z.string(), id: z.string(), label: z.string() }),
+  companyId: z.string().nullable(),
+  siteId: z.string().nullable(),
+  partyId: z.string().nullable(),
+  /** English; the screen draws `words`. */
+  sentence: z.string(),
+  words: phraseSchema,
+})
+
+/** GET /home/coming-up (B-W2a-20): my next five working days by the filtered site's (or company's) calendar. */
+export const comingUpSchema = z.object({
+  asOf: z.string(),
+  today: z.string(),
+  calendar: z.object({ scope: z.string(), id: z.string() }).nullable(),
+  kinds: z.array(z.string()),
+  complete: z.array(z.object({ kind: z.string(), complete: z.boolean() })),
+  days: z.array(z.object({ date: z.string(), working: z.boolean(), items: z.array(comingItemSchema) })),
+  live: z.object({ events: z.array(z.string()) }),
+})
+export type ComingUpAnswer = z.infer<typeof comingUpSchema>
+
+export interface ComingItemView {
+  readonly kind: string
+  readonly label: string
+  readonly words: { readonly key: string; readonly params: Readonly<Record<string, string | number | readonly string[]>> }
+  /** Its record (own page, else its panels), with the company prefix. */
+  readonly href: string
+}
+
+export interface ComingDayView {
+  readonly date: string
+  /** False: a closed day something lands on anyway. */
+  readonly working: boolean
+  readonly items: readonly ComingItemView[]
+}
+
+export interface ComingUpView {
+  readonly days: readonly ComingDayView[]
+  /** False: a kind stopped at its limit (there may be more). */
+  readonly complete: boolean
+  /** The calendar the days follow: a site's or company's, or none (Monday to Friday). */
+  readonly calendar: boolean
+}
+
+/** Whether anything lands in the window. */
+export const comingIsEmpty = (view: ComingUpView): boolean => view.days.every((day) => day.items.length === 0)

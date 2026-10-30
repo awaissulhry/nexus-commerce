@@ -13,6 +13,7 @@ import { CATALOGUE, messagesFor, placeholdersOf } from '../lib/i18n/messages'
 import { I18nProvider } from '../lib/i18n/provider'
 import { designScreen as panelsScreen } from './fixtures'
 import { AUTHOR_KINDS, changeVerbKey, EMAIL_STATUSES, FILE_AUDIENCES, FILE_KINDS, PANEL_TABS, QUARANTINE_REASONS, TIMELINE_FILTERS } from './model'
+import { FOLLOW_REASONS, followReasonKey } from './tasks/model'
 
 /**
  * Every UI string of the two screens exists in every language (PLAN §4.6, PLT-127): the same keys and placeholders in
@@ -31,7 +32,7 @@ function sources(dir: string): string[] {
 }
 
 /** Strings shaped like keys that are not: the permissions and live events the code names. */
-const NOT_KEYS: ReadonlySet<string> = new Set(['files.read', 'files.upload', 'files.manage', 'thread.message_posted'])
+const NOT_KEYS: ReadonlySet<string> = new Set(['files.read', 'files.upload', 'files.manage', 'thread.message_posted', 'thread.followers_changed', 'tasks.manage'])
 
 /** The keys a folder's code names literally (`'files.kind.PHOTO'`), for the prefixes of one catalogue. */
 function literalKeys(dir: string, prefixes: readonly string[]): string[] {
@@ -47,7 +48,7 @@ const has = (namespace: string, key: string) =>
     return key in dictionary || (`${key}_one` in dictionary && `${key}_other` in dictionary)
   })
 
-const RECORDS_PREFIXES = ['panels', 'notice', 'thread', 'composer', 'message', 'files', 'history']
+const RECORDS_PREFIXES = ['panels', 'notice', 'thread', 'composer', 'message', 'files', 'history', 'tasks', 'followers']
 
 const recordsBuilt = [
   ...PANEL_TABS.map((tab) => `panels.tabs.${tab}`),
@@ -59,6 +60,7 @@ const recordsBuilt = [
   ...EMAIL_STATUSES.map((status) => `message.email.${status}`),
   ...AUTHOR_KINDS.map((kind) => `message.author.${kind}`),
   ...TIMELINE_FILTERS.flatMap((filter) => [`history.filter.${filter}`, `history.empty.body.${filter}`]),
+  ...FOLLOW_REASONS.map(followReasonKey),
   ...['OFFICE', 'FLOOR', 'PARTNER', 'LINK', 'SYSTEM'].map((audience) => `history.actor.${audience}`),
   ...['create', 'update', 'delete', 'issue', 'suspend', 'reinstate', 'withdraw', 'archive', 'postNote', 'setStatus', 'send', 'requestUpload', 'completeUpload', 'setVisibility', 'setRetention', 'assign', 'release', 'reject', 'other'].map(
     (verb) => changeVerbKey(`module.${verb}`),
@@ -108,7 +110,7 @@ describe('every string of the record panels and mail to sort exists in it and en
   })
 })
 
-const LEFT_KEY = /\b(?:panels|notice|thread|composer|message|files|history|mailToSort)\.[a-zA-Z]+(?:\.[a-zA-Z_]+)*/
+const LEFT_KEY = /\b(?:panels|notice|thread|composer|message|files|history|tasks|followers|mailToSort)\.[a-zA-Z]+(?:\.[a-zA-Z_]+)*/
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {
   const View = screen.view as ComponentType<{ model: unknown }>

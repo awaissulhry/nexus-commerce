@@ -1,0 +1,191 @@
+{
+  "noAccess": {
+    "title": "Non puoi vedere i report di produzione",
+    "body": "Il report giornaliero di produzione richiede production.reports.view per uno stabilimento. Chiedi all'amministratore il ruolo che lo concede."
+  },
+  "band": {
+    "label": "Stato e azioni del report",
+    "reading": "Lettura del report…",
+    "subscribed": "Via e-mail alle {time}, {days}",
+    "more": "Altre azioni",
+    "email": "Inviami il report giornaliero ogni mattina",
+    "emailChange": "Modifica l'e-mail giornaliera",
+    "emailHeld": "Attendi la lettura del report",
+    "print": "Stampa (nuova scheda)"
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In diretta",
+    "offline": "Offline: i numeri potrebbero non essere aggiornati"
+  },
+  "scope": {
+    "label": "Stabilimento e giorno",
+    "site": "Stabilimento",
+    "noPrevious": "Nessun giorno lavorativo precedente",
+    "previous": "Giorno lavorativo precedente",
+    "previousShort": "Precedente",
+    "day": "Giorno",
+    "noNext": "È oggi: nessun giorno successivo",
+    "next": "Giorno successivo",
+    "nextShort": "Successivo",
+    "today": "Oggi"
+  },
+  "privacy": "Per linea, modello e taglia, mai per persona (Statuto dei Lavoratori art. 4).",
+  "daily": {
+    "title": "Produzione giornaliera",
+    "soFar": "{day}, finora",
+    "of": "{day}",
+    "failed": "Impossibile leggere il report",
+    "closed": "Giorno di chiusura nel calendario dello stabilimento: nessun minuto previsto.",
+    "empty": {
+      "title": "Nulla registrato in questo giorno",
+      "body": "Le scansioni del reparto non riportano capi buoni, scartati o rilavorati in questo giorno."
+    }
+  },
+  "common": {
+    "retry": "Riprova",
+    "loading": "Caricamento…",
+    "cancel": "Annulla"
+  },
+  "error": {
+    "read": "Qualcosa è andato storto durante la lettura. Riprova.",
+    "forbidden": "Non hai il permesso di leggerlo.",
+    "notFound": "Non c'è uno stabilimento in cui tu possa leggerlo.",
+    "offline": "Il server non risponde. Controlla la connessione e riprova."
+  },
+  "tile": {
+    "good": "Buoni",
+    "goodHint": "capi usciti dall'ultima operazione di ogni linea",
+    "scrap": "Scarti",
+    "scrapHint": "capi scartati",
+    "rework": "Rilavorazioni",
+    "reworkHint": "capi rimandati indietro",
+    "efficiency": "Efficienza linee",
+    "efficiencyHint": "minuti guadagnati su previsti, tutte le linee"
+  },
+  "chart": {
+    "label": "Capi per linea e centro di lavoro, ed efficienza delle linee",
+    "garments": "Capi",
+    "efficiency": "Efficienza",
+    "efficiencyAxis": "Efficienza (%)",
+    "caption": "Barre: buoni, scarti e rilavorazioni per linea o centro di lavoro. Punti: l'efficienza di ogni linea."
+  },
+  "kind": {
+    "LINE": "Linea",
+    "WORK_CENTRE": "Centro di lavoro"
+  },
+  "lane": {
+    "figures": "{good} buoni · {scrap} scarti · {rework} rilavorazioni",
+    "noMinutes": "Efficienza: nessun minuto previsto in questo giorno",
+    "efficiency": "Efficienza {pct}: {earned} su {available} minuti ({people} persone × {minutes} min)",
+    "nothing": "Nulla per modello e taglia.",
+    "tableLabel": "{lane} per modello e taglia"
+  },
+  "col": {
+    "style": "Modello",
+    "size": "Taglia",
+    "good": "Buoni",
+    "scrap": "Scarti",
+    "rework": "Rilavorazioni"
+  },
+  "subscribe": {
+    "title": "Inviami questo report via e-mail",
+    "subtitle": "{site} · ogni mattina",
+    "what": "Ogni mattina porta il report del giorno lavorativo precedente: per linea, modello e taglia, mai per persona.",
+    "nowOn": "Ora lo ricevi alle {time}.",
+    "nowOff": "La tua e-mail è disattivata: Iscriviti la riattiva.",
+    "lastSent": "ultimo invio {at}",
+    "time": "Ora",
+    "timeHint": "L'ora dello stabilimento, ogni mattina.",
+    "language": "Lingua",
+    "languageOwn": "La lingua di ciascuno",
+    "languageIt": "Italiano",
+    "languageEn": "Inglese",
+    "weekdays": "Giorni",
+    "recipients": "Chi lo riceve",
+    "onlyMe": "A te ({name}).",
+    "me": "{name} (tu)",
+    "getsIt": "lo riceve già",
+    "whoMay": "Sono elencate solo le persone che possono leggere i report di produzione di questo stabilimento.",
+    "othersTitle": "Lo invii anche a",
+    "other": "{name} alle {time}",
+    "turnOffFor": "Disattiva per {name}",
+    "turnOff": "Disattiva la mia e-mail",
+    "save": "Salva",
+    "go": "Iscriviti",
+    "held": {
+      "busy": "Salvataggio…",
+      "noView": "Non puoi leggere questo report",
+      "time": "Indica un'ora (07:00)",
+      "weekdays": "Scegli almeno un giorno",
+      "recipients": "Scegli chi lo riceve",
+      "noSubscribe": "Solo tu: per aggiungere colleghi serve production.reports.subscribe"
+    },
+    "problem": {
+      "write": "Impossibile salvare. Riprova.",
+      "forbidden": "Non puoi inviare questo report ad altri.",
+      "changed": "È cambiato da quando l'hai letto. Chiudi e riapri.",
+      "recipient": "{name} non può leggere i report di produzione di questo stabilimento.",
+      "someone": "Una persona scelta non può leggere questo report.",
+      "settings": "L'ora o i giorni non sono validi."
+    }
+  },
+  "weekday": {
+    "1": "Lun",
+    "2": "Mar",
+    "3": "Mer",
+    "4": "Gio",
+    "5": "Ven",
+    "6": "Sab",
+    "7": "Dom"
+  },
+  "weekdays": {
+    "workweek": "dal lunedì al venerdì",
+    "everyDay": "tutti i giorni",
+    "some_one": "in {count} giorno",
+    "some_other": "in {count} giorni"
+  },
+  "print": {
+    "title": "Produzione giornaliera · {site} · {day}",
+    "titleLoading": "Produzione giornaliera",
+    "meta": "Letto {at} · stampato da {person}",
+    "soFar": "il giorno finora",
+    "held": "Attendi la lettura del report",
+    "button": "Stampa",
+    "totals": "I totali del giorno"
+  },
+  "lines": {
+    "title": "Linee",
+    "hint": "Ogni linea a colpo d'occhio. Scegli una linea per vedere solo i suoi ordini ([ e ] per scorrere).",
+    "allLines": "Tutte le linee",
+    "failed": "Impossibile leggere le linee",
+    "none": {
+      "title": "Nessuna linea nei tuoi stabilimenti",
+      "body": "Le linee si impostano in Sistema › Società e stabilimenti."
+    },
+    "cardLabel": "{line}: {state}. Mostra solo questa linea.",
+    "state": {
+      "RUNNING": "In lavorazione",
+      "WAITING": "In attesa",
+      "NO_WORK": "Senza lavoro"
+    },
+    "lastReport": "Ultima scansione {time}",
+    "noReport": "Nessuna scansione oggi",
+    "outputLabel": "{line}: produzione rispetto al piano",
+    "output": {
+      "noPlan": "{done} capi oggi · nessun piano pubblicato per oggi",
+      "ofPlan": "{done} di {planned} previsti oggi"
+    },
+    "plan": "piano v{number}",
+    "noWorkOrders": "Nessun ordine di produzione su questa linea",
+    "workOrders_one": "{count} ordine di produzione: {numbers}",
+    "workOrders_other": "{count} ordini di produzione: {numbers}",
+    "bottleneck": "Più in attesa: {seq} {operation}, {waiting} pezzi ({number})",
+    "noStations": "Nessuna postazione su questa linea",
+    "everyoneIn": "Qualcuno è collegato in ogni postazione",
+    "nobody": "Nessuno collegato: {stations}",
+    "machineDown_one": "{count} macchina ferma",
+    "machineDown_other": "{count} macchine ferme",
+    "scoped": "Solo la linea {line}"
+  }
+}

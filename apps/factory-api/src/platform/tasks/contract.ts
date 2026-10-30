@@ -128,3 +128,18 @@ export const bulkTasksContract = defineContract({
   }),
   response: { 200: output({ action: z.enum(BULK_ACTIONS), tasks: z.array(taskView) }) },
 })
+
+/**
+ * B-W2a-40 (My tasks' Reassign and New task, a record's "+ Add task"): who may be given a task here — on the record named
+ * (ACTIVE people who keep tasks there and read its thread), or of its own (people who keep tasks). Names only.
+ */
+export const taskAssigneesContract = defineContract({
+  querystring: input({ recordType: z.string().regex(RECORD_TYPE).optional(), recordId: id().optional() }),
+  response: {
+    200: output({
+      people: z.array(output({ id: id(), name: z.string(), me: z.boolean() })),
+      /** False: the tenant has more active people than were read (the first 500 by name). */
+      complete: z.boolean(),
+    }),
+  },
+})

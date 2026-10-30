@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { listAddress } from '../../../lib/records/record-links'
+import { listAddress, recordAddress } from '../../../lib/records/record-links'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { companyPrefix } from '../../../lib/session/session'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
@@ -12,7 +12,9 @@ import {
   approveQuote,
   assignRow,
   decisionProblem,
+  fetchAlertRecord,
   fetchAssignees,
+  fetchComingUp,
   fetchFlow,
   fetchHandled,
   fetchLayout,
@@ -23,6 +25,11 @@ import {
   rejectQuote,
   resolveRow,
   saveLayout,
+  setMentionDone,
+  setTaskStatus,
+  snoozeMention,
+  snoozeRow,
+  snoozeTask,
 } from './api'
 import { handledView, panelRow, queueItem } from './links'
 import { useTodayLive } from './live'
@@ -30,6 +37,11 @@ import {
   DECIDED_HERE,
   DEFAULT_LAYOUT,
   freshCount,
+  isCategory,
+  snoozeTarget,
+  tileQuery,
+  TODAY_INCLUDE,
+  W2A_TILES,
   newVerbsFor,
   nextAfter,
   wantsChange,
@@ -41,6 +53,9 @@ import {
   type ReviewState,
   type TodayAnswer,
   type Category,
+  type ComingUpAnswer,
+  type ComingUpView,
+  type Tile,
   type TodayDialog,
   type TodayItem,
   type TodayLayout,
@@ -80,7 +95,7 @@ export function Today() {
   const prefix = companyPrefix(session.company?.code ?? '')
   const kind = search.get('kind')
   const tileParam = search.get('tile')
-  const tile: Category | null = tileParam === 'APPROVAL' || tileParam === 'ALERT' ? tileParam : null
+  const tile: Category | null = isCategory(tileParam) ? tileParam : null
   const open = search.get('open')
 
   const [queue, setQueue] = useState<Loaded<QueueState>>({ status: 'loading' })
@@ -94,6 +109,9 @@ export function Today() {
   const [now, setNow] = useState(() => Date.now())
   const [layout, setLayout] = useState<{ readonly layout: TodayLayout; readonly version: number }>({ layout: DEFAULT_LAYOUT, version: 0 })
   const [dialog, setDialog] = useState<TodayDialog | null>(null)
+  const [coming, setComing] = useState<Loaded<ComingUpView>>({ status: 'loading' })
+  const [comingEvents, setComingEvents] = useState<readonly string[]>([])
+  const [alertRecords, setAlertRecords] = useState<Readonly<Record<string, Loaded<string>>>>({})
   const layoutRef = useRef(layout)
   layoutRef.current = layout
 
@@ -124,7 +142,7 @@ export function Today() {
   const loadQueue = useCallback(async () => {
     const mine = ++queueSeq.current
     try {
-      const answer = await fetchToday(api, { kind: kindRef.current, category: tileRef.current })
+      const answer = await fetchToday(api, { kind: kindRef.current, ...tileQuery(tileRef.current), include: TODAY_INCLUDE })
       if (mine !== queueSeq.current) return
       setNow(Date.now())
       setQueue({ status: 'ready', data: { answer, items: answer.items, cursor: answer.nextCursor, loadingMore: false, pending: null } })
@@ -137,7 +155,7 @@ export function Today() {
   const refreshQueue = useCallback(async () => {
     const mine = ++queueSeq.current
     try {
-      const answer = await fetchToday(api, { kind: kindRef.current, category: tileRef.current })
+      const answer = await fetchToday(api, { kind: kindRef.current, ...tileQuery(tileRef.current), include: TODAY_INCLUDE })
       if (mine !== queueSeq.current) return
       setNow(Date.now())
       setQueue((current) => {
@@ -156,7 +174,7 @@ export function Today() {
     const cursor = queue.data.cursor
     setQueue({ status: 'ready', data: { ...queue.data, loadingMore: true } })
     try {
-      const page = await fetchToday(api, { kind: kindRef.current, category: tileRef.current, cursor })
+      const page = await fetchToday(api, { kind: kindRef.current, ...tileQuery(tileRef.current), include: TODAY_INCLUDE, cursor })
       setQueue((current) => (current.status === 'ready' ? { status: 'ready', data: { ...current.data, items: [...current.data.items, ...page.items], cursor: page.nextCursor, loadingMore: false } } : current))
     } catch (error) {
       setQueue((current) => (current.status === 'ready' ? { status: 'ready', data: { ...current.data, loadingMore: false } } : current))
@@ -189,6 +207,28 @@ export function Today() {
       setLens((current) => current ?? (answer.lenses.some((entry) => entry.lens === main) ? main : (answer.lenses[0]?.lens ?? null)))
     } catch (error) {
       setFlow({ status: 'error', problem: readProblem(error) })
+    }
+  }, [api, prefix])
+
+  // W2a: Coming up (my next five working days); each item opens its record.
+  const loadComing = useCallback(async () => {
+    try {
+      const answer: ComingUpAnswer = await fetchComingUp(api)
+      setComingEvents(answer.live.events)
+      setComing({
+        status: 'ready',
+        data: {
+          calendar: answer.calendar !== null,
+          complete: answer.complete.every((entry) => entry.complete),
+          days: answer.days.map((day) => ({
+            date: day.date,
+            working: day.working,
+            items: day.items.map((item) => ({ kind: item.kind, label: item.record.label, words: item.words, href: `${prefix}${recordAddress({ type: item.record.type, id: item.record.id, label: item.record.label, companyId: item.companyId, siteId: item.siteId }, OFFICE_PAGES)}` })),
+          })),
+        },
+      })
+    } catch (error) {
+      setComing({ status: 'error', problem: readProblem(error) })
     }
   }, [api, prefix])
 
@@ -228,6 +268,9 @@ export function Today() {
     if (allowed) void loadFlow()
   }, [allowed, loadFlow])
   useEffect(() => {
+    if (allowed) void loadComing()
+  }, [allowed, loadComing])
+  useEffect(() => {
     if (allowed) void loadPanels()
   }, [allowed, loadPanels])
 
@@ -250,9 +293,18 @@ export function Today() {
   useEffect(() => {
     if (openItem && DECIDED_HERE.has(openItem.kind) && reviews[openItem.key] === undefined) void loadReview(openItem)
   }, [openItem, reviews, loadReview])
+  // W2a: an exception rule's alert opened here: read where its record opens (its own page is Home › Alerts).
+  useEffect(() => {
+    if (!openItem || openItem.kind !== 'RULE_ALERT' || alertRecords[openItem.key] !== undefined) return
+    const key = openItem.key
+    setAlertRecords((current) => ({ ...current, [key]: { status: 'loading' } }))
+    fetchAlertRecord(api, openItem.record.id)
+      .then((record) => setAlertRecords((current) => ({ ...current, [key]: { status: 'ready', data: `${prefix}${recordAddress(record, OFFICE_PAGES)}` } })))
+      .catch((error: unknown) => setAlertRecords((current) => ({ ...current, [key]: { status: 'error', problem: readProblem(error) } })))
+  }, [openItem, alertRecords, api, prefix])
 
   // ---- live ------------------------------------------------------------------------------------------------------------
-  const events = useMemo(() => new Set([...(queue.status === 'ready' ? queue.data.answer.live.events : []), ...flowEvents]), [queue, flowEvents])
+  const events = useMemo(() => new Set([...(queue.status === 'ready' ? queue.data.answer.live.events : []), ...flowEvents, ...comingEvents]), [queue, flowEvents, comingEvents])
   const pendingRead = useRef<ReturnType<typeof setTimeout> | null>(null)
   const readAgain = useCallback(() => {
     // Several events of one change arrive together: one read for them (half a second).
@@ -262,8 +314,9 @@ export function Today() {
       void refreshQueue()
       void loadFlow()
       void loadPanels()
+      void loadComing()
     }, 500)
-  }, [refreshQueue, loadFlow, loadPanels])
+  }, [refreshQueue, loadFlow, loadPanels, loadComing])
   useEffect(() => () => (pendingRead.current ? clearTimeout(pendingRead.current) : undefined), [])
   const live = useTodayLive({ onChange: (type) => wantsChange(events, type) && readAgain(), onReconnect: readAgain }, allowed)
 
@@ -346,9 +399,61 @@ export function Today() {
     }
   }
 
+  // ---- W2a: Done and Snooze of my own rows, Snooze of an alert ---------------------------------------------------------
+  /** One own verb: a notice, the list read again (a done or snoozed row leaves; the next row opens); the bell re-reads. */
+  const ownAct = async (key: string, run: (item: TodayItem) => Promise<unknown>, done: (item: TodayItem) => Notice): Promise<boolean> => {
+    const item = items.find((entry) => entry.key === key)
+    if (!item) return false
+    const keys = items.map((entry) => entry.key)
+    setBusy(true)
+    setNotice(null)
+    try {
+      await run(item)
+      setNotice(done(item))
+      setDialog(null)
+      if (openRef.current === key) setParam('open', nextAfter(keys, key))
+      // The bell counts mentions: tell the shell (it reads its count again).
+      if (item.kind === 'MENTION') window.dispatchEvent(new Event('factory:notifications-changed'))
+      await loadQueue()
+      void loadComing()
+      return true
+    } catch (error) {
+      const problem = actionProblem(error)
+      setNotice({ key: problem.key, tone: problem.tone })
+      setDialog(null)
+      if (problem.reload) void loadQueue()
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }
+  const markDone = (key: string) =>
+    ownAct(
+      key,
+      (item) => {
+        const target = snoozeTarget(item)
+        return target.kind === 'task' ? setTaskStatus(api, target.taskId, 'DONE') : target.kind === 'notification' ? setMentionDone(api, target.notificationId, true) : Promise.reject(new Error('not an own row'))
+      },
+      (item) => ({ key: item.kind === 'TASK_DUE' ? 'today.own.doneTask' : 'today.own.doneMention', tone: 'success', params: { record: item.record.label } }),
+    )
+  const snooze = (key: string, until: string | null) =>
+    ownAct(
+      key,
+      (item) => {
+        const target = snoozeTarget(item)
+        if (target.kind === 'task') return until === null ? Promise.reject(new Error('a task snoozes until a time')) : snoozeTask(api, target.taskId, until)
+        if (target.kind === 'notification') return snoozeMention(api, target.notificationId, until)
+        return snoozeRow(api, item, until)
+      },
+      (item) => ({ key: until === null ? 'today.own.snoozedUntilChange' : 'today.own.snoozed', tone: 'success', params: { record: item.record.label } }),
+    )
+
   // ---- the view model --------------------------------------------------------------------------------------------------
   const model: TodayViewModel = {
     access: allowed ? 'open' : 'refused',
+    tileSet: W2A_TILES,
+    comingUp: coming,
+    alertRecords,
     now,
     live,
     tile,
@@ -362,7 +467,8 @@ export function Today() {
               total: queue.data.answer.total,
               needYou: queue.data.answer.counts.total,
               now: queue.data.answer.counts.now,
-              tiles: queue.data.answer.counts.tiles,
+              // The tiles the screen draws (the API may count a category it has no tile for: TASK).
+              tiles: queue.data.answer.counts.tiles.filter((entry): entry is { tile: Tile; count: number; complete: boolean } => (W2A_TILES as readonly string[]).includes(entry.tile)),
               kindLabels: Object.fromEntries(queue.data.answer.counts.byKind.map((entry) => [entry.kind, entry.label])),
               items: queue.data.items.map((item) => queueItem(item, prefix)),
               more: queue.data.cursor !== null,
@@ -436,15 +542,24 @@ export function Today() {
           if (item) void loadReview(item)
         },
         onDialog: (request) => {
-          setNotice(null)
+          // Closing a dialog keeps the notice its action just set (a snooze closes its own dialog after it).
           if (request === null) setDialog(null)
-          else void loadDialog(request)
+          else {
+            setNotice(null)
+            void loadDialog(request)
+          }
         },
         onRetryDialog: () => {
           if (dialog?.kind === 'assign') void loadDialog({ kind: 'assign', key: dialog.key })
           else if (dialog?.kind === 'handled') void loadDialog({ kind: 'handled' })
         },
         onAcknowledge: (key) => act(key, (item) => acknowledgeRow(api, item), () => ({ key: 'today.actions.acknowledged', tone: 'success' })),
+        onDone: markDone,
+        onSnooze: snooze,
+        onRetryComing: () => {
+          setComing({ status: 'loading' })
+          void loadComing()
+        },
         onAssign: (key, assigneeId) => {
           const name = dialog?.kind === 'assign' && dialog.people.status === 'ready' ? (dialog.people.data.find((person) => person.id === assigneeId)?.name ?? '') : ''
           return act(key, (item) => assignRow(api, item, assigneeId), () => (assigneeId === null ? { key: 'today.actions.takenBack', tone: 'success' } : { key: 'today.actions.assigned', tone: 'success', params: { name } }))

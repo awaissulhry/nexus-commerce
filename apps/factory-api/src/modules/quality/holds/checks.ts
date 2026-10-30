@@ -17,6 +17,19 @@ import { reasonWords } from '../../../platform/reasons/service'
  *   holdOnPacking   modules/shipping/packing: garments put into a parcel, a serial packed, the shipment PACKED: a hold of
  *                   a line's work order, of the shipment, a parcel or a serial.
  *
+ * B-W2a-F1 (the hooks B-W2a-26 left: those inserts reached the database's check_violation, a 500):
+ *
+ *   holdOnCut        modules/production/cutting: a cut (not its reversal): a hold of the hide, of its lot or of the work
+ *                    order (CutLog_awaits_quality_hold); the work order ON_HOLD (wave 5's CutLog_awaits_hold).
+ *   holdOnBundles    modules/production/bundles: bundles made for a work order ON_HOLD (Bundle_awaits_hold).
+ *   holdOnInspection modules/quality/final: a final inspection opened for a work order ON_HOLD (Inspection_awaits_hold).
+ *                    An ACTIVE hold of a COMPLETED work order does not stop it: a passed inspection after the hold is
+ *                    what releases an inspection's hold.
+ *   holdOnRelease    modules/quality/final: garments released: a hold of the work order or of a serial named
+ *                    (QualityRelease_ and GarmentSerial_awaits_quality_hold); the work order ON_HOLD (QualityRelease_awaits_hold).
+ *   holdOnLabels     modules/production/serials: garment labels printed or printed again for a work order ON_HOLD
+ *                    (GarmentLabelPrint_awaits_hold).
+ *
  * Each takes the records' hold locks SHARED in id order first ('factory.quality-hold|<tenant>|<id>', the triggers'
  * locks; a scan the work order's gate lock before them, as the triggers' name order does): a hold being placed finishes
  * first and is then seen. Answers null, or the words of the first hold found. Any client the module's command uses: the
@@ -110,6 +123,77 @@ export async function holdOnIssue(tx: Tx, context: RequestContext, subject: { re
   const orderHold = (await activeHoldsOf(tx, 'WorkOrder', [subject.workOrderId]))[0]
   if (orderHold) return blockedWords(await blocking(tx, orderHold, 'WorkOrder', workOrder?.number ?? ''), 'nothing is issued to it')
   if (workOrder?.status === 'ON_HOLD') return workOrderOnHoldWords(workOrder.number, workOrder.holdReason, 'nothing is issued to it')
+  return null
+}
+
+/** The words of a work order ON_HOLD (wave 5's gate), read after its gate lock; null when it is not held. */
+async function onHoldWords(tx: Tx, tenantId: string, workOrderId: string, what: string): Promise<string | null> {
+  await waitForGates(tx, tenantId, [workOrderId])
+  const workOrder = await tx.workOrder.findUnique({ where: { id: workOrderId }, select: { number: true, status: true, holdReason: true } })
+  return workOrder?.status === 'ON_HOLD' ? workOrderOnHoldWords(workOrder.number, workOrder.holdReason, what) : null
+}
+
+/** A cut of a hide for a work order (not a reversal): a hold of the hide, of its lot or of the work order; the work order ON_HOLD. */
+export async function holdOnCut(tx: Tx, context: RequestContext, subject: { readonly hideId: string; readonly lotId: string | null; readonly workOrderId: string }): Promise<string | null> {
+  const tenantId = tenantOf(context)
+  // The triggers' order: the work order's gate (CutLog_awaits_hold), then the hold locks (CutLog_awaits_quality_hold).
+  await waitForGates(tx, tenantId, [subject.workOrderId])
+  await waitForHolds(tx, tenantId, [subject.lotId, subject.hideId, subject.workOrderId])
+  const hideHold = (await activeHoldsOf(tx, 'Hide', [subject.hideId]))[0]
+  if (hideHold) {
+    const hide = await tx.hide.findUnique({ where: { id: subject.hideId }, select: { code: true } })
+    return blockedWords(await blocking(tx, hideHold, 'Hide', hide?.code ?? ''), 'it is not cut')
+  }
+  const lotHold = (await activeHoldsOf(tx, 'Lot', [subject.lotId]))[0]
+  if (lotHold) {
+    const lot = await tx.lot.findUnique({ where: { id: subject.lotId! }, select: { code: true } })
+    return blockedWords(await blocking(tx, lotHold, 'Lot', lot?.code ?? ''), 'its hides are not cut')
+  }
+  const orderHold = (await activeHoldsOf(tx, 'WorkOrder', [subject.workOrderId]))[0]
+  if (orderHold) {
+    const workOrder = await tx.workOrder.findUnique({ where: { id: subject.workOrderId }, select: { number: true } })
+    return blockedWords(await blocking(tx, orderHold, 'WorkOrder', workOrder?.number ?? ''), 'nothing is cut for it')
+  }
+  return onHoldWords(tx, tenantId, subject.workOrderId, 'nothing is cut for it')
+}
+
+/** Bundles made for a work order (the make; a split says its own words): the work order ON_HOLD. */
+export async function holdOnBundles(tx: Tx, context: RequestContext, subject: { readonly workOrderId: string }): Promise<string | null> {
+  return onHoldWords(tx, tenantOf(context), subject.workOrderId, 'no bundle is made for it')
+}
+
+/** A final inspection opened for a work order: the work order ON_HOLD. */
+export async function holdOnInspection(tx: Tx, context: RequestContext, subject: { readonly workOrderId: string }): Promise<string | null> {
+  return onHoldWords(tx, tenantOf(context), subject.workOrderId, 'its garments are not inspected')
+}
+
+/** Garment labels printed, or printed again, for a work order: the work order ON_HOLD. */
+export async function holdOnLabels(tx: Tx, context: RequestContext, subject: { readonly workOrderId: string }): Promise<string | null> {
+  return onHoldWords(tx, tenantOf(context), subject.workOrderId, 'its garment labels are not printed')
+}
+
+/** What a release refusal is about: the work order (its hold, or ON_HOLD) or a serial named. */
+export interface ReleaseHold {
+  readonly subjectType: 'WorkOrder' | 'GarmentSerial'
+  readonly message: string
+}
+
+/** Garments of a work order released (a cell, its serials named): a hold of the work order or of a serial; the work order ON_HOLD. */
+export async function holdOnRelease(tx: Tx, context: RequestContext, subject: { readonly workOrderId: string; readonly serialIds?: readonly string[] }): Promise<ReleaseHold | null> {
+  const tenantId = tenantOf(context)
+  const serials = sorted(subject.serialIds ?? [])
+  // The triggers' order: the work order's gate (QualityRelease_awaits_hold), then the hold locks.
+  await waitForGates(tx, tenantId, [subject.workOrderId])
+  await waitForHolds(tx, tenantId, [subject.workOrderId, ...serials])
+  const workOrder = await tx.workOrder.findUnique({ where: { id: subject.workOrderId }, select: { number: true, status: true, holdReason: true } })
+  const orderHold = (await activeHoldsOf(tx, 'WorkOrder', [subject.workOrderId]))[0]
+  if (orderHold) return { subjectType: 'WorkOrder', message: blockedWords(await blocking(tx, orderHold, 'WorkOrder', workOrder?.number ?? ''), 'its garments are not released') }
+  const serialHold = (await activeHoldsOf(tx, 'GarmentSerial', serials))[0]
+  if (serialHold) {
+    const serial = await tx.garmentSerial.findFirst({ where: { id: { in: serialHold.subjectIds.filter((id) => serials.includes(id)) } }, select: { serial: true } })
+    return { subjectType: 'GarmentSerial', message: blockedWords(await blocking(tx, serialHold, 'GarmentSerial', serial?.serial ?? ''), 'it is not released') }
+  }
+  if (workOrder?.status === 'ON_HOLD') return { subjectType: 'WorkOrder', message: workOrderOnHoldWords(workOrder.number, workOrder.holdReason, 'its garments are not released') }
   return null
 }
 

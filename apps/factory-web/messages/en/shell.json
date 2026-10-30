@@ -8,6 +8,8 @@
       "main": "Main",
       "today": "Today",
       "approvals": "Approvals",
+      "tasks": "My tasks",
+      "notifications": "Notifications",
       "mailToSort": "Mail to sort"
     },
     "products": {
@@ -58,7 +60,9 @@
       "floor": "Floor now",
       "workOrders": "Work orders",
       "settings": "Settings",
-      "floorRules": "Floor rules & codes"
+      "floorRules": "Floor rules & codes",
+      "reports": "Reports",
+      "reportsPage": "Production reports"
     },
     "quality": {
       "area": "Quality",
@@ -121,7 +125,16 @@
     },
     "userMenu": "{name}: profile and sign out",
     "profile": "My profile",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "bell": {
+      "label": "Notifications",
+      "count_one": "Notifications: {count} unread",
+      "count_other": "Notifications: {count} unread",
+      "countMore": "Notifications: more than {count} unread",
+      "none": "Notifications: nothing unread",
+      "unknown": "Notifications: the count is not available now",
+      "open": "Open your notifications"
+    }
   },
   "banner": {
     "testMode": {
