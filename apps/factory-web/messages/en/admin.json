@@ -1164,6 +1164,14 @@
       "team_leader": {
         "name": "Team leader",
         "description": "Leads a crew on the floor: works and sees the team leader's screens of the device's site; sees no money."
+      },
+      "maintenance": {
+        "name": "Maintenance",
+        "description": "Keeps the machines running: the machine register, the requests from the stations and the maintenance jobs; signs a machine marked unsafe safe again; sees no money."
+      },
+      "technician": {
+        "name": "Maintenance technician",
+        "description": "Works maintenance jobs on an enrolled floor device and signs a machine marked unsafe safe again with the PIN; sees no money."
       }
     },
     "bulk": {
@@ -1497,6 +1505,8 @@
     "pricelists": "Price lists",
     "tasks": "Tasks",
     "views": "Views and exports",
+    "search": "Search",
+    "plant": "Plant",
     "alerts": "Alerts and exception rules"
   },
   "perm": {
@@ -1678,6 +1688,11 @@
     "views_save": "Save and share own views of a list",
     "views_manage": "Share views with everyone and set a role's default",
     "views_export": "Export a list to CSV or Excel",
+    "inventory_discrepancies_manage": "Record and settle receipt discrepancies",
+    "inventory_discrepancies_report": "Send the discrepancy report to the supplier",
+    "search_rebuild": "Rebuild the search index of the whole group",
+    "planning_schedule_manage": "Plan the schedule and allocate work to lines",
+    "planning_schedule_publish": "Publish the schedule to the floor",
     "alerts_view": "See the alerts of the records you see, and the exception rules",
     "alerts_handle": "Acknowledge, assign, snooze and resolve alerts",
     "alerts_rules_manage": "Change and add exception rules"

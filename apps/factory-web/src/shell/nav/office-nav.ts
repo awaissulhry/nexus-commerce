@@ -187,6 +187,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-28: Warehouse › Counts (SCR-132) and a count.
   '/warehouse/counts',
   '/warehouse/counts/[id]',
+  // B-W2a-32: All results of the global search (SCR-248), a frame page opened from the palette (no navigation row).
+  '/search',
 ])
 
 /** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */

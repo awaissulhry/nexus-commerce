@@ -12,6 +12,8 @@ import { ALERTS_DEFINITIONS, ALERTS_PERMISSIONS } from '../../alerts/permissions
 import type { Permission } from '../../core/permissions'
 import { INVENTORY_FLOOR_PERMISSIONS, INVENTORY_PERMISSIONS } from '../../inventory/permissions'
 import { INVENTORY_COUNTS_DEFINITIONS, INVENTORY_COUNTS_PERMISSIONS } from '../../inventory/counts/permissions'
+// B-W2a-31: receiving every day (discrepancies and the report to the supplier).
+import { INVENTORY_DISCREPANCIES_DEFINITIONS, INVENTORY_DISCREPANCIES_PERMISSIONS } from '../../inventory/receipts/permissions'
 import { INVENTORY_RESERVATION_PERMISSIONS } from '../../inventory/reservations/permissions'
 import { INVOICES_DEFINITIONS, INVOICES_PERMISSIONS } from '../../invoicing/permissions'
 import { LINK_SESSION_PERMISSIONS as LINK_SESSION_NAMES, LINKS_OFFICE_PERMISSIONS } from '../../links/permissions'
@@ -23,6 +25,8 @@ import { PLANNING_SETTINGS_DEFINITIONS, PLANNING_SETTINGS_PERMISSIONS } from '..
 // B-W2a-22: MRP every day (planning.firm, planning.exceptions.manage).
 import { PLANNING_EXCEPTIONS_DEFINITIONS, PLANNING_EXCEPTIONS_PERMISSIONS } from '../../planning/exceptions/permissions'
 import { PLANNING_FIRM_DEFINITIONS, PLANNING_FIRM_PERMISSIONS } from '../../planning/mrp/permissions'
+// B-W2a-34: the planning board (planning.schedule.manage, planning.schedule.publish).
+import { PLANNING_SCHEDULE_DEFINITIONS, PLANNING_SCHEDULE_PERMISSIONS } from '../../planning/schedule/permissions'
 import { PURCHASING_DEFINITIONS, PURCHASING_PERMISSIONS } from '../../purchasing/permissions'
 import { PURCHASING_SOURCES_DEFINITIONS, PURCHASING_SOURCES_PERMISSIONS } from '../../purchasing/sources/permissions'
 // B-W2a-25: subcontracting (purchasing.subcontract.manage | kit | receive).
@@ -58,6 +62,10 @@ import { PAYMENT_TERMS_DEFINITIONS, PAYMENT_TERMS_PERMISSIONS } from '../../sale
 import { PRICE_LISTS_DEFINITIONS, PRICE_LISTS_PERMISSIONS } from '../../sales/pricelists/permissions'
 // B-W2a-23: saved views and the export of any list (views.save, views.manage, views.export).
 import { VIEWS_DEFINITIONS, VIEWS_PERMISSIONS } from '../../views/permissions'
+// B-W2a-32: global search (search.rebuild; searching itself needs no permission of its own).
+import { SEARCH_DEFINITIONS, SEARCH_PERMISSIONS } from '../../search/permissions'
+// B-W2a-35: the plant (machines, machine requests, maintenance jobs).
+import { PLANT_DEFINITIONS, PLANT_FLOOR_PERMISSIONS, PLANT_PERMISSIONS } from '../../plant/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -344,6 +352,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCT_ROUTING_DEFINITIONS,
   INVENTORY_DEFINITIONS,
   INVENTORY_COUNTS_DEFINITIONS,
+  // B-W2a-31: receiving every day.
+  INVENTORY_DISCREPANCIES_DEFINITIONS,
   SHIPPING_DEFINITIONS,
   SHIPPING_LABELS_DEFINITIONS,
   PARTIES_DEFINITIONS,
@@ -352,6 +362,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-W2a-22: firm planned orders and the exception list.
   PLANNING_FIRM_DEFINITIONS,
   PLANNING_EXCEPTIONS_DEFINITIONS,
+  // B-W2a-34: the planning board's working plan and its publication.
+  PLANNING_SCHEDULE_DEFINITIONS,
   PURCHASING_DEFINITIONS,
   INVOICES_DEFINITIONS,
   PAYMENTS_DEFINITIONS,
@@ -394,6 +406,10 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   QUALITY_HOLDS_DEFINITIONS,
   // B-W2a-23: saved views and exports.
   VIEWS_DEFINITIONS,
+  // B-W2a-32: rebuilding the search index.
+  SEARCH_DEFINITIONS,
+  // B-W2a-35: the plant.
+  PLANT_DEFINITIONS,
   // B-W2a-33: exception rules and stored alerts (alerts.view | handle | rules.manage).
   ALERTS_DEFINITIONS,
   MONEY_PERMISSIONS,
@@ -413,7 +429,9 @@ export const FLOOR_AREA = 'floor'
  * SCR-097); packing the site's shipments (LOG-039, SCR-098); rework sent back and finished (MES-126). Never a money grain;
  * floor roles still hold no other office permission.
  */
-export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS, ...INVENTORY_FLOOR_PERMISSIONS, ...PRODUCTION_CUTTING_FLOOR_PERMISSIONS, ...PRODUCTION_BUNDLES_FLOOR_PERMISSIONS, ...PRODUCTION_SCANS_FLOOR_PERMISSIONS, ...PRODUCTION_SERIALS_FLOOR_PERMISSIONS, ...PRODUCTION_REWORK_FLOOR_PERMISSIONS, ...QUALITY_FINAL_FLOOR_PERMISSIONS, ...SHIPPING_FLOOR_PERMISSIONS])
+export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PRINT_VIEW, PRINT_LABELS, ...INVENTORY_FLOOR_PERMISSIONS, ...PRODUCTION_CUTTING_FLOOR_PERMISSIONS, ...PRODUCTION_BUNDLES_FLOOR_PERMISSIONS, ...PRODUCTION_SCANS_FLOOR_PERMISSIONS, ...PRODUCTION_SERIALS_FLOOR_PERMISSIONS, ...PRODUCTION_REWORK_FLOOR_PERMISSIONS, ...QUALITY_FINAL_FLOOR_PERMISSIONS, ...SHIPPING_FLOOR_PERMISSIONS,
+  // B-W2a-35: report a machine problem at the station (H1: anyone); the technician's jobs and the sign-safe with the PIN.
+  ...PLANT_FLOOR_PERMISSIONS])
 
 // The modules' constants and their declarations name the same permissions.
 for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...REGISTER_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...INVENTORY_RESERVATION_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...PRODUCT_BOM_PERMISSIONS, ...PRODUCT_ROUTING_PERMISSIONS, ...SHIPPING_PERMISSIONS, ...SHIPPING_LABELS_PERMISSIONS, ...PARTIES_PERMISSIONS, ...PLANNING_PERMISSIONS, ...PURCHASING_PERMISSIONS, ...INVOICES_PERMISSIONS, ...PAYMENTS_PERMISSIONS, ...COSTING_PERMISSIONS, ...PRODUCTION_SETTINGS_PERMISSIONS, ...PRODUCTION_CUTTING_PERMISSIONS, ...PRODUCTION_BUNDLES_PERMISSIONS, ...PRODUCTION_SCANS_PERMISSIONS, ...PRODUCTION_SERIALS_PERMISSIONS, ...WORKORDERS_PERMISSIONS, ...QUOTES_PERMISSIONS, ...SALES_SETTINGS_PERMISSIONS, ...COMPANY_BANK_PERMISSIONS, ...ORDERS_PERMISSIONS, ...PRIVACY_PERMISSIONS, ...QUALITY_LAB_PERMISSIONS, ...QUALITY_FINAL_PERMISSIONS, ...HOME_PERMISSIONS, ...FLOOR_SYNC_PERMISSIONS, ...CALENDARS_PERMISSIONS, ...INVENTORY_COUNTS_PERMISSIONS, ...PURCHASING_SOURCES_PERMISSIONS, ...PRODUCTION_REWORK_PERMISSIONS, ...PRODUCTION_SCRAP_PERMISSIONS]) {
@@ -429,6 +447,8 @@ for (const name of PLANNING_SETTINGS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDec
 for (const name of PURCHASING_SUBCONTRACT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-22: MRP every day.
 for (const name of [...PLANNING_FIRM_PERMISSIONS, ...PLANNING_EXCEPTIONS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-34: the planning board.
+for (const name of PLANNING_SCHEDULE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-18: the reason lists.
 for (const name of REASONS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-19: payment terms and price lists.
@@ -439,6 +459,12 @@ for (const name of TASKS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name))
 for (const name of [...QUALITY_DEFECTS_PERMISSIONS, ...QUALITY_HOLDS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-23: saved views and exports.
 for (const name of VIEWS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-31: receiving every day.
+for (const name of INVENTORY_DISCREPANCIES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-32: global search.
+for (const name of SEARCH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-35: the plant.
+for (const name of PLANT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-33: exception rules and stored alerts.
 for (const name of ALERTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

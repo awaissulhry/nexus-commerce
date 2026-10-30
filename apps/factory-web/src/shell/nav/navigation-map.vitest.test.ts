@@ -70,6 +70,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
     // Built pages that are no row and sit under none: the frame's own page, the record panel route (any record without
     // a page of its own), and the evidence trail (a section of the tree's Technical files page, W2b, opened in a new tab).
     const outside = new Set(['/me', '/records/[type]/[id]', '/compliance/evidence/[kind]/[subject]'])
+    // B-W2a-32: All results of the global search, a frame page the palette opens ("See all results").
+    outside.add('/search')
     for (const address of OFFICE_PAGES) {
       const place = findAreaNavPlace(OFFICE_NAV, sample(address))
       if (outside.has(address)) {

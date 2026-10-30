@@ -36,6 +36,9 @@ import { printDispatchHandler } from './platform/print/handler'
 import { rolesSyncCron, syncAllTenants } from './platform/auth/roles/sync'
 // B-W2a-18: a new tenant's empty reason lists get the standard reasons.
 import { standardReasonsCron, standardReasonsForNewTenants } from './platform/reasons/standard'
+// B-W2a-32: the search index, one indexer per record type in platform/search/indexers/ (found by folder).
+import { indexNewTenants, searchHandlers } from './platform/search/indexing'
+import { loadIndexers } from './platform/search/registry'
 // B-W2a-33: the exception rules (evaluated every 5 minutes, and again for one record after its events) and the date timers.
 import { alertsEvaluateCron, alertsRecheckHandler } from './platform/alerts/engine'
 import { timersFireCron } from './platform/timers/fire'
@@ -67,6 +70,9 @@ type Mode = (typeof MODES)[number]
 const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler(), startOnIssueHandler(), invoiceFilesHandler(), sdiPollHandler(), sdiArchiveHandler(), sdiCourtesyCopyHandler(), trackingPollHandler(), afterAcceptanceHandler(), shipDocumentsHandler(), ...orderHandlers(), tellBuyerHandler(), ...costingHandlers(), ...exportHandlers()]
 // B-W2a-20: the notification centre's fan-out (mentions, followed records, assignments, approvals).
 const W2A_20_HANDLERS: readonly EventHandler[] = [notificationsHandler()]
+// B-W2a-32: the search index follows the record events its indexers name (platform/search/indexing.ts).
+const SEARCH_INDEXERS = await loadIndexers(fileURLToPath(new URL('.', import.meta.url)))
+const W2A_32_HANDLERS: readonly EventHandler[] = searchHandlers(SEARCH_INDEXERS)
 // B-W2a-33: one record's exception rules again right after an event that changes it.
 const W2A_33_HANDLERS: readonly EventHandler[] = [alertsRecheckHandler()]
 
@@ -126,8 +132,9 @@ if (mode === 'worker') {
   // A deploy that changed a role template starts a new worker: the system roles follow it (audited per tenant).
   await syncAllTenants({ database, log }).catch((error) => log.error({ err: error }, 'the system roles could not be synced at start'))
   await standardReasonsForNewTenants({ database, log }).catch((error) => log.error({ err: error }, 'the standard reasons could not be given at start'))
+  await indexNewTenants({ database, indexers: SEARCH_INDEXERS, log }).catch((error) => log.error({ err: error }, 'the search index could not be built at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_33_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]

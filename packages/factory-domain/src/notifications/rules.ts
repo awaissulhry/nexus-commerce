@@ -64,6 +64,10 @@ export const MESSAGE_TEMPLATES = {
   'notifications.approval.quote_requested': { en: '{actor} asks you to approve quote {record}{figure}', it: '{actor} ti chiede di approvare il preventivo {record}{figure}' },
   'notifications.approval.quote_decided': { en: '{actor} {status} your approval request for quote {record}', it: '{actor} ha {status} la tua richiesta di approvazione del preventivo {record}' },
   'notifications.approval.nudged': { en: '{actor} reminds you: quote {record} still waits for your approval', it: '{actor} ti ricorda: il preventivo {record} aspetta ancora la tua approvazione' },
+  // B-W2a-35 (modules/plant): a machine problem reported (to who triages it), an unsafe one, a job given to a technician.
+  'notifications.plant.reported': { en: 'A machine problem was reported on {record}: {title}', it: 'Segnalato un problema sulla macchina {record}: {title}' },
+  'notifications.plant.unsafe': { en: '{record} was marked unsafe ({title}): it stays do-not-use until a technician signs it safe', it: '{record} è stata segnalata non sicura ({title}): resta fuori uso finché un tecnico non la dichiara sicura' },
+  'notifications.assigned.job': { en: '{actor} assigned you maintenance job {record}: "{title}"', it: '{actor} ti ha assegnato l’intervento {record}: "{title}"' },
   // B-W2a-33: an exception rule raised an alert for a record (ALERT; {title} the rule's name), an alert was given to the person.
   'notifications.alert.raised': { en: 'Alert on {record}: {title}', it: 'Avviso su {record}: {title}' },
   'notifications.assigned.alert': { en: '{actor} assigned you the alert "{title}" on {record}', it: '{actor} ti ha assegnato l’avviso "{title}" su {record}' },

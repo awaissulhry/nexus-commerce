@@ -395,6 +395,9 @@ describe('declared', () => {
       'planning.requirements_decided',
       'planning.run_failed',
       'planning.run_finished',
+      // B-W2a-34: the planning board.
+      'planning.schedule_changed',
+      'planning.schedule_published',
       // B-W2a-16.
       'planning.settings_changed',
     ])

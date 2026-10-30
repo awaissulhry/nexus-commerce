@@ -95,6 +95,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (`tools/transport.ts`), mounted once by the Office shell (`areas/_shared/list-tools/ListToolsProvider.tsx`: the API,
   the address, the clipboard, the working layout in localStorage per list); `areas/_shared/list-tools/memory.ts` is the
   same in memory (the gallery). Export ▾ appears only for a list with an API export source.
+- `src/areas/search/` — global search (B-W2a-32): All results (SCR-248, `/w/<company>/search?q=&type=`, a frame page
+  with no navigation row) and the shared parts of the palette's record groups (`model.ts`: where a result opens —
+  its company's Office, `recordAddress`, a supplier on the buying side —, the type/status words of `search.json`;
+  `RecordTypeIcon`). The palette's record search is `shell/palette/use-record-search.ts` (the shell container asks
+  `GET /search`; the view only reads `model.records`). A step that indexes a new record type adds its words
+  (`type.<Type>`, `chip.<Type>`, new status codes) to `messages/*/search.json` and the type to `SEARCH_TYPES`.
 - `src/record-panels/` — SCR-006, the panels every record page mounts: `<RecordPanels record={{ type, id, companyId,
   siteId }} title party />` (thread, files, history; live refresh from `/live`). A screen with its own catalogue wraps its
   view in `WithMessages` (record-panels/i18n.tsx): the layouts load `shell` only.

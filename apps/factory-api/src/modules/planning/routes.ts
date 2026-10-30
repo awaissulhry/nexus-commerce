@@ -32,6 +32,12 @@ import { readinessContract, shortagesContract, workOrderReadinessContract } from
 import { readiness, shortages, workOrderReadiness } from './readiness/readiness'
 import { acknowledgeExceptionsContract, getExceptionContract, listExceptionsContract, resolveExceptionContract, snoozeExceptionContract } from './exceptions/contract'
 import { acknowledgeExceptions, getException, listExceptions, resolveException, snoozeException } from './exceptions/exceptions'
+// B-W2a-34: the planning board (backward scheduling, the working plan, publish to the floor, allocation).
+import { allocate, allocationBoard } from './schedule/allocation'
+import { board, workOrderSchedule } from './schedule/board'
+import { allocateContract, allocationContract, boardContract, moveSlotContract, placeByDueDateContract, placeSlotContract, publishContract, publishPreviewContract, removeSlotContract, versionContract, versionsContract, workOrderScheduleContract } from './schedule/contract'
+import { getVersion, listVersions, publish, publishPreview } from './schedule/publish'
+import { moveSlot, placeByDueDate, placeSlot, removeSlot } from './schedule/slots'
 
 /**
  * What to buy and make (B-W1-29; PLN-062 to PLN-066; A2 SCR-055, design 02): run the plan for a site, read the latest
@@ -49,6 +55,12 @@ import { acknowledgeExceptions, getException, listExceptions, resolveException, 
  * planned again), the pegging of a requirement, order line, work order, purchase order line or reservation, the
  * readiness of the site's work orders and the shortage list with its fixes (computed now), and the exception list of
  * the runs (acknowledge, snooze, resolve).
+ *
+ * B-W2a-34 (PLN-129, PLN-131, PLN-132, PLN-147, PLN-160; design planning.board, planning.allocation; Owner answer P3): the
+ * planning board (lanes with their load, the working plan's slots, the order view with each work order's latest safe
+ * start and why it is late or at risk, the tray, the problems), moves into the site's shared working plan (place, move,
+ * remove, place by due date), publishing it to the floor as a numbered version, the published versions, and the
+ * allocation of work orders to lines and workshops.
  */
 export default defineRoutes('planning', manifest, async (app) => {
   app.post('/planning/runs', { schema: runPlanContract }, async (request, reply) => reply.code(201).send(await runPlan(request, request.body, idempotencyKeyFrom(request))))
@@ -88,4 +100,18 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.get('/planning/exceptions/:exceptionId', { schema: getExceptionContract }, async (request) => getException(request, request.params.exceptionId))
   app.post('/planning/exceptions/:exceptionId/snooze', { schema: snoozeExceptionContract }, async (request) => snoozeException(request, request.params.exceptionId, request.body, idempotencyKeyFrom(request)))
   app.post('/planning/exceptions/:exceptionId/resolve', { schema: resolveExceptionContract }, async (request) => resolveException(request, request.params.exceptionId, request.body, idempotencyKeyFrom(request)))
+
+  // ---- B-W2a-34: the planning board --------------------------------------------------------------------------------
+  app.get('/planning/schedule', { schema: boardContract }, async (request) => board(request, request.query))
+  app.get('/planning/schedule/work-orders/:workOrderId', { schema: workOrderScheduleContract }, async (request) => workOrderSchedule(request, request.params.workOrderId))
+  app.post('/planning/schedule/slots', { schema: placeSlotContract }, async (request, reply) => reply.code(201).send(await placeSlot(request, request.body, idempotencyKeyFrom(request))))
+  app.patch('/planning/schedule/slots/:slotId', { schema: moveSlotContract }, async (request) => moveSlot(request, request.params.slotId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/schedule/slots/:slotId/remove', { schema: removeSlotContract }, async (request) => removeSlot(request, request.params.slotId, request.body, idempotencyKeyFrom(request)))
+  app.post('/planning/schedule/place-by-due-date', { schema: placeByDueDateContract }, async (request) => placeByDueDate(request, request.body, idempotencyKeyFrom(request)))
+  app.get('/planning/schedule/publish', { schema: publishPreviewContract }, async (request) => publishPreview(request, request.query))
+  app.post('/planning/schedule/publish', { schema: publishContract }, async (request, reply) => reply.code(201).send(await publish(request, request.body, idempotencyKeyFrom(request))))
+  app.get('/planning/schedule/versions', { schema: versionsContract }, async (request) => listVersions(request, request.query))
+  app.get('/planning/schedule/versions/:versionId', { schema: versionContract }, async (request) => getVersion(request, request.params.versionId))
+  app.get('/planning/allocation', { schema: allocationContract }, async (request) => allocationBoard(request, request.query))
+  app.put('/planning/allocation/work-orders/:workOrderId', { schema: allocateContract }, async (request) => allocate(request, request.params.workOrderId, request.body, idempotencyKeyFrom(request)))
 })

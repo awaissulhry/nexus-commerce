@@ -50,7 +50,21 @@ const every = (filter: (risk: string) => boolean = () => true): Permission[] =>
  * keeps tasks too. Listed here, one line per template, so the long permission lists below stay as their steps wrote them.
  */
 const TASKS_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor'])
-const addedFor = (key: string, audience: RoleAudience): Permission[] => (audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage'] : [])
+/**
+ * B-W2a-35 (the plant; QHS-162, QHS-178, QHS-184; Owner answer H1): who sees and works the machines, requests and jobs,
+ * one line per template. Every floor role reports a machine problem (H1: anyone at the station marks a machine unsafe at
+ * once); only the technicians' templates (`maintenance`, `technician`, below) sign a machine safe again.
+ */
+const PLANT_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  planner: ['plant.view'],
+  production_manager: ['plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage'],
+  floor_supervisor: ['plant.view', 'plant.report', 'plant.requests.triage'],
+  operator: ['plant.report'],
+  cutting_operator: ['plant.report'],
+  floor_inspector: ['plant.report'],
+  team_leader: ['plant.report'],
+})
+const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -144,6 +158,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'reasons.manage',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.manage', 'views.export',
+      // B-W2a-32: rebuild the search index.
+      'search.rebuild',
     ],
     grains: [],
   }),
@@ -187,6 +203,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'production.scrap.view', 'production.scrap.approve',
       // B-W2a-22: firm planned orders and the exception list of the runs.
       'planning.firm', 'planning.exceptions.manage',
+      // B-W2a-34: the planning board (moves into the shared working plan, allocation) and publishing it to the floor.
+      'planning.schedule.manage', 'planning.schedule.publish',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export'],
     grains: [],
@@ -240,6 +258,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'purchasing.sources.manage',
       // B-W2a-25: subcontract orders to the workshops (operations, fees, kit plan, issue, cancel, close).
       'purchasing.subcontract.manage',
+      // B-W2a-31: what was wrong with a delivery, its report to the supplier and its answer.
+      'inventory.discrepancies.manage',
+      'inventory.discrepancies.report',
       // W2a B-W2a-13 (MES-057): the hide yield per supplier lot feeds the supplier's rating.
       'production.cutting.view',
       // B-W2a-23: save views of a list; export a list.
@@ -303,6 +324,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'home.view',
       // B-W2a-26: sees what is on hold (design quality.holds: warehouse and supervisors read).
       'quality.holds.view',
+      // B-W2a-31: records what was wrong with a delivery at receiving and reports it to the supplier.
+      'inventory.discrepancies.manage',
+      'inventory.discrepancies.report',
       // B-W2a-23: save views of a list; export a list.
       'views.save', 'views.export',
     ],
@@ -409,6 +433,14 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'views.save', 'views.export'],
     grains: [],
   }),
+  // B-W2a-35 (the plant; Owner answer H1): the office's maintenance lead and technicians.
+  template('maintenance', {
+    name: 'Maintenance',
+    description: 'Keeps the machines running: the machine register and its classes and symptoms, the requests from the stations and the maintenance jobs; signs a machine marked unsafe safe again; sees no money.',
+    requireMfa: false,
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'sites.view', 'workers.view', 'parties.view', 'home.view', 'calendars.view', 'tasks.manage', 'views.save', 'views.export', 'plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.jobs.work', 'plant.signSafe'],
+    grains: [],
+  }),
   template('read_only', {
     name: 'Read-only',
     description: 'Sees every screen its scope reaches and changes nothing; sees no money.',
@@ -438,6 +470,13 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Team leader',
     description: "Leads a crew on the floor: works and sees the team leader's screens of the device's site; sees no money.",
     permissions: ['floor.work', 'floor.lead', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'inventory.issue', 'inventory.receive', 'production.cut', 'production.bundles', 'production.scan', 'production.serials', 'quality.inspections.view', 'shipping.pack', 'production.rework'],
+    grains: [],
+  }),
+  // B-W2a-35 (the plant; Owner answer H1): the technician on the floor (maintenance mode).
+  floorTemplate('technician', {
+    name: 'Maintenance technician',
+    description: 'Works maintenance jobs on an enrolled floor device: starts them, waits for parts, hands the machine back, and signs a machine marked unsafe safe again with the PIN; sees no money.',
+    permissions: ['floor.work', 'print.view', 'print.labels', 'plant.report', 'plant.jobs.work', 'plant.signSafe'],
     grains: [],
   }),
 ])

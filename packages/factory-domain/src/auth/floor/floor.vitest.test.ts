@@ -199,7 +199,7 @@ describe('floor roles and their grants', () => {
   it('floor templates hold only floor permissions, no money and no two-factor; office templates hold no floor permission', () => {
     expect(templateProblems(ROLE_TEMPLATES)).toEqual([])
     const floor = ROLE_TEMPLATES.filter((entry) => entry.audience === 'floor')
-    expect(floor.map((entry) => entry.key)).toEqual(['operator', 'cutting_operator', 'floor_inspector', 'team_leader'])
+    expect(floor.map((entry) => entry.key)).toEqual(['operator', 'cutting_operator', 'floor_inspector', 'team_leader', /* B-W2a-35 */ 'technician'])
     for (const entry of floor) {
       expect(entry.requireMfa).toBe(false)
       expect(entry.grains).toEqual([])
@@ -210,7 +210,7 @@ describe('floor roles and their grants', () => {
     for (const entry of ROLE_TEMPLATES.filter((item) => item.audience === 'office')) {
       expect(entry.permissions.some((name) => name.startsWith('floor.')), entry.key).toBe(false)
     }
-    expect(templateOf('team_leader')?.permissions).toEqual(['floor.lead', 'floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.receive', 'inventory.transfer', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'production.rework', 'production.scan', 'production.serials', 'quality.inspections.view', 'shipping.pack'])
+    expect(templateOf('team_leader')?.permissions).toEqual(['floor.lead', 'floor.work', 'inventory.issue', 'inventory.locations.view', 'inventory.receive', 'inventory.transfer', /* B-W2a-35 */ 'plant.report', 'print.labels', 'print.view', 'production.bundles', 'production.cut', 'production.rework', 'production.scan', 'production.serials', 'quality.inspections.view', 'shipping.pack'])
     expect(templateOf('floor_inspector')?.permissions).toEqual(expect.arrayContaining(['quality.inspections.record', 'quality.garments.release']))
     expect(templateOf('floor_inspector')?.permissions).not.toContain('quality.garments.reverse')
     expect(templateOf('admin')?.permissions).toEqual(expect.arrayContaining(['devices.manage', 'devices.revoke', 'workers.manage', 'workers.credentials']))

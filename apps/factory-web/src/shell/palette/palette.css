@@ -101,3 +101,16 @@
     display: none;
   }
 }
+
+/* B-W2a-32: the Records group while the search answers (skeleton rows in the row's own shape), a typo forgiven. */
+.fw-palette-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  width: 100%;
+  padding: var(--nds-space-2) 0 var(--nds-space-2) var(--nds-space-26);
+}
+
+.fw-palette-similar {
+  font-style: italic;
+}

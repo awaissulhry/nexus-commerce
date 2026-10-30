@@ -26,12 +26,15 @@ import {
   type LotStart,
   type ReceiptNote,
 } from '@nexus/factory-domain/inventory/receipts/rules'
+import { lotBasesOf, orderQuantityOf, receivedBase, receivedShapeProblems, receivedUnitOf, type ReceivedUnit } from '@nexus/factory-domain/inventory/receipts/conversion'
 import type { PurchaseOrderStatus } from '@nexus/factory-domain/purchasing/orders'
+import { sourceFor } from '@nexus/factory-domain/purchasing/sources/sources'
 import { Dec, parseDecimal, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { allocateScanIds } from '../../../platform/numbering/scan-ids'
 import { lockOrderForReceipt, readOrderForFloorReceipt, setOrderReceiptProgress, type OrderForReceipt } from '../../purchasing/receiving'
+import { activeSourcesOf } from '../../purchasing/supplier-items/store'
 import { officeContextOf, postedBy, stockContextOf } from '../ledger/access'
 import { postMoves, type MoveDraft, type PostedMove } from '../ledger/post-moves'
 import { lotNumber, receiptNumber } from './numbers'
@@ -83,6 +86,10 @@ export interface LineBody {
   readonly quantity?: string | undefined
   readonly uom?: Uom | undefined
   readonly baseQuantity?: string | undefined
+  /** B-W2a-31 (SCM-123): received in the supplier's unit — how many (an untracked line), the unit and its factor. */
+  readonly receivedQuantity?: string | undefined
+  readonly receivedUom?: Uom | undefined
+  readonly receivedFactor?: string | undefined
   readonly lots?: readonly LotBody[] | undefined
   readonly differenceReason?: string | undefined
   readonly note?: string | null | undefined
@@ -129,6 +136,8 @@ interface PlannedLine {
   readonly quantity: string
   readonly baseQuantity: string
   readonly lots: readonly PlannedLot[]
+  /** B-W2a-31: what came in the supplier's unit (its moves post in the base unit), or null. */
+  readonly received: (ReceivedUnit & { readonly quantity: string }) | null
 }
 
 export interface RecordResult {
@@ -210,7 +219,9 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
   const prices = floor ? new Map<string, string>() : new Map((await tx.purchaseOrderLine.findMany({ where: { purchaseOrderId: order.id }, select: { id: true, unitPrice: true } })).map((row) => [row.id, row.unitPrice.toString()]))
   const items = await readItems(tx, orderLines.map((line) => line.itemId))
   const colours = await readColours(tx, orderLines.map((line) => line.itemColourId))
-  const planned = planLines(body, orderLines, items, colours)
+  // B-W2a-31: the unit the supplier counts in, from its approved source (the office; the floor reads no source).
+  const sourceUnits = floor ? new Map<string, Uom>() : await sourceUnitsOf(tx, order, orderLines, body)
+  const planned = planLines(body, orderLines, items, colours, sourceUnits, floor)
   const moveCount = planned.reduce((sum, line) => sum + (line.lots.length === 0 ? 1 : line.lots.reduce((count, lot) => count + Math.max(1, lot.hides.length), 0)), 0)
   if (moveCount > RECEIPT_LIMITS.moves) {
     throw new ValidationError(`One receipt posts at most ${RECEIPT_LIMITS.moves} hides and lots; this one has ${moveCount}. Split the delivery into two receipts.`, [{ path: 'body/lines', message: `At most ${RECEIPT_LIMITS.moves}.` }])
@@ -291,6 +302,7 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
         uom: line.uom,
         baseQuantity: line.baseQuantity,
         hideCount: line.item.tracking === 'HIDE' ? line.lots.reduce((sum, lot) => sum + lot.hides.length, 0) : null,
+        ...(line.received ? { receivedQuantity: line.received.quantity, receivedUom: line.received.uom, receivedFactor: line.received.factor } : {}),
         note: [blank(line.body.note), reason ? `Difference from the order: ${reason}` : null].filter(Boolean).join(' · ') || null,
         createdAt: now,
         updatedAt: now,
@@ -328,7 +340,8 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
       ...fields,
     })
     if (line.lots.length === 0) {
-      drafts.push(move({ lotId: null, hideId: null, quantity: line.quantity, uom: line.uom, baseQuantity: line.baseQuantity }))
+      // Received in the supplier's unit: the move is in the base unit (its quantity is what the line's factor made).
+      drafts.push(line.received ? move({ lotId: null, hideId: null, quantity: line.baseQuantity, uom: line.item.baseUom, baseQuantity: line.baseQuantity }) : move({ lotId: null, hideId: null, quantity: line.quantity, uom: line.uom, baseQuantity: line.baseQuantity }))
       continue
     }
     for (const [lotIndex, lot] of line.lots.entries()) {
@@ -378,7 +391,11 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
         ...(hold ? { reason: hold } : {}),
       })
       if (lot.hides.length === 0) {
-        drafts.push(move({ lotId, hideId: null, quantity: lot.quantity!, uom: line.uom, baseQuantity: lot.baseQuantity }, lotPlace))
+        drafts.push(
+          line.received
+            ? move({ lotId, hideId: null, quantity: lot.baseQuantity, uom: line.item.baseUom, baseQuantity: lot.baseQuantity }, lotPlace)
+            : move({ lotId, hideId: null, quantity: lot.quantity!, uom: line.uom, baseQuantity: lot.baseQuantity }, lotPlace),
+        )
         continue
       }
       for (const hide of lot.hides) {
@@ -450,7 +467,7 @@ export async function recordReceiptInCommand(tools: CommandTools, body: ReceiptB
       receivedAt: receivedAt.toISOString(),
       locationId: location.id,
       ...(options.heldLocation && lotRows.some((lot) => lot.quarantined) ? { heldLocationId: options.heldLocation.id } : {}),
-      lines: planned.map((line) => ({ seq: line.seq, purchaseOrderLineId: line.orderLine.id, quantity: line.quantity, uom: line.uom, baseQuantity: line.baseQuantity })),
+      lines: planned.map((line) => ({ seq: line.seq, purchaseOrderLineId: line.orderLine.id, quantity: line.quantity, uom: line.uom, baseQuantity: line.baseQuantity, ...(line.received ? { received: line.received } : {}) })),
       lotIds: lotRows.map((lot) => lot.id),
       hides: hideTotal,
     },
@@ -495,15 +512,21 @@ async function locationFor(tools: CommandTools, siteId: string, locationId: stri
  * Every line of the body against the order's lines and its material's tracking, with the units and base quantities
  * worked out (factory-domain units). All problems at once: a 400 with each path.
  */
-function planLines(body: ReceiptBody, orderLines: readonly OrderLineRow[], items: Map<string, ItemRow>, colours: Map<string, { code: string }>): PlannedLine[] {
+function planLines(body: ReceiptBody, orderLines: readonly OrderLineRow[], items: Map<string, ItemRow>, colours: Map<string, { code: string }>, sourceUnits: ReadonlyMap<string, Uom>, floor: boolean): PlannedLine[] {
   const problems: Issue[] = []
   const seen = new Set<string>()
   const planned: PlannedLine[] = []
   body.lines.forEach((line, index) => {
     const at = `body/lines/${index}`
     const orderLine = orderLines.find((entry) => entry.id === line.purchaseOrderLineId)
+    const lotStartOf = (lot: LotBody, of: ItemRow, onLine: OrderLineRow) =>
+      lotStart({ itemRequiresCrViTest: of.requiresCrViTest, itemCrViLimitMgKg: of.crViLimitMgKg?.toString() ?? null, lineRequiresCrViTest: onLine.requiresCrViTest, isPpeComponent: of.isPpeComponent, holdReason: lot.holdReason ?? null })
     if (!orderLine) {
       problems.push({ path: `${at}/purchaseOrderLineId`, message: 'Not a line of this purchase order.' })
+      return
+    }
+    if (orderLine.cancelledAt || orderLine.closedShortAt) {
+      problems.push({ path: `${at}/purchaseOrderLineId`, message: `Order line ${orderLine.seq} was ${orderLine.cancelledAt ? 'cancelled' : 'closed short'}: it receives nothing more. Record extra goods against a new order.` })
       return
     }
     if (seen.has(orderLine.id)) {
@@ -514,6 +537,13 @@ function planLines(body: ReceiptBody, orderLines: readonly OrderLineRow[], items
     const item = items.get(orderLine.itemId)!
     const colour = orderLine.itemColourId ? colours.get(orderLine.itemColourId) : undefined
     const label = `Line ${(index + 1) * 10} (${item.code}${colour ? ` ${colour.code}` : ''})`
+    // B-W2a-31 (SCM-123): received in the supplier's unit — the line keeps what came in it; the base follows its factor.
+    if (line.receivedQuantity !== undefined || line.receivedUom !== undefined || line.receivedFactor !== undefined) {
+      const received = planReceived(line, at, index, orderLine, item, label, sourceUnits.get(orderLine.id) ?? null, floor, lotStartOf)
+      if ('problems' in received) problems.push(...received.problems)
+      else planned.push(received.line)
+      return
+    }
     const shape = lineShapeProblems(line, item.tracking, item.code)
     if (shape.length > 0) {
       problems.push(...shape.map((issue) => ({ path: `${at}/${issue.path}`, message: issue.message })))
@@ -558,18 +588,18 @@ function planLines(body: ReceiptBody, orderLines: readonly OrderLineRow[], items
       const uom = hideLineUnit(all.map((hide) => hide.areaUom), item.baseUom)
       const baseQuantity = quantityText(sum(all.map((hide) => hide.baseArea)))
       const quantity = all.every((hide) => hide.areaUom === uom) ? quantityText(sum(all.map((hide) => hide.area))) : baseQuantity
-      planned.push({ index, seq, body: line, orderLine, item, label, uom, quantity, baseQuantity, lots })
+      planned.push({ index, seq, body: line, orderLine, item, label, uom, quantity, baseQuantity, lots, received: null })
     } else if (item.tracking === 'LOT') {
       const uom = line.uom ?? orderLine.uom
       const lots = (line.lots ?? []).flatMap((lot, lotIndex): PlannedLot[] => {
         const baseQuantity = base(lot.quantity!, uom, lot.baseQuantity, `${at}/lots/${lotIndex}`)
         return baseQuantity === null ? [] : [{ body: lot, start: startOf(lot), quantity: quantityText(lot.quantity!), baseQuantity, hides: [] }]
       })
-      planned.push({ index, seq, body: line, orderLine, item, label, uom, quantity: quantityText(sum(lots.map((lot) => lot.quantity!))), baseQuantity: quantityText(sum(lots.map((lot) => lot.baseQuantity))), lots })
+      planned.push({ index, seq, body: line, orderLine, item, label, uom, quantity: quantityText(sum(lots.map((lot) => lot.quantity!))), baseQuantity: quantityText(sum(lots.map((lot) => lot.baseQuantity))), lots, received: null })
     } else {
       const uom = line.uom ?? orderLine.uom
       const baseQuantity = base(line.quantity!, uom, line.baseQuantity, at)
-      if (baseQuantity !== null) planned.push({ index, seq, body: line, orderLine, item, label, uom, quantity: quantityText(line.quantity!), baseQuantity, lots: [] })
+      if (baseQuantity !== null) planned.push({ index, seq, body: line, orderLine, item, label, uom, quantity: quantityText(line.quantity!), baseQuantity, lots: [], received: null })
     }
   })
   if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'The receipt\'s lines break the receiving rules.', problems)
@@ -577,3 +607,98 @@ function planLines(body: ReceiptBody, orderLines: readonly OrderLineRow[], items
 }
 
 const sum = (values: readonly string[]): Decimal => values.reduce((total, value) => total.plus(new Dec(value)), ZERO)
+
+// ---- B-W2a-31 (SCM-123): received in the supplier's unit ---------------------------------------------------------------------
+
+/**
+ * The unit each order line's supplier counts in, from the approved source of this supplier, company, material and colour
+ * (B-W2a-10 SupplierItem.purchaseUom), for the lines that ask for a received unit without naming it. Office only.
+ */
+async function sourceUnitsOf(tx: CommandTools['tx'], order: OrderForReceipt, orderLines: readonly OrderLineRow[], body: ReceiptBody): Promise<Map<string, Uom>> {
+  const asking = body.lines.filter((line) => line.receivedUom === undefined && (line.receivedQuantity !== undefined || line.receivedFactor !== undefined)).map((line) => line.purchaseOrderLineId)
+  const lines = orderLines.filter((line) => asking.includes(line.id))
+  if (lines.length === 0) return new Map()
+  const sources = await activeSourcesOf(tx, lines.map((line) => line.itemId))
+  const units = new Map<string, Uom>()
+  for (const line of lines) {
+    const source = sourceFor(sources, { companyId: order.companyId, itemId: line.itemId, itemColourId: line.itemColourId }, order.partyId)
+    if (source && source.partyId === order.partyId) units.set(line.id, source.purchaseUom)
+  }
+  return units
+}
+
+/**
+ * One line received in the supplier's unit (factory-domain inventory/receipts/conversion): an untracked line's quantity,
+ * or a lot-tracked line's lots, counted in that unit; the base quantity = round(quantity × factor, 4), the lots' bases add
+ * up to the line's exactly; the line's quantity in the order line's unit. Leather never (its hides carry their units).
+ */
+function planReceived(
+  line: LineBody,
+  at: string,
+  index: number,
+  orderLine: OrderLineRow,
+  item: ItemRow,
+  label: string,
+  sourceUnit: Uom | null,
+  floor: boolean,
+  lotStartOf: (lot: LotBody, item: ItemRow, orderLine: OrderLineRow) => LotStart,
+): { readonly line: PlannedLine } | { readonly problems: Issue[] } {
+  const relative = (issues: readonly Issue[]) => issues.map((issue) => ({ path: `${at}/${issue.path}`, message: issue.message }))
+  const shape = receivedShapeProblems(line, item.tracking)
+  if (shape.length > 0) return { problems: relative(shape) }
+  const uom = line.receivedUom ?? sourceUnit
+  if (uom === null) {
+    return { problems: [{ path: `${at}/receivedUom`, message: floor ? 'Name the unit the supplier counts in.' : `Name the unit the supplier counts in: ${item.code} has no approved source of this supplier to take it from.` }] }
+  }
+  const resolved = receivedUnitOf(uom, line.receivedFactor, unitsOf(item))
+  if (resolved.problems) return { problems: relative(resolved.problems) }
+  const unit = resolved.unit
+  const seq = (index + 1) * 10
+  const tooSmall = (path: string, quantity: string) => ({ path: `${at}/${path}`, message: `${quantity} ${uom} × ${new Dec(unit.factor).toString()} is less than 0.0001 ${item.baseUom}: too little to receive.` })
+  if (item.tracking === 'LOT') {
+    const lotShape = lineShapeProblems({ lots: line.lots }, 'LOT', item.code)
+    if (lotShape.length > 0) return { problems: relative(lotShape) }
+    const lots = line.lots ?? []
+    const bases = lotBasesOf(lots.map((lot) => lot.quantity!), unit.factor)
+    const small = bases.lots.flatMap((base, lotIndex) => (base.lessThanOrEqualTo(0) ? [tooSmall(`lots/${lotIndex}/quantity`, lots[lotIndex]!.quantity!)] : []))
+    if (small.length > 0) return { problems: small }
+    const quantity = quantityText(sum(lots.map((lot) => lot.quantity!)))
+    const baseQuantity = quantityText(bases.lineBase)
+    return {
+      line: {
+        index,
+        seq,
+        body: line,
+        orderLine,
+        item,
+        label,
+        uom: orderLine.uom,
+        quantity: quantityText(orderQuantityOf({ quantity, uom, baseQuantity }, { uom: orderLine.uom, quantity: orderLine.quantity.toString(), baseQuantity: orderLine.baseQuantity.toString() })),
+        baseQuantity,
+        lots: lots.map((lot, lotIndex) => ({ body: lot, start: lotStartOf(lot, item, orderLine), quantity: quantityText(lot.quantity!), baseQuantity: quantityText(bases.lots[lotIndex]!), hides: [] })),
+        received: { ...unit, quantity },
+      },
+    }
+  }
+  const quantityShape = lineShapeProblems({ quantity: line.receivedQuantity, lots: line.lots }, item.tracking, item.code)
+  if (quantityShape.length > 0) return { problems: quantityShape.map((issue) => ({ path: `${at}/${issue.path === 'quantity' ? 'receivedQuantity' : issue.path}`, message: issue.message })) }
+  const quantity = quantityText(line.receivedQuantity!)
+  const base = receivedBase(quantity, unit.factor)
+  if (base.lessThanOrEqualTo(0)) return { problems: [tooSmall('receivedQuantity', quantity)] }
+  const baseQuantity = quantityText(base)
+  return {
+    line: {
+      index,
+      seq,
+      body: line,
+      orderLine,
+      item,
+      label,
+      uom: orderLine.uom,
+      quantity: quantityText(orderQuantityOf({ quantity, uom, baseQuantity }, { uom: orderLine.uom, quantity: orderLine.quantity.toString(), baseQuantity: orderLine.baseQuantity.toString() })),
+      baseQuantity,
+      lots: [],
+      received: { ...unit, quantity },
+    },
+  }
+}
