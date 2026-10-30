@@ -482,7 +482,7 @@ model DepositRequest {
   // money.prisma: its deposit invoices (TD02) and the payments allocated to it.
   invoices     Invoice[]
   allocations  PaymentAllocation[]
-  // The deposit step of its order's payment schedule.
+  // The step of its order's payment schedule it is asked for: the deposit, or a balance before shipping (B-W2a-F2).
   milestones   SalesOrderMilestone[]
 
   // The target of the references from its deposit invoices and payment allocations: the same company and party.
@@ -811,8 +811,8 @@ model SalesOrderAmendment {
 /// One step of an order's payment schedule (SAL-216; design order.money.schedule): what is due when (the deposit on the
 /// order, the balance before shipping or on delivery, the rest on the invoice's terms), its amount and its state. Made
 /// from the order's payment terms (or typed) when the order is made, made again by an amendment while OPEN. The deposit
-/// step names its deposit request (it is PAID when the request is). OPEN → PAID | WAIVED | CANCELLED; the last three are
-/// final. Never deleted.
+/// step names its deposit request, and so does a BEFORE_SHIPPING step (B-W2a-F2); each is PAID when its request is.
+/// OPEN → PAID | WAIVED | CANCELLED; the last three are final. Never deleted.
 model SalesOrderMilestone {
   id               String               @id @db.Uuid
   tenantId         String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -832,7 +832,9 @@ model SalesOrderMilestone {
   amount           Int
   /// The day it falls due, once known (a deposit's due date, an invoice's due date); null: when its event happens.
   dueDate          DateTime?            @db.Date
-  /// DEPOSIT only: its deposit request (of the same order's company and party).
+  /// DEPOSIT and BEFORE_SHIPPING only: its deposit request (of the same order's company and party). A BEFORE_SHIPPING
+  /// step paid before the goods leave is an advance (DPR 633/1972 art. 6 c.4): its request's payment issues its TD02
+  /// (B-W2a-F2), deducted on the goods' invoice like the deposit's.
   depositRequestId String?              @db.Uuid
   status           SalesMilestoneStatus @default(OPEN)
   /// Set exactly when PAID.

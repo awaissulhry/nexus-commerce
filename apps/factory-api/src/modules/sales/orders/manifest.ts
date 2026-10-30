@@ -27,5 +27,7 @@ export const manifest = defineManifest({
   'POST /sales/orders/:orderId/reopen-lines': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'GET /sales/orders/:orderId/cancel-check': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'GET /sales/orders/:orderId/schedule': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // B-W2a-F2: a before-shipping step's deposit request (an advance invoiced with a TD02 when paid before the goods leave).
+  'POST /sales/orders/:orderId/schedule/:milestoneId/request': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/orders/:orderId/copy-as-quote': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },
 })

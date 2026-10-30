@@ -165,6 +165,17 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   supplier's answer and the buyer's accept/refuse), `areas/warehouse/receipts/` (SCR-063 list `?view=expected|posted|today|
   waiting|reversed|all`, the receiving page `/warehouse/receipts/new?order=&lines=` posting the whole receipt at once with the
   hide entry sheet (SCR-061), the receipt `?tab=lines|lots|activity` with its lots and quality state (SCR-062) and Reverse).
+- `src/areas/plant/` — Plant › Maintenance (B-W2a-53, area order 12, Italian "Stabilimento"; catalogue `plant`): `_shared/`
+  (api.ts every plant call + zod; model.ts the pure rules — saved rows ⇄ the API's own filters, the board's lanes and why a
+  card may not go there, the job moves a person may make, refusals `refusal/<CODE>` in our words, costs and due times typed
+  in the site's zone, people in words: a floor worker never by name in a list; parts.tsx pills, the record band, the
+  composed step-up; AssigneeField; fixtures.ts made-up data), `requests/` Machine requests (SCR-148 `?view=&tile=&site=&open=
+  &report=1&machine=`: the queue, its DetailModal with J / K and A / M / D / C / S, Make a job, Close, Merge, Sign safe with a
+  fresh code, Report a problem with the icon grid and the photo capture; `print/` SCR-148-print), `jobs/` Maintenance jobs
+  (SCR-149 `?view=&site=&machine=&mode=board&new=1`: list with inline priority / due / technician, the DS board, New job,
+  Assign jobs; `record/` `?tab=problem|handback|activity`; `sheet/` the job sheet with its QR), `machines/` Machines & tools
+  (SCR-150 `?view=&q=&site=&class=&new=1`: inline station / work centre, New machine, Retire N; `record/`
+  `?tab=overview|history`; `tags/` the tag sheet). Pickers: `GET /plant/places`, `GET /plant/technicians?siteId`.
 - The stock screens (catalogue `stock` shared + one per page; shared parts `areas/_shared/stock/`: api (every inventory read and
   write, zod), model (abilities with the cost grain, words for API faults, units never added across, leather's two numbers
   and both area units, state tones, `movesHref`), parts (pills, Qty, Dual, NoAccess, ReadFailed), made-up fixtures):

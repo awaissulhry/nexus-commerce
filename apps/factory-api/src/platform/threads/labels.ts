@@ -26,6 +26,11 @@ const LABELS: Readonly<Record<string, Labeller>> = Object.freeze({
   IntegrationAccount: async (client, id) => (await client.integrationAccount.findUnique({ where: { id }, select: { label: true } }))?.label ?? null,
   Certificate: async (client, id) => (await client.certificate.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   Style: async (client, id) => (await client.style.findUnique({ where: { id }, select: { code: true } }))?.code ?? null,
+  // modules/receivables (B-W2a-55): a payment reminder by its level and its customer's code.
+  PaymentReminder: async (client, id) => {
+    const reminder = await client.paymentReminder.findUnique({ where: { id }, select: { level: true, party: { select: { code: true } } } })
+    return reminder ? `Reminder ${reminder.level} · ${reminder.party.code}` : null
+  },
   Invoice: async (client, id) => {
     const invoice = await client.invoice.findUnique({ where: { id }, select: { number: true } })
     return invoice ? (invoice.number ?? 'Draft invoice') : null

@@ -74,6 +74,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
   },
   // modules/sales/quotes (SCR-034; B-W1-24 the quote mail with its PDF and the acceptance confirmation): the selling
   // company and the customer.
+  // modules/receivables (B-W2a-55): a payment reminder's e-mail goes out on its own thread, the company owed and the
+  // customer (email out's EmailOutbound of recordType "PaymentReminder").
+  PaymentReminder: async (client, id) => {
+    const reminder = await client.paymentReminder.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return reminder ? { companyId: reminder.companyId, siteId: null, partyId: reminder.partyId } : null
+  },
   Quote: async (client, id) => {
     const quote = await client.quote.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
     return quote ? { companyId: quote.companyId, siteId: null, partyId: quote.partyId } : null
@@ -100,6 +106,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
   SupplierClaim: async (client, id) => {
     const claim = await client.supplierClaim.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
     return claim ? { companyId: claim.companyId, siteId: claim.siteId, partyId: claim.partyId } : null
+  },
+  // modules/payables (SCR-153 the supplier invoice's Activity; B-W2a-62 the differences sent to the buyer): the company it
+  // is addressed to and the supplier or subcontractor that sent it.
+  SupplierInvoice: async (client, id) => {
+    const invoice = await client.supplierInvoice.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return invoice ? { companyId: invoice.companyId, siteId: null, partyId: invoice.partyId } : null
   },
   // modules/sales/orders (SCR-039 Activity; B-W1-25): the selling company and the customer.
   SalesOrder: async (client, id) => {

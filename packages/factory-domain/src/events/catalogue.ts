@@ -42,6 +42,10 @@ import { events as accounting } from '../accounting/events'
 import { events as ops } from '../ops/events'
 // B-W2a-41: the mail delivery log (an address unblocked).
 import { events as emailDelivery } from '../email-delivery/events'
+// B-W2a-55: receivables (payment reminders, the settings, statements sent).
+import { events as receivables } from '../receivables/events'
+// B-W2a-62: payables (supplier invoices, the three-way match, approval, payment, SDI pickups).
+import { events as payables } from '../payables/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -151,7 +155,11 @@ export function createCatalogue(definitions: readonly EventDefinition[]): EventC
  */
 export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...purchasing, ...invoicing, ...payments, ...costing, ...production, ...sales, ...privacy, ...quality, ...floorSync, ...insights, ...calendars, ...reasons, ...notifications, ...tasks, ...views, ...search, ...plant, ...alerts, ...timers, ...accounting, ...ops,
   // B-W2a-41
-  ...emailDelivery] as const satisfies readonly EventDefinition[]
+  ...emailDelivery,
+  // B-W2a-55
+  ...receivables,
+  // B-W2a-62
+  ...payables] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

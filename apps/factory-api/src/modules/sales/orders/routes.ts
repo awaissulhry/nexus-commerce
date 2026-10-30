@@ -17,13 +17,14 @@ import {
   previewManualContract,
   reopenLinesContract,
   scheduleContract,
+  stepRequestContract,
 } from './daily-contract'
 import { cancelCheck } from './impact'
 import { manifest } from './manifest'
 import { createManualOrder, nextOrderNumber, previewManualOrder } from './manual'
 import { cancelOrder, changePromise, closeOrder, markReady, officeOrder } from './moves'
 import { getOrder, listOrders, makeOrder, orderBoard } from './orders'
-import { getSchedule } from './schedule'
+import { getSchedule, requestStep } from './schedule'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A2 SCR-038, SCR-039): the
@@ -78,6 +79,11 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
   app.get('/sales/orders/:orderId/cancel-check', { schema: cancelCheckContract }, async (request) => cancelCheck(request, request.params.orderId))
 
   app.get('/sales/orders/:orderId/schedule', { schema: scheduleContract }, async (request) => getSchedule(request, request.params.orderId))
+
+  // B-W2a-F2: the office opens a before-shipping step (its deposit request).
+  app.post('/sales/orders/:orderId/schedule/:milestoneId/request', { schema: stepRequestContract }, async (request, reply) =>
+    reply.code(201).send(await requestStep(request, request.params.orderId, request.params.milestoneId, request.body, idempotencyKeyFrom(request))),
+  )
 
   app.post('/sales/orders/:orderId/copy-as-quote', { schema: copyOrderAsQuoteContract }, async (request, reply) => {
     const order = await officeOrder(request, request.params.orderId)

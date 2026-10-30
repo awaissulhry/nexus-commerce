@@ -142,6 +142,13 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'planning.allocation', title: 'Lines & subcontractors', titleIt: 'Linee e terzisti', wave: 'W2a', href: '/planning/allocation' },
         ],
       },
+      // W2a: B-W2a-59 Planning settings (SCR-124, SCR-127).
+      {
+        label: 'Settings',
+        labelIt: 'Impostazioni',
+        hideLabel: false,
+        pages: [{ id: 'planning.settings', title: 'Planning settings', titleIt: 'Impostazioni pianificazione', wave: 'W2a', href: '/planning/settings' }],
+      },
     ],
   },
   {
@@ -195,8 +202,11 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'In the warehouse',
         labelIt: 'In magazzino',
         hideLabel: false,
-        // W2a: B-W2a-28 Counts (SCR-132). Picking & kits (B-W2a-58) joins before it with its step; Transfers is W2b.
-        pages: [{ id: 'warehouse.counts', title: 'Counts', titleIt: 'Inventari', wave: 'W2a', href: '/warehouse/counts' }],
+        // W2a: B-W2a-58 Picking & kits (SCR-237), B-W2a-28 Counts (SCR-132); Transfers is W2b.
+        pages: [
+          { id: 'warehouse.picking', title: 'Picking & kits', titleIt: 'Prelievi e kit', wave: 'W2a', href: '/warehouse/picking' },
+          { id: 'warehouse.counts', title: 'Counts', titleIt: 'Inventari', wave: 'W2a', href: '/warehouse/counts' },
+        ],
       },
       {
         label: 'Outbound',
@@ -329,6 +339,26 @@ export const OFFICE: readonly TreeArea[] = [
         labelIt: 'Impostazioni',
         hideLabel: false,
         pages: [{ id: 'finance.settings', title: 'Finance settings', titleIt: 'Impostazioni amministrazione', wave: 'W1', href: '/finance/settings' }],
+      },
+    ],
+  },
+  // W2a: B-W2a-53 the Plant area (Owner answer T2), its Maintenance pages: Machine requests (SCR-148), Maintenance jobs
+  // (SCR-149), Machines & tools (SCR-150). Preventive checks, spare parts, downtime and Health & safety join later.
+  {
+    id: 'plant',
+    order: 12,
+    title: 'Plant',
+    titleIt: 'Stabilimento',
+    groups: [
+      {
+        label: 'Maintenance',
+        labelIt: 'Manutenzione',
+        hideLabel: false,
+        pages: [
+          { id: 'plant.requests', title: 'Machine requests', titleIt: 'Richieste di intervento', wave: 'W2a', href: '/plant/requests' },
+          { id: 'plant.jobs', title: 'Maintenance jobs', titleIt: 'Interventi', wave: 'W2a', href: '/plant/jobs' },
+          { id: 'plant.machines', title: 'Machines & tools', titleIt: 'Macchine e attrezzature', wave: 'W2a', href: '/plant/machines' },
+        ],
       },
     ],
   },

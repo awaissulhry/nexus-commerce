@@ -38,6 +38,13 @@
       "outside": "Outside work",
       "subcontracting": "Subcontract orders"
     },
+    "plant": {
+      "area": "Plant",
+      "maintenance": "Maintenance",
+      "requests": "Machine requests",
+      "jobs": "Maintenance jobs",
+      "machines": "Machines & tools"
+    },
     "admin": {
       "area": "Admin",
       "main": "Main",
@@ -103,7 +110,9 @@
       "main": "Main",
       "mrp": "What to buy & make",
       "board": "Planning board",
-      "allocation": "Lines & subcontractors"
+      "allocation": "Lines & subcontractors",
+      "settingsGroup": "Settings",
+      "settings": "Planning settings"
     },
     "warehouse": {
       "area": "Warehouse",
@@ -120,6 +129,7 @@
       "moves": "Movements",
       "locations": "Locations",
       "inTheWarehouse": "In the warehouse",
+      "picking": "Picking & kits",
       "counts": "Counts"
     },
     "frame": {
