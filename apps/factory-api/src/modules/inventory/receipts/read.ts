@@ -40,8 +40,8 @@ import {
 /**
  * The goods receipts' reads (B-W1-32; A2 SCR-063 Receipts, SCR-061 Lots, SCR-062 Hides): the list, the record (its lines
  * against the order, its lots with their quality in words, whether it may be reversed and what used its stock), its lots
- * with every hide one by one, and the order lines still expected at a site. Office only in W1 (inventory.stock.view;
- * the floor's receiving screen is B-W1-33). Values only for the cost grain. Every read here selects no relation, so the
+ * with every hide one by one, and the order lines still expected at a site. Office only (inventory.stock.view; a
+ * goods-in tablet reads through modules/inventory/receiving, B-W1-33). Values only for the cost grain. Every read here selects no relation, so the
  * record is built the same way inside the receipt's command and outside it.
  */
 

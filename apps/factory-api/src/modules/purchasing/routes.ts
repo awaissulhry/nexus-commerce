@@ -4,11 +4,22 @@ import { defineRoutes } from '../../core/manifest'
 import { AUTH_RATE_LIMITS, officeAuthOf } from '../../platform/auth/sessions/office-auth'
 import { processEmail } from '../../platform/email-out/service'
 import { confirmByLink, declineByLink } from './confirm/answer'
-import { acceptProposalContract, confirmLinkOrderContract, declineLinkOrderContract, openLinkOrderContract, orderAnswerContract, refuseProposalContract, renewLinkOrderContract } from './confirm/contract'
+import {
+  acceptProposalContract,
+  announceConfirmationContract,
+  completeConfirmationContract,
+  confirmLinkOrderContract,
+  declineLinkOrderContract,
+  openLinkOrderContract,
+  orderAnswerContract,
+  refuseProposalContract,
+  renewLinkOrderContract,
+} from './confirm/contract'
 import { acceptProposal, refuseProposal } from './confirm/decide'
 import { orderAnswer } from './confirm/office'
 import { linkView } from './confirm/read'
 import { linkTokenOf, renewConfirmLink } from './confirm/renew'
+import { announceConfirmation, completeConfirmation } from './confirm/upload'
 import {
   addLineContract,
   cancelContract,
@@ -98,6 +109,10 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/link/purchase-order/confirm', { schema: confirmLinkOrderContract, config: limited }, async (request) => confirmByLink(request, request.body))
 
   app.post('/link/purchase-order/decline', { schema: declineLinkOrderContract, config: limited }, async (request) => declineByLink(request, request.body))
+
+  app.post('/link/purchase-order/confirmation', { schema: announceConfirmationContract, config: limited }, async (request, reply) => reply.code(201).send(await announceConfirmation(request, request.body)))
+
+  app.post('/link/purchase-order/confirmation/:fileId/complete', { schema: completeConfirmationContract, config: limited }, async (request) => completeConfirmation(request, request.params.fileId))
 
   app.post('/link/purchase-order/renew', { schema: renewLinkOrderContract, config: limited }, async (request, reply) => {
     const auth = officeAuthOf(app)

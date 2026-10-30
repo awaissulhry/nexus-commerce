@@ -1,0 +1,387 @@
+{
+  "title": "Receive goods",
+  "offline": {
+    "short": "Needs the network",
+    "held": "No network: receiving waits for the network. A receipt, its lots and the hide tags take their numbers from the office. What you entered stays on this screen.",
+    "post": "No network: a delivery is posted only with the network (the office numbers it). Keep this screen open and post it when the network is back."
+  },
+  "noPermission": {
+    "title": "You cannot receive goods here",
+    "body": "Your role at this station does not receive goods. Ask your team leader."
+  },
+  "action": {
+    "toLines": "Lines",
+    "leave": "Back",
+    "finish": "Finish delivery",
+    "lineDone": "Line done",
+    "saveHide": "Save hide",
+    "receiveLot": "Receive lot · {quantity}",
+    "receive": "Receive {quantity}",
+    "receiveNothing": "Receive",
+    "post": "Post the delivery",
+    "reprint": "Reprint",
+    "next": "Next delivery"
+  },
+  "scan": {
+    "label": "Scan the PO or the delivery note",
+    "hint": "Scan our PO number, on the PO or on the supplier's delivery note, or tap an order below.",
+    "ddtKept": "Delivery note {code}: it is not one of our PO numbers. Tap the order it brings.",
+    "ddtClear": "Clear",
+    "loading": "Reading what is expected…",
+    "empty": {
+      "title": "Nothing expected",
+      "body": "Scan the PO number on the delivery note."
+    },
+    "pick": "Which order does this delivery bring?",
+    "expected": "Expected at this site",
+    "due": "needed by {date}",
+    "partly": "part received",
+    "openLines_one": "line to come",
+    "openLines_other": "lines to come",
+    "count_one": "{count} order expected",
+    "count_other": "{count} orders expected"
+  },
+  "status": {
+    "DRAFT": "Draft",
+    "SENT": "Sent",
+    "CONFIRMED": "Confirmed",
+    "CHANGES_PROPOSED": "Changes proposed",
+    "PARTLY_RECEIVED": "Part received",
+    "RECEIVED": "Received",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled",
+    "DECLINED": "Declined"
+  },
+  "lines": {
+    "loading": "Reading the order…",
+    "refusedShort": "This order takes no goods now",
+    "nothingYet": "Receive a line first",
+    "refused": "This order is {status}: it takes no goods now. Ask the buyer.",
+    "ddt": {
+      "label": "Delivery note number",
+      "hint": "Scan or type the supplier's delivery note (DDT) number.",
+      "again": "Delivery note {code}. Scan again to change it."
+    },
+    "title": "What we expect",
+    "count_one": "{count} line",
+    "count_other": "{count} lines"
+  },
+  "card": {
+    "order": "Purchase order",
+    "openLines_one": "line to come",
+    "openLines_other": "lines to come",
+    "supplier": "Supplier",
+    "ddt": "Delivery note",
+    "ddtNone": "Not scanned",
+    "dock": "Goods in",
+    "noDock": "No goods-in dock: ask the office",
+    "requested": "Asked for",
+    "line": "Line {seq}",
+    "oneDyeBatch": "one dye batch only",
+    "gradeAsked": "grade {grade} asked",
+    "thicknessRange": "{min}–{max} mm"
+  },
+  "line": {
+    "ordered": "ordered {quantity}",
+    "receivedBefore": "received {quantity}",
+    "goesToHold": "goes to quality hold",
+    "receivedInFull": "Received",
+    "toCome": "To come",
+    "remaining": "{unit} to come",
+    "hereHides_one": "{count} hide · {area}",
+    "hereHides_other": "{count} hides · {area}",
+    "hereLots_one": "{count} lot · {quantity}",
+    "hereLots_other": "{count} lots · {quantity}",
+    "here": "{quantity} on this delivery"
+  },
+  "tracking": {
+    "NONE": "by quantity",
+    "LOT": "by lot",
+    "HIDE": "hide by hide",
+    "SERIAL": "by quantity"
+  },
+  "keys": {
+    "leave": "Back to the scan",
+    "next": "Next delivery",
+    "tab": "Move between tags"
+  },
+  "hold": {
+    "CR_VI_TEST": "waits for its chromium VI result",
+    "PPE_CERTIFICATE": "PPE part: its certificate is checked",
+    "QUALITY_HOLD": "held for a quality check",
+    "ask": "Hold for a quality check",
+    "chosen": "Held: {reason}",
+    "title": "Why hold it?",
+    "none": "Do not hold",
+    "reason": {
+      "damaged": "Damaged on arrival",
+      "looksWrong": "Not as ordered",
+      "packaging": "Packaging open or wet",
+      "other": "Other check"
+    }
+  },
+  "holdBanner": {
+    "to": "Goes to quality hold: put it on {place}. Why: {why}. Only quality releases it.",
+    "apart": "Goes to quality hold: keep it apart from the stock. Why: {why}. Only quality releases it."
+  },
+  "over": {
+    "now": "Over by {quantity}: give the reason when you finish the delivery.",
+    "ask": "Over by {quantity} (at most {upTo} without a reason). Why is it taken?",
+    "title": "Why is more taken?",
+    "reason": {
+      "supplierSent": "Supplier sent more",
+      "keepForNext": "Kept for the next order",
+      "buyerAgreed": "Agreed with the buyer"
+    }
+  },
+  "pad": {
+    "separator": "Decimal point",
+    "minus": "Less",
+    "plus": "More",
+    "clear": "Clear",
+    "back": "Delete",
+    "empty": "Type a quantity",
+    "range": "From {min} to {max}",
+    "expected": "To come {quantity}",
+    "all": "All to come"
+  },
+  "hide": {
+    "needArea": "Type the hide's area",
+    "scan": {
+      "supplierCode": "Tannery number",
+      "dyeBatch": "Dye batch",
+      "shade": "Shade",
+      "supplierRead": "Tannery number {code}. Scan again to change it.",
+      "supplierHint": "Scan the tannery's ticket on the hide, or type its number.",
+      "otherHint": "Scan or type it: it stays for the next hides."
+    },
+    "countLabel": "hides",
+    "total": {
+      "area": "on this delivery",
+      "open": "still to come",
+      "upTo": "most taken"
+    },
+    "last": "Hide {n} added: {area} · grade {grade} · tannery {code}",
+    "undo": "Undo last hide",
+    "same": "Stays from the last hide",
+    "chip": {
+      "supplierCode": "Tannery {code}",
+      "dyeBatch": "Dye batch {code}",
+      "shade": "Shade {code}"
+    },
+    "grade": "Grade",
+    "defects": "Defects",
+    "tagsLater": "Tags print when you finish the delivery: the office numbers them.",
+    "thickness": "Thickness",
+    "area": "Hide {n}: area",
+    "areaLabel": "Area",
+    "toArea": "Back to the area",
+    "thicknessIs": "Thickness {value} mm",
+    "toThickness": "Thickness",
+    "sum": "{hides} so far · {area} · {open} to come"
+  },
+  "defect": {
+    "hole": "Hole",
+    "scar": "Scar",
+    "brand": "Brand mark",
+    "wrinkle": "Wrinkle"
+  },
+  "lot": {
+    "last_one": "{count} lot added, the last {quantity} · batch {ref}",
+    "last_other": "{count} lots added, the last {quantity} · batch {ref}",
+    "undo": "Undo last lot",
+    "scan": {
+      "label": "Supplier's batch",
+      "hint": "Scan the supplier's batch barcode, or type it.",
+      "read": "Supplier's batch {code}. Scan again to change it."
+    },
+    "title": "Lot {n}: how much came"
+  },
+  "quantity": {
+    "here": "{quantity} on this delivery. Receive again to change it.",
+    "expected": "Still to come {open}; at most {upTo} without a reason.",
+    "title": "How much came",
+    "label": "Quantity"
+  },
+  "finish": {
+    "needReason": "Say why more is taken",
+    "busy": "Posting…",
+    "title": "Finish the delivery",
+    "linesLabel_one": "line received",
+    "linesLabel_other": "lines received",
+    "lots": "Lots",
+    "hides": "Hides",
+    "held": "On quality hold",
+    "short": "Short",
+    "over": "Over",
+    "heldTo_one": "{count} lot goes to quality hold: put it on {place}.",
+    "heldTo_other": "{count} lots go to quality hold: put them on {place}.",
+    "heldApart_one": "{count} lot goes to quality hold: keep it apart.",
+    "heldApart_other": "{count} lots go to quality hold: keep them apart.",
+    "noDdt": "No delivery note number: the office adds it later. Scan it on the lines to add it now.",
+    "lineNow": "{quantity} now",
+    "lineHides_one": "{count} hide",
+    "lineHides_other": "{count} hides",
+    "lineLots_one": "{count} lot",
+    "lineLots_other": "{count} lots",
+    "lineHeld_one": "{count} held",
+    "lineHeld_other": "{count} held",
+    "stillOpen": "{quantity} stays expected",
+    "lineRefused": "The office did not accept this line as it was sent. Check it on its step.",
+    "printsOn": "The hide tags print on {printer}.",
+    "noPrinter": "No label printer at this station: the tags are not printed here. Ask the office."
+  },
+  "difference": {
+    "EXACT": "As expected",
+    "WITHIN_TOLERANCE": "Within tolerance",
+    "SHORT": "Short",
+    "OVER": "Over"
+  },
+  "label": {
+    "colour": "Colour",
+    "grade": "Grade",
+    "area": "Area",
+    "thickness": "Thickness",
+    "lot": "Lot",
+    "name": "Hide tag {code}",
+    "code": "Barcode {code}",
+    "invalid": "Code that does not print: {code}"
+  },
+  "done": {
+    "receipt": "Goods receipt",
+    "posted": "Posted",
+    "hidesLabel_one": "hide",
+    "hidesLabel_other": "hides",
+    "lotsLabel_one": "lot",
+    "lotsLabel_other": "lots",
+    "at": "Received at",
+    "lots_one": "{count} lot",
+    "lots_other": "{count} lots",
+    "lotHides_one": "{count} hide",
+    "lotHides_other": "{count} hides",
+    "lotHeld": "quality hold ({why}) · on {place}",
+    "lotReleased": "usable · on {place}",
+    "notes": "What differs from the order"
+  },
+  "note": {
+    "SHORT": "less than expected came: the rest stays expected.",
+    "WITHIN_TOLERANCE": "within the tolerance: the line is received.",
+    "OVER": "more than expected came, with the reason given.",
+    "HIDE_COUNT": "another number of hides than the buyer expected.",
+    "ONE_DYE_BATCH": "more than one dye batch on a line that asks one.",
+    "THICKNESS": "a hide outside the thickness asked.",
+    "NO_SUPPLIER_DDT": "no delivery note number: the office adds it."
+  },
+  "tags": {
+    "busy": "Printing…",
+    "noPrinterShort": "No label printer at this station",
+    "title_one": "{count} hide tag · {printer}",
+    "title_other": "{count} hide tags · {printer}",
+    "titleNoPrinter_one": "{count} hide tag",
+    "titleNoPrinter_other": "{count} hide tags",
+    "noPrinter": "No label printer at this station: the tags are not printed. Ask the office to print them.",
+    "failed_one": "{count} tag did not print: check the printer, then Retry.",
+    "failed_other": "{count} tags did not print: check the printer, then Retry.",
+    "waiting_one": "{count} tag on its way to the printer…",
+    "waiting_other": "{count} tags on their way to the printer…",
+    "allPrinted_one": "{count} tag printed: put it on its hide.",
+    "allPrinted_other": "All {count} tags printed: put each on its hide, in the order you measured them.",
+    "scan": {
+      "label": "Scan a tag",
+      "hint": "Scan a hide tag to see it, or to reprint it."
+    },
+    "list": "Hide tags",
+    "grade": "grade {grade}",
+    "state": {
+      "queued": "Queued",
+      "sent": "Sent to the printer",
+      "printed": "Printed",
+      "failed": "Not printed",
+      "notPrinted": "Not printed here"
+    },
+    "retry": "Retry",
+    "count_one": "{printed} of {count} tag printed",
+    "count_other": "{printed} of {count} tags printed"
+  },
+  "reprint": {
+    "title": "Reprint tag {code}: why?",
+    "reason": {
+      "DAMAGED": "Damaged",
+      "LOST": "Lost",
+      "OTHER": "Other"
+    },
+    "all": "Print all {count} again",
+    "cancel": "Cancel"
+  },
+  "leave": {
+    "title": "Leave this delivery?",
+    "body": "What you entered is not posted and goes when you leave.",
+    "stay": "Stay",
+    "confirm": "Leave"
+  },
+  "refusal": {
+    "ORDER_CHANGED": {
+      "message": "The order changed a moment ago",
+      "fix": "It was read again. Check the lines, then finish the delivery again: what you entered is kept."
+    },
+    "NOT_RECEIVING": {
+      "message": "This order takes no goods now",
+      "fix": "Ask the buyer which order these goods belong to."
+    },
+    "STATUS_DRAFT": {
+      "message": "This order was never sent",
+      "fix": "Ask the buyer: goods are received against a sent order."
+    },
+    "STATUS_CHANGES_PROPOSED": {
+      "message": "The supplier proposed changes to this order",
+      "fix": "The buyer accepts or refuses them first. Put the goods aside and ask the buyer."
+    },
+    "STATUS_RECEIVED": {
+      "message": "This order is received in full",
+      "fix": "Extra goods need a new order: ask the buyer."
+    },
+    "STATUS_CLOSED": {
+      "message": "This order is closed",
+      "fix": "Ask the buyer which order these goods belong to."
+    },
+    "STATUS_CANCELLED": {
+      "message": "This order was cancelled",
+      "fix": "Put the goods aside and ask the buyer."
+    },
+    "STATUS_DECLINED": {
+      "message": "The supplier declined this order",
+      "fix": "Put the goods aside and ask the buyer."
+    },
+    "NO_DOCK": {
+      "message": "This site has no single goods-in dock",
+      "fix": "The office names the goods-in location. Ask them, then try again."
+    },
+    "LINE_REFUSED": {
+      "message": "A line was not accepted as it was sent",
+      "fix": "Check the line marked on the summary, then finish the delivery again."
+    },
+    "BADGE": {
+      "message": "This badge does not open this tablet",
+      "fix": "The person signed in stays. Ask your team leader."
+    }
+  },
+  "unit": {
+    "PCS": "pcs",
+    "PAIR": "pairs",
+    "SET": "sets",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  }
+}
