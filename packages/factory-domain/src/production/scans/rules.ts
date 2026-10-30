@@ -95,6 +95,8 @@ export const SCAN_REFUSALS = [
   'TARGET_VOIDED',
   // B-W2a-26 (MES-008): the bundle or its work order is on hold (apps/factory-api modules/quality/holds/checks.ts holdOnScan).
   'ON_HOLD',
+  // B-W2a-35b (Owner answer H1): every machine at the scanning station is do-not-use (apps/factory-api modules/plant/checks.ts stationBlock).
+  'MACHINE_UNSAFE',
 ] as const
 export type ScanRefusalCode = (typeof SCAN_REFUSALS)[number]
 

@@ -1,0 +1,402 @@
+{
+  "sec": {
+    "intro": "Se ogni parte della fabbrica funziona, come si accede e la prova che i dati possono tornare. Fatti letti adesso, non impostazioni.",
+    "recheck": "Controlla di nuovo",
+    "checkingHeld": "Controllo in corso…",
+    "retry": "Riprova",
+    "cancel": "Annulla",
+    "open": "Apri",
+    "stillLoading": "Ancora in caricamento…",
+    "later": "In arrivo: processi e integrazioni con le loro esecuzioni, durata delle sessioni, le azioni che chiedono un codice nuovo, eventi di sicurezza e accesso con Microsoft o Google.",
+    "noAccess": {
+      "title": "Non puoi aprirla",
+      "body": "Sicurezza e stato del sistema richiede il permesso di vederla (security.view). Chiedi a un amministratore della tua società."
+    },
+    "failed": {
+      "title": "Non è stato possibile leggerlo",
+      "body": "La risposta non è arrivata. Le altre sezioni continuano a funzionare."
+    },
+    "overall": {
+      "all": "Ogni parte funziona",
+      "partly": "{ok} parti funzionano · {unknown} non ancora controllate da Nexus",
+      "attention_one": "1 parte ha bisogno di te",
+      "attention_other": "{count} parti hanno bisogno di te",
+      "failing_one": "1 parte non funziona",
+      "failing_other": "{count} parti non funzionano",
+      "checking": "Controllo di ogni parte…",
+      "unavailable": "Stato non disponibile: qui nulla dice che tutto funziona."
+    },
+    "state": {
+      "ok": "Funziona",
+      "warning": "Da guardare",
+      "failing": "Non funziona",
+      "needs": "Serve il tuo intervento",
+      "unknown": "Non ancora controllato"
+    },
+    "part": {
+      "api": "Web e API",
+      "database": "Database",
+      "jobs": "Processi in background",
+      "scheduled": "Processi pianificati",
+      "files": "File",
+      "backups": "Backup",
+      "drill": "Prova di ripristino"
+    },
+    "status": {
+      "title": "Funziona tutto?",
+      "hint": "Una riga semplice per parte, letta adesso.",
+      "unavailable": "Stato non disponibile",
+      "unavailableBody": "Non è stato possibile leggere lo stato, quindi nulla è mostrato come funzionante. Riprova tra poco.",
+      "api": {
+        "ok": "Questa pagina ha raggiunto l'API: risponde."
+      },
+      "database": {
+        "ok": "L'API ha letto questa pagina dal database."
+      },
+      "scheduled": {
+        "unknown": "Nexus non tiene ancora traccia di ogni esecuzione pianificata: una saltata non compare qui (l'elenco dei processi arriva più avanti)."
+      },
+      "backups": {
+        "unknown": "I backup li tiene il fornitore del database; Nexus non può ancora leggerli. La seconda copia presso un altro fornitore UE aspetta il sì del titolare."
+      },
+      "jobs": {
+        "ok_one": "1 evento in attesa di essere gestito; nessuno fallito.",
+        "ok_other": "{count} eventi in attesa di essere gestiti; nessuno fallito.",
+        "late_one": "1 evento aspetta da {minutes} minuti: il worker potrebbe essere fermo.",
+        "late_other": "{count} eventi in attesa, il più vecchio da {minutes} minuti: il worker potrebbe essere fermo.",
+        "failing_one": "1 evento è fallito definitivamente: ciò che doveva fare non è successo.",
+        "failing_other": "{count} eventi sono falliti definitivamente: ciò che dovevano fare non è successo."
+      },
+      "files": {
+        "none": "Nessun archivio file configurato: caricamenti e documenti non possono essere conservati.",
+        "paused": "L'archivio file è in pausa: nessun file può essere letto o conservato.",
+        "live_one": "L'archivio file funziona; 1 file è stato trattenuto negli ultimi 30 giorni.",
+        "live_other": "L'archivio file funziona; {count} file sono stati trattenuti negli ultimi 30 giorni.",
+        "test_one": "Modalità di prova: i file restano su questo computer; 1 file trattenuto negli ultimi 30 giorni.",
+        "test_other": "Modalità di prova: i file restano su questo computer; {count} file trattenuti negli ultimi 30 giorni.",
+        "liveClean": "L'archivio file funziona; nessun file trattenuto negli ultimi 30 giorni.",
+        "testClean": "Modalità di prova: i file restano su questo computer; nessun file trattenuto negli ultimi 30 giorni."
+      }
+    },
+    "protection": {
+      "title": "Protezioni attive",
+      "intro": "Fatti, non impostazioni.",
+      "label": {
+        "inTransit": "Cifratura in transito",
+        "atRest": "Cifratura a riposo",
+        "secrets": "Segreti sigillati campo per campo",
+        "bank": "Coordinate bancarie",
+        "headers": "Intestazioni di sicurezza web",
+        "virusScan": "Antivirus sui caricamenti"
+      },
+      "hint": {
+        "inTransit": "Ogni risposta dell'API dice ai browser di usare solo HTTPS (HSTS).",
+        "atRest": "La fanno i fornitori del database e dei file; Nexus non la verifica da sé.",
+        "secrets": "Le password dei servizi esterni e le chiavi dei webhook sono sigillate una per una; {count} sigillate ora.",
+        "bank": "Gli IBAN cambiano solo con un codice nuovo e sono nascosti al reparto e ai clienti; non sono ancora sigillati campo per campo.",
+        "headers": "Intestazioni rigorose su ogni risposta: niente incorporamenti, niente tipi indovinati, isolamento della stessa origine.",
+        "virusScan": "I caricamenti non sono ancora controllati: l'antivirus arriva con il sì del titolare."
+      },
+      "state": {
+        "on": "Attiva",
+        "off": "Non ancora",
+        "provider": "Dal fornitore",
+        "partly": "In parte"
+      },
+      "quarantined_one": "1 file trattenuto questo mese",
+      "quarantined_other": "{count} file trattenuti questo mese"
+    },
+    "signIn": {
+      "title": "Regole di accesso",
+      "hint": "Password, blocco e doppio fattore.",
+      "fixed": "Uguale per ogni utente d'ufficio.",
+      "password": "Password",
+      "passwordRule": "Da {min} a {max} caratteri, non una comune, non il tuo nome o la tua email",
+      "lockout": "Blocco",
+      "lockoutRule": "Dopo {count} tentativi sbagliati di fila: blocco di {first} minuto, che raddoppia fino a {max} minuti",
+      "sessions": "Sessioni",
+      "sessionsRule": "Terminano dopo {idle} ore di inattività, al più tardi dopo {days} giorni",
+      "stepUp": "Codice nuovo",
+      "stepUpRule": "Le modifiche a rischio chiedono un codice dell'app di autenticazione; vale {minutes} minuti",
+      "twoFactor": "Doppio fattore",
+      "twoFactorRule": "{asking} ruoli d'ufficio su {total} lo chiedono",
+      "twoFactorWithout_one": "1 persona il cui ruolo lo chiede non l'ha ancora attivato: le verrà chiesto al prossimo accesso.",
+      "twoFactorWithout_other": "{count} persone il cui ruolo lo chiede non l'hanno ancora attivato: verrà chiesto al loro prossimo accesso.",
+      "twoFactorAll": "Tutti quelli il cui ruolo lo chiede l'hanno attivato."
+    },
+    "tf": {
+      "title": "Doppio fattore per ruolo",
+      "hint": "Seleziona i ruoli, poi chiedi il doppio fattore o smetti di chiederlo. Seleziona ogni ruolo per chiederlo a ogni utente d'ufficio.",
+      "count_one": "1 ruolo d'ufficio",
+      "count_other": "{count} ruoli d'ufficio",
+      "readyMade": "Predefinito",
+      "custom": "Personalizzato",
+      "col": {
+        "role": "Ruolo",
+        "asks": "Doppio fattore",
+        "holders": "Persone",
+        "without": "Senza doppio fattore",
+        "fixed": "Perché resta così"
+      },
+      "asks": {
+        "yes": "Richiesto",
+        "no": "Non richiesto"
+      },
+      "without": {
+        "none": "Tutti l'hanno attivato",
+        "count_one": "1 persona",
+        "count_other": "{count} persone"
+      },
+      "lock": {
+        "none": "Si può cambiare",
+        "floor": "Un ruolo di reparto: i suoi fattori sono il tablet e il PIN",
+        "money": "Vede costi o margini: sempre richiesto",
+        "template": "Il ruolo predefinito lo chiede sempre"
+      },
+      "held": {
+        "right": "Per cambiarlo serve il permesso di modificare i ruoli",
+        "mine": "Hai questo ruolo: lo cambia un altro amministratore"
+      },
+      "bulk": {
+        "ask_one": "Chiedi il doppio fattore a 1 ruolo",
+        "ask_other": "Chiedi il doppio fattore a {count} ruoli",
+        "stop_one": "Non chiederlo più a 1 ruolo",
+        "stop_other": "Non chiederlo più a {count} ruoli",
+        "held": {
+          "ask": "Ogni ruolo selezionato lo chiede già",
+          "stop": "Nessuno dei ruoli selezionati può smettere di chiederlo"
+        }
+      },
+      "nextSignIn": "Una modifica vale dal prossimo accesso di ogni persona, mai nel mezzo del suo lavoro.",
+      "toRoles": "Ruoli e permessi",
+      "refusal": {
+        "floor": "Un ruolo di reparto non chiede mai il doppio fattore: i fattori del reparto sono il tablet e il PIN.",
+        "money": "Un ruolo che vede costi o margini chiede sempre il doppio fattore.",
+        "template": "Questo ruolo predefinito chiede sempre il doppio fattore.",
+        "already": "Questo ruolo chiede già il doppio fattore.",
+        "notAsked": "Questo ruolo non chiede il doppio fattore.",
+        "held": "Hai questo ruolo: chiedi a un altro amministratore di cambiarlo.",
+        "stale": "Questo ruolo è cambiato nel frattempo: chiudi e rileggi la pagina.",
+        "lockOut": "Nessuno potrebbe gestire persone e ruoli finché non attiva il doppio fattore. Prima un amministratore lo attiva in Il mio profilo, poi chiedilo a questo ruolo."
+      },
+      "dialog": {
+        "askTitle_one": "Chiedere il doppio fattore a 1 ruolo?",
+        "askTitle_other": "Chiedere il doppio fattore a {count} ruoli?",
+        "stopTitle_one": "Non chiedere più il doppio fattore a 1 ruolo?",
+        "stopTitle_other": "Non chiedere più il doppio fattore a {count} ruoli?",
+        "askBody_one": "1 persona non ha ancora attivato il doppio fattore: al prossimo accesso le verrà chiesto di farlo, prima di usare il ruolo.",
+        "askBody_other": "{count} persone non hanno ancora attivato il doppio fattore: al prossimo accesso verrà chiesto di farlo, prima di usare il ruolo.",
+        "stopBody_one": "A 1 persona questo ruolo non chiederà più un codice.",
+        "stopBody_other": "A {count} persone questi ruoli non chiederanno più un codice.",
+        "openSessions_one": "1 sessione aperta ora mantiene il ruolo finché termina (al massimo 7 giorni); sospendi la persona per fermarla subito.",
+        "openSessions_other": "{count} sessioni aperte ora mantengono il ruolo finché terminano (al massimo 7 giorni); sospendi una persona per fermare la sua subito.",
+        "stopWarn": "Chi ruba una password potrebbe allora usare questi ruoli senza il telefono.",
+        "notSetUp": "Non ancora attivato",
+        "someone": "Una persona (i nomi richiedono il permesso di vedere gli utenti)",
+        "refusalOf": "Non possibile per {role}",
+        "refusalAll": "Non possibile",
+        "reason": "Perché (facoltativo)",
+        "reasonHint": "Resta nel registro attività con la modifica.",
+        "code": "Il salvataggio chiede un codice nuovo dalla tua app di autenticazione.",
+        "ask": "Chiedi il doppio fattore",
+        "stop": "Non chiederlo più",
+        "waiting": "Lettura di chi riguarda…",
+        "refused": "Prima risolvi ciò che non è possibile",
+        "saving": "Salvataggio…",
+        "previewFailed": "Non è stato possibile leggere chi riguarda. Chiudi e riprova."
+      }
+    },
+    "backups": {
+      "title": "Backup e prove di ripristino",
+      "hint": "La prova che i dati possono tornare.",
+      "recovery": "Ripristino continuo",
+      "recoveryValue": "Tenuto dal fornitore del database",
+      "recoveryHint": "Il fornitore può ripristinare qualsiasi minuto degli ultimi giorni; Nexus non legge ancora questa finestra.",
+      "secondCopy": "Copia giornaliera presso un secondo fornitore UE",
+      "secondCopyValue": "Non ancora attiva",
+      "secondCopyHint": "Aspetta il sì del titolare all'archivio esterno.",
+      "files": "Versioni dei file",
+      "filesValue": "Arriva più avanti",
+      "filesHint": "Una seconda copia di ogni file arriva in una fase successiva.",
+      "lastDrill": "Ultima prova di ripristino"
+    },
+    "drill": {
+      "record": "Registra una prova di ripristino",
+      "recordHeld": "Per registrare una prova serve il permesso di registrare prove di ripristino.",
+      "none": "Nessuna registrata",
+      "lastLine": "{day} · {matched} controlli su {of} coincidono",
+      "history": "Prove di ripristino",
+      "count_one": "1 prova",
+      "count_other": "{count} prove",
+      "emptyTitle": "Nessuna prova di ripristino registrata",
+      "emptyBody": "Ripristina un backup in un posto diverso dalla produzione, poi registra cosa ha mostrato con Registra una prova di ripristino.",
+      "lastChecks": "Cosa ha confrontato l'ultima prova",
+      "matched": "{matched} su {of} coincidono",
+      "minutes_one": "1 minuto",
+      "minutes_other": "{count} minuti",
+      "state": {
+        "none": "Nessuna prova di ripristino registrata: nessuno ha dimostrato che un backup torna.",
+        "ok": "Ultima prova {ago} giorni fa — da rifare tra {left} giorni.",
+        "dueSoon": "Ultima prova {ago} giorni fa — da rifare tra {left} giorni.",
+        "overdue": "In ritardo di {left} giorni: l'ultima prova è riuscita {ago} giorni fa.",
+        "failed": "L'ultima prova non è riuscita ({day}): scopri perché, poi rifalla."
+      },
+      "result": {
+        "PASSED": "Riuscita",
+        "FAILED": "Non riuscita"
+      },
+      "would": {
+        "PASSED": "Riuscirebbe: ogni chiave coincide",
+        "FAILED": "Non riuscirebbe: una chiave è diversa"
+      },
+      "check": {
+        "match": "{key}: uguale",
+        "differs": "{key}: diverso"
+      },
+      "key": {
+        "orders": "Ordini di vendita",
+        "invoices": "Fatture",
+        "stockMoves": "Movimenti di magazzino",
+        "parties": "Clienti e fornitori",
+        "files": "File"
+      },
+      "evidence": {
+        "yes": "Allegata",
+        "no": "Nessuna"
+      },
+      "col": {
+        "day": "Giorno",
+        "result": "Esito",
+        "checks": "Controlli",
+        "environment": "Ripristinato su",
+        "backup": "Backup del",
+        "took": "Durata",
+        "by": "Fatta da",
+        "evidence": "Prova allegata"
+      },
+      "dialog": {
+        "title": "Registra una prova di ripristino",
+        "hint": "Un backup che hai ripristinato in un posto diverso dalla produzione, e cosa hanno mostrato i suoi dati."
+      },
+      "field": {
+        "day": "Giorno della prova",
+        "environment": "Ripristinato su",
+        "environmentHint": "Dove l'hai ripristinato: una copia locale, l'ambiente di prova. Mai la produzione.",
+        "environmentPlaceholder": "una copia locale",
+        "backupAt": "Backup ripristinato",
+        "backupAtHint": "L'ora del backup che hai ripristinato.",
+        "duration": "Minuti impiegati",
+        "durationHint": "Quanto è durato il ripristino: il tempo di recupero che dimostra.",
+        "restored": "Impronta della copia ripristinata",
+        "restoredHint": "Sulla copia ripristinata apri Sicurezza e stato del sistema, leggi la sua impronta all'ora del backup e incolla qui la riga.",
+        "notes": "Note",
+        "evidence": "Prova allegata (facoltativa)",
+        "evidenceHint": "Il registro del ripristino o una schermata; resta con la prova.",
+        "evidenceTypes": "PDF, immagine, testo o CSV, fino a 25 MB",
+        "evidenceRemove": "Rimuovi"
+      },
+      "compare": {
+        "title": "Questo database accanto alla copia ripristinata",
+        "needBackup": "Scegli l'ora del backup per confrontare.",
+        "needLine": "Incolla la riga dell'impronta della copia ripristinata per confrontare.",
+        "failed": "Non è stato possibile leggere l'impronta di questo database. Chiudi e riprova.",
+        "asOf": "Questo database al {time}",
+        "key": "Dati",
+        "here": "Questo database",
+        "copy": "Copia ripristinata",
+        "match": "Uguale?",
+        "same": "Uguale",
+        "differs": "Diverso"
+      },
+      "error": {
+        "environment": "Indica dove è stato ripristinato il backup.",
+        "production": "Una prova ripristina in un posto diverso dalla produzione, mai sopra di essa.",
+        "backupAt": "Scegli l'ora del backup.",
+        "backupLater": "Il backup è di prima del giorno della prova, e non del futuro.",
+        "future": "Il giorno della prova non può essere nel futuro.",
+        "restoredEmpty": "Incolla la riga dell'impronta della copia ripristinata.",
+        "restored": "Non è una riga d'impronta completa: copiala di nuovo dalla copia ripristinata.",
+        "duration": "Minuti interi, da 0 in su.",
+        "notes": "Al massimo 2000 caratteri."
+      },
+      "heldFix": "Prima correggi i campi segnalati",
+      "save": "Salva la prova",
+      "saving": "Salvataggio…"
+    },
+    "print": {
+      "title": "Impronta di questo database",
+      "hint": "Su una copia ripristinata, leggi l'impronta all'ora del backup e copia la riga in Registra una prova di ripristino sul sistema vero. Solo somme di controllo degli identificativi: niente importi, niente nomi.",
+      "asOf": "Al",
+      "read": "Leggi l'impronta",
+      "copy": "Copia la riga",
+      "failed": "Non è stato possibile leggere l'impronta.",
+      "asOfLine": "Al {time}"
+    },
+    "notice": {
+      "drillPassed": "Prova di ripristino registrata: riuscita. La prossima è da fare entro 90 giorni.",
+      "drillFailed": "Prova di ripristino registrata: non riuscita. Scopri perché, poi rifalla.",
+      "asked_one": "Il doppio fattore è chiesto a 1 ruolo dal prossimo accesso di ogni persona.",
+      "asked_other": "Il doppio fattore è chiesto a {count} ruoli dal prossimo accesso di ogni persona.",
+      "stopped_one": "1 ruolo non chiede più il doppio fattore.",
+      "stopped_other": "{count} ruoli non chiedono più il doppio fattore.",
+      "copied": "La riga dell'impronta è copiata.",
+      "copyFailed": "Non è stato possibile copiare la riga: selezionala e copiala a mano."
+    },
+    "problem": {
+      "invalid": "Qualcosa nella prova non va: controlla i campi.",
+      "conflict": "Qualcosa è cambiato nel frattempo: chiudi e rileggi la pagina.",
+      "forbidden": "Qui non puoi farlo.",
+      "failed": "Non è stato possibile salvare. Riprova."
+    },
+    "attention": {
+      "title": "Da guardare",
+      "hint": "I fatti dell'impostazione andati storti da allora, in un solo posto.",
+      "empty": "Niente da guardare.",
+      "unread_one": "1 tipo di fatto non è tuo da leggere ed è escluso.",
+      "unread_other": "{count} tipi di fatti non sono tuoi da leggere e sono esclusi.",
+      "col": {
+        "what": "Cosa",
+        "since": "Da"
+      },
+      "fix": "Sistema",
+      "kind": {
+        "integrationFailing": "{subject}: non funziona dalle {since}",
+        "integrationFailingNoTime": "{subject}: non funziona",
+        "mailDomain": "Dominio email {subject}: i suoi record non sono ancora confermati",
+        "tabletUnseen": "Tablet {subject} non visto da {days} giorni",
+        "tabletNever": "Tablet {subject} mai visto da quando è stato registrato",
+        "jobsFailed_one": "1 evento in background è fallito definitivamente",
+        "jobsFailed_other": "{count} eventi in background sono falliti definitivamente",
+        "twoFactorMissing_one": "1 persona il cui ruolo chiede il doppio fattore non l'ha attivato",
+        "twoFactorMissing_other": "{count} persone il cui ruolo chiede il doppio fattore non l'hanno attivato"
+      },
+      "drill": {
+        "none": "Nessuna prova di ripristino registrata",
+        "failed": "L'ultima prova di ripristino non è riuscita",
+        "overdue": "Prova di ripristino in ritardo di {days} giorni",
+        "due_soon": "Prova di ripristino da fare tra {days} giorni"
+      },
+      "count_one": "1 fatto",
+      "count_other": "{count} fatti"
+    },
+    "role": {
+      "title": "Doppio fattore",
+      "hint": "Chiedi il doppio fattore per questo ruolo: le sue persone danno un codice dal telefono quando accedono.",
+      "toggle": "Chiedi il doppio fattore",
+      "save": "Salva",
+      "saved": "Salvato",
+      "members": "Persone senza doppio fattore",
+      "membersNone": "Tutti quelli che hanno questo ruolo hanno attivato il doppio fattore.",
+      "membersHidden_one": "1 persona non l'ha attivato (i nomi richiedono il permesso di vedere gli utenti).",
+      "membersHidden_other": "{count} persone non l'hanno attivato (i nomi richiedono il permesso di vedere gli utenti).",
+      "changeHeld": "Per cambiarlo serve il permesso di modificare i ruoli",
+      "noChange": "Ancora nessuna modifica",
+      "readFailed": "Non è stato possibile leggere la regola del doppio fattore di questo ruolo."
+    },
+    "moment": {
+      "day": "{label}: giorno",
+      "time": "{label}: ora",
+      "pickDay": "Scegli un giorno"
+    }
+  }
+}

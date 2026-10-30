@@ -164,6 +164,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/admin/users/floor/[workerId]',
   '/admin/roles',
   '/admin/roles/[roleId]',
+  // B-W2a-36: Security & health (SCR-166).
+  '/admin/security',
   // B-W0-28 Admin: Documents & numbering, Languages & formats, Connections & API (and a connection), Import & export,
   // Audit log.
   '/admin/documents',
