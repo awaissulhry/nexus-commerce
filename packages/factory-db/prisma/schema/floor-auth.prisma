@@ -61,6 +61,8 @@ model Device {
   sessions       FloorSession[]    @relation("DeviceSessions")
   // inventory.prisma: the stock moves posted from it.
   stockMoves     StockMove[]
+  // W2a plant.prisma: the machine requests sent from it.
+  maintenanceRequests MaintenanceRequest[]
   // production.prisma: the notice acknowledgements, cut logs, bundles and scans recorded on it.
   noticeAcks     WorkerNoticeAck[]
   cutLogs        CutLog[]
@@ -164,7 +166,18 @@ model Worker {
   // floor-sync.prisma: its refused queued actions (a site that names workers).
   refusedActions         FloorRefusedAction[]
   // quality.prisma: the final inspections the worker made as the inspector.
-  inspections    Inspection[]
+  inspections    Inspection[]   @relation("InspectionInspector")
+  // W2a (wave 6/7) quality.prisma, holds.prisma, ncr.prisma, plant.prisma: the inspections assigned to the worker, the
+  // holds they placed or released at the bench, the NCRs they found, the machine requests they reported or signed safe,
+  // the maintenance jobs they work or handed back.
+  assignedInspections     Inspection[]         @relation("InspectionAssignedInspector")
+  qualityHoldsPlaced      QualityHold[]        @relation("QualityHoldPlacedBy")
+  qualityHoldsReleased    QualityHold[]        @relation("QualityHoldReleasedBy")
+  nonconformancesFound    Nonconformance[]     @relation("NonconformanceFoundBy")
+  maintenanceReported     MaintenanceRequest[] @relation("MaintenanceRequestReportedBy")
+  maintenanceSignedSafe   MaintenanceRequest[] @relation("MaintenanceRequestSignedSafeBy")
+  maintenanceJobs         MaintenanceJob[]     @relation("MaintenanceJobAssignee")
+  maintenanceHandedBack   MaintenanceJob[]     @relation("MaintenanceJobHandedBackBy")
   // The quality releases a floor inspector signed (B-W1-45).
   qualityReleases QualityRelease[]
 

@@ -8,7 +8,8 @@ import { IMPORTERS } from '../../../platform/imports/registry'
 describe('the material lists of factory-domain', () => {
   it('are the factory-db enums, value for value', () => {
     expect([...UOMS].sort()).toEqual(Object.values(Uom).sort())
-    expect([...ITEM_KINDS].sort()).toEqual(Object.values(ItemKind).sort())
+    // W2a wave 5: FINISHED is a finished garment's item (one per SKU), never a material: the library leaves it out.
+    expect([...ITEM_KINDS, 'FINISHED'].sort()).toEqual(Object.values(ItemKind).sort())
     expect([...ITEM_SOURCINGS].sort()).toEqual(Object.values(ItemSourcing).sort())
     expect([...ITEM_TRACKINGS].sort()).toEqual(Object.values(ItemTracking).sort())
     expect([...TANNAGES].sort()).toEqual(Object.values(Tannage).sort())

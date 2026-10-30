@@ -88,15 +88,26 @@ model Party {
   depositRequests     DepositRequest[]
   // supply.prisma: as a supplier, its purchase orders and the requirements it is suggested for.
   purchaseOrders       PurchaseOrder[]
-  materialRequirements MaterialRequirement[]
+  materialRequirements MaterialRequirement[] @relation("MaterialRequirementSupplier")
+  // W2a supply.prisma, planning.prisma: the firm planned orders that buy from it, the item parameters that prefer it.
+  firmRequirements     MaterialRequirement[] @relation("MaterialRequirementFirmSupplier")
+  itemPlannings        ItemPlanning[]        @relation("ItemPlanningSupplier")
   // inventory.prisma: as a supplier, the goods received from it and its lots.
   goodsReceipts        GoodsReceipt[]
   lots                 Lot[]
   // quality.prisma: the PPE register's entries it reported.
   ppeRegisterEntries   PpeRegisterEntry[]
+  // W2a ncr.prisma, plant.prisma: as a supplier, the nonconformances about its goods and the machines it sold.
+  nonconformances      Nonconformance[]
+  machines             Machine[]
   // money.prisma: the invoices it is the buyer of and the payments it made.
   invoices             Invoice[]
   payments             Payment[]
+  // W2a receivables.prisma, payables.prisma (wave 7/7): the refunds paid to it, the reminders it was sent, and as a
+  // supplier or subcontractor the invoices it sent.
+  refunds              Refund[]
+  paymentReminders     PaymentReminder[]
+  supplierInvoices     SupplierInvoice[]
   // pricing.prisma: its default payment terms and price list (Restrict, not Prisma's SetNull default for an optional
   // relation: that would also clear tenantId).
   termsOfPayment       PaymentTerms?        @relation(fields: [tenantId, paymentTermsId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -117,6 +128,8 @@ model Party {
   subcontractedOperations RoutingOperation[]
   subcontractorLocations  Location[]
   subcontractOrders       SubcontractOrder[]
+  // W2a schedule.prisma: as a workshop, its slots on the planning board.
+  scheduleSlots           ScheduleSlot[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the party's rows.

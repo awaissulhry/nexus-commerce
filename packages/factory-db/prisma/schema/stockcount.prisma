@@ -1,0 +1,193 @@
+// Stock counts (W2a schema wave 4/7; plan W2A §5; features SCM-224, SCM-230; SCM-229 and SCM-293 for the approval): the
+// cycle counts and the year-end physical inventory of a site (c.c. art. 2217: the inventory drawn up at the end of each
+// fiscal year). apps/factory-api's modules/inventory/counts writes them (B-W2a-15), always through command(); the screens
+// are B-W2a-28 (Warehouse › Counts). Counting by scan on the floor is W2b (floor.count, SCM-228): no floor grant yet.
+//
+// A count: DRAFT (scope set) → COUNTING (the expected quantities frozen: one line per stock key the ledger held at the
+// snapshot, its expectedQuantity that balance) → SUBMITTED (every line counted; the differences valued) → APPROVED →
+// APPLIED (one COUNT move per line that differs, posted through the ledger and named by the line) → SIGNED_OFF (a
+// year-end count only: the frozen valued list as of its inventory date). An approver sends a SUBMITTED count back to
+// COUNTING (rejected, with the reason) for a recount; a count is CANCELLED, with its reason, before it is applied.
+//
+// History (plan W2A §5: count results once approved are history): from SUBMITTED on, the lines never change again (but
+// the move each line posts, named once while the count is APPROVED) and are never removed; an APPLIED or SIGNED_OFF
+// count changes no more (but the year-end sign-off). The …_stock_plan_w2a_guards triggers hold it for every login.
+//
+// The counter never approves their own variance (SCM-229, SCM-293): when a submission needs an approval (its differences
+// are worth more than the limit; the limit is Warehouse settings', W2b, the counts module's default until then), the
+// approver is not one who counted or recounted a line that differs.
+//
+// Money (A1 §2.6): a count's values are costs. The lines carry none (the floor counts by scan in W2b and inserts lines,
+// and no table the floor inserts into has a cost column); the count keeps the value of its differences at submission
+// (`@grain cost`), the COUNT moves are valued in the StockValuation ledger, and the year-end valued list is the signed
+// file. Who counted a line is a user id inside the one record (Owner answer W1: never a per-person figure or filter).
+//
+// Who sees what (ownership/stockcount.json): the office reads and writes; the floor and portal or link sessions read
+// nothing (W2b adds the floor's count by scan). Nobody deletes a count (it is cancelled); the office deletes a line only
+// while the count is DRAFT or COUNTING.
+
+/// A count of a site's stock (SCM-224): a cycle count of some locations, items or lots, or the year-end physical
+/// inventory (SCM-230).
+model StockCount {
+  id                 String           @id @db.Uuid
+  tenantId           String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that owns the stock: the site's (its COUNT series, its year-end inventory).
+  companyId          String           @db.Uuid
+  siteId             String           @db.Uuid
+  /// The number from the company's COUNT series, unique in the company.
+  number             String
+  kind               StockCountKind
+  /// What it counts, all of these together; none: the whole site. The stock under one location (a warehouse, a zone or
+  /// a bin and everything inside it), of one item, of one lot of it, of one kind of material.
+  locationId         String?          @db.Uuid
+  itemId             String?          @db.Uuid
+  lotId              String?          @db.Uuid
+  itemKind           ItemKind?
+  /// YEAR_END exactly: the day the inventory is taken as of (the fiscal year's last day); its valued list is the stock at
+  /// the end of that day, Europe/Rome.
+  inventoryDate      DateTime?        @db.Date
+  /// Who counts, as the count sheets name them (a team, never a figure per person).
+  countTeam          String?
+  status             StockCountStatus @default(DRAFT)
+  /// From COUNTING on: when counting started, and the instant whose ledger balance each line expects (that start, or the
+  /// end of the inventory date for a year-end count taken later). Fixed once set.
+  startedAt          DateTime?        @db.Timestamptz(3)
+  snapshotAt         DateTime?        @db.Timestamptz(3)
+  /// From SUBMITTED on: when and by whom.
+  submittedAt        DateTime?        @db.Timestamptz(3)
+  submittedById      String?          @db.Uuid
+  /// From SUBMITTED on: what its differences are worth (the sum of each difference, as a number of base units without its
+  /// sign, × its unit cost), in minor units of the company's currency: what the approval rule read.
+  /// @grain cost
+  differenceAmount   Int?
+  /// From SUBMITTED on: whether the differences need a second person's approval (over the value limit). Then the
+  /// approver never counted or recounted a line that differs.
+  approvalRequired   Boolean          @default(true)
+  /// From APPROVED on: who approved, when, and what they wrote.
+  approvedAt         DateTime?        @db.Timestamptz(3)
+  approvedById       String?          @db.Uuid
+  approvalNote       String?
+  /// The latest time a submission was sent back to COUNTING: when, by whom, why (kept until the next one).
+  rejectedAt         DateTime?        @db.Timestamptz(3)
+  rejectedById       String?          @db.Uuid
+  rejectReason       String?
+  /// From APPLIED on: when the COUNT moves were posted, and by whom.
+  appliedAt          DateTime?        @db.Timestamptz(3)
+  appliedById        String?          @db.Uuid
+  /// SIGNED_OFF exactly (a year-end count): who signed off the inventory, when, and the valued list it froze (a
+  /// StoredFile of this count: the document for the inventory book).
+  signedOffAt        DateTime?        @db.Timestamptz(3)
+  signedOffById      String?          @db.Uuid
+  valuedListFileId   String?          @db.Uuid
+  /// CANCELLED exactly: when and why.
+  cancelledAt        DateTime?        @db.Timestamptz(3)
+  cancelReason       String?
+  note               String?
+  version            Int              @default(1)
+  createdAt          DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?          @db.Uuid
+
+  site          Site             @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  location      Location?        @relation(fields: [tenantId, siteId, locationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  item          Item?            @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot           Lot?             @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  valuedList    StoredFile?      @relation("StockCountValuedList", fields: [tenantId, valuedListFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines         StockCountLine[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the lines' reference: on the count's own site.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, siteId, status])
+}
+
+enum StockCountKind {
+  /// Some locations, items or lots, on any day (SCM-224).
+  CYCLE
+  /// The physical inventory at the fiscal year's end (SCM-230; c.c. art. 2217).
+  YEAR_END
+}
+
+/// DRAFT → COUNTING → SUBMITTED → APPROVED → APPLIED → SIGNED_OFF (YEAR_END); SUBMITTED → COUNTING (sent back); DRAFT,
+/// COUNTING, SUBMITTED and APPROVED → CANCELLED. APPLIED (a cycle count), SIGNED_OFF and CANCELLED are final.
+enum StockCountStatus {
+  DRAFT
+  COUNTING
+  SUBMITTED
+  APPROVED
+  APPLIED
+  SIGNED_OFF
+  CANCELLED
+}
+
+/// One stock key of a count (SCM-224): a location, an item in a colour, a lot, a hide; what the ledger held there at the
+/// snapshot and what was counted (a recount replaces the first count), why it differs, and the COUNT move that posted
+/// the difference. Leather is counted hide by hide: a hide found carries its own area, a missing one 0, an extra one is
+/// an ADDED line (SCM-228's area per hide).
+model StockCountLine {
+  id                   String               @id @db.Uuid
+  tenantId             String               @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The count's site.
+  siteId               String               @db.Uuid
+  countId              String               @db.Uuid
+  /// Its place on the count sheet (sorted by location path).
+  seq                  Int
+  /// The location counted, inside the count's scope.
+  locationId           String               @db.Uuid
+  itemId               String               @db.Uuid
+  /// The colour counted (the lot's, when a lot is named).
+  itemColourId         String?              @db.Uuid
+  /// Required for an item tracked by LOT or HIDE: a lot of the site and item.
+  lotId                String?              @db.Uuid
+  /// Leather: the hide counted, a hide of the lot.
+  hideId               String?              @db.Uuid
+  /// SNAPSHOT: a stock key the ledger held there at the snapshot; ADDED: found while counting where the ledger held
+  /// none (an extra hide, a lot in another bin).
+  origin               StockCountLineOrigin @default(SNAPSHOT)
+  /// The ledger's balance of the line's stock key at the count's snapshot, in the item's base unit, 0 or more (0 for an
+  /// ADDED line). Fixed once written.
+  expectedQuantity     Decimal              @db.Decimal(18, 4)
+  /// What was counted, in the base unit, 0 or more (0: not found); null: not counted yet. A hide: its area when found.
+  countedQuantity      Decimal?             @db.Decimal(18, 4)
+  /// When it was counted, and by whom (a user; with the count).
+  countedAt            DateTime?            @db.Timestamptz(3)
+  countedById          String?              @db.Uuid
+  /// Asked to count it again (the difference is over the recount limit, or the approver asked): when and by whom.
+  recountRequestedAt   DateTime?            @db.Timestamptz(3)
+  recountRequestedById String?              @db.Uuid
+  /// The recount, which replaces the first count: what, when and by whom.
+  recountQuantity      Decimal?             @db.Decimal(18, 4)
+  recountedAt          DateTime?            @db.Timestamptz(3)
+  recountedById        String?              @db.Uuid
+  /// Why it differs: a code of the ADJUSTMENT reason list (ReasonCode, kept as text) and a note.
+  reasonCode           String?
+  reasonNote           String?
+  /// The COUNT move that posted the difference (the recount, else the count, minus the expected quantity), named once
+  /// while the count is APPROVED: into the location for more, out of it for less.
+  moveId               String?              @db.Uuid
+  version              Int                  @default(1)
+  createdAt            DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime             @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?              @db.Uuid
+
+  count      StockCount  @relation(fields: [tenantId, siteId, countId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  location   Location    @relation(fields: [tenantId, siteId, locationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  item       Item        @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and the other keys.
+  itemColour ItemColour? @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot        Lot?        @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  hide       Hide?       @relation(fields: [tenantId, siteId, lotId, hideId], references: [tenantId, siteId, lotId, id], onDelete: Restrict, onUpdate: Restrict)
+  move       StockMove?  @relation(fields: [tenantId, siteId, moveId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, countId, seq])
+  // The counts a stock key is in (a hide's count history).
+  @@index([tenantId, siteId, itemId, lotId, hideId])
+}
+
+enum StockCountLineOrigin {
+  /// The ledger held the stock key there at the snapshot.
+  SNAPSHOT
+  /// Found while counting.
+  ADDED
+}

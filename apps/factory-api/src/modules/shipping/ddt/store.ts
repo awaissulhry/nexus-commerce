@@ -152,12 +152,18 @@ export const DDT_SELECT = {
   cancellations: { select: { id: true, reason: true, cancelledAt: true, createdById: true }, orderBy: [{ cancelledAt: 'asc' }, { id: 'asc' }], take: 1 },
 } as const satisfies Prisma.DdtSelect
 
-export type DdtRow = Prisma.DdtGetPayload<{ select: typeof DDT_SELECT }>
+/**
+ * A shipment's DDT (W1): these routes issue, show and cancel only these. A DDT for another reason (W2a schema wave 6/7:
+ * no shipment, a source record) is B-W2a-17's; until then it reads as missing here.
+ */
+type DdtPayload = Prisma.DdtGetPayload<{ select: typeof DDT_SELECT }>
+export type DdtRow = DdtPayload & { readonly shipmentId: string; readonly shipment: NonNullable<DdtPayload['shipment']> }
 
-/** The DDT, or null (missing, or out of the caller's scope). */
+/** The shipment's DDT, or null (missing, out of the caller's scope, or a DDT for another reason). */
 export async function readDdt(db: CommandTx, ddtId: string): Promise<DdtRow | null> {
   if (!isUuid(ddtId)) return null
-  return db.ddt.findUnique({ where: { id: ddtId }, select: DDT_SELECT })
+  const row = await db.ddt.findUnique({ where: { id: ddtId }, select: DDT_SELECT })
+  return row && row.shipmentId !== null && row.shipment !== null ? (row as DdtRow) : null
 }
 
 /**

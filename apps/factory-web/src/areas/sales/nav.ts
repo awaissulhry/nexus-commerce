@@ -2,7 +2,7 @@ import { ClipboardList, Contact, FileText, Handshake } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
- * Sales (A2 §1.3 row 2; design 01 office "sales", group Main with no label). Labels are message keys (`shell:` =
+ * Sales (design 01 area 2 "Sales / Vendite", group Main with no label). Labels are message keys (`shell:` =
  * messages/<locale>/shell.json). B-W1-07 builds Customers (SCR-032, its record SCR-033: one party record, parties.view);
  * B-W1-21/24 build Quotes (SCR-034, SCR-035); B-W1-25 part 2 builds Orders (SCR-038 list and board, SCR-039 the order
  * studio with the deposit: orders.view).

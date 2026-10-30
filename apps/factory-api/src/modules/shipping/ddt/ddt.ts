@@ -315,6 +315,8 @@ export async function listDdts(caller: CommandCaller, query: ListDdtsQuery) {
   const where: Prisma.DdtWhereInput = {
     AND: [
       scopeWhere(actorOf(context), SHIPPING_VIEW, { company: 'companyId', site: 'siteId', party: 'partyId' }) as Prisma.DdtWhereInput,
+      // A shipment's DDTs (a DDT for another reason, W2a wave 6/7, is B-W2a-17's to list).
+      { shipmentId: { not: null } },
       query.shipmentId ? { shipmentId: query.shipmentId } : {},
       query.siteId ? { siteId: query.siteId } : {},
       query.partyId ? { partyId: query.partyId } : {},
@@ -364,8 +366,8 @@ export async function listDdts(caller: CommandCaller, query: ListDdtsQuery) {
         siteId: row.siteId,
         partyId: row.partyId,
         recipientName: typeof recipient?.name === 'string' ? recipient.name : '',
-        shipmentId: row.shipmentId,
-        shipmentNumber: row.shipment.number,
+        shipmentId: row.shipmentId!,
+        shipmentNumber: row.shipment!.number,
         reason: row.reason,
         transportBy: row.transportBy,
         packages: row.packages,

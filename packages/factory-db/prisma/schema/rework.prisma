@@ -1,0 +1,174 @@
+// Rework and replacement (W2a schema wave 5/7, plan W2A §5; features MES-126 rework loop, MES-130 replace scrapped
+// quantity; the design's production.scrap "Scrap & rework" page with its "Replace scrapped quantity" dialog, and the
+// split of production.bundles): garments sent back to an operation to be made again, and the scrapped garments a cut
+// replaces or the order is lowered by. apps/factory-api's modules/production/{rework,scrap} write them (B-W2a-13),
+// always through command(); the floor's scan command opens a rework order for the garments it counted as rework, and the
+// rework's finishing scan closes it.
+//
+// Rework (MES-126): OPEN → IN_PROGRESS → DONE, or CANCELLED (OPEN → DONE when it was done at once). DONE says how many
+// garments came out good and how many were scrapped: together its quantity. The garments travel in a bundle of the
+// cell, often a child split off for the rework (production.prisma Bundle.parentBundleId), back to the operation where
+// they are made again, at or before the one where the fault was found. A held work order (ON_HOLD) takes new rework
+// (the disposition of the hold's nonconformance) but none moves on until the hold is lifted.
+//
+// Replacement (MES-130): a RECUT is cut again from the cell's material (the cutting room's list of recuts): OPEN until
+// the cut log entry that cut it is recorded (DONE), or CANCELLED. A REDUCE lowers what the order is owed instead and
+// needs a second person's approval: OPEN → APPROVED (→ DONE once the order line is lowered) | REFUSED, or CANCELLED.
+//
+// No cost or price column: scrapped stock is valued by the stock ledger's valuation (SCRAP moves by lot and hide), the
+// rework's labour by the cost ledger (W2a wave 7/7). No figure per person (Owner answer F2; Statuto dei Lavoratori
+// art. 4): no row here names the worker who found or did the work.
+//
+// Who sees what (ownership/rework.json): the office reads and writes both; the floor reads its own site's rework, opens
+// it and moves it on (rework is scanned on the floor), and never sees a replacement; portal and link sessions read
+// nothing. Nothing here is deleted (cancelled instead). The rules are the hand-written …_production_w2a_guards
+// triggers, for every login.
+
+/// Garments of one cell of a work order sent back to an operation to be made again (MES-126): how many, why (a REWORK
+/// reason of the tenant's list), the operation it was found at and the one it is redone at, the bundle carrying them, the
+/// scan whose rework count opened it, and what came of it.
+model ReworkOrder {
+  id                  String       @id @db.Uuid
+  tenantId            String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The work order's company and site.
+  companyId           String       @db.Uuid
+  siteId              String       @db.Uuid
+  workOrderId         String       @db.Uuid
+  /// The cell (colourway and size) of the garments.
+  workOrderSizeId     String       @db.Uuid
+  /// The bundle carrying them (of the cell; often one split off for the rework); null: not bundled apart.
+  bundleId            String?      @db.Uuid
+  /// The scan whose rework count opened it (a REPORT or CORRECTION of the work order with rework); null: opened by hand
+  /// (an inspection, a nonconformance's disposition).
+  sourceScanId        String?      @db.Uuid
+  /// The operation the fault was found at; null: found outside the routing (a final check of the garment).
+  foundAtOperationId  String?      @db.Uuid
+  /// The operation the garments go back to, at or before the one it was found at.
+  reworkAtOperationId String       @db.Uuid
+  /// Garments, from 1 (no more than the bundle's when one is named).
+  quantity            Int
+  /// A REWORK reason code of the tenant's list (production.prisma ScrapReason), active when it is opened.
+  reasonCode          String
+  /// What to redo, as the lead or inspector writes it.
+  description         String?
+  /// The record behind it, of another W2a wave (a nonconformance or quality hold, wave 6/7): recordType + recordId,
+  /// both or neither.
+  recordType          String?
+  recordId            String?      @db.Uuid
+  status              ReworkStatus @default(OPEN)
+  /// DONE: garments that came out good and garments scrapped, together its quantity; 0 before.
+  goodQuantity        Int          @default(0)
+  scrapQuantity       Int          @default(0)
+  /// Set from IN_PROGRESS (or DONE) on.
+  startedAt           DateTime?    @db.Timestamptz(3)
+  /// Set exactly when DONE.
+  doneAt              DateTime?    @db.Timestamptz(3)
+  /// Set exactly when CANCELLED, with the reason.
+  cancelledAt         DateTime?    @db.Timestamptz(3)
+  cancelReason        String?
+  note                String?
+  version             Int          @default(1)
+  createdAt           DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?      @db.Uuid
+
+  site          Site                @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder     WorkOrder           @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrderSize WorkOrderSize       @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and
+  // workOrderId.
+  bundle        Bundle?             @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  sourceScan    OperationScan?      @relation(fields: [tenantId, siteId, sourceScanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  foundAt       WorkOrderOperation? @relation("ReworkFoundAt", fields: [tenantId, siteId, workOrderId, foundAtOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  reworkAt      WorkOrderOperation  @relation("ReworkDoneAt", fields: [tenantId, siteId, workOrderId, reworkAtOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The replacements of the garments it scrapped.
+  replacements  ReplacementRequest[]
+
+  // The target of the replacements' reference: a rework of the same site and work order.
+  @@unique([tenantId, siteId, workOrderId, id])
+  // A work order's rework; what is open per site (the Scrap & rework tiles).
+  @@index([tenantId, workOrderId])
+  @@index([tenantId, siteId, status])
+}
+
+/// OPEN → IN_PROGRESS | DONE | CANCELLED; IN_PROGRESS → DONE | CANCELLED. DONE and CANCELLED are final.
+enum ReworkStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+/// How scrapped garments of one cell are replaced (MES-130): cut again (RECUT, for the whole garments or one part), or
+/// the order lowered by them (REDUCE, approved by a second person). It names what scrapped them: a scan, a rework that
+/// ended in scrap, or a record of another W2a wave.
+model ReplacementRequest {
+  id              String            @id @db.Uuid
+  tenantId        String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The work order's company and site.
+  companyId       String            @db.Uuid
+  siteId          String            @db.Uuid
+  workOrderId     String            @db.Uuid
+  /// The cell (colourway and size) whose garments were scrapped.
+  workOrderSizeId String            @db.Uuid
+  kind            ReplacementKind
+  /// Garments, from 1 (for a RECUT of a part: sets of that part).
+  quantity        Int
+  /// RECUT: the garment part to cut again, as the pattern names it ("sleeve"); null: whole garments. REDUCE: null.
+  part            String?
+  /// What scrapped them: the scan (with scrap), the rework (DONE with scrap), or a record of another W2a wave (a
+  /// nonconformance: recordType + recordId, both or neither). Any, or none (typed by hand with the reason).
+  sourceScanId    String?           @db.Uuid
+  reworkOrderId   String?           @db.Uuid
+  recordType      String?
+  recordId        String?           @db.Uuid
+  /// Why, as typed: required.
+  reason          String
+  status          ReplacementStatus @default(OPEN)
+  /// REDUCE: who approved or refused it and when (never the person who asked), with a note (required for REFUSED).
+  decidedAt       DateTime?         @db.Timestamptz(3)
+  decidedById     String?           @db.Uuid
+  decisionNote    String?
+  /// RECUT, DONE: the cut log entry that cut the replacement (of the work order, not a reversal).
+  cutLogId        String?           @db.Uuid
+  /// Set exactly when DONE.
+  doneAt          DateTime?         @db.Timestamptz(3)
+  /// Set exactly when CANCELLED, with the reason.
+  cancelledAt     DateTime?         @db.Timestamptz(3)
+  cancelReason    String?
+  note            String?
+  version         Int               @default(1)
+  createdAt       DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?           @db.Uuid
+
+  site          Site           @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder     WorkOrder      @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrderSize WorkOrderSize  @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and
+  // workOrderId.
+  sourceScan    OperationScan? @relation(fields: [tenantId, siteId, sourceScanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  reworkOrder   ReworkOrder?   @relation(fields: [tenantId, siteId, workOrderId, reworkOrderId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  cutLog        CutLog?        @relation(fields: [tenantId, siteId, workOrderId, cutLogId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A work order's replacements; the recuts to cut and the reductions to approve, per site.
+  @@index([tenantId, workOrderId])
+  @@index([tenantId, siteId, kind, status])
+}
+
+enum ReplacementKind {
+  /// Cut again from the cell's material.
+  RECUT
+  /// Lower what the order is owed by the scrapped garments (needs approval).
+  REDUCE
+}
+
+/// OPEN → APPROVED | REFUSED (REDUCE) | DONE (RECUT) | CANCELLED; APPROVED → DONE | CANCELLED. DONE, REFUSED and
+/// CANCELLED are final.
+enum ReplacementStatus {
+  OPEN
+  APPROVED
+  REFUSED
+  DONE
+  CANCELLED
+}

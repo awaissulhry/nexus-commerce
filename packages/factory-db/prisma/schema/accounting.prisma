@@ -1,0 +1,171 @@
+// Accounting (W2a plan §5 schema wave 7/7; features FIN-046, LOG-098, LOG-100; design finance.accounting: Exports,
+// 1 Period, 2 Checks, 3 Contents, Intrastat rows, 4 Review, 5 Export and lock): the numbered exports a company hands its
+// accountant each month, their files, and the period locks. apps/factory-api's modules/accounting (B-W2a-39) writes
+// them, always through command(); the export wizard is B-W2a-51's screen.
+//
+// An accounting export is a batch for one company and period (whole months): prepared as a DRAFT (which packages go:
+// sales journal, purchases journal, payments, Intrastat, the year-end stock pack …; the named checks and how each was
+// passed or explained; the documents it carries), then EXPORTED with its number from the company's ACCOUNTING_EXPORT
+// series (EXP-…) and its files. An exported batch and its files never change: a later change is a re-export, a new
+// batch that names the one it amends and marks only the changes, so a document is never handed over twice by mistake
+// (one first export per company and period: a partial unique index). The layout of the files is the accountant's
+// software's (Q7, GATE-ACCOUNTANT): `layout` names it, DEFAULT until it is known; Intrastat (Q30) and the year-end stock
+// pack (c.c. art. 2217) go in as their packages once the accountant confirms them.
+//
+// A period lock closes whole months of a company. A SOFT lock is the API's: finance may still write into it with a
+// reason (audited). A HARD lock is the database's: a write dated inside it is refused for every login (the
+// …_money_w2a_guards triggers) on the tables the design's packages are made of: an invoice issued (Invoice.issueDate), a
+// payment received or voided (Payment.receivedOn), a refund paid or voided (Refund.paidOn), a supplier invoice registered
+// or changed (SupplierInvoice.receivedOn, and its paidOn), a work-order cost entry (occurredAt) and an office or
+// system stock move (StockMove.occurredAt; the floor's moves are dated now, and the floor reads no lock: the API's floor
+// paths check it). A lock is lifted with a reason and may be locked again; two live locks of a company never overlap.
+//
+// Who sees what (ownership/accounting.json): the office reads and writes; the floor, portal and link sessions read none
+// of it. Nothing is deleted: an export is cancelled while a DRAFT, a lock lifted.
+
+/// A numbered batch of accounting data for one company and period (FIN-046; design finance.accounting "Exports"): its
+/// packages, checks, documents and files. Frozen once EXPORTED; a re-export amends it.
+model AccountingExport {
+  id             String                  @id @db.Uuid
+  tenantId       String                  @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId      String                  @db.Uuid
+  /// Set exactly from EXPORTED on: the company's ACCOUNTING_EXPORT series and the number it gave (EXP-2026-0001).
+  numberSeriesId String?                 @db.Uuid
+  number         String?
+  /// The period, whole months (Europe/Rome days): the first day of a month to the last day of a month.
+  periodStart    DateTime                @db.Date
+  periodEnd      DateTime                @db.Date
+  /// What goes to the accountant (design "3 · Contents"), each once, at least one.
+  packages       AccountingPackage[]
+  /// The file layout: the accountant's software's import layout (Q7, GATE-ACCOUNTANT); DEFAULT until it is named.
+  layout         String                  @default("DEFAULT")
+  /// A re-export: the EXPORTED batch of the same company and period it amends (only the changes are marked).
+  supersedesId   String?                 @db.Uuid
+  /// DRAFT → EXPORTED | CANCELLED. EXPORTED and CANCELLED are final.
+  status         AccountingExportStatus  @default(DRAFT)
+  /// The named checks (design "2 · Checks") and how each stood at the export: [{ "code": "SHIPMENTS_INVOICED",
+  /// "passed": true } | { "code": …, "passed": false, "explanation": "…" }]; to export, each passed or explained.
+  checks         Json                    @default("[]")
+  /// The documents it carries, each with the version handed over: [{ "recordType": "Invoice", "recordId": "…",
+  /// "number": "FT-2026-00001", "version": 3, "change": "NEW" | "CHANGED" }] (a re-export compares with it).
+  manifest       Json                    @default("[]")
+  /// Set exactly from EXPORTED on: who made it, and when.
+  exportedAt     DateTime?               @db.Timestamptz(3)
+  exportedById   String?                 @db.Uuid
+  /// Set exactly when CANCELLED (a draft abandoned), and why.
+  cancelledAt    DateTime?               @db.Timestamptz(3)
+  cancelReason   String?
+  note           String?
+  version        Int                     @default(1)
+  createdAt      DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?                 @db.Uuid
+
+  company      Company                @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  numberSeries NumberSeries?          @relation(fields: [tenantId, companyId, numberSeriesId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  supersedes   AccountingExport?      @relation("AccountingExportAmends", fields: [tenantId, companyId, supersedesId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  amendedBy    AccountingExport[]     @relation("AccountingExportAmends")
+  files        AccountingExportFile[]
+  locks        PeriodLock[]
+
+  @@unique([tenantId, companyId, number])
+  // The targets of the references from its files, its re-exports and the period locks.
+  @@unique([tenantId, id])
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, companyId, periodStart])
+}
+
+/// A package of an accounting export (design finance.accounting "3 · Contents").
+enum AccountingPackage {
+  SALES_JOURNAL
+  PURCHASES_JOURNAL
+  PAYMENTS
+  /// Cost of goods sold and variances (W2b).
+  COST_OF_SALES
+  /// The VAT registers (W2b).
+  VAT_REGISTERS
+  /// Intrastat (Q30: the accountant confirms the duty, period and file).
+  INTRASTAT
+  /// The year-end stock pack: the valued count list (c.c. art. 2217).
+  YEAR_END_STOCK
+}
+
+enum AccountingExportStatus {
+  DRAFT
+  EXPORTED
+  CANCELLED
+}
+
+/// One file of an accounting export (a journal CSV, the Intrastat file, the valued stock list PDF …): a StoredFile of the
+/// export (recordType "AccountingExport"), its package, format and row count. Added while the export is a DRAFT (the
+/// export job writes them, then the export is EXPORTED); never changed or removed after.
+model AccountingExportFile {
+  id          String            @id @db.Uuid
+  tenantId    String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  exportId    String            @db.Uuid
+  /// 1, 2, 3 … in the export.
+  seq         Int
+  package     AccountingPackage
+  fileId      String            @db.Uuid
+  /// CSV, XLSX, XML, TXT or PDF.
+  format      String
+  /// The data rows it holds (0 for an empty month).
+  rowCount    Int               @default(0)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  createdById String?           @db.Uuid
+
+  export AccountingExport @relation(fields: [tenantId, exportId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  file   StoredFile       @relation("AccountingExportFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, exportId, seq])
+}
+
+/// A lock on whole months of a company (design finance.accounting "5 · Export and lock"): SOFT (the API's: finance may
+/// write into it with a reason) or HARD (the database refuses every write dated inside it). Lifted with a reason; locked
+/// again on the same row.
+model PeriodLock {
+  id           String           @id @db.Uuid
+  tenantId     String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId    String           @db.Uuid
+  /// The months locked (Europe/Rome days): the first day of a month to the last day of a month.
+  periodStart  DateTime         @db.Date
+  periodEnd    DateTime         @db.Date
+  level        PeriodLockLevel
+  /// LOCKED ⇄ UNLOCKED (lifted with a reason; locked again with a new time).
+  status       PeriodLockStatus @default(LOCKED)
+  /// The accounting export made before locking, when there is one (an EXPORTED batch of the company).
+  exportId     String?          @db.Uuid
+  /// The latest lock: when, by whom, and a note.
+  lockedAt     DateTime         @db.Timestamptz(3)
+  lockedById   String           @db.Uuid
+  note         String?
+  /// Set exactly while UNLOCKED: the lift, by whom and why.
+  unlockedAt   DateTime?        @db.Timestamptz(3)
+  unlockedById String?          @db.Uuid
+  unlockReason String?
+  version      Int              @default(1)
+  createdAt    DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?          @db.Uuid
+
+  company Company           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  export  AccountingExport? @relation(fields: [tenantId, companyId, exportId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One row per company and period (a lift and a new lock move the same row; live locks never overlap: the trigger).
+  @@unique([tenantId, companyId, periodStart, periodEnd])
+  @@index([tenantId, companyId, status])
+}
+
+enum PeriodLockLevel {
+  /// The API's: finance may write into it with a reason.
+  SOFT
+  /// The database's: every write dated inside it is refused.
+  HARD
+}
+
+enum PeriodLockStatus {
+  LOCKED
+  UNLOCKED
+}

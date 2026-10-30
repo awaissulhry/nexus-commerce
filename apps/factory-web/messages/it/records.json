@@ -30,7 +30,7 @@
     "rateLimited": "Troppi tentativi in poco tempo. Aspetta un minuto e riprova.",
     "unavailable": "Il server della fabbrica non ha risposto. Non è cambiato nulla; riprova.",
     "failed": "Non ha funzionato. Non è cambiato nulla; riprova.",
-    "noSender": "Non è stato inviato nulla: l'azienda di questo record non ha ancora un indirizzo da cui inviare (Amministrazione › Email e indirizzi).",
+    "noSender": "Non è stato inviato nulla: l'azienda di questo record non ha ancora un indirizzo da cui inviare (Sistema › Connessioni e API).",
     "badRecipient": "Non è stato inviato nulla: un indirizzo è stato rifiutato (non valido, oppure in passato respinto o segnalato).",
     "noSubject": "Non è stato inviato nulla: scrivi un oggetto per la prima email di questa conversazione.",
     "attachmentsRefused": "Non è stato inviato nulla: un file non può più partire con l'email (non condiviso con la controparte, o troppo grande insieme agli altri).",

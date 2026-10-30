@@ -135,6 +135,17 @@ model Company {
   // money.prisma: its invoices and the payments it received.
   invoices             Invoice[]
   payments             Payment[]
+  // W2a receivables.prisma, payables.prisma, cost-ledger.prisma, accounting.prisma (wave 7/7): its refunds, payment
+  // reminders and receivables settings, the supplier invoices it received, its standard costs, accounting exports and
+  // period locks.
+  refunds              Refund[]
+  paymentReminders     PaymentReminder[]
+  receivablesSettings  ReceivablesSettings[]
+  supplierInvoices     SupplierInvoice[]
+  /// @not-money the relation to its standard costs (the rows carry the grain)
+  standardCosts        StandardCost[]
+  accountingExports    AccountingExport[]
+  periodLocks          PeriodLock[]
   // costing.prisma: its own labour rates and costing settings (tenant-wide rows have none).
   labourRates          LabourRate[]
   /// @not-money the relation to its costing settings rows (an overhead percentage, no amount)
@@ -206,6 +217,16 @@ model Site {
   // supply.prisma: the purchase orders delivered to it and its planning runs.
   purchaseOrders  PurchaseOrder[]
   planningRuns    PlanningRun[]
+  // W2a reservations.prisma, stockcount.prisma, planning.prisma: its reservations and stock counts; its planning settings,
+  // item parameters, line and work-centre capacity and planning exceptions; the item parameters of other sites it makes for.
+  reservations         Reservation[]
+  stockCounts          StockCount[]
+  planningSettings     PlanningSettings[]
+  itemPlannings        ItemPlanning[]
+  lineCapacities       LineCapacity[]
+  workCentreCapacities WorkCentreCapacity[]
+  planningExceptions   PlanningException[]
+  madeItemPlannings    ItemPlanning[]       @relation("ItemPlanningMakeSite")
   // inventory.prisma: its locations, goods receipts, lots, stock moves and their values.
   locations       Location[]
   goodsReceipts   GoodsReceipt[]
@@ -222,6 +243,13 @@ model Site {
   // quality.prisma: the lab results and supplier documents of its lots.
   labResults              LabResult[]
   lotDocuments            LotDocument[]
+  // W2a holds.prisma, ncr.prisma, plant.prisma: the goods it has on hold, its nonconformances, its machines, their
+  // requests and maintenance jobs.
+  qualityHolds            QualityHold[]
+  nonconformances         Nonconformance[]
+  machines                Machine[]
+  maintenanceRequests     MaintenanceRequest[]
+  maintenanceJobs         MaintenanceJob[]
   // production.prisma: its garment label prints (B-W1-44) and bundle ticket reprints.
   garmentLabelPrints      GarmentLabelPrint[]
   bundleReprints          BundleReprint[]
@@ -241,6 +269,10 @@ model Site {
   // W2a claims.prisma, subcontract.prisma: the claims about goods at the site, the work it sends to workshops.
   supplierClaims     SupplierClaim[]
   subcontractOrders  SubcontractOrder[]
+  // W2a rework.prisma, schedule.prisma: its rework and replacements, its working plan and published plans.
+  reworkOrders        ReworkOrder[]
+  replacementRequests ReplacementRequest[]
+  planVersions        PlanVersion[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])
@@ -269,8 +301,13 @@ model Line {
 
   site     Site      @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   stations Station[]
+  // W2a planning.prisma: its planned efficiency and people (one row, the line's id).
+  capacity LineCapacity[]
   // calendar.prisma: its calendar.
   workCalendars WorkCalendar[]
+  // W2a production.prisma, schedule.prisma: the work orders allocated to it, its slots on the planning board.
+  workOrders    WorkOrder[]
+  scheduleSlots ScheduleSlot[]
 
   @@unique([tenantId, siteId, code])
   @@unique([tenantId, siteId, id])
@@ -295,10 +332,16 @@ model WorkCentre {
 
   site     Site      @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   stations Station[]
+  // W2a planning.prisma: its planned units and efficiency (one row, the work centre's id).
+  capacity WorkCentreCapacity[]
   // production.prisma: the work order operations mapped to it.
   workOrderOperations WorkOrderOperation[]
+  // W2a plant.prisma: its machines.
+  machines            Machine[]
   // calendar.prisma: its calendar (a workshop's).
   workCalendars       WorkCalendar[]
+  // W2a schedule.prisma: its slots on the planning board.
+  scheduleSlots       ScheduleSlot[]
 
   @@unique([tenantId, siteId, code])
   @@unique([tenantId, siteId, id])
@@ -347,6 +390,9 @@ model Station {
   // production.prisma: the cut logs and scans that name the station (a site that records stations, not workers).
   cutLogs        CutLog[]
   operationScans OperationScan[]
+  // W2a plant.prisma: the machines standing at it and the requests it reported.
+  machines            Machine[]
+  maintenanceRequests MaintenanceRequest[]
   // B-W1-42: correction requests asked and refused scans sent at the station.
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]

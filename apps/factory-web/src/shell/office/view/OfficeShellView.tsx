@@ -12,7 +12,7 @@ import { Kbd, ToolbarButton } from '@nexus/ui/primitives'
 import { useScopedT, useT } from '../../../lib/i18n/provider'
 import { companyPrefix } from '../../../lib/session/session'
 import { useTheme } from '../../../lib/theme/use-theme'
-import { navPages, officeCrumbs, translateNav } from '../../nav/office-nav'
+import { officeCrumbs, palettePages, translateNav } from '../../nav/office-nav'
 import { CommandPaletteView } from '../../palette/view/CommandPaletteView'
 import { CompanySwitcherView, type CompanySwitcherViewModel } from '../../switcher/view/CompanySwitcherView'
 import '../office-shell.css'
@@ -105,7 +105,7 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
   const here = crumbs.length > 1 ? crumbs[crumbs.length - 1].name : (area?.label ?? '')
   const above = crumbs.slice(0, -1).map((crumb) => crumb.name).join(' › ')
   const count = (key: string) => model.counts?.[key]
-  const pages = useMemo(() => navPages(model.nav).map((page) => ({ ...page, href: `${prefix}${page.href}` })), [model.nav, prefix])
+  const pages = useMemo(() => palettePages(model.nav).map((page) => ({ ...page, href: `${prefix}${page.href}` })), [model.nav, prefix])
 
   useEffect(() => {
     setChrome({ header: topBar.current, primaryNavigation: body.current?.querySelector<HTMLElement>('.h10-rail') ?? null })

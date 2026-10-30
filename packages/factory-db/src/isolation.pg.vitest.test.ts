@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed, type CoreSeed } from '../seed/_core'
+import { seed as seedAccounting } from '../seed/accounting'
 import { seed as seedAlerts } from '../seed/alerts'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
@@ -13,6 +14,7 @@ import { seed as seedEmailIn } from '../seed/email-in'
 import { seed as seedFiles } from '../seed/files'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
 import { seed as seedFloorSync } from '../seed/floor-sync'
+import { seed as seedHolds } from '../seed/holds'
 import { seed as seedImports } from '../seed/imports'
 import { seed as seedInsights } from '../seed/insights'
 import { seed as seedIntegration } from '../seed/integration'
@@ -24,6 +26,8 @@ import { seed as seedNumberingBlocks } from '../seed/numbering-blocks'
 import { seed as seedOps } from '../seed/ops'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
+import { seed as seedPlanning } from '../seed/planning'
+import { seed as seedPlant } from '../seed/plant'
 import { seed as seedPricing } from '../seed/pricing'
 import { seed as seedPrint } from '../seed/print'
 import { seed as seedPrivacy } from '../seed/privacy'
@@ -33,8 +37,10 @@ import { seed as seedQuality } from '../seed/quality'
 import { seed as seedQualityLab } from '../seed/quality-lab'
 import { seed as seedReturns } from '../seed/returns'
 import { seed as seedReasons } from '../seed/reasons'
+import { seed as seedReceivables } from '../seed/receivables'
 import { seed as seedRoles } from '../seed/roles'
 import { seed as seedSales } from '../seed/sales'
+import { seed as seedSchedule } from '../seed/schedule'
 import { seed as seedSearch } from '../seed/search'
 import { seed as seedShipping } from '../seed/shipping'
 import { seed as seedSourcing } from '../seed/sourcing'
@@ -187,6 +193,22 @@ beforeAll(async () => {
   await seedSourcing({ db: factory, namespace: 'iso-b' })
   await seedSubcontract({ db: factory, namespace: 'iso-a' })
   await seedSubcontract({ db: factory, namespace: 'iso-b' })
+  // The stock and planning schema of W2a (wave 4/7).
+  await seedPlanning({ db: factory, namespace: 'iso-a' })
+  await seedPlanning({ db: factory, namespace: 'iso-b' })
+  // The production and schedule schema of W2a (wave 5/7).
+  await seedSchedule({ db: factory, namespace: 'iso-a' })
+  await seedSchedule({ db: factory, namespace: 'iso-b' })
+  // The quality, plant and shipping schema of W2a (wave 6/7).
+  await seedHolds({ db: factory, namespace: 'iso-a' })
+  await seedHolds({ db: factory, namespace: 'iso-b' })
+  await seedPlant({ db: factory, namespace: 'iso-a' })
+  await seedPlant({ db: factory, namespace: 'iso-b' })
+  // The money schema of W2a (wave 7/7).
+  for (const seedMoneyW2a of [seedReceivables, seedAccounting]) {
+    await seedMoneyW2a({ db: factory, namespace: 'iso-a' })
+    await seedMoneyW2a({ db: factory, namespace: 'iso-b' })
+  }
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -197,6 +219,8 @@ afterAll(async () => {
 
 it('covers every classified table and every runtime role', () => {
   expect(classified.map(({ model }) => model.name).sort()).toEqual([
+    'AccountingExport',
+    'AccountingExportFile',
     'Alert',
     'AlertEvent',
     'AlertRule',
@@ -222,9 +246,11 @@ it('covers every classified table and every runtime role', () => {
     'CutLogPiece',
     'Ddt',
     'DdtCancellation',
+    'DefectCode',
     'DepositRequest',
     'Device',
     'DeviceEnrolment',
+    'DispositionCode',
     'DueTimer',
     'EmailIdentity',
     'EmailOutbound',
@@ -253,20 +279,31 @@ it('covers every classified table and every runtime role', () => {
     'InvoiceLine',
     'Item',
     'ItemColour',
+    'ItemPlanning',
     'LabResult',
     'LabelTemplate',
     'LabourRate',
     'Line',
+    'LineCapacity',
     'LinkEvidence',
     'Location',
     'Lot',
     'LotDocument',
+    'Machine',
+    'MachineClass',
+    'MachineSymptom',
+    'MaintenanceJob',
+    'MaintenanceRequest',
     'MaterialRequirement',
     'MeasurementPoint',
     'MeasurementProfile',
     'MeasurementTemplate',
     'Message',
     'MessageMention',
+    'NcrContainmentAction',
+    'NcrDispositionLine',
+    'NcrLink',
+    'Nonconformance',
     'Notification',
     'NotificationDelivery',
     'NumberAllocation',
@@ -286,8 +323,13 @@ it('covers every classified table and every runtime role', () => {
     'PasswordReset',
     'Payment',
     'PaymentAllocation',
+    'PaymentReminder',
     'PaymentTerms',
+    'PeriodLock',
+    'PlanVersion',
+    'PlanningException',
     'PlanningRun',
+    'PlanningSettings',
     'PpeRegisterEntry',
     'PriceList',
     'PriceListEntry',
@@ -303,6 +345,7 @@ it('covers every classified table and every runtime role', () => {
     'PurchaseOrderLine',
     'PurchaseOrderReminder',
     'PurchaseOrderRevision',
+    'QualityHold',
     'QualityRelease',
     'QualityReleaseReversal',
     'QualitySettings',
@@ -314,14 +357,20 @@ it('covers every classified table and every runtime role', () => {
     'QuoteVersion',
     'ReasonCode',
     'ReceiptDiscrepancy',
+    'ReceivablesSettings',
     'RecordFollower',
+    'Refund',
     'RepairOrder',
     'RepairStageEvent',
+    'ReplacementRequest',
     'ReportSubscription',
+    'RequirementPegging',
+    'Reservation',
     'RestoreDrill',
     'ReturnAuthorisation',
     'ReturnLine',
     'ReturnReceipt',
+    'ReworkOrder',
     'Role',
     'RoleAssignment',
     'RoutingOperation',
@@ -333,6 +382,7 @@ it('covers every classified table and every runtime role', () => {
     'SalesSettings',
     'SavedView',
     'ScanCorrectionRequest',
+    'ScheduleSlot',
     'ScrapReason',
     'SdiNotification',
     'SdiSubmission',
@@ -348,7 +398,10 @@ it('covers every classified table and every runtime role', () => {
     'Size',
     'SizeScale',
     'StaffNoticeAck',
+    'StandardCost',
     'Station',
+    'StockCount',
+    'StockCountLine',
     'StockMove',
     'StockValuation',
     'StoredFile',
@@ -359,6 +412,9 @@ it('covers every classified table and every runtime role', () => {
     'SubcontractOrder',
     'SupplierClaim',
     'SupplierClaimLine',
+    'SupplierInvoice',
+    'SupplierInvoiceLine',
+    'SupplierInvoiceMatch',
     'SupplierItem',
     'Suppression',
     'Task',
@@ -372,7 +428,9 @@ it('covers every classified table and every runtime role', () => {
     'ViesCheck',
     'WorkCalendar',
     'WorkCentre',
+    'WorkCentreCapacity',
     'WorkOrder',
+    'WorkOrderCostEntry',
     'WorkOrderMaterial',
     'WorkOrderOperation',
     'WorkOrderSize',

@@ -2,7 +2,7 @@ import { Building2, FileClock, FileLock, Hash, Languages, ListChecks, PlugZap, S
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
- * Admin (A2 §1.3 row 14, §1.4 "Admin"; owner and administrator). Every W0 page, written once here (PLAN §2.1); the
+ * Admin (design 01 area 13 "Admin / Sistema", at the foot of the rail; A2 §1.4 "Admin"; owner and administrator). Every W0 page, written once here (PLAN §2.1); the
  * steps B-W0-26 to B-W0-31 build the pages. Labels are message keys (`shell:` = messages/<locale>/shell.json).
  *
  * A row's `permission` is the one its page's API route needs.
@@ -17,7 +17,7 @@ import type { OfficeAreaNav } from '../../shell/nav/office-nav'
  * Data = Import & export, Audit log.
  */
 export const officeArea: OfficeAreaNav = {
-  order: 14,
+  order: 13,
   area: {
     id: 'admin',
     label: 'shell:nav.admin.area',
@@ -27,10 +27,12 @@ export const officeArea: OfficeAreaNav = {
     sections: [
       {
         id: 'admin-top',
-        label: 'shell:nav.admin.area',
+        label: 'shell:nav.admin.main',
         hideLabel: true,
         noCrumb: true,
-        items: [{ id: 'admin-overview', label: 'shell:nav.admin.overview', href: '/admin', icon: ListChecks, permission: 'companies.view' }],
+        // All settings is the tree's W3 page, shipped early as the "Get the factory ready" checklist (Owner answer O2).
+        // `exact`: it is the area's own address, so it never claims the pages under /admin.
+        items: [{ id: 'admin-overview', label: 'shell:nav.admin.overview', href: '/admin', exact: true, icon: ListChecks, permission: 'companies.view' }],
       },
       {
         id: 'admin-organisation',

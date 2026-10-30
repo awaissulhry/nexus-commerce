@@ -61,7 +61,16 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    `factory_sales_settings_guard` (return policy) and the register's `factory_ppe_register_entry_guard` (source type
    Complaint)), `…_supply_w2a_guards` (W2a wave 3/7: PO revisions and reminders append-only, claims, discrepancies,
    subcontract orders, type-change reviews; it redefines the two purchase order functions of
-   `…_supply_po_proposals_guards`): triggers, partial unique indexes and deferred constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
+   `…_supply_po_proposals_guards`), `…_stock_plan_w2a_guards` (W2a wave 4/7: reservations, counts and their history,
+   item parameters, settings, capacity, pegging append-only, exceptions; it redefines supply's
+   `factory_material_requirement_guard` (the firm planned order)), `…_production_w2a_guards` (W2a wave 5/7: the work-order gate and hold, repair kind,
+   line, bundle split, finished goods and production receipts, rework, replacements, plan versions and slots; it
+   redefines production's `factory_work_order_guard` and `factory_work_order_size_guard` and wave 4's
+   `factory_reservation_guard` (a held work order's reservations stay open)), `…_quality_plant_w2a_guards` (W2a wave 6/7:
+   the defect library, disposition codes, holds and what they block (issue, cut, scan, release, packing, shipping), NCRs,
+   machines and the unsafe lock, maintenance, freight; it redefines shipping's `factory_shipment_guard` (freight,
+   transport evidence) and `factory_ddt_check` (a DDT for another reason) and the register's
+   `factory_ppe_register_entry_guard` (source type Nonconformance)), `…_money_w2a_guards` (W2a wave 7/7: refunds, reminders, supplier invoices and their match, standard costs, the cost ledger append-only, accounting exports, period locks; it redefines money's `factory_invoice_check_issue`, `factory_invoice_line_guard`, `factory_payment_guard` and `factory_payment_allocation_check`, and adds its own period-lock triggers on Invoice, Payment and StockMove and the method lock on CostingSettings): triggers, partial unique indexes and deferred constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written
    too but goes the other way: keep it IN `prisma/migrations`, under a timestamp before its schema folder, while

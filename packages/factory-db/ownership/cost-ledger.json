@@ -1,0 +1,21 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/cost-ledger.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker, in the tenant's system context: the handlers that post the cost of issues, scans and completions) keeps the standard costs and posts the work orders' cost ledger through apps/factory-api's modules/costing (B-W2a-21, B-W2a-29), always through command(); the API keeps staff to the companies their grants reach and every figure to the cost grain (A1 §2.6). The floor reads nothing here: no money on the floor, and labour is valued per work order, never per person (Statuto dei Lavoratori art. 4). No portal or link session reads a cost. WorkOrderCostEntry is append-only (`@append-only`; the …_money_w2a_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes it; a wrong entry is reversed by a new row. The office deletes only a DRAFT standard. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "StandardCost": {
+      "about": "Finance prepares an item's standard cost for a period (DRAFT), freezes it, and sets its end once when the next one takes over; it deletes only a DRAFT. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "WorkOrderCostEntry": {
+      "about": "The office or the worker posts a work order's cost events (material, scrap, labour, subcontract, overhead, completion, adjustment) and reverses a wrong one with a new row. Nobody changes or removes one. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    }
+  }
+}

@@ -754,8 +754,8 @@
       "NO_CONTACT": "No contact chosen to receive the order.",
       "CONTACT_NOT_ORDERS": "The contact does not receive orders (give them the Orders role, or pick another).",
       "NO_CONTACT_EMAIL": "The contact has no email address.",
-      "COMPANY_LEGAL": "Our company’s letterhead is not complete (Admin › Companies).",
-      "NO_DELIVERY_ADDRESS": "The delivery site has no address (Admin › Sites).",
+      "COMPANY_LEGAL": "Our company’s letterhead is not complete (Admin › Companies & sites).",
+      "NO_DELIVERY_ADDRESS": "The delivery site has no address (Admin › Companies & sites).",
       "NO_LINES": "The order has no line yet.",
       "LINE_NOT_PRICED": "A line has no price.",
       "NEED_DATE_PAST": "A line’s need date is in the past.",
@@ -932,7 +932,7 @@
         "decline": "Decline it with a reason",
         "noAccount": "No account needed; the link shows no price"
       },
-      "previewNeeds": "The PDF cannot be made yet: the company’s legal details for the letterhead are not complete (legal name, registered office, VAT number, codice fiscale, REA). They are set in Settings › Companies & sites.",
+      "previewNeeds": "The PDF cannot be made yet: the company’s legal details for the letterhead are not complete (legal name, registered office, VAT number, codice fiscale, REA). They are set in Admin › Companies & sites.",
       "previewNeedsCost": "The PDF prints the prices, so it is shown only to who sees costs. The supplier receives it with the mail.",
       "refused": "The order cannot be sent as it is: a check failed meanwhile. The checks were read again."
     },

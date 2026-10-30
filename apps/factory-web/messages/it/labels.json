@@ -561,7 +561,7 @@
     "detail": "{printer} · {time}",
     "failedDetail": "La stampante non l’ha presa.",
     "noPrinter": "Ancora nessuna stampante di etichette",
-    "noPrinterBody": "Un amministratore la aggiunge in Amministrazione › Dispositivi e stampanti.",
+    "noPrinterBody": "Un amministratore la aggiunge in Sistema › Dispositivi e stampanti.",
     "printersFailed": "Non è stato possibile leggere le stampanti"
   },
   "print": {

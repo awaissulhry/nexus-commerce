@@ -52,6 +52,8 @@ model NumberSeries {
   ddts        Ddt[]
   // money.prisma: the invoices and credit notes numbered from it.
   invoices    Invoice[]
+  // accounting.prisma (W2a wave 7/7): the accounting exports numbered from it.
+  accountingExports AccountingExport[]
 
   @@unique([tenantId, companyId, kind, code, scopeKey])
   // The target of the allocations' tenant- and company-safe reference.
@@ -96,6 +98,14 @@ enum NumberKind {
   CLAIM
   /// W2a wave 3: a subcontract order's number (SC-…; subcontract.prisma SubcontractOrder.number).
   SUBCONTRACT
+  /// W2a wave 4: a stock count's number (CNT-…; stockcount.prisma StockCount.number).
+  COUNT
+  /// W2a wave 6: a nonconformance report's number (NCR-…; ncr.prisma Nonconformance.number).
+  NCR
+  /// W2a wave 6: a maintenance job's number (MJ-…; plant.prisma MaintenanceJob.number).
+  MAINTENANCE_JOB
+  /// W2a wave 7: an accounting export batch's number (EXP-…; accounting.prisma AccountingExport.number).
+  ACCOUNTING_EXPORT
 }
 
 enum NumberReset {

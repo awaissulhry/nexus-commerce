@@ -30,7 +30,7 @@
     "rateLimited": "Too many tries in a short time. Wait a minute and try again.",
     "unavailable": "The factory server did not answer. Nothing was changed; try again.",
     "failed": "That did not work. Nothing was changed; try again.",
-    "noSender": "Nothing was sent: this record's company has no address to send mail from yet (Admin › Email & addresses).",
+    "noSender": "Nothing was sent: this record's company has no address to send mail from yet (Admin › Connections & API).",
     "badRecipient": "Nothing was sent: an address was refused (not valid, or it bounced or complained before).",
     "noSubject": "Nothing was sent: write a subject for the first mail of this thread.",
     "attachmentsRefused": "Nothing was sent: a file can no longer go with it (not shared with the party, or too large together).",

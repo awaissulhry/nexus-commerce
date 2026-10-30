@@ -108,10 +108,10 @@
     "loading": "Lettura degli account corriere…",
     "empty": {
       "title": "Collega un account corriere per comprare le etichette",
-      "body": "La società non ha ancora un account Sendcloud. Si collega in Amministrazione › Connessioni e API."
+      "body": "La società non ha ancora un account Sendcloud. Si collega in Sistema › Connessioni e API."
     },
-    "where": "L'account si collega, se ne sostituiscono le chiavi e si scollega in Amministrazione › Connessioni e API.",
-    "manage": "Apri in Amministrazione › Connessioni e API",
+    "where": "L'account si collega, se ne sostituiscono le chiavi e si scollega in Sistema › Connessioni e API.",
+    "manage": "Apri in Sistema › Connessioni e API",
     "askAdmin": "Chiedi a un amministratore."
   },
   "state": {
@@ -190,8 +190,8 @@
       "documentPrinterId": "Una stampante A4 di questo stabilimento."
     },
     "noneAtSite": {
-      "labelPrinterId": "Questo stabilimento non ha ancora una stampante di etichette: si aggiunge in Amministrazione › Dispositivi e stampanti.",
-      "documentPrinterId": "Questo stabilimento non ha ancora una stampante A4: si aggiunge in Amministrazione › Dispositivi e stampanti."
+      "labelPrinterId": "Questo stabilimento non ha ancora una stampante di etichette: si aggiunge in Sistema › Dispositivi e stampanti.",
+      "documentPrinterId": "Questo stabilimento non ha ancora una stampante A4: si aggiunge in Sistema › Dispositivi e stampanti."
     },
     "none": {
       "labelPrinterId": "Nessuna: le etichette si stampano come PDF dal browser",
@@ -204,7 +204,7 @@
     "hidden": "Non puoi vedere le stampanti di questo stabilimento (serve il diritto di vedere le stampanti); quelle impostate restano come sono.",
     "readFailed": "Non è stato possibile leggere le stampanti dello stabilimento: {problem}",
     "loading": "Lettura delle stampanti dello stabilimento…",
-    "manage": "Stampanti in Amministrazione › Dispositivi e stampanti"
+    "manage": "Stampanti in Sistema › Dispositivi e stampanti"
   },
   "problem": {
     "name": "Indica chi spedisce (o riceve) la merce.",

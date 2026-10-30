@@ -1,0 +1,23 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/schedule.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (planners) writes the site's working plan and publishes versions through apps/factory-api's modules/planning/schedule (B-W2a-34), always through command(). Owner answer P3: the floor sees nothing until Publish. So the floor role reads ONLY published plans (onlyValues: PlanVersion.kind PUBLISHED, ScheduleSlot.planKind PUBLISHED), of its own site: the floor's My work and the dispatch list per line and station (MES-021) show the published plan; the working plan is invisible to it. A slot's planKind is its plan's kind (the reference includes it). A published version and its slots are frozen once published and never deleted (the …_production_w2a_guards triggers, for every login); the working plan is never deleted, its slots are moved and removed. ScheduleSlot.partyId is a workshop lane (keyColumns.party, which check-ownership requires for the column; no partner access: a workshop portal is W2b). No figure per person (Owner answer F2). Portal and link sessions get nothing. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "PlanVersion": {
+      "about": "The office keeps the site's working plan and publishes numbered versions of it. The floor reads its own site's PUBLISHED versions only (P3).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "onlyValues": { "kind": ["PUBLISHED"] } }
+      }
+    },
+    "ScheduleSlot": {
+      "about": "The office places, moves and removes slots of the working plan and copies them into a version it publishes. The floor reads the slots of its own site's PUBLISHED versions only (P3): its dispatch list.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "onlyValues": { "planKind": ["PUBLISHED"] } }
+      }
+    }
+  }
+}

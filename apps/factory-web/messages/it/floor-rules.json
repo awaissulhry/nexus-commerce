@@ -70,8 +70,8 @@
       "title": "Cosa tocca questa modifica",
       "narrow": "Da ora scansioni e registri di taglio in questa sede nominano solo la postazione, mai chi lavora.",
       "widen": "Da ora scansioni e registri di taglio in questa sede nominano chi ha fatto l’accesso.",
-      "devices_one": "{count} tablet di reparto non ha una postazione: assegnala (Admin › Dispositivi e stampanti), altrimenti non registra nulla.",
-      "devices_other": "{count} tablet di reparto non hanno una postazione: assegnala a ognuno (Admin › Dispositivi e stampanti), altrimenti non registrano nulla.",
+      "devices_one": "{count} tablet di reparto non ha una postazione: assegnala (Sistema › Dispositivi e stampanti), altrimenti non registra nulla.",
+      "devices_other": "{count} tablet di reparto non hanno una postazione: assegnala a ognuno (Sistema › Dispositivi e stampanti), altrimenti non registrano nulla.",
       "notAcknowledged_one": "{count} delle {active} persone attive non ha confermato l’informativa: nessuna registrazione la nomina finché non lo fa (L. 300/1970 art. 4 c.3; GDPR art. 13).",
       "notAcknowledged_other": "{count} delle {active} persone attive non hanno confermato l’informativa: nessuna registrazione le nomina finché non lo fanno (L. 300/1970 art. 4 c.3; GDPR art. 13).",
       "openOrders_one": "{count} ordine di lavoro aperto prosegue così.",
@@ -149,7 +149,7 @@
       "version_one": "Versione {version}: {count} persona",
       "version_other": "Versione {version}: {count} persone",
       "countsOnly": "Solo conteggi: questa pagina non nomina mai nessuno.",
-      "toPrivacy": "Testo e versioni dell’informativa: Admin › Privacy e informative"
+      "toPrivacy": "Testo e versioni dell’informativa: Sistema › Privacy e informative"
     },
     "bundle": {
       "title": "Dimensione standard del fascio",

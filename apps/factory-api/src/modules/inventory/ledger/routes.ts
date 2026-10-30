@@ -1,8 +1,9 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
-import { adjustContract, countContract, listMovesContract, reverseContract, scrapContract, transferContract } from './contract'
+import { adjustContract, announcePhotoContract, completePhotoContract, countContract, listMovesContract, reverseContract, scrapContract, transferContract, writeOffContract, writeOffRecordContract } from './contract'
 import { manifest } from './manifest'
 import { adjust, listMoves, postCount, reverse, scrap, transfer } from './moves'
+import { announcePhoto, completePhoto, writeOff, writeOffRecord } from './write-off'
 
 /**
  * The append-only stock ledger (B-W1-22; SCM-189, SCM-191, SCM-192, SCM-193, SCM-194, SCM-195): adjustments, counts,
@@ -22,5 +23,15 @@ export default defineRoutes('inventory.ledger', manifest, async (app) => {
 
   app.post('/inventory/moves/:moveId/reverse', { schema: reverseContract }, async (request, reply) =>
     reply.code(201).send(await reverse(request, request.params.moveId, request.body, idempotencyKeyFrom(request))),
+  )
+
+  // B-W2a-11 (SCM-193): write-off with a WRITE_OFF reason code, and its photos.
+  app.post('/inventory/write-offs', { schema: writeOffContract }, async (request, reply) => reply.code(201).send(await writeOff(request, request.body, idempotencyKeyFrom(request))))
+  app.get('/inventory/write-offs/:writeOffId', { schema: writeOffRecordContract }, async (request) => writeOffRecord(request, request.params.writeOffId))
+  app.post('/inventory/write-offs/:writeOffId/photos', { schema: announcePhotoContract }, async (request, reply) =>
+    reply.code(201).send(await announcePhoto(request, request.params.writeOffId, request.body, idempotencyKeyFrom(request))),
+  )
+  app.post('/inventory/write-offs/:writeOffId/photos/:fileId/complete', { schema: completePhotoContract }, async (request) =>
+    completePhoto(request, request.params.writeOffId, request.params.fileId, idempotencyKeyFrom(request)),
   )
 })

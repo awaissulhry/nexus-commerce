@@ -9,7 +9,10 @@
 // A work order makes one style, at one site, as a size grid (colourway x size cells, each from a sales order line) or as
 // one made-to-measure unit (one cell with the rider's measurement profile revision). DRAFT → RELEASED → IN_PROGRESS →
 // COMPLETED → CLOSED; CANCELLED from DRAFT, RELEASED or IN_PROGRESS, with a reason (MES-007; who and when: the audit
-// log). ON_HOLD (MES-008) comes with W2a; enum values are additive.
+// log). W2a (schema wave 5/7, MES-008): ON_HOLD from DRAFT, RELEASED or IN_PROGRESS with its reason, back to the status
+// it was held from (or CANCELLED); while held no floor work, release or finished-goods receipt takes it (the hand-written
+// …_production_w2a_guards). W2a also adds the REPAIR kind (MES-019), the line a work order is allocated to (PLN-160) and
+// the bundle a bundle was split from (MES-071); rework.prisma and schedule.prisma hold the rest of the wave.
 //
 // The frozen specification (MES-005, PRD-192, PRD-193): release fixes the RELEASED style revision (its BOM and routing
 // are frozen for every login by the …_product_guards triggers), the revision's garment label template (ACTIVE, frozen
@@ -127,12 +130,28 @@ model WorkOrder {
   closedAt        DateTime?       @db.Timestamptz(3)
   cancelledAt     DateTime?       @db.Timestamptz(3)
   cancelReason    String?
+  /// W2a (PLN-160): the line of its site it is allocated to (the allocation board); null: not allocated. It changes until
+  /// the work order is COMPLETED (output is counted per line, F2), and only to an ACTIVE line.
+  lineId          String?         @db.Uuid
+  /// W2a (MES-008): the hold it is under, exactly while ON_HOLD: the status it was held from (DRAFT, RELEASED or
+  /// IN_PROGRESS) and goes back to, why (shown on the floor's refusal), when and by whom; the quality hold or
+  /// nonconformance behind it, when there is one (recordType + recordId: wave 6's records). Cleared when the hold is
+  /// lifted; each hold and lift is in the audit log.
+  heldFromStatus  WorkOrderStatus?
+  holdReason      String?
+  heldAt          DateTime?       @db.Timestamptz(3)
+  heldById        String?         @db.Uuid
+  holdRecordType  String?
+  holdRecordId    String?         @db.Uuid
   version         Int             @default(1)
   createdAt       DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
   createdById     String?         @db.Uuid
 
   site          Site                 @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2a: the line it is allocated to (Restrict, not Prisma's SetNull default for an optional relation: that would also
+  // clear tenantId and siteId).
+  line          Line?                @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   style         Style                @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and styleId.
   styleRevision StyleRevision?       @relation(fields: [tenantId, styleId, styleRevisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -143,6 +162,14 @@ model WorkOrder {
   cutLogs       CutLog[]
   bundles       Bundle[]
   scans         OperationScan[]
+  // W2a cost-ledger.prisma (wave 7/7): its cost ledger (material, labour, subcontract, overhead, completion).
+  /// @not-money the relation to the cost ledger (the rows carry the grain)
+  costEntries   WorkOrderCostEntry[]
+  // W2a reservations.prisma, planning.prisma: the stock held for it, and the planning runs' pegging of its material.
+  reservations  Reservation[]
+  peggings      RequirementPegging[]
+  // W2a ncr.prisma: the nonconformances about it.
+  nonconformances Nonconformance[]
   // The floor's correction requests and refused scans about it (B-W1-42).
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]
@@ -152,6 +179,10 @@ model WorkOrder {
   repairOrders  RepairOrder[]
   // W2a subcontract.prisma: the work sent out of it to workshops.
   subcontractOrders SubcontractOrder[]
+  // W2a rework.prisma, schedule.prisma: its rework, the replacements of its scrap, its slots on the planning board.
+  reworkOrders        ReworkOrder[]
+  replacementRequests ReplacementRequest[]
+  scheduleSlots       ScheduleSlot[]
 
   @@unique([tenantId, companyId, number])
   @@unique([tenantId, batchNumber])
@@ -170,6 +201,10 @@ enum WorkOrderKind {
   SIZE_GRID
   /// One made-to-measure unit for one rider (MES-003): one cell of quantity 1 with the measurement profile revision.
   MADE_TO_MEASURE
+  /// W2a (MES-019): a repair of returned garments (a returns.prisma RepairOrder names it): its cells name the sales order
+  /// lines they were sold on (of any kind; a made-to-measure garment keeps its profile, one unit), its operations are the
+  /// routing steps the repair needs (at least one), not the whole routing.
+  REPAIR
 }
 
 enum WorkOrderStatus {
@@ -179,6 +214,9 @@ enum WorkOrderStatus {
   COMPLETED
   CLOSED
   CANCELLED
+  /// W2a (MES-008): held from DRAFT, RELEASED or IN_PROGRESS (heldFromStatus), with its reason; back to that status when
+  /// the hold is lifted, or CANCELLED.
+  ON_HOLD
 }
 
 /// One cell of a work order's size grid (MES-002): the pieces of one colourway in one size, from one sales order line
@@ -223,6 +261,9 @@ model WorkOrderSize {
   shipmentLines      ShipmentLine[]
   // The garment labels printed for it (B-W1-44).
   garmentLabelPrints GarmentLabelPrint[]
+  // W2a rework.prisma: the rework of its garments and the replacements of its scrap.
+  reworkOrders        ReworkOrder[]
+  replacementRequests ReplacementRequest[]
 
   @@unique([tenantId, workOrderId, colourwayId, size])
   // The target of the materials', cut pieces' and bundles' references: a cell of the same site and work order.
@@ -266,6 +307,10 @@ model WorkOrderOperation {
   correctionRequests ScanCorrectionRequest[]
   // W2a subcontract.prisma: the subcontract orders that send it out.
   subcontractOperations SubcontractOperation[]
+  // W2a rework.prisma, schedule.prisma: the rework found at it and done at it, its slots on the planning board.
+  reworkFound   ReworkOrder[]  @relation("ReworkFoundAt")
+  reworkDone    ReworkOrder[]  @relation("ReworkDoneAt")
+  scheduleSlots ScheduleSlot[]
 
   @@unique([tenantId, workOrderId, seq])
   // The target of the scans' reference: an operation of the scan's site and work order.
@@ -355,6 +400,8 @@ model CutLog {
   pieces     CutLogPiece[]
   // inventory.prisma: the used-up hide whose closing entry this is (Hide.closingCutLogId).
   closedHides Hide[]       @relation("HideClosingCutLog")
+  // W2a rework.prisma: the replacements (recuts) it cut.
+  replacementRequests ReplacementRequest[]
 
   @@unique([tenantId, deviceId, clientEventId])
   // The target of the reversals' reference: on the entry's own site.
@@ -407,6 +454,11 @@ model Bundle {
   part            String?
   /// The cut log entries its pieces came from (genealogy: hide, lot), entries of its work order.
   cutLogIds       String[]     @default([]) @db.Uuid
+  /// W2a (MES-071): the bundle it was split from (pieces off into this one, with its own ticket: rework, recut, hold),
+  /// of the same work order, cell and part; set when it is made, never changed. A split leaves the parent's `quantity` as
+  /// it was cut: the garments still in a bundle are its quantity less its children's that are not VOID, at least one
+  /// (the …_production_w2a_guards trigger, under a lock per parent).
+  parentBundleId  String?      @db.Uuid
   status          BundleStatus @default(ACTIVE)
   voidedAt        DateTime?    @db.Timestamptz(3)
   voidReason      String?
@@ -430,6 +482,12 @@ model Bundle {
   garmentSerials GarmentSerial[]
   // Its tickets printed again, each with the reason.
   reprints      BundleReprint[]
+  // W2a (MES-071): the bundle it was split from, and the bundles split from it (Restrict, not Prisma's SetNull default
+  // for an optional relation: that would also clear tenantId, siteId and workOrderId).
+  parent        Bundle?         @relation("BundleSplit", fields: [tenantId, siteId, workOrderId, parentBundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  children      Bundle[]        @relation("BundleSplit")
+  // W2a rework.prisma: the rework of the garments it carries.
+  reworkOrders  ReworkOrder[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, clientEventId])
@@ -535,6 +593,12 @@ model OperationScan {
   correctionRequests ScanCorrectionRequest[] @relation("CorrectionRequestScan")
   answersRequests    ScanCorrectionRequest[] @relation("CorrectionRequestAnswer")
   resolvesRefusals   FloorScanRefusal[]
+  // W2a rework.prisma: the rework its rework count opened, the replacements of its scrap.
+  reworkOrders        ReworkOrder[]
+  replacementRequests ReplacementRequest[]
+  // W2a cost-ledger.prisma (wave 7/7): the labour (or scrap) it posted to its work order's cost ledger.
+  /// @not-money the relation to the cost ledger (the rows carry the grain)
+  costEntries        WorkOrderCostEntry[]
   worker      Worker?            @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   station     Station?           @relation(fields: [tenantId, siteId, stationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   device      Device?            @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)

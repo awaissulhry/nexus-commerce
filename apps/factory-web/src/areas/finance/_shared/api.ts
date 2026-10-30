@@ -15,7 +15,8 @@ export const INVOICE_DOC_TYPES = ['TD01', 'TD02', 'TD04', 'TD24'] as const
 export type DocType = (typeof INVOICE_DOC_TYPES)[number]
 export const INVOICE_STATUSES = ['DRAFT', 'ISSUED', 'SENT', 'DELIVERED', 'NOT_DELIVERABLE', 'REJECTED', 'ERROR'] as const
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number]
-export const LINE_KINDS = ['GOODS', 'SERVICE', 'DEPOSIT_DEDUCTION'] as const
+// CHARGE: W2a's accessory charge (factory-db InvoiceLineKind, wave 7/7); drawn as an ordinary line until its screen.
+export const LINE_KINDS = ['GOODS', 'SERVICE', 'DEPOSIT_DEDUCTION', 'CHARGE'] as const
 export const SDI_STATE_CODES = ['DRAFT', 'NOT_SENT', 'SENDING', 'AT_SDI', 'DELIVERED', 'NOT_DELIVERED', 'REJECTED', 'ERROR'] as const
 export type SdiStateCode = (typeof SDI_STATE_CODES)[number]
 export const SDI_NEXT_ACTIONS = ['ISSUE', 'SEND', 'WAIT', 'FIX_AND_RESEND', 'SEND_AGAIN', 'CHECK_COPY', 'NONE'] as const

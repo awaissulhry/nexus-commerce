@@ -1,5 +1,6 @@
 import { formatScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
-import { navPages, officeNavFor, OFFICE_NAV } from './nav/office-nav'
+import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
+import { officeNavFor, OFFICE_NAV, palettePages } from './nav/office-nav'
 import type { PalettePage } from './palette/palette-model'
 
 /**
@@ -54,10 +55,17 @@ export const OWNER_PERMISSIONS = [
 /** A sales person: Home's Today and mail to sort, nothing of Admin. */
 export const SALES_PERMISSIONS = ['home.view', 'email.triage', 'threads.read', 'threads.post', 'email.send']
 
+/** A system role's permissions as W1 ships them (factory-domain auth/roles/templates): the navigation's real people. */
+export function rolePermissions(key: 'owner' | 'admin' | 'finance' | 'sales' | 'planner' | 'buyer' | 'warehouse' | 'production_manager' | 'quality_inspector' | 'floor_supervisor' | 'read_only'): string[] {
+  const template = templateOf(key)
+  if (!template) throw new Error(`no role template ${key}`)
+  return [...template.permissions]
+}
+
 /** The palette's pages for a permission list, addressed under `/w/DEMO` (labels stay message keys). */
 export function demoPages(permissions: readonly string[], company = 'DEMO'): PalettePage[] {
   const held = new Set(permissions)
-  return navPages(officeNavFor((p) => held.has(p), OFFICE_NAV)).map((page) => ({ ...page, href: `/w/${company}${page.href}` }))
+  return palettePages(officeNavFor((p) => held.has(p), OFFICE_NAV)).map((page) => ({ ...page, href: `/w/${company}${page.href}` }))
 }
 
 /** Label codes as a printer would print them. */
