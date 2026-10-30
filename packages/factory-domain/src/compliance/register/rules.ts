@@ -34,7 +34,9 @@ export type RegisterRisk = (typeof REGISTER_RISKS)[number]
  * chromium VI FAIL on a lot whose stock was issued). A person's own entry has none. The complaint (SAL-416) and the NCR
  * (W2a) join with their modules. The register guard trigger lists the same types (…_quality_lab_guards redefines it).
  */
-export const REGISTER_SOURCE_TYPES = ['QualityReleaseReversal', 'QualityRelease', 'Inspection', 'Shipment', 'LabResult'] as const
+export const REGISTER_SOURCE_TYPES = ['QualityReleaseReversal', 'QualityRelease', 'Inspection', 'Shipment', 'LabResult',
+  // B-W2a-47: a PPE nonconformance that may present a risk (the register guard accepts it since wave 6).
+  'Nonconformance'] as const
 export type RegisterSourceType = (typeof REGISTER_SOURCE_TYPES)[number]
 
 export const KIND_WORDS: Readonly<Record<RegisterKind, string>> = Object.freeze({ COMPLAINT: 'complaint', NON_CONFORMITY: 'non-conformity', RECALL: 'recall' })
