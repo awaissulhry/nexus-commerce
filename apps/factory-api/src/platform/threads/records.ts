@@ -165,6 +165,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const rma = await client.returnAuthorisation.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
     return rma ? { companyId: rma.companyId, siteId: rma.siteId, partyId: rma.partyId } : null
   },
+  // modules/sales/repairs (SCR-112 the Repair order's Activity tab; B-W2a-57): the company, the repairing site and the
+  // customer, so the repair's notes and the customer's mail about it stay with that customer.
+  RepairOrder: async (client, id) => {
+    const repair = await client.repairOrder.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
+    return repair ? { companyId: repair.companyId, siteId: repair.siteId, partyId: repair.partyId } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}
