@@ -31,6 +31,8 @@ import { PURCHASING_DEFINITIONS, PURCHASING_PERMISSIONS } from '../../purchasing
 import { PURCHASING_SOURCES_DEFINITIONS, PURCHASING_SOURCES_PERMISSIONS } from '../../purchasing/sources/permissions'
 // B-W2a-25: subcontracting (purchasing.subcontract.manage | kit | receive).
 import { PURCHASING_SUBCONTRACT_DEFINITIONS, PURCHASING_SUBCONTRACT_PERMISSIONS } from '../../purchasing/subcontracting/permissions'
+// B-W2a-44: supplier claims and returns to the supplier (purchasing.claims.manage | return).
+import { PURCHASING_CLAIMS_DEFINITIONS, PURCHASING_CLAIMS_PERMISSIONS } from '../../purchasing/claims/permissions'
 import { QUALITY_FINAL_DEFINITIONS, QUALITY_FINAL_FLOOR_PERMISSIONS, QUALITY_FINAL_PERMISSIONS } from '../../quality/final/permissions'
 import { QUALITY_LAB_DEFINITIONS, QUALITY_LAB_PERMISSIONS } from '../../quality/lab/permissions'
 // B-W2a-26: the defect library and disposition codes (quality.defects.*), quality holds (quality.holds.*).
@@ -398,6 +400,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PURCHASING_SOURCES_DEFINITIONS,
   // B-W2a-25: subcontracting (purchasing.subcontract.manage | kit | receive).
   PURCHASING_SUBCONTRACT_DEFINITIONS,
+  // B-W2a-44: supplier claims and returns to the supplier (purchasing.claims.manage | return).
+  PURCHASING_CLAIMS_DEFINITIONS,
   // B-W2a-18: the reason lists.
   REASONS_DEFINITIONS,
   // B-W2a-19: paymentterms.view | manage, pricelists.view | manage.
@@ -453,6 +457,8 @@ for (const name of PRODUCTION_COMPLETION_PERMISSIONS) {
 for (const name of PLANNING_SETTINGS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-25: subcontracting.
 for (const name of PURCHASING_SUBCONTRACT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-44: supplier claims.
+for (const name of PURCHASING_CLAIMS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-22: MRP every day.
 for (const name of [...PLANNING_FIRM_PERMISSIONS, ...PLANNING_EXCEPTIONS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-34: the planning board.

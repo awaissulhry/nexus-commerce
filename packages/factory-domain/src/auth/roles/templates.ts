@@ -262,6 +262,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'purchasing.sources.manage',
       // B-W2a-25: subcontract orders to the workshops (operations, fees, kit plan, issue, cancel, close).
       'purchasing.subcontract.manage',
+      // B-W2a-44: claims to suppliers (from discrepancies, lots or typed), sent by e-mail, answered, closed.
+      'purchasing.claims.manage',
       // B-W2a-31: what was wrong with a delivery, its report to the supplier and its answer.
       'inventory.discrepancies.manage',
       'inventory.discrepancies.report',
@@ -320,6 +322,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       // B-W2a-25: send a subcontract order's kit with its DDT, receive the goods back by bundle.
       'purchasing.subcontract.kit',
       'purchasing.subcontract.receive',
+      // B-W2a-44: claims to suppliers, and the goods of a return sent back with the return DDT (Return to supplier).
+      'purchasing.claims.manage',
+      'purchasing.claims.return',
       'workorders.view',
       'orders.view',
       'quality.lots.view',

@@ -89,6 +89,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const order = await client.subcontractOrder.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
     return order ? { companyId: order.companyId, siteId: order.siteId, partyId: order.partyId } : null
   },
+  // modules/purchasing/claims (SCR-131 the claim's Activity tab; B-W2a-44 the claim mailed to the supplier): the company,
+  // the site the goods are at and the supplier, so the claim's mail and the supplier's replies stay with that supplier.
+  SupplierClaim: async (client, id) => {
+    const claim = await client.supplierClaim.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
+    return claim ? { companyId: claim.companyId, siteId: claim.siteId, partyId: claim.partyId } : null
+  },
   // modules/sales/orders (SCR-039 Activity; B-W1-25): the selling company and the customer.
   SalesOrder: async (client, id) => {
     const order = await client.salesOrder.findUnique({ where: { id }, select: { companyId: true, partyId: true } })

@@ -1611,6 +1611,8 @@
     "purchasing_subcontract_manage": "Prepare, issue, cancel and close subcontract orders",
     "purchasing_subcontract_kit": "Send a subcontract order's kit with its DDT",
     "purchasing_subcontract_receive": "Receive goods back from a workshop",
+    "purchasing_claims_manage": "Prepare, send, answer and close supplier claims",
+    "purchasing_claims_return": "Send the goods of a return back to the supplier with the return DDT",
     "invoices_view": "See invoices and credit notes",
     "invoices_manage": "Prepare draft invoices",
     "invoices_issue": "Issue an invoice (it can never change again)",
