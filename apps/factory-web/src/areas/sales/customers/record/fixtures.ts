@@ -3,6 +3,8 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { ARCHIVED_CUSTOMER, at, CUSTOMERS, inShell, NOW, ORDERS, panels, QUOTES, RECORD_CAN, recordModel, withoutMoney } from '../../../parties/_shared/fixtures'
 import { failed, loaded, loading, type PartyRecordModel } from '../../../parties/_shared/model'
 import type { Party } from '../../../parties/_shared/api'
+import { BLANK_TERMS, editing, GROUP_TERMS, PAYMENT_TERMS, TERMS, TERMS_CAN, termsCard, termsModel } from '../_demo/fixtures'
+import type { CommercialTermsModel } from '../terms/view/CommercialTermsCard'
 import { CustomerRecordView } from './view/CustomerRecordView'
 
 /**
@@ -15,13 +17,19 @@ import { CustomerRecordView } from './view/CustomerRecordView'
 const by = (code: string): Party => [...CUSTOMERS, ARCHIVED_CUSTOMER].find((item) => item.code === code)!
 const record = (code: string, over: Partial<PartyRecordModel> = {}) => recordModel('customers', by(code), over)
 
-function CustomerDesign({ model }: { model: PartyRecordModel }) {
-  const party = model.party
+/** A case: the record, and (B-W2a-49) the Commercial terms card of its Tax & terms tab. */
+type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel }
+
+function CustomerDesign({ model }: { model: CustomerCase }) {
+  const { terms, ...record } = model
+  const party = record.party
   const id = party?.id ?? 'x'
-  return inShell(`/sales/customers/${id}`, createElement(CustomerRecordView, { model, panels: party ? panels(party) : null, documents: party ? panels(party, 'files') : null }))
+  return inShell(`/sales/customers/${id}`, createElement(CustomerRecordView, { model: record, panels: party ? panels(party) : null, documents: party ? panels(party, 'files') : null, terms: termsCard(terms ?? termsModel()) }))
 }
 
-export const designScreen = defineDesignScreen<PartyRecordModel>({
+const termsCase = (code: string, terms: CommercialTermsModel, over: Partial<PartyRecordModel> = {}): CustomerCase => ({ ...record(code, { tab: 'tax', ...over }), terms })
+
+export const designScreen = defineDesignScreen<CustomerCase>({
   screen: 'SCR-033',
   title: 'Customer record',
   view: CustomerDesign,
@@ -102,5 +110,24 @@ export const designScreen = defineDesignScreen<PartyRecordModel>({
     { id: 'error', label: "The API didn't answer", model: record('MODA-DEMO', { party: null, problem: 'problem.unavailable' }) },
     { id: 'no-access', label: 'No permission', model: record('MODA-DEMO', { can: { ...RECORD_CAN, view: false } }) },
     { id: 'shortcuts', label: 'Keyboard shortcuts (?)', model: record('MODA-DEMO', { dialog: { kind: 'shortcuts' }, asOf: NOW }) },
+    // B-W2a-49 (design customer.tax.terms, SAL-012): the customer's commercial terms below identity and VIES.
+    { id: 'terms', label: 'W2a: Commercial terms — library terms, its price list and the list it falls back to', model: termsCase('MODA-DEMO', termsModel()), note: 'Payment terms in words (deposit 30 % at once); the price list links to its record; minimum order with the price grain.' },
+    { id: 'terms-group', label: 'W2a: Commercial terms — a dealer in a discount group (read only: the group list gives it)', model: termsCase('MODA-DEMO', termsModel({ terms: GROUP_TERMS })) },
+    { id: 'terms-blank', label: 'W2a: Commercial terms — none from the library yet (the typed W1 text)', model: termsCase('NUOVO-PROVA', termsModel({ terms: BLANK_TERMS })) },
+    { id: 'terms-edit', label: 'W2a: Edit — the fields, nothing changed yet', model: termsCase('MODA-DEMO', editing(TERMS)) },
+    {
+      id: 'terms-edit-changed',
+      label: 'W2a: Edit — two changes, Save with ⌘S',
+      model: termsCase('MODA-DEMO', editing(TERMS, { paymentTermsId: PAYMENT_TERMS[1]!.id, incoterm: 'EXW' })),
+      note: 'The EditModeBar says 2 changes; the payment terms say what they mean under the field.',
+    },
+    { id: 'terms-edit-problem', label: 'W2a: Edit — a deposit that is not a percent (Save held with the reason)', model: termsCase('MODA-DEMO', editing(TERMS, { defaultDepositPct: '130' })) },
+    { id: 'terms-no-lists-manage', label: 'W2a: Edit — a role that may not give price lists (the list field held)', model: termsCase('MODA-DEMO', editing(TERMS, {}, { can: TERMS_CAN.noLists })) },
+    { id: 'terms-refused', label: 'W2a: Save refused — a price list in another currency', model: termsCase('MODA-DEMO', editing(TERMS, { currency: 'CHF' }, { saveProblem: 'terms.refused.list' })) },
+    { id: 'terms-saved', label: 'W2a: Saved', model: termsCase('MODA-DEMO', termsModel({ saved: true })) },
+    { id: 'terms-no-price', label: 'W2a: A role without selling prices (no minimum order)', model: termsCase('MODA-DEMO', termsModel({ can: TERMS_CAN.noPrice })) },
+    { id: 'terms-view-only', label: 'W2a: Finance reads, may not change', model: termsCase('MODA-DEMO', termsModel({ can: TERMS_CAN.finance, held: 'terms.held.noManage' }), { can: { ...RECORD_CAN, manage: false, block: false, vies: false } }) },
+    { id: 'terms-loading', label: 'W2a: Commercial terms loading', model: termsCase('MODA-DEMO', termsModel({ terms: null })) },
+    { id: 'terms-error', label: "W2a: Commercial terms couldn't be read", model: termsCase('MODA-DEMO', termsModel({ terms: null, problem: 'problem.read.unavailable' })) },
   ],
 })

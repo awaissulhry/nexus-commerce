@@ -61,6 +61,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   IntegrationAccount: '/admin/connections/[id]',
   // Home › My tasks (SCR-233, B-W2a-40): a task opens in its DetailModal on the list.
   Task: '/home/tasks?open=[id]',
+  // Sales › Price lists & contracts (SCR-106, B-W2a-49): a customer price list.
+  PriceList: '/sales/price-lists/[id]',
 })
 
 /**
@@ -112,6 +114,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2a-45: the schedule's board and the allocation board.
   '/planning/schedule': '/planning/board',
   '/planning/allocation': '/planning/allocation',
+  // B-W2a-49: the price lists (SCR-106) read `?rows=`, `?kind=` and `?q=`.
+  '/sales/price-lists': '/sales/price-lists',
 })
 
 export interface RecordRef {

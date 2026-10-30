@@ -1,0 +1,222 @@
+/*
+ * Sales › Price lists & contracts (SCR-106) LAYOUT: the page column, the list's head row, the record band, the Prices
+ * tab's head, the price cell, the dialogs' forms and tables. The controls are the design system's; semantic tokens only,
+ * no colours of their own. No page max-width (Owner rule 2026-10-29): the pages fill the shell's main area; wide screens
+ * put cards side by side.
+ */
+.fw-pl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pl-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-pl-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pl-title {
+  overflow-wrap: anywhere;
+}
+
+.fw-pl-title-sub {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-muted);
+}
+
+.fw-pl-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pl-chips,
+.fw-pl-actions,
+.fw-pl-row,
+.fw-pl-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-pl-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pl-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pl-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pl-stack.tight {
+  gap: var(--nds-space-6);
+}
+
+.fw-pl-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.fw-pl-link {
+  font-weight: var(--nds-font-weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-pl-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-pl-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The Prices tab's head: version picker, its days and the read-only reason beside it. */
+.fw-pl-tabhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pl-tabhead-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pl-version-field {
+  min-width: min(100%, 260px);
+}
+
+/* The price cell: the input and its save mark in one row of the grid. */
+.fw-pl-price {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.fw-pl-price-input {
+  max-width: 128px;
+  text-align: right;
+}
+
+.fw-pl-mark {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}
+
+.fw-pl-mark.failed {
+  color: var(--nds-danger);
+}
+
+/* Dialogs: one column of fields, two on wide dialogs. */
+.fw-pl-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pl-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--nds-space-12) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pl-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  max-height: 320px;
+  overflow-y: auto;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.fw-pl-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-6);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pl-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-pl-table {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* Wide screens: the cards of a tab side by side. */
+.fw-pl-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+@media (min-width: 1600px) {
+  .fw-pl-two {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}

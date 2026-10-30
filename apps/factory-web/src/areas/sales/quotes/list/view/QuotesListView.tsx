@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Ban, Download, FileText, MoreHorizontal, Plus, Search } from 'lucide-react'
+import { Ban, Copy, Download, FileText, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { Banner, EmptyState, Field, KeyValue, Menu, MetricStrip, Modal } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Pill, RadioCard, Select, Spinner, Tag, Textarea, TokenChip } from '@nexus/ui/primitives'
@@ -12,7 +12,8 @@ import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { previewHref, QUOTE_STATUSES, type QuoteListRow, type QuoteStatus } from '../../api'
-import { activeFilterCount, APPROVAL_TONE, isExpiring, money, NO_FILTERS, percent, QUOTE_TILES, STATUS_TONE, tileOfFilters } from '../../model'
+import { activeFilterCount, APPROVAL_TONE, droppedWords, isExpiring, money, NO_FILTERS, percent, QUOTE_TILES, START_FROM, STATUS_TONE, tileOfFilters, warningWords } from '../../model'
+import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
 import type { NewQuoteModel, QuotesListActions, QuotesListViewModel } from '../list-model'
 import '../../quotes.css'
 
@@ -78,6 +79,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
   const notCancellable = picked.filter((row) => !CANCELLABLE.has(row.status)).length
   const ownKeys: ListKey[] = [{ keys: ['c'], does: t('list.keyNew') }]
 
+  const live = useRef({ actions, manage: model.can.manage })
+  live.current = { actions, manage: model.can.manage }
   const columns = useMemo<ColDef<QuoteListRow>[]>(() => {
     const NumberCell = ({ data }: ICellRendererParams<QuoteListRow>) =>
       data ? (
@@ -125,6 +128,15 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
             { id: 'open', label: t('list.open'), href: recordHref(data) },
             { id: 'tab', label: t('list.openNewTab'), href: recordHref(data), target: '_blank' },
             { id: 'pdf', label: t('action.previewPdf'), icon: <FileText size={14} aria-hidden />, href: previewHref(data.id, 'it'), target: '_blank' },
+            // B-W2a-49 (SAL-155): a new draft copied from this quote, for this customer or another.
+            {
+              id: 'duplicate',
+              label: t('action.duplicate'),
+              icon: <Copy size={14} aria-hidden />,
+              disabled: !live.current.manage,
+              description: live.current.manage ? undefined : t('held.noManage'),
+              onSelect: () => live.current.actions?.onDuplicateStart?.(data),
+            },
           ]}
         />
       ) : null
@@ -304,6 +316,7 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
       {!model.grains.margin && <p className="fw-q-hint">{t('list.noMarginNote')}</p>}
 
       {model.newQuote && <NewQuoteDialog model={model.newQuote} actions={actions} />}
+      {model.duplicate && <DuplicateDialog model={model.duplicate} canManage={model.can.manage} actions={actions} />}
       {dialog === 'cancel' && <CancelManyDialog rows={picked} busy={model.busy} actions={actions} onDone={() => setSelected([])} onClose={() => setDialog(null)} />}
       {dialog === 'help' && (
         <Modal open onClose={() => setDialog(null)} title={t('list.keysTitle')} size="sm">
@@ -385,9 +398,49 @@ function NewQuoteDialog({ model, actions }: { model: NewQuoteModel; actions?: Qu
   const contacts = party?.contacts.filter((contact) => contact.status === 'ACTIVE') ?? []
   const blocked = party && party.status !== 'ACTIVE' ? t('newQuote.held.party', { status: t(`partyStatus.${party.status}`) }) : null
   const noIdentity = party && !party.taxIdentities.some((identity) => identity.current) ? t('newQuote.held.identity') : null
-  const held = !party ? t('newQuote.held.customer') : blocked ?? noIdentity ?? (model.busy ? t('held.busy') : null)
+  const startFrom = model.startFrom ?? 'blank'
+  const past = model.past ?? null
+  const chosenPast = past?.results?.find((row) => row.id === past.chosenId) ?? null
+  const pastHeld = startFrom === 'past' && !chosenPast ? t('newQuote.held.past') : null
+  const held = !party ? t('newQuote.held.customer') : (blocked ?? noIdentity ?? pastHeld ?? (model.busy ? t('held.busy') : null))
   const create = () => {
     if (!held) actions?.onCreate?.()
+  }
+  // B-W2a-49: a copy said what it left out — shown before the new quote opens.
+  const done = past?.done ?? null
+  if (done) {
+    return (
+      <Modal
+        open
+        onClose={() => actions?.onNewQuote?.(false)}
+        title={t('dup.doneTitle', { number: done.number })}
+        size="md"
+        footer={
+          <Button variant="primary" onClick={() => actions?.onPastOpen?.(done.quoteId)}>
+            {t('dup.open', { number: done.number })}
+          </Button>
+        }
+      >
+        <div className="fw-q-dialog">
+          <p className="fw-q-hint" role="status">
+            {t('dup.doneBody', { number: done.number, source: chosenPast?.number ?? '', count: done.lines })}
+          </p>
+          {done.dropped.length > 0 && (
+            <Banner tone="warning" title={t('dup.droppedTitle', { count: done.dropped.length })}>
+              <ul className="fw-q-list">
+                {done.dropped.map((item) => {
+                  const words = droppedWords(item)
+                  return <li key={`${item.seq}-${item.size ?? ''}`}>{t(words.key, words.params)}</li>
+                })}
+              </ul>
+            </Banner>
+          )}
+          {done.warnings.map((warning) => (
+            <Banner key={warning} tone="info" title={t(warningWords(warning).key)} />
+          ))}
+        </div>
+      </Modal>
+    )
   }
   return (
     <Modal
@@ -399,7 +452,7 @@ function NewQuoteDialog({ model, actions }: { model: NewQuoteModel; actions?: Qu
         <>
           <Button onClick={() => actions?.onNewQuote?.(false)}>{t('common.back')}</Button>
           <Button variant="primary" heldReason={held} onClick={create} aria-keyshortcuts="Meta+Enter Control+Enter">
-            {t('newQuote.create')}
+            {startFrom === 'past' && chosenPast ? t('newQuote.createFrom', { number: chosenPast.number }) : t('newQuote.create')}
           </Button>
         </>
       }
@@ -502,6 +555,13 @@ function NewQuoteDialog({ model, actions }: { model: NewQuoteModel; actions?: Qu
             <Field label={t('terms.customerRef')} hint={t('terms.customerRefHint')}>
               <Input value={model.customerRef} onChange={(event) => actions?.onNewField?.('customerRef', event.target.value)} maxLength={100} />
             </Field>
+            <fieldset className="fw-q-radios">
+              <legend className="fw-q-legend">{t('newQuote.startFrom')}</legend>
+              {START_FROM.map((from) => (
+                <RadioCard key={from} name="fw-q-start-from" value={from} checked={startFrom === from} selected={startFrom === from} onChange={() => actions?.onStartFrom?.(from)} title={t(`newQuote.from.${from}`)} description={t(`newQuote.fromBody.${from}`)} />
+              ))}
+            </fieldset>
+            {startFrom === 'past' && past && <PastQuotes past={past} partyId={party.id} actions={actions} />}
           </>
         )}
         <p className="fw-q-hint" role="status">
@@ -510,5 +570,64 @@ function NewQuoteDialog({ model, actions }: { model: NewQuoteModel; actions?: Qu
         {model.problem && party && <Banner tone="danger" title={t(model.problem)} />}
       </div>
     </Modal>
+  )
+}
+
+/** New quote › Start from a past quote (B-W2a-49): this customer's quotes first; a number finds any quote of the company. */
+function PastQuotes({ past, partyId, actions }: { past: NonNullable<NewQuoteModel['past']>; partyId: string; actions?: QuotesListActions }) {
+  const t = useT('sales')
+  const [query, setQuery] = useState(past.query)
+  const typed = useRef(false)
+  const search = useRef(actions?.onPastSearch)
+  search.current = actions?.onPastSearch
+  useEffect(() => {
+    if (!typed.current) return
+    const timer = setTimeout(() => search.current?.(query), 250)
+    return () => clearTimeout(timer)
+  }, [query])
+  return (
+    <>
+      <Field label={t('newQuote.pastSearch')} hint={t('newQuote.pastHint')}>
+        <Input
+          value={query}
+          type="search"
+          autoComplete="off"
+          placeholder={t('newQuote.pastPlaceholder')}
+          onChange={(event) => {
+            typed.current = true
+            setQuery(event.target.value)
+          }}
+        />
+      </Field>
+      {past.problem ? (
+        <Banner tone="danger" title={t(past.problem)} />
+      ) : (
+        <fieldset className="fw-q-choices">
+          <legend className="fw-q-legend" aria-live="polite">
+            {past.results === null ? t('newQuote.searching') : past.results.length === 0 ? t('newQuote.pastNone') : t('newQuote.pastFound', { count: past.results.length })}
+          </legend>
+          {past.results === null && <Spinner size={14} />}
+          {(past.results ?? []).map((row) => (
+            <RadioCard
+              key={row.id}
+              variant="row"
+              name="fw-q-past"
+              value={row.id}
+              checked={past.chosenId === row.id}
+              selected={past.chosenId === row.id}
+              onChange={() => actions?.onPastPick?.(row.id)}
+              title={`${row.number} · ${row.partyName}`}
+              description={
+                <span className="fw-q-tags">
+                  <span className="fw-q-hint">{t('newQuote.pastLine', { revision: row.revision, lines: row.lineCount, units: row.units })}</span>
+                  <Tag tone={STATUS_TONE[row.status]}>{t(`status.${row.status}`)}</Tag>
+                  {row.partyId !== partyId && <Tag tone="info">{t('newQuote.pastOther')}</Tag>}
+                </span>
+              }
+            />
+          ))}
+        </fieldset>
+      )}
+    </>
   )
 }

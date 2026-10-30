@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../lib/api/errors'
 import { companyPrefix } from '../../../lib/session/session'
@@ -65,15 +65,18 @@ import { PartyRecordView } from './view/PartyRecordView'
  * says someone else changed it. The live stream reads the record again on its party's events; while a dialog or the
  * supplier's form holds unsaved work, a banner offers the reload instead (our edits are kept).
  */
-export function PartyRecord({ side, partyId }: { side: Side; partyId: string }) {
+/** A side's own Tax & terms card (Customers: Commercial terms, B-W2a-49): drawn with the party read, and how to read it again. */
+export type TermsSlot = (party: Party, reload: () => void) => ReactNode
+
+export function PartyRecord({ side, partyId, terms }: { side: Side; partyId: string; terms?: TermsSlot }) {
   return (
     <WithMessages namespaces={['parties']}>
-      <PartyRecordContainer side={side} partyId={partyId} />
+      <PartyRecordContainer side={side} partyId={partyId} terms={terms} />
     </WithMessages>
   )
 }
 
-function PartyRecordContainer({ side, partyId }: { side: Side; partyId: string }) {
+function PartyRecordContainer({ side, partyId, terms }: { side: Side; partyId: string; terms?: TermsSlot }) {
   const config = SIDES[side]
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -330,6 +333,7 @@ function PartyRecordContainer({ side, partyId }: { side: Side; partyId: string }
       }}
       panels={panels}
       documents={documents}
+      terms={party && terms ? terms(party, () => void load()) : null}
       actions={{
         onRetry: () => {
           setProblem(null)

@@ -26,7 +26,9 @@
       "main": "Principali",
       "customers": "Clienti",
       "quotes": "Preventivi",
-      "orders": "Ordini"
+      "orders": "Ordini",
+      "pricing": "Prezzi",
+      "pricelists": "Listini e contratti"
     },
     "purchasing": {
       "area": "Acquisti",
