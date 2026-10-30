@@ -44,6 +44,8 @@ import { alertsEvaluateCron, alertsRecheckHandler } from './platform/alerts/engi
 import { timersFireCron } from './platform/timers/fire'
 // B-W2a-38: the daily production report e-mailed to the people subscribed.
 import { dailyReportCron } from './modules/production/reports/mail'
+// B-W2a-52: the daily purchase order confirmation reminders (sends nothing while a company's switch is off: the default).
+import { confirmationRemindersCron } from './modules/purchasing/reminders/daily'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -147,6 +149,8 @@ if (mode === 'worker') {
   crons.push(alertsEvaluateCron({ database, log }), timersFireCron({ database, log }))
   // B-W2a-38: the daily production report, to the people subscribed (quiet default: none).
   crons.push(dailyReportCron({ database, log }))
+  // B-W2a-52: confirmation reminders to suppliers, only for a company that switched them on (none until a setting exists).
+  crons.push(confirmationRemindersCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

@@ -63,6 +63,8 @@ export const ORDER_COLUMNS = {
   netAmount: true,
   sentAt: true,
   sentById: true,
+  // B-W2a-52: the supplier's confirm-by deadline (SCM-087).
+  confirmBy: true,
   confirmedAt: true,
   confirmedVia: true,
   confirmLinkId: true,
@@ -106,6 +108,13 @@ export const LINE_COLUMNS = {
   note: true,
   confirmedQuantity: true,
   confirmedDate: true,
+  // B-W2a-52: a line cancelled or closed short (SCM-059, SCM-060) changes no more and takes no goods.
+  cancelledAt: true,
+  cancelledById: true,
+  cancelReason: true,
+  closedShortAt: true,
+  closedShortById: true,
+  closeShortReason: true,
   version: true,
 } as const satisfies Prisma.PurchaseOrderLineSelect
 export type LineRow = Prisma.PurchaseOrderLineGetPayload<{ select: typeof LINE_COLUMNS }>

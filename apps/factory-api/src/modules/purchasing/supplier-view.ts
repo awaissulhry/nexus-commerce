@@ -63,6 +63,9 @@ export const SUPPLIER_LINE_COLUMNS = {
   note: true,
   confirmedQuantity: true,
   confirmedDate: true,
+  // B-W2a-52: a line cancelled or closed short (the partner role reads when, never who or why).
+  cancelledAt: true,
+  closedShortAt: true,
   version: true,
 } as const satisfies Prisma.PurchaseOrderLineSelect
 
@@ -124,6 +127,7 @@ export async function supplierView(db: Reader, orderId: string, labels: Reader =
         note: line.note,
         confirmedQuantity: line.confirmedQuantity === null ? null : quantityText(line.confirmedQuantity),
         confirmedDate: dayOf(line.confirmedDate),
+        ended: line.cancelledAt ? ('CANCELLED' as const) : line.closedShortAt ? ('CLOSED_SHORT' as const) : null,
         version: line.version,
       }
     }),

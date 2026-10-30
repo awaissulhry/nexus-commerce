@@ -67,9 +67,12 @@ export const PROPOSAL_ORDER_COLUMNS = {
   proposalDecisionNote: true,
 } as const
 
-/** The lines with their proposals, as factory-domain purchasing/confirm/proposal reads them. */
+/**
+ * The lines with their proposals, as factory-domain purchasing/confirm/proposal reads them. B-W2a-52: the open lines only
+ * (a cancelled or closed-short line holds no proposal: the supplier answers the open ones).
+ */
 export async function proposalLinesOf(db: Pick<CommandTx, 'purchaseOrderLine'>, orderId: string): Promise<StoredProposalLine[]> {
-  const rows = await db.purchaseOrderLine.findMany({ where: { purchaseOrderId: orderId }, orderBy: { seq: 'asc' }, select: PROPOSAL_LINE_COLUMNS })
+  const rows = await db.purchaseOrderLine.findMany({ where: { purchaseOrderId: orderId, cancelledAt: null, closedShortAt: null }, orderBy: { seq: 'asc' }, select: PROPOSAL_LINE_COLUMNS })
   return rows.map((row) => ({
     id: row.id,
     seq: row.seq,

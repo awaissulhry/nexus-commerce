@@ -1,4 +1,6 @@
-import type { FactoryClient } from '@nexus/factory-db'
+import type { FactoryClient, Prisma } from '@nexus/factory-db'
+import { arrivalDate, leadTimeWindow } from '@nexus/factory-domain/calendars/suppliers'
+import type { WorkingCalendar } from '@nexus/factory-domain/calendars/working-time'
 import type { Issue } from '@nexus/factory-domain/core/errors'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { legalProblems } from '@nexus/factory-domain/documents/legal'
@@ -7,6 +9,7 @@ import { supplyRulesFor } from '@nexus/factory-domain/planning/buy'
 import { purchaseOrderDocumentNumber } from '@nexus/factory-domain/purchasing/document'
 import { purchaseQuantityOf, sendChecks, type PurchaseOrderStatus, type SendCheck } from '@nexus/factory-domain/purchasing/orders'
 import type { RequestContext } from '../../core/context'
+import { supplierCalendarsFor } from '../../platform/calendars/service'
 import { companyLegalOf } from '../../platform/documents/documents'
 import { confirmLinksOf } from './confirm-links'
 import {
@@ -45,7 +48,17 @@ export interface OrderFacts {
   readonly contact: ContactRow | null
   readonly site: SiteRow
   readonly plan: Map<string, { readonly requirementId: string; readonly runId: string; readonly runStatus: string; readonly decision: string }[]>
+  /**
+   * B-W2a-52: the supplier's calendar from `today` on (its closed days: the lead time and the confirm-by deadline do not
+   * count them); undefined when read without a day, null when the supplier has none.
+   */
+  readonly supplierCalendar?: WorkingCalendar | null | undefined
+  readonly today?: string | undefined
 }
+
+/** B-W2a-52: a line cancelled or closed short takes no goods and is no part of what is sent. */
+export const isOpenLine = (line: Pick<LineRow, 'cancelledAt' | 'closedShortAt'>): boolean => line.cancelledAt === null && line.closedShortAt === null
+export const isCancelledLine = (line: Pick<LineRow, 'cancelledAt'>): boolean => line.cancelledAt !== null
 
 /** The site's delivery address as printed, when it has one. */
 export function siteAddressOf(site: Pick<SiteRow, 'address' | 'name'>): { name: string; line1: string; line2: string | null; postalCode: string; city: string; province: string | null; country: string } | null {
@@ -59,8 +72,11 @@ export function siteAddressOf(site: Pick<SiteRow, 'address' | 'name'>): { name: 
   return { name: site.name, line1, line2: text('line2'), postalCode, city, province: text('province'), country }
 }
 
-/** Everything the record and the send read, in one scope. */
-export async function readFacts(db: Reader, order: OrderRow): Promise<OrderFacts> {
+/**
+ * Everything the record and the send read, in one scope. With `today` (B-W2a-52), also the supplier's calendar over the
+ * window the longest lead time of the lines (and the confirm-by deadline) walks.
+ */
+export async function readFacts(db: Reader, order: OrderRow, today?: string): Promise<OrderFacts> {
   const lines = await readLines(db, order.id)
   const itemIds = [...new Set(lines.map((line) => line.itemId))]
   const colourIds = [...new Set(lines.flatMap((line) => (line.itemColourId ? [line.itemColourId] : [])))]
@@ -82,7 +98,12 @@ export async function readFacts(db: Reader, order: OrderRow): Promise<OrderFacts
     const entry = { requirementId: row.id, runId: row.runId, runStatus: row.run.status, decision: row.decision }
     plan.set(row.purchaseOrderLineId!, [...(plan.get(row.purchaseOrderLineId!) ?? []), entry])
   }
-  return { order, lines, items: new Map(items.map((item) => [item.id, item])), colours: new Map(colours.map((colour) => [colour.id, colour])), party, contact, site, plan }
+  let supplierCalendar: WorkingCalendar | null | undefined
+  if (today !== undefined) {
+    const longest = Math.max(2, party.leadTimeDays ?? 0, ...items.map((item) => item.leadTimeDays ?? 0))
+    supplierCalendar = (await supplierCalendarsFor(db as Prisma.TransactionClient, [party.id], leadTimeWindow(today, Math.min(longest, 400), 'forward'))).get(party.id)?.calendar ?? null
+  }
+  return { order, lines, items: new Map(items.map((item) => [item.id, item])), colours: new Map(colours.map((colour) => [colour.id, colour])), party, contact, site, plan, supplierCalendar, today }
 }
 
 /** The company's letterhead problems, read in this scope (a command's transaction or a client). */
@@ -102,7 +123,8 @@ export function checksOf(facts: OrderFacts, today: string, companyLegal: readonl
     companyLegal,
     deliveryAddress: siteAddressOf(facts.site) !== null,
     requestedDate: dayOf(order.requestedDate),
-    lines: facts.lines.map((line) => {
+    // B-W2a-52: a cancelled line is not sent (nor checked); the lead time walks around the supplier's closed days.
+    lines: facts.lines.filter((line) => !isCancelledLine(line)).map((line) => {
       const item = facts.items.get(line.itemId)!
       const units = unitsOf(item)
       const rules = supplyRulesFor(
@@ -119,6 +141,7 @@ export function checksOf(facts: OrderFacts, today: string, companyLegal: readonl
         minOrderQuantity: rules.minOrderQuantity,
         orderMultiple: rules.orderMultiple,
         leadTimeDays: rules.leadTimeDays,
+        earliestArrival: facts.supplierCalendar !== undefined && rules.leadTimeDays !== null ? arrivalDate(facts.supplierCalendar, today, rules.leadTimeDays).date : null,
       }
     }),
   })
@@ -157,15 +180,24 @@ function lineView(facts: OrderFacts, line: LineRow, received: ReadonlyMap<string
     /** What every posted goods receipt brought against this line, in the material's base unit (reversed ones count no more). */
     receivedBaseQuantity: received.get(line.id) ?? '0.0000',
     plan: facts.plan.get(line.id) ?? [],
+    /** B-W2a-52: cancelled (nothing more of it is wanted) or closed short (the rest will not come), when, by whom, why. */
+    ended: lineEndOf(line),
     version: line.version,
   }
+}
+
+/** B-W2a-52: how a line ended, or null while it is open. */
+export function lineEndOf(line: Pick<LineRow, 'cancelledAt' | 'cancelledById' | 'cancelReason' | 'closedShortAt' | 'closedShortById' | 'closeShortReason'>) {
+  if (line.cancelledAt) return { kind: 'CANCELLED' as const, at: toUtcIso(line.cancelledAt), byId: line.cancelledById, reason: line.cancelReason }
+  if (line.closedShortAt) return { kind: 'CLOSED_SHORT' as const, at: toUtcIso(line.closedShortAt), byId: line.closedShortById, reason: line.closeShortReason }
+  return null
 }
 
 export type LineView = ReturnType<typeof lineView>
 
 /** The record (the answer of every read and write route). */
 export async function orderDetail(db: Reader, context: RequestContext, order: OrderRow, now: Date) {
-  const facts = await readFacts(db, order)
+  const facts = await readFacts(db, order, order.status === 'DRAFT' ? businessDate(now) : undefined)
   const { party, contact, site } = facts
   const needDates = facts.lines.map((line) => dayOf(line.needDate)!).sort()
   const send = order.status === 'DRAFT' ? checksOf(facts, businessDate(now), await letterheadProblems(db, context, order.companyId)) : null
@@ -195,10 +227,14 @@ export async function orderDetail(db: Reader, context: RequestContext, order: Or
     note: order.note,
     internalNote: order.internalNote,
     netAmount: asMoney('cost', order.netAmount),
+    /** B-W2a-52: the lines not cancelled (a sent order's netAmount stays as sent). */
+    openNetAmount: asMoney('cost', facts.lines.filter((line) => !isCancelledLine(line)).reduce((sum, line) => sum + line.netAmount, 0)),
     lineCount: facts.lines.length,
     earliestNeedDate: needDates[0] ?? null,
     sentAt: order.sentAt === null ? null : toUtcIso(order.sentAt),
     sentById: order.sentById,
+    /** B-W2a-52 (SCM-087): when the supplier is asked to answer by. */
+    confirmBy: order.confirmBy === null ? null : toUtcIso(order.confirmBy),
     confirmedAt: order.confirmedAt === null ? null : toUtcIso(order.confirmedAt),
     confirmedVia: order.confirmedVia,
     confirmedByName: order.confirmedByName,

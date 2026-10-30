@@ -2,9 +2,12 @@ import type { FastifyRequest } from 'fastify'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { evidenceNeeds } from '@nexus/factory-domain/links/evidence'
 import { answerProblem, DECLINE_REASONS, LINE_ANSWERS, type AskedLine } from '@nexus/factory-domain/purchasing/confirm/answer'
+import { supplierLanguageOf } from '@nexus/factory-domain/purchasing/orders'
+import { changeWords, revisionDiff, type RevisionState } from '@nexus/factory-domain/purchasing/revisions/revisions'
 import type { CommandTx } from '../../../core/command'
 import { systemCallerOf } from '../../../platform/files/files'
 import { linkSessionOf, linkUnavailable, type LinkSession } from '../../../platform/links/authenticator'
+import { labelsFor } from '../revisions/read'
 import { dayOf, quantityText } from '../store'
 import { SUPPLIER_LINE_COLUMNS, SUPPLIER_ORDER_COLUMNS, supplierView } from '../supplier-view'
 import { siteAddressOf } from '../views'
@@ -34,7 +37,8 @@ export async function answerFacts(tx: CommandTx, orderId: string) {
   const order = await tx.purchaseOrder.findUnique({ where: { id: orderId }, select: { ...SUPPLIER_ORDER_COLUMNS, companyId: true, siteId: true } })
   if (!order) throw linkUnavailable()
   const lines = await tx.purchaseOrderLine.findMany({ where: { purchaseOrderId: order.id }, orderBy: { seq: 'asc' }, select: SUPPLIER_LINE_COLUMNS })
-  const asked: AskedLine[] = lines.map((line) => ({ id: line.id, seq: line.seq, quantity: quantityText(line.quantity), uom: line.uom, needDate: dayOf(line.needDate)! }))
+  // B-W2a-52: a cancelled line is not answered (planAnswer takes every line once: the open ones).
+  const asked: AskedLine[] = lines.filter((line) => line.cancelledAt === null && line.closedShortAt === null).map((line) => ({ id: line.id, seq: line.seq, quantity: quantityText(line.quantity), uom: line.uom, needDate: dayOf(line.needDate)! }))
   return { order, lines, asked }
 }
 
@@ -59,7 +63,17 @@ export async function linkView(request: FastifyRequest) {
       const view = await supplierView(own, seen.id, tenant)
       const company = await tenant.company.findUnique({ where: { id: seen.companyId }, select: { legalName: true, tradeName: true } })
       const site = await tenant.site.findUnique({ where: { id: seen.siteId }, select: { name: true, address: true } })
-      return { view, company, site }
+      // B-W2a-52: a later revision says what changed (its row, read in the link's own scope: no price, no who).
+      const row = view.order.revision > 1 ? await own.purchaseOrderRevision.findFirst({ where: { purchaseOrderId: seen.id, revision: view.order.revision }, select: { revision: true, sentAt: true, before: true, after: true, changeNote: true } }) : null
+      let revision = null
+      if (row) {
+        const party = await tenant.party.findUnique({ where: { id: link.partyId }, select: { language: true } })
+        const before = row.before as unknown as RevisionState | null
+        const after = row.after as unknown as RevisionState
+        const diff = revisionDiff(before, after)
+        revision = { revision: row.revision, sentAt: toUtcIso(row.sentAt), changeNote: row.changeNote, changes: changeWords(diff, supplierLanguageOf(null, party?.language ?? 'it'), await labelsFor(tenant, [before, after])) }
+      }
+      return { view, company, site, revision }
     }),
   )
   const { view } = read
@@ -77,5 +91,6 @@ export async function linkView(request: FastifyRequest) {
     declineReasons: [...DECLINE_REASONS],
     document: PDF_WORDS,
     expiresAt: toUtcIso(link.expiresAt),
+    revision: read.revision,
   }
 }

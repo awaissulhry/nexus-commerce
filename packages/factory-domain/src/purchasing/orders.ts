@@ -214,6 +214,11 @@ export interface SendLineFacts {
   readonly minOrderQuantity: string | null
   readonly orderMultiple: string | null
   readonly leadTimeDays: number | null
+  /**
+   * B-W2a-52: the earliest arrival with the supplier's closed days not counted (calendars/suppliers arrivalDate over its
+   * calendar, from today); none: today plus the lead time in calendar days.
+   */
+  readonly earliestArrival?: BusinessDate | null | undefined
 }
 
 export interface SendFacts {
@@ -270,7 +275,7 @@ export function sendChecks(facts: SendFacts): { readonly ready: boolean; readonl
       }
     }
     if (line.leadTimeDays !== null && line.needDate >= facts.today) {
-      const earliest = addDays(facts.today, line.leadTimeDays)
+      const earliest = line.earliestArrival ?? addDays(facts.today, line.leadTimeDays)
       if (earliest > line.needDate) warn('LATE_FOR_LEAD_TIME', `${path}/needDate`, `Line ${line.seq} (${line.itemCode}) is needed on ${line.needDate}; with ${line.leadTimeDays} days' lead time it arrives on ${earliest} at the earliest.`)
     }
   }

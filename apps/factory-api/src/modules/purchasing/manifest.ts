@@ -32,6 +32,22 @@ export const manifest = defineManifest({
   'GET /purchasing/orders/:purchaseOrderId/answer': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
   'POST /purchasing/orders/:purchaseOrderId/proposal/accept': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
   'POST /purchasing/orders/:purchaseOrderId/proposal/refuse': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
+  // B-W2a-52: changes after the send (a revision, a counter-proposal, cancel or close short lines and what they reach), the
+  // confirm-by deadline and reminders, the expected deliveries, Send n. A change the supplier is told of also needs
+  // purchasing.send (checked in the handler).
+  'POST /purchasing/orders/:purchaseOrderId/proposal/counter': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/change': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
+  'GET /purchasing/orders/:purchaseOrderId/revisions': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/lines/cancel': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/lines/close-short': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'GET /purchasing/orders/:purchaseOrderId/reach': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/confirm-by': { audiences: ['office'], permission: 'purchasing.manage', scope: 'record' },
+  'POST /purchasing/orders/:purchaseOrderId/remind': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
+  'GET /purchasing/orders/:purchaseOrderId/reminders': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/reminders/due': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'GET /purchasing/expected': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/orders/send-checks': { audiences: ['office'], permission: 'purchasing.view', scope: 'record' },
+  'POST /purchasing/orders/send-many': { audiences: ['office'], permission: 'purchasing.send', scope: 'record' },
   'GET /link/purchase-order': { audiences: ['link'], permission: 'links.open', scope: 'record' },
   'POST /link/purchase-order/confirm': { audiences: ['link'], permission: 'links.confirm', scope: 'record' },
   'POST /link/purchase-order/decline': { audiences: ['link'], permission: 'links.decline', scope: 'record' },
