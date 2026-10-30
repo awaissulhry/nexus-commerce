@@ -26,6 +26,22 @@ export function deviceTileMatch(tile: DeviceTile, device: Device, now: number): 
   return device.status === 'REVOKED'
 }
 
+// ---- the tablet's own state (B-W2a-42; PLT-241; design admin.devices "App version (outdated marked)", "Battery") ----
+
+/** Below this the battery is marked low. */
+export const BATTERY_LOW_PERCENT = 20
+
+/** The battery as the tablet last said it; null when it never said (a browser that does not tell, or not reported yet). */
+export function batteryOf(device: Device): { percent: number; charging: boolean | null; low: boolean } | null {
+  if (device.batteryPercent === null || device.batteryPercent === undefined) return null
+  return { percent: device.batteryPercent, charging: device.batteryCharging ?? null, low: device.batteryPercent < BATTERY_LOW_PERCENT && device.batteryCharging !== true }
+}
+
+/** An enrolled device whose floor app is not the version the server serves now (it updates once its queue is empty). */
+export function isOutdated(device: Device, current: string | null | undefined): boolean {
+  return device.status === 'ACTIVE' && Boolean(current) && device.appVersion !== null && device.appVersion !== current
+}
+
 export interface SiteChoice {
   id: string
   name: string
@@ -66,6 +82,8 @@ export interface DevicesViewModel {
   asOf: string | null
   /** "Now" for "seen in the last hour" (a fixture fixes it). */
   now: string
+  /** The floor app version the server serves now (B-W2a-42): a tablet that reports another is outdated. */
+  currentVersion?: string | null
   can: DevicesAbilities
   enrol?: EnrolModel | null
   printer?: PrinterDialog | null
@@ -206,6 +224,8 @@ export interface DeviceRecordModel {
   dialogProblem?: string | null
   notice?: Notice | null
   now: string
+  /** The floor app version the server serves now (B-W2a-42). */
+  currentVersion?: string | null
   dockOpen?: boolean
   /** A binding draft (fixture). */
   draft?: { name: string; stationId: string } | null

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
-import { FILE_AUDIENCES, FILE_KINDS, FILE_STATUSES, QUARANTINE_REASONS, RECORD_TYPE } from './rules'
+import { FILE_AUDIENCES, FILE_KINDS, FILE_SCAN_STATUSES, FILE_STATUSES, QUARANTINE_REASONS, RECORD_TYPE } from './rules'
 
 /**
  * The files routes' contracts (plan A1 §3.6). A file is never sent through the API: an upload is announced (POST
@@ -26,6 +26,11 @@ export const fileView = output({
   retainUntil: instant().nullable(),
   legalHold: z.boolean().optional(),
   quarantineReason: z.enum(QUARANTINE_REASONS).nullable(),
+  /** The virus scan (B-W2a-42): NOT_SCANNED without a scanner; the office also sees the scanner and what it found. */
+  scanStatus: z.enum(FILE_SCAN_STATUSES),
+  scannedAt: instant().nullable(),
+  scanEngine: z.string().nullable().optional(),
+  scanFinding: z.string().nullable().optional(),
   availableAt: instant().nullable(),
   deletedAt: instant().nullable(),
   version: z.number().int(),

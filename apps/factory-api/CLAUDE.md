@@ -184,6 +184,11 @@ Modules: `modules/compliance/certificates` (certificate register and gate `certi
 - Legal: a worker is a name, language, optional employee number, site, status, badge and PIN hash (GDPR art. 5(1)(c));
   no biometric, photo, birth date or national id (MES-276); no productivity figure, and the registry shows "in use",
   never who (Statuto dei Lavoratori art. 4). The PG tests that prove it name these articles.
+- The tablet's own state (B-W2a-42; PLT-241): `POST /floor/device/state` (public: the device token + CSRF, signed
+  in or not; per-device rate limit) {appVersion, batteryPercent|null, batteryCharging|null, queuedActions}: bookkeeping
+  like `lastSeenAt` (no audit row, no version bump: an office edit never conflicts); a NEW appVersion is one floor command
+  `floor.deviceAppUpdated` (the device as the actor, before → after) for the Activity tab's "app updated". The office's
+  device view carries batteryPercent, batteryCharging, queuedActions, statusReportedAt (a count, never whose).
 
 ## One-off links (`src/platform/links/`, plan A1 §3.10 "Links", §2.2; features SAL-099, PLT-007, PLT-035)
 - A link opens ONE record of ONE party for ONE purpose (factory-domain `links/purposes`: QUOTE_ACCEPT, PO_CONFIRM,
@@ -255,6 +260,21 @@ Modules: `modules/compliance/certificates` (certificate register and gate `certi
   files.upload, files.delete, files.manage (sharing beyond the office, also at upload; retention; legal hold). Every
   office template has files.read; the roles that work on records also files.upload; admin (and owner) files.manage and
   files.delete. Floor, portal and link sessions see files through their audience rule above, never an office template.
+- Virus scan on uploads (B-W2a-42; PLT-245; `platform/files/scan/`, `adapters/clamav/`): `FACTORY_VIRUS_SCAN` off
+  (default: confirmed uploads AVAILABLE unscanned, NOT_SCANNED) | fake (local/test: EICAR infected) | clamav (clamd INSTREAM
+  over `node:net`, `FACTORY_CLAMAV_HOST`/`_PORT`/`_TIMEOUT_MS`; platform infrastructure, no IntegrationCall row; live use
+  needs the Owner's spend yes). With a scanner, `completeUpload` holds a matching upload QUARANTINED `scan_pending` (scan
+  PENDING), then scans it inline (`scan.ts scanFile`: files.read → scanner → ONE command files.recordScan): CLEAN →
+  AVAILABLE + `file.available`; INFECTED → `virus_found` + the signature (never served; the trigger refuses AVAILABLE);
+  FAILED → `scan_failed`; the scanner or the store not answering changes nothing (held, words on the file). Confirming a
+  held file again is "Try again" (FAILED → PENDING via files.rescan). Clustered cron `files.scanPending` (5 min) scans
+  what is still PENDING after a minute. Modules that act on `status === 'AVAILABLE'` after completeUpload keep working:
+  a clean file comes back AVAILABLE from the same call. Tests: `useScanner(fakeScanner())` (`scan/fake.ts`).
+- Error tracking (B-W2a-42; PLT-218; `src/observability/`): `reportError(error, context)` from the 500 handler
+  (core/errors.ts), a job's last failed attempt (outbox/dispatch.ts) and a failed cron tick (core/cron.ts). Every report is
+  factory-domain `observability/report` (allow-listed context, scrubbed text: no person, secret or money). Sinks:
+  `FACTORY_ERROR_TRACKING` fake (local/test default: memory) | off (staging/production until a live EU service and the
+  GDPR art. 28 agreement; fake is refused there). Tests: `useErrorTracker(createErrorTracker({ sink: memorySink() … }))`.
 
 ## Record threads and the timeline (`src/platform/threads/`, plan A1 §2.3, §3.7; COL-001, COL-002, COL-003)
 - `Thread` (threads.prisma): ONE per record (`recordType` + `recordId`, unique per tenant), made with its first message

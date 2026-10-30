@@ -11,7 +11,7 @@ import type { Device } from '../../shared/api'
 import { adminHref, STATUS_TONE } from '../../shared/model'
 import { AdminMessages, dash, NoticeBanner, RecordProblem } from '../../shared/view/parts'
 import { RecordFrame } from '../../shared/view/RecordFrame'
-import { deviceTileMatch, type DeviceRecordModel, type DeviceTab } from '../model'
+import { batteryOf, deviceTileMatch, isOutdated, type DeviceRecordModel, type DeviceTab } from '../model'
 import { EnrolWizard, RevokeConfirm } from './DeviceDialogs'
 
 export type { DeviceRecordModel } from '../model'
@@ -184,16 +184,33 @@ function StatusTab({ model, actions }: { model: DeviceRecordModel; actions?: Dev
   const device = model.device!
   const now = new Date(model.now).getTime()
   const silent = deviceTileMatch('notSeen', device, now)
+  // B-W2a-42: what the tablet last said of itself (app version against the server's, battery, actions waiting).
+  const battery = batteryOf(device)
+  const outdated = isOutdated(device, model.currentVersion)
+  const reported = device.statusReportedAt ? t('device.health.reportedAt', { at: formatDateTime(device.statusReportedAt, { locale }) }) : undefined
   return (
     <div className="fw-adm-stack">
       <Card header={t('device.health.title')} headingLevel={2} padded>
         {silent && device.lastSeenAt && <Banner tone="warning" title={t('device.health.silent', { at: formatDateTime(device.lastSeenAt, { locale }) })} />}
+        {outdated && <Banner tone="info" title={t('device.health.outdated', { version: model.currentVersion ?? '' })} />}
         <KeyValue
           columns={2}
           labelCase="sentence"
           items={[
             { label: t('devices.col.lastSeen'), value: device.lastSeenAt ? formatDateTime(device.lastSeenAt, { locale }) : '—' },
-            { label: t('devices.col.version'), value: dash(device.appVersion) },
+            { label: t('devices.col.version'), value: dash(device.appVersion), ...(outdated ? { hint: t('devices.outdatedTag') } : {}) },
+            {
+              label: t('devices.col.battery'),
+              value: battery
+                ? [t('devices.battery.percent', { percent: battery.percent }), battery.charging ? t('devices.battery.charging') : null, battery.low ? t('devices.battery.lowTag') : null].filter(Boolean).join(' · ')
+                : t(device.statusReportedAt ? 'devices.battery.unknown' : 'device.health.notReported'),
+              ...(reported ? { hint: reported } : {}),
+            },
+            {
+              label: t('device.health.queued'),
+              value: device.queuedActions === null || device.queuedActions === undefined ? t('device.health.notReported') : t('device.health.queuedValue', { count: device.queuedActions }),
+              ...(reported ? { hint: reported } : {}),
+            },
             { label: t('device.health.enrolled'), value: device.enrolledAt ? formatDateTime(device.enrolledAt, { locale }) : '—' },
             { label: t('device.health.inUse'), value: t(device.inUse ? 'device.health.inUseYes' : 'device.health.inUseNo'), hint: t('device.health.neverWho') },
             ...(device.revokedAt ? [{ label: t('device.health.revoked'), value: formatDateTime(device.revokedAt, { locale }) }] : []),

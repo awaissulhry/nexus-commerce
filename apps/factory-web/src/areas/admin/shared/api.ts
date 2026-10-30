@@ -265,6 +265,11 @@ export const deviceSchema = z.object({
   enrolledAt: z.string().nullable(),
   lastSeenAt: z.string().nullable(),
   appVersion: z.string().nullable(),
+  // B-W2a-42: what the tablet last said of itself (battery, charging, actions waiting to sync, when).
+  batteryPercent: z.number().nullable().optional(),
+  batteryCharging: z.boolean().nullable().optional(),
+  queuedActions: z.number().nullable().optional(),
+  statusReportedAt: z.string().nullable().optional(),
   revokedAt: z.string().nullable(),
   inUse: z.boolean(),
   version: z.number(),

@@ -11,6 +11,7 @@ import { STEP_UP_VALID_MS, SESSION_LIFETIME } from '../../auth/sessions/session-
 import type { OfficeAuth } from '../../auth/sessions/office-auth'
 import type { StatusLine } from './contract'
 import { drillsOf } from './drills'
+import { scanningOn } from '../../files/scan/service'
 
 /**
  * `GET /admin/security` (B-W2a-36; SCR-166; design admin.security): the page in one read, every line a fact the API can
@@ -24,7 +25,8 @@ import { drillsOf } from './drills'
  *   backups     the drill's state and the last drills (the page's "Record a restore drill" with security.drills.record)
  *   protection  facts of the code and the providers: in transit (HSTS on every answer), at rest (the providers'),
  *               secrets sealed per field (how many), bank details (step-up and walls, not sealed per field), web
- *               security headers, virus scan on uploads (not yet: B-W2a-42 with the Owner's yes)
+ *               security headers, virus scan on uploads (on when a scanner is configured: B-W2a-42; live ClamAV
+ *               needs the Owner's spend yes)
  */
 
 const JOBS_LATE_MS = 5 * 60_000
@@ -115,7 +117,7 @@ export async function securityPage(auth: OfficeAuth, request: FastifyRequest) {
         { fact: 'secrets' as const, state: 'on' as const, count: sealed },
         { fact: 'bank' as const, state: 'partly' as const, count: null },
         { fact: 'headers' as const, state: 'on' as const, count: null },
-        { fact: 'virusScan' as const, state: 'off' as const, count: quarantined },
+        { fact: 'virusScan' as const, state: scanningOn() ? ('on' as const) : ('off' as const), count: quarantined },
       ],
     }
   })
