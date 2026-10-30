@@ -1,0 +1,615 @@
+{
+  "band": {
+    "label": "Stato e azioni dell'esportazione contabile",
+    "locks": "Blocco dei periodi:",
+    "lockPillLabel": "{month}: {state}. Apri il suo blocco",
+    "reading": "Lettura in corso…",
+    "new": "Nuova esportazione",
+    "toHistory": "Torna alle esportazioni",
+    "more": "Altre azioni",
+    "lockPeriod": "Blocca un periodo…",
+    "mapping": "Piano dei conti",
+    "mappingHeld": "Arriva con W2b, nelle impostazioni amministrazione.",
+    "readAt": "Letto alle {time}"
+  },
+  "layout": {
+    "long": "File nel formato predefinito di Nexus: il software del commercialista e il suo tracciato di importazione sono da confermare con il commercialista. Nulla viene inviato al commercialista né ad alcuna autorità: una persona consegna i file.",
+    "short": "Formato Nexus (da confermare)"
+  },
+  "notice": {
+    "cancelled": "La bozza di esportazione di {month} è annullata."
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In tempo reale",
+    "offline": "Offline: si rilegge al ritorno",
+    "fixed_one": "{count} controllo risolto da quando hai aperto",
+    "fixed_other": "{count} controlli risolti da quando hai aperto",
+    "changed": "Il mese è cambiato da quando hai aperto",
+    "checkAgain": "Controlla di nuovo"
+  },
+  "noAccess": {
+    "title": "Non puoi vedere le esportazioni contabili",
+    "body": "Serve il permesso di contabilità (accounting.view). Chiedi a un amministratore."
+  },
+  "common": {
+    "retry": "Riprova",
+    "loading": "Caricamento…",
+    "working": "In corso…",
+    "close": "Chiudi",
+    "done": "Fatto",
+    "dismiss": "Chiudi"
+  },
+  "keys": {
+    "new": "Nuova esportazione",
+    "title": "Scorciatoie da tastiera"
+  },
+  "status": {
+    "DRAFT": "Bozza",
+    "EXPORTED": "Esportata",
+    "CANCELLED": "Annullata"
+  },
+  "lockState": {
+    "open": "aperto",
+    "soft": "bloccato",
+    "hard": "chiuso",
+    "lifted": "sbloccato"
+  },
+  "package": {
+    "SALES_JOURNAL": {
+      "title": "Registro vendite",
+      "body": "Le fatture emesse nel mese, una riga per aliquota IVA (una fattura scartata dallo SDI conta come mai emessa)."
+    },
+    "PURCHASES_JOURNAL": {
+      "title": "Registro acquisti",
+      "body": "Le fatture dei fornitori ricevute nel mese (per data di arrivo), una riga per aliquota IVA."
+    },
+    "PAYMENTS": {
+      "title": "Incassi e rimborsi",
+      "body": "Gli incassi del mese, cosa paga ciascuno e cosa non è abbinato; i rimborsi pagati nel mese."
+    },
+    "COST_OF_SALES": {
+      "title": "Costo del venduto e scostamenti",
+      "body": "Quanto è costata la merce venduta e gli scostamenti degli ordini di lavoro."
+    },
+    "VAT_REGISTERS": {
+      "title": "Registri IVA",
+      "body": "I registri IVA del mese."
+    },
+    "INTRASTAT": {
+      "title": "Intrastat (cessioni UE)",
+      "body": "Le cessioni di beni del mese verso altri Stati UE, con i dati che servono al file."
+    },
+    "YEAR_END_STOCK": {
+      "title": "Inventario di fine anno",
+      "body": "L'inventario di fine anno firmato (il suo elenco valorizzato come firmato) e la giacenza valorizzata a fine anno."
+    }
+  },
+  "contents": {
+    "held": {
+      "w2b": "Arriva con W2b: non può ancora entrare in un'esportazione.",
+      "yearEnd": "Va con l'esportazione del mese che chiude l'anno (31 dicembre).",
+      "grain": {
+        "price": "Contiene prezzi: serve il livello prezzi (money.price).",
+        "cost": "Contiene costi: serve il livello costi (money.cost)."
+      }
+    },
+    "documents_one": "{count} documento",
+    "documents_other": "{count} documenti",
+    "rows_one": "{count} riga nel file",
+    "rows_other": "{count} righe nel file",
+    "reDocuments_one": "Riesportazione: va {count} documento nuovo, modificato o tolto.",
+    "reDocuments_other": "Riesportazione: vanno {count} documenti nuovi, modificati o tolti.",
+    "reWhole_one": "Riesportazione: di nuovo il file intero ({count} modifica).",
+    "reWhole_other": "Riesportazione: di nuovo il file intero ({count} modifiche).",
+    "intrastatAccountant": "Se la società presenta l'Intrastat, con che frequenza e con quale file è da confermare con il commercialista."
+  },
+  "sum": {
+    "TAXABLE": "Imponibile",
+    "VAT": "IVA",
+    "GROSS": "Totale",
+    "RECEIVED": "Incassato",
+    "REFUNDED": "Rimborsato",
+    "NOT_PLACED": "Non abbinato",
+    "VALUE": "Valore"
+  },
+  "history": {
+    "noNumber": "Ancora senza numero",
+    "title": "Esportazioni",
+    "lead": "Ogni esportazione, numerata; una riesportazione porta solo ciò che è cambiato, mai un doppione.",
+    "slow": "Ancora in caricamento…",
+    "count_one": "{count} esportazione",
+    "count_other": "{count} esportazioni",
+    "countMore_one": "{count} esportazione finora",
+    "countMore_other": "{count} esportazioni finora",
+    "more": "Mostra altre",
+    "failed": "Non è stato possibile caricare le esportazioni",
+    "empty": {
+      "title": "Ancora nessuna esportazione",
+      "body": "Prepara la prima esportazione numerata per il commercialista con Nuova esportazione."
+    },
+    "noMatch": {
+      "title": "Nessuna esportazione corrisponde",
+      "body": "Nessuna esportazione con questo stato in questo anno."
+    },
+    "clearFilters": "Togli i filtri",
+    "statusLabel": "Stato",
+    "allStatuses": "Tutti gli stati",
+    "yearLabel": "Anno",
+    "allYears": "Tutti gli anni",
+    "col": {
+      "batch": "Esportazione",
+      "period": "Periodo",
+      "contents": "Contenuto",
+      "made": "Fatta da",
+      "files": "File",
+      "changed": "Cambiato da allora",
+      "more": "Altro"
+    },
+    "reExportOf": "Riesportazione di {number}",
+    "firstExport": "Prima esportazione",
+    "cancelled": "Annullata prima di finire",
+    "documents_one": "{count} documento · {changed} modificati · {removed} tolti",
+    "documents_other": "{count} documenti · {changed} modificati · {removed} tolti",
+    "someone": "Qualcuno",
+    "files_one": "{count} file",
+    "files_other": "{count} file",
+    "noFiles": "Nessun file",
+    "amendedBy": "Corretta da {number}",
+    "upToDate": "Nulla è cambiato da allora",
+    "changedSince_one": "{count} documento cambiato da allora",
+    "changedSince_other": "{count} documenti cambiati da allora",
+    "reExport": "Riesporta",
+    "rowMenu": "Altro per {number} ({month})",
+    "openFiles": "Apri i file (nuova scheda)",
+    "cancelDraft": "Annulla la bozza…",
+    "lockMonth": "Blocca {month}…",
+    "bulkFiles_one": "File di {count} esportazione",
+    "bulkFiles_other": "File di {count} esportazioni",
+    "held": {
+      "notExported": "Si riesporta solo un'esportazione già fatta.",
+      "notLatest": "Un'esportazione successiva ({number}) porta ora il mese: riesporta quella.",
+      "nothingChanged": "Nulla è cambiato da {number}: non c'è nulla da riesportare.",
+      "notDraft": "Si annulla solo una bozza; un'esportazione fatta si corregge con una riesportazione."
+    },
+    "unselectable": {
+      "draft": "Una bozza non ha ancora file.",
+      "cancelled": "Un'esportazione annullata non ha file.",
+      "noFiles": "Questa esportazione non ha file."
+    }
+  },
+  "cancel": {
+    "title": "Annullare la bozza di esportazione di {month}?",
+    "body": "La bozza non ha mai avuto il numero e i suoi file non sono mai stati consegnati. La prossima esportazione del mese la sostituisce comunque.",
+    "reason": "Perché",
+    "go": "Annulla la bozza",
+    "held": {
+      "reason": "Scrivi prima il perché."
+    }
+  },
+  "wizard": {
+    "title": "Nuova esportazione",
+    "titleMonth": "Esportazione di {month}",
+    "stepOf": "Passo {step} di {count}: {name}",
+    "nav": "Passi",
+    "back": "Indietro",
+    "continue": "Continua",
+    "showMe": "Mostrami"
+  },
+  "step": {
+    "period": {
+      "title": "Periodo",
+      "lead": "Quale mese va al commercialista e se è bloccato."
+    },
+    "checks": {
+      "title": "Controlli",
+      "lead": "Ogni controllo passa, o va spiegato a parole prima dell'esportazione (l'esportazione conserva la spiegazione)."
+    },
+    "contents": {
+      "title": "Contenuto",
+      "lead": "Cosa va al commercialista in questa esportazione."
+    },
+    "intrastat": {
+      "title": "Righe Intrastat",
+      "lead": "Le righe delle cessioni UE con i dati che servono al file; ciò che manca è segnalato con dove correggerlo."
+    },
+    "review": {
+      "title": "Riepilogo"
+    },
+    "export": {
+      "title": "Esporta e blocca"
+    },
+    "failed": "Non è stato possibile caricare {step}",
+    "reading": "Lettura di {step}…"
+  },
+  "held": {
+    "chooseMonth": "Scegli prima un mese.",
+    "reading": "Attendi la lettura del mese.",
+    "readFailed": "Non è stato possibile leggere il mese: riprova.",
+    "checks_one": "{count} controllo non passa e non ha spiegazione.",
+    "checks_other": "{count} controlli non passano e non hanno spiegazione.",
+    "noPackage": "Scegli almeno un contenuto.",
+    "intrastat": "Correggi le righe a cui mancano dati, o spiega il controllo Intrastat.",
+    "nothingChanged": "Nulla è cambiato da {number}: non c'è nulla da inviare.",
+    "noExport": "Preparare un'esportazione richiede il permesso accounting.export.",
+    "busy": "Attendi: l'ultima azione è ancora in corso.",
+    "firstStep": "Questo è il primo passo."
+  },
+  "period": {
+    "previousYear": "Anno precedente",
+    "nextYear": "Anno successivo",
+    "noNextYear": "L'anno successivo non è iniziato.",
+    "months": "I mesi del {year}",
+    "exported": "Esportato come {numbers}",
+    "notExported": "Non ancora esportato",
+    "notOver": "Non ancora finito",
+    "readingMonth": "Lettura di {month}…",
+    "first": "{month} non è ancora esportato: questa è la sua prima esportazione.",
+    "reExport_one": "{month} è esportato come {number}: questa è una riesportazione di ciò che è cambiato ({count} documento).",
+    "reExport_other": "{month} è esportato come {number}: questa è una riesportazione di ciò che è cambiato ({count} documenti).",
+    "running": "Il mese non è finito (finisce il {end}): ciò che ha data successiva arriva al commercialista con una riesportazione.",
+    "draft": "Una bozza di questo mese non è stata completata: questa esportazione la sostituisce.",
+    "yearEnd": "Il mese chiude l'anno: con esso va l'inventario di fine anno."
+  },
+  "check": {
+    "PERIOD_ENDED": {
+      "title": "Il mese è finito",
+      "pass": "{month} è finito.",
+      "fail_one": "{month} non è finito (finisce il {end}): ciò che ha data successiva va in una riesportazione.",
+      "fail_other": "{month} non è finito (finisce il {end}): ciò che ha data successiva va in una riesportazione."
+    },
+    "SHIPMENTS_INVOICED": {
+      "title": "Ogni spedizione fatturata",
+      "pass": "Ogni DDT di merce spedita a {month} è fatturato.",
+      "fail_one": "{count} DDT di merce spedita a {month} non è fatturato del tutto.",
+      "fail_other": "{count} DDT di merce spedita a {month} non sono fatturati del tutto."
+    },
+    "NO_INVOICE_REJECTED": {
+      "title": "Nessuna fattura scartata dallo SDI",
+      "pass": "Nessuna fattura di {month} è scartata dallo SDI.",
+      "fail_one": "{count} fattura di {month} è scartata dallo SDI: conta come mai emessa finché non è inviata di nuovo.",
+      "fail_other": "{count} fatture di {month} sono scartate dallo SDI: contano come mai emesse finché non sono inviate di nuovo."
+    },
+    "PAYMENTS_PLACED": {
+      "title": "Incassi abbinati",
+      "pass": "Ogni incasso di {month} è abbinato a ciò che paga.",
+      "fail_one": "{count} incasso di {month} non è abbinato del tutto a ciò che paga.",
+      "fail_other": "{count} incassi di {month} non sono abbinati del tutto a ciò che pagano."
+    },
+    "PLACEMENTS_WITHIN_PAYMENTS": {
+      "title": "Abbinamenti entro gli incassi",
+      "pass": "Nessun incasso è abbinato o rimborsato oltre il suo importo.",
+      "fail_one": "{count} incasso è abbinato o rimborsato oltre il suo importo.",
+      "fail_other": "{count} incassi sono abbinati o rimborsati oltre il loro importo."
+    },
+    "TOTALS_EQUAL_ROWS": {
+      "title": "Totali uguali alla somma delle righe",
+      "pass": "I totali di ogni fattura sono uguali alla somma delle righe IVA.",
+      "fail_one": "{count} fattura ha totali diversi dalla somma delle righe IVA.",
+      "fail_other": "{count} fatture hanno totali diversi dalla somma delle righe IVA."
+    },
+    "INTRASTAT_COMPLETE": {
+      "title": "Dati Intrastat completi",
+      "pass": "Ogni riga di cessione UE ha ciò che serve al file Intrastat.",
+      "fail_one": "Manca {count} dato che serve al file Intrastat (vedi Righe Intrastat).",
+      "fail_other": "Mancano {count} dati che servono al file Intrastat (vedi Righe Intrastat)."
+    },
+    "YEAR_END_SIGNED_OFF": {
+      "title": "Inventario di fine anno firmato",
+      "pass": "L'inventario di fine anno di ogni sede è firmato.",
+      "fail_one": "{count} inventario di fine anno è aperto o mancante.",
+      "fail_other": "{count} inventari di fine anno sono aperti o mancanti."
+    },
+    "STOCK_VALUED": {
+      "title": "Ogni movimento di magazzino valorizzato",
+      "pass": "Ogni movimento di magazzino fino a fine anno ha il suo valore.",
+      "fail_one": "{count} movimento di magazzino fino a fine anno non ha ancora un valore.",
+      "fail_other": "{count} movimenti di magazzino fino a fine anno non hanno ancora un valore."
+    },
+    "fixesLabel": "Dove correggere \"{check}\"",
+    "moreFixes_one": "e altri {count}",
+    "moreFixes_other": "e altri {count}",
+    "explain": "Perché si può procedere (conservato con l'esportazione)",
+    "explainHint": "A parole che il commercialista legge: cosa è aperto e quando si chiude."
+  },
+  "checks": {
+    "allPass_one": "{count} controllo passa",
+    "allPass_other": "Tutti i {count} controlli passano",
+    "failing_one": "{count} non passa · {unexplained} senza spiegazione",
+    "failing_other": "{count} non passano · {unexplained} senza spiegazione",
+    "w2b": "\"Ordini di lavoro chiusi\" arriva con W2b."
+  },
+  "fix": {
+    "Ddt": "DDT {number}",
+    "Invoice": "Fattura {number}",
+    "Payment": "Incasso {number}",
+    "Style": "Modello {number}",
+    "Party": "Cliente {number}",
+    "StockCount": "Inventario {number}",
+    "Site": "Sede {number}",
+    "other": "Record {number}"
+  },
+  "field": {
+    "hsCode": "codice doganale (NC, 8 cifre)",
+    "originCountry": "paese di origine",
+    "netMassKg": "massa netta per capo",
+    "taxIdentity": "partita IVA",
+    "incoterm": "condizioni di consegna (Incoterm)"
+  },
+  "intrastat": {
+    "accountant": "Da confermare con il commercialista: se la società presenta l'Intrastat delle cessioni, mensile o trimestrale, il file ufficiale e i codici natura (11 e 21 sono solo suggeriti).",
+    "sumRows_one": "{count} riga",
+    "sumRows_other": "{count} righe",
+    "sumFileRows_one": "{count} riga del file",
+    "sumFileRows_other": "{count} righe del file",
+    "count_one": "{count} riga di cessione UE",
+    "count_other": "{count} righe di cessione UE",
+    "empty": {
+      "title": "Nessuna cessione UE a {month}",
+      "body": "Nessun bene del mese è andato in un altro Stato UE: il file Intrastat sarebbe vuoto."
+    },
+    "col": {
+      "invoice": "Fattura",
+      "partner": "Acquirente e partita IVA",
+      "goods": "Codice NC e origine",
+      "to": "Verso, consegna, trasporto",
+      "quantity": "Massa netta e unità",
+      "value": "Valore",
+      "flags": "Cosa manca"
+    },
+    "line": "Riga {seq} · {nature} ({code}, suggerito)",
+    "nature": {
+      "SALE": "Cessione",
+      "RETURN": "Reso"
+    },
+    "noVat": "Nessuna partita IVA",
+    "cn": "NC {code}",
+    "noCn": "Nessun codice NC",
+    "origin": "origine {country}",
+    "noOrigin": "nessuna origine",
+    "noTerms": "nessuna condizione di consegna",
+    "noTransport": "trasporto non registrato",
+    "mass": "{kg} kg",
+    "noMass": "Nessuna massa netta",
+    "units": "{units} pezzi",
+    "complete": "Completa",
+    "blocking_one": "{count} mancante",
+    "blocking_other": "{count} mancanti",
+    "warnings_one": "{count} avviso",
+    "warnings_other": "{count} avvisi",
+    "fixIn": "Correggi in {record}"
+  },
+  "flag": {
+    "NOT_EUR": "non in euro",
+    "NO_STYLE": "beni senza modello",
+    "CN_CODE_MISSING": "nessun codice NC",
+    "CN_CODE_SHORT": "codice a 6 cifre, ne servono 8",
+    "ORIGIN_MISSING": "nessuna origine",
+    "NET_MASS_MISSING": "nessuna massa netta",
+    "VAT_ID_MISSING": "nessuna partita IVA dell'acquirente",
+    "DELIVERY_TERMS_MISSING": "nessuna condizione di consegna",
+    "DESTINATION_FROM_BILL_TO": "paese dalla fattura (nessun DDT)"
+  },
+  "review": {
+    "first": "Va tutto il contenuto scelto: è la prima esportazione del mese.",
+    "reExport": "Una riesportazione di {number}: i registri portano solo i documenti nuovi, modificati e tolti; Intrastat e inventario di fine anno vanno di nuovo interi se è cambiato qualcosa.",
+    "new": "Nuovi",
+    "newHint": "In nessuna esportazione precedente",
+    "changed": "Modificati",
+    "changedHint": "Diversi da quanto ha il commercialista",
+    "removed": "Tolti",
+    "removedHint": "Non più nel mese",
+    "same": "Già esportati",
+    "sameHint": "Come li ha il commercialista",
+    "col": {
+      "package": "Contenuto",
+      "documents": "Documenti",
+      "new": "Nuovi",
+      "changed": "Modificati",
+      "removed": "Tolti",
+      "same": "Già esportati",
+      "rows": "Righe del file",
+      "totals": "Totali"
+    },
+    "goes": "va in questa esportazione",
+    "goesWhole": "va di nuovo intero",
+    "leftOut": "nulla è cambiato: escluso",
+    "noTotals": "Nessuna somma",
+    "checks_one": "{count} controllo · {failing} non passano · {explained} spiegati",
+    "checks_other": "{count} controlli · {failing} non passano · {explained} spiegati",
+    "grains": "Le somme di un livello che non hai non sono mostrate."
+  },
+  "export": {
+    "number": "Numero che avrà",
+    "numberHint": "Se nessuno esporta prima di te.",
+    "noSeries": "Ancora nessuna serie di numerazione (Sistema › Documenti e numerazioni)",
+    "period": "Periodo",
+    "kind": "Tipo",
+    "first": "Prima esportazione del mese",
+    "reExport": "Riesportazione di {number}",
+    "willMake": "I file che questa esportazione creerà",
+    "file_one": "CSV · {count} riga",
+    "file_other": "CSV · {count} righe",
+    "fileYearEnd_one": "CSV · {count} riga, con l'elenco valorizzato firmato (PDF, XLSX)",
+    "fileYearEnd_other": "CSV · {count} righe, con l'elenco valorizzato firmato (PDF, XLSX)",
+    "language": "Lingua dei file",
+    "languageHint": "Intestazioni e formato dei numeri (italiano: ; e la virgola decimale).",
+    "languageIt": "Italiano",
+    "languageEn": "Inglese",
+    "note": "Nota dell'esportazione",
+    "handOver": "Esportare crea i file e dà il numero all'esportazione. Nulla viene inviato: consegni tu i file al commercialista.",
+    "making": "Preparazione dell'esportazione di {month}…",
+    "makingDetail": "Il mese viene riletto, i file vengono creati, poi viene dato il numero.",
+    "go": "Esporta {month} come {number}",
+    "goNoNumber": "Esporta {month}",
+    "done_one": "{number} è pronta: {month}, {count} file.",
+    "done_other": "{number} è pronta: {month}, {count} file.",
+    "doneBody": "Scarica i file e consegnali al commercialista; poi blocca il mese.",
+    "filesLabel": "I file di {number}",
+    "openFiles": "Apri i file in una nuova scheda",
+    "nothing": "Nulla è cambiato a {month} da {number}",
+    "nothingBody": "Non c'è un'esportazione da fare: il commercialista ha il mese com'è. Puoi bloccarlo."
+  },
+  "files": {
+    "status_one": "{package} · {count} riga · {format}",
+    "status_other": "{package} · {count} righe · {format}",
+    "download": "Scarica",
+    "held": {
+      "noView": "Scaricare richiede il permesso accounting.view."
+    },
+    "title_one": "File di {count} esportazione",
+    "title_other": "File di {count} esportazioni",
+    "none": {
+      "title": "Nessuna esportazione indicata",
+      "body": "Apri i file da Amministrazione › Esportazione contabile."
+    },
+    "failed": "Non è stato possibile caricare questa esportazione",
+    "batch": "{number} · {month}",
+    "carried": "Contenuto",
+    "kind": "Tipo",
+    "made": "Fatta",
+    "amended": "Corretta",
+    "note": "Nota",
+    "explained": "Controlli superati con spiegazione",
+    "noExplanation": "Nessuna spiegazione conservata.",
+    "allPassed_one": "{count} controllo passava quando è stata fatta.",
+    "allPassed_other": "Tutti i {count} controlli passavano quando è stata fatta."
+  },
+  "lock": {
+    "title": "Blocca {month}",
+    "lead": "Blocca il mese dopo aver consegnato l'esportazione: provvisorio (l'amministrazione può ancora scriverci con un motivo) o definitivo (nulla con data nel mese può cambiare).",
+    "afterExport": "Il blocco viene dopo l'esportazione.",
+    "accountant": "Concorda prima la chiusura definitiva con il commercialista.",
+    "dialogTitle": "Il blocco di {month}",
+    "dialogTitleAny": "Blocca un periodo",
+    "month": "Mese",
+    "chooseMonth": "Scegli un mese",
+    "readFailed": "Non è stato possibile leggere i blocchi",
+    "level": "Come bloccare",
+    "now": {
+      "open": "{month} è aperto: nulla lo blocca.",
+      "soft": "{month} è bloccato in modo provvisorio da {by} dal {at}.",
+      "hard": "{month} è chiuso in modo definitivo da {by} dal {at}.",
+      "lifted": "{month}: il blocco è stato tolto da {by} il {at}."
+    },
+    "short": {
+      "open": "{month} è aperto.",
+      "soft": "{month} è bloccato in modo provvisorio: l'amministrazione può ancora scriverci con un motivo.",
+      "hard": "{month} è chiuso in modo definitivo: nulla con data nel mese può cambiare.",
+      "lifted": "{month} era bloccato e il blocco è stato tolto."
+    },
+    "soft": {
+      "title": "Blocco provvisorio",
+      "body": "L'amministrazione può ancora scrivere nel mese, con un motivo.",
+      "already": "Il mese è già bloccato in modo provvisorio: scegli Definitivo per chiuderlo.",
+      "go": "Blocca {month} in modo provvisorio"
+    },
+    "hard": {
+      "title": "Blocco definitivo (chiusura)",
+      "body": "Nulla con data a {month} può cambiare: il database lo rifiuta. Solo il titolare lo toglie, con un motivo.",
+      "go": "Chiudi {month} in modo definitivo"
+    },
+    "phrase": {
+      "label": "Scrivi \"{phrase}\" per chiuderlo in modo definitivo",
+      "empty": "Scrivi la frase esatta; maiuscole e spazi in più non contano.",
+      "partial": "Continua a scrivere.",
+      "mismatch": "Questa non è la frase.",
+      "match": "La frase corrisponde."
+    },
+    "note": "Nota (facoltativa)",
+    "done": {
+      "soft": "{month} è bloccato in modo provvisorio",
+      "hard": "{month} è chiuso in modo definitivo",
+      "softBody": "Nulla impedisce la chiusura definitiva.",
+      "hardBody": "Ora nulla con data nel mese può cambiare.",
+      "warnings": "Prima della chiusura definitiva:"
+    },
+    "held": {
+      "noLock": "Bloccare richiede il permesso accounting.lock.",
+      "chooseMonth": "Scegli prima un mese.",
+      "alreadySoft": "Il mese è già bloccato in modo provvisorio.",
+      "alreadyHard": "Il mese è già chiuso in modo definitivo.",
+      "hardFirst": "Un mese chiuso si sblocca prima, non diventa provvisorio.",
+      "phrase": "Scrivi prima la frase esatta."
+    }
+  },
+  "lift": {
+    "title": "Togli il blocco",
+    "softBody": "Le scritture con data nel mese tornano aperte (accounting.lock).",
+    "hardBody": "Solo chi può togliere una chiusura definitiva (accounting.unlock: il titolare) lo fa, con un codice nuovo dell'app di autenticazione. Concordalo prima con il commercialista.",
+    "reason": "Perché",
+    "go": "Togli il blocco di {month}",
+    "done": "Il blocco di {month} è tolto.",
+    "held": {
+      "notLocked": "Il mese non è bloccato.",
+      "noUnlock": "Togliere una chiusura definitiva richiede accounting.unlock (di norma il titolare).",
+      "reason": "Scrivi prima il perché."
+    }
+  },
+  "stepUp": {
+    "title": "Conferma che sei tu",
+    "lift": "Togliere una chiusura definitiva chiede un codice nuovo dell'app di autenticazione.",
+    "confirm": "Conferma"
+  },
+  "aside": {
+    "title": "Questa esportazione",
+    "month": "Mese",
+    "noMonth": "Non ancora scelto",
+    "kind": "Tipo",
+    "packages": "Contenuto",
+    "noPackages": "Nessuno scelto",
+    "checks": "Controlli",
+    "checksPass": "Passano tutti",
+    "checksFail": "{failing} non passano · {unexplained} senza spiegazione",
+    "number": "Numero che avrà",
+    "batch": "Esportazione fatta",
+    "lock": "Blocco"
+  },
+  "problem": {
+    "read": {
+      "signed_out": "La sessione è scaduta: accedi di nuovo.",
+      "forbidden": "Non puoi vedere la contabilità di questa società.",
+      "not_found": "Questa esportazione o questo mese non esiste più.",
+      "unavailable": "Il sistema della fabbrica non ha risposto: riprova.",
+      "rate_limited": "Troppe letture insieme: attendi un momento.",
+      "invalid": "Il mese o un filtro non è valido.",
+      "internal": "Si è verificato un errore da parte nostra."
+    },
+    "write": {
+      "signed_out": "La sessione è scaduta: accedi di nuovo e riprova.",
+      "forbidden": "Non puoi farlo (manca un permesso o un livello).",
+      "not_found": "Questa esportazione o blocco non esiste più: la pagina viene riletta.",
+      "rate_limited": "Troppi tentativi: attendi un momento.",
+      "unavailable": "Il sistema della fabbrica non ha risposto: nulla è stato fatto, riprova.",
+      "step_up": "Serve un codice nuovo dell'app di autenticazione.",
+      "invalid": "Qualcosa di inserito non è valido.",
+      "internal": "Si è verificato un errore da parte nostra: nulla è stato fatto.",
+      "explain": "Un controllo che non passa non è ancora spiegato: spiegalo nel passo Controlli.",
+      "phrase": "La frase non è quella richiesta.",
+      "moved": "Qualcuno l'ha cambiato nel frattempo: viene riletto.",
+      "changedWhile": "Documenti del mese sono cambiati durante l'esportazione: il mese viene riletto; esportalo di nuovo."
+    }
+  },
+  "refusal": {
+    "ALREADY_EXPORTED": "Il mese è già esportato: la prossima esportazione è una riesportazione di ciò che è cambiato (il mese viene riletto).",
+    "EXPORTED_MEANWHILE": "Qualcuno ha esportato il mese nel frattempo: guardalo di nuovo.",
+    "NOTHING_CHANGED": "Nulla è cambiato dall'ultima esportazione: non c'è nulla da inviare.",
+    "NOT_LATEST": "Un'esportazione successiva porta ora il mese: il mese viene riletto.",
+    "NOTHING_EXPORTED": "Il mese non ha un'esportazione da correggere: il mese viene riletto.",
+    "PACKAGE_W2B": "Un contenuto scelto arriva con W2b.",
+    "YEAR_END_NOT_THIS_PERIOD": "L'inventario di fine anno va solo con il mese che chiude l'anno.",
+    "PACKAGE_GRAIN": "Un contenuto scelto ha importi di un livello che non hai.",
+    "NOT_DRAFT": "Questa esportazione non è più una bozza: l'elenco viene riletto.",
+    "CANCELLED": "Questa esportazione è stata sostituita o annullata prima di finire: guarda di nuovo il mese.",
+    "ALREADY_LOCKED": "Il mese è già bloccato così.",
+    "HARD_LOCKED": "Il mese è chiuso in modo definitivo: togli prima il blocco.",
+    "OVERLAPS": "Un altro blocco copre già questo mese.",
+    "NOT_LOCKED": "Il blocco è già tolto.",
+    "CHANGED": "Il blocco è cambiato nel frattempo: viene riletto.",
+    "INVOICE_REJECTED": "Una fattura del mese è scartata dallo SDI: inviala prima di nuovo.",
+    "STOCK_NOT_VALUED": "Alcuni movimenti di magazzino del mese non hanno ancora un valore.",
+    "YEAR_END_COUNT_OPEN": "Un inventario di fine anno è ancora aperto.",
+    "YEAR_END_COUNT_MISSING": "L'inventario di fine anno di dicembre non è ancora applicato.",
+    "other": "Qualcosa impedisce ancora la chiusura definitiva."
+  }
+}

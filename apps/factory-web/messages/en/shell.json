@@ -86,7 +86,11 @@
       "invoices": "Invoices",
       "payments": "Payments",
       "settingsGroup": "Settings",
-      "settings": "Finance settings"
+      "settings": "Finance settings",
+      "close": "Close",
+      "accounting": "Accounting export",
+      "reportsGroup": "Reports",
+      "reports": "Finance reports"
     },
     "planning": {
       "area": "Planning",

@@ -163,6 +163,11 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/finance/payments',
   '/finance/payments/[id]',
   '/finance/settings',
+  // B-W2a-51: Accounting export (SCR-156) with its files tab; Finance reports › stock valuation (SCR-239) with its print tab.
+  '/finance/accounting',
+  '/finance/accounting/files',
+  '/finance/reports',
+  '/finance/reports/print',
   // B-W0-27 Admin: All settings, Companies & sites, Devices & printers, Users, Roles & permissions, and their records.
   '/admin',
   '/admin/companies',

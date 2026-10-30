@@ -86,7 +86,11 @@
       "invoices": "Fatture",
       "payments": "Incassi",
       "settingsGroup": "Impostazioni",
-      "settings": "Impostazioni amministrazione"
+      "settings": "Impostazioni amministrazione",
+      "close": "Chiusura",
+      "accounting": "Esportazione contabile",
+      "reportsGroup": "Report",
+      "reports": "Report amministrazione"
     },
     "planning": {
       "area": "Pianificazione",

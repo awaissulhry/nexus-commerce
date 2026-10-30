@@ -63,6 +63,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Task: '/home/tasks?open=[id]',
   // Sales › Price lists & contracts (SCR-106, B-W2a-49): a customer price list.
   PriceList: '/sales/price-lists/[id]',
+  // Finance › Accounting export (SCR-156, B-W2a-51): a batch opens on its files tab (its checks, explanations and files).
+  AccountingExport: '/finance/accounting/files?export=[id]',
 })
 
 /**
@@ -97,6 +99,9 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // The invoice list reads the API's own filters from the address (`?status=REJECTED`, `?docType=TD04`).
   '/invoicing/invoices': '/finance/invoices',
   '/payments': '/finance/payments',
+  // B-W2a-51: the accounting batches (`?status=`, `?year=`) and the stock valuation (`?asOf=`, `?site=`, `?category=`).
+  '/accounting/exports': '/finance/accounting',
+  '/costing/valuation': '/finance/reports',
   // The shipments list (SCR-066) reads `?rows=` and `?q=` from the address.
   '/shipping/shipments': '/warehouse/shipments',
   // The PO list reads `status` (one state, as the API) and `waitingOver48h`; Receipts reads `status`, `view=expected`.
