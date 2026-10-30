@@ -1,3 +1,32 @@
+## Planning board and load bar (factory gap D18) — 2026-10-30
+
+New part in new files; nothing existing changes (one comment line in the patterns barrel), and no Commerce page
+carries its code or CSS. Every word comes in as
+a prop (English defaults). It is NOT in the patterns barrel (the web pulls it into its pages): `patterns/planning-board`
+is an entry point of its own (`@/design-system/patterns/planning-board` in the web, `@nexus/ui/patterns/planning-board/index`
+by package path); its stylesheet `planning-board.css` comes with the components. Data in, events out: it calls nothing.
+- **`PlanningBoard`**: resource lanes (lines, work centres, subcontractors) × time buckets (days, weeks), cards in
+  standard minutes that may span buckets (packed into tracks), a tray ("Not on the board") that takes drops, today and
+  closed buckets marked in words, held lanes with their reason, late cards striped with a "Late" tag, pins, marks and a
+  note in words. Layouts: `time` (lanes are rows) and `columns` (lanes are columns: the allocation board, the tray
+  first); either becomes a list with a Move dialog per card (lane, bucket, the load after the move) below `listBelow`
+  px (640) of its own width. Moves: drag (mouse; a long press on touch; `@dnd-kit/core`), keyboard (Space or M picks
+  up, arrows choose a lane and a bucket — the tray after the last lane —, Enter or Space drops, Escape cancels; arrows
+  move the focus between cards otherwise, one tab stop), the list's dialog, Undo / Redo (buttons, ⌘Z / ⌘⇧Z) only while
+  the card is where the move put it. While a move is under way the target cells show the load after the drop and a
+  ghost of the card. Checks with their reason: read-only (`heldReason`, said at rest and on the first attempt), pinned,
+  held lane, closed cell, the app's `dropHeld`, over capacity with `overload: 'block'`. Every step is said in one
+  always-mounted live region. `onMove(move)` carries from, to, how, the landing cells' load after and `over`; return
+  `false` when it did not happen. Each load cell opens a popover (how the capacity is made, the cards in it with their
+  minutes and share, Show on board).
+- **`LoadBar`**: booked against available standard minutes per lane and bucket — the percent written, "+640 min over"
+  in words and a hatched part past the capacity line (never colour alone), "—" when unknown, "No working time set" /
+  "No working time", a preview (`after`) marked and said with both loads; `sm` (a board cell) and `md` (a line); with
+  `detail` it is a `DetailPopover` button.
+- Rules in `planningBoardModel.ts` and `loadBarModel.ts` (pure); tests `planningBoard.vitest.test.ts`,
+  `loadBar.vitest.test.ts` (including: the patterns barrel does not re-export the folder; no shared stylesheet carries
+  its rules). Catalog: "Planning board" (`apps/web/src/app/design-system/_catalog/planning/`).
+
 ## Floor counts, label preview, sign and accept (factory gaps G6 G11 G12) — 2026-10-28
 
 New parts, new files only; nothing existing changes, and no Commerce page carries their code or CSS. Every word comes in

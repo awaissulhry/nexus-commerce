@@ -36,6 +36,7 @@ import { useStyleComplianceClock } from '../../modules/product/compliance/read'
 import { useShipmentDocumentsClock } from '../../modules/shipping/documents/read'
 import { emailInHandlers } from '../../platform/email-in/handlers'
 import { emailSendHandler } from '../../platform/email-out/outbound'
+import { exportHandlers } from '../../platform/exports/worker'
 import { createGateway, type Gateway } from '../../platform/gateway/gateway'
 import { useGateway } from '../../platform/gateway/service'
 import { importHandlers } from '../../platform/imports/worker'
@@ -63,9 +64,9 @@ const BACKGROUND = fileURLToPath(new URL('../../background.ts', import.meta.url)
 
 /** The worker's handlers, built from the same factories as background.ts HANDLERS (same order). */
 export function workerHandlers(): readonly EventHandler[] {
-  return [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler(), startOnIssueHandler(), invoiceFilesHandler(), sdiPollHandler(), sdiArchiveHandler(), sdiCourtesyCopyHandler(), trackingPollHandler(), afterAcceptanceHandler(), shipDocumentsHandler(), ...orderHandlers(), tellBuyerHandler(), ...costingHandlers()]
+  return [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler(), startOnIssueHandler(), invoiceFilesHandler(), sdiPollHandler(), sdiArchiveHandler(), sdiCourtesyCopyHandler(), trackingPollHandler(), afterAcceptanceHandler(), shipDocumentsHandler(), ...orderHandlers(), tellBuyerHandler(), ...costingHandlers(), ...exportHandlers()]
 }
-const HANDLER_FACTORIES = ['inboundHandler', 'importHandlers', 'printDispatchHandler', 'emailSendHandler', 'emailInHandlers', 'floorMoveValuationHandler', 'startOnIssueHandler', 'invoiceFilesHandler', 'sdiPollHandler', 'sdiArchiveHandler', 'sdiCourtesyCopyHandler', 'trackingPollHandler', 'afterAcceptanceHandler', 'shipDocumentsHandler', 'orderHandlers', 'tellBuyerHandler', 'costingHandlers']
+const HANDLER_FACTORIES = ['inboundHandler', 'importHandlers', 'printDispatchHandler', 'emailSendHandler', 'emailInHandlers', 'floorMoveValuationHandler', 'startOnIssueHandler', 'invoiceFilesHandler', 'sdiPollHandler', 'sdiArchiveHandler', 'sdiCourtesyCopyHandler', 'trackingPollHandler', 'afterAcceptanceHandler', 'shipDocumentsHandler', 'orderHandlers', 'tellBuyerHandler', 'costingHandlers', 'exportHandlers']
 
 /** background.ts lists exactly the factories above: a handler the worker gains fails the golden flow until it runs here too. */
 export function assertWorkerHandlers(): void {

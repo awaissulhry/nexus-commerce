@@ -23,6 +23,7 @@ import { actorOf } from '../../../core/context'
 import { readPrinter } from '../../../platform/print/printers'
 import { assertMay, shippingContextOf, type ShippingContext } from '../access'
 import { lockCells, tenantOf } from '../cells'
+import { holdOnPacking } from '../../quality/holds/checks'
 import { pdfFileIdsOf } from '../ddt/store'
 import { readSettings } from '../settings/settings'
 import { PACKING_DOCUMENTS } from './contract'
@@ -190,6 +191,15 @@ const measuresOf = (parcel: { grossWeightKg: Prisma.Decimal | null; lengthCm: Pr
   heightCm: parcel.heightCm?.toFixed(2) ?? null,
 })
 
+/**
+ * W2a B-W2a-26 hook (modules/quality/holds/checks.ts): packing goods on hold — garments into a parcel, a serial packed,
+ * the shipment PACKED — is refused with the hold's reason (409) before the database's …_awaits_quality_hold triggers.
+ */
+async function refuseIfHeld(tools: CommandTools, shipmentId: string, what: { readonly parcelIds?: readonly (string | null)[]; readonly workOrderIds?: readonly string[]; readonly serialIds?: readonly string[] }): Promise<void> {
+  const held = await holdOnPacking(tools.tx, tools.context, { shipmentId, ...what })
+  if (held) throw new ConflictError(held)
+}
+
 // ---- parcels ------------------------------------------------------------------------------------------------------
 
 /** shipping.pack: a new parcel (the next place), weighed and measured when given; only while a DRAFT. */
@@ -261,6 +271,7 @@ export async function placeLine(caller: CommandCaller, shipmentId: string, lineI
     if (labelled.length > 0) throw new ConflictError(labelled.join(' '))
     const placed = placementOf(packLineOf(line), body.parcelId, body.quantity ?? line.quantity, lines.map(packLineOf))
     if (!placed.ok) throw new ConflictError(placed.problem)
+    if (body.parcelId !== null) await refuseIfHeld(tools, shipment.id, { parcelIds: [body.parcelId], workOrderIds: [line.workOrderId] })
     const placement = placed.placement
     await lockCells(tools.tx, tenantOf(tools.context), [line.workOrderSizeId])
     const audit = (recordId: string, before: unknown, after: unknown) =>
@@ -341,6 +352,7 @@ export async function packSerial(caller: CommandCaller, shipmentId: string, body
       const seq = parcels.find((parcel) => parcel.id === body.parcelId)?.seq
       throw new ConflictError(`This shipment has no garment of serial ${serial.serial}'s cell left without a serial${seq ? ` in parcel ${seq}` : ''}.`)
     }
+    await refuseIfHeld(tools, shipment.id, { parcelIds: [target.parcelId], workOrderIds: [target.workOrderId], serialIds: [serial.id] })
     await tools.tx.garmentSerial.update({ where: { id: serial.id }, data: { shipmentLineId: target.id, version: { increment: 1 } }, select: { id: true } })
     tools.audit({ action: 'shipping.packSerial', recordType: 'GarmentSerial', recordId: serial.id, companyId: shipment.companyId, siteId: shipment.siteId, before: { shipmentLineId: null }, after: { shipmentLineId: target.id, shipmentId: shipment.id } })
   })
@@ -361,6 +373,10 @@ export async function unpackSerial(caller: CommandCaller, shipmentId: string, se
 
 async function move(tools: CommandTools, shipment: ShipmentHeader, from: 'DRAFT' | 'PACKED', to: 'DRAFT' | 'PACKED') {
   await lockedStatus(tools, shipment.id, [from], to === 'PACKED' ? 'it is packed' : 'it is unpacked')
+  if (to === 'PACKED') {
+    const { lines, parcels } = await readContents(tools.tx, shipment.id)
+    await refuseIfHeld(tools, shipment.id, { parcelIds: parcels.map((parcel) => parcel.id), workOrderIds: lines.map((line) => line.workOrderId), serialIds: lines.flatMap((line) => line.serials.map((entry) => entry.id)) })
+  }
   assertTransition(shipmentMachine, from, to, await shipmentFacts(tools.tx, shipment.id))
   await tools.tx.shipment.update({ where: { id: shipment.id }, data: { status: to, packedAt: to === 'PACKED' ? tools.now : null }, select: { id: true } })
   tools.audit({ action: to === 'PACKED' ? 'shipping.packShipment' : 'shipping.unpackShipment', recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, before: { status: from }, after: { status: to } })

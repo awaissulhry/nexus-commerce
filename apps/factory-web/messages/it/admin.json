@@ -1495,7 +1495,8 @@
     "reasons": "Elenchi delle causali",
     "paymentterms": "Condizioni di pagamento",
     "pricelists": "Listini",
-    "tasks": "Attività"
+    "tasks": "Attività",
+    "views": "Viste ed esportazioni"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1667,6 +1668,14 @@
     "paymentterms_view": "Vedere le condizioni di pagamento",
     "paymentterms_manage": "Aggiungere e cambiare condizioni di pagamento",
     "pricelists_view": "Vedere i listini e i loro prezzi",
-    "pricelists_manage": "Gestire listini, versioni e clienti"
+    "pricelists_manage": "Gestire listini, versioni e clienti",
+    "quality_defects_view": "Vedere la libreria dei difetti e le destinazioni",
+    "quality_defects_manage": "Gestire la libreria dei difetti e le destinazioni",
+    "quality_holds_view": "Vedere cosa è bloccato",
+    "quality_holds_place": "Bloccare merci e ordini di lavoro",
+    "quality_holds_release": "Sbloccare un blocco con firma elettronica",
+    "views_save": "Salvare e condividere le proprie viste di un elenco",
+    "views_manage": "Condividere viste con tutti e impostare la vista predefinita di un ruolo",
+    "views_export": "Esportare un elenco in CSV o Excel"
   }
 }
