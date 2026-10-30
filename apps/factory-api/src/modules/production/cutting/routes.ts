@@ -1,8 +1,9 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
-import { correctContract, cutContract, cutLogContract, cuttingViewContract, cuttingWorkOrdersContract, remnantContract, scanHideContract, undoContract } from './contract'
+import { correctContract, cutContract, cutLogContract, cutsListContract, cuttingViewContract, cuttingWorkOrdersContract, remnantContract, scanHideContract, undoContract } from './contract'
 import { correctCut, logCut, undoCut } from './cut'
 import { manifest } from './manifest'
+import { cutsList } from './office'
 import { cutLog, cuttingView, cuttingWorkOrders, scanHide } from './views'
 
 /**
@@ -44,4 +45,7 @@ export default defineRoutes('production.cutting', manifest, async (app) => {
   app.post('/production/cutting/cuts/:cutLogId/correct', { schema: correctContract }, async (request, reply) =>
     reply.code(201).send(await correctCut(request, request.params.cutLogId, request.body, idempotencyKeyFrom(request))),
   )
+
+  // B-W2a-60: the cutting office's list of cuts (office.ts).
+  app.get('/production/cutting/cuts', { schema: cutsListContract }, async (request) => cutsList(request, request.query))
 })

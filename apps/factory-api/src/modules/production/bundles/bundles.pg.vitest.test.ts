@@ -217,7 +217,7 @@ async function cutAll(workOrder: Json, hideKey: string): Promise<Json> {
   return response.json().cut
 }
 
-type Orders = 'main' | 'race' | 'pair' | 'part' | 'gate' | 'station' | 'size' | 'event' | 'printer'
+type Orders = 'main' | 'race' | 'pair' | 'part' | 'gate' | 'station' | 'size' | 'event' | 'printer' | 'held'
 const WO = {} as Record<Orders, Json>
 const CUT = {} as Record<Orders, Json>
 /** The Idempotency-Key of the first make of WO.main (replayed again after a reprint). */
@@ -253,7 +253,7 @@ beforeAll(async () => {
     })
     await tx.certificateCoverage.create({ data: { id: newId(), certificateId, styleId: A.style, sizes: ['50', '52'] }, select: { id: true } })
   })
-  await addHides(9)
+  await addHides(10)
   await admin(`INSERT INTO "Device" (id, "tenantId", "companyId", "siteId", "stationId", name, kind, status, "enrolledAt") VALUES ($1, $2, $3, $4, $5, 'Second cutting tablet', 'TABLET', 'ACTIVE', now())`, [A.tablet2, A.tenant, A.companyA, A.siteA1, A.station])
   await admin(
     `INSERT INTO "Printer" (id, "tenantId", "companyId", "siteId", code, name, kind, relay, "relayTarget", dpi, "labelWidthMm", "labelHeightMm") VALUES ($1, $2, $3, $4, 'LBL-BN', 'Made-up ticket printer', 'LABEL_ZPL', 'FAKE', 'test-ticket-printer:9100', 203, 100, 100)`,
@@ -264,7 +264,7 @@ beforeAll(async () => {
     { environment: 'test', trustProxyHops: 0, cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
-  const line = await salesOrder({ '50': 120, '52': 6 })
+  const line = await salesOrder({ '50': 132, '52': 6 })
   const plan: [Orders, Record<string, number>, string][] = [
     ['main', { '50': 12 }, 'H01'],
     ['race', { '50': 12 }, 'H02'],
@@ -275,6 +275,7 @@ beforeAll(async () => {
     ['size', { '50': 12 }, 'H07'],
     ['event', { '50': 12 }, 'H08'],
     ['printer', { '50': 12 }, 'H09'],
+    ['held', { '50': 12 }, 'H10'],
   ]
   for (const [name, sizes, hide] of plan) {
     WO[name] = await releasedWorkOrder(line, sizes)
@@ -753,5 +754,28 @@ describe("the station label printer (MES-184): a station names its printer; its 
       await admin(`UPDATE "Station" SET "labelPrinterId" = NULL WHERE id = $1`, [A.station])
       await admin(`UPDATE "Printer" SET status = 'ARCHIVED' WHERE id = ANY($1::uuid[])`, [[second, a4]])
     }
+  })
+})
+
+// ---- a held work order (B-W2a-60; the hook B-W2a-F1 put in, holdOnBundles) ---------------------------------------------------
+
+describe("bundles for a held work order are refused in the hold's words before the database (Bundle_awaits_hold)", () => {
+  it('a work order ON_HOLD makes no bundle: 409 WORK_ORDER_ON_HOLD with its reason, nothing made; lifted, the same make makes them', async () => {
+    const workOrder = WO.held
+    const cells = { cells: [{ workOrderSizeId: cellOf(workOrder), quantities: [12] }], printerId: null }
+    await admin(`UPDATE "WorkOrder" SET "heldFromStatus" = status, status = 'ON_HOLD', "heldAt" = now(), "holdReason" = 'Grain crack on a front panel (made up)' WHERE id = $1`, [workOrder.id])
+    try {
+      const error = await refused('floor', 'POST', makeUrl(workOrder.id), cells, 409)
+      expect(error.issues).toEqual([{ path: 'refusal/WORK_ORDER_ON_HOLD', message: `Work order ${workOrder.number} is on hold (Grain crack on a front panel (made up)): no bundle is made for it until the hold is lifted.` }])
+      expect(await activeSum(workOrder.id)).toBe(0)
+      // The database refuses the same for every login (wave 5's gate), so the words above are what a person ever sees.
+      await expect(
+        admin(`INSERT INTO "Bundle" (id, "tenantId", "siteId", "workOrderId", "workOrderSizeId", code, quantity, "cutLogIds") VALUES ($1, $2, $3, $4, $5, $6, 12, ARRAY[$7]::uuid[])`, [newId(), A.tenant, A.siteA1, workOrder.id, cellOf(workOrder), `T-${run}-HELD-BN`, CUT.held.id]),
+      ).rejects.toThrow(/is ON_HOLD/)
+    } finally {
+      await admin(`UPDATE "WorkOrder" SET status = "heldFromStatus", "heldFromStatus" = NULL, "heldAt" = NULL, "holdReason" = NULL WHERE id = $1`, [workOrder.id])
+    }
+    const made = await ok('floor', 'POST', makeUrl(workOrder.id), cells, 201, freshKey())
+    expect(made.bundles.map((bundle: Json) => bundle.quantity)).toEqual([12])
   })
 })

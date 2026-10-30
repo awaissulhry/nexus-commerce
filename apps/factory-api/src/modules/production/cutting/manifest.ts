@@ -17,4 +17,6 @@ export const manifest = defineManifest({
   'POST /production/cutting/cuts/:cutLogId/undo': { audiences: ['floor'], permission: 'production.cut', scope: 'record' },
   'GET /production/cutting/work-orders/:workOrderId/cut-log': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'POST /production/cutting/cuts/:cutLogId/correct': { audiences: ['office'], permission: 'production.cut.correct', scope: 'record' },
+  // B-W2a-60: the cutting office (SCR-238), one cut per work order with its tiles (production.cutting.view).
+  'GET /production/cutting/cuts': { audiences: ['office'], permission: 'production.cutting.view', scope: 'record' },
 })
