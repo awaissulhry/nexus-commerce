@@ -41,7 +41,7 @@ describe('the permission registry', () => {
     expect(FACTORY_PERMISSIONS.get('roles.assign')?.risk).toBe('stepUp')
     expect(FACTORY_PERMISSIONS.assignable.some((definition) => definition.area === 'money')).toBe(false)
     expect(FACTORY_PERMISSIONS.undeclared(['users.view', 'quotes.export', 'quotes.export'])).toEqual(['quotes.export'])
-    expect([...FACTORY_PERMISSIONS.byArea().keys()]).toEqual(['users', 'roles', 'audit', 'numbering', 'files', 'links', 'devices', 'workers', 'floor', 'threads', 'imports', 'documents', 'print', 'email', 'integrations', 'compliance', 'product', 'inventory', 'shipping', 'parties', 'planning', 'purchasing', 'invoices', 'payments', 'costing', 'production', 'workorders', 'quotes', 'sales', 'companies', 'sites', 'orders', 'privacy', 'quality', 'home', 'floorsync', 'calendars', 'reasons', 'paymentterms', 'pricelists', 'tasks', 'views', 'money'])
+    expect([...FACTORY_PERMISSIONS.byArea().keys()]).toEqual(['users', 'roles', 'audit', 'numbering', 'files', 'links', 'devices', 'workers', 'floor', 'threads', 'imports', 'documents', 'print', 'email', 'integrations', 'compliance', 'product', 'inventory', 'shipping', 'parties', 'planning', 'purchasing', 'invoices', 'payments', 'costing', 'production', 'workorders', 'quotes', 'sales', 'companies', 'sites', 'orders', 'privacy', 'quality', 'home', 'floorsync', 'calendars', 'reasons', 'paymentterms', 'pricelists', 'tasks', 'views', 'alerts', 'money'])
   })
 
   it('refuses a name declared twice, a bad area, a bad risk, an empty description', () => {

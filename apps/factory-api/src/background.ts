@@ -36,6 +36,9 @@ import { printDispatchHandler } from './platform/print/handler'
 import { rolesSyncCron, syncAllTenants } from './platform/auth/roles/sync'
 // B-W2a-18: a new tenant's empty reason lists get the standard reasons.
 import { standardReasonsCron, standardReasonsForNewTenants } from './platform/reasons/standard'
+// B-W2a-33: the exception rules (evaluated every 5 minutes, and again for one record after its events) and the date timers.
+import { alertsEvaluateCron, alertsRecheckHandler } from './platform/alerts/engine'
+import { timersFireCron } from './platform/timers/fire'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -64,6 +67,8 @@ type Mode = (typeof MODES)[number]
 const HANDLERS: readonly EventHandler[] = [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler(), startOnIssueHandler(), invoiceFilesHandler(), sdiPollHandler(), sdiArchiveHandler(), sdiCourtesyCopyHandler(), trackingPollHandler(), afterAcceptanceHandler(), shipDocumentsHandler(), ...orderHandlers(), tellBuyerHandler(), ...costingHandlers(), ...exportHandlers()]
 // B-W2a-20: the notification centre's fan-out (mentions, followed records, assignments, approvals).
 const W2A_20_HANDLERS: readonly EventHandler[] = [notificationsHandler()]
+// B-W2a-33: one record's exception rules again right after an event that changes it.
+const W2A_33_HANDLERS: readonly EventHandler[] = [alertsRecheckHandler()]
 
 const mode = process.argv[2] as Mode
 if (!MODES.includes(mode)) {
@@ -122,13 +127,15 @@ if (mode === 'worker') {
   await syncAllTenants({ database, log }).catch((error) => log.error({ err: error }, 'the system roles could not be synced at start'))
   await standardReasonsForNewTenants({ database, log }).catch((error) => log.error({ err: error }, 'the standard reasons could not be given at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_33_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]
   crons.push(standardReasonsCron({ database, log }))
   // B-W2a-20: the daily digests people turned on.
   crons.push(digestCron({ database, log }))
+  // B-W2a-33: the exception rules' evaluation and the date timers' firing.
+  crons.push(alertsEvaluateCron({ database, log }), timersFireCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

@@ -29,6 +29,9 @@ import { events as sales } from '../sales/events'
 import { events as shipping } from '../shipping/events'
 // B-W2a-23: the exports of the lists.
 import { events as views } from '../views/events'
+// B-W2a-33: the stored alerts and the date timers.
+import { events as alerts } from '../alerts/events'
+import { events as timers } from '../timers/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -131,8 +134,9 @@ export function createCatalogue(definitions: readonly EventDefinition[]): EventC
  * production: floor rules and work orders; purchasing: purchase orders); floor-sync: the floor tablets' refused queued actions;
  * calendars: the business calendars and shift patterns; reasons: the reason lists.
  * views: the exports of the lists (B-W2a-23).
+ * alerts, timers: the exception rules' stored alerts and the date timers (B-W2a-33).
  */
-export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...purchasing, ...invoicing, ...payments, ...costing, ...production, ...sales, ...privacy, ...quality, ...floorSync, ...insights, ...calendars, ...reasons, ...notifications, ...tasks, ...views] as const satisfies readonly EventDefinition[]
+export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...purchasing, ...invoicing, ...payments, ...costing, ...production, ...sales, ...privacy, ...quality, ...floorSync, ...insights, ...calendars, ...reasons, ...notifications, ...tasks, ...views, ...alerts, ...timers] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

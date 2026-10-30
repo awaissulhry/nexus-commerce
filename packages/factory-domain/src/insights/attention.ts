@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { ALERTS_HANDLE, ALERTS_VIEW } from '../alerts/permissions'
 import { heldGrains, type Grain } from '../auth/grains/grains'
 import { EMAIL_TRIAGE } from '../auth/permissions/catalogue'
 import { REGISTER_MANAGE, REGISTER_VIEW } from '../compliance/register/permissions'
@@ -64,16 +65,20 @@ export const ATTENTION_KINDS = [
   // that I have not finished.
   'TASK_DUE',
   'MENTION',
+  // B-W2a-33 (design home.alerts conn "Today's Needs me shows my open alerts"): the exception rules' stored alerts that are
+  // mine (assigned to me, or nobody's yet and their rule tells me), read only when Today is asked for them (`include`).
+  'RULE_ALERT',
 ] as const
 export type AttentionKind = (typeof ATTENTION_KINDS)[number]
 
 export const isAttentionKind = (value: unknown): value is AttentionKind => typeof value === 'string' && (ATTENTION_KINDS as readonly string[]).includes(value)
 
 /**
- * The kinds that are the person's own (B-W2a-20): their tasks and their mentions. Today lists them only when asked
- * (`GET /home/today?include=TASKS,MENTIONS`), so a screen built before them (W1) reads the same answer as before.
+ * The kinds that are the person's own (B-W2a-20): their tasks and their mentions; B-W2a-33: their open alerts. Today lists
+ * them only when asked (`GET /home/today?include=TASKS,MENTIONS,ALERTS`), so a screen built before them (W1) reads the
+ * same answer as before.
  */
-export const PERSONAL_KINDS = ['TASK_DUE', 'MENTION'] as const satisfies readonly AttentionKind[]
+export const PERSONAL_KINDS = ['TASK_DUE', 'MENTION', 'RULE_ALERT'] as const satisfies readonly AttentionKind[]
 export type PersonalKind = (typeof PERSONAL_KINDS)[number]
 export const isPersonalKind = (kind: AttentionKind): kind is PersonalKind => (PERSONAL_KINDS as readonly string[]).includes(kind)
 
@@ -274,6 +279,17 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     act: [HOME_VIEW],
     decide: 'OPEN',
     live: ['notification.created'],
+  }),
+  // B-W2a-33: my open alerts of the exception rules (platform/alerts). Mine when assigned to me, or unassigned and the rule
+  // tells me; handled in the alert itself (acknowledge, assign, snooze, resolve with a note), never with Today's verbs.
+  RULE_ALERT: rule({
+    kind: 'RULE_ALERT',
+    category: 'ALERT',
+    label: 'Alerts of the exception rules for you',
+    view: ALERTS_VIEW,
+    act: [ALERTS_HANDLE],
+    decide: 'OPEN',
+    live: ['alert.raised', 'alert.acknowledged', 'alert.assigned', 'alert.snoozed', 'alert.resolved'],
   }),
 })
 

@@ -35,8 +35,15 @@ import { scopeFilterOf, viewerOf } from './viewer'
  * assigned row says to whom, an acknowledged one by whom; each row says which verbs its reader may use. Read only.
  */
 
-/** The W2a parts a screen asks for (B-W2a-20): my tasks due or overdue, my mentions, and their tiles. */
-export const TODAY_INCLUDES = ['TASKS', 'MENTIONS'] as const
+/** The W2a parts a screen asks for (B-W2a-20): my tasks due or overdue, my mentions, and their tiles; B-W2a-33: my open alerts. */
+export const TODAY_INCLUDES = ['TASKS', 'MENTIONS', 'ALERTS'] as const
+
+/**
+ * B-W2a-33: with my stored alerts asked for, the W1 checks the exception rules replace are not computed again (the rule
+ * of the same kind raises the alert, or is switched off): an order late or at risk, a purchase order not confirmed.
+ */
+const REPLACED_BY_RULES: ReadonlySet<AttentionKind> = new Set(['ORDER_PROMISE', 'PO_NOT_CONFIRMED'])
+const includeOf = (kind: AttentionKind): TodayInclude => (kind === 'TASK_DUE' ? 'TASKS' : kind === 'RULE_ALERT' ? 'ALERTS' : 'MENTIONS')
 export type TodayInclude = (typeof TODAY_INCLUDES)[number]
 
 export interface TodayQuery {
@@ -100,7 +107,7 @@ export async function today(caller: CommandCaller, query: TodayQuery) {
   const filter = await scopeFilterOf(caller, query)
   const included = new Set(query.include ?? [])
   // The person's own kinds only when the screen asks for them (a W1 screen reads W1's answer).
-  const wanted = (kind: AttentionKind) => !isPersonalKind(kind) || (kind === 'TASK_DUE' ? included.has('TASKS') : included.has('MENTIONS'))
+  const wanted = (kind: AttentionKind) => (isPersonalKind(kind) ? included.has(includeOf(kind)) : !(included.has('ALERTS') && REPLACED_BY_RULES.has(kind)))
   const kinds = sourcesFor(viewer.actor).filter(wanted)
   const answers: SourceAnswer[] = []
   for (const kind of kinds) answers.push(await SOURCES[kind]({ caller, viewer }))
