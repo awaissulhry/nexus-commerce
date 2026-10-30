@@ -13,6 +13,7 @@ import { seed as seedEmailIn } from '../seed/email-in'
 import { seed as seedFiles } from '../seed/files'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
 import { seed as seedFloorSync } from '../seed/floor-sync'
+import { seed as seedHolds } from '../seed/holds'
 import { seed as seedImports } from '../seed/imports'
 import { seed as seedInsights } from '../seed/insights'
 import { seed as seedIntegration } from '../seed/integration'
@@ -25,6 +26,7 @@ import { seed as seedOps } from '../seed/ops'
 import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
 import { seed as seedPlanning } from '../seed/planning'
+import { seed as seedPlant } from '../seed/plant'
 import { seed as seedPricing } from '../seed/pricing'
 import { seed as seedPrint } from '../seed/print'
 import { seed as seedPrivacy } from '../seed/privacy'
@@ -195,6 +197,11 @@ beforeAll(async () => {
   // The production and schedule schema of W2a (wave 5/7).
   await seedSchedule({ db: factory, namespace: 'iso-a' })
   await seedSchedule({ db: factory, namespace: 'iso-b' })
+  // The quality, plant and shipping schema of W2a (wave 6/7).
+  await seedHolds({ db: factory, namespace: 'iso-a' })
+  await seedHolds({ db: factory, namespace: 'iso-b' })
+  await seedPlant({ db: factory, namespace: 'iso-a' })
+  await seedPlant({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -230,9 +237,11 @@ it('covers every classified table and every runtime role', () => {
     'CutLogPiece',
     'Ddt',
     'DdtCancellation',
+    'DefectCode',
     'DepositRequest',
     'Device',
     'DeviceEnrolment',
+    'DispositionCode',
     'DueTimer',
     'EmailIdentity',
     'EmailOutbound',
@@ -271,12 +280,21 @@ it('covers every classified table and every runtime role', () => {
     'Location',
     'Lot',
     'LotDocument',
+    'Machine',
+    'MachineClass',
+    'MachineSymptom',
+    'MaintenanceJob',
+    'MaintenanceRequest',
     'MaterialRequirement',
     'MeasurementPoint',
     'MeasurementProfile',
     'MeasurementTemplate',
     'Message',
     'MessageMention',
+    'NcrContainmentAction',
+    'NcrDispositionLine',
+    'NcrLink',
+    'Nonconformance',
     'Notification',
     'NotificationDelivery',
     'NumberAllocation',
@@ -316,6 +334,7 @@ it('covers every classified table and every runtime role', () => {
     'PurchaseOrderLine',
     'PurchaseOrderReminder',
     'PurchaseOrderRevision',
+    'QualityHold',
     'QualityRelease',
     'QualityReleaseReversal',
     'QualitySettings',

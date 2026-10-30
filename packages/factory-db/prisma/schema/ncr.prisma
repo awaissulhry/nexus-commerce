@@ -1,0 +1,253 @@
+// Nonconformances (W2a schema wave 6/7; B-W2a-47; features QHS-080, QHS-081, QHS-082, QHS-083, QHS-089, QHS-090; design
+// quality.ncr with its record "NCR" (Problem & evidence, Containment, Disposition, Linked records) and its popups
+// ncr-new and ncr-close): an NCR raised from an inspection, a bundle reject, a complaint, a return, a supplier's goods,
+// an audit or by hand, numbered from the company's NCR series, with its containment actions, the decision of its
+// quantity across disposition codes (holds.prisma) and the records it is linked to. apps/factory-api's
+// modules/quality/ncr writes them (B-W2a-47), always through command().
+//
+// Stages (the design's stepper): OPEN → CONTAINED (every containment action done or cancelled, at least one done) →
+// DECIDED (the whole quantity affected decided, every decision that needs approval approved) → CLOSED (the closing
+// signature: every decision carried out, its stock move posted or its follow-up record made); CANCELLED from OPEN or
+// CONTAINED (raised by mistake). The problem is edited while OPEN or CONTAINED and read-only after; a CLOSED or CANCELLED
+// NCR never changes. "Use as is" is never decided for a major or critical nonconformance (QHS-002: critical is never
+// accepted). The …_quality_plant_w2a_guards triggers hold all of it, for every login.
+//
+// Links to records of the other W2a waves are recordType + recordId: the NCR's source, a containment action's record (a
+// hold, a message), a decision's follow-up (a rework order, a repair, a supplier claim) and the NCR's linked records
+// (NcrLink: an inspection, a complaint, lots, shipments, the PPE register entry, a CAPA later). Holds name their NCR by
+// a reference (holds.prisma, this wave). A nonconformity of PPE that may present a risk opens a PPE register entry whose
+// source is the NCR (quality.prisma PpeRegisterEntry.sourceType "Nonconformance").
+//
+// Who sees what (ownership/ncr.json): the office only. The floor raises a hold at the bench (holds.prisma) and the
+// office raises the NCR; portal and link sessions read nothing here. No column holds a cost (the cost tab is W2b) or a
+// figure per person.
+
+/// Where an NCR comes from (the design's Source column).
+enum NcrSource {
+  INSPECTION
+  /// A bundle rejected at an operation.
+  BUNDLE
+  COMPLAINT
+  RETURN
+  /// A supplier's goods (incoming, in stock, at cutting).
+  SUPPLIER
+  AUDIT
+  OTHER
+}
+
+/// OPEN → CONTAINED → DECIDED → CLOSED; CANCELLED from OPEN or CONTAINED.
+enum NcrStage {
+  OPEN
+  CONTAINED
+  DECIDED
+  CLOSED
+  CANCELLED
+}
+
+/// A nonconformance report (QHS-080, QHS-081): what happened, where it was found, how much is affected and suspect, the
+/// defect and its severity, what it is about (style, colourway, size, serial, work order, material lot, supplier), who
+/// follows it up and its stage. Never deleted.
+model Nonconformance {
+  id                   String       @id @db.Uuid
+  tenantId             String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The site it is handled at, and its company.
+  companyId            String       @db.Uuid
+  siteId               String       @db.Uuid
+  /// Its number from the company's NCR series (NCR-2026-0031; allocateNumber when it is raised), unique in the
+  /// company; never changes.
+  number               String
+  title                String
+  /// What happened, in words.
+  description          String?
+  source               NcrSource
+  /// The record it was raised from (Inspection, Bundle, Complaint, ReturnAuthorisation, GoodsReceipt, …): its type and
+  /// id, both or neither.
+  sourceType           String?
+  sourceId             String?      @db.Uuid
+  /// Where and when it was found, and by whom (an office user or a floor worker of the site, at most one).
+  foundAt              QualityStage
+  foundOn              DateTime     @db.Timestamptz(3)
+  foundById            String?      @db.Uuid
+  foundByWorkerId      String?      @db.Uuid
+  /// How much is affected (above 0) and suspect (0 or more), in `uom`: the disposition lines decide the affected.
+  quantityAffected     Decimal      @db.Decimal(18, 4)
+  quantitySuspect      Decimal?     @db.Decimal(18, 4)
+  uom                  Uom
+  /// The defect (a defect of the library, not a category) and its severity, and where on the garment (a zone id of
+  /// factory-domain's garment zone map).
+  defectCodeId         String?      @db.Uuid
+  severity             DefectClass
+  zone                 String?
+  /// What it is about, as far as known: the style (its colourway and size), the serial as read, the work order, the
+  /// material (its lot) and the supplier.
+  styleId              String?      @db.Uuid
+  colourwayId          String?      @db.Uuid
+  size                 String?
+  serial               String?
+  workOrderId          String?      @db.Uuid
+  itemId               String?      @db.Uuid
+  lotId                String?      @db.Uuid
+  supplierId           String?      @db.Uuid
+  stage                NcrStage     @default(OPEN)
+  /// The office user who follows it up, and when its containment is due.
+  ownerId              String?      @db.Uuid
+  containmentDueAt     DateTime?    @db.Timestamptz(3)
+  /// When it became CONTAINED and DECIDED (set in that move, kept after).
+  containedAt          DateTime?    @db.Timestamptz(3)
+  decidedAt            DateTime?    @db.Timestamptz(3)
+  /// CLOSED: when, by whom, the closing note and the SHA-256 (hex) of what was signed (the e-signature).
+  closedAt             DateTime?    @db.Timestamptz(3)
+  closedById           String?      @db.Uuid
+  closeNote            String?
+  closeSignatureSha256 String?
+  /// CANCELLED: when and why.
+  cancelledAt          DateTime?    @db.Timestamptz(3)
+  cancelReason         String?
+  version              Int          @default(1)
+  createdAt            DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?      @db.Uuid
+
+  site          Site                    @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and
+  // styleId.
+  foundByWorker Worker?                 @relation("NonconformanceFoundBy", fields: [tenantId, siteId, foundByWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  defectCode    DefectCode?             @relation(fields: [tenantId, defectCodeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  style         Style?                  @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  colourway     Colourway?              @relation(fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder     WorkOrder?              @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  item          Item?                   @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lot           Lot?                    @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplier      Party?                  @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  containment   NcrContainmentAction[]
+  dispositions  NcrDispositionLine[]
+  links         NcrLink[]
+  // holds.prisma: the holds it decides.
+  holds         QualityHold[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of the references from its actions, decisions, links and holds: the same site.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, stage])
+  @@index([tenantId, sourceType, sourceId])
+}
+
+/// What a containment action does (QHS-082; the design's Containment tab).
+enum ContainmentKind {
+  /// Put the stock on hold (a QualityHold, which the action names once done).
+  HOLD_STOCK
+  /// Check the work in progress.
+  CHECK_WIP
+  /// Check the goods already shipped.
+  CHECK_SHIPPED
+  TELL_CUSTOMER
+  OTHER
+}
+
+/// OPEN → DONE | CANCELLED (both final).
+enum ContainmentStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+/// One containment action of an NCR (QHS-082): the immediate action, its owner and due time, and when it was done with
+/// its evidence (a note, or files of the row: StoredFile recordType "NcrContainmentAction") and the record it made or
+/// names (a hold, a message: type and id). Written while the NCR is OPEN or CONTAINED.
+model NcrContainmentAction {
+  id           String            @id @db.Uuid
+  tenantId     String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The NCR's site.
+  siteId       String            @db.Uuid
+  ncrId        String            @db.Uuid
+  /// 1, 2, 3 … in the NCR.
+  seq          Int
+  kind         ContainmentKind
+  /// What to do, in words (required for OTHER).
+  description  String?
+  ownerId      String?           @db.Uuid
+  dueAt        DateTime?         @db.Timestamptz(3)
+  status       ContainmentStatus @default(OPEN)
+  /// DONE: when, by whom, and its evidence in words (or as files of the row).
+  doneAt       DateTime?         @db.Timestamptz(3)
+  doneById     String?           @db.Uuid
+  evidenceNote String?
+  /// The record it made or names: its type and id, both or neither (a HOLD_STOCK action names its QualityHold once DONE).
+  recordType   String?
+  recordId     String?           @db.Uuid
+  version      Int               @default(1)
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?           @db.Uuid
+
+  ncr Nonconformance @relation(fields: [tenantId, siteId, ncrId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, ncrId, seq])
+}
+
+/// One decision of an NCR's quantity (QHS-083, QHS-005): how much goes which way (a disposition code), who decided it
+/// and when, whether it needs approval (the code's rule, applied by the API) and who approved it (never who decided),
+/// and once carried out its stock move and its follow-up record (a rework order, a repair, a supplier claim: type and
+/// id). The lines of an NCR never pass its quantity affected. Written while the NCR is OPEN or CONTAINED; carried out
+/// until it is CLOSED.
+model NcrDispositionLine {
+  id                String    @id @db.Uuid
+  tenantId          String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The NCR's site.
+  siteId            String    @db.Uuid
+  ncrId             String    @db.Uuid
+  /// 1, 2, 3 … in the NCR.
+  seq               Int
+  dispositionCodeId String    @db.Uuid
+  /// Above 0, in the NCR's unit.
+  quantity          Decimal   @db.Decimal(18, 4)
+  note              String?
+  /// Who decided it, and when.
+  decidedAt         DateTime  @db.Timestamptz(3)
+  decidedById       String?   @db.Uuid
+  /// Whether it needs a person's approval (by the code's severity or value rule), and that approval: when and by whom
+  /// (both or neither; never who decided).
+  approvalRequired  Boolean   @default(false)
+  approvedAt        DateTime? @db.Timestamptz(3)
+  approvedById      String?   @db.Uuid
+  /// Carried out: when, the stock move it posted (one of the code's reason, of the NCR's site) and the record it opened
+  /// (type and id, both or neither).
+  doneAt            DateTime? @db.Timestamptz(3)
+  stockMoveId       String?   @db.Uuid
+  followUpType      String?
+  followUpId        String?   @db.Uuid
+  version           Int       @default(1)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?   @db.Uuid
+
+  ncr             Nonconformance  @relation(fields: [tenantId, siteId, ncrId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  dispositionCode DispositionCode @relation(fields: [tenantId, dispositionCodeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  stockMove       StockMove?      @relation(fields: [tenantId, siteId, stockMoveId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, ncrId, seq])
+}
+
+/// A record an NCR is linked to (the design's Linked records tab: the source inspection, a complaint, lots, shipments,
+/// a rework order, the PPE register entry, a CAPA later): its type and id. One link per record is the module's (a unique
+/// key with the record type cannot be copied by the generated isolation tests). Unlinking deletes the row (the audit log
+/// keeps it).
+model NcrLink {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The NCR's site.
+  siteId      String   @db.Uuid
+  ncrId       String   @db.Uuid
+  recordType  String
+  recordId    String   @db.Uuid
+  note        String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  ncr Nonconformance @relation(fields: [tenantId, siteId, ncrId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, ncrId])
+  // Which NCRs a record is linked to (the record's own NCR list).
+  @@index([tenantId, recordType, recordId])
+}

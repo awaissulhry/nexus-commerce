@@ -100,6 +100,11 @@ model Inspection {
   /// The inspector's signed statement that they made none of the garments: required where the floor records do not
   /// name every maker (the site records the station, MES-278; PLAN §2.8).
   notMakerStatement Boolean          @default(false)
+  /// W2a (wave 6/7; design quality.inspections "Assign inspector"): the inspector it is assigned to before it is decided,
+  /// an office user or a worker of the site, at most one; neither: not assigned. The office assigns (the floor never
+  /// changes it); a decided inspection keeps it.
+  assignedInspectorId       String?  @db.Uuid
+  assignedInspectorWorkerId String?  @db.Uuid
   /// When it was decided (PASSED or FAILED), and the SHA-256 (hex) of the decision as the inspector signed it (the
   /// e-signature, QHS-058): set exactly then.
   decidedAt         DateTime?        @db.Timestamptz(3)
@@ -120,7 +125,9 @@ model Inspection {
   site            Site               @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   workOrder       WorkOrder          @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
-  inspectorWorker Worker?            @relation(fields: [tenantId, siteId, inspectorWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  inspectorWorker Worker?            @relation("InspectionInspector", fields: [tenantId, siteId, inspectorWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2a: the worker it is assigned to (Restrict, as above).
+  assignedInspectorWorker Worker?    @relation("InspectionAssignedInspector", fields: [tenantId, siteId, assignedInspectorWorkerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   defects         InspectionDefect[]
   releases        QualityRelease[]
 
@@ -160,6 +167,11 @@ model InspectionDefect {
   defectClass     DefectClass
   /// The defect's code as the defect list names it ("STITCH-SKIP", "LABEL-MISSING"); one row per class and code.
   code            String
+  /// W2a (wave 6/7, QHS-001): the defect of the library it was picked from (holds.prisma DefectCode: a defect, not a
+  /// category; its code is `code`), and where on the garment it was found (a zone id of factory-domain's garment zone
+  /// map); null: typed (W1 rows) or not located.
+  defectCodeId    String?     @db.Uuid
+  zone            String?
   description     String?
   /// Garments of the sample with this defect, from 1.
   quantity        Int
@@ -175,6 +187,8 @@ model InspectionDefect {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and
   // workOrderId.
   workOrderSize WorkOrderSize? @relation(fields: [tenantId, siteId, workOrderId, workOrderSizeId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2a: the library's defect (Restrict, as above: SetNull would also clear tenantId).
+  defectCode    DefectCode?    @relation(fields: [tenantId, defectCodeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, inspectionId, defectClass, code])
 }

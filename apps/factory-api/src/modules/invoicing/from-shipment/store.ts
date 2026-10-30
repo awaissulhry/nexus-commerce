@@ -31,7 +31,8 @@ export interface DdtRow {
 
 export async function readDdts(db: Reader, where: Prisma.DdtWhereInput, take = 500): Promise<DdtRow[]> {
   const rows = await db.ddt.findMany({
-    where,
+    // Goods shipped with DDTs: a shipment's DDTs (a DDT for another reason, W2a wave 6/7, carries no sale; B-W2a-54).
+    where: { AND: [where, { shipmentId: { not: null } }] },
     take,
     orderBy: [{ documentDate: 'asc' }, { number: 'asc' }],
     select: { id: true, number: true, documentDate: true, companyId: true, partyId: true, shipmentId: true, cancellations: { select: { id: true }, take: 1 }, shipment: { select: { number: true, status: true, salesOrderId: true } } },
@@ -42,10 +43,10 @@ export async function readDdts(db: Reader, where: Prisma.DdtWhereInput, take = 5
     date: day(row.documentDate),
     companyId: row.companyId,
     partyId: row.partyId,
-    shipmentId: row.shipmentId,
-    shipmentNumber: row.shipment.number,
-    shipmentStatus: row.shipment.status,
-    salesOrderId: row.shipment.salesOrderId,
+    shipmentId: row.shipmentId!,
+    shipmentNumber: row.shipment!.number,
+    shipmentStatus: row.shipment!.status,
+    salesOrderId: row.shipment!.salesOrderId,
     cancelled: row.cancellations.length > 0,
   }))
 }

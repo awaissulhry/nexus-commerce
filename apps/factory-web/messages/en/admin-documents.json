@@ -256,7 +256,9 @@
       "COMPLAINT": "Customer complaint",
       "CLAIM": "Supplier claim",
       "SUBCONTRACT": "Subcontract order",
-      "COUNT": "Stock count"
+      "COUNT": "Stock count",
+      "NCR": "Nonconformance",
+      "MAINTENANCE_JOB": "Maintenance job"
     },
     "record": {
       "Invoice": "Invoice",
