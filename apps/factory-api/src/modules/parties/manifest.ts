@@ -27,4 +27,7 @@ export const manifest = defineManifest({
   'PATCH /parties/:partyId/tax-identities/:taxIdentityId': { audiences: ['office'], permission: 'parties.manage', scope: 'record' },
   'GET /parties/:partyId/vies-checks': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
   'POST /parties/:partyId/vies-checks': { audiences: ['office'], permission: 'parties.vies', scope: 'record' },
+  // B-W2a-19 (SAL-012): the customer's commercial terms; a price list given also needs pricelists.manage (checked inside).
+  'GET /parties/:partyId/commercial-terms': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
+  'PATCH /parties/:partyId/commercial-terms': { audiences: ['office'], permission: 'parties.manage', scope: 'record' },
 })

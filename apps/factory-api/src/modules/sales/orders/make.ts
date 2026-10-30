@@ -67,6 +67,8 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string)
       billTo: true,
       shipTo: true,
       paymentTerms: true,
+      // B-W2a-19: the order keeps the library terms the quote was accepted with (its schedule and due dates follow them).
+      paymentTermsId: true,
       promiseDate: true,
       noWithdrawal: true,
       depositAmount: true,
@@ -175,6 +177,7 @@ export async function makeOrderInCommand(tools: CommandTools, versionId: string)
       billTo: header.billTo as Prisma.InputJsonValue,
       shipTo: header.shipTo as Prisma.InputJsonValue,
       paymentTerms: header.paymentTerms,
+      paymentTermsId: version.paymentTermsId,
       promiseDate: header.promiseDate === null ? null : asDay(header.promiseDate),
       originalPromiseDate: header.originalPromiseDate === null ? null : asDay(header.originalPromiseDate),
       priority: header.priority,

@@ -1492,7 +1492,10 @@
     "home": "Home",
     "floorsync": "Sincronizzazione reparto",
     "calendars": "Calendari",
-    "reasons": "Elenchi delle causali"
+    "reasons": "Elenchi delle causali",
+    "paymentterms": "Condizioni di pagamento",
+    "pricelists": "Listini",
+    "tasks": "Attività"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1646,6 +1649,7 @@
     "quality_garments_release": "Rilasciare i capi ispezionati per la spedizione",
     "quality_garments_reverse": "Ritirare i capi rilasciati prima della spedizione",
     "home_view": "Vedere Oggi",
+    "tasks_manage": "Creare attività sui record e assegnarle",
     "floorsync_view": "Vedere le azioni rifiutate dei tablet di reparto",
     "floorsync_discard": "Scartare un'azione rifiutata di un tablet di reparto",
     "calendars_view": "Vedere i calendari aziendali",
@@ -1659,6 +1663,10 @@
     "planning_firm": "Rendere fissi gli ordini pianificati",
     "planning_exceptions_manage": "Gestire le eccezioni della pianificazione",
     "reasons_view": "Vedere gli elenchi delle causali e quanto è usato ogni codice",
-    "reasons_manage": "Gestire gli elenchi delle causali di tutto il gruppo"
+    "reasons_manage": "Gestire gli elenchi delle causali di tutto il gruppo",
+    "paymentterms_view": "Vedere le condizioni di pagamento",
+    "paymentterms_manage": "Aggiungere e cambiare condizioni di pagamento",
+    "pricelists_view": "Vedere i listini e i loro prezzi",
+    "pricelists_manage": "Gestire listini, versioni e clienti"
   }
 }

@@ -45,8 +45,15 @@ const assignable = FACTORY_PERMISSIONS.assignable.filter((definition) => definit
 const every = (filter: (risk: string) => boolean = () => true): Permission[] =>
   assignable.filter((definition) => filter(definition.risk)).map((definition) => definition.name)
 
+/**
+ * B-W2a-20 (tasks on any record, COL-037): every office template that writes notes on records (threads.post) makes and
+ * keeps tasks too. Listed here, one line per template, so the long permission lists below stay as their steps wrote them.
+ */
+const TASKS_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor'])
+const addedFor = (key: string, audience: RoleAudience): Permission[] => (audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage'] : [])
+
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...content.permissions].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 
@@ -129,7 +136,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       // B-W2a-21 (standard vs actual): standards, the cost ledger, the costing method (step-up).
       'costing.standards.manage', 'costing.ledger.manage', 'costing.method.manage',
       // B-W2a-18: the reason lists (return and cancel reasons beside the sales settings).
-      'reasons.view'],
+      'reasons.view',
+      // B-W2a-19: the payment terms library (Finance settings) and the price lists (read).
+      'paymentterms.view', 'paymentterms.manage', 'pricelists.view'],
     grains: ['price', 'cost', 'margin', 'wages'],
   }),
   template('sales', {
@@ -139,7 +148,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     // (A1 §3.10).
     description: 'Customers, quotes and orders; sees selling prices and margin %, not costs.',
     requireMfa: true,
-    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send', 'orders.view', 'orders.manage', 'home.view', 'calendars.view'],
+    permissions: ['audit.read', 'files.read', 'files.upload', 'threads.read', 'threads.post', 'documents.view', 'print.view', 'print.documents', 'email.send', 'email.triage', 'product.materials.view', 'product.styles.view', 'shipping.view', 'imports.view', 'imports.run', 'imports.apply', 'parties.view', 'parties.manage', 'parties.vies', 'invoices.view', 'payments.view', 'costing.view', 'workorders.view', 'quotes.view', 'quotes.manage', 'quotes.send', 'orders.view', 'orders.manage', 'home.view', 'calendars.view',
+      // B-W2a-19: the customer price lists (keep them) and the payment terms library (pick from it).
+      'pricelists.view', 'pricelists.manage', 'paymentterms.view'],
     grains: ['price', 'margin'],
   }),
   template('planner', {

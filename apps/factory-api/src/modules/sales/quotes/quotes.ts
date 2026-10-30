@@ -15,6 +15,10 @@ import { allocateNumber } from '../../../platform/numbering/allocate'
 import { decideTreatment, refreshVersion } from './pricing'
 import { quoteRulesFor } from './rules'
 import { revokeAcceptLinks } from './accept-links'
+import { chainForQuote } from './list-price'
+import { usableTerms } from '../terms/store'
+import { termsForParty } from '../terms/terms'
+import { depositOf, quoteDefaultsOf, termsNameIn } from '@nexus/factory-domain/sales/terms/terms'
 import { assertMay, day, dayValue, decimal, grainsOf, officeContextOf, officeQuote, quotePartyOf, readCurrentVersion, readQuote, type QuoteParty, type QuoteRow, type VersionRow } from './store'
 import { forCaller, quoteDetail, type QuoteDetail } from './views'
 
@@ -80,6 +84,8 @@ export interface HeaderInput {
   readonly firmOffer?: boolean | undefined
   readonly promiseDate?: string | null | undefined
   readonly paymentTerms?: string | null | undefined
+  /** B-W2a-19: terms from the library; their printed name (in the version's language) follows unless paymentTerms is sent. */
+  readonly paymentTermsId?: string | null | undefined
   readonly termsText?: string | null | undefined
   readonly termsVersion?: string | null | undefined
   readonly depositPct?: string | null | undefined
@@ -127,6 +133,7 @@ export interface CreateQuoteInput extends HeaderInput {
 export async function createQuote(caller: CommandCaller, body: CreateQuoteInput, idempotencyKey?: string): Promise<{ quote: QuoteDetail }> {
   const context = officeContextOf(caller)
   assertMay(context, QUOTES_MANAGE, { companyId: body.companyId, partyId: body.partyId }, 'Customer')
+  const picked = body.paymentTermsId ? await termsForParty(caller, body.paymentTermsId, body.companyId, 'body/paymentTermsId') : null
   const { result } = await command(caller, { name: 'quotes.create', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools
     const today = businessDate(now)
@@ -148,8 +155,18 @@ export async function createQuote(caller: CommandCaller, body: CreateQuoteInput,
     const address = async (flag: 'isDefaultBillTo' | 'isDefaultShipTo') => (await tx.partyAddress.findFirst({ where: { partyId: party.row.id, status: 'ACTIVE', [flag]: true }, select: { id: true } }))?.id ?? null
     const billToAddressId = body.billToAddressId === undefined ? await address('isDefaultBillTo') : body.billToAddressId
     const shipToAddressId = body.shipToAddressId === undefined ? await address('isDefaultShipTo') : body.shipToAddressId
-    const depositPct = body.depositPct === undefined ? rules.defaultDepositPct : blankToNull(body.depositPct)
     const language = body.language ?? ((contact?.language ?? party.row.language) === 'it' ? 'it' : 'en')
+    // B-W2a-19 (SAL-012): the customer's commercial terms: its library terms (when its company may use them) with their
+    // printed name in the document's language, its deposit (else its terms' order share, else the settings').
+    const terms = picked ? await usableTerms(tx, picked.id, company.id) : body.paymentTermsId === null ? null : await usableTerms(tx, party.row.paymentTermsId, company.id)
+    const defaults = quoteDefaultsOf({
+      partyDepositPct: party.row.defaultDepositPct === null ? null : party.row.defaultDepositPct.toString(),
+      terms,
+      partyTermsText: party.row.paymentTerms,
+      settingsDepositPct: rules.defaultDepositPct,
+      language,
+    })
+    const depositPct = body.depositPct === undefined ? defaults.depositPct : blankToNull(body.depositPct)
 
     const id = newId()
     const issued = await allocateNumber(tools, { companyId: company.id, kind: 'QUOTE' }, { type: 'Quote', id })
@@ -174,7 +191,8 @@ export async function createQuote(caller: CommandCaller, body: CreateQuoteInput,
         validUntil: dayValue(body.validUntil ?? addDays(today, rules.defaultValidityDays)),
         firmOffer: body.firmOffer ?? false,
         promiseDate: body.promiseDate ? dayValue(body.promiseDate) : null,
-        paymentTerms: body.paymentTerms === undefined ? party.row.paymentTerms : blankToNull(body.paymentTerms),
+        paymentTerms: body.paymentTerms === undefined ? defaults.paymentTerms : blankToNull(body.paymentTerms),
+        paymentTermsId: defaults.paymentTermsId,
         termsText: blankToNull(body.termsText),
         termsVersion: blankToNull(body.termsVersion),
         depositPct,
@@ -186,13 +204,16 @@ export async function createQuote(caller: CommandCaller, body: CreateQuoteInput,
       select: { id: true },
     })
     const quote = (await readQuote(tx, id))!
+    // SAL-165: the list version its prices come from, kept while the quote is open.
+    const chain = await chainForQuote(tx, quote, { currency: company.currency, priceListVersionId: null }, party, now)
+    if (chain.keptVersionId !== null) await tx.quoteVersion.update({ where: { id: versionId }, data: { priceListVersionId: chain.keptVersionId }, select: { id: true } })
     await refreshVersion(tools, quote, await readCurrentVersion(tx, quote), new Set())
     tools.audit({
       action: 'quotes.create',
       recordType: 'Quote',
       recordId: id,
       companyId: company.id,
-      after: { number: issued.formatted, partyId: party.row.id, status: 'DRAFT', revision: 1, contactId, billToAddressId, shipToAddressId, depositPct, rulesSource: rules.source },
+      after: { number: issued.formatted, partyId: party.row.id, status: 'DRAFT', revision: 1, contactId, billToAddressId, shipToAddressId, depositPct, rulesSource: rules.source, paymentTermsId: defaults.paymentTermsId, listVersionId: chain.keptVersionId },
     })
     tools.emit({ type: 'quote.created', subject: id, companyId: company.id, payload: { quoteId: id, versionId, number: issued.formatted, partyId: party.row.id } })
     return detailInCommand(tools, id)
@@ -203,13 +224,14 @@ export async function createQuote(caller: CommandCaller, body: CreateQuoteInput,
 // ---- the header and the draft's terms --------------------------------------------------------------------------------
 
 const QUOTE_FIELDS = ['contactId', 'customerRef', 'internalNote'] as const
-const VERSION_FIELDS = ['validUntil', 'firmOffer', 'promiseDate', 'paymentTerms', 'termsText', 'termsVersion', 'depositPct', 'depositKind', 'billToAddressId', 'shipToAddressId', 'language', 'changeNote'] as const
+const VERSION_FIELDS = ['validUntil', 'firmOffer', 'promiseDate', 'paymentTerms', 'paymentTermsId', 'termsText', 'termsVersion', 'depositPct', 'depositKind', 'billToAddressId', 'shipToAddressId', 'language', 'changeNote'] as const
 
 const termsOf = (version: VersionRow) => ({
   validUntil: day(version.validUntil),
   firmOffer: version.firmOffer,
   promiseDate: day(version.promiseDate),
   paymentTerms: version.paymentTerms,
+  paymentTermsId: version.paymentTermsId,
   termsText: version.termsText,
   termsVersion: version.termsVersion,
   depositPct: decimal(version.depositPct),
@@ -227,6 +249,7 @@ const termsOf = (version: VersionRow) => ({
  */
 export async function updateQuote(caller: CommandCaller, quoteId: string, body: HeaderInput & { version: number }, idempotencyKey?: string): Promise<{ quote: QuoteDetail }> {
   const quote = await officeQuote(caller, quoteId, QUOTES_MANAGE)
+  const picked = body.paymentTermsId ? await termsForParty(caller, body.paymentTermsId, quote.companyId, 'body/paymentTermsId') : null
   return onQuote(caller, quote, { name: 'quotes.update', idempotencyKey, input: { quoteId, ...body }, version: body.version }, async (tools, current, version) => {
     const fields = [...QUOTE_FIELDS, ...VERSION_FIELDS].filter((field) => body[field] !== undefined)
     if (fields.length === 0) throw new ValidationError('Nothing to change.', [{ path: 'body', message: 'Send at least one field.' }])
@@ -239,15 +262,29 @@ export async function updateQuote(caller: CommandCaller, quoteId: string, body: 
       ...(body.internalNote !== undefined ? { internalNote: blankToNull(body.internalNote) } : {}),
     }
     if (Object.keys(quoteData).length > 0) await tools.tx.quote.update({ where: { id: current.id }, data: quoteData, select: { id: true } })
-    const depositPct = body.depositPct === undefined ? decimal(version.depositPct) : blankToNull(body.depositPct)
+    // B-W2a-19: library terms chosen (their printed name in the version's language, and their order share as the deposit
+    // unless one is sent); a change of language reprints the library terms' name.
+    const language = body.language ?? version.language
+    const chosen = picked ? await usableTerms(tools.tx, picked.id, current.companyId) : null
+    const keptTerms = body.paymentTermsId === undefined && version.paymentTermsId !== null ? await usableTerms(tools.tx, version.paymentTermsId, current.companyId) : null
+    const termsText =
+      body.paymentTerms !== undefined ? undefined
+      : chosen ? termsNameIn(chosen, language)
+      : body.paymentTermsId === null ? undefined
+      : keptTerms && body.language !== undefined && version.paymentTerms === termsNameIn(keptTerms, version.language) ? termsNameIn(keptTerms, language)
+      : undefined
+    const termsDeposit = chosen && body.depositPct === undefined ? (depositOf(chosen.instalments)?.sharePct ?? undefined) : undefined
+    const depositPct = body.depositPct === undefined ? (termsDeposit ?? decimal(version.depositPct)) : blankToNull(body.depositPct)
     const versionData: Prisma.QuoteVersionUncheckedUpdateInput = {
       ...(body.validUntil !== undefined ? { validUntil: body.validUntil === null ? null : dayValue(body.validUntil) } : {}),
       ...(body.firmOffer !== undefined ? { firmOffer: body.firmOffer } : {}),
       ...(body.promiseDate !== undefined ? { promiseDate: body.promiseDate === null ? null : dayValue(body.promiseDate) } : {}),
       ...(body.paymentTerms !== undefined ? { paymentTerms: blankToNull(body.paymentTerms) } : {}),
+      ...(termsText !== undefined ? { paymentTerms: termsText } : {}),
+      ...(body.paymentTermsId !== undefined ? { paymentTermsId: chosen?.id ?? null } : {}),
       ...(body.termsText !== undefined ? { termsText: blankToNull(body.termsText) } : {}),
       ...(body.termsVersion !== undefined ? { termsVersion: blankToNull(body.termsVersion) } : {}),
-      ...(body.depositPct !== undefined || body.depositKind !== undefined ? { depositPct, depositKind: depositPct === null ? null : (body.depositKind ?? version.depositKind ?? 'ACCONTO') } : {}),
+      ...(body.depositPct !== undefined || body.depositKind !== undefined || termsDeposit !== undefined ? { depositPct, depositKind: depositPct === null ? null : (body.depositKind ?? version.depositKind ?? 'ACCONTO') } : {}),
       ...(body.billToAddressId !== undefined ? { billToAddressId: body.billToAddressId } : {}),
       ...(body.shipToAddressId !== undefined ? { shipToAddressId: body.shipToAddressId } : {}),
       ...(body.language !== undefined ? { language: body.language } : {}),

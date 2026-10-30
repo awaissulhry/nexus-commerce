@@ -19,6 +19,8 @@ import { QUALITY_LOTS_REJECT, QUALITY_LOTS_RELEASE, QUALITY_LOTS_VIEW } from '..
 import { ORDERS_MANAGE, ORDERS_VIEW } from '../sales/orders/permissions'
 import { QUOTES_APPROVE, QUOTES_VIEW } from '../sales/quotes/permissions'
 import { Dec } from '../tax/decimal'
+import { TASKS_MANAGE } from '../tasks/permissions'
+import { HOME_VIEW } from './permissions'
 import { phrase, whyKey, type Phrase, type WordParams } from './words'
 
 /**
@@ -57,10 +59,23 @@ export const ATTENTION_KINDS = [
   'PRIVACY_DUTY',
   'STYLE_COMPLIANCE',
   'MAIL_TO_SORT',
+  // B-W2a-20 (design home.today needs-me "tasks due or overdue (W2a) · @mentions (W2a)"): the person's OWN rows, read only
+  // when Today is asked for them (`include`): my open tasks due today or overdue, and the notes that mentioned me and
+  // that I have not finished.
+  'TASK_DUE',
+  'MENTION',
 ] as const
 export type AttentionKind = (typeof ATTENTION_KINDS)[number]
 
 export const isAttentionKind = (value: unknown): value is AttentionKind => typeof value === 'string' && (ATTENTION_KINDS as readonly string[]).includes(value)
+
+/**
+ * The kinds that are the person's own (B-W2a-20): their tasks and their mentions. Today lists them only when asked
+ * (`GET /home/today?include=TASKS,MENTIONS`), so a screen built before them (W1) reads the same answer as before.
+ */
+export const PERSONAL_KINDS = ['TASK_DUE', 'MENTION'] as const satisfies readonly AttentionKind[]
+export type PersonalKind = (typeof PERSONAL_KINDS)[number]
+export const isPersonalKind = (kind: AttentionKind): kind is PersonalKind => (PERSONAL_KINDS as readonly string[]).includes(kind)
 
 export const SEVERITIES = ['HIGH', 'MEDIUM', 'LOW'] as const
 export type Severity = (typeof SEVERITIES)[number]
@@ -72,9 +87,10 @@ export type Group = (typeof GROUPS)[number]
 
 /**
  * The design's tiles (home.today `focus-strip`, W1): "Needs me now" (every row) · "Approvals" (the decisions a person
- * reviews: decide REVIEW) · "Alerts on my records" (late, on hold, rejected, a duty open: every other row).
+ * reviews: decide REVIEW) · "Alerts on my records" (late, on hold, rejected, a duty open: every other row). W2a adds the
+ * person's own rows: TASK (my tasks due or overdue) and MENTION (notes that mentioned me).
  */
-export const CATEGORIES = ['APPROVAL', 'ALERT'] as const
+export const CATEGORIES = ['APPROVAL', 'ALERT', 'TASK', 'MENTION'] as const
 export type Category = (typeof CATEGORIES)[number]
 
 /** How a row is decided from Today (O3 = A): the review of an approval, or the record of an alert or task. */
@@ -237,6 +253,27 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     act: [EMAIL_TRIAGE],
     decide: 'REVIEW',
     live: ['email.inbound_sorted'],
+  }),
+  // B-W2a-20: my open tasks due today or overdue, not snoozed (platform/tasks). Mine when assigned to me and I may still
+  // change it (tasks.manage); done or snoozed from Today.
+  TASK_DUE: rule({
+    kind: 'TASK_DUE',
+    category: 'TASK',
+    label: 'Your tasks due today or overdue',
+    view: HOME_VIEW,
+    act: [TASKS_MANAGE],
+    decide: 'OPEN',
+    live: ['task.created', 'task.assigned', 'task.completed', 'task.changed'],
+  }),
+  // B-W2a-20: notes that mentioned me, whose notification I have not finished or snoozed (platform/notifications).
+  MENTION: rule({
+    kind: 'MENTION',
+    category: 'MENTION',
+    label: 'Notes that mention you',
+    view: HOME_VIEW,
+    act: [HOME_VIEW],
+    decide: 'OPEN',
+    live: ['notification.created'],
   }),
 })
 
@@ -575,7 +612,7 @@ export interface AttentionCounts {
 
 /** The tiles: one per kind the person acts on (0 is an answer), plus any kind a row has; each count = its rows. */
 export function countsOf(items: readonly AttentionItem[], tileKinds: readonly AttentionKind[]): AttentionCounts {
-  const byCategory = { APPROVAL: 0, ALERT: 0 } as Record<Category, number>
+  const byCategory = { APPROVAL: 0, ALERT: 0, TASK: 0, MENTION: 0 } as Record<Category, number>
   const byKind = new Map<AttentionKind, number>(tileKinds.map((kind) => [kind, 0]))
   for (const item of items) {
     byCategory[item.category] += 1
@@ -590,7 +627,7 @@ export function countsOf(items: readonly AttentionItem[], tileKinds: readonly At
 }
 
 /** What people do about an alert (insights/actions): Today is read again after one, for everyone who sees the row. */
-export const ACTION_EVENTS: readonly EventType[] = Object.freeze(['attention.assigned', 'attention.resolved', 'attention.acknowledged'])
+export const ACTION_EVENTS: readonly EventType[] = Object.freeze(['attention.assigned', 'attention.resolved', 'attention.acknowledged', 'attention.snoozed'])
 
 /** Every event any of these kinds refreshes on, sorted (the web's GET /live filter for Today); with alerts, the actions'. */
 export function liveEventsOf(kinds: readonly AttentionKind[]): EventType[] {

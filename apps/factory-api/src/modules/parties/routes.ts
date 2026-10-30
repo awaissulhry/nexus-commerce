@@ -18,6 +18,8 @@ import {
   updateTaxIdentityContract,
   viesHistoryContract,
 } from './contract'
+import { getCommercialTerms, updateCommercialTerms } from './commercial-terms'
+import { getCommercialTermsContract, updateCommercialTermsContract } from './contract'
 import { manifest } from './manifest'
 import { createParty, getParty, listParties, moveParty, updateParty } from './parties'
 import { addTaxIdentity, updateTaxIdentity } from './tax-identities'
@@ -73,4 +75,8 @@ export default defineRoutes('parties', manifest, async (app) => {
   app.post('/parties/:partyId/vies-checks', { schema: checkViesContract }, async (request, reply) =>
     reply.code(201).send(await checkVies(request, request.params.partyId, request.body, idempotencyKeyFrom(request))),
   )
+
+  // B-W2a-19 (SAL-012): the commercial terms its new quotes and orders start with.
+  app.get('/parties/:partyId/commercial-terms', { schema: getCommercialTermsContract }, async (request) => getCommercialTerms(request, request.params.partyId))
+  app.patch('/parties/:partyId/commercial-terms', { schema: updateCommercialTermsContract }, async (request) => updateCommercialTerms(request, request.params.partyId, request.body, idempotencyKeyFrom(request)))
 })

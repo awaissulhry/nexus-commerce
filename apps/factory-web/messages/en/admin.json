@@ -1492,7 +1492,10 @@
     "home": "Home",
     "floorsync": "Floor sync",
     "calendars": "Calendars",
-    "reasons": "Reason lists"
+    "reasons": "Reason lists",
+    "paymentterms": "Payment terms",
+    "pricelists": "Price lists",
+    "tasks": "Tasks"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1646,6 +1649,7 @@
     "quality_garments_release": "Release inspected garments for shipping",
     "quality_garments_reverse": "Take released garments back before they ship",
     "home_view": "See Today",
+    "tasks_manage": "Make tasks on records and assign them",
     "floorsync_view": "See refused actions from floor tablets",
     "floorsync_discard": "Discard a refused floor tablet action",
     "calendars_view": "See the business calendars",
@@ -1659,6 +1663,10 @@
     "planning_firm": "Make planned orders firm",
     "planning_exceptions_manage": "Work the planning exceptions",
     "reasons_view": "See the reason lists and how often each code is used",
-    "reasons_manage": "Keep the reason lists of the whole group"
+    "reasons_manage": "Keep the reason lists of the whole group",
+    "paymentterms_view": "See the payment terms library",
+    "paymentterms_manage": "Add and change payment terms",
+    "pricelists_view": "See price lists and their prices",
+    "pricelists_manage": "Keep price lists, their versions and customers"
   }
 }

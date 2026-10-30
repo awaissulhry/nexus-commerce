@@ -115,7 +115,7 @@ describe('what is stored, laid over the rows', () => {
     const row = candidate('ORDER_PROMISE')
     const item = itemOf(row)
     const resolved = stored(item, { resolvedCondition: item.condition, resolveNote: 'Called the customer', resolvedById: OTHER, resolvedAt: NOW } as Partial<StoredAction>)
-    expect(withActions([item], new Map([[item.key, resolved]]))).toEqual({ items: [], resolved: 1 })
+    expect(withActions([item], new Map([[item.key, resolved]]))).toEqual({ items: [], resolved: 1, snoozed: 0 })
     const moved = itemOf({ ...row, due: '2026-11-05' })
     expect(moved.key).toBe(item.key)
     const back = withActions([moved], new Map([[item.key, resolved]]))
@@ -127,14 +127,14 @@ describe('what is stored, laid over the rows', () => {
     const row = candidate('LOT_HOLD', { state: 'QUARANTINE', due: null })
     const item = itemOf(row)
     const action = stored(item, { acknowledgedCondition: item.condition, acknowledgedById: OTHER, acknowledgedAt: NOW, assignedToId: ME, assignedById: OTHER, assignedAt: NOW })
-    expect(rowActionsOf(item, action)).toEqual({ condition: item.condition, version: 3, verbs: ['ASSIGN', 'RESOLVE'], assigned: { toId: ME, byId: OTHER, at: NOW }, acknowledged: { byId: OTHER, at: NOW } })
+    expect(rowActionsOf(item, action)).toEqual({ condition: item.condition, version: 3, verbs: ['ASSIGN', 'RESOLVE'], assigned: { toId: ME, byId: OTHER, at: NOW }, acknowledged: { byId: OTHER, at: NOW }, snoozable: true })
     const blocked = itemOf({ ...row, state: 'BLOCKED' })
     expect(rowActionsOf(blocked, action)).toMatchObject({ verbs: ['ASSIGN', 'RESOLVE', 'ACKNOWLEDGE'], assigned: { toId: ME }, acknowledged: null })
   })
 
   it('nothing stored: version 0; an approval or a mail takes none of the verbs', () => {
     const alert = itemOf(candidate('ORDER_PROMISE'))
-    expect(rowActionsOf(alert, undefined)).toEqual({ condition: alert.condition, version: 0, verbs: ['ASSIGN', 'RESOLVE', 'ACKNOWLEDGE'], assigned: null, acknowledged: null })
+    expect(rowActionsOf(alert, undefined)).toEqual({ condition: alert.condition, version: 0, verbs: ['ASSIGN', 'RESOLVE', 'ACKNOWLEDGE'], assigned: null, acknowledged: null, snoozable: true })
     for (const kind of ['QUOTE_APPROVAL', 'MAIL_TO_SORT', 'PO_PROPOSAL', 'SCAN_CORRECTION'] as const) {
       const approval = itemOf(candidate(kind, { scope: { companyId: A, siteId: SITE_A, partyId: P1 } }))
       expect(rowActionsOf(approval, undefined).verbs).toEqual([])
