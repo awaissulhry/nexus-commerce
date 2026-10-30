@@ -1,9 +1,10 @@
+import { freightProblems } from '@nexus/factory-domain/invoicing/charges/charges'
 import type { IssueProblem } from '@nexus/factory-domain/invoicing/checks'
 import { creditProblems } from '@nexus/factory-domain/invoicing/credit-note/credit-note'
 import { deductionProblems } from '@nexus/factory-domain/invoicing/from-shipment/deductions'
 import { ddtInvoiceProblems, type DdtFacts } from '@nexus/factory-domain/invoicing/from-shipment/shipped'
 import type { InvoiceRow, LineRow, Reader } from '../store'
-import { creditedInvoiceOf, depositInvoicesOf, invoicedOf, readDdts, shippedOf } from './store'
+import { creditedInvoiceOf, depositInvoicesOf, freightBilledOf, freightOf, invoicedOf, readDdts, shippedOf } from './store'
 
 /**
  * The checks of B-W1-51 that the issue adds to the invoice core's (facts.ts reviewIssue: the "Before you issue" panel,
@@ -15,6 +16,8 @@ import { creditedInvoiceOf, depositInvoicesOf, invoicedOf, readDdts, shippedOf }
  *                    net less their credit notes (from-shipment/deductions);
  *   CREDIT_*         a TD04: its reason, the invoice it credits (issued, not rejected, not a credit note) and what is still
  *                    creditable (credit-note).
+ *   CHARGE_FREIGHT_* B-W2a-54: a FREIGHT charge naming a DDT — billed once per shipment (no other issued invoice bills
+ *                    it), at the figure the shipment holds now (charges/freightProblems).
  * And the references the FatturaPA pre-check needs to build the file as it will be issued: the DDTs (number and date,
  * each line's DDT when there are several) and the credited invoice.
  */
@@ -63,6 +66,13 @@ export async function shippedAndMoneyProblems(db: Reader, invoice: InvoiceRow, l
           others,
         ),
       )
+    }
+    const freight = lines.flatMap((line, index) => (line.kind === 'CHARGE' && line.chargeKind === 'FREIGHT' && line.ddtId ? [{ index, ddtId: line.ddtId, netAmount: line.netAmount }] : []))
+    if (freight.length > 0) {
+      const freightDdts = [...new Set(freight.map((line) => line.ddtId))]
+      const rows = await readDdts(db, { id: { in: freightDdts } })
+      const others = (await freightBilledOf(db, freightDdts, invoice.id)).filter((row) => !row.draft)
+      problems.push(...freightProblems(freight, new Map(rows.map((row) => [row.id, freightOf(row)])), others, invoice.priceBasis, invoice.currency))
     }
     const deducted = lines.flatMap((line, index) => (line.kind === 'DEPOSIT_DEDUCTION' && line.depositInvoiceId ? [{ index, depositInvoiceId: line.depositInvoiceId, netAmount: line.netAmount }] : []))
     if (deducted.length > 0) {

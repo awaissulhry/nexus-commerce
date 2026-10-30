@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output, quantity, unitPrice } from '@nexus/factory-domain/core/contracts'
+import { CHARGE_KINDS } from '@nexus/factory-domain/invoicing/charges/charges'
 import { INVOICE_DOC_TYPES, INVOICE_LINE_KINDS, INVOICE_STATUSES, MAX_CAUSALE, MAX_DESCRIPTION, MAX_INVOICE_LINES, PRICE_BASES } from '@nexus/factory-domain/invoicing/invoices'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 
@@ -17,7 +18,9 @@ const json = z.record(z.string(), z.unknown())
 const paymentMethod = z.string().regex(/^MP(0[1-9]|1[0-9]|2[0-3])$/, { message: 'Expected a FatturaPA ModalitaPagamento, MP05 for a bank transfer.' })
 
 export const lineInput = input({
-  kind: z.enum(['GOODS', 'SERVICE']).optional(),
+  /** B-W2a-54: CHARGE, an accessory charge (freight, packaging, samples, a fee), with `chargeKind`. */
+  kind: z.enum(['GOODS', 'SERVICE', 'CHARGE']).optional(),
+  chargeKind: z.enum(CHARGE_KINDS).nullish(),
   description: z.string().trim().min(1).max(MAX_DESCRIPTION),
   itemCode: z.string().trim().max(35).nullish(),
   quantity: quantity(),
@@ -53,7 +56,13 @@ const lineView = output({
   size: z.string().nullable(),
   ddtId: id().nullable(),
   depositInvoiceId: id().nullable(),
+  /** B-W2a-54: CHARGE only, what it bills; the step of the order's payment schedule the line bills (a TD02's deposit). */
+  chargeKind: z.enum(CHARGE_KINDS).nullable(),
+  milestoneId: id().nullable(),
 })
+
+/** A legal invoicing deadline (DPR 633/1972 art. 21 c.4), in words, with the days left (factory-domain from-shipment/deadlines). */
+export const deadlineView = output({ docType: z.enum(['TD01', 'TD24']), dueBy: z.string(), daysLeft: z.number().int(), state: z.enum(['OPEN', 'DUE_SOON', 'LATE']), words: z.string() })
 
 const vatSummaryEntry = output({ rate: z.string().nullable(), nature: z.string().nullable(), legalRef: z.string().nullable(), taxable: z.number().int(), vat: z.number().int(), rounding: z.number().int() })
 
@@ -97,6 +106,8 @@ export const invoiceView = output({
   creditedAmount: money.price(z.number().int()),
   openAmount: money.price(z.number().int()),
   refundDueAmount: money.price(z.number().int()),
+  /** B-W2a-54 (FIN-065): a DRAFT TD01/TD24 of shipped goods — the last day to issue it, counted down; else null. */
+  deadline: deadlineView.nullable(),
   lines: z.array(lineView),
   createdAt: instant(),
   updatedAt: instant(),

@@ -10,11 +10,18 @@ import { fifteenthOfNextMonth, formatDateIt, monthOf } from '../fatturapa/format
  *   deferred (TD24)    the goods shipped with DDTs in one calendar month, invoiced together by the 15th of the next month,
  *                      citing the DDTs: art. 21 c.4 lett. a. One invoice per customer and month.
  *
- * The rule (W1; a preset per customer comes later): one DDT still within its 12 days → TD01; several DDTs of one month,
- * or one DDT past its 12 days → TD24 while the 15th of the next month has not passed. The office may pick the other
- * type while it is in time. When both limits passed the invoice is late: one DDT is invoiced at once as a TD01 (the
- * FatturaPA builder refuses a TD24 after its 15th); several DDTs are split, one TD01 each. The deadlines are in words,
- * with the days left, for the "Shipped, not invoiced" list and the record's countdown (A2 SCR-080, SCR-081).
+ * The rule (W1): one DDT still within its 12 days → TD01; several DDTs of one month, or one DDT past its 12 days → TD24
+ * while the 15th of the next month has not passed. The office may pick the other type while it is in time. When both
+ * limits passed the invoice is late: one DDT is invoiced at once as a TD01 (the FatturaPA builder refuses a TD24 after
+ * its 15th); several DDTs are split, one TD01 each. The deadlines are in words, with the days left, for the "Shipped,
+ * not invoiced" list and the record's countdown (A2 SCR-080, SCR-081).
+ *
+ * B-W2a-54 (FIN-065): the customer's preset (Party.invoiceTiming, B-W2a-19 sales/terms invoiceTypePreset): per shipment
+ * an immediate invoice (TD01), monthly one deferred invoice (TD24). The preset is the suggestion whenever the law allows
+ * it (`chooseInvoiceType(…, preset)`), and each DDT's own deadline follows it (`presetDeadline`: a monthly customer's DDT
+ * waits for the 15th of the next month; a per-shipment customer's DDT for its 12 days, then, once they passed, for the
+ * 15th: the deferred invoice is still in time). The date timers (B-W2a-33 INVOICE_DEADLINE) and the lists count down to
+ * that day.
  */
 
 export type ShipInvoiceType = 'TD01' | 'TD24'
@@ -102,9 +109,9 @@ export interface TypeChoice {
 
 /**
  * The type of the invoice of these DDTs (all of one customer), today, and its deadline. `requested`: the office's pick
- * (refused, with why, when it is not allowed).
+ * (refused, with why, when it is not allowed). `preset`: the customer's (B-W2a-54), suggested whenever it is allowed.
  */
-export function chooseInvoiceType(ddts: readonly { readonly number: string; readonly date: BusinessDate }[], today: BusinessDate, requested?: ShipInvoiceType, path = 'body/docType'): TypeChoice {
+export function chooseInvoiceType(ddts: readonly { readonly number: string; readonly date: BusinessDate }[], today: BusinessDate, requested?: ShipInvoiceType, path = 'body/docType', preset?: ShipInvoiceType): TypeChoice {
   const none = (message: string, at = 'body/ddtIds'): TypeChoice => ({ docType: null, suggested: null, allowed: [], deadline: null, immediate: null, deferred: null, words: message, problems: [{ path: at, message }] })
   if (ddts.length === 0) return none('Choose at least one shipped DDT to invoice.')
   const months = [...new Set(ddts.map((ddt) => monthOf(ddt.date)))].sort()
@@ -123,9 +130,11 @@ export function chooseInvoiceType(ddts: readonly { readonly number: string; read
       deferred,
     }
   }
-  const suggested: ShipInvoiceType = allowed[0]!
+  const suggested: ShipInvoiceType = preset !== undefined && allowed.includes(preset) ? preset : allowed[0]!
   const reason =
-    suggested === 'TD01'
+    preset === 'TD24' && suggested === 'TD24' && ddts.length === 1 && immediate!.state !== 'LATE'
+      ? `The customer is invoiced once a month: one deferred invoice (TD24) for the DDTs of ${months[0]}. ${deferred.words}`
+      : suggested === 'TD01'
       ? immediate!.state === 'LATE'
         ? `Late: both limits passed (${formatDateIt(immediate!.dueBy)} and ${formatDateIt(deferred.dueBy)}). Issue it now as an immediate invoice (TD01) and tell the accountant (late invoicing).`
         : `One DDT, still within its 12 days: an immediate invoice (TD01). ${immediate!.words}`
@@ -143,4 +152,27 @@ export function chooseInvoiceType(ddts: readonly { readonly number: string; read
   }
   const docType = requested ?? suggested
   return { docType, suggested, allowed, deadline: docType === 'TD01' ? immediate : deferred, immediate, deferred, words: reason, problems: [] }
+}
+
+/**
+ * A DDT's own deadline under the customer's preset (B-W2a-54; FIN-065): TD24 → the 15th of the month after the DDT's;
+ * TD01 → its 12 days while they last, then the 15th while that lasts (a deferred invoice is still in time), then late
+ * on its 12 days.
+ */
+export function presetDeadline(ddt: { readonly number: string; readonly date: BusinessDate }, preset: ShipInvoiceType, today: BusinessDate): InvoiceDeadline {
+  const deferred = deferredDeadline(monthOf(ddt.date), today)
+  if (preset === 'TD24') return deferred
+  const immediate = immediateDeadline(ddt, today)
+  if (immediate.state !== 'LATE' || deferred.state === 'LATE') return immediate
+  return deferred
+}
+
+/**
+ * The countdown of a DRAFT invoice of shipped goods (B-W2a-54; A2 SCR-081 "the record's countdown"): a TD01 by its DDT's
+ * 12 days (the earliest DDT when it names more), a TD24 by the 15th of the month after its DDTs'. Null without a DDT.
+ */
+export function draftDeadline(docType: ShipInvoiceType, ddts: readonly { readonly number: string; readonly date: BusinessDate }[], today: BusinessDate): InvoiceDeadline | null {
+  const first = [...ddts].sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number, undefined, { numeric: true }))[0]
+  if (!first) return null
+  return docType === 'TD01' ? immediateDeadline(first, today) : deferredDeadline(monthOf(first.date), today)
 }

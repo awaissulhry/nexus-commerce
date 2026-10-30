@@ -36,7 +36,7 @@ export async function settlementOf(db: Reader, orderId: string): Promise<OrderSe
   if (!isUuid(orderId)) return null
   const order = await db.salesOrder.findUnique({
     where: { id: orderId },
-    select: { id: true, number: true, status: true, currency: true, companyId: true, partyId: true, lines: { select: { id: true, seq: true, quantity: true, description: true, sizes: { select: { size: true, quantity: true } } } } },
+    select: { id: true, number: true, status: true, currency: true, companyId: true, partyId: true, lines: { select: { id: true, seq: true, quantity: true, description: true, closedShortQuantity: true, sizes: { select: { size: true, quantity: true } } } } },
   })
   if (!order) return null
   const lineIds = order.lines.map((line) => line.id)
@@ -72,6 +72,8 @@ export async function settlementOf(db: Reader, orderId: string): Promise<OrderSe
       seq: line.seq,
       description: line.description ?? `line ${line.seq}`,
       sizes: line.sizes.length > 0 ? line.sizes.map((size) => ({ size: size.size, ordered: size.quantity })) : [{ size: null, ordered: line.quantity }],
+      // B-W2a-54: a line closed short (B-W2a-30) owes nothing more of what it never shipped.
+      closedShort: line.closedShortQuantity !== null,
     })),
     shipped: shipped.map((row) => ({ salesOrderLineId: row.salesOrderLineId, size: row.size, quantity: row.quantity })),
     invoiced: billed.map((row) => ({ salesOrderLineId: row.salesOrderLineId!, size: row.size, quantity: row.quantity.toFixed(4) })),
