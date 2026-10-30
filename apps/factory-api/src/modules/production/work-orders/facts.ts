@@ -22,6 +22,7 @@ import {
   type ReleaseChecklist,
 } from '@nexus/factory-domain/production/work-orders/release'
 import { planMaterials, planOperations, type BomGap, type MissingWorkCentre, type PlannedMaterial, type PlannedOperation, type SpecCell } from '@nexus/factory-domain/production/work-orders/spec'
+import { repairNotRequired, repairWorkCentreCheck } from '@nexus/factory-domain/production/work-orders/repair'
 import type { UnusableReason } from '@nexus/factory-domain/planning/usable'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
@@ -262,11 +263,44 @@ export interface ReleaseFacts extends Basics {
   readonly batchSeries: boolean
 }
 
+/**
+ * A repair DRAFT's spec (B-W2a-12, MES-019): the steps stored on it when it was made (./repairs), at the work centres they
+ * name, and no material. The release freezes them as they are.
+ */
+export async function repairSpecOf(db: Reader, workOrderId: string, parts: SpecParts): Promise<SpecPlan> {
+  const rows = await db.workOrderOperation.findMany({
+    where: { workOrderId },
+    select: { seq: true, routingSeq: true, code: true, name: true, standardMinutes: true, scanRequired: true, workCentreId: true },
+    orderBy: { seq: 'asc' },
+  })
+  const centreOf = new Map(parts.centres.map((centre) => [centre.id, centre]))
+  const stepOf = new Map(parts.steps.map((step) => [step.seq, step]))
+  const operations: PlannedOperation[] = rows.map((row) => ({
+    seq: row.seq,
+    routingSeq: row.routingSeq,
+    stepId: stepOf.get(row.routingSeq)?.id ?? '',
+    code: row.code,
+    name: row.name,
+    standardMinutes: decimalText(row.standardMinutes.toString()),
+    scanRequired: row.scanRequired,
+    // The site's work centres are read whatever their status, so the operation's own is always there.
+    workCentreKind: centreOf.get(row.workCentreId)!.kind,
+    workCentreId: row.workCentreId,
+    workCentreCode: centreOf.get(row.workCentreId)?.code ?? null,
+  }))
+  return { operations, missing: [], materials: [], gaps: [] }
+}
+
 /** Everything the release check reads, for a DRAFT, on the day `date`. */
 export async function readReleaseFacts(db: Reader, basics: Basics, date: BusinessDate): Promise<ReleaseFacts> {
   const { workOrder, style, cells, orders, revision } = basics
   const current = await readReleasedRevision(db, style.id)
   const parts = await readSpecParts(db, revision?.styleId === style.id ? revision.id : null, workOrder.siteId)
+  if (workOrder.kind === 'REPAIR') {
+    // B-W2a-12: a repair checks no certificate, deposit, BOM or material (factory-domain production/work-orders/repair).
+    const spec = await repairSpecOf(db, workOrder.id, parts)
+    return { ...basics, current, parts, spec, gates: [], deposits: [], material: [], batchSeries: await hasSeries(db, workOrder.companyId, 'BATCH') }
+  }
   const spec = planSpec(parts, cells)
   const gates = await readGates(db, style.id, cells, date)
   const deposits = await readDeposits(db, orders)
@@ -278,6 +312,24 @@ export async function readReleaseFacts(db: Reader, basics: Basics, date: Busines
 /** THE release check: the record's checklist and the release's refusal are this one answer. */
 export function checklistOf(facts: ReleaseFacts, override: { readonly reason: string } | null): ReleaseChecklist {
   const { style, site, cells, revision, label, current, parts, spec } = facts
+  if (facts.workOrder.kind === 'REPAIR') {
+    // B-W2a-12 (MES-019): a repair's own answers; its steps at active work centres of the site.
+    const centreOf = new Map(parts.centres.map((centre) => [centre.id, centre]))
+    return releaseChecklist([
+      revisionCheck(style.id, revision, current),
+      labelCheck(revision, revision?.labelTemplateId ? label : null),
+      repairNotRequired('CERTIFICATE'),
+      repairWorkCentreCheck(
+        site.code,
+        spec.operations.map((op) => ({ seq: op.seq, code: op.code, name: op.name, workCentreKind: op.workCentreKind, workCentreCode: op.workCentreCode, workCentreStatus: op.workCentreId ? (centreOf.get(op.workCentreId)?.status ?? null) : null })),
+      ),
+      repairNotRequired('BOM'),
+      cellsCheck(cells.map((cell) => ({ id: cell.id, label: cellLabel(cell), inRange: style.sizes.includes(cell.size) }))),
+      repairNotRequired('DEPOSIT'),
+      repairNotRequired('MATERIAL'),
+      batchCheck(facts.batchSeries),
+    ])
+  }
   return releaseChecklist([
     revisionCheck(style.id, revision, current),
     labelCheck(revision, revision?.labelTemplateId ? label : null),

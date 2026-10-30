@@ -383,6 +383,15 @@ describe('deciding lines (set aside, open again, ordered)', () => {
 describe('declared', () => {
   it('the permissions and events are in the catalogues; no event carries money', () => {
     for (const permission of PLANNING_PERMISSIONS) expect(FACTORY_PERMISSIONS.isDeclared(permission)).toBe(true)
-    expect(EVENT_CATALOGUE.types().filter((type) => type.startsWith('planning.'))).toEqual(['planning.requirements_decided', 'planning.run_failed', 'planning.run_finished'])
+    expect(EVENT_CATALOGUE.types().filter((type) => type.startsWith('planning.'))).toEqual([
+      // B-W2a-16: planning settings and capacity.
+      'planning.capacity_changed',
+      'planning.item_parameters_changed',
+      'planning.requirements_decided',
+      'planning.run_failed',
+      'planning.run_finished',
+      // B-W2a-16.
+      'planning.settings_changed',
+    ])
   })
 })

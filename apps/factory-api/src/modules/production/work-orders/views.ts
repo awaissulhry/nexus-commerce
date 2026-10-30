@@ -167,7 +167,8 @@ export async function workOrderView(db: Reader, workOrder: Header, today: Busine
   const { style, site, cells, orders, revision, label } = basics
   const frozen = workOrder.status !== 'DRAFT'
   const parts = await readSpecParts(db, revision?.id ?? null, workOrder.siteId)
-  const draft = frozen ? null : planSpec(parts, cells)
+  // A repair DRAFT (B-W2a-12) shows the steps stored on it, as the release will freeze them.
+  const draft = frozen || workOrder.kind === 'REPAIR' ? null : planSpec(parts, cells)
   const plan = draft ? { operations: draft.operations.map((op) => ({ ...op, id: null })), materials: draft.materials } : await frozenSpec(db, workOrder, parts)
   const issued = await readIssued(db, workOrder.siteId, [workOrder.id])
   const cut = frozen ? await cutCountsOf(db, workOrder.id, workOrder.styleId) : null
@@ -202,6 +203,8 @@ export async function workOrderView(db: Reader, workOrder: Header, today: Busine
     updatedAt: toUtcIso(workOrder.updatedAt),
     createdById: workOrder.createdById,
     nextActions: [...nextActions(workOrder.status)],
+    // B-W2a-12 (MES-019): the repair order a REPAIR work order repairs for (wave 2 RepairOrder.workOrderId).
+    repairOrder: workOrder.kind === 'REPAIR' ? await db.repairOrder.findFirst({ where: { workOrderId: workOrder.id }, select: { id: true, number: true, stage: true }, orderBy: { createdAt: 'desc' } }) : null,
     orders: orders.map((order) => ({ id: order.id, number: order.number, customerRef: order.customerRef, status: order.status, partyId: order.partyId, partyName: order.partyName, depositRequired: order.depositRequired })),
     cells: cells.map((cell) => ({
       id: cell.id,

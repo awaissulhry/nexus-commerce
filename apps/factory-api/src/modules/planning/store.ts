@@ -164,7 +164,8 @@ export async function readDemand(db: Reader, site: SiteRow): Promise<DemandRead>
 export async function readWorkOrders(db: Reader, siteId: string, orderLineIds: readonly string[]): Promise<{ cells: PlanWorkOrderCell[]; issues: WorkOrderIssue[] }> {
   if (orderLineIds.length === 0) return { cells: [], issues: [] }
   const rows = await db.workOrderSize.findMany({
-    where: { siteId, salesOrderLineId: { in: [...orderLineIds] }, workOrder: { status: { in: [...OPEN_WORK_ORDER_STATUSES, ...MADE_WORK_ORDER_STATUSES] } } },
+    // B-W2a-12: a REPAIR work order's cell repairs a sold garment; it is not production of the line.
+    where: { siteId, salesOrderLineId: { in: [...orderLineIds] }, workOrder: { status: { in: [...OPEN_WORK_ORDER_STATUSES, ...MADE_WORK_ORDER_STATUSES] }, kind: { not: 'REPAIR' } } },
     select: { workOrderId: true, salesOrderLineId: true, size: true, quantity: true, workOrder: { select: { number: true, status: true } } },
     orderBy: [{ workOrderId: 'asc' }, { size: 'asc' }],
   })

@@ -41,7 +41,8 @@ export async function readyToShip(caller: CommandCaller, query: ReadyQuery) {
     const [counts, cells] = await Promise.all([
       cellCounts(client, cellIds),
       client.workOrderSize.findMany({
-        where: { id: { in: cellIds }, salesOrderLine: { order: { status: { notIn: ['CANCELLED', 'CLOSED'] } } } },
+        // B-W2a-12: a repaired garment goes back with its repair's DDT (B-W2a-17), never on a shipment of the order.
+        where: { id: { in: cellIds }, salesOrderLine: { order: { status: { notIn: ['CANCELLED', 'CLOSED'] } } }, workOrder: { kind: { not: 'REPAIR' } } },
         select: {
           id: true,
           siteId: true,
