@@ -93,6 +93,8 @@ model StoredFile {
   // quality.prisma: the lab results it is the report of, the lot documents it is.
   labResults     LabResult[]
   lotDocuments   LotDocument[]
+  // W2a stockcount.prisma: the year-end count whose signed valued list it is.
+  stockCountValuedLists StockCount[] @relation("StockCountValuedList")
   // privacy.prisma: the notice language and the DPIA whose PDF it is.
   privacyNoticeTexts PrivacyNoticeText[] @relation("PrivacyNoticeTextFile")
   privacyDpias       PrivacyDpia[]       @relation("PrivacyDpiaFile")

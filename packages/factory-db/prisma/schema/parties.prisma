@@ -88,7 +88,10 @@ model Party {
   depositRequests     DepositRequest[]
   // supply.prisma: as a supplier, its purchase orders and the requirements it is suggested for.
   purchaseOrders       PurchaseOrder[]
-  materialRequirements MaterialRequirement[]
+  materialRequirements MaterialRequirement[] @relation("MaterialRequirementSupplier")
+  // W2a supply.prisma, planning.prisma: the firm planned orders that buy from it, the item parameters that prefer it.
+  firmRequirements     MaterialRequirement[] @relation("MaterialRequirementFirmSupplier")
+  itemPlannings        ItemPlanning[]        @relation("ItemPlanningSupplier")
   // inventory.prisma: as a supplier, the goods received from it and its lots.
   goodsReceipts        GoodsReceipt[]
   lots                 Lot[]

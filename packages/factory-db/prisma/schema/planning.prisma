@@ -1,0 +1,354 @@
+// Planning (W2a schema wave 4/7; plan W2A §5; features PLN-003, PLN-005, PLN-014, PLN-071, PLN-099, PLN-115, PLN-116,
+// PLN-193): the numbers the plan and the planning board need before they can run every day: the planning settings of a
+// site (horizon and buckets), the planning parameters of each item at a site (lead times, safety stock, reorder point,
+// min/max, lot sizes, where it comes from), the planned efficiency and capacity of each line and work centre, the
+// pegging each planning run writes (which demand each requirement serves, and what covers it), and the exceptions the
+// runs find. apps/factory-api's modules/planning writes them (B-W2a-16 settings and capacity, B-W2a-22 the daily run:
+// pegging, firm planned orders, exceptions), always through command(). The runs and their material requirements (with
+// the firm planned order's columns) are supply.prisma's; the calendars and shift patterns are calendar.prisma's (W2a
+// wave 1).
+//
+// Capacity (PLN-115, PLN-116): available minutes = people (or stations) × the calendar's working minutes of the day ×
+// the planned efficiency; load = the standard minutes of the frozen routings. Per line and per work centre, never per
+// person (Statuto dei Lavoratori art. 4; Owner answers W1, H3): no table here names a worker.
+//
+// One row per site (settings), per line or per work centre (capacity) is kept by the id: the row's id IS the site's,
+// line's or work centre's (as ProductionSettings). One item parameter row per item, colour and site is the planning
+// module's: a unique key of ids alone cannot be copied by the generated isolation tests.
+//
+// Pegging (PLN-071) is the run's history: written with its run, never changed or removed (`@append-only`). Exceptions
+// (PLN-193) are a queue the planner clears: one row per condition (its dedupe key) while it is unresolved; each run
+// that finds it again moves it on (its latest run, facts and impact); acknowledged, snoozed and resolved by a person, or
+// cleared by a run that no longer finds it; one that comes back after it was resolved is a new occurrence.
+//
+// Who sees what (ownership/planning.json): the office only (planners, buyers, the scheduler's system context). No money
+// here: costs stay with the requirements and purchase orders (`@grain cost`). Nobody deletes settings, capacity, pegging
+// or an exception; the office deletes an item's parameters (the item is then planned by its defaults again).
+
+/// The planning settings of a site (PLN-003): how far the plan looks ahead and in which buckets, the efficiency of a line
+/// without its own, and the time of the nightly run.
+model PlanningSettings {
+  /// The site's own id: a site has at most one row, read by the site's id.
+  id                   String   @id @db.Uuid
+  tenantId             String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId            String   @db.Uuid
+  siteId               String   @db.Uuid
+  /// How far the plan looks ahead, in weeks: 1 to 104.
+  horizonWeeks         Int      @default(26)
+  /// The plan's buckets: days for the first dayBucketWeeks weeks, then weeks up to week weekBucketWeeks, then months to
+  /// the horizon (0 ≤ day weeks ≤ week weeks ≤ horizon).
+  dayBucketWeeks       Int      @default(2)
+  weekBucketWeeks      Int      @default(13)
+  /// The planned efficiency of a line or work centre without its own capacity row, percent of the standard minutes:
+  /// above 0, at most 200.
+  defaultEfficiencyPct Decimal  @default(100) @db.Decimal(5, 2)
+  /// The nightly planning run of the site (B-W2a-22): its time, HH:MM in the site's timezone; null: runs on demand only.
+  scheduledRunTime     String?
+  version              Int      @default(1)
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?  @db.Uuid
+
+  site Site @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, siteId])
+}
+
+/// How a site plans one item (and colour) (PLN-005, PLN-099): from the orders, by a reorder point or by min/max; its lead
+/// times, safety stock and lot sizes; bought (from which supplier) or made (at which site). Quantities count in the item's
+/// base unit; a buy also follows its supplier's own minimum and steps (sourcing.prisma, the item's).
+model ItemPlanning {
+  id                 String              @id @db.Uuid
+  tenantId           String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId          String              @db.Uuid
+  /// The site planned for: its stock is netted, its orders are counted.
+  siteId             String              @db.Uuid
+  itemId             String              @db.Uuid
+  /// The colour it is for, one of the item's; null: every colour of the item (or an item without colours).
+  itemColourId       String?             @db.Uuid
+  /// ORDERS (the default): the need of the orders, plus the safety stock. REORDER_POINT: order lotSize when the stock falls
+  /// to reorderPoint. MIN_MAX: when the stock falls below minStock, order up to maxStock. MANUAL: shown, never suggested.
+  method             ItemPlanningMethod  @default(ORDERS)
+  /// Where it comes from at this site; null: the item's own sourcing.
+  source             ItemPlanningSource?
+  /// BUY: the preferred supplier at this site (one of the item's approved sources: the planning module checks it); null:
+  /// the item's default source.
+  supplierId         String?             @db.Uuid
+  /// MAKE: the site that makes it, a plant of the same company; null: this site.
+  makeSiteId         String?             @db.Uuid
+  /// Calendar days, 0 to 366: from the order to the goods at this site when bought (null: the source's lead time), to
+  /// make it (null: from its routing), and the safety days added before the need date.
+  buyLeadTimeDays    Int?
+  makeLeadTimeDays   Int?
+  safetyLeadTimeDays Int?
+  /// The stock the plan keeps on hand, 0 or more; null: none.
+  safetyStock        Decimal?            @db.Decimal(18, 4)
+  /// REORDER_POINT exactly: the stock (on hand + on order − reserved) at which to order, 0 or more, and how much (the lot
+  /// size, above 0).
+  reorderPoint       Decimal?            @db.Decimal(18, 4)
+  lotSize            Decimal?            @db.Decimal(18, 4)
+  /// MIN_MAX exactly: order when the stock falls below minStock (0 or more), up to maxStock (above it).
+  minStock           Decimal?            @db.Decimal(18, 4)
+  maxStock           Decimal?            @db.Decimal(18, 4)
+  /// Every order the plan suggests: at least minOrderQty, in steps of orderMultiple, at most maxOrderQty; each above 0,
+  /// the maximum not below the minimum.
+  minOrderQty        Decimal?            @db.Decimal(18, 4)
+  orderMultiple      Decimal?            @db.Decimal(18, 4)
+  maxOrderQty        Decimal?            @db.Decimal(18, 4)
+  note               String?
+  version            Int                 @default(1)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?             @db.Uuid
+
+  site       Site        @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  item       Item        @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and the other keys.
+  itemColour ItemColour? @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  supplier   Party?      @relation("ItemPlanningSupplier", fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  makeSite   Site?       @relation("ItemPlanningMakeSite", fields: [tenantId, companyId, makeSiteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, siteId, itemId])
+}
+
+enum ItemPlanningMethod {
+  ORDERS
+  REORDER_POINT
+  MIN_MAX
+  MANUAL
+}
+
+enum ItemPlanningSource {
+  BUY
+  MAKE
+}
+
+/// The capacity of one line for planning (PLN-014, PLN-115): its planned efficiency and the people it plans with. Per
+/// line, never per person (Statuto dei Lavoratori art. 4).
+model LineCapacity {
+  /// The line's own id: a line has at most one row, read by the line's id.
+  id                   String   @id @db.Uuid
+  tenantId             String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId            String   @db.Uuid
+  siteId               String   @db.Uuid
+  lineId               String   @db.Uuid
+  /// Planned efficiency, percent of the standard minutes: above 0, at most 200.
+  plannedEfficiencyPct Decimal  @db.Decimal(5, 2)
+  /// How many people work on it per shift, as planned (a headcount, never who): 1 to 500; null: one per active station
+  /// of the line.
+  operators            Int?
+  note                 String?
+  version              Int      @default(1)
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?  @db.Uuid
+
+  site Site @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  line Line @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, siteId])
+}
+
+/// The capacity of one work centre for planning (PLN-115): how many of its stations work at once and their planned
+/// efficiency. Its working minutes come from its calendar (a workshop's), else its site's.
+model WorkCentreCapacity {
+  /// The work centre's own id: a work centre has at most one row, read by its id.
+  id                   String   @id @db.Uuid
+  tenantId             String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId            String   @db.Uuid
+  siteId               String   @db.Uuid
+  workCentreId         String   @db.Uuid
+  /// How many stations (or people) work at once, as planned: 1 to 500; null: its active stations.
+  units                Int?
+  /// Planned efficiency, percent of the standard minutes: above 0, at most 200.
+  plannedEfficiencyPct Decimal  @db.Decimal(5, 2)
+  note                 String?
+  version              Int      @default(1)
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?  @db.Uuid
+
+  site       Site       @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  workCentre WorkCentre @relation(fields: [tenantId, siteId, workCentreId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, siteId])
+}
+
+/// One part of a requirement's pegging (PLN-071): this much of one demand (a sales order line and size, a work order,
+/// the safety stock or a reorder rule) and what covers it (usable stock, a reservation, an open purchase order line, or
+/// the requirement's planned order). The demand's rows add up to its need, the requirement's to its gross quantity.
+/// Written by the run, never changed or removed (the …_stock_plan_w2a_guards triggers, for every login).
+/// @append-only
+model RequirementPegging {
+  id                  String            @id @db.Uuid
+  tenantId            String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The run's site and the run.
+  siteId              String            @db.Uuid
+  runId               String            @db.Uuid
+  /// The requirement (one material and colour of the run) it pegs.
+  requirementId       String            @db.Uuid
+  /// Its place in the requirement's tree: by demand date, then supply.
+  seq                 Int
+  demandKind          PeggingDemandKind
+  /// ORDER_LINE exactly, and a WORK_ORDER's when it makes one: the sales order line (with its party) and, for a size
+  /// grid, the size; null for a made-to-measure unit or the whole line.
+  salesOrderLineId    String?           @db.Uuid
+  partyId             String?           @db.Uuid
+  size                String?
+  /// WORK_ORDER exactly: the open work order of the site whose material it is.
+  workOrderId         String?           @db.Uuid
+  /// When the demand needs it.
+  demandDate          DateTime          @db.Date
+  /// Above 0, in the item's base unit.
+  quantity            Decimal           @db.Decimal(18, 4)
+  supplyKind          PeggingSupplyKind
+  /// RESERVATION exactly: the reservation it counts on (the same material).
+  reservationId       String?           @db.Uuid
+  /// PURCHASE_ORDER exactly: the open purchase order line it counts on (the same material and colour).
+  purchaseOrderLineId String?           @db.Uuid
+  /// When that supply is there: the purchase order line's confirmed (else asked) date, the planned order's date; null
+  /// for stock on hand and reservations.
+  supplyDate          DateTime?         @db.Date
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  createdById         String?           @db.Uuid
+
+  requirement       MaterialRequirement @relation(fields: [tenantId, siteId, runId, requirementId], references: [tenantId, siteId, runId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and the other keys.
+  salesOrderLine    SalesOrderLine?     @relation(fields: [tenantId, partyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  workOrder         WorkOrder?          @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  reservation       Reservation?        @relation(fields: [tenantId, siteId, reservationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  purchaseOrderLine PurchaseOrderLine?  @relation(fields: [tenantId, siteId, purchaseOrderLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, requirementId, seq])
+  @@index([tenantId, runId])
+  // "Why": the requirements an order line or a work order is pegged to.
+  @@index([tenantId, salesOrderLineId])
+  @@index([tenantId, workOrderId])
+}
+
+enum PeggingDemandKind {
+  /// A sales order line (and size) with no work order yet.
+  ORDER_LINE
+  /// An open work order's material (and the order line it makes, when it makes one).
+  WORK_ORDER
+  /// The site's safety stock of the item (its planning parameters).
+  SAFETY_STOCK
+  /// A reorder point or min/max rule of the item.
+  REORDER
+}
+
+enum PeggingSupplyKind {
+  /// Usable (RELEASED) stock at the site.
+  STOCK
+  /// Stock reserved for this demand.
+  RESERVATION
+  /// An open purchase order line.
+  PURCHASE_ORDER
+  /// The requirement's planned order (to buy or make; firm or not, as the requirement says).
+  PLANNED
+}
+
+/// One thing the planning runs of a site could not solve (PLN-193), a queue the planner clears: a shortage, a supply
+/// that comes too late, a lane over or under its capacity, an order past due, stock in excess or below safety, a planned
+/// order to move or cancel, negative stock.
+model PlanningException {
+  id               String                       @id @db.Uuid
+  tenantId         String                       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId        String                       @db.Uuid
+  siteId           String                       @db.Uuid
+  kind             PlanningExceptionKind
+  /// What it is about, so the next run finds it again: `<kind>:<record id>[:<more>]` (the material and colour of a
+  /// shortage, the order line, the purchase order line, the lane). Fixed.
+  dedupeKey        String
+  /// 1 the first time; one more each time it comes back after it was resolved.
+  occurrence       Int                          @default(1)
+  /// The run that found it first, and the latest run that found it (runs of the site); when.
+  firstRunId       String                       @db.Uuid
+  lastRunId        String                       @db.Uuid
+  firstSeenAt      DateTime                     @db.Timestamptz(3)
+  lastSeenAt       DateTime                     @db.Timestamptz(3)
+  /// The material it is about (and colour); null for a lane or an order.
+  itemId           String?                      @db.Uuid
+  itemColourId     String?                      @db.Uuid
+  /// The latest run's requirement it comes from, for a material's exception.
+  requirementId    String?                      @db.Uuid
+  /// The record it is about, both or neither: its model name ("SalesOrderLine", "WorkOrder", "PurchaseOrderLine",
+  /// "Line", "WorkCentre") and id.
+  recordType       String?
+  recordId         String?                      @db.Uuid
+  /// The numbers its sentence is made from, as decimal strings and ISO dates (no floats, never a cost or a person):
+  /// { "needDate": "2026-11-14", "supplyDate": "2026-11-20", "quantity": "200.0000", "uom": "FT2", … }.
+  facts            Json                         @default("{}")
+  /// Its impact: how many orders it touches (0 or more) and by how many days the latest would be late (0 or more; null:
+  /// none late).
+  ordersAffected   Int                          @default(0)
+  daysLate         Int?
+  status           PlanningExceptionStatus      @default(NEW)
+  /// The person it is for (a planner or a buyer); null: nobody yet.
+  ownerId          String?                      @db.Uuid
+  /// From ACKNOWLEDGED on: when and by whom; set once.
+  acknowledgedAt   DateTime?                    @db.Timestamptz(3)
+  acknowledgedById String?                      @db.Uuid
+  /// Snoozed by a person (while unresolved): when, by whom, until when (after the snooze); until null: until the next run.
+  snoozedAt        DateTime?                    @db.Timestamptz(3)
+  snoozedById      String?                      @db.Uuid
+  snoozedUntil     DateTime?                    @db.Timestamptz(3)
+  /// RESOLVED exactly: when and how. HANDLED by a person, with their note; CLEARED by a run that no longer found it.
+  resolvedAt       DateTime?                    @db.Timestamptz(3)
+  resolvedById     String?                      @db.Uuid
+  resolution       PlanningExceptionResolution?
+  resolveNote      String?
+  version          Int                          @default(1)
+  createdAt        DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime                     @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?                      @db.Uuid
+
+  site        Site                 @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  firstRun    PlanningRun          @relation("PlanningExceptionFirstRun", fields: [tenantId, siteId, firstRunId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  lastRun     PlanningRun          @relation("PlanningExceptionLastRun", fields: [tenantId, siteId, lastRunId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and the other keys.
+  item        Item?                @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour  ItemColour?          @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+  requirement MaterialRequirement? @relation(fields: [tenantId, siteId, requirementId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, siteId, dedupeKey, occurrence])
+  // The queue: what is open at a site.
+  @@index([tenantId, siteId, status])
+}
+
+enum PlanningExceptionKind {
+  /// A material is short for an order or a work order.
+  SHORT
+  /// A supply (a purchase order line) comes after the need.
+  SUPPLY_LATE
+  /// A lane (line or work centre) is loaded above its capacity in a bucket.
+  LANE_OVERLOADED
+  /// A lane is loaded well below its capacity.
+  LANE_UNDERUSED
+  /// An order line or work order is past its date.
+  PAST_DUE
+  /// More stock or supply than the plan needs.
+  EXCESS
+  /// The stock falls below the item's safety stock.
+  BELOW_SAFETY_STOCK
+  /// A supply should come earlier, or later, or not at all.
+  MOVE_EARLIER
+  MOVE_LATER
+  CANCEL
+  /// The projected stock falls below zero in a bucket (a need before any supply, a receipt not posted).
+  NEGATIVE_STOCK
+}
+
+/// NEW → ACKNOWLEDGED → RESOLVED, or NEW → RESOLVED. RESOLVED is final (it may come back as a new occurrence).
+enum PlanningExceptionStatus {
+  NEW
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum PlanningExceptionResolution {
+  /// A person resolved it, with a note.
+  HANDLED
+  /// A later run no longer found it.
+  CLEARED
+}

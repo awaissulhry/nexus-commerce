@@ -96,6 +96,8 @@ enum NumberKind {
   CLAIM
   /// W2a wave 3: a subcontract order's number (SC-…; subcontract.prisma SubcontractOrder.number).
   SUBCONTRACT
+  /// W2a wave 4: a stock count's number (CNT-…; stockcount.prisma StockCount.number).
+  COUNT
 }
 
 enum NumberReset {
