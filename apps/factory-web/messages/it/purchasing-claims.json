@@ -1,0 +1,689 @@
+{
+  "act": {
+    "answer": "Registra la risposta",
+    "cancel": "Annulla bozza",
+    "close": "Chiudi",
+    "removeLines": "Togli righe",
+    "returnGoods": "Rendi la merce",
+    "send": "Invia al fornitore",
+    "sendAgain": "Invia di nuovo"
+  },
+  "answer": {
+    "accepted": "Ha accettato il reclamo",
+    "agreedHint": "Vuoto: il valore della merce ({value}).",
+    "confirm": "Registra la risposta",
+    "does": {
+      "accepted": "Accettato: le difformità al ricevimento diventano “concordate”; Amministrazione abbina poi la nota di credito.",
+      "rejected": "Respinto: puoi inviarlo di nuovo con più prove, o chiuderlo."
+    },
+    "held": {
+      "outcome": "Indica se il fornitore l’ha accettato o respinto.",
+      "words": "Scrivi cosa ha detto il fornitore."
+    },
+    "outcome": "Il fornitore",
+    "rejected": "Ha respinto il reclamo",
+    "title": "La risposta del fornitore a {number}",
+    "words": "Cosa ha detto il fornitore",
+    "wordsHint": "Resta sul reclamo; il fornitore non vede questo campo."
+  },
+  "bulk": {
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)"
+  },
+  "cancel": {
+    "confirm": "Annulla bozza",
+    "does": "La bozza è annullata: non è mai stata inviata e resta nell’elenco come annullata.",
+    "held": {
+      "reason": "Scrivi perché (almeno 3 caratteri)."
+    },
+    "kept": "Il numero resta; nulla viene cancellato.",
+    "reason": "Perché",
+    "title": "Annulla la bozza {number}"
+  },
+  "chip": {
+    "clearAll": "Togli tutti",
+    "label": "Filtri",
+    "lot": "Lotto {code}",
+    "receipt": "Ricevimento {number}",
+    "remove": "Togli il filtro: {filter}",
+    "thisLot": "Questo lotto",
+    "thisReceipt": "Questo ricevimento"
+  },
+  "claimTab": {
+    "facts": "Da dove viene",
+    "fixedAfterSend": "Da quando è inviato, l’oggetto del reclamo resta come inviato: cambiano solo il rimedio, il credito concordato e la nota interna.",
+    "what": "Cosa non va e cosa si chiede"
+  },
+  "close": {
+    "confirm": "Chiudi reclamo",
+    "discrepancies": "Le sue difformità al ricevimento si chiudono con lui.",
+    "does": "Il reclamo è chiuso: non cambia più (solo la nota interna).",
+    "goodsHere_one": "La merce di {count} riga non è mai partita: resta in magazzino.",
+    "goodsHere_other": "La merce di {count} righe non è mai partita: resta in magazzino.",
+    "held": {
+      "note": "Scrivi come è stato chiuso (almeno 3 caratteri)."
+    },
+    "note": "Come è stato chiuso",
+    "noteHint": "Per esempio: nota di credito ricevuta, o perché non si prosegue.",
+    "title": "Chiudi il reclamo {number}"
+  },
+  "col": {
+    "age": "Età",
+    "kind": "Tipo",
+    "lot": "Lotto",
+    "material": "Materiale",
+    "more": "Altro",
+    "number": "Numero",
+    "quantity": "Quantità o superficie",
+    "reason": "Motivo",
+    "remedy": "Rimedio",
+    "status": "Stato",
+    "supplier": "Fornitore",
+    "value": "Valore (costo)"
+  },
+  "common": {
+    "cancel": "Annulla",
+    "clearFilters": "Togli i filtri",
+    "close": "Chiudi",
+    "countMore_one": "{count} reclamo mostrato, altri da caricare",
+    "countMore_other": "{count} reclami mostrati, altri da caricare",
+    "count_one": "{count} reclamo",
+    "count_other": "{count} reclami",
+    "dismiss": "Chiudi",
+    "loading": "Caricamento…",
+    "more": "Mostra altri",
+    "notYet": "Non ancora letto",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "retry": "Riprova",
+    "shortcuts": "Scorciatoie da tastiera",
+    "updated": "Aggiornato alle {time}"
+  },
+  "contactRole": {
+    "DESIGN": "design",
+    "INVOICES": "fatture",
+    "ORDERS": "ordini",
+    "OWNER": "titolare",
+    "QUALITY": "qualità",
+    "RIDER": "pilota"
+  },
+  "credit": {
+    "agreedHint": "Concordato con il fornitore",
+    "asked": "Chiesto",
+    "askedHint": "Chiesto: il valore della merce",
+    "difference": "Differenza",
+    "expected": "Credito atteso",
+    "financeLater": "Le fatture fornitori non ci sono ancora in Amministrazione: arrivano con le schermate delle fatture fornitori.",
+    "hidden": "Richiede il permesso costi",
+    "matchLabel": "Credito chiesto e nota di credito abbinata",
+    "matchWhere": "Fatture e note di credito dei fornitori si abbinano in Amministrazione; l’abbinamento arriva con le schermate delle fatture fornitori.",
+    "matched": "Nota di credito abbinata",
+    "noCost": "Gli importi richiedono il permesso costi (money.cost): il tuo ruolo legge il reclamo senza.",
+    "none": "Nessuno",
+    "notMatched": "Ancora nessuna nota di credito abbinata",
+    "openFinance": "Apri in Amministrazione",
+    "remedy": "Rimedio",
+    "replacement": {
+      "body": "Il fornitore rimanda la merce; nulla viene accreditato.",
+      "title": "Nessun credito atteso — si è chiesta una sostituzione"
+    },
+    "title": "Credito",
+    "value": "Valore della merce",
+    "valueHint": "Costo dei lotti × quantità"
+  },
+  "csv": {
+    "age": "Età (giorni)",
+    "created": "Creato",
+    "credit": "Credito atteso",
+    "currency": "Valuta",
+    "kind": "Tipo",
+    "lines": "Righe",
+    "lots": "Lotti",
+    "materials": "Materiali",
+    "note": "Nota",
+    "number": "Numero",
+    "quantity": "Quantità",
+    "reason": "Motivo",
+    "remedy": "Rimedio",
+    "returned": "Resi",
+    "status": "Stato",
+    "supplier": "Fornitore",
+    "unit": "Unità",
+    "value": "Valore"
+  },
+  "ddt": {
+    "appearance": "Aspetto dei beni",
+    "appearanceHint": "Per esempio: su pallet, arrotolate",
+    "by": {
+      "CARRIER": "Vettore",
+      "RECIPIENT": "Destinatario (il fornitore)",
+      "SENDER": "Mittente (noi)"
+    },
+    "carrier": "Vettore",
+    "fixed": "Il DDT prende il numero dalla serie DDT dell’azienda quando la merce parte; poi non cambia più (uno sbagliato si annulla e il numero resta).",
+    "held": {
+      "carrier": "Indica il vettore.",
+      "packages": "Indica i colli: un numero intero da 1.",
+      "weight": "Indica il peso lordo in kg."
+    },
+    "packages": "Colli",
+    "reason": "Causale",
+    "reasonFixed": "Un reso al fornitore",
+    "reasonReturn": "Reso",
+    "refused": {
+      "other": "Qualcosa nel DDT non è stato accettato: controlla i campi.",
+      "transport": "Indica a cura di chi è il trasporto.",
+      "weight": "Il peso lordo non è stato accettato: indicalo in kg."
+    },
+    "remarks": "Annotazioni",
+    "transportBy": "Trasporto a cura del",
+    "weight": "Peso lordo"
+  },
+  "ddtReason": {
+    "OTHER": "Altro",
+    "RETURN": "Reso al fornitore"
+  },
+  "discrepancyKind": {
+    "DAMAGED": "Danneggiato",
+    "MISSING_DOCUMENT": "Documento mancante",
+    "OTHER": "Altro",
+    "OVER": "Quantità in eccesso",
+    "SHORT": "Quantità mancante",
+    "WRONG_COLOUR": "Colore errato",
+    "WRONG_ITEM": "Articolo errato"
+  },
+  "discrepancyStatus": {
+    "AGREED": "Concordata",
+    "CLOSED": "Chiusa",
+    "CREDITED": "Accreditata",
+    "OPEN": "Aperta",
+    "SENT": "Inviata"
+  },
+  "fact": {
+    "answered": "Risposta del fornitore",
+    "by": "da {name}",
+    "cancelReason": "Perché è stato annullato",
+    "closeNote": "Come è stato chiuso",
+    "closed": "Chiuso",
+    "created": "Creato",
+    "notSent": "Non ancora inviato",
+    "order": "Ordine d’acquisto",
+    "receipt": "Ricevimento",
+    "sent": "Inviato",
+    "site": "Sito",
+    "supplier": "Fornitore",
+    "supplierAnswer": "Le parole del fornitore",
+    "supplierDdt": "DDT fornitore {number} del {date}"
+  },
+  "field": {
+    "agreed": "Credito concordato ({currency})",
+    "agreedHint": "Vuoto: il valore della merce.",
+    "foundAt": "Trovato",
+    "internalNote": "Nota interna",
+    "internalNoteHint": "Solo per l’ufficio; mai inviata al fornitore.",
+    "kind": "Tipo",
+    "pickReason": "Scegli un motivo",
+    "reason": "Motivo",
+    "reasonNote": "Cosa non va",
+    "reasonNoteHint": "Il fornitore legge queste parole con il motivo.",
+    "reasonNoteNeeded": "Questo motivo richiede qualche parola.",
+    "remedy": "Cosa si chiede"
+  },
+  "form": {
+    "held": {
+      "agreed": "Il credito non è un importo: scrivilo come 18,90.",
+      "note": "Questo motivo richiede qualche parola: di’ cosa non va.",
+      "nothing": "Ancora nessuna modifica.",
+      "reason": "Scegli un motivo.",
+      "remedy": "Un reclamo inviato chiede un credito o una sostituzione."
+    },
+    "refused": {
+      "kind": "Una riga ha un materiale tracciato senza lotto o pelle: un reso li richiede; lascialo reclamo.",
+      "reason": "Quel motivo non è nell’elenco dei reclami (o non è più usato): scegline un altro.",
+      "receipt": "Il ricevimento o l’ordine non è del fornitore."
+    }
+  },
+  "foundAt": {
+    "CUTTING": "Trovato al taglio",
+    "INSPECTION": "Trovato al controllo",
+    "PRODUCTION": "Trovato in produzione",
+    "RECEIPT": "Trovato al ricevimento",
+    "STOCK": "Trovato in magazzino"
+  },
+  "goods": {
+    "cancelled": "Annullato",
+    "col": {
+      "ddt": "DDT",
+      "lot": "Lotto / pelle",
+      "move": "Movimento",
+      "quantity": "Quantità",
+      "when": "Uscita"
+    },
+    "count": "{count} di {total} righe rese",
+    "ddtLines_one": "{count} riga",
+    "ddtLines_other": "{count} righe",
+    "ddts": "DDT di reso",
+    "from": "da {place}",
+    "held": {
+      "none": "Spunta le righe la cui merce parte ora."
+    },
+    "label": "Merce resa",
+    "noDdt": "Ancora nessun DDT di reso.",
+    "none": {
+      "body": "Questo reclamo tiene la merce e chiede un credito o una sostituzione.",
+      "title": "Nulla di reso — solo reclamo"
+    },
+    "noneYet": {
+      "body": "La merce parte con il DDT di reso quando il reso è inviato: Rendi la merce.",
+      "title": "Ancora nulla di reso"
+    },
+    "notYet": "Nessuna merce è ancora partita.",
+    "openPdf": "Apri il PDF del DDT",
+    "openPdfOf": "Apri il PDF del DDT {number}",
+    "pdfMissing": "Il PDF del DDT non c’è ancora.",
+    "replaced": "prima sul {number} (annullato)"
+  },
+  "goodsBack": {
+    "body": "La merce esce dal magazzino da dove si trova e viaggia con un solo DDT di reso.",
+    "confirm_one": "Rendi {count} riga",
+    "confirm_other": "Rendi {count} righe",
+    "doneTitle": "Merce resa con DDT {ddt}",
+    "done_one": "{count} movimento in uscita; emesso il DDT {ddt}.",
+    "done_other": "{count} movimenti in uscita; emesso il DDT {ddt}.",
+    "line": "Riga {seq}: {what} · {quantity} {unit}",
+    "lines": "Righe ancora qui",
+    "title": "Rendi la merce di {number} a {supplier}"
+  },
+  "held": {
+    "answer": {
+      "state": "Solo un reclamo inviato riceve la risposta del fornitore; questo è {status}."
+    },
+    "busy": "In corso…",
+    "cancel": {
+      "sent": "Si annulla solo una bozza; questo è {status}: chiudilo.",
+      "state": "Si annulla solo una bozza; questo è {status}."
+    },
+    "close": {
+      "draft": "Una bozza non si chiude: annullala.",
+      "state": "Questo reclamo è {status}: non cambia più."
+    },
+    "lines": {
+      "state": "Le righe cambiano solo finché il reclamo è una bozza; questo è {status}."
+    },
+    "loading": "Ancora in caricamento…",
+    "permission": "Richiede {permission}: il tuo ruolo non può farlo.",
+    "permissionPlain": "Richiede {permission}: il tuo ruolo non può farlo.",
+    "return": {
+      "allGone": "Tutte le righe di questo reso sono già partite.",
+      "claim": "Questo reclamo tiene la merce (credito o sostituzione): solo un reso rimanda la merce.",
+      "draft": "Prima invia il reso al fornitore: la merce parte quando è inviato.",
+      "state": "La merce parte solo finché il reso è inviato o accettato; questo è {status}."
+    },
+    "send": {
+      "noLines": "Il reclamo non ha righe: prima indica di cosa si tratta.",
+      "state": "Si invia solo una bozza, o un reclamo respinto dal fornitore; questo è {status}."
+    }
+  },
+  "kind": {
+    "CLAIM": "Reclamo",
+    "RETURN": "Reso"
+  },
+  "kindPlural": {
+    "CLAIM": "Reclami",
+    "RETURN": "Resi"
+  },
+  "language": {
+    "en": "inglese",
+    "it": "italiano"
+  },
+  "lines": {
+    "col": {
+      "discrepancy": "Difformità al ricevimento",
+      "goods": "Merce",
+      "lot": "Lotto / pelle",
+      "material": "Materiale",
+      "quantity": "Quantità",
+      "reason": "Motivo",
+      "seq": "Riga",
+      "value": "Valore (costo)"
+    },
+    "count_one": "{count} riga",
+    "count_other": "{count} righe",
+    "discrepancy": "Difformità {seq}",
+    "held": {
+      "none": "Spunta le righe da togliere."
+    },
+    "here": "Ancora qui",
+    "kept": "Tenuta",
+    "label": "Righe del reclamo",
+    "none": "Ancora nessuna riga: un reclamo dice di cosa si tratta prima dell’invio.",
+    "removeLine": "Riga {seq}: {what}",
+    "removeReach": "Cambia solo questa bozza; lotti, pelli e difformità restano come sono. Lo storico tiene ciò che è stato tolto.",
+    "removeTitle_one": "Togli {count} riga dalla bozza",
+    "removeTitle_other": "Togli {count} righe dalla bozza",
+    "remove_one": "Togli {count} riga",
+    "remove_other": "Togli {count} righe",
+    "returned": "Resa",
+    "unitCost": "{cost} per {unit}"
+  },
+  "list": {
+    "age_one": "{count} giorno",
+    "age_other": "{count} giorni",
+    "agreed": "concordato {amount}",
+    "closedNote": "L’elenco mostra tutti i reclami chiusi; il riquadro conta solo quelli di questo mese.",
+    "empty": {
+      "body": "Qui compaiono la merce resa ai fornitori e i reclami per un credito.",
+      "title": "Nessun reso o reclamo"
+    },
+    "everyKind": "Resi e reclami",
+    "failed": "Impossibile caricare resi e reclami",
+    "kindLabel": "Tipo",
+    "lines_one": "{count} riga",
+    "lines_other": "{count} righe",
+    "noMatch": {
+      "body": "Cambia o togli i filtri.",
+      "title": "Nessuna riga corrisponde a questi filtri"
+    },
+    "returned": "{returned} di {count} resi",
+    "rowMenu": "Azioni per {number}",
+    "search": "Cerca numero, fornitore, lotto o materiale",
+    "tableLabel": "Resi e reclami",
+    "viewLabel": "Righe",
+    "viewing": "Mostra: {view}"
+  },
+  "live": {
+    "connecting": "Collegamento agli aggiornamenti…",
+    "live": "In tempo reale",
+    "offline": "Aggiornamenti sospesi"
+  },
+  "lotQuality": {
+    "BLOCKED": "Bloccato",
+    "QUARANTINE": "Quarantena",
+    "REJECTED": "Respinto",
+    "RELEASED": "Rilasciato"
+  },
+  "moveReason": {
+    "ADJUSTMENT": "Uscita: rettifica (reso al fornitore)",
+    "COUNT": "Inventario",
+    "ISSUE": "Prelievo",
+    "OPENING": "Giacenza iniziale",
+    "OTHER": "Movimento",
+    "RECEIPT": "Ricevimento",
+    "RETURN": "Reso",
+    "SCRAP": "Scarto",
+    "TRANSFER": "Trasferimento"
+  },
+  "notice": {
+    "accepted": "{number}: accettato dal fornitore.",
+    "cancelled": "{number} annullato.",
+    "closed": "{number} chiuso.",
+    "linesRemoved_one": "{count} riga tolta.",
+    "linesRemoved_other": "{count} righe tolte.",
+    "rejected": "{number}: respinto dal fornitore.",
+    "saved": "Salvato.",
+    "sent": "{number} segnato come inviato.",
+    "sentMail": "{number} inviato al fornitore per e-mail."
+  },
+  "page": {
+    "export": "Esporta questo elenco (CSV)",
+    "keyReturn": "Reso al fornitore",
+    "more": "Altro",
+    "noAccess": {
+      "body": "Questa pagina richiede purchasing.view: chiedi a un amministratore un ruolo acquisti o magazzino.",
+      "title": "Non puoi vedere resi e reclami"
+    },
+    "return": "Reso al fornitore",
+    "shortcuts": "Scorciatoie da tastiera"
+  },
+  "problem": {
+    "changed": "Qualcuno l’ha modificato nel frattempo: è stato riletto. Controlla e riprova.",
+    "forbidden": "Il tuo ruolo non può vedere o fare questo.",
+    "gone": "Non esiste più, o appartiene a un’altra azienda.",
+    "invalid": "Qualcosa non è stato accettato. Controlla i campi e riprova.",
+    "offline": "Nessuna connessione al server. Controlla la rete e riprova.",
+    "read": "Il server non ha risposto come previsto. Riprova.",
+    "slowDown": "Troppi tentativi insieme. Attendi un momento e riprova.",
+    "write": "Non è stato salvato. Riprova."
+  },
+  "record": {
+    "back": "Resi e reclami",
+    "backToList": "Torna a Resi e reclami",
+    "changed": "Modificato da un altro alle {time}",
+    "copyNumber": "Copia il numero",
+    "created": "creato il {date}",
+    "dock": "Thread",
+    "dockHint": "Il thread accanto a questa scheda (⌘J)",
+    "dockLabel": "Il thread del reclamo",
+    "error": {
+      "title": "Impossibile caricare il reclamo"
+    },
+    "forbidden": {
+      "body": "Richiede purchasing.view sul suo fornitore e sito.",
+      "title": "Non puoi vedere questo reclamo"
+    },
+    "loading": "Caricamento del reclamo…",
+    "more": "Altre azioni",
+    "noPanels": "Thread, file e storico non sono disponibili.",
+    "not_found": {
+      "body": "Non è mai stato creato, o appartiene a un’altra azienda.",
+      "title": "Questo reclamo non esiste"
+    },
+    "openOrder": "Apri l’ordine {number}",
+    "openReceipt": "Apri il ricevimento {number}",
+    "readOnlyCancelled": "Sola lettura: annullato il {time}",
+    "readOnlyClosed": "Sola lettura: chiuso il {time}",
+    "readOnlyRight": "Puoi leggere questo reclamo; per modificarlo serve {permission}.",
+    "reload": "Ricarica",
+    "tabsLabel": "Sezioni del reclamo",
+    "title": "Reclamo al fornitore"
+  },
+  "remedy": {
+    "CREDIT": "Nota di credito",
+    "REPLACEMENT": "Sostituzione",
+    "later": "Scegli dopo",
+    "none": "Non ancora scelto"
+  },
+  "ret": {
+    "allHides": "Tutte le pelli in giacenza ({count})",
+    "change": "Cambia lotto",
+    "create": "Crea il reso",
+    "ddtTitle": "DDT di reso",
+    "does": {
+      "claim": "Crea un reclamo di reso a {supplier}, inviato subito.",
+      "credit": "Registra il credito atteso: il costo del lotto per quanto si rende.",
+      "creditHidden": "Registra il credito atteso (il valore richiede il permesso costi).",
+      "ddt": "Emette il DDT di reso (numerato, poi non cambia più).",
+      "goods": "Scarica la merce dal magazzino.",
+      "hides_one": "Scarica {count} pelle dal magazzino.",
+      "hides_other": "Scarica {count} pelli dal magazzino.",
+      "stock": "Scarica dal magazzino quanto indicato del lotto {lot}."
+    },
+    "done": {
+      "banner": "{number} è stato inviato a {supplier}; la merce è uscita con il DDT {ddt}.",
+      "claim": "Reclamo",
+      "ddt": "DDT di reso",
+      "goods": "Merce uscita",
+      "goodsValue_one": "{count} movimento",
+      "goodsValue_other": "{count} movimenti",
+      "open": "Apri il reclamo",
+      "overReservedBody": "Le prenotazioni restano: i pianificatori vedono la mancanza in Cosa acquistare e produrre.",
+      "overReserved_one": "{count} materiale ora è riservato oltre la giacenza",
+      "overReserved_other": "{count} materiali ora sono riservati oltre la giacenza",
+      "pdfLater": "Il PDF non è ancora pronto: ristampalo dalla scheda Merce resa del reclamo.",
+      "title": "Reso {number} creato"
+    },
+    "fromPlace": "Da {place}",
+    "fromReceipt": "ricevuto con {number}",
+    "goodsTitle": "Cosa si rende",
+    "grade": "scelta {grade}",
+    "held": {
+      "contact": "Spunta chi riceve l’e-mail, o disattiva l’e-mail.",
+      "contactsFailed": "I contatti del fornitore non si sono potuti leggere.",
+      "lot": "Scegli il lotto da rendere.",
+      "noHide": "Spunta almeno una pelle.",
+      "noHideInStock": "Il lotto {lot} non ha pelli in giacenza: non c’è nulla da rendere.",
+      "noSupplier": "Il lotto {lot} non indica un fornitore: non si può rendere.",
+      "note": "Questo motivo richiede qualche parola: di’ cosa non va.",
+      "nothing": "Indica quanto si rende da almeno un posto.",
+      "nothingInStock": "Il lotto {lot} non ha giacenza: non c’è nulla da rendere.",
+      "quantity": "La quantità da {place} non è un numero.",
+      "readFailed": "La giacenza del lotto non si è potuta leggere: chiudi e riprova.",
+      "reason": "Scegli il motivo.",
+      "reasonsFailed": "I motivi non si sono potuti leggere: chiudi e riprova.",
+      "tooMuch": "Più di quanto c’è in {place} ({onHand})."
+    },
+    "hideLabel": "Pelle {hide}",
+    "hidesLabel": "Pelli del lotto {lot} in giacenza",
+    "hides_one": "{count} pelle",
+    "hides_other": "{count} pelli",
+    "lotTitle": "Il lotto",
+    "mailAfterLot": "Prima scegli il lotto: seguono i contatti del suo fornitore.",
+    "mailNow": "Invia ora un’e-mail al fornitore",
+    "mailTitle": "Avvisa il fornitore",
+    "message": "Le tue parole (facoltativo)",
+    "messageHint": "Nexus scrive il testo standard nella lingua del fornitore, senza prezzi; le tue parole lo sostituiscono.",
+    "noContacts": "{supplier} non ha contatti attivi con un’e-mail.",
+    "noDdtRight": "Il DDT di reso richiede shipping.ddt.issue: chiedi al magazzino.",
+    "noHideInStock": "Il lotto {lot} non ha pelli in giacenza nel suo sito.",
+    "noLots": {
+      "body": "Solo i lotti con giacenza nel sito possono essere resi.",
+      "title": "Nessun lotto in giacenza corrisponde"
+    },
+    "noMail": "Senza e-mail, la merce e il suo DDT avvisano il fornitore. Puoi scrivere più tardi dal thread del reclamo.",
+    "noPartiesRight": "I contatti del fornitore richiedono parties.view.",
+    "noStockRight": "Per cercare un lotto serve inventory.stock.view.",
+    "noSupplier": "nessun fornitore registrato",
+    "nothingInStock": "Il lotto {lot} non ha giacenza nel suo sito.",
+    "onHand": "{quantity} {unit} in giacenza",
+    "pick": "Scegli",
+    "pickLot": "Scegli il lotto {lot}",
+    "placeOnHand": "{quantity} {unit} qui",
+    "quantityHint": "Quantità in {unit}; tutto il lotto è {total}. Lascia vuoto un posto per tenerne la giacenza.",
+    "refused": {
+      "forbidden": "Il tuo ruolo non può rendere merce: servono purchasing.claims.manage, purchasing.claims.return e shipping.ddt.issue.",
+      "gone": "Parte di questa merce è già stata resa: è stato riletto.",
+      "hideGone": "Una pelle spuntata non è più in giacenza: scegli di nuovo il lotto.",
+      "mail": "Un contatto spuntato non ha più l’e-mail: spuntane un altro o invia senza e-mail.",
+      "nothingLeft": "Il lotto non ha più giacenza nel suo sito: è stato riletto.",
+      "otherSupplier": "Questa merce viene da un altro fornitore: fai un reso per fornitore.",
+      "places": "La merce è in più posti: indica quanto parte da ciascuno.",
+      "reason": "Quel motivo non è nell’elenco dei reclami (o non è più usato): scegline un altro.",
+      "reserved": "Una pelle è riservata a un ordine o a un ordine di produzione: libera prima la prenotazione.",
+      "numbering": "La serie dei DDT ha già un documento con una data successiva a oggi: oggi non si può dare il numero successivo. Controlla la serie in Sistema › Documenti e numerazioni.",
+      "company": "I dati legali dell’azienda non sono completi per un DDT: completali in Sistema › Società e stabilimenti."
+    },
+    "results": "Lotti trovati",
+    "search": "Cerca un lotto in giacenza (codice, lotto fornitore, materiale)",
+    "searchHint": "Scrivi almeno due caratteri.",
+    "subtitle": "In un solo passo si crea e invia il reclamo, la merce esce dal magazzino e si emette il DDT di reso.",
+    "tannery": "n. conceria {code}",
+    "title": "Reso al fornitore",
+    "whyTitle": "Perché e cosa si chiede"
+  },
+  "save": {
+    "discard": "Scarta",
+    "region": "Modifiche non salvate",
+    "save": "Salva",
+    "shortcut": "⌘S salva",
+    "unsaved_one": "{count} modifica non salvata",
+    "unsaved_other": "{count} modifiche non salvate"
+  },
+  "send": {
+    "body": "Il fornitore riceve il reclamo nel suo thread; la risposta torna nello stesso thread.",
+    "cc": "Copia a",
+    "ccHint": "Indirizzi separati da virgola o spazio.",
+    "confirmMail": "Invia al fornitore",
+    "confirmNoMail": "Segna come inviato",
+    "does": {
+      "discrepancies": "Le sue difformità al ricevimento diventano “inviate”.",
+      "fixed": "L’e-mail non si può ritirare una volta inviata.",
+      "state": "Il reclamo diventa “inviato”: il suo oggetto non cambia più."
+    },
+    "held": {
+      "cc": "Non è un indirizzo e-mail: {list}",
+      "checkFailed": "I destinatari non si sono potuti leggere: chiudi e riprova, o invia senza e-mail.",
+      "message": "Il testo è vuoto.",
+      "noContact": "Spunta chi riceve l’e-mail.",
+      "noContacts": "Nessun contatto del fornitore ha un’e-mail: invia senza e-mail.",
+      "remedy": "Scegli cosa chiede il reclamo: una nota di credito o una sostituzione."
+    },
+    "mailTitle": "L’e-mail",
+    "message": "Testo che legge il fornitore ({language})",
+    "messageHint": "Il testo standard nella lingua del fornitore; modificalo se vuoi.",
+    "noContacts": "{supplier} non ha contatti attivi con un’e-mail: aggiungine uno sul fornitore, o invia senza e-mail.",
+    "noMail": "Segnato come inviato senza e-mail (hai avvisato il fornitore in altro modo).",
+    "noPrice": "Nessun prezzo viaggia con il reclamo (il credito chiesto resta in ufficio).",
+    "recipients": "Destinatari",
+    "refused": {
+      "mail": "Un destinatario non è stato accettato (senza e-mail, o non del fornitore): controlla i destinatari."
+    },
+    "remedyHint": "Un reclamo inviato chiede una nota di credito o una sostituzione.",
+    "subject": "Oggetto",
+    "title": "Invia il reclamo {number} a {supplier}",
+    "titleAgain": "Invia di nuovo il reclamo {number} a {supplier}",
+    "withMail": "Invialo per e-mail"
+  },
+  "status": {
+    "ACCEPTED": "Accettato",
+    "CANCELLED": "Annullato",
+    "CLOSED": "Chiuso",
+    "DRAFT": "Bozza",
+    "REJECTED": "Respinto",
+    "SENT": "Inviato"
+  },
+  "statusIn": {
+    "ACCEPTED": "accettato dal fornitore",
+    "CANCELLED": "annullato",
+    "CLOSED": "chiuso",
+    "DRAFT": "una bozza",
+    "REJECTED": "respinto dal fornitore",
+    "SENT": "inviato, in attesa del fornitore"
+  },
+  "tab": {
+    "activity": "Attività",
+    "claim": "Reclamo",
+    "credit": "Credito",
+    "goods": "Merce resa"
+  },
+  "tile": {
+    "closed": "Chiusi questo mese",
+    "closedHint": "Solo questo mese; l’elenco mostra tutti i chiusi",
+    "credit": "Credito atteso",
+    "creditHint": "Reclami accettati che chiedono una nota di credito",
+    "open": "Aperti",
+    "waiting": "In attesa del fornitore"
+  },
+  "tiles": {
+    "failed": "I conteggi non si sono potuti leggere",
+    "label": "Reclami"
+  },
+  "uom": {
+    "BOX": "scatole",
+    "CM": "cm",
+    "CONE": "coni",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "G": "g",
+    "HIDE": "pelli",
+    "KG": "kg",
+    "L": "l",
+    "M": "m",
+    "M2": "m²",
+    "MM": "mm",
+    "PAIR": "paio",
+    "PCS": "pz",
+    "ROLL": "rotoli",
+    "SET": "set",
+    "SIDE": "mezze pelli"
+  },
+  "view": {
+    "accepted": "Accettati",
+    "all": "Tutti gli stati",
+    "cancelled": "Annullati",
+    "closed": "Chiusi",
+    "draft": "Bozze",
+    "open": "Aperti",
+    "rejected": "Respinti",
+    "sent": "In attesa del fornitore"
+  }
+}

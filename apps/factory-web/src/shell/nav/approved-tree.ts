@@ -173,6 +173,13 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: false,
         pages: [{ id: 'purchasing.subcontracting', title: 'Subcontract orders', titleIt: 'Ordini ai terzisti', wave: 'W2a', href: '/purchasing/subcontracting' }],
       },
+      // W2a: B-W2a-63 Returns & claims (SCR-131). RFQs & sourcing (W2b) joins before it with its step.
+      {
+        label: 'Sourcing & claims',
+        labelIt: 'Offerte e reclami',
+        hideLabel: false,
+        pages: [{ id: 'purchasing.claims', title: 'Returns & claims', titleIt: 'Resi e reclami ai fornitori', wave: 'W2a', href: '/purchasing/claims' }],
+      },
     ],
   },
   {

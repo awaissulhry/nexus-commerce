@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useT } from '../../../../lib/i18n/provider'
+import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { downloadText, useCoalesced, useLive } from '../../../_shared/buying/hooks'
-import { buyingCan, csvOf, phrase, readProblem, startOfDayIn } from '../../../_shared/buying/model'
+import { buyingCan, csvOf, part, phrase, readProblem, startOfDayIn, type Part } from '../../../_shared/buying/model'
+import { EVERY_COMPANY, useSheetImport } from '../../../products/styles/import/sheet-import'
+import { hideListSummary, type HideListSummary } from '../daily-api'
+import { dailyCan, hideListHeld, NAMESPACE, readSay } from '../daily-model'
 import { countReceipts, expectedLines, listReceipts, type ReceiptCounts } from '../api'
 import { receiptQuery, receiptViewOf, type ReceiptsListModel, type ReceiptView } from '../model'
 import { ReceiptsListView } from './view/ReceiptsListView'
@@ -21,7 +24,7 @@ const TIME_ZONE = 'Europe/Rome'
  */
 export function ReceiptsPage() {
   return (
-    <WithMessages namespaces={['buying', 'lists']}>
+    <WithMessages namespaces={['buying', 'lists', NAMESPACE, 'admin-import', 'admin']}>
       <ReceiptsContainer />
     </WithMessages>
   )
@@ -29,6 +32,8 @@ export function ReceiptsPage() {
 
 function ReceiptsContainer() {
   const t = useT('buying')
+  const td = useT(NAMESPACE)
+  const locale = useLocale()
   const api = useOfficeApi()
   const session = useOfficeSession()
   const router = useRouter()
@@ -154,7 +159,52 @@ function ReceiptsContainer() {
     [rows.items, can.cost, t],
   )
 
-  const model: ReceiptsListModel = { prefix, can, view, q, rows, expected, counts, asOf, live, updates, notice, timeZone: TIME_ZONE }
+  // ---- B-W2a-63: the tannery's hide list (importer inventory.hideList; one list = one order = ONE receipt) ----
+  const dCan = useMemo(() => dailyCan(session.permissions), [session.permissions])
+  const companies = useMemo(() => session.companies.map((company) => ({ id: company.id, name: company.name })), [session.companies])
+  const sheet = useSheetImport(api, {
+    importerKey: 'inventory.hideList',
+    // A hide list is received by the order's company: the address's company (the API refuses "every company").
+    companyId: session.company?.id ?? EVERY_COMPANY,
+    companies,
+    everyCompany: td('hideList.everyCompany'),
+    rights: { view: dCan.importView, run: dCan.importRun, apply: dCan.importApply, people: false },
+    locale: locale === 'en' ? 'en' : 'it',
+    onApplied: () => void load(),
+  })
+  const jobId = sheet.model?.wizard.job?.id ?? null
+  const [importId, setImportId] = useState<string | null>(null)
+  const [summary, setSummary] = useState<Part<HideListSummary>>({ value: null, problem: null })
+  useEffect(() => {
+    if (jobId) setImportId(jobId)
+  }, [jobId])
+  const wizardOpen = sheet.model !== null
+  const loadSummary = useCallback(() => {
+    if (!importId) return
+    setSummary({ value: null, problem: null })
+    hideListSummary(api, importId)
+      .then((value) => setSummary(part(value)))
+      .catch((error: unknown) => setSummary({ value: null, problem: readSay(error) }))
+  }, [api, importId])
+  useEffect(() => {
+    if (!wizardOpen) loadSummary()
+  }, [wizardOpen, loadSummary])
+
+  const model: ReceiptsListModel = {
+    prefix,
+    can,
+    view,
+    q,
+    rows,
+    expected,
+    counts,
+    asOf,
+    live,
+    updates,
+    notice,
+    timeZone: TIME_ZONE,
+    hideList: { held: hideListHeld(dCan), sheet: sheet.model, summary: importId && !wizardOpen ? { importId, part: summary } : null },
+  }
 
   return (
     <ReceiptsListView
@@ -175,6 +225,14 @@ function ReceiptsContainer() {
         },
         onExport: exportRows,
         onDismissNotice: () => setNotice(null),
+        hideList: {
+          onOpen: () => {
+            if (!hideListHeld(dCan)) sheet.open()
+          },
+          wizard: sheet.actions,
+          onRetrySummary: loadSummary,
+          onDismiss: () => setImportId(null),
+        },
       }}
     />
   )
