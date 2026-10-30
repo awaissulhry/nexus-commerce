@@ -13,6 +13,7 @@ import { recallScope, rememberScope, SCOPE_COOKIE } from '../../lib/session/scop
 import { permissionCheck, splitOfficePath, type OfficeSession } from '../../lib/session/session'
 import { ListToolsProvider } from '../../areas/_shared/list-tools/ListToolsProvider'
 import { officeNavFor } from '../nav/office-nav'
+import { useRecordSearch } from '../palette/use-record-search'
 import { OfficeShellView, type SystemBanner } from './view/OfficeShellView'
 
 /**
@@ -44,6 +45,8 @@ export function OfficeShell({ session, company, children }: { session: OfficeSes
   }, [locale])
 
   const nav = useMemo(() => officeNavFor(permissionCheck(session.permissions)), [session.permissions])
+  // B-W2a-32: the palette's Records and Exact number groups (GET /search as this company).
+  const search = useRecordSearch({ company, companies: session.companies })
   // No API reports the connections' modes yet (Connections, SCR-087, comes with B-W0-28): no TEST MODE banner until it does.
   const banners: SystemBanner[] = []
 
@@ -56,9 +59,11 @@ export function OfficeShell({ session, company, children }: { session: OfficeSes
         user: { displayName: session.user.displayName, email: session.user.email },
         tenantTag: tenantTag(session.tenant.id),
         banners,
+        paletteRecords: search.records,
       }}
       onNavigate={(href) => router.push(href)}
       onSiteChange={setSite}
+      onPaletteQuery={search.onQuery}
       onSignOut={() => {
         void signOut(browserApi())
           .catch(() => undefined)

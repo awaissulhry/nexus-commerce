@@ -1496,7 +1496,8 @@
     "paymentterms": "Payment terms",
     "pricelists": "Price lists",
     "tasks": "Tasks",
-    "views": "Views and exports"
+    "views": "Views and exports",
+    "search": "Search"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1678,6 +1679,7 @@
     "views_manage": "Share views with everyone and set a role's default",
     "views_export": "Export a list to CSV or Excel",
     "inventory_discrepancies_manage": "Record and settle receipt discrepancies",
-    "inventory_discrepancies_report": "Send the discrepancy report to the supplier"
+    "inventory_discrepancies_report": "Send the discrepancy report to the supplier",
+    "search_rebuild": "Rebuild the search index of the whole group"
   }
 }

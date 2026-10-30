@@ -110,7 +110,7 @@
   "topbar": {
     "home": "Nexus Factory home",
     "searchLabel": "Search: opens the command palette",
-    "searchPlaceholder": "Find a page or scan a label…",
+    "searchPlaceholder": "Find a record, a page or scan a label…",
     "theme": {
       "light": "Light theme. Switch to dark",
       "dark": "Dark theme. Switch to the system's",
@@ -148,23 +148,28 @@
   },
   "palette": {
     "title": "Search",
-    "placeholder": "Page name, label code or number",
+    "placeholder": "Number, name, label code or page",
     "results": "Results",
     "group": {
       "labels": "Label",
-      "numbers": "Number",
+      "exact": "Exact number",
+      "records": "Records",
       "pages": "Pages"
     },
-    "empty": "Nothing matches “{query}”.",
+    "empty": "Nothing found for “{query}”. Try a number, a name or scan a label.",
     "keys": {
       "move": "to move",
       "open": "to open",
+      "newTab": "new tab",
+      "group": "next group",
       "close": "to close"
     },
     "label": {
       "found": "{type} label {code}",
-      "later": "Reference {reference}. You can open it from here once these records are in Nexus Factory.",
-      "refused": "{code} is not a label of this factory"
+      "later": "Reference {reference}. No record has this label in Nexus Factory yet.",
+      "refused": "{code} is not a label of this factory",
+      "looking": "Reference {reference}. Looking for its record…",
+      "open": "{type} {code} · {title}"
     },
     "problem": {
       "format": "It is not written the way labels are printed. Scan it again.",
@@ -173,8 +178,20 @@
       "tenant": "This label belongs to another factory."
     },
     "number": {
-      "find": "Find number “{number}”",
-      "later": "Search by document number comes with the first records."
+      "find": "Number “{number}”",
+      "later": "No record you can open has this number.",
+      "looking": "Looking for this number…"
+    },
+    "records": {
+      "loading": "Looking for records…",
+      "slow": "Still loading…",
+      "error": "Search is not answering — pages still work.",
+      "all": "See all results for “{query}”",
+      "allCount_one": "{count} result",
+      "allCount_other": "{count} results"
+    },
+    "record": {
+      "similar": "similar"
     }
   },
   "scanType": {
