@@ -212,7 +212,7 @@ describe('where a row opens (one detail rule; lib/records/record-links.ts)', () 
   it('its own page when built, else its panels with what they show; real addresses for ⌘-click', () => {
     expect(recordAddress({ type: 'SalesOrder', id: 'o1', label: 'SO-1', companyId: 'c1' }, OFFICE_PAGES)).toBe('/sales/orders/o1')
     expect(recordAddress({ type: 'Shipment', id: 's1', label: 'SH-1', companyId: 'c1' }, OFFICE_PAGES)).toBe('/warehouse/shipments/s1')
-    expect(recordAddress({ type: 'Invoice', id: 'i1', label: 'FT-1', companyId: 'c1' }, OFFICE_PAGES)).toBe('/records/Invoice/i1?label=FT-1&company=c1')
+    expect(recordAddress({ type: 'Invoice', id: 'i1', label: 'FT-1', companyId: 'c1' }, OFFICE_PAGES)).toBe('/finance/invoices/i1')
     expect(recordAddress({ type: 'InboundEmail', id: 'm1' }, OFFICE_PAGES)).toBe('/home/mail-to-sort?open=m1')
     expect(recordAddress({ type: 'InboundEmail', id: 'm1' }, new Set())).toBe('/records/InboundEmail/m1')
     expect(OFFICE_PAGES.has('/records/[type]/[id]')).toBe(true)

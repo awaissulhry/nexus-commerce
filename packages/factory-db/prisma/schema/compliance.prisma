@@ -48,6 +48,10 @@ model Certificate {
   statusReason       String?
   statusChangedAt    DateTime?         @db.Timestamptz(3)
   note               String?
+  /// W2a (QHS-105, B-W2a-66): the certificate that renews it (the notified body's new one for the same holder, valid
+  /// from a later day); set once, when the renewal arrives, never changed after (the …_supply_w2a_guards trigger). A
+  /// certificate renews at most one.
+  successorId        String?           @db.Uuid
   version            Int               @default(1)
   createdAt          DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
@@ -57,9 +61,16 @@ model Certificate {
   holderParty         Party?                @relation(fields: [tenantId, holderPartyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   coverage            CertificateCoverage[]
   complianceDocuments ComplianceDocument[]
+  // W2a: the renewal (successor) and the certificate it renews; the changes to its approved type under review.
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  successor           Certificate?          @relation("CertificateRenewal", fields: [tenantId, successorId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  renews              Certificate?          @relation("CertificateRenewal")
+  typeChangeReviews   TypeChangeReview[]
 
   // One row per certificate of a notified body.
   @@unique([tenantId, notifiedBodyNumber, number])
+  // W2a: a certificate is renewed by at most one (a NULL successor repeats freely).
+  @@unique([tenantId, successorId])
   // The target of the tenant-safe references from its coverage and the documents that cite it.
   @@unique([tenantId, id])
 }
@@ -230,4 +241,66 @@ enum ComplianceDocumentStatus {
   ISSUED
   SUPERSEDED
   WITHDRAWN
+}
+
+/// A change to the approved type of a certified style (PRD-285; Reg. (EU) 2016/425 Annex V 7.2): a new revision of the
+/// style changes something the certificate's type examination covered (the outer leather, its thickness, a protector
+/// model, seams, the lining). The maker tells the notified body, which approves it as an addition to the certificate or
+/// asks for a new examination; or compliance decides, with its reason, that the change needs no notification. Until the
+/// review is APPROVED or NOT_NEEDED the revision's garments do not print their class label (B-W2a-66). Kept and never
+/// deleted (Reg. 2016/425 art. 8(3)); the notified body's answer is its file (StoredFile recordType "TypeChangeReview").
+model TypeChangeReview {
+  id                 String                 @id @db.Uuid
+  tenantId           String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  styleId            String                 @db.Uuid
+  /// The style's revision that changes (usually its DRAFT; once released, frozen like any revision).
+  revisionId         String                 @db.Uuid
+  /// The certificate whose approved type it may change: one that covers the style.
+  certificateId      String                 @db.Uuid
+  /// The certified revision it is compared with (the one the type examination saw), when known; not `revisionId`.
+  comparedRevisionId String?                @db.Uuid
+  /// What changed against the certified revision, found when the review was opened; changes only while OPEN:
+  /// [{ "kind": "OUTER_LEATHER" | "THICKNESS" | "PROTECTOR" | "SEAMS" | "LINING" | "OTHER", "what": "Outer leather",
+  ///    "before": "SEED-LEA-100 1.1-1.3 mm", "after": "SEED-LEA-110 1.0-1.2 mm", "bomLineId": "…" }].
+  changes            Json                   @default("[]")
+  status             TypeChangeReviewStatus @default(OPEN)
+  /// When the notified body was told: set in the move to NOTIFIED, kept after.
+  notifiedAt         DateTime?              @db.Timestamptz(3)
+  /// The notified body's answer: when it came and its reference (the addition's number); set exactly in APPROVED and
+  /// REFUSED.
+  answeredAt         DateTime?              @db.Date
+  answerReference    String?
+  /// The final decision (APPROVED, REFUSED, NOT_NEEDED): when, by whom and why (required for NOT_NEEDED).
+  decidedAt          DateTime?              @db.Timestamptz(3)
+  decidedById        String?                @db.Uuid
+  decisionNote       String?
+  version            Int                    @default(1)
+  createdAt          DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?                @db.Uuid
+
+  // product.prisma: the style and its two revisions (the same style's).
+  style            Style          @relation(fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  revision         StyleRevision  @relation("TypeChangeReviewRevision", fields: [tenantId, styleId, revisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and styleId.
+  comparedRevision StyleRevision? @relation("TypeChangeReviewComparedRevision", fields: [tenantId, styleId, comparedRevisionId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
+  certificate      Certificate    @relation(fields: [tenantId, certificateId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A revision's reviews, and a certificate's.
+  @@index([tenantId, revisionId])
+  @@index([tenantId, certificateId])
+}
+
+/// OPEN → NOTIFIED | NOT_NEEDED; NOTIFIED → APPROVED | REFUSED. APPROVED, REFUSED and NOT_NEEDED are final.
+enum TypeChangeReviewStatus {
+  /// Found; compliance decides whether the notified body must be told.
+  OPEN
+  /// The notified body was told; its answer is awaited.
+  NOTIFIED
+  /// The notified body approved it: an addition to the certificate.
+  APPROVED
+  /// The notified body did not: the changed revision needs a new type examination.
+  REFUSED
+  /// Compliance decided the change does not affect the approved type (with its reason).
+  NOT_NEEDED
 }

@@ -119,12 +119,12 @@
       }
     },
     "RoutingOperation": {
-      "about": "The office edits a draft revision's routing: adds, changes and removes steps (delete only while the revision is DRAFT: the …_product_guards trigger). The floor reads it: the operations it scans, with their standard minutes.",
+      "about": "The office edits a draft revision's routing: adds, changes and removes steps (delete only while the revision is DRAFT: the …_product_guards trigger), and names the workshop of a subcontracted step with its fee and transit days (W2a). The floor reads it: the operations it scans, with their standard minutes, never a subcontracted step's fee.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
-        "factory_floor_runtime": { "privileges": ["select"] }
+        "factory_floor_runtime": { "privileges": ["select"], "hiddenColumns": ["pricePerPiece"] }
       }
     },
     "MeasurementTemplate": {

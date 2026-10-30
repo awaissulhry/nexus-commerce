@@ -148,7 +148,7 @@ export async function issueChecks(caller: CommandCaller, invoiceId: string): Pro
 }
 
 /** The next number of the company's series of a kind for the year of `date`, read without a lock (a preview). */
-async function numberPreview(db: Reader, companyId: string, kind: NumberKind, date: BusinessDate): Promise<string | null> {
+export async function numberPreview(db: Reader, companyId: string, kind: NumberKind, date: BusinessDate): Promise<string | null> {
   const rows = await db.numberSeries.findMany({ where: { companyId, kind, status: 'ACTIVE' }, select: { scopeKey: true, nextValue: true, pattern: true, reset: true }, orderBy: { scopeKey: 'desc' } })
   const year = date.slice(0, 4)
   const row = rows.find((series) => series.reset === 'NEVER' || series.scopeKey === year) ?? rows[0]

@@ -8,6 +8,7 @@ import { linkCommand, useLink, type LinkUse } from '../../../platform/links/use'
 import { dayValue } from '../store'
 import { answerFacts, buyerNameOf, confirmLinkOf, linkView } from './read'
 import { recordProposal } from './proposal'
+import { confirmationFileOf } from './upload'
 
 /**
  * The supplier's answer through its PO_CONFIRM link (B-W1-31; SCM-085, SCM-086; design links.po; PLAN §4.7 08-buy).
@@ -37,6 +38,8 @@ import { recordProposal } from './proposal'
 export interface ConfirmBody extends ConfirmInput {
   readonly version: number
   readonly typedName?: string | null | undefined
+  /** The supplier's confirmation PDF, uploaded through the link before (./upload.ts). */
+  readonly confirmationFileId?: string | null | undefined
 }
 
 export interface DeclineBody {
@@ -104,9 +107,9 @@ const assertAnswerable = (status: string): void => {
   if (problem) throw new InvalidStateError(problem)
 }
 
-async function endState(request: FastifyRequest, outcome: AnswerOutcome, summary: string | null) {
+async function endState(request: FastifyRequest, outcome: AnswerOutcome, summary: string | null, confirmationFile: Awaited<ReturnType<typeof confirmationFileOf>> = null) {
   const link = confirmLinkOf(request)
-  return { ...(await linkView(request)), outcome, summary, done: doneMessage(outcome, await buyerNameOf(request, link)) }
+  return { ...(await linkView(request)), outcome, summary, done: doneMessage(outcome, await buyerNameOf(request, link)), confirmationFile }
 }
 
 /** POST /link/purchase-order/confirm (links.confirm): confirm all as asked, or answer line by line. */
@@ -119,15 +122,20 @@ export async function confirmByLink(request: FastifyRequest, body: ConfirmBody) 
       const facts = await answerFacts(tools.tx, link.record.id)
       assertAnswerable(facts.order.status)
       const plan = planAnswer(facts.asked, body, businessDate(tools.now))
+      const file = await confirmationFileOf(tools.tx, facts.order.id, body.confirmationFileId)
       // Every line one the supplier cannot deliver is its decline (the evidence says so).
       const use = await useLink(tools, request, { action: plan.outcome === 'DECLINED' ? 'decline' : 'confirm', typedName: body.typedName })
       if (plan.outcome === 'CONFIRMED') await writeConfirmation(tools, facts, plan, use, link.id)
       else if (plan.outcome === 'DECLINED') await writeDecline(tools, facts, plan.declineReason!, use, link.id, { answer: 'BY_LINE', summary: plan.summary, lines: lineDays(plan), note: plan.note })
       else await recordProposal(tools, { order: facts.order, plan, use, linkId: link.id })
-      return { outcome: plan.outcome, summary: plan.summary, at: toUtcIso(tools.now) }
+      if (file) {
+        // The supplier's own confirmation PDF went with this answer (the evidence of what it confirmed or proposed).
+        tools.audit({ action: 'purchasing.supplierConfirmationFile', recordType: 'PurchaseOrder', recordId: facts.order.id, companyId: facts.order.companyId, siteId: facts.order.siteId, after: { fileId: file.id, originalName: file.originalName, outcome: plan.outcome, evidenceId: use.evidenceId } })
+      }
+      return { outcome: plan.outcome, summary: plan.summary, at: toUtcIso(tools.now), file }
     },
   )
-  return endState(request, result.outcome, result.summary)
+  return endState(request, result.outcome, result.summary, result.file)
 }
 
 /** POST /link/purchase-order/decline (links.decline): the whole order, with a reason. */

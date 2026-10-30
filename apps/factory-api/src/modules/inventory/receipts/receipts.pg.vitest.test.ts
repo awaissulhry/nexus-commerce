@@ -531,7 +531,7 @@ describe('a cancel and a receipt of one order: exactly one wins', () => {
 
 // ---- who may ------------------------------------------------------------------------------------------------------------------------
 
-describe('the walls: office only in W1, the caller\'s companies and sites, its tenant', () => {
+describe('the walls: office only, the caller\'s companies and sites, its tenant', () => {
   let receipt: Json
   let order: Awaited<ReturnType<typeof makeOrder>>
   beforeAll(async () => {
@@ -540,7 +540,7 @@ describe('the walls: office only in W1, the caller\'s companies and sites, its t
   })
   const body = () => ({ purchaseOrderId: order.id, lines: [{ purchaseOrderLineId: order.lines[0], lots: [{ quantity: '5' }] }] })
 
-  it('a floor device reads and records nothing here yet (its receiving screen is B-W1-33)', async () => {
+  it('a floor device reads and records nothing here (it receives through /inventory/receiving, B-W1-33)', async () => {
     expect((await call('floor', 'GET', '/inventory/receipts')).statusCode).toBe(403)
     expect((await call('floor', 'GET', `/inventory/receipts/${receipt.id}`)).statusCode).toBe(403)
     expect((await call('floor', 'POST', '/inventory/receipts', body(), freshKey())).statusCode).toBe(403)

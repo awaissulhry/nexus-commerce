@@ -104,7 +104,8 @@
     "RECEIVING": "Ricevimento merci",
     "QUARANTINE": "Scaffale quarantena",
     "PRODUCTION": "Bordo linea",
-    "SHIPPING": "Spedizioni"
+    "SHIPPING": "Spedizioni",
+    "SUBCONTRACTOR": "Terzista"
   },
   "locationStatus": {
     "ACTIVE": "Attiva",

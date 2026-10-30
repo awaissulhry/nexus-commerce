@@ -4,10 +4,11 @@ import { requireStepUp } from '../../platform/auth/office/account'
 import { officeAuthOf } from '../../platform/auth/sessions/office-auth'
 import { processEmail } from '../../platform/email-out/service'
 import { processFiles } from '../../platform/files/service'
-import { allocateContract, depositLinkViewContract, depositReceivedContract, getPaymentContract, listPaymentsContract, recordPaymentContract, reverseContract, sendDepositLinkContract, voidContract } from './contract'
+import { allocateContract, depositLinkViewContract, depositReceivedContract, getPaymentContract, listPaymentsContract, openItemsContract, recordPaymentContract, reverseContract, sendDepositLinkContract, voidContract } from './contract'
 import { depositLinkView, sendDepositLink } from './deposit-link'
 import { depositReceived } from './deposits'
 import { manifest } from './manifest'
+import { openItems } from './open-items'
 import { allocatePayment, getPayment, listPayments, recordPayment, reverseAllocation, voidPayment } from './payments'
 
 /**
@@ -17,6 +18,8 @@ import { allocatePayment, getPayment, listPayments, recordPayment, reverseAlloca
  */
 export default defineRoutes('payments', manifest, async (app) => {
   app.get('/payments', { schema: listPaymentsContract }, async (request) => listPayments(request, request.query))
+
+  app.get('/payments/open-items', { schema: openItemsContract }, async (request) => openItems(request, request.query))
 
   app.get('/payments/:paymentId', { schema: getPaymentContract }, async (request) => getPayment(request, request.params.paymentId))
 

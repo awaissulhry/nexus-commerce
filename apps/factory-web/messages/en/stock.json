@@ -104,7 +104,8 @@
     "RECEIVING": "Goods in",
     "QUARANTINE": "Quarantine shelf",
     "PRODUCTION": "Line side",
-    "SHIPPING": "Shipping"
+    "SHIPPING": "Shipping",
+    "SUBCONTRACTOR": "Subcontractor"
   },
   "locationStatus": {
     "ACTIVE": "Active",

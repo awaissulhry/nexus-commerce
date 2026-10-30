@@ -1,0 +1,332 @@
+/*
+ * Labels & marking (SCR-053) LAYOUT only, beside the shared quality layout (areas/quality/_shared/quality.css): the
+ * builder (the form beside the preview and the checks on wide screens, stacked on a phone), the label sheet's frame,
+ * the stand-in marks, the field order list, the composition rows, the care choices, the sources, the save row and the
+ * dialogs' grids. The controls are the design system's; semantic tokens only. No page max-width (Owner rule 2026-10-29).
+ */
+.fw-lb-title {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.fw-lb-title-kind {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-normal);
+}
+
+.fw-lb-save {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-lb-save.is-failed,
+.fw-lb-error {
+  color: var(--nds-danger-text);
+}
+
+.fw-lb-error {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+}
+
+@media (max-width: 759px) {
+  .fw-lb-hide-phone {
+    display: none;
+  }
+}
+
+/* ---- the builder ---- */
+.fw-lb-builder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .fw-lb-builder {
+    grid-template-columns: minmax(0, 1.25fr) minmax(360px, 1fr);
+  }
+
+  .fw-lb-side {
+    position: sticky;
+    top: var(--nds-space-12);
+  }
+}
+
+.fw-lb-main,
+.fw-lb-form,
+.fw-lb-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-lb-h3 {
+  margin: var(--nds-space-8) 0 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-lb-langs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-lb-langs-add {
+  display: inline-flex;
+  gap: var(--nds-space-6);
+  align-items: center;
+}
+
+.fw-lb-langs-add input {
+  width: 9rem;
+}
+
+.fw-lb-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-sm);
+  min-width: 0;
+}
+
+.fw-lb-part-head {
+  display: inline-flex;
+  gap: var(--nds-space-8);
+  align-items: center;
+  padding: 0 var(--nds-space-4);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-lb-fibre {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: var(--nds-space-8);
+  align-items: end;
+}
+
+.fw-lb-toggle {
+  display: inline-flex;
+  gap: var(--nds-space-8);
+  align-items: flex-start;
+}
+
+.fw-lb-optional {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-10) var(--nds-space-20);
+}
+
+.fw-lb-care {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-10) var(--nds-space-12);
+}
+
+@media (min-width: 640px) {
+  .fw-lb-care {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1700px) {
+  .fw-lb-care {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.fw-lb-caretexts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-lb-order {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-sm);
+}
+
+.fw-lb-order-row {
+  display: flex;
+  gap: var(--nds-space-8);
+  align-items: center;
+  padding: var(--nds-space-2) var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-lb-order-row + .fw-lb-order-row {
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-lb-order-row:focus-visible {
+  outline: 2px solid var(--nds-focus-ring);
+  outline-offset: -2px;
+}
+
+.fw-lb-order-n {
+  width: 1.5rem;
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-lb-order-name {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---- the save row (the DS EditModeBar has English words: composed here) ---- */
+.fw-lb-savebar {
+  position: sticky;
+  top: var(--nds-space-8);
+  z-index: 2;
+}
+
+.fw-lb-savebar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  align-items: center;
+}
+
+.fw-lb-savebar-keys {
+  display: inline-flex;
+  gap: var(--nds-space-2);
+}
+
+.fw-lb-grow {
+  flex: 1;
+}
+
+/* ---- the preview ---- */
+.fw-lb-ask {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-10);
+}
+
+.fw-lb-ask-wide {
+  grid-column: 1 / -1;
+}
+
+.fw-lb-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-lb-sheet-paper {
+  min-width: 0;
+}
+
+.fw-lb-standin {
+  display: block;
+}
+
+.fw-lb-fit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  align-items: center;
+  margin: 0;
+}
+
+.fw-lb-sourcelist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: var(--nds-space-8) 0 0;
+}
+
+.fw-lb-source dt {
+  display: inline-flex;
+  gap: var(--nds-space-6);
+  align-items: center;
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-lb-source dd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  margin: var(--nds-space-2) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-lb-checktext {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-lb-api {
+  overflow-wrap: anywhere;
+}
+
+/* ---- dialogs ---- */
+.fw-lb-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-lb-picklist,
+.fw-lb-links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-lb-test {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 760px) {
+  .fw-lb-test {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.fw-lb-keymap {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--nds-space-8) var(--nds-space-12);
+  margin: 0;
+  align-items: center;
+}
+
+.fw-lb-keymap dt {
+  display: inline-flex;
+  gap: var(--nds-space-2);
+}
+
+.fw-lb-keymap dd {
+  margin: 0;
+}

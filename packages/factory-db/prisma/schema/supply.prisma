@@ -12,6 +12,10 @@
 // the supplier confirmed (SENT → PARTLY_RECEIVED | RECEIVED); a reversed receipt moves it back. The lines change only
 // while the order is DRAFT; the supplier's confirmation (the order's and each line's) is set once and never changed
 // (the …_supply_guards triggers, for every login).
+// W2a (B-W2a-52; the …_supply_w2a_guards triggers): a CONFIRMED order, or one whose proposal the buyer refuses, also
+// goes back to DRAFT as its next revision; a confirmed one then loses its confirmation and its lines' (sourcing.prisma
+// PurchaseOrderRevision keeps them), and the supplier confirms the new revision again. A line is cancelled or closed
+// short (set once); then it changes no more and takes no goods.
 //
 // Planning (PLN-062, B-W1-29): one run at a time per site (a partial unique index of …_supply_guards) explodes the
 // BOMs of the open orders per size and colour and nets them against usable (RELEASED) stock and open purchase orders.
@@ -71,6 +75,9 @@ model PurchaseOrder {
   netAmount       Int                          @default(0)
   sentAt          DateTime?                    @db.Timestamptz(3)
   sentById        String?                      @db.Uuid
+  /// W2a (SCM-087): when the supplier is asked to answer by (48 hours after the send by default); a reminder goes after
+  /// it while the order waits. Set at the send; the office may move it later; after sentAt.
+  confirmBy       DateTime?                    @db.Timestamptz(3)
   /// The supplier's confirmation: set once, in the move SENT → CONFIRMED, never changed after.
   confirmedAt     DateTime?                    @db.Timestamptz(3)
   confirmedVia    PurchaseConfirmationChannel?
@@ -117,6 +124,10 @@ model PurchaseOrder {
   lines         PurchaseOrderLine[]
   // inventory.prisma: the goods received against it.
   goodsReceipts GoodsReceipt[]
+  // W2a sourcing.prisma, claims.prisma: every revision sent, the reminders to confirm, the claims about its goods.
+  revisions      PurchaseOrderRevision[]
+  reminders      PurchaseOrderReminder[]
+  supplierClaims SupplierClaim[]
 
   @@unique([tenantId, companyId, number])
   // The target of the lines' reference: a line names its order's party and site.
@@ -219,6 +230,16 @@ model PurchaseOrderLine {
   proposedSplitQuantity Decimal?  @db.Decimal(18, 4)
   proposedSplitDate     DateTime? @db.Date
   proposalReason        String?
+  /// W2a (SCM-059): the line cancelled (nothing more of it is wanted), when, by whom and why; set once, never on a
+  /// closed, cancelled or received order. A cancelled line changes no more and takes no goods.
+  cancelledAt           DateTime? @db.Timestamptz(3)
+  cancelledById         String?   @db.Uuid
+  cancelReason          String?
+  /// W2a (SCM-060): the line closed short (part came, the rest will not), when, by whom and why; set once, while the
+  /// order is PARTLY_RECEIVED. It then counts as complete; it changes no more and takes no goods.
+  closedShortAt         DateTime? @db.Timestamptz(3)
+  closedShortById       String?   @db.Uuid
+  closeShortReason      String?
   version             Int       @default(1)
   createdAt           DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime  @default(now()) @updatedAt @db.Timestamptz(3)

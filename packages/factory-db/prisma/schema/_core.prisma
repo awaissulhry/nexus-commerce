@@ -145,6 +145,21 @@ model Company {
   privacyNotices       PrivacyNotice[]
   privacyDpias         PrivacyDpia[]
   processingActivities ProcessingActivity[]
+  // pricing.prisma, complaints.prisma: its payment terms and price lists (tenant-wide rows have none), its complaints.
+  paymentTerms         PaymentTerms[]
+  /// @not-money the relation to its price lists
+  priceLists           PriceList[]
+  complaints           Complaint[]
+  // calendar.prisma: its calendars (its own and its sites', lines', workshops' and suppliers') and its shift patterns.
+  workCalendars        WorkCalendar[]
+  shiftPatterns        ShiftPattern[]
+  // views.prisma: the saved views of its lists and the reports sent about it.
+  savedViews           SavedView[]
+  reportSubscriptions  ReportSubscription[]
+  // alerts.prisma: the alert rules that look at it.
+  alertRules           AlertRule[]
+  // W2a sourcing.prisma: the approved sources held for the company only.
+  supplierItems        SupplierItem[]
 
   @@unique([tenantId, code])
   // The target of the tenant-safe references from the company's rows.
@@ -163,6 +178,9 @@ model Site {
   /// { line1, line2?, postalCode, city, province?, country }.
   address     Json?
   timezone    String       @default("Europe/Rome")
+  /// The languages its floor workers read (PLT-128, B-W2a-41): ISO 639 codes, at least one, no repeats. A language is
+  /// offered on the site's tablets only with the worker notice in it (the API checks it; Owner list Q23).
+  floorLocales String[]    @default(["it", "en"])
   status      MasterStatus @default(ACTIVE)
   version     Int          @default(1)
   createdAt   DateTime     @default(now()) @db.Timestamptz(3)
@@ -213,6 +231,16 @@ model Site {
   shippingSettings   ShippingSettings[]
   shipments          Shipment[]
   ddts               Ddt[]
+  // returns.prisma: the returns coming back to it and the repairs it makes.
+  returnAuthorisations ReturnAuthorisation[]
+  repairOrders         RepairOrder[]
+  // calendar.prisma, views.prisma, alerts.prisma: its calendar, the reports sent about it, the alert rules that look at it.
+  workCalendars       WorkCalendar[]
+  reportSubscriptions ReportSubscription[]
+  alertRules          AlertRule[]
+  // W2a claims.prisma, subcontract.prisma: the claims about goods at the site, the work it sends to workshops.
+  supplierClaims     SupplierClaim[]
+  subcontractOrders  SubcontractOrder[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, companyId, id])
@@ -241,6 +269,8 @@ model Line {
 
   site     Site      @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   stations Station[]
+  // calendar.prisma: its calendar.
+  workCalendars WorkCalendar[]
 
   @@unique([tenantId, siteId, code])
   @@unique([tenantId, siteId, id])
@@ -267,6 +297,8 @@ model WorkCentre {
   stations Station[]
   // production.prisma: the work order operations mapped to it.
   workOrderOperations WorkOrderOperation[]
+  // calendar.prisma: its calendar (a workshop's).
+  workCalendars       WorkCalendar[]
 
   @@unique([tenantId, siteId, code])
   @@unique([tenantId, siteId, id])

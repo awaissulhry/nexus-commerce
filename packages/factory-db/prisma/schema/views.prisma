@@ -1,0 +1,164 @@
+// The shared list frame and the report pack (W2a schema wave 1/7; B-W2a-23, B-W2a-38, B-W2a-79; features PLT-163,
+// PLT-179, MES-301; design shell.lists toolbar with its popups customise, save-view and export-job; production.reports
+// popup prr-subscribe "Email me this report"):
+//
+//   SavedView           a saved view of one list: its filters, columns, sort and mode, for its owner only, for everyone
+//                       who sees the list, or for the holders of a role (and that role's default view of the list).
+//   ExportJob           an export of a list larger than one page, run in the background: what was asked, the columns
+//                       left out by the person's rights, its progress and its file (a StoredFile of the job).
+//   ReportSubscription  a report sent to one office user on a schedule (the daily production report every morning).
+//
+// Lists are named by their page id (`sales.orders`), as the web's list frame names them; nothing here waits for a
+// module. Reports and exports are per line, station or work order, never per person (Statuto dei Lavoratori art. 4).
+
+/// A saved view of one list (PLT-163). Its owner changes and removes it; a role default is changed by views.manage.
+model SavedView {
+  id          String            @id @db.Uuid
+  tenantId    String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The list: its page id (`sales.orders`, `warehouse.moves`). Never changes.
+  listKey     String
+  name        String
+  /// The office user who made it. Never changes.
+  ownerId     String            @db.Uuid
+  audience    SavedViewAudience @default(ONLY_ME)
+  /// ROLE: the role whose holders see it (set exactly then).
+  roleId      String?           @db.Uuid
+  /// The role's default view of the list: a ROLE view, one per list, role and company (views.manage).
+  roleDefault Boolean           @default(false)
+  /// The company it is for; null: every company the reader sees.
+  companyId   String?           @db.Uuid
+  /// What it keeps, as the list frame reads it: { filters?, columns?, sort?, mode?, density?, groupBy? }, only what
+  /// was chosen to keep (the list frame checks it).
+  state       Json
+  version     Int               @default(1)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?           @db.Uuid
+
+  owner      User        @relation(fields: [tenantId, ownerId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  role       Role?       @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  company    Company?    @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  exportJobs ExportJob[]
+
+  @@unique([tenantId, ownerId, listKey, name])
+  // The target of the exports' tenant-safe reference.
+  @@unique([tenantId, id])
+  // A list's views.
+  @@index([tenantId, listKey])
+}
+
+/// Who sees a saved view (design save-view: Only me · My team · Role default).
+enum SavedViewAudience {
+  ONLY_ME
+  /// Everyone who sees the list.
+  EVERYONE
+  /// The holders of one role (roleId).
+  ROLE
+}
+
+/// An export of a list in the background (PLT-179): QUEUED → RUNNING → DONE → EXPIRED, or FAILED. Field security
+/// applies: the columns the person may not see are left out and named here (and in the file's header).
+model ExportJob {
+  id             String       @id @db.Uuid
+  tenantId       String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose list it is; null: a tenant-wide list.
+  companyId      String?      @db.Uuid
+  /// The office user who asked for it: the file is theirs.
+  requestedById  String       @db.Uuid
+  /// The list (its page id) and the saved view it was made from, if any.
+  listKey        String
+  viewId         String?      @db.Uuid
+  format         ExportFormat
+  /// What is exported, as the server applied it: { search?, filters?, sort?, columns? }.
+  query          Json
+  /// The columns left out because the person may not see them.
+  omittedColumns String[]     @default([])
+  status         ExportStatus @default(QUEUED)
+  /// Rows written so far, and how many in all once known.
+  rowsDone       Int          @default(0)
+  rowCount       Int?
+  /// DONE: the file (a StoredFile of this job), kept until expiresAt.
+  fileId         String?      @db.Uuid
+  startedAt      DateTime?    @db.Timestamptz(3)
+  finishedAt     DateTime?    @db.Timestamptz(3)
+  /// FAILED: why, in words.
+  failureReason  String?
+  /// When the link was e-mailed to the person (an export runs on when its window is closed).
+  emailedAt      DateTime?    @db.Timestamptz(3)
+  /// After this the file is deleted and the job EXPIRED.
+  expiresAt      DateTime?    @db.Timestamptz(3)
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+
+  requestedBy User        @relation(fields: [tenantId, requestedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  view        SavedView?  @relation(fields: [tenantId, viewId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  file        StoredFile? @relation(fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // A person's exports, newest first.
+  @@index([tenantId, requestedById, createdAt])
+  // The worker's queue.
+  @@index([tenantId, status])
+}
+
+enum ExportFormat {
+  /// This view as CSV.
+  CSV
+  /// This view as Excel.
+  XLSX
+  /// The full file for re-import (the list's importer reads it back).
+  XLSX_REIMPORT
+}
+
+enum ExportStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+  /// DONE, and its file deleted after expiresAt.
+  EXPIRED
+}
+
+/// A report sent to one office user on a schedule ("Email me this report": time, recipients, language). The person
+/// who set it is createdById; the recipient is userId. Removed when unsubscribed.
+model ReportSubscription {
+  id          String        @id @db.Uuid
+  tenantId    String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The office user it is sent to, and the language it is sent in. Never changes.
+  userId      String        @db.Uuid
+  locale      String
+  /// The report: its definition key in the report registry (`production.daily`). Never changes.
+  reportKey   String
+  /// Where it looks: a company and a site (null: every one the recipient sees), and its other filters as the report
+  /// reads them ({ lineIds?: [...] }).
+  companyId   String?       @db.Uuid
+  siteId      String?       @db.Uuid
+  params      Json          @default("{}")
+  channel     ReportChannel @default(EMAIL)
+  /// When: the ISO weekdays (1 Monday … 7 Sunday, ascending) and the time of day (HH:MM, the site's zone, else the
+  /// company's).
+  weekdays    Int[]         @default([1, 2, 3, 4, 5])
+  sendTime    String
+  /// Off: kept, not sent.
+  active      Boolean       @default(true)
+  lastSentAt  DateTime?     @db.Timestamptz(3)
+  version     Int           @default(1)
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?       @db.Uuid
+
+  user    User     @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  company Company? @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  site    Site?    @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, userId])
+  // The scheduler's pass over the active ones.
+  @@index([tenantId, active])
+}
+
+enum ReportChannel {
+  EMAIL
+}

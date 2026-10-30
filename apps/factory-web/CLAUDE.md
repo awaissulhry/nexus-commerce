@@ -67,6 +67,16 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/areas/products/styles/` — Products › Styles (SCR-040 list, SCR-041 … SCR-045 the Style studio): `api.ts` (every call, checked
   against factory-domain's own contracts), `model.ts` (pure rules), `list/`, `record/` (studio shell, Overview, Colourways &
   sizes), `bom/`, `routing/`, `cost/`, `compliance/` (the revision tabs), `demo/fixtures.ts` (made-up data for the design cases).
+- `src/areas/products/{materials,operations,sizes}/` — the product libraries: Materials & trims (SCR-047 list, SCR-048
+  the record: Overview with the units converter, Colours, Properties & grades, Suppliers & prices (cost grain only),
+  Compliance, Stock), Operations (SCR-049, the record with Where used → "Update N to the library value" on draft
+  routings), Sizes & measurements (size scales; the scale record with its sizes' body measures). Shared parts, rules,
+  role cases and the `library` catalogue's test in `products/library/`. Each folder: `api.ts`, `model.ts`, the page
+  container, `view/`, `record/`, `fixtures.ts` (made-up data).
+- `src/areas/compliance/certificates/` (SCR-050 register, SCR-051 the record with coverage and the lapse check) and
+  `src/areas/compliance/labels/` (SCR-053 list, `SCR-053-label` the PPE label builder: the preview re-rendered as you
+  type with factory-domain's `renderLabel` over the values the API's preview answers; CE mark, pictogram and care
+  symbols are named stand-ins). Catalogues `certificates`, `labels`.
 - `src/links/<task>/` — a one-off link's task page, in the Links view (`links/quote-accept`, SCR-099: the link landing
   opens it for a QUOTE_ACCEPT link with the same client; the token stays in its header; `links/deposit-pay`, SCR-199:
   a DEPOSIT_INFO link's deposit to pay by bank transfer, each field with Copy). `src/areas/_shared/` — Office
@@ -94,6 +104,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   thread dock, step-up asked first when the session has none fresh), `list/` (list frame; Export N), `record/` (tabs
   `?tab=lines|dates|production|shipments|money|documents|activity`, dialogs), `_demo/fixtures.ts` (made-up data).
   "Make work orders" opens `/production/work-orders?new=1&order=<number>` (the dialog picks that order).
+- `src/areas/finance/` — Finance (area order 11, Italian "Contabilità"; SCR-080 … SCR-083): `_shared/` (api.ts every call + zod,
+  model.ts the pure rules — saved views ⇄ address = the API's own `?status=` `?docType=`, journey, next step held with its
+  reason, the checks in words with where to fix, payment state, placement oldest first, CSV, problems —, hooks.ts live,
+  step-up asked first, thread dock; parts.tsx the named stand-ins JourneyStrip, CheckList, Bridge, DialogFrame;
+  placement.tsx = MatchPanel), `invoices/list` (Shipped, not invoiced + All invoices: two list frames), `invoices/record`
+  (`?tab=lines|money|sdi|documents|activity`; issue = P1 confirm then send; fix and resend; credit note), `payments/list`
+  (Record a payment: two steps; `?new=1&invoice=<id>`), `payments/record` (`?tab=allocation|bank`), `settings`,
+  `_demo/fixtures.ts` (made-up data). `RECORD_PAGES.Invoice|Payment` and `LIST_PAGES['/invoicing/invoices'|'/payments']`.
 - `src/areas/production/` — Production (SCR-069 … SCR-073): `work-orders/` the list (list frame; Export N, Release N) and
   New work order (`?new=1`), `work-orders/record/` the work order studio (`?tab=overview|materials|cutting|bundles|
   operations|quality|activity`, `?at=<seq>`; tabs in `cutting/`, `bundles/`, `progress/`), `wip/` Floor now

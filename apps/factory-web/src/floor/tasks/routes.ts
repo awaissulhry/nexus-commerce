@@ -2,7 +2,7 @@ import type { FloorMode, TileKey } from '../model'
 import type { ScanRead } from '../scan/scan-model'
 
 /**
- * Where the floor tasks live (SCR-090, 093, 094, 095, 097) and the scan router of Home (design "The floor frame",
+ * Where the floor tasks live (SCR-090, 092, 093, 094, 095, 097) and the scan router of Home (design "The floor frame",
  * scanRouter): a label scanned on Home opens the job for this station and person with the label loaded — a bundle at a
  * sewing station opens Operation, a hide at a cutting table opens Cut a hide, a bundle there opens Bundles (to fix its
  * ticket), a work order's label opens Pick & issue at the warehouse and Final inspection at the bench, a garment's serial
@@ -10,12 +10,13 @@ import type { ScanRead } from '../scan/scan-model'
  * opens Scan anything. Pure, so the tests hold it.
  */
 
-export type TaskKey = Extract<TileKey, 'operation' | 'cut' | 'bundles' | 'pick' | 'final' | 'pack' | 'labels'>
+export type TaskKey = Extract<TileKey, 'operation' | 'cut' | 'bundles' | 'receive' | 'pick' | 'final' | 'pack' | 'labels'>
 
 export const TASK_ROUTES: Readonly<Record<TaskKey, string>> = {
   operation: '/floor/operation',
   cut: '/floor/cut',
   bundles: '/floor/bundles',
+  receive: '/floor/receive',
   pick: '/floor/pick',
   final: '/floor/final',
   pack: '/floor/pack',
@@ -28,7 +29,7 @@ export function taskOfTile(key: TileKey): TaskKey | null {
 }
 
 /** The catalogues the floor app loads (the frame's and each task's). */
-export const FLOOR_NAMESPACES = ['floor', 'floor-tasks', 'floor-scans', 'floor-issue', 'floor-cutting', 'floor-bundles', 'floor-final', 'floor-pack', 'floor-labels'] as const
+export const FLOOR_NAMESPACES = ['floor', 'floor-tasks', 'floor-scans', 'floor-issue', 'floor-cutting', 'floor-bundles', 'floor-final', 'floor-receive', 'floor-pack', 'floor-labels'] as const
 
 /**
  * The task a code scanned on Home opens at this station, given the tiles the person has (a tile = mode AND permission),

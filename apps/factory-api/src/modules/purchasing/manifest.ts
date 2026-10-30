@@ -35,5 +35,8 @@ export const manifest = defineManifest({
   'GET /link/purchase-order': { audiences: ['link'], permission: 'links.open', scope: 'record' },
   'POST /link/purchase-order/confirm': { audiences: ['link'], permission: 'links.confirm', scope: 'record' },
   'POST /link/purchase-order/decline': { audiences: ['link'], permission: 'links.decline', scope: 'record' },
+  // B-W1-33 (SCR-100): the supplier's confirmation PDF, uploaded before it answers.
+  'POST /link/purchase-order/confirmation': { audiences: ['link'], permission: 'links.confirm', scope: 'record' },
+  'POST /link/purchase-order/confirmation/:fileId/complete': { audiences: ['link'], permission: 'links.confirm', scope: 'record' },
   'POST /link/purchase-order/renew': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
 })

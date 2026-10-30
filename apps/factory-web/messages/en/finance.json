@@ -1,0 +1,1209 @@
+{
+  "action": {
+    "copyNumber": "Copy the number",
+    "creditNote": "Create a credit note",
+    "deleteDraft": "Delete the draft",
+    "downloadPdf": "Download the courtesy PDF",
+    "downloadXml": "Download the XML (legal)",
+    "makeFiles": "Make the files",
+    "sendCopy": "Send copy"
+  },
+  "bank": {
+    "bic": "BIC",
+    "edit": "Edit",
+    "explain": "Printed on every invoice and on the customer’s deposit page.",
+    "holder": "Account holder",
+    "iban": "IBAN",
+    "name": "Bank",
+    "noRight": "The bank account is shown to roles with the bank right.",
+    "none": {
+      "body": "Add it: invoices and the deposit page print it.",
+      "title": "No bank account yet"
+    },
+    "problem": {
+      "both": "The holder and the IBAN go together (both empty removes the account).",
+      "iban": "An IBAN: two letters, two check digits and the account (spaces allowed).",
+      "ibanCheck": "The IBAN’s check digits do not match: check it against the bank’s."
+    },
+    "save": "Save the bank account",
+    "stepUp": "Saving asks a fresh code from your authenticator app.",
+    "title": "Bank account",
+    "updated": "Updated"
+  },
+  "basis": {
+    "GROSS": "Prices with VAT",
+    "NET": "Prices without VAT"
+  },
+  "bulk": {
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)",
+    "invoiceDdts_one": "Invoice {count} DDT",
+    "invoiceDdts_other": "Invoice {count} DDTs"
+  },
+  "check": {
+    "BUYER": "The customer’s tax identity is not complete for FatturaPA.",
+    "CREDIT_OF": "The credited invoice is missing, or it cannot be credited.",
+    "CREDIT_OVER": "The credit note is above what is still creditable on the invoice.",
+    "CREDIT_REASON": "The credit note needs its reason.",
+    "CURRENCY": "The invoice’s currency does not match.",
+    "DDT_CANCELLED": "A DDT of this invoice was cancelled.",
+    "DDT_INVOICED": "These goods are already on another issued invoice.",
+    "DDT_NOT_CARRIED": "A line bills goods the DDT did not carry.",
+    "DDT_NOT_SHIPPED": "A DDT of this invoice is not shipped yet.",
+    "DEDUCTION_OVER": "The deposit is deducted more than it was invoiced.",
+    "DEDUCTION_STATE": "A deducted deposit invoice is not issued or was rejected.",
+    "DEPOSIT_CURRENCY": "The deposit is in another currency.",
+    "DEPOSIT_MISSING": "The deposit request of this deposit invoice is missing.",
+    "DEPOSIT_OVER_REQUEST": "The deposit invoice is above what was paid on the request.",
+    "DEPOSIT_STATE": "The deposit request is not in a state that allows its deposit invoice.",
+    "DEPOSIT_ZERO": "Nothing is paid on the deposit yet.",
+    "FATTURAPA": "The FatturaPA file would be refused: a text holds characters it cannot carry, or a value is not allowed.",
+    "LINE": "A line is not complete (description, quantity, price or VAT).",
+    "NO_LINES": "The invoice has no lines.",
+    "NO_VIES_PROOF": "An EU sale without VAT needs a valid VIES check of the customer’s VAT number.",
+    "OTHER": "A check does not pass.",
+    "PARTY_ARCHIVED": "The customer is archived.",
+    "PARTY_BLOCKED": "The customer is blocked: no invoice can go to them.",
+    "PARTY_WARNING": "The customer’s data is not complete for an invoice (SDI code or PEC, VAT number, address).",
+    "SELLER": "Our company’s data is not complete for an invoice (VAT number, tax regime, address).",
+    "SERIES": "The company has no active number series for this document: an admin opens one.",
+    "TOTALS": "The totals do not add up: save the lines again."
+  },
+  "checks": {
+    "allPass": "Every check passes. It will get number {number} with today’s date.",
+    "explain": "SDI refuses files with missing or wrong data. We check the same rules first, so a rejection is rare.",
+    "failCount_one": "{count} check to fix before the invoice can be issued.",
+    "failCount_other": "{count} checks to fix before the invoice can be issued.",
+    "fix": {
+      "company": "Finance settings",
+      "deduction": "Remove the deduction in the lines below if it is wrong",
+      "lines": "Edit the lines",
+      "none": "Nothing to change",
+      "party": "Fix on the customer",
+      "series": "Number series",
+      "text": "Edit the text"
+    },
+    "title": "Before you issue"
+  },
+  "col": {
+    "amount": "Amount",
+    "customer": "Customer",
+    "ddt": "DDT",
+    "deadline": "Legal deadline",
+    "depositPaid": "Deposit paid",
+    "draft": "Draft",
+    "due": "Due",
+    "gross": "Total",
+    "more": "More",
+    "net": "Net",
+    "notPlaced": "Not placed",
+    "number": "Number",
+    "orders": "Orders",
+    "payment": "Payment",
+    "placedOn": "Placed on",
+    "receivedOn": "Received",
+    "reference": "Bank reference",
+    "sdi": "SDI",
+    "state": "State",
+    "suggested": "Suggested type",
+    "toInvoice": "To invoice",
+    "type": "Type",
+    "value": "Value",
+    "vat": "VAT"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "dismiss": "Dismiss",
+    "done": "Done",
+    "retry": "Try again",
+    "working": "Working…"
+  },
+  "credit": {
+    "after": "The draft opens; check and issue it to send it to SDI.",
+    "amount": "Amount with VAT",
+    "amountHint": "Never above what is still creditable",
+    "body": "A credit note (TD04) corrects an issued invoice: it is a new draft you check and issue like any invoice. Amounts are positive.",
+    "creditable": "Still creditable: {amount}",
+    "go": "Create the draft credit note",
+    "linesLabel": "Lines to credit",
+    "mode": "What it credits",
+    "modes": {
+      "amount": "An amount",
+      "amountHint": "An amount with VAT included at the invoice’s VAT (a price reduction).",
+      "full": "The whole invoice",
+      "fullHint": "Every line, at its price.",
+      "lines": "Some lines",
+      "linesHint": "Chosen lines, a quantity up to the invoiced one, at the price or lower."
+    },
+    "pickReason": "Choose the reason",
+    "problem": {
+      "amount": "Type an amount above 0.",
+      "fullAfterPart": "The whole invoice cannot be credited after a part was.",
+      "lineValues": "A chosen line needs a quantity and a price.",
+      "lines": "Choose at least one line.",
+      "over": "More than is still creditable.",
+      "reason": "Choose the reason.",
+      "text": "Say the reason in words."
+    },
+    "quantity": "Quantity (at most {max})",
+    "reason": "Reason",
+    "text": "In words",
+    "textHint": "Printed after the reason on the credit note",
+    "title": "Credit note for {number}",
+    "unitPrice": "Unit price",
+    "unitPriceHint": "The invoiced price or lower"
+  },
+  "creditReason": {
+    "BILLING_ERROR": "Billing error",
+    "DEFECT": "Defective goods",
+    "DEPOSIT_REFUND": "Deposit given back",
+    "OTHER": "Other",
+    "PRICE_REDUCTION": "Price reduction",
+    "RETURN": "Goods returned"
+  },
+  "csv": {
+    "amount": "Amount",
+    "customer": "Customer",
+    "date": "Date",
+    "due": "Due",
+    "gross": "Total",
+    "left": "Not placed",
+    "net": "Net",
+    "number": "Number",
+    "open": "Open",
+    "paid": "Paid",
+    "placed": "Placed",
+    "placedOn": "Placed on",
+    "reference": "Bank reference",
+    "status": "Status",
+    "type": "Type",
+    "vat": "VAT"
+  },
+  "deadline": {
+    "late": {
+      "TD01_one": "{count} day late",
+      "TD01_other": "{count} days late",
+      "TD24_one": "{count} day late",
+      "TD24_other": "{count} days late"
+    },
+    "left": {
+      "TD01_one": "{count} day left",
+      "TD01_other": "{count} days left",
+      "TD24_one": "{count} day left",
+      "TD24_other": "{count} days left"
+    }
+  },
+  "delete": {
+    "body": "The draft for {customer} has no number: deleting it leaves no gap. Its goods return to \"Shipped, not invoiced\".",
+    "go": "Delete the draft",
+    "title": "Delete this draft?"
+  },
+  "depositKind": {
+    "ACCONTO": "Advance (acconto)",
+    "CAPARRA": "Confirmatory deposit (caparra)"
+  },
+  "details": {
+    "causaleHint": "Printed on the invoice; FatturaPA allows plain Latin letters.",
+    "dueHint": "Paid by bank transfer to the company’s IBAN.",
+    "go": "Save",
+    "problem": {
+      "date": "A date as on the calendar."
+    },
+    "title": "The draft’s text and due date"
+  },
+  "docType": {
+    "TD01": "Invoice",
+    "TD02": "Deposit invoice",
+    "TD04": "Credit note",
+    "TD24": "Deferred invoice"
+  },
+  "docs": {
+    "col": {
+      "action": "Open",
+      "document": "Document",
+      "what": "What it is"
+    },
+    "copy": "E-mailed copy",
+    "copyWhat": "Sent to the customer on {date}",
+    "ddt": "DDT {number} of {date}",
+    "ddtWhat": "The transport document of shipment {shipment}, cited by the invoice",
+    "download": "Download",
+    "draft": {
+      "body": "They are made at issue: the legal XML and the courtesy PDF.",
+      "title": "No documents yet"
+    },
+    "filesPending": "The invoice is issued; its XML and PDF are still being made.",
+    "mail": {
+      "other": "On its way",
+      "sent": "Sent"
+    },
+    "notYet": "Not yet",
+    "openShipment": "Open the shipment",
+    "pdf": "{number} (courtesy copy)",
+    "pdfFailed": "The PDF could not be opened: download it instead.",
+    "pdfLoading": "Opening the PDF…",
+    "pdfWhat": "A courtesy copy to read and print; it says it is a copy",
+    "title": "Documents",
+    "view": "View",
+    "xml": "{number}.xml",
+    "xmlWhat": "The legal invoice: the FatturaPA file SDI receives"
+  },
+  "fix": {
+    "causaleHint": "The reason printed on the invoice (causale).",
+    "elsewhere": "Fix the customer’s or our company’s data where it lives, then come back and resend:",
+    "go": "Resend to SDI",
+    "lines": "The invoice’s lines",
+    "notReady": "Saved. The resend’s checks still do not pass: fix what is listed, then send again.",
+    "problemLines": "Fix the lines first.",
+    "resendChecks": "What the resend still finds",
+    "same": "Same number and date; send it by {date}.",
+    "sameNoDate": "Same number and date.",
+    "title": "Fix and resend {number}",
+    "willCorrect": "The correction is saved, then the invoice goes to SDI again.",
+    "willResend": "Nothing typed here changes: the customer’s and our data are read again and the invoice goes to SDI again."
+  },
+  "fromDdts": {
+    "body": "One draft per customer: choose the DDTs, the type, then check and issue it from its record.",
+    "customer": "Customer",
+    "ddtCount_one": "{count} DDT",
+    "ddtCount_other": "{count} DDTs",
+    "ddts": "DDTs to invoice",
+    "deferredNote": "Several DDTs make one deferred invoice (TD24).",
+    "deposit": "Deposit paid on these orders",
+    "depositHint": "Its deposit invoice is deducted in the draft",
+    "go": "Create the draft invoice",
+    "noneLeft": "Every DDT of this customer is invoiced or in a draft.",
+    "orders": "Orders",
+    "pickCustomer": "Choose the customer",
+    "td01Not": "Only for one DDT within its 12 days.",
+    "td24Not": "Too late for this month’s deferred invoice: one immediate invoice per DDT.",
+    "title": "Invoice shipped goods",
+    "type": "Type",
+    "typeWhy": {
+      "TD01": "Issued now, within 12 days of the DDT.",
+      "TD24": "One invoice for the month’s DDTs, by the 15th of the next month; it names each DDT."
+    },
+    "value": "Value at the order’s prices",
+    "valueHint": "Without VAT; the draft computes the VAT"
+  },
+  "held": {
+    "allPlaced": "Everything of it is placed.",
+    "busy": "Wait: the last change is being saved.",
+    "checksFail_one": "{count} check to fix first.",
+    "checksFail_other": "{count} checks to fix first.",
+    "checksReading": "The checks are being read.",
+    "creditNothingLeft": "Nothing is left to credit on it.",
+    "creditOfCredit": "A credit note is not credited again.",
+    "creditOfDraft": "A draft is corrected directly, not with a credit note.",
+    "creditOfRejected": "A rejected invoice is fixed and sent again, not credited.",
+    "ddtInDraft": "Already in a draft invoice: open the draft.",
+    "lateEach": "Too late for one deferred invoice: invoice each DDT on its own.",
+    "noBank": "Changing the bank account needs the bank right.",
+    "noCompany": "Open a company first.",
+    "noDdt": "Choose at least one DDT.",
+    "noEmail": "Writing to customers needs the e-mail right.",
+    "noIssue": "Issuing and sending invoices is finance’s.",
+    "noManage": "Making and changing invoice drafts is finance’s.",
+    "noRecord": "Recording payments is finance’s.",
+    "noVoid": "Voiding a payment needs the right to void payments.",
+    "nothingChanged": "Nothing changed yet.",
+    "nothingShipped": "Nothing shipped waits for an invoice.",
+    "oneCustomer": "One invoice per customer: choose DDTs of one customer.",
+    "oneMonth": "A deferred invoice takes the DDTs of one month.",
+    "payDraft": "A draft is paid once it is issued.",
+    "payNotPayable": "This document is not paid on its own.",
+    "payNothingOpen": "Nothing is left to pay on it.",
+    "pickCustomer": "Choose the customer.",
+    "sdiNotNow": "SDI cannot take it now: see its state.",
+    "voidPlaced": "Take its placements back first: a payment is voided only once nothing is placed.",
+    "voided": "The payment is voided."
+  },
+  "invoiceStatus": {
+    "DELIVERED": "Delivered",
+    "DRAFT": "Draft",
+    "ERROR": "Send failed",
+    "ISSUED": "Issued",
+    "NOT_DELIVERABLE": "Not delivered",
+    "REJECTED": "Rejected by SDI",
+    "SENT": "At SDI"
+  },
+  "issue": {
+    "alsoSend": "Send it to SDI at once",
+    "checksPass": "Every check before issue passes.",
+    "customer": "Customer",
+    "date": "Date",
+    "final": "An issued invoice cannot change or be deleted. Mistakes are corrected with a credit note.",
+    "go": "Issue and send",
+    "goOnly": "Issue",
+    "number": "Number it will get",
+    "numberHint": "Taken at issue: the series’ next number",
+    "title": "Issue the invoice and send it to SDI?",
+    "titleOnly": "Issue the invoice?",
+    "total": "Total",
+    "what": {
+      "copy": "If SDI cannot deliver it, the customer gets the courtesy PDF by e-mail.",
+      "locked": "The invoice is locked with its number and date.",
+      "sdi": "SDI receives the XML through the intermediary."
+    },
+    "working": "Issuing and sending…",
+    "workingOnly": "Issuing…"
+  },
+  "item": {
+    "deposit": "Deposit of order {order}",
+    "depositNoOrder": "Deposit",
+    "invoice": "Invoice {number}"
+  },
+  "journey": {
+    "checks": "Checks",
+    "delivered": "Delivered",
+    "draft": "Draft",
+    "issued": "Issued",
+    "issuedNumber": "Issued {number}",
+    "label": "Where the invoice stands",
+    "notDelivered": "Not delivered: tax drawer",
+    "paid": "Paid",
+    "rejected": "Rejected by SDI",
+    "sdi": "SDI accepted",
+    "state": {
+      "current": "now",
+      "done": "done",
+      "problem": "needs attention",
+      "skipped": "not for this document",
+      "todo": "not yet"
+    }
+  },
+  "lines": {
+    "basis": "Prices",
+    "causale": "Reason on the invoice (causale)",
+    "col": {
+      "description": "Description",
+      "discount": "Discount",
+      "net": "Net",
+      "quantity": "Quantity",
+      "unitPrice": "Unit price",
+      "vat": "VAT"
+    },
+    "ddtRef": "DDT {number}",
+    "deduction": "Deposit deducted: deposit invoice {number}",
+    "deductionSub": "Deposit deducted",
+    "due": "Due date",
+    "edit": "Edit lines",
+    "editDetails": "Text & due date",
+    "empty": {
+      "body": "Make the invoice from shipped goods: its lines come from the DDTs.",
+      "title": "No lines"
+    },
+    "field": {
+      "description": "Line {n}: description",
+      "discount": "Discount %",
+      "quantity": "Quantity",
+      "size": "Size {size}",
+      "unitPrice": "Unit price"
+    },
+    "issuedBanner": "Issued {date}: it cannot change. Corrections only by credit note.",
+    "method": "By bank transfer",
+    "openTd02": "Open the deposit invoice",
+    "problem": {
+      "description": "Say what the line bills.",
+      "discount": "A discount above 0 and below 100.",
+      "long": "At most 1,000 characters.",
+      "price": "A price of 0 or more, at most 6 decimals.",
+      "quantity": "A quantity above 0, at most 4 decimals."
+    },
+    "refs": "Customer’s order",
+    "rejectedBanner": "Rejected by SDI: it counts as never issued. Fix it and send it again by {date} with the same number and date.",
+    "rejectedBannerNoDate": "Rejected by SDI: it counts as never issued. Fix it and send it again with the same number and date.",
+    "relatedPart": "the DDTs and deposits",
+    "removeDeduction": "Remove the deduction",
+    "title": "Lines"
+  },
+  "linesDialog": {
+    "body": "The deposit deduction stays as it is; the totals are computed again.",
+    "go": "Save the lines",
+    "title": "Edit the lines"
+  },
+  "list": {
+    "clearFilters": "Show all invoices",
+    "countMore_one": "{count} invoice shown, more to load",
+    "countMore_other": "{count} invoices shown, more to load",
+    "count_one": "{count} invoice",
+    "count_other": "{count} invoices",
+    "createdOn": "Created {date}",
+    "draft": "Draft",
+    "empty": {
+      "body": "Invoices are made from shipped goods: choose DDTs in \"Shipped, not invoiced\".",
+      "title": "No invoices yet"
+    },
+    "failed": "Couldn't load the invoices",
+    "filesPending": "Files being made",
+    "keyInvoiceShipped": "Invoice shipped goods",
+    "keysTitle": "Keyboard shortcuts",
+    "more": "Show more",
+    "noMatch": {
+      "body": "No invoice is in this view now.",
+      "title": "Nothing in this view"
+    },
+    "notYet": "Not read yet",
+    "open": "Open",
+    "openAmount": "{amount} to pay",
+    "openNewTab": "Open in a new tab",
+    "rowMenu": "More for {number}",
+    "rowsLabel": "Rows",
+    "title": "All invoices",
+    "updated": "Updated {time}"
+  },
+  "live": {
+    "connecting": "Connecting to live updates",
+    "live": "Live",
+    "offline": "Offline: refresh to see changes"
+  },
+  "match": {
+    "amountFor": "Amount for {item}",
+    "depositSub": "Asked {date} · due {due} · open {open}",
+    "depositSubNoDue": "Asked {date} · open {open}",
+    "failed": "Couldn't load the open items",
+    "invoiceSub": "Issued {date} · due {due} · open {open}",
+    "invoiceSubNoDue": "Issued {date} · open {open}",
+    "label": "Open items, oldest first",
+    "left": "Left to place",
+    "loading": "Reading the customer’s open items…",
+    "none": {
+      "body": "The money stays on the payment, to place when an invoice comes.",
+      "title": "Nothing open for this customer"
+    },
+    "problem": {
+      "fix": "Fix the amounts first.",
+      "none": "Choose where it goes.",
+      "over": "More than it still asks.",
+      "tooMuch": "More is placed than the payment holds.",
+      "zero": "Type an amount above 0."
+    },
+    "suggest": "Suggest (oldest first)",
+    "title": "Where it goes"
+  },
+  "money": {
+    "asked": "Asked",
+    "col": {
+      "amount": "Amount",
+      "creditNote": "Credit note",
+      "date": "Received",
+      "payment": "Payment",
+      "status": "Status"
+    },
+    "creditNotesTitle": "Credit notes of this invoice",
+    "creditOf": "This credit note corrects invoice",
+    "credited": "Credit notes",
+    "deductedHere": "Deducted on this invoice: {amount} (VAT included)",
+    "deposit": "{kind} · order {order}",
+    "depositsExplain": "A deposit invoice (TD02) is issued when an advance arrives; the final invoice subtracts it, so the customer is never charged twice.",
+    "depositsTitle": "Deposits",
+    "document": "Document that followed",
+    "dueOn": "Due {date}",
+    "gross": "Invoice total",
+    "noDeposit": {
+      "body": "The orders of this invoice asked no deposit.",
+      "title": "No deposit on this order"
+    },
+    "noFiscal": "No fiscal document (its VAT rule asks none)",
+    "noPayments": {
+      "body": "Record the customer’s transfer: it is placed here.",
+      "notPayable": "This document is not paid on its own.",
+      "title": "Nothing paid yet"
+    },
+    "notPaid": "Not paid yet",
+    "open": "Still to pay",
+    "overdue_one": "Overdue {count} day",
+    "overdue_other": "Overdue {count} days",
+    "paid": "Paid",
+    "paidAt": "Paid on",
+    "paidOnDeposit": "Paid",
+    "paymentsTitle": "Payments placed on it",
+    "placed": "Placed",
+    "reversal": "Taken back: {note}",
+    "reversed": "Taken back later",
+    "td02": "Deposit invoice {number}",
+    "td02Draft": "Deposit invoice (draft)",
+    "td02PaidBy": "A deposit invoice is paid through its deposit request.",
+    "td02Waits": "The deposit invoice waits for the payment",
+    "title": "Deposits & payments"
+  },
+  "natura": {
+    "N1": "Excluded from VAT (art. 15)",
+    "N2_1": "Service to a business abroad: outside the scope of Italian VAT (reverse charge)",
+    "N2_2": "Not subject to VAT, other cases",
+    "N3_1": "Export: no Italian VAT",
+    "N3_2": "Sale to an EU business: no Italian VAT",
+    "N3_3": "Sale to San Marino: no Italian VAT",
+    "N3_4": "Treated as an export: no Italian VAT",
+    "N3_5": "Customer's declaration of intent: no Italian VAT",
+    "N3_6": "Non-taxable, other cases",
+    "N4": "Exempt from VAT",
+    "N5": "Margin scheme: VAT not shown",
+    "N6_9": "Reverse charge: the customer accounts for the VAT",
+    "N7": "VAT paid in another EU state"
+  },
+  "notice": {
+    "bankSaved": "The bank account is saved.",
+    "created": "The draft invoice is made.",
+    "deductionRemoved": "The deduction is removed.",
+    "detailsSaved": "The text and the due date are saved.",
+    "filesMade": "The XML and the PDF are made.",
+    "issued": "Invoice {number} is issued.",
+    "issuedFilesPending": "Invoice {number} is issued; its XML and PDF are still being made.",
+    "issuedNotSent": "Invoice {number} is issued, not sent to SDI yet: send it from here.",
+    "issuedSendFailed": "Invoice {number} is issued, but the send to SDI did not go: see the SDI tab and send it again.",
+    "issuedSent": "Invoice {number} is issued and sent to SDI.",
+    "linesSaved": "The lines are saved; the totals and the checks are read again.",
+    "placed": "The payment is placed.",
+    "resent": "Sent to SDI again with the same number and date.",
+    "sent": "Sent to SDI: its answer comes by itself.",
+    "takenBack": "The placement is taken back.",
+    "voided": "The payment is voided."
+  },
+  "part": {
+    "failed": "Couldn't load {part}",
+    "loading": "Loading {part}…"
+  },
+  "pay": {
+    "BY_DEPOSIT": "Paid by its deposit",
+    "CREDIT": "Nothing to collect",
+    "NONE": "—",
+    "OVERDUE_one": "Overdue {count} day",
+    "OVERDUE_other": "Overdue {count} days",
+    "PAID": "Paid",
+    "PART_PAID": "Part paid",
+    "UNPAID": "Unpaid"
+  },
+  "payRows": {
+    "all": "All payments",
+    "received": "Received",
+    "voided": "Voided"
+  },
+  "payTile": {
+    "month": "Received this month",
+    "monthCount_one": "{count} payment",
+    "monthCount_other": "{count} payments",
+    "notPlaced": "Not placed yet",
+    "notPlacedCapped_one": "{count} payment among the latest 200",
+    "notPlacedCapped_other": "{count} payments among the latest 200",
+    "notPlacedCount_one": "{count} payment with money to place",
+    "notPlacedCount_other": "{count} payments with money to place"
+  },
+  "payment": {
+    "back": "Payments",
+    "backToList": "Back to the payments",
+    "bankLine": "Bank statement",
+    "bankTitle": "Bank line",
+    "byHand": "By hand by {name} on {date}",
+    "col": {
+      "action": "Action",
+      "amount": "Amount",
+      "target": "Placed on",
+      "when": "When, by whom"
+    },
+    "copyReference": "Copy the reference",
+    "left": "Left to place",
+    "loading": "Loading the payment…",
+    "meta": "Received {date} · {method}",
+    "noBankLine": "No bank line linked: bank import comes later.",
+    "nothing": {
+      "body": "Place it on the customer’s deposits and invoices.",
+      "title": "Not placed yet",
+      "voided": "A voided payment is placed nowhere."
+    },
+    "placeBody": "{amount} is not placed yet.",
+    "placeGo": "Place it",
+    "placeRest": "Place the rest",
+    "placeTitle": "Place the rest of {reference}",
+    "placed": "Placed",
+    "placedRow": "Placed",
+    "reason": "Reason",
+    "reasonNeeded": "Say why (at least 3 characters).",
+    "recordedBy": "Recorded",
+    "reversal": "Taken back: {note}",
+    "reversed": "Taken back later",
+    "someone": "A colleague",
+    "state": {
+      "error": {
+        "body": "Try again in a moment.",
+        "title": "Couldn't load the payment"
+      },
+      "forbidden": {
+        "body": "Your role does not show the payments of this company or customer.",
+        "title": "No access to this payment"
+      },
+      "not_found": {
+        "body": "It belongs to another company, or the address is wrong.",
+        "title": "Payment not found"
+      }
+    },
+    "system": "The system",
+    "tab": {
+      "allocation": "Allocation",
+      "bank": "Bank line"
+    },
+    "tabsLabel": "Payment tabs",
+    "takeBack": "Take back",
+    "takeBackBody": "The ledger never changes: a take-back row undoes it, with your reason. A paid deposit keeps its payment.",
+    "takeBackGo": "Take it back",
+    "takeBackTitle": "Take back the placement on {target}?",
+    "title": "Payment",
+    "void": "Void (typed by mistake)",
+    "voidBody": "Only for a payment typed by mistake: nothing of it is placed. It stays in the list as voided.",
+    "voidGo": "Void it",
+    "voidTitle": "Void payment {reference}?",
+    "voidedBanner": "Voided on {date}: {reason}",
+    "what": "What arrived",
+    "where": "Where it went"
+  },
+  "paymentStatus": {
+    "RECEIVED": "Received",
+    "VOIDED": "Voided"
+  },
+  "payments": {
+    "countMore_one": "{count} payment shown, more to load",
+    "countMore_other": "{count} payments shown, more to load",
+    "count_one": "{count} payment",
+    "count_other": "{count} payments",
+    "empty": {
+      "body": "Record a bank transfer as it arrives: it is placed on deposits and invoices.",
+      "title": "No payments recorded"
+    },
+    "failed": "Couldn't load the payments",
+    "keyRecord": "Record payment",
+    "method": {
+      "BANK_TRANSFER": "Bank transfer"
+    },
+    "nothingPlaced": "Not placed yet",
+    "rowMenu": "More for {reference}",
+    "title": "Payments",
+    "voided": "Voided"
+  },
+  "placed": {
+    "NOT_PLACED": "Not placed",
+    "PARTLY": "Partly placed",
+    "PLACED": "Placed",
+    "VOIDED": "Voided"
+  },
+  "problem": {
+    "read": {
+      "forbidden": "Your role does not show this.",
+      "internal": "Something went wrong on our side.",
+      "not_found": "Not found.",
+      "rate_limited": "Too many requests: wait a moment.",
+      "signed_out": "Your session ended: sign in again.",
+      "unavailable": "The server did not answer: try again in a moment."
+    },
+    "write": {
+      "allocation": "An item no longer asks that much (someone placed money on it): read again and place what is left.",
+      "checks": "A check before issue does not pass now: see the list.",
+      "creditOver": "More than is still creditable on the invoice.",
+      "ddts": "Someone invoiced these DDTs meanwhile, or they are in a draft: the list is read again.",
+      "forbidden": "Your role does not allow this.",
+      "iban": "The IBAN is not valid.",
+      "internal": "Something went wrong on our side: nothing was changed.",
+      "invalid": "Something typed is not accepted: check the fields.",
+      "moved": "Someone changed it meanwhile: it is read again, check and try again.",
+      "not_found": "It is no longer there.",
+      "rate_limited": "Too many tries: wait a moment.",
+      "reference": "This bank reference was recorded already: a transfer counts once.",
+      "signed_out": "Your session ended: sign in again.",
+      "state": "Its state does not allow this now: it is read again.",
+      "step_up": "A fresh authenticator code is needed.",
+      "unavailable": "The server did not answer: try again in a moment."
+    }
+  },
+  "record": {
+    "back": "Invoices",
+    "backToList": "Back to the invoices",
+    "changed": "Someone changed this invoice at {time}.",
+    "dock": "Thread",
+    "dockHint": "The invoice’s thread beside the tab (⌘J)",
+    "dockLabel": "Thread, files and history",
+    "draftTitle": "Draft · {type}",
+    "issuedOn": "Issued {date}",
+    "loading": "Loading the invoice…",
+    "more": "More actions",
+    "noPanels": "The thread is not available here.",
+    "order": "Order {number}",
+    "readOnly": "You can read this invoice; finance issues invoices and records payments.",
+    "reload": "Reload",
+    "resendBy_one": "Send again by {date} ({count} working day left)",
+    "resendBy_other": "Send again by {date} ({count} working days left)",
+    "resendOverdue": "The time to send it again ended on {date}",
+    "sendCopyHint": "Write to the customer from the thread and attach the courtesy PDF",
+    "state": {
+      "error": {
+        "body": "Try again in a moment.",
+        "title": "Couldn't load the invoice"
+      },
+      "forbidden": {
+        "body": "Your role does not show the invoices of this company or customer.",
+        "title": "No access to this invoice"
+      },
+      "not_found": {
+        "body": "It belongs to another company, or the address is wrong.",
+        "title": "Invoice not found"
+      }
+    },
+    "tabsLabel": "Invoice tabs",
+    "title": "Invoice",
+    "typeChip": "{type} · {code}"
+  },
+  "recordPay": {
+    "amount": "Amount",
+    "back": "Back to the payment",
+    "body": "A bank transfer, as the bank shows it. Its reference makes sure it is counted once.",
+    "customer": "Customer",
+    "customerHint": "Name, code or VAT number",
+    "customers": "Customers found",
+    "done": "{amount} recorded with reference {reference}.",
+    "go": "Record {amount} and place it",
+    "goEmpty": "Record the payment",
+    "goOnAccount": "Record {amount} on account",
+    "issueTd02": "Issue the deposit invoice (TD02) now",
+    "issueTd02Hint": "The deposit is paid in full: its deposit invoice is issued in the same step (a fresh code).",
+    "issueTd02Off": "The deposit invoice waits: issue it later from the deposit.",
+    "leftOnAccount": "{amount} stays on the payment.",
+    "method": "Method",
+    "next": "Next: where it goes",
+    "noCustomer": "No customer with that name.",
+    "notPlaced": "Not placed yet: it stays on account.",
+    "note": "Note (for the office)",
+    "openPayment": "Open the payment",
+    "pick": "Choose",
+    "placedOn": "Placed on: {list}.",
+    "problem": {
+      "amount": "An amount above 0, at most two decimals.",
+      "date": "A date as on the calendar.",
+      "future": "Not after today.",
+      "party": "Choose the customer.",
+      "reference": "The bank reference is needed: it makes sure a transfer counts once.",
+      "referenceChars": "Letters, digits and / . _ : - only.",
+      "referenceLong": "At most 140 characters."
+    },
+    "receivedOn": "Received on",
+    "reference": "Bank reference (CRO or TRN)",
+    "referenceHint": "As on the bank statement",
+    "restOnAccount": "{amount} stays on the payment, to place later.",
+    "searching": "Searching…",
+    "td02ByFinance": "The deposit invoice is issued by finance.",
+    "td02FilesPending": "Deposit invoice {number} is issued; its files are being made.",
+    "td02Issued": "Deposit invoice {number} is issued.",
+    "td02Later": "The deposit is paid; its deposit invoice waits to be issued.",
+    "title": "Record a payment",
+    "titleDone": "Payment recorded",
+    "titleStep2": "Where the money of {customer} goes"
+  },
+  "rejected": {
+    "banner": "Invoice {number} ({customer}) was rejected by SDI. It counts as never issued: fix it and send it again by {date} with the same number and date.",
+    "bannerNoDate": "Invoice {number} ({customer}) was rejected by SDI. It counts as never issued: fix it and send it again with the same number and date.",
+    "bannerOverdue": "Invoice {number} ({customer}) was rejected by SDI and the time to send it again ended on {date}: fix it and send it now with the same number and date.",
+    "fixNow": "Fix now"
+  },
+  "requestStatus": {
+    "CANCELLED": "Cancelled",
+    "OPEN": "Waiting for payment",
+    "PAID": "Paid",
+    "WAIVED": "Waived"
+  },
+  "rows": {
+    "all": "All invoices",
+    "atSdi": "At SDI",
+    "creditNotes": "Credit notes",
+    "custom": "The filter in the address",
+    "depositInvoices": "Deposit invoices",
+    "drafts": "Drafts",
+    "notDelivered": "Not delivered",
+    "rejected": "Rejected by SDI"
+  },
+  "sdi": {
+    "about": "SDI is the tax agency’s post office for invoices: in Italy the invoice is the XML file SDI accepts; the PDF is only a courtesy copy.",
+    "archive": "Legal keeping",
+    "archived": "Archived for legal keeping on {date}",
+    "archivedShort": "On {date}",
+    "copyMissing": "No contact has an e-mail address: send a copy from the thread.",
+    "copySent": "We e-mailed the customer a copy on {date}.",
+    "deadlineOverdue": "The time to send it again ended on {date}: send it now.",
+    "deadline_one": "Fix it and send it again by {date} ({count} working day left), with the same number and date.",
+    "deadline_other": "Fix it and send it again by {date} ({count} working days left), with the same number and date.",
+    "draft": {
+      "body": "Check and issue sends it to SDI.",
+      "title": "Not sent yet"
+    },
+    "errorCode": "SDI code {code}: {text}",
+    "explain": {
+      "AT_SDI": "SDI received the file and is checking and delivering it: it answers within minutes, at most in five days.",
+      "DELIVERED": "SDI delivered the invoice to the customer. It is issued and final.",
+      "DRAFT": "A draft has no number and is not sent. SDI receives it once it is issued.",
+      "ERROR": "The send did not finish: the file may not have reached SDI.",
+      "NOT_DELIVERED": "SDI could not reach the customer’s address. The invoice is still legally issued and waits in the customer’s tax drawer.",
+      "NOT_SENT": "The invoice has its number, but SDI does not have it yet.",
+      "REJECTED": "SDI rejected the file: the invoice counts as never issued. Fix it and send it again with the same number and date.",
+      "SENDING": "The file is going to SDI through the intermediary."
+    },
+    "failure": {
+      "NOT_SENT": "The file was not sent.",
+      "NO_ANSWER": "The intermediary did not answer.",
+      "OTHER": "The send did not finish.",
+      "REFUSED": "The intermediary refused the file before SDI: it never reached SDI."
+    },
+    "failureUncertain": "It may have reached SDI: we ask the intermediary before sending again.",
+    "fixWhere": {
+      "company": "Fix it in our company’s data, then send again.",
+      "lines": "Fix it in the lines here.",
+      "none": "Nothing to change: send it again.",
+      "party": "Fix it on the customer, then send again.",
+      "text": "Fix it in the invoice’s text here."
+    },
+    "identifier": "SDI identifier {id}",
+    "next": {
+      "CHECK_COPY": "The customer finds it in the tax drawer; we e-mailed a copy. Send another copy if they ask.",
+      "FIX_AND_RESEND": "Fix it and send it again with the same number and date.",
+      "ISSUE": "Check and issue it, then it goes to SDI.",
+      "NONE": "Nothing more to do.",
+      "SEND": "Send it to SDI.",
+      "SEND_AGAIN": "Send it again: we ask the intermediary first, so it is never sent twice.",
+      "WAIT": "Nothing to do: SDI’s answer arrives by itself."
+    },
+    "noErrorList": "SDI gave no list of errors.",
+    "noSends": {
+      "body": "Send to SDI starts here.",
+      "title": "Not sent to SDI yet"
+    },
+    "notArchived": "Not yet: after delivery",
+    "notification": {
+      "AT": "Could not be delivered: handed to the tax drawer",
+      "DT": "No answer from the public body in 15 days",
+      "MC": "Not delivered: in the customer’s tax drawer",
+      "NE": "The public body answered",
+      "NS": "Rejected by SDI",
+      "RC": "Delivered to the customer"
+    },
+    "numberDate": "Number and date",
+    "reason": "Why SDI rejected it",
+    "send": {
+      "DELIVERED": "Delivered",
+      "FAILED": "Failed",
+      "NOT_DELIVERABLE": "Not delivered",
+      "REJECTED": "Rejected",
+      "SENDING": "Sending",
+      "SENT": "At SDI"
+    },
+    "sent": "Sent to SDI through the intermediary",
+    "sentAgain": "Sent again (attempt {attempt}), same number and date",
+    "source": {
+      "poll": "asked the intermediary",
+      "webhook": "SDI’s notice"
+    },
+    "state": {
+      "AT_SDI": "At SDI",
+      "DELIVERED": "Delivered",
+      "DRAFT": "Not sent yet",
+      "ERROR": "Send failed",
+      "NOT_DELIVERED": "Not delivered",
+      "NOT_SENT": "Issued, not sent",
+      "REJECTED": "Rejected",
+      "SENDING": "Being sent"
+    },
+    "timeline": "SDI steps",
+    "title": "Where the invoice is",
+    "unknownError": "An error SDI did not explain."
+  },
+  "sdiError": {
+    "c00001": "SDI did not accept the file name.",
+    "c00002": "SDI already has a file with this name; the next send uses a new name.",
+    "c00102": "The file’s signature is not valid (the intermediary signs it).",
+    "c00200": "The file does not follow the FatturaPA format.",
+    "c00301": "Our company’s VAT number is not valid at the tax agency.",
+    "c00305": "The customer’s VAT number is not valid at the tax agency.",
+    "c00306": "The customer’s tax code (codice fiscale) is not valid at the tax agency.",
+    "c00311": "The customer’s SDI code does not exist.",
+    "c00312": "The customer’s SDI code is not active.",
+    "c00400": "A line at 0% VAT has no reason (Natura).",
+    "c00401": "A line with VAT above 0% carries a reason (Natura); only 0% lines carry one.",
+    "c00403": "The invoice date is later than the day SDI received it.",
+    "c00404": "SDI already has an invoice with this number and date from this company (a duplicate).",
+    "c00409": "The same invoice appears twice in the file.",
+    "c00418": "The invoice is dated before the invoice it refers to.",
+    "c00421": "The VAT of a rate is not computed as SDI computes it.",
+    "c00422": "The taxable amount of a rate is not the sum of its lines.",
+    "c00423": "A line’s total is not its quantity × unit price less the discount.",
+    "c00424": "A VAT rate is not written as a percentage.",
+    "c00425": "The invoice number has no digit.",
+    "c00427": "The customer’s SDI code has the wrong length for a business invoice (7 characters).",
+    "c00429": "A 0% VAT summary has no reason (Natura).",
+    "c00430": "A VAT summary above 0% carries a reason (Natura).",
+    "c00443": "The lines’ VAT rates and the summary’s do not match.",
+    "c00444": "The lines’ reasons (Natura) and the summary’s do not match."
+  },
+  "send": {
+    "body": "The invoice of {date} goes to SDI through the intermediary. Its answer comes by itself.",
+    "bodyAgain": "The last send did not finish. We ask the intermediary first, so the invoice of {date} is never sent twice.",
+    "sending": "Sending…",
+    "title": "Send {number} to SDI?",
+    "titleAgain": "Send {number} again?"
+  },
+  "settings": {
+    "accountant": {
+      "explain": "These points are our reading, not yet confirmed. Invoices follow them now; the accountant’s answer changes a setting, not the code.",
+      "point": {
+        "foreignConsumer": "A private customer abroad without a tax id: which convention FatturaPA takes (not needed for the first customer, a business).",
+        "progressive": "The 5-character file progressive can collide after thousands of invoices; the send picks a free name. To check with the real intermediary.",
+        "resendDays": "A rejected invoice is sent again within 5 working days (Saturday not counted) or 5 days."
+      },
+      "rule": {
+        "EU_B2C_GOODS_ITALIAN_VAT": "EU consumers pay Italian VAT while each company stays under the EU distance-sales threshold of 10,000 euro.",
+        "STAMP_DUTY": "Which reasons without VAT are free of the 2.00 euro stamp duty (now N3.1, N3.2 and the reverse-charge codes)."
+      },
+      "title": "For the accountant"
+    },
+    "archive": {
+      "count": "Invoices archived",
+      "explain": "Every e-invoice SDI delivered is kept for the legal period; our own copy of the XML stays here too.",
+      "intermediary": "At the intermediary, once SDI delivers",
+      "last": "Last archived",
+      "never": "None yet",
+      "title": "Legal archiving",
+      "where": "Where"
+    },
+    "company": {
+      "address": "Registered office",
+      "byAdmin": "An admin changes it in Admin › Companies.",
+      "capital": "Share capital",
+      "change": "Change in Admin › Companies",
+      "legalName": "Legal name",
+      "missing": "What an invoice still needs",
+      "notReady": "Data missing",
+      "rea": "REA",
+      "ready": "Ready to invoice",
+      "regime": "Tax regime",
+      "regimeValue": "{code}",
+      "taxCode": "Tax code",
+      "title": "Company & tax",
+      "vat": "VAT number"
+    },
+    "companyLabel": "Company",
+    "deposits": {
+      "col": {
+        "customer": "Customer",
+        "document": "Document after payment",
+        "status": "Rule"
+      },
+      "explain": "Which document follows when a deposit is paid. Checked once with the accountant; the system then follows it on every order.",
+      "rule": {
+        "DEPOSIT_EU_B2B_GOODS": {
+          "what": "No deposit invoice: the supply happens when transport starts",
+          "who": "EU business, goods (valid VIES)"
+        },
+        "DEPOSIT_EU_B2B_SERVICES": {
+          "what": "Deposit invoice (TD02, N2.1) at payment",
+          "who": "EU business, services"
+        },
+        "DEPOSIT_EU_B2C": {
+          "what": "Deposit invoice (TD02) like an Italian one",
+          "who": "EU consumer"
+        },
+        "DEPOSIT_EXPORT": {
+          "what": "Deposit invoice (TD02, N3.1) at payment",
+          "who": "Customer outside the EU"
+        },
+        "DEPOSIT_INVOICE_IT": {
+          "what": "Deposit invoice (TD02) on the day it is paid",
+          "who": "Italian customer"
+        }
+      },
+      "title": "Deposits"
+    },
+    "explain": "What every invoice takes, per company, read where invoicing reads it.",
+    "failed": "Couldn't load the finance settings",
+    "loading": "Loading the finance settings…",
+    "missing": {
+      "address": "The registered office: street, postal code and city",
+      "other": "A company field",
+      "regime": "The tax regime (RF01 for the ordinary regime)",
+      "vatNumber": "The Partita IVA (IT and 11 digits)"
+    },
+    "noCompany": {
+      "body": "Your role reaches no company’s invoices.",
+      "title": "No company to show"
+    },
+    "sdi": {
+      "byAdmin": "An admin manages the connection in Admin › Connections.",
+      "col": {
+        "connection": "Connection",
+        "mode": "Mode",
+        "state": "State"
+      },
+      "explain": "Invoices reach SDI through an accredited intermediary, one connection per company.",
+      "intermediary": "The intermediary is still to be chosen with the accountant; until then answers are simulated.",
+      "mode": {
+        "FAKE": "Simulated (nothing leaves)",
+        "LIVE": "Live",
+        "SANDBOX": "Intermediary’s test area"
+      },
+      "open": "Open Admin › Connections",
+      "state": {
+        "ACTIVE": "Connected",
+        "NONE": "Not set up",
+        "PAUSED": "Paused",
+        "SEVERAL": "More than one connection"
+      },
+      "status": {
+        "ACTIVE": "Active",
+        "PAUSED": "Paused"
+      },
+      "title": "E-invoicing (SDI)"
+    },
+    "series": {
+      "byAdmin": "An admin manages the series in Admin › Documents & numbering.",
+      "col": {
+        "kind": "Document",
+        "next": "Next number"
+      },
+      "kind": {
+        "CREDIT_NOTE": "Credit notes",
+        "DEPOSIT_INVOICE": "Deposit invoices",
+        "INVOICE": "Invoices"
+      },
+      "none": "No active series: an admin opens one",
+      "open": "Open Admin › Documents & numbering",
+      "title": "Number series",
+      "usesInvoice": "Numbered in the invoice series"
+    },
+    "state": {
+      "forbidden": {
+        "body": "Your role does not show invoices of this company.",
+        "title": "No access to the finance settings"
+      },
+      "not_found": {
+        "body": "The address is wrong.",
+        "title": "Nothing here"
+      }
+    },
+    "terms": {
+      "due": "Due date",
+      "dueValue": "Set on each invoice",
+      "iban": "Account",
+      "ibanValue": "The company’s bank account",
+      "later": "A library of terms (30/60 days end of month, Ri.Ba.) comes with a later step.",
+      "method": "Method on the invoice",
+      "methodValue": "Bank transfer (MP05)",
+      "title": "Payment terms"
+    },
+    "testMode": "E-invoice test mode: nothing goes to SDI. Its answers are simulated until the intermediary is chosen.",
+    "unverified": "Waits for the accountant",
+    "verified": "Settled",
+    "wording": {
+      "case": {
+        "EU_B2B_SERVICES": "Services to a business in another EU state",
+        "EXPORT": "Goods shipped out of the EU",
+        "EXTRA_EU_SERVICES": "Services to a business outside the EU",
+        "INTRA_EU_SUPPLY": "Goods to a business in another EU state with a valid VIES check"
+      },
+      "col": {
+        "code": "Code",
+        "meaning": "When",
+        "printed": "Printed on the invoice"
+      },
+      "explain": "When a line carries no VAT, the invoice states why and under which law. This is the wording printed today.",
+      "title": "VAT reasons and wording"
+    }
+  },
+  "shipType": {
+    "TD01": "Immediate invoice",
+    "TD24": "Monthly deferred invoice"
+  },
+  "shipped": {
+    "count_one": "{count} DDT",
+    "count_other": "{count} DDTs",
+    "ddt": "DDT {number}",
+    "dueBy": "by {date}",
+    "empty": {
+      "body": "Nothing shipped waits for an invoice.",
+      "title": "Every shipment is invoiced"
+    },
+    "explain": "Italy lets you invoice at once (within 12 days of the DDT) or once a month for all deliveries (by the 15th of the next month), listing the DDTs.",
+    "failed": "Couldn't load shipped, not invoiced",
+    "inDraft_one": "{count} piece in a draft",
+    "inDraft_other": "{count} pieces in a draft",
+    "lines_one": "{count} line",
+    "lines_other": "{count} lines",
+    "noDeposit": "No deposit",
+    "openDraft": "Open the draft",
+    "pieces_one": "{count} piece",
+    "pieces_other": "{count} pieces",
+    "title": "Shipped, not invoiced"
+  },
+  "step": {
+    "fix": "Fix and resend",
+    "invoiceShipped": "Invoice shipped goods",
+    "issue": "Check and issue",
+    "recordPayment": "Record payment",
+    "send": "Send to SDI",
+    "sendAgain": "Send again"
+  },
+  "stepUp": {
+    "confirm": "Confirm",
+    "problem": {
+      "locked": "Too many codes tried: wait a few minutes.",
+      "unavailable": "The code could not be checked now: try again.",
+      "wrong": "That code was not accepted: type the newest one."
+    },
+    "sentence": {
+      "bank": "The bank account is printed on every invoice: type the code from your authenticator app.",
+      "fix": "Correcting a rejected invoice and sending it again: type the code from your authenticator app.",
+      "issue": "Issuing an invoice gives it its number for good: type the code from your authenticator app.",
+      "sdi": "Sending an invoice to SDI makes it legal: type the code from your authenticator app.",
+      "td02": "Issuing the deposit invoice gives it its number for good: type the code from your authenticator app."
+    },
+    "title": "Confirm it’s you"
+  },
+  "tab": {
+    "activity": "Activity",
+    "checksFail": "Checks to fix",
+    "documents": "Documents",
+    "lines": "Lines & VAT",
+    "money": "Deposits & payments",
+    "rejected": "Rejected by SDI",
+    "sdi": "SDI status"
+  },
+  "tile": {
+    "atSdi": "Waiting at SDI",
+    "drafts": "Drafts",
+    "fixIn5": "Fix in 5 working days",
+    "notDelivered": "Not delivered (tax drawer)",
+    "oldest_one": "Oldest {count} day",
+    "oldest_other": "Oldest {count} days",
+    "rejected": "Rejected by SDI",
+    "shipped": "Shipped, not invoiced"
+  },
+  "totals": {
+    "col": {
+      "taxable": "Taxable",
+      "treatment": "Rate or reason",
+      "vat": "VAT"
+    },
+    "credit": "Credit note total",
+    "credited": "Credit notes",
+    "deposit": "Deposit deducted",
+    "goods": "Goods",
+    "gross": "Invoice total",
+    "noGrain": "Amounts are shown to roles that see prices.",
+    "open": "Still to pay",
+    "paid": "Paid",
+    "refundDue": "A credit note gives back {amount} already paid: a refund is due.",
+    "stamp": "Stamp duty",
+    "summary": "VAT summary",
+    "taxable": "Taxable amount",
+    "title": "Totals",
+    "vat": "VAT"
+  },
+  "vat": {
+    "otherCode": "Reason {code} (see the law printed on the invoice).",
+    "printed": "Printed on the invoice: {text}",
+    "vies": "The customer’s VAT number was valid at VIES on {date}.",
+    "whyLabel": "Why no VAT: {code}",
+    "whyTitle": "Why no VAT?"
+  }
+}

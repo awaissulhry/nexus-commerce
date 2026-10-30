@@ -1,0 +1,998 @@
+{
+  "common": {
+    "back": "Indietro",
+    "dismiss": "Chiudi avviso",
+    "retry": "Riprova",
+    "yes": "Sì",
+    "no": "No",
+    "notInRole": "Non nel tuo ruolo",
+    "notYet": "Non ancora letto",
+    "updated": "Aggiornato alle {time}"
+  },
+  "dialog": {
+    "reason": "Motivo (facoltativo)",
+    "reasonHint": "Resta nello storico insieme alla modifica."
+  },
+  "held": {
+    "busy": "Attendi: l’ultima modifica è ancora in salvataggio.",
+    "noManage": "Il tuo ruolo non modifica questa libreria.",
+    "noCost": "Impostare il costo standard richiede il permesso costi e la visibilità dei costi."
+  },
+  "problem": {
+    "read": {
+      "signed_out": "La sessione è scaduta: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non legge questi dati.",
+      "not_found": "Non c’è più.",
+      "unavailable": "Il server della fabbrica non ha risposto: riprova tra poco.",
+      "rate_limited": "Troppe richieste: attendi un momento.",
+      "contract": "Il server ha risposto in un formato che questa pagina non conosce: ricarica la pagina.",
+      "internal": "Qualcosa è andato storto durante la lettura: riprova."
+    },
+    "write": {
+      "moved": "Qualcun altro l’ha modificato nel frattempo: è stato riletto, controlla e ripeti.",
+      "state": "Il suo stato non lo consente più: è stato riletto.",
+      "codeTaken": "Questo codice è già usato da un altro record: scegline un altro.",
+      "invalid": "Il server ha rifiutato un valore: controlla i campi segnati.",
+      "stepUp": "Conferma la tua identità (codice dell’app) e ripeti.",
+      "signed_out": "La sessione è scaduta: accedi di nuovo. Nulla è stato salvato.",
+      "forbidden": "Il tuo ruolo non consente questa modifica.",
+      "not_found": "Non c’è più: la pagina è stata riletta.",
+      "rate_limited": "Troppe modifiche insieme: attendi un momento e ripeti.",
+      "unavailable": "Il server della fabbrica non ha risposto: nulla è stato salvato, riprova.",
+      "internal": "Qualcosa è andato storto: nulla è stato salvato, riprova."
+    }
+  },
+  "list": {
+    "count_one": "{count} di {total}",
+    "count_other": "{count} di {total}",
+    "countMore_one": "{count} di {total}",
+    "countMore_other": "{count} di {total}",
+    "failed": "Impossibile caricare l’elenco",
+    "noMatch": {
+      "title": "Nessuna riga corrisponde a questi filtri",
+      "body": "Togli un filtro o cancellali tutti."
+    },
+    "clearAll": "Cancella tutti",
+    "activeFilters": "Filtri in uso",
+    "removeFilter": "Togli filtro",
+    "chipSearch": "Ricerca: {q}",
+    "viewFilter": "Vista salvata",
+    "more": "Mostra altri 50",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "copyCode": "Copia codice",
+    "rowMenu": "Azioni per {code}",
+    "col": {
+      "more": "Azioni"
+    },
+    "bulk": {
+      "export_one": "Esporta {count}",
+      "export_other": "Esporta {count}",
+      "archive_one": "Archivia {count}",
+      "archive_other": "Archivia {count}",
+      "reactivate_one": "Riattiva {count}",
+      "reactivate_other": "Riattiva {count}",
+      "archiveHeld": "Tra i selezionati ce n’è uno già archiviato: toglilo prima.",
+      "reactivateHeld": "Si riattivano solo quelli archiviati: togli prima quelli attivi.",
+      "costArchived": "Tra i selezionati c’è un materiale archiviato: toglilo prima."
+    }
+  },
+  "record": {
+    "tabsLabel": "Sezioni della scheda",
+    "more": "Altre azioni",
+    "loading": "Caricamento…",
+    "backToList": "Torna all’elenco",
+    "changed": "Qualcun altro l’ha modificato alle {time}.",
+    "reload": "Ricarica",
+    "state": {
+      "loading": {
+        "title": "Caricamento",
+        "body": "Caricamento…"
+      },
+      "error": {
+        "title": "Impossibile caricarlo",
+        "body": "Riprova tra poco."
+      },
+      "notFound": {
+        "title": "Non trovato",
+        "body": "Non esiste, oppure è di un’azienda in cui non lavori."
+      },
+      "forbidden": {
+        "title": "Nessun accesso",
+        "body": "Il tuo ruolo non apre questa scheda. Chiedi a un amministratore il ruolo che lo consente."
+      }
+    }
+  },
+  "save": {
+    "saving": "Salvataggio…",
+    "saved": "Salvato alle {time}",
+    "failed": "Non salvato",
+    "region": "Modifiche non salvate",
+    "unsaved_one": "{count} modifica non salvata",
+    "unsaved_other": "{count} modifiche non salvate",
+    "shortcut": "⌘S salva",
+    "discard": "Annulla modifiche"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "menu": "Scorciatoie da tastiera",
+    "help": "Tutte le scorciatoie",
+    "save": "Salva le modifiche",
+    "newColour": "Nuovo colore",
+    "addSizes": "Aggiungi taglie"
+  },
+  "status": {
+    "ACTIVE": "Attivo",
+    "ARCHIVED": "Archiviato"
+  },
+  "styleStatus": {
+    "DRAFT": "Bozza",
+    "ACTIVE": "Attivo",
+    "ARCHIVED": "Archiviato"
+  },
+  "revisionStatus": {
+    "DRAFT": "Bozza",
+    "RELEASED": "Rilasciata",
+    "OBSOLETE": "Superata"
+  },
+  "certStatus": {
+    "DRAFT": "Bozza",
+    "VALID": "Valido",
+    "SUSPENDED": "Sospeso",
+    "WITHDRAWN": "Ritirato",
+    "EXPIRED": "Scaduto"
+  },
+  "lotStatus": {
+    "QUARANTINE": "In quarantena",
+    "RELEASED": "Rilasciato",
+    "REJECTED": "Scartato",
+    "BLOCKED": "Bloccato"
+  },
+  "crViStatus": {
+    "NOT_REQUIRED": "Prova non richiesta",
+    "PENDING": "In attesa di risultato",
+    "PASS": "Superata",
+    "FAIL": "Non superata"
+  },
+  "kind": {
+    "LEATHER": "Pelle",
+    "TEXTILE": "Tessuto",
+    "LINING": "Fodera",
+    "MEMBRANE": "Membrana",
+    "PADDING": "Imbottitura",
+    "THREAD": "Filo",
+    "TRIM": "Accessorio",
+    "HARDWARE": "Minuteria",
+    "PROTECTOR": "Protezione",
+    "LABEL": "Etichetta",
+    "PACKAGING": "Imballo",
+    "COMPONENT": "Componente"
+  },
+  "kindHint": {
+    "LEATHER": "Acquistata a pelle, tagliata a superficie; prova Cr VI",
+    "TEXTILE": "A rotoli, usato a metri",
+    "LINING": "A rotoli, usata a metri",
+    "MEMBRANE": "A rotoli, usata a metri",
+    "PADDING": "A rotoli, usata a metri",
+    "THREAD": "A coni, usato a metri",
+    "TRIM": "Contato a pezzi",
+    "HARDWARE": "Contata a pezzi",
+    "PROTECTOR": "Componente DPI, tracciato a lotto",
+    "LABEL": "Contata a pezzi",
+    "PACKAGING": "Contato a pezzi",
+    "COMPONENT": "Una parte che produciamo"
+  },
+  "sourcing": {
+    "BUY": "Acquistato",
+    "MAKE": "Prodotto internamente",
+    "MAKE_OR_BUY": "Prodotto o acquistato"
+  },
+  "tracking": {
+    "NONE": "Non tracciato",
+    "LOT": "A lotto",
+    "HIDE": "Pelle per pelle",
+    "SERIAL": "A matricola"
+  },
+  "trackingHint": {
+    "NONE": "Giacenza contata senza lotti.",
+    "LOT": "Ogni consegna è un lotto: prove e blocchi per lotto.",
+    "HIDE": "Ogni pelle ricevuta, bloccata e tagliata da sola (solo pelle).",
+    "SERIAL": "Una matricola per pezzo (contato a pezzi)."
+  },
+  "tannage": {
+    "CHROME": "Concia al cromo",
+    "VEGETABLE": "Concia vegetale",
+    "CHROME_FREE": "Senza cromo",
+    "COMBINATION": "Concia mista"
+  },
+  "uom": {
+    "PCS": "pz",
+    "PAIR": "paio",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelle",
+    "SIDE": "mezzina",
+    "ROLL": "rotolo",
+    "CONE": "cono",
+    "BOX": "scatola"
+  },
+  "department": {
+    "CUTTING": "Taglio",
+    "SEWING": "Cucitura",
+    "ASSEMBLY": "Montaggio",
+    "FINISHING": "Rifinitura",
+    "INSPECTION": "Controllo",
+    "PACKING": "Imballaggio",
+    "SUBCONTRACT": "Terzisti"
+  },
+  "converter": {
+    "label": "Unità:",
+    "one": "Acquistato, a magazzino e usato in {unit}."
+  },
+  "csv": {
+    "code": "Codice",
+    "name": "Nome",
+    "kind": "Tipo",
+    "baseUom": "Unità di base",
+    "purchaseUom": "Unità di acquisto",
+    "consumptionUom": "Unità di consumo",
+    "supplier": "Fornitore predefinito",
+    "standardCost": "Costo standard per unità di base",
+    "currency": "Valuta",
+    "colours": "Colori",
+    "crvi": "Limite Cr VI (mg/kg)",
+    "ppe": "Componente DPI",
+    "status": "Stato",
+    "department": "Reparto",
+    "machine": "Tipo di macchina",
+    "skill": "Competenza",
+    "smv": "Minuti standard",
+    "usedIn": "Cicli",
+    "differing": "Cicli con minuti diversi",
+    "sizes": "Taglie",
+    "sizeCount": "Numero di taglie",
+    "styles": "Modelli"
+  },
+  "materials": {
+    "list": {
+      "intro": "Pelli, tessuti, accessori, protezioni ed etichette: come si acquista, si tiene a magazzino e si usa ognuno, i suoi colori, il fornitore e le prove che i suoi lotti devono portare.",
+      "new": "Nuovo materiale",
+      "keyNew": "Nuovo materiale",
+      "search": "Cerca codice, nome o codice fornitore",
+      "tableLabel": "Materiali e accessori",
+      "kindFilter": "Tipo",
+      "allKinds": "Tutti i tipi",
+      "unitsTitle": "Acquistato in {buy}, a magazzino in {stock}, usato in {use}",
+      "theirCode": "loro codice {code}",
+      "made": "Prodotto internamente",
+      "noSupplier": "Nessun fornitore predefinito",
+      "missingCost": "Manca",
+      "perUnit": "per {unit}",
+      "crvi": "Cr VI {limit}",
+      "ppe": "Componente DPI",
+      "openColours": "Apri i suoi colori"
+    },
+    "col": {
+      "material": "Materiale",
+      "kind": "Tipo · provenienza",
+      "units": "Acquisto → magazzino → consumo",
+      "supplier": "Fornitore predefinito",
+      "colours": "Colori",
+      "cost": "Costo standard",
+      "compliance": "Prove richieste",
+      "status": "Stato"
+    },
+    "view": {
+      "open": "Materiali attivi",
+      "leather": "Pelli",
+      "textiles": "Tessuti e fodere",
+      "trims": "Accessori e minuteria",
+      "protectors": "Protezioni",
+      "labels": "Etichette e imballi",
+      "missingCost": "Senza costo standard",
+      "crvi": "Prova Cr VI richiesta",
+      "ppe": "Componenti DPI",
+      "archived": "Archiviati",
+      "all": "Tutti"
+    },
+    "tile": {
+      "leather": "Articoli in pelle",
+      "missingCost": "Senza costo standard",
+      "crvi": "Prova Cr VI richiesta",
+      "ppe": "Componenti DPI"
+    },
+    "tileHint": {
+      "leather": "Pelli attive, acquistate a pelle e tracciate a lotto o pelle per pelle.",
+      "missingCost": "Preventivi e schede costo non possono ancora costarli.",
+      "crvi": "Ogni lotto resta bloccato finché non arriva la prova del cromo VI (REACH allegato XVII voce 47).",
+      "ppe": "Protezioni e altre parti citate dal certificato del capo."
+    },
+    "bulk": {
+      "cost_one": "Imposta costo standard per {count}",
+      "cost_other": "Imposta costo standard per {count}"
+    },
+    "forbidden": {
+      "title": "Non hai accesso ai materiali",
+      "body": "Per leggere i materiali serve il permesso materiali (ufficio prodotto, acquisti e magazzino lo hanno)."
+    },
+    "empty": {
+      "title": "Ancora nessun materiale",
+      "body": "Aggiungi la prima pelle, il primo tessuto o accessorio: i modelli scelgono qui le righe della distinta.",
+      "bodyView": "Li aggiunge l’ufficio prodotto; li vedrai qui.",
+      "create": "Aggiungi il primo materiale"
+    },
+    "archive": {
+      "title_one": "Archivia {count} materiale",
+      "title_other": "Archivia {count} materiali",
+      "reach": "Nessuna nuova riga di distinta potrà usarli.",
+      "kept": "Distinte, ordini d’acquisto e giacenze che li contengono li mantengono.",
+      "back": "Riattiva ne riporta indietro uno."
+    },
+    "notice": {
+      "archived_one": "{count} materiale archiviato.",
+      "archived_other": "{count} materiali archiviati.",
+      "costSet_one": "Costo standard impostato per {count} materiale.",
+      "costSet_other": "Costo standard impostato per {count} materiali."
+    },
+    "cost": {
+      "title_one": "Imposta il costo standard di {count} materiale",
+      "title_other": "Imposta il costo standard di {count} materiali",
+      "intro": "Per unità di base, come lo usano preventivi e schede costo finché non ci sono listini fornitore. Lascia vuoto un campo per mantenerne il costo.",
+      "now": "Ora {cost} per {unit}",
+      "new": "Nuovo costo per {unit}",
+      "newOf": "Nuovo costo standard di {code}",
+      "badNumber": "Un numero con al massimo 6 decimali, come 2,45.",
+      "reason": "Perché cambia",
+      "reasonHint": "Un nuovo listino, un’offerta della conceria …: resta nella riga di audit.",
+      "styles": "I modelli costati con questi materiali mostrano le nuove cifre alla prossima lettura.",
+      "apply_one": "Applica {count} modifica",
+      "apply_other": "Applica {count} modifiche",
+      "held": {
+        "invalid": "Un nuovo costo non è un numero: correggilo prima.",
+        "none": "Scrivi almeno un nuovo costo."
+      }
+    }
+  },
+  "newMaterial": {
+    "title": "Nuovo materiale",
+    "intro": "Scegli prima il tipo: imposta unità, tracciabilità e controlli. Le stesse regole del server controllano ciò che scrivi.",
+    "kind": "Tipo",
+    "company": "Azienda",
+    "companyHint": "Tutte le aziende: dato anagrafico condiviso.",
+    "everyCompany": "Tutte le aziende",
+    "supplierSearch": "Cerca un fornitore",
+    "supplierHint": "Scrivi parte del nome o del codice.",
+    "supplierPicked": "Scelto: {name}",
+    "noSupplier": "Nessun fornitore predefinito",
+    "blocked": "bloccato",
+    "noParties": "Il tuo ruolo non legge i fornitori: il fornitore predefinito lo imposta poi l’ufficio acquisti.",
+    "pick": "Scegli…",
+    "create": "Crea materiale",
+    "after": "Crea apre il materiale: poi colori, proprietà e prove.",
+    "refused": "Il server ha rifiutato questo valore.",
+    "otherProblems_one": "Ancora {count} cosa da sistemare",
+    "otherProblems_other": "Ancora {count} cose da sistemare",
+    "held": {
+      "code": "Indica prima il codice.",
+      "name": "Indica prima il nome.",
+      "cost": "Il costo standard non è un numero.",
+      "problems_one": "{count} cosa da sistemare prima: vedi il campo segnato.",
+      "problems_other": "{count} cose da sistemare prima: vedi i campi segnati."
+    },
+    "why": {
+      "code": "Da 1 a 40 lettere maiuscole o cifre, con . _ - / all’interno.",
+      "name": "Dai un nome al materiale (al massimo 200 caratteri).",
+      "baseUom": "La pelle si conta in unità di superficie: m², dm² o ft².",
+      "purchaseFactor": "Indica quante unità di base contiene un’unità di acquisto (una pelle: la sua superficie media).",
+      "consumptionFactor": "Indica quante unità di base contiene un’unità di consumo.",
+      "tracking": "La pelle si traccia a lotto o pelle per pelle; un componente DPI a lotto o matricola; la matricola conta a pezzi.",
+      "sourcing": "Un componente è una parte che produciamo: prodotto internamente, o prodotto o acquistato.",
+      "defaultSupplierId": "Un materiale che solo produciamo non ha fornitore.",
+      "supplierArticleCode": "Al massimo 64 caratteri; nessuno per un materiale che solo produciamo.",
+      "animalSpecies": "La pelle indica il suo animale (bovino, capra, canguro …).",
+      "tannage": "La pelle indica la concia (la concia al cromo è il motivo della prova Cr VI).",
+      "grade": "La pelle indica la scelta o il grado della conceria.",
+      "thicknessMinMm": "La pelle ha il suo intervallo di spessore in millimetri.",
+      "thicknessMaxMm": "Lo spessore massimo è almeno quello minimo, in millimetri.",
+      "animalOrigin": "La pelle è di origine animale: l’etichetta del capo lo dice (Reg. (UE) 1007/2011 art. 12).",
+      "crViLimitMgKg": "Un limite sopra 0 e al massimo 3 mg/kg quando la prova è richiesta (REACH allegato XVII voce 47).",
+      "other": "Le regole del server rifiutano questo valore."
+    }
+  },
+  "material": {
+    "back": "Materiali e accessori",
+    "baseIn": "in {unit}",
+    "tab": {
+      "overview": "Panoramica",
+      "colours": "Colori",
+      "properties": "Proprietà e scelte",
+      "suppliers": "Fornitori e prezzi",
+      "compliance": "Conformità",
+      "stock": "Giacenza"
+    },
+    "action": {
+      "newColour": "Nuovo colore",
+      "archive": "Archivia…",
+      "reactivate": "Riattiva"
+    },
+    "archive": {
+      "title": "Archivia {code}"
+    },
+    "archivedBanner": "Archiviato: sola lettura, nessuna nuova riga di distinta può usarlo. ⋯ Riattiva lo riporta indietro.",
+    "held": {
+      "archived": "Archiviato: riattivalo prima."
+    },
+    "refusedTitle": "Cosa ha risposto il server",
+    "readOnly": "Puoi vedere, non modificare.",
+    "identity": "Identità e unità",
+    "identityHint": "Cos’è, come si acquista, si tiene a magazzino e si usa. ⌘S salva.",
+    "save": "Salva",
+    "code": "Codice",
+    "codeHint": "Lettere maiuscole e cifre, con . _ - / all’interno.",
+    "name": "Nome",
+    "nameIt": "Nome in italiano",
+    "nameEn": "Nome in inglese",
+    "nameLangHint": "Mostrato a chi lavora in quella lingua.",
+    "sourcing": "Produzione o acquisto",
+    "tracking": "Tracciabilità",
+    "units": "Unità",
+    "baseUom": "Unità di base (giacenza e costo)",
+    "baseUomHint": "La giacenza è tenuta e costata in questa unità.",
+    "baseUomLocked": "Le modifiche sono rifiutate se il materiale è su una riga di distinta o in giacenza: il server lo dice.",
+    "purchaseUom": "Unità di acquisto",
+    "purchaseUomHint": "Come lo vendono i fornitori (una pelle, un rotolo, un cono).",
+    "consumptionUom": "Unità di consumo",
+    "consumptionUomHint": "Come lo usa la distinta (dm² di pelle, metri di filo).",
+    "factorOf": "1 {unit} = quanti {base}",
+    "factorHide": "La superficie media di una pelle.",
+    "supplier": "Fornitore predefinito",
+    "supplierIntro": "Da chi acquistiamo di solito, e il loro codice articolo.",
+    "supplierMade": "Questo materiale lo produciamo: non ha fornitore.",
+    "defaultSupplier": "Fornitore",
+    "supplierArticleCode": "Loro codice articolo",
+    "openSupplier": "Apri {name}",
+    "leather": "Pelle",
+    "animalSpecies": "Animale",
+    "animalSpeciesHint": "Bovino, capra, canguro …",
+    "tannage": "Concia",
+    "grade": "Scelta o grado",
+    "gradeHint": "Come la indica la conceria (TR1, A …).",
+    "finish": "Rifinizione",
+    "thickness": "Spessore",
+    "thicknessMin": "Spessore da (mm)",
+    "thicknessMax": "Spessore a (mm)",
+    "crvi": "Cromo VI",
+    "requiresCrVi": "Prova Cr VI per ogni lotto",
+    "requiresCrViHint": "Ogni lotto resta bloccato finché non arriva la prova.",
+    "crViLimit": "Limite (mg/kg)",
+    "crViLimitHint": "Al massimo 3 mg/kg per legge; un marchio può chiedere meno.",
+    "standardCost": "Prezzo d’acquisto standard",
+    "standardCostHint": "Quello che usano preventivi e schede costo finché non ci sono listini fornitore.",
+    "costPer": "Costo per {unit} (€)",
+    "animalOrigin": "Contiene parti di origine animale",
+    "animalOriginHint": "L’etichetta del capo lo dice (Reg. (UE) 1007/2011 art. 12).",
+    "ppe": "Componente DPI",
+    "ppeHint": "Una protezione EN 1621 o un’altra parte citata dal certificato del capo; tracciata a lotto o matricola.",
+    "side": {
+      "title": "In breve",
+      "cost": "Costo standard",
+      "supplier": "Fornitore predefinito",
+      "colours": "Colori",
+      "colourCount_one": "{count} colore attivo",
+      "colourCount_other": "{count} colori attivi",
+      "crvi": "Prova Cr VI",
+      "noCrvi": "Non richiesta",
+      "ppe": "Componente DPI",
+      "stock": "Giacenza",
+      "stockLink": "Vedi la giacenza"
+    },
+    "warning": {
+      "NO_DEFAULT_SUPPLIER": "Nessun fornitore predefinito: gli ordini d’acquisto ne chiederanno uno.",
+      "LEATHER_WITHOUT_CR6_TEST": "Pelle senza prova Cr VI: i suoi lotti vengono rilasciati senza prova del cromo VI."
+    },
+    "notice": {
+      "costSet": "Costo standard salvato.",
+      "archived": "Materiale archiviato.",
+      "reactivated": "Materiale riattivato.",
+      "colourAdded": "Colore {code} aggiunto.",
+      "coloursArchived_one": "{count} colore archiviato.",
+      "coloursArchived_other": "{count} colori archiviati.",
+      "coloursRestored_one": "{count} colore ripristinato.",
+      "coloursRestored_other": "{count} colori ripristinati."
+    },
+    "colours": {
+      "intro": "Il materiale in ogni colore, come servono agli ordini d’acquisto. Un colore usato si archivia, non si cancella.",
+      "count_one": "{count} colore attivo",
+      "count_other": "{count} colori attivi",
+      "col": {
+        "colour": "Colore",
+        "library": "Colore di libreria",
+        "supplierCode": "Codice colore fornitore",
+        "status": "Stato"
+      },
+      "edit": "Modifica…",
+      "archive": "Archivia",
+      "restore": "Ripristina",
+      "archiveN_one": "Archivia {count}",
+      "archiveN_other": "Archivia {count}",
+      "restoreN_one": "Ripristina {count}",
+      "restoreN_other": "Ripristina {count}",
+      "held": {
+        "archived": "Tra i selezionati c’è un colore archiviato.",
+        "active": "Si ripristinano solo i colori archiviati.",
+        "code": "Indica prima il nostro codice colore.",
+        "taken": "Questo materiale ha già un colore con questo codice.",
+        "name": "Indica prima il nome del colore."
+      },
+      "empty": {
+        "title": "Un solo colore?",
+        "body": "Lascia vuoto. Altrimenti aggiungi il primo colore (n)."
+      },
+      "libraryUnknown": "Un colore di libreria che non vedi",
+      "addTitle": "Nuovo colore di {code}",
+      "editTitle": "Colore {code}",
+      "code": "Nostro codice",
+      "codeFixed": "Fisso una volta creato il colore.",
+      "name": "Nome",
+      "supplierCode": "Codice colore fornitore",
+      "supplierCodeHint": "Stampato sull’ordine d’acquisto.",
+      "library": "Colore di libreria",
+      "libraryHint": "Il colore della libreria a cui corrisponde (il campione si vede negli elenchi).",
+      "noLibrary": "Nessuno",
+      "libraryLoading": "Lettura della libreria colori…",
+      "add": "Aggiungi colore",
+      "save": "Salva"
+    },
+    "props": {
+      "title": "Proprietà",
+      "leatherHint": "Solo i campi della pelle. ⌘S salva.",
+      "otherHint": "Origine animale e altri attributi. ⌘S salva.",
+      "composition": "Composizione delle fibre",
+      "compositionHint": "Ogni fibra una volta; insieme esattamente 100 %.",
+      "sum": "Insieme {sum} %",
+      "noComposition": "Nessuna composizione indicata.",
+      "fibre": "Fibra",
+      "percent": "Quota (%)",
+      "addFibre": "Aggiungi una fibra",
+      "removeFibre": "Togli la fibra {n}",
+      "held": {
+        "fibres": "Al massimo 10 fibre.",
+        "sum": "Le fibre fanno {sum} %, non 100 %."
+      },
+      "attributes": "Altri attributi",
+      "attributesHint": "Nome = valore (peso, altezza, origine …).",
+      "attrName": "Nome",
+      "attrValue": "Valore",
+      "addAttr": "Aggiungi un attributo",
+      "removeAttr": "Togli l’attributo {n}"
+    },
+    "cost": {
+      "title": "Costo standard",
+      "intro": "Per unità di base: quello che usano preventivi e schede costo finché non ci sono listini fornitore.",
+      "notInRole": "Non nel tuo ruolo: lo mostra la visibilità dei costi.",
+      "perBase": "Per {unit}",
+      "perUnit": "Per {unit}",
+      "clearHint": "In {currency}; vuoto lo toglie.",
+      "apply": "Salva il costo",
+      "viewOnly": "Impostarlo richiede il permesso costi."
+    },
+    "cp": {
+      "rules": "Regole di prova",
+      "rulesHint": "Cosa deve provare ogni lotto prima del rilascio. ⌘S salva.",
+      "limit": {
+        "empty": "Indica il limite in mg/kg.",
+        "number": "Un numero sopra 0 con al massimo 3 decimali.",
+        "law": "Al massimo 3 mg/kg: il limite di legge (REACH allegato XVII voce 47)."
+      },
+      "limitWords": "Sì, al massimo {limit} mg/kg",
+      "certificates": "Certificati che lo coprono",
+      "notPpe": "Non è un componente DPI.",
+      "noCertificatesRight": "Il tuo ruolo non legge i certificati.",
+      "certificatesFailed": "Impossibile caricare i certificati",
+      "noCertificates": "Nessun certificato lo copre ancora: i capi che lo contengono non possono avere l’etichetta DPI.",
+      "col": {
+        "certificate": "Certificato",
+        "standard": "Norma",
+        "validTo": "Valido fino al",
+        "lot": "Lotto",
+        "crvi": "Esito Cr VI / limite",
+        "tested": "Provato il",
+        "state": "Stato del lotto"
+      },
+      "tests": "Esiti recenti delle prove",
+      "testsIntro": "I suoi lotti e i loro esiti del cromo VI; ognuno si apre in Conformità › Test e sostanze.",
+      "noLotsRight": "Il tuo ruolo non legge i lotti.",
+      "testsFailed": "Impossibile caricare i lotti",
+      "noTests": "Ancora nessuna prova.",
+      "noTestsCapped": "Nessuno tra i {count} lotti più recenti.",
+      "testsCapped": "Dai {count} lotti più recenti di tutti i materiali.",
+      "crviNotRequired": "Prova non richiesta"
+    },
+    "stock": {
+      "onHand": "In giacenza",
+      "onHandHint": "Nella sua unità di base.",
+      "hides_one": "{count} pelle",
+      "hides_other": "{count} pelli",
+      "available": "Disponibile",
+      "availableHint": "Solo lotti rilasciati.",
+      "held": "Bloccato (qualità)",
+      "heldHint": "Lotti non ancora rilasciati.",
+      "truncated": "Più righe di quante ne contenga una lettura: i totali sopra le contano tutte, la tabella mostra le prime.",
+      "lots": "Lotti e pelli",
+      "empty": "Nulla in giacenza",
+      "failed": "Impossibile caricare la giacenza",
+      "col": {
+        "location": "Ubicazione",
+        "colour": "Colore",
+        "lot": "Lotto o pelle",
+        "onHand": "In giacenza",
+        "state": "Stato del lotto"
+      },
+      "hide": "Pelle {code} · lotto {lot}",
+      "noColour": "Colore unico"
+    }
+  },
+  "operations": {
+    "list": {
+      "intro": "La libreria delle operazioni da cui pescano i cicli: cosa si fa, in quale reparto, su quale macchina, con i minuti standard per capo.",
+      "new": "Nuova operazione",
+      "keyNew": "Nuova operazione",
+      "search": "Cerca codice, nome, macchina o competenza",
+      "tableLabel": "Operazioni",
+      "departmentFilter": "Reparto",
+      "allDepartments": "Tutti i reparti",
+      "skill": "competenza: {skill}",
+      "noSkill": "Nessuna competenza indicata",
+      "minutes": "{minutes} min",
+      "usedIn_one": "In {count} ciclo",
+      "usedIn_other": "In {count} cicli",
+      "differing_one": "{count} con minuti diversi",
+      "differing_other": "{count} con minuti diversi",
+      "allSame": "Stessi minuti ovunque",
+      "unused": "Ancora in nessun ciclo",
+      "openUsed": "Dove è usata"
+    },
+    "col": {
+      "operation": "Operazione",
+      "department": "Reparto",
+      "machine": "Macchina · competenza",
+      "smv": "Minuti standard",
+      "used": "Cicli",
+      "status": "Stato"
+    },
+    "view": {
+      "open": "Operazioni attive",
+      "unused": "In nessun ciclo",
+      "differs": "Minuti diversi in un ciclo",
+      "archived": "Archiviate",
+      "all": "Tutte"
+    },
+    "tile": {
+      "unused": "In nessun ciclo",
+      "differs": "Minuti diversi in alcuni cicli"
+    },
+    "tileHint": {
+      "unused": "Operazioni di libreria che nessun ciclo ha copiato.",
+      "differs": "Un ciclo in bozza o rilasciato ha minuti diversi dalla libreria."
+    },
+    "forbidden": {
+      "title": "Non hai accesso alle operazioni",
+      "body": "La libreria delle operazioni richiede il permesso cicli (produzione e pianificazione lo hanno)."
+    },
+    "empty": {
+      "title": "Ancora nessuna operazione",
+      "body": "Aggiungi la prima operazione: i cicli dei modelli scelgono qui i loro passi.",
+      "bodyView": "Le aggiunge l’ufficio produzione; le vedrai qui.",
+      "create": "Aggiungi la prima operazione"
+    },
+    "archive": {
+      "title_one": "Archivia {count} operazione",
+      "title_other": "Archivia {count} operazioni",
+      "reach": "Nessun nuovo passo di ciclo potrà usarle.",
+      "kept": "I cicli mantengono i passi copiati, con i loro minuti.",
+      "back": "Riattiva ne riporta indietro una."
+    },
+    "notice": {
+      "archived_one": "{count} operazione archiviata.",
+      "archived_other": "{count} operazioni archiviate.",
+      "reactivated_one": "{count} operazione riattivata.",
+      "reactivated_other": "{count} operazioni riattivate."
+    }
+  },
+  "newOperation": {
+    "title": "Nuova operazione",
+    "intro": "Cosa si fa e come: i cicli la copiano con i suoi minuti, e possono cambiare la loro copia.",
+    "companyHint": "Tutte le aziende: condivisa da tutti gli stabilimenti.",
+    "create": "Crea operazione",
+    "held": {
+      "code": "Indica prima il codice (lettere maiuscole e cifre).",
+      "name": "Indica prima il nome.",
+      "minutes": "Indica prima i minuti standard.",
+      "minutesInvalid": "Minuti sopra 0, come 4,25 (arrotondati a 3 decimali)."
+    }
+  },
+  "operation": {
+    "back": "Operazioni",
+    "tab": {
+      "definition": "Definizione",
+      "minutes": "Minuti",
+      "whereused": "Dove è usata"
+    },
+    "action": {
+      "archive": "Archivia…",
+      "reactivate": "Riattiva"
+    },
+    "archive": {
+      "title": "Archivia {code}"
+    },
+    "archivedBanner": "Archiviata: sola lettura, nessun nuovo passo di ciclo può usarla. ⋯ Riattiva la riporta indietro.",
+    "code": "Codice",
+    "codeFrozen_one": "{count} ciclo ha copiato questo codice: non cambia più.",
+    "codeFrozen_other": "{count} cicli hanno copiato questo codice: non cambia più.",
+    "name": "Nome",
+    "floorNameHint": "Lo schermo di reparto e il cartellino mostrano la lingua dell’operatore.",
+    "floorNamesMissing": "Indica il nome in italiano e in inglese: il reparto mostra a ognuno il suo.",
+    "department": "Reparto",
+    "departmentHint": "Il tipo di centro di lavoro in cui si fa.",
+    "machine": "Tipo di macchina",
+    "machineHint": "Piana, a colonna, due aghi, pressa …",
+    "skill": "Competenza",
+    "smv": "Minuti standard per capo",
+    "smvHint": "Come 4,25; arrotondati a 3 decimali.",
+    "instructions": "Istruzioni",
+    "instructionsHint": "Per il cartellino e lo schermo di reparto.",
+    "definitionHint": "Cosa si fa e come. ⌘S salva.",
+    "minutes": {
+      "title": "Minuti standard",
+      "intro": "I minuti standard per capo che copiano i nuovi cicli.",
+      "save": "Salva i minuti",
+      "newOnly_one": "I nuovi cicli lo prendono; i cicli mantengono i loro minuti. {count} ciclo in bozza può prenderlo da Dove è usata.",
+      "newOnly_other": "I nuovi cicli lo prendono; i cicli mantengono i loro minuti. {count} cicli in bozza possono prenderlo da Dove è usata.",
+      "routings": "Nei cicli",
+      "used": "Usata",
+      "differing": "Minuti diversi",
+      "see": "Vedi dove sono diversi"
+    },
+    "used": {
+      "intro": "Ogni passo di ciclo creato da essa. Un passo in bozza diverso può prendere il valore di libreria ({minutes} min); un ciclo rilasciato resta com’è.",
+      "count_one": "{count} passo",
+      "count_other": "{count} passi",
+      "col": {
+        "style": "Modello",
+        "revision": "Revisione",
+        "step": "Passo",
+        "minutes": "Minuti nel ciclo",
+        "difference": "Rispetto alla libreria"
+      },
+      "revision": "Rev {revision}",
+      "same": "Uguale alla libreria",
+      "diff": "{diff} min",
+      "update_one": "Aggiorna {count} al valore di libreria",
+      "update_other": "Aggiorna {count} al valore di libreria",
+      "held": {
+        "released": "Rilasciata: bloccata. Una nuova revisione prende il valore di libreria.",
+        "obsolete": "Superata: bloccata.",
+        "same": "Ha già il valore di libreria.",
+        "noRouting": "Modificare un ciclo richiede il permesso cicli."
+      },
+      "confirmTitle_one": "Aggiorna {count} passo al valore di libreria",
+      "confirmTitle_other": "Aggiorna {count} passi al valore di libreria",
+      "confirmIntro": "Ogni passo di ciclo in bozza prende i minuti della libreria, uno alla volta con la versione della sua revisione.",
+      "step": "passo {seq}",
+      "min": "min",
+      "empty": {
+        "title": "Ancora in nessun ciclo",
+        "body": "La scheda Operazioni di un modello la aggiunge a un ciclo."
+      }
+    },
+    "notice": {
+      "updated_one": "{count} passo di ciclo aggiornato al valore di libreria.",
+      "updated_other": "{count} passi di ciclo aggiornati al valore di libreria.",
+      "archived": "Operazione archiviata.",
+      "reactivated": "Operazione riattivata."
+    }
+  },
+  "sizes": {
+    "list": {
+      "intro": "Le scale taglie da cui attingono i modelli, ogni taglia con le misure del corpo a cui corrisponde: ciò che stampa l’etichetta DPI e su cui si controlla un pilota su misura.",
+      "new": "Nuova scala taglie",
+      "keyNew": "Nuova scala taglie",
+      "search": "Cerca codice o nome",
+      "tableLabel": "Scale taglie",
+      "sizeCount_one": "{count} taglia",
+      "sizeCount_other": "{count} taglie",
+      "styles_one": "{count} modello",
+      "styles_other": "{count} modelli",
+      "orderFixed": "Ordine fissato dai modelli",
+      "orderFree": "Ordine modificabile",
+      "openUsed": "Dove è usata"
+    },
+    "col": {
+      "scale": "Scala taglie",
+      "sizes": "Taglie",
+      "styles": "Usata da",
+      "status": "Stato"
+    },
+    "view": {
+      "open": "Scale attive",
+      "archived": "Archiviate",
+      "all": "Tutte"
+    },
+    "forbidden": {
+      "title": "Non hai accesso alle scale taglie",
+      "body": "Le scale taglie richiedono il permesso modelli."
+    },
+    "empty": {
+      "title": "Ancora nessuna scala taglie",
+      "body": "Aggiungi la prima scala (EU 44–64, S–4XL …): ogni modello ne indica una.",
+      "bodyView": "Le aggiunge l’ufficio prodotto; le vedrai qui.",
+      "create": "Aggiungi la prima scala taglie"
+    },
+    "archive": {
+      "title_one": "Archivia {count} scala taglie",
+      "title_other": "Archivia {count} scale taglie",
+      "reach": "Nessun nuovo modello potrà sceglierle.",
+      "kept": "I modelli che le usano mantengono le loro taglie.",
+      "back": "Riattiva ne riporta indietro una."
+    },
+    "notice": {
+      "archived_one": "{count} scala taglie archiviata.",
+      "archived_other": "{count} scale taglie archiviate."
+    }
+  },
+  "newScale": {
+    "title": "Nuova scala taglie",
+    "intro": "Scrivi o incolla le taglie in ordine, dalla più piccola alla più grande.",
+    "companyHint": "Tutte le aziende: condivisa da tutte le aziende.",
+    "sizes": "Taglie in ordine",
+    "sizesHint": "Separate da virgole, spazi o a capo: \"44, 46, 48\".",
+    "preview_one": "{count} taglia: {sizes}",
+    "preview_other": "{count} taglie: {sizes}",
+    "after": "Crea apre la scala: poi etichette e misure del corpo.",
+    "create": "Crea scala taglie",
+    "held": {
+      "code": "Indica prima il codice (lettere maiuscole e cifre).",
+      "name": "Indica prima il nome.",
+      "sizes": "Scrivi almeno una taglia.",
+      "badSizes": "Non è un codice taglia: {sizes} (da 1 a 10 lettere o cifre, . o _ all’interno, niente trattino).",
+      "tooMany": "Al massimo 60 taglie in una scala."
+    }
+  },
+  "scale": {
+    "back": "Taglie e misure",
+    "tab": {
+      "sizes": "Taglie",
+      "points": "Punti di misura",
+      "whereused": "Dove è usata"
+    },
+    "code": "Codice",
+    "name": "Nome",
+    "action": {
+      "add": "Aggiungi taglie",
+      "rename": "Rinomina…",
+      "archive": "Archivia…",
+      "reactivate": "Riattiva"
+    },
+    "archive": {
+      "title": "Archivia {code}"
+    },
+    "archivedBanner": "Archiviata: sola lettura, nessun nuovo modello può sceglierla. ⋯ Riattiva la riporta indietro.",
+    "orderFixedTag": "Ordine fissato dai modelli",
+    "held": {
+      "archived": "Archiviata: riattivala prima.",
+      "order_one": "{count} modello usa questa scala: l’ordine resta (aggiungi piuttosto taglie prima di una taglia).",
+      "order_other": "{count} modelli usano questa scala: l’ordine resta (aggiungi piuttosto taglie prima di una taglia)."
+    },
+    "notice": {
+      "added_one": "{count} taglia aggiunta.",
+      "added_other": "{count} taglie aggiunte.",
+      "archived": "Scala taglie archiviata.",
+      "reactivated": "Scala taglie riattivata."
+    },
+    "sizes": {
+      "title": "Taglie",
+      "intro": "In ordine, ognuna con le misure del corpo a cui corrisponde (pittogramma taglie EN 17092, controllo su misura). Una taglia col lucchetto è citata da un modello, uno SKU o un ordine: il suo codice resta.",
+      "col": {
+        "size": "Taglia",
+        "label": "Etichetta mostrata",
+        "status": "Offerta",
+        "actions": "Azioni"
+      },
+      "inUse": "In uso: il codice resta",
+      "up": "Sposta {code} su",
+      "down": "Sposta {code} giù",
+      "first": "È già la prima taglia.",
+      "last": "È già l’ultima taglia.",
+      "edit": "Modifica la taglia {code}",
+      "editShort": "Modifica",
+      "noMeasures": "Ancora nessuna misura del corpo: l’etichetta DPI non può stampare il pittogramma taglie finché ogni taglia non le ha.",
+      "missing_one": "{point}: {count} taglia non ha ancora la misura.",
+      "missing_other": "{point}: {count} taglie non hanno ancora la misura."
+    },
+    "points": {
+      "title": "Punti di misura",
+      "intro": "Le misure del corpo delle sue taglie, ognuna in un’unica unità per tutta la scala.",
+      "col": {
+        "point": "Punto",
+        "unit": "Unità",
+        "sizes": "Taglie misurate"
+      },
+      "coverage_one": "{count} di {of}",
+      "coverage_other": "{count} di {of}",
+      "empty": {
+        "title": "Ancora nessun punto",
+        "body": "Modifica una taglia per darle la prima misura del corpo (torace, altezza, vita …)."
+      }
+    },
+    "used": {
+      "intro": "I modelli su questa scala, in ogni stato, e le taglie che usa ognuno.",
+      "col": {
+        "style": "Modello",
+        "range": "Gamma taglie",
+        "base": "Taglia base",
+        "status": "Stato"
+      },
+      "failed": "Impossibile caricare i modelli",
+      "empty": {
+        "title": "Nessun modello la usa ancora",
+        "body": "Ordine e codici possono ancora cambiare."
+      }
+    },
+    "rename": {
+      "title": "Rinomina la scala taglie",
+      "codeFrozen_one": "{count} modello la usa: il codice resta.",
+      "codeFrozen_other": "{count} modelli la usano: il codice resta.",
+      "held": {
+        "same": "Ancora nessuna modifica."
+      }
+    },
+    "add": {
+      "title": "Aggiungi taglie a {code}",
+      "where": "Dove",
+      "whereUsed": "I modelli usano la scala: le nuove taglie entrano senza spostare le altre.",
+      "atEnd": "In fondo",
+      "before": "Prima di {code}",
+      "go_one": "Aggiungi {count} taglia",
+      "go_other": "Aggiungi {count} taglie",
+      "held": {
+        "taken": "Già nella scala: {sizes}"
+      }
+    },
+    "size": {
+      "title": "Taglia {code} di {scale}",
+      "code": "Codice taglia",
+      "codeHint": "Nulla la cita ancora: può cambiare.",
+      "codeInUse": "Citata da un modello, uno SKU o un ordine: il codice resta.",
+      "label": "Etichetta mostrata",
+      "labelHint": "Quando non è il codice, come \"52 (L)\".",
+      "offered": "Offerta nelle nuove gamme",
+      "offeredHint": "No: archiviata, resta dove è usata.",
+      "measures": "Misure del corpo",
+      "measuresHint": "L’intervallo di ogni punto a cui corrisponde questa taglia; basta un estremo. Lascia vuoti entrambi per togliere un punto da questa taglia.",
+      "min": "{point} da",
+      "max": "{point} a",
+      "unit": "Unità",
+      "unitFixed": "La scala misura questo punto in questa unità.",
+      "newPoint": "Nuovo punto di misura",
+      "pointRule": "Lettere minuscole, cifre e _: torace, altezza, cavallo_interno.",
+      "pointTaken": "Questa taglia ha già questo punto.",
+      "pointEmpty": "Indica prima il punto.",
+      "addPoint": "Aggiungi punto",
+      "held": {
+        "point": "Non è un codice punto: {point} (lettere minuscole, cifre e _).",
+        "number": "{point}: numeri sopra 0 con al massimo 2 decimali.",
+        "order": "{point}: l’inizio è al massimo la fine.",
+        "unit": "{point}: la scala lo misura in un’altra unità.",
+        "tooMany": "Al massimo 30 punti per taglia."
+      }
+    }
+  }
+}

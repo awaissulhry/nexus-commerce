@@ -1,0 +1,169 @@
+// Sourcing and daily buying (W2a schema wave 3/7; plan W2A §5; features SCM-005, SCM-058, SCM-059, SCM-060, SCM-087):
+// the approved sources of each material with the supplier's price, and the history of every purchase order sent to a
+// supplier: each revision sent, frozen with its PDF, and each reminder to confirm. apps/factory-api's modules/purchasing
+// writes them (B-W2a-10 supplier items, B-W2a-52 revisions and reminders), always through command(). The purchase
+// orders themselves, their lines' cancel and close-short columns and the confirm-by deadline are supply.prisma's.
+//
+// Revisions (SCM-058): a purchase order that was sent and must change goes back to DRAFT (its revision up by one; a
+// confirmed order loses its confirmation, which the supplier gives again: the …_supply_w2a_guards triggers) and is
+// sent again. Each send writes one PurchaseOrderRevision: the order as it was sent (`after`), the order as the
+// previous send left it, with the supplier's answer (`before`, none for revision 1), the PDF that went with it, who
+// sent it and when. A revision is never changed or removed (`@append-only`): the diff the buyer and the supplier read is
+// the one that was sent.
+//
+// Reminders (SCM-087): an order sent with a confirm-by deadline (PurchaseOrder.confirmBy) that the supplier has not
+// answered gets a reminder by mail (the scheduler, or the buyer). Each reminder sent is one PurchaseOrderReminder row,
+// never changed or removed (`@append-only`). The Owner turns the automatic reminders on per company after go-live.
+//
+// Money (A1 §2.6; Owner answer C2: no prices on supplier screens): supplier prices are costs (`@grain cost`), never shown
+// to the floor, a portal or a link. A revision keeps its prices apart from the rest of its snapshot (`beforePrices`,
+// `afterPrices`), so the partner role may read what changed in quantities and dates and never a price.
+//
+// Who sees what (ownership/sourcing.json): the office reads and writes; a portal or PO_CONFIRM link session reads its
+// OWN party's revisions without their prices, PDF or who sent them (the supplier re-confirms revision 2 by its link);
+// the floor reads none of it. Nobody deletes a source (it is archived), a revision or a reminder.
+//
+// Uniqueness made only of references (one primary source per item and colour) is the purchasing module's: a unique key
+// of ids alone cannot be copied by the generated isolation tests.
+
+/// An approved source (SCM-005): a material (in one colour, or any) that a supplier sells us, with its article code,
+/// the unit and terms it sells in and its price. Buy suggestions and new purchase order lines take it (B-W2a-10).
+model SupplierItem {
+  id                  String                 @id @db.Uuid
+  tenantId            String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The buying company it holds for; null: every company of the tenant.
+  companyId           String?                @db.Uuid
+  /// The supplier (a party with the SUPPLIER role; the purchasing module checks the role, the database does not).
+  partyId             String                 @db.Uuid
+  itemId              String                 @db.Uuid
+  /// The colour it is for, one of the item's; null: the supplier sells the article in every colour of the item.
+  itemColourId        String?                @db.Uuid
+  /// The supplier's article and colour codes, as printed on its documents and our purchase orders.
+  supplierArticleCode String?
+  supplierColourCode  String?
+  /// What the supplier calls it, when more than the item's name.
+  description         String?
+  /// The unit the supplier sells it in, and how many of the item's base units one of it holds (above 0): 1 for the
+  /// base unit; the fixed factor inside one dimension (FT2 → M2); the article's average for a unit of its own (HIDE).
+  purchaseUom         Uom
+  purchaseFactor      Decimal                @default(1) @db.Decimal(18, 8)
+  /// The supplier's price per `purchaseUom`, in `currency`; null: none on record yet.
+  /// @grain cost
+  unitPrice           Decimal?               @db.Decimal(18, 6)
+  /// ISO 4217.
+  currency            String                 @default("EUR")
+  /// The least it sells and the steps it sells in, both above 0, in `purchaseUom`; null: none.
+  minOrderQty         Decimal?               @db.Decimal(18, 4)
+  orderMultiple       Decimal?               @db.Decimal(18, 4)
+  /// Calendar days from the order to the goods at the site, 0 or more; null: the party's usual lead time.
+  leadTimeDays        Int?
+  /// PRIMARY: the source a buy suggestion takes first; BACKUP: another approved one.
+  preference          SupplierItemPreference @default(PRIMARY)
+  /// ARCHIVED: no longer an approved source (kept: purchase orders were made from it).
+  status              MasterStatus           @default(ACTIVE)
+  note                String?
+  version             Int                    @default(1)
+  createdAt           DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById         String?                @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company    Company?    @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  party      Party       @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  item       Item        @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  itemColour ItemColour? @relation(fields: [tenantId, itemId, itemColourId], references: [tenantId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // The sources of a material, and a supplier's list.
+  @@index([tenantId, itemId])
+  @@index([tenantId, partyId])
+}
+
+enum SupplierItemPreference {
+  PRIMARY
+  BACKUP
+}
+
+/// One revision of a purchase order as it was sent to the supplier (SCM-058): the order and its lines as sent
+/// (`after`), as the previous send left them with the supplier's answer (`before`; none for revision 1), their prices
+/// kept apart (`afterPrices`, `beforePrices`), the PDF that went with it, who sent it and when. Written in the send's
+/// command, once the order is SENT; never changed or removed (the …_supply_w2a_guards triggers, for every login).
+/// @append-only
+model PurchaseOrderRevision {
+  id              String   @id @db.Uuid
+  tenantId        String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  purchaseOrderId String   @db.Uuid
+  /// The order's supplier (the partner role's policy key).
+  partyId         String   @db.Uuid
+  /// The order's delivery site.
+  siteId          String   @db.Uuid
+  /// The order's revision this row freezes: 1 for the first send, one more for each change sent again.
+  revision        Int
+  /// When it was sent (the order's sentAt of this send) and by whom.
+  sentAt          DateTime @db.Timestamptz(3)
+  sentById        String?  @db.Uuid
+  /// The order as the previous revision's send left it, the supplier's answer included (null for revision 1), and as
+  /// this revision was sent, without a price or an internal note (factory-domain purchasing/revisions):
+  /// { "requestedDate": "2026-11-16", "incoterms": "…", "paymentTerms": "…", "note": "…", "status": "CONFIRMED",
+  ///   "confirmation": { "at": "…", "via": "LINK", "byName": "…", "supplierRef": "…" } | null,
+  ///   "lines": [{ "id": "…", "seq": 10, "itemId": "…", "itemColourId": "…", "description": "…", "quantity": "420.0000",
+  ///   "uom": "FT2", "needDate": "2026-11-16", "grade": "A", "confirmedQuantity": "420.0000", "confirmedDate": "…",
+  ///   "cancelled": false }] }.
+  before          Json?
+  after           Json
+  /// The prices of the same two states, as decimal strings and minor units (no floats):
+  /// { "currency": "EUR", "netAmount": 192000, "lines": [{ "id": "…", "seq": 10, "unitPrice": "4.200000", "netAmount": 176400 }] }.
+  /// @grain cost
+  beforePrices    Json?
+  /// @grain cost
+  afterPrices     Json
+  /// What changed and why, in the buyer's words to the supplier (printed in the mail); null for revision 1.
+  changeNote      String?
+  /// The PDF sent with this revision: a StoredFile of the order (recordType PurchaseOrder), kept ten years.
+  documentFileId  String?  @db.Uuid
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  createdById     String?  @db.Uuid
+
+  purchaseOrder PurchaseOrder @relation(fields: [tenantId, partyId, siteId, purchaseOrderId], references: [tenantId, partyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  documentFile  StoredFile?   @relation("PurchaseOrderRevisionDocument", fields: [tenantId, documentFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, purchaseOrderId, revision])
+}
+
+/// One reminder sent to a supplier about a purchase order (SCM-087): CONFIRMATION, when the order is still waiting for
+/// its answer at or after its confirm-by deadline. Written by the reminder's command (the scheduler or the buyer), with
+/// the mail it queued; never changed or removed (the …_supply_w2a_guards triggers, for every login).
+/// @append-only
+model PurchaseOrderReminder {
+  id              String                @id @db.Uuid
+  tenantId        String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  purchaseOrderId String                @db.Uuid
+  /// The order's supplier.
+  partyId         String                @db.Uuid
+  /// The order's delivery site.
+  siteId          String                @db.Uuid
+  /// The order's revision it reminds of (the one waiting for its answer).
+  revision        Int
+  kind            PurchaseReminderKind
+  sentAt          DateTime              @db.Timestamptz(3)
+  /// The office user who sent it; null: the scheduler.
+  sentById        String?               @db.Uuid
+  /// The address it went to (the order's contact for purchase orders).
+  toAddress       String?
+  /// The mail it queued (email.prisma EmailOutbound; a plain id: that table has no tenant-safe target key).
+  emailOutboundId String?               @db.Uuid
+  note            String?
+  createdAt       DateTime              @default(now()) @db.Timestamptz(3)
+  createdById     String?               @db.Uuid
+
+  purchaseOrder PurchaseOrder @relation(fields: [tenantId, partyId, siteId, purchaseOrderId], references: [tenantId, partyId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // An order's reminders, in order.
+  @@index([tenantId, purchaseOrderId, sentAt])
+}
+
+/// What a reminder is about. New kinds are additive (a late delivery chase is W2b).
+enum PurchaseReminderKind {
+  /// The supplier has not answered the order by its confirm-by deadline.
+  CONFIRMATION
+}
