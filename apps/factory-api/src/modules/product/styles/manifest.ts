@@ -21,6 +21,9 @@ export const manifest = defineManifest({
   'PATCH /product/styles/:styleId/colourways/:colourwayId': manage,
   'POST /product/styles/:styleId/skus/generate': manage,
   'PATCH /product/styles/:styleId/skus/:skuId': manage,
+  // W2a (PRD-011): what a copy can take, and the copy (the parts' own write permissions are checked by the handler).
+  'GET /product/styles/:styleId/duplicate': view,
+  'POST /product/styles/:styleId/duplicate': manage,
   'GET /product/styles/:styleId/revisions': view,
   'POST /product/styles/:styleId/revisions': manage,
   'GET /product/colours': view,

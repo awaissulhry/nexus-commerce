@@ -45,6 +45,11 @@ import { manifest } from './manifest'
 import { cancelOrder, createOrder, getOrder, listOrders, updateOrder } from './orders'
 import { inlineDisposition, previewOrderPdf, sendCheck, sendNewLink, sendOrder } from './send'
 import { previewSupplierView } from './supplier-view'
+import { convertRequestsContract, getRequestContract, listRequestsContract, previewConversionContract, requestCountsContract } from './requests/contract'
+import { convertRequests, previewConversion } from './requests/convert'
+import { getRequest, listRequests, requestCounts } from './requests/queue'
+import { archiveSourceContract, createSourceContract, getSourceContract, listSourcesContract, restoreSourceContract, updateSourceContract } from './supplier-items/contract'
+import { archiveSource, createSource, getSource, listSources, restoreSource, updateSource } from './supplier-items/supplier-items'
 
 /**
  * Purchase orders, part 1 (B-W1-30): the list ("Where POs stand") and the record, a new draft, its header, its lines (with
@@ -58,6 +63,9 @@ import { previewSupplierView } from './supplier-view'
  * /link/purchase-order/confirm (all as asked, or line by line) | decline, and the public POST /link/purchase-order/renew
  * ("ask for a new link": one answer whatever the token; a new link only to the address on file). Link routes are rate
  * limited like every link route.
+ *
+ * B-W2a-10: approved sources (./supplier-items: list, read, add, change, archive, approve again) and requests to buy
+ * (./requests: the queue, its tiles, one request, the "Draft POs for n" preview and the conversion).
  */
 export default defineRoutes('purchasing', manifest, async (app) => {
   app.get('/purchasing/orders', { schema: listOrdersContract }, async (request) => listOrders(request, request.query))
@@ -100,6 +108,30 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/purchasing/orders/:purchaseOrderId/proposal/accept', { schema: acceptProposalContract }, async (request) => acceptProposal(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
 
   app.post('/purchasing/orders/:purchaseOrderId/proposal/refuse', { schema: refuseProposalContract }, async (request) => refuseProposal(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2a-10 (SCM-005): approved sources.
+  app.get('/purchasing/supplier-items', { schema: listSourcesContract }, async (request) => listSources(request, request.query))
+
+  app.get('/purchasing/supplier-items/:supplierItemId', { schema: getSourceContract }, async (request) => getSource(request, request.params.supplierItemId))
+
+  app.post('/purchasing/supplier-items', { schema: createSourceContract }, async (request, reply) => reply.code(201).send(await createSource(request, request.body, idempotencyKeyFrom(request))))
+
+  app.patch('/purchasing/supplier-items/:supplierItemId', { schema: updateSourceContract }, async (request) => updateSource(request, request.params.supplierItemId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/supplier-items/:supplierItemId/archive', { schema: archiveSourceContract }, async (request) => archiveSource(request, request.params.supplierItemId, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/purchasing/supplier-items/:supplierItemId/restore', { schema: restoreSourceContract }, async (request) => restoreSource(request, request.params.supplierItemId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2a-10 (SCM-034, SCM-036): requests to buy.
+  app.get('/purchasing/requests', { schema: listRequestsContract }, async (request) => listRequests(request, request.query))
+
+  app.get('/purchasing/requests/counts', { schema: requestCountsContract }, async (request) => requestCounts(request, request.query))
+
+  app.get('/purchasing/requests/:kind/:refId', { schema: getRequestContract }, async (request) => getRequest(request, request.params.kind, request.params.refId))
+
+  app.post('/purchasing/requests/preview', { schema: previewConversionContract }, async (request) => previewConversion(request, request.body))
+
+  app.post('/purchasing/requests/convert', { schema: convertRequestsContract }, async (request) => convertRequests(request, request.body, idempotencyKeyFrom(request)))
 
   const linkUse = app.officeAuth?.rateLimits.linkUse ?? AUTH_RATE_LIMITS.linkUse
   const limited = { rateLimit: { max: linkUse.max, timeWindow: linkUse.timeWindowMs } }

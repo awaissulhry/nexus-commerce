@@ -1,8 +1,9 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { makeBundles, reprintBundle, voidBundle } from './bundles'
-import { bundlesViewContract, bundleWorkOrdersContract, makeBundlesContract, reprintBundleContract, scanBundleContract, voidBundleContract, workOrderBundlesContract } from './contract'
+import { bundlesViewContract, bundleWorkOrdersContract, makeBundlesContract, reprintBundleContract, scanBundleContract, splitBundleContract, voidBundleContract, workOrderBundlesContract } from './contract'
 import { manifest } from './manifest'
+import { splitBundle } from './split'
 import { bundlesOfWorkOrder, bundleWorkOrders, scanBundle, workOrderBundles } from './views'
 
 /**
@@ -35,4 +36,10 @@ export default defineRoutes('production.bundles', manifest, async (app) => {
   })
 
   app.get('/production/bundles/work-orders/:workOrderId/bundles', { schema: workOrderBundlesContract }, async (request) => workOrderBundles(request, request.params.workOrderId))
+
+  // W2a B-W2a-13 (MES-071): split pieces off into a child bundle with its own ticket.
+  app.post('/production/bundles/:bundleId/split', { schema: splitBundleContract }, async (request, reply) => {
+    const result = await splitBundle(request, request.params.bundleId, request.body, idempotencyKeyFrom(request))
+    return reply.code(result.replayed ? 200 : 201).send(result)
+  })
 })

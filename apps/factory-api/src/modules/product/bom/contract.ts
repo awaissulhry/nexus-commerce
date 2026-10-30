@@ -1,4 +1,7 @@
+import { z } from 'zod'
 import { defineContract, id, input, output } from '@nexus/factory-domain/core/contracts'
+import { DOCUMENT_LANGUAGES } from '@nexus/factory-domain/documents/model'
+import { NUMBER_FORMATS } from '@nexus/factory-domain/imports/cells'
 import {
   addLineBody,
   bomDiffView,
@@ -14,7 +17,7 @@ import {
   updateRevisionBody,
 } from '@nexus/factory-domain/product/bom/contracts'
 
-/** The BOM routes' contracts (A2 SCR-042, SCR-046): the bodies and answers are factory-domain's product/bom/contracts. No money. */
+/** The BOM routes' contracts (A2 SCR-042, SCR-046): the bodies and answers are factory-domain's product/bom/contracts. No money (the export too). */
 
 const revision = input({ styleId: id(), revisionId: id() })
 const line = input({ styleId: id(), revisionId: id(), lineId: id() })
@@ -29,5 +32,11 @@ export const setSizesContract = defineContract({ params: line, body: setSizesBod
 export const setColoursContract = defineContract({ params: line, body: setColoursBody, response: one })
 export const copyRevisionContract = defineContract({ params: revision, body: copyRevisionBody, response: { 201: output({ bom: bomView }) } })
 export const compareContract = defineContract({ params: input({ styleId: id() }), querystring: compareQuery, response: { 200: output({ diff: bomDiffView }) } })
+/** W2a (PRD-090): the BOM as a file: csv or xlsx (the import's columns, numbers in `numberFormat`, Italian by default) or pdf (in `language`). */
+export const exportContract = defineContract({
+  params: revision,
+  querystring: input({ format: z.enum(['csv', 'xlsx', 'pdf']).default('xlsx'), numberFormat: z.enum(NUMBER_FORMATS).default('it'), language: z.enum(DOCUMENT_LANGUAGES).default('it') }),
+  response: {},
+})
 export const releaseContract = defineContract({ params: revision, body: releaseBody, response: one })
 export const obsoleteContract = defineContract({ params: revision, body: obsoleteBody, response: one })
