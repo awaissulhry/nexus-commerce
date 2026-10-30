@@ -12,7 +12,7 @@ import { priceBasisOf, type SalesLineKind } from '../quotes/quotes'
  * …_sales_guards trigger holds the frame for every login (CLOSED only from SHIPPED, CANCELLED with its reason only before
  * anything shipped, closedAt exactly when CLOSED or CANCELLED, originalPromiseDate set once).
  *
- *   CONFIRMED → IN_PRODUCTION → READY → PARTLY_SHIPPED → SHIPPED → CLOSED; CANCELLED (with a reason) from CONFIRMED.
+ *   CONFIRMED → IN_PRODUCTION → READY → PARTLY_SHIPPED → SHIPPED → CLOSED; CANCELLED (with a reason) before anything shipped.
  *
  * One writer per move (SAL-204; the design's board: cards never drag, each state changes only through its own action):
  *
@@ -25,8 +25,13 @@ import { priceBasisOf, type SalesLineKind } from '../quotes/quotes'
  *   CLOSED           the close command: settled (every line shipped, invoiced and paid: the money module's port, its
  *                    order.fully_settled event) by the system or a person; not settled only with a reason, by a person
  *                    with orders.close
- *   CANCELLED        by a person, with a reason, only while CONFIRMED and before any work order is released (and with
- *                    no draft work order left on its lines)
+ *   CANCELLED        by a person, with a reason, while CONFIRMED, IN_PRODUCTION or READY (B-W2a-30, SAL-211: the cancel
+ *                    impact check, ./daily `cancelImpact`): nothing shipped, no draft work order left on its lines, no
+ *                    shipment being packed and no invoice of it; released work orders, cut leather, reservations,
+ *                    purchase orders and a paid deposit are left behind and named
+ *
+ * W2a (B-W2a-30): a line closed short (SAL-210) counts as done in the progress: the pieces that will not be made or
+ * shipped are `closedShort`, never "to ship".
  */
 
 export const SALES_ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'CANCELLED'] as const
@@ -53,6 +58,9 @@ export const LINE_CHANGE_STATUSES: readonly SalesOrderStatus[] = Object.freeze([
 
 /** Final: nothing on the order changes any more. */
 export const FINAL_STATUSES: readonly SalesOrderStatus[] = Object.freeze(['CLOSED', 'CANCELLED'])
+
+/** B-W2a-30 (SAL-211): an order is cancelled only before anything shipped (the …_sales_guards trigger says so too). */
+export const CANCEL_STATUSES: readonly SalesOrderStatus[] = Object.freeze(['CONFIRMED', 'IN_PRODUCTION', 'READY'])
 
 export const isSalesOrderStatus = (value: unknown): value is SalesOrderStatus => isState(salesOrderMachine, value)
 
@@ -82,6 +90,11 @@ export interface SalesOrderFacts {
   readonly settlement?: SettlementAnswer
   /** The reason a person gave: a cancellation, a ready by hand, a close while not settled. */
   readonly reason?: string | null
+  /**
+   * B-W2a-30: what stops a cancellation besides the reason and the drafts, in words (./daily `cancelImpact` blocks: a
+   * shipment being packed, an invoice of the order).
+   */
+  readonly cancelBlocks?: readonly string[]
 }
 
 const hasReason = (facts: SalesOrderFacts): boolean => typeof facts.reason === 'string' && facts.reason.trim() !== ''
@@ -94,8 +107,8 @@ export const salesOrderMachine = defineMachine<SalesOrderStatus, SalesOrderFacts
   states: SALES_ORDER_STATUSES,
   transitions: {
     CONFIRMED: ['IN_PRODUCTION', 'PARTLY_SHIPPED', 'SHIPPED', 'CANCELLED'],
-    IN_PRODUCTION: ['READY', 'PARTLY_SHIPPED', 'SHIPPED'],
-    READY: ['PARTLY_SHIPPED', 'SHIPPED'],
+    IN_PRODUCTION: ['READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CANCELLED'],
+    READY: ['PARTLY_SHIPPED', 'SHIPPED', 'CANCELLED'],
     PARTLY_SHIPPED: ['SHIPPED'],
     SHIPPED: ['PARTLY_SHIPPED', 'CLOSED'],
   },
@@ -106,10 +119,11 @@ export const salesOrderMachine = defineMachine<SalesOrderStatus, SalesOrderFacts
     SHIPPED: (facts) => (facts.shipped === 'ALL' ? [] : ['every ordered piece shipped']),
     CLOSED: (facts) =>
       facts.settlement?.settled === true || hasReason(facts) ? [] : [`every line shipped, invoiced and paid (${missingWords(facts.settlement)}), or a reason to close it anyway`],
+    // B-W2a-30 (SAL-211): released work orders no longer stop it; they are left behind and named by the impact check.
     CANCELLED: (facts) => [
       ...(hasReason(facts) ? [] : ['a reason for the cancellation']),
-      ...((facts.releasedWorkOrders ?? 0) > 0 ? ['no released work order (production has started: a cancellation would leave its work behind)'] : []),
       ...((facts.draftWorkOrders ?? []).length > 0 ? [`its draft work orders cancelled first (${(facts.draftWorkOrders ?? []).join(', ')})`] : []),
+      ...(facts.cancelBlocks ?? []),
     ],
   },
 })
@@ -167,6 +181,8 @@ export interface ProgressFacts {
   readonly shipped: readonly PieceCount[]
   /** Billed by issued invoices (TD01, TD24) less issued credit notes (TD04): Decimal(18,4) strings. */
   readonly invoiced: readonly { readonly lineId: string; readonly size: string | null; readonly quantity: string }[]
+  /** B-W2a-30 (SAL-210): the lines closed short (what was left of them will not be made or shipped). */
+  readonly closedShort?: ReadonlySet<string>
 }
 
 /** The numbers of one size of one line (or of a made-to-measure unit). */
@@ -179,8 +195,10 @@ export interface Progress {
   readonly shipped: number
   /** A decimal string (an invoice line may bill part of a piece only in theory: FatturaPA quantities have 4 places). */
   readonly invoiced: string
-  /** Ordered and not shipped yet (never below 0). */
+  /** Ordered and not shipped yet (never below 0); 0 once the line is closed short. */
   readonly toShip: number
+  /** B-W2a-30: pieces closed short (the line's remaining pieces that will not be made or shipped); 0 while open. */
+  readonly closedShort: number
 }
 
 export interface ProgressRow extends Progress {
@@ -211,13 +229,16 @@ function add(rows: Progress[]): Progress {
     shipped: rows.reduce((total, row) => total + row.shipped, 0),
     invoiced: decimalText(invoiced),
     toShip: rows.reduce((total, row) => total + row.toShip, 0),
+    closedShort: rows.reduce((total, row) => total + row.closedShort, 0),
   }
 }
 
 /**
  * Per line × size: ordered, in work orders, made (null until scans), released, shipped, invoiced, still to ship; the
  * totals per line and for the order; how much left (ALL when every size shipped as ordered, PARTLY when anything left);
- * whether quality released everything. A made-to-measure line (no size rows) counts every piece of its line.
+ * whether quality released everything. A made-to-measure line (no size rows) counts every piece of its line. A line
+ * closed short (B-W2a-30) counts as done: its sizes' remaining pieces are `closedShort`, nothing of it is to ship; ALL
+ * then means every size shipped or closed, and something shipped.
  */
 export function orderProgress(facts: ProgressFacts): OrderProgress {
   const sizeless = new Set(facts.lines.filter((line) => line.sizes.length === 0).map((line) => line.id))
@@ -233,12 +254,14 @@ export function orderProgress(facts: ProgressFacts): OrderProgress {
   const invoiced = new Map<string, Decimal>()
   for (const row of facts.invoiced) invoiced.set(keyFor(row.lineId, row.size), (invoiced.get(keyFor(row.lineId, row.size)) ?? ZERO).plus(new Dec(row.quantity)))
 
+  const closed = facts.closedShort ?? new Set<string>()
   const rows: ProgressRow[] = []
   for (const line of [...facts.lines].sort((a, b) => a.seq - b.seq)) {
     const sizes = line.sizes.length > 0 ? line.sizes.map((entry) => ({ size: entry.size as string | null, ordered: entry.quantity })) : [{ size: null, ordered: line.quantity }]
     for (const entry of sizes) {
       const key = keyFor(line.id, entry.size)
       const out = shipped.get(key) ?? 0
+      const short = closed.has(line.id) ? Math.max(0, entry.ordered - out) : 0
       rows.push({
         lineId: line.id,
         seq: line.seq,
@@ -249,21 +272,22 @@ export function orderProgress(facts: ProgressFacts): OrderProgress {
         released: Math.max(0, released.get(key) ?? 0),
         shipped: out,
         invoiced: decimalText(invoiced.get(key) ?? ZERO),
-        toShip: Math.max(0, entry.ordered - out),
+        toShip: short > 0 ? 0 : Math.max(0, entry.ordered - out),
+        closedShort: short,
       })
     }
   }
   const lines = facts.lines
     .map((line) => ({ lineId: line.id, seq: line.seq, ...add(rows.filter((row) => row.lineId === line.id)) }))
     .sort((a, b) => a.seq - b.seq)
-  const all = rows.length > 0 && rows.every((row) => row.shipped >= row.ordered)
   const any = rows.some((row) => row.shipped > 0)
+  const all = any && rows.every((row) => row.shipped + row.closedShort >= row.ordered)
   return {
     rows,
     lines,
     totals: add(rows),
     shipped: all ? 'ALL' : any ? 'PARTLY' : 'NONE',
-    released: rows.length > 0 && rows.every((row) => row.released >= row.ordered),
+    released: rows.length > 0 && rows.every((row) => row.released + row.closedShort >= row.ordered),
   }
 }
 
@@ -475,7 +499,7 @@ export function orderActions(status: SalesOrderStatus, facts: SalesOrderFacts): 
   const actions: ActionView[] = []
   if (!FINAL_STATUSES.includes(status)) actions.push({ action: 'changePromise', allowed: true, needsReason: true, held: null })
   if (status === 'IN_PRODUCTION') actions.push({ action: 'markReady', allowed: true, needsReason: true, held: null })
-  if (status === 'CONFIRMED') {
+  if (CANCEL_STATUSES.includes(status)) {
     const check = canTransition(salesOrderMachine, status, 'CANCELLED', { ...facts, reason: 'asked' })
     actions.push({ action: 'cancel', allowed: check.ok, needsReason: true, held: check.ok ? null : `Cancelling needs ${check.missing.join(' and ')}.` })
   }

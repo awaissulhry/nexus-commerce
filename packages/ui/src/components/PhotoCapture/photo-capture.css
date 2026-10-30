@@ -1,0 +1,257 @@
+/* PhotoCapture (gap D21; PhotoCapture.tsx). Loaded with the component, never by the shared stylesheets: no page that
+   does not take a photo carries these rules. Every size reads `--nds-density-*` (big on the floor tier, phone-sized on
+   comfortable, console-sized at standard); colours are semantic `--nds-*` roles only (no raw colour, no numbered ramp).
+
+   Contrast, both themes (2026-10-30):
+   - Page text: --nds-text / --nds-text-2 on the page ground (the DS pairs, at least 7:1).
+   - Held / problem notes: --nds-text on --nds-warning-soft / --nds-danger-soft (the pair B-W2a-14 measured, 14.45 light /
+     11.11 dark for the warning one); never the note-warn pair, whose fg is 2.1:1 in dark.
+   - The camera view is a dark plate in both themes, as a camera is: --nds-tooltip-light-fg (grey-900) with its words in
+     --nds-tooltip-light-bg (white), the light tooltip's theme-invariant pair (about 17:1).
+   - Marks, the guide and the crosshair sit on a PHOTO, whose colours nobody knows: a bright core (--nds-warning, amber,
+     the same in both themes) over a dark outline (--nds-tooltip-light-fg) twice as wide, so one of the two is at least
+     3:1 against any part of any photo. Mark numbers: grey-900 on a white disc. */
+
+.nds-photo {
+  --nds-photo-max-h: 70dvh;
+  container: nds-photo / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+  line-height: 1.4;
+}
+
+/* ── Capture ── */
+.nds-photo-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-density-gap);
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-photo-hint-line {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.nds-photo-hint-line.is-guide {
+  font-weight: var(--nds-font-weight-normal);
+  color: var(--nds-text-2);
+}
+.nds-photo-viewfinder {
+  position: relative;
+  width: min(100%, calc(var(--nds-photo-max-h) * 4 / 3));
+  aspect-ratio: 4 / 3;
+  margin-inline: auto;
+  overflow: hidden;
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-tooltip-light-fg);
+}
+.nds-photo-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* What the person sees is the whole shot: no cropping. */
+  object-fit: contain;
+}
+.nds-photo-video[hidden] {
+  display: none;
+}
+.nds-photo-guide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.nds-photo-guide :is(rect, ellipse, path) {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+.nds-photo-guide-outline :is(rect, ellipse, path) {
+  stroke: var(--nds-tooltip-light-fg);
+  stroke-width: 6px;
+}
+.nds-photo-guide-line :is(rect, ellipse, path) {
+  stroke: var(--nds-tooltip-light-bg);
+  stroke-width: 3px;
+  stroke-dasharray: 12 8;
+}
+.nds-photo-state {
+  position: absolute;
+  inset-inline: var(--nds-density-pad-x);
+  inset-block-end: var(--nds-density-pad-x);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: var(--nds-space-8) var(--nds-density-pad-x);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-tooltip-light-fg);
+  color: var(--nds-tooltip-light-bg);
+  font-size: var(--nds-density-font-body);
+}
+
+/* ── Markup ── */
+.nds-photo-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-density-gap);
+}
+.nds-photo-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-density-gap);
+}
+.nds-photo-tools-label {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+.nds-photo-stage {
+  position: relative;
+  width: min(100%, calc(var(--nds-photo-max-h) * var(--nds-photo-aspect, 1.3333)));
+  aspect-ratio: var(--nds-photo-aspect, 1.3333);
+  margin-inline: auto;
+  overflow: hidden;
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-tooltip-light-fg);
+}
+.nds-photo-img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.nds-photo-surface {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  /* A drag draws; it never scrolls the page. */
+  touch-action: none;
+  cursor: crosshair;
+}
+.nds-photo-surface.is-still {
+  cursor: default;
+  pointer-events: none;
+}
+.nds-photo-surface:focus {
+  outline: none;
+}
+.nds-photo-stage:has(.nds-photo-surface:focus-visible) {
+  outline: var(--nds-density-focus-w) solid var(--nds-primary);
+  outline-offset: var(--nds-density-focus-offset);
+}
+.nds-photo-mark path,
+.nds-photo-crosshair path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.nds-photo-mark-outline {
+  stroke: var(--nds-tooltip-light-fg);
+}
+.nds-photo-mark-core {
+  stroke: var(--nds-warning);
+}
+.nds-photo-mark-badge {
+  fill: var(--nds-tooltip-light-bg);
+  stroke: var(--nds-tooltip-light-fg);
+}
+.nds-photo-mark-number text {
+  fill: var(--nds-tooltip-light-fg);
+  font-family: inherit;
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-photo-crosshair-line {
+  stroke: var(--nds-tooltip-light-bg);
+}
+.nds-photo-anchor {
+  fill: var(--nds-warning);
+  stroke: var(--nds-tooltip-light-fg);
+}
+.nds-photo-instructions {
+  margin: 0;
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-photo-marks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.nds-photo-marks-count {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-photo-marks-list {
+  margin: 0;
+  padding-inline-start: 0;
+  list-style: none;
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+
+/* ── Notes and actions ── */
+.nds-photo-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: var(--nds-space-8) var(--nds-density-pad-x);
+  border-radius: var(--nds-density-radius);
+  color: var(--nds-text);
+}
+.nds-photo-note.is-held {
+  background: var(--nds-warning-soft);
+}
+.nds-photo-note.is-held .nds-floor-icon {
+  color: var(--nds-warning-text);
+}
+.nds-photo-note.is-problem {
+  background: var(--nds-danger-soft);
+}
+.nds-photo-note.is-problem .nds-floor-icon {
+  color: var(--nds-danger-text);
+}
+/* The main action last, bottom right (the floor's rule); the others before it. */
+.nds-photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-density-gap);
+}
+/* A phone-wide part: every action a full row, the main one at the bottom. */
+@container nds-photo (max-width: 30rem) {
+  .nds-photo-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .nds-photo-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nds-photo * {
+    transition: none;
+    animation: none;
+  }
+}

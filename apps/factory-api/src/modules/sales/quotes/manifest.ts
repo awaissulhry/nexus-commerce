@@ -27,6 +27,8 @@ export const manifest = defineManifest({
   'POST /sales/quotes/:quoteId/send': { audiences: ['office'], permission: 'quotes.send', scope: 'record' },
   'POST /sales/quotes/:quoteId/send-link': { audiences: ['office'], permission: 'quotes.send', scope: 'record' },
   'POST /sales/quotes/:quoteId/revise': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },
+  // B-W2a-30 (SAL-155): a new quote copied from this one (quotes.view on it; quotes.manage for the customer it is for).
+  'POST /sales/quotes/:quoteId/duplicate': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },
   'GET /sales/quotes/:quoteId/versions': { audiences: ['office'], permission: 'quotes.view', scope: 'record' },
   // B-W1-21 part 2 (the screens): the approvals queue (Home › Approvals), the next number (New quote), the PDF before send.
   'GET /sales/quote-approvals': { audiences: ['office'], permission: 'quotes.view', scope: 'record' },

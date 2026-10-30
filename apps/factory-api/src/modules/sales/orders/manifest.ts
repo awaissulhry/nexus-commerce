@@ -15,4 +15,17 @@ export const manifest = defineManifest({
   'POST /sales/orders/:orderId/ready': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/orders/:orderId/cancel': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/orders/:orderId/close': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // B-W2a-30 (orders every day): manual entry, amendments, close and reopen lines, the cancel's impact check, the payment
+  // schedule, an order copied as a new quote (orders.view on it; quotes.manage for the customer it is for).
+  'GET /sales/order-numbers/next': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'POST /sales/orders/manual/preview': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'POST /sales/orders/manual': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'GET /sales/orders/:orderId/amendments': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  'POST /sales/orders/:orderId/amendments/preview': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'POST /sales/orders/:orderId/amendments': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'POST /sales/orders/:orderId/close-lines': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'POST /sales/orders/:orderId/reopen-lines': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'GET /sales/orders/:orderId/cancel-check': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  'GET /sales/orders/:orderId/schedule': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  'POST /sales/orders/:orderId/copy-as-quote': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },
 })

@@ -367,12 +367,16 @@ describe('dates (SAL-206): a new promise needs a reason; the first promise never
 describe('production and shipping move the order (SAL-204: the system is their one writer)', () => {
   const so2 = () => seeded.a.quality.production.salesOrderId
 
-  it('a released work order starts production, once; after the release the order is not cancelled', async () => {
+  it('a released work order starts production, once; the cancel check then names it as left behind (B-W2a-30)', async () => {
     // SEED-SO-0003 (the quality seed's): WO-0003 released, nothing shipped yet.
     const so3 = seeded.a.quality.serialSalesOrderId
     const before = await one('SELECT version FROM "SalesOrder" WHERE id = $1', [so3])
-    const cancel = await refused('a.sales', 'POST', `${orderUrl(so3)}/cancel`, { version: before.version, reason: 'The customer withdrew.' }, 409)
-    expect(cancel.message).toMatch(/missing: no released work order/)
+    // W2a (SAL-211): a released work order no longer stops a cancellation, the impact check names it; SH-0002, being
+    // packed for it, does (the warehouse cancels it first).
+    const check = await ok('a.sales', 'GET', `${orderUrl(so3)}/cancel-check`)
+    expect(check.impact.cancellable).toBe(false)
+    expect(check.impact.blocks.map((item: Json) => [item.code, item.refs.map((ref: Json) => ref.number)])).toEqual([['SHIPMENT_IN_PREPARATION', ['SEED-SH-0002']]])
+    expect(check.impact.leavesBehind.find((item: Json) => item.code === 'WORK_ORDERS_OPEN')?.refs.map((ref: Json) => ref.number)).toEqual(['SEED-WO-0003'])
     const event = { workOrderId: seeded.a.quality.serialWorkOrderId, number: 'SEED-WO-0003', salesOrderIds: [so3] }
     for (let attempt = 1; attempt <= 2; attempt++) {
       await handler('sales.ordersFollowWorkOrders').handle(envelope('a', 'workorder.released', event), { caller: systemCaller('a'), attempt }) // a repeat changes nothing
@@ -381,13 +385,16 @@ describe('production and shipping move the order (SAL-204: the system is their o
     const moves = (await auditsOf(so3)).filter((row) => row.action === 'orders.follow')
     expect(moves.map((row) => [row.before.status, row.after.status, row.reason, row.audience])).toEqual([['CONFIRMED', 'IN_PRODUCTION', 'Followed: work order SEED-WO-0003 released.', 'SYSTEM']])
     expect((await statusEvents(so3)).map((row) => row.payload)).toEqual([expect.objectContaining({ from: 'CONFIRMED', to: 'IN_PRODUCTION', by: 'system' })])
-    await refused('a.sales', 'POST', `${orderUrl(so3)}/cancel`, { version: before.version + 1, reason: 'The customer withdrew.' }, 409)
+    // A stale version is still a 409; the order stays IN_PRODUCTION for the tests that follow.
+    await refused('a.sales', 'POST', `${orderUrl(so3)}/cancel`, { version: before.version, reason: 'The customer withdrew.' }, 409)
   })
 
   it('ready by hand: IN_PRODUCTION → READY with a reason while quality release is not in use', async () => {
     const so3 = seeded.a.quality.serialSalesOrderId
     const { order: record } = await ok('a.sales', 'GET', orderUrl(so3))
-    expect(record.actions.map((action: Json) => action.action)).toEqual(['changePromise', 'markReady'])
+    // B-W2a-30: cancel is offered while IN_PRODUCTION too, held here by SH-0002 being packed for it.
+    expect(record.actions.map((action: Json) => action.action)).toEqual(['changePromise', 'markReady', 'cancel'])
+    expect(record.actions[2]).toMatchObject({ allowed: false, held: expect.stringMatching(/SEED-SH-0002/) })
     await refused('a.sales', 'POST', `${orderUrl(so3)}/ready`, { version: record.version, reason: '' }, 400)
     await refused('a.viewer', 'POST', `${orderUrl(so3)}/ready`, { version: record.version, reason: 'Quality signed the paper sheet.' }, 403)
     const ready = (await ok('a.sales', 'POST', `${orderUrl(so3)}/ready`, { version: record.version, reason: 'Quality signed the paper sheet for all four.' })).order
@@ -398,11 +405,12 @@ describe('production and shipping move the order (SAL-204: the system is their o
     await refused('a.sales', 'POST', `${orderUrl(so3)}/ready`, { version: ready.version, reason: 'Again.' }, 409)
   })
 
-  it('SEED-SO-0002: cancel names the released and the draft work order; the release handler follows every fact at once', async () => {
+  it('SEED-SO-0002: cancel names the draft work order and what cannot be undone; the release handler follows every fact at once', async () => {
     const before = await one('SELECT version FROM "SalesOrder" WHERE id = $1', [so2()])
     const cancel = await refused('a.sales', 'POST', `${orderUrl(so2())}/cancel`, { version: before.version, reason: 'The customer withdrew.' }, 409)
-    expect(cancel.message).toMatch(/no released work order/)
     expect(cancel.message).toMatch(/draft work orders cancelled first \(SEED-WO-0002\)/)
+    // B-W2a-30: SH-0001 already left with 2 jackets: a shipped order is not cancelled.
+    expect(cancel.message).toMatch(/Goods left with SEED-SH-0001/)
     // WO-0001 released, and SH-0001 already left with 2 of the 7 jackets: production started, then part shipped.
     await released('a')
     expect((await auditsOf(so2())).filter((row) => row.action === 'orders.follow').map((row) => [row.before.status, row.after.status])).toEqual([
@@ -427,7 +435,7 @@ describe('production and shipping move the order (SAL-204: the system is their o
       ['RED', '52', 1, 1, 1, 1, 0],
       ['RED', '54', 1, 1, 0, 0, 1],
     ])
-    expect(record.progress).toEqual({ ordered: 7, inWorkOrders: 8, made: null, released: 3, shipped: 2, invoiced: '0', toShip: 5 })
+    expect(record.progress).toEqual({ ordered: 7, inWorkOrders: 8, made: null, released: 3, shipped: 2, invoiced: '0', toShip: 5, closedShort: 0 })
     expect(record.chain.workOrders.map((row: Json) => [row.number, row.status])).toEqual([['SEED-WO-0001', 'IN_PROGRESS'], ['SEED-WO-0002', 'DRAFT']])
     expect(record.chain.shipments.map((row: Json) => [row.number, row.status])).toEqual([['SEED-SH-0001', 'SHIPPED']])
     // Shipped in part: no ready by hand, no close, lines' promises are fixed; the order's own promise still moves.

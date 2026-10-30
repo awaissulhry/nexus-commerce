@@ -13,6 +13,7 @@ import { useScopedT, useT } from '../../../lib/i18n/provider'
 import { companyPrefix } from '../../../lib/session/session'
 import { useTheme } from '../../../lib/theme/use-theme'
 import { officeCrumbs, palettePages, translateNav } from '../../nav/office-nav'
+import type { PaletteRecords } from '../../palette/palette-model'
 import { CommandPaletteView } from '../../palette/view/CommandPaletteView'
 import { CompanySwitcherView, type CompanySwitcherViewModel } from '../../switcher/view/CompanySwitcherView'
 import '../office-shell.css'
@@ -56,6 +57,8 @@ export interface OfficeShellViewModel {
   /** Open the area's navigation at once (design fixtures). */
   areaNavOpen?: boolean
   paletteQuery?: string
+  /** B-W2a-32: what the record search answered for the palette (absent: no record search, as in the shell's cases). */
+  paletteRecords?: PaletteRecords | null
 }
 
 export interface OfficeShellViewProps {
@@ -68,6 +71,8 @@ export interface OfficeShellViewProps {
   onNavigate?: (href: string) => void
   onSiteChange?: (site: string | null) => void
   onSignOut?: () => void
+  /** B-W2a-32: the palette's field changed (the container searches the records). */
+  onPaletteQuery?: (query: string) => void
 }
 
 /** Next's Link for the DS rail and bottom bar (they take the app's link). */
@@ -81,7 +86,7 @@ const ShellLink = forwardRef<HTMLAnchorElement, RailLinkProps & { onClick?: () =
 
 const isPlainClick = (event: MouseEvent<HTMLAnchorElement>) => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
 
-export function OfficeShellView({ model, children, onNavigate, onSiteChange, onSignOut }: OfficeShellViewProps) {
+export function OfficeShellView({ model, children, onNavigate, onSiteChange, onSignOut, onPaletteQuery }: OfficeShellViewProps) {
   const t = useT('shell')
   const named = useScopedT('shell')
   const { mode, cycleTheme } = useTheme()
@@ -226,9 +231,10 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
       />
 
       <CommandPaletteView
-        model={{ open: paletteOpen, query: model.paletteQuery ?? '', pages, tenantTag: model.tenantTag }}
+        model={{ open: paletteOpen, query: model.paletteQuery ?? '', pages, tenantTag: model.tenantTag, records: model.paletteRecords ?? null }}
         onClose={() => setPaletteOpen(false)}
-        onOpenHref={(href) => onNavigate?.(href)}
+        onOpenHref={(href, options) => (options?.newTab ? window.open(href, '_blank', 'noopener') : onNavigate?.(href))}
+        onQuery={onPaletteQuery}
       />
     </div>
   )

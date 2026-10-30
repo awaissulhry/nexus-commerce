@@ -58,18 +58,19 @@ describe('the machine: one action per move, each with its guard (SAL-204)', () =
     expect(salesOrderMachine.finals).toEqual(['CLOSED', 'CANCELLED'])
   })
 
-  it('CANCELLED only while CONFIRMED, with a reason, before any work order is released and with no draft left', () => {
+  it('CANCELLED before anything shipped, with a reason and no draft left; released work orders are left behind (B-W2a-30)', () => {
     expect(canTransition(salesOrderMachine, 'CONFIRMED', 'CANCELLED', { reason: 'The customer withdrew.', releasedWorkOrders: 0, draftWorkOrders: [] }).ok).toBe(true)
     expect(canTransition(salesOrderMachine, 'CONFIRMED', 'CANCELLED', { reason: '', releasedWorkOrders: 0 })).toMatchObject({ ok: false, missing: ['a reason for the cancellation'] })
-    expect(canTransition(salesOrderMachine, 'CONFIRMED', 'CANCELLED', { reason: 'Too late.', releasedWorkOrders: 1 })).toMatchObject({
-      ok: false,
-      missing: ['no released work order (production has started: a cancellation would leave its work behind)'],
-    })
+    // SAL-211: production started — the cancel names what it leaves behind instead of refusing.
+    expect(canTransition(salesOrderMachine, 'CONFIRMED', 'CANCELLED', { reason: 'Too late.', releasedWorkOrders: 1 }).ok).toBe(true)
+    expect(canTransition(salesOrderMachine, 'IN_PRODUCTION', 'CANCELLED', { reason: 'Too late.', releasedWorkOrders: 1 }).ok).toBe(true)
+    expect(canTransition(salesOrderMachine, 'READY', 'CANCELLED', { reason: 'Too late.' }).ok).toBe(true)
     expect(canTransition(salesOrderMachine, 'CONFIRMED', 'CANCELLED', { reason: 'Too late.', releasedWorkOrders: 0, draftWorkOrders: ['WO-00007'] })).toMatchObject({
       ok: false,
       missing: ['its draft work orders cancelled first (WO-00007)'],
     })
-    expect(canTransition(salesOrderMachine, 'IN_PRODUCTION', 'CANCELLED', { reason: 'Too late.' })).toMatchObject({ ok: false, reason: 'not_allowed' })
+    expect(canTransition(salesOrderMachine, 'READY', 'CANCELLED', { reason: 'Too late.', cancelBlocks: ['a shipment cancelled first'] })).toMatchObject({ ok: false, missing: ['a shipment cancelled first'] })
+    expect(canTransition(salesOrderMachine, 'PARTLY_SHIPPED', 'CANCELLED', { reason: 'Too late.' })).toMatchObject({ ok: false, reason: 'not_allowed' })
   })
 })
 
@@ -110,13 +111,13 @@ describe('per line × size progress (the design: Ordered · Made · Shipped · L
       invoiced: [{ lineId: 'L1', size: '50', quantity: '2.0000' }, { lineId: 'L1', size: '50', quantity: '-1.0000' }],
     })
     expect(progress.rows).toEqual([
-      { lineId: 'L1', seq: 10, size: '50', ordered: 2, inWorkOrders: 2, made: null, released: 2, shipped: 2, invoiced: '1', toShip: 0 },
-      { lineId: 'L1', seq: 10, size: '52', ordered: 3, inWorkOrders: 3, made: null, released: 1, shipped: 0, invoiced: '0', toShip: 3 },
+      { lineId: 'L1', seq: 10, size: '50', ordered: 2, inWorkOrders: 2, made: null, released: 2, shipped: 2, invoiced: '1', toShip: 0, closedShort: 0 },
+      { lineId: 'L1', seq: 10, size: '52', ordered: 3, inWorkOrders: 3, made: null, released: 1, shipped: 0, invoiced: '0', toShip: 3, closedShort: 0 },
       // A made-to-measure unit has no size rows: everything of its line counts, whatever the size.
-      { lineId: 'L2', seq: 20, size: null, ordered: 1, inWorkOrders: 1, made: null, released: 0, shipped: 0, invoiced: '0', toShip: 1 },
+      { lineId: 'L2', seq: 20, size: null, ordered: 1, inWorkOrders: 1, made: null, released: 0, shipped: 0, invoiced: '0', toShip: 1, closedShort: 0 },
     ])
     expect(progress.lines.map((line) => [line.lineId, line.ordered, line.shipped, line.toShip])).toEqual([['L1', 5, 2, 3], ['L2', 1, 0, 1]])
-    expect(progress.totals).toEqual({ ordered: 6, inWorkOrders: 6, made: null, released: 3, shipped: 2, invoiced: '1', toShip: 4 })
+    expect(progress.totals).toEqual({ ordered: 6, inWorkOrders: 6, made: null, released: 3, shipped: 2, invoiced: '1', toShip: 4, closedShort: 0 })
     expect(progress.shipped).toBe('PARTLY')
     expect(progress.released).toBe(false)
   })
@@ -132,6 +133,23 @@ describe('per line × size progress (the design: Ordered · Made · Shipped · L
     expect([all.shipped, all.released]).toEqual(['ALL', true])
     const none = orderProgress({ lines: [lines[1]!], inWorkOrders: [], released: [], shipped: [], invoiced: [] })
     expect([none.shipped, none.released]).toEqual(['NONE', false])
+  })
+
+  it('a line closed short is done: its left pieces are closed short, nothing to ship (B-W2a-30, SAL-210)', () => {
+    const facts = {
+      lines,
+      inWorkOrders: [],
+      released: [{ lineId: 'L1', size: '50', quantity: 2 }, { lineId: 'L2', size: null, quantity: 1 }],
+      shipped: [{ lineId: 'L1', size: '50', quantity: 2 }, { lineId: 'L2', size: null, quantity: 1 }],
+      invoiced: [],
+    }
+    const open = orderProgress(facts)
+    expect([open.shipped, open.totals.toShip, open.totals.closedShort]).toEqual(['PARTLY', 3, 0])
+    const closed = orderProgress({ ...facts, closedShort: new Set(['L1']) })
+    expect(closed.rows.find((row) => row.size === '52')).toMatchObject({ ordered: 3, shipped: 0, toShip: 0, closedShort: 3 })
+    expect([closed.shipped, closed.released, closed.totals.toShip, closed.totals.closedShort]).toEqual(['ALL', true, 0, 3])
+    // Every line closed and nothing shipped is not "shipped".
+    expect(orderProgress({ lines: [lines[1]!], inWorkOrders: [], released: [], shipped: [], invoiced: [], closedShort: new Set(['L1']) }).shipped).toBe('NONE')
   })
 })
 
@@ -243,12 +261,14 @@ describe('the order of an accepted version (SAL-200, SAL-203)', () => {
 })
 
 describe('what a person may do next', () => {
-  it('cancel is held once production started; close waits for the settlement or a reason', () => {
+  it('cancel is held by a draft or a block of the impact check; close waits for the settlement or a reason', () => {
     expect(orderActions('CONFIRMED', { releasedWorkOrders: 0, draftWorkOrders: [] })).toEqual([
       { action: 'changePromise', allowed: true, needsReason: true, held: null },
       { action: 'cancel', allowed: true, needsReason: true, held: null },
     ])
-    expect(orderActions('CONFIRMED', { releasedWorkOrders: 1 }).find((action) => action.action === 'cancel')).toMatchObject({ allowed: false, held: expect.stringMatching(/no released work order/) })
+    expect(orderActions('IN_PRODUCTION', { releasedWorkOrders: 1 }).find((action) => action.action === 'cancel')).toMatchObject({ allowed: true })
+    expect(orderActions('READY', { draftWorkOrders: ['WO-9'] }).find((action) => action.action === 'cancel')).toMatchObject({ allowed: false, held: expect.stringMatching(/draft work orders cancelled first/) })
+    expect(orderActions('PARTLY_SHIPPED', {}).find((action) => action.action === 'cancel')).toBeUndefined()
     expect(orderActions('SHIPPED', { settlement: settled })).toEqual([
       { action: 'changePromise', allowed: true, needsReason: true, held: null },
       { action: 'close', allowed: true, needsReason: false, held: null },

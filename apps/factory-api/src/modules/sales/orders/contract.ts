@@ -3,6 +3,7 @@ import { businessDate, defineContract, id, input, instant, output } from '@nexus
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { LINK_STATES } from '@nexus/factory-domain/links/purposes'
 import { PARTY_TAX_MODES } from '@nexus/factory-domain/parties/tax'
+import { DAILY_ORDER_ACTIONS } from '@nexus/factory-domain/sales/orders/daily'
 import { MAX_REASON, ORDER_ACTIONS, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { DEPOSIT_KINDS, SALES_LINE_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
 
@@ -29,6 +30,8 @@ const progressView = output({
   /** A decimal string: issued invoices less issued credit notes. */
   invoiced: z.string(),
   toShip: z.number().int(),
+  /** B-W2a-30: pieces closed short (will not be made or shipped). */
+  closedShort: z.number().int(),
 })
 
 const lineView = output({
@@ -61,6 +64,8 @@ const lineView = output({
   promiseDate: z.string().nullable(),
   priority: z.number().int().nullable(),
   siteId: id().nullable(),
+  /** B-W2a-30 (SAL-210): closed short — the pieces that will not be made or shipped, when, by whom, why; null: open. */
+  closedShort: output({ quantity: z.number().int(), at: instant().nullable(), byId: id().nullable(), reason: z.string().nullable() }).nullable(),
   version: z.number().int(),
   /** Its size grid in the style's range order (a made-to-measure unit: one entry, size null), with the progress of each. */
   sizes: z.array(output({ size: z.string().nullable(), quantity: z.number().int(), unitPrice: money.price(z.string().nullable()), progress: progressView })),
@@ -112,6 +117,8 @@ export const orderView = output({
   billTo: json,
   shipTo: json,
   paymentTerms: z.string().nullable(),
+  /** B-W2a-30: the library terms its payment schedule comes from. */
+  paymentTermsId: id().nullable(),
   requestedDate: z.string().nullable(),
   promiseDate: z.string().nullable(),
   /** The first promise: never changes. */
@@ -153,6 +160,12 @@ export const orderView = output({
   settlement: settlementView,
   /** What may be done next, held with the first reason in words. */
   actions: z.array(output({ action: z.enum(ORDER_ACTIONS), allowed: z.boolean(), needsReason: z.boolean(), held: z.string().nullable() })),
+  /** B-W2a-30: amend, close and reopen lines, copy as a new quote — each held with its reason in words. */
+  dailyActions: z.array(output({ action: z.enum(DAILY_ORDER_ACTIONS), allowed: z.boolean(), held: z.string().nullable() })),
+  /** B-W2a-30 (SAL-217): its amendments so far (GET …/amendments has them whole). */
+  amendments: output({ count: z.number().int(), latestRevision: z.number().int().nullable(), latestAt: instant().nullable() }),
+  /** SAL-209: a confirmed order's lines change only through an amendment. */
+  locked: z.boolean(),
 })
 
 const one = output({ order: orderView })
@@ -247,11 +260,6 @@ export const promiseContract = defineContract({
 
 export const readyContract = defineContract({ params: orderParams, body: input({ version, reason }), response: { 200: one } })
 
-export const cancelContract = defineContract({
-  params: orderParams,
-  body: input({ version, reason }),
-  response: { 200: output({ order: orderView, /** PAID deposit requests the cancellation leaves behind (a refund is the money module's). */ paidDepositRequestIds: z.array(id()) }) },
-})
 
 export const closeContract = defineContract({
   params: orderParams,

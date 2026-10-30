@@ -8,7 +8,7 @@ import type { CommandCaller, CommandTools, CommandTx } from '../../../core/comma
 import { chainForQuote, keepListVersion, listPriceOf } from './list-price'
 import { refreshVersion } from './pricing'
 import { assertDraft, assertQuotable, detailInCommand, onQuote } from './quotes'
-import { decimal, officeQuote, quotePartyOf, readLineRecords, type LineRecord } from './store'
+import { decimal, officeQuote, quotePartyOf, readLineRecords, type LineRecord, type Reader } from './store'
 import type { QuoteDetail } from './views'
 
 /**
@@ -35,8 +35,11 @@ export const madeToMeasureLater = (): DomainError =>
 
 const invalid = (issues: Issue[]): ValidationError => new ValidationError(issues.length === 1 ? issues[0]!.message : 'The line cannot be saved.', issues)
 
-/** The style, colourway and revision a line names, checked against the quote's company, and the sizes offered. */
-async function lineTarget(tx: CommandTx, companyId: string, wanted: { styleId: string; colourwayId: string; styleRevisionId: string | null | undefined }, currentRevisionId: string | null, at: string) {
+/**
+ * The style, colourway and revision a line names, checked against the quote's company, and the sizes offered. B-W2a-30:
+ * also an order's new line (orders/pricing.ts: manual orders and amendments), read in a command or a preview.
+ */
+export async function lineTarget(tx: Reader, companyId: string, wanted: { styleId: string; colourwayId: string; styleRevisionId: string | null | undefined }, currentRevisionId: string | null, at: string) {
   const style = isUuid(wanted.styleId) ? await tx.style.findUnique({ where: { id: wanted.styleId }, select: { id: true, code: true, name: true, companyId: true, status: true, sizes: true } }) : null
   if (!style || (style.companyId !== null && style.companyId !== companyId)) throw invalid([{ path: `${at}/styleId`, message: 'Not a style this company sells.' }])
   if (style.status === 'ARCHIVED') throw invalid([{ path: `${at}/styleId`, message: `${style.code} is archived: it is not quoted.` }])
