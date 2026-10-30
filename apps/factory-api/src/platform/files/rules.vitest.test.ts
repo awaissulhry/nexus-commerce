@@ -189,6 +189,8 @@ describe('the permissions (registry and role templates)', () => {
       production_manager: ['files.read', 'files.upload'],
       quality_inspector: ['files.read', 'files.upload'],
       floor_supervisor: ['files.read'],
+      // B-W2a-35: the plant's technicians (photos and documents of machines, requests and jobs).
+      maintenance: ['files.read', 'files.upload'],
       read_only: ['files.read'],
     })
   })

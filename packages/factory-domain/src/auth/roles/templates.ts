@@ -50,10 +50,41 @@ const every = (filter: (risk: string) => boolean = () => true): Permission[] =>
  * keeps tasks too. Listed here, one line per template, so the long permission lists below stay as their steps wrote them.
  */
 const TASKS_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor'])
-const addedFor = (key: string, audience: RoleAudience): Permission[] => (audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage'] : [])
+/**
+ * B-W2a-35 (the plant; QHS-162, QHS-178, QHS-184; Owner answer H1): who sees and works the machines, requests and jobs,
+ * one line per template. Every floor role reports a machine problem (H1: anyone at the station marks a machine unsafe at
+ * once); only the technicians' templates (`maintenance`, `technician`, below) sign a machine safe again.
+ */
+const PLANT_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  planner: ['plant.view'],
+  production_manager: ['plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage'],
+  floor_supervisor: ['plant.view', 'plant.report', 'plant.requests.triage'],
+  operator: ['plant.report'],
+  cutting_operator: ['plant.report'],
+  floor_inspector: ['plant.report'],
+  team_leader: ['plant.report'],
+})
+const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? [])]
+/**
+ * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
+ * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
+ * administrator and the production manager keep the rules. Listed here, one line per template, as tasks are.
+ */
+const ALERTS_TEMPLATES: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['alerts.view', 'alerts.handle', 'alerts.rules.manage'],
+  finance: ['alerts.view', 'alerts.handle'],
+  sales: ['alerts.view', 'alerts.handle'],
+  planner: ['alerts.view', 'alerts.handle'],
+  buyer: ['alerts.view', 'alerts.handle'],
+  warehouse: ['alerts.view', 'alerts.handle'],
+  production_manager: ['alerts.view', 'alerts.handle', 'alerts.rules.manage'],
+  quality_inspector: ['alerts.view', 'alerts.handle'],
+  floor_supervisor: ['alerts.view', 'alerts.handle'],
+})
+const alertsAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' ? (ALERTS_TEMPLATES[key] ?? []) : [])
 
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 
@@ -404,6 +435,14 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'views.save', 'views.export'],
     grains: [],
   }),
+  // B-W2a-35 (the plant; Owner answer H1): the office's maintenance lead and technicians.
+  template('maintenance', {
+    name: 'Maintenance',
+    description: 'Keeps the machines running: the machine register and its classes and symptoms, the requests from the stations and the maintenance jobs; signs a machine marked unsafe safe again; sees no money.',
+    requireMfa: false,
+    permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'sites.view', 'workers.view', 'parties.view', 'home.view', 'calendars.view', 'tasks.manage', 'views.save', 'views.export', 'plant.view', 'plant.machines.manage', 'plant.report', 'plant.requests.triage', 'plant.jobs.manage', 'plant.jobs.work', 'plant.signSafe'],
+    grains: [],
+  }),
   template('read_only', {
     name: 'Read-only',
     description: 'Sees every screen its scope reaches and changes nothing; sees no money.',
@@ -433,6 +472,13 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     name: 'Team leader',
     description: "Leads a crew on the floor: works and sees the team leader's screens of the device's site; sees no money.",
     permissions: ['floor.work', 'floor.lead', 'print.view', 'print.labels', 'inventory.locations.view', 'inventory.transfer', 'inventory.issue', 'inventory.receive', 'production.cut', 'production.bundles', 'production.scan', 'production.serials', 'quality.inspections.view', 'shipping.pack', 'production.rework'],
+    grains: [],
+  }),
+  // B-W2a-35 (the plant; Owner answer H1): the technician on the floor (maintenance mode).
+  floorTemplate('technician', {
+    name: 'Maintenance technician',
+    description: 'Works maintenance jobs on an enrolled floor device: starts them, waits for parts, hands the machine back, and signs a machine marked unsafe safe again with the PIN; sees no money.',
+    permissions: ['floor.work', 'print.view', 'print.labels', 'plant.report', 'plant.jobs.work', 'plant.signSafe'],
     grains: [],
   }),
 ])

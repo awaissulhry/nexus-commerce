@@ -41,7 +41,7 @@ describe('the permission registry', () => {
     expect(FACTORY_PERMISSIONS.get('roles.assign')?.risk).toBe('stepUp')
     expect(FACTORY_PERMISSIONS.assignable.some((definition) => definition.area === 'money')).toBe(false)
     expect(FACTORY_PERMISSIONS.undeclared(['users.view', 'quotes.export', 'quotes.export'])).toEqual(['quotes.export'])
-    expect([...FACTORY_PERMISSIONS.byArea().keys()]).toEqual(['users', 'roles', 'audit', 'numbering', 'files', 'links', 'devices', 'workers', 'floor', 'threads', 'imports', 'documents', 'print', 'email', 'integrations', 'compliance', 'product', 'inventory', 'shipping', 'parties', 'planning', 'purchasing', 'invoices', 'payments', 'costing', 'production', 'workorders', 'quotes', 'sales', 'companies', 'sites', 'orders', 'privacy', 'quality', 'home', 'floorsync', 'calendars', 'reasons', 'paymentterms', 'pricelists', 'tasks', 'views', 'search', 'accounting', 'money'])
+    expect([...FACTORY_PERMISSIONS.byArea().keys()]).toEqual(['users', 'roles', 'audit', 'numbering', 'files', 'links', 'devices', 'workers', 'floor', 'threads', 'imports', 'documents', 'print', 'email', 'integrations', 'compliance', 'product', 'inventory', 'shipping', 'parties', 'planning', 'purchasing', 'invoices', 'payments', 'costing', 'production', 'workorders', 'quotes', 'sales', 'companies', 'sites', 'orders', 'privacy', 'quality', 'home', 'floorsync', 'calendars', 'reasons', 'paymentterms', 'pricelists', 'tasks', 'views', 'search', 'plant', 'alerts', 'accounting', 'money'])
   })
 
   it('refuses a name declared twice, a bad area, a bad risk, an empty description', () => {
@@ -57,8 +57,12 @@ describe('role templates', () => {
   it('are valid: declared permissions, grains apart, two-factor for cost and margin, an owner', () => {
     expect(templateProblems(ROLE_TEMPLATES)).toEqual([])
     expect(ROLE_TEMPLATES.map((entry) => entry.key)).toEqual([
-      'owner', 'admin', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor', 'read_only',
+      'owner', 'admin', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor',
+      // B-W2a-35: the plant's technicians (office and floor).
+      'maintenance',
+      'read_only',
       'operator', 'cutting_operator', 'floor_inspector', 'team_leader',
+      'technician',
     ])
     // The owner holds every office permission; the floor's are held only by floor roles.
     expect(templateOf('owner')?.permissions).toEqual(
