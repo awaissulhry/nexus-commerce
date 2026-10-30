@@ -1,3 +1,4 @@
+import type { SdiReceivedFile, SdiReceivedList, SdiReceivedListRequest } from '@nexus/factory-domain/payables/sdi-port'
 import type { SdiArchiveReceipt, SdiArchiveRequest, SdiMessage, SdiSendReceipt, SdiSendRequest, SdiStatusAnswer, SdiStatusRequest } from '@nexus/factory-domain/ports/sdi'
 import type { SignatureVerifier } from '@nexus/factory-domain/ports/signature'
 import { ProviderError, type GatewayCall } from '../../platform/gateway/gateway'
@@ -24,6 +25,13 @@ export interface SdiAdapter {
   archive(call: GatewayCall, request: SdiArchiveRequest): Promise<SdiArchiveReceipt>
   /** The notifications a verified webhook body holds, in the port's shape (the provider's format is the adapter's). */
   webhookMessages(body: string): SdiMessage[]
+  /**
+   * B-W2a-62, the passive side (factory-domain payables/sdi-port): the supplier invoices SDI delivered to the account's
+   * company that the provider holds, delivered at or after `since` (a page of them). Read only.
+   */
+  listReceived(call: GatewayCall, request: SdiReceivedListRequest): Promise<SdiReceivedList>
+  /** One delivered supplier invoice: its FatturaPA XML (out of its signed envelope), by the provider's id. Read only. */
+  getReceived(call: GatewayCall, providerRef: string): Promise<SdiReceivedFile>
 }
 
 const UNCHOSEN = 'No SDI intermediary is chosen yet (Owner question Q21): a LIVE or SANDBOX SDI account cannot be called until its adapter exists.'
@@ -41,6 +49,12 @@ export const UNCHOSEN_SDI_PROVIDER: SdiAdapter = Object.freeze({
   },
   webhookMessages: () => {
     throw new Error(UNCHOSEN)
+  },
+  listReceived: async () => {
+    throw new ProviderError(UNCHOSEN, { retryable: false })
+  },
+  getReceived: async () => {
+    throw new ProviderError(UNCHOSEN, { retryable: false })
   },
 })
 

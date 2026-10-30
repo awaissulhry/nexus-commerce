@@ -1525,7 +1525,8 @@
     "alerts": "Avvisi e regole di eccezione",
     "accounting": "Contabilità",
     "security": "Sicurezza e stato del sistema",
-    "receivables": "Crediti e solleciti"
+    "receivables": "Crediti e solleciti",
+    "payables": "Fatture fornitori"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1748,6 +1749,11 @@
     "receivables_reminders_approve": "Approvare e inviare i solleciti di pagamento",
     "receivables_statements_send": "Inviare al cliente l'estratto conto per e-mail",
     "receivables_settings_manage": "Modificare la scala dei solleciti e la regola degli interessi di mora",
-    "receivables_reminders_switch": "Attivare o disattivare i solleciti di un'azienda"
+    "receivables_reminders_switch": "Attivare o disattivare i solleciti di un'azienda",
+    "payables_view": "Vedere le fatture fornitori, il riscontro e l'approvazione",
+    "payables_manage": "Registrare, abbinare e contestare le fatture fornitori",
+    "payables_differences_accept": "Accettare a parole una differenza di una fattura fornitore",
+    "payables_approve": "Approvare le fatture fornitori per il pagamento",
+    "payables_pay": "Registrare il pagamento di una fattura fornitore"
   }
 }
