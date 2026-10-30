@@ -1,0 +1,387 @@
+{
+  "title": "Ricevi merce",
+  "offline": {
+    "short": "Serve la rete",
+    "held": "Niente rete: il ricevimento aspetta la rete. Il ricevimento, i suoi lotti e i cartellini delle pelli prendono il numero dall'ufficio. Quello che hai inserito resta su questa schermata.",
+    "post": "Niente rete: un ricevimento si registra solo con la rete (lo numera l'ufficio). Tieni aperta questa schermata e registralo quando torna la rete."
+  },
+  "noPermission": {
+    "title": "Qui non puoi ricevere merce",
+    "body": "Il tuo ruolo in questa postazione non riceve merce. Chiedi al tuo capo squadra."
+  },
+  "action": {
+    "toLines": "Righe",
+    "leave": "Indietro",
+    "finish": "Chiudi la consegna",
+    "lineDone": "Riga fatta",
+    "saveHide": "Salva pelle",
+    "receiveLot": "Ricevi lotto · {quantity}",
+    "receive": "Ricevi {quantity}",
+    "receiveNothing": "Ricevi",
+    "post": "Registra la consegna",
+    "reprint": "Ristampa",
+    "next": "Prossima consegna"
+  },
+  "scan": {
+    "label": "Scansiona l'ordine o il DDT",
+    "hint": "Scansiona il nostro numero d'ordine, sull'ordine o sul DDT del fornitore, oppure tocca un ordine qui sotto.",
+    "ddtKept": "DDT {code}: non è un nostro numero d'ordine. Tocca l'ordine che porta.",
+    "ddtClear": "Togli",
+    "loading": "Leggo cosa è atteso…",
+    "empty": {
+      "title": "Niente in arrivo",
+      "body": "Scansiona il numero d'ordine sul DDT."
+    },
+    "pick": "Quale ordine porta questa consegna?",
+    "expected": "Atteso in questo stabilimento",
+    "due": "serve entro il {date}",
+    "partly": "ricevuto in parte",
+    "openLines_one": "riga in arrivo",
+    "openLines_other": "righe in arrivo",
+    "count_one": "{count} ordine atteso",
+    "count_other": "{count} ordini attesi"
+  },
+  "status": {
+    "DRAFT": "Bozza",
+    "SENT": "Inviato",
+    "CONFIRMED": "Confermato",
+    "CHANGES_PROPOSED": "Modifiche proposte",
+    "PARTLY_RECEIVED": "Ricevuto in parte",
+    "RECEIVED": "Ricevuto",
+    "CLOSED": "Chiuso",
+    "CANCELLED": "Annullato",
+    "DECLINED": "Rifiutato"
+  },
+  "lines": {
+    "loading": "Leggo l'ordine…",
+    "refusedShort": "Questo ordine ora non riceve merce",
+    "nothingYet": "Prima ricevi una riga",
+    "refused": "Questo ordine è {status}: ora non riceve merce. Chiedi al buyer.",
+    "ddt": {
+      "label": "Numero del DDT",
+      "hint": "Scansiona o digita il numero del DDT del fornitore.",
+      "again": "DDT {code}. Scansiona di nuovo per cambiarlo."
+    },
+    "title": "Cosa aspettiamo",
+    "count_one": "{count} riga",
+    "count_other": "{count} righe"
+  },
+  "card": {
+    "order": "Ordine d'acquisto",
+    "openLines_one": "riga in arrivo",
+    "openLines_other": "righe in arrivo",
+    "supplier": "Fornitore",
+    "ddt": "DDT",
+    "ddtNone": "Non scansionato",
+    "dock": "Ricevimento",
+    "noDock": "Nessuna baia di ricevimento: chiedi all'ufficio",
+    "requested": "Chiesto per",
+    "line": "Riga {seq}",
+    "oneDyeBatch": "un solo bagno",
+    "gradeAsked": "scelta {grade} chiesta",
+    "thicknessRange": "{min}–{max} mm"
+  },
+  "line": {
+    "ordered": "ordinato {quantity}",
+    "receivedBefore": "ricevuto {quantity}",
+    "goesToHold": "va in blocco qualità",
+    "receivedInFull": "Ricevuto",
+    "toCome": "In arrivo",
+    "remaining": "{unit} in arrivo",
+    "hereHides_one": "{count} pelle · {area}",
+    "hereHides_other": "{count} pelli · {area}",
+    "hereLots_one": "{count} lotto · {quantity}",
+    "hereLots_other": "{count} lotti · {quantity}",
+    "here": "{quantity} in questa consegna"
+  },
+  "tracking": {
+    "NONE": "a quantità",
+    "LOT": "a lotto",
+    "HIDE": "pelle per pelle",
+    "SERIAL": "a quantità"
+  },
+  "keys": {
+    "leave": "Torna alla scansione",
+    "next": "Prossima consegna",
+    "tab": "Passa da un cartellino all'altro"
+  },
+  "hold": {
+    "CR_VI_TEST": "aspetta l'esito del cromo VI",
+    "PPE_CERTIFICATE": "parte DPI: si controlla il certificato",
+    "QUALITY_HOLD": "bloccato per un controllo qualità",
+    "ask": "Blocca per un controllo qualità",
+    "chosen": "Bloccato: {reason}",
+    "title": "Perché lo blocchi?",
+    "none": "Non bloccare",
+    "reason": {
+      "damaged": "Danneggiato all'arrivo",
+      "looksWrong": "Non come ordinato",
+      "packaging": "Imballo aperto o bagnato",
+      "other": "Altro controllo"
+    }
+  },
+  "holdBanner": {
+    "to": "Va in blocco qualità: mettilo su {place}. Perché: {why}. Lo sblocca solo la qualità.",
+    "apart": "Va in blocco qualità: tienilo separato dalla scorta. Perché: {why}. Lo sblocca solo la qualità."
+  },
+  "over": {
+    "now": "In più di {quantity}: dai il motivo quando chiudi la consegna.",
+    "ask": "In più di {quantity} (al massimo {upTo} senza motivo). Perché si prende?",
+    "title": "Perché si prende di più?",
+    "reason": {
+      "supplierSent": "Il fornitore ha mandato di più",
+      "keepForNext": "Tenuto per il prossimo ordine",
+      "buyerAgreed": "D'accordo con il buyer"
+    }
+  },
+  "pad": {
+    "separator": "Virgola",
+    "minus": "Meno",
+    "plus": "Più",
+    "clear": "Cancella",
+    "back": "Elimina",
+    "empty": "Scrivi una quantità",
+    "range": "Da {min} a {max}",
+    "expected": "In arrivo {quantity}",
+    "all": "Tutto in arrivo"
+  },
+  "hide": {
+    "needArea": "Scrivi la superficie della pelle",
+    "scan": {
+      "supplierCode": "Numero della conceria",
+      "dyeBatch": "Bagno di tintura",
+      "shade": "Tono",
+      "supplierRead": "Numero della conceria {code}. Scansiona di nuovo per cambiarlo.",
+      "supplierHint": "Scansiona il cartellino della conceria sulla pelle, o digita il suo numero.",
+      "otherHint": "Scansionalo o digitalo: resta per le pelli successive."
+    },
+    "countLabel": "pelli",
+    "total": {
+      "area": "in questa consegna",
+      "open": "ancora in arrivo",
+      "upTo": "massimo preso"
+    },
+    "last": "Pelle {n} aggiunta: {area} · scelta {grade} · conceria {code}",
+    "undo": "Annulla l'ultima pelle",
+    "same": "Resta dall'ultima pelle",
+    "chip": {
+      "supplierCode": "Conceria {code}",
+      "dyeBatch": "Bagno {code}",
+      "shade": "Tono {code}"
+    },
+    "grade": "Scelta",
+    "defects": "Difetti",
+    "tagsLater": "I cartellini si stampano quando chiudi la consegna: li numera l'ufficio.",
+    "thickness": "Spessore",
+    "area": "Pelle {n}: superficie",
+    "areaLabel": "Superficie",
+    "toArea": "Torna alla superficie",
+    "thicknessIs": "Spessore {value} mm",
+    "toThickness": "Spessore",
+    "sum": "{hides} finora · {area} · {open} in arrivo"
+  },
+  "defect": {
+    "hole": "Buco",
+    "scar": "Cicatrice",
+    "brand": "Marchio a fuoco",
+    "wrinkle": "Grinza"
+  },
+  "lot": {
+    "last_one": "{count} lotto aggiunto, l'ultimo {quantity} · lotto fornitore {ref}",
+    "last_other": "{count} lotti aggiunti, l'ultimo {quantity} · lotto fornitore {ref}",
+    "undo": "Annulla l'ultimo lotto",
+    "scan": {
+      "label": "Lotto del fornitore",
+      "hint": "Scansiona il codice a barre del lotto del fornitore, o digitalo.",
+      "read": "Lotto del fornitore {code}. Scansiona di nuovo per cambiarlo."
+    },
+    "title": "Lotto {n}: quanto è arrivato"
+  },
+  "quantity": {
+    "here": "{quantity} in questa consegna. Ricevi di nuovo per cambiarla.",
+    "expected": "Ancora in arrivo {open}; al massimo {upTo} senza motivo.",
+    "title": "Quanto è arrivato",
+    "label": "Quantità"
+  },
+  "finish": {
+    "needReason": "Di' perché si prende di più",
+    "busy": "Registro…",
+    "title": "Chiudi la consegna",
+    "linesLabel_one": "riga ricevuta",
+    "linesLabel_other": "righe ricevute",
+    "lots": "Lotti",
+    "hides": "Pelli",
+    "held": "In blocco qualità",
+    "short": "In meno",
+    "over": "In più",
+    "heldTo_one": "{count} lotto va in blocco qualità: mettilo su {place}.",
+    "heldTo_other": "{count} lotti vanno in blocco qualità: mettili su {place}.",
+    "heldApart_one": "{count} lotto va in blocco qualità: tienilo separato.",
+    "heldApart_other": "{count} lotti vanno in blocco qualità: tienili separati.",
+    "noDdt": "Nessun numero di DDT: lo aggiunge l'ufficio. Scansionalo sulle righe per aggiungerlo ora.",
+    "lineNow": "{quantity} ora",
+    "lineHides_one": "{count} pelle",
+    "lineHides_other": "{count} pelli",
+    "lineLots_one": "{count} lotto",
+    "lineLots_other": "{count} lotti",
+    "lineHeld_one": "{count} bloccato",
+    "lineHeld_other": "{count} bloccati",
+    "stillOpen": "{quantity} resta atteso",
+    "lineRefused": "L'ufficio non ha accettato questa riga così com'era. Controllala nel suo passo.",
+    "printsOn": "I cartellini delle pelli si stampano su {printer}.",
+    "noPrinter": "Nessuna stampante di etichette in questa postazione: qui i cartellini non si stampano. Chiedi all'ufficio."
+  },
+  "difference": {
+    "EXACT": "Come atteso",
+    "WITHIN_TOLERANCE": "Nella tolleranza",
+    "SHORT": "In meno",
+    "OVER": "In più"
+  },
+  "label": {
+    "colour": "Colore",
+    "grade": "Scelta",
+    "area": "Superficie",
+    "thickness": "Spessore",
+    "lot": "Lotto",
+    "name": "Cartellino pelle {code}",
+    "code": "Codice a barre {code}",
+    "invalid": "Codice che non si stampa: {code}"
+  },
+  "done": {
+    "receipt": "Ricevimento merce",
+    "posted": "Registrato",
+    "hidesLabel_one": "pelle",
+    "hidesLabel_other": "pelli",
+    "lotsLabel_one": "lotto",
+    "lotsLabel_other": "lotti",
+    "at": "Ricevuto alle",
+    "lots_one": "{count} lotto",
+    "lots_other": "{count} lotti",
+    "lotHides_one": "{count} pelle",
+    "lotHides_other": "{count} pelli",
+    "lotHeld": "blocco qualità ({why}) · su {place}",
+    "lotReleased": "usabile · su {place}",
+    "notes": "Cosa è diverso dall'ordine"
+  },
+  "note": {
+    "SHORT": "è arrivato meno del previsto: il resto resta atteso.",
+    "WITHIN_TOLERANCE": "nella tolleranza: la riga è ricevuta.",
+    "OVER": "è arrivato più del previsto, con il motivo dato.",
+    "HIDE_COUNT": "un numero di pelli diverso da quello atteso dal buyer.",
+    "ONE_DYE_BATCH": "più di un bagno di tintura su una riga che ne chiede uno.",
+    "THICKNESS": "una pelle fuori dallo spessore chiesto.",
+    "NO_SUPPLIER_DDT": "nessun numero di DDT: lo aggiunge l'ufficio."
+  },
+  "tags": {
+    "busy": "Stampo…",
+    "noPrinterShort": "Nessuna stampante di etichette in questa postazione",
+    "title_one": "{count} cartellino pelle · {printer}",
+    "title_other": "{count} cartellini pelle · {printer}",
+    "titleNoPrinter_one": "{count} cartellino pelle",
+    "titleNoPrinter_other": "{count} cartellini pelle",
+    "noPrinter": "Nessuna stampante di etichette in questa postazione: i cartellini non sono stampati. Chiedi all'ufficio di stamparli.",
+    "failed_one": "{count} cartellino non stampato: controlla la stampante, poi Riprova.",
+    "failed_other": "{count} cartellini non stampati: controlla la stampante, poi Riprova.",
+    "waiting_one": "{count} cartellino sta andando alla stampante…",
+    "waiting_other": "{count} cartellini stanno andando alla stampante…",
+    "allPrinted_one": "{count} cartellino stampato: mettilo sulla sua pelle.",
+    "allPrinted_other": "Tutti i {count} cartellini stampati: metti ognuno sulla sua pelle, nell'ordine in cui le hai misurate.",
+    "scan": {
+      "label": "Scansiona un cartellino",
+      "hint": "Scansiona un cartellino pelle per vederlo o ristamparlo."
+    },
+    "list": "Cartellini pelle",
+    "grade": "scelta {grade}",
+    "state": {
+      "queued": "In coda",
+      "sent": "Inviato alla stampante",
+      "printed": "Stampato",
+      "failed": "Non stampato",
+      "notPrinted": "Non stampato qui"
+    },
+    "retry": "Riprova",
+    "count_one": "{printed} di {count} cartellino stampato",
+    "count_other": "{printed} di {count} cartellini stampati"
+  },
+  "reprint": {
+    "title": "Ristampa il cartellino {code}: perché?",
+    "reason": {
+      "DAMAGED": "Rovinato",
+      "LOST": "Perso",
+      "OTHER": "Altro"
+    },
+    "all": "Stampa di nuovo tutti i {count}",
+    "cancel": "Annulla"
+  },
+  "leave": {
+    "title": "Lasci questa consegna?",
+    "body": "Quello che hai inserito non è registrato e si perde se esci.",
+    "stay": "Resta",
+    "confirm": "Esci"
+  },
+  "refusal": {
+    "ORDER_CHANGED": {
+      "message": "L'ordine è cambiato un momento fa",
+      "fix": "L'ho letto di nuovo. Controlla le righe, poi chiudi di nuovo la consegna: quello che hai inserito resta."
+    },
+    "NOT_RECEIVING": {
+      "message": "Questo ordine ora non riceve merce",
+      "fix": "Chiedi al buyer a quale ordine appartiene questa merce."
+    },
+    "STATUS_DRAFT": {
+      "message": "Questo ordine non è mai stato inviato",
+      "fix": "Chiedi al buyer: la merce si riceve su un ordine inviato."
+    },
+    "STATUS_CHANGES_PROPOSED": {
+      "message": "Il fornitore ha proposto modifiche a questo ordine",
+      "fix": "Prima il buyer le accetta o le rifiuta. Metti da parte la merce e chiedi al buyer."
+    },
+    "STATUS_RECEIVED": {
+      "message": "Questo ordine è ricevuto tutto",
+      "fix": "La merce in più vuole un nuovo ordine: chiedi al buyer."
+    },
+    "STATUS_CLOSED": {
+      "message": "Questo ordine è chiuso",
+      "fix": "Chiedi al buyer a quale ordine appartiene questa merce."
+    },
+    "STATUS_CANCELLED": {
+      "message": "Questo ordine è stato annullato",
+      "fix": "Metti da parte la merce e chiedi al buyer."
+    },
+    "STATUS_DECLINED": {
+      "message": "Il fornitore ha rifiutato questo ordine",
+      "fix": "Metti da parte la merce e chiedi al buyer."
+    },
+    "NO_DOCK": {
+      "message": "Questo stabilimento non ha un'unica baia di ricevimento",
+      "fix": "L'ufficio indica dove va la merce. Chiedi a loro, poi riprova."
+    },
+    "LINE_REFUSED": {
+      "message": "Una riga non è stata accettata così com'era",
+      "fix": "Controlla la riga segnata nel riepilogo, poi chiudi di nuovo la consegna."
+    },
+    "BADGE": {
+      "message": "Questo badge non apre questo tablet",
+      "fix": "Chi è entrato resta. Chiedi al tuo capo squadra."
+    }
+  },
+  "unit": {
+    "PCS": "pz",
+    "PAIR": "paia",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "fianchi",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole"
+  }
+}

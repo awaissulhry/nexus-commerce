@@ -4,11 +4,22 @@ import { defineRoutes } from '../../core/manifest'
 import { AUTH_RATE_LIMITS, officeAuthOf } from '../../platform/auth/sessions/office-auth'
 import { processEmail } from '../../platform/email-out/service'
 import { confirmByLink, declineByLink } from './confirm/answer'
-import { acceptProposalContract, confirmLinkOrderContract, declineLinkOrderContract, openLinkOrderContract, orderAnswerContract, refuseProposalContract, renewLinkOrderContract } from './confirm/contract'
+import {
+  acceptProposalContract,
+  announceConfirmationContract,
+  completeConfirmationContract,
+  confirmLinkOrderContract,
+  declineLinkOrderContract,
+  openLinkOrderContract,
+  orderAnswerContract,
+  refuseProposalContract,
+  renewLinkOrderContract,
+} from './confirm/contract'
 import { acceptProposal, refuseProposal } from './confirm/decide'
 import { orderAnswer } from './confirm/office'
 import { linkView } from './confirm/read'
 import { linkTokenOf, renewConfirmLink } from './confirm/renew'
+import { announceConfirmation, completeConfirmation } from './confirm/upload'
 import {
   addLineContract,
   cancelContract,
@@ -18,6 +29,7 @@ import {
   editLineContract,
   getOrderContract,
   listOrdersContract,
+  previewContract,
   removeLineContract,
   sendCheckContract,
   sendContract,
@@ -31,7 +43,7 @@ import { draftFromPlan, undoDraftFromPlan } from './from-plan'
 import { addLine, editLine, removeLine } from './lines'
 import { manifest } from './manifest'
 import { cancelOrder, createOrder, getOrder, listOrders, updateOrder } from './orders'
-import { sendCheck, sendNewLink, sendOrder } from './send'
+import { inlineDisposition, previewOrderPdf, sendCheck, sendNewLink, sendOrder } from './send'
 import { previewSupplierView } from './supplier-view'
 
 /**
@@ -66,6 +78,11 @@ export default defineRoutes('purchasing', manifest, async (app) => {
 
   app.post('/purchasing/from-plan/undo', { schema: undoDraftContract }, async (request) => undoDraftFromPlan(request, request.body, idempotencyKeyFrom(request)))
 
+  app.get('/purchasing/orders/:purchaseOrderId/preview', { schema: previewContract }, async (request, reply) => {
+    const { pdf, fileName } = await previewOrderPdf(request, request.params.purchaseOrderId, request.query.language)
+    return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
+  })
+
   app.get('/purchasing/orders/:purchaseOrderId/send-check', { schema: sendCheckContract }, async (request) => sendCheck(request, request.params.purchaseOrderId))
 
   app.post('/purchasing/orders/:purchaseOrderId/send', { schema: sendContract }, async (request) => sendOrder(request, request.params.purchaseOrderId, request.body, idempotencyKeyFrom(request)))
@@ -92,6 +109,10 @@ export default defineRoutes('purchasing', manifest, async (app) => {
   app.post('/link/purchase-order/confirm', { schema: confirmLinkOrderContract, config: limited }, async (request) => confirmByLink(request, request.body))
 
   app.post('/link/purchase-order/decline', { schema: declineLinkOrderContract, config: limited }, async (request) => declineByLink(request, request.body))
+
+  app.post('/link/purchase-order/confirmation', { schema: announceConfirmationContract, config: limited }, async (request, reply) => reply.code(201).send(await announceConfirmation(request, request.body)))
+
+  app.post('/link/purchase-order/confirmation/:fileId/complete', { schema: completeConfirmationContract, config: limited }, async (request) => completeConfirmation(request, request.params.fileId))
 
   app.post('/link/purchase-order/renew', { schema: renewLinkOrderContract, config: limited }, async (request, reply) => {
     const auth = officeAuthOf(app)

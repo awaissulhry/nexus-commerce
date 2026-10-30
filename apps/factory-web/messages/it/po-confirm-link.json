@@ -1,0 +1,301 @@
+{
+  "title": "Ordine d'acquisto {number}",
+  "who": {
+    "buyer": "l'ufficio acquisti",
+    "buyerStart": "L'ufficio acquisti"
+  },
+  "answerBy": {
+    "title": "Rispondi entro {date}",
+    "body": "{buyer} di {company} ti chiede di confermare quantità e date, o di dire che cosa puoi fare invece.",
+    "bodyNoBuyer": "{company} ti chiede di confermare quantità e date, o di dire che cosa puoi fare invece."
+  },
+  "order": {
+    "title": "L'ordine",
+    "from": "Da",
+    "buyer": "Chi chiede",
+    "deliverTo": "Consegna a",
+    "sentOn": "Inviato il",
+    "version": "Versione",
+    "orderDate": "Data ordine",
+    "wanted": "Richiesto per",
+    "incoterms": "Resa",
+    "paymentTerms": "Pagamento",
+    "note": "Nota di chi ordina",
+    "pdf": "Il PDF di questo ordine è nell'e-mail che ti abbiamo inviato.",
+    "noPrices": "Questa pagina mostra che cosa e quando, mai i prezzi."
+  },
+  "lines": {
+    "title_one": "{count} riga",
+    "title_other": "{count} righe",
+    "line": "Riga {seq}",
+    "asked": "{quantity} {unit}",
+    "needed": "Serve il {date}",
+    "colour": "Colore {colour}",
+    "yourCode": "tuo codice {code}",
+    "grade": "scelta {grade}",
+    "thickness": "{min}–{max} mm",
+    "thicknessFrom": "da {min} mm",
+    "thicknessUpTo": "fino a {max} mm",
+    "oneDyeBatch": "un solo bagno di tintura",
+    "tolerance": "superficie ± {pct} %",
+    "hides_one": "circa {count} pelle",
+    "hides_other": "circa {count} pelli",
+    "crVi": "Serve il rapporto di prova Cr VI con ogni lotto",
+    "confirmed": "Confermato: {quantity} {unit} entro il {date}",
+    "yourAnswer": "La tua risposta",
+    "change": "Modifica",
+    "changeAria": "Modifica la risposta alla riga {seq}",
+    "asAskedAgain": "Come richiesto",
+    "asAskedAgainAria": "Riga {seq} di nuovo come richiesto",
+    "reason": "Il tuo motivo: {reason}",
+    "answer": {
+      "AS_ASKED": "Come richiesto",
+      "OTHER": "{quantity} {unit} entro il {date}",
+      "SPLIT": "Due consegne: {first} e {second}",
+      "CANNOT_DELIVER": "Non puoi consegnarla"
+    },
+    "delivery": "{quantity} {unit} entro il {date}",
+    "changes": {
+      "LATER": "Data più tardi",
+      "EARLIER": "Data prima",
+      "LESS": "Meno",
+      "MORE": "Di più",
+      "SPLIT": "Due consegne",
+      "CANNOT_DELIVER": "Non consegnabile"
+    }
+  },
+  "answer": {
+    "title": "La tua risposta",
+    "review": "La tua risposta: {summary}.",
+    "outcome": {
+      "CONFIRMED": "Confermando, {buyer} sa che l'ordine va come richiesto.",
+      "PROPOSED": "{buyer} accetta o rifiuta le tue modifiche. Fino ad allora nulla è confermato.",
+      "DECLINED": "Non puoi consegnare nessuna riga: inviando, rifiuti l'ordine."
+    },
+    "confirmAll": "Conferma tutto come richiesto",
+    "sendChanges": "Invia le tue modifiche",
+    "sendDecline": "Invia: non posso consegnare",
+    "decline": "Rifiuta l'ordine…",
+    "undoAll": "Annulla le tue modifiche",
+    "ref": "Il tuo numero d'ordine o di conferma",
+    "refHint": "Facoltativo. Lo riportiamo sui nostri documenti.",
+    "name": "Il tuo nome",
+    "nameOptional": "Il tuo nome (facoltativo)",
+    "nameHint": "Così {buyer} sa chi ha risposto.",
+    "note": "Una nota per {buyer} (facoltativa)",
+    "busy": "Invio della risposta…",
+    "held": {
+      "busy": "Invio della risposta…",
+      "incomplete": "La risposta a una riga non è completa: aprila e salvala di nuovo.",
+      "uploading": "Attendi che il PDF sia caricato.",
+      "file": "Scegli di nuovo il PDF, oppure toglilo.",
+      "name": "Scrivi prima il tuo nome.",
+      "ref": "Il numero ha al massimo 60 caratteri.",
+      "note": "La nota ha al massimo 1000 caratteri."
+    }
+  },
+  "summary": {
+    "allAsAsked_one": "la riga come richiesto",
+    "allAsAsked_other": "tutte le {count} righe come richiesto",
+    "asAsked_one": "{count} riga come richiesto",
+    "asAsked_other": "{count} righe come richiesto",
+    "later_one": "{count} data più tardi",
+    "later_other": "{count} date più tardi",
+    "earlier_one": "{count} data prima",
+    "earlier_other": "{count} date prima",
+    "quantity_one": "{count} quantità diversa",
+    "quantity_other": "{count} quantità diverse",
+    "split_one": "{count} riga in due consegne",
+    "split_other": "{count} righe in due consegne",
+    "cannot_one": "{count} riga che non puoi consegnare",
+    "cannot_other": "{count} righe che non puoi consegnare"
+  },
+  "file": {
+    "title": "Il tuo PDF di conferma",
+    "hint": "Facoltativo: la tua conferma in PDF, al massimo 20 MB. Va con la tua risposta.",
+    "choose": "Scegli un PDF",
+    "change": "Scegline un altro",
+    "remove": "Togli",
+    "none": "Nessun file scelto",
+    "uploading": "Caricamento di {name}…",
+    "done": "{name} · {size} · caricato",
+    "quarantined": "{name} non è arrivato come è stato inviato. Sceglilo di nuovo.",
+    "failed": "Non è stato possibile caricare {name}. Sceglilo di nuovo.",
+    "rejected": {
+      "notPdf": "{name} non è un PDF. Scegli un file PDF.",
+      "tooBig": "{name} è più grande di 20 MB.",
+      "empty": "{name} è vuoto."
+    },
+    "kb": "{size} KB",
+    "mb": "{size} MB"
+  },
+  "sheet": {
+    "title": "Riga {seq} — la tua risposta",
+    "asked": "Richiesto",
+    "askedValue": "{quantity} {unit} entro il {date}",
+    "kind": "Che cosa puoi fare?",
+    "kinds": {
+      "AS_ASKED": {
+        "title": "Come richiesto",
+        "body": "{quantity} {unit} entro il {date}"
+      },
+      "OTHER": {
+        "title": "Un'altra data o quantità",
+        "body": "Una consegna, in un'altra data, di un'altra quantità, o entrambe."
+      },
+      "SPLIT": {
+        "title": "In due consegne",
+        "body": "Una parte ora, il resto dopo: ognuna con quantità e data."
+      },
+      "CANNOT_DELIVER": {
+        "title": "Non posso consegnare questa riga",
+        "body": "Niente di questa riga. Le altre righe tengono la tua risposta."
+      }
+    },
+    "quantity": "Quantità ({unit})",
+    "date": "Entro il",
+    "first": "Prima consegna",
+    "second": "Seconda consegna",
+    "reason": "Perché",
+    "reasonHint": "Due parole per {buyer}.",
+    "save": "Salva",
+    "cancel": "Annulla",
+    "problem": {
+      "whole": {
+        "nothing": "Indica un'altra quantità, un'altra data, o entrambe.",
+        "same": "È quanto richiesto: scegli “Come richiesto”.",
+        "sameDay": "Le due consegne sono in due giorni diversi."
+      },
+      "quantity": {
+        "number": "Scrivi la quantità come numero, con al massimo quattro decimali.",
+        "positive": "Indica una quantità sopra 0, oppure scegli “Non posso consegnare questa riga”."
+      },
+      "date": {
+        "missing": "Indica la data.",
+        "past": "Indica una data da oggi in poi.",
+        "far": "Indica una data entro due anni."
+      },
+      "reason": {
+        "missing": "Di' perché, in poche parole.",
+        "long": "Al massimo 500 caratteri."
+      }
+    }
+  },
+  "decline": {
+    "title": "Rifiuta questo ordine",
+    "body": "{buyer} vede subito la tua risposta. Se puoi consegnare una parte dell'ordine, rispondi riga per riga invece.",
+    "reason": "Perché",
+    "reasons": {
+      "NO_CAPACITY": "Nessuna capacità per questo ordine",
+      "MATERIAL_NOT_AVAILABLE": "Il materiale non è disponibile",
+      "OTHER": "Un altro motivo"
+    },
+    "note": "Una nota (facoltativa)",
+    "noteRequired": "Il tuo motivo",
+    "held": {
+      "note": "Di' perché rifiuti."
+    },
+    "back": "Indietro",
+    "go": "Rifiuta l'ordine"
+  },
+  "done": {
+    "CONFIRMED": {
+      "title": "Confermato — grazie",
+      "body": "{buyer} lo vede ora.",
+      "expect": "Aspettiamo la merce a {site} entro il {date}.",
+      "expectRange": "Aspettiamo la merce a {site} dal {first} al {last}.",
+      "expectNoSite": "Aspettiamo la merce entro il {date}.",
+      "later": "Devi cambiare qualcosa più avanti? Rispondi alla nostra e-mail: arriva a {buyer}."
+    },
+    "PROPOSED": {
+      "title": "Inviato — {buyer} decide sulle tue modifiche",
+      "body": "La tua risposta: {summary}. Nulla è confermato finché {buyer} non accetta o rifiuta le tue modifiche; riceverai una risposta per e-mail."
+    },
+    "DECLINED": {
+      "title": "Rifiutato",
+      "body": "{buyer} lo vede ora e ti ricontatterà."
+    },
+    "ref": "Il tuo riferimento",
+    "file": "Il tuo PDF",
+    "lines": "La tua risposta, riga per riga"
+  },
+  "answered": {
+    "CONFIRMED": {
+      "title": "Questo ordine è confermato",
+      "body": "Non c'è altro da rispondere. Devi cambiare qualcosa? Rispondi alla nostra e-mail."
+    },
+    "CHANGES_PROPOSED": {
+      "title": "Le tue modifiche sono da {buyer}",
+      "body": "{buyer} le accetta o le rifiuta. Riceverai una risposta per e-mail."
+    },
+    "DECLINED": {
+      "title": "Hai rifiutato questo ordine",
+      "body": "{buyer} lo modifica o lo annulla e ti ricontatta."
+    },
+    "PARTLY_RECEIVED": {
+      "title": "La merce di questo ordine sta arrivando",
+      "body": "Una parte è già stata ricevuta: non serve più una conferma."
+    },
+    "RECEIVED": {
+      "title": "Questo ordine è stato ricevuto",
+      "body": "La merce è arrivata: non serve più una conferma."
+    },
+    "DRAFT": {
+      "title": "Chi ordina sta modificando questo ordine",
+      "body": "L'ordine modificato ti arriva con un nuovo link."
+    },
+    "CANCELLED": {
+      "title": "Questo ordine è stato annullato",
+      "body": "Non serve una risposta. Per qualsiasi domanda rispondi alla nostra e-mail."
+    },
+    "CLOSED": {
+      "title": "Questo ordine è chiuso",
+      "body": "Non serve più una risposta."
+    },
+    "other": {
+      "title": "Questo ordine ora non aspetta una risposta",
+      "body": "Per qualsiasi domanda rispondi alla nostra e-mail."
+    }
+  },
+  "problem": {
+    "changed": "Questo ordine è cambiato poco fa. Guardalo di nuovo: quanto hai scritto resta.",
+    "notAnswerable": "Questo ordine non accetta più una risposta.",
+    "invalid": "Alcune risposte non sono complete. Apri ogni riga modificata e controllala.",
+    "rateLimited": "Troppi tentativi. Attendi un minuto, poi invia di nuovo.",
+    "unavailableNow": "Ora non raggiungiamo il nostro sistema. La risposta non è stata inviata: riprova tra un momento.",
+    "internal": "Qualcosa non ha funzionato da parte nostra. La risposta non è stata inviata: riprova.",
+    "upload": "Non è stato possibile caricare il PDF. Sceglilo di nuovo, oppure invia la risposta senza."
+  },
+  "dead": {
+    "ask": "Chiedi un nuovo link",
+    "asked": "Richiesto — l'abbiamo inoltrato. Se il link era nostro, {sender} scrive all'indirizzo a cui era stato inviato.",
+    "askedAnonymous": "Richiesto — l'abbiamo inoltrato. Se il link era nostro, chi l'ha inviato scrive all'indirizzo a cui era stato inviato.",
+    "expiredTitle": "Questo link è scaduto il {time}",
+    "expiredBody": "Chiedine uno nuovo a {sender}.",
+    "expiredBodyAnonymous": "Chiedine uno nuovo a chi te l'ha inviato."
+  },
+  "error": {
+    "title": "Non è stato possibile aprire l'ordine",
+    "body": "Qualcosa non ha funzionato da parte nostra. Riprova.",
+    "retry": "Riprova"
+  },
+  "uom": {
+    "PCS": "pz",
+    "PAIR": "paia",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "fianchi",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole"
+  }
+}

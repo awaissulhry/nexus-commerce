@@ -1,0 +1,474 @@
+/*
+ * The buying office (Planning › What to buy & make SCR-055, Purchasing › Purchase orders SCR-058/059, Warehouse ›
+ * Receipts SCR-061 … 063) LAYOUT: the page head, the record's band and tabs, the body with the optional thread beside
+ * it, card grids, check lists, the hide entry sheet. The controls are the design system's; this file only places
+ * them, with semantic tokens (no colours of its own). No page max-width (Owner rule 2026-10-29): pages fill the
+ * shell's main area; wide screens use the width (cards side by side).
+ */
+.fw-by {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-by-head,
+.fw-by-meta-row,
+.fw-by-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-by-inline,
+.fw-by-actions,
+.fw-by-meta,
+.fw-by-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-by-chips {
+  gap: var(--nds-space-4);
+}
+
+.fw-by-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-by-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-by-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-by-text {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* ---- list cells ---- */
+.fw-by-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-by-cell-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-by-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-by-link {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+
+.fw-by-link:hover,
+.fw-by-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-by-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-by-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.fw-by-danger {
+  color: var(--nds-danger);
+}
+
+.fw-by-warning {
+  color: var(--nds-warning);
+}
+
+.fw-by-success {
+  color: var(--nds-success);
+}
+
+/* ---- the record ---- */
+.fw-by-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-by-title {
+  overflow-wrap: anywhere;
+}
+
+.fw-by-title-sub {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-muted);
+}
+
+.fw-by-keys {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: var(--nds-space-4);
+}
+
+.fw-by-tablabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-by-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--nds-warning);
+}
+
+.fw-by-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-by-body.has-dock {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+}
+
+@media (max-width: 1279px) {
+  .fw-by-body.has-dock {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fw-by-dock {
+    display: none;
+  }
+}
+
+.fw-by-main,
+.fw-by-stack,
+.fw-by-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-by-dialog {
+  gap: var(--nds-space-12);
+}
+
+/* Cards side by side on a wide screen, one column below. */
+.fw-by-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-by-cards > *,
+.fw-by-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10, var(--nds-space-8));
+  min-width: 0;
+}
+
+@media (min-width: 1600px) {
+  .fw-by-cards--wide {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+}
+
+.fw-by-h2,
+.fw-by-h3 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-by-h2 {
+  font-size: var(--nds-font-size-md, var(--nds-font-size-sm));
+}
+
+.fw-by-h3 {
+  font-size: var(--nds-font-size-sm);
+}
+
+/* A form's fields side by side on a wide screen (two or three columns), one below. */
+.fw-by-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--nds-space-10, var(--nds-space-8)) var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+/* ---- check lists (ready to post, send checks, what a reversal does) ---- */
+.fw-by-checks,
+.fw-by-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-by-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* A check row whose action drops under the words when they need the room (a phone). */
+.fw-by-check-wrap {
+  flex-wrap: wrap;
+}
+
+.fw-by-check-wrap > .fw-by-check-body {
+  flex: 1 1 220px;
+}
+
+.fw-by-check-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-by-ico {
+  flex: none;
+  margin-top: 2px;
+  color: var(--nds-text-muted);
+}
+
+.fw-by-ico.is-ok {
+  color: var(--nds-success);
+}
+
+.fw-by-ico.is-blocked {
+  color: var(--nds-danger);
+}
+
+.fw-by-ico.is-warning {
+  color: var(--nds-warning);
+}
+
+/* ---- the netting ladder (Why this number) ---- */
+.fw-by-ladder {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-by-rung {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  padding: var(--nds-space-8) var(--nds-space-10, var(--nds-space-8));
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md, 8px);
+  background: var(--nds-surface-sunken, var(--nds-surface));
+}
+
+.fw-by-rung.is-result {
+  border-color: var(--nds-border-strong, var(--nds-border));
+  background: var(--nds-surface);
+}
+
+.fw-by-rung-label {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-by-rung-value {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- the journey of a purchase order (drafted → sent → confirmed → received) ---- */
+.fw-by-journey {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.fw-by-journey-short {
+  display: none;
+  margin: 0;
+}
+
+@media (max-width: 759px) {
+  .fw-by-journey {
+    display: none;
+  }
+
+  .fw-by-journey-short {
+    display: block;
+  }
+}
+
+/* ---- the hide entry sheet: rows typed one by one (Enter down, Tab right, a pasted column fills down) ---- */
+.fw-by-sheet {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md, 8px);
+}
+
+.fw-by-sheet table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-by-sheet th {
+  position: sticky;
+  top: 0;
+  padding: var(--nds-space-6) var(--nds-space-6);
+  text-align: left;
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-muted);
+  background: var(--nds-surface-sunken, var(--nds-surface));
+  border-bottom: 1px solid var(--nds-border);
+  white-space: nowrap;
+}
+
+.fw-by-sheet td {
+  padding: var(--nds-space-4) var(--nds-space-6);
+  border-bottom: 1px solid var(--nds-border);
+  vertical-align: middle;
+}
+
+.fw-by-sheet tr:last-child td {
+  border-bottom: none;
+}
+
+.fw-by-sheet .is-seq {
+  width: 1%;
+  color: var(--nds-text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.fw-by-sheet .is-narrow {
+  width: 96px;
+  min-width: 84px;
+}
+
+.fw-by-sheet .is-tight {
+  width: 76px;
+  min-width: 64px;
+}
+
+.fw-by-sheet .is-wide {
+  min-width: 140px;
+}
+
+.fw-by-sheet .is-end {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.fw-by-totals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-14);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* A lot inside a receipt line: its fields, then its hides. */
+.fw-by-lot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10, var(--nds-space-8));
+  min-width: 0;
+  padding: var(--nds-space-10, var(--nds-space-8)) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md, 8px);
+}
+
+.fw-by-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+@media (min-width: 1280px) {
+  .fw-by-two {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+    align-items: start;
+  }
+}
+
+.fw-by-sticky {
+  position: sticky;
+  top: var(--nds-space-14);
+}
+
+/* Read by a screen reader, not drawn (a column header whose cells are buttons). */
+.fw-by-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 759px) {
+  .fw-by-keys {
+    display: none;
+  }
+}

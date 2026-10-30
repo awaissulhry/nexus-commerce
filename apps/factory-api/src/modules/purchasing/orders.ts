@@ -233,6 +233,7 @@ export interface ListOrdersQuery {
   readonly siteId?: string | undefined
   readonly partyId?: string | undefined
   readonly q?: string | undefined
+  readonly waitingOver48h?: boolean | undefined
   readonly cursor?: string | undefined
   readonly limit: number
 }
@@ -254,9 +255,10 @@ export async function listOrders(caller: CommandCaller, query: ListOrdersQuery) 
     query.q ? { number: { contains: query.q, mode: 'insensitive' } } : {},
   ]
   const now = serverClock.now()
+  const waitingLongWhere: Prisma.PurchaseOrderWhereInput = { status: 'SENT', sentAt: { lt: new Date(now.getTime() - WAITING_MS) } }
   return caller.withClient(async (client) => {
     const rows = await client.purchaseOrder.findMany({
-      where: { AND: [...filters, query.status ? { status: query.status } : {}, query.cursor ? { id: { lt: query.cursor } } : {}] },
+      where: { AND: [...filters, query.status ? { status: query.status } : {}, query.waitingOver48h ? waitingLongWhere : {}, query.cursor ? { id: { lt: query.cursor } } : {}] },
       orderBy: { id: 'desc' },
       take: query.limit + 1,
       select: { id: true, number: true, companyId: true, siteId: true, partyId: true, status: true, revision: true, currency: true, orderDate: true, requestedDate: true, netAmount: true, sentAt: true, confirmedAt: true, confirmedVia: true, confirmedByName: true, declinedAt: true, createdById: true, updatedAt: true, version: true },
@@ -265,11 +267,11 @@ export async function listOrders(caller: CommandCaller, query: ListOrdersQuery) 
     const ids = page.map((row) => row.id)
     const lines = ids.length === 0 ? [] : await client.purchaseOrderLine.findMany({ where: { purchaseOrderId: { in: ids } }, select: { purchaseOrderId: true, needDate: true, confirmedDate: true } })
     const parties = new Map((await client.party.findMany({ where: { id: { in: [...new Set(page.map((row) => row.partyId))] } }, select: { id: true, legalName: true } })).map((party) => [party.id, party.legalName]))
-    const counted = await client.purchaseOrder.groupBy({ by: ['status'], where: { AND: [...filters, { status: { in: ['DRAFT', 'SENT', 'DECLINED'] } }] }, _count: { _all: true } })
+    const counted = await client.purchaseOrder.groupBy({ by: ['status'], where: { AND: [...filters, { status: { in: ['DRAFT', 'SENT', 'CHANGES_PROPOSED', 'DECLINED'] } }] }, _count: { _all: true } })
     const count = (status: string) => counted.find((row) => row.status === status)?._count._all ?? 0
-    const waitingLong = await client.purchaseOrder.count({ where: { AND: [...filters, { status: 'SENT', sentAt: { lt: new Date(now.getTime() - WAITING_MS) } }] } })
+    const waitingLong = await client.purchaseOrder.count({ where: { AND: [...filters, waitingLongWhere] } })
     return {
-      summary: { drafts: count('DRAFT'), waiting: count('SENT'), notConfirmedAfter48h: waitingLong, declined: count('DECLINED') },
+      summary: { drafts: count('DRAFT'), waiting: count('SENT'), notConfirmedAfter48h: waitingLong, changesProposed: count('CHANGES_PROPOSED'), declined: count('DECLINED') },
       orders: page.map((row) => {
         const own = lines.filter((line) => line.purchaseOrderId === row.id)
         const need = own.map((line) => dayOf(line.needDate)!).sort()

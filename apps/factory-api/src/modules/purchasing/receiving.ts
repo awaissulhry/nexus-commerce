@@ -1,4 +1,5 @@
 import { ForbiddenError } from '@nexus/factory-domain/core/errors'
+import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { PurchaseOrderStatus } from '@nexus/factory-domain/purchasing/orders'
 import type { CommandTools, CommandTx } from '../../core/command'
 
@@ -11,7 +12,8 @@ import type { CommandTools, CommandTx } from '../../core/command'
  * Why both: an office receipt bumps the order's version, so a cancel decided on the order as it was read fails on its
  * version (and a receipt after a cancel reads CANCELLED). A floor device (B-W1-33) cannot lock or update the order (its
  * role only reads it), so the advisory lock is what keeps a floor receipt and a cancel apart: the cancel takes it after
- * its version bump and refuses while a receipt names the order.
+ * its version bump and refuses while a receipt names the order. The floor's receipt then moves the order in the
+ * tenant's system context, in a command of its own right after (modules/inventory/receiving/progress.ts).
  */
 
 /** The advisory lock a receipt against the order and the order's cancel share (held to the end of the transaction). */
@@ -47,6 +49,25 @@ export async function lockOrderForReceipt(tools: Pick<CommandTools, 'tx' | 'cont
   if (!('tenantId' in tools.context)) throw new ForbiddenError()
   await lockOrderReceiving(tools.tx, tools.context.tenantId, orderId)
   return row
+}
+
+/**
+ * Inside a FLOOR receipt's command (B-W1-33): the order's receiving lock first, then the order read under it with the
+ * columns the floor's role may read (it may not lock or change the order's row). A cancel takes the same lock after its
+ * version bump and refuses while a receipt names the order, so the two never both commit: a cancel that went first is
+ * read here as CANCELLED. The version is the one the order has now (not bumped: the follow-up system command bumps it).
+ * Null when the order is not there or not of the device's site (row-level security).
+ */
+export async function readOrderForFloorReceipt(tools: Pick<CommandTools, 'tx' | 'context'>, orderId: string): Promise<OrderForReceipt | null> {
+  if (tools.context.audience !== 'floor') throw new ForbiddenError()
+  if (!isUuid(orderId)) return null
+  await lockOrderReceiving(tools.tx, tools.context.tenantId, orderId)
+  const row = await tools.tx.purchaseOrder.findUnique({
+    where: { id: orderId },
+    select: { id: true, companyId: true, siteId: true, partyId: true, number: true, status: true, currency: true, confirmedAt: true, version: true },
+  })
+  if (!row) return null
+  return { id: row.id, companyId: row.companyId, siteId: row.siteId, partyId: row.partyId, number: row.number, status: row.status, currency: row.currency, confirmed: row.confirmedAt !== null, version: row.version }
 }
 
 /**

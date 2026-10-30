@@ -56,6 +56,8 @@ export async function getShipment(caller: CommandCaller, shipmentId: string): Pr
 
 export interface ListShipmentsQuery {
   readonly status?: ShipmentStatus | undefined
+  readonly open?: 'true' | 'false' | undefined
+  readonly q?: string | undefined
   readonly siteId?: string | undefined
   readonly salesOrderId?: string | undefined
   readonly partyId?: string | undefined
@@ -70,6 +72,18 @@ export async function listShipments(caller: CommandCaller, query: ListShipmentsQ
     AND: [
       scopeWhere(actorOf(context), SHIPPING_VIEW, { company: 'companyId', site: 'siteId', party: 'partyId' }) as Prisma.ShipmentWhereInput,
       query.status ? { status: query.status } : {},
+      query.open === 'true' ? { status: { in: ['DRAFT', 'PACKED'] } } : query.open === 'false' ? { status: { notIn: ['DRAFT', 'PACKED'] } } : {},
+      query.q
+        ? {
+            OR: [
+              { number: { contains: query.q, mode: 'insensitive' } },
+              { salesOrder: { number: { contains: query.q, mode: 'insensitive' } } },
+              { salesOrder: { customerRef: { contains: query.q, mode: 'insensitive' } } },
+              { salesOrder: { party: { legalName: { contains: query.q, mode: 'insensitive' } } } },
+              { parcels: { some: { trackingNumber: { contains: query.q, mode: 'insensitive' } } } },
+            ],
+          }
+        : {},
       query.siteId ? { siteId: query.siteId } : {},
       query.salesOrderId ? { salesOrderId: query.salesOrderId } : {},
       query.partyId ? { partyId: query.partyId } : {},
@@ -92,19 +106,33 @@ export async function listShipments(caller: CommandCaller, query: ListShipmentsQ
         salesOrderId: true,
         transportBy: true,
         carrierCode: true,
+        carrierName: true,
         serviceCode: true,
+        shipTo: true,
         packedAt: true,
         shippedAt: true,
         cancelledAt: true,
         createdAt: true,
         salesOrder: { select: { number: true, party: { select: { legalName: true } } } },
         lines: { select: { quantity: true } },
-        _count: { select: { parcels: true } },
+        parcels: { select: { seq: true, grossWeightKg: true, trackingNumber: true, labelledAt: true }, orderBy: { seq: 'asc' } },
+        ddts: { where: { cancellations: { none: {} } }, select: { id: true, number: true }, take: 1 },
       },
     }),
   )
   const page = rows.slice(0, query.limit)
   const at = (value: Date | null) => (value ? toUtcIso(value) : null)
+  const place = (shipTo: unknown) => {
+    const value = shipTo && typeof shipTo === 'object' ? (shipTo as Record<string, unknown>) : {}
+    return { city: typeof value.city === 'string' && value.city !== '' ? value.city : null, country: typeof value.country === 'string' && value.country !== '' ? value.country : null }
+  }
+  // Decimal arithmetic (factory-db exports Prisma's types, not its runtime Decimal: the first weight starts the sum).
+  const weight = (parcels: readonly { grossWeightKg: Prisma.Decimal | null }[]) => {
+    const weights = parcels.flatMap((parcel) => (parcel.grossWeightKg === null ? [] : [parcel.grossWeightKg]))
+    const [first, ...rest] = weights
+    if (!first || weights.length < parcels.length) return null
+    return rest.reduce((sum, value) => sum.plus(value), first).toFixed(4)
+  }
   return {
     shipments: page.map((row) => ({
       id: row.id,
@@ -119,10 +147,16 @@ export async function listShipments(caller: CommandCaller, query: ListShipmentsQ
       salesOrderNumber: row.salesOrder.number,
       transportBy: row.transportBy,
       carrierCode: row.carrierCode,
+      carrierName: row.carrierName,
       serviceCode: row.serviceCode,
+      shipTo: place(row.shipTo),
       lines: row.lines.length,
       garments: row.lines.reduce((garments, line) => garments + line.quantity, 0),
-      parcels: row._count.parcels,
+      parcels: row.parcels.length,
+      grossWeightKg: weight(row.parcels),
+      labelled: row.parcels.filter((parcel) => parcel.trackingNumber !== null && parcel.labelledAt !== null).length,
+      trackingNumbers: row.parcels.flatMap((parcel) => (parcel.trackingNumber ? [parcel.trackingNumber] : [])).slice(0, 3),
+      ddt: row.ddts[0] ? { id: row.ddts[0].id, number: row.ddts[0].number } : null,
       packedAt: at(row.packedAt),
       shippedAt: at(row.shippedAt),
       cancelledAt: at(row.cancelledAt),

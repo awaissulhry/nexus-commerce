@@ -28,7 +28,8 @@
     "purchasing": {
       "area": "Acquisti",
       "main": "Principali",
-      "suppliers": "Fornitori"
+      "suppliers": "Fornitori",
+      "orders": "Ordini d'acquisto"
     },
     "admin": {
       "area": "Amministrazione",
@@ -66,6 +67,20 @@
       "register": "Registro DPI e richiami",
       "certificates": "Certificati",
       "labels": "Etichette e marcature"
+    },
+    "planning": {
+      "area": "Pianificazione",
+      "main": "Principali",
+      "mrp": "Cosa comprare e produrre"
+    },
+    "warehouse": {
+      "area": "Magazzino",
+      "inbound": "In entrata",
+      "receipts": "Ricevimenti",
+      "outbound": "In uscita",
+      "shipments": "Spedizioni",
+      "settings": "Impostazioni",
+      "shipping": "Corrieri e spedizioni"
     }
   },
   "topbar": {

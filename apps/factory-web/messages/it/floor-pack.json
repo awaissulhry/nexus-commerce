@@ -1,0 +1,232 @@
+{
+  "bar": "Azioni dell'imballo",
+  "busy": "Invio all'ufficio…",
+  "loading": "Lettura della spedizione…",
+  "noPermission": {
+    "title": "L'imballo non è per il tuo ruolo",
+    "body": "Il tuo ruolo non imballa spedizioni a questa postazione. Chiedi al capo squadra."
+  },
+  "offline": {
+    "held": "Serve la rete: l'ufficio registra l'imballo subito. Aspetta che torni."
+  },
+  "scan": {
+    "read": "Letto {code}",
+    "type": "Scrivi un codice",
+    "camera": {
+      "start": "Fotocamera",
+      "stop": "Ferma la fotocamera",
+      "error": "La fotocamera qui non legge: scrivi il codice."
+    }
+  },
+  "list": {
+    "scan": "Scansiona la bolla di imballo",
+    "hint": "Oppure scegli una spedizione qui sotto. Qui ci sono solo spedizioni di capi rilasciati.",
+    "title": "Spedizioni da imballare",
+    "carrier": "{carrier}",
+    "noCarrier": "Nessun corriere",
+    "cartons_one": "{count} cartone",
+    "cartons_other": "{count} cartoni",
+    "garments": "capi",
+    "toPack": "Da imballare",
+    "waiting": "Imballata · documenti",
+    "count_one": "{count} spedizione",
+    "count_other": "{count} spedizioni",
+    "notFound": "{code} non è una spedizione di questa postazione. Scansiona di nuovo la bolla o chiedi all'ufficio.",
+    "serialFirst": "{code} è un capo: apri prima la sua spedizione (scansiona la bolla).",
+    "empty": {
+      "title": "Niente di rilasciato da imballare.",
+      "body": "L'ufficio prepara una spedizione quando la qualità ha rilasciato i capi."
+    }
+  },
+  "status": {
+    "DRAFT": "Da imballare",
+    "PACKED": "Imballata",
+    "SHIPPED": "Spedita",
+    "DELIVERED": "Consegnata",
+    "RETURNED": "Resa",
+    "CANCELLED": "Annullata"
+  },
+  "transport": {
+    "SENDER": "Nostro furgone",
+    "RECIPIENT": "Ritira il cliente",
+    "CARRIER": "Con corriere"
+  },
+  "strip": {
+    "cartons_one": "{count} cartone",
+    "cartons_other": "{count} cartoni"
+  },
+  "released": {
+    "batches": "Rilasciati dalla qualità: su questa spedizione ci sono solo capi rilasciati (lotto {batches}).",
+    "plain": "Rilasciati dalla qualità: su questa spedizione ci sono solo capi rilasciati."
+  },
+  "pack": {
+    "alreadyPacked": "Questa spedizione è imballata. Disimballala per cambiare i cartoni.",
+    "scan": "Scansiona un capo",
+    "hint": "La sua etichetta va nel cartone {seq}.",
+    "hintNew": "La prima scansione apre un cartone nuovo.",
+    "done": "Imballo finito",
+    "unpack": "Disimballa"
+  },
+  "carton": {
+    "current": "Cartone {seq} di {count}",
+    "none": "Nessun cartone aperto",
+    "noneLead": "Scansiona un capo: un cartone nuovo si apre da solo. Oppure aprine uno con Nuovo cartone.",
+    "noneDone": "Tutti i cartoni sono chiusi.",
+    "thisOne": "Cartone in uso",
+    "type": "Cartone",
+    "seq": "Cartone {seq}",
+    "open": "Aperto",
+    "closed": "Chiuso · pesato",
+    "labelled": "Etichetta applicata",
+    "line": "{cell} × {count}",
+    "lineSerials": "{cell} × {count} ({serials} seriali)",
+    "empty": "Vuoto",
+    "notWeighed": "Non pesato",
+    "kg": "{weight} kg",
+    "pick": "Imballa in questo",
+    "remove": "Togli il cartone vuoto",
+    "add": "Nuovo cartone",
+    "close": "Chiudi cartone",
+    "held": {
+      "empty": "Metti prima un capo",
+      "none": "Nessun cartone aperto"
+    }
+  },
+  "cartons": {
+    "title_one": "{count} cartone",
+    "title_other": "{count} cartoni",
+    "empty": "Ancora nessun cartone."
+  },
+  "weigh": {
+    "label": "Peso del cartone {seq}",
+    "unit": "kg",
+    "separator": "Virgola decimale",
+    "empty": "Scrivi il peso",
+    "range": "Da 0,01 kg",
+    "save": "Salva il peso · chiudi il cartone",
+    "cancel": "Torna al cartone"
+  },
+  "pad": {
+    "minus": "Meno",
+    "plus": "Più",
+    "clear": "Cancella",
+    "back": "Togli una cifra"
+  },
+  "rest": {
+    "title": "Metti il resto in questo cartone",
+    "put_one": "Metti {count} {cell} in questo cartone",
+    "put_other": "Metti i {count} {cell} in questo cartone",
+    "serials_one": "{cell}: ne manca {count}. Scansiona l'etichetta seriale di ogni capo.",
+    "serials_other": "{cell}: ne mancano {count}. Scansiona l'etichetta seriale di ogni capo."
+  },
+  "grid": {
+    "title": "Imballati {packed} di {garments}",
+    "caption": "Capi per modello, colore e taglia: imballati su previsti",
+    "style": "Modello · colore",
+    "cell": "{packed}/{planned}"
+  },
+  "left": {
+    "title": "Ancora da fare",
+    "noLines": "Nessun capo su questa spedizione: li aggiunge l'ufficio.",
+    "loose_one": "{count} capo non è in un cartone",
+    "loose_other": "{count} capi non sono in un cartone",
+    "noCartons": "Ancora nessun cartone",
+    "unweighed": "Pesa il cartone {cartons}",
+    "empty": "Il cartone {cartons} è vuoto: toglilo",
+    "serials_one": "{count} seriale ancora da scansionare",
+    "serials_other": "{count} seriali ancora da scansionare",
+    "none": "Tutto è in cartoni pesati: l'imballo è finito."
+  },
+  "note": {
+    "packed": "{code}: {cell} nel cartone {seq}",
+    "rest_one": "{count} {cell} nel cartone {seq}",
+    "rest_other": "{count} × {cell} nel cartone {seq}"
+  },
+  "refused": {
+    "notReleased": "Non ancora rilasciato dalla qualità: resta fuori dal cartone.",
+    "otherShipment": "Già imballato in un'altra spedizione.",
+    "already": "Già in questa spedizione.",
+    "notThisShipment": "Non è su questa spedizione: mettilo da parte e avvisa l'ufficio.",
+    "void": "Questo seriale è annullato: metti da parte il capo e avvisa il capo squadra.",
+    "shipped": "Questo capo è già partito.",
+    "noRoom": "Su questa spedizione non ce ne sono altri di questa taglia: è un pezzo in più. Mettilo da parte.",
+    "serialTracked": "{cell} si traccia per seriale: scansiona l'etichetta seriale di ogni capo.",
+    "batchDone": "Tutti i capi di questo lotto sono già in un cartone.",
+    "unknown": "Non è su questa spedizione: controlla l'etichetta.",
+    "notDraft": "Questa spedizione è imballata: disimballala prima per cambiare i cartoni.",
+    "offline": "Serve la rete: scansionalo di nuovo quando torna."
+  },
+  "notice": {
+    "refused": "Rifiutato dall'ufficio: {words}"
+  },
+  "documents": {
+    "open": "Etichette e documenti",
+    "title": "DDT e packing list",
+    "ddt": "DDT",
+    "date": "Data",
+    "cartons": "Cartoni",
+    "packingList": "Packing list",
+    "yes": "Sì",
+    "no": "Non fatto",
+    "readyBoth": "Il DDT e la packing list si stampano sulla stampante della postazione.",
+    "readyDdt": "Il DDT si stampa sulla stampante della postazione.",
+    "noPreview": "I documenti si leggono in ufficio; il tablet li stampa.",
+    "print": "Stampa i documenti",
+    "finish": "Fatto",
+    "held": {
+      "officeIssues": "Il DDT lo emette l'ufficio: compare qui appena è emesso.",
+      "pdfMissing": "Il PDF del DDT non è ancora salvato: l'ufficio lo ristampa.",
+      "noPrinter": "Nessuna stampante documenti a questa postazione: il DDT lo stampa l'ufficio.",
+      "nothing": "Ancora niente da stampare: l'ufficio emette il DDT e compra le etichette."
+    }
+  },
+  "labels": {
+    "title": "Etichette del corriere",
+    "carton": "Cartone {seq}",
+    "tracking": "Tracking {number}",
+    "noLabel": "Ancora nessuna etichetta",
+    "bought": "Etichetta comprata",
+    "waiting": "In attesa",
+    "ready_one": "{count} etichetta pronta da stampare",
+    "ready_other": "{count} etichette pronte da stampare",
+    "held": {
+      "notNeeded": "Nessuna etichetta del corriere necessaria.",
+      "officeBuys": "Le etichette le compra l'ufficio: compaiono qui appena comprate.",
+      "noPrinter": "Nessuna stampante etichette a questa postazione: l'ufficio le stampa in PDF.",
+      "noRight": "Il tuo ruolo qui non stampa etichette."
+    },
+    "notNeeded": {
+      "SENDER": "Nessuna etichetta del corriere: la merce va col nostro furgone.",
+      "RECIPIENT": "Nessuna etichetta del corriere: la merce la ritira il cliente.",
+      "CARRIER": "Nessuna etichetta del corriere necessaria."
+    }
+  },
+  "jobs": {
+    "title": "Stampe",
+    "label": "Etichetta · cartone {seq}",
+    "DDT": "DDT",
+    "PACKING_LIST": "Packing list",
+    "retry": "Ristampa: {what}",
+    "retryLabel": "Ristampa l'etichetta del cartone {seq}"
+  },
+  "job": {
+    "QUEUED": "In coda",
+    "SENT": "Inviata alla stampante",
+    "PRINTED": "Stampata",
+    "FAILED": "Non riuscita"
+  },
+  "unpack": {
+    "held": {
+      "labelled": "Un cartone ha l'etichetta del corriere: l'ufficio la annulla prima.",
+      "ddt": "Il DDT è emesso: l'ufficio lo annulla prima."
+    }
+  },
+  "done": {
+    "title": "Spedizione {number} imballata",
+    "body_one": "{count} cartone.",
+    "body_other": "{count} cartoni.",
+    "bodyLabels_one": "{count} cartone · etichette stampate.",
+    "bodyLabels_other": "{count} cartoni · etichette stampate.",
+    "next": "Prossima spedizione"
+  }
+}

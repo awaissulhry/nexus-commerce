@@ -58,8 +58,11 @@ export interface ApiClient {
   request<T>(method: HttpMethod, path: string, options?: RequestOptions<T>): Promise<T>
   get<T>(path: string, options?: RequestOptions<T>): Promise<T>
   post<T>(path: string, options?: RequestOptions<T>): Promise<T>
-  /** A GET whose answer is a file the API makes (a PDF): its bytes; an error answer is an ApiError as for JSON. */
-  bytes(path: string, options?: Pick<RequestOptions<unknown>, 'query' | 'signal'>): Promise<Uint8Array>
+  /**
+   * A GET whose answer is a file the API makes (a PDF): its bytes; an error answer is an ApiError as for JSON. A POST
+   * with a body (`method`, `body`: a draft rendered from what the person typed, never stored) answers the same way.
+   */
+  bytes(path: string, options?: Pick<RequestOptions<unknown>, 'query' | 'signal' | 'body'> & { method?: 'GET' | 'POST' }): Promise<Uint8Array>
 }
 
 const UNSAFE: ReadonlySet<HttpMethod> = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -133,12 +136,20 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   function post<T>(path: string, options?: RequestOptions<T>): Promise<T> {
     return request<T>('POST', path, options)
   }
-  async function bytes(path: string, read: Pick<RequestOptions<unknown>, 'query' | 'signal'> = {}): Promise<Uint8Array> {
+  async function bytes(path: string, read: Pick<RequestOptions<unknown>, 'query' | 'signal' | 'body'> & { method?: 'GET' | 'POST' } = {}): Promise<Uint8Array> {
     let response: Response
     try {
-      const headers = requestHeaders(options, 'GET', {})
+      const method = read.method ?? 'GET'
+      const headers = requestHeaders(options, method, method === 'POST' ? { body: read.body ?? {} } : {})
       headers.set('accept', 'application/pdf, application/json')
-      response = await doFetch(apiUrl(options.baseUrl, path, read.query), { method: 'GET', headers, credentials: 'same-origin', cache: 'no-store', signal: read.signal })
+      response = await doFetch(apiUrl(options.baseUrl, path, read.query), {
+        method,
+        headers,
+        ...(method === 'POST' ? { body: JSON.stringify(read.body ?? {}) } : {}),
+        credentials: 'same-origin',
+        cache: 'no-store',
+        signal: read.signal,
+      })
     } catch (cause) {
       if ((cause as { name?: string } | null)?.name === 'AbortError') throw cause
       throw networkError(cause)

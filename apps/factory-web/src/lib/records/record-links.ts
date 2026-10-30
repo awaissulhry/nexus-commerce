@@ -34,6 +34,11 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // Compliance › Certificates (SCR-051) and Labels & marking (SCR-053).
   Certificate: '/compliance/certificates/[id]',
   LabelTemplate: '/compliance/labels/[id]',
+  // Warehouse › Shipments (SCR-067): a shipment's record.
+  Shipment: '/warehouse/shipments/[id]',
+  // Purchasing › the PO studio (SCR-059); Warehouse › a goods receipt (SCR-063).
+  PurchaseOrder: '/purchasing/orders/[id]',
+  GoodsReceipt: '/warehouse/receipts/[id]',
 })
 
 /** An API list route → the web page that shows it (with the same query). */
@@ -56,6 +61,12 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/quality/inspections': '/quality/inspections',
   '/quality/lots': '/compliance/tests',
   '/compliance/register': '/compliance/register',
+  // The shipments list (SCR-066) reads `?rows=` and `?q=` from the address.
+  '/shipping/shipments': '/warehouse/shipments',
+  // The PO list reads `status` (one state, as the API) and `waitingOver48h`; Receipts reads `status`, `view=expected`.
+  '/purchasing/orders': '/purchasing/orders',
+  '/inventory/receipts': '/warehouse/receipts',
+  '/planning/runs/latest': '/planning/mrp',
 })
 
 export interface RecordRef {

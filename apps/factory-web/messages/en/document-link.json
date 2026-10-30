@@ -1,0 +1,87 @@
+{
+  "title": "Documents of shipment {number}",
+  "status": {
+    "works": "Works until {date}",
+    "opensLeft_one": "{count} open left",
+    "opensLeft_other": "{count} opens left"
+  },
+  "list": {
+    "title_one": "{count} document for this shipment",
+    "title_other": "{count} documents for this shipment",
+    "for": "Shipment {number} · {sent}. Choose a document to read it here."
+  },
+  "shipment": {
+    "shipped": "shipped on {date}",
+    "delivered": "delivered on {date}",
+    "notShipped": "not shipped yet"
+  },
+  "kind": {
+    "DDT": "Transport document (DDT)",
+    "DECLARATION_OF_CONFORMITY": "EU Declaration of Conformity",
+    "USER_INFORMATION": "User information",
+    "OTHER": "Document"
+  },
+  "row": {
+    "ddt": "DDT {number}",
+    "styled": "{kind} · {style}",
+    "revision": "{name} · revision {revision}",
+    "file": "File shared by the sender"
+  },
+  "fact": {
+    "file": "File",
+    "shipment": "Shipment",
+    "style": "Product",
+    "styleRevision": "{code} · {name} · revision {revision}",
+    "number": "Number",
+    "date": "Date",
+    "language": "Language"
+  },
+  "languages": {
+    "label": "Other languages",
+    "only": "Available in {language} only."
+  },
+  "download": "Download",
+  "logged": "Opening or downloading a document here is recorded for the sender.",
+  "pdf": {
+    "loading": "Opening the document…",
+    "failed": {
+      "title": "The document could not be shown",
+      "body": "Something went wrong while reading it. Try again, or download it."
+    },
+    "notPdf": "This file cannot be shown in the page: download it to open it."
+  },
+  "empty": {
+    "title": "No document shared yet",
+    "body": "The sender has not shared any document of shipment {number} on this link yet."
+  },
+  "loading": {
+    "label": "Reading the documents…",
+    "slow": "Still loading…"
+  },
+  "state": {
+    "expired": {
+      "title": "This link has expired",
+      "body": "This link expired on {time}. You can ask for a new one.",
+      "bodyNoTime": "This link has expired. You can ask for a new one."
+    },
+    "withdrawn": {
+      "title": "This link no longer opens",
+      "body": "It may have been withdrawn by the sender or used up. You can ask for a new one."
+    },
+    "error": {
+      "title": "Something went wrong on our side",
+      "body": "The documents could not be read. Try again."
+    }
+  },
+  "ask": {
+    "label": "Ask for a new link",
+    "again": "Ask again",
+    "busy": "Sending your request…",
+    "asked": "Asked",
+    "held": "Asked — we passed it on",
+    "done": "We passed this on. If the link was ours, the sender will write to the address it was sent to.",
+    "failed": "Your request did not reach us. Check the connection and ask again.",
+    "onlyOnFile": "A new link only ever goes to the address the documents were sent to, never to one typed here."
+  },
+  "retry": "Try again"
+}

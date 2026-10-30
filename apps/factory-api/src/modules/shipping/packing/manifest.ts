@@ -16,4 +16,6 @@ export const manifest = defineManifest({
   'DELETE /shipping/packing/:shipmentId/serials/:serialId': { audiences: ['office', 'floor'], permission: 'shipping.pack', scope: 'record' },
   'POST /shipping/packing/:shipmentId/pack': { audiences: ['office', 'floor'], permission: 'shipping.pack', scope: 'record' },
   'POST /shipping/packing/:shipmentId/unpack': { audiences: ['office', 'floor'], permission: 'shipping.pack', scope: 'record' },
+  // The office's documents (the live DDT, the packing list) on the site's packing printer (SCR-098 "Documents").
+  'POST /shipping/packing/:shipmentId/documents/print': { audiences: ['office', 'floor'], permission: 'shipping.pack', scope: 'record' },
 })

@@ -1,5 +1,5 @@
 import type { FastifyRequest } from 'fastify'
-import { DomainError, InvalidStateError, type Issue } from '@nexus/factory-domain/core/errors'
+import { DomainError, ForbiddenError, InvalidStateError, type Issue } from '@nexus/factory-domain/core/errors'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { composeDocument } from '@nexus/factory-domain/documents/compose'
 import { legalProblems } from '@nexus/factory-domain/documents/legal'
@@ -21,7 +21,7 @@ import { TAX_COLUMNS, taxFieldsOf } from '../parties/store'
 import { confirmLinkTerms, insertConfirmLink, mintConfirmLink, revokeConfirmLinks, type ConfirmLinkTerms, type MintedLink } from './confirm-links'
 import { deliverLinkMail, queueLinkMail } from './mail'
 import { detailInCommand, refreshTotal } from './orders'
-import { dayOf, decimal, officeContextOf, officeOrder, quantityText, readOrder, senderOf, type Reader } from './store'
+import { dayOf, decimal, officeContextOf, officeOrder, quantityText, readOrder, seesCost, senderOf, type Reader } from './store'
 import { checksOf, letterheadProblems, readFacts, siteAddressOf, type OrderFacts } from './views'
 
 /**
@@ -151,6 +151,38 @@ export async function sendCheck(caller: CommandCaller, orderId: string) {
       message: mail.stored,
     }
   })
+}
+
+// ---- the PDF before it is sent (the send dialog's preview) --------------------------------------------------------------
+
+/** The PDF shown in the page (a new tab opens it too): inline, with the document's own file name. */
+export function inlineDisposition(fileName: string): string {
+  const ascii = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_')
+  const encoded = encodeURIComponent(fileName).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+  return `inline; filename="${ascii}"; filename*=UTF-8''${encoded}`
+}
+
+/**
+ * purchasing.view + the cost grain (the PDF prints the prices): the order as the supplier would get it today — the same
+ * SupplierOrder, layout and letterhead as the send, in the language asked (default the supplier's) — with the "sample"
+ * banner, rendered in memory and stored nowhere. A sent order's frozen PDF is under …/documents. Without the letterhead
+ * a 409 names what is missing, in the send's words.
+ */
+export async function previewOrderPdf(caller: CommandCaller, orderId: string, language: 'it' | 'en' | undefined): Promise<{ pdf: Buffer; fileName: string }> {
+  const context = officeContextOf(caller)
+  const order = await officeOrder(caller, orderId)
+  if (!seesCost(context)) throw new ForbiddenError('The order’s PDF prints its prices: it needs the cost grain.')
+  const today = businessDate(serverClock.now())
+  const company = await companyLegalOf(caller, order.companyId)
+  const problems = legalProblems(company)
+  if (problems.length > 0) throw new DomainError('conflict', `The PDF cannot be made yet. ${problems.map((issue) => issue.message).join(' ')}`, [...problems])
+  const { facts, supplier } = await caller.withClient(async (client) => {
+    const read = await readFacts(client, order)
+    return { facts: read, supplier: await supplierParty(client, read, today) }
+  })
+  const frozen = supplierOrderOf(facts, supplier, today)
+  const composed = composeDocument({ ...purchaseOrderDocument({ ...frozen, language: language ?? frozen.language }), company, sample: true })
+  return { pdf: await renderDocumentPdf(composed), fileName: documentFileName(composed) }
 }
 
 // ---- send -----------------------------------------------------------------------------------------------------------

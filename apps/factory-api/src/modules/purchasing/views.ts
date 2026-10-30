@@ -124,7 +124,7 @@ export function checksOf(facts: OrderFacts, today: string, companyLegal: readonl
   })
 }
 
-function lineView(facts: OrderFacts, line: LineRow) {
+function lineView(facts: OrderFacts, line: LineRow, received: ReadonlyMap<string, string>) {
   const item = facts.items.get(line.itemId)!
   const colour = line.itemColourId ? (facts.colours.get(line.itemColourId) ?? null) : null
   return {
@@ -154,6 +154,8 @@ function lineView(facts: OrderFacts, line: LineRow) {
     note: line.note,
     confirmedQuantity: line.confirmedQuantity === null ? null : quantityText(line.confirmedQuantity),
     confirmedDate: dayOf(line.confirmedDate),
+    /** What every posted goods receipt brought against this line, in the material's base unit (reversed ones count no more). */
+    receivedBaseQuantity: received.get(line.id) ?? '0.0000',
     plan: facts.plan.get(line.id) ?? [],
     version: line.version,
   }
@@ -167,6 +169,11 @@ export async function orderDetail(db: Reader, context: RequestContext, order: Or
   const { party, contact, site } = facts
   const needDates = facts.lines.map((line) => dayOf(line.needDate)!).sort()
   const send = order.status === 'DRAFT' ? checksOf(facts, businessDate(now), await letterheadProblems(db, context, order.companyId)) : null
+  const receivedRows =
+    facts.lines.length === 0
+      ? []
+      : await db.goodsReceiptLine.groupBy({ by: ['purchaseOrderLineId'], where: { purchaseOrderLineId: { in: facts.lines.map((line) => line.id) }, receipt: { status: 'POSTED' } }, _sum: { baseQuantity: true } })
+  const received = new Map(receivedRows.flatMap((row) => (row.purchaseOrderLineId && row._sum.baseQuantity ? [[row.purchaseOrderLineId, quantityText(row._sum.baseQuantity)] as const] : [])))
   return {
     id: order.id,
     number: order.number,
@@ -206,7 +213,7 @@ export async function orderDetail(db: Reader, context: RequestContext, order: Or
     createdAt: toUtcIso(order.createdAt),
     updatedAt: toUtcIso(order.updatedAt),
     createdById: order.createdById,
-    lines: facts.lines.map((line) => lineView(facts, line)),
+    lines: facts.lines.map((line) => lineView(facts, line, received)),
     send,
     confirmLinks: await confirmLinksOf(db, order.id, now),
   }
