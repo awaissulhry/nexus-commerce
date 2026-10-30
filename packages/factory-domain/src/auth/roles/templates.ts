@@ -65,9 +65,26 @@ const PLANT_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freez
   team_leader: ['plant.report'],
 })
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? [])]
+/**
+ * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
+ * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
+ * administrator and the production manager keep the rules. Listed here, one line per template, as tasks are.
+ */
+const ALERTS_TEMPLATES: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['alerts.view', 'alerts.handle', 'alerts.rules.manage'],
+  finance: ['alerts.view', 'alerts.handle'],
+  sales: ['alerts.view', 'alerts.handle'],
+  planner: ['alerts.view', 'alerts.handle'],
+  buyer: ['alerts.view', 'alerts.handle'],
+  warehouse: ['alerts.view', 'alerts.handle'],
+  production_manager: ['alerts.view', 'alerts.handle', 'alerts.rules.manage'],
+  quality_inspector: ['alerts.view', 'alerts.handle'],
+  floor_supervisor: ['alerts.view', 'alerts.handle'],
+})
+const alertsAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' ? (ALERTS_TEMPLATES[key] ?? []) : [])
 
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 

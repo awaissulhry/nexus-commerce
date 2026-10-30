@@ -68,6 +68,9 @@ export const MESSAGE_TEMPLATES = {
   'notifications.plant.reported': { en: 'A machine problem was reported on {record}: {title}', it: 'Segnalato un problema sulla macchina {record}: {title}' },
   'notifications.plant.unsafe': { en: '{record} was marked unsafe ({title}): it stays do-not-use until a technician signs it safe', it: '{record} è stata segnalata non sicura ({title}): resta fuori uso finché un tecnico non la dichiara sicura' },
   'notifications.assigned.job': { en: '{actor} assigned you maintenance job {record}: "{title}"', it: '{actor} ti ha assegnato l’intervento {record}: "{title}"' },
+  // B-W2a-33: an exception rule raised an alert for a record (ALERT; {title} the rule's name), an alert was given to the person.
+  'notifications.alert.raised': { en: 'Alert on {record}: {title}', it: 'Avviso su {record}: {title}' },
+  'notifications.assigned.alert': { en: '{actor} assigned you the alert "{title}" on {record}', it: '{actor} ti ha assegnato l’avviso "{title}" su {record}' },
 } as const satisfies Record<string, { readonly en: string; readonly it: string }>
 export type MessageKey = keyof typeof MESSAGE_TEMPLATES
 export const MESSAGE_KEYS = Object.freeze(Object.keys(MESSAGE_TEMPLATES)) as readonly MessageKey[]

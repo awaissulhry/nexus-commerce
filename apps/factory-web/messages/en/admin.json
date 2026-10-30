@@ -1506,7 +1506,8 @@
     "tasks": "Tasks",
     "views": "Views and exports",
     "search": "Search",
-    "plant": "Plant"
+    "plant": "Plant",
+    "alerts": "Alerts and exception rules"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1691,6 +1692,9 @@
     "inventory_discrepancies_report": "Send the discrepancy report to the supplier",
     "search_rebuild": "Rebuild the search index of the whole group",
     "planning_schedule_manage": "Plan the schedule and allocate work to lines",
-    "planning_schedule_publish": "Publish the schedule to the floor"
+    "planning_schedule_publish": "Publish the schedule to the floor",
+    "alerts_view": "See the alerts of the records you see, and the exception rules",
+    "alerts_handle": "Acknowledge, assign, snooze and resolve alerts",
+    "alerts_rules_manage": "Change and add exception rules"
   }
 }

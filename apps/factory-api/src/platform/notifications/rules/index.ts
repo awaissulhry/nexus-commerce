@@ -1,4 +1,5 @@
 import type { FanOutRule } from '../fan-out'
+import { ALERT_RULES } from './alerts'
 import { APPROVAL_RULES } from './approvals'
 import { ASSIGNMENT_RULES } from './assignments'
 import { THREAD_RULES } from './threads'
@@ -10,4 +11,6 @@ import { PLANT_RULES } from './plant'
  * adds a source of notifications adds its file here, one line (a merge point): B-W2a-33 the alerts its rules raise
  * (category ALERT, the rule's recipients), B-W2a-23 a finished export (SYSTEM, its asker).
  */
-export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RULES, ...ASSIGNMENT_RULES, ...APPROVAL_RULES, ...PLANT_RULES])
+export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RULES, ...ASSIGNMENT_RULES, ...APPROVAL_RULES, ...PLANT_RULES,
+  // B-W2a-33: the exception rules' alerts (ALERT to the rule's recipients; ASSIGNMENT to an alert's assignee).
+  ...ALERT_RULES])

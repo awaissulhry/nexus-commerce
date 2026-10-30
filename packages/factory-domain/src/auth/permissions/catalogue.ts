@@ -7,6 +7,8 @@ import { COSTING_DEFINITIONS, COSTING_PERMISSIONS } from '../../costing/permissi
 import { FLOOR_SYNC_DEFINITIONS, FLOOR_SYNC_PERMISSIONS } from '../../floor-sync/permissions'
 import { HOME_DEFINITIONS, HOME_PERMISSIONS } from '../../insights/permissions'
 import { TASKS_DEFINITIONS, TASKS_PERMISSIONS } from '../../tasks/permissions'
+// B-W2a-33: exception rules and stored alerts.
+import { ALERTS_DEFINITIONS, ALERTS_PERMISSIONS } from '../../alerts/permissions'
 import type { Permission } from '../../core/permissions'
 import { INVENTORY_FLOOR_PERMISSIONS, INVENTORY_PERMISSIONS } from '../../inventory/permissions'
 import { INVENTORY_COUNTS_DEFINITIONS, INVENTORY_COUNTS_PERMISSIONS } from '../../inventory/counts/permissions'
@@ -408,6 +410,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   SEARCH_DEFINITIONS,
   // B-W2a-35: the plant.
   PLANT_DEFINITIONS,
+  // B-W2a-33: exception rules and stored alerts (alerts.view | handle | rules.manage).
+  ALERTS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -461,6 +465,8 @@ for (const name of INVENTORY_DISCREPANCIES_PERMISSIONS) if (!FACTORY_PERMISSIONS
 for (const name of SEARCH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-35: the plant.
 for (const name of PLANT_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-33: exception rules and stored alerts.
+for (const name of ALERTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

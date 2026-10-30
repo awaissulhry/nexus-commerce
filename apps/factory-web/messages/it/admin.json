@@ -1506,7 +1506,8 @@
     "tasks": "Attività",
     "views": "Viste ed esportazioni",
     "search": "Ricerca",
-    "plant": "Stabilimento"
+    "plant": "Stabilimento",
+    "alerts": "Avvisi e regole di eccezione"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1691,6 +1692,9 @@
     "inventory_discrepancies_report": "Inviare al fornitore il rapporto delle differenze",
     "search_rebuild": "Ricostruire l'indice di ricerca di tutto il gruppo",
     "planning_schedule_manage": "Pianificare il programma e assegnare il lavoro alle linee",
-    "planning_schedule_publish": "Pubblicare il programma al reparto"
+    "planning_schedule_publish": "Pubblicare il programma al reparto",
+    "alerts_view": "Vedere gli avvisi dei record che vedi e le regole di eccezione",
+    "alerts_handle": "Prendere in carico, assegnare, posticipare e risolvere gli avvisi",
+    "alerts_rules_manage": "Modificare e aggiungere regole di eccezione"
   }
 }

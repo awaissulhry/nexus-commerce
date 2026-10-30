@@ -85,8 +85,8 @@ export interface RowActions {
   readonly snoozable: boolean
 }
 
-/** Whether a row takes the alert verbs (an approval or a mail is decided in its own review). */
-export const takesActions = (item: Pick<AttentionItem, 'category'>): boolean => item.category === 'ALERT'
+/** Whether a row takes the alert verbs (an approval or a mail is decided in its own review; B-W2a-33: a rule's stored alert in itself). */
+export const takesActions = (item: Pick<AttentionItem, 'category'> & { readonly kind?: string }): boolean => item.category === 'ALERT' && item.kind !== 'RULE_ALERT'
 
 /** Resolved in the row's present condition: it is not on Today. */
 export const isResolved = (item: Pick<AttentionItem, 'condition'>, stored: StoredAction | undefined): boolean => stored?.resolvedCondition === item.condition
@@ -152,7 +152,7 @@ export function snoozeTimeProblem(until: Date | null, now: Date): string | null 
 
 /** The refusal codes of an action, in words for the person (the API answers 409 with them). */
 export const ACTION_REFUSALS = {
-  NOT_AN_ALERT: 'This row is an approval or a mail: decide it in its review, not here.',
+  NOT_AN_ALERT: 'This row is an approval, a mail or an exception rule\'s alert: decide it in its review or in the alert, not here.',
   ALREADY_RESOLVED: 'Someone resolved this row meanwhile: it is off Today until its condition changes.',
   CHANGED: 'This row changed since you read it. Read Today again and decide on what it says now.',
   ALREADY_ACKNOWLEDGED: 'This row is acknowledged already.',
