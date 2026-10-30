@@ -1,9 +1,10 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { BOARD_LANES } from '../api'
-import { at, BOARD, canOf, forRole, inShell, LIST_ROWS, OPEN_ROWS, PREFIX, TODAY, type Role } from '../_demo/fixtures'
+import { DEMO_COMPANIES } from '../../../../shell/design-data'
+import { at, BOARD, canOf, forRole, inShell, LIST_ROWS, OPEN_ROWS, PARTY, PARTY_ROWS, PREFIX, TODAY, type Role } from '../_demo/fixtures'
 import type { Lane } from '../model'
-import type { OrdersListModel } from './list-model'
+import type { NewOrderDialogModel, OrdersListModel } from './list-model'
 import { OrdersListView } from './view/OrdersListView'
 
 /**
@@ -12,6 +13,8 @@ import { OrdersListView } from './view/OrdersListView'
  * production, Ready to ship), the selection and Export N, the board by state (lanes with counts and values, a lane
  * still reading or failed, closed orders off the board), and the roles: Owner, Sales, Finance and the Production
  * manager (read-only, no money). Ticks, the header box, shift-click, j / k / x / Enter / v and ? work for real.
+ * B-W2a-50: New order (c) — the customer search, a customer picked, a blocked one, no number series — and the board
+ * that follows live (open it in a new tab), a ready card's Create shipment.
  */
 
 interface ListCase {
@@ -45,6 +48,19 @@ const base = (role: Role, over: Partial<OrdersListModel> = {}): ListCase => ({
 })
 
 const board = (role: Role, over: Partial<OrdersListModel> = {}): ListCase => base(role, { layout: 'board', lanes: lanesOf(role), ...over })
+
+const newOrder = (over: Partial<NewOrderDialogModel> = {}): NewOrderDialogModel => ({
+  companies: DEMO_COMPANIES.slice(0, 1),
+  companyId: DEMO_COMPANIES[0].id,
+  results: PARTY_ROWS,
+  searchProblem: null,
+  party: null,
+  partyProblem: null,
+  contactId: '',
+  customerRef: '',
+  number: 'SO-2026-0089',
+  ...over,
+})
 
 function OrdersDesign({ model }: { model: ListCase }) {
   return inShell('/sales/orders', createElement(OrdersListView, { model: model.list }), model.role)
@@ -81,5 +97,13 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'board-closed', label: 'Board with Closed chosen: closed orders are not on the board', model: board('sales', { rows: 'CLOSED', lanes: [] }) },
     { id: 'board-one-state', label: 'Board with In production pressed: that lane only', model: board('sales', { rows: 'IN_PRODUCTION', lanes: lanesOf('sales').filter((lane) => lane.status === 'IN_PRODUCTION') }) },
     { id: 'notice', label: 'A notice above the list', model: base('sales', { notice: { tone: 'danger', words: { key: 'problem.read.unavailable' } } }) },
+    // ---- B-W2a-50 ---------------------------------------------------------------------------------------------------------
+    { id: 'new-order', label: 'W2a · Sales · New order: search the customer (c opens it)', model: base('sales', { newOrder: newOrder() }), note: 'Pick a customer: the contact and the customer PO come next; Create draft order opens its Lines.' },
+    { id: 'new-order-picked', label: 'W2a · Sales · New order: the customer picked, the orders contact chosen, the number it will get', model: base('sales', { newOrder: newOrder({ party: PARTY, contactId: PARTY.contacts[0]!.id, customerRef: 'PO-ESEMPIO-89' }) }) },
+    { id: 'new-order-blocked', label: 'W2a · Sales · New order: a blocked customer (Create held with the reason)', model: base('sales', { newOrder: newOrder({ party: { ...PARTY, status: 'BLOCKED' } }) }) },
+    { id: 'new-order-companies', label: 'W2a · Owner · New order: two selling companies; no number series yet', model: base('owner', { newOrder: newOrder({ companies: DEMO_COMPANIES, number: null }) }) },
+    { id: 'new-order-searching', label: 'W2a · Sales · New order: searching customers', model: base('sales', { newOrder: newOrder({ results: null, number: undefined }) }) },
+    { id: 'new-order-held', label: 'W2a · Finance · New order held: taking orders is the sales right', model: base('finance') },
+    { id: 'board-live', label: 'W2a · Owner · Board by state (follows live; Board in a new tab); a ready order offers Create shipment', model: board('owner'), note: 'Board in a new tab opens ?view=board: left open on a second screen it reads its lanes again on every change.' },
   ],
 })

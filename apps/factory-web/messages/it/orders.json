@@ -145,10 +145,12 @@
     "clearFilters": "Togli i filtri",
     "empty": {
       "title": "Ancora nessun ordine",
-      "body": "Un ordine compare qui quando un cliente accetta un preventivo.",
+      "body": "Gli ordini compaiono qui quando un cliente accetta un preventivo, o quando l'ufficio ne inserisce uno con Nuovo ordine.",
       "quotes": "Vai ai preventivi"
     },
-    "viewing": "Mostra: {view}"
+    "viewing": "Mostra: {view}",
+    "new": "Nuovo ordine",
+    "keyNew": "Nuovo ordine"
   },
   "col": {
     "number": "Numero",
@@ -213,7 +215,9 @@
       "OPEN": "Acconto aperto",
       "PAID": "Acconto pagato",
       "WAIVED": "Acconto rinunciato"
-    }
+    },
+    "newTab": "Bacheca in una nuova scheda",
+    "newTabHint": "Lasciala aperta su un secondo schermo: segue da sola ogni cambiamento."
   },
   "tab": {
     "lines": "Righe",
@@ -223,7 +227,8 @@
     "money": "Fatture e pagamenti",
     "documents": "Documenti",
     "activity": "Attività",
-    "depositOpen": "C'è un acconto aperto"
+    "depositOpen": "C'è un acconto aperto",
+    "changes": "Modifiche"
   },
   "step": {
     "makeWorkOrders": "Crea ordini di lavoro",
@@ -235,7 +240,12 @@
     "ready": "Segna come pronto…",
     "openQuote": "Apri il preventivo {number}",
     "copyNumber": "Copia il numero",
-    "createShipment": "Crea spedizione"
+    "createShipment": "Crea spedizione",
+    "amend": "Modifica ordine",
+    "closeLines": "Chiudi le righe rimaste…",
+    "reopenLines": "Riapri righe…",
+    "copyAsQuote": "Copia come nuovo preventivo…",
+    "cancel": "Annulla ordine…"
   },
   "record": {
     "back": "Ordini",
@@ -273,7 +283,10 @@
     "closed": "Chiuso il {date}: non cambia più nulla.",
     "closedNoDate": "Chiuso: non cambia più nulla.",
     "readOnly": "Sola lettura: il tuo ruolo segue gli ordini e non ne cambia nessuno.",
-    "noPanels": "La conversazione, i file e la cronologia si aprono con il record."
+    "noPanels": "La conversazione, i file e la cronologia si aprono con il record.",
+    "amended": "Modificato · rev. {revision}",
+    "reapproval": "In attesa che il cliente accetti la modifica",
+    "typed": "Inserito dall'ufficio"
   },
   "held": {
     "busy": "Sto salvando l'ultima modifica…",
@@ -284,7 +297,7 @@
     "closeState": "Si chiude solo un ordine spedito",
     "noClose": "Chiudere richiede il diritto di gestire o chiudere gli ordini",
     "notSettled": "Non ancora saldato: chiuderlo comunque richiede il diritto di chiudere ordini non saldati",
-    "cancelState": "Si annulla solo un ordine confermato",
+    "cancelState": "Si annulla solo un ordine da cui non è ancora partito nulla: per tornare indietro c'è il reso",
     "cancelWorkOrders": "Le sue righe hanno ordini di lavoro: annulla prima le bozze; uno rilasciato tiene l'ordine",
     "readyState": "Si segna come pronto solo un ordine in produzione",
     "final": "Un ordine chiuso o annullato non cambia mai",
@@ -293,7 +306,17 @@
     "noQuote": "Questo acconto non appartiene a un preventivo: la sua pagina va con il preventivo",
     "noPrice": "Gli importi sono visibili a chi vede i prezzi",
     "noIssue": "Inviare allo SDI richiede il diritto di emettere fatture",
-    "sdiNotNow": "Ora non si può inviare: vedi il suo stato"
+    "sdiNotNow": "Ora non si può inviare: vedi il suo stato",
+    "amending": "Le righe sono in modifica: prima rivedi o scarta la modifica",
+    "amendShipped": "Le righe sono fisse appena parte qualcosa: un cambio successivo è un reso",
+    "amendMtm": "L'ordine ha un capo su misura: qui non si modifica ancora",
+    "amendState": "Ora l'ordine non accetta modifiche",
+    "closeLinesState": "Chiude righe solo un ordine non ancora spedito per intero",
+    "closeLinesNone": "Non resta nulla da chiudere: ogni riga è spedita per intero o già chiusa",
+    "closeLinesOnly": "Non è partito nulla ed è l'unica riga aperta: annulla l'ordine",
+    "reopenState": "Un ordine chiuso o annullato tiene le righe chiuse",
+    "reopenNone": "Nessuna riga è chiusa in anticipo",
+    "noQuotes": "Fare preventivi richiede il diritto commerciale di gestire i preventivi"
   },
   "summary": {
     "label": "L'ordine in sintesi",
@@ -353,7 +376,7 @@
     "open": "Apri l'acconto"
   },
   "lines": {
-    "readOnly": "Quello che il cliente ha ordinato, come accettato. Un ordine cambia con una variazione (più avanti).",
+    "readOnly": "Quello che il cliente ha ordinato, come accettato. Le righe cambiano solo con una modifica (Modifica ordine).",
     "show": "Mostra",
     "vatNature": "IVA {nature}",
     "orderDate": "Come l'ordine",
@@ -371,7 +394,9 @@
       "net": "Imponibile",
       "vat": "IVA",
       "promise": "Promessa"
-    }
+    },
+    "closedShort_one": "Chiusa in anticipo: {count} pezzo",
+    "closedShort_other": "Chiusa in anticipo: {count} pezzi"
   },
   "layer": {
     "ordered": "Ordinati",
@@ -665,7 +690,11 @@
     "promise": "La data promessa è cambiata; la prima promessa resta registrata.",
     "ready": "L'ordine è pronto da spedire.",
     "closed": "L'ordine è chiuso.",
-    "sdiSent": "Inviata allo SDI: la sua risposta compare qui quando arriva."
+    "sdiSent": "Inviata allo SDI: la sua risposta compare qui quando arriva.",
+    "amended": "Modifica {revision} applicata.",
+    "amendedReaccept": "Modifica {revision} applicata. Il totale imponibile è cambiato: il cliente deve accettare di nuovo l'ordine — avvisalo.",
+    "reopened": "Le righe sono state riaperte.",
+    "cancelled": "L'ordine è stato annullato."
   },
   "stepUp": {
     "title": "Conferma che sei tu",
@@ -701,6 +730,408 @@
       "unavailable": "Il server della fabbrica non risponde: non è cambiato nulla.",
       "step_up": "Serve il codice dell'app di autenticazione.",
       "internal": "Qualcosa non ha funzionato sul server: non è cambiato nulla."
+    }
+  },
+  "amend": {
+    "start": "Modifica ordine",
+    "title": "Modifica {revision} — non applicata",
+    "count_one": "{count} cambiamento",
+    "count_other": "{count} cambiamenti",
+    "barLabel": "Bozza della modifica",
+    "discard": "Scarta",
+    "review": "Rivedi",
+    "how": "Cambia qui sotto taglie e prezzi, aggiungi un colore o un modello, o porta una riga a 0 per toglierla. Non cambia nulla finché non rivedi e applichi la modifica.",
+    "header": "Dati dell'ordine",
+    "customerRef": "Ordine del cliente",
+    "requestedDate": "Data richiesta dal cliente",
+    "requestedHint": "Oggi o dopo; vuota: nessuna.",
+    "reviewTitle": "Rivedi la modifica {revision} di {number}",
+    "reading": "Verifica della modifica con il server della fabbrica…",
+    "failed": "Non è stato possibile verificare la modifica.",
+    "problems_one": "{count} cosa blocca la modifica:",
+    "problems_other": "{count} cose bloccano la modifica:",
+    "summary_one": "Cambia {count} riga.",
+    "summary_other": "Cambiano {count} righe.",
+    "summaryMoney": "Imponibile {before} → {after} ({delta}).",
+    "reaccept": "Il totale imponibile cambia: il cliente deve accettare di nuovo l'ordine. L'ordine mostra «in attesa del cliente»; il link di accettazione non c'è ancora, quindi avvisa tu il cliente.",
+    "noReaccept": "Il totale imponibile non cambia: il cliente non deve accettare di nuovo.",
+    "tableLabel": "Righe prima → dopo",
+    "field": {
+      "customerRef": "Ordine del cliente",
+      "requestedDate": "Data richiesta"
+    },
+    "reason": "Perché l'ordine cambia",
+    "reasonHint": "Resta con la modifica, nella scheda Modifiche.",
+    "apply": "Applica la modifica",
+    "held": {
+      "price": "Un prezzo scritto non è un prezzo: controllalo",
+      "workOrders": "Una taglia è sotto quanto gli ordini di lavoro fanno già",
+      "empty": "Un ordine tiene almeno una riga: per fermare tutto l'ordine, annullalo",
+      "nothing": "Non cambia ancora nulla",
+      "reading": "Prima la verifica della modifica",
+      "failed": "La verifica non è riuscita: riprova",
+      "problems": "Prima sistema ciò che blocca la modifica",
+      "reason": "Scrivi perché l'ordine cambia"
+    }
+  },
+  "editor": {
+    "add": {
+      "title": "Aggiungi un modello",
+      "style": "Modello",
+      "styleHint": "Scrivi codice o nome, sceglilo, poi i colori da aggiungere: le loro righe si aprono nella sua griglia.",
+      "placeholder": "Cerca modelli",
+      "searching": "Ricerca dei modelli…",
+      "none": "Nessun modello trovato.",
+      "found_one": "{count} modello",
+      "found_other": "{count} modelli",
+      "estimate": "Solo costi in bozza",
+      "noCost": "Ancora senza scheda costi",
+      "change": "Scegli un altro modello",
+      "colours": "Colori da aggiungere",
+      "go_one": "Aggiungi {count} colore",
+      "go_other": "Aggiungi {count} colori"
+    },
+    "held": {
+      "style": "Prima scegli un modello",
+      "colour": "Scegli almeno un colore"
+    },
+    "empty": {
+      "title": "Ancora nessuna riga",
+      "amend": "Aggiungi un modello qui sopra: un ordine tiene almeno una riga.",
+      "new": "Aggiungi un modello qui sopra, scegli i colori e scrivi i pezzi per taglia."
+    },
+    "gridCaption": "Pezzi di {style} per colore e taglia",
+    "pricesOf": "Prezzi di {style}",
+    "priceOf": "Prezzo unitario di {colour}",
+    "priceKept": "Come accettato",
+    "priceList": "Listino: {price}",
+    "priceListUnknown": "Prezzo di listino del cliente",
+    "col": {
+      "change": "Cambiamento"
+    },
+    "change": {
+      "added": "Aggiunta",
+      "removed": "Tolta",
+      "changed": "Cambiata",
+      "none": "Invariata",
+      "empty": "Scrivi le taglie"
+    },
+    "underWorkOrders": "Taglia {size}: gli ordini di lavoro ne fanno già {made}",
+    "styleReading": "Lettura del modello…",
+    "styleUnread": "Non è stato possibile leggere il modello: solo le taglie dell'ordine",
+    "lockedLabel": "Righe tenute come sono",
+    "lockedClosed_one": "{colour}: chiusa in anticipo ({count} pezzo): riaprila prima di cambiarla",
+    "lockedClosed_other": "{colour}: chiusa in anticipo ({count} pezzi): riaprila prima di cambiarla",
+    "lockedMtm": "{colour}: un capo su misura, tenuto com'è"
+  },
+  "issue": {
+    "state": "Nel suo stato di ora l'ordine non accetta questo cambiamento.",
+    "lines": "Una riga che gli ordini di lavoro fanno, chiusa in anticipo, o nominata da una spedizione o da una fattura non si toglie: chiudila in anticipo o abbassa le taglie.",
+    "reason": "Scrivi perché l'ordine cambia.",
+    "party": "Questo cliente ora non può ricevere un ordine (non attivo, o senza ruolo di cliente).",
+    "contact": "Il contatto non è un contatto attivo di questo cliente.",
+    "billTo": "Il cliente non ha un indirizzo di fatturazione valido: aggiungilo prima al cliente.",
+    "shipTo": "Il cliente non ha un indirizzo di consegna valido: aggiungilo prima al cliente.",
+    "promiseDate": "La data promessa è oggi o dopo.",
+    "requestedDate": "La data richiesta è oggi o dopo.",
+    "customerRef": "L'ordine del cliente è troppo lungo.",
+    "deposit": "L'acconto è sopra 0 e al massimo 100 per cento, oppure nessuno.",
+    "number": "L'azienda non ha una numerazione per gli ordini: un amministratore la aggiunge in Numerazione.",
+    "terms": "I termini di pagamento non sono validi.",
+    "text": "Un testo è troppo lungo.",
+    "other": "Qualcosa non è accettato: controlla l'ordine.",
+    "line": {
+      "sizes": "{line}: controlla le taglie (una taglia non offerta per questo colore, o sotto quanto fanno gli ordini di lavoro).",
+      "price": "{line}: scrivi il prezzo unitario (nessun listino lo prezza per questo cliente).",
+      "catalogue": "{line}: questo modello o colore ora non si può ordinare (archiviato, o non offerto).",
+      "moved": "{line}: nel frattempo l'ordine è cambiato: rileggilo.",
+      "text": "{line}: un testo è troppo lungo.",
+      "other": "{line}: controlla questa riga."
+    }
+  },
+  "closeLines": {
+    "title": "Chiudi le righe rimaste di {number}",
+    "body": "Ciò che resta di queste righe non sarà prodotto né spedito. Quanto è già partito resta com'è.",
+    "lines": "Righe da chiudere",
+    "line_one": "Riga {line} · {style} {colour} — resta {count} pezzo",
+    "line_other": "Riga {line} · {style} {colour} — restano {count} pezzi",
+    "pieces_one": "{count} pezzo non sarà prodotto né spedito.",
+    "pieces_other": "{count} pezzi non saranno prodotti né spediti.",
+    "inWorkOrders_one": "Gli ordini di lavoro fanno ancora {count} pezzo di queste righe: la produzione decide se finirlo a magazzino.",
+    "inWorkOrders_other": "Gli ordini di lavoro fanno ancora {count} pezzi di queste righe: la produzione decide se finirli a magazzino.",
+    "reason": "Perché",
+    "reasonHint": "Per esempio: il cliente non vuole il resto.",
+    "reversal": "Le righe chiuse si possono riaprire dopo (Riapri righe).",
+    "go_one": "Chiudi {count} riga",
+    "go_other": "Chiudi {count} righe",
+    "done_one": "{count} riga chiusa ({pieces} pezzi non saranno prodotti né spediti).",
+    "done_other": "{count} righe chiuse ({pieces} pezzi non saranno prodotti né spediti).",
+    "stillMade_one": "Gli ordini di lavoro ne fanno ancora {count} pezzo: decide la produzione.",
+    "stillMade_other": "Gli ordini di lavoro ne fanno ancora {count} pezzi: decide la produzione.",
+    "problem": {
+      "none": "Scegli almeno una riga",
+      "all": "Non è partito nulla: chiudendo tutte le righe l'ordine resterebbe vuoto. Annulla l'ordine",
+      "reason": "Scrivi perché le righe si chiudono"
+    }
+  },
+  "reopen": {
+    "title": "Riapri righe di {number}",
+    "body": "I pezzi chiusi in anticipo tornano da produrre e spedire.",
+    "lines": "Righe da riaprire",
+    "line_one": "Riga {line} · {style} {colour} — {count} pezzo chiuso in anticipo",
+    "line_other": "Riga {line} · {style} {colour} — {count} pezzi chiusi in anticipo",
+    "closedOn": "Chiusa il {date}.",
+    "reason": "Perché",
+    "go_one": "Riapri {count} riga",
+    "go_other": "Riapri {count} righe",
+    "held": {
+      "none": "Scegli almeno una riga",
+      "reason": "Scrivi perché le righe si riaprono"
+    }
+  },
+  "cancel": {
+    "title": "Annulla l'ordine {number}",
+    "reading": "Verifica di cosa toccherebbe l'annullamento…",
+    "failed": "Non è stato possibile leggere cosa toccherebbe l'annullamento: {problem}",
+    "blocked": "Questo ordine non si può ancora annullare: prima sistema ciò che lo blocca.",
+    "blocks": "Blocca",
+    "stopsTitle": "Cosa blocca l'annullamento",
+    "changesTitle": "Cosa cambia l'annullamento",
+    "leavesTitle": "Cosa lascia (decide chi ne è responsabile)",
+    "nothing": "Nient'altro viene toccato.",
+    "reason": "Motivo",
+    "reasonHint": "Resta sull'ordine e nella sua cronologia.",
+    "type": "Scrivi il numero d'ordine {number} per confermare",
+    "typeHint": "Contano maiuscole e trattini.",
+    "typeWrong": "Questo non è il numero dell'ordine.",
+    "reversal": "Non si torna indietro: un ordine annullato resta com'è. Per ripartire, copialo come nuovo preventivo.",
+    "go": "Annulla ordine",
+    "held": {
+      "reading": "Prima la verifica di cosa toccherebbe l'annullamento",
+      "blocked": "Qualcosa blocca l'annullamento: vedi sopra",
+      "reason": "Prima scrivi il motivo",
+      "number": "Scrivi {number} per confermare"
+    },
+    "keep": "Tieni l'ordine",
+    "open": "Apri:"
+  },
+  "impact": {
+    "STATE_final": "L'ordine è chiuso o annullato: non cambia più.",
+    "STATE_shipped": "La merce è partita: un ordine spedito non si annulla (per tornare indietro c'è un reso o una nota di credito).",
+    "DRAFT_WORK_ORDERS": "Prima si annullano in produzione i suoi ordini di lavoro in bozza ({refs}).",
+    "SHIPMENT_IN_PREPARATION": "Prima il magazzino annulla le spedizioni in preparazione ({refs}).",
+    "SHIPPED": "La merce è partita con {refs}: un ordine spedito non si annulla (per tornare indietro c'è il reso).",
+    "INVOICE_DRAFT_one": "Prima l'amministrazione toglie una fattura in bozza dell'ordine.",
+    "INVOICE_DRAFT_other": "Prima l'amministrazione toglie {count} fatture in bozza dell'ordine.",
+    "INVOICE_ISSUED": "Sono state emesse fatture dell'ordine ({refs}): un documento fiscale non si cancella mai; prima l'amministrazione emette una nota di credito.",
+    "DEPOSITS_CANCELLED_one": "L'acconto non ancora pagato si annulla con l'ordine: al cliente non viene più chiesto.",
+    "DEPOSITS_CANCELLED_other": "{count} acconti non ancora pagati si annullano con l'ordine: al cliente non vengono più chiesti.",
+    "PAYMENT_STEPS_CANCELLED_one": "Si annulla {count} scadenza aperta del piano di pagamento.",
+    "PAYMENT_STEPS_CANCELLED_other": "Si annullano {count} scadenze aperte del piano di pagamento.",
+    "WORK_ORDERS_OPEN": "Gli ordini di lavoro restano aperti ({refs}): la produzione li finisce a magazzino o li annulla.",
+    "LEATHER_CUT_one": "La pelle è già stata tagliata: {count} pelle su {refs}.",
+    "LEATHER_CUT_other": "La pelle è già stata tagliata: {count} pelli su {refs}.",
+    "STOCK_RESERVED_one": "{count} prenotazione di magazzino resta finché il pianificatore non la libera.",
+    "STOCK_RESERVED_other": "{count} prenotazioni di magazzino restano finché il pianificatore non le libera.",
+    "PURCHASE_ORDERS": "La pianificazione contava su ordini d'acquisto per questo ordine ({refs}): restano aperti; decide il compratore.",
+    "DEPOSIT_PAID": "L'acconto è stato pagato: resta; un rimborso spetta all'amministrazione.",
+    "DEPOSIT_PAID_invoiced": "L'acconto è stato pagato e fatturato ({refs}): resta; un rimborso o una nota di credito spetta all'amministrazione.",
+    "PAYMENT_STEPS_PAID_one": "{count} scadenza pagata del piano di pagamento resta pagata: un rimborso spetta all'amministrazione.",
+    "PAYMENT_STEPS_PAID_other": "{count} scadenze pagate del piano di pagamento restano pagate: un rimborso spetta all'amministrazione."
+  },
+  "copy": {
+    "title": "Copia {number} come nuovo preventivo",
+    "body": "Un nuovo preventivo in bozza per {customer} con le righe di questo ordine.",
+    "prices": "Una riga venduta a listino prende il listino di oggi; un prezzo scritto a mano resta.",
+    "left": "Modelli, colori o taglie non più offerti restano fuori (contati dopo la copia).",
+    "orderStays": "Questo ordine non cambia.",
+    "go": "Copia come nuovo preventivo",
+    "done": "Preventivo {number} creato in bozza.",
+    "dropped_one": "{count} riga o taglia è rimasta fuori (non più offerta).",
+    "dropped_other": "{count} righe o taglie sono rimaste fuori (non più offerte).",
+    "open": "Apri il preventivo {number}"
+  },
+  "schedule": {
+    "title": "Piano di pagamento",
+    "label": "Scadenze di pagamento",
+    "empty": "Pagato secondo i termini della fattura; nessuna scadenza.",
+    "open": "Ancora aperto: {amount}",
+    "stepShare": "{kind} · {share}",
+    "kind": {
+      "DEPOSIT": "Acconto all'ordine",
+      "BEFORE_SHIPPING": "Prima della spedizione",
+      "ON_DELIVERY": "Alla consegna",
+      "ON_INVOICE": "Alla fattura"
+    },
+    "status": {
+      "OPEN": "Aperta",
+      "PAID": "Pagata",
+      "WAIVED": "Rinunciata",
+      "CANCELLED": "Annullata"
+    },
+    "when": {
+      "DEPOSIT": "Scade come dice la richiesta d'acconto",
+      "BEFORE_SHIPPING": "Scade prima che la merce parta",
+      "ON_DELIVERY": "Scade alla consegna",
+      "ON_INVOICE": "Scade come dice la fattura"
+    },
+    "overdue": "Scaduta",
+    "due": "Scade il {date}",
+    "dueDeposit": "Scade il {date} (la richiesta d'acconto)",
+    "paidOn": "Pagata il {date}",
+    "cancelled_one": "{count} scadenza precedente è stata sostituita quando una modifica ha rifatto il piano.",
+    "cancelled_other": "{count} scadenze precedenti sono state sostituite quando una modifica ha rifatto il piano."
+  },
+  "changes": {
+    "title": "Modifiche",
+    "subtitle": "Ogni cambiamento all'ordine confermato, numerato, con l'ordine prima e dopo.",
+    "tableLabel": "Modifiche di questo ordine",
+    "empty": {
+      "title": "Nessuna modifica dalla conferma",
+      "body": "Una modifica compare qui appena applicata (Righe › Modifica ordine).",
+      "final": "L'ordine non è mai cambiato dopo la conferma."
+    },
+    "waiting": "In attesa che il cliente accetti l'ordine modificato (dal {date}). Il link di accettazione non c'è ancora: avvisa tu il cliente.",
+    "col": {
+      "revision": "Revisione",
+      "madeBy": "Fatta da",
+      "reason": "Motivo",
+      "lines": "Righe",
+      "money": "Variazione",
+      "reacceptance": "Cliente",
+      "open": "Istantanea",
+      "line": "Riga",
+      "change": "Cambiamento",
+      "sizes": "Taglie prima → dopo",
+      "pieces": "Pezzi",
+      "price": "Prezzo unitario",
+      "before": "Prima",
+      "after": "Dopo",
+      "net": "Imponibile"
+    },
+    "revision": "Rev. {revision}",
+    "when": "{date} alle {time}",
+    "someone": "Qualcuno",
+    "headerOnly": "Solo i dati dell'ordine",
+    "count": {
+      "CHANGED_one": "{count} riga cambiata",
+      "CHANGED_other": "{count} righe cambiate",
+      "ADDED_one": "{count} riga aggiunta",
+      "ADDED_other": "{count} righe aggiunte",
+      "REMOVED_one": "{count} riga tolta",
+      "REMOVED_other": "{count} righe tolte"
+    },
+    "piecesMoved": "Pezzi {before} → {after}",
+    "reaccept": {
+      "NEEDED": "Deve accettare di nuovo",
+      "NOT_NEEDED": "Non serve"
+    },
+    "open": "Prima → dopo",
+    "openOf": "Prima → dopo della revisione {revision}",
+    "line": "Riga {line}",
+    "lineWhat": "Riga {line} · {what}",
+    "kind": {
+      "ADDED": "Aggiunta",
+      "REMOVED": "Tolta",
+      "CHANGED": "Cambiata",
+      "same": "Invariata"
+    },
+    "sizesSame": "Taglie invariate",
+    "pieces": "{before} → {after}",
+    "priceSame": "Invariato",
+    "madeBy": "Fatta da",
+    "byAt": "{name}, {date}",
+    "reason": "Motivo",
+    "money": "Imponibile",
+    "reacceptance": "Nuova accettazione del cliente"
+  },
+  "compare": {
+    "title": "Revisione {revision} di {number}: prima → dopo",
+    "tableLabel": "Le righe dell'ordine prima e dopo",
+    "noSnapshot": "L'istantanea non è disponibile: le taglie vengono dal cambiamento stesso."
+  },
+  "newOrder": {
+    "title": "Nuovo ordine",
+    "body": "Inserito dall'ufficio (per esempio un ordine per telefono o per e-mail). Le righe si scrivono dopo; nulla viene salvato fino a Conferma ordine.",
+    "company": "Azienda che vende",
+    "customer": "Cliente",
+    "customerHint": "Nome, codice, partita IVA o codice fiscale.",
+    "customerPlaceholder": "Cerca clienti",
+    "searching": "Ricerca dei clienti…",
+    "none": "Nessun cliente trovato.",
+    "found_one": "{count} cliente",
+    "found_other": "{count} clienti",
+    "viesWarning": "VIES non valido",
+    "change": "Scegli un altro cliente",
+    "code": "Codice",
+    "taxMode": "Regime fiscale",
+    "terms": "Termini di pagamento",
+    "termsNone": "Quelli del cliente",
+    "warnings_one": "Il cliente ha {count} avviso: vedi la sua scheda.",
+    "warnings_other": "Il cliente ha {count} avvisi: vedi la sua scheda.",
+    "contact": "Contatto",
+    "contactHint": "Se c'è, si sceglie il contatto per gli ordini.",
+    "contactDefault": "Quello del cliente",
+    "noEmail": "senza e-mail",
+    "customerRef": "Ordine del cliente",
+    "customerRefHint": "Il loro numero d'ordine, stampato sui documenti.",
+    "numberLoading": "Lettura del prossimo numero…",
+    "numberUnknown": "Il numero si dà alla conferma dell'ordine.",
+    "number": "Avrà il numero {number} (se un altro ordine non lo prende prima).",
+    "create": "Crea l'ordine in bozza",
+    "partyStatus": {
+      "PROSPECT": "un potenziale cliente",
+      "ACTIVE": "attivo",
+      "BLOCKED": "bloccato",
+      "ARCHIVED": "archiviato"
+    },
+    "taxModes": {
+      "IT_B2B": "Impresa italiana",
+      "IT_B2C": "Consumatore italiano",
+      "EU_B2B": "Impresa UE",
+      "EU_B2C": "Consumatore UE",
+      "EXTRA_EU": "Fuori UE"
+    },
+    "held": {
+      "customer": "Prima scegli un cliente",
+      "party": "Questo cliente è {status}: non si prendono ordini da lui",
+      "identity": "Questo cliente non ha un'identità fiscale valida: aggiungila prima al cliente",
+      "lines": "Aggiungi una riga con almeno un pezzo",
+      "pricing": "Prima il calcolo dei prezzi",
+      "previewFailed": "Non è stato possibile calcolare i prezzi: riprova",
+      "problems": "Prima sistema ciò che il riepilogo elenca"
+    },
+    "pageTitle": "Nuovo ordine",
+    "reading": "Lettura del cliente…",
+    "state": {
+      "missing": {
+        "title": "Nessun cliente scelto",
+        "body": "Inizia un nuovo ordine dall'elenco degli ordini: la finestra chiede prima il cliente."
+      },
+      "error": {
+        "title": "Non è stato possibile leggere il cliente"
+      }
+    },
+    "startAgain": "Inizia un nuovo ordine",
+    "discard": "Scarta",
+    "confirm": "Conferma ordine",
+    "draft": "Bozza — non confermato",
+    "contactIs": "Contatto: {name}",
+    "nothingSaved": "Nulla viene salvato fino a Conferma ordine: le righe restano in questa scheda, anche se si ricarica. La conferma rende subito l'ordine confermato, con la sua richiesta d'acconto.",
+    "details": "Date e nota",
+    "requested": "Data richiesta dal cliente",
+    "requestedHint": "Oggi o dopo; vuota: nessuna.",
+    "promise": "Data promessa",
+    "promiseHint": "Oggi o dopo; vuota: si dà più avanti.",
+    "note": "Nota interna",
+    "noteHint": "Solo per il personale; mai stampata.",
+    "pricing": "Calcolo dei prezzi…",
+    "depositValue": "{pct} · {amount}",
+    "scheduleLater": "Le scadenze compaiono appena l'ordine ha i prezzi.",
+    "problems_one": "{count} cosa blocca l'ordine",
+    "problems_other": "{count} cose bloccano l'ordine",
+    "problem": {
+      "past": "Una data è oggi o dopo."
     }
   }
 }

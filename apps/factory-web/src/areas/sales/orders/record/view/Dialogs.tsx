@@ -11,6 +11,7 @@ import { money } from '../../../quotes/model'
 import type { Order } from '../../api'
 import { amountText, closeHeld, closeNeedsReason, dayInstant, linePromisesAllowed, mayIssueDepositInvoice, parseAmount, paymentProblems, promiseProblems, settlementWords, stillToPay } from '../../model'
 import type { OrderRecordActions, OrderRecordModel } from '../record-model'
+import { AmendReviewDialog, CancelDialog, CloseLinesDialog, CompareDialog, CopyQuoteDialog, ReopenLinesDialog } from './DailyDialogs'
 
 /**
  * The order studio's dialogs: Change promise date (the order or chosen lines, the reason; the first promise never
@@ -36,6 +37,18 @@ export function OrderDialogs({ order, model, actions }: { order: Order; model: O
       return <PaymentDialog order={order} requestId={dialog.requestId} model={model} actions={actions} />
     case 'sdiSend':
       return <SdiDialog order={order} invoiceId={dialog.invoiceId} model={model} actions={actions} />
+    case 'amendReview':
+      return <AmendReviewDialog order={order} model={model} actions={actions} />
+    case 'closeLines':
+      return <CloseLinesDialog order={order} model={model} actions={actions} />
+    case 'reopenLines':
+      return <ReopenLinesDialog order={order} model={model} actions={actions} />
+    case 'cancel':
+      return <CancelDialog order={order} model={model} actions={actions} />
+    case 'copyQuote':
+      return <CopyQuoteDialog order={order} model={model} actions={actions} />
+    case 'compare':
+      return <CompareDialog order={order} amendmentId={dialog.amendmentId} model={model} actions={actions} />
     default:
       return null
   }
@@ -49,7 +62,7 @@ const confirmKeys = (held: string | null, go: () => void) => (event: KeyboardEve
   }
 }
 
-function Frame({ title, held, go, goLabel, onClose, children, problem, size = 'md', tone = 'primary', done }: { title: string; held: string | null; go: () => void; goLabel: string; onClose: () => void; children: ReactNode; problem: ReactNode; size?: 'sm' | 'md' | 'lg'; tone?: 'primary' | 'danger'; done?: ReactNode }) {
+export function Frame({ title, held, go, goLabel, onClose, children, problem, size = 'md', tone = 'primary', done, closeLabel }: { title: string; held: string | null; go: () => void; goLabel: string; onClose: () => void; children: ReactNode; problem: ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl'; tone?: 'primary' | 'danger'; done?: ReactNode; closeLabel?: string }) {
   const t = useT('orders')
   return (
     <Modal
@@ -69,7 +82,7 @@ function Frame({ title, held, go, goLabel, onClose, children, problem, size = 'm
           <>
             <span className="grow" />
             <Button size="sm" onClick={onClose}>
-              {t('common.cancel')}
+              {closeLabel ?? t('common.cancel')}
             </Button>
             <Button size="sm" variant={tone} heldReason={held} onClick={go} aria-keyshortcuts="Meta+Enter Control+Enter">
               {goLabel}
@@ -93,7 +106,7 @@ function Frame({ title, held, go, goLabel, onClose, children, problem, size = 'm
   )
 }
 
-function DialogProblem({ model }: { model: OrderRecordModel }) {
+export function DialogProblem({ model }: { model: OrderRecordModel }) {
   const t = useT('orders')
   return model.dialogProblem ? <Banner tone="danger" title={t(model.dialogProblem.key, model.dialogProblem.params)} /> : null
 }
