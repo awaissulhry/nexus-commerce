@@ -35,7 +35,8 @@ async function noteFacts(db: Reader, type: string, orderId: string, linkId: stri
   const documentNumber = purchaseOrderDocumentNumber(order.number, order.revision)
   if (type === 'purchase_order.confirmed') {
     if (!order.confirmedAt) return null
-    const lines = (await readLines(db, order.id)).length
+    // B-W2a-52: the open lines (a cancelled one was not answered).
+    const lines = (await readLines(db, order.id)).filter((line) => line.cancelledAt === null && line.closedShortAt === null).length
     return { documentNumber, outcome: 'CONFIRMED', byName: order.confirmedByName, supplierRef: order.supplierRef, note: order.confirmNote, summary: answerSummary({ lines, asAsked: lines, laterDate: 0, earlierDate: 0, otherQuantity: 0, split: 0, cannotDeliver: 0 }) }
   }
   if (type === 'purchase_order.changes_proposed') {

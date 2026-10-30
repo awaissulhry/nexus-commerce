@@ -278,12 +278,12 @@ describe('the link page and "confirm all as asked" (SCM-085; no price on the lin
     ])
   })
 
-  it('a cancel decided before the answer finds the order confirmed: 409, and a confirmed order is not cancelled here', async () => {
+  it('a cancel decided before the answer finds the order confirmed: 409; read again (B-W2a-52) the confirmed order is cancelled, the supplier told', async () => {
     const stale = await as('POST', `${orderUrl(order.id)}/cancel`, { version: sentVersion, reason: 'Covered elsewhere' }, 409)
     expect(stale.error.message).toMatch(/changed since it was read/)
-    const current = (await as('GET', orderUrl(order.id))).order
-    expect((await as('POST', `${orderUrl(order.id)}/cancel`, { version: current.version, reason: 'Covered elsewhere' }, 409)).error.message).toMatch(/^The supplier confirmed this order: it is a contract now/)
     expect(await one('SELECT status FROM "PurchaseOrder" WHERE id = $1', [order.id])).toEqual({ status: 'CONFIRMED' })
+    const current = (await as('GET', orderUrl(order.id))).order
+    expect(await as('POST', `${orderUrl(order.id)}/cancel`, { version: current.version, reason: 'Covered elsewhere' })).toMatchObject({ supplierTold: true, order: { status: 'CANCELLED' } })
   })
 })
 

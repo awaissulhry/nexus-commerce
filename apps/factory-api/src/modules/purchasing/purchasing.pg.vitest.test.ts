@@ -416,12 +416,12 @@ describe('a send and a cancel never both happen (compare-and-set on the order ve
     }
   })
 
-  it('a confirmed order is a contract: it is not cancelled here; a received one is closed, never cancelled', async () => {
+  it('B-W2a-52: a confirmed order is cancelled too (the supplier is told); a received one is closed, never cancelled', async () => {
     const draft = await manualOrder()
     const { answer } = await send(draft)
     await admin(`UPDATE "PurchaseOrder" SET status = 'CONFIRMED', "confirmedAt" = now(), "confirmedVia" = 'OFFICE', "confirmedByName" = 'Seed Order Desk' WHERE id = $1`, [draft.id])
     const current = (await as('GET', orderUrl(draft.id))).order
-    expect((await refusedAs('POST', `${orderUrl(draft.id)}/cancel`, { version: current.version, reason: 'Changed our mind' }, 409)).message).toMatch(/^The supplier confirmed this order: it is a contract now/)
+    expect(await as('POST', `${orderUrl(draft.id)}/cancel`, { version: current.version, reason: 'Changed our mind' })).toMatchObject({ order: { status: 'CANCELLED' } })
     expect(answer.order.status).toBe('SENT')
     const received = (await as('GET', orderUrl(seedId('link:P2:record')))).order
     expect(received.status).toBe('PARTLY_RECEIVED')
