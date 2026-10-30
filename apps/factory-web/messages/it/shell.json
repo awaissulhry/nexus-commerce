@@ -85,7 +85,9 @@
     "planning": {
       "area": "Pianificazione",
       "main": "Principali",
-      "mrp": "Cosa comprare e produrre"
+      "mrp": "Cosa comprare e produrre",
+      "board": "Tabellone di pianificazione",
+      "allocation": "Linee e terzisti"
     },
     "warehouse": {
       "area": "Magazzino",

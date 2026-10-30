@@ -85,7 +85,9 @@
     "planning": {
       "area": "Planning",
       "main": "Main",
-      "mrp": "What to buy & make"
+      "mrp": "What to buy & make",
+      "board": "Planning board",
+      "allocation": "Lines & subcontractors"
     },
     "warehouse": {
       "area": "Warehouse",
