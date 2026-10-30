@@ -1524,7 +1524,8 @@
     "plant": "Plant",
     "alerts": "Alerts and exception rules",
     "accounting": "Accounting",
-    "security": "Security & health"
+    "security": "Security & health",
+    "receivables": "Receivables and reminders"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1736,6 +1737,17 @@
     "sales_returns_manage": "Open and change customer returns",
     "sales_returns_receive": "Receive returned goods at the dock",
     "sales_returns_inspect": "Grade returned goods",
-    "sales_returns_decide": "Decide what happens to returned goods"
+    "sales_returns_decide": "Decide what happens to returned goods",
+    "sales_repairs_view": "See repairs",
+    "sales_repairs_manage": "Make and move repairs",
+    "sales_repairs_receive": "Receive a garment for repair",
+    "sales_repairs_check": "Sign a protective garment's safety check",
+    "sales_repairs_ship": "Send a repaired garment back",
+    "receivables_view": "See what customers owe, their statements and the payment reminders",
+    "receivables_reminders_manage": "Prepare, edit, skip and cancel payment reminders",
+    "receivables_reminders_approve": "Approve and send payment reminders",
+    "receivables_statements_send": "E-mail a customer its statement of account",
+    "receivables_settings_manage": "Change the reminder ladder and the late-payment rule",
+    "receivables_reminders_switch": "Switch a company's payment reminders on or off"
   }
 }

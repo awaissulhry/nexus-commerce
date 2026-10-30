@@ -106,6 +106,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/planning/allocation': 'planning.view', // GET /planning/allocation (B-W2a-45)
       '/purchasing/suppliers': 'parties.view', // GET /parties
       '/purchasing/orders': 'purchasing.view', // GET /purchasing/orders
+      '/purchasing/subcontracting': 'purchasing.view', // GET /purchasing/subcontracting/orders (B-W2a-56)
       '/warehouse/stock': 'inventory.stock.view', // GET /inventory/stock
       '/warehouse/hides': 'inventory.stock.view', // GET /inventory/hides
       '/warehouse/lots': 'inventory.stock.view', // GET /inventory/lots
@@ -129,6 +130,10 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/finance/accounting': 'accounting.view', // GET /accounting/exports (B-W2a-51)
       '/finance/reports': 'inventory.stock.view', // GET /costing/valuation (B-W2a-51)
       '/finance/settings': 'invoices.view', // GET /invoicing/settings
+      // B-W2a-53: Plant › Maintenance.
+      '/plant/requests': 'plant.view', // GET /plant/requests
+      '/plant/jobs': 'plant.view', // GET /plant/jobs
+      '/plant/machines': 'plant.view', // GET /plant/machines
       '/admin': 'companies.view', // the checklist reads the companies
       '/admin/companies': 'companies.view',
       '/admin/devices': 'devices.view',
