@@ -13,7 +13,8 @@ import { newIdempotencyKey } from '../../../lib/api/client'
 // W2a wave 5: ON_HOLD (factory-domain production/work-orders/machine).
 export const WORK_ORDER_STATUSES = ['DRAFT', 'RELEASED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED', 'ON_HOLD'] as const
 export type WorkOrderStatus = (typeof WORK_ORDER_STATUSES)[number]
-export const RELEASE_CHECKS = ['REVISION', 'LABEL_TEMPLATE', 'CERTIFICATE', 'WORK_CENTRES', 'BOM', 'CELLS', 'DEPOSIT', 'MATERIAL', 'BATCH_NUMBER'] as const
+// B-W2a-46: HOLDS (factory-domain production/work-orders/blockers).
+export const RELEASE_CHECKS = ['REVISION', 'LABEL_TEMPLATE', 'CERTIFICATE', 'WORK_CENTRES', 'BOM', 'CELLS', 'DEPOSIT', 'MATERIAL', 'BATCH_NUMBER', 'HOLDS'] as const
 export type ReleaseCheckCode = (typeof RELEASE_CHECKS)[number]
 export const CHECK_STATES = ['OK', 'BLOCKED', 'NOT_REQUIRED', 'OVERRIDDEN'] as const
 export type CheckState = (typeof CHECK_STATES)[number]
@@ -84,7 +85,8 @@ export function listWorkOrders(api: ApiClient, query: ListQuery, signal?: AbortS
   })
 }
 
-const countsSchema = z.object({ counts: z.object({ draft: z.number(), released: z.number(), inProgress: z.number(), completed: z.number(), open: z.number(), late: z.number() }) })
+// B-W2a-46: onHold (design wo-metrics "On hold (W2a)").
+const countsSchema = z.object({ counts: z.object({ draft: z.number(), released: z.number(), inProgress: z.number(), completed: z.number(), open: z.number(), late: z.number(), onHold: z.number().optional() }) })
 export type WorkOrderCounts = z.infer<typeof countsSchema>['counts']
 
 export async function countWorkOrders(api: ApiClient, signal?: AbortSignal): Promise<WorkOrderCounts> {
@@ -166,6 +168,8 @@ export const workOrderSchema = z.object({
   ),
   pieces: z.number(),
   progress: z.object({ counted: z.boolean() }),
+  /** B-W2a-46: while ON_HOLD, why, since when and the status it goes back to. */
+  hold: z.object({ reason: z.string().nullable(), at: z.string().nullable(), fromStatus: z.string().nullable(), recordType: z.string().nullable(), recordId: z.string().nullable() }).nullable().optional(),
   spec: z.object({
     frozen: z.boolean(),
     frozenAt: z.string().nullable(),
@@ -183,6 +187,15 @@ export async function getWorkOrder(api: ApiClient, id: string, signal?: AbortSig
 }
 
 const issueSchema = z.object({ path: z.string(), message: z.string() })
+// B-W2a-46 (PLN-086): the plan's word per work order and material (planning readiness; no money, no person).
+export const READINESS_WORDS = ['NOT_ENOUGH', 'DELAYED', 'REQUESTED', 'EXPECTED', 'NOT_BOOKED', 'RECEIVED', 'NOT_PLANNED'] as const
+export type ReadinessWord = (typeof READINESS_WORDS)[number]
+export const readinessSchema = z.object({
+  word: z.enum(READINESS_WORDS),
+  date: z.string().nullable(),
+  materials: z.array(z.object({ itemId: z.string(), itemColourId: z.string().nullable(), label: z.string(), uom: z.string(), word: z.enum(READINESS_WORDS), date: z.string().nullable(), needed: z.string(), reserved: z.string(), inStock: z.string(), onOrder: z.string(), short: z.string() })),
+})
+export type Readiness = z.infer<typeof readinessSchema>
 export const releaseCheckSchema = z.object({
   workOrderId: z.string(),
   status,
@@ -207,6 +220,9 @@ export const releaseCheckSchema = z.object({
       held: z.array(z.object({ reason: z.enum(UNUSABLE_REASONS), quantity: z.string() })),
     }),
   ),
+  // B-W2a-46: the plan's readiness beside the checks, and the holds that block the release.
+  readiness: readinessSchema.nullable().optional(),
+  holds: z.array(z.object({ holdId: z.string().nullable(), reason: z.string(), placedAt: z.string() })).optional(),
 })
 export type ReleaseCheck = z.infer<typeof releaseCheckSchema>
 

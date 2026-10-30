@@ -21,6 +21,8 @@ import { downloadText, useCoalesced, useLive } from '../_shared/hooks'
 import { abilitiesOf, liveTouches, readProblem, releaseRefusalCodes, viewFromAddress, viewQuery, workOrdersCsv, writeProblem, type ListView } from '../_shared/model'
 import { linesOfStyle, NO_NEW_ORDER, openGridOf, stylesOf, type BulkReleaseModel, type NewWorkOrderModel, type WorkOrdersListModel } from './list-model'
 import { WorkOrdersListView } from './view/WorkOrdersListView'
+import { getReadiness, holdReasons, placeHold, type ReadinessRow } from './daily/api'
+import { DAILY_NAMESPACE, dailyCan, dailyProblem, NO_DAILY, READINESS_STATUSES, type DailyModel } from './daily/model'
 
 /**
  * `/w/<company>/production/work-orders` (SCR-069): reads the work orders of the saved view (`?view=`, default open) and
@@ -32,7 +34,7 @@ import { WorkOrdersListView } from './view/WorkOrdersListView'
  */
 export function WorkOrdersPage() {
   return (
-    <WithMessages namespaces={['production', 'lists']}>
+    <WithMessages namespaces={['production', DAILY_NAMESPACE, 'lists']}>
       <WorkOrdersContainer />
     </WithMessages>
   )
@@ -63,6 +65,10 @@ function WorkOrdersContainer() {
   const [newOrder, setNewOrder] = useState<NewWorkOrderModel | null>(null)
   const [release, setRelease] = useState<BulkReleaseModel | null>(null)
   const readId = useRef(0)
+  // B-W2a-46: the readiness word per row (one read per page of rows) and Hold N.
+  const dcan = useMemo(() => dailyCan(session.permissions), [session.permissions])
+  const [readiness, setReadiness] = useState<Record<string, ReadinessRow> | null>(null)
+  const [daily, setDaily] = useState<DailyModel>(() => NO_DAILY(dcan))
 
   const address = useCallback(
     (next: { view?: ListView; q?: string; new?: boolean }) => {
@@ -101,6 +107,21 @@ function WorkOrdersContainer() {
     setRows({ items: null, more: false, problem: null })
     void load()
   }, [load])
+
+  const readinessIds = (rows.items ?? []).filter((row) => READINESS_STATUSES.includes(row.status)).map((row) => row.id).slice(0, 100).join(',')
+  useEffect(() => {
+    if (!readinessIds) return
+    getReadiness(api, readinessIds.split(','))
+      .then((answer) => setReadiness(Object.fromEntries(answer.map((row) => [row.workOrderId, row]))))
+      .catch(() => setReadiness(null))
+  }, [api, readinessIds])
+
+  useEffect(() => {
+    if (daily.dialog?.kind !== 'hold' || daily.reasons) return
+    holdReasons(api)
+      .then((reasons) => setDaily((current) => ({ ...current, reasons })))
+      .catch(() => setDaily((current) => ({ ...current, problem: { key: 'problem.read' } })))
+  }, [api, daily.dialog, daily.reasons])
 
   const more = useCallback(async () => {
     if (!cursor) return
@@ -240,6 +261,8 @@ function WorkOrdersContainer() {
     notice,
     newOrder,
     release,
+    readiness,
+    daily: { ...daily, can: dcan },
   }
 
   return (
@@ -260,6 +283,20 @@ function WorkOrdersContainer() {
         onRunRelease: () => void runRelease(),
         onCloseRelease: () => setRelease(null),
         onDismissNotice: () => setNotice(null),
+        daily: {
+          onDialog: (next) => setDaily((current) => ({ ...current, dialog: next, problem: null })),
+          onPlaceHold: (input) => {
+            if (daily.busy) return
+            setDaily((current) => ({ ...current, busy: true, problem: null }))
+            placeHold(api, input)
+              .then((answer) => {
+                setDaily((current) => ({ ...current, busy: false, dialog: null }))
+                setNotice({ tone: 'success', words: { key: `${DAILY_NAMESPACE}:notice.heldMany`, params: { count: answer.workOrdersHeld.length } } })
+                void load()
+              })
+              .catch((error: unknown) => setDaily((current) => ({ ...current, busy: false, problem: dailyProblem(error) })))
+          },
+        },
         onNew: (open) => {
           if (open) setNewOrder({ ...NO_NEW_ORDER })
           else {

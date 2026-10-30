@@ -12,6 +12,8 @@ import { sizeGridCopy } from '../../../_shared/grid-copy'
 import { checkItems, draftGrid, gridChanged, mayEditDetails, onlyMaterialShort, percentOf, SIZE_LAYERS, sizeRunOf, stepTotals, type SizeLayer } from '../../../_shared/model'
 import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
 import { PartState } from './WorkOrderRecordView'
+import { beforeRelease, readinessView } from '../../daily/model'
+import { HoldsCard, ReadinessLine } from '../../daily/view/DailyParts'
 
 /**
  * Overview & release (design wo-release, wo-frozen, wo-facts, wo-sizes-mini): a draft's release check (each condition
@@ -23,9 +25,11 @@ export function OverviewTab({ workOrder, model, actions }: { workOrder: WorkOrde
   return (
     <div className="fw-pr-stack">
       <div className="fw-pr-cards fw-pr-cards--wide">
-        {workOrder.status === 'DRAFT' ? <ReleaseCheckCard workOrder={workOrder} model={model} actions={actions} /> : <FrozenCard workOrder={workOrder} />}
+        {beforeRelease(workOrder) ? <ReleaseCheckCard workOrder={workOrder} model={model} actions={actions} /> : <FrozenCard workOrder={workOrder} model={model} />}
         <FactsCard workOrder={workOrder} model={model} actions={actions} />
       </div>
+      {/* B-W2a-46 (wo-side "holds (W2a)"): the work order's holds, Put on hold / Release the hold. */}
+      {model.daily && <HoldsCard workOrder={workOrder} daily={model.daily} actions={actions?.daily} />}
       <SizeRunCard workOrder={workOrder} model={model} actions={actions} />
     </div>
   )
@@ -69,6 +73,8 @@ function ReleaseCheckCard({ workOrder, model, actions }: { workOrder: WorkOrder;
           </li>
         ))}
       </ul>
+      {/* B-W2a-46 (wo-release "material available or expected (W2a readiness)"). */}
+      <ReadinessLine readiness={check.readiness ?? null} />
       {onlyMaterialShort(check) && <p className="fw-pr-hint">{t('overview.overrideHint')}</p>}
       <p className="fw-pr-hint">{t('overview.notFrozen')}</p>
     </Card>
@@ -81,7 +87,7 @@ export function translateParams(t: (key: string, params?: Record<string, string 
   return Object.fromEntries(Object.entries(params).map(([name, value]) => [name, typeof value === 'string' && /^(reason|kind)\.[A-Z_]+$/.test(value) ? t(value) : value]))
 }
 
-function FrozenCard({ workOrder }: { workOrder: WorkOrder }) {
+function FrozenCard({ workOrder, model }: { workOrder: WorkOrder; model: WorkOrderRecordModel }) {
   const t = useT('production')
   const locale = useLocale()
   const override = workOrder.release?.materialOverride ?? null
@@ -103,6 +109,7 @@ function FrozenCard({ workOrder }: { workOrder: WorkOrder }) {
         ]}
       />
       {override && <Banner tone="warning" title={t('overview.override', { reason: override.reason })} />}
+      <ReadinessLine readiness={readinessView(workOrder, null, model.daily?.readiness?.value ?? null)} />
       <p className="fw-pr-hint">{t('overview.frozenHint')}</p>
     </Card>
   )

@@ -28,9 +28,12 @@ import type { BomGap, MissingWorkCentre } from './spec'
  *   BATCH_NUMBER    the company has an active batch number series (the number is given at the release, MES-076)
  *
  * Automatic blockers (MES-004, holds) are W2a; the release is by hand (PLAN D1).
+ *   HOLDS           (B-W2a-46, ./blockers) no ACTIVE quality hold names the work order and it is not ON_HOLD; MATERIAL
+ *                   then also reads the plan's readiness (a shortage expected in time passes)
  */
 
-export const RELEASE_CHECKS = ['REVISION', 'LABEL_TEMPLATE', 'CERTIFICATE', 'WORK_CENTRES', 'BOM', 'CELLS', 'DEPOSIT', 'MATERIAL', 'BATCH_NUMBER'] as const
+// B-W2a-46: HOLDS (./blockers).
+export const RELEASE_CHECKS = ['REVISION', 'LABEL_TEMPLATE', 'CERTIFICATE', 'WORK_CENTRES', 'BOM', 'CELLS', 'DEPOSIT', 'MATERIAL', 'BATCH_NUMBER', 'HOLDS'] as const
 export type ReleaseCheckCode = (typeof RELEASE_CHECKS)[number]
 
 export const CHECK_STATES = ['OK', 'BLOCKED', 'NOT_REQUIRED', 'OVERRIDDEN'] as const

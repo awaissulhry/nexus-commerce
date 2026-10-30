@@ -10,6 +10,8 @@ export const manifest = defineManifest({
   'GET /production/work-orders': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'GET /production/work-orders/counts': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'GET /production/work-orders/open-lines': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
+  // B-W2a-46: the readiness word of many work orders (the list's column), each checked on its company and site.
+  'GET /production/work-orders/readiness': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'GET /production/work-orders/:workOrderId': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'GET /production/work-orders/:workOrderId/release-check': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'GET /production/work-orders/:workOrderId/spec/compare': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },

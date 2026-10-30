@@ -12,6 +12,7 @@ import type { CutEntry, CutLog, WorkOrder } from '../../../_shared/api'
 import { correctHold, entryPieces, hideBar, quantityText } from '../../../_shared/model'
 import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../../record/record-model'
 import { NotReleased, PartState } from '../../record/view/WorkOrderRecordView'
+import { PrintButton, YieldCard } from '../../daily/view/DailyParts'
 
 /**
  * SCR-071 — Cutting (design wo-cutlog, wo-cutplan; MES-056): cut against plan per cell, each hide's area (cut + waste +
@@ -32,6 +33,13 @@ export function CuttingTab({ workOrder, model, actions }: { workOrder: WorkOrder
       </div>
       <CutLogList log={log} model={model} actions={actions} />
       {model.cutOpen && <EntryDetail log={log} entryId={model.cutOpen} model={model} actions={actions} />}
+      {/* B-W2a-46 (wo-yield; wo-docs "cutting list (W2a)"). */}
+      {model.daily && <YieldCard daily={model.daily} actions={actions?.daily} />}
+      {model.daily && (
+        <div className="fw-pr-actions">
+          <PrintButton what="cutting" actions={actions?.daily} />
+        </div>
+      )}
     </div>
   )
 }

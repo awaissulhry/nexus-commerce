@@ -8,6 +8,7 @@ import { useT } from '../../../../../lib/i18n/provider'
 import type { WorkOrder, WorkOrderWip } from '../../../_shared/api'
 import { percentOf } from '../../../_shared/model'
 import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../../record/record-model'
+import { OperationFlow } from '../../daily/view/DailyParts'
 import { PartState } from '../../record/view/WorkOrderRecordView'
 
 /**
@@ -21,7 +22,13 @@ export function OperationsTab({ workOrder, model, actions }: { workOrder: WorkOr
   if (workOrder.status === 'DRAFT') return <PlannedOperations workOrder={workOrder} />
   const wip = model.wip.value
   if (!wip) return <PartState label={t('tab.operations')} problem={model.wip.problem} onRetry={() => actions?.onRetryPart?.('wip')} />
-  return <Flow workOrder={workOrder} wip={wip} prefix={model.prefix} bySize={!!model.draft?.opsBySize} />
+  return (
+    <div className="fw-pr-stack">
+      {/* B-W2a-46 (wo-flow "W2a OperationFlow"): the operations as a row with the pile waiting before each. */}
+      {model.daily && <OperationFlow wip={wip} />}
+      <Flow workOrder={workOrder} wip={wip} prefix={model.prefix} bySize={!!model.draft?.opsBySize} />
+    </div>
+  )
 }
 
 function PlannedOperations({ workOrder }: { workOrder: WorkOrder }) {

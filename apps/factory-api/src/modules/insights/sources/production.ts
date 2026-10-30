@@ -30,7 +30,8 @@ export const workOrderHeld: Source = async ({ caller, viewer }) => {
     const candidates: AttentionCandidate[] = []
     for (const row of mine.slice(0, CHECK_LIMIT)) {
       const basics = await readBasics(db, row)
-      const checklist = checklistOf(await readReleaseFacts(db, basics, viewer.today), null)
+      // B-W2a-46: W1's material check here (the plan's readiness nets the whole site: too slow for every Today read).
+      const checklist = checklistOf(await readReleaseFacts(db, basics, viewer.today, undefined, 'never'), null)
       if (checklist.releasable) continue
       const blocked = checklist.checks.filter((check) => check.state === 'BLOCKED').map((check) => check.code)
       const dueDate = dayOrNull(row.dueDate)
