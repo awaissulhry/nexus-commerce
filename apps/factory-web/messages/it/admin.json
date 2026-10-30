@@ -1736,6 +1736,11 @@
     "sales_returns_manage": "Aprire e modificare i resi dei clienti",
     "sales_returns_receive": "Ricevere la merce resa al magazzino",
     "sales_returns_inspect": "Valutare la merce resa",
-    "sales_returns_decide": "Decidere l'esito della merce resa"
+    "sales_returns_decide": "Decidere l'esito della merce resa",
+    "sales_repairs_view": "Vedere le riparazioni",
+    "sales_repairs_manage": "Creare e far avanzare le riparazioni",
+    "sales_repairs_receive": "Ricevere un capo in riparazione",
+    "sales_repairs_check": "Firmare il controllo di sicurezza di un DPI riparato",
+    "sales_repairs_ship": "Rispedire un capo riparato"
   }
 }
