@@ -1588,6 +1588,7 @@
     "purchasing_view": "Vedere gli ordini d'acquisto",
     "purchasing_manage": "Creare e modificare ordini d'acquisto in bozza",
     "purchasing_send": "Inviare un ordine d'acquisto al fornitore",
+    "purchasing_sources_manage": "Gestire prezzi fornitore e fonti approvate",
     "invoices_view": "Vedere fatture e note di credito",
     "invoices_manage": "Preparare fatture in bozza",
     "invoices_issue": "Emettere una fattura (non potrà più cambiare)",

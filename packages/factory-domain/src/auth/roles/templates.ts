@@ -186,6 +186,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'home.view',
       'calendars.view',
       'calendars.suppliers.manage',
+      // B-W2a-10: the approved sources (supplier articles, units, prices, minimums, lead times).
+      'purchasing.sources.manage',
     ],
     grains: ['cost'],
   }),

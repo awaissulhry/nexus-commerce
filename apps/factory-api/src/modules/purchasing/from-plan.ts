@@ -1,31 +1,38 @@
 import { ConflictError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
+import { businessDate } from '@nexus/factory-domain/core/time'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { PURCHASING_MANAGE, PURCHASING_VIEW } from '@nexus/factory-domain/purchasing/permissions'
 import type { Uom } from '@nexus/factory-domain/product/units/units'
 import { STATUS_WORDS, type PurchaseOrderStatus } from '@nexus/factory-domain/purchasing/orders'
 import { command, type CommandCaller, type CommandTools } from '../../core/command'
-import { actorOf } from '../../core/context'
-import { orderRequirement, proposalFor, type PurchaseProposal } from '../planning/hooks'
+import { actorOf, type OfficeContext } from '../../core/context'
+import { orderRequirement } from '../planning/hooks'
 import { lineAudit, linesChanged, insertLine, itemFor, removeLines } from './lines'
 import { assertBuyable, insertDraft } from './orders'
-import { assertMay, officeContextOf, ORDER_COLUMNS, PARTY_COLUMNS, readOrder, type OrderRow } from './store'
+import { requestIdOf, type RequestHoldCode } from '@nexus/factory-domain/purchasing/requests/requests'
+import { buildRequests, planRaws, type Built } from './requests/build'
+import { assertMay, officeContextOf, ORDER_COLUMNS, PARTY_COLUMNS, readOrder, type OrderRow, type Reader } from './store'
 
 /**
  * "Draft PO" from What to buy & make (B-W1-30; design 02: the Requirements grid's one-click Draft PO, the band's "Draft POs
  * for all open Buy lines", the Draft purchase orders pop-up; SCR-055): ONE command turns plan lines to buy into purchase
  * order lines, one line per plan line, grouped per supplier (and delivery site): into the supplier's open DRAFT for that
  * site (or the draft the caller names, or a new one), each plan line marked ORDERED with the line that buys it through
- * planning's hook in the same command. The quantity is the plan's suggestion in the purchase unit, already rounded to whole
- * units, the supplier's minimum and its steps (planning/buy, from the item's terms); the need date is the plan's; the price
- * the material's standard purchase price.
+ * planning's hook in the same command. The supplier is the one the caller names, else the plan line's (the material's
+ * default), else the request queue's choice (a firm planned order's, the site's, the best approved source). The quantity,
+ * unit, price and codes are the request queue's for that supplier (./requests/build, B-W2a-10): a firm planned order as
+ * the planner fixed it; with an approved source of the supplier its unit, minimum, steps, price and article codes; else
+ * the plan's suggestion (the material's terms) at the material's standard purchase price. A supplier that is not one of
+ * the material's approved sources (once it has some) is refused, as is a blocked one.
  *
  * Its Undo removes those lines again (each plan line opens again through the hook) and cancels the drafts the call made
  * when they are left without a line. A line named by an older (superseded) plan cannot be removed (409: the plan never
  * changes; the line is changed or the order cancelled).
  *
  * Two buyers drafting for one supplier and site wait for each other (an advisory lock per supplier and site), so they
- * share one open draft; each order touched is locked by its version.
+ * share one open draft; each order touched is locked by its version. `draftLines` is the one way lines go into supplier
+ * drafts: the request queue's bulk conversion (./requests/convert) uses it too.
  */
 
 export interface DraftFromPlanInput {
@@ -34,11 +41,45 @@ export interface DraftFromPlanInput {
   readonly into?: readonly { readonly supplierId: string; readonly purchaseOrderId: string | null }[] | undefined
 }
 
-interface Planned {
-  readonly proposal: PurchaseProposal
-  readonly version: number
+/** One purchase order line to draft into a supplier's draft. */
+export interface DraftLine {
+  /** What the answer names the line by (the requirement id, or the request id). */
+  readonly key: string
   readonly companyId: string
+  readonly siteId: string
   readonly supplierId: string
+  readonly itemId: string
+  readonly itemColourId: string | null
+  readonly quantity: string
+  readonly uom: Uom
+  readonly needDate: string
+  /** Per `uom`, in the supplier's currency; null: the material's standard purchase price (insertLine's default). */
+  readonly unitPrice: string | null
+  readonly supplierArticleCode: string | null
+  readonly supplierColourCode: string | null
+  /** The plan line it buys: ORDERED with the new line (planning's hook), compared with this version. */
+  readonly requirement: { readonly id: string; readonly version: number; readonly runId: string } | null
+  /** What the line's audit row keeps besides the line. */
+  readonly audit: Record<string, unknown>
+}
+
+/** Per supplier (and delivery site, when named): the draft to add to, or null for a new one. */
+export interface DraftInto {
+  readonly supplierId: string
+  readonly siteId?: string | undefined
+  readonly purchaseOrderId: string | null
+}
+
+export interface DraftedOrder {
+  readonly id: string
+  readonly number: string
+  readonly created: boolean
+  readonly companyId: string
+  readonly siteId: string
+  readonly supplierId: string
+  readonly lineIds: string[]
+  readonly keys: string[]
+  readonly lineCount: number
 }
 
 /** Locks one order's row for this command (its version moves): only a draft takes lines. */
@@ -50,6 +91,108 @@ async function lockDraft(tools: CommandTools, order: OrderRow): Promise<void> {
   }
 }
 
+/** The supplier's open draft at the site the caller would add to (its newest, in the supplier's currency), or null. */
+export const openDraftOf = (db: Reader, scope: { readonly companyId: string; readonly siteId: string; readonly partyId: string; readonly currency: string }) =>
+  db.purchaseOrder.findFirst({ where: { ...scope, status: 'DRAFT' }, orderBy: { id: 'desc' }, select: ORDER_COLUMNS })
+
+/**
+ * Inside a command (the caller checked purchasing.manage over each line's company, site and supplier): the lines into
+ * their suppliers' drafts, one draft per company, site and supplier, groups in a fixed order (the advisory locks are
+ * taken in it). Each line is audited with `action`; each order touched gets purchasing's lines_changed.
+ */
+export async function draftLines(tools: CommandTools, context: OfficeContext, lines: readonly DraftLine[], into: readonly DraftInto[], action: 'purchasing.draftFromPlan' | 'purchasing.convertRequests') {
+  const { tx } = tools
+  const groups = new Map<string, DraftLine[]>()
+  for (const line of lines) {
+    const key = `${line.companyId}|${line.siteId}|${line.supplierId}`
+    groups.set(key, [...(groups.get(key) ?? []), line])
+  }
+  const orders: DraftedOrder[] = []
+  const made: { key: string; purchaseOrderId: string; purchaseOrderLineId: string }[] = []
+  for (const key of [...groups.keys()].sort()) {
+    const entries = groups.get(key)!
+    const { companyId, siteId, supplierId } = entries[0]!
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.purchase-draft', ${context.tenantId}::uuid, ${siteId}::uuid, ${supplierId}::uuid), 0))`
+    const party = await tx.party.findUnique({ where: { id: supplierId }, select: PARTY_COLUMNS })
+    if (!party || (party.companyId !== null && party.companyId !== companyId)) throw new NotFoundError('Supplier not found.')
+    assertBuyable(party, 'body/lines')
+
+    const named = into.find((entry) => entry.supplierId === supplierId && (entry.siteId === undefined || entry.siteId === siteId))
+    let order: OrderRow | null = null
+    let created = false
+    if (named?.purchaseOrderId) {
+      order = await readOrder(tx, named.purchaseOrderId)
+      if (!order || order.companyId !== companyId || order.siteId !== siteId || order.partyId !== supplierId) {
+        throw new ValidationError(`The draft named for ${party.legalName} is not one of its orders for this site.`, [{ path: 'body/into', message: 'Name a draft of this supplier for the site.' }])
+      }
+    } else if (named === undefined) {
+      order = await openDraftOf(tx, { companyId, siteId, partyId: supplierId, currency: party.currency })
+    }
+    if (order) await lockDraft(tools, order)
+    else {
+      const draft = await insertDraft(tools, { companyId, siteId, party, header: {}, source: 'PLAN' })
+      order = (await readOrder(tx, draft.id))!
+      created = true
+    }
+
+    const lineIds: string[] = []
+    for (const entry of entries) {
+      const item = await itemFor(tools, order, entry.itemId)
+      const line = await insertLine(tools, order, item, {
+        itemColourId: entry.itemColourId,
+        quantity: entry.quantity,
+        uom: entry.uom,
+        needDate: entry.needDate,
+        ...(entry.unitPrice === null ? {} : { unitPrice: entry.unitPrice }),
+        supplierArticleCode: entry.supplierArticleCode,
+        supplierColourCode: entry.supplierColourCode,
+      })
+      if (entry.requirement) await orderRequirement(tools, { requirementId: entry.requirement.id, purchaseOrderLineId: line.id, expectedVersion: entry.requirement.version })
+      lineIds.push(line.id)
+      made.push({ key: entry.key, purchaseOrderId: order.id, purchaseOrderLineId: line.id })
+      tools.audit({ action, recordType: 'PurchaseOrderLine', recordId: line.id, companyId, siteId, after: { purchaseOrderId: order.id, ...entry.audit, line: lineAudit(line) } })
+    }
+    const keys = entries.map((entry) => entry.key)
+    await linesChanged(tools, order, { added: lineIds.length }, { action, after: { created, lineIds, ...(action === 'purchasing.draftFromPlan' ? { requirementIds: keys } : { requestIds: keys }) } })
+    orders.push({ id: order.id, number: order.number, created, companyId, siteId, supplierId, lineIds, keys, lineCount: await tx.purchaseOrderLine.count({ where: { purchaseOrderId: order.id } }) })
+  }
+  return { orders, made }
+}
+
+/**
+ * A request as a line to draft; a held one is refused in words (the caller's path names it). `passing` lets holds through
+ * that `draftLines` refuses itself (a supplier that cannot take an order: assertBuyable's words, as W1's Draft PO).
+ */
+export function draftLineOf(built: Built, path: string, audit: Record<string, unknown>, passing: readonly RequestHoldCode[] = []): DraftLine {
+  if (built.hold && !passing.includes(built.hold.code)) {
+    const wrongSupplier = built.hold.code === 'NO_SUPPLIER' || built.hold.code === 'NOT_A_SUPPLIER' || built.hold.code === 'NOT_APPROVED'
+    if (wrongSupplier) throw new ValidationError(built.hold.message, [{ path: `${path}/supplierId`, message: built.hold.message }])
+    throw new ConflictError(built.hold.message)
+  }
+  return {
+    key: built.id,
+    companyId: built.companyId,
+    siteId: built.siteId,
+    supplierId: built.supplier!.id,
+    itemId: built.item.id,
+    itemColourId: built.colour?.id ?? null,
+    quantity: built.quantity,
+    uom: built.uom,
+    needDate: built.needDate,
+    unitPrice: built.unitPrice,
+    supplierArticleCode: built.supplierArticleCode,
+    supplierColourCode: built.supplierColourCode,
+    requirement: built.plan ? { id: built.refId, version: built.version, runId: built.plan.runId } : null,
+    audit,
+  }
+}
+
+/**
+ * The holds a Draft PO from the plan leaves to W1's own refusals, in W1's words: a supplier that cannot take an order
+ * (draftLines' assertBuyable) and a line that is not open (planning's hook: "ordered already", "set aside").
+ */
+const PLAN_PASSING: readonly RequestHoldCode[] = ['NOT_A_SUPPLIER', 'SUPPLIER_BLOCKED', 'SUPPLIER_ARCHIVED', 'NOT_OPEN']
+
 /** purchasing.manage over each plan line's company, site and supplier. */
 export async function draftFromPlan(caller: CommandCaller, body: DraftFromPlanInput, idempotencyKey?: string) {
   const context = officeContextOf(caller)
@@ -57,70 +200,33 @@ export async function draftFromPlan(caller: CommandCaller, body: DraftFromPlanIn
   if (new Set(ids).size !== ids.length) throw new ValidationError('A plan line is listed twice.', [{ path: 'body/lines', message: 'Each line once.' }])
   const { result } = await command(caller, { name: 'purchasing.draftFromPlan', idempotencyKey, input: body }, async (tools) => {
     const { tx } = tools
-    const planned: Planned[] = []
-    for (const [index, line] of body.lines.entries()) {
-      const proposal = await proposalFor(tx, line.id)
-      const run = await tx.planningRun.findUniqueOrThrow({ where: { id: proposal.runId }, select: { companyId: true, status: true } })
-      const supplierId = line.supplierId ?? proposal.supplierId
-      if (!can(actorOf(context), PURCHASING_VIEW, { companyId: run.companyId, siteId: proposal.siteId })) throw new NotFoundError('Plan line not found.')
-      if (!supplierId) {
-        const item = await tx.item.findUniqueOrThrow({ where: { id: proposal.itemId }, select: { code: true } })
-        throw new ValidationError(`Pick a supplier first: ${item.code} has none.`, [{ path: `body/lines/${index}/supplierId`, message: 'Required: the material has no default supplier.' }])
-      }
-      assertMay(context, PURCHASING_MANAGE, { companyId: run.companyId, siteId: proposal.siteId, partyId: supplierId }, 'Plan line')
-      if (run.status !== 'DONE') throw new ConflictError('A newer plan replaced this one: draft the lines of the latest plan.')
-      planned.push({ proposal, version: line.version, companyId: run.companyId, supplierId })
+    const raws = await planRaws(tx, null, { id: { in: ids.filter(isUuid) } })
+    const rawOf = new Map(raws.map((raw) => [raw.row.id, raw]))
+    for (const line of body.lines) {
+      const raw = rawOf.get(line.id)
+      if (!raw) throw new NotFoundError('Requirement not found.')
+      if (raw.row.action !== 'BUY') throw new ConflictError('A part we make is not bought: it has no purchase line.')
+      if (!raw.row.suggestedQuantity.gt(0) && raw.row.firmQuantity === null) throw new ConflictError('Nothing is short on this line: there is nothing to buy.')
+      if (!can(actorOf(context), PURCHASING_VIEW, { companyId: raw.run.companyId, siteId: raw.row.siteId })) throw new NotFoundError('Plan line not found.')
     }
-
-    // One group per company, site and supplier, in a fixed order (the advisory locks are taken in it).
-    const groups = new Map<string, Planned[]>()
-    for (const entry of planned) {
-      const key = `${entry.companyId}|${entry.proposal.siteId}|${entry.supplierId}`
-      groups.set(key, [...(groups.get(key) ?? []), entry])
+    // The supplier: the caller's, else the plan line's (the material's default), else the queue's choice.
+    const choices = new Map(body.lines.map((line) => [requestIdOf('PLAN', line.id), { supplierId: line.supplierId ?? rawOf.get(line.id)!.row.supplierId }]))
+    const built = new Map((await buildRequests(tx, raws, { today: businessDate(tools.now), choices, triggeredOnly: false })).map((entry) => [entry.refId, entry]))
+    const drafts = body.lines.map((line, index) => {
+      const request = built.get(line.id)!
+      if (!request.supplier) {
+        throw new ValidationError(`Pick a supplier first: ${request.item.code} has none.`, [{ path: `body/lines/${index}/supplierId`, message: 'Required: the material has no default supplier.' }])
+      }
+      assertMay(context, PURCHASING_MANAGE, { companyId: request.companyId, siteId: request.siteId, partyId: request.supplier.id }, 'Plan line')
+      if (request.plan!.runStatus !== 'DONE') throw new ConflictError('A newer plan replaced this one: draft the lines of the latest plan.')
+      const audit = { requirementId: request.refId, runId: request.plan!.runId, quantityFrom: request.quantityFrom, sourceId: request.source?.id ?? null }
+      return { ...draftLineOf({ ...request, version: line.version }, `body/lines/${index}`, audit, PLAN_PASSING), key: request.refId }
+    })
+    const { orders, made } = await draftLines(tools, context, drafts, body.into ?? [], 'purchasing.draftFromPlan')
+    return {
+      orders: orders.map((order) => ({ id: order.id, number: order.number, created: order.created, lineIds: order.lineIds, lineCount: order.lineCount })),
+      lines: made.map((entry) => ({ requirementId: entry.key, purchaseOrderId: entry.purchaseOrderId, purchaseOrderLineId: entry.purchaseOrderLineId })),
     }
-    const orders: { id: string; number: string; created: boolean; lineIds: string[]; lineCount: number }[] = []
-    const made: { requirementId: string; purchaseOrderId: string; purchaseOrderLineId: string }[] = []
-    for (const key of [...groups.keys()].sort()) {
-      const entries = groups.get(key)!
-      const { companyId, supplierId } = entries[0]!
-      const siteId = entries[0]!.proposal.siteId
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.purchase-draft', ${context.tenantId}::uuid, ${siteId}::uuid, ${supplierId}::uuid), 0))`
-      const party = await tx.party.findUnique({ where: { id: supplierId }, select: PARTY_COLUMNS })
-      if (!party || (party.companyId !== null && party.companyId !== companyId)) throw new NotFoundError('Supplier not found.')
-      assertBuyable(party, 'body/lines')
-
-      const named = body.into?.find((entry) => entry.supplierId === supplierId)
-      let order: OrderRow | null = null
-      let created = false
-      if (named?.purchaseOrderId) {
-        order = await readOrder(tx, named.purchaseOrderId)
-        if (!order || order.companyId !== companyId || order.siteId !== siteId || order.partyId !== supplierId) {
-          throw new ValidationError(`The draft named for ${party.legalName} is not one of its orders for this site.`, [{ path: 'body/into', message: 'Name a draft of this supplier for the plan’s site.' }])
-        }
-      } else if (named === undefined) {
-        order = await tx.purchaseOrder.findFirst({ where: { companyId, siteId, partyId: supplierId, status: 'DRAFT', currency: party.currency }, orderBy: { id: 'desc' }, select: ORDER_COLUMNS })
-      }
-      if (order) await lockDraft(tools, order)
-      else {
-        const draft = await insertDraft(tools, { companyId, siteId, party, header: {}, source: 'PLAN' })
-        order = (await readOrder(tx, draft.id))!
-        created = true
-      }
-
-      const lineIds: string[] = []
-      for (const entry of entries) {
-        const { proposal } = entry
-        const item = await itemFor(tools, order, proposal.itemId)
-        const line = await insertLine(tools, order, item, { itemColourId: proposal.itemColourId, quantity: proposal.quantity, uom: proposal.uom as Uom, needDate: proposal.needDate })
-        await orderRequirement(tools, { requirementId: proposal.requirementId, purchaseOrderLineId: line.id, expectedVersion: entry.version })
-        lineIds.push(line.id)
-        made.push({ requirementId: proposal.requirementId, purchaseOrderId: order.id, purchaseOrderLineId: line.id })
-        tools.audit({ action: 'purchasing.draftFromPlan', recordType: 'PurchaseOrderLine', recordId: line.id, companyId, siteId, after: { purchaseOrderId: order.id, requirementId: proposal.requirementId, runId: proposal.runId, line: lineAudit(line) } })
-      }
-      await linesChanged(tools, order, { added: lineIds.length }, { action: 'purchasing.draftFromPlan', after: { created, lineIds, requirementIds: entries.map((entry) => entry.proposal.requirementId) } })
-      orders.push({ id: order.id, number: order.number, created, lineIds, lineCount: await tx.purchaseOrderLine.count({ where: { purchaseOrderId: order.id } }) })
-    }
-    return { orders, lines: made }
   })
   return result
 }

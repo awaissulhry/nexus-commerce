@@ -1588,6 +1588,7 @@
     "purchasing_view": "See purchase orders",
     "purchasing_manage": "Make and edit draft purchase orders",
     "purchasing_send": "Send a purchase order to its supplier",
+    "purchasing_sources_manage": "Manage supplier prices and approved sources",
     "invoices_view": "See invoices and credit notes",
     "invoices_manage": "Prepare draft invoices",
     "invoices_issue": "Issue an invoice (it can never change again)",
