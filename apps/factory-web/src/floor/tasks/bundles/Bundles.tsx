@@ -79,7 +79,8 @@ export function FloorBundles() {
   const seesJobs = permissions.has('print.view')
 
   const [screen, setScreen] = useState<Screen>({ kind: 'loading', code: null })
-  const [, setVersion] = useState(0)
+  // Bumped after a make: the tickets made here re-read MADE then (the last make's push follows its queue snapshot).
+  const [version, setVersion] = useState(0)
   const bump = useCallback(() => setVersion((value) => value + 1), [])
   const [sizes, setSizes] = useState<ReadonlyMap<string, number>>(new Map())
   const [overrides, setOverrides] = useState<ReadonlyMap<string, readonly number[]>>(new Map())
@@ -219,7 +220,7 @@ export function FloorBundles() {
 
   const workOrderId = screen.kind === 'order' ? screen.workOrderId : null
   const remembered: Remembered<BundleOrder> | null = workOrderId ? ORDERS.get(workOrderId) : null
-  const made = useMemo(() => (workOrderId ? MADE.filter((ticket) => ticket.workOrderId === workOrderId) : []), [workOrderId, queueSnapshot.items])
+  const made = useMemo(() => (workOrderId ? MADE.filter((ticket) => ticket.workOrderId === workOrderId) : []), [workOrderId, queueSnapshot.items, version])
   const counted = (workOrderId && COUNTED.get(workOrderId)) || new Set<string>()
 
   // The office recorded a make this read does not count: read the work order again (its counts, its bundles' codes).

@@ -3,6 +3,7 @@ import { ApiError } from '../../lib/api/errors'
 import { linkDocumentsSchema, type LinkDocument } from './api'
 import { designScreen } from './fixtures'
 import {
+  dayInstant,
   documentRows,
   fileNameOf,
   isExpired,
@@ -105,6 +106,12 @@ describe('words and files', () => {
     expect(languageName('en', 'it')).toBe('Inglese')
     expect(languageName('it', 'en')).toBe('Italian')
     expect(languageName('zz', 'en')).toMatch(/^ZZ$|^Zz$/i)
+  })
+
+  it('reads a document date given as a day or as an instant (the DoC and the leaflet send their issue instant)', () => {
+    expect(dayInstant('2026-11-12')).toBe('2026-11-12T12:00:00Z')
+    expect(dayInstant('2026-10-30T03:05:00.000Z')).toBe('2026-10-30T03:05:00.000Z')
+    for (const value of ['2026-11-12', '2026-10-30T03:05:00.000Z']) expect(Number.isNaN(new Date(dayInstant(value)).getTime())).toBe(false)
   })
 
   it('gives the download a .pdf name for a PDF', () => {
