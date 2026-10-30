@@ -1622,6 +1622,27 @@
     "quality_lots_documents": "Attach a lot's supplier documents",
     "quality_lots_release": "Release a lot when every check passes",
     "quality_lots_reject": "Reject or block a lot",
-    "quality_settings_manage": "Change what counts as chromium VI evidence"
+    "quality_settings_manage": "Change what counts as chromium VI evidence",
+    "inventory_opening_import": "Load opening stock from a sheet",
+    "inventory_counts_view": "See stock counts and the year-end inventory",
+    "inventory_counts_manage": "Run a stock count and type what was counted",
+    "inventory_counts_approve": "Approve count differences or send a count back",
+    "inventory_counts_signoff": "Sign off the year-end inventory",
+    "planning_settings_manage": "Change planning settings and line capacity",
+    "planning_items_manage": "Change how each item is planned",
+    "production_bundles": "Make bundles and print their tickets",
+    "production_scan": "Report bundles done at an operation",
+    "production_scan_correct": "Decide scan corrections from the floor",
+    "production_serials": "Print garment labels at the final operation",
+    "quality_inspections_view": "See final inspections and release checks",
+    "quality_inspections_record": "Record a final inspection",
+    "quality_garments_release": "Release inspected garments for shipping",
+    "quality_garments_reverse": "Take released garments back before they ship",
+    "home_view": "See Today",
+    "floorsync_view": "See refused actions from floor tablets",
+    "floorsync_discard": "Discard a refused floor tablet action",
+    "calendars_view": "See the business calendars",
+    "calendars_manage": "Change company, site and line calendars",
+    "calendars_suppliers_manage": "Change supplier and subcontractor calendars"
   }
 }
