@@ -377,7 +377,7 @@ describe('buying labels (LOG-025, LOG-032; the company pays)', () => {
   it('voids parcel 2 before the goods leave; then it changes and is labelled again with a new label', async () => {
     expect((await refused('packerA1', 'POST', `/shipping/shipments/${sh2()}/parcels/${S.p2}/label/void`, { reason: 'Wrong box' }, 403)).code).toBe('forbidden')
     const voided = await ok('warehouse', 'POST', `/shipping/shipments/${sh2()}/parcels/${S.p2}/label/void`, { reason: 'Wrong box size' })
-    expect(voided.voided).toEqual({ parcelId: S.p2, seq: 2, carrier: 'CANCELLED' })
+    expect(voided.voided).toEqual({ parcelId: S.p2, seq: 2, carrier: 'CANCELLED', words: expect.stringMatching(/^Cancelled at the carrier/) })
     expect(voided.parcels[1]).toMatchObject({ trackingNumber: null, labelledAt: null, files: [] })
     expect(fake.labelOf(S.track2!).voided).toBe('CANCELLED')
     const audit = await admin(`SELECT before, after, reason FROM "AuditLog" WHERE action = 'shipping.voidLabel' AND "recordId" = $1`, [S.p2])

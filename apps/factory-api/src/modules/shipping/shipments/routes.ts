@@ -10,11 +10,20 @@ import {
   listShipmentsContract,
   packingListContract,
   readyContract,
+  backordersContract,
+  orderBackorderContract,
+  packingListsContract,
+  setFreightContract,
+  getFreightRuleContract,
+  saveFreightRuleContract,
   removeLineContract,
   updateShipmentContract,
 } from './contract'
+import { ValidationError } from '@nexus/factory-domain/core/errors'
+import { listBackorders, orderBackorder } from './backorder'
+import { getFreightRule, saveFreightRule, setFreight } from './freight'
 import { manifest } from './manifest'
-import { packingList } from './packing-list'
+import { packingList, packingLists } from './packing-list'
 import { readyToShip } from './ready'
 import { addLines, cancelShipment, changeLine, createShipment, getShipment, listShipments, removeLine, updateShipment } from './shipments'
 
@@ -49,4 +58,20 @@ export default defineRoutes('shipping.shipments', manifest, async (app) => {
   app.post('/shipping/shipments/:shipmentId/packing-list', { schema: packingListContract }, async (request, reply) =>
     reply.code(201).send(await packingList(processFiles(), request, request.params.shipmentId, request.body, idempotencyKeyFrom(request))),
   )
+
+  // B-W2a-48: shipping every day.
+  app.get('/shipping/backorders', { schema: backordersContract }, async (request) => listBackorders(request, request.query))
+
+  app.get('/shipping/orders/:salesOrderId/backorder', { schema: orderBackorderContract }, async (request) => orderBackorder(request, request.params.salesOrderId, request.query))
+
+  app.get('/shipping/shipments/:shipmentId/packing-lists', { schema: packingListsContract }, async (request) => packingLists(request, request.params.shipmentId))
+
+  app.put('/shipping/shipments/:shipmentId/freight', { schema: setFreightContract }, async (request) => {
+    if (request.body.freightCharge === undefined) throw new ValidationError('Give the freight charged (minor units), or null for the site\'s rule.', [{ path: 'body/freightCharge', message: 'Required (null: back to the rule).' }])
+    return setFreight(request, request.params.shipmentId, { version: request.body.version, freightCharge: request.body.freightCharge }, idempotencyKeyFrom(request))
+  })
+
+  app.get('/shipping/sites/:siteId/freight-rule', { schema: getFreightRuleContract }, async (request) => getFreightRule(request, request.params.siteId))
+
+  app.put('/shipping/sites/:siteId/freight-rule', { schema: saveFreightRuleContract }, async (request) => saveFreightRule(request, request.params.siteId, request.body, idempotencyKeyFrom(request)))
 })

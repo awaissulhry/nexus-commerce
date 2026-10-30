@@ -109,6 +109,9 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // Counts (SCR-132) reads `?view=`, `?q=` and `?site=`.
   '/inventory/stock-counts': '/warehouse/counts',
   '/planning/runs/latest': '/planning/mrp',
+  // B-W2a-45: the schedule's board and the allocation board.
+  '/planning/schedule': '/planning/board',
+  '/planning/allocation': '/planning/allocation',
 })
 
 export interface RecordRef {

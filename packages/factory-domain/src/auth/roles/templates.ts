@@ -81,6 +81,14 @@ const RETURNS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.fre
   floor_inspector: ['sales.returns.receive', 'sales.returns.inspect'],
 })
 /**
+ * B-W2a-48 (shipping every day; LOG-105, LOG-090): finance sets the freight charged (a price: its grain) and says when a
+ * shipment's intra-EU transport evidence is enough; the warehouse files the carrier's papers. Owner takes them from every().
+ */
+const SHIPPING_DAILY_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  finance: ['shipping.freight.manage', 'shipping.evidence.manage'],
+  warehouse: ['shipping.evidence.manage'],
+})
+/**
  * B-W2a-47 (nonconformances, QHS-080 … QHS-091; design quality.ncr): whoever finds a problem raises an NCR from where
  * they work (the warehouse at a lot or a receipt, the buyer at a supplier claim, sales at a return, the floor
  * supervisor at a bundle); quality follows it up, approves another person's decisions and closes it with an
@@ -96,7 +104,7 @@ const NCR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze(
   sales: ['quality.ncr.view', 'quality.ncr.raise'],
   planner: ['quality.ncr.view'],
 })
-const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : [])]
+const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -206,6 +214,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'search.rebuild',
       // B-W2a-36: Security & health; record a restore drill.
       'security.view', 'security.drills.record',
+      // B-W2a-41: the mail delivery log; unblock an address.
+      'email.delivery.view', 'email.delivery.unblock',
     ],
     grains: [],
   }),

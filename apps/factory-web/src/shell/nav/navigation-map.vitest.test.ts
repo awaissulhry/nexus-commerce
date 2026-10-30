@@ -101,6 +101,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/products/operations': 'product.routing.view', // GET /product/operations
       '/products/sizes': 'product.styles.view', // GET /product/size-scales
       '/planning/mrp': 'planning.view', // GET /planning/runs/latest
+      '/planning/board': 'planning.view', // GET /planning/schedule (B-W2a-45)
+      '/planning/allocation': 'planning.view', // GET /planning/allocation (B-W2a-45)
       '/purchasing/suppliers': 'parties.view', // GET /parties
       '/purchasing/orders': 'purchasing.view', // GET /purchasing/orders
       '/warehouse/stock': 'inventory.stock.view', // GET /inventory/stock

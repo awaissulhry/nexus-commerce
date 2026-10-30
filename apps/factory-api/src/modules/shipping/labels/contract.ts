@@ -68,7 +68,20 @@ export const buyLabelsContract = defineContract({
 export const voidLabelContract = defineContract({
   params: input({ shipmentId: id(), parcelId: id() }),
   body: input({ version, reason: z.string().trim().min(3).max(500) }),
-  response: { 200: output({ ...labelsView, voided: output({ parcelId: id(), seq: z.number().int(), carrier: z.enum(['CANCELLED', 'QUEUED', 'NOT_SENT']) }) }) },
+  response: { 200: output({ ...labelsView, voided: output({ parcelId: id(), seq: z.number().int(), carrier: z.enum(['CANCELLED', 'QUEUED', 'NOT_SENT']), words: z.string() }) }) },
+})
+
+/** B-W2a-48 (LOG-028): every labelled parcel of the shipment, voided together. */
+export const voidAllLabelsContract = defineContract({
+  params: shipmentParams,
+  body: input({ version, reason: z.string().trim().min(3).max(500) }),
+  response: {
+    200: output({
+      ...labelsView,
+      outcomes: z.array(output({ parcelId: id(), seq: z.number().int(), ok: z.boolean(), carrier: z.enum(['CANCELLED', 'QUEUED', 'NOT_SENT']).nullable(), problem: z.string().nullable(), words: z.string().nullable() })),
+      problem: z.string().nullable(),
+    }),
+  },
 })
 
 export const printLabelsContract = defineContract({

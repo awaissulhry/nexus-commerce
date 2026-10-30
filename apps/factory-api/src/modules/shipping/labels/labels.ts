@@ -29,7 +29,8 @@ import { tenantOf } from '../cells'
 import { officeShipment } from '../shipments/shipments'
 import { lockedStatus, readShipment, type ShipmentHeader } from '../store'
 import { carrierProblem, isCarrierRefusal, type CarrierRuntime } from './carrier'
-import { labelFilesOf, labelsView, readLabelFacts, readLabelParcels, shipmentAccountId, type LabelsView } from './store'
+import { labelFilesOf, labelsView, latestStatuses, readLabelFacts, readLabelParcels, readTracking, shipmentAccountId, statusMap, type LabelsView } from './store'
+import { collectedProblems, voidAllPlan, voidAllProblems, voidOutcomeWords } from '@nexus/factory-domain/shipping/shipments/void'
 
 /**
  * Carrier labels (B-W1-48; LOG-025, LOG-032, LOG-059; A2 SCR-067 in the office, SCR-098 on the floor).
@@ -246,6 +247,10 @@ export async function voidLabel(carrier: CarrierRuntime, caller: CommandCaller, 
   if (!parcel) throw new NotFoundError('Parcel not found.')
   const problems = voidProblems(shipment.status, { seq: parcel.seq, trackingNumber: parcel.trackingNumber, providerId: parcel.carrierParcelId })
   if (problems.length > 0) throw new InvalidStateError(problems.join(' '))
+  // B-W2a-48 (LOG-028): the carrier has the parcel already: said before the carrier is called.
+  const latest = await caller.withClient(async (client) => statusMap(latestStatuses(await readTracking(client, shipment.id))))
+  const collected = collectedProblems({ seq: parcel.seq, latest: latest.get(parcel.id) ?? null })
+  if (collected.length > 0) throw new InvalidStateError(collected.join(' '))
 
   let outcome: 'CANCELLED' | 'QUEUED' | 'NOT_SENT' = 'NOT_SENT'
   if (parcel.carrierParcelId !== null) {
@@ -282,7 +287,85 @@ export async function voidLabel(carrier: CarrierRuntime, caller: CommandCaller, 
     },
   )
   const view = await caller.withClient(async (client) => labelsView(client, (await readShipment(client, shipment.id))!, serverClock.now()))
-  return { ...view, voided: { parcelId: result.voided, seq: parcel.seq, carrier: result.carrier } }
+  return { ...view, voided: { parcelId: result.voided, seq: parcel.seq, carrier: result.carrier, words: voidOutcomeWords(result.carrier) } }
+}
+
+/**
+ * B-W2a-48 (LOG-028; design pop-up "Void labels"): shipping.labels.void, every labelled parcel of a shipment that has not
+ * left, in one go. A parcel the carrier already has keeps its label (said in words, nothing sent for it). The others
+ * are cancelled at the carrier one by one OUTSIDE any transaction (a refusal keeps that parcel's label with the
+ * carrier's words, the rest go on), then ONE command on the Shipment (its version as read) clears the labels the
+ * carrier cancelled, with the reason on each audit row. Nothing cancelled: 409 with every parcel's words.
+ */
+export async function voidAllLabels(carrier: CarrierRuntime, caller: CommandCaller, shipmentId: string, body: { version?: number | undefined; reason: string }, idempotencyKey?: string) {
+  const shipment = await officeLabelShipment(caller, shipmentId, SHIPPING_LABELS_VOID)
+  const facts = await caller.withClient(async (client) => {
+    const rows = await client.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, trackingNumber: true, carrierParcelId: true, labelledAt: true }, orderBy: { seq: 'asc' } })
+    const latest = statusMap(latestStatuses(await readTracking(client, shipment.id)))
+    return { rows, latest }
+  })
+  const parcels = facts.rows.map((row) => ({ parcelId: row.id, seq: row.seq, labelled: isLabelled({ trackingNumber: row.trackingNumber, providerId: row.carrierParcelId }), latest: facts.latest.get(row.id) ?? null }))
+  const problems = voidAllProblems(shipment.status, parcels)
+  if (problems.length > 0) throw new InvalidStateError(problems.join(' '))
+  if (body.version !== undefined && body.version !== shipment.version) throw new StaleVersionError('Shipment', shipment.id, shipment.version, body.version)
+  const plan = voidAllPlan(parcels)
+  const rowOf = new Map(facts.rows.map((row) => [row.id, row]))
+  const outcomes: { parcelId: string; seq: number; ok: boolean; carrier: 'CANCELLED' | 'QUEUED' | 'NOT_SENT' | null; problem: string | null }[] = plan.kept.map((entry) => ({ parcelId: entry.parcelId, seq: entry.seq, ok: false, carrier: null, problem: entry.problem }))
+  const cancelled: { parcelId: string; seq: number; carrier: 'CANCELLED' | 'QUEUED' | 'NOT_SENT'; trackingNumber: string | null; providerId: string | null; labelledAt: Date | null }[] = []
+  for (const parcel of plan.toVoid) {
+    const row = rowOf.get(parcel.parcelId)!
+    let outcome: 'CANCELLED' | 'QUEUED' | 'NOT_SENT' = 'NOT_SENT'
+    if (row.carrierParcelId !== null) {
+      if (!shipment.integrationAccountId) {
+        outcomes.push({ parcelId: row.id, seq: row.seq, ok: false, carrier: null, problem: 'The shipment names no Sendcloud connection: its label cannot be voided from here.' })
+        continue
+      }
+      try {
+        outcome = await carrier.voidLabel(caller, shipment.integrationAccountId, row.carrierParcelId)
+      } catch (error) {
+        const why = carrierProblem(error)
+        outcomes.push({ parcelId: row.id, seq: row.seq, ok: false, carrier: null, problem: isCarrierRefusal(error) ? `The label of parcel ${row.seq} stays: ${why}` : `The label of parcel ${row.seq} was not voided: ${why} Try again.` })
+        continue
+      }
+    }
+    cancelled.push({ parcelId: row.id, seq: row.seq, carrier: outcome, trackingNumber: row.trackingNumber, providerId: row.carrierParcelId, labelledAt: row.labelledAt })
+    outcomes.push({ parcelId: row.id, seq: row.seq, ok: true, carrier: outcome, problem: null })
+  }
+  if (cancelled.length === 0) throw new ConflictError(outcomes.map((outcome) => outcome.problem).filter(Boolean).join(' ') || 'No label was voided.')
+
+  await command(
+    caller,
+    { name: 'shipping.voidLabels', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id } },
+    async (tools) => {
+      const current = await lockedStatus(tools, shipment.id, ['DRAFT', 'PACKED'], 'labels are voided')
+      for (const entry of cancelled) {
+        const row = await tools.tx.parcel.findFirst({ where: { id: entry.parcelId, shipmentId: shipment.id }, select: { trackingNumber: true, carrierParcelId: true } })
+        // Changed meanwhile (bought again, voided by another): the carrier's answer stands, the row is left as it is now.
+        if (!row || row.carrierParcelId !== entry.providerId || row.trackingNumber !== entry.trackingNumber) continue
+        await tools.tx.parcel.update({ where: { id: entry.parcelId }, data: { trackingNumber: null, carrierParcelId: null, labelledAt: null, version: { increment: 1 } }, select: { id: true } })
+        tools.audit({
+          action: 'shipping.voidLabel',
+          recordType: 'Parcel',
+          recordId: entry.parcelId,
+          companyId: current.companyId,
+          siteId: current.siteId,
+          before: { trackingNumber: entry.trackingNumber, providerId: entry.providerId, labelledAt: entry.labelledAt?.toISOString() ?? null },
+          after: { trackingNumber: null, carrier: entry.carrier, all: true },
+          reason: body.reason,
+        })
+        tools.emit({ type: 'shipment.label_voided', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, parcelId: entry.parcelId, seq: entry.seq, queued: entry.carrier === 'QUEUED' } })
+      }
+      tools.audit({ action: 'shipping.voidLabels', recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, after: { voided: cancelled.map((entry) => entry.seq), kept: outcomes.filter((outcome) => !outcome.ok).map((outcome) => outcome.seq) }, reason: body.reason })
+      tools.emit({ type: 'shipment.packing_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, status: current.status, change: 'parcels' } })
+      return { voided: cancelled.length }
+    },
+  )
+  const view = await caller.withClient(async (client) => labelsView(client, (await readShipment(client, shipment.id))!, serverClock.now()))
+  return {
+    ...view,
+    outcomes: outcomes.sort((a, b) => a.seq - b.seq).map((outcome) => ({ ...outcome, words: outcome.carrier ? voidOutcomeWords(outcome.carrier) : null })),
+    problem: outcomes.some((outcome) => !outcome.ok) ? `${cancelled.length} of ${outcomes.length} labels were voided; see each parcel.` : null,
+  }
 }
 
 // ---- print and read ---------------------------------------------------------------------------------------------------

@@ -7,7 +7,9 @@ import { isApiError } from '../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { WithMessages } from '../../../record-panels/i18n'
 import { useLive } from '../../_shared/buying/hooks'
-import { changeBundleSize, changeScanSubject, getRules, listReasons, listRules, noticeAcks, recordLegalBasis, stepUp, type ChangeAnswer } from './api'
+import { changeBundleSize, changeScanSubject, getRules, listRules, noticeAcks, recordLegalBasis, stepUp, type ChangeAnswer } from './api'
+import { REASON_LIST_GROUPS } from '@nexus/factory-domain/reasons/lists'
+import { ReasonListsEditor } from '../../_shared/reasons/ReasonListsEditor'
 import { changeProblem, chosenSite, doneOf, FLOOR_RULES_NAMESPACES, floorRulesCan, StepUpCancelled, stepUpProblem, subjectBody, tabOf, withStepUp } from './model'
 import { FloorRulesView, type FloorRulesModel } from './view/FloorRulesView'
 
@@ -24,9 +26,9 @@ function readProblem(error: unknown): string {
 }
 
 /**
- * `/w/<company>/production/settings?site=&tab=rules|codes` (SCR-074): reads the sites' floor rules (production.settings
+ * `/w/<company>/production/settings?site=&tab=rules|codes&list=` (SCR-074, SCR-088): reads the sites' floor rules (production.settings
  * .view), the shown site's detail (the counts a change reaches) and its notice acknowledgements as counts, and the
- * reason codes (production.scan); applies the switch (widening: a fresh code when the API asks, then the same call once
+ * reason codes in the shared reason list editor (B-W2a-46; reasons.view, reasons.manage); applies the switch (widening: a fresh code when the API asks, then the same call once
  * more; narrowing after the confirm), records or replaces the legal basis and saves the standard bundle size, each with
  * the version read and its own Idempotency-Key per attempt. Live `production.monitoring_changed` of the site from
  * another screen → "Changed by someone else · Reload".
@@ -54,7 +56,6 @@ function Container() {
   const [sites, setSites] = useState<FloorRulesModel['sites']>({ status: 'loading' })
   const [detail, setDetail] = useState<FloorRulesModel['detail']>(LOADING)
   const [acks, setAcks] = useState<FloorRulesModel['acks']>(LOADING)
-  const [reasons, setReasons] = useState<FloorRulesModel['reasons']>(LOADING)
   const [asOf, setAsOf] = useState<string | null>(null)
   const [busy, setBusy] = useState<FloorRulesModel['busy']>(null)
   const [notice, setNotice] = useState<FloorRulesModel['notice']>(null)
@@ -100,14 +101,6 @@ function Container() {
     [api],
   )
 
-  const loadReasons = useCallback(() => {
-    if (!can.reasons) return
-    setReasons(LOADING)
-    listReasons(api)
-      .then((value) => setReasons({ value, problem: null }))
-      .catch((error: unknown) => setReasons({ value: null, problem: readProblem(error) }))
-  }, [api, can.reasons])
-
   useEffect(() => {
     void loadSites()
   }, [loadSites])
@@ -118,10 +111,6 @@ function Container() {
   useEffect(() => {
     if (siteId) void loadSite(siteId)
   }, [siteId, loadSite])
-
-  useEffect(() => {
-    if (tab === 'codes') loadReasons()
-  }, [tab, loadReasons])
 
   useLive(
     (change) => {
@@ -172,7 +161,6 @@ function Container() {
     siteId,
     detail,
     acks,
-    reasons,
     asOf,
     busy,
     notice,
@@ -180,9 +168,24 @@ function Container() {
     stepUp: stepUpState,
   }
 
+  // B-W2a-46 (SCR-088): the reason lists of Floor rules & codes, in the shared editor (`?list=` keeps the one shown).
+  const codes =
+    tab === 'codes' ? (
+      <ReasonListsEditor
+        lists={REASON_LIST_GROUPS.floorRules}
+        initialList={params?.get('list') ?? null}
+        onListChange={(list) => {
+          const query = new URLSearchParams(params?.toString() ?? '')
+          query.set('list', list)
+          router.replace(`${pathname}?${query.toString()}`)
+        }}
+      />
+    ) : null
+
   return (
     <FloorRulesView
       model={model}
+      codes={codes}
       actions={{
         onSite: (next) => {
           setNotice(null)
@@ -242,8 +245,7 @@ function Container() {
           if (sites.status !== 'ready') {
             setSites({ status: 'loading' })
             void loadSites()
-          } else if (tab === 'codes') loadReasons()
-          else if (siteId) void loadSite(siteId)
+          } else if (siteId) void loadSite(siteId)
         },
         onDismissNotice: () => setNotice(null),
       }}

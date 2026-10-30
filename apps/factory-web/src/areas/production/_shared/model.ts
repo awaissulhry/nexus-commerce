@@ -68,7 +68,8 @@ export const STATUS_TONE: Readonly<Record<WorkOrderStatus, Tone>> = Object.freez
 // ---- the list: saved views and tiles -------------------------------------------------------------------------------------------
 
 /** Rows ▾: the saved views (design wo-grid). `open` is the default. */
-export const LIST_VIEWS = ['open', 'late', 'DRAFT', 'RELEASED', 'IN_PROGRESS', 'COMPLETED', 'CLOSED', 'CANCELLED', 'all'] as const
+// B-W2a-46: ON_HOLD (design wo-metrics "On hold (W2a)").
+export const LIST_VIEWS = ['open', 'late', 'DRAFT', 'RELEASED', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CLOSED', 'CANCELLED', 'all'] as const
 export type ListView = (typeof LIST_VIEWS)[number]
 export const DEFAULT_VIEW: ListView = 'open'
 
@@ -104,6 +105,8 @@ export const TILES = [
   { id: 'released', view: 'RELEASED', count: (counts: WorkOrderCounts) => counts.released },
   { id: 'inProgress', view: 'IN_PROGRESS', count: (counts: WorkOrderCounts) => counts.inProgress },
   { id: 'late', view: 'late', count: (counts: WorkOrderCounts) => counts.late },
+  // B-W2a-46: work orders on hold.
+  { id: 'onHold', view: 'ON_HOLD', count: (counts: WorkOrderCounts) => counts.onHold ?? 0 },
 ] as const satisfies ReadonlyArray<{ id: string; view: ListView; count: (counts: WorkOrderCounts) => number }>
 
 // ---- numbers --------------------------------------------------------------------------------------------------------------------
@@ -233,6 +236,8 @@ export function checkItems(check: ReleaseCheck, workOrder: Pick<WorkOrder, 'cell
     if (entry.code === 'BOM' && entry.state === 'BLOCKED' && !workOrder.revision) wordKey = 'check.noRevision'
     // No kind named: the routing has no step at all (no revision, or a routing without operations).
     if (entry.code === 'WORK_CENTRES' && entry.state === 'BLOCKED' && !entry.problems.some((problem) => problem.path.startsWith('checks/WORK_CENTRES/'))) wordKey = 'check.WORK_CENTRES.noSteps'
+    // B-W2a-46: a shortage the plan expects in time passes MATERIAL (its own words); a hold names how many.
+    if (entry.code === 'MATERIAL' && entry.state === 'OK' && check.materials.some((line) => Number(line.short) > 0)) wordKey = 'check.MATERIAL.expected'
     const problems = entry.state === 'BLOCKED' || entry.state === 'OVERRIDDEN' ? entry.problems.flatMap((problem) => problemWords(problem.path, entry.code, check, workOrder)) : []
     return { code: entry.code, state: entry.state, words: phrase(wordKey, params), problems }
   })
@@ -260,6 +265,11 @@ function problemWords(path: string, code: ReleaseCheckCode, check: ReleaseCheck,
     ]
   }
   if (parts[0] === 'checks' && parts[1] === 'WORK_CENTRES' && parts[2]) return [phrase('problem.workCentre', { kind: `kind.${parts[2]}`, site: workOrder.site.code })]
+  // B-W2a-46: a hold that blocks the release (`holds/<id>`, or the work order's own hold under another record).
+  if (parts[0] === 'holds' || (parts[0] === 'checks' && parts[1] === 'HOLDS')) {
+    const hold = (check.holds ?? []).find((entry) => (parts[0] === 'holds' ? entry.holdId === parts[1] : entry.holdId === null))
+    return [phrase('problem.hold', { since: hold?.placedAt.slice(0, 10) ?? '—' })]
+  }
   // `checks/<CODE>`: the check's own sentence says it.
   if (parts[0] === 'checks' && parts[1] === code) return []
   return [phrase('problem.other')]
@@ -468,6 +478,8 @@ export function releaseRefusalCodes(error: unknown): ReleaseCheckCode[] {
     if (head === 'checks' && second) codes.add(second as ReleaseCheckCode)
     if (head === 'orders') codes.add('DEPOSIT')
     if (head === 'materials') codes.add('MATERIAL')
+    // B-W2a-46: a hold that blocks the release.
+    if (head === 'holds') codes.add('HOLDS')
     if (head === 'cells') codes.add(third === 'certificate' ? 'CERTIFICATE' : third === 'bom' ? 'BOM' : 'CELLS')
   }
   return [...codes]

@@ -1,0 +1,191 @@
+/*
+ * Planning › Planning board (SCR-122) LAYOUT: the band, the controls, the board's section, the problems and the dialogs'
+ * forms. The controls, the board, its load bars and its cards are the design system's (PlanningBoard D18, LoadBar); semantic
+ * tokens only, no colours of their own. No page max-width (Owner rule 2026-10-29): the board fills the main area and uses
+ * the width for more days; it scrolls inside itself, never the page sideways.
+ */
+.fw-pb {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pb-band,
+.fw-pb-toolbar,
+.fw-pb-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pb-band {
+  justify-content: space-between;
+}
+
+.fw-pb-scope,
+.fw-pb-actions,
+.fw-pb-dates,
+.fw-pb-dialog-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-pb-date {
+  width: 10.5rem;
+  flex: none;
+}
+
+.fw-pb-site {
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-pb-status,
+.fw-pb-plan,
+.fw-pb-hint {
+  color: var(--nds-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.fw-pb-plan {
+  margin: 0;
+}
+
+.fw-pb-search {
+  flex: 1 1 14rem;
+  min-width: 10rem;
+  max-width: 24rem;
+}
+
+.fw-pb-filters {
+  gap: var(--nds-space-6);
+}
+
+.fw-pb-filter-name {
+  color: var(--nds-text-muted);
+  margin-inline-start: var(--nds-space-6);
+}
+
+.fw-pb-filter-name:first-child {
+  margin-inline-start: 0;
+}
+
+.fw-pb-board,
+.fw-pb-problems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pb-board:focus {
+  outline: none;
+}
+
+.fw-pb-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-12);
+}
+
+.fw-pb-h2,
+.fw-pb-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pb-h3 {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pb-skeleton,
+.fw-pb-dialog-reading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-pb-problem-list,
+.fw-pb-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-pb-problem,
+.fw-pb-check {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pb-problem-words {
+  flex: 1 1 18rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-pb-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pb-dialog p {
+  margin: 0;
+}
+
+.fw-pb-dialog-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-pb-legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+}
+
+.fw-pb-legend-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, max-content) 1fr;
+  gap: var(--nds-space-12);
+  align-items: baseline;
+}
+
+.fw-pb-legend-row dt {
+  display: inline-flex;
+  gap: var(--nds-space-4);
+  flex-wrap: wrap;
+}
+
+.fw-pb-legend-row dd {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .fw-pb-search {
+    max-width: none;
+  }
+
+  .fw-pb-legend-row {
+    grid-template-columns: 1fr;
+    gap: var(--nds-space-4);
+  }
+}

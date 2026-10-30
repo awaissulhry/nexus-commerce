@@ -23,6 +23,7 @@ import { assertMay, mayOn, officeContextOf } from '../access'
 import { tenantOf } from '../cells'
 import { shipmentDetail, officeShipment } from '../shipments/shipments'
 import { shipmentDocumentBlockers } from '../documents/read'
+import { whenShipped } from '../shipments/leave'
 import { lockedStatus, readShipment, shipmentFacts, type ShipmentHeader } from '../store'
 import { isSourceDdt, lockSource, sourceDdtView, sourceIssuedOf, sourceLanguageOf, sourceNumbersOf, type SourceDdtRow } from './sources-store'
 import { ddtView, expectedDdtNumber, isShipmentDdt, issuedOf, languageOf, liveDdtOf, pdfFileIdOf, pdfFileIdsOf, readAnyDdt, readDdt, readDdtFacts, type AnyDdtRow, type DdtRow, type DdtView } from './store'
@@ -120,6 +121,8 @@ async function shipGoods(tools: CommandTools, shipment: ShipmentHeader): Promise
     await tools.tx.garmentSerial.update({ where: { id: serial.id }, data: { status: 'SHIPPED', version: { increment: 1 } }, select: { id: true } })
     tools.audit({ action: 'shipping.shipSerial', recordType: 'GarmentSerial', recordId: serial.id, companyId: shipment.companyId, siteId: shipment.siteId, before: { status: 'RELEASED' }, after: { status: 'SHIPPED', shipmentId: shipment.id } })
   }
+  // B-W2a-48: closed-short lines refused, the garments in finished goods out of stock, the freight, the EU evidence.
+  await whenShipped(tools, shipment)
   tools.emit({ type: 'shipment.status_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, from: 'PACKED', to: 'SHIPPED' } })
   tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status: 'SHIPPED', change: 'status' } })
   return serials.map((serial) => serial.serial)

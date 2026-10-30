@@ -16,6 +16,7 @@ import { adminHref } from '../../shared/model'
 import { BulkButton, FrameState, PageHead } from '../../shared/view/parts'
 import type { IntegrationAccount, IntegrationProvider } from '../api'
 import { MailDomainSection, type MailDomainActions } from '../mail/view/MailDomainSection'
+import { DeliverySection, type DeliveryActions } from '../delivery/view/DeliverySection'
 import {
   accountState,
   CONNECTION_TILES,
@@ -58,6 +59,8 @@ export interface ConnectionsActions {
   onStepUp?: (code: string) => void
   onStepUpClose?: () => void
   mail?: MailDomainActions
+  /** The delivery log and blocked addresses (B-W2a-41). */
+  delivery?: DeliveryActions
 }
 
 /**
@@ -237,7 +240,7 @@ function Connections({ model, actions }: { model: ConnectionsViewModel; actions?
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (event.metaKey || event.ctrlKey || event.altKey || model.connect || model.confirm || model.bulk || model.mail?.add) return
+      if (event.metaKey || event.ctrlKey || event.altKey || model.connect || model.confirm || model.bulk || model.mail?.add || model.delivery?.confirm) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]') || target.isContentEditable)) return
       if (event.key !== 'c') return
       event.preventDefault()
@@ -367,6 +370,7 @@ function Connections({ model, actions }: { model: ConnectionsViewModel; actions?
       />
       {help}
       {model.mail ? <MailDomainSection model={model.mail} actions={actions?.mail} prefix={model.prefix} /> : <Banner tone="info" title={t('mail.noRight')} />}
+      {model.delivery && <DeliverySection model={model.delivery} actions={actions?.delivery} prefix={model.prefix} />}
       <Residency model={model} />
       <p className="fw-adm-hint">{t('conn.later')}</p>
       <ConnectModal open={!!model.connect} accounts={live} onClose={() => actions?.onConnect?.(false)} />

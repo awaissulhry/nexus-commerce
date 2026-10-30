@@ -68,13 +68,15 @@
     "COMPLETED": "Completati",
     "CLOSED": "Chiusi",
     "CANCELLED": "Annullati",
-    "all": "Tutti"
+    "all": "Tutti",
+    "ON_HOLD": "In sospeso"
   },
   "tile": {
     "draft": "Bozze da rilasciare",
     "released": "Rilasciati, non iniziati",
     "inProgress": "In lavorazione",
-    "late": "In ritardo"
+    "late": "In ritardo",
+    "onHold": "In sospeso"
   },
   "col": {
     "number": "Ordine",
@@ -303,7 +305,8 @@
       "DEPOSIT": "Acconto",
       "MATERIAL": "Materiale",
       "BATCH_NUMBER": "Numero di lotto",
-      "other": "altri controlli"
+      "other": "altri controlli",
+      "HOLDS": "Blocchi"
     },
     "REVISION": {
       "OK": "La Rev {revision} è rilasciata; il rilascio la congela.",
@@ -342,11 +345,16 @@
     "MATERIAL": {
       "OK": "Le scorte utilizzabili della sede coprono ogni materiale.",
       "BLOCKED": "Materiale mancante in sede: attendi la merce, o rilascia con il motivo del pianificatore.",
-      "OVERRIDDEN": "Materiale mancante, rilasciato con il motivo del pianificatore."
+      "OVERRIDDEN": "Materiale mancante, rilasciato con il motivo del pianificatore.",
+      "expected": "Oggi manca a magazzino, ma il piano lo attende in tempo (o lo tiene per questo ordine di produzione)."
     },
     "BATCH_NUMBER": {
       "OK": "Il numero di lotto viene assegnato al rilascio e non cambia mai.",
       "BLOCKED": "L'azienda non ha una serie per i lotti: un amministratore la imposta in Sistema › Documenti e numerazioni."
+    },
+    "HOLDS": {
+      "OK": "Nessun blocco lo riguarda.",
+      "BLOCKED": "È in sospeso: la qualità toglie il blocco prima del rilascio."
     }
   },
   "problem": {
@@ -360,7 +368,8 @@
       "unknown": "Manca un materiale"
     },
     "workCentre": "Nessun centro di lavoro {kind} attivo a {site}",
-    "other": "Un altro problema lo trattiene"
+    "other": "Un altro problema lo trattiene",
+    "hold": "In sospeso dal {since}"
   },
   "reason": {
     "CR_VI_PENDING": "attende il risultato Cr VI",

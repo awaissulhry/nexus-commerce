@@ -149,8 +149,8 @@ function sumOrNull(values: Iterable<number | null>): number | null {
  * null for a draft (nothing is frozen to count against, never a made-up 0). The same counts as the record (cutCountsOf,
  * scanProgressOf), so the list and the record never disagree.
  */
-export async function progressTotalsOf(db: Reader, workOrder: Pick<Header, 'id' | 'siteId' | 'styleId' | 'status'>): Promise<ProgressTotals | null> {
-  if (workOrder.status === 'DRAFT') return null
+export async function progressTotalsOf(db: Reader, workOrder: Pick<Header, 'id' | 'siteId' | 'styleId' | 'status'> & { readonly heldFromStatus?: string | null }): Promise<ProgressTotals | null> {
+  if (workOrder.status === 'DRAFT' || (workOrder.status === 'ON_HOLD' && workOrder.heldFromStatus === 'DRAFT')) return null
   const cut = await cutCountsOf(db, workOrder.id, workOrder.styleId)
   const scanned = [...(await scanProgressOf(db, workOrder)).values()]
   return {
@@ -165,7 +165,8 @@ export async function progressTotalsOf(db: Reader, workOrder: Pick<Header, 'id' 
 export async function workOrderView(db: Reader, workOrder: Header, today: BusinessDate, loaded?: Basics) {
   const basics = loaded ?? (await readBasics(db, workOrder))
   const { style, site, cells, orders, revision, label } = basics
-  const frozen = workOrder.status !== 'DRAFT'
+  // B-W2a-46: a DRAFT put on hold keeps its draft spec (nothing is frozen before the release).
+  const frozen = workOrder.status !== 'DRAFT' && !(workOrder.status === 'ON_HOLD' && workOrder.heldFromStatus === 'DRAFT')
   const parts = await readSpecParts(db, revision?.id ?? null, workOrder.siteId)
   // A repair DRAFT (B-W2a-12) shows the steps stored on it, as the release will freeze them.
   const draft = frozen || workOrder.kind === 'REPAIR' ? null : planSpec(parts, cells)
@@ -199,6 +200,8 @@ export async function workOrderView(db: Reader, workOrder: Header, today: Busine
     closedAt: at(workOrder.closedAt),
     cancelledAt: at(workOrder.cancelledAt),
     cancelReason: workOrder.cancelReason,
+    // B-W2a-46: the work order's own hold (ON_HOLD): its reason, since when, and the status it goes back to.
+    hold: workOrder.status === 'ON_HOLD' ? { reason: workOrder.holdReason, at: at(workOrder.heldAt), fromStatus: workOrder.heldFromStatus, recordType: workOrder.holdRecordType, recordId: workOrder.holdRecordId } : null,
     createdAt: toUtcIso(workOrder.createdAt),
     updatedAt: toUtcIso(workOrder.updatedAt),
     createdById: workOrder.createdById,

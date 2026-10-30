@@ -121,10 +121,9 @@ export type ParcelView = ReturnType<typeof parcelView>
 
 /** The shipment's lines (by style, colourway, size) and parcels (by place), as read now. */
 export async function readContents(db: CommandTx, shipmentId: string): Promise<{ lines: LineRow[]; parcels: ParcelRow[] }> {
-  const [lines, parcels] = await Promise.all([
-    db.shipmentLine.findMany({ where: { shipmentId }, select: LINE_SELECT, orderBy: { id: 'asc' } }),
-    db.parcel.findMany({ where: { shipmentId }, select: PARCEL_SELECT, orderBy: { seq: 'asc' } }),
-  ])
+  // One query after another (B-W2a-48): a transaction's client has one connection.
+  const lines = await db.shipmentLine.findMany({ where: { shipmentId }, select: LINE_SELECT, orderBy: { id: 'asc' } })
+  const parcels = await db.parcel.findMany({ where: { shipmentId }, select: PARCEL_SELECT, orderBy: { seq: 'asc' } })
   lines.sort(
     (a, b) =>
       a.workOrderSize.workOrder.style.code.localeCompare(b.workOrderSize.workOrder.style.code) ||
@@ -138,10 +137,8 @@ export async function readContents(db: CommandTx, shipmentId: string): Promise<{
 
 /** The facts the shipment machine's guards need (packing complete, labels, live DDTs). */
 export async function shipmentFacts(db: CommandTx, shipmentId: string, contents?: { lines: LineRow[]; parcels: ParcelRow[] }): Promise<ShipmentFacts> {
-  const [{ lines, parcels }, liveDdts] = await Promise.all([
-    contents ?? readContents(db, shipmentId),
-    db.ddt.count({ where: { shipmentId, cancellations: { none: {} } } }),
-  ])
+  const { lines, parcels } = contents ?? (await readContents(db, shipmentId))
+  const liveDdts = await db.ddt.count({ where: { shipmentId, cancellations: { none: {} } } })
   return { lines: lines.map(packLineOf), parcels: parcels.map(packParcelOf), liveDdts }
 }
 
