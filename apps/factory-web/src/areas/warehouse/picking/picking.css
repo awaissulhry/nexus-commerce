@@ -1,0 +1,201 @@
+/*
+ * Warehouse › Picking & kits (SCR-237) LAYOUT: the page column, the head row and its band, the readiness popover's
+ * list, the pick list dialog's body, the check list, the Create dialog and the paper. The controls are the design
+ * system's (stock.css holds the cells and numbers every stock screen shares); semantic tokens only, no colours of their
+ * own. No page max-width (Owner rule 2026-10-29): the page fills the shell's main area.
+ */
+.fw-pk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pk-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pk-status {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pk-band,
+.fw-pk-buttons,
+.fw-pk-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-pk-code {
+  font-family: var(--nds-font-mono);
+  white-space: nowrap;
+}
+
+.fw-pk-held {
+  color: var(--nds-danger-text);
+}
+
+.fw-pk-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pk-ready-trigger {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.fw-pk-ready {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  max-width: 26rem;
+}
+
+.fw-pk-ready-head {
+  margin: 0;
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-pk-ready-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pk-ready-list li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-pk-ready-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-12);
+}
+
+.fw-pk-sheet,
+.fw-pk-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pk-sheet-place {
+  margin: 0;
+  color: var(--nds-text-muted);
+}
+
+.fw-pk-stops {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  overflow-wrap: anywhere;
+}
+
+.fw-pk-h3 {
+  margin: 0 0 var(--nds-space-6);
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-pk-heldlist ul,
+.fw-pk-print-held,
+.fw-pk-keys {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding-left: var(--nds-space-16);
+}
+
+.fw-pk-check {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pk-check li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+}
+
+.fw-pk-check li.ok svg {
+  color: var(--nds-success);
+}
+
+.fw-pk-check li.open svg {
+  color: var(--nds-text-muted);
+}
+
+/* ---- the paper ---- */
+.fw-pk-print {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-pk-print-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-pk-print-title {
+  margin: 0;
+  font-size: var(--nds-font-size-xl);
+}
+
+.fw-pk-print-button {
+  align-self: flex-start;
+}
+
+.fw-pk-print-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pk-box {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-sm);
+}
+
+@media print {
+  .fw-topbar,
+  .h10-rail,
+  .fw-office-subheader,
+  .nds-bottombar,
+  .fw-system-banner,
+  .fw-pk-print-button {
+    display: none !important;
+  }
+
+  .fw-pk-print .fw-pk-print-section {
+    break-inside: avoid-page;
+  }
+}

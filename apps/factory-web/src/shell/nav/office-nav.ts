@@ -131,6 +131,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-45: Planning board (SCR-122) and Lines & subcontractors (SCR-126).
   '/planning/board',
   '/planning/allocation',
+  // B-W2a-59: Planning settings (SCR-124, SCR-127) and its plant calendar print (a new tab).
+  '/planning/settings',
+  '/planning/settings/calendar-print',
   // B-W1-32 part 2: Receipts (SCR-063), receiving against a PO with lots and hides one by one (SCR-061/062), a receipt.
   '/warehouse/receipts',
   '/warehouse/receipts/new',
@@ -209,11 +212,24 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-28: Warehouse › Counts (SCR-132) and a count.
   '/warehouse/counts',
   '/warehouse/counts/[id]',
+  // B-W2a-58: Warehouse › Picking & kits (SCR-237) and its paper (a new tab, no navigation row).
+  '/warehouse/picking',
+  '/warehouse/picking/print',
   // B-W2a-32: All results of the global search (SCR-248), a frame page opened from the palette (no navigation row).
   '/search',
   // B-W2a-38: Production › Reports › Production reports (SCR-240) and its print page (a new tab, no navigation row).
   '/production/reports',
   '/production/reports/print',
+  // B-W2a-53: Plant › Maintenance — Machine requests (SCR-148) and their print for the shift, Maintenance jobs (SCR-149),
+  // a job and its job sheet, Machines & tools (SCR-150), a machine and the tag sheet.
+  '/plant/requests',
+  '/plant/requests/print',
+  '/plant/jobs',
+  '/plant/jobs/[id]',
+  '/plant/jobs/[id]/sheet',
+  '/plant/machines',
+  '/plant/machines/[id]',
+  '/plant/machines/tags',
 ])
 
 /** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */

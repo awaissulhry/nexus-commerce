@@ -38,6 +38,13 @@
       "outside": "Lavorazioni esterne",
       "subcontracting": "Ordini ai terzisti"
     },
+    "plant": {
+      "area": "Stabilimento",
+      "maintenance": "Manutenzione",
+      "requests": "Richieste di intervento",
+      "jobs": "Interventi",
+      "machines": "Macchine e attrezzature"
+    },
     "admin": {
       "area": "Sistema",
       "main": "Principali",
@@ -99,7 +106,9 @@
       "main": "Principali",
       "mrp": "Cosa comprare e produrre",
       "board": "Tabellone di pianificazione",
-      "allocation": "Linee e terzisti"
+      "allocation": "Linee e terzisti",
+      "settingsGroup": "Impostazioni",
+      "settings": "Impostazioni pianificazione"
     },
     "warehouse": {
       "area": "Magazzino",
@@ -116,6 +125,7 @@
       "moves": "Movimenti",
       "locations": "Ubicazioni",
       "inTheWarehouse": "In magazzino",
+      "picking": "Prelievi e kit",
       "counts": "Inventari"
     },
     "frame": {

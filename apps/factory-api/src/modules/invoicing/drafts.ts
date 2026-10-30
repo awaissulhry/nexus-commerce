@@ -7,6 +7,7 @@ import { depositInvoiceDraft, depositTreatment } from '@nexus/factory-domain/inv
 import { computeInvoiceTotals, lineProblems, MAX_INVOICE_LINES, storedVatOf, treatmentOf, type CoreLine, type InvoiceDocType, type InvoiceTotals } from '@nexus/factory-domain/invoicing/invoices'
 import { INVOICES_MANAGE, INVOICES_VIEW } from '@nexus/factory-domain/invoicing/permissions'
 import { markMoney } from '@nexus/factory-domain/money/marked'
+import { ADVANCE_STEP_KINDS } from '@nexus/factory-domain/sales/orders/schedule'
 import { STANDARD_VAT_RATE } from '@nexus/factory-domain/tax/vat-rates'
 import { decideVatTreatment, type CustomerTaxProfile, type VatTreatment } from '@nexus/factory-domain/tax/vat-treatment'
 import { TaxRuleError } from '@nexus/factory-domain/tax/rules'
@@ -27,9 +28,9 @@ import { assertMay, invoiceDetail, officeContextOf, officeInvoice, readInvoice, 
  * refuses the rest: DPR 633/1972 art. 26).
  *
  * B-W2a-54: charge lines (kind CHARGE + what they bill, factory-domain invoicing/charges; FIN-060), their VAT following
- * the goods when none is given; a deposit invoice's line names its order's deposit step (FIN-058); the payment terms come
- * from where the invoice says (./terms.ts: the office's own, the order's or the customer's library terms, a TD02's
- * advance) and are made again for every new total.
+ * the goods when none is given; a deposit invoice's line names its order's deposit step (FIN-058) — B-W2a-F2: or the
+ * before-shipping step whose own request it invoices; the payment terms come from where the invoice says (./terms.ts: the
+ * office's own, the order's or the customer's library terms, a TD02's advance) and are made again for every new total.
  */
 
 export interface LineInput {
@@ -378,8 +379,9 @@ export async function insertDepositDraft(tools: CommandTools, request: { id: str
   if ('problem' in treatment) throw new DomainError('conflict', treatment.problem, [{ path: 'party/taxIdentity', message: treatment.problem }])
   const order = request.orderId ? await tools.tx.salesOrder.findUnique({ where: { id: request.orderId }, select: { number: true, orderDate: true, customerRef: true } }) : null
   const draft = depositInvoiceDraft({ amount, currency: request.currency, treatment: treatment.treatment, paidOn, depositPct: request.depositPct, order: order ? { number: order.number, date: order.orderDate.toISOString().slice(0, 10) } : null })
-  // B-W2a-54 (FIN-058): the deposit is a step of the order's payment schedule (B-W2a-30): its TD02 line names it.
-  const step = request.orderId ? await tools.tx.salesOrderMilestone.findFirst({ where: { orderId: request.orderId, depositRequestId: request.id, kind: 'DEPOSIT', status: { in: ['OPEN', 'PAID'] } }, select: { id: true } }) : null
+  // B-W2a-54 (FIN-058): the deposit is a step of the order's payment schedule (B-W2a-30): its TD02 line names it. B-W2a-F2:
+  // so is a before-shipping step's own request (the balance paid before the goods leave): the step that names the request.
+  const step = request.orderId ? await tools.tx.salesOrderMilestone.findFirst({ where: { orderId: request.orderId, depositRequestId: request.id, kind: { in: [...ADVANCE_STEP_KINDS] }, status: { in: ['OPEN', 'PAID'] } }, select: { id: true } }) : null
   const id = newId()
   await insertDraft(
     tools,

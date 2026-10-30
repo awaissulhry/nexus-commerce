@@ -90,6 +90,12 @@ const depositView = output({
   paidAmount: money.price(z.number().int()),
   /** Its latest bank-details page sent to the customer (DEPOSIT_INFO link), or null when none was sent. */
   link: output({ sentAt: instant(), to: z.string().nullable(), expiresAt: instant(), state: z.enum(LINK_STATES) }).nullable(),
+  /**
+   * B-W2a-F2: the payment-schedule step that names it — DEPOSIT (the deposit production waits for) or BEFORE_SHIPPING
+   * (the balance paid before the goods leave, invoiced as an advance); null: no step names it (an order made before the
+   * schedule existed: its deposit).
+   */
+  stepKind: z.enum(['DEPOSIT', 'BEFORE_SHIPPING']).nullable(),
 })
 
 const settlementView = output({

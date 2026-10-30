@@ -1,0 +1,361 @@
+{
+  "ps": {
+    "title": "Planning settings",
+    "tabs": "Parts of the planning settings",
+    "tab": {
+      "calendars": "Calendars & shifts",
+      "items": "Item parameters",
+      "reorder": "Reorder rules",
+      "horizon": "Horizon & fences",
+      "efficiency": "Line efficiency"
+    },
+    "site": "Site",
+    "siteOption": "{code} · {name}",
+    "print": "Plant calendar (print)",
+    "changedBy": "Changed by …",
+    "retry": "Try again",
+    "stillLoading": "Still loading…",
+    "sitesFailed": "Couldn't load the sites you plan at",
+    "noAccess": {
+      "title": "Your role may not see the planning settings",
+      "body": "Your role does not include “planning.view”. Ask an administrator if you need this page."
+    },
+    "noSites": {
+      "title": "No site to plan yet",
+      "body": "Planning settings are kept per site. Add a plant in Admin › Companies & sites, or ask for the planning rights over one.",
+      "action": "Companies & sites"
+    },
+    "status": {
+      "saved": "All changes saved · {time}",
+      "saving": "Saving…",
+      "unsaved_one": "{count} change not saved",
+      "unsaved_other": "{count} changes not saved",
+      "failed_one": "{count} change not saved — try again",
+      "failed_other": "{count} changes not saved — try again"
+    },
+    "save": {
+      "region": "Unsaved changes",
+      "unsaved_one": "{count} unsaved change",
+      "unsaved_other": "{count} unsaved changes",
+      "discard": "Discard",
+      "save": "Save"
+    },
+    "held": {
+      "busy": "Saving: wait for the answer.",
+      "calendars": "Keeping calendars needs the Calendars right (calendars.manage).",
+      "items": "Keeping item parameters needs the item planning right (planning.items.manage).",
+      "settings": "Keeping the planning settings needs the planning settings right (planning.settings.manage)."
+    },
+    "problem": {
+      "read": "The factory did not answer as expected. Try again in a moment.",
+      "forbidden": "Your role may not read this part for this site.",
+      "offline": "The factory cannot be reached: check the connection, then try again.",
+      "gone": "It is not there any more: someone removed or archived it.",
+      "signedOut": "You were signed out. Sign in again to go on.",
+      "write": "The change was not saved: the factory refused it.",
+      "conflict": "Someone else changed it meanwhile: read it again, then make your change.",
+      "writeForbidden": "Your role may not change this for this site.",
+      "invalid": "The change was refused as it is: check the value.",
+      "unknown": "No answer came back: the change may or may not be saved. Read it again to see."
+    }
+  },
+  "cal": {
+    "kind": {
+      "work": "Working day",
+      "off": "Day off",
+      "holiday": "Public holiday",
+      "closure": "Closure",
+      "extra": "Extra shift",
+      "short": "Short day",
+      "opened": "Open on a holiday",
+      "noShifts": "No shift set"
+    },
+    "from": "From {name}",
+    "scope": {
+      "COMPANY": "the company",
+      "SITE": "the site",
+      "LINE": "the line",
+      "WORK_CENTRE": "the workshop",
+      "SUPPLIER": "the supplier",
+      "companyOf": "{name} (company)"
+    },
+    "noAccess": {
+      "title": "Your role may not see the calendars"
+    },
+    "failed": "Couldn't load calendars & shifts",
+    "yearFailed": "Couldn't load this calendar's days",
+    "elsewhere": {
+      "title": "Someone else changed the calendars",
+      "body": "A calendar or a shift pattern of this company changed on another screen. Reload to see it; nothing of yours is lost.",
+      "reload": "Reload"
+    },
+    "readOnly": {
+      "title": "You can look, not change",
+      "body": "Keeping calendars needs the Calendars right (calendars.manage). Days still open to show what they are."
+    },
+    "owner": {
+      "label": "Calendar of",
+      "group": {
+        "COMPANY": "Company (every site)",
+        "SITE": "Site",
+        "LINE": "Lines",
+        "WORK_CENTRE": "Workshops"
+      },
+      "company": "{name} — every site",
+      "named": "{code} · {name}"
+    },
+    "none": {
+      "title": "No calendar yet",
+      "body": "{name} and the calendars above it have none: the site default (Monday to Friday, one shift 08:00–17:00) is used until you set one."
+    },
+    "follows": {
+      "title": "{name} follows the calendars above",
+      "body": "Its days come from {above}. A change here makes its own calendar, which then keeps its own week and days."
+    },
+    "gridLabel": "Calendar · {name}",
+    "month": {
+      "title": "{month}",
+      "body_one": "{count} working day · {hours} of working time",
+      "body_other": "{count} working days · {hours} of working time"
+    },
+    "recalculates": "Recalculates capacity at once: {lanes}",
+    "recalculatesNone": "Recalculates capacity at once (no line or workshop on this site yet).",
+    "chain": {
+      "default": "No calendar: the planning default",
+      "own_one": "Its own calendar · {count} dated day",
+      "own_other": "Its own calendar · {count} dated days",
+      "ownAbove_one": "Its own calendar · {count} dated day · above it: {above}",
+      "ownAbove_other": "Its own calendar · {count} dated days · above it: {above}",
+      "follows": "Follows {above}"
+    },
+    "cancel": "Cancel",
+    "words": {
+      "to": "to",
+      "and": "and"
+    },
+    "week": {
+      "title": "Working week and shifts",
+      "inherited": "Works {days} · shifts: {pattern}.",
+      "makeOwn": "Give {name} its own calendar",
+      "makeOwnHint": "Its own calendar starts with the week above it; then its days, week and shifts are its own.",
+      "days": "Working days",
+      "pattern": "Shift pattern",
+      "patternNone": "None of its own (from above)",
+      "patternFromAbove": "Uses {pattern}.",
+      "patternNamed": "{code} · {name}",
+      "patternDefault": "the planning default (08:00–17:00, lunch 12:00–13:00)",
+      "held": {
+        "none": "A calendar works at least one weekday."
+      }
+    },
+    "follow": {
+      "open": "Follow the calendars above again",
+      "title": "Follow the calendars above again — {name}?",
+      "body_one": "{name} stops using its own calendar; its {count} dated day is kept in its history. Its days then come from the calendars above.",
+      "body_other": "{name} stops using its own calendar; its {count} dated days are kept in its history. Its days then come from the calendars above.",
+      "confirm": "Follow the calendars above"
+    },
+    "day": {
+      "title": "{date} — {name}",
+      "minutes": "{hours} of working time",
+      "decidedBy": "Set by {by}. A change here is for {name} only.",
+      "noShifts": "A working day the shift pattern has no shift on: it counts no working time. Pick a pattern with shifts on this weekday.",
+      "choice": "This day",
+      "choices": {
+        "week": "As the week (no exception)",
+        "extra": "Extra shift",
+        "short": "Short day",
+        "open": "Working, with the week's shifts",
+        "closure": "Closed (a closure)",
+        "holiday": "Holiday"
+      },
+      "defaultName": {
+        "extra": "Extra shift",
+        "short": "Short day",
+        "open": "Working day",
+        "closure": "Closed",
+        "holiday": "Holiday"
+      },
+      "pattern": "Shifts that day",
+      "patternPick": "Pick a shift pattern",
+      "noPattern": {
+        "extra": "No pattern has more working time on this weekday: make one in Shift patterns below.",
+        "short": "No pattern has less working time on this weekday: make one in Shift patterns below."
+      },
+      "name": "Name (the reason)",
+      "note": "Note",
+      "makesOwn": "Saving gives {name} its own calendar first.",
+      "save": "Save exception",
+      "held": {
+        "pattern": "Pick the shifts of the day first.",
+        "name": "Give the day a name first (the reason).",
+        "same": "Nothing changed for this day."
+      }
+    },
+    "closure": {
+      "open": "Add closure",
+      "title": "Add a closure",
+      "add": "Add closure",
+      "from": "From",
+      "to": "To",
+      "days_one": "{count} day",
+      "days_other": "{count} days",
+      "reason": "Reason",
+      "reasonHint": "Said on every day of the closure and on the plant calendar.",
+      "reasonPlaceholder": "August shutdown",
+      "where": "Sites and lines",
+      "makesOwn": "gets its own calendar",
+      "otherSite": "{code} · {name} — the whole site",
+      "impact": "Lanes and work orders affected",
+      "impactIdle": "Pick the days and where: the lanes and the work orders booked on those days are shown here.",
+      "impactFailed": "The booked work could not be read now; the closure can still be added.",
+      "laneBooked_one": "{count} work order booked · {minutes} min on those days",
+      "laneBooked_other": "{count} work orders booked · {minutes} min on those days",
+      "laneFree": "nothing booked on those days",
+      "otherSiteLanes": "every line and workshop of that site",
+      "impactNone": "No line or workshop is reached.",
+      "toBoard": "Move the booked work on the planning board",
+      "recalculates": "Recalculates capacity at once, for every lane it reaches.",
+      "taken": {
+        "title_one": "{count} day is already set on a calendar",
+        "title_other": "{count} days are already set on a calendar",
+        "keep": "Keep those days as they are; close the other days",
+        "replace": "Replace them with the closure"
+      },
+      "held": {
+        "dates": "Pick the first and the last day.",
+        "order": "The last day is before the first.",
+        "long": "A closure is at most 366 days.",
+        "reason": "Give the closure a reason.",
+        "where": "Pick at least one calendar.",
+        "taken": "Say what happens to the days already set."
+      }
+    },
+    "patterns": {
+      "title": "Shift patterns",
+      "hint": "One shift, two shifts, Saturday morning: a calendar uses one; an extra shift or a short day picks one for a day.",
+      "count_one": "{count} pattern",
+      "count_other": "{count} patterns",
+      "new": "New pattern",
+      "archive_one": "Archive {count} pattern",
+      "archive_other": "Archive {count} patterns",
+      "used_one": "{count} calendar",
+      "used_other": "{count} calendars",
+      "forCompany": "This company",
+      "forAll": "Every company",
+      "status": {
+        "ACTIVE": "In use",
+        "ARCHIVED": "Archived"
+      },
+      "col": {
+        "pattern": "Pattern",
+        "shifts": "Shifts",
+        "hours": "A week",
+        "used": "Used by",
+        "for": "For",
+        "status": "State"
+      },
+      "empty": {
+        "title": "No shift pattern yet",
+        "body": "Without one, calendars use the planning default: 08:00–17:00 with a lunch hour, Monday to Friday."
+      },
+      "held": {
+        "archived": "Archived already.",
+        "inUse_one": "Used by {count} calendar: give it another pattern first.",
+        "inUse_other": "Used by {count} calendars: give them another pattern first."
+      }
+    },
+    "pattern": {
+      "newTitle": "New shift pattern",
+      "editTitle": "Shift pattern {code}",
+      "save": "Save pattern",
+      "create": "Create pattern",
+      "code": "Code",
+      "codeHint": "Capital letters, digits or hyphens (TWO-SHIFTS).",
+      "codeFixed": "A pattern's code never changes.",
+      "name": "Name",
+      "description": "Description",
+      "everyCompany": "For every company of the group (else this company only)",
+      "inUse_one": "Used by {count} calendar: a change recalculates its capacity at once.",
+      "inUse_other": "Used by {count} calendars: a change recalculates their capacity at once.",
+      "rows": "Shifts and breaks",
+      "shiftOn": "Shift {n} on",
+      "breakOn": "Break {n} on",
+      "dayOf": "{day} (row {n})",
+      "kind": "Shift or break (row {n})",
+      "label": "Name (row {n})",
+      "labelPlaceholder": "Morning",
+      "start": "Starts (row {n})",
+      "end": "Ends (row {n})",
+      "remove": "Remove row {n}",
+      "removeShort": "Remove",
+      "nextDay": "Ends the next morning (a night shift).",
+      "addShift": "Add a shift",
+      "addBreak": "Add a break",
+      "shiftWord": "Shift",
+      "breakWord": "Break",
+      "preview": "{week} a week · {days}",
+      "held": {
+        "problems_one": "Fix {count} problem first.",
+        "problems_other": "Fix {count} problems first."
+      },
+      "problem": {
+        "code": "Use 1 to 20 capital letters, digits or hyphens.",
+        "codeTaken": "Another pattern has this code.",
+        "name": "Give the pattern a name.",
+        "noShift": "A pattern has at least one shift.",
+        "days": "Pick at least one weekday.",
+        "time": "Type a time as HH:MM.",
+        "overlap": "Two shifts overlap on a weekday: working time would count twice.",
+        "segment": "This shift or break does not fit: check its times (a break inside its shift)."
+      }
+    },
+    "keys": {
+      "title": "Keys of the calendar",
+      "close": "Close",
+      "open": "Enter or a click — open a day: its exception",
+      "range": "Shift + arrows, then Enter — or a drag across days — select days for a closure",
+      "month": "Arrows — move by day and week; Page Up / Page Down — by month",
+      "escape": "Escape — let the selection go, close a dialog",
+      "new": "c — a new shift pattern (in Shift patterns)"
+    },
+    "problem": {
+      "wholeCompany": "The company's calendar and its patterns reach every site: keeping them needs Calendars (calendars.manage) over every site of the company."
+    },
+    "notice": {
+      "daySaved": "Saved. Capacity recalculated at once for: {lanes}.",
+      "dayRemoved": "The day follows the week again. Capacity recalculated at once for: {lanes}.",
+      "closureAdded": "Closure added to {where}. Capacity recalculated at once for: {lanes}.",
+      "closurePartly_one": "Closure added to {done}; {count} calendar refused it: {refused}.",
+      "closurePartly_other": "Closure added to {done}; {count} calendars refused it: {refused}.",
+      "weekSaved": "Week and shifts saved. Capacity recalculated at once for: {lanes}.",
+      "made": "{name} has its own calendar now.",
+      "follows": "{name} follows the calendars above again.",
+      "patternSaved": "Pattern {code} saved. Calendars that use it recalculate their capacity at once.",
+      "patternMade": "Pattern {code} created.",
+      "patternsArchived_one": "{count} pattern archived · {refused} refused.",
+      "patternsArchived_other": "{count} patterns archived · {refused} refused."
+    }
+  },
+  "print": {
+    "title": "Plant calendar {year} — {site}",
+    "printed": "Printed {date} by {person}",
+    "previousYear": "The year before",
+    "nextYear": "The year after",
+    "held": "Wait for the calendar to load.",
+    "print": "Print",
+    "failed": "Couldn't load the plant calendar",
+    "week": "Works {days} · shifts: {pattern}.",
+    "days": "Holidays, closures and exceptions",
+    "daysNone": "No day differs from the week this year.",
+    "lanes": "Lines and workshops that differ",
+    "lanesNone": "Every line and workshop follows the site's days.",
+    "col": {
+      "date": "Day",
+      "kind": "What",
+      "name": "Name",
+      "hours": "Hours",
+      "lane": "Line or workshop"
+    }
+  }
+}

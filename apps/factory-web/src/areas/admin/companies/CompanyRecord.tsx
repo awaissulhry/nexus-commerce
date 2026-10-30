@@ -9,6 +9,7 @@ import { RecordPanels } from '../../../record-panels/RecordPanels'
 import { editCompany, getCompany, type Company, type Site } from '../shared/api'
 import { adminHref, failed, loaded, loading, problemKey, problemNotice, type Loaded, type Notice } from '../shared/model'
 import { useRecordTab, useThreadDock } from '../shared/record-hooks'
+import { CompanyCalendarsTab } from './calendars/CompanyCalendarsTab'
 import { COMPANY_TABS, companyPatch, type CompanyDraft } from './model'
 import { CompanyRecordView } from './view/CompanyRecordView'
 
@@ -16,6 +17,7 @@ import { CompanyRecordView } from './view/CompanyRecordView'
  * `/w/<company>/admin/companies/<id>` (SCR-008 Company record): reads the company and its sites
  * (`GET /org/companies/:id`), saves a form's changed fields with the version read (`PATCH`; a 409 reads it again and
  * says someone else changed it, COL-078), archives it (held while it has an active site), and mounts the record panels.
+ * The Calendars tab (B-W2a-59) is its own container (calendars/CompanyCalendarsTab.tsx), mounted only on that tab.
  */
 export function CompanyRecord({ companyId }: { companyId: string }) {
   const api = useOfficeApi()
@@ -23,7 +25,10 @@ export function CompanyRecord({ companyId }: { companyId: string }) {
   const router = useRouter()
   const held = useMemo(() => new Set(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
-  const tab = useRecordTab(COMPANY_TABS)
+  const asked = useRecordTab(COMPANY_TABS)
+  // B-W2a-59: the Calendars tab is absent without calendars.view (the address falls back to Legal & tax).
+  const viewCalendars = held.has('calendars.view')
+  const tab = asked === 'calendars' && !viewCalendars ? 'legal' : asked
   const { dockOpen, toggleDock } = useThreadDock('Company')
   const [company, setCompany] = useState<Company | null>(null)
   const [sites, setSites] = useState<Loaded<Site>>(loading())
@@ -71,13 +76,14 @@ export function CompanyRecord({ companyId }: { companyId: string }) {
         company,
         sites,
         problem,
-        can: { manageCompanies: held.has('companies.manage'), viewSites: held.has('sites.view'), manageSites: held.has('sites.manage') },
+        can: { manageCompanies: held.has('companies.manage'), viewSites: held.has('sites.view'), manageSites: held.has('sites.manage'), viewCalendars, manageCalendars: held.has('calendars.manage') },
         busy,
         notice,
         archiving,
         dockOpen,
       }}
       panels={company ? <RecordPanels record={{ type: 'Company', id: company.id, companyId: company.id }} title={company.legalName} /> : null}
+      calendars={company && tab === 'calendars' ? <CompanyCalendarsTab company={company} sites={sites.items ?? []} prefix={prefix} canManage={held.has('calendars.manage')} /> : null}
       actions={{
         onSave: (before: CompanyDraft, after: CompanyDraft, fields) => (company ? save(companyPatch(before, after, fields, company.version), 'company.saved') : Promise.resolve(false)),
         onArchive: setArchiving,

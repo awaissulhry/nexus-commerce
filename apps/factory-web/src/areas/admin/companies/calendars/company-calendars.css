@@ -1,0 +1,96 @@
+/*
+ * Admin › Company › Calendars › Working days and holidays LAYOUT: the year calendar beside the holidays list and the
+ * working week on wide screens (one column below 1600 px: the list's five columns need the room), the sites line, the
+ * Add holiday form. The controls are the
+ * design system's; semantic tokens only. No page max-width (Owner rule 2026-10-29): the tab fills the record's width.
+ */
+.fw-acal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-acal-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+}
+
+@media (min-width: 1600px) {
+  .fw-acal-grid {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
+.fw-acal-side,
+.fw-acal-inherit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-acal-inherit {
+  margin-top: var(--nds-space-12);
+  gap: var(--nds-space-4);
+}
+
+.fw-acal-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-acal-hint {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-acal-sites {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-16);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-acal-sites a {
+  color: var(--nds-text-link);
+}
+
+.fw-acal-week {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-12);
+  margin-bottom: var(--nds-space-10);
+}
+
+.fw-acal-weekday {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-strong);
+}
+
+.fw-acal-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--nds-space-10) var(--nds-space-12);
+}
+
+.fw-acal-form-wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 560px) {
+  .fw-acal-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

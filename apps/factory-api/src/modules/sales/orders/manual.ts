@@ -47,7 +47,8 @@ import type { OrderView } from './views'
  *              customer's list price unless a price (or a discount off it) is typed, costed from today's sheet
  *   made       numbered from the company's SALES_ORDER series, CONFIRMED (quoteVersionId null), the deposit request
  *              (named on the order, no quote) when a deposit is asked: production waits for it (depositRequired); the
- *              payment schedule (SAL-216); sales_order.created
+ *              payment schedule (SAL-216; a before-shipping step with its day gets its own deposit request, B-W2a-F2);
+ *              sales_order.created
  */
 
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
@@ -372,7 +373,7 @@ export async function makeManualOrderInCommand(tools: CommandTools, body: Manual
       })
     }
   }
-  const steps = await makeScheduleInCommand(tools, { id, number: number.formatted, companyId: body.companyId, partyId: plan.party.row.id, grossAmount: plan.priced.grossAmount, promiseDate: plan.promiseDate === null ? null : asDay(plan.promiseDate), paymentTermsId: plan.paymentTermsId }, deposit)
+  const steps = await makeScheduleInCommand(tools, { id, number: number.formatted, companyId: body.companyId, partyId: plan.party.row.id, currency: plan.currency, grossAmount: plan.priced.grossAmount, promiseDate: plan.promiseDate === null ? null : asDay(plan.promiseDate), paymentTermsId: plan.paymentTermsId }, deposit)
   tools.audit({
     action: 'orders.makeManual',
     recordType: 'SalesOrder',
