@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
+import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { useLiveChanges } from '../../../../record-panels/live'
@@ -19,6 +20,7 @@ import {
   confirmDocument,
   copyRevision,
   documentDownload,
+  exportBom,
   findMaterials,
   findOperations,
   generateSkus,
@@ -32,6 +34,7 @@ import {
   listColours,
   listLabelTemplates,
   listScales,
+  listWorkshops,
   obsoleteRevision,
   reactivateStyle,
   releaseRevision,
@@ -48,6 +51,7 @@ import {
   updateSku,
   updateStep,
   updateStyle,
+  type BomExportFormat,
   type BomView,
   type CostDiffView,
   type CostSheetView,
@@ -56,6 +60,8 @@ import {
   type StyleComplianceView,
   type StyleView,
 } from '../api'
+import { useDuplicate } from '../duplicate/use-duplicate'
+import { EVERY_COMPANY, useSheetImport } from '../import/sheet-import'
 import { abilitiesOf, grainsOf, releasedOf, revisionInView, sha256Of, tabOf, type StyleTab } from '../model'
 import { readProblem, writeProblem } from '../problems'
 import type { BomViewMode, Loaded, Part, SaveState, StyleDialog, StyleNotice, StyleRecordViewModel } from './record-model'
@@ -91,6 +97,8 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const can = useMemo(() => abilitiesOf(session.permissions), [session.permissions])
   const grains = useMemo(() => grainsOf(session.permissions), [session.permissions])
   const companyId = session.company?.id ?? null
+  const locale = useLocale()
+  const t = useT('products')
 
   const [style, setStyle] = useState<Loaded<StyleView>>({ status: 'loading' })
   const styleRef = useRef<StyleView | null>(null)
@@ -107,7 +115,9 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const [operationSearch, setOperationSearch] = useState<StyleRecordViewModel['operationSearch']>({ query: '', kind: null, results: null, problem: null })
   /** The latest version of the revision in view (a revision's BOM and routing are one versioned record). */
   const revisionVersionRef = useRef<{ id: string; version: number } | null>(null)
-  const [libraries, setLibraries] = useState<StyleRecordViewModel['libraries']>({ scales: null, colours: null, brands: null, labels: null })
+  const [libraries, setLibraries] = useState<StyleRecordViewModel['libraries']>({ scales: null, colours: null, brands: null, labels: null, workshops: null })
+  const [refused, setRefused] = useState<string[]>([])
+  const [exporting, setExporting] = useState<BomExportFormat | null>(null)
   const [save, setSave] = useState<SaveState>({ state: 'idle', at: null })
   const [dialog, setDialog] = useState<StyleDialog | null>(null)
   const [busy, setBusy] = useState(false)
@@ -262,6 +272,21 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     loadParts(revisionId)
   }, [loadStyle, loadParts, revisionId])
 
+  // W2a: Duplicate style (the band's ⋯) and Import BOM (importer product.bom; the rows name their styles).
+  const duplicate = useDuplicate(api)
+  const companies = useMemo(() => session.companies.map((company) => ({ id: company.id, name: company.name })), [session.companies])
+  const importRights = useMemo(() => ({ view: session.permissions.includes('imports.view'), run: can.imports, apply: can.importsApply, people: false }), [session.permissions, can.imports, can.importsApply])
+  const bomImport = useSheetImport(api, {
+    importerKey: 'product.bom',
+    // The job's company is the style's: a style of every company is imported by a job for every company.
+    companyId: value ? (value.companyId ?? EVERY_COMPANY) : (companyId ?? ''),
+    companies,
+    everyCompany: t('newStyle.everyCompany'),
+    rights: importRights,
+    locale,
+    onApplied: () => reloadAll(),
+  })
+
   useLiveChanges({
     onChange: (change) => {
       if (change.fields.styleId !== styleId) return
@@ -292,10 +317,12 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
           await work()
           setSave({ state: 'saved', at: new Date().toISOString() })
           setNotice(done ?? null)
+          setRefused([])
           return true
         } catch (error) {
           const problem = writeProblem(error)
           setNotice({ key: problem.key, tone: 'danger' })
+          setRefused(problem.paths)
           setSave((state) => ({ state: 'failed', at: state.at }))
           if (problem.reload) reloadAll()
           return false
@@ -367,6 +394,34 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
       .catch((error: unknown) => mine === operationSeq.current && setOperationSearch({ query, kind, results: null, problem: readProblem(error) }))
   }
 
+  const exportFile = (format: BomExportFormat) => {
+    const style = styleRef.current
+    const rev = style && revisionId ? style.revisions.find((entry) => entry.id === revisionId) : null
+    if (!style || !rev || exporting) return
+    setExporting(format)
+    exportBom(api, style.id, rev.id, format, locale)
+      .then((bytes) => {
+        const type = format === 'pdf' ? 'application/pdf' : format === 'csv' ? 'text/csv;charset=utf-8' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type }))
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = `${style.code}-r${rev.revision}-bom.${format}`
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+      })
+      .catch((error: unknown) => setNotice({ key: readProblem(error), tone: 'danger' }))
+      .finally(() => setExporting(null))
+  }
+
+  const loadWorkshops = () => {
+    if (!can.workshops) return
+    listWorkshops(api)
+      .then((workshops) => setLibraries((current) => ({ ...current, workshops })))
+      .catch(() => setLibraries((current) => ({ ...current, workshops: [] })))
+  }
+
   const model: StyleRecordViewModel = {
     prefix,
     tab,
@@ -392,6 +447,10 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     notice,
     changed,
     dockOpen,
+    refused,
+    duplicate: duplicate.model,
+    bomImport: bomImport.model,
+    exporting,
   }
 
   return (
@@ -510,6 +569,16 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
         onLineColours: (lineId, colours) => void bomWrite((target) => setBomColours(api, styleId, target, lineId, colours)),
         onHideYield: (pct) => bomWrite((target) => updateRevision(api, styleId, target, { plannedHideYieldPct: pct }), { key: 'notice.saved', tone: 'success' }),
         onOperationQuery,
+        onSubcontract: (stepId, subcontract) => routingWrite((target) => updateStep(api, styleId, target, stepId, { subcontract }), { key: subcontract ? 'notice.subcontractSaved' : 'notice.inHouse', tone: 'success' }),
+        onLoadWorkshops: loadWorkshops,
+        onDuplicate: () => {
+          const style = styleRef.current
+          if (style) duplicate.open({ id: style.id, code: style.code, name: style.name })
+        },
+        duplicate: duplicate.actions,
+        onImportBom: bomImport.open,
+        bomImport: bomImport.actions,
+        onExportBom: exportFile,
         onAddSteps: (operationIds) => routingWrite((target) => addSteps(api, styleId, target, operationIds), { key: 'notice.stepsAdded', tone: 'success', params: { count: operationIds.length } }),
         onStep: (stepId, patch) => routingWrite((target) => updateStep(api, styleId, target, stepId, patch)),
         onRemoveStep: (stepId) => routingWrite((target) => removeStep(api, styleId, target, stepId), { key: 'notice.stepRemoved', tone: 'success' }),

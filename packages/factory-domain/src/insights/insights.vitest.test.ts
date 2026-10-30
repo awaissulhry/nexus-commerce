@@ -108,13 +108,14 @@ describe('who a row is for (whyMine: the right to act, four eyes, the grain, the
 
   it('the sources a role reads and the tiles it gets', () => {
     expect(tileKindsFor(roleActor('owner'))).toEqual([...ATTENTION_KINDS])
-    // W2a: every office person's own rows (my tasks: tasks.manage; my mentions: home.view) follow the W1 kinds.
-    expect(tileKindsFor(roleActor('buyer'))).toEqual(['PO_PROPOSAL', 'PO_NOT_CONFIRMED', 'MAIL_TO_SORT', 'TASK_DUE', 'MENTION'])
+    // W2a: every office person's own rows (my tasks: tasks.manage; my mentions: home.view; B-W2a-33 my alerts: alerts.handle)
+    // follow the W1 kinds.
+    expect(tileKindsFor(roleActor('buyer'))).toEqual(['PO_PROPOSAL', 'PO_NOT_CONFIRMED', 'MAIL_TO_SORT', 'TASK_DUE', 'MENTION', 'RULE_ALERT'])
     expect(sourcesFor(roleActor('buyer'))).toContain('LOT_HOLD') // seen, never acted on
-    expect(tileKindsFor(roleActor('quality_inspector'))).toEqual(['LOT_HOLD', 'REGISTER_DUTY', 'STYLE_COMPLIANCE', 'TASK_DUE', 'MENTION'])
-    expect(tileKindsFor(roleActor('sales'))).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT', 'TASK_DUE', 'MENTION'])
-    expect(tileKindsFor(roleActor('finance'))).toEqual(['INVOICE_SDI', 'QUOTE_APPROVAL', 'INVOICE_TO_ISSUE', 'TASK_DUE', 'MENTION'])
-    // Read-only keeps no task (tasks.manage is a write); it still reads the notes that mention it.
+    expect(tileKindsFor(roleActor('quality_inspector'))).toEqual(['LOT_HOLD', 'REGISTER_DUTY', 'STYLE_COMPLIANCE', 'TASK_DUE', 'MENTION', 'RULE_ALERT'])
+    expect(tileKindsFor(roleActor('sales'))).toEqual(['ORDER_PROMISE', 'MAIL_TO_SORT', 'TASK_DUE', 'MENTION', 'RULE_ALERT'])
+    expect(tileKindsFor(roleActor('finance'))).toEqual(['INVOICE_SDI', 'QUOTE_APPROVAL', 'INVOICE_TO_ISSUE', 'TASK_DUE', 'MENTION', 'RULE_ALERT'])
+    // Read-only keeps no task (tasks.manage is a write) and handles no alert; it still reads the notes that mention it.
     expect(tileKindsFor(roleActor('read_only'))).toEqual(['MENTION'])
   })
 })
@@ -339,9 +340,10 @@ describe('the catalogue', () => {
     const recordKinds = ATTENTION_KINDS.filter((kind) => !isPersonalKind(kind))
     for (const kind of recordKinds) for (const permission of KIND_RULES[kind].act) expect(EN_TEMPLATES[whyKey(kind, permission)], `${kind} ${permission}`).toBeTruthy()
     // The design's tiles: Approvals are exactly the decisions a person reviews; everything else is an alert. W2a's own
-    // rows (my tasks, my mentions) have their own categories and words (insights/personal).
+    // rows (my tasks, my mentions) have their own categories and words (insights/personal); my alerts (B-W2a-33) are alerts
+    // with the alert's own words (alerts/today).
     for (const kind of recordKinds) expect(KIND_RULES[kind].category, kind).toBe(KIND_RULES[kind].decide === 'REVIEW' ? 'APPROVAL' : 'ALERT')
-    expect(PERSONAL_KINDS.map((kind) => KIND_RULES[kind].category)).toEqual(['TASK', 'MENTION'])
+    expect(PERSONAL_KINDS.map((kind) => KIND_RULES[kind].category)).toEqual(['TASK', 'MENTION', 'ALERT'])
     expect(Object.keys(CODE_WORDS).sort()).toEqual(['checks', 'complianceChecks', 'duties', 'entryKind', 'heldReason', 'privacyDuties', 'reasons', 'steps'])
   })
 

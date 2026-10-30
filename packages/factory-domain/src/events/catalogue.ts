@@ -31,6 +31,13 @@ import { events as shipping } from '../shipping/events'
 import { events as views } from '../views/events'
 // B-W2a-32: the search index's rebuild.
 import { events as search } from '../search/events'
+// B-W2a-35: the plant (machines, machine requests, maintenance jobs).
+import { events as plant } from '../plant/events'
+// B-W2a-33: the stored alerts and the date timers.
+import { events as alerts } from '../alerts/events'
+import { events as timers } from '../timers/events'
+// B-W2a-39: the accounting exports and the period locks.
+import { events as accounting } from '../accounting/events'
 // B-W2a-36: Security & health (restore drills, two-factor per role).
 import { events as ops } from '../ops/events'
 import type { EventDefinition } from './define'
@@ -136,9 +143,11 @@ export function createCatalogue(definitions: readonly EventDefinition[]): EventC
  * calendars: the business calendars and shift patterns; reasons: the reason lists.
  * views: the exports of the lists (B-W2a-23).
  * search: the search index's rebuild (B-W2a-32).
+ * alerts, timers: the exception rules' stored alerts and the date timers (B-W2a-33).
+ * accounting: the accounting exports and the period locks (B-W2a-39).
  * ops: restore drills and the two-factor rule of a role (B-W2a-36).
  */
-export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...purchasing, ...invoicing, ...payments, ...costing, ...production, ...sales, ...privacy, ...quality, ...floorSync, ...insights, ...calendars, ...reasons, ...notifications, ...tasks, ...views, ...search, ...ops] as const satisfies readonly EventDefinition[]
+export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads, ...imports, ...print, ...email, ...emailIn, ...compliance, ...product, ...inventory, ...shipping, ...parties, ...planning, ...purchasing, ...invoicing, ...payments, ...costing, ...production, ...sales, ...privacy, ...quality, ...floorSync, ...insights, ...calendars, ...reasons, ...notifications, ...tasks, ...views, ...search, ...plant, ...alerts, ...timers, ...accounting, ...ops] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
 export type EventType = (typeof EVENT_DEFINITIONS)[number]['type']

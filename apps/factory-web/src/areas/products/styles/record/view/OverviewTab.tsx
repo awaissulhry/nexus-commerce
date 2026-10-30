@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { ArrowRight, CircleCheck, CircleX } from 'lucide-react'
 import { Banner, Card, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
@@ -9,11 +9,20 @@ import { Button, Input, Pill, Select, Tag, Textarea, Toggle } from '@nexus/ui/pr
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { StylePatch, StyleView } from '../../api'
+import { countryName, countryOptions } from '../../../../parties/_shared/model'
 import { PpeFields, settlePpe, type PpeValue } from '../../forms'
-import { complianceAfterRelease, draftOf, issueTab, issueWords, nextRevisionNumber, releasedOf, REVISION_TONE, revisionInView, startRevisionHeld, STATUS_TONE } from '../../model'
+import { complianceAfterRelease, decimalText, draftOf, issueTab, issueWords, nextRevisionNumber, releasedOf, REVISION_TONE, revisionInView, startRevisionHeld, STATUS_TONE } from '../../model'
+import { customsDraftOf, customsErrors, customsPatch, hsCodeText, refusedCustoms, type CustomsDraft, type CustomsField } from '../customs'
 import type { StyleRecordActions, StyleRecordViewModel } from '../record-model'
 
 const PRODUCT_TYPES: StyleView['productType'][] = ['JACKET', 'TROUSERS', 'SUIT', 'GLOVES', 'VEST', 'OTHER']
+
+/**
+ * Country names come from the runtime's Intl data, which differs between the server and the browser: they are drawn
+ * after hydration (the code alone before), so the first client render matches the server's.
+ */
+const noSubscription = () => () => undefined
+const useHydrated = () => useSyncExternalStore(noSubscription, () => true, () => false)
 
 interface Identity {
   code: string
@@ -24,9 +33,11 @@ interface Identity {
   description: string
   mtmAllowed: boolean
   ppe: PpeValue
+  /** W2a customs and origin (PRD-018). */
+  customs: CustomsDraft
 }
 
-const identityOf = (style: StyleView): Identity => ({
+const identityOf = (style: StyleView, locale: 'it' | 'en' = 'it'): Identity => ({
   code: style.code,
   name: style.name,
   productType: style.productType,
@@ -35,6 +46,7 @@ const identityOf = (style: StyleView): Identity => ({
   description: style.description ?? '',
   mtmAllowed: style.mtmAllowed,
   ppe: { ppeCategory: style.ppeCategory, ppeStandard: style.ppeStandard, ppeClass: style.ppeClass },
+  customs: customsDraftOf(style, locale),
 })
 
 /** What changed, as the API's PATCH body (only the fields that differ). */
@@ -53,7 +65,7 @@ export function identityPatch(style: StyleView, draft: Identity): StylePatch {
     patch.ppeStandard = draft.ppe.ppeStandard
     patch.ppeClass = draft.ppe.ppeClass
   }
-  return patch
+  return { ...patch, ...customsPatch(style, draft.customs) }
 }
 
 /**
@@ -80,7 +92,9 @@ export function OverviewTab({ style, model, actions }: { style: StyleView; model
 
 function IdentityCard({ style, model, actions }: { style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
   const t = useT('products')
-  const base = useMemo(() => identityOf(style), [style])
+  const locale = useLocale()
+  const hydrated = useHydrated()
+  const base = useMemo(() => identityOf(style, locale), [style, locale])
   const seeded = model.identityDraft ? { ...base, ...applyDesignDraft(base, model.identityDraft) } : base
   const [draft, setDraft] = useState<Identity>(seeded)
   const [saving, setSaving] = useState(false)
@@ -88,14 +102,27 @@ function IdentityCard({ style, model, actions }: { style: StyleView; model: Styl
   // save they equal the new read anyway).
   const lastBase = useRef(base)
   useEffect(() => {
-    setDraft((current) => (sameIdentity(current, lastBase.current) ? base : current))
+    // A draft that says the same as the new read (customs typed with spaces, now stored as digits) shows the stored form.
+    setDraft((current) => (sameIdentity(current, lastBase.current) || Object.keys(identityPatch(style, current)).length === 0 ? base : current))
     lastBase.current = base
   }, [base])
   const editable = model.can.manage && style.status !== 'ARCHIVED'
   const codeFrozen = style.matrix.generated
   const patch = identityPatch(style, draft)
   const count = Object.keys(patch).filter((key) => key !== 'ppeStandard' && key !== 'ppeClass').length
-  const held = draft.name.trim() === '' ? t('identity.held.name') : !/^[A-Z0-9](?:[A-Z0-9._-]{0,22}[A-Z0-9])?$/.test(draft.code.trim().toUpperCase()) ? t('identity.held.code') : saving ? t('held.busy') : null
+  const customsProblems = customsErrors(draft.customs)
+  const held =
+    draft.name.trim() === ''
+      ? t('identity.held.name')
+      : !/^[A-Z0-9](?:[A-Z0-9._-]{0,22}[A-Z0-9])?$/.test(draft.code.trim().toUpperCase())
+        ? t('identity.held.code')
+        : Object.keys(customsProblems).length > 0
+          ? t('customs.held', { count: Object.keys(customsProblems).length })
+          : saving
+            ? t('held.busy')
+            : null
+  const setCustoms = (field: CustomsField, value: string) => setDraft((current) => ({ ...current, customs: { ...current.customs, [field]: value } }))
+  const customsError = (field: CustomsField) => (customsProblems[field] ? t(customsProblems[field]!) : refusedCustoms(model.refused ?? [], field) ? t('customs.refused') : undefined)
   const set = <K extends keyof Identity>(field: K, value: Identity[K]) => setDraft((current) => ({ ...current, [field]: value }))
   const save = async () => {
     if (held || count === 0) return
@@ -120,6 +147,9 @@ function IdentityCard({ style, model, actions }: { style: StyleView; model: Styl
             { label: t('identity.mtm'), value: t(style.mtmAllowed ? 'common.yes' : 'common.no') },
             { label: t('identity.ppe'), value: <PpeFields value={base.ppe} productType={style.productType} onChange={() => undefined} readOnly /> },
             { label: t('identity.tracking'), value: t(`tracking.${style.tracking}`) },
+            { label: t('customs.hsCode'), value: hsCodeText(style.hsCode) },
+            { label: t('customs.origin'), value: style.originCountry ? (hydrated ? `${countryName(style.originCountry, locale)} (${style.originCountry})` : style.originCountry) : '—' },
+            { label: t('customs.netMass'), value: style.netMassKg ? t('customs.kg', { kg: decimalText(style.netMassKg, locale, 3) }) : '—' },
             { label: t('identity.description'), value: style.description ?? '—' },
           ]}
         />
@@ -179,6 +209,30 @@ function IdentityCard({ style, model, actions }: { style: StyleView; model: Styl
         </div>
         <PpeFields value={draft.ppe} productType={draft.productType} onChange={(ppe) => set('ppe', ppe)} />
         <KeyValue dense labelCase="sentence" items={[{ label: t('identity.tracking'), value: t(`tracking.${draft.ppe.ppeCategory === 'NOT_PPE' ? 'NONE' : 'LOT'}`) }]} />
+        <div className="fw-st-stack">
+          <h3 className="fw-st-h3">{t('customs.title')}</h3>
+          <p className="fw-st-hint">{t('customs.intro')}</p>
+          <div className="fw-st-form-grid">
+            <Field label={t('customs.hsCode')} hint={t('customs.hsCodeHint')} error={customsError('hsCode')}>
+              <Input value={draft.customs.hsCode} maxLength={20} inputMode="numeric" onChange={(event) => setCustoms('hsCode', event.target.value)} />
+            </Field>
+            <Field label={t('customs.origin')} hint={t('customs.originHint')} error={customsError('originCountry')}>
+              <Select value={draft.customs.originCountry} onChange={(event) => setCustoms('originCountry', event.target.value)}>
+                <option value="">{t('customs.notOnRecord')}</option>
+                {hydrated
+                  ? countryOptions(locale).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label} ({option.value})
+                      </option>
+                    ))
+                  : draft.customs.originCountry && <option value={draft.customs.originCountry}>{draft.customs.originCountry}</option>}
+              </Select>
+            </Field>
+            <Field label={t('customs.netMass')} hint={t('customs.netMassHint')} error={customsError('netMassKg')}>
+              <Input value={draft.customs.netMassKg} maxLength={14} inputMode="decimal" suffix="kg" onChange={(event) => setCustoms('netMassKg', event.target.value)} />
+            </Field>
+          </div>
+        </div>
         <Field label={t('identity.description')} hint={t('identity.descriptionHint')}>
           <Textarea value={draft.description} rows={3} maxLength={4000} onChange={(event) => set('description', event.target.value)} />
         </Field>
@@ -206,6 +260,11 @@ function applyDesignDraft(base: Identity, patch: StylePatch): Partial<Identity> 
     ...(patch.name !== undefined ? { name: patch.name ?? '' } : {}),
     ...(patch.season !== undefined ? { season: patch.season ?? '' } : {}),
     ...(patch.ppeCategory !== undefined ? { ppe: { ppeCategory: patch.ppeCategory, ppeStandard: patch.ppeStandard ?? null, ppeClass: patch.ppeClass ?? null } } : { ppe: base.ppe }),
+    customs: {
+      hsCode: patch.hsCode !== undefined ? (patch.hsCode ?? '') : base.customs.hsCode,
+      originCountry: patch.originCountry !== undefined ? (patch.originCountry ?? '') : base.customs.originCountry,
+      netMassKg: patch.netMassKg !== undefined ? (patch.netMassKg ?? '') : base.customs.netMassKg,
+    },
   }
 }
 

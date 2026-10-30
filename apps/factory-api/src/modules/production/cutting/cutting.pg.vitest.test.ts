@@ -9,6 +9,7 @@ import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedNumbering } from '../../../../../../packages/factory-db/seed/numbering'
+import { seed as seedPlant } from '../../../../../../packages/factory-db/seed/plant'
 import { seed as seedPrivacy } from '../../../../../../packages/factory-db/seed/privacy'
 import { seed as seedProduction } from '../../../../../../packages/factory-db/seed/production'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
@@ -25,7 +26,8 @@ import { lockHideCuts } from '../../inventory/issue/store'
  * per size-50 garment; plant A1 names workers, its operator acknowledged the PUBLISHED worker notice 2026-10 and its
  * team leader nothing; plant B1 records the station only; SEED-WO-0001 in progress with a seeded cut of its hide in two
  * bundles), the privacy seed (company A's stored DPIA and published worker notice: its floor is ready), the numbering seed,
- * a made-up certificate, and made-up stock at A1: a lot of twelve black hides of 55 ft² RELEASED and a hide whose lot
+ * the plant seed of tenant A (at the cutting table the press SEED-CP-01 locked as unsafe, the cutting table SEED-CT-01
+ * running: the station cuts; B-W2a-35b), a made-up certificate, and made-up stock at A1: a lot of twelve black hides of 55 ft² RELEASED and a hide whose lot
  * waits for its chromium VI result. Released work orders of two black jackets in size 50 are made through the
  * work-order routes. Two more tablets at A1 (one at the cutting table, one without a station): the undo tests use them,
  * because the seeded cut of the A1 tablet carries a later server time than anything a test writes (serverTime orders the
@@ -66,6 +68,8 @@ const A = {
   operatorB1: idOf(ns.a, 'worker:B1:operator'),
   seededWorkOrder: idOf(ns.a, 'production:work-order:WO-0001'),
   seededCut: idOf(ns.a, 'production:cut:H1:1'),
+  /** The plant seed's cutting table SEED-CT-01 at CUT-01 (RUNNING; the press beside it is locked as unsafe). */
+  cuttingTable: idOf(ns.a, 'plant:machine:SEED-CT-01'),
 }
 const B = { tenant: idOf(ns.b, 'tenant') }
 
@@ -232,6 +236,7 @@ beforeAll(async () => {
     await seedProduction({ db: database, namespace })
     await seedNumbering({ db: database, namespace })
   }
+  await seedPlant({ db: database, namespace: ns.a })
   await asOffice(async (tx) => {
     const certificateId = newId()
     await tx.certificate.create({
@@ -535,6 +540,20 @@ describe('who an entry names (Statuto dei Lavoratori art. 4; MES-278): the ackno
     const error = await refused('floorLead', 'POST', cutUrl(WO.station.id), { clientEventId: clientEvent(), code: hides.H06!.code, lines: sets(WO.station) }, 409)
     expect(error.message).toMatch(/acknowledge the information notice first/)
     expect(await onHand(A.bin, hides.H06!.id)).toBe('55.0000')
+  })
+
+  it('B-W2a-35b: cuts nothing at a cutting station whose machines are all do-not-use (Owner answer H1), before anything is issued', async () => {
+    // The press is locked as unsafe; the office sets the cutting table beside it do-not-use too: no machine is left there.
+    await admin(`UPDATE "Machine" SET status = 'DO_NOT_USE', "statusSince" = now(), "statusReason" = 'Blade guard cracked.' WHERE id = $1`, [A.cuttingTable])
+    try {
+      const error = await refused('floor', 'POST', cutUrl(WO.station.id), { clientEventId: clientEvent(), code: hides.H06!.code, lines: sets(WO.station) }, 409)
+      expect(refusalOf(error)).toBe('refusal/MACHINE_UNSAFE')
+      expect(error.message).toBe('Machines SEED-CP-01, SEED-CT-01 are marked do not use (unsafe): do not work on them. A technician checks the machine and signs it safe first (Owner answer H1; D.Lgs. 81/2008 art. 71).')
+      expect(await onHand(A.bin, hides.H06!.id)).toBe('55.0000')
+    } finally {
+      // Running again: the next test cuts at the same station (tablet2).
+      await admin(`UPDATE "Machine" SET status = 'RUNNING', "statusSince" = now(), "statusReason" = NULL WHERE id = $1`, [A.cuttingTable])
+    }
   })
 
   it('at a site that records the station, names the station only (no worker, no creator), and needs a tablet with a station', async () => {

@@ -39,6 +39,9 @@ import { standardReasonsCron, standardReasonsForNewTenants } from './platform/re
 // B-W2a-32: the search index, one indexer per record type in platform/search/indexers/ (found by folder).
 import { indexNewTenants, searchHandlers } from './platform/search/indexing'
 import { loadIndexers } from './platform/search/registry'
+// B-W2a-33: the exception rules (evaluated every 5 minutes, and again for one record after its events) and the date timers.
+import { alertsEvaluateCron, alertsRecheckHandler } from './platform/alerts/engine'
+import { timersFireCron } from './platform/timers/fire'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -70,6 +73,8 @@ const W2A_20_HANDLERS: readonly EventHandler[] = [notificationsHandler()]
 // B-W2a-32: the search index follows the record events its indexers name (platform/search/indexing.ts).
 const SEARCH_INDEXERS = await loadIndexers(fileURLToPath(new URL('.', import.meta.url)))
 const W2A_32_HANDLERS: readonly EventHandler[] = searchHandlers(SEARCH_INDEXERS)
+// B-W2a-33: one record's exception rules again right after an event that changes it.
+const W2A_33_HANDLERS: readonly EventHandler[] = [alertsRecheckHandler()]
 
 const mode = process.argv[2] as Mode
 if (!MODES.includes(mode)) {
@@ -129,13 +134,15 @@ if (mode === 'worker') {
   await standardReasonsForNewTenants({ database, log }).catch((error) => log.error({ err: error }, 'the standard reasons could not be given at start'))
   await indexNewTenants({ database, indexers: SEARCH_INDEXERS, log }).catch((error) => log.error({ err: error }, 'the search index could not be built at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]
   crons.push(standardReasonsCron({ database, log }))
   // B-W2a-20: the daily digests people turned on.
   crons.push(digestCron({ database, log }))
+  // B-W2a-33: the exception rules' evaluation and the date timers' firing.
+  crons.push(alertsEvaluateCron({ database, log }), timersFireCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

@@ -222,6 +222,14 @@
       "inventory_opening": {
         "name": "Opening stock",
         "fills": "The stock on hand before Nexus: lots, hides one by one with their areas, linings, trims and protectors, with their existing chromium VI reports. Lots that need the quality step wait in quarantine."
+      },
+      "product_bom": {
+        "name": "BOM lines",
+        "fills": "BOM lines of the styles’ draft revisions: each row names its style and place (export a BOM to start from); quantities by size and colours by colourway in one cell, like 50=43,5; 52=45."
+      },
+      "product_operations": {
+        "name": "Operations",
+        "fills": "The operation library by code: name (Italian and English), department, standard minutes, machine, skill and instructions. Routings keep their copied minutes."
       }
     },
     "keys": {

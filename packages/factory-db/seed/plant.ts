@@ -12,7 +12,7 @@ import { seed as seedFloorAuth } from './floor-auth'
 
 /**
  * The W2a plant seed (schema wave 6/7), per tenant of seed/_core.ts: the machine classes and the symptoms a station
- * reports, two machines of plant A1, two requests from its stations and one maintenance job. The office's rows are
+ * reports, three machines of plant A1, two requests from its stations and one maintenance job. The office's rows are
  * written in the tenant's office scope, the requests in A1's floor scope (the operator at the station), as the app does
  * (the CLI runs this file after seed/floor-auth.ts by name; it runs that seed first anyway).
  *
@@ -21,7 +21,10 @@ import { seed as seedFloorAuth } from './floor-auth'
  *              once, Owner answer H1), other (with a photo or a note); for a lockstitch: thread breaks, skipped
  *              stitches; for a clicking press: the two-hand control fails (unsafe).
  *   machines   SEED-SEW-L1-01, a lockstitch at sewing station 1 (RUNNING); SEED-CP-01, the clicking press at the cutting
- *              table, DO_NOT_USE: locked as unsafe (its guard is missing).
+ *              table, DO_NOT_USE: locked as unsafe (its guard is missing); SEED-CT-01, a hand-cutting table at the same
+ *              station (RUNNING), so the cutting station keeps one usable machine and its work is not blocked
+ *              (the scans' and cuts' station hook, apps/factory-api modules/plant/checks.ts stationBlock: a station is
+ *              blocked only when EVERY machine there is do-not-use).
  *   requests   the operator at sewing station 1 reports thread breaks (NEW); the operator at the cutting table reports
  *              the guard missing (unsafe: the press is DO_NOT_USE in the same transaction); maintenance acknowledged it
  *              and made a job; no technician has signed it safe yet.
@@ -54,8 +57,8 @@ const SLATE = '#475569'
 export interface PlantSeed {
   readonly classIds: Readonly<Record<string, string>>
   readonly symptomIds: Readonly<Record<string, string>>
-  /** SEED-SEW-L1-01 (RUNNING), SEED-CP-01 (DO_NOT_USE, locked). */
-  readonly machineIds: readonly [string, string]
+  /** SEED-SEW-L1-01 (RUNNING), SEED-CP-01 (DO_NOT_USE, locked), SEED-CT-01 (RUNNING, at the press's station). */
+  readonly machineIds: readonly [string, string, string]
   /** The thread-breaks request (NEW) and the unsafe guard-missing one (JOB_MADE, not signed safe). */
   readonly requestIds: readonly [string, string]
   readonly jobId: string
@@ -115,7 +118,7 @@ export async function seed(context: SeedContext): Promise<PlantSeed> {
   })
 
   // --- machines: upserted, the status only when they are made ---------------------------------------------------------
-  const machineIds = [firstId('plant:machine:SEED-SEW-L1-01'), id('plant:machine:SEED-CP-01')] as const
+  const machineIds = [firstId('plant:machine:SEED-SEW-L1-01'), id('plant:machine:SEED-CP-01'), id('plant:machine:SEED-CT-01')] as const
   const machines: (Prisma.MachineUncheckedCreateInput & { id: string })[] = [
     {
       id: machineIds[0],
@@ -148,6 +151,23 @@ export async function seed(context: SeedContext): Promise<PlantSeed> {
       purchaseCost: 920000,
       statusSince: T.setup,
       note: 'The swing-beam press of the cutting room.',
+      ...stamp(T.setup),
+    },
+    {
+      id: machineIds[2],
+      companyId: companyA,
+      siteId: siteA,
+      assetNumber: 'SEED-CT-01',
+      classId: classIds['CUTTING_TABLE']!,
+      make: 'Seedcut',
+      modelName: 'CT-30',
+      serialNumber: 'SC-0007',
+      year: 2020,
+      stationId: station.cut,
+      workCentreId: workCentre.cut,
+      purchaseCost: 240000,
+      statusSince: T.setup,
+      note: 'The hand-cutting table next to the press.',
       ...stamp(T.setup),
     },
   ]

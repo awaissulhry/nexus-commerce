@@ -1,6 +1,9 @@
 import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
 import type { RecordPanelsViewModel } from '../../../../record-panels/model'
-import type { BomLine, BomView, BrandRow, ColourRow, CostDiffView, CostSheetView, MaterialView, OperationRow, RoutingView, ScaleRow, StyleComplianceView, StyleRow, StyleView } from '../api'
+import type { ImportJob, Importer, ImportRow } from '../../../admin/import/api'
+import { blankDraft, emptyWizard } from '../../../admin/import/model'
+import type { BomLine, BomView, BrandRow, ColourRow, CostDiffView, CostSheetView, DuplicatedView, DuplicateOfferView, MaterialView, OperationRow, PriceEntry, RoutingView, ScaleRow, StyleComplianceView, StyleRow, StyleView, WorkshopRow } from '../api'
+import type { SheetImport } from '../import/sheet-import'
 import type { Grains, StyleAbilities } from '../model'
 import type { StyleRecordViewModel } from '../record/record-model'
 
@@ -35,15 +38,20 @@ const NONE: StyleAbilities = {
   materials: false,
   brands: false,
   thread: false,
+  workshops: false,
+  imports: false,
+  importsApply: false,
+  prices: false,
 }
 
 /** The Owner (every right, every grain), a product / technical office person (makes the style, sees cost), the production
  * manager (makes BOM and routing, no money), sales (reads the style and the cost structure, no cost figures). */
 export const CAN: Record<'owner' | 'product' | 'production' | 'sales' | 'viewer', StyleAbilities> = {
-  owner: { view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, declarations: true, labels: true, materials: true, brands: true, thread: true },
-  product: { view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, declarations: false, labels: false, materials: true, brands: true, thread: true },
-  production: { ...NONE, view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, materials: true, thread: true },
-  sales: { ...NONE, view: true, costView: true, materials: true, brands: true, thread: true },
+  owner: { view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, declarations: true, labels: true, materials: true, brands: true, thread: true, workshops: true, imports: true, importsApply: true, prices: true },
+  product: { view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, declarations: false, labels: false, materials: true, brands: true, thread: true, workshops: true, imports: false, importsApply: false, prices: false },
+  // The production manager's template (factory-domain roles): imports yes, the parties list no (no workshop picker).
+  production: { ...NONE, view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, materials: true, thread: true, imports: true, importsApply: true },
+  sales: { ...NONE, view: true, costView: true, materials: true, brands: true, thread: true, prices: true },
   viewer: { ...NONE, view: true, bomView: true, routingView: true, complianceView: true, materials: true, thread: true },
 }
 
@@ -67,6 +75,13 @@ const colour = (n: number, code: string, name: string, hex: string): ColourRow =
 export const COLOURS: ColourRow[] = [colour(1, 'NERO', 'Nero', '#1C1C1E'), colour(2, 'ANTR', 'Antracite', '#4A4D52'), colour(3, 'ROSSO', 'Rosso corsa', '#B3261E'), colour(4, 'SABB', 'Sabbia', '#C8B48A')]
 
 export const BRANDS: BrandRow[] = [{ id: uid('6666', 1), code: 'BR-DEMO', legalName: 'Marchio Esempio S.r.l.', tradeName: 'Esempio Moto' }]
+
+/** Made-up workshops (subcontractors): one of the company, one of every company, one of another company. */
+export const WORKSHOPS: WorkshopRow[] = [
+  { id: uid('6667', 1), companyId: COMPANY_ID, code: 'TERZ-DEMO-01', legalName: 'Laboratorio Cuciture Demo S.n.c.', tradeName: 'Cuciture Demo' },
+  { id: uid('6667', 2), companyId: null, code: 'TERZ-DEMO-02', legalName: 'Ricami Esempio S.r.l.', tradeName: null },
+  { id: uid('6667', 3), companyId: '0190f0e2-1111-7000-8000-000000000002', code: 'TERZ-ALTRO-01', legalName: 'Officina Altrove S.r.l.', tradeName: null },
+]
 
 // ---- the style --------------------------------------------------------------------------------------------------------
 
@@ -652,7 +667,7 @@ export function recordModel(role: keyof typeof GRAINS, overrides: Partial<StyleR
     cost: { status: 'idle' },
     costCompare: null,
     compliance: can.complianceView ? { status: 'ready', value: demoCompliance() } : { status: 'idle' },
-    libraries: { scales: SCALES, colours: COLOURS, brands: can.brands ? BRANDS : null, labels: null },
+    libraries: { scales: SCALES, colours: COLOURS, brands: can.brands ? BRANDS : null, labels: null, workshops: can.workshops ? WORKSHOPS : null },
     materials: {},
     materialSearch: { query: '', results: null, problem: null },
     operationSearch: { query: '', kind: null, results: null, problem: null },
@@ -665,6 +680,8 @@ export function recordModel(role: keyof typeof GRAINS, overrides: Partial<StyleR
     changed: null,
     dockOpen: false,
     panelsPreview: can.thread ? demoPanels() : undefined,
+    duplicate: null,
+    bomImport: null,
     ...overrides,
   }
 }
@@ -847,4 +864,149 @@ export function demoCompare(): CostDiffView {
     unchanged: 0,
   }
   return diff as unknown as CostDiffView
+}
+
+// ---- W2a: copy a style, list prices, subcontracted steps, sheet imports (made-up) ------------------------------------------
+
+/** The Duplicate offer of DEMO-JKT-01 (parts from its released revision 2), as `GET …/duplicate` answers it. */
+export function demoOffer(options: { held?: boolean; noRevision?: boolean; dropped?: string[] } = {}): DuplicateOfferView {
+  const revision = options.noRevision ? null : { id: REV.r2, revision: 2, status: 'RELEASED' as const }
+  const no = (reason: string) => ({ available: false, count: null, reason })
+  return {
+    source: { id: STYLE_ID, code: 'DEMO-JKT-01', name: 'Giacca Touring Demo', status: 'ACTIVE' },
+    revision,
+    parts: [
+      revision ? { part: 'BOM', available: true, count: 8, reason: null } : { part: 'BOM', ...no('DEMO-JKT-01 has no revision yet.') },
+      revision ? { part: 'ROUTING', available: true, count: 9, reason: null } : { part: 'ROUTING', ...no('DEMO-JKT-01 has no revision yet.') },
+      options.held ? { part: 'MEASUREMENTS', ...no('DEMO-JKT-01 is not made to measure.') } : { part: 'MEASUREMENTS', available: true, count: null, reason: null },
+      options.held || !revision ? { part: 'LABELS', ...no(revision ? "Label LBL-DEMO-01 r2 is DEMO-JKT-01's own label: make one for the copy in Compliance." : 'DEMO-JKT-01 has no revision yet.') } : { part: 'LABELS', available: true, count: null, reason: null },
+      { part: 'PICTURES', ...no("The style's sketches and pictures are copied once the gallery arrives (W2b).") },
+      { part: 'OPTIONS', ...no('Style options are copied once option groups arrive (W2b).') },
+    ],
+    colourways: 3,
+    droppedSizes: options.dropped ?? [],
+  }
+}
+
+/** What the copy DEMO-JKT-01-SS made (its revision 1 a draft with the BOM and routing), with two notes. */
+export function demoDuplicated(): DuplicatedView {
+  const copy = { ...newStyle(), id: uid('7777', 901), code: 'DEMO-JKT-01-SS', name: 'Giacca Touring Demo Estiva', season: 'SS28' }
+  return {
+    style: copy,
+    revision: { ...REVISIONS[2]!, id: uid('7777', 902), revision: 1, status: 'DRAFT', changeNote: 'Copied from DEMO-JKT-01 revision 2.' },
+    copied: { from: { styleId: STYLE_ID, code: 'DEMO-JKT-01', revisionId: REV.r2, revision: 2 }, parts: ['BOM', 'ROUTING'], colourways: 3, bomLines: 7, routingSteps: 9, label: false, skus: 0 },
+    notes: ['Size(s) 58 are archived in the scale: the copy\'s range leaves them out.', '1 BOM line(s) of archived colourways are not copied.'],
+  }
+}
+
+/** The base price list in force (made-up): a price per style, two styles priced per colourway only, one unpriced. */
+export const DEMO_PRICES: { list: { id: string; code: string; name: string; currency: string }; entries: PriceEntry[] } = {
+  list: { id: uid('8888', 1), code: 'DEMO-LISTINO-27', name: 'Listino base demo 2027', currency: 'EUR' },
+  entries: [
+    { styleId: STYLE_ID, colourwayId: null, unitPrice: '389', marginPct: '41.2', belowFloor: false },
+    { styleId: ROWS[1]!.id, colourwayId: null, unitPrice: '459', marginPct: '38.6', belowFloor: false },
+    { styleId: ROWS[2]!.id, colourwayId: uid('7777', 991), unitPrice: '279', marginPct: '22.4', belowFloor: true },
+    { styleId: ROWS[2]!.id, colourwayId: uid('7777', 992), unitPrice: '299', marginPct: '27.5', belowFloor: false },
+    { styleId: ROWS[3]!.id, colourwayId: null, unitPrice: '249', marginPct: null, belowFloor: false },
+    { styleId: ROWS[5]!.id, colourwayId: null, unitPrice: '89.9', marginPct: '45', belowFloor: false },
+    { styleId: ROWS[7]!.id, colourwayId: null, unitPrice: '39.5', marginPct: '52.3', belowFloor: false },
+  ],
+}
+
+/** The routing with two steps done by workshops (sewing the sleeves, the finishing), as the API answers it. */
+export function demoSubcontractedRouting(options: { cost?: boolean; revision?: Revision } = {}): RoutingView {
+  const routing = demoRouting(options.revision ? { revision: options.revision } : {})
+  const fee = (value: string | null) => (options.cost === false ? {} : { pricePerPiece: value })
+  const steps = routing.steps.map((step) =>
+    step.code === 'CUC-MAN'
+      ? { ...step, subcontract: { supplier: { id: WORKSHOPS[0]!.id, code: WORKSHOPS[0]!.code, name: WORKSHOPS[0]!.tradeName! }, ...fee('4.5'), transitDays: 6 } }
+      : step.code === 'FIN-STI'
+        ? { ...step, subcontract: { supplier: { id: WORKSHOPS[1]!.id, code: WORKSHOPS[1]!.code, name: WORKSHOPS[1]!.legalName }, ...fee(null), transitDays: null } }
+        : step,
+  )
+  // The fee is a money field (the cost grain): made-up values typed as the API's answer is (as demoCost does).
+  return { ...routing, steps: steps as unknown as RoutingView['steps'], minutes: { ...routing.minutes, subcontracted: 2 } }
+}
+
+const importer = (key: 'product.bom' | 'product.operations'): Importer => ({ key, label: key === 'product.bom' ? 'BOM lines' : 'Operations', description: null, columns: [], keyColumns: key === 'product.bom' ? ['style', 'seq'] : ['code'], maxRows: 10000 })
+
+/** A sheet import of a product screen at one step: the upload, the dry run (changes and refused rows) or the result. */
+export function demoSheetImport(key: 'product.bom' | 'product.operations', step: 'upload' | 'planned' | 'applied', rights: { run: boolean; apply: boolean } = { run: true, apply: true }): SheetImport {
+  const draft = blankDraft(key, COMPANY_ID, 'it')
+  const bom = key === 'product.bom'
+  const layout = {
+    format: 'csv' as const,
+    sheet: null,
+    sheets: [],
+    encoding: 'utf-8',
+    delimiter: ';',
+    headers: bom ? ['Modello', 'Posizione', 'Materiale', 'Qta', 'Sfrido %', 'Qta per taglia', 'Nota'] : ['Codice', 'Nome', 'Reparto', 'Minuti', 'Macchina'],
+    columns: bom
+      ? [
+          { index: 0, header: 'Modello', column: 'style' },
+          { index: 1, header: 'Posizione', column: 'seq' },
+          { index: 2, header: 'Materiale', column: 'material' },
+          { index: 3, header: 'Qta', column: 'qty' },
+          { index: 4, header: 'Sfrido %', column: 'wastagePct' },
+          { index: 5, header: 'Qta per taglia', column: 'sizes' },
+        ]
+      : [
+          { index: 0, header: 'Codice', column: 'code' },
+          { index: 1, header: 'Nome', column: 'name' },
+          { index: 2, header: 'Reparto', column: 'workCentreKind' },
+          { index: 3, header: 'Minuti', column: 'standardMinutes' },
+          { index: 4, header: 'Macchina', column: 'machineType' },
+        ],
+    ignored: bom ? [{ index: 6, header: 'Nota', reason: 'Not a column of this import (ignored).' }] : [],
+  }
+  const base: ImportJob = {
+    id: uid('4141', bom ? 1 : 2),
+    companyId: COMPANY_ID,
+    importerKey: key,
+    importerLabel: bom ? 'BOM lines' : 'Operations',
+    fileId: uid('4141', bom ? 11 : 12),
+    fileName: bom ? 'DEMO-JKT-01-r3-bom.csv' : 'operazioni-demo.csv',
+    fileStatus: 'AVAILABLE',
+    sheetName: null,
+    encoding: 'utf-8',
+    numberFormat: 'it',
+    mapping: null,
+    layout,
+    status: step === 'applied' ? 'APPLIED' : 'PLANNED',
+    mode: step === 'applied' ? 'APPLY' : 'DRY_RUN',
+    rowCount: bom ? 9 : 7,
+    createCount: 1,
+    updateCount: bom ? 2 : 3,
+    unchangedCount: bom ? 5 : 3,
+    errorCount: 1,
+    appliedCount: step === 'applied' ? (bom ? 3 : 4) : 0,
+    skippedCount: 0,
+    issues: null,
+    error: null,
+    plannedAt: at(30, 9, 2),
+    applyRequestedAt: step === 'applied' ? at(30, 9, 4) : null,
+    appliedAt: step === 'applied' ? at(30, 9, 5) : null,
+    cancelledAt: null,
+    version: step === 'applied' ? 5 : 3,
+    createdAt: at(30, 9, 1),
+    updatedAt: at(30, 9, 5),
+    createdById: null,
+  }
+  const rows: ImportRow[] = bom
+    ? [
+        { rowNumber: 2, action: 'UPDATE', key: '["DEMO-JKT-01",10]', recordId: uid('4400', 1), errors: null, before: { wastagePct: '12' }, after: { wastagePct: '15' }, outcome: null, note: null, appliedAt: null },
+        { rowNumber: 5, action: 'UPDATE', key: '["DEMO-JKT-01",40]', recordId: uid('4400', 4), errors: null, before: { sizes: '50=0,8;52=0,8' }, after: { sizes: '50=0,8;52=0,85' }, outcome: null, note: null, appliedAt: null },
+        { rowNumber: 9, action: 'CREATE', key: '["DEMO-JKT-01",95]', recordId: null, errors: null, after: { material: 'ETI-TAGLIA', qty: '1' }, outcome: null, note: null, appliedAt: null },
+      ]
+    : [
+        { rowNumber: 2, action: 'UPDATE', key: '["DEMO-CUC-SPALLA"]', recordId: uid('4901', 2), errors: null, before: { standardMinutes: '6.2' }, after: { standardMinutes: '6.5' }, outcome: null, note: null, appliedAt: null },
+        { rowNumber: 7, action: 'CREATE', key: '["DEMO-CUC-TASCA"]', recordId: null, errors: null, after: { name: 'Cucitura tasca', workCentreKind: 'SEWING', standardMinutes: '3.4' }, outcome: null, note: null, appliedAt: null },
+      ]
+  const refused: ImportRow[] = [
+    bom
+      ? { rowNumber: 7, action: 'ERROR', key: '["DEMO-JKT-02",20]', recordId: null, errors: [{ column: 'style', message: 'DEMO-JKT-02 has no draft revision: start one first.' }], outcome: null, note: null, appliedAt: null }
+      : { rowNumber: 5, action: 'ERROR', key: '["DEMO-XX"]', recordId: null, errors: [{ column: 'workCentreKind', message: 'Expected one of the departments.' }], outcome: null, note: null, appliedAt: null },
+  ]
+  const wizard = step === 'upload' ? emptyWizard({ ...draft, file: { name: base.fileName, size: 2048 } }) : { ...emptyWizard(draft, base), refused: { items: refused, problem: null }, changes: { items: step === 'planned' ? rows : [], problem: null } }
+  return { wizard, importers: [importer(key)], rights: { view: true, run: rights.run, apply: rights.apply, people: false }, companies: [{ id: 'every-company', name: 'Every company' }, { id: COMPANY_ID, name: 'Officina Demo S.r.l.' }] }
 }

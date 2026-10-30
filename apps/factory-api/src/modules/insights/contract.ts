@@ -103,8 +103,9 @@ export const todayContract = defineContract({
       .transform((value, context) => {
         if (value === undefined || value.trim() === '') return undefined
         const parts = [...new Set(value.split(',').map((part) => part.trim()))]
-        if (parts.some((part) => part !== 'TASKS' && part !== 'MENTIONS')) context.addIssue({ code: 'custom', message: 'Expected TASKS, MENTIONS.' })
-        return parts as ('TASKS' | 'MENTIONS')[]
+        // B-W2a-33: ALERTS (my open alerts of the exception rules; the W1 checks they replace are then not computed).
+        if (parts.some((part) => part !== 'TASKS' && part !== 'MENTIONS' && part !== 'ALERTS')) context.addIssue({ code: 'custom', message: 'Expected TASKS, MENTIONS, ALERTS.' })
+        return parts as ('TASKS' | 'MENTIONS' | 'ALERTS')[]
       }),
     ...scopeQuery,
     cursor: z.string().min(1).max(500).optional(),

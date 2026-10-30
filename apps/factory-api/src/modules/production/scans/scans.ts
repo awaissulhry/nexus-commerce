@@ -31,6 +31,7 @@ import { bundleFlowOf } from '../bundles/flow'
 import { lockBundleForScan, readBundle, readBundleByCode, type BundleRow } from '../bundles/store'
 import { floorRecordSubjectFor, hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
 import { startOnFirstWork } from '../work-orders/moves'
+import { stationBlock } from '../../plant/checks'
 import { holdOnScan } from '../../quality/holds/checks'
 import { floorOf, mayScan, ScanRefusedError, refuse, systemView } from './access'
 import { insertCorrectionRequest, readCorrectionRequests, type CorrectionRequest } from './corrections-store'
@@ -400,6 +401,9 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   if (!locked) throw new NotFoundError('Not a bundle ticket of this site.')
   await lockBundleScans(tx, context.tenantId, locked.bundle.siteId, locked.bundle.id)
   await refuseIfHeld(tools, locked.bundle.id, locked.bundle.workOrderId)
+  // W2a B-W2a-35b hook (plant/checks.ts, Owner answer H1): a station whose machines are all do-not-use takes no report; not final: it passes once one of them may be used again (a technician signed it safe).
+  const unsafe = await stationBlock(tx, work.stationId)
+  if (unsafe) refuse({ code: 'MACHINE_UNSAFE', message: unsafe.message, fix: unsafe.fix, final: false })
   const workOrder = (await readHeader(tx, locked.bundle.workOrderId))!
   const operations = await readOperations(tx, workOrder.id)
   const scans = await readBundleScans(tx, locked.bundle.id)
