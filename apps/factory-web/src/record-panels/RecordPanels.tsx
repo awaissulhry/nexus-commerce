@@ -88,6 +88,14 @@ function readProblem(error: unknown): string {
 const issuePaths = (error: ApiError): string[] => error.issues.map((issue) => issuePath(issue).replace(/\./g, '/'))
 
 /** The notice for a refused mail or note: what the API pointed at, in this app's words. */
+/** The notice after a confirm that held the file: its reason's words (B-W2a-42: the virus scan has three of its own). */
+function quarantineNotice(reason: string | null): { key: string; tone: 'danger' | 'warning' } {
+  if (reason === 'virus_found') return { key: 'files.notice.infected', tone: 'danger' }
+  if (reason === 'scan_pending') return { key: 'files.notice.scanPending', tone: 'warning' }
+  if (reason === 'scan_failed') return { key: 'files.notice.scanFailed', tone: 'warning' }
+  return { key: 'files.notice.quarantined', tone: 'danger' }
+}
+
 export function sendNotice(error: unknown): Notice {
   if (isApiError(error) && error.kind === 'invalid') {
     const paths = issuePaths(error)
@@ -365,7 +373,7 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
       set(row('confirming'))
       const { file: done } = await completeUpload(api, announced.file.id)
       set(null)
-      setNotice(done.status === 'QUARANTINED' ? { key: 'files.notice.quarantined', tone: 'danger' } : { key: 'files.notice.uploaded', tone: 'success' })
+      setNotice(done.status === 'QUARANTINED' ? quarantineNotice(done.quarantineReason) : { key: 'files.notice.uploaded', tone: 'success' })
       void loadFiles()
       void loadTimeline()
     } catch (error) {

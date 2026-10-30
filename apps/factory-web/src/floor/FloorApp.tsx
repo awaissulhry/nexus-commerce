@@ -17,6 +17,8 @@ import { floorLocale, IDLE_WARN_MS, idleWarnAfterMs } from './model'
 import { numberKindsOf } from './queue/actions'
 import { FloorQueue, type QueueSnapshot } from './queue/queue'
 import { browserStorage } from './queue/storage'
+import { DeviceReporter, readBattery, sendDeviceState } from './queue/report'
+import { AppUpdater, queuedCount, updateStep, VERSION_CHECK_MS, type UpdateSnapshot, type UpdateStep } from './queue/update'
 import { shellQueueOf, type ShellQueue } from './shell/banner'
 import type { SignedOutWhy } from './sign-in/view/SignInView'
 import { DEFAULT_TIME_ZONE } from '../lib/i18n/format'
@@ -35,6 +37,10 @@ import { DEFAULT_TIME_ZONE } from '../lib/i18n/format'
  * The offline queue (B-W0-30, queue/queue.ts) lives here too, for every screen: actions saved on the tablet first and
  * sent in order when the network is there (back online, back in view, after each action, on a timer), the banner's
  * counts (shell/banner.ts), and the tablet's label numbers topped up with each send.
+ *
+ * Safe app updates (B-W2a-42, PLT-241; queue/update.ts): the app knows the version its page runs, asks the server for
+ * its current one, and takes a newer one only with the queue empty, the network there and a screen at rest. The tablet
+ * tells the office its app version, battery and queue count (queue/report.ts; Admin › Devices).
  */
 
 export interface FloorStore {
@@ -79,6 +85,8 @@ export interface FloorStore {
   queueSnapshot: QueueSnapshot
   /** The person's counts and the tablet's label numbers, as the shell shows them. */
   shellQueue: ShellQueue
+  /** The version this page runs, the server's latest, and what an update waits for (B-W2a-42). */
+  appUpdate: UpdateSnapshot & { step: UpdateStep }
 }
 
 /** Chrome's `beforeinstallprompt` event (not in the DOM types). */
@@ -134,7 +142,7 @@ async function storageState(): Promise<{ persisted: boolean | null; freeMb: numb
   }
 }
 
-export function FloorApp({ catalogues, children }: { catalogues: Readonly<Record<Locale, LocaleMessages>>; children: ReactNode }) {
+export function FloorApp({ appVersion, catalogues, children }: { appVersion: string; catalogues: Readonly<Record<Locale, LocaleMessages>>; children: ReactNode }) {
   const api = useMemo(() => browserApi(), [])
   const router = useRouter()
   const pathname = usePathname()
@@ -150,6 +158,10 @@ export function FloorApp({ catalogues, children }: { catalogues: Readonly<Record
   const scan = useRef<string | null>(null)
   const queue = useMemo(() => new FloorQueue(browserStorage(), api), [api])
   const queueSnapshot = useSyncExternalStore(queue.subscribe, queue.getSnapshot, queue.getSnapshot)
+
+  const updater = useMemo(() => new AppUpdater(appVersion), [appVersion])
+  const updateSnapshot = useSyncExternalStore(updater.subscribe, updater.getSnapshot, updater.getSnapshot)
+  const reporter = useMemo(() => new DeviceReporter((state) => sendDeviceState(api, state)), [api])
 
   const device = load.status === 'ready' ? load.device : null
   const me = load.status === 'ready' ? load.me : null
@@ -202,6 +214,45 @@ export function FloorApp({ catalogues, children }: { catalogues: Readonly<Record
   useEffect(() => {
     queue.setContext({ deviceId: device?.device.id ?? null, workerId: me && !me.pinMustChange ? me.worker.id : null, numberKinds })
   }, [queue, device?.device.id, me, numberKinds])
+
+  // Safe app updates (B-W2a-42): ask for the server's version at start, on a timer, back in view and after each send;
+  // take a newer one only when updateStep says nothing can be lost.
+  const queued = queuedCount(queueSnapshot.items)
+  const step = updateStep({ running: appVersion, latest: updateSnapshot.latest, queued, sending: queueSnapshot.sending, online, path: pathname, triedFor: updateSnapshot.triedFor })
+  useEffect(() => {
+    void updater.check()
+    const timer = window.setInterval(() => void updater.check(), VERSION_CHECK_MS)
+    const visible = () => {
+      if (document.visibilityState === 'visible') void updater.check()
+    }
+    document.addEventListener('visibilitychange', visible)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', visible)
+    }
+  }, [updater])
+  useEffect(() => {
+    if (queueSnapshot.lastSentAt) void updater.check()
+  }, [updater, queueSnapshot.lastSentAt])
+  useEffect(() => {
+    if (step === 'apply') updater.apply()
+  }, [updater, step])
+
+  // The tablet's own state for the office (B-W2a-42): at start, when the queue empties or fills, and every few minutes.
+  const queuedNow = useRef(queued)
+  queuedNow.current = queued
+  const deviceId = device?.device.id ?? null
+  const queueEmpty = queued === 0
+  useEffect(() => {
+    if (!deviceId) return
+    const tick = async () => {
+      const battery = await readBattery()
+      await reporter.report({ appVersion, batteryPercent: battery.percent, batteryCharging: battery.charging, queuedActions: queuedNow.current })
+    }
+    void tick()
+    const timer = window.setInterval(() => void tick(), 60_000)
+    return () => window.clearInterval(timer)
+  }, [reporter, deviceId, appVersion, queueEmpty])
 
   const setDevice = useCallback((next: DeviceInfo) => setLoad((current) => ({ status: 'ready', device: next, me: current.status === 'ready' ? current.me : null })), [])
   const setMe = useCallback((next: FloorMe | null, why: SignedOutWhy = null) => {
@@ -372,6 +423,7 @@ export function FloorApp({ catalogues, children }: { catalogues: Readonly<Record
     queue,
     queueSnapshot,
     shellQueue,
+    appUpdate: { ...updateSnapshot, step },
   }
 
   return (

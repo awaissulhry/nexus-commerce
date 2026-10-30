@@ -16,8 +16,8 @@ export type FileStatus = (typeof FILE_STATUSES)[number]
 /** platform/files/rules.ts FILE_AUDIENCES (COL-050). */
 export const FILE_AUDIENCES = ['OFFICE', 'FLOOR', 'PARTNER', 'LINK'] as const
 export type FileAudience = (typeof FILE_AUDIENCES)[number]
-/** platform/files/rules.ts QUARANTINE_REASONS. */
-export const QUARANTINE_REASONS = ['size_mismatch', 'type_mismatch', 'checksum_mismatch'] as const
+/** platform/files/rules.ts QUARANTINE_REASONS (B-W2a-42: held for the virus scan, a virus found, the scan failed). */
+export const QUARANTINE_REASONS = ['size_mismatch', 'type_mismatch', 'checksum_mismatch', 'scan_pending', 'virus_found', 'scan_failed'] as const
 export type QuarantineReason = (typeof QUARANTINE_REASONS)[number]
 /** factory-domain threads/rules.ts. */
 export const MESSAGE_DIRECTIONS = ['INTERNAL_NOTE', 'OUTBOUND', 'INBOUND'] as const
