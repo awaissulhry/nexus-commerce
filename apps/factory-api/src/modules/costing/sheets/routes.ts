@@ -1,5 +1,5 @@
-import { idempotencyKeyFrom } from '../../core/command'
-import { defineRoutes } from '../../core/manifest'
+import { idempotencyKeyFrom } from '../../../core/command'
+import { defineRoutes } from '../../../core/manifest'
 import {
   archiveRateContract,
   compareCostContract,
@@ -12,8 +12,8 @@ import {
   updateRateContract,
 } from './contract'
 import { manifest } from './manifest'
-import { archiveRate, createRate, getSettings, listRates, saveSettings, updateRate } from './rates'
-import { compareCostSheets, costCells, costSheetOf } from './sheets'
+import { archiveRate, createRate, getSettings, listRates, saveSettings, updateRate } from '../rates'
+import { compareCostSheets, costCells, costSheetOf } from '../sheets'
 
 /**
  * The style cost sheet (costing module, B-W1-16; A2 SCR-044 "Style › Cost"; features FIN-001, FIN-002, FIN-004,

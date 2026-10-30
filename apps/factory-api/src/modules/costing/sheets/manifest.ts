@@ -1,4 +1,4 @@
-import { defineManifest } from '../../core/manifest'
+import { defineManifest } from '../../../core/manifest'
 
 /**
  * Costing's routes (A2 SCR-044 "Style › Cost"; features FIN-001, FIN-002, FIN-004). Office only: the floor and partner
