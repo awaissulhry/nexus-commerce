@@ -12,7 +12,11 @@
     "products": {
       "area": "Prodotti",
       "main": "Principali",
-      "styles": "Modelli"
+      "styles": "Modelli",
+      "materials": "Materiali e accessori",
+      "libraries": "Librerie",
+      "operations": "Operazioni",
+      "sizes": "Taglie e misure"
     },
     "sales": {
       "area": "Vendite",
@@ -60,7 +64,17 @@
       "main": "Principali",
       "tests": "Test e sostanze",
       "safety": "Sicurezza prodotto",
-      "register": "Registro DPI e richiami"
+      "register": "Registro DPI e richiami",
+      "certificates": "Certificati",
+      "labels": "Etichette e marcature"
+    },
+    "finance": {
+      "area": "Contabilità",
+      "main": "Principali",
+      "invoices": "Fatture",
+      "payments": "Incassi",
+      "settingsGroup": "Impostazioni",
+      "settings": "Impostazioni contabilità"
     },
     "planning": {
       "area": "Pianificazione",

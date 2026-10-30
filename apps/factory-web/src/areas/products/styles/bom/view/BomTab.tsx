@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { ArrowDown, ArrowUp, CircleAlert, CircleX, Plus, Search, Trash2 } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, KeyValue, Modal, SummaryTable } from '@nexus/ui/components'
 import { Button, Input, RadioCard, SegmentedControl, Select, Spinner, Tag, Textarea, Toggle } from '@nexus/ui/primitives'
@@ -137,7 +138,7 @@ export function BomTab({ style, model, actions }: { style: StyleView; model: Sty
         ) : model.bomView === 'colours' ? (
           <ColoursView bom={bom} model={model} editable={editable} actions={actions} />
         ) : (
-          <LinesView bom={bom} editable={editable} heldWhy={heldWhy} actions={actions} />
+          <LinesView bom={bom} editable={editable} heldWhy={heldWhy} actions={actions} prefix={model.prefix} />
         )}
       </Card>
 
@@ -159,7 +160,7 @@ function dependence(line: BomLine, t: (key: string, params?: Record<string, stri
   )
 }
 
-function LinesView({ bom, editable, heldWhy, actions }: { bom: BomView; editable: boolean; heldWhy: string | null; actions?: StyleRecordActions }) {
+function LinesView({ bom, editable, heldWhy, actions, prefix }: { bom: BomView; editable: boolean; heldWhy: string | null; actions?: StyleRecordActions; prefix: string }) {
   const t = useT('products')
   const locale = useLocale()
   const base = bom.style.baseSize
@@ -193,7 +194,10 @@ function LinesView({ bom, editable, heldWhy, actions }: { bom: BomView; editable
             cells: [
               String(line.seq),
               <span key="m" className="fw-st-cellstack">
-                <b>{line.item.code}</b>
+                {/* The material record (Products › Materials & trims, SCR-048). */}
+                <Link className="fw-st-link" href={`${prefix}/products/materials/${line.item.id}`}>
+                  <b>{line.item.code}</b>
+                </Link>
                 <span className="nds-summary-sub">
                   {line.item.name} · {t(`kind.${line.item.kind}`)}
                 </span>

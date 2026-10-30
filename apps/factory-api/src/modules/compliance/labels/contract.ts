@@ -127,6 +127,39 @@ const cellView = output({
   certificate: output({ outcome: z.enum(['covered', 'not_required', 'refused']), number: z.string().nullable(), reasons: z.array(z.string()) }).nullable(),
 })
 
+/**
+ * The records' values the cell was rendered with (factory-domain `LabelValues` of a SAMPLE, without the batch or serial and
+ * the date of manufacture, which a preview never has): with them and a template's content the browser renders a draft
+ * as it is typed (`renderLabel`), the same blocks this answer's `label` holds for the saved content.
+ */
+const measureView = output({ min: z.string().nullable(), max: z.string().nullable(), unit: z.string() })
+const valuesView = output({
+  style: output({
+    id: id(),
+    code: z.string(),
+    name: z.string(),
+    companyId: id().nullable(),
+    productType: z.string(),
+    ppeCategory: z.string(),
+    ppeStandard: z.string().nullable(),
+    ppeClass: z.string().nullable(),
+    brandPartyId: id().nullable(),
+  }),
+  colourway: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
+  size: output({ code: z.string(), label: z.string().nullable(), scaleId: id(), scaleCode: z.string(), bodyMeasures: z.record(z.string(), measureView).nullable() }).nullable(),
+  certificate: output({
+    outcome: z.enum(['covered', 'not_required', 'refused']),
+    certificate: output({ id: id(), number: z.string(), standard: z.string(), ppeClass: z.string().nullable(), validTo: businessDate() }).nullable(),
+    reasons: z.array(z.string()),
+    date: businessDate(),
+  }).nullable(),
+  /** BATCH or SERIAL (the style's garment tracking); a preview has no value. */
+  identification: output({ kind: z.enum(['BATCH', 'SERIAL']) }),
+  date: businessDate(),
+  /** The languages the buyer's market needs, as asked. */
+  marketLanguages: z.array(z.string()),
+})
+
 // ---- routes ------------------------------------------------------------------------------------------------------------------
 
 const templateParams = input({ templateId: id() })
@@ -202,7 +235,7 @@ const cellQuery = {
 export const previewContract = defineContract({
   params: templateParams,
   querystring: input({ ...cellQuery, dpi: z.coerce.number().int().refine((value) => (LABEL_DPIS as readonly number[]).includes(value), { message: `Expected ${LABEL_DPIS.join(', ')}.` }).default(203) }),
-  response: { 200: output({ label: renderedLabelView, cell: cellView, zpl: output({ dpi: z.number().int(), text: z.string() }).nullable() }) },
+  response: { 200: output({ label: renderedLabelView, cell: cellView, values: valuesView, zpl: output({ dpi: z.number().int(), text: z.string() }).nullable() }) },
 })
 
 /** The PDF itself (an attachment, stored nowhere). */

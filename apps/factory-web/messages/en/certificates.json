@@ -1,0 +1,598 @@
+{
+  "common": {
+    "back": "Back",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "status": {
+    "DRAFT": "Draft",
+    "VALID": "Valid",
+    "SUSPENDED": "Suspended",
+    "WITHDRAWN": "Withdrawn",
+    "EXPIRED": "Expired",
+    "held": {
+      "reason": "Write the notified body's words first."
+    }
+  },
+  "kind": {
+    "GARMENT": "EN 17092 garment",
+    "PROTECTOR": "EN 1621 protector",
+    "GLOVE": "EN 13594 glove",
+    "OTHER": "Other standard"
+  },
+  "holder": {
+    "company": "Our company",
+    "brand": "Brand (private label)"
+  },
+  "left": {
+    "years_one": "{count} year",
+    "years_other": "{count} years",
+    "months_one": "{count} month",
+    "months_other": "{count} months",
+    "span": "{span} left",
+    "days_one": "{count} day left",
+    "days_other": "{count} days left",
+    "lastDay": "Last valid day today",
+    "expired_one": "Expired {count} day ago",
+    "expired_other": "Expired {count} days ago",
+    "withdrawn": "Withdrawn: covers nothing",
+    "notRegistered": "Not registered · {span} once valid"
+  },
+  "explainer": {
+    "summary": "How the certificate gate works",
+    "rule": "A garment may be labelled, released and shipped only when a valid certificate covers its style, colour and size on that day.",
+    "placesLabel": "Where the gate acts",
+    "coveredIntro": "“Covered” means all of these, on the day asked:",
+    "covered": {
+      "status": "The certificate is Valid (not a draft, suspended, withdrawn or expired).",
+      "dates": "The day is inside its Valid from – Valid to.",
+      "style": "The style is in its coverage.",
+      "colour": "The colourway is covered (or all colourways are).",
+      "size": "The size is covered (or the whole range is).",
+      "mtm": "Made-to-measure: the rider’s measures fall inside the covered sizes’ body measures."
+    }
+  },
+  "stop": {
+    "release": "Work order release",
+    "label": "Garment label print on the floor",
+    "ship": "Final release and shipment"
+  },
+  "law": {
+    "annexV": "Reg. (EU) 2016/425 Annex V",
+    "en17092": "EN 17092"
+  },
+  "list": {
+    "intro": "The EU type-examination certificates of our garments, protectors and gloves: what each covers and until when.",
+    "add": "Add certificate",
+    "table": "Certificates",
+    "count_one": "{count} certificate",
+    "count_other": "{count} certificates",
+    "countOf_one": "{count} of {total}",
+    "countOf_other": "{count} of {total}",
+    "search": "Search number, body, model",
+    "rows": "Rows: {view}",
+    "rowsHeading": "Saved views",
+    "kindFilter": "Kind of certificate",
+    "allKinds": "Every kind",
+    "activeFilters": "Active filters",
+    "removeFilter": "Remove the filter {name}",
+    "clearAll": "Clear all",
+    "more": "More",
+    "exportView": "Export this view (CSV)",
+    "exportViewHint_one": "{count} certificate as shown",
+    "exportViewHint_other": "{count} certificates as shown",
+    "exportNothing": "Nothing to export in this view",
+    "bulkExport_one": "Export {count} (CSV)",
+    "bulkExport_other": "Export {count} (CSV)",
+    "moreCapped": "Show more",
+    "failedTitle": "The register could not be read",
+    "noMatch": "No certificate matches these filters",
+    "empty": {
+      "title": "No certificates yet",
+      "body": "Add the notified body’s certificate with its PDF, then say which styles and sizes it covers.",
+      "bodyView": "The compliance office adds the certificates; they show here."
+    },
+    "emptyAdd": "Add the first certificate",
+    "col": {
+      "number": "Number · model",
+      "standard": "Standard · kind · class",
+      "holder": "Holder",
+      "body": "Notified body",
+      "covers": "Covers",
+      "valid": "Valid",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "class": "class {class}",
+    "level": "level {class}",
+    "covers_one": "{count} style or part",
+    "covers_other": "{count} styles or parts",
+    "validRange": "{from} – {to}"
+  },
+  "row": {
+    "menu": "Actions for {number}",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "coverage": "Coverage",
+    "check": "Check a garment with this certificate",
+    "copy": "Copy number"
+  },
+  "noAccess": {
+    "title": "Not for your role",
+    "body": "The certificate register needs the permission to view certificates (compliance.certificates.view): the compliance lead, quality or an administrator grants it."
+  },
+  "view": {
+    "all": "All",
+    "valid": "Valid",
+    "expiring": "Expiring in 180 days",
+    "suspended": "Suspended or withdrawn",
+    "drafts": "Drafts not registered",
+    "expired": "Expired"
+  },
+  "tile": {
+    "valid": "Valid",
+    "expiring": "Expiring in 180 days",
+    "suspended": "Suspended or withdrawn",
+    "drafts": "Drafts not registered",
+    "expiringHint": "{within90} within 90 days · {within30} within 30",
+    "unknown": "Could not count"
+  },
+  "tileHint": {
+    "valid": "Covering garments today",
+    "expiring": "Ask the notified body for the renewal",
+    "suspended": "The gate refuses what they covered",
+    "drafts": "They cover nothing until registered"
+  },
+  "held": {
+    "registerMax": "The register shows the first {max} certificates: narrow it with a view or a search.",
+    "manage": "Your role does not change certificates (compliance.certificates.manage).",
+    "upload": "Your role does not upload files (files.upload).",
+    "busy": "Working…",
+    "long": "At most 500 characters.",
+    "notDraft": "Only a draft is registered.",
+    "noCoverage": "A {status} certificate covers nothing more."
+  },
+  "notice": {
+    "suspended_one": "{number} suspended by notified body {body}: the gate refuses the {count} style or part it covered.",
+    "suspended_other": "{number} suspended by notified body {body}: the gate refuses the {count} styles or parts it covered.",
+    "pastValidity": "{number} is past its last valid day ({date}): it covers nothing from today.",
+    "expiringSoon_one": "{number} ends in {count} day ({date}): ask the notified body for its renewal.",
+    "expiringSoon_other": "{number} ends in {count} days ({date}): ask the notified body for its renewal.",
+    "open": "Open",
+    "more_one": "{count} more notice",
+    "more_other": "{count} more notices",
+    "fewer": "Fewer notices"
+  },
+  "done": {
+    "exported_one": "Exported {count} certificate (CSV).",
+    "exported_other": "Exported {count} certificates (CSV).",
+    "copied": "Copied {number}.",
+    "copyFailed": "This browser did not allow copying.",
+    "registered": "{number} is registered: it covers what it lists from its first valid day.",
+    "suspend": "{number} is suspended: the gate refuses what it covered.",
+    "withdraw": "{number} is withdrawn: it covers nothing any more.",
+    "reinstate": "{number} is valid again.",
+    "saved": "The draft is saved.",
+    "coverageAdded": "{code} is covered.",
+    "coverageEnded": "The coverage of {code} is ended (kept in the list of ended coverage).",
+    "pdf": "{name} is on the certificate."
+  },
+  "add": {
+    "title": "Add certificate",
+    "intro": "Type it as the notified body wrote it. It is created as a draft: it covers nothing until it has its PDF and coverage and is registered.",
+    "create": "Create draft certificate",
+    "pdf": "The certificate’s PDF",
+    "pdfHint": "The notified body’s signed PDF. You can also add it later on the record.",
+    "after": "Next: say which styles, colourways and sizes it covers, then register it.",
+    "fiveYearsLaw": "An EU type-examination certificate is valid for at most five years (Reg. (EU) 2016/425 Annex V): the last day can be {latest} at the latest.",
+    "problem": {
+      "holder": "Choose who holds it: our company or the brand.",
+      "number": "Type the certificate number as the notified body wrote it.",
+      "bodyName": "Type the notified body’s name.",
+      "bodyNumber": "The notified body’s number has four digits, as NANDO lists it.",
+      "standard": "Write the standard with its edition, as “EN 17092-4:2020”.",
+      "standardPart": "Name the part of EN 17092 that grants the class (part 2 to 6).",
+      "class": "Write the class or level as the certificate states it (letters or digits).",
+      "level": "An EN 1621 protector has level 1 or 2.",
+      "validFrom": "Choose the first valid day.",
+      "validTo": "Choose the last valid day.",
+      "validToOrder": "The last valid day comes after the first.",
+      "fiveYears": "At most {years} years: the last day can be {latest} at the latest.",
+      "refused": "The register refused this field: see below.",
+      "duplicate": "This notified body already has a certificate with this number in the register.",
+      "invalid": "The register refused the certificate as it is.",
+      "failed": "The certificate was not created. Try again."
+    }
+  },
+  "field": {
+    "standard": "Standard",
+    "standardHint": "The harmonised standard and edition on the certificate.",
+    "standardOther": "Another standard…",
+    "standardTyped": "Standard as written",
+    "standardTypedHint": "With its edition, as “EN 17092-4:2020”.",
+    "class": "Class",
+    "classGranted": "The part of EN 17092 grants this class.",
+    "level": "Performance level",
+    "levelPick": "Choose the level",
+    "levelValue": "Level {level}",
+    "classOther": "Class or level",
+    "classOtherHint": "As the certificate states it (gloves: “1KP”).",
+    "number": "Certificate number",
+    "numberHint": "As the notified body wrote it.",
+    "holder": "Holder",
+    "holderHint": "With a brand label the brand is the legal maker.",
+    "holderPick": "Choose the holder",
+    "holderCompany": "Our company · {name}",
+    "holderBrand": "Brand · {name}",
+    "bodyName": "Notified body",
+    "bodyNumber": "Its number",
+    "bodyNumberHint": "Four digits, as NANDO lists it.",
+    "model": "Model reference",
+    "modelHint": "The type the certificate names.",
+    "validFrom": "Valid from",
+    "validTo": "Valid to",
+    "validToHint": "At most five years after the first day.",
+    "span": "Valid for {span}.",
+    "note": "Note",
+    "noteHint": "For the office (not printed)."
+  },
+  "date": {
+    "notSet": "Not set",
+    "clear": "Clear the date"
+  },
+  "file": {
+    "choose": "Choose a PDF",
+    "change": "Choose another",
+    "none": "No file chosen"
+  },
+  "check": {
+    "open": "Check a garment",
+    "title": "Check a garment",
+    "intro": "May this garment be labelled, released and shipped on that day? The answer says which certificate covers it, or why not and how to fix it.",
+    "style": "Style",
+    "styleSearch": "Search code or name",
+    "styles": "Styles found",
+    "noStyles": "Nothing found",
+    "changeStyle": "Change",
+    "colourway": "Colourway",
+    "size": "Size",
+    "pick": "Choose",
+    "date": "On",
+    "today": "Today",
+    "otherDay": "Another day: for an audit or a complaint",
+    "run": "Check",
+    "held": {
+      "styles": "Your role does not read styles (product.styles.view).",
+      "style": "Choose the style first.",
+      "colourway": "Choose the colourway.",
+      "size": "Choose the size.",
+      "date": "Choose the day."
+    },
+    "covered": "Yes – {style} {colourway} {size} is covered by {number} on {date}.",
+    "coveredBy": "{standard}, class {class}, notified body {body}; valid {from} – {to}.",
+    "notRequired": "{style} {colourway} {size} needs no certificate on {date}.",
+    "refused": "No – {style} {colourway} {size} is not covered on {date}.",
+    "stops": "Until it is fixed the work order is not released, the label is not printed and the garment is not shipped."
+  },
+  "gate": {
+    "no_certificate": "No valid certificate covers this style.",
+    "certificate_not_valid": "The certificate that would cover it is not valid (a draft, suspended or withdrawn).",
+    "certificate_expired": "The certificate that covered it has ended.",
+    "certificate_not_yet_valid": "The certificate is not valid yet on that day.",
+    "colourway_not_covered": "This colourway is not covered.",
+    "size_not_covered": "This size is outside the covered range.",
+    "style_not_made_to_measure": "The style is not made to measure.",
+    "made_to_measure_not_allowed": "The certificate does not cover made-to-measure units.",
+    "body_measures_missing": "The covered sizes have no body measures to compare with.",
+    "measurement_missing": "A measure of the rider is missing.",
+    "measurement_invalid": "A measure of the rider is not a usable number.",
+    "measurement_outside": "A measure of the rider is outside the covered sizes’ body measures."
+  },
+  "gateFix": {
+    "no_certificate": "Compliance: add the notified body’s certificate and its coverage, or take the style off the order.",
+    "certificate_not_valid": "Compliance: register the draft, or ask the notified body to reinstate it.",
+    "certificate_expired": "Compliance: ask the notified body for the renewal and add the new certificate.",
+    "certificate_not_yet_valid": "Wait for its first valid day, or ask about a later day.",
+    "colourway_not_covered": "Compliance: ask the notified body to add the colourway, or take it off the order.",
+    "size_not_covered": "Compliance: ask the notified body to extend the certificate, or take the size off the order.",
+    "style_not_made_to_measure": "Product office: allow made-to-measure on the style, or order a standard size.",
+    "made_to_measure_not_allowed": "Compliance: ask the notified body to cover made-to-measure, or order a standard size.",
+    "body_measures_missing": "Product office: add the body measures to the size scale.",
+    "measurement_missing": "Sales: take the missing measure.",
+    "measurement_invalid": "Sales: correct the measure.",
+    "measurement_outside": "Compliance: ask the notified body about the size, or make a standard size."
+  },
+  "record": {
+    "back": "Certificates",
+    "backToList": "Back to certificates",
+    "more": "More actions",
+    "bodyMeta": "notified body {number} {name}",
+    "modelMeta": "model {model}",
+    "noPanels": "The thread, files and history are shown here.",
+    "panelsHeld": "The thread, files and history need the permission to read threads (threads.read)."
+  },
+  "tab": {
+    "coverage": "Coverage",
+    "body": "Notified body",
+    "files": "Files",
+    "activity": "Activity"
+  },
+  "action": {
+    "register": "Register…",
+    "reinstate": "Reinstate…",
+    "suspend": "Mark suspended…",
+    "withdraw": "Mark withdrawn…",
+    "files": "The PDF and files",
+    "copyNumber": "Copy number"
+  },
+  "state": {
+    "draft": "A draft covers nothing: add its PDF and what it covers, then register it.",
+    "registered": "Registered – only its status can change; a correction is a new certificate.",
+    "pastValidity": "Its last valid day was {date}: it covers nothing from today (the night’s run marks it expired).",
+    "suspended": "Suspended on {date}.",
+    "suspendedBlocks": "Until it is valid again the gate refuses every garment it covered: no work order release, no label, no shipment.",
+    "withdrawn": "Withdrawn on {date}: it covers nothing any more.",
+    "expired": "Expired: its last valid day was {date}.",
+    "expiredBlocks": "The garments it covered cannot be labelled, released or shipped under it. A renewal is a new certificate."
+  },
+  "details": {
+    "title": "The certificate",
+    "draft": "As typed from the notified body’s paper; a draft can still be corrected.",
+    "registered": "As registered.",
+    "edit": "Edit",
+    "editing": "Each field is checked as you leave it.",
+    "save": "Save"
+  },
+  "register": {
+    "title": "Before registering",
+    "intro": "Every check must pass.",
+    "confirmTitle": "Register {number}",
+    "once": "Once registered only its status changes. A correction is a new certificate.",
+    "confirm": "Register certificate",
+    "check": {
+      "pdf": {
+        "name": "PDF",
+        "ok": "The notified body’s PDF is on the certificate.",
+        "open": "The notified body’s PDF is missing.",
+        "fix": "Add it on the Files tab."
+      },
+      "data": {
+        "name": "Data",
+        "ok": "Number, notified body, class and dates pass their checks, five years at most.",
+        "open": "A field does not pass its check.",
+        "fix": "Edit the draft’s details."
+      },
+      "validity": {
+        "name": "Validity",
+        "ok": "Its last valid day has not passed.",
+        "open": "Its last valid day has passed.",
+        "fix": "An ended certificate is not registered: add the renewal instead."
+      },
+      "coverage": {
+        "name": "Coverage",
+        "ok": "It covers at least one style or part.",
+        "open": "It covers nothing yet.",
+        "fix": "Add what it covers."
+      }
+    },
+    "held": {
+      "pdf": "Add the notified body’s PDF first.",
+      "data": "A field of the draft does not pass its check.",
+      "validity": "Its last valid day has passed.",
+      "coverage": "Add what it covers first."
+    }
+  },
+  "move": {
+    "suspend": {
+      "title": "Mark {number} suspended",
+      "confirm": "Mark suspended",
+      "what": "Record the notified body’s suspension. It only protects: from now on the gate refuses what it covers, until it is reinstated.",
+      "impact_one": "The gate will refuse the garments of this style or part:",
+      "impact_other": "The gate will refuse the garments of these {count} styles or parts:"
+    },
+    "withdraw": {
+      "title": "Mark {number} withdrawn",
+      "confirm": "Mark withdrawn",
+      "what": "Withdrawn is final: it covers nothing any more and cannot be reinstated. A new certificate is a new record.",
+      "impact_one": "It will no longer cover this style or part:",
+      "impact_other": "It will no longer cover these {count} styles or parts:"
+    },
+    "reinstate": {
+      "title": "Reinstate {number}",
+      "confirm": "Reinstate",
+      "what": "The notified body lifted the suspension: the certificate covers again from today, within its dates.",
+      "impact_one": "It covers again this style or part:",
+      "impact_other": "It covers again these {count} styles or parts:"
+    },
+    "nothingCovered": "It covers no style or part now.",
+    "notServed": "The open work orders, garments in stock and shipments it touches are not listed here yet.",
+    "reason": "The notified body’s words",
+    "reasonOptional": "Why (optional)",
+    "reasonHint": "Kept in the certificate’s history."
+  },
+  "coverage": {
+    "title": "What it covers",
+    "intro": "Per style: its colourways × sizes. A part (a protector) is listed below.",
+    "add": "Add coverage",
+    "empty": {
+      "title": "It covers nothing yet",
+      "draft": "Add the styles (or the protector) the notified body examined, with their colourways and sizes.",
+      "body": "Nothing is covered by it now."
+    },
+    "allColours": "All colourways",
+    "someColours_one": "{count} colourway",
+    "someColours_other": "{count} colourways",
+    "wholeRange": "Whole range",
+    "someSizes": "Sizes {sizes}",
+    "mtm": "Made-to-measure allowed",
+    "noMtm": "No made-to-measure",
+    "end": "End coverage…",
+    "loadingStyle": "Reading the style’s colourways and sizes…",
+    "styleFailed": "The style’s colourways and sizes could not be read: the coverage holds as written above.",
+    "styleHeld": "Your role does not read styles: the coverage holds as written above.",
+    "noColourways": "The style has no colourway yet.",
+    "gridLabel": "Coverage of {style}: colourways × sizes",
+    "colourway": "Colourway",
+    "archivedColourway": "archived",
+    "cell": "{colourway} {size}: {state}",
+    "counts": "{covered} of {offered} offered cells covered.",
+    "items": "Parts it covers",
+    "col": {
+      "item": "Part",
+      "note": "Note",
+      "since": "Since"
+    },
+    "ended_one": "{count} ended coverage",
+    "ended_other": "{count} ended coverages",
+    "endedOn": "ended",
+    "addTitle": "Add coverage to {number}",
+    "addConfirm": "Add coverage",
+    "target": "What it covers",
+    "targetStyle": "A style",
+    "targetItem": "A part (protector)",
+    "item": "Part",
+    "itemSearch": "Search the material code or name",
+    "ppeComponent": "PPE component",
+    "colourways": "Colourways",
+    "sizes": "Sizes",
+    "wholeRangeOf": "Whole range ({sizes})",
+    "mtmField": "Made-to-measure units",
+    "mtmHint": "Covered when the rider’s measures fall inside the covered sizes’ body measures.",
+    "mtmStyleOff": "The style itself is not made to measure.",
+    "note": "Note",
+    "noteHint": "Which report or letter of the notified body says so.",
+    "held": {
+      "style": "Choose the style.",
+      "item": "Choose the part.",
+      "already": "It is covered by this certificate already: end that coverage first to change it.",
+      "colourways": "Tick at least one colourway.",
+      "sizes": "Tick at least one size.",
+      "materials": "Your role does not read materials (product.materials.view).",
+      "reason": "Say why it ends."
+    },
+    "endTitle": "End the coverage of {code}",
+    "endConfirm": "End coverage",
+    "endWhat": "From now on this certificate no longer covers it.",
+    "endKept": "The coverage is kept, ended, in the certificate’s history (never deleted).",
+    "endWiden": "To widen it, add the new coverage after.",
+    "endReason": "Why it ends"
+  },
+  "cell": {
+    "covered": "covered",
+    "notCovered": "not covered",
+    "notOffered": "not offered"
+  },
+  "cellShort": {
+    "covered": "Covered",
+    "notCovered": "Not covered",
+    "notOffered": "Not offered"
+  },
+  "lapse": {
+    "title": "What it blocks when it lapses",
+    "intro": "Ask the certificate gate, on a day you choose, about every garment it covers: what it would refuse and why.",
+    "today": "Today",
+    "run_one": "Check {count} garment",
+    "run_other": "Check {count} garments",
+    "garments_one": "It covers {count} garment (colourway × size) today.",
+    "garments_other": "It covers {count} garments (colourway × size) today.",
+    "capped": "The first 200 are checked.",
+    "running": "Asking the gate: {done} of {total}…",
+    "failed": "The gate did not answer. Try again.",
+    "refused_one": "On {date} the gate would refuse {count} of {total} garment.",
+    "refused_other": "On {date} the gate would refuse {count} of {total} garments.",
+    "allCovered": "On {date} all {total} garments are still covered.",
+    "stopsIntro": "For each refused garment, the gate stops:",
+    "stopsLabel": "What a refusal stops",
+    "unknown_one": "{count} garment could not be asked.",
+    "unknown_other": "{count} garments could not be asked.",
+    "sizes": "sizes {sizes}",
+    "outcome": {
+      "refused": "Refused",
+      "covered": "Covered",
+      "not_required": "No certificate needed",
+      "unknown": "No answer"
+    },
+    "coveredBy": "Still covered on that day by {number}.",
+    "stillThis": "Still covered by this certificate on that day.",
+    "held": {
+      "withdrawn": "A withdrawn certificate covers nothing.",
+      "nothing": "It covers no garment of a style."
+    },
+    "notServed": "The open work orders, stock and shipments behind these garments are not counted here yet."
+  },
+  "body": {
+    "title": "Notified body",
+    "intro": "Who examined the type and issued the certificate.",
+    "name": "Name",
+    "number": "Identification number",
+    "numberHint": "As the EU’s NANDO list names it.",
+    "others": "Other certificates from this body",
+    "noOthers": "None in the register."
+  },
+  "files": {
+    "title": "The certificate’s PDF",
+    "hasPdf": "The notified body’s PDF is on file.",
+    "noPdf": "No PDF yet: a certificate is registered only with it.",
+    "upload": "Upload the PDF",
+    "addAnother": "Add another PDF",
+    "held": {
+      "status": "A {status} certificate takes no new PDF."
+    },
+    "readHeld": "Your role does not read files (files.read).",
+    "empty": {
+      "title": "No PDF yet",
+      "body": "Upload the notified body’s signed PDF."
+    },
+    "others": "Other papers",
+    "col": {
+      "name": "File",
+      "size": "Size",
+      "added": "Added"
+    },
+    "size": "{kb} KB",
+    "download": "Download",
+    "retention": {
+      "title": "Kept",
+      "body": "Kept {years} years after its last valid day: at least until {date} (Reg. (EU) 2016/425 art. 8(3)).",
+      "added": "Files of a registered certificate are added, never replaced."
+    },
+    "onlyPdf": "Only a PDF can be the certificate’s file.",
+    "uploadFailed": "The PDF was not sent. Try again.",
+    "uploadFailedAfterCreate": "The draft is created but its PDF was not sent: upload it here.",
+    "downloadFailed": "The file could not be downloaded."
+  },
+  "fileStatus": {
+    "AVAILABLE": "Available",
+    "QUARANTINED": "Held by the virus check",
+    "PENDING": "Being sent"
+  },
+  "write": {
+    "conflict": "Someone changed the certificate in the meantime: it has been read again.",
+    "invalid": "The register refused it as it is.",
+    "notFound": "It is not there any more.",
+    "failed": "It was not saved. Try again."
+  },
+  "csv": {
+    "number": "Number",
+    "standard": "Standard",
+    "class": "Class or level",
+    "kind": "Kind",
+    "holder": "Holder",
+    "bodyName": "Notified body",
+    "bodyNumber": "Notified body number",
+    "model": "Model reference",
+    "covers": "Styles or parts covered",
+    "validFrom": "Valid from",
+    "validTo": "Valid to",
+    "daysLeft": "Days left",
+    "status": "Status"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "add": "Add certificate",
+    "check": "Check a garment",
+    "register": "Register (a draft)",
+    "thread": "The thread beside the record",
+    "help": "All shortcuts"
+  }
+}

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { defineContract, id, input, output } from '@nexus/factory-domain/core/contracts'
+import { notMoney } from '@nexus/factory-domain/money/marked'
 import {
   colourBody,
   createMaterialBody,
@@ -19,9 +20,18 @@ import {
 
 const one = { 200: output({ material: materialView }) }
 const material = input({ materialId: id() })
+const flag = () => z.enum(['true', 'false']).transform((value) => value === 'true')
+
+/**
+ * The list's filters: factory-domain's, plus the two the Materials & trims tiles count (SCR-047): PPE components
+ * (`ppeComponent`), and the materials without a standard purchase price (`missingCost`: a yes/no filter, not an amount —
+ * notMoney — that listMaterials refuses to a caller without the cost grain, since the answer tells which have a price).
+ */
+export const listMaterialsFilters = listMaterialsQuery.extend({ ppeComponent: flag().optional(), missingCost: notMoney(flag().optional()) })
+export type ListMaterialsFilters = z.output<typeof listMaterialsFilters>
 
 export const listMaterialsContract = defineContract({
-  querystring: listMaterialsQuery,
+  querystring: listMaterialsFilters,
   response: { 200: output({ materials: z.array(materialRow), nextCursor: z.string().nullable(), count: z.number().int() }) },
 })
 

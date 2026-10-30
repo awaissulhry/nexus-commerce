@@ -197,7 +197,9 @@ function CoverageCard({ compliance, model }: { compliance: StyleComplianceView; 
                 id: entry.coverageId,
                 cells: [
                   <span key="n" className="fw-st-cellstack">
-                    <b>{entry.certificate.number}</b>
+                    <Link className="fw-st-link" href={`${model.prefix}/compliance/certificates/${entry.certificate.id}`}>
+                      <b>{entry.certificate.number}</b>
+                    </Link>
                     <span className="nds-summary-sub">{t(`certStatus.${entry.certificate.status}`)}</span>
                   </span>,
                   `${entry.certificate.standard}${entry.certificate.ppeClass ? ` · ${entry.certificate.ppeClass}` : ''}`,
@@ -337,7 +339,14 @@ function LabelCard({ compliance, style, model, actions }: { compliance: StyleCom
             columns={2}
             labelCase="sentence"
             items={[
-              { label: t('compliance.label.template'), value: `${label.code} · ${t('revisions.rev', { revision: label.revision })}` },
+              {
+                label: t('compliance.label.template'),
+                value: (
+                  <Link className="fw-st-link" href={`${model.prefix}/compliance/labels/${label.id}`}>
+                    {`${label.code} · ${t('revisions.rev', { revision: label.revision })}`}
+                  </Link>
+                ),
+              },
               { label: t('compliance.label.status'), value: <Pill tone={label.status === 'ACTIVE' ? 'success' : 'warning'}>{t(`labelStatus.${label.status}`)}</Pill> },
               { label: t('compliance.label.languages'), value: label.languages.map((language) => language.toUpperCase()).join(', ') || '—' },
             ]}
@@ -363,6 +372,18 @@ function LabelCard({ compliance, style, model, actions }: { compliance: StyleCom
           </Field>
         )}
         <p className="fw-st-hint">{t('compliance.label.where')}</p>
+        {model.can.complianceView && (
+          <span className="fw-st-inline">
+            <Link className="fw-st-link" href={`${model.prefix}/compliance/labels?q=${encodeURIComponent(style.code)}`}>
+              {t('compliance.label.open')}
+            </Link>
+            {model.can.labels && style.status !== 'ARCHIVED' && (
+              <Link className="fw-st-link" href={`${model.prefix}/compliance/labels?new=1&style=${style.id}`}>
+                {t('compliance.label.new')}
+              </Link>
+            )}
+          </span>
+        )}
       </div>
     </Card>
   )

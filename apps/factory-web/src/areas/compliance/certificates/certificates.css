@@ -1,0 +1,294 @@
+/*
+ * Certificates (SCR-050 register, SCR-051 record) LAYOUT: the gate explainer, the coverage grid of a style, the lapse
+ * check's answer, the dialogs' pickers. The page head, record frame, sections and check lists are the shared quality
+ * parts (areas/quality/_shared/quality.css); the list is the shared list frame. Controls are the design system's; this
+ * file places them with semantic tokens only. No page max-width (Owner rule 2026-10-29): the pages fill the main area.
+ */
+
+.fw-ce-explainer-body {
+  display: grid;
+  gap: var(--nds-space-10);
+  padding-top: var(--nds-space-8);
+}
+
+@media (min-width: 1100px) {
+  .fw-ce-explainer-body {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: start;
+  }
+  .fw-ce-explainer-body > .fw-q-tags {
+    grid-column: 1 / -1;
+  }
+}
+
+.fw-ce-rule {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-medium);
+  line-height: 1.5;
+}
+
+.fw-ce-places,
+.fw-ce-list,
+.fw-ce-reasons,
+.fw-ce-stops,
+.fw-ce-groups,
+.fw-ce-options {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-ce-places li {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-ce-list li,
+.fw-ce-stops li {
+  position: relative;
+  padding-left: var(--nds-space-14);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ce-list li::before,
+.fw-ce-stops li::before {
+  content: '·';
+  position: absolute;
+  left: var(--nds-space-4);
+  color: var(--nds-text-2);
+}
+
+.fw-ce-reasons li,
+.fw-ce-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-ce-reason {
+  font-weight: var(--nds-font-weight-medium);
+}
+
+/* The API's own sentences: data, kept as written. */
+.fw-ce-data {
+  font-style: italic;
+}
+
+.fw-ce-answer-line {
+  margin: 0;
+}
+
+.fw-ce-answer:empty {
+  display: none;
+}
+
+.fw-ce-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-ce-wide {
+  grid-column: 1 / -1;
+}
+
+.fw-ce-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-ce-options {
+  max-height: 240px;
+  overflow-y: auto;
+  gap: var(--nds-space-2);
+}
+
+.fw-ce-file {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-ce-file-label {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+}
+
+.fw-ce-keymap {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--nds-space-8) var(--nds-space-14);
+  margin: 0;
+}
+
+.fw-ce-keymap dt {
+  display: flex;
+  gap: var(--nds-space-4);
+}
+
+.fw-ce-keymap dd {
+  margin: 0;
+}
+
+.fw-ce-title-sub {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-normal);
+}
+
+.fw-ce-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+/* Covered styles: one card each, two side by side on a wide screen. */
+.fw-ce-coverages {
+  display: grid;
+  gap: var(--nds-space-12);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1500px) {
+  .fw-ce-coverages {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fw-ce-items {
+    grid-column: 1 / -1;
+  }
+}
+
+.fw-ce-items,
+.fw-ce-style {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-ce-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.fw-ce-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 100%;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-ce-grid th,
+.fw-ce-grid td {
+  padding: var(--nds-space-6) var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.fw-ce-grid thead th {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-ce-grid th[scope='row'],
+.fw-ce-corner {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  text-align: left;
+  background: var(--nds-surface);
+}
+
+.fw-ce-cell {
+  color: var(--nds-text-2);
+}
+
+.fw-ce-cell svg {
+  vertical-align: -2px;
+}
+
+.fw-ce-cell-word {
+  margin-left: var(--nds-space-4);
+}
+
+.fw-ce-cell.is-covered {
+  color: var(--nds-success-text);
+}
+
+.fw-ce-cell.is-notCovered {
+  color: var(--nds-danger-text);
+}
+
+.fw-ce-lapse-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-ce-date {
+  min-width: 160px;
+}
+
+.fw-ce-lapse {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+}
+
+.fw-ce-lapse:empty {
+  display: none;
+}
+
+.fw-ce-groups {
+  gap: var(--nds-space-8);
+}
+
+.fw-ce-group {
+  padding-bottom: var(--nds-space-6);
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-ce-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-ce-fieldset legend {
+  width: 100%;
+  margin-bottom: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+}
+
+.fw-ce-ticks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-14);
+  width: 100%;
+}
+
+.fw-ce-upload {
+  display: inline-flex;
+}
+
+@media (max-width: 720px) {
+  .fw-ce-hide-phone {
+    display: none;
+  }
+}
