@@ -4,7 +4,7 @@ import { matches, type Loaded, type Notice } from '../shared/model'
 
 /**
  * SCR-008 Companies & sites (design 02 admin.org): ONE page — a tree of the legal companies and their sites, with what
- * each is missing — and the Company record (Legal & tax · Sites · Defaults · Activity). Pure: the rows of the tree, the
+ * each is missing — and the Company record (Legal & tax · Sites · Defaults · Calendars · Activity). Pure: the rows of the tree, the
  * readiness banner, the code a new company gets, the form checks and the Company record's form drafts.
  */
 
@@ -15,6 +15,10 @@ export interface OrgAbilities {
   viewSites: boolean
   /** sites.manage: new site. */
   manageSites: boolean
+  /** calendars.view: the Company record's Calendars tab and "Holidays for all sites" (B-W2a-59; absent without it). */
+  viewCalendars?: boolean
+  /** calendars.manage: keep the company's working days and holidays (the API asks it over every site of the company). */
+  manageCalendars?: boolean
 }
 
 export type OrgDialog = 'new-company' | 'new-site'
@@ -38,6 +42,8 @@ export interface CompaniesViewModel {
   busy?: boolean
   /** The dialog's refusal (a message key). */
   dialogProblem?: string | null
+  /** The company of the address: "Holidays for all sites" opens its calendar (B-W2a-59). */
+  currentCompanyId?: string | null
 }
 
 /** One row of the tree: a company, or one of its sites under it. */
@@ -157,7 +163,8 @@ export function addressLine(address: Address | null): string | null {
 
 // ---- the Company record ----------------------------------------------------------------------------------------------
 
-export const COMPANY_TABS = ['legal', 'sites', 'defaults', 'activity'] as const
+// B-W2a-59: Calendars (Working days and holidays), between Defaults and Activity as the design orders them; shown with calendars.view.
+export const COMPANY_TABS = ['legal', 'sites', 'defaults', 'calendars', 'activity'] as const
 export type CompanyTab = (typeof COMPANY_TABS)[number]
 export const REGIMES = ['RF01', 'RF02', 'RF04', 'RF05', 'RF06', 'RF07', 'RF08', 'RF09', 'RF10', 'RF11', 'RF12', 'RF13', 'RF14', 'RF15', 'RF16', 'RF17', 'RF18', 'RF19'] as const
 export const TIME_ZONES = ['Europe/Rome', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Madrid', 'Europe/Bucharest', 'Europe/Tirane', 'Africa/Tunis'] as const

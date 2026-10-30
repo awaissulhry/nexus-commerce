@@ -1,0 +1,381 @@
+{
+  "pp": {
+    "cancel": "Annulla",
+    "none": "Nessuno",
+    "siteOption": "{code} · {name}",
+    "more": "Mostra altri 50",
+    "loadingMore": "Lettura dei prossimi articoli…",
+    "clearFilters": "Azzera ricerca e filtri",
+    "weeks": "settimane",
+    "less": "Uno in meno",
+    "more_": "Uno in più",
+    "pct": "{pct} %",
+    "inUnit": "In {unit} (l'unità base dell'articolo).",
+    "days_one": "{count} giorno",
+    "days_other": "{count} giorni",
+    "readOnly": {
+      "title": "Puoi leggere queste impostazioni, non modificarle"
+    },
+    "elsewhere": {
+      "title": "Modificato da qualcun altro",
+      "body": "Qualcuno ha modificato queste impostazioni da un'altra schermata. Ricarica per vedere le sue; ciò che hai scritto qui e non salvato resta finché non ricarichi.",
+      "reload": "Ricarica"
+    },
+    "keys": {
+      "title": "Tasti di questo elenco",
+      "edit": "Modifica la cella (o apri la sua scelta)",
+      "cancel": "Lascia la cella com'era",
+      "undo": "Annulla l'ultima modifica (finché è ancora tua)",
+      "newRule": "Nuova regola di riordino"
+    },
+    "held": {
+      "busy": "Salvataggio in corso: attendi la risposta.",
+      "loading": "Lettura in corso: attendi un momento.",
+      "same": "Niente da cambiare: i valori sono gli stessi."
+    },
+    "cell": {
+      "change": "Modifica {field} di {item}: ora {value}"
+    },
+    "colour": {
+      "every": "Tutti i colori"
+    },
+    "method": {
+      "ORDERS": "Da ordini",
+      "MANUAL": "A mano",
+      "REORDER_POINT": "Punto di riordino",
+      "MIN_MAX": "Min / max"
+    },
+    "methodHint": {
+      "ORDERS": "Il piano compra o produce ciò che serve agli ordini, più la scorta di sicurezza.",
+      "MANUAL": "Il piano mostra l'articolo ma non propone mai un ordine: qualcuno lo ordina a mano.",
+      "REORDER_POINT": "Quando la posizione di scorta scende al punto di riordino, il piano ordina il lotto (tanti lotti quanti la riportano sopra).",
+      "MIN_MAX": "Quando la posizione di scorta scende sotto il minimo, il piano ordina fino al massimo."
+    },
+    "source": {
+      "own": "Dell'articolo ({sourcing})",
+      "BUY": "Acquistato qui",
+      "MAKE": "Prodotto in uno stabilimento"
+    },
+    "sourcing": {
+      "BUY": "acquistato",
+      "MAKE": "prodotto",
+      "MAKE_OR_BUY": "prodotto o acquistato"
+    },
+    "default": {
+      "days_one": "dall'articolo: {count} giorno",
+      "days_other": "dall'articolo: {count} giorni",
+      "qty": "dall'articolo: {qty} {unit}",
+      "supplier": "dall'articolo: {name}"
+    },
+    "field": {
+      "method": "Il metodo di pianificazione",
+      "source": "La provenienza",
+      "supplierId": "Il fornitore preferito",
+      "makeSiteId": "Lo stabilimento di produzione",
+      "buyLeadTimeDays": "Il tempo di approvvigionamento",
+      "makeLeadTimeDays": "Il tempo di produzione",
+      "safetyLeadTimeDays": "Il tempo di sicurezza",
+      "safetyStock": "La scorta di sicurezza",
+      "reorderPoint": "Il punto di riordino",
+      "lotSize": "Il lotto",
+      "minStock": "La scorta minima",
+      "maxStock": "La scorta massima",
+      "minOrderQty": "Il minimo d'ordine",
+      "orderMultiple": "Il multiplo d'ordine",
+      "maxOrderQty": "Il massimo d'ordine",
+      "note": "La nota",
+      "horizonWeeks": "Quanto lontano guarda il piano",
+      "dayBucketWeeks": "Giorni fino alla fine della settimana",
+      "weekBucketWeeks": "Settimane fino alla fine della settimana",
+      "defaultEfficiencyPct": "Efficienza pianificata predefinita",
+      "scheduledRunTime": "Il calcolo notturno",
+      "people": "Persone per turno",
+      "plannedEfficiencyPct": "L'efficienza pianificata"
+    },
+    "col": {
+      "item": "Articolo",
+      "colour": "Colore",
+      "method": "Metodo",
+      "source": "Provenienza",
+      "supplier": "Fornitore preferito",
+      "makeSite": "Stabilimento di produzione",
+      "buyLeadTimeDays": "Tempo di approvvigionamento",
+      "makeLeadTimeDays": "Tempo di produzione",
+      "safetyLeadTimeDays": "Tempo di sicurezza",
+      "safetyStock": "Scorta di sicurezza",
+      "minOrderQty": "Minimo d'ordine",
+      "orderMultiple": "Multiplo d'ordine",
+      "maxOrderQty": "Massimo d'ordine",
+      "reorderPoint": "Punto di riordino",
+      "lotSize": "Lotto",
+      "minStock": "Scorta min",
+      "maxStock": "Scorta max",
+      "warehouse": "Magazzino",
+      "lane": "Linea o centro di lavoro",
+      "kind": "Tipo",
+      "stations": "Postazioni",
+      "plannedEfficiencyPct": "% pianificata",
+      "effSource": "% pianificata da",
+      "people": "Persone per turno",
+      "actual": "Effettiva, ultime 4 settimane"
+    },
+    "uom": {
+      "PCS": "pz",
+      "PAIR": "paio",
+      "SET": "set",
+      "M": "m",
+      "CM": "cm",
+      "MM": "mm",
+      "M2": "m²",
+      "DM2": "dm²",
+      "FT2": "ft²",
+      "KG": "kg",
+      "G": "g",
+      "L": "l",
+      "HIDE": "pelli",
+      "SIDE": "mezze pelli",
+      "ROLL": "rotoli",
+      "CONE": "coni",
+      "BOX": "scatole"
+    },
+    "wcKind": {
+      "CUTTING": "Taglio",
+      "SEWING": "Cucitura",
+      "ASSEMBLY": "Assemblaggio",
+      "FINISHING": "Finissaggio",
+      "INSPECTION": "Controllo",
+      "PACKING": "Imballaggio",
+      "SUBCONTRACT": "Terzisti"
+    },
+    "problem": {
+      "days": "{field} è un numero intero di giorni di calendario, da 0 a 366.",
+      "quantity": "{field} è una quantità nell'unità base dell'articolo: cifre, con punto o virgola per i decimali.",
+      "decimals": "{field} ha al massimo quattro decimali.",
+      "aboveZero": "{field} è maggiore di 0.",
+      "maxStock": "La scorta massima deve essere sopra la minima ({min}).",
+      "maxOrder": "Il massimo d'ordine non può essere sotto il minimo d'ordine ({min}).",
+      "ropNeeds": "Una regola a punto di riordino richiede sia il punto di riordino sia il lotto.",
+      "ropOnly": "{field} appartiene al metodo a punto di riordino: cambia prima il metodo.",
+      "minMaxNeeds": "Una regola min/max richiede sia la scorta minima sia la massima.",
+      "minMaxOnly": "{field} appartiene al metodo min/max: cambia prima il metodo.",
+      "supplierBuy": "Un fornitore preferito va con un articolo acquistato qui.",
+      "makeSiteMake": "Uno stabilimento di produzione va con un articolo prodotto in uno stabilimento.",
+      "note": "Una nota ha al massimo 500 caratteri.",
+      "invalidField": "{field} è stato rifiutato così com'è.",
+      "refusedField": "La fabbrica ha rifiutato {field} così com'è: controlla il valore.",
+      "percent": "Indica una percentuale sopra 0 e al massimo 200, con al massimo due decimali (85 o 92,5).",
+      "people": "Indica da 1 a 500 persone, o lascia vuoto per una per postazione attiva."
+    },
+    "cleared_one": "Salvato. {fields} è stato azzerato: appartiene al metodo o alla provenienza di prima.",
+    "cleared_other": "Salvato. {fields} sono stati azzerati: appartengono al metodo o alla provenienza di prima.",
+    "undo": {
+      "done": "L'ultima modifica di {item} è stata annullata.",
+      "notOurs": "L'ultima modifica non si può più annullare: la riga è cambiata nel frattempo."
+    },
+    "filter": {
+      "method": "Metodo",
+      "anyMethod": "Qualsiasi metodo",
+      "configured": "Parametri",
+      "all": "Tutti gli articoli",
+      "yes": "Con parametri",
+      "no": "Solo predefiniti"
+    },
+    "import": {
+      "label": "Importa",
+      "held": "Non esiste ancora un importatore per i parametri articolo: scrivili qui, o modifica molte righe insieme con Modifica."
+    },
+    "items": {
+      "title": "Parametri articolo",
+      "table": "Parametri articolo dello stabilimento",
+      "search": "Cerca codice o nome articolo",
+      "hint": "Come {site} pianifica ogni articolo e colore: tempi, scorta di sicurezza, minimo, multiplo e massimo d'ordine, acquistato o prodotto. Un articolo senza riga segue i propri valori predefiniti (in chiaro). Le quantità sono nell'unità base dell'articolo.",
+      "count_one": "{count} riga",
+      "count_other": "{count} righe",
+      "failed": "Impossibile caricare i parametri articolo",
+      "noMatch": "Nessun articolo corrisponde alla ricerca o ai filtri",
+      "empty": {
+        "title": "Ancora nessun articolo",
+        "body": "Gli articoli compaiono qui quando Prodotti › Materiali e accessori li contiene."
+      }
+    },
+    "methodDialog": {
+      "title": "Come si pianifica {item}",
+      "apply": "Salva il metodo",
+      "clears": "Salvando si azzera {fields}: appartiene al metodo di prima."
+    },
+    "sourceDialog": {
+      "title": "Da dove viene {item}",
+      "apply": "Salva",
+      "noSupplier": "Nessun fornitore preferito",
+      "noMakeSite": "Nessuno stabilimento di produzione",
+      "suppliersHint": "Il fornitore dell'articolo e le sue fonti approvate.",
+      "suppliersFailed": "Non è stato possibile leggere le fonti approvate: si propone il fornitore dell'articolo.",
+      "suppliersHeld": "Per scegliere un fornitore preferito serve il diritto acquisti (purchasing.view) per leggere le fonti approvate.",
+      "noPlants": "Nessuno stabilimento di questa società in cui produrlo."
+    },
+    "bulk": {
+      "edit_one": "Modifica {count}",
+      "edit_other": "Modifica {count}",
+      "defaults_one": "Pianifica {count} coi predefiniti",
+      "defaults_other": "Pianifica {count} coi predefiniti",
+      "defaultsNone": "Nessuna delle righe selezionate ha parametri propri.",
+      "title_one": "Modifica {count} riga",
+      "title_other": "Modifica {count} righe",
+      "hint": "Spunta i campi da cambiare. Un valore vuoto azzera il campo su ogni riga.",
+      "newValue": "Nuovo valore",
+      "daysHint": "Giorni di calendario interi.",
+      "qtyHint": "Nell'unità base di ogni articolo.",
+      "methodHint": "Una regola di riordino richiede i propri valori: impostala sulla riga o in Regole di riordino.",
+      "keepMethod": "Mantieni il metodo di ogni riga",
+      "pickField": "Spunta almeno un campo da cambiare.",
+      "review": "Rivedi le modifiche",
+      "reviewTitle_one": "Rivedi la modifica di {count} riga",
+      "reviewTitle_other": "Rivedi la modifica di {count} righe",
+      "counts": "{write} da salvare · {refused} rifiutate · {same} già così",
+      "change": "Modifica",
+      "result": "Cosa succede",
+      "willSave": "Sarà salvata",
+      "same": "Già così: niente da cambiare",
+      "empty": "vuoto",
+      "back": "Torna ai campi",
+      "apply_one": "Salva {count} riga",
+      "apply_other": "Salva {count} righe",
+      "nothing": "Nessuna riga ha una modifica che si possa salvare.",
+      "done_one": "{count} riga salvata.",
+      "done_other": "{count} righe salvate.",
+      "partly": "{saved} salvate · {refused} rifiutate"
+    },
+    "defaults": {
+      "title_one": "Pianificare {count} riga coi predefiniti?",
+      "title_other": "Pianificare {count} righe coi predefiniti?",
+      "body": "I parametri dello stabilimento di queste righe vengono rimossi; gli articoli tornano a seguire i propri valori predefiniti. Puoi reimpostarli in qualsiasi momento.",
+      "apply_one": "Pianifica {count} coi predefiniti",
+      "apply_other": "Pianifica {count} coi predefiniti",
+      "done_one": "{count} riga ora segue i valori predefiniti dell'articolo.",
+      "done_other": "{count} righe ora seguono i valori predefiniti degli articoli."
+    },
+    "reorder": {
+      "title": "Regole di riordino",
+      "table": "Regole di riordino dello stabilimento",
+      "hint": "Punto di riordino o min/max per articolo e colore. Le regole sono per stabilimento: il magazzino è {site} nel suo insieme (non un'ubicazione al suo interno).",
+      "count_one": "{count} regola",
+      "count_other": "{count} regole",
+      "failed": "Impossibile caricare le regole di riordino",
+      "new": "Nuova regola",
+      "notThisMethod": "Non usato dal metodo di questa regola",
+      "empty": {
+        "title": "Nessuna regola di riordino",
+        "body": "Gli articoli sono pianificati solo dagli ordini."
+      },
+      "toOrders_one": "Pianifica {count} dagli ordini",
+      "toOrders_other": "Pianifica {count} dagli ordini",
+      "toOrdersTitle_one": "Pianificare {count} articolo dagli ordini?",
+      "toOrdersTitle_other": "Pianificare {count} articoli dagli ordini?",
+      "toOrdersBody": "Le loro regole di riordino terminano e i valori di riordino si azzerano; il piano ordina ciò che serve agli ordini.",
+      "toOrdersDone_one": "{count} articolo ora è pianificato dagli ordini.",
+      "toOrdersDone_other": "{count} articoli ora sono pianificati dagli ordini."
+    },
+    "rule": {
+      "title": "Nuova regola di riordino",
+      "item": "Articolo",
+      "itemHint": "Scrivi un codice o un nome, poi scegli l'articolo.",
+      "searching": "Ricerca…",
+      "searchFailed": "La ricerca non ha risposto: riprova.",
+      "pickItem": "Scegli prima l'articolo.",
+      "hasRow": "Questo articolo ha già parametri per questo colore (pianificato: {method}): salvando li modifichi.",
+      "add": "Aggiungi la regola",
+      "change": "Passa a questa regola",
+      "added": "Regola di riordino aggiunta per {item}.",
+      "changed": "{item} ora segue questa regola di riordino."
+    },
+    "horizon": {
+      "title": "Orizzonte e barriere",
+      "bucketsTitle": "Orizzonte e periodi",
+      "runTitle": "Efficienza e calcolo notturno",
+      "hint": "Il piano conta prima in giorni, poi in settimane, poi in mesi fino al suo orizzonte.",
+      "isDefault": "Questo stabilimento usa i valori predefiniti (26 settimane; giorni per 2 settimane; settimane fino alla 13). Salvando avrà impostazioni proprie.",
+      "horizonHint": "Da 1 a 104 settimane; questa settimana è la settimana 1.",
+      "dayHint": "Giorni nel piano fino alla fine di questa settimana (0: nessun periodo giornaliero).",
+      "weekHint": "Settimane fino alla fine di questa settimana; poi mesi.",
+      "efficiencyHint": "Per una linea o un centro di lavoro senza una propria % pianificata.",
+      "onDemand": "Solo su richiesta",
+      "nightly": "Ogni notte",
+      "runAt": "Esegui alle",
+      "runHint": "Ora nel fuso dello stabilimento ({zone}).",
+      "onDemandHint": "Il piano si calcola solo quando qualcuno lo avvia.",
+      "preview": "I periodi del piano:",
+      "noPreview": "Correggi i campi per vedere i periodi.",
+      "days_one": "{count} giorno fino a {to}",
+      "days_other": "{count} giorni fino a {to}",
+      "weeksTo_one": "{count} settimana fino a {to}",
+      "weeksTo_other": "{count} settimane fino a {to}",
+      "months_one": "{count} mese fino a {to}",
+      "months_other": "{count} mesi fino a {to}",
+      "fencesLater": "Le barriere temporali (congelata, di conferma, previsionale, di capacità) arrivano in una versione successiva.",
+      "fixFirst_one": "Correggi prima {count} campo.",
+      "fixFirst_other": "Correggi prima {count} campi.",
+      "failed": "Impossibile caricare orizzonte e barriere",
+      "saved_one": "Salvato: {count} impostazione cambiata. Il prossimo piano la usa.",
+      "saved_other": "Salvato: {count} impostazioni cambiate. Il prossimo piano le usa.",
+      "problem": {
+        "required": "Indica un valore.",
+        "horizon": "Il piano guarda avanti da {min} a {max} settimane.",
+        "weeks": "Indica 0 o più settimane.",
+        "dayAfterWeek": "I periodi giornalieri ({days} settimane) finiscono prima di quelli settimanali (settimana {weeks}).",
+        "weekAfterHorizon": "I periodi settimanali (settimana {weeks}) finiscono entro l'orizzonte ({horizon} settimane).",
+        "runTime": "Il calcolo notturno è un orario HH:MM (02:00).",
+        "refused": "La fabbrica ha rifiutato questo valore: controllalo."
+      }
+    },
+    "lane": {
+      "line": "Linea",
+      "workCentre": "Centro di lavoro · {kind}",
+      "workshop": "Reparto"
+    },
+    "effSource": {
+      "LANE": "Propria",
+      "SITE": "Predefinita dello stabilimento",
+      "DEFAULT": "100 % (nessuna impostazione)"
+    },
+    "people": {
+      "planned_one": "{count} persona per turno",
+      "planned_other": "{count} persone per turno",
+      "stations_one": "Una per postazione ({count})",
+      "stations_other": "Una per postazione ({count})"
+    },
+    "units": {
+      "planned_one": "{count} alla volta",
+      "planned_other": "{count} alla volta"
+    },
+    "actual": {
+      "label": "Efficienza effettiva di {lane}, ultime 4 settimane",
+      "empty": "Niente dichiarato",
+      "none": "Non calcolata per un centro di lavoro",
+      "last": "Ultima settimana {pct} %",
+      "lastNone": "Ultima settimana: niente disponibile"
+    },
+    "efficiency": {
+      "title": "Efficienza linee",
+      "table": "Efficienza delle linee dello stabilimento",
+      "hint": "Efficienza pianificata per linea, con lo storico effettivo accanto.",
+      "hintSite": "Efficienza pianificata per linea, con lo storico effettivo accanto. Senza una % propria, una linea pianifica alla predefinita dello stabilimento ({pct} %).",
+      "hintDefault": "Efficienza pianificata per linea, con lo storico effettivo accanto. Senza una % propria, una linea pianifica al {pct} % (nessuna predefinita dello stabilimento).",
+      "count": "Linee: {lines} · centri di lavoro: {centres}",
+      "failed": "Impossibile caricare l'efficienza delle linee",
+      "empty": {
+        "title": "Ancora nessuna linea",
+        "body": "Linee e centri di lavoro si impostano sullo stabilimento.",
+        "action": "Linee di produzione"
+      },
+      "privacy": "L'efficienza si conta solo per linea e centro di lavoro, mai per persona.",
+      "bulk_one": "Imposta la % pianificata di {count}",
+      "bulk_other": "Imposta la % pianificata di {count}",
+      "bulkTitle_one": "% pianificata di {count} linea",
+      "bulkTitle_other": "% pianificata di {count} linee",
+      "bulkHint": "Sopra 0 e al massimo 200.",
+      "bulkNeeds": "Scrivi prima la percentuale.",
+      "bulkApply_one": "Salva per {count}",
+      "bulkApply_other": "Salva per {count}"
+    }
+  }
+}

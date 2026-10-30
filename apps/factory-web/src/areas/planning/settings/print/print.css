@@ -1,0 +1,68 @@
+/*
+ * Planning settings › Plant calendar (print) (SCR-124-print) LAYOUT: one sheet for the notice board — the head, the
+ * year, the days in date order, the lines that differ. On paper the frame and the buttons are hidden and the year keeps
+ * to one page where it can. Semantic tokens only; the page fills the main area on screen.
+ */
+.fw-psp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-psp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-psp-title {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-psp-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-psp-body,
+.fw-psp-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-psp-h {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-psp-week {
+  margin: 0;
+  color: var(--nds-text-strong);
+}
+
+@media print {
+  .fw-topbar,
+  .h10-rail,
+  .fw-office-subheader,
+  .nds-bottombar,
+  .fw-system-banner,
+  .fw-psp-actions {
+    display: none !important;
+  }
+
+  .fw-psp-section {
+    break-inside: avoid-page;
+  }
+}

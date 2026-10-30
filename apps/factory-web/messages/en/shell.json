@@ -97,7 +97,9 @@
       "main": "Main",
       "mrp": "What to buy & make",
       "board": "Planning board",
-      "allocation": "Lines & subcontractors"
+      "allocation": "Lines & subcontractors",
+      "settingsGroup": "Settings",
+      "settings": "Planning settings"
     },
     "warehouse": {
       "area": "Warehouse",
