@@ -64,6 +64,8 @@ const SESSIONS: Record<string, SessionContext> = {
   /** The same with the cost grain. */
   owner: office([grant(['inventory.reserve', 'inventory.stock.view', 'inventory.scrap', 'inventory.reverse', 'inventory.issue', 'money.cost'])]),
   viewer: office([grant(['inventory.stock.view'])]),
+  /** B-W2a-64: quality places holds (and sees stock). */
+  quality: office([grant(['quality.holds.place', 'quality.holds.view', 'inventory.stock.view'])]),
   floor: {
     audience: 'floor',
     tenantId: A.tenant,
@@ -423,5 +425,37 @@ describe('stock as of a date (SCM-197) and the searchable ledger (SCM-195)', () 
     expect(page.rowCount).toBeGreaterThan(2)
     const next = await ok('warehouse', 'GET', `/inventory/ledger?siteId=${A.siteA1}&limit=2&cursor=${page.nextCursor}`)
     expect(next.rowCount).toBeNull()
+  })
+})
+
+describe('the warehouse every day: reserved hides and held stock (B-W2a-64)', () => {
+  it('says which work order holds each hide, on the list, the Reserved view and tile, and the record', async () => {
+    const reserved = await ok('warehouse', 'GET', `/inventory/hides?siteId=${A.siteA1}&reserved=true`)
+    expect(reserved.hides.map((hide: Json) => hide.id)).toEqual([hides.H4])
+    expect(reserved.hides[0].reservedFor).toMatchObject({ demand: { type: 'WorkOrder', id: WO.two.id, number: WO.two.number }, stale: false })
+    expect(reserved.counts.reserved).toEqual({ hides: 1, area: [{ uom: 'FT2', quantity: '35.0000' }] })
+    const all = await ok('warehouse', 'GET', `/inventory/hides?siteId=${A.siteA1}`)
+    // Q1 was never reserved; H2's reservation was ISSUED with the hide: it holds nothing.
+    expect(all.hides.find((hide: Json) => hide.id === hides.Q1).reservedFor).toBeNull()
+    expect(all.hides.find((hide: Json) => hide.id === hides.H2).reservedFor).toBeNull()
+    expect(all.counts.reserved.hides).toBe(1)
+    const record = await ok('warehouse', 'GET', `/inventory/hides/${hides.H4}`)
+    expect(record.hide.reservedFor).toMatchObject({ demand: { number: WO.two.number }, version: expect.any(Number) })
+  })
+
+  it('refuses to write off stock under a quality hold, in words, before anything moves', async () => {
+    await ok('quality', 'POST', '/quality/holds', { subjectType: 'Lot', subjectIds: [lots.LIN!.id], reasonCode: 'QUALITY_CHECK' }, 201)
+    await ok('quality', 'POST', '/quality/holds', { subjectType: 'Hide', subjectIds: [hides.Q1], reasonCode: 'QUALITY_CHECK' }, 201)
+    const before = (await ok('warehouse', 'GET', `/inventory/ledger?siteId=${A.siteA1}&writeOffs=true`)).rowCount
+    const lot = await refused('warehouse', 'POST', '/inventory/write-offs', { siteId: A.siteA1, reasonCode: 'DAMAGED', note: 'Stained', lines: [{ lotId: lots.LIN!.id, fromLocationId: A.bin, quantity: '1' }] }, 409)
+    expect(paths(lot)).toEqual(['body/lines/0/refusal/QUALITY_HOLD'])
+    expect(lot.message).toMatch(new RegExp(`^Lot T-${run}-LIN is on hold \\(Quality check, since [^)]+\\): its stock is not written off until quality releases the hold\\.$`))
+    const hide = await refused('warehouse', 'POST', '/inventory/write-offs', { siteId: A.siteA1, reasonCode: 'DAMAGED', note: 'Torn', lines: [{ hideId: hides.Q1 }] }, 409)
+    expect(paths(hide)).toEqual(['body/lines/0/refusal/QUALITY_HOLD'])
+    expect(hide.message).toMatch(new RegExp(`^Hide T-${run}-Q1 is on hold \\(Quality check`))
+    // Nothing moved, and the hide is still in stock as it was.
+    expect((await ok('warehouse', 'GET', `/inventory/ledger?siteId=${A.siteA1}&writeOffs=true`)).rowCount).toBe(before)
+    const [state] = await admin<{ state: string }>(`SELECT state::text FROM "Hide" WHERE id = $1`, [hides.Q1])
+    expect(state!.state).toBe('FULL')
   })
 })

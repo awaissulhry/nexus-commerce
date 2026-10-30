@@ -9,13 +9,17 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { scanSubjectFor } from '../../production/settings/subject'
 import { mayAt, officeContextOf } from '../ledger/access'
+import { viewsOf } from '../reservations/read'
+import { RESERVATION_COLUMNS } from '../reservations/store'
 import { decimalText, fixed, locatedBy, mainPlace, PARTY_SELECT, partyName, perUnit, SCOPE, type Located } from './read-kit'
 import type { HideRow, HideState } from './reads-contract'
 
 /**
  * Warehouse › Hides (design warehouse.hides; SCM-233, SCM-253, SCM-258): every hide one by one — its measured area,
  * grade, shade, lot, state and where its stock lies — and one hide's record with what happened to its area (the cut
- * log) and its cuts. Office reads, inventory.stock.view; a hide's scope is its lot's company and site.
+ * log) and its cuts. Office reads, inventory.stock.view; a hide's scope is its lot's company and site. B-W2a-64: each
+ * hide says which ACTIVE reservation holds it whole (`reservedFor`, its demand; stale when that demand is done), the
+ * Reserved view filters to them and the Reserved tile counts them.
  */
 
 const IN_STOCK: HideState[] = ['FULL', 'PARTLY_CUT', 'REMNANT']
@@ -73,7 +77,19 @@ function leftOf(state: string, baseArea: Prisma.Decimal, onHand: Decimal, cut: D
   return onHand
 }
 
-function rowOf(hide: HideData, located: Located | undefined, locations: ReadonlyMap<string, { id: string; code: string; name: string }>, cut: Decimal | undefined): HideRow {
+type ReservedFor = NonNullable<HideRow['reservedFor']>
+
+/** The ACTIVE reservation holding each of these hides whole (a hide has at most one: the reserve refuses a second). */
+async function reservedFor(client: FactoryClient, hideIds: readonly string[]): Promise<Map<string, ReservedFor>> {
+  if (hideIds.length === 0) return new Map()
+  const rows = await client.reservation.findMany({ where: { status: 'ACTIVE', hideId: { in: [...hideIds] } }, select: RESERVATION_COLUMNS, orderBy: { id: 'asc' } })
+  const views = await viewsOf(client, rows, { withOrders: true })
+  const result = new Map<string, ReservedFor>()
+  for (const view of views) if (view.hide && !result.has(view.hide.id)) result.set(view.hide.id, { reservationId: view.id, version: view.version, demand: view.demand, stale: view.stale })
+  return result
+}
+
+function rowOf(hide: HideData, located: Located | undefined, locations: ReadonlyMap<string, { id: string; code: string; name: string }>, cut: Decimal | undefined, reserved: ReservedFor | null): HideRow {
   const place = mainPlace(located)
   return {
     id: hide.id,
@@ -97,6 +113,7 @@ function rowOf(hide: HideData, located: Located | undefined, locations: Readonly
     location: place ? (locations.get(place) ?? null) : null,
     receivedAt: hide.lot.receivedAt ? toUtcIso(hide.lot.receivedAt) : null,
     createdAt: toUtcIso(hide.createdAt),
+    reservedFor: reserved,
   }
 }
 
@@ -107,6 +124,7 @@ export interface HideQuery {
   readonly itemColourId?: string | undefined
   readonly state?: HideState | undefined
   readonly inStock?: boolean | undefined
+  readonly reserved?: boolean | undefined
   readonly quality?: 'QUARANTINE' | 'RELEASED' | 'REJECTED' | 'BLOCKED' | undefined
   readonly locationId?: string | undefined
   readonly grade?: string | undefined
@@ -128,6 +146,10 @@ export async function listHides(caller: CommandCaller, query: HideQuery) {
       const here = await locatedBy(client, 'hideId', { OR: [{ toLocationId: query.locationId }, { fromLocationId: query.locationId }] })
       atLocation = [...here].filter(([, located]) => (located.at.get(query.locationId!) ?? ZERO).greaterThan(0)).map(([hideId]) => hideId)
     }
+    // The Reserved view: the hides of the scope an ACTIVE reservation holds whole.
+    const reservedIds = query.reserved
+      ? [...new Set((await client.reservation.findMany({ where: { status: 'ACTIVE', hideId: { not: null }, ...(query.siteId ? { siteId: query.siteId } : {}) }, select: { hideId: true } })).map((row) => row.hideId!))]
+      : null
     const filters: Prisma.HideWhereInput = {
       AND: [
         scope,
@@ -142,6 +164,7 @@ export async function listHides(caller: CommandCaller, query: HideQuery) {
           ? { OR: [{ code: { contains: text, mode: 'insensitive' } }, { supplierCode: { contains: text, mode: 'insensitive' } }, { lot: { code: { contains: text, mode: 'insensitive' } } }] }
           : {},
         atLocation ? { id: { in: atLocation } } : {},
+        reservedIds ? { id: { in: reservedIds } } : {},
       ],
     }
     const page = await client.hide.findMany({ where: { AND: [filters, query.cursor ? { id: { lt: query.cursor } } : {}] }, select: HIDE_SELECT, orderBy: { id: 'desc' }, take: query.limit + 1 })
@@ -153,7 +176,11 @@ export async function listHides(caller: CommandCaller, query: HideQuery) {
       client.hide.findMany({ where: filters, select: { id: true } }),
     ])
     const ids = all.map((hide) => hide.id)
-    const [located, cutArea] = await Promise.all([ids.length > 0 ? locatedBy(client, 'hideId', { hideId: { in: ids } }) : Promise.resolve(new Map<string, Located>()), cutAreaOf(client, ids)])
+    const [located, cutArea, reservations] = await Promise.all([
+      ids.length > 0 ? locatedBy(client, 'hideId', { hideId: { in: ids } }) : Promise.resolve(new Map<string, Located>()),
+      cutAreaOf(client, ids),
+      reservedFor(client, ids),
+    ])
     const locationIds = [...new Set(shown.flatMap((hide) => (mainPlace(located.get(hide.id)) ? [mainPlace(located.get(hide.id))!] : [])))]
     const locations = new Map(
       (locationIds.length > 0 ? await client.location.findMany({ where: { id: { in: locationIds } }, select: { id: true, code: true, name: true } }) : []).map((row) => [row.id, row]),
@@ -164,7 +191,7 @@ export async function listHides(caller: CommandCaller, query: HideQuery) {
     const inStock = all.filter((hide) => IN_STOCK.includes(hide.state as HideState))
     const matching = new Set(matchingIds.map((hide) => hide.id))
     return {
-      hides: shown.map((hide) => rowOf(hide, located.get(hide.id), locations, cutArea.get(hide.id))),
+      hides: shown.map((hide) => rowOf(hide, located.get(hide.id), locations, cutArea.get(hide.id), reservations.get(hide.id) ?? null)),
       nextCursor: page.length > query.limit ? shown[shown.length - 1]!.id : null,
       counts: {
         full: count(inStock.filter((hide) => hide.state === 'FULL')),
@@ -176,6 +203,7 @@ export async function listHides(caller: CommandCaller, query: HideQuery) {
           all.filter((hide) => hide.state === 'CONSUMED'),
           (hide) => ({ uom: hide.lot.item.baseUom, quantity: new Dec(hide.baseArea.toString()) }),
         ),
+        reserved: count(inStock.filter((hide) => reservations.has(hide.id))),
       },
       matching: count(all.filter((hide) => matching.has(hide.id))),
     }
@@ -188,7 +216,7 @@ export async function hideRecord(caller: CommandCaller, hideId: string) {
   const hide = isUuid(hideId) ? await caller.withClient((client) => client.hide.findUnique({ where: { id: hideId }, select: HIDE_SELECT })) : null
   if (!hide || !mayAt(context, INVENTORY_STOCK_VIEW, { companyId: hide.lot.companyId, siteId: hide.siteId })) throw new NotFoundError('Hide not found.')
   return caller.withClient(async (client) => {
-    const [located, lot, cuts, subject, cutArea] = await Promise.all([
+    const [located, lot, cuts, subject, cutArea, reservations] = await Promise.all([
       locatedBy(client, 'hideId', { hideId: hide.id }),
       client.lot.findUnique({
         where: { id: hide.lot.id },
@@ -226,6 +254,7 @@ export async function hideRecord(caller: CommandCaller, hideId: string) {
       }),
       scanSubjectFor(client, hide.siteId),
       cutAreaOf(client, [hide.id]),
+      reservedFor(client, [hide.id]),
     ])
     const stationOnly = subject === 'STATION'
     const workerIds = stationOnly ? [] : [...new Set(cuts.flatMap((cut) => (cut.workerId ? [cut.workerId] : [])))]
@@ -236,7 +265,7 @@ export async function hideRecord(caller: CommandCaller, hideId: string) {
     // A reversal entry mirrors its original (same areas): the net of the log.
     const net = (pick: (cut: (typeof cuts)[number]) => Prisma.Decimal) => cuts.reduce<Decimal>((sum, cut) => (cut.reversalOfId ? sum.minus(pick(cut).toString()) : sum.plus(pick(cut).toString())), ZERO)
     return {
-      hide: rowOf(hide, located1, locations, cutArea.get(hide.id)),
+      hide: rowOf(hide, located1, locations, cutArea.get(hide.id), reservations.get(hide.id) ?? null),
       lot: {
         id: hide.lot.id,
         code: hide.lot.code,

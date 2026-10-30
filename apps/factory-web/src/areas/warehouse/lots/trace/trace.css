@@ -1,0 +1,129 @@
+/*
+ * The trace tree and the trace page (B-W2a-64; design warehouse.lots lt-trace-tree, "TraceTree (new)" composed here) —
+ * LAYOUT only: the level counts, the gaps, the tools row and the tree rows (indented by depth). Semantic tokens only;
+ * no page max-width (Owner rule 2026-10-29).
+ */
+.fw-tt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-tt-levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-tt-levels li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-tt-gaps {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-tt-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-tt-tree {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.fw-tt-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  padding: var(--nds-space-6) var(--nds-space-12);
+  padding-left: calc(var(--nds-space-12) + var(--fw-tt-depth, 0) * var(--nds-space-20));
+  border-top: 1px solid var(--nds-border);
+  cursor: default;
+  min-width: 0;
+}
+
+.fw-tt-row:first-child {
+  border-top: 0;
+}
+
+.fw-tt-row:hover {
+  background: var(--nds-surface-hover);
+}
+
+.fw-tt-row:focus-visible {
+  outline: 2px solid var(--nds-focus-ring);
+  outline-offset: -2px;
+}
+
+.fw-tt-row.is-section {
+  background: var(--nds-surface-sunken);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-tt-row.is-group {
+  color: var(--nds-text-strong);
+}
+
+.fw-tt-chevron {
+  display: inline-flex;
+  width: 14px;
+  color: var(--nds-text-muted);
+}
+
+.fw-tt-main {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-tt-kind {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-tt-detail {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.fw-tt-qty {
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-sm);
+}
+
+@media (max-width: 719px) {
+  .fw-tt-row {
+    padding-left: calc(var(--nds-space-8) + var(--fw-tt-depth, 0) * var(--nds-space-12));
+  }
+}
+
+.fw-tt-foot {
+  display: flex;
+  justify-content: flex-end;
+}

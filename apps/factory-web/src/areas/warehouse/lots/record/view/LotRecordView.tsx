@@ -2,18 +2,24 @@
 
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, CircleDashed, ClipboardCheck, MinusCircle, MoreHorizontal, XCircle } from 'lucide-react'
+import { CheckCircle2, CircleDashed, ClipboardCheck, GitBranch, MinusCircle, MoreHorizontal, Trash2, Undo2, XCircle } from 'lucide-react'
 import { Banner, Card, EmptyState, KeyValue, Menu, SummaryTable, type TabItem } from '@nexus/ui/components'
-import { Button, Tag } from '@nexus/ui/primitives'
+import { Button, Pill, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale } from '../../../../../lib/i18n/provider'
 import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
+import { recordAddress } from '../../../../../lib/records/record-links'
+import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import type { LotRecord } from '../../../../_shared/stock/api'
 import { lotWaitKey, movesHref, quantity } from '../../../../_shared/stock/model'
 import { CrViPill, Dual, QualityPill, Qty } from '../../../../_shared/stock/parts'
 import type { ReleaseChecklist } from '../../api'
-import { checkKey, checklistHead, LOT_TABS, traceSummary, type LotRecordActions, type LotRecordModel, type LotTab } from '../../model'
+import { checkKey, checklistHead, holdGroups, LOT_TABS, rejectedWithStock, traceSummary, type LotHolds, type LotRecordActions, type LotRecordModel, type LotTab } from '../../model'
 import { DockButton, LotsMessages, MovesTable, PartState, RecordFrame, useWords, type Words } from '../../shared/parts'
+import { demandLabel, demandRecord, holdsBySubject, reasonLabel } from '../../../stock/daily/model'
+import { WriteOffDialog } from '../../../stock/daily/WriteOffDialog'
+import { TraceDialog } from '../../trace/TraceDialog'
+import { TraceTree } from '../../trace/TraceTree'
 
 export type { LotRecordActions, LotRecordModel } from '../../model'
 
@@ -24,6 +30,10 @@ export type { LotRecordActions, LotRecordModel } from '../../model'
  * (the release checklist read-only in our words, the lot's facts, where its stock is, its hides), Trace (came from: the
  * supplier, the purchase order line, the receipt and the supplier's DDT; went to: the work orders, their shipments and
  * customers), Moves (the ledger filtered by the lot with the running balance) and Activity (thread, files, history).
+ * B-W2a-64: the band's Trace…; Overview's "Where it is" with reserved and available (the lot at its site: reservations
+ * hold a site's stock, not a place) and who reserved it; Quality status (the status, read only, and the holds that touch
+ * the lot and its hides, by kind with counts; incoming inspections come later); the Trace tab's tree under the recorded
+ * links; a rejected lot with stock asks what happens to it: return to the supplier (a claim) or write it off per place.
  */
 export function LotRecordView({ model, actions, panels }: { model: LotRecordModel; actions?: LotRecordActions; panels?: ReactNode }) {
   return (
@@ -47,11 +57,12 @@ function LotRecordBody({ model, actions, panels }: { model: LotRecordModel; acti
   const decideHref = lot ? `${model.prefix}/compliance/tests/${encodeURIComponent(lot.id)}?tab=release` : ''
   const keyHref = lot ? movesHref(model.prefix, { siteId: lot.siteId, itemId: lot.item.id, lotId: lot.id }) : ''
 
+  const activeHolds = model.holds?.value ? holdGroups(model.holds.value).reduce((sum, group) => sum + group.active, 0) : null
   const tabs: TabItem[] = LOT_TABS.map((tab: LotTab) => ({
     id: tab,
     href: tab === 'overview' ? base : `${base}?tab=${tab}`,
     label: t(`lt.tab.${tab}`),
-    count: tab === 'moves' && value ? value.moves : tab === 'trace' && value ? value.trace.forward.workOrders.length : null,
+    count: tab === 'moves' && value ? value.moves : tab === 'trace' && value ? value.trace.forward.workOrders.length : tab === 'quality' && activeHolds ? activeHolds : null,
   }))
 
   const title = lot ? (
@@ -73,6 +84,9 @@ function LotRecordBody({ model, actions, panels }: { model: LotRecordModel; acti
           <ClipboardCheck size={14} aria-hidden /> {t('lt.record.toChecklist')}
         </Button>
       )}
+      <Button size="sm" onClick={() => actions?.onTrace?.()}>
+        <GitBranch size={14} aria-hidden /> {t('lt.find.open')}
+      </Button>
       {activity && <DockButton open={model.dockOpen} onDock={actions?.onDock} />}
       <Menu
         label={<MoreHorizontal size={16} aria-label={t('rec.more')} />}
@@ -130,11 +144,28 @@ function LotRecordBody({ model, actions, panels }: { model: LotRecordModel; acti
         />
       )}
       {lot?.qualityStatus === 'REJECTED' && <Banner tone="info" title={t('lt.record.rejected', { date: lot.qualityDecidedAt ? formatDate(lot.qualityDecidedAt, place) : '—' })}>{lot.qualityNote ?? undefined}</Banner>}
+      {value && rejectedWithStock(value) && <RejectedStock value={value} model={model} actions={actions} />}
       {value && (
         <div className={showDock ? 'fw-wl-body has-dock' : 'fw-wl-body'}>
           <div className="fw-wl-stack">
             {model.tab === 'overview' && <OverviewTab value={value} model={model} actions={actions} decideHref={decideHref} keyHref={keyHref} />}
-            {model.tab === 'trace' && <TraceTab value={value} model={model} />}
+            {model.tab === 'quality' && <QualityTab value={value} model={model} actions={actions} decideHref={decideHref} />}
+            {model.tab === 'trace' && (
+              <>
+                <TraceTab value={value} model={model} />
+                <Card padded>
+                  <div className="fw-wl-stack tight">
+                    <h3 className="fw-wl-h3">{t('lt.tree.title')}</h3>
+                    <p className="fw-wl-hint">{t('lt.tree.intro')}</p>
+                    {model.trace && (
+                      <PartState value={model.trace} label={t('lt.tree.title')} onRetry={actions?.onRetryTrace}>
+                        {(trace) => <TraceTree trace={trace} prefix={model.prefix} holdReasons={model.holdReasons} affectedOnly={model.affectedOnly} />}
+                      </PartState>
+                    )}
+                  </div>
+                </Card>
+              </>
+            )}
             {model.tab === 'moves' && (
               <PartState value={model.moves} label={t('lt.tab.moves')} onRetry={actions?.onRetryMoves}>
                 {(moves) => <MovesTable moves={moves} prefix={model.prefix} label={t('lt.movesLabel', { code: value.lot.code })} keyHref={keyHref} onMore={actions?.onMoreMoves} />}
@@ -149,6 +180,8 @@ function LotRecordBody({ model, actions, panels }: { model: LotRecordModel; acti
           )}
         </div>
       )}
+      {model.writeOff && <WriteOffDialog model={model.writeOff} actions={actions?.writeOff} />}
+      {model.find && <TraceDialog model={model.find} actions={actions?.find} />}
     </RecordFrame>
   )
 }
@@ -199,6 +232,7 @@ function OverviewTab({ value, model, actions, decideHref, keyHref }: { value: Lo
   const wait = lotWaitKey(lot)
   const unit = t(`stock:uom.${lot.item.baseUom}`)
   const leather = lot.item.tracking === 'HIDE'
+  const lotHold = model.holds?.value ? (holdsBySubject(model.holds.value.lot).get(lot.id) ?? null) : null
   return (
     <div className="fw-wl-split">
       <div className="fw-wl-stack">
@@ -257,21 +291,47 @@ function OverviewTab({ value, model, actions, decideHref, keyHref }: { value: Lo
             ) : (
               <SummaryTable
                 label={t('lt.where.title')}
-                columns={[t('lt.where.location'), t('lt.where.onHand'), ...(leather ? [t('lt.where.hides')] : []), t('lt.where.held')]}
-                align={['left', 'right', 'right', 'right']}
-                widths={leather ? ['46%', '20%', '14%', '20%'] : ['50%', '25%', '25%']}
+                columns={[t('lt.where.location'), t('lt.where.onHand'), ...(leather ? [t('lt.where.hides')] : []), t('lt.where.reserved'), t('lt.where.available'), t('lt.where.held')]}
+                align={['left', 'right', 'right', 'right', 'right', 'right']}
+                widths={leather ? ['30%', '16%', '10%', '14%', '15%', '15%'] : ['34%', '17%', '16%', '17%', '16%']}
                 stackOnPhone
-                rows={value.stock.map((row) => ({
-                  id: row.location.id,
-                  cells: [
-                    `${row.location.code} · ${row.location.name}`,
-                    <Link key="on" className="fw-st-link fw-st-num" href={movesHref(model.prefix, { siteId: lot.siteId, itemId: lot.item.id, lotId: lot.id, locationId: row.location.id, why: true })}>{`${quantity(row.onHand, locale)} ${unit}`}</Link>,
-                    ...(leather ? [String(row.hides)] : []),
-                    row.held === '0.0000' ? '—' : `${quantity(row.held, locale)} ${unit}`,
-                  ],
-                }))}
+                rows={[
+                  ...value.stock.map((row) => ({
+                    id: row.location.id,
+                    cells: [
+                      `${row.location.code} · ${row.location.name}`,
+                      <Link key="on" className="fw-st-link fw-st-num" href={movesHref(model.prefix, { siteId: lot.siteId, itemId: lot.item.id, lotId: lot.id, locationId: row.location.id, why: true })}>{`${quantity(row.onHand, locale)} ${unit}`}</Link>,
+                      ...(leather ? [String(row.hides)] : []),
+                      <span key="r" className="fw-st-sub" title={t('lt.where.perSite')}>
+                        {t('lt.where.atSite')}
+                      </span>,
+                      <span key="a" className="fw-st-sub" title={t('lt.where.perSite')}>
+                        {t('lt.where.atSite')}
+                      </span>,
+                      row.held === '0.0000' ? '—' : `${quantity(row.held, locale)} ${unit}`,
+                    ],
+                  })),
+                  ...(model.figures?.value?.lot
+                    ? [
+                        {
+                          id: 'site',
+                          cells: [
+                            <b key="l">{t('lt.where.site', { site: lot.siteCode })}</b>,
+                            <b key="o" className="fw-st-num">{`${quantity(model.figures.value.lot.onHand, locale)} ${unit}`}</b>,
+                            ...(leather ? [<b key="h">{String(lot.hides)}</b>] : []),
+                            <b key="r" className="fw-st-num">{model.figures.value.lot.reserved === '0.0000' ? '—' : `${quantity(model.figures.value.lot.reserved, locale)} ${unit}`}</b>,
+                            <b key="a" className={model.figures.value.lot.overReserved ? 'fw-st-num fw-st-warning' : 'fw-st-num'}>{`${quantity(model.figures.value.lot.available, locale)} ${unit}`}</b>,
+                            <b key="d" className="fw-st-num">{model.figures.value.lot.held === '0.0000' ? '—' : `${quantity(model.figures.value.lot.held, locale)} ${unit}`}</b>,
+                          ],
+                        },
+                      ]
+                    : []),
+                ]}
               />
             )}
+            {model.figures && model.figures.value === null && <p className="fw-wl-hint">{model.figures.problem ? t('lt.where.figuresFailed') : t('lt.where.figuresLoading')}</p>}
+            {model.figures?.value?.lot?.overReserved && <p className="fw-wl-hint fw-st-warning">{t('lt.where.overReserved')}</p>}
+            {model.figures?.value && <Reservations figures={model.figures.value} model={model} unit={unit} />}
             {leather && <p className="fw-wl-hint">{t('lt.where.hidesLine', { inStock: value.hides.inStock, consumed: value.hides.consumed, scrapped: value.hides.scrapped })}</p>}
             {value.trace.forward.workOrders.length > 0 && <p className="fw-wl-hint">{t('lt.where.issued', { count: value.trace.forward.workOrders.length })}</p>}
           </div>
@@ -283,7 +343,7 @@ function OverviewTab({ value, model, actions, decideHref, keyHref }: { value: Lo
           <span className="fw-wl-chips">
             <QualityPill status={lot.qualityStatus} />
           </span>
-          <p className="fw-wl-text">{wait ? t(`stock:${wait}`) : t('lt.side.usable')}</p>
+          <p className="fw-wl-text">{lotHold ? t('lt.side.onHold', { reason: reasonLabel(model.holdReasons, lotHold.reasonCode, locale) }) : wait ? t(`stock:${wait}`) : t('lt.side.usable')}</p>
           {lot.qualityDecidedAt && <p className="fw-wl-hint">{t('lt.side.decided', { date: formatDateTime(lot.qualityDecidedAt, place) })}</p>}
           {lot.qualityNote && <p className="fw-wl-hint">{t('lt.side.note', { note: lot.qualityNote })}</p>}
           <KeyValue
@@ -416,6 +476,141 @@ function TraceTab({ value, model }: { value: LotRecord; model: LotRecordModel })
           )}
         </div>
       </Card>
+    </div>
+  )
+}
+
+/** Who reserved the lot (its ACTIVE reservations, design lt-stock "Reserved"): the demand, what it still holds, when it is needed. */
+function Reservations({ figures, model, unit }: { figures: NonNullable<NonNullable<LotRecordModel['figures']>['value']>; model: LotRecordModel; unit: string }) {
+  const t = useWords()
+  const locale = useLocale()
+  const place = { locale, timeZone: model.timeZone }
+  if (figures.reservations.length === 0) return <p className="fw-wl-hint">{t('lt.where.noReservations')}</p>
+  return (
+    <div className="fw-wl-stack tight">
+      <h4 className="fw-wl-h3">{t('lt.where.reservedFor', { count: figures.reservations.length })}</h4>
+      <ul className="fw-wl-checks">
+        {figures.reservations.map((reservation) => (
+          <li key={reservation.id} className="fw-st-inline">
+            <Link className="fw-st-link fw-wl-code" href={`${model.prefix}${recordAddress(demandRecord(reservation.demand), OFFICE_PAGES)}`}>
+              {demandLabel(reservation.demand)}
+            </Link>
+            <span className="fw-st-num">{reservation.hide ? t('lt.where.wholeHide', { code: reservation.hide.code }) : `${quantity(reservation.open, locale)} ${unit}`}</span>
+            {reservation.needDate && <span className="fw-st-sub">{t('lt.where.needed', { date: formatDate(`${reservation.needDate}T12:00:00Z`, place) })}</span>}
+            {reservation.stale && <Pill tone="warning">{t('lt.where.stale')}</Pill>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/** A rejected lot that still has stock (design lt-reject: "what happens to the stock"): return it, or write it off per place. */
+function RejectedStock({ value, model, actions }: { value: LotRecord; model: LotRecordModel; actions?: LotRecordActions }) {
+  const t = useWords()
+  const locale = useLocale()
+  const lot = value.lot
+  const unit = t(`stock:uom.${lot.item.baseUom}`)
+  const places = value.stock.filter((row) => row.onHand !== '0.0000')
+  return (
+    <Banner
+      tone="warning"
+      title={t('lt.reject.title')}
+      action={
+        <Button size="sm" asChild>
+          <Link href={`${model.prefix}/purchasing/claims?return=${encodeURIComponent(lot.id)}`}>
+            <Undo2 size={13} aria-hidden /> {t('lt.reject.return')}
+          </Link>
+        </Button>
+      }
+    >
+      <div className="fw-wl-stack tight">
+        <p className="fw-wl-text">{t('lt.reject.body')}</p>
+        <span className="fw-st-actions">
+          {places.map((row) => (
+            <Button key={row.location.id} size="sm" variant="danger-outline" heldReason={model.daily.scrap ? null : t('lt.reject.noScrap')} onClick={() => actions?.onWriteOff?.(row.location.id)}>
+              <Trash2 size={13} aria-hidden /> {t('lt.reject.writeOff', { place: row.location.code, quantity: `${quantity(row.onHand, locale)} ${unit}` })}
+            </Button>
+          ))}
+        </span>
+      </div>
+    </Banner>
+  )
+}
+
+/** Quality status (design rec:Lot/quality): the status read only (decided in Compliance), and the holds that touch the lot. */
+function QualityTab({ value, model, actions, decideHref }: { value: LotRecord; model: LotRecordModel; actions?: LotRecordActions; decideHref: string }) {
+  const t = useWords()
+  const locale = useLocale()
+  const place = { locale, timeZone: model.timeZone }
+  const lot = value.lot
+  const wait = lotWaitKey(lot)
+  return (
+    <div className="fw-wl-cards">
+      <Card padded>
+        <div className="fw-wl-stack tight">
+          <h3 className="fw-wl-h3">{t('lt.quality.status')}</h3>
+          <span className="fw-wl-chips">
+            <QualityPill status={lot.qualityStatus} />
+            {(lot.crVi.required || lot.crVi.status !== 'NOT_REQUIRED') && <CrViPill status={lot.crVi.status} value={lot.crVi.valueMgKg} limit={lot.crVi.limitMgKg} />}
+          </span>
+          <p className="fw-wl-text">{wait ? t(`stock:${wait}`) : t('lt.side.usable')}</p>
+          {lot.qualityDecidedAt && <p className="fw-wl-hint">{t('lt.side.decided', { date: formatDateTime(lot.qualityDecidedAt, place) })}</p>}
+          {lot.qualityNote && <p className="fw-wl-hint">{t('lt.side.note', { note: lot.qualityNote })}</p>}
+          <p className="fw-wl-hint">{t('lt.quality.where')}</p>
+          {model.can.lotsView ? (
+            <Link className="fw-st-link" href={decideHref}>
+              {t('lt.decide')}
+            </Link>
+          ) : (
+            <p className="fw-wl-hint">{t('lt.record.noQuality')}</p>
+          )}
+        </div>
+      </Card>
+      <Card padded>
+        <div className="fw-wl-stack tight">
+          <h3 className="fw-wl-h3">{t('lt.quality.holdsTitle')}</h3>
+          {model.holds === null ? (
+            <p className="fw-wl-hint">{t('lt.quality.noRight')}</p>
+          ) : (
+            <PartState value={model.holds} label={t('lt.quality.holdsTitle')} onRetry={actions?.onRetryHolds}>
+              {(holds) => <HoldLinks holds={holds} model={model} />}
+            </PartState>
+          )}
+          <p className="fw-wl-hint">{t('lt.quality.inspections')}</p>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+/** The holds grouped by kind with counts (design lt-holds "EntityLinks grouped by kind"): each its state, reason and since. */
+function HoldLinks({ holds, model }: { holds: LotHolds; model: LotRecordModel }) {
+  const t = useWords()
+  const locale = useLocale()
+  const place = { locale, timeZone: model.timeZone }
+  const groups = holdGroups(holds)
+  if (groups.length === 0) return <EmptyState title={t('lt.quality.noHolds')} description={t('lt.quality.noHoldsBody')} />
+  return (
+    <div className="fw-wl-stack">
+      {groups.map((group) => (
+        <div key={group.kind} className="fw-wl-stack tight">
+          <h4 className="fw-wl-h3">{t(`lt.quality.group.${group.kind}`, { count: group.rows.length, active: group.active })}</h4>
+          <ul className="fw-wl-checks">
+            {group.rows.map((hold) => (
+              <li key={hold.id} className="fw-st-inline">
+                <Link className="fw-st-link" href={`${model.prefix}${recordAddress({ type: 'QualityHold', id: hold.id }, OFFICE_PAGES)}`}>
+                  {reasonLabel(model.holdReasons, hold.reasonCode, locale)}
+                </Link>
+                <Pill tone={hold.status === 'ACTIVE' ? 'danger' : 'neutral'}>{t(`lt.quality.holdStatus.${hold.status}`)}</Pill>
+                <span className="fw-st-sub">{t('lt.quality.since', { date: formatDate(hold.placedAt, place) })}</span>
+                {group.kind === 'Hide' && <span className="fw-st-sub">{hold.subjects.map((subject) => subject.label ?? '—').join(', ')}</span>}
+                {hold.reasonNote && <span className="fw-st-sub">{hold.reasonNote}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   )
 }

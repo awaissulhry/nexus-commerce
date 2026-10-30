@@ -83,20 +83,23 @@
       "remnants": "Ritagli",
       "quarantine": "In quarantena",
       "consumed": "Consumate",
-      "all": "Tutte le pelli"
+      "all": "Tutte le pelli",
+      "reserved": "Riservate"
     },
     "tile": {
       "full": "Intere",
       "partlyCut": "Tagliate in parte",
       "remnant": "Ritagli",
-      "quarantine": "In quarantena"
+      "quarantine": "In quarantena",
+      "reserved": "Riservate"
     },
     "tileHint": {
       "full": "{area} · mai tagliate",
       "partlyCut": "{area} ancora da tagliare",
       "remnant": "{area} di ritagli in giacenza",
       "quarantine": "{area} · il lotto attende la qualità",
-      "unknown": "Area non ancora nota"
+      "unknown": "Area non ancora nota",
+      "reserved": "{area} · tenute intere per ordini di lavoro"
     },
     "filter": {
       "lotId": "Lotto",
@@ -118,7 +121,8 @@
       "place": "Dove",
       "thickness": "Spessore",
       "defects": "Difetti",
-      "received": "Ricevuta"
+      "received": "Ricevuta",
+      "reservedFor": "Riservata per"
     },
     "tannery": "N. conceria {number}",
     "shade": "Tonalità {shade}",
@@ -151,7 +155,8 @@
       "location": "Ubicazione",
       "thickness": "Spessore mm",
       "defects": "Difetti",
-      "received": "Ricevuta"
+      "received": "Ricevuta",
+      "reservedFor": "Riservata per"
     },
     "print": {
       "title_one": "Stampa {count} cartellino pelle",
@@ -248,7 +253,10 @@
       "atWorkOrder": "Presso un ordine: la lavora il tavolo di taglio.",
       "held": "Bloccata: {reason}",
       "consumed": "Consumata: nulla da tagliare.",
-      "scrapped": "Scartata: fuori dalla giacenza."
+      "scrapped": "Scartata: fuori dalla giacenza.",
+      "onHold": "Bloccata: {reason}",
+      "reserved": "Riservata per {demand}: si preleva solo per quello.",
+      "reservedStale": "Riservata per {demand}, che è concluso: libera la riserva."
     },
     "cuts": {
       "totals_one": "Misurata {measured} · tagliata {cut} in {count} taglio · ritagli {remnant}",
@@ -274,6 +282,30 @@
       "reversed": "Stornato da una voce successiva",
       "deviceTime": "Orologio del tablet {time}",
       "office": "Inserito in ufficio"
+    },
+    "daily": {
+      "onHold": "In blocco: {reason}",
+      "stale": "concluso: libera la riserva",
+      "forWorkOrder": "ordine di lavoro",
+      "forOrderLine": "riga d'ordine",
+      "reserve_one": "Riserva {count} pelle a un ordine di lavoro…",
+      "reserve_other": "Riserva {count} pelli a un ordine di lavoro…",
+      "scrap_one": "Rottama {count} pelle…",
+      "scrap_other": "Rottama {count} pelli…",
+      "reserveOne": "Riserva a un ordine di lavoro…",
+      "scrapOne": "Rottama…",
+      "holdSince": "{what} dal {date}: lo toglie la qualità.",
+      "holdOfHide": "Un blocco su questa pelle",
+      "holdOfLot": "Un blocco sul suo lotto",
+      "openDemand": "Apri {demand}",
+      "held": {
+        "noReserve": "Il tuo ruolo non può riservare merce (inventory.reserve).",
+        "pick": "Seleziona prima le pelli.",
+        "oneSite": "Pelli di un solo stabilimento alla volta: scegli prima lo stabilimento.",
+        "noScrap": "Il tuo ruolo non può rottamare merce (inventory.scrap).",
+        "gone": "Una pelle selezionata non ha nulla in giacenza (esaurita, rottamata o presso un ordine): toglila dalla selezione.",
+        "reservedAlready": "Già riservata: libera prima quella riserva."
+      }
     }
   },
   "lt": {
@@ -304,7 +336,7 @@
       "empty": "Ancora nessun lotto",
       "emptyBody": "I lotti nascono al ricevimento della merce (o con la giacenza iniziale).",
       "receive": "Ricevi merce",
-      "decideWhere": "Rilascio, blocco e rifiuto di un lotto, e il risultato Cr VI, si fanno in Conformità › Test e sostanze (riga ⋯)."
+      "decideWhere": "Più lotti che superano i controlli si rilasciano qui (selezionali: Rilascia N lotti); blocco, rifiuto, il rilascio singolo e il risultato Cr VI si fanno in Conformità › Test e sostanze (riga ⋯)."
     },
     "view": {
       "waiting": "In attesa di rilascio (bloccati)",
@@ -387,7 +419,8 @@
       "overview": "Panoramica",
       "trace": "Tracciabilità",
       "moves": "Movimenti",
-      "activity": "Attività"
+      "activity": "Attività",
+      "quality": "Stato qualità"
     },
     "movesLabel": "Movimenti del lotto {code}",
     "release": {
@@ -474,7 +507,21 @@
       "nothing": "Nulla di questo lotto è in giacenza.",
       "hidesLine": "Pelli: {inStock} in giacenza · {consumed} consumate · {scrapped} scartate",
       "issued_one": "Prelevato per {count} ordine: vedi Tracciabilità.",
-      "issued_other": "Prelevato per {count} ordini: vedi Tracciabilità."
+      "issued_other": "Prelevato per {count} ordini: vedi Tracciabilità.",
+      "reserved": "Riservato",
+      "available": "Disponibile",
+      "atSite": "nello stabilimento",
+      "perSite": "Le riserve tengono il lotto nello stabilimento, non in un posto: vedi la riga dello stabilimento.",
+      "site": "Il lotto a {site}",
+      "figuresLoading": "Lettura di quanto è riservato…",
+      "figuresFailed": "Non è stato possibile leggere quanto è riservato.",
+      "overReserved": "Di questo lotto è riservato più di quanto ce n'è: libera o sposta una riserva.",
+      "noReservations": "Nessun ordine di lavoro ha riservato questo lotto.",
+      "reservedFor_one": "Riservato per {count} richiesta",
+      "reservedFor_other": "Riservato per {count} richieste",
+      "wholeHide": "pelle {code}, intera",
+      "needed": "serve il {date}",
+      "stale": "concluso: libera la riserva"
     },
     "side": {
       "title": "Stato qualità",
@@ -485,7 +532,8 @@
       "evidence": "Prova",
       "testedOn": "Provato il {date}",
       "documents": "Documenti",
-      "onHand": "In giacenza"
+      "onHand": "In giacenza",
+      "onHold": "In blocco: {reason}"
     },
     "trace": {
       "cameFrom": "Provenienza",
@@ -512,7 +560,7 @@
       "shipmentsLabel": "Spedizioni di quegli ordini",
       "noShipments": "Nessuno di questi ordini ha ancora spedito capi.",
       "unknownOrder": "Un ordine di lavoro",
-      "far": "La tracciabilità arriva fin dove arrivano i dati: dall’ordine alle spedizioni e ai clienti. I singoli capi (seriali e lotti di produzione) arriveranno più avanti con l’albero di tracciabilità.",
+      "far": "La tracciabilità arriva fin dove arrivano i dati: dall’ordine alle spedizioni e ai clienti. L’albero di tracciabilità qui sotto segue ogni legame nei due sensi, fino ai fasci e ai capi.",
       "col": {
         "order": "Ordine",
         "batch": "Lotto di produzione",
@@ -533,6 +581,251 @@
       "DELIVERED": "Consegnata",
       "RETURNED": "Resa",
       "CANCELLED": "Annullata"
+    },
+    "reject": {
+      "title": "Rifiutato, con merce ancora qui: che cosa succede?",
+      "body": "Rimandala al fornitore (un reclamo con il suo DDT di reso e l'accredito atteso) o scaricala a perdita dove si trova.",
+      "return": "Rendi al fornitore…",
+      "writeOff": "Scarica a perdita in {place} ({quantity})…",
+      "noScrap": "Il tuo ruolo non può scaricare merce a perdita (inventory.scrap)."
+    },
+    "quality": {
+      "status": "Stato e decisioni",
+      "where": "Rilascio, blocco, rifiuto e il risultato Cr VI si decidono in Conformità › Test e sostanze.",
+      "holdsTitle": "Blocchi e ispezioni",
+      "noRight": "Il tuo ruolo non vede i blocchi di qualità (quality.holds.view).",
+      "inspections": "Le ispezioni in accettazione del lotto arriveranno in una versione successiva.",
+      "noHolds": "Nessun blocco",
+      "noHoldsBody": "Nessun blocco di qualità ha nominato questo lotto o le sue pelli.",
+      "group": {
+        "Lot": "Sul lotto: {count} ({active} attivi)",
+        "Hide": "Sulle sue pelli: {count} ({active} attivi)"
+      },
+      "holdStatus": {
+        "ACTIVE": "Attivo",
+        "RELEASED": "Tolto",
+        "CLOSED": "Chiuso"
+      },
+      "since": "dal {date}"
+    },
+    "find": {
+      "open": "Traccia…",
+      "title": "Traccia",
+      "subtitle": "All'indietro e in avanti, da qualsiasi codice.",
+      "field": "Scansiona o scrivi un codice",
+      "hint": "Una matricola del capo, un lotto di produzione o un numero di ordine di lavoro, un cartellino di fascio, un cartellino di pelle, un lotto, un numero di spedizione o di DDT.",
+      "go": "Traccia",
+      "finding": "Ricerca…",
+      "heldEmpty": "Scansiona o scrivi prima un codice.",
+      "none": "Nulla trovato per {code}.",
+      "unreadable": "{code} non è un'etichetta che la tracciabilità legge (un posto, un collo o l'etichetta di un'altra fabbrica).",
+      "failed": "Non è stato possibile cercare il codice.",
+      "several_one": "{code} nomina {count} record:",
+      "several_other": "{code} nomina {count} record: scegline uno.",
+      "matches": "Record trovati",
+      "kind": {
+        "LOT": "Lotto",
+        "HIDE": "Pelle",
+        "BUNDLE": "Fascio",
+        "WORK_ORDER": "Ordine di lavoro",
+        "SERIAL": "Capo",
+        "SHIPMENT": "Spedizione"
+      },
+      "matchedBy": {
+        "LOT_CODE": "dal codice lotto",
+        "SUPPLIER_LOT": "dal lotto del fornitore",
+        "DYE_BATCH": "dalla partita di tintura",
+        "HIDE_TAG": "dal cartellino della pelle",
+        "TANNERY_NUMBER": "dal numero della conceria",
+        "BUNDLE_TICKET": "dal cartellino del fascio",
+        "OLD_BUNDLE_TICKET": "da un vecchio cartellino di fascio",
+        "SERIAL": "dalla matricola del capo",
+        "BATCH_NUMBER": "dal lotto di produzione",
+        "WORK_ORDER_NUMBER": "dal numero dell'ordine di lavoro",
+        "SHIPMENT_NUMBER": "dal numero di spedizione",
+        "DDT_NUMBER": "dal numero di DDT"
+      }
+    },
+    "tracePage": {
+      "name": "Traccia",
+      "title": "Traccia · {kind} {code}",
+      "hint": "Da dove viene e dove è andato, letto adesso dai record (nulla viene salvato).",
+      "read": "Letto alle {time}",
+      "direction": "Direzione",
+      "directions": {
+        "BOTH": "Nei due sensi",
+        "BACKWARD": "Da dove viene",
+        "FORWARD": "Dove è andato"
+      },
+      "loading": "Tracciamento…",
+      "notFound": "Nulla da tracciare qui",
+      "notFoundBody": "Il record non esiste, o è di un'azienda o di uno stabilimento che non vedi.",
+      "nothing": "Nulla da tracciare",
+      "nothingBody": "Apri la tracciabilità da un codice: Traccia… trova il record."
+    },
+    "tree": {
+      "title": "Albero di tracciabilità",
+      "intro": "All'indietro e in avanti in un solo albero. Ciò che i record conoscono solo per ordine di lavoro o per taglia dice «potrebbe contenerlo»: un richiamo lo conta comunque.",
+      "label": "Tracciabilità di {code}",
+      "levels": "Livelli",
+      "count": {
+        "SUPPLIER_one": "{count} fornitore",
+        "SUPPLIER_other": "{count} fornitori",
+        "RECEIPT_one": "{count} ricevimento",
+        "RECEIPT_other": "{count} ricevimenti",
+        "LOT_one": "{count} lotto",
+        "LOT_other": "{count} lotti",
+        "HIDE_one": "{count} pelle",
+        "HIDE_other": "{count} pelli",
+        "SUBCONTRACT_one": "{count} ordine di lavorazione esterna",
+        "SUBCONTRACT_other": "{count} ordini di lavorazione esterna",
+        "WORK_ORDER_one": "{count} ordine di lavoro",
+        "WORK_ORDER_other": "{count} ordini di lavoro",
+        "CELL_one": "{count} taglia",
+        "CELL_other": "{count} taglie",
+        "BUNDLE_one": "{count} fascio",
+        "BUNDLE_other": "{count} fasci",
+        "SERIAL_one": "{count} capo",
+        "SERIAL_other": "{count} capi",
+        "SHIPMENT_one": "{count} spedizione",
+        "SHIPMENT_other": "{count} spedizioni",
+        "CUSTOMER_one": "{count} cliente",
+        "CUSTOMER_other": "{count} clienti"
+      },
+      "possibleCount_one": "{count} potrebbe contenerlo",
+      "possibleCount_other": "{count} potrebbero contenerlo",
+      "gapTitle": {
+        "BROKEN": "Dove la catena è interrotta",
+        "COARSE": "Dove i record sono approssimativi",
+        "IN_WORK": "Ancora in lavorazione"
+      },
+      "gap": {
+        "OPENING_STOCK": "{at} è entrato come giacenza iniziale: non c'è un ricevimento né un DDT del fornitore.",
+        "NO_SUPPLIER": "{at} non nomina un fornitore né un ricevimento: non si sa da dove viene.",
+        "NO_ISSUE": "L'ordine di lavoro {at} non ha nulla prelevato o tagliato a registro: i suoi lotti non sono noti.",
+        "BUNDLE_WITHOUT_CUTS": "Il fascio {at} non nomina alcun taglio: le sue pelli sono note solo per l'ordine di lavoro (potrebbero contenerlo).",
+        "SERIAL_WITHOUT_BUNDLE_one": "{count} capo di {at} ha avuto la matricola prima che si conoscesse il fascio: noto solo per l'ordine di lavoro.",
+        "SERIAL_WITHOUT_BUNDLE_other": "{count} capi di {at} hanno avuto la matricola prima che si conoscesse il fascio: noti solo per l'ordine di lavoro.",
+        "LINE_WITHOUT_SERIALS_one": "{count} capo della spedizione {at} non ha matricola a registro: noto solo per la taglia.",
+        "LINE_WITHOUT_SERIALS_other": "{count} capi della spedizione {at} non hanno matricola a registro: noti solo per la taglia.",
+        "BATCH_TRACKED": "I capi di {at} portano il lotto di produzione, non la matricola: ogni spedizione della taglia potrebbe contenerlo.",
+        "ISSUED_BY_QUANTITY": "{at}: il materiale prelevato a quantità è registrato per tutto l'ordine di lavoro, non per capo (potrebbe contenerlo).",
+        "SUBCONTRACT_RETURN": "Ordine di lavorazione esterna {at}: ciò che è rientrato non è collegato capo per capo; ogni capo del suo ordine di lavoro potrebbe contenerlo.",
+        "ISSUED_NOT_CUT_one": "{at} è prelevato per {count} ordine di lavoro e non ancora tagliato: per ora la tracciabilità finisce lì.",
+        "ISSUED_NOT_CUT_other": "{at} è prelevato per {count} ordini di lavoro e non ancora tagliato: per ora la tracciabilità finisce lì.",
+        "CUT_NOT_BUNDLED_one": "{count} taglio di {at} non è ancora in un fascio: i pezzi sono ancora in taglio.",
+        "CUT_NOT_BUNDLED_other": "{count} tagli di {at} non sono ancora in un fascio: i pezzi sono ancora in taglio.",
+        "SERIALS_COLLAPSED_one": "{count} matricola è contata sul suo fascio e la sua taglia: traccia l'ordine di lavoro o il fascio per vederla.",
+        "SERIALS_COLLAPSED_other": "{count} matricole sono contate sui loro fasci e taglie: traccia l'ordine di lavoro o un fascio per vederle una a una."
+      },
+      "restricted_one": "{count} record che non puoi vedere è contato, non mostrato ({permission}).",
+      "restricted_other": "{count} record che non puoi vedere sono contati, non mostrati ({permission}).",
+      "affected_one": "Mostra solo i clienti coinvolti ({count} ha ricevuto)",
+      "affected_other": "Mostra solo i clienti coinvolti ({count} hanno ricevuto)",
+      "noAffected": "Nessun cliente ha ricevuto questa merce.",
+      "empty": "Ancora nulla da tracciare.",
+      "failed": "Non è stato possibile leggere la tracciabilità.",
+      "cameFrom": "Viene da ({count})",
+      "wentTo": "È andato a ({count})",
+      "kind": {
+        "SUPPLIER": "Fornitore",
+        "RECEIPT": "Ricevimento",
+        "LOT": "Lotto",
+        "HIDE": "Pelle",
+        "SUBCONTRACT": "Lavorazione esterna",
+        "WORK_ORDER": "Ordine di lavoro",
+        "CELL": "Taglia",
+        "BUNDLE": "Fascio",
+        "SERIAL": "Capo",
+        "SHIPMENT": "Spedizione",
+        "CUSTOMER": "Cliente"
+      },
+      "hidden": "non visibile per te",
+      "possible": "potrebbe contenerlo",
+      "received": "ricevuto",
+      "onHold": "In blocco: {reason}",
+      "partyHidden": "nome non visibile per te",
+      "ddt": "DDT {number}",
+      "onHand": "{quantity} in giacenza",
+      "batch": "lotto {batch}",
+      "woStatus": {
+        "DRAFT": "bozza",
+        "RELEASED": "rilasciato",
+        "IN_PROGRESS": "in lavorazione",
+        "ON_HOLD": "in sospeso",
+        "COMPLETED": "completato",
+        "CLOSED": "chiuso",
+        "CANCELLED": "annullato"
+      },
+      "garments_one": "{count} capo",
+      "garments_other": "{count} capi",
+      "serialStatus": {
+        "MADE": "prodotto",
+        "RELEASED": "rilasciato",
+        "SHIPPED": "spedito",
+        "VOID": "annullato"
+      },
+      "key": {
+        "walk": "Scorri l’albero",
+        "open": "Apri un livello, o entra",
+        "close": "Chiudi un livello, o esci",
+        "ends": "Prima e ultima riga",
+        "enter": "Apri il record"
+      }
+    },
+    "rel": {
+      "button_one": "Rilascia {count} lotto…",
+      "button_other": "Rilascia {count} lotti…",
+      "buttonNone": "Rilascia…",
+      "title_one": "Rilascia {count} lotto",
+      "title_other": "Rilascia {count} lotti",
+      "subtitle": "{going} su {count} si possono rilasciare adesso.",
+      "tableLabel": "I lotti e i loro controlli di rilascio",
+      "col": {
+        "state": "Si può",
+        "why": "Perché"
+      },
+      "can": "Si può",
+      "cannot": "Non si può",
+      "released": "Rilasciato",
+      "refused": "Rifiutato",
+      "ready": "Tutti i controlli superati: pronto al rilascio.",
+      "nowUsable": "Rilasciato: la sua merce ora è utilizzabile.",
+      "why": {
+        "checking": "Lettura del controllo di rilascio…",
+        "failed": "Non è stato possibile leggere il suo controllo di rilascio.",
+        "released": "Già rilasciato.",
+        "rejected": "Rifiutato: definitivo.",
+        "blocked": "Bloccato: sbloccalo in Test e sostanze (è un'altra decisione).",
+        "open_one": "{count} controllo aperto",
+        "open_other": "{count} controlli aperti"
+      },
+      "reach_one": "{count} lotto diventa utilizzabile: la pianificazione lo conteggia e il reparto può prelevarlo.",
+      "reach_other": "{count} lotti diventano utilizzabili: la pianificazione li conteggia e il reparto può prelevarli.",
+      "reversal": "Per annullare: blocca il lotto in Test e sostanze.",
+      "note": "Nota della decisione",
+      "noteHint": "Resta con ogni rilascio.",
+      "phrase": "Scrivi {phrase} per confermare",
+      "phraseWord_one": "RILASCIA {count}",
+      "phraseWord_other": "RILASCIA {count}",
+      "go_one": "Rilascia {count} lotto",
+      "go_other": "Rilascia {count} lotti",
+      "summary": "Rilasciati {released} su {count}.",
+      "held": {
+        "busy": "Rilascio in corso…",
+        "checking": "Lettura dei controlli di rilascio…",
+        "none": "Nessuno di questi lotti si può rilasciare adesso.",
+        "phrase": "Scrivi prima {phrase}.",
+        "noRight": "Il tuo ruolo non può rilasciare lotti (quality.lots.release).",
+        "pick": "Seleziona prima i lotti da rilasciare."
+      },
+      "result": {
+        "changed": "È cambiato nel frattempo (un'altra decisione, o un controllo si è riaperto): rileggilo.",
+        "forbidden": "Il tuo ruolo non può rilasciare questo lotto.",
+        "refused": "Rifiutato: un controllo non è più soddisfatto.",
+        "offline": "Nessuna connessione: non è stato rilasciato.",
+        "failed": "Non è stato rilasciato. Riprova."
+      }
     }
   }
 }

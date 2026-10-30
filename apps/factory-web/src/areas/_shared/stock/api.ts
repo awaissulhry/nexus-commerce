@@ -52,6 +52,8 @@ const stockRowSchema = z.object({
   hide: z.object({ id: z.string(), code: z.string() }).nullable(),
   onHand: z.string(),
   held: z.string(),
+  /** B-W2a-11: what a hide's own HIDE reservation holds of this row (other reservations hold a site's stock: `reservations`). */
+  reserved: z.string().nullable().optional(),
   available: z.string(),
   unitCost: cost,
   value: z.number().nullable().optional(),
@@ -68,11 +70,17 @@ const stockItemSchema = z.object({
   hides: z.number(),
   heldHides: z.number(),
   locations: z.number(),
+  /** B-W2a-11: what open reservations hold at the sites shown, and whether they hold more than there is. */
+  reserved: z.string().nullable().optional(),
+  overReserved: z.boolean().nullable().optional(),
   value: z.number().nullable().optional(),
   currency: z.string().optional(),
 })
 export type StockItem = z.infer<typeof stockItemSchema>
-const overviewSchema = z.object({ rows: z.array(stockRowSchema), items: z.array(stockItemSchema), truncated: z.boolean() })
+/** B-W2a-11: what open reservations hold per site, material, colour and lot (null: any lot of it). */
+const reservedKeySchema = z.object({ siteId: z.string(), itemId: z.string(), itemColourId: z.string().nullable(), lotId: z.string().nullable(), reserved: z.string(), reservations: z.number(), stale: z.number() })
+export type ReservedKey = z.infer<typeof reservedKeySchema>
+const overviewSchema = z.object({ rows: z.array(stockRowSchema), items: z.array(stockItemSchema), reservations: z.array(reservedKeySchema).optional(), truncated: z.boolean() })
 export type StockOverview = z.infer<typeof overviewSchema>
 
 export interface StockQuery {
@@ -83,9 +91,22 @@ export interface StockQuery {
   hideId?: string | null
   locationId?: string | null
   held?: boolean
+  /** B-W2a-11: only the stock of a material and colour that open reservations hold (the Reserved tile). */
+  reserved?: boolean
 }
 export const stockOverview = (api: ApiClient, query: StockQuery, signal?: AbortSignal) =>
-  api.get('/inventory/stock', { query: clean({ ...query, held: query.held ? 'true' : undefined }), schema: overviewSchema, signal })
+  api.get('/inventory/stock', { query: clean({ ...query, held: query.held ? 'true' : undefined, reserved: query.reserved ? 'true' : undefined }), schema: overviewSchema, signal })
+
+/**
+ * The stock as it was at an instant (B-W2a-11, SCM-197; design st-asof): the moves up to it. There is no history of
+ * quality status or reservations, so held, reserved and available are null then (the screen says so, never 0).
+ */
+const pastRowSchema = stockRowSchema.extend({ held: z.string().nullable(), available: z.string().nullable() })
+export type PastStockRow = z.infer<typeof pastRowSchema>
+const pastSchema = z.object({ asOf: z.string().nullable(), rows: z.array(pastRowSchema), items: z.array(stockItemSchema.extend({ held: z.string().nullable(), available: z.string().nullable(), heldHides: z.number().nullable() })), truncated: z.boolean() })
+export type PastStock = z.infer<typeof pastSchema>
+export const stockAsOf = (api: ApiClient, query: Omit<StockQuery, 'held' | 'reserved'>, asOf: string, signal?: AbortSignal) =>
+  api.get('/inventory/stock', { query: clean({ ...query, asOf }), schema: pastSchema, signal })
 
 // ---- why is it this number (GET /inventory/stock/explain) -----------------------------------------------------------------
 
@@ -145,9 +166,12 @@ const ledgerRowSchema = z.object({
   reversedById: z.string().nullable(),
   postedBy: z.object({ audience: z.enum(['OFFICE', 'FLOOR', 'SYSTEM']), name: z.string().nullable(), device: z.object({ id: z.string(), name: z.string() }).nullable() }),
   valuation: valuation.nullable().optional(),
+  /** B-W2a-11: a SCRAP that is a write-off: its record (the first move's id), its WRITE_OFF reason code and note. */
+  writeOff: z.object({ id: z.string(), reasonCode: z.string(), note: z.string().nullable() }).nullable().optional(),
 })
 export type LedgerRow = z.infer<typeof ledgerRowSchema>
-const ledgerSchema = z.object({ moves: z.array(ledgerRowSchema), nextCursor: z.string().nullable(), closing: z.string().nullable() })
+/** `rowCount` (B-W2a-11): every move of the filter, on the first page only (null with a cursor). */
+const ledgerSchema = z.object({ moves: z.array(ledgerRowSchema), nextCursor: z.string().nullable(), closing: z.string().nullable(), rowCount: z.number().nullable().optional() })
 export type LedgerPage = z.infer<typeof ledgerSchema>
 
 export interface LedgerQuery extends Partial<StockKey> {
@@ -161,6 +185,10 @@ export interface LedgerQuery extends Partial<StockKey> {
   to?: string | null
   cursor?: string | null
   limit?: number
+  /** B-W2a-11: text across the ledger (item, lot, hide, places, receipt, work order, reference, note). */
+  q?: string | null
+  /** B-W2a-11: only write-offs (true) or everything but them (false). */
+  writeOffs?: boolean | null
 }
 export const readLedger = (api: ApiClient, query: LedgerQuery, signal?: AbortSignal) =>
   api.get('/inventory/ledger', {
@@ -181,12 +209,14 @@ export const readLedger = (api: ApiClient, query: LedgerQuery, signal?: AbortSig
       to: query.to,
       cursor: query.cursor,
       limit: query.limit,
+      q: query.q?.trim() || undefined,
+      writeOffs: query.writeOffs === null || query.writeOffs === undefined ? undefined : String(query.writeOffs),
     }),
     schema: ledgerSchema,
     signal,
   })
 
-const ledgerCountsSchema = z.object({ adjustments7d: z.number(), scraps30d: z.number(), counts30d: z.number(), reversals30d: z.number(), unvalued: z.number().optional() })
+const ledgerCountsSchema = z.object({ adjustments7d: z.number(), scraps30d: z.number(), counts30d: z.number(), reversals30d: z.number(), writeOffs30d: z.number().optional(), unvalued: z.number().optional() })
 export type LedgerCounts = z.infer<typeof ledgerCountsSchema>
 export const ledgerCounts = (api: ApiClient, siteId: string | null, signal?: AbortSignal) => api.get('/inventory/ledger/counts', { query: clean({ siteId }), schema: ledgerCountsSchema, signal })
 
@@ -229,6 +259,12 @@ export const reverseMove = (api: ApiClient, moveId: string, note: string, idempo
 // ---- hides (GET /inventory/hides…) --------------------------------------------------------------------------------------------
 
 const lotBrief = z.object({ id: z.string(), code: z.string(), qualityStatus: quality, crViStatus: crVi, dyeBatch: z.string().nullable(), shade: z.string().nullable() })
+/** What a reservation holds stock for (B-W2a-11): a work order, or a line of a sales order. */
+export const demandSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('WorkOrder'), id: z.string(), number: z.string(), status: z.string() }),
+  z.object({ type: z.literal('SalesOrderLine'), id: z.string(), orderId: z.string(), orderNumber: z.string(), seq: z.number(), status: z.string() }),
+])
+export type Demand = z.infer<typeof demandSchema>
 const hideRowSchema = z.object({
   id: z.string(),
   code: z.string(),
@@ -252,6 +288,8 @@ const hideRowSchema = z.object({
   location: named.nullable(),
   receivedAt: z.string().nullable(),
   createdAt: z.string(),
+  /** B-W2a-64: the ACTIVE reservation that holds the hide whole (its demand; `stale` once that demand is done), or null. */
+  reservedFor: z.object({ reservationId: z.string(), version: z.number(), demand: demandSchema, stale: z.boolean() }).nullable().optional(),
 })
 export type HideRow = z.infer<typeof hideRowSchema>
 const stateCount = z.object({ hides: z.number(), area: z.array(perUnit) })
@@ -259,7 +297,7 @@ export type StateCount = z.infer<typeof stateCount>
 const hidesSchema = z.object({
   hides: z.array(hideRowSchema),
   nextCursor: z.string().nullable(),
-  counts: z.object({ full: stateCount, partlyCut: stateCount, remnant: stateCount, quarantine: stateCount, consumed: stateCount }),
+  counts: z.object({ full: stateCount, partlyCut: stateCount, remnant: stateCount, quarantine: stateCount, consumed: stateCount, reserved: stateCount.optional() }),
   matching: stateCount,
 })
 export type HidesPage = z.infer<typeof hidesSchema>
@@ -271,6 +309,8 @@ export interface HideQuery {
   itemColourId?: string | null
   state?: HideState | null
   inStock?: boolean
+  /** B-W2a-64: only hides an ACTIVE reservation holds whole. */
+  reserved?: boolean
   quality?: QualityStatus | null
   locationId?: string | null
   grade?: string | null
@@ -280,7 +320,7 @@ export interface HideQuery {
   limit?: number
 }
 export const listHides = (api: ApiClient, query: HideQuery, signal?: AbortSignal) =>
-  api.get('/inventory/hides', { query: clean({ ...query, inStock: query.inStock ? 'true' : undefined, q: query.q?.trim() }), schema: hidesSchema, signal })
+  api.get('/inventory/hides', { query: clean({ ...query, inStock: query.inStock ? 'true' : undefined, reserved: query.reserved ? 'true' : undefined, q: query.q?.trim() }), schema: hidesSchema, signal })
 
 const cutSchema = z.object({
   id: z.string(),

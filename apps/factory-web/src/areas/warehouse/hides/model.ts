@@ -8,6 +8,9 @@ import type { RecordPanelsViewModel } from '../../../record-panels/model'
 import type { SiteChoice } from '../lots/model'
 import type { Loaded, Part } from '../lots/shared/model'
 import type { MovesPart } from '../lots/shared/parts'
+import type { DailyCan, HoldsBySubject } from '../lots/shared/daily'
+import type { PickerReason } from '../../_shared/reasons/api'
+import type { ReserveActions, ReserveDialogModel, WriteOffActions, WriteOffDialogModel } from '../stock/daily/dialog-model'
 
 /**
  * Warehouse › Hides (SCR-200 the list, SCR-200-record a hide), pure: the saved views and tiles ⇄ the address and the
@@ -16,7 +19,7 @@ import type { MovesPart } from '../lots/shared/parts'
  * hide's next step in words.
  */
 
-export const HIDE_VIEWS = ['inStock', 'full', 'partlyCut', 'remnants', 'quarantine', 'consumed', 'all'] as const
+export const HIDE_VIEWS = ['inStock', 'full', 'partlyCut', 'remnants', 'quarantine', 'reserved', 'consumed', 'all'] as const
 export type HideView = (typeof HIDE_VIEWS)[number]
 export const DEFAULT_HIDE_VIEW: HideView = 'inStock'
 
@@ -26,6 +29,7 @@ export function hideViewOf(params: { get(name: string): string | null } | null):
   if (params?.get('state') === 'REMNANT') return 'remnants'
   if (params?.get('state') === 'CONSUMED') return 'consumed'
   if (params?.get('quality') === 'QUARANTINE') return 'quarantine'
+  if (params?.get('reserved') === 'true') return 'reserved'
   if (params?.get('inStock') === 'true') return 'inStock'
   return DEFAULT_HIDE_VIEW
 }
@@ -58,6 +62,9 @@ export function hideQuery(view: HideView, q: string, siteId: string | null, filt
       return { ...base, state: 'REMNANT' }
     case 'quarantine':
       return { ...base, inStock: true, quality: 'QUARANTINE' }
+    case 'reserved':
+      // B-W2a-64: the hides an ACTIVE reservation holds whole (design hd-grid "Reserved").
+      return { ...base, reserved: true }
     case 'consumed':
       return { ...base, state: 'CONSUMED' }
     default:
@@ -66,7 +73,7 @@ export function hideQuery(view: HideView, q: string, siteId: string | null, filt
 }
 
 export interface HideTile {
-  id: 'full' | 'partlyCut' | 'remnant' | 'quarantine'
+  id: 'full' | 'partlyCut' | 'remnant' | 'quarantine' | 'reserved'
   view: HideView
   count: (counts: HidesPage['counts'] | null) => StateCount | null
 }
@@ -75,6 +82,8 @@ export const HIDE_TILES: readonly HideTile[] = [
   { id: 'partlyCut', view: 'partlyCut', count: (counts) => counts?.partlyCut ?? null },
   { id: 'remnant', view: 'remnants', count: (counts) => counts?.remnant ?? null },
   { id: 'quarantine', view: 'quarantine', count: (counts) => counts?.quarantine ?? null },
+  // B-W2a-64 (design hd-metrics "Reserved"): an API without the count says "—", never 0.
+  { id: 'reserved', view: 'reserved', count: (counts) => counts?.reserved ?? null },
 ]
 
 /** A tag typed or scanned that is the one hit: open its hide (design R7, "one hit opens the hide"). */
@@ -171,13 +180,18 @@ export function printHeldKey(dialog: PrintDialog): string | null {
   return null
 }
 
-/** A hide's next step in words (a key of `warehouse-lots`): read only, held with the lot's reason, ready, or at a work order. */
-export function nextStepKey(record: Pick<HideRecord, 'hide'>): string {
+/**
+ * A hide's next step in words (a key of `warehouse-lots`): read only, held with the lot's reason, held by a quality hold
+ * (B-W2a-64, its reason), at a work order, reserved for a work order or an order line (B-W2a-64), ready.
+ */
+export function nextStepKey(record: Pick<HideRecord, 'hide'>, onHold = false): string {
   const hide = record.hide
   if (hide.state === 'CONSUMED') return 'hd.next.consumed'
   if (hide.state === 'SCRAPPED') return 'hd.next.scrapped'
+  if (onHold) return 'hd.next.onHold'
   if (hide.lot.qualityStatus !== 'RELEASED') return 'hd.next.held'
   if (hide.onHand === '0.0000') return 'hd.next.atWorkOrder'
+  if (hide.reservedFor) return hide.reservedFor.stale ? 'hd.next.reservedStale' : 'hd.next.reserved'
   return hide.state === 'REMNANT' ? 'hd.next.remnant' : 'hd.next.ready'
 }
 
@@ -197,6 +211,14 @@ export interface HidesListModel {
   updates: number
   timeZone: string
   print: PrintDialog | null
+  /** B-W2a-64: reserve, scrap, holds, NCR, photos, work orders, the cost grain. */
+  daily: DailyCan
+  /** B-W2a-64: the ACTIVE quality holds of the site's lots and hides (quality.holds.view; empty without it). */
+  holds: HoldsBySubject
+  /** The HOLD reasons' words. */
+  holdReasons: readonly PickerReason[]
+  reserve: ReserveDialogModel | null
+  writeOff: WriteOffDialogModel | null
   /** Design cases: rows selected, the keys panel open. */
   selected?: readonly string[]
   helpOpen?: boolean
@@ -213,6 +235,11 @@ export interface HidesListActions {
   onOpen?: (id: string) => void
   onExport?: (ids: readonly string[]) => void
   print?: PrintActions
+  /** B-W2a-64: Reserve to a work order… and Scrap… on the selection. */
+  onReserve?: (ids: readonly string[]) => void
+  onScrap?: (ids: readonly string[]) => void
+  reserve?: ReserveActions
+  writeOff?: WriteOffActions
 }
 
 export interface PrintActions {
@@ -241,6 +268,12 @@ export interface HideRecordModel {
   asOf: string | null
   timeZone: string
   print: PrintDialog | null
+  /** B-W2a-64: abilities, the hold of the hide (its own or its lot's) and the HOLD reasons' words, the dialogs. */
+  daily: DailyCan
+  holds: HoldsBySubject
+  holdReasons: readonly PickerReason[]
+  reserve: ReserveDialogModel | null
+  writeOff: WriteOffDialogModel | null
   /** Design cases: the record panels drawn without the API. */
   panelsPreview?: RecordPanelsViewModel | null
 }
@@ -250,7 +283,11 @@ export interface HideRecordActions {
   onRetryMoves?: () => void
   onMoreMoves?: () => void
   print?: PrintActions
+  onReserve?: () => void
+  onScrap?: () => void
+  reserve?: ReserveActions
+  writeOff?: WriteOffActions
 }
 
 /** The CSV columns of Export N (header words: `hd.csv.<column>`). */
-export const HIDE_CSV_COLUMNS = ['tag', 'tannery', 'article', 'colour', 'lot', 'quality', 'dyeBatch', 'shade', 'grade', 'area', 'areaUnit', 'baseArea', 'left', 'unit', 'state', 'location', 'thickness', 'defects', 'received'] as const
+export const HIDE_CSV_COLUMNS = ['tag', 'tannery', 'article', 'colour', 'lot', 'quality', 'dyeBatch', 'shade', 'grade', 'area', 'areaUnit', 'baseArea', 'left', 'unit', 'state', 'location', 'thickness', 'defects', 'received', 'reservedFor'] as const

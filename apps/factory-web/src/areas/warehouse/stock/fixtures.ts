@@ -1,9 +1,13 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import type { ItemRef, LotCounts, Named, QualityStatus, StockRow } from '../../_shared/stock/api'
-import { canFor, COLOURS, inShell, ITEMS, LOCATIONS, LOTS, named, NOW, PREFIX, SITE, SITE_SOUTH, stockRow, TIME_ZONE, uid, type RoleCase } from '../../_shared/stock/fixtures'
+import type { ItemRef, LotCounts, Named, PastStockRow, QualityStatus, ReservedKey, StockRow } from '../../_shared/stock/api'
+import { canFor, COLOURS, inShell, ITEMS, LOCATIONS, LOTS, named, NOW, PREFIX, ROLE_PERMISSIONS, SITE, SITE_SOUTH, stockRow, TIME_ZONE, uid, WORK_ORDERS, type RoleCase } from '../../_shared/stock/fixtures'
 import { blankDraft, type AdjustDialogModel, type AdjustTarget } from './adjust/model'
-import { stockAddressOf, type StockAddress, type StockPageModel } from './model'
+import type { HoldPreview } from './daily/api'
+import type { HoldDialogModel } from './daily/dialog-model'
+import { blankHold } from './daily/model'
+import { HOLD_REASONS, holdOf } from './demo/fixtures'
+import { dailyCan, holdSubjectsOf, stockAddressOf, stockLines, type StockAddress, type StockPageModel } from './model'
 import { StockView } from './view/StockView'
 
 /**
@@ -13,6 +17,9 @@ import { StockView } from './view/StockView'
  * the views (by material, by lot, by place, leather one row per hide, on hold), the tiles as filters, a search, a
  * selection with its totals, Adjust stock (empty, a decrease too large, refused because the stock went meanwhile,
  * posted), the notices, live updates, several sites, and the states (loading, error, empty, no permission).
+ * B-W2a-64: what reservations hold per row (a hide reserved whole, a lot and an any-lot reservation placed on its rows,
+ * one key over-reserved), a quality hold's reason on a row, stock as of 30 Sep (the pill, the read-only notice, every
+ * change held) and its dialog, Put N lots on hold (who may, the reach, refused, done), and the phone card list.
  */
 
 type Case = { role: RoleCase; page: StockPageModel }
@@ -52,12 +59,27 @@ export const ROWS: StockRow[] = [
   stockRow({ item: ITEMS.protector, location: named(LOCATIONS.receiving), lot: { id: LOTS.protector.id, code: LOTS.protector.code, qualityStatus: 'QUARANTINE' }, onHand: '48.0000', held: '48.0000', available: '0.0000', unitCost: '4.000000', value: 19_200 }),
   stockRow({ item: ITEMS.zip, location: named(LOCATIONS.binA2), onHand: '300.0000', held: '0.0000', available: '300.0000', unitCost: null, value: null }),
 ]
+/** The same stock with the reservations the API answers: hide HD-DEMO-0001 reserved whole (its row's own `reserved`). */
+const RESERVED_ROWS: StockRow[] = ROWS.map((row, index) => (index === 0 ? { ...row, reserved: row.onHand, available: '0.0000' } : { ...row, reserved: '0.0000' }))
+/** Per key: the nappa lot (its hide's 52,4 ft² plus 80 ft² by area for WO-D-0032), lining by any lot (30 m). */
+const RESERVATIONS: ReservedKey[] = [
+  { siteId: SITE.id, itemId: ITEMS.leather.id, itemColourId: COLOURS.black.id, lotId: LOTS.nappa.id, reserved: '132.4000', reservations: 2, stale: 0 },
+  { siteId: SITE.id, itemId: ITEMS.lining.id, itemColourId: COLOURS.black.id, lotId: null, reserved: '30.0000', reservations: 1, stale: 0 },
+]
+/** One key reserved beyond what is free: the suede lot is blocked, yet 6 m² of it are reserved for a work order. */
+const OVER: ReservedKey[] = [...RESERVATIONS, { siteId: SITE.id, itemId: ITEMS.suede.id, itemColourId: COLOURS.grey.id, lotId: null, reserved: '6.0000', reservations: 1, stale: 0 }]
+/** The lining lot under a quality hold (its stock counts as held: the API's rows say so). */
+const HELD_ROWS: StockRow[] = RESERVED_ROWS.map((row) => (row.lot?.id === LOTS.lining.id ? { ...row, held: row.onHand, available: '0.0000' } : row))
+const HOLDS = [holdOf(1, 'Lot', [LOTS.lining], 'SUPPLIER_CHECK', 28)]
+/** As of 30 Sep 2026 23:59 (Rome): the moves up to then; held, reserved and available are not kept for past days. */
+const AS_OF = '2026-09-30T21:59:59.999Z'
+const PAST_ROWS: PastStockRow[] = ROWS.filter((row) => row.lot?.id !== LOTS.nappaQuarantine.id && row.lot?.id !== LOTS.suedeFail.id).map((row) => ({ ...row, held: null, reserved: null, available: null }))
 const SOUTH_ROWS: StockRow[] = [
   stockRow({ siteId: SITE_SOUTH.id, siteCode: SITE_SOUTH.code, item: ITEMS.zip, location: { id: uid('2323', 41), code: 'S-MAG', name: 'Magazzino sud' }, onHand: '120.0000', held: '0.0000', available: '120.0000' }),
 ]
 const COUNTS: LotCounts = { quarantine: 2, waitingCrVi: 1, crViFailed: 1, blocked: 1, rejected: 0, released: 2 }
 const CURRENCIES = Object.fromEntries(Object.values(ITEMS).map((item) => [item.id, 'EUR']))
-const withoutCost = (rows: StockRow[]) => rows.map(({ unitCost: _cost, value: _value, ...row }) => row)
+const withoutCost = <Row extends PastStockRow>(rows: Row[]) => rows.map(({ unitCost: _cost, value: _value, ...row }) => row)
 
 function page(role: RoleCase, over: Partial<StockPageModel> = {}, address: Partial<StockAddress> = {}): Case {
   const can = canFor(role)
@@ -68,7 +90,12 @@ function page(role: RoleCase, over: Partial<StockPageModel> = {}, address: Parti
       can,
       address: { ...stockAddressOf(null), ...address },
       sites: [],
-      rows: can.cost ? ROWS : withoutCost(ROWS),
+      rows: can.cost ? RESERVED_ROWS : withoutCost(RESERVED_ROWS),
+      daily: dailyCan(ROLE_PERMISSIONS[role]),
+      reservations: RESERVATIONS,
+      holds: [],
+      holdReasons: HOLD_REASONS,
+      now: NOW,
       problem: null,
       truncated: false,
       counts: COUNTS,
@@ -91,6 +118,32 @@ const TARGET: AdjustTarget = { siteId: SITE.id, siteCode: SITE.code, item: ITEMS
 const LINING_TARGET: AdjustTarget = { siteId: SITE.id, siteCode: SITE.code, item: ITEMS.lining, colour: COLOURS.black, lot: LOTS.lining, hide: null, location: named(LOCATIONS.binA2), onHand: '120.0000' }
 const PLACES = Object.values(LOCATIONS).filter((place) => place.status === 'ACTIVE').map(named)
 const adjust = (over: Partial<AdjustDialogModel> = {}, target: AdjustTarget = TARGET, withCost = false): AdjustDialogModel => ({ target, draft: blankDraft(target), locations: PLACES, withCost, posting: false, problem: null, ...over })
+
+/** The hold dialog over the two lots of a selection (the nappa lot and the lining lot), as useHold builds it. */
+const holdLines = stockLines(RESERVED_ROWS, false, false).filter((line) => line.lot?.id === LOTS.nappa.id || line.lot?.id === LOTS.lining.id || line.item.id === ITEMS.zip.id)
+const HOLD_SUBJECTS = holdSubjectsOf(holdLines)
+const PREVIEW: HoldPreview = {
+  siteId: SITE.id,
+  subjects: HOLD_SUBJECTS.subjects.map((subject) => ({ id: subject.id, code: subject.code, label: subject.code, state: 'RELEASED', quantity: null, problem: null })),
+  quantity: null,
+  workOrders: [],
+  quarantinePlaces: [named(LOCATIONS.quarantine)],
+}
+const hold = (over: Partial<HoldDialogModel> = {}): HoldDialogModel => ({
+  subjectType: 'Lot',
+  subjects: HOLD_SUBJECTS.subjects,
+  leftOut: HOLD_SUBJECTS.leftOut,
+  preview: { value: PREVIEW, problem: null },
+  reservedBy: { value: [WORK_ORDERS.a.number, WORK_ORDERS.b.number], problem: null },
+  reasons: { value: HOLD_REASONS, problem: null },
+  draft: blankHold(),
+  posting: false,
+  problem: null,
+  done: null,
+  ...over,
+})
+const REJECTED_PREVIEW: HoldPreview = { ...PREVIEW, subjects: [{ ...PREVIEW.subjects[0]!, state: 'REJECTED', problem: 'Lot is rejected.' }, ...PREVIEW.subjects.slice(1)] }
+const lineId = (row: StockRow) => `${SITE.id}|${row.location.id}|${row.item.id}|${row.colour?.id ?? '-'}|${row.lot?.id ?? '-'}|-`
 
 function StockDesign({ model }: { model: Case }) {
   return inShell('/warehouse/stock', createElement(StockView, { model: model.page }), model.role)
@@ -130,6 +183,25 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'loading', label: 'Loading', model: page('warehouse', { rows: null, counts: null, asOf: null, live: 'connecting' }) },
     { id: 'error', label: "The stock couldn't be read (never drawn as an empty list)", model: page('warehouse', { rows: null, problem: 'problem.offline', counts: null, asOf: null, live: 'offline' }) },
     { id: 'admin', label: 'Administrator: no inventory.stock.view — the page says so', model: page('admin') },
+    // B-W2a-64 — reservations, holds, stock as of a date, Put on hold, the phone cards.
+    { id: 'reserved', label: 'Reserved: a hide reserved whole, the lot’s and the any-lot reservations placed on its rows; available what is left', model: page('warehouse', {}, { tile: 'reserved' }), note: 'Lot and any-lot reservations hold a site’s stock: they are placed on the lot’s rows in place order.' },
+    { id: 'over-reserved', label: 'A key reserved beyond what is free: the notice, available below 0 said as over-reserved', model: page('warehouse', { reservations: OVER }) },
+    { id: 'held-reason', label: 'A quality hold on a released lot: held, with the hold’s reason and day (never free to use)', model: page('warehouse', { rows: withoutCost(HELD_ROWS), holds: HOLDS }) },
+    { id: 'held-no-right', label: 'The same hold for a role without quality.holds.view (a buyer): held in the figures, no reason read', model: page('warehouse', { rows: withoutCost(HELD_ROWS), holds: HOLDS, daily: { ...dailyCan(ROLE_PERMISSIONS.warehouse), holdsView: false } }) },
+    { id: 'as-of', label: 'Stock as of 30 Sep 2026 23:59: the pill, the read-only notice, held/reserved/available “—”, every change held', model: page('warehouse', { rows: withoutCost(PAST_ROWS), reservations: [], asOf: NOW }, { asOf: AS_OF }) },
+    { id: 'as-of-owner', label: 'As of 30 Sep with values (owner): the valued list of that day in ⋯ (PDF, a new tab)', model: page('owner', { rows: PAST_ROWS, reservations: [] }, { asOf: AS_OF }) },
+    { id: 'as-of-dialog', label: 'Stock as of a date… open: the day, end of day by default, Now, the note', model: page('warehouse', { asOfDialog: { day: '2026-09-30', time: '23:59' } }) },
+    { id: 'as-of-future', label: 'Stock as of a date: a day still to come holds the button with the reason', model: page('warehouse', { asOfDialog: { day: '2026-11-02', time: '23:59' } }) },
+    { id: 'hold-select-quality', label: 'Quality inspector: three rows selected — “Put 2 lots on hold” (a row without a lot is left out)', model: page('quality', { selected: [lineId(ROWS[0]!), lineId(ROWS[12]!), lineId(ROWS[15]!)] }) },
+    { id: 'hold-select-warehouse', label: 'Warehouse: the same selection — Put on hold held (the role may not place holds)', model: page('warehouse', { selected: [lineId(ROWS[0]!), lineId(ROWS[12]!)] }) },
+    { id: 'hold-loading', label: 'Put 2 lots on hold: what the hold reaches being read', model: page('quality', { hold: hold({ preview: { value: null, problem: null }, reservedBy: { value: null, problem: null }, reasons: { value: null, problem: null } }) }) },
+    { id: 'hold-ready', label: 'Put 2 lots on hold: the reach (hides and area), 2 work orders reserved them, the reason, quarantine asked', model: page('quality', { hold: hold({ draft: { ...blankHold(), reasonCode: 'QUALITY_CHECK', reasonNote: 'Macchie sul fiore da verificare', askQuarantine: true, quarantineLocationId: LOCATIONS.quarantine.id } }) }) },
+    { id: 'hold-other-note', label: 'Reason “Other”: the note is required (held until written)', model: page('quality', { hold: hold({ draft: { ...blankHold(), reasonCode: 'OTHER' } }) }) },
+    { id: 'hold-rejected', label: 'A rejected lot cannot be held: said in our words, the button held', model: page('quality', { hold: hold({ preview: { value: REJECTED_PREVIEW, problem: null }, draft: { ...blankHold(), reasonCode: 'QUALITY_CHECK' } }) }) },
+    { id: 'hold-refused', label: 'The hold refused (a lot’s state changed meanwhile, 409): in our words', model: page('quality', { hold: hold({ draft: { ...blankHold(), reasonCode: 'QUALITY_CHECK' }, problem: { key: 'hold.problem.subjects' } }) }) },
+    { id: 'hold-done', label: 'Placed: 2 lots on hold, the page reads again', model: page('quality', { hold: hold({ done: { count: 2 } }) }) },
+    { id: 'phone', label: 'Phone (390): the same rows as cards, with search and Rows ▾', model: page('warehouse', { phone: true }) },
+    { id: 'phone-select', label: 'Phone: Select mode, two cards ticked, the bulk actions', model: page('quality', { phone: true, phoneSelect: true, selected: [lineId(ROWS[0]!), lineId(ROWS[12]!)] }) },
     { id: 'sales', label: 'Sales: no inventory.stock.view — the page says so', model: page('sales') },
   ],
 })
