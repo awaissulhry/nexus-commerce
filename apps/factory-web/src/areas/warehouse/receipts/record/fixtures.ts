@@ -3,6 +3,7 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { canOf, inShell, panels, panelsModel, PREFIX, TIME_ZONE, type Role } from '../../../_shared/buying/fixtures'
 import { part } from '../../../_shared/buying/model'
 import type { LotWithHides, Receipt } from '../api'
+import { DDT_PHOTOS, DISCREPANCY_COUNTS, dailyModel } from '../demo/daily/fixtures'
 import { LOTS, lotOf, receipt } from '../demo/fixtures'
 import type { ReceiptRecordModel } from '../model'
 import { ReceiptRecordView } from './view/ReceiptRecordView'
@@ -23,10 +24,13 @@ export interface LotsCase {
 
 export function receiptCase(role: Role, value: Receipt = receipt(), over: Partial<ReceiptRecordModel> = {}): { role: Role; record: ReceiptRecordModel } {
   const can = canOf(role)
-  const shown = can.cost ? value : { ...value, value: undefined, lines: value.lines.map((line) => ({ ...line, value: undefined })) }
+  // B-W2a-63: every receipt case carries the W2a parts (Documents check, Discrepancies) as the real page does.
+  const daily = over.daily ?? dailyModel(role)
+  const counted = { ...value, discrepancies: value.discrepancies.count > 0 ? value.discrepancies : DISCREPANCY_COUNTS, ddtPhotos: value.ddtPhotos.length > 0 ? value.ddtPhotos : DDT_PHOTOS }
+  const shown = can.cost ? counted : { ...counted, value: undefined, lines: counted.lines.map((line) => ({ ...line, value: undefined })) }
   return {
     role,
-    record: { prefix: PREFIX, can, tab: 'lines', receipt: { status: 'ready', value: shown }, lots: part(LOTS), live: 'live', dockOpen: false, changed: null, notice: null, notes: null, busy: false, dialog: null, dialogProblem: null, panelsPreview: panelsModel('GoodsReceipt', value.id, value.number), timeZone: TIME_ZONE, ...over },
+    record: { prefix: PREFIX, can, tab: 'lines', receipt: { status: 'ready', value: shown }, lots: part(LOTS), live: 'live', dockOpen: false, changed: null, notice: null, notes: null, busy: false, dialog: null, dialogProblem: null, panelsPreview: panelsModel('GoodsReceipt', value.id, value.number), timeZone: TIME_ZONE, ...over, daily },
   }
 }
 

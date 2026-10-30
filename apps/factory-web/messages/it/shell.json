@@ -36,7 +36,9 @@
       "suppliers": "Fornitori",
       "orders": "Ordini d'acquisto",
       "outside": "Lavorazioni esterne",
-      "subcontracting": "Ordini ai terzisti"
+      "subcontracting": "Ordini ai terzisti",
+      "sourcingClaims": "Offerte e reclami",
+      "claims": "Resi e reclami ai fornitori"
     },
     "plant": {
       "area": "Stabilimento",

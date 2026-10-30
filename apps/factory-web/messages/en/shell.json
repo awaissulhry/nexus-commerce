@@ -36,7 +36,9 @@
       "suppliers": "Suppliers",
       "orders": "Purchase orders",
       "outside": "Outside work",
-      "subcontracting": "Subcontract orders"
+      "subcontracting": "Subcontract orders",
+      "sourcingClaims": "Sourcing & claims",
+      "claims": "Returns & claims"
     },
     "plant": {
       "area": "Plant",

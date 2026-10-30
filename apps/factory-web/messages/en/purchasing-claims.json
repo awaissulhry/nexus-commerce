@@ -1,0 +1,689 @@
+{
+  "act": {
+    "answer": "Record the answer",
+    "cancel": "Cancel draft",
+    "close": "Close",
+    "removeLines": "Remove lines",
+    "returnGoods": "Send the goods back",
+    "send": "Send to the supplier",
+    "sendAgain": "Send again"
+  },
+  "answer": {
+    "accepted": "Accepted the claim",
+    "agreedHint": "Empty: the value of the goods ({value}).",
+    "confirm": "Record the answer",
+    "does": {
+      "accepted": "Accepted: its receipt discrepancies become “agreed”; Finance matches the credit note later.",
+      "rejected": "Rejected: you may send it again with more evidence, or close it."
+    },
+    "held": {
+      "outcome": "Say whether the supplier accepted or rejected it.",
+      "words": "Write what the supplier said."
+    },
+    "outcome": "The supplier",
+    "rejected": "Rejected the claim",
+    "title": "The supplier’s answer to {number}",
+    "words": "What the supplier said",
+    "wordsHint": "Kept on the claim; the supplier never sees this field."
+  },
+  "bulk": {
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)"
+  },
+  "cancel": {
+    "confirm": "Cancel draft",
+    "does": "The draft is cancelled: it was never sent and stays in the list as cancelled.",
+    "held": {
+      "reason": "Write why (3 characters or more)."
+    },
+    "kept": "Its number is kept; nothing is deleted.",
+    "reason": "Why",
+    "title": "Cancel draft {number}"
+  },
+  "chip": {
+    "clearAll": "Clear all",
+    "label": "Filters",
+    "lot": "Lot {code}",
+    "receipt": "Receipt {number}",
+    "remove": "Remove filter: {filter}",
+    "thisLot": "This lot",
+    "thisReceipt": "This receipt"
+  },
+  "claimTab": {
+    "facts": "Where it comes from",
+    "fixedAfterSend": "Since it was sent, what the claim is about stays as sent: only the remedy, the credit agreed and the internal note change.",
+    "what": "What is wrong and what is asked"
+  },
+  "close": {
+    "confirm": "Close claim",
+    "discrepancies": "Its receipt discrepancies close with it.",
+    "does": "The claim is settled: it changes no more (only its internal note).",
+    "goodsHere_one": "{count} line’s goods never went back: they stay in stock.",
+    "goodsHere_other": "{count} lines’ goods never went back: they stay in stock.",
+    "held": {
+      "note": "Write how it was settled (3 characters or more)."
+    },
+    "note": "How it was settled",
+    "noteHint": "For example: credit note received, or why it is not pursued.",
+    "title": "Close claim {number}"
+  },
+  "col": {
+    "age": "Age",
+    "kind": "Kind",
+    "lot": "Lot",
+    "material": "Material",
+    "more": "More",
+    "number": "Number",
+    "quantity": "Quantity or area",
+    "reason": "Reason",
+    "remedy": "Remedy",
+    "status": "Status",
+    "supplier": "Supplier",
+    "value": "Value (cost)"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "clearFilters": "Clear filters",
+    "close": "Close",
+    "countMore_one": "{count} claim shown, more to load",
+    "countMore_other": "{count} claims shown, more to load",
+    "count_one": "{count} claim",
+    "count_other": "{count} claims",
+    "dismiss": "Dismiss",
+    "loading": "Loading…",
+    "more": "Show more",
+    "notYet": "Not read yet",
+    "open": "Open",
+    "openNewTab": "Open in a new tab",
+    "retry": "Try again",
+    "shortcuts": "Keyboard shortcuts",
+    "updated": "Updated {time}"
+  },
+  "contactRole": {
+    "DESIGN": "design",
+    "INVOICES": "invoices",
+    "ORDERS": "orders",
+    "OWNER": "owner",
+    "QUALITY": "quality",
+    "RIDER": "rider"
+  },
+  "credit": {
+    "agreedHint": "Agreed with the supplier",
+    "asked": "Asked",
+    "askedHint": "Asked: the value of the goods",
+    "difference": "Difference",
+    "expected": "Credit expected",
+    "financeLater": "Supplier invoices are not built yet in Finance: they come with the supplier invoice screens.",
+    "hidden": "Needs the cost grain",
+    "matchLabel": "Credit asked and credit note matched",
+    "matchWhere": "Supplier invoices and credit notes are matched in Finance; the match comes with the supplier invoice screens.",
+    "matched": "Credit note matched",
+    "noCost": "The amounts need the cost grain (money.cost): your role reads the claim without them.",
+    "none": "None",
+    "notMatched": "No credit note matched yet",
+    "openFinance": "Open in Finance",
+    "remedy": "Remedy",
+    "replacement": {
+      "body": "The supplier sends the goods again; nothing is credited.",
+      "title": "No credit expected — a replacement was asked"
+    },
+    "title": "Credit",
+    "value": "Value of the goods",
+    "valueHint": "The lots’ cost × the quantity"
+  },
+  "csv": {
+    "age": "Age (days)",
+    "created": "Created",
+    "credit": "Credit expected",
+    "currency": "Currency",
+    "kind": "Kind",
+    "lines": "Lines",
+    "lots": "Lots",
+    "materials": "Materials",
+    "note": "Note",
+    "number": "Number",
+    "quantity": "Quantity",
+    "reason": "Reason",
+    "remedy": "Remedy",
+    "returned": "Returned",
+    "status": "Status",
+    "supplier": "Supplier",
+    "unit": "Unit",
+    "value": "Value"
+  },
+  "ddt": {
+    "appearance": "Appearance of the goods",
+    "appearanceHint": "For example: on a pallet, rolled",
+    "by": {
+      "CARRIER": "Carrier",
+      "RECIPIENT": "Recipient (the supplier)",
+      "SENDER": "Sender (us)"
+    },
+    "carrier": "Carrier",
+    "fixed": "The DDT is numbered from the company’s DDT series when the goods leave; it never changes after (a wrong one is annulled and its number kept).",
+    "held": {
+      "carrier": "Name the carrier.",
+      "packages": "Type the packages: a whole number from 1.",
+      "weight": "Type the gross weight in kg."
+    },
+    "packages": "Packages",
+    "reason": "Reason (causale)",
+    "reasonFixed": "A return to the supplier",
+    "reasonReturn": "Return",
+    "refused": {
+      "other": "Something in the DDT was not accepted: check its fields.",
+      "transport": "Say who carries the goods.",
+      "weight": "The gross weight was not accepted: type it in kg."
+    },
+    "remarks": "Remarks",
+    "transportBy": "Transport by",
+    "weight": "Gross weight"
+  },
+  "ddtReason": {
+    "OTHER": "Other",
+    "RETURN": "Return to the supplier"
+  },
+  "discrepancyKind": {
+    "DAMAGED": "Damaged",
+    "MISSING_DOCUMENT": "Missing document",
+    "OTHER": "Other",
+    "OVER": "Over",
+    "SHORT": "Short",
+    "WRONG_COLOUR": "Wrong colour",
+    "WRONG_ITEM": "Wrong item"
+  },
+  "discrepancyStatus": {
+    "AGREED": "Agreed",
+    "CLOSED": "Closed",
+    "CREDITED": "Credited",
+    "OPEN": "Open",
+    "SENT": "Sent"
+  },
+  "fact": {
+    "answered": "Supplier answered",
+    "by": "by {name}",
+    "cancelReason": "Why it was cancelled",
+    "closeNote": "How it was settled",
+    "closed": "Closed",
+    "created": "Created",
+    "notSent": "Not sent yet",
+    "order": "Purchase order",
+    "receipt": "Receipt",
+    "sent": "Sent",
+    "site": "Site",
+    "supplier": "Supplier",
+    "supplierAnswer": "The supplier’s words",
+    "supplierDdt": "supplier DDT {number} of {date}"
+  },
+  "field": {
+    "agreed": "Credit agreed ({currency})",
+    "agreedHint": "Empty: the value of the goods.",
+    "foundAt": "Found at",
+    "internalNote": "Internal note",
+    "internalNoteHint": "For the office only; never sent to the supplier.",
+    "kind": "Kind",
+    "pickReason": "Choose a reason",
+    "reason": "Reason",
+    "reasonNote": "What is wrong",
+    "reasonNoteHint": "The supplier reads these words with the reason.",
+    "reasonNoteNeeded": "This reason needs a few words.",
+    "remedy": "What is asked"
+  },
+  "form": {
+    "held": {
+      "agreed": "The credit is no amount: type it like 18,90.",
+      "note": "This reason needs a few words: say what is wrong.",
+      "nothing": "Nothing changed yet.",
+      "reason": "Choose a reason.",
+      "remedy": "A sent claim asks for a credit or a replacement."
+    },
+    "refused": {
+      "kind": "A line names material that is tracked without its lot or hide: a return names them; keep it a claim.",
+      "reason": "That reason is not in the claim list (or no longer used): choose another.",
+      "receipt": "The receipt or the order is not the supplier’s."
+    }
+  },
+  "foundAt": {
+    "CUTTING": "Found at cutting",
+    "INSPECTION": "Found at inspection",
+    "PRODUCTION": "Found in production",
+    "RECEIPT": "Found at receipt",
+    "STOCK": "Found in stock"
+  },
+  "goods": {
+    "cancelled": "Annulled",
+    "col": {
+      "ddt": "DDT",
+      "lot": "Lot / hide",
+      "move": "Stock move",
+      "quantity": "Quantity",
+      "when": "Left"
+    },
+    "count": "{count} of {total} lines back",
+    "ddtLines_one": "{count} line",
+    "ddtLines_other": "{count} lines",
+    "ddts": "Return DDTs",
+    "from": "from {place}",
+    "held": {
+      "none": "Tick the lines whose goods go now."
+    },
+    "label": "Goods that went back",
+    "noDdt": "No return DDT yet.",
+    "none": {
+      "body": "This claim keeps the goods and asks for a credit or a replacement.",
+      "title": "Nothing returned — claim only"
+    },
+    "noneYet": {
+      "body": "The goods go back with their return DDT once the return is sent: Send the goods back.",
+      "title": "Nothing returned yet"
+    },
+    "notYet": "No goods went back yet.",
+    "openPdf": "Open the DDT PDF",
+    "openPdfOf": "Open the PDF of DDT {number}",
+    "pdfMissing": "The DDT’s PDF is not there yet.",
+    "replaced": "first on {number} (annulled)"
+  },
+  "goodsBack": {
+    "body": "The goods leave the stock from where they lie and travel with one return DDT.",
+    "confirm_one": "Send {count} line back",
+    "confirm_other": "Send {count} lines back",
+    "doneTitle": "Goods sent back with DDT {ddt}",
+    "done_one": "{count} stock move out; DDT {ddt} issued.",
+    "done_other": "{count} stock moves out; DDT {ddt} issued.",
+    "line": "Line {seq}: {what} · {quantity} {unit}",
+    "lines": "Lines still here",
+    "title": "Send the goods of {number} back to {supplier}"
+  },
+  "held": {
+    "answer": {
+      "state": "Only a sent claim gets the supplier’s answer; this one is {status}."
+    },
+    "busy": "Working…",
+    "cancel": {
+      "sent": "Only a draft is cancelled; this one is {status}: close it instead.",
+      "state": "Only a draft is cancelled; this one is {status}."
+    },
+    "close": {
+      "draft": "A draft is not closed: cancel it instead.",
+      "state": "This claim is {status}: it changes no more."
+    },
+    "lines": {
+      "state": "Lines change only while the claim is a draft; this one is {status}."
+    },
+    "loading": "Still loading…",
+    "permission": "Needs {permission}: your role may not do this.",
+    "permissionPlain": "Needs {permission}: your role may not do this.",
+    "return": {
+      "allGone": "Every line of this return went back already.",
+      "claim": "This claim keeps the goods (a claim for credit or replacement): only a return sends goods back.",
+      "draft": "Send the return to the supplier first: its goods go back once it is sent.",
+      "state": "The goods go back only while the return is sent or accepted; this one is {status}."
+    },
+    "send": {
+      "noLines": "The claim has no line: say what it is about first.",
+      "state": "Only a draft, or a claim the supplier rejected, is sent; this one is {status}."
+    }
+  },
+  "kind": {
+    "CLAIM": "Claim",
+    "RETURN": "Return"
+  },
+  "kindPlural": {
+    "CLAIM": "Claims",
+    "RETURN": "Returns"
+  },
+  "language": {
+    "en": "English",
+    "it": "Italian"
+  },
+  "lines": {
+    "col": {
+      "discrepancy": "Receipt discrepancy",
+      "goods": "Goods",
+      "lot": "Lot / hide",
+      "material": "Material",
+      "quantity": "Quantity",
+      "reason": "Reason",
+      "seq": "Line",
+      "value": "Value (cost)"
+    },
+    "count_one": "{count} line",
+    "count_other": "{count} lines",
+    "discrepancy": "Discrepancy {seq}",
+    "held": {
+      "none": "Tick the lines to remove."
+    },
+    "here": "Still here",
+    "kept": "Kept",
+    "label": "Lines of the claim",
+    "none": "No line yet: a claim says what it is about before it is sent.",
+    "removeLine": "Line {seq}: {what}",
+    "removeReach": "Only this draft changes; the lots, hides and discrepancies stay as they are. The history keeps what was removed.",
+    "removeTitle_one": "Remove {count} line from the draft",
+    "removeTitle_other": "Remove {count} lines from the draft",
+    "remove_one": "Remove {count} line",
+    "remove_other": "Remove {count} lines",
+    "returned": "Gone back",
+    "unitCost": "{cost} per {unit}"
+  },
+  "list": {
+    "age_one": "{count} day",
+    "age_other": "{count} days",
+    "agreed": "agreed {amount}",
+    "closedNote": "Every closed claim is listed; the tile counts this month’s only.",
+    "empty": {
+      "body": "Goods sent back to a supplier and claims for credit appear here.",
+      "title": "No returns or claims"
+    },
+    "everyKind": "Returns and claims",
+    "failed": "Couldn't load returns and claims",
+    "kindLabel": "Kind",
+    "lines_one": "{count} line",
+    "lines_other": "{count} lines",
+    "noMatch": {
+      "body": "Change or clear the filters.",
+      "title": "No rows match these filters"
+    },
+    "returned": "{returned} of {count} back",
+    "rowMenu": "Actions for {number}",
+    "search": "Search a number, supplier, lot or material",
+    "tableLabel": "Returns and claims",
+    "viewLabel": "Rows",
+    "viewing": "Showing: {view}"
+  },
+  "live": {
+    "connecting": "Connecting to live updates…",
+    "live": "Live",
+    "offline": "Live updates paused"
+  },
+  "lotQuality": {
+    "BLOCKED": "Blocked",
+    "QUARANTINE": "Quarantine",
+    "REJECTED": "Rejected",
+    "RELEASED": "Released"
+  },
+  "moveReason": {
+    "ADJUSTMENT": "Out of stock: adjustment (back to the supplier)",
+    "COUNT": "Count",
+    "ISSUE": "Issued",
+    "OPENING": "Opening stock",
+    "OTHER": "Stock move",
+    "RECEIPT": "Receipt",
+    "RETURN": "Return",
+    "SCRAP": "Scrapped",
+    "TRANSFER": "Transfer"
+  },
+  "notice": {
+    "accepted": "{number}: accepted by the supplier.",
+    "cancelled": "{number} cancelled.",
+    "closed": "{number} closed.",
+    "linesRemoved_one": "{count} line removed.",
+    "linesRemoved_other": "{count} lines removed.",
+    "rejected": "{number}: rejected by the supplier.",
+    "saved": "Saved.",
+    "sent": "{number} marked as sent.",
+    "sentMail": "{number} sent to the supplier by e-mail."
+  },
+  "page": {
+    "export": "Export this list (CSV)",
+    "keyReturn": "Return to supplier",
+    "more": "More",
+    "noAccess": {
+      "body": "This page needs purchasing.view: ask an administrator for a buying or warehouse role.",
+      "title": "You cannot see returns and claims"
+    },
+    "return": "Return to supplier",
+    "shortcuts": "Keyboard shortcuts"
+  },
+  "problem": {
+    "changed": "Someone changed it meanwhile: it was read again. Check and try again.",
+    "forbidden": "Your role may not see or do this.",
+    "gone": "It no longer exists, or it belongs to another company.",
+    "invalid": "Something in it was not accepted. Check the fields and try again.",
+    "offline": "No connection to the server. Check the network and try again.",
+    "read": "The server didn't answer as expected. Try again.",
+    "slowDown": "Too many tries at once. Wait a moment and try again.",
+    "write": "It was not saved. Try again."
+  },
+  "record": {
+    "back": "Returns & claims",
+    "backToList": "Back to Returns & claims",
+    "changed": "Changed by someone else at {time}",
+    "copyNumber": "Copy the number",
+    "created": "created {date}",
+    "dock": "Thread",
+    "dockHint": "The thread beside this tab (⌘J)",
+    "dockLabel": "The claim’s thread",
+    "error": {
+      "title": "Couldn't load the claim"
+    },
+    "forbidden": {
+      "body": "It needs purchasing.view over its supplier and site.",
+      "title": "You cannot see this claim"
+    },
+    "loading": "Loading the claim…",
+    "more": "More actions",
+    "noPanels": "The thread, files and history are not available.",
+    "not_found": {
+      "body": "It was never made, or it belongs to another company.",
+      "title": "This claim does not exist"
+    },
+    "openOrder": "Open order {number}",
+    "openReceipt": "Open receipt {number}",
+    "readOnlyCancelled": "Read-only: cancelled {time}",
+    "readOnlyClosed": "Read-only: closed {time}",
+    "readOnlyRight": "You may read this claim; changing it needs {permission}.",
+    "reload": "Reload",
+    "tabsLabel": "Sections of the claim",
+    "title": "Supplier claim"
+  },
+  "remedy": {
+    "CREDIT": "Credit note",
+    "REPLACEMENT": "Replacement",
+    "later": "Choose later",
+    "none": "Not chosen yet"
+  },
+  "ret": {
+    "allHides": "Every hide in stock ({count})",
+    "change": "Change lot",
+    "create": "Create return",
+    "ddtTitle": "Return DDT",
+    "does": {
+      "claim": "Makes a return claim to {supplier}, sent at once.",
+      "credit": "Records the credit expected: the lot’s cost of what goes back.",
+      "creditHidden": "Records the credit expected (its value needs the cost grain).",
+      "ddt": "Issues the return DDT (numbered, it never changes after).",
+      "goods": "Takes the goods out of stock.",
+      "hides_one": "Takes {count} hide out of stock.",
+      "hides_other": "Takes {count} hides out of stock.",
+      "stock": "Takes what you typed of lot {lot} out of stock."
+    },
+    "done": {
+      "banner": "{number} was sent to {supplier}; the goods left the stock with DDT {ddt}.",
+      "claim": "Claim",
+      "ddt": "Return DDT",
+      "goods": "Goods out",
+      "goodsValue_one": "{count} stock move",
+      "goodsValue_other": "{count} stock moves",
+      "open": "Open the claim",
+      "overReservedBody": "The reservations stay: the planners see the shortage on What to buy & make.",
+      "overReserved_one": "{count} material is now reserved beyond what is left",
+      "overReserved_other": "{count} materials are now reserved beyond what is left",
+      "pdfLater": "The PDF is not ready yet: print it again from the claim’s Goods returned tab.",
+      "title": "Return {number} made"
+    },
+    "fromPlace": "From {place}",
+    "fromReceipt": "received on {number}",
+    "goodsTitle": "What goes back",
+    "grade": "grade {grade}",
+    "held": {
+      "contact": "Tick who gets the e-mail, or switch the e-mail off.",
+      "contactsFailed": "The supplier’s contacts couldn’t be read.",
+      "lot": "Pick the lot that goes back.",
+      "noHide": "Tick at least one hide.",
+      "noHideInStock": "Lot {lot} has no hide in stock: nothing can go back.",
+      "noSupplier": "Lot {lot} names no supplier: it cannot go back to one.",
+      "note": "This reason needs a few words: say what is wrong.",
+      "nothing": "Type how much goes back from at least one place.",
+      "nothingInStock": "Lot {lot} holds nothing: nothing can go back.",
+      "quantity": "The quantity from {place} is no number.",
+      "readFailed": "The lot’s stock couldn’t be read: close and try again.",
+      "reason": "Choose the reason.",
+      "reasonsFailed": "The reasons couldn’t be read: close and try again.",
+      "tooMuch": "More than {place} holds ({onHand})."
+    },
+    "hideLabel": "Hide {hide}",
+    "hidesLabel": "Hides of lot {lot} in stock",
+    "hides_one": "{count} hide",
+    "hides_other": "{count} hides",
+    "lotTitle": "The lot",
+    "mailAfterLot": "Pick the lot first: its supplier’s contacts follow.",
+    "mailNow": "E-mail the supplier now",
+    "mailTitle": "Tell the supplier",
+    "message": "Your own words (optional)",
+    "messageHint": "Nexus writes the standard text in the supplier’s language, without any price; your words replace it.",
+    "noContacts": "{supplier} has no active contact with an e-mail.",
+    "noDdtRight": "The return DDT needs shipping.ddt.issue: ask the warehouse.",
+    "noHideInStock": "Lot {lot} has no hide in stock at its site.",
+    "noLots": {
+      "body": "Only lots with stock at the site can go back.",
+      "title": "No lot in stock matches"
+    },
+    "noMail": "Without an e-mail, the goods and their DDT tell the supplier. You can write from the claim’s thread later.",
+    "noPartiesRight": "The supplier’s contacts need parties.view.",
+    "noStockRight": "Finding a lot needs inventory.stock.view.",
+    "noSupplier": "no supplier on record",
+    "nothingInStock": "Lot {lot} holds nothing at its site.",
+    "onHand": "{quantity} {unit} in stock",
+    "pick": "Pick",
+    "pickLot": "Pick lot {lot}",
+    "placeOnHand": "{quantity} {unit} here",
+    "quantityHint": "Quantities in {unit}; the whole lot is {total}. Leave a place empty to keep its stock.",
+    "refused": {
+      "forbidden": "Your role may not send goods back: it needs purchasing.claims.manage, purchasing.claims.return and shipping.ddt.issue.",
+      "gone": "Some of these goods went back already: it was read again.",
+      "hideGone": "A hide ticked is no longer in stock: pick the lot again.",
+      "mail": "A contact ticked has no e-mail any more: tick another or send without e-mail.",
+      "nothingLeft": "The lot holds nothing at its site any more: it was read again.",
+      "otherSupplier": "These goods came from another supplier: make one return per supplier.",
+      "places": "The goods lie in several places: type how much goes from each.",
+      "reason": "That reason is not in the claim list (or no longer used): choose another.",
+      "reserved": "A hide is reserved for an order or a work order: release that reservation first.",
+      "numbering": "The DDT series already holds a document dated later than today: the next DDT number cannot be given today. Check the series in Admin › Documents & numbering.",
+      "company": "The company’s legal details are not complete for a DDT: fill them in Admin › Companies & sites."
+    },
+    "results": "Lots found",
+    "search": "Search a lot in stock (code, supplier lot, material)",
+    "searchHint": "Type at least two characters.",
+    "subtitle": "The claim is made and sent, the goods leave the stock and the return DDT is issued, in one step.",
+    "tannery": "tannery no. {code}",
+    "title": "Return to supplier",
+    "whyTitle": "Why and what is asked"
+  },
+  "save": {
+    "discard": "Discard",
+    "region": "Unsaved changes",
+    "save": "Save",
+    "shortcut": "⌘S saves",
+    "unsaved_one": "{count} change not saved",
+    "unsaved_other": "{count} changes not saved"
+  },
+  "send": {
+    "body": "The supplier gets the claim on its thread; the answer comes back to the same thread.",
+    "cc": "Copy to",
+    "ccHint": "Addresses separated by a comma or a space.",
+    "confirmMail": "Send to the supplier",
+    "confirmNoMail": "Mark as sent",
+    "does": {
+      "discrepancies": "Its receipt discrepancies become “sent”.",
+      "fixed": "The mail cannot be recalled once it is sent.",
+      "state": "The claim becomes “sent”: what it is about no longer changes."
+    },
+    "held": {
+      "cc": "Not an e-mail address: {list}",
+      "checkFailed": "The recipients couldn’t be read: close and try again, or send without e-mail.",
+      "message": "The text is empty.",
+      "noContact": "Tick who gets the e-mail.",
+      "noContacts": "No contact of the supplier has an e-mail: send without e-mail.",
+      "remedy": "Choose what the claim asks for: a credit note or a replacement."
+    },
+    "mailTitle": "The e-mail",
+    "message": "Text the supplier reads ({language})",
+    "messageHint": "The standard text in the supplier’s language; change it if you want.",
+    "noContacts": "{supplier} has no active contact with an e-mail: add one on the supplier, or send without e-mail.",
+    "noMail": "Marked as sent without an e-mail (you told the supplier another way).",
+    "noPrice": "No price travels with the claim (the credit asked stays in the office).",
+    "recipients": "Recipients",
+    "refused": {
+      "mail": "A recipient was not accepted (no e-mail, or not the supplier’s): check the recipients."
+    },
+    "remedyHint": "A sent claim asks for a credit note or a replacement.",
+    "subject": "Subject",
+    "title": "Send claim {number} to {supplier}",
+    "titleAgain": "Send claim {number} to {supplier} again",
+    "withMail": "Send it by e-mail"
+  },
+  "status": {
+    "ACCEPTED": "Accepted",
+    "CANCELLED": "Cancelled",
+    "CLOSED": "Closed",
+    "DRAFT": "Draft",
+    "REJECTED": "Rejected",
+    "SENT": "Sent"
+  },
+  "statusIn": {
+    "ACCEPTED": "accepted by the supplier",
+    "CANCELLED": "cancelled",
+    "CLOSED": "closed",
+    "DRAFT": "a draft",
+    "REJECTED": "rejected by the supplier",
+    "SENT": "sent, waiting for the supplier"
+  },
+  "tab": {
+    "activity": "Activity",
+    "claim": "Claim",
+    "credit": "Credit",
+    "goods": "Goods returned"
+  },
+  "tile": {
+    "closed": "Closed this month",
+    "closedHint": "This month only; the list shows every closed one",
+    "credit": "Credit expected",
+    "creditHint": "Accepted claims that ask for a credit note",
+    "open": "Open",
+    "waiting": "Waiting for the supplier"
+  },
+  "tiles": {
+    "failed": "The counts couldn't be read",
+    "label": "Claims"
+  },
+  "uom": {
+    "BOX": "boxes",
+    "CM": "cm",
+    "CONE": "cones",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "G": "g",
+    "HIDE": "hides",
+    "KG": "kg",
+    "L": "l",
+    "M": "m",
+    "M2": "m²",
+    "MM": "mm",
+    "PAIR": "pair",
+    "PCS": "pcs",
+    "ROLL": "rolls",
+    "SET": "set",
+    "SIDE": "sides"
+  },
+  "view": {
+    "accepted": "Accepted",
+    "all": "Every state",
+    "cancelled": "Cancelled",
+    "closed": "Closed",
+    "draft": "Drafts",
+    "open": "Open",
+    "rejected": "Rejected",
+    "sent": "Waiting for the supplier"
+  }
+}

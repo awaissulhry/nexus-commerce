@@ -1,0 +1,144 @@
+/*
+ * Purchasing › Returns & claims (SCR-131) LAYOUT on top of the buying office's (`_shared/buying/buying.css`: the head,
+ * the band, the body with the thread, cards, fields, check lists). The controls are the design system's; this file only
+ * places them, with semantic tokens (no colours of its own). No page max-width (Owner rule 2026-10-29): the page fills
+ * the shell's main area; wide screens put the record's cards side by side.
+ */
+.fw-cl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-cl-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding-top: var(--nds-space-10, var(--nds-space-8));
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-cl-section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.fw-cl-picks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.fw-cl-pick {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-10);
+  padding: var(--nds-space-6) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  min-width: 0;
+}
+
+.fw-cl-pick-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-cl-places {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--nds-space-8) var(--nds-space-14);
+}
+
+/* The design's "NEW MatchPanel" stand-in (area-local, B-W2a-63): the credit asked beside what Finance matched. */
+.fw-cl-match {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-10, var(--nds-space-8)) var(--nds-space-14);
+  padding: var(--nds-space-10, var(--nds-space-8)) var(--nds-space-12);
+  border: 1px dashed var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+
+.fw-cl-match-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-cl-match-label {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-cl-match-value {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The Claim tab's explicit save (composed: the DS EditModeBar speaks English only). */
+.fw-cl-savebar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-raised);
+}
+
+.fw-cl-readfield {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-cl-readfield-label {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-cl-readfield-value {
+  overflow-wrap: anywhere;
+}
+
+.fw-cl-said {
+  margin: 0;
+  padding-left: var(--nds-space-10, var(--nds-space-8));
+  border-left: 2px solid var(--nds-border);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .fw-cl-pick {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .fw-cl-pick > :last-child {
+    grid-column: 2;
+  }
+}
