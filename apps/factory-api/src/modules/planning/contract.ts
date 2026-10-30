@@ -9,6 +9,7 @@ import { CR_VI_STATUSES } from '@nexus/factory-domain/planning/usable'
 import { money } from '@nexus/factory-domain/money/marked'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { PURCHASE_ORDER_STATUSES } from '@nexus/factory-domain/purchasing/orders'
+import { PEGGING_DEMAND_KINDS, PEGGING_SUPPLY_KINDS } from '@nexus/factory-domain/planning/pegging/pegging'
 
 /**
  * "What to buy & make" (B-W1-29; PLN-062 to PLN-066; A2 SCR-055; design 02): the planning runs of a site, their lines
@@ -23,6 +24,7 @@ const named = output({ id: id(), code: z.string(), name: z.string() })
 const uom = z.enum(UOMS)
 
 export const TRIGGERS = ['MANUAL', 'ORDER', 'SCHEDULED'] as const
+export type Trigger = (typeof TRIGGERS)[number]
 
 const warning = output({
   code: z.enum(WARNING_CODES),
@@ -73,6 +75,22 @@ const orderBy = output({
   /** null: no lead time on record (the date is the need date). */
   leadTimeDays: z.number().int().nullable(),
   passed: z.boolean(),
+  /** B-W2a-22: the supplier's closed days the walk back skipped (its calendar, B-W2a-08). */
+  closedDaysSkipped: z.number().int(),
+})
+
+/** B-W2a-22 (PLN-075): a line's firm planned order. */
+const firmView = output({
+  /** In the line's suggested unit, and in the base unit. */
+  quantity: quantity(),
+  uom,
+  baseQuantity: quantity(),
+  date: businessDate(),
+  supplier: named.nullable(),
+  firmedAt: instant(),
+  firmedById: id().nullable(),
+  /** Made firm on an earlier plan and carried by this one. */
+  carried: z.boolean(),
 })
 
 export const lineView = output({
@@ -113,6 +131,8 @@ export const lineView = output({
   /** The purchase order an ordered line went into (its number and state: "In draft PO-…", "Ordered PO-… (sent)"). */
   purchaseOrder: output({ id: id(), number: z.string(), status: z.enum(PURCHASE_ORDER_STATUSES) }).nullable(),
   decidedAt: instant().nullable(),
+  /** B-W2a-22: the firm planned order; null: the line is planned (the run may change it). */
+  firm: firmView.nullable(),
   /** The item's standard cost per suggested unit, and the suggestion's expected value in minor units (cost grain). */
   unitCost: money.cost(unitPrice().nullable()),
   expectedAmount: money.cost(amountMinor().nullable()),
@@ -144,7 +164,20 @@ const planView = output({
     setAside: z.number().int(),
     /** Lines short although stock exists that the plan may not use. */
     shortWithHeldStock: z.number().int(),
+    /** B-W2a-22: firm planned orders (made firm here, or carried). */
+    firm: z.number().int(),
   }),
+  /**
+   * B-W2a-22 (the W1 leftover "out of date since the run"): what changed at the site since the plan shown finished:
+   * orders confirmed, receipts posted, lots released or held. null: no plan shown, or nothing changed.
+   */
+  outOfDate: output({
+    since: instant(),
+    ordersConfirmed: z.array(output({ id: id(), number: z.string() })),
+    receiptsPosted: z.array(output({ id: id(), number: z.string() })),
+    lotsReleased: z.array(output({ id: id(), code: z.string() })),
+    lotsHeld: z.array(output({ id: id(), code: z.string() })),
+  }).nullable(),
   lines: z.array(lineView),
 })
 
@@ -191,6 +224,33 @@ const stockLine = output({
   held: z.boolean(),
 })
 
+/** B-W2a-22 (PLN-071): one demand of a requirement with its supplies (the run's pegging rows). */
+export const pegSupply = output({
+  seq: z.number().int(),
+  kind: z.enum(PEGGING_SUPPLY_KINDS),
+  quantity: quantity(),
+  /** PURCHASE_ORDER: the line's (confirmed, else asked) date; PLANNED: the planned order's (the firm date, or the need date). */
+  date: businessDate().nullable(),
+  reservation: output({ id: id(), kind: z.string(), lot: output({ id: id(), code: z.string() }).nullable(), hide: output({ id: id(), code: z.string() }).nullable() }).nullable(),
+  purchaseOrder: output({ id: id(), number: z.string(), status: z.string(), lineId: id(), seq: z.number().int() }).nullable(),
+  /** PLANNED: the planned order is firm. */
+  firm: z.boolean(),
+})
+export const pegDemand = output({
+  requirementId: id(),
+  kind: z.enum(PEGGING_DEMAND_KINDS),
+  order: output({ id: id(), number: z.string() }).nullable(),
+  orderLine: output({ id: id(), seq: z.number().int() }).nullable(),
+  /** The size of a size grid; null for a made-to-measure unit. */
+  size: z.string().nullable(),
+  workOrder: output({ id: id(), number: z.string(), status: z.string() }).nullable(),
+  demandDate: businessDate(),
+  quantity: quantity(),
+  /** Of it, planned (not covered by a reservation, stock or a purchase line). */
+  planned: quantity(),
+  supplies: z.array(pegSupply),
+})
+
 export const explainContract = defineContract({
   params: input({ requirementId: id() }),
   response: {
@@ -198,10 +258,14 @@ export const explainContract = defineContract({
       run: runView,
       line: lineView,
       sentence: z.string(),
+      /** B-W2a-22 (PLN-071): which supply covers which order line, size and work order, as the run pegged it. */
+      pegging: z.array(pegDemand),
       bridge: z.array(output({ step: z.enum(BRIDGE_STEPS), label: z.string(), quantity: quantity(), uom })),
       rounding: z.array(output({ rule: z.enum(['WHOLE_UNITS', 'MINIMUM', 'MULTIPLE']), quantity: quantity() })),
       /** Today's stock and open purchase lines, netted against the line's demand (the run's numbers stay its snapshot). */
       now: output({
+        /** B-W2a-22: usable stock reserved for other demand (not counted for this line). */
+        reservedForOthers: quantity(),
         usableStock: quantity(),
         heldStock: quantity(),
         onOrder: quantity(),
@@ -245,4 +309,25 @@ export const reopenContract = defineContract({
 export const unusableStockContract = defineContract({
   querystring: input({ siteId: id(), itemId: id().optional() }),
   response: { 200: output({ siteId: id(), lines: z.array(stockLine) }) },
+})
+
+// ---- B-W2a-22: firm planned orders (PLN-075) ----------------------------------------------------------------------------
+
+export const firmContract = defineContract({
+  params: input({ requirementId: id() }),
+  body: input({
+    version: z.number().int().min(1),
+    /** In the line's suggested unit, four decimals at most. */
+    quantity: z.string().trim().max(24),
+    date: z.string().trim().max(10),
+    /** A buy only; left out: the line's supplier. */
+    supplierId: id().optional(),
+  }),
+  response: { 200: output({ line: lineView, replayed: z.boolean() }) },
+})
+
+export const unfirmContract = defineContract({
+  params: input({ requirementId: id() }),
+  body: input({ version: z.number().int().min(1) }),
+  response: { 200: output({ line: lineView, replayed: z.boolean() }) },
 })

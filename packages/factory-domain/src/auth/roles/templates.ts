@@ -141,7 +141,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     requireMfa: false,
     permissions: ['files.read', 'files.upload', 'threads.read', 'threads.post', 'print.view', 'print.labels', 'print.documents', 'product.materials.view', 'product.styles.view', 'product.bom.view', 'product.routing.view', 'compliance.certificates.view', 'inventory.locations.view', 'inventory.stock.view', 'inventory.reserve', 'shipping.view', 'planning.view', 'planning.run', 'planning.decide', 'purchasing.view', 'workorders.view', 'workorders.manage', 'workorders.release', 'orders.view', 'home.view', 'calendars.view', 'calendars.manage', 'calendars.suppliers.manage',
       // B-W2a-16: planning settings and capacity (horizon, efficiency, people per line) and item parameters.
-      'planning.settings.manage', 'planning.items.manage'],
+      'planning.settings.manage', 'planning.items.manage',
+      // B-W2a-22: firm planned orders and the exception list of the runs.
+      'planning.firm', 'planning.exceptions.manage'],
     grains: [],
   }),
   template('buyer', {
@@ -177,6 +179,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       'planning.decide',
       // B-W2a-16: lead times, safety stock, order minimum and step, preferred supplier per item and site.
       'planning.items.manage',
+      // B-W2a-22: firm planned orders and the exception list of the runs.
+      'planning.firm',
+      'planning.exceptions.manage',
       'purchasing.view',
       'purchasing.manage',
       'purchasing.send',

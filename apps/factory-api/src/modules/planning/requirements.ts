@@ -1,20 +1,27 @@
 import { ConflictError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
-import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
+import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
+import { PLANNED_ORDER_STATUSES } from '@nexus/factory-domain/planning/explode'
 import { NO_SUPPLY_RULES, orderByOf, suggestionFor } from '@nexus/factory-domain/planning/buy'
 import { decisionNoteOf, decisionProblem, setAsideProblems, type Decision, type SetAsideReason } from '@nexus/factory-domain/planning/decisions'
 import { bridgeOf, sentenceOf } from '@nexus/factory-domain/planning/explain'
 import { netMaterial } from '@nexus/factory-domain/planning/netting'
+import { pegMaterial, type DemandPart } from '@nexus/factory-domain/planning/mrp/net'
+import type { RequirementSource } from '@nexus/factory-domain/planning/explode'
+import { quantityWords } from '@nexus/factory-domain/planning/explain'
+import { buyFromSource, sourceFor } from '@nexus/factory-domain/purchasing/sources/sources'
 import { PLANNING_DECIDE, PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import { NOT_COUNTED_WORDS, type NotCountedReason } from '@nexus/factory-domain/planning/usable'
-import { Dec, ZERO } from '@nexus/factory-domain/tax/decimal'
+import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { command, StaleVersionError, type CommandCaller } from '../../core/command'
 import { actorOf, type OfficeContext } from '../../core/context'
 import { serverClock } from '../../core/time'
 import { assertMayAt, officeContextOf, seesCost, siteFor } from './access'
 import type { LineView, RunView } from './contract'
-import { lotFactsOf, readLots, readPurchases, readStock, unitsOf, type LotRow, type PlanStockRow, type Reader } from './store'
+import { readReservations } from './inputs'
+import { PEG_COLUMNS, pegTreeView, type PegRowRead } from './pegging/read'
+import { dayOf, lotFactsOf, readLots, readPurchases, readStock, unitsOf, type LotRow, type PlanStockRow, type Reader } from './store'
 import { lineViewOf, quantityOf, readLineContext, REQUIREMENT_COLUMNS, RUN_COLUMNS, runCounts, runViewOf, sourcesOf, type RequirementRow, type RunRow } from './views'
 
 /**
@@ -47,8 +54,8 @@ async function planOf(db: Reader, context: OfficeContext, run: RunRow | null, si
     orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
   })
   const counts = await runCounts(db, [run?.id, latestAttempt?.id].filter((id): id is string => !!id))
-  const summary = { toBuy: 0, orderByPassed: 0, toMake: 0, inDraftPurchaseOrder: 0, ordered: 0, setAside: 0, shortWithHeldStock: 0 }
-  if (!run) return { run: null, latestAttempt: latestAttempt ? runViewOf(latestAttempt, counts.get(latestAttempt.id)!) : null, summary, lines: [] }
+  const summary = { toBuy: 0, orderByPassed: 0, toMake: 0, inDraftPurchaseOrder: 0, ordered: 0, setAside: 0, shortWithHeldStock: 0, firm: 0 }
+  if (!run) return { run: null, latestAttempt: latestAttempt ? runViewOf(latestAttempt, counts.get(latestAttempt.id)!) : null, summary, outOfDate: null, lines: [] }
   const rows = await db.materialRequirement.findMany({ where: { runId: run.id }, select: REQUIREMENT_COLUMNS, orderBy: { seq: 'asc' } })
   const lineContext = await readLineContext(db, rows, withCost)
   const today = todayAt(timezone)
@@ -66,6 +73,7 @@ async function planOf(db: Reader, context: OfficeContext, run: RunRow | null, si
     if (line.decision === 'ORDERED' && line.purchaseOrderLineId && drafts.has(line.purchaseOrderLineId)) summary.inDraftPurchaseOrder++
     if (line.decision === 'IGNORED') summary.setAside++
     if (short && new Dec(line.heldStock).gt(0)) summary.shortWithHeldStock++
+    if (line.firm) summary.firm++
   }
   const lines = all.filter(
     (line) =>
@@ -79,8 +87,29 @@ async function planOf(db: Reader, context: OfficeContext, run: RunRow | null, si
     run: runViewOf(run, counts.get(run.id)!),
     latestAttempt: latestAttempt ? runViewOf(latestAttempt, counts.get(latestAttempt.id)!) : null,
     summary,
+    outOfDate: run.finishedAt ? await outOfDateSince(db, run.companyId, siteId, run.finishedAt) : null,
     lines,
   }
+}
+
+/**
+ * B-W2a-22 (the W1 leftover "out of date since the run"; design planning.mrp run strip "3 orders confirmed, 2 receipts
+ * posted, 1 lot released (each a link)"): what changed at the site after the plan finished, read from the records
+ * themselves (an order is made confirmed; a receipt's postedAt; a lot's quality decision). null when nothing did.
+ */
+async function outOfDateSince(db: Reader, companyId: string, siteId: string, since: Date) {
+  const ordersConfirmed = await db.salesOrder.findMany({
+    where: { companyId, createdAt: { gt: since }, status: { in: [...PLANNED_ORDER_STATUSES] }, lines: { some: { OR: [{ siteId }, { siteId: null }] } } },
+    select: { id: true, number: true },
+    orderBy: { number: 'asc' },
+    take: 50,
+  })
+  const receiptsPosted = await db.goodsReceipt.findMany({ where: { siteId, postedAt: { gt: since } }, select: { id: true, number: true }, orderBy: { number: 'asc' }, take: 50 })
+  const lots = await db.lot.findMany({ where: { siteId, qualityDecidedAt: { gt: since } }, select: { id: true, code: true, qualityStatus: true }, orderBy: { code: 'asc' }, take: 100 })
+  const lotsReleased = lots.filter((lot) => lot.qualityStatus === 'RELEASED').map(({ id, code }) => ({ id, code }))
+  const lotsHeld = lots.filter((lot) => lot.qualityStatus === 'QUARANTINE' || lot.qualityStatus === 'BLOCKED').map(({ id, code }) => ({ id, code }))
+  if (ordersConfirmed.length + receiptsPosted.length + lotsReleased.length + lotsHeld.length === 0) return null
+  return { since: toUtcIso(since), ordersConfirmed, receiptsPosted, lotsReleased, lotsHeld }
 }
 
 /** GET /planning/runs/latest: the site's latest DONE plan. */
@@ -193,6 +222,51 @@ export async function unusableStock(caller: CommandCaller, query: { readonly sit
 
 // ---- why this number ------------------------------------------------------------------------------------------------
 
+/** B-W2a-22: the demand parts of a line as its run pegged them (what each order line, size and work order still needed). */
+function partsFromPegging(rows: readonly PegRowRead[], sources: readonly RequirementSource[]): DemandPart[] {
+  const parts = new Map<string, { row: PegRowRead; quantity: Decimal }>()
+  for (const row of rows) {
+    const key = [row.salesOrderLineId ?? '-', row.size ?? '-', row.workOrderId ?? '-'].join('|')
+    const entry = parts.get(key)
+    parts.set(key, { row: entry?.row ?? row, quantity: (entry?.quantity ?? ZERO).plus(row.quantity.toString()) })
+  }
+  return [...parts.entries()].map(([key, { row, quantity }]) => {
+    const source = sources.find((candidate) => candidate.orderLineId === row.salesOrderLineId)
+    return {
+      key,
+      orderId: source?.orderId ?? '',
+      orderNumber: source?.orderNumber ?? '',
+      orderLineId: row.salesOrderLineId ?? '',
+      lineSeq: source?.lineSeq ?? 0,
+      partyId: null,
+      size: row.size,
+      workOrderId: row.workOrderId,
+      workOrderNumber: null,
+      pieces: 0,
+      dueDate: dayOf(row.demandDate),
+      quantity: quantity.toFixed(4),
+      issued: '0.0000',
+    }
+  })
+}
+
+/** W1: one source as one part (no work order split). */
+const partOfSource = (source: RequirementSource): DemandPart => ({
+  key: `${source.orderLineId}|${source.size}|-`,
+  orderId: source.orderId,
+  orderNumber: source.orderNumber,
+  orderLineId: source.orderLineId,
+  lineSeq: source.lineSeq,
+  partyId: null,
+  size: source.size,
+  workOrderId: null,
+  workOrderNumber: null,
+  pieces: source.pieces,
+  dueDate: source.dueDate,
+  quantity: source.quantity,
+  issued: source.issued,
+})
+
 /** GET /planning/requirements/:requirementId: the line, its sentence and ladder, and today's stock and purchase lines behind it. */
 export async function explainLine(caller: CommandCaller, requirementId: string) {
   const context = officeContextOf(caller)
@@ -214,20 +288,29 @@ export async function explainLine(caller: CommandCaller, requirementId: string) 
     const facts = new Map(lots.map((lot) => [lot.id, lotFactsOf(lot)]))
     const purchases = (await readPurchases(db, row.siteId, [row.itemId])).filter((purchase) => purchase.itemColourId === row.itemColourId)
     const sources = sourcesOf(row.sources)
-    const now = netMaterial({
+    // B-W2a-22: the line's demand as the run pegged it (per order line, size and work order), netted again with today's
+    // stock, reservations and purchase lines; a line of a run without pegging nets its sources (W1).
+    const pegRows = await db.requirementPegging.findMany({ where: { requirementId: row.id }, select: PEG_COLUMNS, orderBy: { seq: 'asc' } })
+    const reservations = await readReservations(db, row.siteId, [row.itemId])
+    const now = pegMaterial({
       itemColourId: row.itemColourId,
-      demands: sources.map((source) => ({ dueDate: source.dueDate, quantity: new Dec(source.quantity).minus(source.issued).toFixed(4) })),
+      parts: pegRows.length > 0 ? partsFromPegging(pegRows, sources) : sources.map((source) => partOfSource(source)),
       stock,
       lotOf: (id) => facts.get(id),
+      reservations,
       purchases,
       runDate: today,
     })
     const sum = (reasons: readonly NotCountedReason[]) => now.stock.filter((entry) => entry.notCounted && reasons.includes(entry.notCounted)).reduce((total, entry) => total.plus(entry.entry.quantity.toString()), ZERO)
-    const rules = lineContext.rulesOf(row.itemId, row.supplierId)
-    const steps = suggestionFor(line.netQuantity, line.action, units, line.action === 'BUY' ? rules : NO_SUPPLY_RULES).steps
-    const rounding = new Dec(line.suggestedBaseQuantity).minus(line.netQuantity)
+    // What the suggestion brings: the net need (a firm planned order is said apart, below).
+    const toBring = new Dec(line.netQuantity)
+    const companyId = run.companyId
+    const sourceOfLine = line.action === 'BUY' && row.supplierId ? sourceFor(lineContext.sources, { companyId, itemId: row.itemId, itemColourId: row.itemColourId }, row.supplierId) : null
+    const fromSource = sourceOfLine ? buyFromSource(toBring.toFixed(4), units, sourceOfLine, lineContext.supplierLeadTimes.get(row.supplierId!) ?? null) : null
+    const steps = fromSource?.steps ?? suggestionFor(toBring.toFixed(4), line.action, units, line.action === 'BUY' ? lineContext.rulesOf(row.itemId, row.supplierId) : NO_SUPPLY_RULES).steps
+    const rounding = new Dec(line.suggestedBaseQuantity).minus(toBring)
     const suggestion = { quantity: line.suggestedQuantity, uom: line.suggestedUom, baseQuantity: line.suggestedBaseQuantity, roundingBase: (rounding.isNegative() ? ZERO : rounding).toFixed(4), steps }
-    const sentence = sentenceOf(line, {
+    const words = sentenceOf(line, {
       orders: line.orders.length,
       issued: sources.reduce((total, source) => total.plus(source.issued), ZERO).toFixed(4),
       otherColours: sum(['OTHER_COLOUR']).toFixed(4),
@@ -235,8 +318,17 @@ export async function explainLine(caller: CommandCaller, requirementId: string) 
       tooLate: now.purchases.filter((purchase) => purchase.why === 'TOO_LATE').reduce((total, purchase) => total.plus(purchase.notCounted), ZERO).toFixed(4),
       suggestion,
       hides: line.estimatedHides,
-      orderBy: line.orderBy ?? orderByOf(line.needDate, NO_SUPPLY_RULES, today),
+      orderBy: line.orderBy ?? { ...orderByOf(line.needDate, NO_SUPPLY_RULES, today) },
     })
+    const extra: string[] = []
+    if (new Dec(now.reservedForOthers).gt(0)) extra.push(`${quantityWords(now.reservedForOthers, line.uom)} in stock are reserved for other work orders or orders and not counted.`)
+    if (line.firm) {
+      extra.push(
+        `A firm planned order${line.firm.carried ? ' carried from an earlier plan' : ''} brings ${quantityWords(line.firm.quantity, line.firm.uom)}${line.firm.uom === line.uom ? '' : ` (about ${quantityWords(line.firm.baseQuantity, line.uom)})`} by ${line.firm.date}; the plan does not change it, and it is what is bought.`,
+      )
+    }
+    const sentence = [words, ...extra].join(' ')
+    const pegging = await pegTreeView(db, pegRows, new Map([[row.id, line.firm !== null]]))
     const byLine = new Map(purchases.map((purchase) => [purchase.purchaseOrderLineId, purchase]))
     const changed =
       now.usable !== line.usableStock || now.held !== line.heldStock || now.onOrder !== line.onOrder || now.net !== line.netQuantity
@@ -244,9 +336,11 @@ export async function explainLine(caller: CommandCaller, requirementId: string) 
       run: runViewOf(run, (await runCounts(db, [run.id])).get(run.id)!),
       line,
       sentence,
+      pegging,
       bridge: bridgeOf(line, suggestion),
       rounding: steps.map((step) => ({ ...step })),
       now: {
+        reservedForOthers: now.reservedForOthers,
         usableStock: now.usable,
         heldStock: now.held,
         onOrder: now.onOrder,

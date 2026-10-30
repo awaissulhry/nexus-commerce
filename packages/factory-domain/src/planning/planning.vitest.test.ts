@@ -386,7 +386,12 @@ describe('declared', () => {
     expect(EVENT_CATALOGUE.types().filter((type) => type.startsWith('planning.'))).toEqual([
       // B-W2a-16: planning settings and capacity.
       'planning.capacity_changed',
+      // B-W2a-22: the exception list.
+      'planning.exceptions_changed',
+      'planning.exceptions_found',
       'planning.item_parameters_changed',
+      // B-W2a-22: firm planned orders.
+      'planning.requirement_firmed',
       'planning.requirements_decided',
       'planning.run_failed',
       'planning.run_finished',

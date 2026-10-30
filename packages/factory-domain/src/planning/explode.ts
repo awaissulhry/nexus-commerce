@@ -2,9 +2,11 @@ import type { Decimal } from 'decimal.js'
 import type { BusinessDate } from '../core/time'
 import type { BomLineData } from '../product/bom/rules'
 import { colourIn, exactRequirements, netQuantity } from '../product/bom/requirements'
-import { baseFactor, decimalOf, QUANTITY_SCALE, roundTo, type ItemUnits, type Uom } from '../product/units/units'
-import { NO_SUPPLY_RULES, suggestionFor, type SupplyRulesOf } from './buy'
-import { netMaterial, type LotFacts, type OpenPurchase, type StockEntry } from './netting'
+import { baseFactor, convert, decimalOf, QUANTITY_SCALE, roundTo, type ItemUnits, type Uom } from '../product/units/units'
+import { NO_SUPPLY_RULES, suggestionFor, type Suggestion, type SupplyRulesOf } from './buy'
+import type { LotFacts, OpenPurchase, StockEntry } from './netting'
+// B-W2a-22 (MRP every day): the netting part by part, with reservations and firm planned orders (./mrp/net).
+import { pegMaterial, type DemandPart, type FirmSupply, type MaterialPegging, type PlanReservation } from './mrp/net'
 
 /**
  * One planning run of a site, pure (PLN-062, PLN-063, PLN-064, PLN-065, PLN-066; design 02 "What to buy & make"):
@@ -31,6 +33,16 @@ import { netMaterial, type LotFacts, type OpenPurchase, type StockEntry } from '
  * Make or buy. An item sourced MAKE is a MAKE line (a part we make; W1 has no BOM per item, so it is not exploded
  * further); BUY a BUY line; MAKE_OR_BUY a BUY line when a supplier is known, else MAKE. The supplier: the one every
  * contributing BOM line names (its own, else the item's default); when they differ, the item's default (warning).
+ *
+ * B-W2a-22 (MRP every day; PLN-071, PLN-075). Each source is split into PARTS: the pieces each open work order makes
+ * (its share of the issued material) and the pieces no work order makes yet, so the netting (./mrp/net `pegMaterial`)
+ * says which supply covers which part: reservations of the part's own work order or order line, free stock, open
+ * purchase lines, the firm planned order the run carries (`firmSupply`), and the rest planned. The numbers stay W1's
+ * when there is no reservation and no firm planned order. A carried line keeps its firm columns (the buyer buys the firm
+ * quantity, B-W2a-10) and still says the plan's own suggestion for the whole net need (in the firm order's unit), so
+ * making it planned again needs no new run; what the firm order does not cover is a SHORT exception. `buying` lets the run choose the supplier and the suggestion
+ * from the approved sources and the site's item parameters (B-W2a-10, B-W2a-16); without it, W1's terms. A firm planned
+ * order whose material has no demand any more is still carried, as a line of its own with nothing needed.
  */
 
 export const PLANNED_ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION'] as const
@@ -62,6 +74,9 @@ export interface PlanOrderLine {
   readonly sizes: readonly { readonly size: string; readonly pieces: number }[]
   /** The day it is due: the line's promise date, else its requested date, else the order's; null: none. */
   readonly dueDate: BusinessDate | null
+  /** B-W2a-22: the line's party (the pegging names the line with it), and whether it is a made-to-measure unit. */
+  readonly partyId?: string | null
+  readonly madeToMeasure?: boolean
 }
 
 export interface PlanRevision {
@@ -172,7 +187,36 @@ export interface PlanResult {
   readonly orderLines: number
   readonly requirements: readonly PlannedRequirement[]
   readonly warnings: readonly PlanWarning[]
+  /** B-W2a-22: per requirement (same order), how its parts were covered, and the firm planned order it carries. */
+  readonly netting: readonly RequirementNetting[]
 }
+
+/** B-W2a-22: how one requirement was netted, part by part (./mrp/net), and the firm planned order it carries. */
+export interface RequirementNetting {
+  readonly seq: number
+  readonly itemId: string
+  readonly itemColourId: string | null
+  readonly pegging: MaterialPegging
+  /** The firm planned order of the earlier run this line carries; null: none. */
+  readonly carried: FirmSupply | null
+}
+
+/** B-W2a-22: who a buy goes to and what it suggests, chosen by the run (approved sources, the site's parameters). */
+export interface BuyChoice {
+  readonly action: RequirementAction
+  readonly supplierId: string | null
+  /** null: W1's suggestion with the chosen supplier's terms. */
+  readonly suggestion: Suggestion | null
+}
+
+/** Asked once per material with what is still to bring (base unit); null: W1's terms decide. */
+export type BuyingRule = (material: {
+  readonly item: PlanItem
+  readonly itemColourId: string | null
+  readonly action: RequirementAction
+  readonly supplierId: string | null
+  readonly quantity: string
+}) => BuyChoice | null
 
 export interface PlanInput {
   readonly runDate: BusinessDate
@@ -186,6 +230,12 @@ export interface PlanInput {
   readonly purchases: readonly PlanPurchase[]
   /** The supplier's terms (lead time, minimum, multiple): ./buy SupplyRulesOf. */
   readonly supplyRulesOf?: SupplyRulesOf
+  /** B-W2a-22: ACTIVE reservations of the site's materials (B-W2a-11). */
+  readonly reservations?: readonly PlanReservation[]
+  /** B-W2a-22: the firm planned orders of the run this one supersedes (OPEN lines), carried. */
+  readonly firmSupply?: readonly FirmSupply[]
+  /** B-W2a-22: the run's supplier and suggestion choice; none: W1's. */
+  readonly buying?: BuyingRule
 }
 
 const UP = { scale: QUANTITY_SCALE, rounding: 'UP' } as const
@@ -193,6 +243,7 @@ const ZERO = decimalOf('0')
 const q = (value: Decimal): string => value.toFixed(QUANTITY_SCALE)
 const materialKey = (itemId: string, itemColourId: string | null): string => `${itemId}|${itemColourId ?? '-'}`
 const cellKey = (orderLineId: string, size: string): string => `${orderLineId}|${size}`
+const least = (...values: Decimal[]): Decimal => values.reduce((a, b) => (b.lt(a) ? b : a))
 
 /** Per garment of one size in one colourway: each material colour with its exact base quantity and BOM lines. */
 interface PerPiece {
@@ -288,12 +339,15 @@ export function planRequirements(input: PlanInput): PlanResult {
     else if (OPEN_WORK_ORDER_STATUSES.includes(cell.status)) draft.openCells.push(cell)
   }
   const piecesOf = (draft: SourceDraft): number => Math.max(0, draft.ordered - draft.made)
+  const perPieceOf = (draft: SourceDraft, key: string): Decimal | null => draft.perPiece.find((entry) => materialKey(entry.itemId, entry.itemColourId) === key)?.quantity ?? null
   const needOf = (draft: SourceDraft, key: string, pieces: number): Decimal => {
-    const per = draft.perPiece.find((entry) => materialKey(entry.itemId, entry.itemColourId) === key)
-    return per ? roundTo(per.quantity.times(pieces), UP) : ZERO
+    const per = perPieceOf(draft, key)
+    return per ? roundTo(per.times(pieces), UP) : ZERO
   }
   /** Issued material shared out per order line, size and material: cellKey|materialKey → quantity. */
   const issuedTo = new Map<string, Decimal>()
+  /** B-W2a-22: the same, per work order that took it: cellKey|materialKey|workOrderId → quantity. */
+  const issuedBy = new Map<string, Decimal>()
   const issuesByWorkOrder = new Map<string, WorkOrderIssue[]>()
   for (const issue of input.workOrderIssues) issuesByWorkOrder.set(issue.workOrderId, [...(issuesByWorkOrder.get(issue.workOrderId) ?? []), issue])
   const cellsByWorkOrder = new Map<string, SourceDraft[]>()
@@ -315,9 +369,60 @@ export function planRequirements(input: PlanInput): PlanResult {
         if (room.lte(0)) continue
         const take = left.lt(room) ? left : room
         issuedTo.set(slot, (issuedTo.get(slot) ?? ZERO).plus(take))
+        issuedBy.set(`${slot}|${workOrderId}`, (issuedBy.get(`${slot}|${workOrderId}`) ?? ZERO).plus(take))
         left = left.minus(take)
       }
     }
+  }
+
+  /**
+   * B-W2a-22: the parts of one source: the pieces of each open work order (by number, as many as the source still
+   * needs), then the pieces no work order makes. Quantities by cumulative rounding up, so the parts add up to the
+   * source exactly; the source's issued material goes to the work orders that took it, capped at each part.
+   */
+  const partsOf = (draft: SourceDraft, key: string, source: RequirementSource): DemandPart[] => {
+    const per = perPieceOf(draft, key)
+    const byWorkOrder = new Map<string, { number: string; pieces: number }>()
+    for (const cell of draft.openCells) {
+      const entry = byWorkOrder.get(cell.workOrderId) ?? { number: cell.workOrderNumber, pieces: 0 }
+      byWorkOrder.set(cell.workOrderId, { ...entry, pieces: entry.pieces + cell.pieces })
+    }
+    const slot = `${cellKey(draft.line.orderLineId, draft.size)}|${key}`
+    const size = draft.line.madeToMeasure ? null : draft.size
+    const base = { orderId: draft.line.orderId, orderNumber: draft.line.orderNumber, orderLineId: draft.line.orderLineId, lineSeq: draft.line.lineSeq, partyId: draft.line.partyId ?? null, size, dueDate: draft.line.dueDate }
+    const parts: { part: Omit<DemandPart, 'issued'>; own: Decimal }[] = []
+    let piecesLeft = source.pieces
+    let cumulative = 0
+    let before = ZERO
+    for (const [workOrderId, entry] of [...byWorkOrder.entries()].sort(([, a], [, b]) => (a.number < b.number ? -1 : a.number > b.number ? 1 : 0))) {
+      const pieces = Math.min(piecesLeft, entry.pieces)
+      if (pieces <= 0 || !per) continue
+      piecesLeft -= pieces
+      cumulative += pieces
+      const upTo = roundTo(per.times(cumulative), UP)
+      parts.push({
+        part: { ...base, key: `${draft.line.orderLineId}|${draft.size}|${workOrderId}`, workOrderId, workOrderNumber: entry.number, pieces, quantity: q(upTo.minus(before)) },
+        own: issuedBy.get(`${slot}|${workOrderId}`) ?? ZERO,
+      })
+      before = upTo
+    }
+    const rest = decimalOf(source.quantity).minus(before)
+    if (piecesLeft > 0 || rest.gt(0)) parts.push({ part: { ...base, key: `${draft.line.orderLineId}|${draft.size}|-`, workOrderId: null, workOrderNumber: null, pieces: piecesLeft, quantity: q(rest.isNegative() ? ZERO : rest) }, own: ZERO })
+    // The source's issued material: first to the work order that took it, then to any part with room.
+    let toGive = decimalOf(source.issued)
+    const given = parts.map((entry) => {
+      const take = least(entry.own, decimalOf(entry.part.quantity), toGive)
+      toGive = toGive.minus(take)
+      return take
+    })
+    parts.forEach((entry, index) => {
+      if (toGive.lte(0)) return
+      const room = decimalOf(entry.part.quantity).minus(given[index]!)
+      const take = least(room, toGive)
+      given[index] = given[index]!.plus(take)
+      toGive = toGive.minus(take)
+    })
+    return parts.map((entry, index) => ({ ...entry.part, issued: q(given[index]!) }))
   }
 
   // ---- per material and colour: the sources ------------------------------------------------------------------------
@@ -325,6 +430,7 @@ export function planRequirements(input: PlanInput): PlanResult {
     readonly itemId: string
     readonly itemColourId: string | null
     readonly sources: RequirementSource[]
+    readonly parts: DemandPart[]
     readonly suppliers: Set<string | null>
   }
   const materials = new Map<string, Material>()
@@ -336,8 +442,8 @@ export function planRequirements(input: PlanInput): PlanResult {
       const quantity = needOf(draft, key, pieces)
       if (quantity.isZero()) continue
       const issued = issuedTo.get(`${cellKey(draft.line.orderLineId, draft.size)}|${key}`) ?? ZERO
-      const material = materials.get(key) ?? { itemId: per.itemId, itemColourId: per.itemColourId, sources: [], suppliers: new Set<string | null>() }
-      material.sources.push({
+      const material = materials.get(key) ?? { itemId: per.itemId, itemColourId: per.itemColourId, sources: [], parts: [], suppliers: new Set<string | null>() }
+      const source: RequirementSource = {
         orderId: draft.line.orderId,
         orderNumber: draft.line.orderNumber,
         orderLineId: draft.line.orderLineId,
@@ -349,7 +455,9 @@ export function planRequirements(input: PlanInput): PlanResult {
         issued: q(issued.gt(quantity) ? quantity : issued),
         dueDate: draft.line.dueDate,
         workOrders: [...new Set(draft.openCells.map((cell) => cell.workOrderNumber))].sort(),
-      })
+      }
+      material.sources.push(source)
+      material.parts.push(...partsOf(draft, key, source))
       const item = items.get(per.itemId)
       for (const lineId of per.lineIds) material.suppliers.add(bomLineSupplier.get(lineId) ?? item?.defaultSupplierId ?? null)
       materials.set(key, material)
@@ -358,29 +466,49 @@ export function planRequirements(input: PlanInput): PlanResult {
 
   // ---- netting and suggestion -----------------------------------------------------------------------------------------
   const lots = new Map(input.lots.map((lot) => [lot.id, lot]))
-  const rows: Omit<PlannedRequirement, 'seq'>[] = []
+  const firmOf = new Map<string, FirmSupply>()
+  for (const firm of input.firmSupply ?? []) firmOf.set(`${materialKey(firm.itemId, firm.itemColourId)}|${firm.action}`, firm)
+  const carriedFirms = new Set<FirmSupply>()
+  const rows: (Omit<PlannedRequirement, 'seq'> & { readonly netting: Omit<RequirementNetting, 'seq' | 'itemId' | 'itemColourId'> })[] = []
+  const pegOf = (itemId: string, itemColourId: string | null, parts: readonly DemandPart[], firm: FirmSupply | null) =>
+    pegMaterial({
+      itemColourId,
+      parts,
+      stock: input.stock.filter((entry) => entry.itemId === itemId),
+      lotOf: (lotId) => lots.get(lotId),
+      reservations: (input.reservations ?? []).filter((reservation) => reservation.itemId === itemId),
+      purchases: input.purchases.filter((line) => line.itemId === itemId && line.itemColourId === itemColourId),
+      firm,
+      runDate: input.runDate,
+    })
   for (const material of materials.values()) {
     const item = items.get(material.itemId)
     if (!item) continue
-    const demands = material.sources.map((source) => ({ dueDate: source.dueDate, quantity: decimalOf(source.quantity).minus(decimalOf(source.issued)) }))
-    if (demands.every((demand) => demand.quantity.lte(0))) continue
-    const netting = netMaterial({
-      itemColourId: material.itemColourId,
-      demands,
-      stock: input.stock.filter((entry) => entry.itemId === material.itemId),
-      lotOf: (lotId) => lots.get(lotId),
-      purchases: input.purchases.filter((line) => line.itemId === material.itemId && line.itemColourId === material.itemColourId),
-      runDate: input.runDate,
-    })
+    if (material.parts.every((part) => decimalOf(part.quantity).minus(decimalOf(part.issued)).lte(0))) continue
     const named = [...material.suppliers].filter((supplier): supplier is string => supplier !== null)
     let supplierId: string | null = named.length === 1 && !material.suppliers.has(null) ? named[0]! : (item.defaultSupplierId ?? named[0] ?? null)
     if (new Set(named).size > 1) {
       warn({ code: 'SEVERAL_SUPPLIERS', message: `${item.code}: the BOM lines name different suppliers; the plan suggests the material's default.`, itemId: item.id })
       supplierId = item.defaultSupplierId ?? null
     }
-    const action: RequirementAction = item.sourcing === 'MAKE' || (item.sourcing === 'MAKE_OR_BUY' && supplierId === null) ? 'MAKE' : 'BUY'
+    let action: RequirementAction = item.sourcing === 'MAKE' || (item.sourcing === 'MAKE_OR_BUY' && supplierId === null) ? 'MAKE' : 'BUY'
     if (action === 'MAKE') supplierId = null
-    const suggestion = suggestionFor(netting.net, action, item.units, action === 'BUY' ? supplyRulesOf(item.id, supplierId) : NO_SUPPLY_RULES)
+    // The firm planned order the earlier run fixed for this material and action (B-W2a-22, PLN-075).
+    const firm = firmOf.get(`${materialKey(material.itemId, material.itemColourId)}|${action}`) ?? null
+    if (firm) carriedFirms.add(firm)
+    const netting = pegOf(material.itemId, material.itemColourId, material.parts, firm)
+    const chosen = input.buying?.({ item, itemColourId: material.itemColourId, action, supplierId, quantity: netting.net }) ?? null
+    if (chosen) {
+      action = chosen.action
+      supplierId = chosen.action === 'MAKE' ? null : chosen.supplierId
+    }
+    const computed = chosen?.suggestion ?? suggestionFor(netting.net, action, item.units, action === 'BUY' ? supplyRulesOf(item.id, supplierId) : NO_SUPPLY_RULES)
+    // A carried firm planned order keeps its unit: the line's suggestion is said in it too (rounded up).
+    const firmUom = firm ? (firm.uom as Uom) : null
+    const suggestion =
+      firmUom && firmUom !== computed.uom && baseFactor(firmUom, item.units) !== null
+        ? { quantity: q(convert(computed.quantity, computed.uom, firmUom, item.units, UP)), uom: firmUom }
+        : { quantity: computed.quantity, uom: computed.uom }
     rows.push({
       itemId: material.itemId,
       itemColourId: material.itemColourId,
@@ -396,6 +524,31 @@ export function planRequirements(input: PlanInput): PlanResult {
       needDate: netting.needDate,
       supplierId,
       sources: material.sources,
+      netting: { pegging: netting, carried: firm },
+    })
+  }
+  // A firm planned order whose material (and action) no longer has any demand is carried all the same: nothing needs it.
+  for (const firm of input.firmSupply ?? []) {
+    if (carriedFirms.has(firm)) continue
+    const item = items.get(firm.itemId)
+    if (!item) continue
+    const netting = pegOf(firm.itemId, firm.itemColourId, [], firm)
+    rows.push({
+      itemId: firm.itemId,
+      itemColourId: firm.itemColourId,
+      action: firm.action,
+      uom: item.units.baseUom,
+      grossQuantity: netting.gross,
+      usableStock: netting.usable,
+      heldStock: netting.held,
+      onOrder: netting.onOrder,
+      netQuantity: netting.net,
+      suggestedQuantity: q(ZERO),
+      suggestedUom: firm.uom as Uom,
+      needDate: firm.date,
+      supplierId: firm.action === 'BUY' ? firm.supplierId : null,
+      sources: [],
+      netting: { pegging: netting, carried: firm },
     })
   }
   const codeOf = (itemId: string) => items.get(itemId)?.code ?? ''
@@ -414,5 +567,7 @@ export function planRequirements(input: PlanInput): PlanResult {
             ? 1
             : 0,
   )
-  return { orderLines: planned, requirements: rows.map((row, index) => ({ seq: index + 1, ...row })), warnings }
+  const requirements = rows.map(({ netting: _netting, ...row }, index) => ({ seq: index + 1, ...row }))
+  const netting = rows.map((row, index) => ({ seq: index + 1, itemId: row.itemId, itemColourId: row.itemColourId, ...row.netting }))
+  return { orderLines: planned, requirements, warnings, netting }
 }
