@@ -104,7 +104,7 @@ afterAll(async () => {
 
 describe('the index (worker side)', () => {
   it('loads one indexer per record type from the folder, each following declared events', () => {
-    expect(indexers.map((indexer) => indexer.recordType).sort()).toEqual(['GoodsReceipt', 'Hide', 'Invoice', 'Item', 'Lot', 'Party', 'PurchaseOrder', 'Quote', 'SalesOrder', 'Shipment', 'Style', 'WorkOrder'])
+    expect(indexers.map((indexer) => indexer.recordType).sort()).toEqual(['Complaint', 'GoodsReceipt', 'Hide', 'Invoice', 'Item', 'Lot', 'Party', 'PurchaseOrder', 'Quote', 'RepairOrder', 'ReturnAuthorisation', 'SalesOrder', 'Shipment', 'Style', 'SupplierClaim', 'WorkOrder'])
     const handlers = searchHandlers(indexers)
     expect(handlers.map((handler) => handler.name)).toEqual([INDEX_HANDLER, REBUILD_HANDLER])
     expect(handlers[0]!.events).toEqual(expect.arrayContaining(['sales_order.created', 'party.updated', 'inventory.receipt_posted']))

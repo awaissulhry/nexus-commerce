@@ -7,6 +7,7 @@ import { NUMBER_KINDS } from '@nexus/factory-domain/numbering/kinds'
 import { areaSubNavGroups, findAreaNavPlace, type AreaNav, type AreaNavItem } from '@nexus/ui/patterns/shell/index'
 import { NEW_VERBS } from '../../areas/home/today/model'
 import { PANELS } from '../../areas/home/today/panels'
+import { SEARCH_TYPES } from '../../areas/search/model'
 import { FLOOR_MODES, homeTiles, MAX_TILES, TILE_KEYS, TILE_RULES, type FloorMode, type TileKey } from '../../floor/model'
 import { LABEL_TYPES, type ScanRead } from '../../floor/scan/scan-model'
 import { TASK_ROUTES, taskForScan, taskOfTile } from '../../floor/tasks/routes'
@@ -20,10 +21,12 @@ import { FLOOR, FRAME, LINKS, OFFICE, type TreePage } from './approved-tree'
 import { FRAME_PAGES, OFFICE_NAV, OFFICE_PAGES, officeAreaDeclarations, officeNavFor, palettePages, translateNav } from './office-nav'
 
 /**
- * B-W1-08, the W1 navigation check (SCR-003; PLT-160, PLT-036): the whole map against the approved tree (design
- * 01-navigation-tree, copied in approved-tree.ts) — the rail, every area's Pages overlay, the words in both languages,
- * the permissions, the built pages, the record links and list addresses Home uses, the floor tiles and the scan router,
- * the link-type registry and the palette. A gap, a wrong order, a wrong word or an extra row fails here.
+ * B-W1-08, the W1 navigation check, and B-W2a-83, the W2a one (SCR-003; PLT-160, PLT-036; design check I2): the whole map
+ * against the approved tree (design 01-navigation-tree, W0–W2a, copied in approved-tree.ts) — the rail (Plant before
+ * Admin), every area's Pages overlay with its groups, the words in both languages, the permissions, the built pages
+ * (OFFICE_PAGES), the record links (RECORD_PAGES) and list addresses Home and the search use, the floor tiles per mode and
+ * permission and the scan router, the link-type registry and the palette. A gap, a wrong order, a wrong word or an extra
+ * row fails here.
  */
 
 const namespaces = Object.keys(CATALOGUE.en)
@@ -34,9 +37,11 @@ const shipped = (page: TreePage) => page.href !== null && !page.deferred
 const owner = officeNavFor(permissionCheck(templateOf('owner')!.permissions))
 
 describe('the Office map is the approved tree (rail, overlays, words, order)', () => {
-  it('the rail: one area per tree area that has a W0/W1 page, in the tree\'s order and with its order number; Admin at the foot', () => {
+  it('the rail: one area per tree area that has a W0–W2a page, in the tree\'s order and with its order number; Plant right above Admin at the foot', () => {
     expect(officeAreaDeclarations().map((d) => [d.order, d.area.id])).toEqual(OFFICE.map((area) => [area.order, area.id]))
-    expect(OFFICE_NAV.areas[OFFICE_NAV.areas.length - 1]?.id).toBe('admin')
+    expect(OFFICE_NAV.areas.slice(-2).map((area) => area.id)).toEqual(['plant', 'admin'])
+    // People (the tree's 11) is W2b: no row of it ships in W2a.
+    expect(OFFICE_NAV.areas.map((area) => area.id)).not.toContain('people')
   })
 
   for (const locale of LOCALES) {
@@ -56,8 +61,10 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
     })
   }
 
-  it('no later-wave page shows: every row is a W0/W1 page of the tree (or one the Owner moved earlier), none deferred', () => {
+  it('no later-wave page shows: every row is a W0–W2a page of the tree (or one moved earlier, named), none deferred', () => {
     const allowed = new Set(OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter(shipped).map((page) => page.href))))
+    // Every tree page is of a built wave, or says why it ships early.
+    expect(OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => !['W0', 'W1', 'W2a'].includes(page.wave) && !page.early).map((page) => page.id)))).toEqual([])
     expect(rows(OFFICE_NAV).map((row) => row.href).filter((href) => !allowed.has(href))).toEqual([])
     const early = OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => page.early).map((page) => page.id)))
     expect(early).toEqual(['plant.settings', 'admin.overview'])
@@ -264,6 +271,13 @@ describe('record links and list addresses (lib/records/record-links.ts)', () => 
     }
   })
 
+  it('every record type the search finds opens its own page (B-W2a-83: returns, repairs, complaints and supplier claims too)', () => {
+    for (const type of SEARCH_TYPES) {
+      expect(RECORD_PAGES[type], type).toBeDefined()
+      expect(findAreaNavPlace(OFFICE_NAV, recordAddress({ type, id: 'x1', companyId: 'c0' }, OFFICE_PAGES))?.item, type).toBeDefined()
+    }
+  })
+
   it('a site opens under its company; without its company it opens its panels', () => {
     expect(recordAddress({ type: 'Site', id: 's1', companyId: 'c1' }, OFFICE_PAGES)).toBe('/admin/companies/c1/sites/s1')
     expect(recordAddress({ type: 'Site', id: 's1' }, OFFICE_PAGES)).toBe('/records/Site/s1')
@@ -311,7 +325,7 @@ describe('record links and list addresses (lib/records/record-links.ts)', () => 
 describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/routes.ts)', () => {
   const everything = [...new Set(FACTORY_PERMISSIONS.assignable.map((definition) => definition.name))]
 
-  it('one tile per W1 floor task, in the tree\'s order, Scan anything last; every tile built, every task tile has its page', () => {
+  it('one tile per W0–W2a floor task, in the tree\'s order, Scan anything last; every tile built, every task tile has its page', () => {
     const order = FLOOR.filter((page) => page.tile !== 'scan').map((page) => page.tile)
     expect(TILE_RULES.map((rule) => rule.key)).toEqual([...order, 'scan'])
     expect([...TILE_KEYS]).toEqual([...order, 'scan'])
@@ -321,11 +335,16 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
     }
   })
 
-  it('each tile in the station modes the tree gives it (Operation also at the inspection bench: the floor tasks\' decision)', () => {
-    const added: Partial<Record<TileKey, readonly FloorMode[]>> = { operation: ['inspection'] }
+  it('each tile in the station modes the tree gives it, the build\'s two named differences apart', () => {
+    // Operation also at the inspection bench (the floor tasks' decision: a routing's scanned INSPECTION operation). My
+    // work (B-W2a-74): at the packing bench too (the dispatch list is per station), not at the warehouse (a device with no
+    // station has no queue; the warehouse's task inbox, SCM-274, is W2b — and a seventh warehouse tile would push Scan
+    // anything off Home, MAX_TILES).
+    const added: Partial<Record<TileKey, readonly FloorMode[]>> = { operation: ['inspection'], mywork: ['packing'] }
+    const removed: Partial<Record<TileKey, readonly FloorMode[]>> = { mywork: ['warehouse'] }
     for (const page of FLOOR) {
       const rule = TILE_RULES.find((entry) => entry.key === page.tile)!
-      const tree = page.modes.filter((mode): mode is FloorMode => (FLOOR_MODES as readonly string[]).includes(mode))
+      const tree = page.modes.filter((mode): mode is FloorMode => (FLOOR_MODES as readonly string[]).includes(mode) && !(removed[rule.key] ?? []).includes(mode as FloorMode))
       expect(rule.modes === 'all' ? [...FLOOR_MODES] : [...rule.modes].sort(), page.id).toEqual(page.tile === 'scan' ? [...FLOOR_MODES] : [...tree, ...(added[rule.key] ?? [])].sort())
     }
   })

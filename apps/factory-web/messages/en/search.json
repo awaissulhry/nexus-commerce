@@ -65,6 +65,10 @@
     "GoodsReceipt": "Goods receipt",
     "Shipment": "Shipment",
     "Invoice": "Invoice",
+    "ReturnAuthorisation": "Customer return",
+    "RepairOrder": "Repair",
+    "Complaint": "Complaint",
+    "SupplierClaim": "Supplier return or claim",
     "other": "Record"
   },
   "chip": {
@@ -80,6 +84,10 @@
     "GoodsReceipt": "Receipts",
     "Shipment": "Shipments",
     "Invoice": "Invoices",
+    "ReturnAuthorisation": "Returns",
+    "RepairOrder": "Repairs",
+    "Complaint": "Complaints",
+    "SupplierClaim": "Supplier claims",
     "other": "Other records"
   },
   "status": {
@@ -118,6 +126,17 @@
     "RETURNED": "Returned",
     "ISSUED": "Issued",
     "NOT_DELIVERABLE": "Not deliverable",
-    "ERROR": "Error"
+    "ERROR": "Error",
+    "REQUESTED": "Requested",
+    "AUTHORISED": "Authorised",
+    "INSPECTED": "Inspected",
+    "AWAITING_GOODS": "Waiting for the garment",
+    "ESTIMATED": "Estimated",
+    "IN_REPAIR": "In repair",
+    "REPAIRED": "Repaired",
+    "NEW": "New",
+    "TRIAGED": "Triaged",
+    "INVESTIGATING": "Investigating",
+    "ANSWERED": "Answered"
   }
 }

@@ -228,11 +228,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `shell:`-style message keys; each row's `permission` is the one its page's API needs). The rail, sub-sidebar, crumbs,
   phone bottom bar and palette all read it; `officeNavFor(can)` filters it per person. A permission not yet declared in
   factory-domain must be in `PENDING_PERMISSIONS` (shell/nav/office-nav.ts) until its step declares it. `order` and the
-  words are the approved tree's (`shell/nav/approved-tree.ts`, its W0/W1 part: Admin is "Sistema" in Italian, Finance
-  "Amministrazione"); `shell/nav/navigation-map.vitest.test.ts` walks it against the rail, every overlay, the palette,
-  RECORD_PAGES/LIST_PAGES, the floor tiles and scan router, the link registry (`links/_nav/link-types.ts`: purpose ×
-  record type → link task page, else the link frame) and every "Area › Page" pointer in the catalogues. A page that
-  ships adds its tree entry there.
+  words are the approved tree's (`shell/nav/approved-tree.ts`, its W0–W2a part, checked whole by B-W2a-83: Admin is
+  "Sistema" in Italian, Finance "Amministrazione", Plant 12 right above Admin 13); `shell/nav/navigation-map.vitest.test.ts`
+  walks it against the rail, every overlay, the palette, RECORD_PAGES/LIST_PAGES (and every searchable record type's
+  page), the floor tiles per mode and permission (the build's differences from the tree named there) and scan router, the
+  link registry (`links/_nav/link-types.ts`: purpose × record type → link task page, else the link frame) and every "Area
+  › Page" pointer in the catalogues. A page that ships adds its tree entry there.
 - Views never import each other (`check-view-boundaries`): Office (`app/(office)`, `shell/{office,nav,switcher,palette}`,
   `areas`), Links (`app/(links)`, `shell/links`), Floor, Portal. Share through `src/lib`. No `@nexus/factory-db`.
 - UI text: `messages/<locale>/<area>.json` (it, en), found by themselves; every key in both languages with the same
