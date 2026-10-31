@@ -56,6 +56,8 @@ import { creditNoteHandlers } from './modules/invoicing/credit-note/handlers'
 import { payablesHandlers, sdiPickupCron } from './modules/payables/sdi'
 // B-W2a-66: the certificate renewal stages.
 import { renewalStagesCron } from './modules/compliance/renewals/stages'
+// B-W2b-11: the report pack, so the worker can export a report (platform/exports/sources/reports.ts).
+import { loadReports } from './modules/insights/reports/registry'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -95,6 +97,8 @@ const W2A_55_HANDLERS: readonly EventHandler[] = ladderHandlers()
 const W2A_61_HANDLERS: readonly EventHandler[] = creditNoteHandlers()
 // B-W2a-62: a company's SDI pickup came due (the supplier invoices SDI delivered); goods arrived for an invoice (match again).
 const W2A_62_HANDLERS: readonly EventHandler[] = payablesHandlers()
+// B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
+await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 
 const mode = process.argv[2] as Mode
 if (!MODES.includes(mode)) {
