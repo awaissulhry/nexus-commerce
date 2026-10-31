@@ -112,6 +112,8 @@ import { PRODUCTION_OFFSTANDARD_DEFINITIONS, PRODUCTION_OFFSTANDARD_PERMISSIONS 
 import { PRODUCTION_CALLS_DEFINITIONS, PRODUCTION_CALLS_FLOOR_PERMISSIONS, PRODUCTION_CALLS_PERMISSIONS } from '../../production/calls/permissions'
 // B-W2b-32: shifts and overtime requests (people.shifts.view | manage | team, people.overtime.manage | approve).
 import { PEOPLE_SHIFTS_DEFINITIONS, PEOPLE_SHIFTS_PERMISSIONS } from '../../people/shifts/permissions'
+// B-W2b-39: skills and machine authorisations (people.skills.view | manage, people.authorisations.manage).
+import { PEOPLE_SKILLS_DEFINITIONS, PEOPLE_SKILLS_PERMISSIONS } from '../../people/skills/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -502,6 +504,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PEOPLE_SHIFTS_DEFINITIONS,
   // B-W2b-46: checks before a scan counts (production.scan.override).
   PRODUCTION_GUARDS_DEFINITIONS,
+  // B-W2b-39: skills and machine authorisations.
+  PEOPLE_SKILLS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -607,6 +611,8 @@ for (const name of PRODUCTION_CALLS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDecl
 for (const name of PEOPLE_SHIFTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-46: checks before a scan counts.
 for (const name of PRODUCTION_GUARDS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-39: skills and machine authorisations.
+for (const name of PEOPLE_SKILLS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

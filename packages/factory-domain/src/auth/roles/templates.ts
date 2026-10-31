@@ -321,6 +321,20 @@ const PEOPLE_SHIFTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Obje
 const peopleShiftsAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' ? (PEOPLE_SHIFTS_ADDS[key] ?? []) : [])
 
 /**
+ * B-W2b-39 (skills and machine authorisations; MES-241, MES-244, MES-246, MES-024; design people.skills): the
+ * administrator (the HR register's keeper until an HR template comes), the production manager and the floor supervisor
+ * (the leads: "1–4 set a level on a skill cell") read the matrix, set levels, give trainee periods, sign trainees off and
+ * authorise people on machines. Office only: the floor reads its people's levels through the qualification check. Owner
+ * and read-only take theirs from every(). One line per template.
+ */
+const SKILLS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.skills.view', 'people.skills.manage', 'people.authorisations.manage'],
+  production_manager: ['people.skills.view', 'people.skills.manage', 'people.authorisations.manage'],
+  floor_supervisor: ['people.skills.view', 'people.skills.manage', 'people.authorisations.manage'],
+})
+const skillsAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' ? (SKILLS_ADDS[key] ?? []) : [])
+
+/**
  * B-W2b-24 (PLT-125, design admin.documents popup `override`): type the number a migrated document had in the old system —
  * the administrator (who runs the go-live's first load) and finance (who keeps the number series). The owner and nobody
  * else through every(); never read_only, never a floor role. One line.
@@ -329,7 +343,7 @@ const NUMBERING_OVERRIDE_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'fin
 const numberingOverrideAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' && NUMBERING_OVERRIDE_TEMPLATES.has(key) ? ['numbering.override' as Permission] : [])
 
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience), ...repairsAddedFor(key, audience), ...reportLibraryAddedFor(key, audience), ...numberingOverrideAddedFor(key, audience), ...peopleAddedFor(key, audience), ...peopleShiftsAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience), ...repairsAddedFor(key, audience), ...reportLibraryAddedFor(key, audience), ...numberingOverrideAddedFor(key, audience), ...peopleAddedFor(key, audience), ...peopleShiftsAddedFor(key, audience), ...skillsAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 
