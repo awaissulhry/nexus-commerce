@@ -120,6 +120,8 @@
       "mrp": "What to buy & make",
       "board": "Planning board",
       "allocation": "Lines & subcontractors",
+      "capacity": "Capacity & load",
+      "exceptions": "Exceptions",
       "settingsGroup": "Settings",
       "settings": "Planning settings"
     },

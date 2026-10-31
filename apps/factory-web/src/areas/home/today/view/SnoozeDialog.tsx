@@ -18,6 +18,8 @@ export interface SnoozeDialogProps {
   now: number
   /** The thing snoozed can wait "until something changes on its record" (an alert row, a notification). */
   untilChange: boolean
+  /** The host's words for that last choice when its "change" is another event (B-W2a-70: "After the next run"). */
+  untilChangeLabel?: string
   /** The API's limit for it, in days. */
   maxDays: number
   /** Why snoozing is held now (offline, busy), or null. */
@@ -41,7 +43,7 @@ export function SnoozeDialog(props: SnoozeDialogProps) {
   )
 }
 
-function Snooze({ what, now, untilChange, maxDays, held = null, onSnooze, onClose }: SnoozeDialogProps) {
+function Snooze({ what, now, untilChange, untilChangeLabel, maxDays, held = null, onSnooze, onClose }: SnoozeDialogProps) {
   const t = useT('home')
   const locale = useLocale()
   const options = useMemo(() => snoozeOptions(now, { untilChange }), [now, untilChange])
@@ -69,7 +71,7 @@ function Snooze({ what, now, untilChange, maxDays, held = null, onSnooze, onClos
     if (choice === 'TOMORROW' && until) return t('today.snooze.tomorrow', { time: formatTime(until, { locale }) })
     if (choice === 'MONDAY' && until) return t('today.snooze.monday', { time: formatTime(until, { locale }) })
     if (choice === 'PICK') return t('today.snooze.pick')
-    return t('today.snooze.untilChange')
+    return untilChangeLabel ?? t('today.snooze.untilChange')
   }
   const onListKey = (event: React.KeyboardEvent<HTMLUListElement>) => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return

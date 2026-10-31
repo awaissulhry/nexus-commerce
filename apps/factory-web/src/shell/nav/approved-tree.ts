@@ -139,7 +139,10 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'planning.mrp', title: 'What to buy & make', titleIt: 'Cosa comprare e produrre', wave: 'W1', href: '/planning/mrp' },
           // W2a: B-W2a-45 Planning board (SCR-122) and Lines & subcontractors (SCR-126). Capacity & load and Exceptions join between and after with their steps.
           { id: 'planning.board', title: 'Planning board', titleIt: 'Tabellone di pianificazione', wave: 'W2a', href: '/planning/board' },
+          // B-W2a-70: Capacity & load (SCR-123) between the board and the allocation; Exceptions (SCR-125) after it.
+          { id: 'planning.capacity', title: 'Capacity & load', titleIt: 'Capacità e carico', wave: 'W2a', href: '/planning/capacity' },
           { id: 'planning.allocation', title: 'Lines & subcontractors', titleIt: 'Linee e terzisti', wave: 'W2a', href: '/planning/allocation' },
+          { id: 'planning.exceptions', title: 'Exceptions', titleIt: 'Eccezioni', wave: 'W2a', href: '/planning/exceptions' },
         ],
       },
       // W2a: B-W2a-59 Planning settings (SCR-124, SCR-127).
