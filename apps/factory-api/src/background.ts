@@ -60,6 +60,8 @@ import { renewalStagesCron } from './modules/compliance/renewals/stages'
 import { releaseOnWorkOrderDoneHandler, reservationCleanupCron } from './modules/inventory/reservations/system-release'
 // B-W2b-26: the leaver steps the system settles on its own (badge off after the last day, the case closed when done).
 import { leaverStepsCron } from './modules/people/leavers/automatic'
+// B-W2b-33: the automatic clock-out at the shift end (MES-227).
+import { autoClockOutCron } from './modules/people/clock/auto'
 // B-W2b-24: the W2b data catch-ups (two-factor since, lifted blocks, first-load steps from their W2a audit rows).
 import { fillTwoFactorSinceAll, twoFactorSinceCron } from './platform/auth/roles/two-factor-since'
 import { liftCatchUpCron, moveLiftsAll } from './platform/email-out/delivery/lift-catch-up'
@@ -201,6 +203,8 @@ if (mode === 'worker') {
   // B-W2b-26: the open leaver cases, hourly: after the last working day the floor sign-in is switched off, due automatic
   // steps tick, a case with nothing open closes (the person LEFT).
   crons.push(leaverStepsCron({ database, log }))
+  // B-W2b-33: every five minutes, an open clock-in past its shift end + the company's tolerance is closed (AUTO).
+  crons.push(autoClockOutCron({ database, log }))
   // B-W2b-24: the W2b data catch-ups again each night (idle passes write nothing).
   crons.push(twoFactorSinceCron({ database, log }), liftCatchUpCron({ database, log }), firstLoadCatchUpCron({ database, log }))
   crons.push(costCatchUpCron({ database, log }))

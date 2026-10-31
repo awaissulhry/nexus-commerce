@@ -19,6 +19,10 @@ import { ScanIdsRefusedError } from '../numbering/scan-ids'
 import { OffStandardRefusedError } from '../../modules/production/offstandard/access'
 import { floorEndContract, floorStartContract } from '../../modules/production/offstandard/contract'
 import { floorEnd, floorStart } from '../../modules/production/offstandard/floor'
+// B-W2b-33: the signed-in worker's clock kept offline.
+import { ClockRefusedError } from '../../modules/people/clock/access'
+import { clockFromQueue } from '../../modules/people/clock/clock'
+import { queuedClockBody } from '../../modules/people/clock/contract'
 
 /**
  * How each queued kind is applied (B-W0-30): through its own module command, in-process, as the tablet's request (the
@@ -36,6 +40,8 @@ import { floorEnd, floorStart } from '../../modules/production/offstandard/floor
  *                                         it arrives, and the station's queued scans after it are refused, not final)
  *   production.offStandard.start / .end   modules/production/offstandard floorStart / floorEnd (B-W2b-29: a tile tapped
  *                                         or the running block ended, with the tablet's time when believable)
+ *   people.clock.record                   modules/people/clock clockFromQueue (B-W2b-33: the signed-in worker's clock-in,
+ *                                         clock-out or break with the tablet's time, flagged when its clock looked wrong)
  *
  * The event's payload is the module's body without the envelope's fields (client event id, device time, taker).
  */
@@ -68,6 +74,7 @@ export function refusalOfError(error: unknown): SyncRefusal | null {
   if (error instanceof BundleRefusedError || error instanceof CutRefusedError) return moduleRefusal(error.refusal as ModuleRefusal)
   if (error instanceof PlantRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
   if (error instanceof OffStandardRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix })
+  if (error instanceof ClockRefusedError) return moduleRefusal({ code: error.refusal.code, message: error.refusal.message, fix: error.refusal.fix, final: error.refusal.final })
   if (error instanceof ScanIdsRefusedError) {
     const first = error.refusals[0]
     return first ? moduleRefusal({ code: first.code, message: first.message, fix: first.fix }) : moduleRefusal({ code: 'NUMBER_REFUSED', message: error.message })
@@ -144,6 +151,14 @@ async function applyOffStandard(caller: CommandCaller, event: QueuedEvent, key: 
   return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'OffStandardEntry', id: result.block.id } }
 }
 
+/** B-W2b-33: a clock action kept offline, through the clock's own command (its key: `<device>.<client event id>`). */
+async function applyClock(caller: CommandCaller, event: QueuedEvent, key: string, sentAt: string | undefined): Promise<Applied> {
+  const body = parsed(queuedClockBody, { ...event.payload, clientEventId: event.clientEventId, ...(event.occurredAt ? { occurredAt: event.occurredAt } : {}) })
+  if (!body.ok) return refusedBy(body.refusal)
+  const result = await clockFromQueue(caller, { ...body.value, ...(event.workerId ? { workerId: event.workerId } : {}) }, key, sentAt)
+  return { status: result.replayed ? 'duplicate' : 'accepted', result: { type: 'ClockEvent', id: result.id } }
+}
+
 /**
  * Applies one event through its module. `key`: the module command's Idempotency-Key (`<device>.<client event id>`); a
  * module refusal or a domain error is a refusal, anything else is thrown (the send fails; resending it is safe).
@@ -165,6 +180,8 @@ export async function applyQueued(caller: CommandCaller, event: QueuedEvent, con
       case 'production.offStandard.start':
       case 'production.offStandard.end':
         return await applyOffStandard(caller, event, context.key)
+      case 'people.clock.record':
+        return await applyClock(caller, event, context.key, context.sentAt)
     }
   } catch (error) {
     const refusal = refusalOfError(error)

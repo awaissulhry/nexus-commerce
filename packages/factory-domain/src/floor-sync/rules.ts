@@ -200,6 +200,9 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
       return { code: text(p.codeId, 40) }
     case 'production.offStandard.end':
       return {}
+    // B-W2b-33: which clock action (IN, OUT, BREAK_OUT, BREAK_IN); never who or when (the ledger keeps the tablet time).
+    case 'people.clock.record':
+      return { code: text(p.action, 20) }
   }
 }
 

@@ -3,6 +3,8 @@ import { defineEvent } from '../events/define'
 import { EMPLOYEE_KINDS } from './employees/rules'
 import { LEAVER_STEP_KINDS, LEAVER_STEP_STATUSES } from './leavers/rules'
 import { GATE_PURPOSES } from './privacy/purposes'
+// B-W2b-33: clock in and out.
+import { CLOCK_ACTIONS } from './clock/rules'
 
 /**
  * The people module's events (B-W2b-26 employees and teams; design people.employees "Live": employee.created / updated
@@ -33,6 +35,18 @@ import { GATE_PURPOSES } from './privacy/purposes'
  *   people_settings.privacy_changed  a company's minimum group size or the roles that see one person's figures changed
  *
  * Both reach the office screens of people.privacy.view holders; the floor receives none (it reads no legal basis).
+ *
+ * B-W2b-33 (clock in and out), emitted by apps/factory-api modules/people/clock in the command that records the clock
+ * event (from the floor, a badge or a name and PIN, online or kept offline, or the automatic clock-out). Ids, kinds and
+ * sources only: no name, no time of a person (the record has it), no reason.
+ *
+ *   attendance.clock_event   a person clocked in, out, or started or ended a break (design people.attendance "Live":
+ *                            the day row and Who is in now; the worker's own tablet reads its clock again)
+ *   clock.out                a person clocked out (on the floor, kept offline, or by the automatic clock-out): the steps
+ *                            that stop work at clock-out listen to it (B-W2b-40 pauses the open operations, MES-117)
+ *
+ * attendance.clock_event reaches the office screens of people.attendance.view holders and the tablets of the site
+ * (floor.work; no person in the message: each tablet reads its own state again); clock.out reaches no screen.
  */
 
 export const LEGAL_GATE_CHANGES = ['SWITCHED_ON', 'SWITCHED_OFF', 'LEADS_WIDENED', 'LEADS_NARROWED'] as const
@@ -123,5 +137,32 @@ export const events = [
       change: z.enum(PRIVACY_SETTINGS_CHANGES),
     }),
     live: { permission: 'people.privacy.view', fields: ['companyId', 'minimumGroupSize', 'change'] },
+  }),
+  // B-W2b-33: clock in and out.
+  defineEvent({
+    type: 'attendance.clock_event',
+    context: 'people',
+    description: 'A person clocked in or out, or started or ended a break: at a tablet with a badge or by name and PIN, kept offline with the tablet time, or by the automatic clock-out at the shift end.',
+    payload: z.strictObject({
+      clockEventId: z.uuid(),
+      siteId: z.uuid(),
+      employeeId: z.uuid(),
+      kind: z.enum(CLOCK_ACTIONS),
+      source: z.enum(['BADGE', 'NAME_PIN', 'OFFLINE', 'AUTO']),
+      flagged: z.boolean(),
+    }),
+    live: { permission: 'people.attendance.view', floor: 'floor.work', fields: ['clockEventId', 'siteId', 'kind'] },
+  }),
+  defineEvent({
+    type: 'clock.out',
+    context: 'people',
+    description: 'A person clocked out (on the floor, kept offline, or by the automatic clock-out): what stops at clock-out (open operations) listens to it.',
+    payload: z.strictObject({
+      clockEventId: z.uuid(),
+      siteId: z.uuid(),
+      employeeId: z.uuid(),
+      workerId: z.uuid().nullable(),
+      source: z.enum(['BADGE', 'NAME_PIN', 'OFFLINE', 'AUTO']),
+    }),
   }),
 ] as const

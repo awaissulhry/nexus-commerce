@@ -1797,6 +1797,7 @@
     "people_figures_view": "Vedere i dati di lavoro di una persona (solo per un ruolo indicato nelle impostazioni privacy dell'azienda, a presupposto attivo)",
     "production_offstandard_view": "Vedere i blocchi di tempo fuori standard e indiretto e i loro conteggi (nessuna persona negli elenchi)",
     "production_offstandard_codes": "Aggiungere e cambiare i codici di tempo fuori standard e indiretto e le loro regole di paga",
-    "production_offstandard_approve": "Approvare, respingere, riaprire e correggere i blocchi di tempo fuori standard (mai i propri)"
+    "production_offstandard_approve": "Approvare, respingere, riaprire e correggere i blocchi di tempo fuori standard (mai i propri)",
+    "people_attendance_view": "Vedere le presenze delle tue sedi: entrate, uscite e pause, le giornate e chi è presente ora (dove la finalità presenze è attiva)"
   }
 }

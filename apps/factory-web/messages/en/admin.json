@@ -1797,6 +1797,7 @@
     "people_figures_view": "See one person's work figures (only for a role named in the company's privacy settings, while the gate is on)",
     "production_offstandard_view": "See off-standard and indirect time blocks and their counts (no person in the lists)",
     "production_offstandard_codes": "Add and change off-standard and indirect time codes and their pay rules",
-    "production_offstandard_approve": "Approve, reject, reopen and correct off-standard time blocks (never your own)"
+    "production_offstandard_approve": "Approve, reject, reopen and correct off-standard time blocks (never your own)",
+    "people_attendance_view": "See attendance at your sites: clock-ins, clock-outs and breaks, the days and who is in now (where the attendance purpose is on)"
   }
 }
