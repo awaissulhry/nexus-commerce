@@ -1,5 +1,6 @@
 import type { ReadyOrder, ShipmentRow, TransportBy } from '../api'
 import type { LiveState } from '../hooks'
+import type { PrintOutcome } from '../daily-model'
 import type { CutOffCard, Phrase, RowView, ShippingAbilities, TileKey } from '../model'
 
 /** SCR-066 — the shipments list's view model (ShipmentsListView draws it and fetches nothing). */
@@ -27,6 +28,8 @@ export interface ShipmentsListModel {
   notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase; detail?: string | null } | null
   /** New shipment (sh-new), when open. */
   create: NewShipmentModel | null
+  /** B-W2a-71: Print N DDTs (the selection row), when open. */
+  printDdts?: PrintDdtsModel | null
   /** Design cases: the starting selection, the focused row, the keys panel. */
   selected?: string[]
   focusRow?: number
@@ -50,6 +53,15 @@ export interface NewShipmentModel {
   refused: { words: Phrase; detail?: string | null } | null
 }
 
+/** B-W2a-71 (design sh-grid selection row "Print 4 DDTs"): the selected shipments' live DDTs on their site's document printer. */
+export interface PrintDdtsModel {
+  /** The selected rows (those without a live DDT are skipped, said so). */
+  ids: string[]
+  busy: boolean
+  /** One per selected shipment once sent: queued, refused (in words) or skipped. */
+  outcomes: PrintOutcome[] | null
+}
+
 export interface ShipmentsListActions {
   onRows?: (rows: RowView) => void
   onSearch?: (q: string) => void
@@ -68,4 +80,8 @@ export interface ShipmentsListActions {
   onNewAll?: () => void
   onNewDelivery?: (next: { transportBy?: TransportBy; carrierCode?: string; serviceCode?: string }) => void
   onNewCreate?: () => void
+  // B-W2a-71
+  onPrintDdts?: (ids: string[]) => void
+  onPrintDdtsGo?: () => void
+  onPrintDdtsClose?: () => void
 }

@@ -6,7 +6,7 @@ import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../..
 import { officeNavFor } from '../../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../../shell/office/view/OfficeShellView'
 import { samplePdf } from '../../../_shared/document-send/sample-pdf'
-import type { Ddt, DdtPreview, DdtRow, Documents, Labels, Parcel, ReadyOrder, Shipment, ShipmentLine, ShipmentRow, ShipmentStatus, Tracking } from '../api'
+import type { Backorder, Ddt, DdtPreview, DdtRow, Documents, Evidence, EvidencePaper, EvidenceStatus, Freight, Labels, PackingListVersion, Parcel, ReadyOrder, Shipment, ShipmentLine, ShipmentRow, ShipmentStatus, Tracking, Voided } from '../api'
 import { abilitiesOf, type ShippingAbilities } from '../model'
 
 /**
@@ -28,12 +28,13 @@ export const SITE = uid('5100', 1)
 
 const COMMON = ['home.view', 'threads.read', 'threads.post', 'files.read', 'files.upload']
 const SHIPPING_ALL = ['shipping.view', 'shipping.manage', 'shipping.pack', 'shipping.settings.view', 'shipping.settings.manage', 'shipping.ddt.issue', 'shipping.ddt.cancel', 'shipping.labels.buy', 'shipping.labels.void', 'print.view', 'print.labels', 'print.documents']
+/** B-W2a-48 templates (SHIPPING_DAILY_ADDS): finance the freight and the evidence, the warehouse the evidence; the owner both. */
 export const ROLES = {
-  owner: [...OWNER_PERMISSIONS, ...COMMON, ...SHIPPING_ALL, 'orders.view', 'orders.manage', 'workorders.view', 'money.price', 'money.cost', 'money.margin'],
-  warehouse: [...COMMON, ...SHIPPING_ALL, 'orders.view', 'workorders.view', 'inventory.stock.view'],
+  owner: [...OWNER_PERMISSIONS, ...COMMON, ...SHIPPING_ALL, 'shipping.freight.manage', 'shipping.evidence.manage', 'orders.view', 'orders.manage', 'workorders.view', 'invoices.view', 'money.price', 'money.cost', 'money.margin'],
+  warehouse: [...COMMON, ...SHIPPING_ALL, 'shipping.evidence.manage', 'orders.view', 'workorders.view', 'inventory.stock.view'],
   /** Sales follows its orders' shipments read-only (shipping.view). */
   sales: [...COMMON, 'shipping.view', 'orders.view', 'orders.manage', 'parties.view', 'money.price', 'money.margin'],
-  finance: [...COMMON, 'shipping.view', 'orders.view', 'invoices.view', 'payments.view', 'money.price', 'money.cost'],
+  finance: [...COMMON, 'shipping.view', 'shipping.freight.manage', 'shipping.evidence.manage', 'orders.view', 'invoices.view', 'payments.view', 'money.price', 'money.cost'],
 } as const
 export type Role = keyof typeof ROLES
 export const canOf = (role: Role): ShippingAbilities => abilitiesOf(ROLES[role])
@@ -90,9 +91,22 @@ export const row = (n: number, status: ShipmentStatus, extra: Partial<ShipmentRo
     shippedAt: left ? at(28, 16, 5) : null,
     cancelledAt: status === 'CANCELLED' ? at(27, 11) : null,
     createdAt: at(27, 9, 30),
+    // B-W2a-48: the rule's freight is set when the goods leave (2 parcels × 7,00 €); the evidence only for an EU sale.
+    freightCharge: left ? 1400 : null,
+    currency: 'EUR',
+    transportEvidence: 'NOT_NEEDED',
     ...extra,
   }
 }
+
+/** A role's rows: without the price grain the API sends no freight amount at all (the field is absent). */
+export const rowsFor = (rows: readonly ShipmentRow[], role: Role): ShipmentRow[] =>
+  canOf(role).price
+    ? [...rows]
+    : rows.map((entry) => {
+        const { freightCharge: _hidden, ...rest } = entry
+        return rest as ShipmentRow
+      })
 
 /** The ship-today queue: two to pack, one packed waiting for its DDT, one waiting for labels, one ready to hand over, one by own van. */
 export const OPEN_ROWS: ShipmentRow[] = [
@@ -103,7 +117,13 @@ export const OPEN_ROWS: ShipmentRow[] = [
   row(6, 'PACKED', { labelled: 2, trackingNumbers: ['DEMO600451', 'DEMO600452'] }),
   row(7, 'PACKED', { transportBy: 'SENDER', carrierCode: null, carrierName: null, serviceCode: null, ddt: { id: uid('5300', 7), number: '157/2026' } }),
 ]
-export const LEFT_ROWS: ShipmentRow[] = [row(8, 'SHIPPED'), row(9, 'SHIPPED'), row(10, 'DELIVERED'), row(11, 'RETURNED'), row(12, 'CANCELLED', { grossWeightKg: null, ddt: null, parcels: 0 })]
+export const LEFT_ROWS: ShipmentRow[] = [
+  row(8, 'SHIPPED', { shipTo: { city: 'München', country: 'DE' }, transportEvidence: 'AWAITED' }),
+  row(9, 'SHIPPED', { freightCharge: 900 }),
+  row(10, 'DELIVERED', { shipTo: { city: 'Lyon', country: 'FR' }, transportEvidence: 'PARTIAL', freightCharge: 0 }),
+  row(11, 'RETURNED'),
+  row(12, 'CANCELLED', { grossWeightKg: null, ddt: null, parcels: 0, freightCharge: null }),
+]
 export const ALL_ROWS = [...OPEN_ROWS, ...LEFT_ROWS]
 
 // ---- a shipment -------------------------------------------------------------------------------------------------------------------
@@ -169,8 +189,23 @@ export function shipment(status: ShipmentStatus, extra: Partial<Shipment> = {}):
     parcels: [parcel(1, P1, packed ? 6 : 2), parcel(2, P2, packed ? 2 : 6, { grossWeightKg: packed ? '3.1000' : null })],
     garments: 8,
     packingProblems: packed ? [] : ['every parcel weighed (parcel 2 not weighed)'],
+    freight: freight(status === 'SHIPPED' || status === 'DELIVERED' || status === 'RETURNED' ? 1400 : null),
+    transportEvidence: { status: 'NOT_NEEDED', completedAt: null },
     ...extra,
   }
+}
+
+/** B-W2a-48: the freight as the API answers it (the rule: 7,00 € per parcel, 2 parcels). */
+export function freight(charge: number | null, over: Partial<Freight> = {}): Freight {
+  return { charge, currency: 'EUR', byHand: false, byRule: { charge: 1400, basis: 'PER_PARCEL', words: '' }, ...over }
+}
+
+/** A role's shipment: without the price grain the freight's amounts are absent (never 0). */
+export function pricedFor(value: Shipment, role: Role): Shipment {
+  if (canOf(role).price) return value
+  const { charge: _charge, ...rest } = value.freight
+  const { charge: _rule, ...rule } = rest.byRule
+  return { ...value, freight: { ...rest, byRule: rule } as Freight }
 }
 
 /** A DRAFT still being packed: two garments of size 54 are in no carton yet. */
@@ -373,4 +408,88 @@ const conversation = panelsScreen.cases.find((item) => item.id === 'conversation
 
 export function panelsModel(): RecordPanelsViewModel {
   return { ...conversation, record: { type: 'Shipment', id: SHIPMENT_ID, companyId: COMPANY, siteId: SITE }, title: 'SH-00160 · Moto Demo S.r.l.', party: null }
+}
+
+// ---- B-W2a-71 (every day): the backorder, the packing list's versions, the evidence, a void's outcome ----------------------
+
+const size = (name: string, ordered: number, shipped: number, open: number, thisShipment: number, netReleased: number) => {
+  const backorder = Math.max(0, ordered - shipped - open - thisShipment)
+  const readyNow = Math.min(backorder, Math.max(0, netReleased - shipped - open - thisShipment))
+  return { size: name, ordered, closedShort: false, closed: 0, shipped, open, thisShipment, netReleased, onShipments: shipped + open + thisShipment, backorder, readyNow, inProduction: backorder - readyNow }
+}
+
+const totalsOf = (sizes: ReturnType<typeof size>[]) => {
+  const sum = (pick: (entry: ReturnType<typeof size>) => number) => sizes.reduce((total, entry) => total + pick(entry), 0)
+  return { ordered: sum((e) => e.ordered), closed: sum((e) => e.closed), shipped: sum((e) => e.shipped), open: sum((e) => e.open), thisShipment: sum((e) => e.thisShipment), backorder: sum((e) => e.backorder), readyNow: sum((e) => e.readyNow), inProduction: sum((e) => e.inProduction) }
+}
+
+/** SO-2026-0088 on SH-00160: partial (2 still to ship: 1 released and ready, 1 still to make), complete, or a line closed short. */
+export function backorder(kind: 'partial' | 'complete' | 'closed' = 'partial'): Backorder {
+  const jackets = kind === 'partial' ? [size('50', 4, 1, 0, 2, 4), size('52', 6, 2, 0, 4, 6), size('54', 3, 0, 0, 2, 2)] : [size('50', 3, 1, 0, 2, 3), size('52', 6, 2, 0, 4, 6), size('54', 2, 0, 0, 2, 2)]
+  const lines: Backorder['lines'] = [
+    { lineId: uid('5800', 1), seq: 10, styleCode: 'DEMO-JKT-01', styleName: 'Giacca moto Demo', colourwayCode: 'BLK', colourwayName: 'Nero', closedShort: false, closeShortReason: null, sizes: jackets, totals: totalsOf(jackets) },
+  ]
+  if (kind === 'closed') {
+    const pants = [{ ...size('48', 2, 0, 0, 0, 0), closedShort: true, closed: 2, backorder: 0, readyNow: 0, inProduction: 0 }]
+    lines.push({ lineId: uid('5800', 2), seq: 20, styleCode: 'DEMO-PNT-02', styleName: 'Pantalone Demo', colourwayCode: 'BLK', colourwayName: 'Nero', closedShort: true, closeShortReason: 'Il cliente non li vuole più', sizes: pants, totals: totalsOf(pants) })
+  }
+  const all = lines.flatMap((line) => line.sizes)
+  return {
+    order: { salesOrderId: uid('5150', 20), number: 'SO-2026-0088', status: 'PARTLY_SHIPPED', customerRef: 'PO-MD-7731', promiseDate: '2026-11-06' },
+    shipmentId: SHIPMENT_ID,
+    lines,
+    totals: totalsOf(all),
+    shipments: [
+      { id: uid('5200', 19), number: 'SH-00152', status: 'DELIVERED', shippedAt: at(20, 15) },
+      { id: SHIPMENT_ID, number: 'SH-00160', status: 'PACKED', shippedAt: null },
+    ],
+  }
+}
+
+export const PACKING_LISTS: PackingListVersion[] = [
+  { fileId: uid('5380', 2), version: 2, number: 'SH-00160/2', language: 'it', current: true, parcels: 2, garments: 8, createdAt: at(29, 10, 25) },
+  { fileId: uid('5380', 1), version: 1, number: 'SH-00160/1', language: 'it', current: false, parcels: 2, garments: 7, createdAt: at(29, 9, 50) },
+]
+
+const paper = (n: number, kind: EvidencePaper['kind'], name: string, day: number): EvidencePaper => ({ fileId: uid('5390', n), kind, originalName: name, contentType: 'application/pdf', sizeBytes: 148_000 + n * 9_000, status: 'AVAILABLE', createdAt: at(day, 9, 30, 11) })
+
+/** The intra-EU transport evidence of SH-00160 when it goes to Germany (a zero-rated EU sale). */
+export function evidence(status: EvidenceStatus, over: Partial<Evidence> = {}): Evidence {
+  const papers = status === 'AWAITED' || status === 'NOT_NEEDED' ? [] : status === 'PARTIAL' ? [paper(1, 'POD', 'POD-DEMO20000451.pdf', 3)] : [paper(1, 'POD', 'POD-DEMO20000451.pdf', 3), paper(2, 'CMR', 'CMR-firmato-SH-00160.pdf', 4)]
+  return {
+    shipmentId: SHIPMENT_ID,
+    number: 'SH-00160',
+    shipmentStatus: 'DELIVERED',
+    version: 9,
+    status,
+    completedAt: status === 'COMPLETE' ? at(5, 10, 0, 11) : null,
+    completedById: status === 'COMPLETE' ? uid('6630', 1) : null,
+    note: status === 'COMPLETE' ? 'POD del corriere e CMR firmato dal destinatario: coerenti.' : null,
+    neededBySale: status !== 'NOT_NEEDED',
+    papers,
+    ...over,
+  }
+}
+
+/** SH-00160 gone to Germany (Germany: a zero-rated intra-EU sale). */
+export const toGermany = (status: ShipmentStatus, evidenceStatus: EvidenceStatus): Shipment => {
+  const value = labelled(status)
+  return { ...value, shipTo: { name: 'Lager Demo GmbH', line1: 'Musterstraße 5', postalCode: '80331', city: 'München', country: 'DE' }, transportEvidence: { status: evidenceStatus, completedAt: evidenceStatus === 'COMPLETE' ? at(5, 10, 0, 11) : null } }
+}
+
+export function voidedOf(value: Shipment, keptSeq: number | null = null): Voided {
+  const after = { ...value, parcels: value.parcels.map((entry) => (entry.seq === keptSeq ? entry : { ...entry, trackingNumber: null, labelledAt: null })) }
+  return {
+    ...labels(after),
+    outcomes: value.parcels.map((entry) => (entry.seq === keptSeq ? { parcelId: entry.id, seq: entry.seq, ok: false, carrier: null, problem: 'The carrier refuses: the parcel is already in its depot.' } : { parcelId: entry.id, seq: entry.seq, ok: true, carrier: entry.seq === 1 ? ('CANCELLED' as const) : ('QUEUED' as const), problem: null })),
+    problem: keptSeq ? '1 of 2 labels were voided; see each parcel.' : null,
+  }
+}
+
+/** Labels bought and the carrier has none of the parcels yet (each one's latest event: label created); `collected` parcels are on their way. */
+export function trackingLabelled(value: Shipment, collected: readonly number[] = []): Tracking {
+  return {
+    ...tracking(value),
+    parcels: value.parcels.map((entry) => ({ parcelId: entry.id, seq: entry.seq, trackingNumber: entry.trackingNumber, labelledAt: entry.labelledAt, status: collected.includes(entry.seq) ? 'IN_TRANSIT' : 'LABEL_CREATED', lastEventAt: at(29, 11, 5) })),
+  }
 }
