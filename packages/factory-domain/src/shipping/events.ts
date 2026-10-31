@@ -160,4 +160,19 @@ export const events = [
     payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), from: z.enum(TRANSPORT_EVIDENCE_STATUSES), to: z.enum(TRANSPORT_EVIDENCE_STATUSES), papers: z.number().int().min(0) }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'from', 'to', 'papers'] },
   }),
+  // B-W2b-19 (W2a follow-ups): the carrier's freight cost (a cost: no figure in the payload) and a carrier return.
+  defineEvent({
+    type: 'shipment.freight_cost_changed',
+    context: 'shipping',
+    description: "What the carrier charged for a shipment (its invoice) was recorded, changed or cleared by the office.",
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), recorded: z.boolean() }),
+    live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'recorded'] },
+  }),
+  defineEvent({
+    type: 'shipment.carrier_return_received',
+    context: 'shipping',
+    description: 'The garments of a shipment the carrier brought back were put back into finished goods.',
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), garments: z.number().int().min(1), locationId: z.uuid() }),
+    live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'garments'] },
+  }),
 ] as const

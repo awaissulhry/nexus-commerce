@@ -131,11 +131,70 @@ async function printsOf(db: CommandTx, parcelIds: readonly string[]) {
   return latest
 }
 
+/** A voided label as the office reads it (B-W2b-19). */
+export interface VoidedLabelView {
+  readonly parcelId: string
+  readonly seq: number
+  readonly trackingNumber: string | null
+  readonly labelledAt: string | null
+  readonly voidedAt: string
+  readonly voidedById: string | null
+  /** What the carrier said: CANCELLED, QUEUED (it cancels later), NOT_SENT (never sent to it); null: not recorded. */
+  readonly carrier: 'CANCELLED' | 'QUEUED' | 'NOT_SENT' | null
+  readonly reason: string | null
+  /** The voided label's files (they stay: the record's history). */
+  readonly files: LabelFileView[]
+}
+
+/**
+ * W2b (B-W2b-19; the B-W2a-71 gap "the Labels list shows no Voided row"; design sh-labels rows "status Bought / Printed /
+ * Voided"): the shipment's voided labels, newest first, from the void's own audit rows (`shipping.voidLabel` of the
+ * parcel: the tracking number and label time it had, the carrier's answer, the reason, who and when) and the parcel's
+ * label files made from that label's time until the void. Office reads only (the floor reads no audit).
+ */
+export async function voidedLabelsOf(db: CommandTx, parcels: readonly { readonly id: string; readonly seq: number }[]): Promise<VoidedLabelView[]> {
+  if (parcels.length === 0) return []
+  const rows = await db.auditLog.findMany({
+    where: { recordType: 'Parcel', recordId: { in: parcels.map((parcel) => parcel.id) }, action: 'shipping.voidLabel' },
+    select: { recordId: true, at: true, actorId: true, before: true, after: true, reason: true },
+    orderBy: [{ at: 'desc' }, { id: 'desc' }],
+  })
+  if (rows.length === 0) return []
+  const files = await db.storedFile.findMany({
+    where: { recordType: 'Parcel', recordId: { in: [...new Set(rows.map((row) => row.recordId))] }, status: 'AVAILABLE' },
+    select: { id: true, recordId: true, contentType: true, originalName: true, createdAt: true },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  })
+  const seqOf = new Map(parcels.map((parcel) => [parcel.id, parcel.seq]))
+  const outcome = (value: unknown): VoidedLabelView['carrier'] => (value === 'CANCELLED' || value === 'QUEUED' || value === 'NOT_SENT' ? value : null)
+  return rows.map((row) => {
+    const before = (row.before ?? {}) as { trackingNumber?: unknown; labelledAt?: unknown }
+    const after = (row.after ?? {}) as { carrier?: unknown }
+    const labelledAt = typeof before.labelledAt === 'string' ? new Date(before.labelledAt) : null
+    return {
+      parcelId: row.recordId,
+      seq: seqOf.get(row.recordId) ?? 0,
+      trackingNumber: typeof before.trackingNumber === 'string' ? before.trackingNumber : null,
+      labelledAt: labelledAt ? toUtcIso(labelledAt) : null,
+      voidedAt: toUtcIso(row.at),
+      voidedById: row.actorId,
+      carrier: outcome(after.carrier),
+      reason: row.reason,
+      files: labelledAt
+        ? files
+            .filter((file) => file.recordId === row.recordId && file.createdAt.getTime() >= labelledAt.getTime() && file.createdAt.getTime() <= row.at.getTime())
+            .map((file) => ({ fileId: file.id, format: file.contentType === 'application/pdf' ? ('PDF' as const) : ('ZPL' as const), name: file.originalName }))
+        : [],
+    }
+  })
+}
+
 /**
  * What the packers and the office see of a shipment's labels (SCR-067, SCR-098): each parcel, its label (tracking
- * number, files), its latest print job, how many still need a label, and the site's cut-off today.
+ * number, files), its latest print job, how many still need a label, and the site's cut-off today; for the office, the
+ * voided labels (B-W2b-19; `voided` null for a floor device).
  */
-export async function labelsView(db: CommandTx, shipment: ShipmentHeader, now: Date) {
+export async function labelsView(db: CommandTx, shipment: ShipmentHeader, now: Date, withVoided = true) {
   const rows = await readLabelParcels(db, shipment.id)
   const files = await labelFilesOf(db, rows)
   const prints = await printsOf(db, rows.map((row) => row.id))
@@ -157,6 +216,7 @@ export async function labelsView(db: CommandTx, shipment: ShipmentHeader, now: D
       files: files.get(parcel.id) ?? [],
       print: prints.get(parcel.id) ?? null,
     })),
+    voided: withVoided ? await voidedLabelsOf(db, rows) : null,
   }
 }
 

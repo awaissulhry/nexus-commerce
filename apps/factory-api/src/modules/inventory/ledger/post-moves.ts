@@ -77,6 +77,8 @@ export interface MoveDraft {
    */
   readonly baseQuantity?: string
   readonly receiptLineId?: string | null
+  /** W2b (B-W2b-19): a SHIPMENT move names the shipment line its garments leave with (and only it: the trigger). */
+  readonly shipmentLineId?: string | null
   readonly workOrderId?: string | null
   readonly reference?: string | null
   /** Why: required for ADJUSTMENT, COUNT, SCRAP and a reversal. */
@@ -316,6 +318,7 @@ export async function postMoves(tools: CommandTools, drafts: readonly MoveDraft[
       uom: row.uom,
       baseQuantity: row.baseQuantity,
       receiptLineId: row.receiptLineId,
+      ...(row.shipmentLineId ? { shipmentLineId: row.shipmentLineId } : {}),
       workOrderId: row.workOrderId,
       reference: row.reference,
       note: row.note,
@@ -525,6 +528,7 @@ function rowOf(move: KeyedDraft, index: number, facts: Facts, context: StockCont
     uom,
     baseQuantity: quantityText(move.baseQuantity ?? move.quantity),
     receiptLineId: move.receiptLineId ?? null,
+    ...(move.shipmentLineId ? { shipmentLineId: move.shipmentLineId } : {}),
     workOrderId: move.workOrderId ?? null,
     reference: move.reference?.trim() || null,
     note: move.note?.trim() || null,
