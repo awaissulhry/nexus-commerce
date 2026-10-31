@@ -170,11 +170,13 @@ describe('the engine (scheduler and worker)', () => {
     const before = (await one(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE "tenantId" = $1`, [T])).n
     const run = await evaluate()
     expect(errors).toEqual([])
-    expect(run.builtIns).toBe(3)
+    // B-W2b-24: + INTEGRATION_FAILING (4 built-ins made; nothing fails in the seed, so it raises nothing).
+    expect(run.builtIns).toBe(4)
     expect((await admin(`SELECT "ruleKind" FROM "AlertRule" WHERE "tenantId" = $1 AND "builtIn" ORDER BY 1`, [T])).map((row) => row.ruleKind)).toEqual([
       'APPROVAL_OVERDUE',
       'CERTIFICATE_EXPIRING',
       'HOLD_TOO_LONG',
+      'INTEGRATION_FAILING',
       'INVOICE_DEADLINE',
       'MATERIAL_SHORT',
       'ORDER_LATE_RISK',
@@ -208,9 +210,9 @@ describe('the engine (scheduler and worker)', () => {
     expect(events).toEqual([
       { type: 'alert.raised', n: 3 },
       { type: 'alert.resolved', n: 1 },
-      { type: 'alert.rule_changed', n: 3 },
+      { type: 'alert.rule_changed', n: 4 },
     ])
-    expect((await one(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE "tenantId" = $1`, [T])).n).toBe(before + 7)
+    expect((await one(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE "tenantId" = $1`, [T])).n).toBe(before + 8)
   })
 
   it('a second pass (a replay, the next tick) raises nothing twice and writes nothing at all', async () => {
@@ -385,7 +387,8 @@ describe('Today (include=ALERTS)', () => {
 describe('the rules and the date timers (home.alerts Rules, admin.automation Reminders & timers)', () => {
   it('lists the rules as sentences with their numbers, recipients, last fired and fired in 7 days', async () => {
     const list = await ok('planner', 'GET', '/alerts/rules')
-    expect((list.rules as Json[]).map((rule) => rule.ruleKind).sort()).toEqual(['APPROVAL_OVERDUE', 'CERTIFICATE_EXPIRING', 'HOLD_TOO_LONG', 'INVOICE_DEADLINE', 'MATERIAL_SHORT', 'ORDER_LATE_RISK', 'PO_NOT_CONFIRMED'])
+    // B-W2b-24: + INTEGRATION_FAILING (a rule's sentence is no record: listed to whoever reads the rules).
+    expect((list.rules as Json[]).map((rule) => rule.ruleKind).sort()).toEqual(['APPROVAL_OVERDUE', 'CERTIFICATE_EXPIRING', 'HOLD_TOO_LONG', 'INTEGRATION_FAILING', 'INVOICE_DEADLINE', 'MATERIAL_SHORT', 'ORDER_LATE_RISK', 'PO_NOT_CONFIRMED'])
     const hold = (list.rules as Json[]).find((rule) => rule.ruleKind === 'HOLD_TOO_LONG')!
     expect(hold).toMatchObject({ threshold: { hours: 24 }, recipient: { name: 'Quality inspector' }, cooldownWords: 'at most once a day', enabled: true, builtIn: true, canChange: false, timers: null })
     expect(hold.place.label).toBeTruthy()
@@ -460,5 +463,51 @@ describe('the rules and the date timers (home.alerts Rules, admin.automation Rem
     const site = await call('owner', 'POST', '/alerts/rules', { ruleKind: 'HOLD_TOO_LONG', siteId: newId() })
     expect([site.status, issuePaths(site.body)]).toEqual([409, ['body/siteId']])
     expect((await call('planner', 'POST', '/alerts/rules', { ruleKind: 'HOLD_TOO_LONG' })).status).toBe(403)
+  })
+})
+
+describe('B-W2b-24: a connection failing (INTEGRATION_FAILING) and the restore drill reminder (RESTORE_DRILL_DUE)', () => {
+  it('raises a built-in alert for a connection with no call that worked for the hours, to who sees connections; clears it when one works', async () => {
+    const failing = newId()
+    const paused = newId()
+    const hours = (n: number) => new Date(at.getTime() - n * 3_600_000)
+    await admin(`INSERT INTO "IntegrationAccount" (id, "tenantId", provider, code, label, mode, status, "lastOkAt", "lastErrorAt", "lastError", "createdAt", "updatedAt") VALUES ($1, $2, 'SES', 'mail-w2b24', 'Mail (made up)', 'FAKE', 'ACTIVE', $3, $4, 'mail.send: Error: refused', $5, $5)`, [failing, T, hours(3), hours(0.1), hours(48)])
+    await admin(`INSERT INTO "IntegrationAccount" (id, "tenantId", provider, code, label, mode, status, "lastOkAt", "lastErrorAt", "createdAt", "updatedAt") VALUES ($1, $2, 'SENDCLOUD', 'paused-w2b24', 'Carrier (paused)', 'FAKE', 'PAUSED', NULL, $3, $4, $4)`, [paused, T, hours(0.1), hours(48)])
+    const run = await evaluate()
+    expect(errors).toEqual([])
+    expect(run.failed).toBe(0)
+    const alert = await alertOf('INTEGRATION_FAILING', failing)
+    expect(alert).toMatchObject({ state: 'OPEN', recordType: 'IntegrationAccount', recordLabel: 'Mail (made up)', severity: 'CRITICAL', companyId: null, facts: { hours: 3, threshold: 1, never: false, provider: 'SES' } })
+    expect(await admin(`SELECT id FROM "Alert" WHERE "recordId" = $1`, [paused])).toEqual([])
+    expect((await ruleOf('INTEGRATION_FAILING')).recipientRoleId).toBe((await one(`SELECT id FROM "Role" WHERE "tenantId" = $1 AND key = 'admin'`, [T])).id)
+    // The owner sees it (integrations.view over every company), in words; a planner does not (no integrations.view).
+    const owner = await ok('owner', 'GET', '/alerts?ruleKind=INTEGRATION_FAILING')
+    expect((owner.items as Json[]).map((item) => item.sentence)).toEqual(['Connection Mail (made up) has not worked for 3 hours: its last call failed.'])
+    expect(((await ok('planner', 'GET', '/alerts')).items as Json[]).some((item) => item.ruleKind === 'INTEGRATION_FAILING')).toBe(false)
+    // A call works again: the system clears it.
+    await admin(`UPDATE "IntegrationAccount" SET "lastOkAt" = $2 WHERE id = $1`, [failing, at])
+    await evaluate()
+    expect(await alertOf('INTEGRATION_FAILING', failing)).toMatchObject({ state: 'RESOLVED', resolution: 'CLEARED' })
+  })
+
+  it('tells the people who see Security & health when the restore drill timer fires (the last drill that passed named), once', async () => {
+    const drill = newId()
+    const drilledOn = plusCalendarDays(businessDate(at), -80)
+    await admin(`INSERT INTO "RestoreDrill" (id, "tenantId", "drilledOn", environment, "backupAt", checks, result, "performedById", "requestId") VALUES ($1, $2, $3::date, 'a local copy', $4, '[{"key":"orders","match":true}]'::jsonb, 'PASSED', $5, 'test')`, [drill, T, drilledOn, new Date(`${drilledOn}T06:00:00.000Z`), PEOPLE.owner])
+    const timer = newId()
+    await admin(`INSERT INTO "DueTimer" (id, "tenantId", "timerKey", "recordType", "recordId", "dueAt", "fireAt", payload, "createdAt", "updatedAt") VALUES ($1, $2, 'RESTORE_DRILL_DUE:-14d', 'Tenant', $2, $3, $4, $5::jsonb, $4, $4)`, [timer, T, new Date(at.getTime() + 10 * 86_400_000), new Date(at.getTime() - 60_000), JSON.stringify({ dueOn: plusCalendarDays(drilledOn, 90) })])
+    const fired = await fire()
+    expect(fired.failed).toBe(0)
+    expect((await one(`SELECT status FROM "DueTimer" WHERE id = $1`, [timer])).status).toBe('FIRED')
+    expect(await fanOutSince(['timer.fired'])).toBeGreaterThan(0)
+    const told = await admin(`SELECT "userId", category, "messageKey", "recordType", "recordId", "recordLabel" FROM "Notification" WHERE "tenantId" = $1 AND anchor = $2 ORDER BY "userId"`, [T, `drill-due:${timer}`])
+    // security.view: the owner and read_only (the registry's read permissions); never the planner, buyer or quality.
+    const toldIds = told.map((row) => row.userId)
+    expect(toldIds).toEqual(expect.arrayContaining([PEOPLE.owner, PEOPLE.reader]))
+    for (const person of ['planner', 'buyer', 'quality'] as const) expect(toldIds).not.toContain(PEOPLE[person])
+    expect(told[0]).toMatchObject({ category: 'SYSTEM', messageKey: 'notifications.security.drillDue', recordType: 'RestoreDrill', recordId: drill, recordLabel: drilledOn })
+    expect(await fanOutSince(['timer.fired'])).toBe(0)
+    const bell = await ok('owner', 'GET', '/notifications?tab=SYSTEM')
+    expect((bell.items as Json[]).find((item) => item.anchor === `drill-due:${timer}`)).toMatchObject({ sentence: `The next restore drill is due on ${plusCalendarDays(drilledOn, 90)}: the last one that passed was on ${drilledOn}` })
   })
 })

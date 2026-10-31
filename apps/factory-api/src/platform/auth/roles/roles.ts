@@ -12,11 +12,14 @@ import {
   templateAdds,
 } from '@nexus/factory-domain/auth/roles/roles'
 import { ROLE_TEMPLATES, templateOf } from '@nexus/factory-domain/auth/roles/templates'
-import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { ConflictError, DomainError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
+import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { TWO_FACTOR_REFUSALS, twoFactorRefusal, type TwoFactorRefusal } from '@nexus/factory-domain/ops/two-factor'
 import type { CommandTx } from '../../../core/command'
 import { requireContext, type OfficeContext } from '../../../core/context'
+import { weigh } from '../../admin/security/two-factor'
 import { requireStepUp } from '../office/account'
 import type { OfficeAuth } from '../sessions/office-auth'
 import { activeAdmins, heldRoles, liveAssignment } from './access'
@@ -47,13 +50,14 @@ const ROLE_SELECT = {
   system: true,
   basedOn: true,
   requireMfa: true,
+  requireMfaSince: true,
   permissions: true,
   grains: true,
   version: true,
   audience: true,
 } as const
 
-type RoleRow = { id: string; key: string; name: string; description: string | null; system: boolean; basedOn: string | null; requireMfa: boolean; permissions: string[]; grains: string[]; version: number; audience: 'OFFICE' | 'FLOOR' }
+type RoleRow = { id: string; key: string; name: string; description: string | null; system: boolean; basedOn: string | null; requireMfa: boolean; requireMfaSince: Date | null; permissions: string[]; grains: string[]; version: number; audience: 'OFFICE' | 'FLOOR' }
 
 const mutable = (adds: { readonly permissionsAdded: readonly string[]; readonly grainsAdded: readonly Grain[] }) => ({
   permissionsAdded: [...adds.permissionsAdded],
@@ -71,6 +75,7 @@ function roleViewOf(row: RoleRow, holders: number) {
     basedOn: row.basedOn,
     audience: row.audience === 'FLOOR' ? ('floor' as const) : ('office' as const),
     requireMfa: row.requireMfa,
+    requireMfaSince: row.requireMfaSince ? toUtcIso(row.requireMfaSince) : null,
     permissions: row.permissions,
     grains,
     version: row.version,
@@ -140,7 +145,7 @@ export async function createRole(auth: OfficeAuth, request: FastifyRequest, body
   try {
     const { result } = await auth.command(context, { name: 'roles.create', input: body }, async ({ tx, now, audit }) => {
       await tx.role.create({
-        data: { id, key, name: content.name, description: body.description ?? null, basedOn: source?.key ?? null, requireMfa: content.requireMfa, permissions: content.permissions, grains: content.grains, createdAt: now, createdById: context.actorId },
+        data: { id, key, name: content.name, description: body.description ?? null, basedOn: source?.key ?? null, requireMfa: content.requireMfa, requireMfaSince: content.requireMfa ? now : null, permissions: content.permissions, grains: content.grains, createdAt: now, createdById: context.actorId },
       })
       audit({ recordType: 'Role', recordId: id, after: { key, name: content.name, basedOn: source?.key ?? null, requireMfa: content.requireMfa, permissions: content.permissions, grains: content.grains } })
       return roleWithHolders(tx, id, now)
@@ -152,13 +157,31 @@ export async function createRole(auth: OfficeAuth, request: FastifyRequest, body
   }
 }
 
+/**
+ * B-W2b-24 (B-W2a-36 note): PATCH /auth/roles applies the two-factor rules of Security & health to a requireMfa change —
+ * a role that sees costs or margins after the edit keeps asking (its content), and the change never leaves the tenant
+ * with no administrator able to work (the lock-out rule, weighed on the committed state as the Security command does).
+ * Holding the role is refused before (nobody edits a role they hold). 409 with `body/requireMfa/<code>` (the codes of
+ * factory-domain ops/two-factor: the web says its own words).
+ */
+async function assertTwoFactorChange(tx: CommandTx, before: RoleRow, after: { readonly requireMfa: boolean; readonly grains: readonly Grain[] }, actorId: string, now: Date): Promise<void> {
+  const codes: TwoFactorRefusal[] = []
+  const own = twoFactorRefusal({ id: before.id, key: before.key, system: before.system, audience: before.audience === 'FLOOR' ? 'floor' : 'office', requireMfa: before.requireMfa, grains: [...after.grains] }, after.requireMfa)
+  if (own) codes.push(own)
+  const weighed = await weigh(tx, { changes: [{ roleId: before.id, version: before.version, requireMfa: after.requireMfa }] }, actorId, now)
+  if (weighed.refusals.some((refusal) => refusal.code === 'lockOut')) codes.push('lockOut')
+  if (codes.length > 0) {
+    throw new DomainError('conflict', TWO_FACTOR_REFUSALS[codes[0]!], codes.map((code) => ({ path: `body/requireMfa/${code}`, message: TWO_FACTOR_REFUSALS[code] })))
+  }
+}
+
 export async function editRole(auth: OfficeAuth, request: FastifyRequest, roleId: string, body: EditRoleBody) {
   const context = officeContextOf(request)
   requireStepUp(auth, request)
   const { result } = await auth.command(
     context,
     { name: 'roles.edit', input: body, record: { type: 'Role', id: roleId, expectedVersion: body.version } },
-    async ({ tx, now, audit }) => {
+    async ({ tx, now, audit, emit }) => {
       const before = await tx.role.findUniqueOrThrow({ where: { id: roleId }, select: ROLE_SELECT })
       if (before.system) throw new InvalidStateError('A system role follows its template and cannot be edited; copy it into a custom role.')
       const held = await heldRoles(tx, context.actorId, now)
@@ -175,7 +198,21 @@ export async function editRole(auth: OfficeAuth, request: FastifyRequest, roleId
         const through = await activeAdmins(tx, now)
         if (through.size > 0 && others.size === 0) throw new InvalidStateError(`This role makes the last administrators of the tenant; it keeps ${ADMIN_PERMISSION}.`)
       }
-      await tx.role.update({ where: { id: roleId }, data: { name: after.name, description, requireMfa: after.requireMfa, permissions: after.permissions, grains: after.grains } })
+      const mfaChanged = after.requireMfa !== before.requireMfa
+      if (mfaChanged) await assertTwoFactorChange(tx, before, after, context.actorId, now)
+      await tx.role.update({
+        where: { id: roleId },
+        data: {
+          name: after.name,
+          description,
+          requireMfa: after.requireMfa,
+          // B-W2b-24: the command's time, so the audit row and the column say the same (the database keeps it otherwise).
+          ...(mfaChanged ? { requireMfaSince: after.requireMfa ? now : null } : {}),
+          permissions: after.permissions,
+          grains: after.grains,
+        },
+      })
+      if (mfaChanged) emit({ type: 'security.two_factor_changed', subject: roleId, payload: { roleId, requireMfa: after.requireMfa } })
       const change = contentChange({ permissions: before.permissions as Permission[], grains: before.grains.filter(isGrain) }, after)
       audit({
         recordType: 'Role',

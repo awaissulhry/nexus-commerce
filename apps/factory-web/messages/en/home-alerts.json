@@ -9,6 +9,8 @@
     "alerts.CERTIFICATE_EXPIRING": "Certificate {label} expires on {dueDate} ({days} days left).",
     "alerts.INVOICE_DEADLINE": "The goods of DDT {label} must be invoiced by {dueDate} ({days} days left).",
     "alerts.INVOICE_DEADLINE.LATE": "The goods of DDT {label} were due to be invoiced by {dueDate}: {days} days late.",
+    "alerts.INTEGRATION_FAILING": "Connection {label} has not worked for {hours} hours: its last call failed.",
+    "alerts.INTEGRATION_FAILING.NEVER": "Connection {label} has never worked: no call has succeeded in the {hours} hours since it was set up.",
     "alerts.UNKNOWN": "Alert on {label}."
   },
   "refused": {
@@ -153,7 +155,8 @@
       "APPROVAL_OVERDUE": "{record}: approval overdue",
       "PO_NOT_CONFIRMED": "{record} not confirmed",
       "CERTIFICATE_EXPIRING": "{record} expiring",
-      "INVOICE_DEADLINE": "{record}: invoice deadline near"
+      "INVOICE_DEADLINE": "{record}: invoice deadline near",
+      "INTEGRATION_FAILING": "{record} is failing"
     },
     "snooze": "Snooze",
     "assign": "Assign",

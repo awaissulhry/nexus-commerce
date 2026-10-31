@@ -1,0 +1,40 @@
+/* B-W2b-24 (PLT-125): a new document's number line and the popup "Type a number for a migrated document". Layout only. */
+.fw-no-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+.fw-no-body {
+  margin: 0;
+  color: var(--nds-text-muted);
+}
+.fw-no-status {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-height: 1.25rem;
+  margin: 0;
+  color: var(--nds-text-muted);
+}
+.fw-no-status[data-state='ok'] {
+  color: var(--nds-success-text);
+}
+.fw-no-status[data-state='refused'],
+.fw-no-status[data-state='failed'] {
+  color: var(--nds-danger-text);
+}
+.fw-no-reason {
+  width: 100%;
+}
+.fw-no-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  color: var(--nds-text-muted);
+}
+.fw-no-line-text {
+  flex: 1 1 16rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

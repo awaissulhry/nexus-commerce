@@ -17,7 +17,7 @@ import { designScreen as overviewScreen } from './overview/fixtures'
 import { READ_RIGHTS, STEP_IDS } from './overview/model'
 import { designScreen as rolesScreen } from './roles/fixtures'
 import { ALWAYS_RULES } from './roles/model'
-import { DEVICE_KINDS, DEVICE_STATUSES, GRAINS, PRINTER_KINDS, PRINTER_STATUSES, SITE_KINDS, USER_STATUSES, WORK_CENTRE_KINDS, WORKER_STATUSES } from './shared/api'
+import { DEVICE_KINDS, DEVICE_NETWORKS, DEVICE_STATUSES, GRAINS, PRINTER_KINDS, PRINTER_STATUSES, SITE_KINDS, USER_STATUSES, WORK_CENTRE_KINDS, WORKER_STATUSES } from './shared/api'
 import { permissionKey } from './shared/view/PermissionMatrix'
 import { designScreen as sitesScreen } from './sites/fixtures'
 import { designScreen as usersScreen } from './users/fixtures'
@@ -79,6 +79,8 @@ const built = [
   ...Object.values(READ_RIGHTS).map((right) => `right.${right.replace(/\./g, '_')}`),
   ...DEVICE_STATUSES.map((status) => `devices.status.${status}`),
   ...DEVICE_KINDS.map((kind) => `devices.kind.${kind}`),
+  // B-W2b-24: the network a tablet says it uses.
+  ...DEVICE_NETWORKS.map((network) => `devices.network.${network}`),
   ...[...DEVICE_TILES, 'failedPrinters'].map((tile) => `devices.tile.${tile}`),
   ...['where', 'scan', 'ready'].map((step) => `devices.step.${step}`),
   ...PRINTER_KINDS.map((kind) => `printers.kind.${kind}`),
@@ -111,6 +113,11 @@ describe('every Admin string exists in it and en (PLAN §4.6)', () => {
     const definitions = FACTORY_PERMISSIONS.assignable
     expect(definitions.filter((definition) => platform.has(definition.area) && !has(permissionKey(definition.name))).map((definition) => definition.name)).toEqual([])
     expect([...new Set(definitions.map((definition) => definition.area))].filter((area) => !has(`area.${area}`))).toEqual([])
+  })
+
+  it('B-W2b-24 (Z12:08): every assignable permission of every area has words of its own in both languages', () => {
+    const missing = FACTORY_PERMISSIONS.assignable.filter((definition) => !has(permissionKey(definition.name))).map((definition) => definition.name)
+    expect(missing).toEqual([])
   })
 })
 

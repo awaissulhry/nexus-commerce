@@ -12,7 +12,7 @@ import { IMPORT_MAX_BYTES, layoutSchema, type ImportJob, type Importer, type Imp
  */
 
 /** The importers this web has its own words for (factory-domain *importer.ts keys). Another key shows the API's label. */
-export const KNOWN_IMPORTERS = ['product.materials', 'parties.parties', 'inventory.locations', 'inventory.opening', 'product.bom', 'product.operations', 'inventory.hideList'] as const
+export const KNOWN_IMPORTERS = ['product.materials', 'parties.parties', 'inventory.locations', 'inventory.opening', 'product.bom', 'product.operations', 'inventory.hideList', 'plant.machines', 'planning.itemParameters'] as const
 
 /** The message stem of an importer's words (`inventory.opening` → its `inventory_opening` words). */
 export const importerStem = (key: string) => `imp.importer.${key.replace(/\./g, '_')}`

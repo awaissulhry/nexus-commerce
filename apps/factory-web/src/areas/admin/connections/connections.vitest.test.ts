@@ -13,10 +13,10 @@ import { I18nProvider } from '../../../lib/i18n/provider'
 import { bulkHeld } from '../kit/bulk-model'
 import { runWithStepUp } from '../shared/step-up'
 import { checkIdentity, INBOUND_STATUSES, INTEGRATION_MODES, INTEGRATION_PROVIDERS, CALL_STATUSES, listAccounts, listCalls, setPaused, DISPLAY_NAME_POLICIES, IDENTITY_KINDS } from './api'
-import { ACCOUNTS, CALLS, CHOICES, designScreen as connectionsScreen, IDENTITY_FAILED, IDENTITY_READY, IDENTITY_WAITING } from './fixtures'
+import { ACCOUNTS, CALLS, CHOICES, designScreen as connectionsScreen, SCANNER, IDENTITY_FAILED, IDENTITY_READY, IDENTITY_WAITING } from './fixtures'
 import { designScreen as mailScreen } from './mail/fixtures'
 import { dnsRows, draftProblems, emptyDraft, fromAddressOf, identityState, recordStateOf, recordsText } from './mail/model'
-import { accountState, CONNECTION_TILES, KNOWN_REASONS, KNOWN_SETTINGS, LATER_SERVICES, residencyRows, sameDay, serviceRows, switchReach, tileMatch } from './model'
+import { accountState, AWAITING_SPEND, CONNECTION_TILES, KNOWN_REASONS, KNOWN_SETTINGS, LATER_SERVICES, residencyRows, sameDay, serviceRows, switchReach, tileMatch } from './model'
 import { CallsCell, ServiceCell, StateCell } from './view/ConnectionsView'
 import { ConnectionsMessages } from './view/parts'
 
@@ -69,6 +69,13 @@ describe('the services list', () => {
     expect(serviceRows(ACCOUNTS, null, null, '', words).filter((row) => row.kind === 'missing')).toEqual([])
     expect(serviceRows([], null, null, '', words).map((row) => (row.kind === 'missing' ? row.provider : ''))).toEqual(['SES', 'R2', 'VIES'])
     expect(serviceRows([], CHOICES, null, '', words)).toHaveLength(3 + 2 * CHOICES.length)
+  })
+
+  it('B-W2b-24: the virus scanner and error tracking are listed when an account exists, never as "Not connected" (GATE-SPEND)', () => {
+    expect([...AWAITING_SPEND].sort()).toEqual(['CLAMAV', 'ERROR_TRACKING'])
+    expect(serviceRows([], CHOICES, null, '', words).some((row) => row.kind === 'missing' && AWAITING_SPEND.has(row.provider))).toBe(false)
+    const rows = serviceRows([...ACCOUNTS, SCANNER], CHOICES, null, '', words)
+    expect(rows.filter((row) => row.kind === 'account').map((row) => (row.kind === 'account' ? row.account.code : ''))).toEqual(['mail', 'files', 'sdi-demo', 'sendcloud-demo', 'vies', 'virus-scan'])
   })
 
   it('a tile shows accounts only; the search reads the label, the code, the service and the company', () => {
@@ -173,6 +180,12 @@ describe('the Connections calls (platform/admin/connections, platform/email-out)
     await listAccounts(api, { provider: 'SDI' })
     expect(calls.map((call) => call.url)).toEqual(['/api/integrations/accounts', '/api/integrations/accounts?provider=SDI'])
     expect(calls[0]!.headers.get('x-factory-company')).toBe('DEMO')
+  })
+
+  it('B-W2b-24: an account of the virus scanner or error tracking parses (the list never fails on it)', async () => {
+    const tracking = { ...SCANNER, id: '00000000-0000-7000-8000-0000000000e7', provider: 'ERROR_TRACKING', code: 'errors', label: 'Error tracking (fake)' }
+    const { api } = mockApi([{ status: 200, body: { accounts: [...ACCOUNTS, SCANNER, tracking] } }])
+    expect((await listAccounts(api)).map((account) => account.provider).slice(-2)).toEqual(['CLAMAV', 'ERROR_TRACKING'])
   })
 
   it('pages the call ledger and asks only the failures when told', async () => {

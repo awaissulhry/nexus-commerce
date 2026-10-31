@@ -134,6 +134,7 @@
       "col": {
         "role": "Ruolo",
         "asks": "Doppio fattore",
+        "since": "Richiesto dal",
         "holders": "Persone",
         "without": "Senza doppio fattore",
         "fixed": "Perché resta così"
@@ -141,6 +142,11 @@
       "asks": {
         "yes": "Richiesto",
         "no": "Non richiesto"
+      },
+      "since": {
+        "on": "Richiesto dal {day}",
+        "unknown": "Richiesto da prima che Nexus ne tenesse la data",
+        "notAsked": "—"
       },
       "without": {
         "none": "Tutti l'hanno attivato",

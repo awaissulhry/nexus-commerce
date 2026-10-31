@@ -14,7 +14,8 @@ import { problemOf, useListToolsTransport, type ListToolsTransport, type SavedVi
  * The list key: the frame's own (`listKey`), else the page's (the Office address with dots) for the page's first
  * frame and `<page>.<n>` for the n-th (two lists on one page keep their views apart). A record page has none: its
  * tabs' lists keep their own toolbar. Opening: a shared link's `?savedView=` first; else, on a clean address with no
- * working layout, the default view of the first role the person holds that has one.
+ * working layout, my own default view of the list (B-W2b-24), else the default view of the first role the person holds
+ * that has one.
  */
 
 export interface ListToolsArgs<T> {
@@ -47,6 +48,8 @@ export interface ListToolsState<T> {
   setLayout(next: WorkingLayout): void
   /** A view was made or changed: in the menu, and the one on screen. */
   saved(view: SavedView): void
+  /** B-W2b-24: my default view changed (the view as it is now, and the list's default for me). */
+  defaulted(view: SavedView, personalDefaultId: string | null): void
   removed(viewId: string): void
   dismissLinkNotice(): void
 }
@@ -121,11 +124,12 @@ export function useListTools<T>({ frame, listKey: own, columns, title }: ListToo
           }
           return
         }
-        // A clean address and no working layout: the role's default view.
+        // A clean address and no working layout: my own default view (B-W2b-24), else the role's default view.
         const stored = current.readLayout(listKey)
         if (current.query === '' && !stored) {
-          const fallback = roleDefaultFor(next.views, { userId: '', roleIds: next.roles.map((role) => role.id), save: false, manage: false })
-          const view = fallback ? next.views.find((entry) => entry.id === fallback.id) : undefined
+          const mine = next.personalDefaultId ? next.views.find((entry) => entry.id === next.personalDefaultId && entry.mine) : undefined
+          const fallback = mine ? null : roleDefaultFor(next.views, { userId: '', roleIds: next.roles.map((role) => role.id), save: false, manage: false })
+          const view = mine ?? (fallback ? next.views.find((entry) => entry.id === fallback.id) : undefined)
           if (view) apply(view)
         }
       })
@@ -153,9 +157,20 @@ export function useListTools<T>({ frame, listKey: own, columns, title }: ListToo
     },
     [setLayout],
   )
+  const defaulted = useCallback((view: SavedView, personalDefaultId: string | null) => {
+    setAnswer((current) =>
+      current
+        ? {
+            ...current,
+            personalDefaultId,
+            views: current.views.map((entry) => (entry.id === view.id ? view : personalDefaultId !== null && entry.personalDefault ? { ...entry, personalDefault: false, version: entry.version + 1 } : entry)),
+          }
+        : current,
+    )
+  }, [])
   const removed = useCallback(
     (viewId: string) => {
-      setAnswer((current) => (current ? { ...current, views: current.views.filter((entry) => entry.id !== viewId) } : current))
+      setAnswer((current) => (current ? { ...current, views: current.views.filter((entry) => entry.id !== viewId), personalDefaultId: current.personalDefaultId === viewId ? null : current.personalDefaultId } : current))
       if (layout.viewId === viewId) setLayout({ ...layout, viewId: null })
     },
     [layout, setLayout],
@@ -177,6 +192,7 @@ export function useListTools<T>({ frame, listKey: own, columns, title }: ListToo
     apply,
     setLayout,
     saved,
+    defaulted,
     removed,
     dismissLinkNotice: () => setLinkNotice(false),
   }

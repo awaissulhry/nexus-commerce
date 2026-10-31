@@ -4,7 +4,8 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { SYSTEM_ACTOR_ID, type OfficeContext } from '../../../core/context'
 import type { Log } from '../../../core/queue'
 import { rolesSyncCron, syncAllTenants } from './sync'
-import { addRole, addTenant, addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant, type TestUser } from '../sessions/testing/harness'
+import { fillTwoFactorSinceAll } from './two-factor-since'
+import { addRole, addTenant, addUser, Browser, enrolTotp, START, startHarness, stepUp, type Harness, type TestTenant, type TestUser } from '../sessions/testing/harness'
 
 /**
  * Roles, scopes and money grains on the local stack (features PLT-029, PLT-030, PLT-032, PLT-034), through the real
@@ -400,6 +401,77 @@ describe('the system roles follow their templates by themselves', () => {
     await cron.run({ name: cron.name, scheduledAt: h.clock.now() })
     expect((await admin(`SELECT grains FROM "Role" WHERE "tenantId" = $1::uuid AND key = 'owner'`, [delta.id]))[0]).toEqual({ grains: ['price', 'cost', 'margin', 'wages'] })
     expect(lines.filter((line) => line.level === 'error')).toEqual([])
+  })
+})
+
+describe('B-W2b-24: two-factor since, and the Security rules on PATCH /auth/roles', () => {
+  const admin = async (sql: string, values: unknown[] = []) => (await h.db.admin.query(sql, values)).rows as Record<string, unknown>[]
+  const log: Log = { info: () => undefined, warn: () => undefined, error: () => undefined }
+
+  it('keeps "since" on every write path; PATCH asks it from the next sign-in, never mid-session, with its event', async () => {
+    const made = await asOwner('post', '/auth/roles', { key: 'mfa_probe', name: 'Two-factor probe', permissions: ['users.view'] })
+    expect(made.body).toMatchObject({ requireMfa: false, requireMfaSince: null })
+    const holder = await addUser(h, alpha, { email: 'mfa-holder@example.com' })
+    // Given on the test's clock (the database would date it by the real one, which runs days after the harness's).
+    await h.database.withScope({ audience: 'office', tenantId: alpha.id, actorId: ownerUser.id }, (client) =>
+      client.roleAssignment.create({ data: { id: newId(), userId: holder.id, roleId: made.body.id, allCompanies: true, validFrom: new Date(START), createdAt: h.clock.now() } }),
+    )
+    const before = await signedIn('alpha', holder)
+    expect(await permissionsOf(before)).toContain('users.view')
+    h.clock.advance(60_000)
+
+    const raised = await asOwner('patch', `/auth/roles/${made.body.id}`, { version: 1, requireMfa: true, reason: 'Sees every person' })
+    expect(raised.status, JSON.stringify(raised.body)).toBe(200)
+    expect(raised.body.requireMfaSince).not.toBeNull()
+    const [row] = await admin(`SELECT r."requireMfaSince" = a.at AS same FROM "Role" r JOIN "AuditLog" a ON a."recordId" = r.id AND a.action = 'roles.edit' WHERE r.id = $1 ORDER BY a.at DESC LIMIT 1`, [made.body.id])
+    expect(row).toEqual({ same: true })
+    expect(await admin(`SELECT type, payload FROM "OutboxEvent" WHERE subject = $1 AND type = 'security.two_factor_changed'`, [made.body.id])).toEqual([{ type: 'security.two_factor_changed', payload: { roleId: made.body.id, requireMfa: true } }])
+    // The open session keeps the role until it ends (the column, no audit lookup); a new sign-in holds nothing of it yet.
+    expect(await permissionsOf(before)).toContain('users.view')
+    h.clock.advance(60_000)
+    expect(await permissionsOf(await signedIn('alpha', holder))).not.toContain('users.view')
+    // Two-factor list says since when too.
+    const listed = ((await owner.get('/admin/security/two-factor')).body.roles as { id: string; requireMfaSince: string | null }[]).find((role) => role.id === made.body.id)
+    expect(listed?.requireMfaSince).toBe(raised.body.requireMfaSince)
+    // Stopped: since cleared.
+    const lowered = await asOwner('patch', `/auth/roles/${made.body.id}`, { version: 2, requireMfa: false })
+    expect(lowered.body).toMatchObject({ requireMfa: false, requireMfaSince: null })
+  })
+
+  it('refuses a raise on PATCH that would leave nobody able to manage people and roles (lockOut), in words', async () => {
+    const gamma = await addTenant(h, 'w2b24-lock')
+    const actor = newId()
+    const [boss, helper] = [newId(), newId()]
+    await h.database.withScope({ audience: 'office', tenantId: gamma.id, actorId: actor }, async (client) => {
+      await client.role.create({ data: { id: boss, key: 'custom.boss', name: 'Boss', permissions: ['roles.assign', 'roles.manage', 'roles.view', 'users.view'], grains: [], requireMfa: false } })
+      await client.role.create({ data: { id: helper, key: 'custom.helper', name: 'Helper', permissions: ['roles.manage', 'roles.view'], grains: [], requireMfa: false } })
+    })
+    const bossUser = await addUser(h, gamma, { email: 'boss@example.com' })
+    await addRole(h, gamma, bossUser.id, 'custom.boss')
+    const helperPerson = await person(gamma, 'helper@example.com', 'custom.helper')
+    await stepUp(h, helperPerson.browser, helperPerson.secret)
+    const refused = await helperPerson.browser.send('PATCH' as never, `/auth/roles/${boss}`, { version: 1, requireMfa: true })
+    expect(refused.status).toBe(409)
+    expect(refused.body.error.issues).toEqual([{ path: 'body/requireMfa/lockOut', message: expect.stringMatching(/Nobody could manage people and roles/) }])
+    expect((await admin(`SELECT "requireMfa" FROM "Role" WHERE id = $1`, [boss]))[0]).toEqual({ requireMfa: false })
+  })
+
+  it('fills "since" once from the audit log for a role that asked before the time was kept (worker start, daily cron)', async () => {
+    const made = await asOwner('post', '/auth/roles', { key: 'old_asker', name: 'Asked before W2b', permissions: ['users.view'], requireMfa: true })
+    expect(made.body.requireMfaSince).not.toBeNull()
+    // As a role made before B-W2b-03 kept the time: no time (past the trigger, the admin session only).
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(`UPDATE "Role" SET "requireMfaSince" = NULL WHERE id = $1`, [made.body.id])
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+    const [created] = await admin(`SELECT at FROM "AuditLog" WHERE "recordId" = $1 AND action = 'roles.create'`, [made.body.id])
+    expect(await fillTwoFactorSinceAll({ database: h.database, log, clock: h.clock })).toMatchObject({ failed: 0 })
+    const [row] = await admin(`SELECT "requireMfaSince" FROM "Role" WHERE id = $1`, [made.body.id])
+    expect((row!.requireMfaSince as Date).toISOString()).toBe((created!.at as Date).toISOString())
+    expect(await admin(`SELECT action, after FROM "AuditLog" WHERE "recordId" = $1 AND action = 'roles.twoFactorSince'`, [made.body.id])).toEqual([{ action: 'roles.twoFactorSince', after: { requireMfaSince: (created!.at as Date).toISOString(), from: 'audit' } }])
+    expect((await fillTwoFactorSinceAll({ database: h.database, log, clock: h.clock })).filled).toBe(0)
   })
 })
 

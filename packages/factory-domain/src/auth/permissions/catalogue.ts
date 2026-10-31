@@ -20,6 +20,8 @@ import { INVENTORY_RESERVATION_PERMISSIONS } from '../../inventory/reservations/
 import { INVOICES_DEFINITIONS, INVOICES_PERMISSIONS } from '../../invoicing/permissions'
 import { LINK_SESSION_PERMISSIONS as LINK_SESSION_NAMES, LINKS_OFFICE_PERMISSIONS } from '../../links/permissions'
 import { NUMBERING_MANAGE, NUMBERING_VIEW } from '../../numbering/permissions'
+// B-W2b-24: the controlled override of a migrated document's number (PLT-125).
+import { NUMBERING_OVERRIDE_DEFINITIONS, NUMBERING_OVERRIDE_PERMISSIONS } from '../../numbering/permissions'
 import { PARTIES_DEFINITIONS, PARTIES_PERMISSIONS } from '../../parties/permissions'
 import { PAYMENTS_DEFINITIONS, PAYMENTS_PERMISSIONS } from '../../payments/permissions'
 import { PLANNING_DEFINITIONS, PLANNING_PERMISSIONS } from '../../planning/permissions'
@@ -367,6 +369,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   ROLES_PERMISSIONS,
   AUDIT_PERMISSIONS,
   NUMBERING_DEFINITIONS,
+  // B-W2b-24: numbering.override (PLT-125).
+  NUMBERING_OVERRIDE_DEFINITIONS,
   FILES_DEFINITIONS,
   LINKS_PERMISSIONS,
   LINK_SESSION_PERMISSIONS,
@@ -565,6 +569,8 @@ for (const name of QUALITY_COMPLAINTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDe
 for (const name of HOME_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-14: the Owner's switch for automatic PO confirmation reminders.
 for (const name of PURCHASING_REMINDERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-24: the controlled override of a migrated document's number.
+for (const name of NUMBERING_OVERRIDE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-26: people.
 for (const name of [...PEOPLE_EMPLOYEES_PERMISSIONS, ...PEOPLE_TEAMS_PERMISSIONS, ...PEOPLE_LEAVERS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

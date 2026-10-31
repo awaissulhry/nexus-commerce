@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import { LAST_OPENED, OWNER_LIBRARY, PLANNER_LIBRARY, PREFIX, inShell, type Role } from './demo/fixtures'
+import { OWNER_LIBRARY, PLANNER_LIBRARY, PREFIX, inShell, type Role } from './demo/fixtures'
 import { reportsCanOf } from './model'
 import { LibraryView, type LibraryModel } from './view/LibraryView'
 
@@ -23,7 +23,6 @@ const library = (role: Role, change: Partial<LibraryModel> = {}): Case => ({
     prefix: PREFIX,
     address: { q: '', area: null, outside: false },
     library: { value: role === 'planner' ? PLANNER_LIBRARY : OWNER_LIBRARY, problem: null },
-    lastOpened: LAST_OPENED,
     ...change,
   },
 })
@@ -37,12 +36,12 @@ export const designScreen = defineDesignScreen<Case>({
   title: 'Reports: the library (Home › Insights)',
   view: LibraryDesign,
   cases: [
-    { id: 'owner', label: 'Owner — the standard pack', model: library('owner'), note: 'Fourteen reports said as questions, grouped by area (column and chips); last opened by me (this device); the daily production report e-mailed to me; CSV · PDF. A row opens the report.' },
+    { id: 'owner', label: 'Owner — the standard pack', model: library('owner'), note: 'Fourteen reports said as questions, grouped by area (column and chips); last run by me (the server’s run log: two reports run, the rest "Not yet"); the daily production report e-mailed to me; CSV · PDF. A row opens the report.' },
     {
       id: 'planner',
       label: 'Planner — reports held by rights',
       model: library('planner'),
-      note: 'Stock value says "Needs cost rights" and stays listed; three reports read lists outside the role and are hidden until "Outside my role (3)" is pressed.',
+      note: 'Stock value says "Needs cost rights" and stays listed; three reports read lists outside the role and are hidden until "Outside my role (3)" is pressed. The planner ran none yet: "Not yet" on every row.',
     },
     { id: 'planner-outside', label: 'Planner — reports outside the role shown', model: library('planner', { address: { q: '', area: null, outside: true } }), note: 'Listed with "Reads a list outside your role": never run.' },
     { id: 'search', label: 'Search "late"', model: library('owner', { address: { q: 'late', area: null, outside: false } }), note: 'The search reads the words the person sees (title and question, Italian or English).' },

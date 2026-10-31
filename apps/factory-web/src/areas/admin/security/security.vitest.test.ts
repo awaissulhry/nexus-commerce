@@ -74,7 +74,7 @@ describe('the words of Security & health', () => {
 })
 
 const line = (part: StatusLine['part'], state: StatusLine['state'], over: Partial<StatusLine> = {}): StatusLine => ({ part, state, count: null, minutes: null, at: null, days: null, mode: null, ...over })
-const role = (over: Partial<TwoFactorRole>): TwoFactorRole => ({ id: 'r', key: 'planner', name: 'Planner', system: true, requireMfa: false, lock: null, templateAsks: false, version: 3, holders: [], heldByMe: false, ...over })
+const role = (over: Partial<TwoFactorRole>): TwoFactorRole => ({ id: 'r', key: 'planner', name: 'Planner', system: true, requireMfa: false, requireMfaSince: null, lock: null, templateAsks: false, version: 3, holders: [], heldByMe: false, ...over })
 
 describe('the page rules', () => {
   it('never says "all working" while a part is not watched; a failing part first', () => {
@@ -173,7 +173,7 @@ describe('the lists’ cells, drawn alone', () => {
       const t = createTranslator(locale, words(locale))
       const words2 = { name: (value: { key: string; name: string }) => value.name }
       const nodes: ReactNode[] = [
-        ...twoFactorColumns({ t, prefix: '/w/DEMO', words: words2 }).map((column) => cellNode(column, role({ holders: [{ userId: 'u', name: 'Marco Prova', twoFactor: false }], lock: 'template' }))),
+        ...twoFactorColumns({ t, locale, prefix: '/w/DEMO', words: words2 }).map((column) => cellNode(column, role({ holders: [{ userId: 'u', name: 'Marco Prova', twoFactor: false }], lock: 'template' }))),
         ...drillColumns({ t, locale }).map((column) => cellNode(column, drill)),
         ...attentionColumns({ t, locale, prefix: '/w/DEMO' }).map((column) => cellNode(column, item)),
       ]

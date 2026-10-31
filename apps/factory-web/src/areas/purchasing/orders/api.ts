@@ -214,7 +214,8 @@ export interface HeaderFields {
   internalNote?: string | null
 }
 
-export async function createOrder(api: ApiClient, body: { companyId: string; siteId: string; partyId: string } & HeaderFields): Promise<PurchaseOrder> {
+/** B-W2b-24 (PLT-125): `typedNumber` = a migrated open order keeps its old number (numbering.override; the API checks it). */
+export async function createOrder(api: ApiClient, body: { companyId: string; siteId: string; partyId: string; typedNumber?: { number: string; reason: string } } & HeaderFields): Promise<PurchaseOrder> {
   return (await api.post('/purchasing/orders', { body, schema: one, idempotencyKey: newIdempotencyKey() })).order
 }
 
