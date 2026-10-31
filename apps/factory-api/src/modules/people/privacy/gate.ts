@@ -60,6 +60,15 @@ export async function legalGateFor(db: GateReader, siteId: string, purpose: Gate
   return { siteId, purpose, open: gateOpen(gate), gate }
 }
 
+/**
+ * The row not switched off of a site and a purpose, whatever its switch-on moment: what switching on, off and the leads
+ * choice act on (a row dated later than now is there, and refused in words, never a second row or a 500). Reads of
+ * people data use legalGateFor, which opens only from the switch-on moment.
+ */
+export async function gateRowInForce(db: GateReader, siteId: string, purpose: GatePurpose): Promise<GateRecord | null> {
+  return db.peopleLegalGate.findFirst({ where: { siteId, purpose, switchedOffAt: null }, select: GATE_SELECT })
+}
+
 /** The gates in force of several sites (both purposes), by site then purpose. */
 export async function legalGatesOf(db: GateReader, siteIds: readonly string[]): Promise<Map<string, Map<GatePurpose, GateRecord>>> {
   const rows = siteIds.length === 0 ? [] : await db.peopleLegalGate.findMany({ where: { siteId: { in: [...siteIds] }, switchedOffAt: null }, select: GATE_SELECT })
