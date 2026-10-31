@@ -16,11 +16,17 @@ describe('model ownership', () => {
     expect(problems(loadOwnership())).toEqual([])
     const inputs = policyInputs(loadSchema(), loadOwnership())
     expect(inputs.model.tables.map((table) => table.table).sort()).toEqual([
+      'AbsenceCode',
+      'AbsenceEntry',
       'AccountingExport',
       'AccountingExportFile',
       'Alert',
       'AlertEvent',
       'AlertRule',
+      'AttendanceAnomaly',
+      'AttendanceCorrection',
+      'AttendanceDay',
+      'AttendanceMonthClose',
       'AttentionAction',
       'AttentionActionLog',
       'AuditLog',
@@ -34,6 +40,7 @@ describe('model ownership', () => {
       'Certificate',
       'CertificateCoverage',
       'CertificateRenewal',
+      'ClockEvent',
       'Colour',
       'Colourway',
       'Company',
@@ -123,6 +130,9 @@ describe('model ownership', () => {
       'OperationScanDefect',
       'OrgArea',
       'OutboxEvent',
+      'OvertimeAgreement',
+      'OvertimeEntry',
+      'OvertimeRequest',
       'Parcel',
       'Party',
       'PartyAddress',
@@ -187,6 +197,7 @@ describe('model ownership', () => {
       'ReworkOrder',
       'Role',
       'RoleAssignment',
+      'RosterEntry',
       'RoutingOperation',
       'SalesOrder',
       'SalesOrderAmendment',
@@ -242,6 +253,7 @@ describe('model ownership', () => {
       'TeamMember',
       'Tenant',
       'Thread',
+      'TimesheetApproval',
       'TodayLayout',
       'TrackingEvent',
       'TypeChangeReview',
@@ -260,6 +272,7 @@ describe('model ownership', () => {
       'Worker',
       'WorkerNoticeAck',
       'WorkerRole',
+      'WorkingTimeRule',
     ])
     expect(inputs.platformTables).toEqual([{ table: 'Tenant', privileges: ['select', 'insert', 'update'], walled: true }])
   })
@@ -430,7 +443,13 @@ describe('model ownership', () => {
 
     it('maps every model that holds personal data: who it is about and the purposes of each column', () => {
       const map = personalDataOf(loadSchema(), loadOwnership())
-      expect(map.map((entry) => entry.model).sort()).toEqual(['Employee', 'EmployeeSkill', 'LeaverCase', 'LeaverStep', 'LineLoan', 'MachineAuthorisation', 'TeamMember'])
+      expect(map.map((entry) => entry.model).sort()).toEqual(
+        [
+          ...['Employee', 'EmployeeSkill', 'LeaverCase', 'LeaverStep', 'LineLoan', 'MachineAuthorisation', 'TeamMember'],
+          // W2b time and attendance (wave 5/7): purpose ATTENDANCE.
+          ...['AbsenceEntry', 'AttendanceAnomaly', 'AttendanceCorrection', 'AttendanceDay', 'ClockEvent', 'OvertimeAgreement', 'OvertimeEntry', 'RosterEntry', 'TimesheetApproval'],
+        ].sort(),
+      )
       const employee = map.find((entry) => entry.model === 'Employee')!
       expect(employee.subject).toBe('id')
       expect(employee.columns.firstName).toEqual(['EMPLOYMENT'])
