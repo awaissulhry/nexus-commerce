@@ -58,6 +58,8 @@ import { payablesHandlers, sdiPickupCron } from './modules/payables/sdi'
 import { renewalStagesCron } from './modules/compliance/renewals/stages'
 // B-W2b-15
 import { releaseOnWorkOrderDoneHandler, reservationCleanupCron } from './modules/inventory/reservations/system-release'
+// B-W2b-22: the cost ledger's nightly catch-up (what waited for a value or a rate).
+import { costCatchUpCron } from './modules/costing/actual/catch-up'
 // B-W2b-11: the report pack, so the worker can export a report (platform/exports/sources/reports.ts).
 import { loadReports } from './modules/insights/reports/registry'
 
@@ -186,6 +188,7 @@ if (mode === 'worker') {
   crons.push(renewalStagesCron({ database, log }))
   // B-W2b-15: the nightly reservation clean-up (SCM-211): reservations whose demand is done, released by the system.
   crons.push(reservationCleanupCron({ database, log }))
+  crons.push(costCatchUpCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

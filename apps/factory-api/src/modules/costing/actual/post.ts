@@ -55,10 +55,12 @@ import {
  *   scans: each standing REPORT or CORRECTION with good garments → LABOUR (good × the operation's standard minutes × the
  *     cost per minute in force that day for its kind of work centre, never per person); one an UNDO or CORRECTION
  *     voided → the reversal of its LABOUR; its scrap → a SCRAP record per material (amount 0: the leather and its value)
- *   reworks DONE with scrap → a SCRAP record per material, with the scan that opened the rework
+ *   reworks DONE with scrap → a SCRAP record per material, with the scan that opened the rework; a rework opened by hand
+ *     (an inspection, a nonconformance: no scan) names its rework order instead (B-W2b-22), and one not bundled apart
+ *     takes the leather of its cell's bundles
  *   overhead at the company's % with each MATERIAL, stock SCRAP and LABOUR entry (none at 0 %); reversed with it
  * What cannot post yet is answered as `waiting`, in words: a move without a value, a day without a labour rate, another
- * currency, a rework without its scan. An event of a locked month is posted dated now (and says so). The company's
+ * currency, a rework of a cell nothing was cut for. An event of a locked month is posted dated now (and says so). The company's
  * costing method is written on every entry; a decided one is locked by the first entry (lockMethodInCommand).
  *
  * Inside the caller's command: postCostsInCommand(tools, workOrderId, scope); on its own: postWorkOrderCosts(caller, …).
@@ -231,20 +233,31 @@ export async function planCosts(db: Reader, workOrder: CostedWorkOrder, scope: P
     const only = scope?.reworkIds ? [...scope.reworkIds] : null
     const reworks = await db.reworkOrder.findMany({
       where: { workOrderId: workOrder.id, status: 'DONE', scrapQuantity: { gt: 0 }, ...(only ? { id: { in: only } } : {}) },
-      select: { id: true, bundleId: true, sourceScanId: true, scrapQuantity: true, doneAt: true, reworkAtOperationId: true },
+      select: { id: true, bundleId: true, workOrderSizeId: true, sourceScanId: true, scrapQuantity: true, doneAt: true, reworkAtOperationId: true },
       orderBy: { id: 'asc' },
     })
     const open = reworks.filter((rework) => ![...byKey.keys()].some((key) => key.startsWith(`rework-scrap:${rework.id}:`)))
-    const bundles = await db.bundle.findMany({ where: { id: { in: unique(open.map((rework) => rework.bundleId)) } }, select: { id: true, workOrderId: true, workOrderSizeId: true, part: true, cutLogIds: true } })
-    const facts = bundles.length === 0 ? null : await scrapFactsOf(db, workOrder.id, bundles)
+    const BUNDLE = { id: true, workOrderId: true, workOrderSizeId: true, part: true, cutLogIds: true } as const
+    const bundles = await db.bundle.findMany({ where: { id: { in: unique(open.map((rework) => rework.bundleId)) } }, select: BUNDLE })
+    // B-W2b-22 (Z9:03): a rework not bundled apart (opened by hand on a cell) scraps whole garments of its cell: per part,
+    // the leather of that part's bundles of the cell (a whole-garment bundle is the part null), read as one bundle each.
+    const cellIds = unique(open.filter((rework) => rework.bundleId === null).map((rework) => rework.workOrderSizeId))
+    const cellBundles = cellIds.length === 0 ? [] : await db.bundle.findMany({ where: { workOrderId: workOrder.id, workOrderSizeId: { in: cellIds } }, select: BUNDLE })
+    const partsOfCell = (cellId: string) =>
+      unique(cellBundles.filter((row) => row.workOrderSizeId === cellId).map((row) => row.part ?? '')).map((part) => {
+        const mine = cellBundles.filter((row) => row.workOrderSizeId === cellId && (row.part ?? '') === part)
+        return { id: mine[0]!.id, workOrderId: workOrder.id, workOrderSizeId: cellId, part: part === '' ? null : part, cutLogIds: unique(mine.flatMap((row) => row.cutLogIds)) }
+      })
+    const facts = bundles.length + cellBundles.length === 0 ? null : await scrapFactsOf(db, workOrder.id, [...bundles, ...cellBundles])
     const standards = facts ? await frozenStandards(db, [workOrder.companyId], [...facts.items.keys()]) : new Map()
     for (const rework of open) {
-      const bundle = bundles.find((row) => row.id === rework.bundleId)
-      if (!rework.sourceScanId || !bundle || !facts) {
-        wait('NO_SCAN', 'ReworkOrder', rework.id, "This rework's scrap has no scan and bundle to name: the ledger records scrap with its scan or stock move only (a rework opened by hand stays out of the ledger; its leather is in the material issued).")
+      const named = rework.bundleId ? bundles.filter((row) => row.id === rework.bundleId) : partsOfCell(rework.workOrderSizeId)
+      const cut = named.filter((bundle) => bundle.cutLogIds.length > 0)
+      if (cut.length === 0 || !facts) {
+        wait('NO_SCAN', 'ReworkOrder', rework.id, "This rework's scrap has no cut leather to name: nothing of its garments' cell was cut into bundles yet, so the ledger cannot say which hides it lost (it is recorded once the cell is cut).")
         continue
       }
-      const shares = scrapMaterials(facts, bundle, rework.scrapQuantity)
+      const shares = cut.flatMap((bundle) => scrapMaterials(facts, bundle, rework.scrapQuantity))
       if (shares.some((share) => share.value === null)) {
         wait('NOT_VALUED', 'ReworkOrder', rework.id, 'The leather of the garments it scrapped was issued without a value yet: the scrap is recorded once the issue is valued.')
         continue
@@ -252,6 +265,7 @@ export async function planCosts(db: Reader, workOrder: CostedWorkOrder, scope: P
       const at = rework.doneAt ?? new Date()
       for (const draft of scrapRecords(ids, shares, {
         occurredAt: at,
+        // A rework opened by hand has no scan: the entry names its rework order (the …_w2b_guards cost-entry check).
         operationScanId: rework.sourceScanId,
         key: (itemId) => entryKeys.reworkScrap(rework.id, itemId),
         sourceType: 'ReworkOrder',

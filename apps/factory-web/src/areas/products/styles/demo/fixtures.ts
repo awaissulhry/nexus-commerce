@@ -176,6 +176,8 @@ export function demoStyle(options: StyleOptions = {}): StyleView {
     hsCode: '42031000',
     originCountry: 'IT',
     netMassKg: '1.85',
+    gender: 'UNISEX',
+    copiedFrom: null,
     status: options.status ?? 'ACTIVE',
     version: 9,
     updatedAt: at(28, 16, 40),
@@ -290,6 +292,9 @@ const row = (n: number, code: string, name: string, extra: Partial<StyleRow>): S
   hsCode: null,
   originCountry: null,
   netMassKg: null,
+  gender: null,
+  thumbnail: null,
+  coverage: null,
   status: 'ACTIVE',
   version: 4,
   updatedAt: at(20 + (n % 8), 10 + (n % 6)),
@@ -918,17 +923,26 @@ export function demoCompare(): CostDiffView {
 /** The Duplicate offer of DEMO-JKT-01 (parts from its released revision 2), as `GET …/duplicate` answers it. */
 export function demoOffer(options: { held?: boolean; noRevision?: boolean; dropped?: string[] } = {}): DuplicateOfferView {
   const revision = options.noRevision ? null : { id: REV.r2, revision: 2, status: 'RELEASED' as const }
-  const no = (reason: string) => ({ available: false, count: null, reason })
+  const no = (reason: string, reasonCode: DuplicateOfferView['parts'][number]['reasonCode'], facts: { revision?: number; label?: string; labelRevision?: number } = {}) => ({
+    available: false,
+    count: null,
+    reason,
+    reasonCode,
+    reasonFacts: { style: 'DEMO-JKT-01', revision: facts.revision ?? null, label: facts.label ?? null, labelRevision: facts.labelRevision ?? null, permission: null, everyCompany: false },
+  })
+  const yes = { reasonCode: null, reasonFacts: null }
   return {
     source: { id: STYLE_ID, code: 'DEMO-JKT-01', name: 'Giacca Touring Demo', status: 'ACTIVE' },
     revision,
     parts: [
-      revision ? { part: 'BOM', available: true, count: 8, reason: null } : { part: 'BOM', ...no('DEMO-JKT-01 has no revision yet.') },
-      revision ? { part: 'ROUTING', available: true, count: 9, reason: null } : { part: 'ROUTING', ...no('DEMO-JKT-01 has no revision yet.') },
-      options.held ? { part: 'MEASUREMENTS', ...no('DEMO-JKT-01 is not made to measure.') } : { part: 'MEASUREMENTS', available: true, count: null, reason: null },
-      options.held || !revision ? { part: 'LABELS', ...no(revision ? "Label LBL-DEMO-01 r2 is DEMO-JKT-01's own label: make one for the copy in Compliance." : 'DEMO-JKT-01 has no revision yet.') } : { part: 'LABELS', available: true, count: null, reason: null },
-      { part: 'PICTURES', ...no("The style's sketches and pictures are copied once the gallery arrives (W2b).") },
-      { part: 'OPTIONS', ...no('Style options are copied once option groups arrive (W2b).') },
+      revision ? { part: 'BOM', available: true, count: 8, reason: null, ...yes } : { part: 'BOM', ...no('DEMO-JKT-01 has no revision yet.', 'NO_REVISION') },
+      revision ? { part: 'ROUTING', available: true, count: 9, reason: null, ...yes } : { part: 'ROUTING', ...no('DEMO-JKT-01 has no revision yet.', 'NO_REVISION') },
+      options.held ? { part: 'MEASUREMENTS', ...no('DEMO-JKT-01 is not made to measure.', 'NOT_MADE_TO_MEASURE') } : { part: 'MEASUREMENTS', available: true, count: null, reason: null, ...yes },
+      options.held || !revision
+        ? { part: 'LABELS', ...(revision ? no("Label LBL-DEMO-01 r2 is DEMO-JKT-01's own label: make one for the copy in Compliance.", 'OWN_LABEL', { revision: 2, label: 'LBL-DEMO-01', labelRevision: 2 }) : no('DEMO-JKT-01 has no revision yet.', 'NO_REVISION')) }
+        : { part: 'LABELS', available: true, count: null, reason: null, ...yes },
+      { part: 'PICTURES', ...no("The style's sketches and pictures are copied once the gallery arrives (W2b).", 'NOT_YET') },
+      { part: 'OPTIONS', ...no('Style options are copied once option groups arrive (W2b).', 'NOT_YET') },
     ],
     colourways: 3,
     droppedSizes: options.dropped ?? [],
@@ -937,12 +951,16 @@ export function demoOffer(options: { held?: boolean; noRevision?: boolean; dropp
 
 /** What the copy DEMO-JKT-01-SS made (its revision 1 a draft with the BOM and routing), with two notes. */
 export function demoDuplicated(): DuplicatedView {
-  const copy = { ...newStyle(), id: uid('7777', 901), code: 'DEMO-JKT-01-SS', name: 'Giacca Touring Demo Estiva', season: 'SS28' }
+  const copy = { ...newStyle(), id: uid('7777', 901), code: 'DEMO-JKT-01-SS', name: 'Giacca Touring Demo Estiva', season: 'SS28', copiedFrom: { styleId: STYLE_ID, code: 'DEMO-JKT-01', name: 'Giacca Touring Demo', revisionId: REV.r2, revision: 2 } }
   return {
     style: copy,
     revision: { ...REVISIONS[2]!, id: uid('7777', 902), revision: 1, status: 'DRAFT', changeNote: 'Copied from DEMO-JKT-01 revision 2.' },
     copied: { from: { styleId: STYLE_ID, code: 'DEMO-JKT-01', revisionId: REV.r2, revision: 2 }, parts: ['BOM', 'ROUTING'], colourways: 3, bomLines: 7, routingSteps: 9, label: false, skus: 0 },
     notes: ['Size(s) 58 are archived in the scale: the copy\'s range leaves them out.', '1 BOM line(s) of archived colourways are not copied.'],
+    noteCodes: [
+      { code: 'SIZES_ARCHIVED', sizes: ['58'], count: null, colourway: null },
+      { code: 'BOM_LINES_LEFT_OUT', sizes: [], count: 1, colourway: null },
+    ],
   }
 }
 

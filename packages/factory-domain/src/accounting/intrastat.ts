@@ -1,3 +1,4 @@
+import { INTRASTAT_TRANSPORT_CODES, type TransportMode } from '../shipping/shipments/transport'
 import { Dec, type Decimal } from '../tax/decimal'
 import { isEuMemberState } from '../tax/eu'
 import type { ExportCell } from '../views/exports'
@@ -16,8 +17,8 @@ import { fingerprint, type ExportDocument } from './manifest'
  * Each row names what the file needs (design columns): the CN code (the style's commodity code, its first 8 digits),
  * the partner's VAT ID (the buyer's on the invoice, with its VIES prefix), the value (the line's net amount, euros), the
  * net mass (the style's mass per garment × the pieces), the supplementary units (the pieces), the nature of the
- * transaction, the delivery terms (the customer's Incoterm), the mode of transport (not recorded in Nexus: left blank)
- * and the country of origin (the style's). Anything missing is flagged with what fixes it (the style, the customer).
+ * transaction, the delivery terms (the customer's Incoterm), the mode of transport (B-W2b-22: the DDT's, frozen when it
+ * was issued, else its shipment's — B-W2b-19 records it; blank when neither does) and the country of origin (the style's). Anything missing is flagged with what fixes it (the style, the customer).
  *
  * TO CONFIRM WITH THE ACCOUNTANT (Q30, GATE-ACCOUNTANT): whether the company files Intrastat for sales at all, monthly or
  * quarterly, the official file layout (the file here is Nexus's DEFAULT CSV, one row per partner, CN code, nature,
@@ -68,6 +69,8 @@ export interface IntrastatLineFacts {
   /** Where the goods went, and from which record that is known. */
   readonly destination: { readonly country: string | null; readonly source: 'DDT' | 'BILL_TO' }
   readonly style: { readonly id: string; readonly code: string; readonly hsCode: string | null; readonly originCountry: string | null; readonly netMassKg: string | null } | null
+  /** B-W2b-22: the mode of transport recorded on the line's DDT (else its shipment); null or left out: not recorded. */
+  readonly transportMode?: TransportMode | null
 }
 
 export interface IntrastatRow {
@@ -95,8 +98,8 @@ export interface IntrastatRow {
   readonly nature: IntrastatNature
   readonly suggestedNatureCode: string
   readonly deliveryTerms: string | null
-  /** Not recorded in Nexus (no column): always null. */
-  readonly transportMode: null
+  /** B-W2b-22: the DDT's mode of transport (else its shipment's); null: not recorded (the file's cell stays blank). */
+  readonly transportMode: TransportMode | null
   readonly flags: readonly IntrastatFlag[]
 }
 
@@ -159,7 +162,7 @@ export function intrastatRowOf(facts: IntrastatLineFacts): IntrastatRow {
     nature,
     suggestedNatureCode: SUGGESTED_NATURE_CODES[nature],
     deliveryTerms: facts.buyer.incoterm,
-    transportMode: null,
+    transportMode: facts.transportMode ?? null,
     flags,
   }
 }
@@ -171,6 +174,8 @@ export interface IntrastatFileRow {
   readonly nature: IntrastatNature
   readonly suggestedNatureCode: string
   readonly deliveryTerms: string | null
+  /** B-W2b-22: the rows' mode of transport (rows of another mode are another file row). */
+  readonly transportMode: TransportMode | null
   readonly originCountry: string | null
   readonly value: number
   readonly currency: string
@@ -180,11 +185,11 @@ export interface IntrastatFileRow {
   readonly documents: readonly string[]
 }
 
-/** The file's rows: the EU sale rows summed per partner, country, CN code, nature, delivery terms, origin and currency. */
+/** The file's rows: the EU sale rows summed per partner, country, CN code, nature, delivery terms, mode of transport, origin and currency. */
 export function intrastatFileRows(rows: readonly IntrastatRow[]): IntrastatFileRow[] {
   const groups = new Map<string, { row: IntrastatRow; value: number; mass: Decimal | null; units: Decimal; documents: Set<string> }>()
   for (const row of rows) {
-    const key = [row.partnerVatId, row.destinationCountry, row.cnCode, row.nature, row.deliveryTerms, row.originCountry, row.currency].map((part) => part ?? '').join('|')
+    const key = [row.partnerVatId, row.destinationCountry, row.cnCode, row.nature, row.deliveryTerms, row.transportMode, row.originCountry, row.currency].map((part) => part ?? '').join('|')
     const group = groups.get(key) ?? { row, value: 0, mass: new Dec(0), units: new Dec(0), documents: new Set<string>() }
     group.value += row.value
     group.mass = group.mass === null || row.netMassKg === null ? null : group.mass.plus(row.netMassKg)
@@ -200,6 +205,7 @@ export function intrastatFileRows(rows: readonly IntrastatRow[]): IntrastatFileR
       nature: row.nature,
       suggestedNatureCode: row.suggestedNatureCode,
       deliveryTerms: row.deliveryTerms,
+      transportMode: row.transportMode,
       originCountry: row.originCountry,
       value,
       currency: row.currency,
@@ -215,7 +221,7 @@ export const INTRASTAT_HEADINGS = {
   it: ['Partita IVA acquirente', 'Paese di destinazione', 'Codice NC', 'Natura della transazione', 'Codice natura (suggerito)', 'Condizioni di consegna', 'Modo di trasporto', 'Paese di origine', 'Valore', 'Massa netta (kg)', 'Unità supplementari', 'Fatture'],
 } as const
 
-/** A file row's cells (the mode of transport stays blank: not recorded in Nexus). */
+/** A file row's cells (the mode of transport as its Intrastat code, 1–5 or 7–9; blank when not recorded). */
 export function intrastatCells(row: IntrastatFileRow): ExportCell[] {
   return [
     row.partnerVatId,
@@ -224,7 +230,7 @@ export function intrastatCells(row: IntrastatFileRow): ExportCell[] {
     row.nature,
     row.suggestedNatureCode,
     row.deliveryTerms,
-    null,
+    row.transportMode === null ? null : String(INTRASTAT_TRANSPORT_CODES[row.transportMode]),
     row.originCountry,
     { minor: row.value, currency: row.currency },
     row.netMassKg === null ? null : { decimal: row.netMassKg },
@@ -243,7 +249,9 @@ export function intrastatDocuments(rows: readonly IntrastatRow[], versions: Read
     recordId: invoiceId,
     number: mine[0]!.invoiceNumber,
     version: versions.get(invoiceId) ?? null,
-    hash: fingerprint(mine.map((row) => [row.lineId, row.partnerVatId, row.destinationCountry, row.cnCode, row.originCountry, row.value, row.currency, row.netMassKg, row.supplementaryUnits, row.nature, row.deliveryTerms])),
+    // B-W2b-22: the mode of transport joins the fingerprint only once recorded, so a batch exported before it was read
+    // keeps its hash (no false "changed since").
+    hash: fingerprint(mine.map((row) => [row.lineId, row.partnerVatId, row.destinationCountry, row.cnCode, row.originCountry, row.value, row.currency, row.netMassKg, row.supplementaryUnits, row.nature, row.deliveryTerms, ...(row.transportMode === null ? [] : [row.transportMode])])),
   }))
 }
 
@@ -269,4 +277,4 @@ export function intrastatSummary(rows: readonly IntrastatRow[]): IntrastatSummar
 }
 
 export const INTRASTAT_WORDS =
-  "Intrastat data of the month's EU sales: TO CONFIRM WITH THE ACCOUNTANT whether the company files them, how often, and the official file layout (Q30). The nature codes are suggested (11 sale, 21 return); the mode of transport is not recorded in Nexus and stays blank; the net mass is kept to the gram. Nothing is filed: a person hands the file to the accountant."
+  "Intrastat data of the month's EU sales: TO CONFIRM WITH THE ACCOUNTANT whether the company files them, how often, and the official file layout (Q30). The nature codes are suggested (11 sale, 21 return); the mode of transport is the DDT's (else its shipment's), written as its Intrastat code, and stays blank when neither records it; the net mass is kept to the gram. Nothing is filed: a person hands the file to the accountant."
