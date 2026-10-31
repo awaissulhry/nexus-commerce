@@ -144,6 +144,12 @@ model Company {
   paymentReminders     PaymentReminder[]
   receivablesSettings  ReceivablesSettings[]
   supplierInvoices     SupplierInvoice[]
+  // W2b supply.prisma, payables.prisma (schema wave 2/7): its purchasing and payables settings, the files of several
+  // supplier invoices and the SDI deliveries waiting in its inbox.
+  purchasingSettings   PurchasingSettings[]
+  payablesSettings     PayablesSettings[]
+  supplierInvoiceFiles SupplierInvoiceFile[]
+  sdiInboxItems        SdiInboxItem[]
   /// @not-money the relation to its standard costs (the rows carry the grain)
   standardCosts        StandardCost[]
   accountingExports    AccountingExport[]
@@ -261,6 +267,8 @@ model Site {
   shippingSettings   ShippingSettings[]
   shipments          Shipment[]
   ddts               Ddt[]
+  // W2b gendocs.prisma (B-W2b-01): the documents generated for its records (packing lists, claim letters, job sheets).
+  generatedDocuments GeneratedDocument[]
   // returns.prisma: the returns coming back to it and the repairs it makes.
   returnAuthorisations ReturnAuthorisation[]
   repairOrders         RepairOrder[]

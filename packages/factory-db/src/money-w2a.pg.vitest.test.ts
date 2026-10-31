@@ -217,7 +217,8 @@ describe('the seeds and the walls', () => {
   })
 
   it('the new tables are the office’s: the floor and the portal read none of them', async () => {
-    const models = classifiedModels(loadSchema(), loadOwnership()).filter(({ model }) => FILES.has(model.file))
+    // The wave's own tables (W2b schema wave 2/7 adds more to payables.prisma and receivables.prisma: its own test).
+    const models = classifiedModels(loadSchema(), loadOwnership()).filter(({ model }) => FILES.has(model.file) && (TABLES as readonly string[]).includes(model.name))
     expect(models.map(({ model }) => model.name).sort()).toEqual([...TABLES].sort())
     for (const { model, ownership } of models) {
       expect(ownership.access[PARTNER_ROLE], model.name).toBeUndefined()
@@ -594,7 +595,9 @@ describe('supplier invoices and the three-way match', () => {
     expect(await run(office(), `DELETE FROM "SupplierInvoiceMatch" WHERE "invoiceId" = $1::uuid`, invoice.id)).toBe(1)
     expect(await run(office(), `DELETE FROM "SupplierInvoiceLine" WHERE id = $1::uuid`, line.id)).toBe(1)
     expect(await run(office(), `UPDATE "SupplierInvoice" SET status = 'VOIDED', "voidedAt" = now(), "voidReason" = 'Typed twice' WHERE id = $1::uuid`, invoice.id)).toBe(1)
-    // The same supplier's number on the same date is recorded once.
+    // The same supplier's number on the same date is recorded once while it is not VOIDED: W2b (schema wave 2/7) frees the
+    // number of a voided typed invoice, and the one recorded again holds it.
+    expect(await insert(office(), 'SupplierInvoice', { ...invoice, id: randomUUID(), status: 'RECEIVED' })).toBe(1)
     await expect(insert(office(), 'SupplierInvoice', { ...invoice, id: randomUUID(), status: 'RECEIVED' })).rejects.toThrow(/duplicate key|unique/i)
   })
 })

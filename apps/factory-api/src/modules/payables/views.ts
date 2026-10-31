@@ -4,7 +4,7 @@ import { actionProblems, approvalProblems, isTyped, type InvoiceKind, type Invoi
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { MatchStatus } from '@nexus/factory-domain/payables/match'
 import { freshMatch } from './matching'
-import { dayOf, peopleNames, readLines, readMatches, type InvoiceRow, type LineRow, type Reader } from './store'
+import { dayOf, peopleNames, preparationOf, readLines, readMatches, type InvoiceRow, type LineRow, type Reader } from './store'
 
 /**
  * What the answers show of a supplier invoice (design finance.payables: the grid's row; the record's Lines, Match,
@@ -145,6 +145,7 @@ export async function detailOf(db: Reader, invoice: InvoiceRow, viewer: { readon
   const credits = await db.supplierInvoice.findMany({ where: { creditOfId: invoice.id }, select: { id: true, number: true, issueDate: true, status: true }, orderBy: { issueDate: 'asc' } })
   const unaccepted = matches.filter((row) => !row.withinTolerance && row.acceptedAt === null).length
   const linesNet = isTyped(invoice.source as InvoiceSource) ? lines.reduce((total, line) => total + line.netAmount, 0) : null
+  const { mappedByIds, acceptedByIds } = await preparationOf(db, invoice.id)
   const facts = {
     number: invoice.number,
     status: invoice.status as InvoiceStatus,
@@ -152,6 +153,8 @@ export async function detailOf(db: Reader, invoice: InvoiceRow, viewer: { readon
     kind: invoice.kind as InvoiceKind,
     matchStatus: invoice.matchStatus as MatchStatus,
     createdById: invoice.createdById,
+    mappedByIds,
+    acceptedByIds,
     xmlFileId: invoice.xmlFileId,
     unaccepted,
     linesNet,

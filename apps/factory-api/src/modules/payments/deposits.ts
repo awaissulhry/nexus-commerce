@@ -1,3 +1,4 @@
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { DomainError, ForbiddenError, InvalidStateError } from '@nexus/factory-domain/core/errors'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { depositInvoiceDecision, depositRuleNow, type DepositInvoiceDecision } from '@nexus/factory-domain/invoicing/deposit'
@@ -38,6 +39,8 @@ export interface DepositReceivedInput {
   readonly internalNote?: string | null | undefined
   /** Default true: issue the TD02 now when the rule requires one. */
   readonly issueDepositInvoice?: boolean | undefined
+  /** B-W2a-F8: the reason the payment (and its TD02) go into a SOFT-locked month anyway. */
+  readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
 export interface DepositReceivedAnswer {
@@ -89,12 +92,12 @@ export async function depositReceived(files: FilesRuntime, caller: CommandCaller
 
   const outcome = await recordingCommand(() =>
     command(caller, { name: 'payments.depositReceived', idempotencyKey, input: body }, async (tools) => {
-      const payment = await insertPayment(tools, checked)
+      const payment = await insertPayment(tools, checked, body.periodLockOverride)
       // Allocate BEFORE issuing: the payment's lock, then the request's (allocateInCommand), then the series.
       const [allocation] = await allocateInCommand(tools, payment, [{ depositRequestId: current.id }], 'body/allocations', { settle: false })
       const decision: DepositInvoiceDecision = depositInvoiceDecision({ fiscalDocument: current.fiscalDocument, fiscalRule: current.fiscalRule, paidAmount: allocation?.amount ?? 0, paidOn: checked.receivedOn, goodsLeftOn: await goodsLeftOn(tools.tx, current.orderId) })
       let invoiceId: string | null = null
-      if (decision.required && body.issueDepositInvoice !== false) invoiceId = await issueDeposit(tools, current, allocation!.amount, checked.receivedOn)
+      if (decision.required && body.issueDepositInvoice !== false) invoiceId = await issueDeposit(tools, current, allocation!.amount, checked.receivedOn, body.periodLockOverride)
       const status = (await tools.tx.depositRequest.findUnique({ where: { id: current.id }, select: { status: true } }))!.status
       // B-W1-51: the order's settlement, announced at the end (after the TD02's series).
       await settleOrders(tools, current.orderId ? [current.orderId] : [])
@@ -117,12 +120,12 @@ export async function depositReceived(files: FilesRuntime, caller: CommandCaller
 }
 
 /** Inside the deposit command, the request's lock held: the TD02 draft of the amount paid, issued (or 409 with its problems). */
-async function issueDeposit(tools: CommandTools, request: NonNullable<Awaited<ReturnType<typeof readDepositRequest>>>, amount: number, paidOn: string): Promise<string> {
+async function issueDeposit(tools: CommandTools, request: NonNullable<Awaited<ReturnType<typeof readDepositRequest>>>, amount: number, paidOn: string, periodLockOverride?: PeriodLockOverride): Promise<string> {
   await lockMoney(tools.tx, tools.context, 'deposit', request.id)
   if ((await seriesKindFor(tools.tx, request.companyId, 'TD02')) === null) {
     throw refusal([{ code: 'SERIES', path: 'numbering', message: 'This company has no active deposit invoice or invoice number series: an admin sets it up under numbering.' }])
   }
   const invoiceId = await insertDepositDraft(tools, request, amount, paidOn)
-  await issueInCommand(tools, invoiceId)
+  await issueInCommand(tools, invoiceId, periodLockOverride)
   return invoiceId
 }

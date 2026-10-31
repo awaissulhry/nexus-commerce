@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { amountMinor, businessDate, currency, defineContract, id, input, instant, output, quantity, unitPrice } from '@nexus/factory-domain/core/contracts'
 import { DOCUMENT_LANGUAGES } from '@nexus/factory-domain/documents/model'
 import { COUNT_ITEM_KINDS, COUNT_LIMITS, COUNT_LINE_ORIGINS, STOCK_COUNT_KINDS, STOCK_COUNT_STATUSES } from '@nexus/factory-domain/inventory/counts/rules'
@@ -321,7 +322,9 @@ export const sendBackContract = defineContract({
 
 export const applyCountContract = defineContract({
   params: countParams,
-  body: versionBody,
+  body: versionBody.extend({
+    periodLockOverride: periodLockOverride.optional(),
+  }),
   response: {
     200: output({
       count: countRecordView,

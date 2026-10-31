@@ -14,6 +14,7 @@ import { seed as seedEmailIn } from '../seed/email-in'
 import { seed as seedFiles } from '../seed/files'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
 import { seed as seedFloorSync } from '../seed/floor-sync'
+import { seed as seedFollowupsQualityMoney } from '../seed/followups-quality-money'
 import { seed as seedHolds } from '../seed/holds'
 import { seed as seedImports } from '../seed/imports'
 import { seed as seedInsights } from '../seed/insights'
@@ -45,6 +46,7 @@ import { seed as seedSearch } from '../seed/search'
 import { seed as seedShipping } from '../seed/shipping'
 import { seed as seedSourcing } from '../seed/sourcing'
 import { seed as seedSubcontract } from '../seed/subcontract'
+import { seed as seedSubcontractReceipts } from '../seed/subcontract-receipts'
 import { seed as seedSupply } from '../seed/supply'
 import { seed as seedThreads } from '../seed/threads'
 import { seed as seedViews } from '../seed/views'
@@ -194,6 +196,9 @@ beforeAll(async () => {
   await seedSourcing({ db: factory, namespace: 'iso-b' })
   await seedSubcontract({ db: factory, namespace: 'iso-a' })
   await seedSubcontract({ db: factory, namespace: 'iso-b' })
+  // W2b schema wave 1/7: goods out to and back from a workshop, a job sheet version.
+  await seedSubcontractReceipts({ db: factory, namespace: 'iso-a' })
+  await seedSubcontractReceipts({ db: factory, namespace: 'iso-b' })
   // The stock and planning schema of W2a (wave 4/7).
   await seedPlanning({ db: factory, namespace: 'iso-a' })
   await seedPlanning({ db: factory, namespace: 'iso-b' })
@@ -210,6 +215,9 @@ beforeAll(async () => {
     await seedMoneyW2a({ db: factory, namespace: 'iso-a' })
     await seedMoneyW2a({ db: factory, namespace: 'iso-b' })
   }
+  // W2b schema wave 2/7: the follow-ups for quality, planning and money.
+  await seedFollowupsQualityMoney({ db: factory, namespace: 'iso-a' })
+  await seedFollowupsQualityMoney({ db: factory, namespace: 'iso-b' })
   // The W2a follow-ups for sales, product and platform (W2b schema wave 3/7).
   await seedFollowupsPlatformW2b({ db: factory, namespace: 'iso-a' })
   await seedFollowupsPlatformW2b({ db: factory, namespace: 'iso-b' })
@@ -240,6 +248,7 @@ it('covers every classified table and every runtime role', () => {
     'CalendarDay',
     'Certificate',
     'CertificateCoverage',
+    'CertificateRenewal',
     'Colour',
     'Colourway',
     'Company',
@@ -267,6 +276,7 @@ it('covers every classified table and every runtime role', () => {
     'FloorSyncEvent',
     'GarmentLabelPrint',
     'GarmentSerial',
+    'GeneratedDocument',
     'GoodsReceipt',
     'GoodsReceiptLine',
     'Hide',
@@ -279,6 +289,7 @@ it('covers every classified table and every runtime role', () => {
     'InspectionDefect',
     'IntegrationAccount',
     'IntegrationCall',
+    'InterestReferenceRate',
     'Invitation',
     'Invoice',
     'InvoiceLine',
@@ -327,6 +338,7 @@ it('covers every classified table and every runtime role', () => {
     'PartyPriceListAssignment',
     'PartyTaxIdentity',
     'PasswordReset',
+    'PayablesSettings',
     'Payment',
     'PaymentAllocation',
     'PaymentReminder',
@@ -351,6 +363,7 @@ it('covers every classified table and every runtime role', () => {
     'PurchaseOrderLine',
     'PurchaseOrderReminder',
     'PurchaseOrderRevision',
+    'PurchasingSettings',
     'QualityHold',
     'QualityRelease',
     'QualityReleaseReversal',
@@ -391,6 +404,7 @@ it('covers every classified table and every runtime role', () => {
     'ScanCorrectionRequest',
     'ScheduleSlot',
     'ScrapReason',
+    'SdiInboxItem',
     'SdiNotification',
     'SdiSubmission',
     'SearchEntry',
@@ -414,12 +428,16 @@ it('covers every classified table and every runtime role', () => {
     'StoredFile',
     'Style',
     'StyleRevision',
+    'SubcontractBundle',
     'SubcontractKitLine',
     'SubcontractOperation',
     'SubcontractOrder',
+    'SubcontractReceipt',
+    'SubcontractReceiptLine',
     'SupplierClaim',
     'SupplierClaimLine',
     'SupplierInvoice',
+    'SupplierInvoiceFile',
     'SupplierInvoiceLine',
     'SupplierInvoiceMatch',
     'SupplierItem',
@@ -438,6 +456,7 @@ it('covers every classified table and every runtime role', () => {
     'WorkCentreCapacity',
     'WorkOrder',
     'WorkOrderCostEntry',
+    'WorkOrderKit',
     'WorkOrderMaterial',
     'WorkOrderOperation',
     'WorkOrderSize',

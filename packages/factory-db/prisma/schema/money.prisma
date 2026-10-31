@@ -496,6 +496,11 @@ model PaymentAllocation {
   amount           Int
   /// A reversal: the allocation of the same payment and target it takes back.
   reversalOfId     String?         @db.Uuid
+  /// W2b (schema wave 2/7; B-W2a-61's schema need "a NONE deposit carried onto the invoice"): this allocation places on an
+  /// issued TD01 / TD24 of the order the money a reversal of the same payment took back from the order's PAID deposit
+  /// request that issues no deposit invoice (fiscal document NONE): that reversal, in the same command, for the opposite
+  /// amount (the …_followups_quality_money_w2b_guards triggers; the reversal waits for it at commit). Once per reversal.
+  carriedFromId    String?         @db.Uuid
   /// Why (required on a reversal).
   /// @internal
   note             String?
@@ -509,9 +514,14 @@ model PaymentAllocation {
   depositRequest DepositRequest?     @relation(fields: [tenantId, companyId, partyId, depositRequestId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   reversalOf     PaymentAllocation?  @relation("PaymentAllocationReversal", fields: [tenantId, paymentId, reversalOfId], references: [tenantId, paymentId, id], onDelete: Restrict, onUpdate: Restrict)
   reversals      PaymentAllocation[] @relation("PaymentAllocationReversal")
+  // W2b: the reversal of a NONE deposit's allocation this one carries onto an invoice, and the carry of a reversal.
+  carriedFrom    PaymentAllocation?  @relation("PaymentAllocationCarry", fields: [tenantId, paymentId, carriedFromId], references: [tenantId, paymentId, id], onDelete: Restrict, onUpdate: Restrict)
+  carries        PaymentAllocation[] @relation("PaymentAllocationCarry")
 
   // The target of the reversals' reference: an allocation of the same payment.
   @@unique([tenantId, paymentId, id])
+  // W2b: a reversal is carried once.
+  @@unique([tenantId, carriedFromId])
   @@index([tenantId, invoiceId])
   @@index([tenantId, depositRequestId])
 }

@@ -1,0 +1,73 @@
+{
+  "col": {
+    "overdue": "Scaduto"
+  },
+  "cell": {
+    "reading": "Lettura…",
+    "none": "nessuno",
+    "daysLate_one": "{count} giorno di ritardo",
+    "daysLate_other": "{count} giorni di ritardo",
+    "invoices_one": "{count} fattura",
+    "invoices_other": "{count} fatture"
+  },
+  "money": {
+    "overdue": "Scaduto",
+    "nothingLate": "Niente di scaduto",
+    "lateInvoices_one": "{count} fattura scaduta",
+    "lateInvoices_other": "{count} fatture scadute",
+    "unknown": "Non è stato possibile leggerlo",
+    "reading": "Lettura…",
+    "oldestLate_one": "La più vecchia {count} giorno di ritardo · Amministrazione › Crediti e fidi",
+    "oldestLate_other": "La più vecchia {count} giorni di ritardo · Amministrazione › Crediti e fidi",
+    "nothingLateHint": "Niente oltre la scadenza · Amministrazione › Crediti e fidi",
+    "returns": "Resi nel {year}",
+    "returnsHint": "{units} pezzi · {open} aperti"
+  },
+  "now": {
+    "title": "Resi e reclami aperti",
+    "reading": "Lettura…",
+    "nothingOpen": "Nessun reso o reclamo aperto.",
+    "return": "Reso",
+    "complaint": "Reclamo",
+    "late": "merce in ritardo",
+    "requested": "Richiesto il {date} · {units} pezzi",
+    "answerDue": "Risposta entro il {date}",
+    "received": "Ricevuto il {date}",
+    "col": {
+      "type": "Tipo",
+      "number": "Numero",
+      "state": "Stato",
+      "when": "Quando"
+    },
+    "more_one": "Altro {count} aperto: vedi gli elenchi.",
+    "more_other": "Altri {count} aperti: vedi gli elenchi.",
+    "owes": "Quanto deve questo cliente, per anzianità:",
+    "receivables": "Amministrazione › Crediti e fidi"
+  },
+  "returnStatus": {
+    "REQUESTED": "Richiesto",
+    "AUTHORISED": "Autorizzato",
+    "RECEIVED": "Ricevuto",
+    "INSPECTED": "Ispezionato",
+    "CLOSED": "Chiuso",
+    "REJECTED": "Rifiutato",
+    "CANCELLED": "Annullato"
+  },
+  "complaintStatus": {
+    "NEW": "Nuovo",
+    "TRIAGED": "Valutato",
+    "INVESTIGATING": "In analisi",
+    "ANSWERED": "Risposto",
+    "CLOSED": "Chiuso"
+  },
+  "problem": {
+    "conflict": "Cambiato nel frattempo: rileggilo.",
+    "signed_out": "Sei uscito.",
+    "forbidden": "Non hai il permesso per questo.",
+    "not_found": "Non trovato.",
+    "unavailable": "Non leggibile: il server non è raggiungibile.",
+    "rate_limited": "Troppi tentativi: attendi un momento.",
+    "invalid": "Rifiutato così com'è.",
+    "internal": "Qualcosa è andato storto."
+  }
+}

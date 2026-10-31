@@ -1,0 +1,73 @@
+{
+  "col": {
+    "overdue": "Overdue"
+  },
+  "cell": {
+    "reading": "Reading…",
+    "none": "none",
+    "daysLate_one": "{count} day late",
+    "daysLate_other": "{count} days late",
+    "invoices_one": "{count} invoice",
+    "invoices_other": "{count} invoices"
+  },
+  "money": {
+    "overdue": "Overdue",
+    "nothingLate": "Nothing late",
+    "lateInvoices_one": "{count} invoice late",
+    "lateInvoices_other": "{count} invoices late",
+    "unknown": "Couldn't be read",
+    "reading": "Reading…",
+    "oldestLate_one": "Oldest {count} day late · Finance › Receivables & credit",
+    "oldestLate_other": "Oldest {count} days late · Finance › Receivables & credit",
+    "nothingLateHint": "Nothing past its due date · Finance › Receivables & credit",
+    "returns": "Returns in {year}",
+    "returnsHint": "{units} units · {open} open"
+  },
+  "now": {
+    "title": "Open returns and claims",
+    "reading": "Reading…",
+    "nothingOpen": "No open return or claim.",
+    "return": "Return",
+    "complaint": "Complaint",
+    "late": "goods late",
+    "requested": "Asked {date} · {units} units",
+    "answerDue": "Answer due {date}",
+    "received": "Received {date}",
+    "col": {
+      "type": "Type",
+      "number": "Number",
+      "state": "State",
+      "when": "When"
+    },
+    "more_one": "{count} more open: see the lists.",
+    "more_other": "{count} more open: see the lists.",
+    "owes": "What this customer owes, by age:",
+    "receivables": "Finance › Receivables & credit"
+  },
+  "returnStatus": {
+    "REQUESTED": "Requested",
+    "AUTHORISED": "Authorised",
+    "RECEIVED": "Received",
+    "INSPECTED": "Inspected",
+    "CLOSED": "Closed",
+    "REJECTED": "Rejected",
+    "CANCELLED": "Cancelled"
+  },
+  "complaintStatus": {
+    "NEW": "New",
+    "TRIAGED": "Triaged",
+    "INVESTIGATING": "Investigating",
+    "ANSWERED": "Answered",
+    "CLOSED": "Closed"
+  },
+  "problem": {
+    "conflict": "Changed meanwhile: read it again.",
+    "signed_out": "You are signed out.",
+    "forbidden": "You don't have the permission for this.",
+    "not_found": "Not found.",
+    "unavailable": "Couldn't be read: the server cannot be reached.",
+    "rate_limited": "Too many tries: wait a moment.",
+    "invalid": "Refused as it is.",
+    "internal": "Something went wrong."
+  }
+}

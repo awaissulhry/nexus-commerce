@@ -1,0 +1,40 @@
+// Work-order kits (W2b schema wave 1/7, B-W2b-01; the B-W2a-58 note; feature SCM-213; design warehouse.picking pk-grid
+// "Kit location", pk-list "Mark kit complete", floor.pick "Kit staging"): where the material picked for a work order is
+// staged, and when someone marked the kit complete. Until W2b the kit status was only derived from the issues and "Kit
+// place" was not recorded. apps/factory-api's modules/inventory (B-W2b-15) writes it, always through command(); the floor
+// marks a kit on its pick screen.
+//
+// One kit per work order: its id is the work order's id by the module's convention (a unique key of ids alone cannot
+// be copied by the generated isolation tests), and a kit names its work order. The staging place is a location of the
+// work order's site (not archived, not a workshop's). Marked complete with when and by whom (both or neither; the
+// module holds "Mark kit complete" while lines are short), and opened again by clearing them. Never deleted.
+//
+// Who sees what (ownership/kits.json): the office, and the floor of the work order's site, read and write; portal and
+// link sessions read none. No money here.
+
+/// The material kit of one work order (SCM-213): its staging place and whether it was marked complete.
+model WorkOrderKit {
+  /// The work order's own id (the module's convention: one kit per work order).
+  id                String    @id @db.Uuid
+  tenantId          String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The work order's site.
+  siteId            String    @db.Uuid
+  workOrderId       String    @db.Uuid
+  /// Where the picked material waits for the work order: a location of the site; null: not staged yet.
+  stagingLocationId String?   @db.Uuid
+  /// When and by whom (an office user or a floor worker) it was marked complete; both or neither (cleared when opened
+  /// again).
+  completedAt       DateTime? @db.Timestamptz(3)
+  completedById     String?   @db.Uuid
+  note              String?
+  version           Int       @default(1)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?   @db.Uuid
+
+  workOrder       WorkOrder @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  stagingLocation Location? @relation(fields: [tenantId, siteId, stagingLocationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, workOrderId])
+}

@@ -259,7 +259,8 @@
       "COUNT": "Stock count",
       "NCR": "Nonconformance",
       "MAINTENANCE_JOB": "Maintenance job",
-      "ACCOUNTING_EXPORT": "Accounting export"
+      "ACCOUNTING_EXPORT": "Accounting export",
+      "HOLD": "Quality hold"
     },
     "record": {
       "Invoice": "Invoice",

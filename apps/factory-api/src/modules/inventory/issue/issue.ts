@@ -12,6 +12,7 @@ import { command, type CommandCaller, type CommandTools, type CommandTx } from '
 import { actorOf } from '../../../core/context'
 import { mayAt, postedBy, stockContextOf, type StockContext } from '../ledger/access'
 import { InsufficientStockError, LEDGER_SELECT, postMoves, type LedgerRow, type MoveDraft, type PostedMove } from '../ledger/post-moves'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { latestMoveOf, PickRefusedError, pickingWorkOrder, readGroup } from './picking'
 import { giveBackIssue, reservedForIssue, ReservedForOtherError } from '../reservations/consume'
 import { holdOnIssue } from '../../quality/holds/checks'
@@ -159,6 +160,8 @@ export interface IssueInput extends StockRef {
   readonly overIssueReason?: string | undefined
   /** When it happened, by the device's clock (a floor scan sent later). Default now. */
   readonly occurredAt?: string | undefined
+  /** B-W2a-F8: the reason an issue dated inside a SOFT-locked month is posted anyway. */
+  readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
 export interface IssueResult {
@@ -265,7 +268,11 @@ export async function issueInCommand(tools: CommandTools, workOrderId: string, b
   }))
   let moves: PostedMove[]
   try {
-    moves = await postMoves(tools, drafts, { key, issuePath: () => path })
+    moves = await postMoves(tools, drafts, {
+      key,
+      issuePath: () => path,
+      periodLockOverride: body.periodLockOverride,
+    })
   } catch (error) {
     // Another tablet issued the same hide first (it held the stock lock): who-free words, not the balance (SCM-194).
     if (error instanceof InsufficientStockError && hide) throw await alreadyIssued(tx, hide)
@@ -357,6 +364,8 @@ export interface ReturnInput extends StockRef {
   readonly toLocationId: string
   readonly note?: string | null | undefined
   readonly occurredAt?: string | undefined
+  /** B-W2a-F8: the reason a return dated inside a SOFT-locked month is posted anyway. */
+  readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
 export async function returnStock(caller: CommandCaller, workOrderId: string, body: ReturnInput, idempotencyKey?: string) {
@@ -404,7 +413,11 @@ export async function returnStock(caller: CommandCaller, workOrderId: string, bo
             ...(occurredAt ? { occurredAt } : {}),
           },
         ],
-        { key: keyFor('inventory.return', idempotencyKey), issuePath: () => 'body' },
+        {
+          key: keyFor('inventory.return', idempotencyKey),
+          issuePath: () => 'body',
+          periodLockOverride: body.periodLockOverride,
+        },
       )
       const hideState: HideState | null = decision.hideState
       if (hide && hideState && hideState !== hide.state) {

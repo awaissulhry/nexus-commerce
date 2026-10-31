@@ -23,7 +23,8 @@ const item = output({ id: id(), code: z.string(), name: z.string(), baseUom: uom
 const flag = () => z.enum(['true', 'false']).transform((value) => value === 'true')
 const quality = z.enum(LOT_QUALITY_STATUSES)
 const crViStatus = z.enum(['NOT_REQUIRED', 'PENDING', 'PASS', 'FAIL'])
-const hideState = z.enum(['FULL', 'PARTLY_CUT', 'REMNANT', 'CONSUMED', 'SCRAPPED'])
+// W2b (B-W2b-01): RETURNED, a hide sent back to the tannery.
+const hideState = z.enum(['FULL', 'PARTLY_CUT', 'REMNANT', 'CONSUMED', 'SCRAPPED', 'RETURNED'])
 /** One quantity in one unit (totals never add different units). */
 const perUnit = output({ uom, quantity: z.string() })
 const limit = (max: number, fallback: number) => z.coerce.number().int().min(1).max(max).default(fallback)

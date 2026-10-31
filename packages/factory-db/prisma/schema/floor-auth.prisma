@@ -80,6 +80,8 @@ model Device {
   // B-W1-44: the garment labels printed on it; the bundle tickets printed again on it.
   garmentLabelPrints     GarmentLabelPrint[]
   bundleReprints         BundleReprint[]
+  // W2b subcontract.prisma (B-W2b-01): the subcontract receipts taken on it (the floor's kit task).
+  subcontractReceipts    SubcontractReceipt[]
   // numbering.prisma: the numbers of its blocks it used.
   numberBlockUses NumberBlockUse[]
   // floor-sync.prisma: its queue's recorded events and refused actions.

@@ -261,7 +261,7 @@ function stockOf(input: PickInput, itemId: string, itemColourId: string | null):
       heldBy.set(row.lotId!, entry)
       continue
     }
-    if (hide && (hide.state === 'CONSUMED' || hide.state === 'SCRAPPED')) continue
+    if (hide && (hide.state === 'CONSUMED' || hide.state === 'SCRAPPED' || hide.state === 'RETURNED')) continue
     usableOnHand = usableOnHand.plus(dec(row.onHand))
     candidates.push({
       lotId: row.lotId,

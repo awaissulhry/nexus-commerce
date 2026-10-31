@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { businessDate, defineContract, id, input, instant, output, quantity, unitPrice } from '@nexus/factory-domain/core/contracts'
 import { money } from '@nexus/factory-domain/money/marked'
 import { ITEM_TRACKINGS } from '@nexus/factory-domain/product/materials/rules'
@@ -364,6 +365,7 @@ export const sendKitContract = defineContract({
     bundles: z.array(input({ bundleId: id() })).max(MAX_LINES_PER_ACT).default([]),
     /** The DDT for work on our behalf (conto lavorazione) the goods travel with; null: none issued now (issue it later). */
     ddt: sourceRequest.omit({ version: true }).nullable(),
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: {
     201: output({
@@ -395,6 +397,7 @@ export const receiveContract = defineContract({
     /** The workshop's DDT the goods came back with. */
     supplierDdt: input({ number: z.string().trim().min(1).max(40), date: businessDate().nullish() }).nullish(),
     note: note(),
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: {
     201: output({
