@@ -1,0 +1,282 @@
+{
+  "title": "Approved sources",
+  "intro": "What {supplier} sells us and on what terms. Type in a cell: it is saved when you leave it.",
+  "everyColour": "Every colour",
+  "everyCompany": "Every company",
+  "uom": {
+    "PCS": "pcs",
+    "PAIR": "pair",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "hides",
+    "SIDE": "sides",
+    "ROLL": "rolls",
+    "CONE": "cones",
+    "BOX": "boxes"
+  },
+  "unit": {
+    "factor": "1 {unit} = {factor} {base}",
+    "notUsable": "Unit no longer converted",
+    "notUsableNote": "A source whose unit the material no longer converts is bought in the material’s own unit until it is changed."
+  },
+  "price": {
+    "per": "{currency} per {unit}",
+    "none": "No price yet"
+  },
+  "lead": {
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "usual_one": "The supplier’s usual: {count} day",
+    "usual_other": "The supplier’s usual: {count} days",
+    "none": "Not known"
+  },
+  "preference": {
+    "PRIMARY": "Primary",
+    "BACKUP": "Backup"
+  },
+  "last": {
+    "none": "Not bought yet"
+  },
+  "status": {
+    "ACTIVE": "Approved",
+    "ARCHIVED": "Archived"
+  },
+  "col": {
+    "material": "Material",
+    "company": "Company",
+    "article": "Their code",
+    "colourCode": "Their colour code",
+    "description": "Their description",
+    "unit": "Purchase unit",
+    "price": "Price",
+    "moq": "Minimum order",
+    "multiple": "Pack multiple",
+    "lead": "Lead time",
+    "preference": "Primary / backup",
+    "last": "Last purchase",
+    "status": "State",
+    "supplier": "Supplier",
+    "colour": "Colour",
+    "pack": "Pack size"
+  },
+  "noAccess": {
+    "title": "Approved sources are Purchasing’s",
+    "body": "Your role cannot read them: it needs purchasing.view. Ask an administrator."
+  },
+  "held": {
+    "noManage": "Your role cannot change approved sources (purchasing.sources.manage).",
+    "supplierArchived": "The supplier is archived: it is no approved source any more.",
+    "busy": "Wait: the last change is still being saved.",
+    "archived": "Archived: restore it to change it."
+  },
+  "list": {
+    "failed": "Couldn’t load approved sources",
+    "noMatch": "No source matches the search",
+    "empty": {
+      "title": "No items yet",
+      "body": "Add what this supplier sells us: the material, their code, unit, price, minimum, multiple and lead time. Importing a price list comes later."
+    },
+    "emptyView": {
+      "archived": "No archived source",
+      "all": "No source yet"
+    },
+    "label": "Approved sources of {supplier}",
+    "count_one": "{count} source",
+    "count_other": "{count} sources",
+    "countMore_one": "{count} source shown, more to read",
+    "countMore_other": "{count} sources shown, more to read",
+    "search": "Search material or code",
+    "viewLabel": "Which sources",
+    "more": "Show more"
+  },
+  "view": {
+    "active": "Approved",
+    "archived": "Archived",
+    "all": "All"
+  },
+  "add": {
+    "open": "Add a source",
+    "title": "Add a source of {supplier}",
+    "submit": "Add",
+    "noMaterials": "Finding a material needs product.materials.view: ask an administrator.",
+    "otherMaterial": "Another material",
+    "material": "Material",
+    "materialHint": "Active materials only.",
+    "materialSearch": "Code or name",
+    "noMaterial": "No active material matches.",
+    "colour": "Colour",
+    "colourHint": "A colour’s own source is used before the one of every colour.",
+    "company": "Holds for",
+    "companyHint": "A source of every company needs a role over every company.",
+    "companyOneHint": "This supplier supplies one company only.",
+    "thisCompany": "This company ({company})",
+    "unit": "Purchase unit",
+    "unitHint": "Any unit the material converts; by default its own ({unit}).",
+    "unitDefault": "The material’s own ({unit})",
+    "preference": "Primary or backup",
+    "preferenceHint": "One primary per material, colour and company.",
+    "price": "Price per unit",
+    "priceHint": "In the currency below; blank: no price yet.",
+    "currency": "Currency",
+    "leadHint": "Blank: the supplier’s usual lead time.",
+    "note": "Note",
+    "noCost": "Your role has no cost grain: the price is added by a buyer who sees costs.",
+    "primaryNote": "The current primary source of this material, colour and company becomes a backup.",
+    "held": {
+      "material": "Choose the material first.",
+      "oneCompany": "This supplier supplies one company only: its source holds for that company.",
+      "noCompany": "Open a company first: a source holds for one company or for every company.",
+      "noCost": "Your role has no cost grain: leave the price blank.",
+      "currency": "A currency code of three letters (EUR)."
+    },
+    "refused": {
+      "archived": "The supplier or the material is archived: it cannot be an approved source.",
+      "duplicate": "This supplier already has an approved source of this material for this company and colour: change that one.",
+      "everyCompany": "A source of every company is kept only by a role over every company: choose this company.",
+      "company": "The supplier or the material belongs to one company: the source holds for that company.",
+      "notSupplier": "This party has no supplier role: give it one first.",
+      "colour": "Choose an active colour of this material.",
+      "gone": "The supplier or the material is no longer there."
+    }
+  },
+  "bulk": {
+    "archive_one": "Archive {count}",
+    "archive_other": "Archive {count}",
+    "restore_one": "Restore {count}",
+    "restore_other": "Restore {count}",
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)",
+    "noneActive": "None of the picked sources is approved.",
+    "noneArchived": "None of the picked sources is archived.",
+    "done": {
+      "archive_one": "{count} source archived.",
+      "archive_other": "{count} sources archived.",
+      "restore_one": "{count} source approved again.",
+      "restore_other": "{count} sources approved again."
+    },
+    "refusedRow": "{label}: {why}",
+    "refused": {
+      "archiveState": "it is archived already.",
+      "restoreState": "it cannot be approved again: the supplier or the material is archived, or it is approved already.",
+      "restoreDuplicate": "the supplier has another approved source of it for this company and colour: archive that one first."
+    }
+  },
+  "common": {
+    "retry": "Try again",
+    "clearSearch": "Clear the search",
+    "dismiss": "Dismiss",
+    "cancel": "Cancel",
+    "loading": "Loading…"
+  },
+  "readOnly": {
+    "title": "Read only",
+    "body": "Your role reads the approved sources but cannot change them: that needs purchasing.sources.manage (the buyer)."
+  },
+  "noCost": "Prices are not shown: your role has no cost grain.",
+  "cell": {
+    "label": "{field} of {material}",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "refused": {
+      "supplierArticleCode": "Their code is at most 60 characters.",
+      "supplierColourCode": "Their colour code is at most 60 characters.",
+      "description": "The description is at most 300 characters.",
+      "purchaseUom": "The material does not convert this unit.",
+      "unitPrice": "A price of 0 or more, at most six decimals.",
+      "minOrderQty": "A minimum above 0, at most four decimals.",
+      "orderMultiple": "A multiple above 0, at most four decimals.",
+      "leadTimeDays": "Whole days, 0 to 366.",
+      "preference": "Choose primary or backup.",
+      "currency": "A currency code of three letters (EUR).",
+      "note": "The note is at most 1000 characters."
+    },
+    "tooLong": "At most {max} characters.",
+    "badPrice": "A price of 0 or more, at most six decimals.",
+    "badQuantity": "Above 0, at most four decimals.",
+    "badDays": "Whole days, 0 to {max}.",
+    "changed": "Changed by someone else: read again, type it again.",
+    "archived": "Archived meanwhile: restore it to change it.",
+    "unitNotConverted": "The material does not convert this unit to its base unit.",
+    "forbidden": "Your role cannot change this source (a source of every company needs a role over every company)."
+  },
+  "field": {
+    "supplierArticleCode": "Their code",
+    "supplierColourCode": "Their colour code",
+    "description": "Their description",
+    "purchaseUom": "Purchase unit",
+    "unitPrice": "Price",
+    "minOrderQty": "Minimum order",
+    "orderMultiple": "Pack multiple",
+    "leadTimeDays": "Lead time in days",
+    "preference": "Primary or backup"
+  },
+  "problem": {
+    "write": "Not saved: try again.",
+    "invalid": "Not saved: check what you typed.",
+    "gone": "It is no longer there.",
+    "offline": "No answer from the server: try again in a moment.",
+    "read": "The read failed: try again.",
+    "forbidden": "Your role cannot read this.",
+    "changed": "Changed by someone else: read again.",
+    "slowDown": "Too many tries: wait a moment."
+  },
+  "archive": {
+    "title_one": "Archive {count} source?",
+    "title_other": "Archive {count} sources?",
+    "submit_one": "Archive {count}",
+    "submit_other": "Archive {count}",
+    "body": "An archived source is no longer offered when buying: the supplier is not approved for it any more. It is kept, and may be approved again.",
+    "reason": "Reason",
+    "reasonHint": "Kept in the history (optional)."
+  },
+  "restore": {
+    "title_one": "Approve {count} source again?",
+    "title_other": "Approve {count} sources again?",
+    "submit_one": "Approve {count} again",
+    "submit_other": "Approve {count} again",
+    "body": "Each comes back as a backup source. Its terms are as they were when it was archived."
+  },
+  "notice": {
+    "demoted": "{supplier} is now the backup for {material}.",
+    "changed": "{material} was changed by someone else: the row was read again.",
+    "added": "Source of {material} added.",
+    "addedDemoted": "Source of {material} added as primary: {supplier} is now the backup."
+  },
+  "keys": {
+    "add": "Add a source",
+    "title": "Keyboard shortcuts"
+  },
+  "csv": {
+    "material": "Material",
+    "colour": "Colour",
+    "company": "Company",
+    "articleCode": "Their code",
+    "colourCode": "Their colour code",
+    "description": "Their description",
+    "unit": "Unit",
+    "price": "Price",
+    "currency": "Currency",
+    "moq": "Minimum order",
+    "multiple": "Pack multiple",
+    "lead": "Lead time (days)",
+    "preference": "Primary / backup",
+    "status": "State"
+  },
+  "prices": {
+    "title": "Supplier prices",
+    "intro": "The approved suppliers of this material with their price, minimum, pack size and lead time. They are kept in Purchasing, on each supplier’s Items & prices.",
+    "noAccess": "Supplier prices are Purchasing’s: your role needs purchasing.view to read them.",
+    "failed": "Couldn’t load supplier prices",
+    "onlyDefault": "Only the default supplier: {supplier}. No approved source yet.",
+    "openSupplier": "Open the supplier",
+    "none": "No approved source yet, and no default supplier."
+  }
+}

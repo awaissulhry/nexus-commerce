@@ -2,7 +2,7 @@ import { designScreen as panelsScreen } from '../../../../record-panels/fixtures
 import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import type { ImportJob, Importer, ImportRow } from '../../../admin/import/api'
 import { blankDraft, emptyWizard } from '../../../admin/import/model'
-import type { BomLine, BomView, BrandRow, ColourRow, CostDiffView, CostSheetView, DuplicatedView, DuplicateOfferView, MaterialView, OperationRow, PriceEntry, RoutingView, ScaleRow, StyleComplianceView, StyleRow, StyleView, WorkshopRow } from '../api'
+import type { BomLine, BomView, BrandRow, ColourRow, CostDiffView, CostSheetView, DuplicatedView, DuplicateOfferView, MaterialView, OperationRow, PriceEntry, RoutingView, ScaleRow, StyleComplianceView, StyleRow, StyleTypeChanges, StyleView, WorkshopRow } from '../api'
 import type { SheetImport } from '../import/sheet-import'
 import type { Grains, StyleAbilities } from '../model'
 import type { StyleRecordViewModel } from '../record/record-model'
@@ -42,15 +42,16 @@ const NONE: StyleAbilities = {
   imports: false,
   importsApply: false,
   prices: false,
+  tellCompliance: false,
 }
 
 /** The Owner (every right, every grain), a product / technical office person (makes the style, sees cost), the production
  * manager (makes BOM and routing, no money), sales (reads the style and the cost structure, no cost figures). */
 export const CAN: Record<'owner' | 'product' | 'production' | 'sales' | 'viewer', StyleAbilities> = {
-  owner: { view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, declarations: true, labels: true, materials: true, brands: true, thread: true, workshops: true, imports: true, importsApply: true, prices: true },
-  product: { view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, declarations: false, labels: false, materials: true, brands: true, thread: true, workshops: true, imports: false, importsApply: false, prices: false },
+  owner: { view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, declarations: true, labels: true, materials: true, brands: true, thread: true, workshops: true, imports: true, importsApply: true, prices: true, tellCompliance: true },
+  product: { view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, declarations: false, labels: false, materials: true, brands: true, thread: true, workshops: true, imports: false, importsApply: false, prices: false, tellCompliance: true },
   // The production manager's template (factory-domain roles): imports yes, the parties list no (no workshop picker).
-  production: { ...NONE, view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, materials: true, thread: true, imports: true, importsApply: true },
+  production: { ...NONE, view: true, manage: true, bomView: true, bomManage: true, release: true, routingView: true, routingManage: true, costView: true, complianceView: true, materials: true, thread: true, imports: true, importsApply: true, tellCompliance: true },
   sales: { ...NONE, view: true, costView: true, materials: true, brands: true, thread: true, prices: true },
   viewer: { ...NONE, view: true, bomView: true, routingView: true, complianceView: true, materials: true, thread: true },
 }
@@ -502,6 +503,50 @@ export function demoRouting(options: { revision?: Revision; differs?: boolean; e
 
 const CERT = { id: uid('1212', 1), number: 'CERT-DEMO-0001', standard: 'EN 17092-4:2020', ppeClass: 'A', notifiedBodyNumber: '0000', validFrom: '2025-03-01', validTo: '2026-12-15', status: 'VALID' as const }
 
+/**
+ * W2a (B-W2a-66): what the revision in view changes against the type CERT-DEMO-0001 approved. `draft`: revision 3 (a
+ * draft) changes the lining and the elbow protector against revision 2, found now; `released`: revision 2 was released
+ * with a lighter leather, its review waits for the notified body (the class label held); `none`: nothing relevant.
+ */
+export function demoTypeChanges(kind: 'draft' | 'released' | 'none'): StyleTypeChanges {
+  const certificate = { id: CERT.id, number: CERT.number, standard: CERT.standard, status: 'VALID', notifiedBodyName: 'Organismo Notificato Demo', notifiedBodyNumber: '0000' }
+  const r = (id: string, revision: number, status: string) => ({ id, revision, status })
+  if (kind === 'none') return { styleId: STYLE_ID, revision: r(REV.r3, 3, 'DRAFT'), certificates: [{ certificate, comparedRevision: r(REV.r2, 2, 'RELEASED'), changes: [], reviews: [], labelHeld: false }] }
+  if (kind === 'released')
+    return {
+      styleId: STYLE_ID,
+      revision: r(REV.r2, 2, 'RELEASED'),
+      certificates: [
+        {
+          certificate,
+          comparedRevision: r(REV.r1, 1, 'OBSOLETE'),
+          changes: [
+            { kind: 'OUTER_LEATHER', what: 'Outer leather', before: 'DEMO-PEL-100 Vacchetta pieno fiore 1.2–1.4 mm', after: 'DEMO-PEL-120 Vacchetta 1–1.2 mm', bomLineId: uid('6262', 1) },
+            { kind: 'THICKNESS', what: 'Leather thickness', before: '1.2–1.4 mm', after: '1–1.2 mm', bomLineId: uid('6262', 1) },
+          ],
+          reviews: [{ id: uid('6363', 1), status: 'NOTIFIED', holdsLabel: true, answeredOn: null, answerReference: null, notifiedAt: at(14, 10) }],
+          labelHeld: true,
+        },
+      ],
+    }
+  return {
+    styleId: STYLE_ID,
+    revision: r(REV.r3, 3, 'DRAFT'),
+    certificates: [
+      {
+        certificate,
+        comparedRevision: r(REV.r2, 2, 'RELEASED'),
+        changes: [
+          { kind: 'PROTECTOR', what: 'Protector model', before: 'DEMO-PROT-GOM-1 Gomitiera livello 1', after: 'DEMO-PROT-GOM-2 Gomitiera livello 2', bomLineId: uid('6262', 2) },
+          { kind: 'LINING', what: 'Lining', before: 'DEMO-FOD-200 Fodera rete', after: 'DEMO-FOD-210 Fodera rete leggera', bomLineId: uid('6262', 3) },
+        ],
+        reviews: [],
+        labelHeld: false,
+      },
+    ],
+  }
+}
+
 export function demoCompliance(options: { revision?: Revision; docs?: 'current' | 'missing' | 'older'; notPpe?: boolean; label?: boolean } = {}): StyleComplianceView {
   const rev = options.revision ?? REVISIONS[1]!
   const notPpe = !!options.notPpe
@@ -667,6 +712,8 @@ export function recordModel(role: keyof typeof GRAINS, overrides: Partial<StyleR
     cost: { status: 'idle' },
     costCompare: null,
     compliance: can.complianceView ? { status: 'ready', value: demoCompliance() } : { status: 'idle' },
+    typeChanges: { status: 'idle' },
+    taskPeople: null,
     libraries: { scales: SCALES, colours: COLOURS, brands: can.brands ? BRANDS : null, labels: null, workshops: can.workshops ? WORKSHOPS : null },
     materials: {},
     materialSearch: { query: '', results: null, problem: null },

@@ -742,7 +742,6 @@
       "receive": "Ricevi merce"
     },
     "cancelHeld": {
-      "contract": "Il fornitore ha confermato: ora è un contratto, qui non si annulla.",
       "received": "È stata ricevuta merce: l’ordine si chiude, non si annulla.",
       "proposed": "Accetta o rifiuta prima le modifiche del fornitore.",
       "cancelled": "Già annullato."

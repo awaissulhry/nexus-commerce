@@ -205,7 +205,8 @@
     "trackingSaved": "La numerazione dei capi è salvata.",
     "labelNamed": "La revisione indica la sua etichetta capo.",
     "subcontractSaved": "Dettagli del terzista salvati.",
-    "inHouse": "La fase è di nuovo fatta internamente."
+    "inHouse": "La fase è di nuovo fatta internamente.",
+    "toldCompliance": "L'attività per la Conformità è creata: compare nelle Attività del modello e nelle loro Mie attività."
   },
   "identity": {
     "title": "Identità",
@@ -1464,6 +1465,49 @@
       "workshop": "Scegli il terzista.",
       "fee": "Scrivi un compenso di 0 o più, con al massimo 6 decimali.",
       "days": "Scrivi giorni interi da 0 a 365."
+    }
+  },
+  "typeChange": {
+    "title": "Modifiche che possono richiedere l'organismo notificato",
+    "introDraft": "Cosa cambia la revisione bozza {revision} in pelle esterna, spessore, modello di protezione, cuciture o fodera rispetto al tipo approvato da un certificato (Reg. (UE) 2016/425 Allegato V 7.2).",
+    "introReleased": "Cosa ha cambiato la revisione {revision} in pelle esterna, spessore, modello di protezione, cuciture o fodera rispetto al tipo approvato da un certificato (Reg. (UE) 2016/425 Allegato V 7.2).",
+    "failed": "Non è stato possibile leggere le modifiche rispetto al tipo certificato.",
+    "banner": {
+      "found": "Rispetto a {number} (organismo notificato {body}, il tipo della revisione {compared}): può richiedere l'organismo notificato.",
+      "reviewed": "Rispetto a {number} (organismo notificato {body}, il tipo della revisione {compared}): esaminata in Conformità.",
+      "held": "Rispetto a {number} (organismo notificato {body}, il tipo della revisione {compared}): la sua etichetta con la classe è bloccata finché non è registrata la risposta."
+    },
+    "list": "Cosa è cambiato rispetto a {number}",
+    "to": "diventa",
+    "open": "Apri in Conformità",
+    "tell": "Avvisa la Conformità",
+    "kind": {
+      "OUTER_LEATHER": "Pelle esterna",
+      "THICKNESS": "Spessore",
+      "PROTECTOR": "Modello di protezione",
+      "SEAMS": "Cuciture",
+      "LINING": "Fodera",
+      "OTHER": "Altro"
+    },
+    "status": {
+      "OPEN": "In attesa della Conformità",
+      "NOTIFIED": "Comunicata all'organismo",
+      "APPROVED": "Integrazione approvata",
+      "REFUSED": "Rifiutata: nuovo esame",
+      "NOT_NEEDED": "Non necessaria"
+    },
+    "labelHeld": "I capi di questa revisione non stampano l'etichetta con la classe finché non è registrata la risposta dell'organismo notificato.",
+    "labelFree": "L'etichetta con la classe si stampa.",
+    "atRelease": "Al rilascio la Conformità ne riceve un esame; fino alla risposta questa revisione non stampa l'etichetta con la classe.",
+    "law": "La Conformità decide con l'organismo notificato; il certificato è in Conformità › Certificati.",
+    "held": {
+      "task": "Il tuo ruolo non crea attività su un modello (tasks.manage e threads.post)."
+    },
+    "task": {
+      "title": "Verificare con l'organismo notificato le modifiche di {code} revisione {revision}",
+      "description": "La revisione {revision} cambia il tipo che il certificato {number} (organismo notificato {body}) ha approvato con la revisione {compared}:",
+      "step1": "Decidere se informare l'organismo notificato {body}",
+      "step2": "Registrare la decisione nella scheda Rinnovi del certificato"
     }
   }
 }

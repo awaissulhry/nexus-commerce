@@ -30,6 +30,8 @@ import { reasonWords } from '../../../platform/reasons/service'
  *   holdOnLabels     modules/production/serials: garment labels printed or printed again for a work order ON_HOLD
  *                    (GarmentLabelPrint_awaits_hold).
  *
+ * B-W2a-64: holdOnWriteOff (modules/inventory/ledger write-off): a hold of the lot or the hide (no trigger: a rule).
+ *
  * Each takes the records' hold locks SHARED in id order first ('factory.quality-hold|<tenant>|<id>', the triggers'
  * locks; a scan the work order's gate lock before them, as the triggers' name order does): a hold being placed finishes
  * first and is then seen. Answers null, or the words of the first hold found. Any client the module's command uses: the
@@ -123,6 +125,27 @@ export async function holdOnIssue(tx: Tx, context: RequestContext, subject: { re
   const orderHold = (await activeHoldsOf(tx, 'WorkOrder', [subject.workOrderId]))[0]
   if (orderHold) return blockedWords(await blocking(tx, orderHold, 'WorkOrder', workOrder?.number ?? ''), 'nothing is issued to it')
   if (workOrder?.status === 'ON_HOLD') return workOrderOnHoldWords(workOrder.number, workOrder.holdReason, 'nothing is issued to it')
+  return null
+}
+
+/**
+ * A write-off of stock (B-W2a-64; inventory's POST /inventory/write-offs, design warehouse.moves › Write off and
+ * warehouse.hides › Scrap N hides): a hold of the lot or of the hide. No database trigger refuses a SCRAP of held stock:
+ * held stock is quality's to decide (its NCR's disposition scraps it), so the warehouse's write-off waits for the hold.
+ */
+export async function holdOnWriteOff(tx: Tx, context: RequestContext, subject: { readonly lotId: string | null; readonly hideId: string | null }): Promise<string | null> {
+  const tenantId = tenantOf(context)
+  await waitForHolds(tx, tenantId, [subject.lotId, subject.hideId])
+  const hideHold = (await activeHoldsOf(tx, 'Hide', [subject.hideId]))[0]
+  if (hideHold) {
+    const hide = await tx.hide.findUnique({ where: { id: subject.hideId! }, select: { code: true } })
+    return blockedWords(await blocking(tx, hideHold, 'Hide', hide?.code ?? ''), 'it is not written off')
+  }
+  const lotHold = (await activeHoldsOf(tx, 'Lot', [subject.lotId]))[0]
+  if (lotHold) {
+    const lot = await tx.lot.findUnique({ where: { id: subject.lotId! }, select: { code: true } })
+    return blockedWords(await blocking(tx, lotHold, 'Lot', lot?.code ?? ''), 'its stock is not written off')
+  }
   return null
 }
 

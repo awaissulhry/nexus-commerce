@@ -1,0 +1,82 @@
+/*
+ * The warehouse's every-day dialogs (B-W2a-64: Write off, Scrap N hides, Put on hold, Reserve to a work order, Stock as
+ * of a date) — LAYOUT only. The controls are the design system's; semantic tokens only (no colours of their own).
+ */
+.fw-dy-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-dy-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-dy-strong {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-dy-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-dy-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-dy-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-dy-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  white-space: nowrap;
+}
+
+.fw-dy-out {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-dy-picks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  max-height: 16rem;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.fw-dy-photo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-dy-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--nds-space-12);
+}

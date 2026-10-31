@@ -7,11 +7,15 @@ import { recordAddress } from '../../../lib/records/record-links'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { downloadText, useCoalesced, useLive } from '../../_shared/buying/hooks'
-import { ledgerCounts, listLocations, listLots, stockOverview, type LotCounts, type StockRow } from '../../_shared/stock/api'
+import { pickerReasons, type PickerReason } from '../../_shared/reasons/api'
+import { ledgerCounts, listLocations, listLots, stockAsOf, stockOverview, type LotCounts, type ReservedKey } from '../../_shared/stock/api'
 import { csvOf, readProblem, stockCan, TIME_ZONE } from '../../_shared/stock/model'
 import { StockMessages } from '../../_shared/stock/parts'
 import { useAdjust } from './adjust/useAdjust'
-import { stockAddressOf, stockQueryString, type SiteChoice, type StockAddress, type StockLine, type StockPageModel } from './model'
+import { listHolds, type HoldRow } from './daily/api'
+import { asOfInstant, DAILY_NAMESPACE } from './daily/model'
+import { useHold } from './daily/useHold'
+import { dailyCan, holdSubjectsOf, stockAddressOf, stockQueryString, type AsOfDraft, type GridRow, type SiteChoice, type StockAddress, type StockLine, type StockPageModel } from './model'
 import { StockView } from './view/StockView'
 
 /**
@@ -20,10 +24,15 @@ import { StockView } from './view/StockView'
  * wait for their Cr VI result (`GET /inventory/lots?crVi=PENDING`), and with the cost grain the moves not valued yet;
  * live inventory.moved behind "N updates · Show" (rows never move under the reader), lot decisions refresh the tiles.
  * Adjust stock posts one move through the shared dialog, then the page reads again.
+ *
+ * B-W2a-64: `?asOf=<instant>` reads the stock as it was then (`GET /inventory/stock?asOf=`, read only: no live, no
+ * reservations, no holds); now, the answer's reservations per key are placed on the rows, and with quality.holds.view
+ * the site's ACTIVE holds (`GET /quality/holds`) and the HOLD reasons' words say why a row is held; Put N lots on hold
+ * through the shared dialog (useHold), then the page reads again.
  */
 export function StockPage() {
   return (
-    <StockMessages extra={['warehouse-stock']}>
+    <StockMessages extra={['warehouse-stock', DAILY_NAMESPACE]}>
       <StockContainer />
     </StockMessages>
   )
@@ -39,9 +48,14 @@ function StockContainer() {
   const params = useSearchParams()
   const prefix = pathname.replace(/\/warehouse\/stock\/?$/, '')
   const can = useMemo(() => stockCan(session.permissions), [session.permissions])
+  const daily = useMemo(() => dailyCan(session.permissions), [session.permissions])
   const address = useMemo(() => stockAddressOf(params), [params])
 
-  const [rows, setRows] = useState<StockRow[] | null>(null)
+  const [rows, setRows] = useState<GridRow[] | null>(null)
+  const [reservations, setReservations] = useState<ReservedKey[]>([])
+  const [holds, setHolds] = useState<HoldRow[]>([])
+  const [holdReasons, setHoldReasons] = useState<PickerReason[]>([])
+  const [asOfDialog, setAsOfDialog] = useState<AsOfDraft | null>(null)
   const [currencies, setCurrencies] = useState<Record<string, string>>({})
   const [truncated, setTruncated] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
@@ -83,14 +97,31 @@ function StockContainer() {
         .catch(() => setUnvalued(null))
   }, [api, address.site, can.cost])
 
+  // The site's ACTIVE quality holds (their reasons on the rows); a failed read leaves the lot-status words.
+  const loadHolds = useCallback(() => {
+    if (!daily.holdsView || address.asOf) return
+    listHolds(api, { status: 'ACTIVE', siteId: address.site })
+      .then((answer) => setHolds(answer.holds.filter((hold) => hold.subjectType === 'Lot' || hold.subjectType === 'Hide')))
+      .catch(() => setHolds([]))
+  }, [api, daily.holdsView, address.site, address.asOf])
+
+  useEffect(() => {
+    if (!daily.holdsView) return
+    pickerReasons(api, ['HOLD'])
+      .then(setHoldReasons)
+      .catch(() => setHoldReasons([]))
+  }, [api, daily.holdsView])
+
   const load = useCallback(async () => {
     if (!can.stockView) return
     const id = ++readId.current
     loadTiles()
+    loadHolds()
     try {
-      const answer = await stockOverview(api, { siteId: address.site })
+      const answer = address.asOf ? await stockAsOf(api, { siteId: address.site }, address.asOf) : await stockOverview(api, { siteId: address.site })
       if (id !== readId.current) return
       setRows(answer.rows)
+      setReservations('reservations' in answer ? (answer.reservations ?? []) : [])
       setCurrencies(Object.fromEntries(answer.items.flatMap((entry) => (entry.currency ? [[entry.itemId, entry.currency]] : []))))
       setTruncated(answer.truncated)
       setProblem(null)
@@ -101,7 +132,7 @@ function StockContainer() {
       setRows(null)
       setProblem(readProblem(error))
     }
-  }, [api, can.stockView, address.site, loadTiles])
+  }, [api, can.stockView, address.site, address.asOf, loadTiles, loadHolds])
 
   useEffect(() => {
     setRows(null)
@@ -115,17 +146,18 @@ function StockContainer() {
       if (change.type.startsWith('lot.') || change.type.startsWith('inventory.receipt_') || change.type === 'inventory.opening_posted') refreshTiles()
     },
     () => void load(),
-    can.stockView,
+    can.stockView && !address.asOf,
   )
 
   const adjust = useAdjust(api, can.cost, (words) => {
     setNotice({ tone: 'success', key: words.key, params: words.params })
     void load()
   })
+  const hold = useHold(api, () => void load())
 
   const exportLines = useCallback(
     (lines: StockLine[]) => {
-      const header = ['material', 'materialName', 'colour', 'lot', 'hide', 'quality', 'site', 'location', 'onHand', 'unit', 'hides', 'held', 'available', ...(can.cost ? ['unitCost', 'value', 'currency'] : [])].map((column) => t(`st.csv.${column}`))
+      const header = ['material', 'materialName', 'colour', 'lot', 'hide', 'quality', 'site', 'location', 'onHand', 'unit', 'hides', 'reserved', 'held', 'available', ...(can.cost ? ['unitCost', 'value', 'currency'] : [])].map((column) => t(`st.csv.${column}`))
       const csvRows = lines.map((line) => [
         line.item.code,
         line.item.name,
@@ -138,13 +170,14 @@ function StockContainer() {
         line.onHand,
         s(`uom.${line.item.baseUom}`),
         line.hides,
-        line.held,
-        line.available,
+        line.reserved ?? '',
+        line.held ?? '',
+        line.available ?? '',
         ...(can.cost ? [line.unitCost ?? '', line.value === null || line.value === undefined ? '' : (line.value / 100).toFixed(2), currencies[line.item.id] ?? ''] : []),
       ])
-      downloadText(`stock-${new Date().toISOString().slice(0, 10)}.csv`, csvOf(header, csvRows))
+      downloadText(`stock-${(address.asOf ?? new Date().toISOString()).slice(0, 10)}.csv`, csvOf(header, csvRows))
     },
-    [can.cost, currencies, s, t],
+    [can.cost, currencies, s, t, address.asOf],
   )
 
   const model: StockPageModel = {
@@ -166,12 +199,19 @@ function StockContainer() {
     timeZone: TIME_ZONE,
     notice,
     adjust: adjust.model,
+    daily,
+    reservations,
+    holds,
+    holdReasons,
+    asOfDialog,
+    hold: hold.model,
   }
 
   return (
     <StockView
       model={model}
       adjustActions={adjust.actions}
+      holdActions={hold.actions}
       actions={{
         onAddress: go,
         onRetry: () => void load(),
@@ -191,6 +231,21 @@ function StockContainer() {
             onHand: line.onHand,
           }),
         onExport: exportLines,
+        onAsOf: setAsOfDialog,
+        onAsOfShow: (draft) => {
+          const instant = asOfInstant(draft.day, draft.time, TIME_ZONE)
+          if (!instant) return
+          setAsOfDialog(null)
+          go({ asOf: instant })
+        },
+        onNow: () => {
+          setAsOfDialog(null)
+          go({ asOf: null })
+        },
+        onHold: (lines) => {
+          const { subjects, leftOut } = holdSubjectsOf(lines)
+          if (subjects.length > 0) hold.open('Lot', subjects, leftOut)
+        },
       }}
     />
   )

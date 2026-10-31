@@ -302,3 +302,19 @@ p.fw-wl-hint[role='status'] {
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--nds-space-8) var(--nds-space-14);
 }
+
+/* B-W2a-64: a cell's first line with its pills, never wrapping into a third line (rows are two lines). */
+.fw-wl-line {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* A hold's reason under the lot: the warning text tone (words, never colour alone). */
+.fw-wl-held {
+  color: var(--nds-warning-text);
+  font-weight: var(--nds-font-weight-medium);
+}

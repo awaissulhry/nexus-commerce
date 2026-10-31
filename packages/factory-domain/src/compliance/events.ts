@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { defineEvent } from '../events/define'
+import { CHANGE_KINDS, REVIEW_STATUSES } from './type-changes/rules'
 
 /**
  * The compliance module's events (plan A1 §3.4; QHS-103, QHS-105, PRD-283). apps/factory-api's
@@ -18,6 +19,14 @@ import { defineEvent } from '../events/define'
  * already left), `compliance.register_entry_changed` (edited, the corrective action done, distributors informed, the
  * authority told) and `compliance.register_entry_closed`. The W2a notification centre alerts the owner and
  * quality on a risk (`risk` YES). Live on the PPE register (SCR-113) for compliance.register.view.
+ *
+ * W2a (B-W2a-66; QHS-105, PRD-283, PRD-285; Reg. (EU) 2016/425 Annex V 7.2), modules/compliance/renewals and
+ * modules/compliance/type-changes: `compliance.renewal_started` (the renewal task made on the certificate),
+ * `compliance.renewal_applied` (the day the application for review went to the notified body, typed in: nothing is sent),
+ * `compliance.certificate_renewed` (the registered successor linked: the old certificate leaves the expiry alerts),
+ * `compliance.type_change_found` (a released revision changes what a covering certificate's type examination saw: a
+ * review opened, the revision's class label held) and `compliance.type_change_decided` (told, approved, refused, not
+ * needed). Ids, numbers, days and kinds only; live for compliance.certificates.view.
  */
 const day = () => z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const labelTemplate = {
@@ -35,6 +44,10 @@ const registerEntry = {
   risk: z.enum(['NO', 'ASSESSING', 'YES']),
 }
 const registerLive = { permission: 'compliance.register.view', fields: ['entryId', 'reference', 'risk'] } as const
+// B-W2a-66
+const renewalLive = { permission: 'compliance.certificates.view', fields: ['certificateId', 'number'] } as const
+const typeChange = { reviewId: z.uuid(), styleId: z.uuid(), revisionId: z.uuid(), revision: z.number().int().min(1), certificateId: z.uuid() }
+const typeChangeLive = { permission: 'compliance.certificates.view', fields: ['reviewId', 'styleId', 'revisionId', 'certificateId'] } as const
 
 export const events = [
   defineEvent({
@@ -129,5 +142,41 @@ export const events = [
     description: 'A PPE register entry was closed with its reason, its corrective action done and its duties met; it never changes again.',
     payload: z.strictObject({ ...registerEntry, shippedGoods: z.boolean() }),
     live: registerLive,
+  }),
+  // B-W2a-66: certificate renewals and changes to an approved type.
+  defineEvent({
+    type: 'compliance.renewal_started',
+    context: 'compliance',
+    description: "A certificate's renewal was started: its task with the usual steps was made on the certificate (the notified body's own list wins).",
+    payload: z.strictObject({ certificateId: z.uuid(), number: z.string(), taskId: z.uuid(), windowOpens: day(), windowCloses: day() }),
+    live: renewalLive,
+  }),
+  defineEvent({
+    type: 'compliance.renewal_applied',
+    context: 'compliance',
+    description: 'The day the application for the review of a certificate went to its notified body was recorded (nothing is sent from the factory).',
+    payload: z.strictObject({ certificateId: z.uuid(), number: z.string(), appliedOn: day(), inWindow: z.boolean() }),
+    live: renewalLive,
+  }),
+  defineEvent({
+    type: 'compliance.certificate_renewed',
+    context: 'compliance',
+    description: 'A registered certificate was linked as the renewal (successor) of an older one of the same holder: the older one is no longer warned about.',
+    payload: z.strictObject({ certificateId: z.uuid(), number: z.string(), successorId: z.uuid(), successorNumber: z.string() }),
+    live: renewalLive,
+  }),
+  defineEvent({
+    type: 'compliance.type_change_found',
+    context: 'compliance',
+    description: "A released style revision changes the approved type of a certificate that covers the style (outer leather, thickness, protector, seams, lining): a review was opened and the revision's class label is held.",
+    payload: z.strictObject({ ...typeChange, comparedRevisionId: z.uuid().nullable(), kinds: z.array(z.enum(CHANGE_KINDS)).min(1) }),
+    live: typeChangeLive,
+  }),
+  defineEvent({
+    type: 'compliance.type_change_decided',
+    context: 'compliance',
+    description: 'A change to an approved type moved: the notified body was told, it answered (approved or refused), or compliance decided it needs no notification.',
+    payload: z.strictObject({ ...typeChange, status: z.enum(REVIEW_STATUSES), previousStatus: z.enum(REVIEW_STATUSES) }),
+    live: typeChangeLive,
   }),
 ] as const

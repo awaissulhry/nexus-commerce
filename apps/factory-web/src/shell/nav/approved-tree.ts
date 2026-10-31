@@ -163,6 +163,8 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: true,
         pages: [
           { id: 'purchasing.suppliers', title: 'Suppliers', titleIt: 'Fornitori', wave: 'W1', href: '/purchasing/suppliers' },
+          // W2a: B-W2a-69 Requests to buy (SCR-236).
+          { id: 'purchasing.requests', title: 'Requests to buy', titleIt: "Richieste d'acquisto", wave: 'W2a', href: '/purchasing/requests' },
           { id: 'purchasing.orders', title: 'Purchase orders', titleIt: "Ordini d'acquisto", wave: 'W1', href: '/purchasing/orders' },
         ],
       },

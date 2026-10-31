@@ -1,0 +1,135 @@
+/* Approved sources (SCR-057 Items & prices) and Supplier prices (SCR-048): layout only, semantic tokens, no page width. */
+
+.fw-src {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-src-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-src-title {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-src-hint {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+/* A two-line cell: the main words and a muted line under them. */
+.fw-src-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.fw-src-sub {
+  overflow: hidden;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-src-link {
+  color: var(--nds-text-link);
+  text-decoration: none;
+}
+
+.fw-src-link:hover,
+.fw-src-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-src-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-src-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+/* The cell editor (composed: an input or a select in the grid cell) and its save mark beside it. */
+.fw-src-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  width: 100%;
+  min-width: 0;
+}
+
+.fw-src-edit.right {
+  justify-content: flex-end;
+}
+
+.fw-src-edit-field {
+  min-width: 0;
+  width: 100%;
+}
+
+.fw-src-edit.right .fw-src-edit-field {
+  max-width: 120px;
+  text-align: right;
+}
+
+.fw-src-mark {
+  flex: none;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+  white-space: nowrap;
+}
+
+.fw-src-mark.saved {
+  color: var(--nds-success);
+}
+
+.fw-src-mark.refused {
+  color: var(--nds-danger);
+  white-space: normal;
+}
+
+/* Dialogs: fields in one column, two side by side when the dialog is wide enough. */
+.fw-src-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-src-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-src-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.fw-src-list {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  font-size: var(--nds-font-size-sm);
+}

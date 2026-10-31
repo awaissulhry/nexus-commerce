@@ -1,0 +1,36 @@
+/* Purchasing every day (B-W2a-69): layout only, semantic tokens; no page max-width. */
+.fw-po-revisions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.fw-po-revision {
+  border-top: 1px solid var(--nds-border);
+  padding-top: var(--nds-space-12);
+}
+.fw-po-revision:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.fw-po-cards {
+  display: grid;
+  gap: var(--nds-space-12);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+}
+.fw-po-card-orders {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--nds-space-8);
+}
+.fw-po-card-order {
+  display: grid;
+  gap: var(--nds-space-4);
+  border-top: 1px solid var(--nds-border);
+  padding-top: var(--nds-space-8);
+}
+.fw-po-card-order:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
