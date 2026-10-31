@@ -28,8 +28,10 @@ import { CARRIER_RETURN_KEY, shippedCells, type ShippedCell } from './stock'
  *                                                          takes `periodLockOverride`), the audit row and the event
  *
  * The status RETURNED itself comes from the carrier's tracking (labels/tracking.ts): the person confirms the garments
- * are back at the dock. The shipment's lines and serials stay as they are (its history): see shipments/stock.ts for
- * how the garments then count in stock.
+ * are back at the dock. The shipment's lines stay as they are (its history): see shipments/stock.ts for how the garments
+ * then count in stock. B-W2b-F1: the same command writes Shipment.carrierReturnReceivedAt, so the shipment no longer
+ * holds its garments against its cells' releases (cells.ts and the …_followups_f1_w2b_guards cap): the same cells ship
+ * them again; and its SHIPPED serials go back to RELEASED, unpacked (the audit row names them), to be packed again.
  */
 
 const RECEIVED_ACTION = 'shipping.carrierReturnReceived'
@@ -151,13 +153,17 @@ export async function receiveCarrierReturn(caller: CommandCaller, shipmentId: st
         })
       }
       const moves = await postMoves(tools, drafts, { key: `${CARRIER_RETURN_KEY}:${current.id}`, issuePath: () => 'shipment', periodLockOverride: body.periodLockOverride })
+      // B-W2b-F1: received back (first: the serial trigger reads it), then its serials released again, unpacked.
+      await tx.shipment.update({ where: { id: current.id }, data: { carrierReturnReceivedAt: tools.now }, select: { id: true } })
+      const serialIds = (await tx.garmentSerial.findMany({ where: { status: 'SHIPPED', shipmentLine: { shipmentId: current.id } }, select: { id: true }, orderBy: { id: 'asc' } })).map((serial) => serial.id)
+      if (serialIds.length > 0) await tx.garmentSerial.updateMany({ where: { id: { in: serialIds } }, data: { status: 'RELEASED', shipmentLineId: null, version: { increment: 1 } } })
       tools.audit({
         action: RECEIVED_ACTION,
         recordType: 'Shipment',
         recordId: current.id,
         companyId: current.companyId,
         siteId: current.siteId,
-        after: { locationId: place.id, garments, cells: cells.map((cell) => ({ cellId: cell.cellId, label: cell.label, garments: cell.garments })), moveIds: moves.map((move) => move.id) },
+        after: { locationId: place.id, garments, cells: cells.map((cell) => ({ cellId: cell.cellId, label: cell.label, garments: cell.garments })), moveIds: moves.map((move) => move.id), serialIds },
         ...(note ? { reason: note } : {}),
       })
       tools.emit({ type: 'shipment.carrier_return_received', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, garments, locationId: place.id } })

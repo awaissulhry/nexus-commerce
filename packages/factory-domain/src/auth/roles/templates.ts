@@ -181,6 +181,17 @@ const SUBCONTRACT_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = 
 const PAYABLES_SETTINGS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
   finance: ['payables.settings'],
 })
+/**
+ * B-W2b-27 (privacy of people data; PLT-209, ANA-075, MES-249; design people.settings "Privacy of people data", admin.privacy
+ * "People data rules"): the administrator (who keeps the privacy pack) and the production manager read the legal gate of
+ * each site and purpose and the privacy settings. Switching a purpose on or off (people.privacy.manage) and opening one
+ * person's figures (people.figures.view) are in no template: the Owner holds them through every office permission and
+ * records the basis per site and purpose (GATE-LABOUR); an HR role gets people.figures.view (Owner answer H3).
+ */
+const PEOPLE_PRIVACY_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.privacy.view'],
+  production_manager: ['people.privacy.view'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -195,7 +206,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2a-F4
   ...(audience === 'office' ? (RECEIPT_DOCUMENTS_ADDS[key] ?? []) : []),
   // B-W2b-21
-  ...(audience === 'office' ? (PAYABLES_SETTINGS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PAYABLES_SETTINGS_ADDS[key] ?? []) : []),
+  // B-W2b-27
+  ...(audience === 'office' ? (PEOPLE_PRIVACY_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

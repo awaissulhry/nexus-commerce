@@ -792,8 +792,8 @@ describe('a cut of a held hide, or of a hide of a held lot, is refused in words 
   /** An ACTIVE hold placed by the office, as POST /quality/holds writes it (the …_quality_plant_w2a_guards are real). */
   const placeHold = (subjectType: 'Hide' | 'Lot', subjectId: string) =>
     admin(
-      `INSERT INTO "QualityHold" (id, "tenantId", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "reasonNote", "placedAt", "placedById", "createdById")
-       VALUES ($1, $2, $3, $4, $5, ARRAY[$6]::uuid[], 'QUALITY_CHECK', 'A grain crack seen at the table (made up).', '2026-11-21T09:00:00Z', $7, $7)`,
+      `INSERT INTO "QualityHold" (id, "tenantId", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "reasonNote", "placedAt", "placedById", "createdById", "number")
+       VALUES ($1, $2, $3, $4, $5, ARRAY[$6]::uuid[], 'QUALITY_CHECK', 'A grain crack seen at the table (made up).', '2026-11-21T09:00:00Z', $7, $7, 'HLD-T-' || gen_random_uuid())`,
       [newId(), A.tenant, A.companyA, A.siteA1, subjectType, subjectId, A.actor],
     )
   const collar = (code: string) => ({ clientEventId: clientEvent(), code, lines: [{ workOrderSizeId: WO.held.cells[0].id, parts: [{ part: 'Collar', pieces: 1 }] }], area: { area: '2.5', uom: 'FT2' } })
@@ -894,8 +894,8 @@ describe('the cutting office (B-W2a-60, SCR-238): one cut per work order, where 
     const workOrder = WO.officeHeld
     const holdId = newId()
     await admin(
-      `INSERT INTO "QualityHold" (id, "tenantId", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "reasonNote", "placedAt", "placedById", "createdById")
-       VALUES ($1, $2, $3, $4, 'WorkOrder', ARRAY[$5]::uuid[], 'QUALITY_CHECK', 'Shade differs from the approved sample (made up).', '2026-11-21T09:00:00Z', $6, $6)`,
+      `INSERT INTO "QualityHold" (id, "tenantId", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "reasonNote", "placedAt", "placedById", "createdById", "number")
+       VALUES ($1, $2, $3, $4, 'WorkOrder', ARRAY[$5]::uuid[], 'QUALITY_CHECK', 'Shade differs from the approved sample (made up).', '2026-11-21T09:00:00Z', $6, $6, 'HLD-T-' || gen_random_uuid())`,
       [holdId, A.tenant, A.companyA, A.siteA1, workOrder.id, A.actor],
     )
     await admin(

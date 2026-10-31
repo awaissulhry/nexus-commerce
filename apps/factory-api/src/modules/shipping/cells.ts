@@ -27,14 +27,18 @@ export async function lockCells(tx: CommandTx, tenantId: string, cellIds: Iterab
   }
 }
 
-/** Per cell: garments released, reversed, and on shipments that are not CANCELLED (0 for a cell with none). */
+/**
+ * Per cell: garments released, reversed, and on shipments that are not CANCELLED (0 for a cell with none). B-W2b-F1: nor
+ * RETURNED with their garments received back (Shipment.carrierReturnReceivedAt, carrier-return.ts): those garments are
+ * in finished goods again and ship on a new shipment of the cell (the trigger's cap counts the same).
+ */
 export async function cellCounts(tx: CommandTx, cellIds: readonly string[]): Promise<Map<string, CellCount>> {
   const ids = [...new Set(cellIds)]
   if (ids.length === 0) return new Map()
   // One query after another (B-W2a-48): a transaction's client has one connection (pg refuses concurrent queries on it).
   const released = await tx.qualityRelease.groupBy({ by: ['workOrderSizeId'], where: { workOrderSizeId: { in: ids } }, _sum: { quantity: true } })
   const reversed = await tx.qualityReleaseReversal.groupBy({ by: ['workOrderSizeId'], where: { workOrderSizeId: { in: ids } }, _sum: { quantity: true } })
-  const shipped = await tx.shipmentLine.groupBy({ by: ['workOrderSizeId'], where: { workOrderSizeId: { in: ids }, shipment: { status: { not: 'CANCELLED' } } }, _sum: { quantity: true } })
+  const shipped = await tx.shipmentLine.groupBy({ by: ['workOrderSizeId'], where: { workOrderSizeId: { in: ids }, shipment: { status: { not: 'CANCELLED' }, NOT: { status: 'RETURNED', carrierReturnReceivedAt: { not: null } } } }, _sum: { quantity: true } })
   const sumOf = (rows: readonly { workOrderSizeId: string; _sum: { quantity: number | null } }[]) => new Map(rows.map((row) => [row.workOrderSizeId, row._sum.quantity ?? 0]))
   const r = sumOf(released)
   const v = sumOf(reversed)
