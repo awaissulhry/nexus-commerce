@@ -5,9 +5,12 @@ import { INVENTORY_COUNTS_VIEW } from '@nexus/factory-domain/inventory/counts/pe
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { officeContextOf } from '../ledger/access'
+import type { CountListView, CountItemKind } from '@nexus/factory-domain/inventory/counts/rules'
+import { differs } from '@nexus/factory-domain/inventory/counts/rules'
 import type { CountView, LineView } from './contract'
+import { siteLocations } from './ledger-at'
 import { COUNT_COLUMNS, readCount } from './store'
-import { COUNT_SCOPE, countViews, lineViews, listWhere, pageOfLines, scopeOf } from './views'
+import { COUNT_SCOPE, countViews, factsOf, lineViews, listWhere, pageOfLines, scopeOf } from './views'
 
 /**
  * The counts' reads (B-W2a-15; design warehouse.counts): the list with its filters, the tiles, the adjustment reasons a
@@ -19,6 +22,8 @@ export interface ListQuery {
   readonly status?: string | undefined
   readonly kind?: string | undefined
   readonly open?: 'true' | 'false' | undefined
+  /** B-W2b-15: waiting for approval / to apply (the tiles' rows). */
+  readonly view?: CountListView | undefined
   readonly q?: string | undefined
   readonly cursor?: string | undefined
   readonly limit: number
@@ -84,5 +89,70 @@ export async function listLines(caller: CommandCaller, countId: string, query: L
     if (!count || !can(actorOf(context), INVENTORY_COUNTS_VIEW, scopeOf(count))) throw new NotFoundError('Stock count not found.')
     const page = await pageOfLines(client, countId, query)
     return { lines: await lineViews(client, count, page.lines, context), nextCursor: page.nextCursor }
+  })
+}
+
+/**
+ * B-W2b-15 (follow-up Z2:05): a count's lines per place, for the Lines tab's place filter — every place the count has
+ * lines at (not only those of the page read so far), with how many lines, how many are counted and how many differ.
+ */
+export async function countPlaces(caller: CommandCaller, countId: string) {
+  const context = officeContextOf(caller)
+  if (!isUuid(countId)) throw new NotFoundError('Stock count not found.')
+  return caller.withClient(async (client) => {
+    const count = await readCount(client, countId)
+    if (!count || !can(actorOf(context), INVENTORY_COUNTS_VIEW, scopeOf(count))) throw new NotFoundError('Stock count not found.')
+    const lines = await client.stockCountLine.findMany({ where: { countId }, select: { locationId: true, expectedQuantity: true, countedQuantity: true, recountRequestedAt: true, recountQuantity: true } })
+    const per = new Map<string, { lines: number; counted: number; differing: number }>()
+    for (const line of lines) {
+      const entry = per.get(line.locationId) ?? { lines: 0, counted: 0, differing: 0 }
+      entry.lines++
+      if (line.countedQuantity !== null) entry.counted++
+      if (line.countedQuantity !== null && differs(factsOf(line))) entry.differing++
+      per.set(line.locationId, entry)
+    }
+    const nodes = await siteLocations(client, count.siteId)
+    const places = [...per.entries()].map(([locationId, figures]) => {
+      const node = nodes.get(locationId)
+      return { location: { id: locationId, code: node?.code ?? '', name: node?.name ?? '', path: node?.path ?? '' }, ...figures }
+    })
+    return { places: places.sort((a, b) => (a.location.path < b.location.path ? -1 : a.location.path > b.location.path ? 1 : 0)) }
+  })
+}
+
+export interface ItemsQuery {
+  readonly siteId: string
+  readonly q: string
+  readonly kind?: CountItemKind | undefined
+  readonly limit: number
+}
+
+/**
+ * B-W2b-15 (follow-up Z2:06): what a count names, by code or name — the materials AND the finished garments (FINISHED
+ * items, one per SKU: Products › Materials & trims leaves them out) of the site's company and the tenant's shared ones,
+ * active, with their colours (in use). inventory.counts.view at the site; no cost.
+ */
+export async function countItems(caller: CommandCaller, query: ItemsQuery) {
+  const context = officeContextOf(caller)
+  return caller.withClient(async (client) => {
+    const site = await client.site.findUnique({ where: { id: query.siteId }, select: { id: true, companyId: true } })
+    if (!site || !can(actorOf(context), INVENTORY_COUNTS_VIEW, { companyId: site.companyId, siteId: site.id })) throw new NotFoundError('Site not found.')
+    const items = await client.item.findMany({
+      where: {
+        AND: [
+          { status: 'ACTIVE' },
+          { OR: [{ companyId: site.companyId }, { companyId: null }] },
+          query.kind ? { kind: query.kind } : {},
+          { OR: [{ code: { contains: query.q, mode: 'insensitive' } }, { name: { contains: query.q, mode: 'insensitive' } }] },
+        ],
+      },
+      select: { id: true, code: true, name: true, kind: true, baseUom: true, tracking: true },
+      orderBy: [{ code: 'asc' }],
+      take: query.limit,
+    })
+    const colours = items.length === 0 ? [] : await client.itemColour.findMany({ where: { itemId: { in: items.map((item) => item.id) }, status: 'ACTIVE' }, select: { id: true, itemId: true, code: true, name: true }, orderBy: { code: 'asc' } })
+    return {
+      items: items.map((item) => ({ ...item, colours: colours.filter((colour) => colour.itemId === item.id).map(({ itemId: _item, ...colour }) => colour) })),
+    }
   })
 }

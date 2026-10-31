@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { COUNT_ITEM_KINDS, STOCK_COUNT_KINDS, STOCK_COUNT_STATUSES } from '@nexus/factory-domain/inventory/counts/rules'
+import { COUNT_ITEM_KINDS, STOCK_COUNT_KINDS, STOCK_COUNT_STATUSES, type CountListView } from '@nexus/factory-domain/inventory/counts/rules'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { presignedSchema, type Presigned } from '../../../record-panels/api'
@@ -140,6 +140,8 @@ export interface CountQuery {
   status?: CountStatus | null
   kind?: CountKind | null
   open?: boolean
+  /** B-W2b-15: the tiles' saved rows the API filters (waiting for approval, to apply). */
+  view?: CountListView | null
   q?: string | null
   cursor?: string | null
   limit?: number
@@ -147,7 +149,7 @@ export interface CountQuery {
 
 export const listCounts = (api: ApiClient, query: CountQuery, signal?: AbortSignal) =>
   api.get('/inventory/stock-counts', {
-    query: clean({ siteId: query.siteId, status: query.status, kind: query.kind, open: query.open ? 'true' : undefined, q: query.q?.trim(), cursor: query.cursor, limit: query.limit }),
+    query: clean({ siteId: query.siteId, status: query.status, kind: query.kind, open: query.open ? 'true' : undefined, view: query.view, q: query.q?.trim(), cursor: query.cursor, limit: query.limit }),
     schema: z.object({ counts: z.array(countSchema), nextCursor: z.string().nullable() }),
     signal,
   })
@@ -172,6 +174,11 @@ export const countLines = (api: ApiClient, id: string, query: LinesQuery, signal
     schema: z.object({ lines: z.array(lineSchema), nextCursor: z.number().nullable() }),
     signal,
   })
+
+const placeSchema = z.object({ location: z.object({ id: z.string(), code: z.string(), name: z.string(), path: z.string() }), lines: z.number(), counted: z.number(), differing: z.number() })
+export type CountPlace = z.infer<typeof placeSchema>
+/** B-W2b-15: every place of a count with its lines, counted and differing (the Lines tab's place filter). */
+export const countPlaces = (api: ApiClient, id: string, signal?: AbortSignal) => api.get(`${countPath(id)}/places`, { schema: z.object({ places: z.array(placeSchema) }), signal }).then((answer) => answer.places)
 
 // ---- writes ---------------------------------------------------------------------------------------------------------------
 
@@ -262,18 +269,26 @@ export const fileLink = (api: ApiClient, fileId: string): Promise<Presigned> =>
 
 // ---- what the New count and Found stock dialogs choose from -------------------------------------------------------------------
 
-const materialSchema = z.object({ id: z.string(), code: z.string(), name: z.string(), kind: z.string(), baseUom: uom, tracking: z.enum(['NONE', 'LOT', 'HIDE', 'SERIAL']) })
+const materialSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  name: z.string(),
+  kind: z.string(),
+  baseUom: uom,
+  tracking: z.enum(['NONE', 'LOT', 'HIDE', 'SERIAL']),
+  /** Its colours in use (a finished garment has none: its colour is its SKU's). */
+  colours: z.array(z.object({ id: z.string(), code: z.string(), name: z.string() })),
+})
 export type MaterialChoice = z.infer<typeof materialSchema>
-/** Materials by code or name (Products › Materials & trims' list: product.materials.view). */
-export const findMaterials = (api: ApiClient, q: string, signal?: AbortSignal) =>
+/**
+ * B-W2b-15 (follow-up Z2:06): what a count names, by code or name — the materials AND the finished garments (one item per
+ * SKU, which Products › Materials & trims leaves out) of the site's company and the tenant's shared ones, with their
+ * colours (`GET /inventory/stock-counts/items`: inventory.counts.view at the site).
+ */
+export const findMaterials = (api: ApiClient, siteId: string, q: string, signal?: AbortSignal) =>
   api
-    .get('/product/materials', { query: clean({ q: q.trim(), status: 'ACTIVE', limit: 20 }), schema: z.object({ materials: z.array(materialSchema) }), signal })
-    .then((answer) => answer.materials)
-
-const materialColours = z.object({ material: z.object({ id: z.string(), colours: z.array(z.object({ id: z.string(), code: z.string(), name: z.string() })).optional() }) })
-/** A material's colours (its record). */
-export const materialColoursOf = (api: ApiClient, itemId: string, signal?: AbortSignal) =>
-  api.get(`/product/materials/${seg(itemId)}`, { schema: materialColours, signal }).then((answer) => answer.material.colours ?? [])
+    .get('/inventory/stock-counts/items', { query: clean({ siteId, q: q.trim(), limit: 20 }), schema: z.object({ items: z.array(materialSchema) }), signal })
+    .then((answer) => answer.items)
 
 const lotChoice = z.object({ id: z.string(), code: z.string(), onHand: z.string() })
 /** The lots of a material at a site (Lots & traceability's list: inventory.stock.view). */

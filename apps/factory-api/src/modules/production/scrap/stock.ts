@@ -26,7 +26,7 @@ import { demandWords, lockReservations, readDemands, readKeyFacts, reserveKeyOf,
  *   SCRAP reason of the tenant's floor list, ScrapReason) → the lines: an area of a hide (from the location named, or
  *   the one holding it), a lot or untracked material by quantity from a location → the reserve lock of each item and
  *   colour (inventory reservations: after the work order, before the stock): a hide another demand reserves is refused in
- *   words → postMoves (inventory/ledger, the ONE way stock moves): SCRAP moves, note `<CODE>: <note>`, reference the
+ *   words → postMoves (inventory/ledger, the ONE way stock moves): SCRAP moves, reasonCode + note `<CODE>: <note>`, reference the
  *   work order's number, keys `production.scrap:<Idempotency-Key>:<n>` → a hide left with nothing is SCRAPPED (final) →
  *   the audit row (record `ProductionScrap`, id = the first move's) and production.scrap_posted.
  *
@@ -100,7 +100,8 @@ export async function scrapStock(caller: CommandCaller, body: ScrapStockInput, i
     const drafts: MoveDraft[] = []
     const lineOf: number[] = []
     for (const [index, line] of body.lines.entries()) {
-      const common = { siteId: workOrder.siteId, reason: 'SCRAP' as const, workOrderId: workOrder.id, note, reference: workOrder.number }
+      // B-W2b-15: the floor list's code is the move's own column (the SCRAP list's usage counts read it).
+      const common = { siteId: workOrder.siteId, reason: 'SCRAP' as const, workOrderId: workOrder.id, note, reasonCode: reason.code, reference: workOrder.number }
       if (line.hideId) {
         const hide = hides.get(line.hideId)
         if (!hide || hide.siteId !== workOrder.siteId) throw new ValidationError('Not a hide of this site.', [{ path: path(index, 'hideId'), message: 'Not a hide of this site.' }])

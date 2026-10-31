@@ -1,14 +1,15 @@
 'use client'
 
+import { useId } from 'react'
 import Link from 'next/link'
-import { CheckCheck, Printer } from 'lucide-react'
-import { SummaryTable } from '@nexus/ui/components'
+import { CheckCheck, Printer, RotateCcw } from 'lucide-react'
+import { Banner, Field, SummaryTable } from '@nexus/ui/components'
 import { DetailModal } from '@nexus/ui/patterns'
-import { Button, Pill, Tag } from '@nexus/ui/primitives'
+import { Button, Pill, Select, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale } from '../../../../../lib/i18n/provider'
 import type { PickSheet, SheetLine } from '../../api'
-import { kitCheck, markCompleteHeld, READINESS_TONE, stopsOf, walkOrder, type PickingCan } from '../../model'
+import { kitCheck, kitHeld, kitPlaceWords, markCompleteHeld, READINESS_TONE, stopsOf, walkOrder, type PickingCan } from '../../model'
 import { CheckList, KitPill, say, useHeldWords, useQty, useReadinessWord, useWords } from '../../parts'
 import type { PickingListActions, SheetModel } from '../../view-model'
 
@@ -16,8 +17,10 @@ import type { PickingListActions, SheetModel } from '../../view-model'
  * pop:pk-list — "Pick list WO-…" (design warehouse.picking): the lines in the order the picker walks (by bin path), each
  * with where to take it (the lot or hide reserved for the work order, else the one a pick list would propose, oldest
  * first), needed, picked (and the lots and hides the floor's scans issued) and what is still short; the stock that may
- * not be used, held with its reason (a quality hold named with its reason and day); the kit's place (not recorded yet);
- * the kit complete check, and "Mark kit complete", held with why. J / K walk the rows of the list as shown.
+ * not be used, held with its reason (a quality hold named with its reason and day); B-W2b-15: the kit's place, chosen from
+ * the site's places (never a workshop's) and saved at once; the kit complete check, and "Mark kit complete" (held with why
+ * while lines are short), then "Checked complete" with when (never who) and "Open again" with the reason. J / K walk the
+ * rows of the list as shown.
  */
 export function PickListDialog({
   model,
@@ -108,19 +111,85 @@ export function PickListDialog({
       footer={
         sheet ? (
           <span className="fw-pk-buttons">
-            <Button variant="primary" heldReason={say(t, markCompleteHeld(sheet))}>
-              <CheckCheck size={14} aria-hidden /> {t('kit.mark')}
+            <Button variant="primary" heldReason={model.kitBusy ? t('kit.busy') : say(t, markCompleteHeld(sheet, can))} onClick={() => actions?.onCompleteKit?.()}>
+              {model.kitBusy ? <Spinner size={12} /> : <CheckCheck size={14} aria-hidden />} {t('kit.mark')}
             </Button>
           </span>
         ) : undefined
       }
     >
-      {sheet && <SheetBody sheet={sheet} qty={qty} held={held} timeZone={timeZone} />}
+      {sheet && <SheetBody sheet={sheet} model={model} can={can} actions={actions} qty={qty} held={held} timeZone={timeZone} />}
     </DetailModal>
   )
 }
 
-function SheetBody({ sheet, qty, held, timeZone }: { sheet: PickSheet; qty: ReturnType<typeof useQty>; held: ReturnType<typeof useHeldWords>; timeZone: string }) {
+/** B-W2b-15: where the kit waits — a place of the site chosen here (saved at once), or said in words. */
+function KitPlace({ sheet, model, can, actions }: { sheet: PickSheet; model: SheetModel; can: PickingCan; actions?: PickingListActions }) {
+  const t = useWords()
+  const id = useId()
+  const stageHeld = model.kitBusy ? t('kit.busy') : say(t, kitHeld(sheet, can, 'stage'))
+  const places = model.places?.items ?? null
+  if (stageHeld !== null || !can.places || model.places === null || model.places === undefined) {
+    return (
+      <p className="fw-pk-sheet-place">
+        <b>{t('kit.place')}</b> {say(t, kitPlaceWords(sheet.kit))}
+        {stageHeld && can.kits && <span className="fw-st-sub"> · {stageHeld}</span>}
+        {!stageHeld && can.kits && !can.places && <span className="fw-st-sub"> · {t('kit.heldNoPlaces')}</span>}
+      </p>
+    )
+  }
+  return (
+    <div className="fw-pk-sheet-place">
+      <Field label={t('kit.placeLabel')} hint={model.places.problem ? t(`stock:${model.places.problem}`) : t('kit.placeHint')}>
+        <Select id={id} value={sheet.kit.location?.id ?? ''} disabled={places === null} onChange={(event) => actions?.onStageKit?.(event.target.value || null)}>
+          <option value="">{t('kit.placeNone')}</option>
+          {sheet.kit.location && !(places ?? []).some((place) => place.id === sheet.kit.location!.id) && <option value={sheet.kit.location.id}>{`${sheet.kit.location.code} · ${sheet.kit.location.name}`}</option>}
+          {(places ?? []).map((place) => (
+            <option key={place.id} value={place.id}>
+              {`${'\u00a0\u00a0'.repeat(place.depth)}${place.code} · ${place.name}`}
+            </option>
+          ))}
+        </Select>
+      </Field>
+    </div>
+  )
+}
+
+/** B-W2b-15: the kit checked complete (when, never who) with "Open again" and its reason. */
+function KitChecked({ sheet, model, can, actions, timeZone }: { sheet: PickSheet; model: SheetModel; can: PickingCan; actions?: PickingListActions; timeZone: string }) {
+  const t = useWords()
+  const locale = useLocale()
+  if (!sheet.kit.checkedAt) return null
+  const reopenHeld = model.kitBusy ? t('kit.busy') : say(t, kitHeld(sheet, can, 'reopen'))
+  return (
+    <div className="fw-pk-checked">
+      <p>
+        <Tag tone="success">{t('kit.checked')}</Tag> <span className="fw-st-sub">{t('kit.checkedAt', { at: formatDateTime(sheet.kit.checkedAt, { locale, timeZone }) })}</span>
+      </p>
+      {model.reopen ? (
+        <div className="fw-pk-reopen">
+          <Field label={t('kit.reopenReason')} required>
+            <Textarea value={model.reopen.reason} maxLength={500} rows={2} onChange={(event) => actions?.onReopenReason?.(event.target.value)} />
+          </Field>
+          <span className="fw-pk-buttons">
+            <Button size="sm" variant="secondary" onClick={() => actions?.onReopenKit?.(null)}>
+              {t('stock:common.cancel')}
+            </Button>
+            <Button size="sm" variant="primary" heldReason={model.reopen.reason.trim() ? reopenHeld : t('kit.reopenWhy')} onClick={() => actions?.onConfirmReopen?.()}>
+              <RotateCcw size={14} aria-hidden /> {t('kit.reopen')}
+            </Button>
+          </span>
+        </div>
+      ) : (
+        <Button size="sm" variant="secondary" heldReason={reopenHeld} onClick={() => actions?.onReopenKit?.('')}>
+          <RotateCcw size={14} aria-hidden /> {t('kit.reopen')}
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function SheetBody({ sheet, model, can, actions, qty, held, timeZone }: { sheet: PickSheet; model: SheetModel; can: PickingCan; actions?: PickingListActions; qty: ReturnType<typeof useQty>; held: ReturnType<typeof useHeldWords>; timeZone: string }) {
   const t = useWords()
   const locale = useLocale()
   const lines = walkOrder(sheet.lines)
@@ -156,9 +225,8 @@ function SheetBody({ sheet, qty, held, timeZone }: { sheet: PickSheet; qty: Retu
   const heldEntries = sheet.lines.flatMap((line) => line.held.map((entry) => ({ line, entry })))
   return (
     <div className="fw-pk-sheet">
-      <p className="fw-pk-sheet-place">
-        <b>{t('kit.place')}</b> {t('kit.placeLater')}
-      </p>
+      {model.kitProblem && <Banner tone="danger" title={say(t, model.kitProblem) ?? ''} />}
+      <KitPlace sheet={sheet} model={model} can={can} actions={actions} />
       {lines.length === 0 ? (
         <p className="fw-st-sub">{t('sheet.noLines')}</p>
       ) : (
@@ -228,6 +296,7 @@ function SheetBody({ sheet, qty, held, timeZone }: { sheet: PickSheet; qty: Retu
             },
           ]}
         />
+        <KitChecked sheet={sheet} model={model} can={can} actions={actions} timeZone={timeZone} />
         {(sheet.startedAt || sheet.finishedAt) && (
           <p className="fw-st-sub">
             {[

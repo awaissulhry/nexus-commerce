@@ -11,6 +11,7 @@ import {
 import {
   approveProblems,
   COUNT_RULES,
+  countListViewFilter,
   differenceOf,
   differencePercent,
   differenceValue,
@@ -23,6 +24,7 @@ import {
   recountSuggested,
   snapshotFor,
   submitProblems,
+  type CountListView,
   type LineFacts,
 } from '@nexus/factory-domain/inventory/counts/rules'
 import { quantityText } from '@nexus/factory-domain/inventory/ledger/moves'
@@ -347,11 +349,16 @@ export async function pageOfLines(client: Client, countId: string, query: { read
 }
 
 /** The counts the caller may see, newest first (UUIDv7 ids), with the list's filters. */
-export function listWhere(context: OfficeContext, query: { readonly siteId?: string | undefined; readonly status?: string | undefined; readonly kind?: string | undefined; readonly open?: string | undefined; readonly q?: string | undefined }): Prisma.StockCountWhereInput {
+export function listWhere(
+  context: OfficeContext,
+  query: { readonly siteId?: string | undefined; readonly status?: string | undefined; readonly kind?: string | undefined; readonly open?: string | undefined; readonly view?: CountListView | undefined; readonly q?: string | undefined },
+): Prisma.StockCountWhereInput {
   return {
     AND: [
       scopeWhere(actorOf(context), INVENTORY_COUNTS_VIEW, COUNT_SCOPE) as Prisma.StockCountWhereInput,
       query.siteId ? { siteId: query.siteId } : {},
+      // B-W2b-15: the tiles' saved rows (waiting for approval, to apply), filtered here as the tiles count them.
+      query.view ? { OR: countListViewFilter(query.view) } : {},
       query.status ? { status: query.status as CountRow['status'] } : {},
       query.kind ? { kind: query.kind as CountRow['kind'] } : {},
       query.open === 'true' ? { OR: [{ status: { in: ['DRAFT', 'COUNTING', 'SUBMITTED', 'APPROVED'] } }, { status: 'APPLIED', kind: 'YEAR_END' }] } : {},

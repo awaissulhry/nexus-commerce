@@ -20,10 +20,10 @@ import {
   countSheets,
   editCount,
   fileLink,
+  countPlaces,
   findMaterials,
   hidesOf,
   lotsOf,
-  materialColoursOf,
   recordLines,
   removeLine,
   sendBack,
@@ -32,6 +32,7 @@ import {
   submitCount,
   valuedListPreview,
   type CountLine,
+  type CountPlace,
   type CountReason,
   type CountRecord as CountRecordValue,
   type LineEntry,
@@ -40,6 +41,7 @@ import { countProblem, countsCan, isCountEvent, readCount, readProblem, recordTa
 import { openPdf, openStored, saveXlsx } from '../papers'
 import { CountsMessages } from '../parts'
 import type { CellSave, CountRecordModel, FoundDraft, FoundModel, LinesPart, Loaded, Notice, PlaceChoice, RecordDialog } from '../view-model'
+import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { CountRecordView } from './view/CountRecordView'
 
 /**
@@ -109,6 +111,15 @@ function CountRecordContainer({ countId }: { countId: string }) {
   diffsRef.current = diffs
   const diffsAsked = useRef(false)
 
+  // B-W2b-15: every place of the count with its line counts (the place filter), read with the record.
+  const [places, setPlaces] = useState<CountPlace[] | null>(null)
+  const loadPlaces = useCallback(() => {
+    if (!can.view) return
+    countPlaces(api, countId)
+      .then(setPlaces)
+      .catch(() => setPlaces(null))
+  }, [api, can.view, countId])
+
   const load = useCallback(async () => {
     if (!can.view) {
       setRecord({ status: 'forbidden' })
@@ -116,13 +127,14 @@ function CountRecordContainer({ countId }: { countId: string }) {
     }
     try {
       setRecord({ status: 'ready', value: await countRecord(api, countId) })
+      loadPlaces()
       setAsOf(new Date().toISOString())
     } catch (error) {
       if (isApiError(error) && error.kind === 'not_found') setRecord({ status: 'not_found' })
       else if (isApiError(error) && error.kind === 'forbidden') setRecord({ status: 'forbidden' })
       else setRecord({ status: 'error', problem: readProblem(error) })
     }
-  }, [api, can.view, countId])
+  }, [api, can.view, countId, loadPlaces])
 
   const loadLines = useCallback(
     async (after: number | null = null, part: Pick<LinesPart, 'filter' | 'q' | 'locationId'> = linesRef.current) => {
@@ -430,16 +442,14 @@ function CountRecordContainer({ countId }: { countId: string }) {
   useEffect(() => {
     if (!foundItem || !siteId) return
     const controller = new AbortController()
-    if (can.materials)
-      materialColoursOf(api, foundItem.id, controller.signal)
-        .then((colours) => patchFound({ colours }))
-        .catch(() => patchFound({ colours: [] }))
+    // B-W2b-15: the item search answers its colours (a finished garment has none).
+    patchFound({ colours: foundItem.colours })
     if (foundItem.tracking !== 'NONE' && can.stock)
       lotsOf(api, siteId, foundItem.id, controller.signal)
         .then((lots) => patchFound({ lots }))
         .catch(() => patchFound({ lots: [] }))
     return () => controller.abort()
-  }, [api, foundItem, siteId, can.materials, can.stock, patchFound])
+  }, [api, foundItem, siteId, can.stock, patchFound])
   useEffect(() => {
     if (!foundLot || !siteId || foundItem?.tracking !== 'HIDE' || !can.stock) return
     const controller = new AbortController()
@@ -451,16 +461,16 @@ function CountRecordContainer({ countId }: { countId: string }) {
 
   const findFound = useCallback(
     (text: string) => {
-      if (!can.materials || text.trim().length < 2) {
+      if (!can.materials || !siteId || text.trim().length < 2) {
         patchFound({ found: null })
         return
       }
       patchFound({ searching: true })
-      findMaterials(api, text)
+      findMaterials(api, siteId, text)
         .then((found) => patchFound({ found, searching: false }))
         .catch(() => patchFound({ found: [], searching: false }))
     },
-    [api, can.materials, patchFound],
+    [api, can.materials, siteId, patchFound],
   )
 
   const openDialog = useCallback(
@@ -516,11 +526,15 @@ function CountRecordContainer({ countId }: { countId: string }) {
     problem,
     notice,
     now: new Date().toISOString(),
+    places,
   }
+  // B-W2b-15: the count's thread, files and history (Activity), of its company and site.
+  const panels = value && can.threads ? <RecordPanels record={{ type: 'StockCount', id: value.id, companyId: value.companyId, siteId: value.site.id }} title={value.number} /> : null
 
   return (
     <CountRecordView
       model={model}
+      panels={panels}
       actions={{
         onRetry: () => void load(),
         onReload: () => reread(),
