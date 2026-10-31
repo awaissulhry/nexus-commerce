@@ -18,6 +18,7 @@ import { quantityText } from '../store'
 import { kitGoods, actFacts, detailInCommand } from './orders'
 import { KIT_COLUMNS, officeOrder, readLocationRow, readOrder, sizesOf, type OrderRow } from './store'
 import type { OrderDetailView } from './views'
+import { recordBundlesSentInCommand } from './receive-back'
 
 /**
  * Kit out (B-W2a-25; SCM-140; design purchasing.subcontracting "Kit sent", floor.kits "Send a kit"): our material goes
@@ -183,6 +184,8 @@ export async function sendKitAs(
         seenBundles.add(bundle.id)
         bundles.push(bundle)
       }
+      // B-W2b-10 hook (receive-back.ts): one SubcontractBundle per bundle that goes out (refused when it went out already).
+      await recordBundlesSentInCommand(tools, order, bundles)
 
       // The pieces out per operation: as named, else from the bundles (a garment travels once for every operation).
       const out = new Map<string, number>()

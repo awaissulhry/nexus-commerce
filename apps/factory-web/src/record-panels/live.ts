@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useLiveBus } from '../shell/live/use-live'
 import type { LiveChange } from './model'
 
 /**
@@ -9,6 +9,7 @@ import type { LiveChange } from './model'
  * the stream is live, and pings. A message is a HINT: the screen reads the part again; nothing is replayed, so after a
  * reconnect (the browser's EventSource reconnects by itself) the screen reads everything again (`onReconnect`).
  * The stream is reached through this app's `/api` (the session cookie is first-party); it needs no company header.
+ * B-W2b-05: one connection per browser tab (shell/live/bus.ts), whoever listens.
  */
 
 /** A `change` message's data, or null when it is not one. */
@@ -26,32 +27,14 @@ export function parseLiveData(text: string): LiveChange | null {
 
 export interface LiveHandlers {
   onChange: (change: LiveChange) => void
-  /** The stream came back after a break: read everything again. */
+  /** The stream came back after a break (or the tab's fallback poll while it is down): read everything again. */
   onReconnect?: () => void
 }
 
-/** Listens to the live stream while the screen is open (and `enabled`). */
+/**
+ * Listens to the live stream while the screen is open (and `enabled`) — through the tab's ONE live connection
+ * (B-W2b-05, shell/live/bus.ts), shared with the bell and every other screen of the tab.
+ */
 export function useLiveChanges(handlers: LiveHandlers, enabled = true): void {
-  const latest = useRef(handlers)
-  latest.current = handlers
-  useEffect(() => {
-    if (!enabled || typeof EventSource === 'undefined') return
-    const source = new EventSource('/api/live')
-    let readyOnce = false
-    const onReady = () => {
-      if (readyOnce) latest.current.onReconnect?.()
-      readyOnce = true
-    }
-    const onChange = (event: MessageEvent<string>) => {
-      const change = parseLiveData(event.data)
-      if (change) latest.current.onChange(change)
-    }
-    source.addEventListener('ready', onReady)
-    source.addEventListener('change', onChange as EventListener)
-    return () => {
-      source.removeEventListener('ready', onReady)
-      source.removeEventListener('change', onChange as EventListener)
-      source.close()
-    }
-  }, [enabled])
+  useLiveBus(handlers, enabled)
 }

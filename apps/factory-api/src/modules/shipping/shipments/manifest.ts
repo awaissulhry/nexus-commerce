@@ -23,4 +23,8 @@ export const manifest = defineManifest({
   'PUT /shipping/shipments/:shipmentId/freight': { audiences: ['office'], permission: 'shipping.freight.manage', scope: 'record' },
   'GET /shipping/sites/:siteId/freight-rule': { audiences: ['office'], permission: 'shipping.settings.view', scope: 'record' },
   'PUT /shipping/sites/:siteId/freight-rule': { audiences: ['office'], permission: 'shipping.freight.manage', scope: 'record' },
+  // B-W2b-19: the carrier's freight cost (a cost), a carrier return back into finished goods.
+  'PUT /shipping/shipments/:shipmentId/freight-cost': { audiences: ['office'], permission: 'shipping.freight.manage', scope: 'record' },
+  'GET /shipping/shipments/:shipmentId/carrier-return': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
+  'POST /shipping/shipments/:shipmentId/carrier-return': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
 })

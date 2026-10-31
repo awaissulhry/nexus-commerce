@@ -665,6 +665,9 @@ model SalesOrderLine {
   closedShortAt        DateTime?     @db.Timestamptz(3)
   closedShortById      String?       @db.Uuid
   closeShortReason     String?
+  /// W2b (B-W2b-03): why it was closed short as a code of the CANCEL reason list (reasons.prisma ReasonCode, kept as
+  /// text), beside the words above; only on a line closed short, cleared with it (null on lines closed before W2b).
+  closedShortReasonCode String?
   version              Int           @default(1)
   createdAt            DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime      @default(now()) @updatedAt @db.Timestamptz(3)

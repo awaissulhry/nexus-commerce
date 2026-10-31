@@ -4,9 +4,10 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { PRODUCTION_SCAN_CORRECT } from '@nexus/factory-domain/production/scans/permissions'
-import { correctionApprovalRefusal, decidedRefusal, scrapReasonColumn } from '@nexus/factory-domain/production/scans/rules'
+import { correctionApprovalRefusal, decidedRefusal, scrapReasonColumn, standingScans } from '@nexus/factory-domain/production/scans/rules'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
+import { bundleFlowOf } from '../bundles/flow'
 import { lockBundleForScan, readBundle } from '../bundles/store'
 import { mayScan, officeOf, refuse } from './access'
 import { decideCorrectionRequest, lockCorrectionRequest, readCorrectionRequest, readCorrectionRequests, type CorrectionRequest, type CorrectionStatus } from './corrections-store'
@@ -66,9 +67,12 @@ export async function approveCorrection(caller: CommandCaller, requestId: string
     const scans = await readBundleScans(tx, request.bundleId)
     const target = scans.find((scan) => scan.id === request.scanId) ?? null
     const involved = target ? await involvedOf(tx, request, target) : new Set<string>()
+    // W2b B-W2b-10 hook (bundles/flow.ts): a split parent's correction is capped at its live garments.
+    const flow = await bundleFlowOf(tx, locked.bundle, operations, standingScans(scans))
     const refusal = correctionApprovalRefusal({
       workOrder,
-      bundle: { code: locked.bundle.code, quantity: locked.bundle.quantity },
+      bundle: { code: locked.bundle.code, quantity: flow.quantity },
+      standing: flow.standing,
       target,
       operations,
       scans,

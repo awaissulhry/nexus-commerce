@@ -15,6 +15,7 @@ import {
   type SubcontractOrderStatus,
 } from '@nexus/factory-domain/purchasing/subcontracting/rules'
 import { dayOf, quantityText, type Reader } from '../store'
+import { receiptsOfOrder } from './receive-back'
 import { KIT_COLUMNS, nameOf, OPERATION_COLUMNS, sizesOf, type KitRow, type OperationRow, type OrderRow } from './store'
 
 /**
@@ -185,13 +186,19 @@ export function storedReceiptOf(after: Prisma.JsonValue | null): StoredReceipt |
   return { receiptId: after.receiptId, receivedAt: after.receivedAt, lines, returns, supplierDdt: ddt, note: str(after.note) }
 }
 
-/** The order's receipts, oldest first, with when and by whom they were recorded. */
+/**
+ * The order's receipts, oldest first, with when and by whom they were recorded: W2b's SubcontractReceipt rows
+ * (receive-back.ts, B-W2b-10), and before them the receipts recorded before W2b as their command's audit rows.
+ */
 export async function storedReceipts(db: Reader, orderId: string): Promise<(StoredReceipt & { recordedAt: Date; byId: string | null })[]> {
+  const tables = await receiptsOfOrder(db, orderId)
+  const kept = new Set(tables.map((receipt) => receipt.receiptId))
   const rows = await db.auditLog.findMany({ where: { recordType: 'SubcontractOrder', recordId: orderId, action: RECEIPT_ACTION }, select: { at: true, actorId: true, audience: true, after: true }, orderBy: [{ at: 'asc' }, { id: 'asc' }] })
-  return rows.flatMap((row) => {
+  const older = rows.flatMap((row) => {
     const receipt = storedReceiptOf(row.after)
-    return receipt ? [{ ...receipt, recordedAt: row.at, byId: row.audience === 'OFFICE' ? row.actorId : null }] : []
+    return receipt && !kept.has(receipt.receiptId) ? [{ ...receipt, recordedAt: row.at, byId: row.audience === 'OFFICE' ? row.actorId : null }] : []
   })
+  return [...older, ...tables]
 }
 
 /** Receipts as the record shows them (bundles, cells, materials and places named). */

@@ -8,6 +8,9 @@ import { cancelDdtProblems, ddtDocument, draftDdt, draftInvoicesWarning, invoice
 import { cancelSourceDdtProblems, DDT_SOURCE_TYPES, sourceDdtDocument, type DdtSourceType } from '@nexus/factory-domain/shipping/ddt/sources'
 import { SHIPPING_DDT_CANCEL, SHIPPING_DDT_ISSUE, SHIPPING_MANAGE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { shipmentMachine, type ShipmentStatus } from '@nexus/factory-domain/shipping/shipments'
+import type { TransportMode } from '@nexus/factory-domain/shipping/shipments/transport'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
+import { isDocumentLanguage } from '@nexus/factory-domain/documents/model'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, IdempotencyKeyReusedError, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
@@ -55,6 +58,10 @@ import { ddtView, expectedDdtNumber, isShipmentDdt, issuedOf, languageOf, liveDd
 export interface IssueBody extends DdtRequest {
   readonly version?: number | undefined
   readonly internalNote?: string | null | undefined
+  /** B-W2b-19 (Intrastat): the mode of transport the DDT keeps; default the shipment's. */
+  readonly transportMode?: TransportMode | null | undefined
+  /** B-W2a-F8 with B-W2b-19: with `ship`, the reason the garments' SHIPMENT moves go into a SOFT-locked month. */
+  readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
 const issues = (problems: readonly Issue[]) => new ValidationError(problems.length === 1 ? problems[0]!.message : 'The DDT cannot be issued as it stands.', problems)
@@ -114,7 +121,7 @@ const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tool
  * SHIPPED (the …_quality_shipping_guards trigger ships a serial only with its shipment; the deferred one checks the
  * live DDT at commit). Returns the serials shipped.
  */
-async function shipGoods(tools: CommandTools, shipment: ShipmentHeader): Promise<string[]> {
+async function shipGoods(tools: CommandTools, shipment: ShipmentHeader, periodLockOverride?: PeriodLockOverride | null): Promise<string[]> {
   await tools.tx.shipment.update({ where: { id: shipment.id }, data: { status: 'SHIPPED', shippedAt: tools.now }, select: { id: true } })
   const serials = await tools.tx.garmentSerial.findMany({ where: { shipmentLine: { shipmentId: shipment.id }, status: 'RELEASED' }, select: { id: true, serial: true }, orderBy: { serial: 'asc' } })
   for (const serial of serials) {
@@ -122,7 +129,7 @@ async function shipGoods(tools: CommandTools, shipment: ShipmentHeader): Promise
     tools.audit({ action: 'shipping.shipSerial', recordType: 'GarmentSerial', recordId: serial.id, companyId: shipment.companyId, siteId: shipment.siteId, before: { status: 'RELEASED' }, after: { status: 'SHIPPED', shipmentId: shipment.id } })
   }
   // B-W2a-48: closed-short lines refused, the garments in finished goods out of stock, the freight, the EU evidence.
-  await whenShipped(tools, shipment)
+  await whenShipped(tools, shipment, periodLockOverride)
   tools.emit({ type: 'shipment.status_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, from: 'PACKED', to: 'SHIPPED' } })
   tools.emit({ type: 'shipment.packing_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, status: 'SHIPPED', change: 'status' } })
   return serials.map((serial) => serial.serial)
@@ -179,6 +186,8 @@ export async function issueDdt(files: FilesRuntime, caller: CommandCaller, shipm
       const id = newId()
       const number = await allocateNumber(tools, { companyId: current.companyId, kind: 'DDT' }, { type: 'Ddt', id, date: draft.documentDate })
       const internalNote = body.internalNote?.trim() ? body.internalNote.trim() : null
+      // B-W2b-19: the DDT keeps the language it is printed in and the mode of transport (Intrastat).
+      const shipmentMode = (await tools.tx.shipment.findUnique({ where: { id: current.id }, select: { transportMode: true } }))?.transportMode ?? null
       await tools.tx.ddt.create({
         data: {
           id,
@@ -186,6 +195,8 @@ export async function issueDdt(files: FilesRuntime, caller: CommandCaller, shipm
           siteId: current.siteId,
           partyId: current.partyId,
           shipmentId: current.id,
+          language: facts.language,
+          transportMode: body.transportMode !== undefined ? body.transportMode : shipmentMode,
           numberSeriesId: number.seriesId,
           number: number.formatted,
           documentDate: day(number.documentDate),
@@ -212,7 +223,7 @@ export async function issueDdt(files: FilesRuntime, caller: CommandCaller, shipm
         select: { id: true },
       })
       const replacement = current.status === 'SHIPPED'
-      const shipped = body.ship === true ? await shipGoods(tools, current) : null
+      const shipped = body.ship === true ? await shipGoods(tools, current, body.periodLockOverride) : null
       tools.audit({
         recordType: 'Ddt',
         recordId: id,
@@ -245,10 +256,12 @@ async function ensurePdf(files: FilesRuntime, caller: CommandCaller, ddtId: stri
     const row = (await readAnyDdt(client, ddtId))!
     const company = await client.company.findUnique({ where: { id: row.companyId }, select: { currency: true } })
     const currency = company?.currency ?? 'EUR'
-    // A shipment's DDT speaks its order's language; one for another reason its party's (B-W2a-17).
-    if (isShipmentDdt(row)) return { ddt: row, document: ddtDocument(issuedOf(row), await languageOf(client, row.shipment.salesOrderId), currency) }
+    // The language it was issued in (B-W2b-19: Ddt.language); a DDT issued before W2b: a shipment's speaks its order's
+    // language, one for another reason its party's (B-W2a-17).
+    const kept = isDocumentLanguage(row.language) ? row.language : null
+    if (isShipmentDdt(row)) return { ddt: row, document: ddtDocument(issuedOf(row), kept ?? (await languageOf(client, row.shipment.salesOrderId)), currency) }
     if (!isSourceDdt(row)) throw new InvalidStateError('This DDT names neither a shipment nor a source record.')
-    return { ddt: row, document: sourceDdtDocument(sourceIssuedOf(row), await sourceLanguageOf(client, row.partyId), currency) }
+    return { ddt: row, document: sourceDdtDocument(sourceIssuedOf(row), kept ?? (await sourceLanguageOf(client, row.partyId)), currency) }
   })
   try {
     const { file } = await storeDocumentPdf(files, caller, {
@@ -413,7 +426,7 @@ export async function listDdts(caller: CommandCaller, query: ListDdtsQuery) {
  * shipping.manage: the goods were handed over (PACKED → SHIPPED, the packed serials SHIPPED): with a live DDT, unless
  * an immediate invoice travels with them (ddtRequired false). Office only; never the floor.
  */
-export async function shipShipment(caller: CommandCaller, shipmentId: string, body: { version?: number | undefined }, idempotencyKey?: string) {
+export async function shipShipment(caller: CommandCaller, shipmentId: string, body: { version?: number | undefined; periodLockOverride?: PeriodLockOverride | undefined }, idempotencyKey?: string) {
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
   const { result } = await command(caller, { name: 'shipping.ship', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } }, async (tools) => {
     const current = await lockedStatus(tools, shipment.id, ['PACKED'], 'it leaves')
@@ -421,7 +434,7 @@ export async function shipShipment(caller: CommandCaller, shipmentId: string, bo
     assertTransition(shipmentMachine, current.status, 'SHIPPED', facts)
     await assertDocumentsTravel(tools, current.id)
     const live = await liveDdtOf(tools.tx, current.id)
-    const serials = await shipGoods(tools, current)
+    const serials = await shipGoods(tools, current, body.periodLockOverride)
     tools.audit({ recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { status: 'PACKED' }, after: { status: 'SHIPPED', ddt: live?.number ?? null, serials } })
     return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, current.id))!) }
   })

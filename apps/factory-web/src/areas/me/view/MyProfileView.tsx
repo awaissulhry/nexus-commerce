@@ -39,17 +39,20 @@ export interface MyProfileViewProps {
   model: MyProfileViewModel
   /** The page's actions; absent in the design index (forms then only check themselves). */
   onAction?: (action: MeAction) => void
+  /** B-W2b-05: the shell's "Where I work" card (shell/scope StartPageCard), after Display. */
+  whereIWork?: ReactNode
 }
 
 type Translate = ReturnType<typeof useT>
 
-export function MyProfileView({ model, onAction }: MyProfileViewProps) {
+export function MyProfileView({ model, onAction, whereIWork }: MyProfileViewProps) {
   const t = useT('me')
   return (
     <div className="fw-me">
       <PageHeader title={t('title')} subtitle={t('subtitle', { name: model.person.displayName, email: model.person.email, tenant: model.tenant })} />
       <div className="fw-me-cards">
         <DisplayCard model={model} onAction={onAction} />
+        {whereIWork}
         <AuthenticatorCardView model={model} onAction={onAction} />
         <PasswordCardView model={model} onAction={onAction} />
         <SessionCard model={model} onAction={onAction} />

@@ -284,6 +284,19 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/plant/settings',
 ])
 
+/**
+ * B-W2b-05 (the W2a follow-up "window mode for new-tab pages and nav row target"; design arch new-tab-window: "no rail,
+ * no Pages button: the window is the board"): pages that open in their OWN WINDOW. At their own address the shell draws
+ * them in window mode (a slim bar — Back to Office, the page's name, company and site, the live state, Close — and the
+ * page filling the rest), and their navigation row opens them in a new tab (the DS AreaNavItem has no `target`: the
+ * shell opens it on a plain click; ⌘-click does as always). An office entry never lands on one. A W2b window page (the
+ * line TV's office preview) adds its address here.
+ */
+export const WINDOW_PAGES: ReadonlySet<string> = new Set(['/planning/board'])
+
+/** Whether a company-free address (with or without its terms) is a window page. */
+export const isWindowPage = (address: string): boolean => WINDOW_PAGES.has(address.split('?')[0]!.replace(/\/+$/, '') || '/')
+
 /** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */
 export const PROFILE_PAGE = '/me'
 
@@ -307,7 +320,7 @@ export function firstOfficePage(nav: AreaNav, options: { areaId?: string; built?
       if (!area.sections?.length && built.has(area.href)) return area.href
       for (const section of area.sections ?? []) {
         for (const item of section.items) {
-          for (const row of [item, ...(item.children ?? [])]) if (built.has(row.href)) return row.href
+          for (const row of [item, ...(item.children ?? [])]) if (built.has(row.href) && !isWindowPage(row.href)) return row.href
         }
       }
     }

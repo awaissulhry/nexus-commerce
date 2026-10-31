@@ -6,6 +6,9 @@ import { fileView } from '../../../platform/files/contract'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { TRANSPORT_EVIDENCE_STATUSES } from '@nexus/factory-domain/shipping/evidence/evidence'
 import { FREIGHT_RULES, MAX_FREIGHT } from '@nexus/factory-domain/shipping/shipments/freight'
+import { CARRIER_RETURN_STATES } from '@nexus/factory-domain/shipping/shipments/stock'
+import { TRANSPORT_MODES } from '@nexus/factory-domain/shipping/shipments/transport'
+import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { freightSchema, oneShipment, statusSchema, transportBySchema } from '../views'
 
 /**
@@ -164,6 +167,8 @@ export const updateShipmentContract = defineContract({
     carrierCode: z.string().trim().max(64).nullish(),
     serviceCode: z.string().trim().max(128).nullish(),
     internalNote: z.string().trim().max(2000).nullish(),
+    /** B-W2b-19 (Intrastat): the mode of transport, until the shipment is cancelled (after it left too); null clears it. */
+    transportMode: z.enum(TRANSPORT_MODES).nullish(),
   }),
   response: { 200: oneShipment },
 })
@@ -338,4 +343,53 @@ export const setFreightContract = defineContract({
     freightCharge: money.price(z.number().int().min(0).max(MAX_FREIGHT).nullable()),
   }),
   response: { 200: output({ shipmentId: id(), number: z.string(), status: statusSchema, version: z.number().int(), freight: freightSchema }) },
+})
+
+// ---- B-W2b-19: shipping follow-ups ---------------------------------------------------------------------------------
+
+export const setFreightCostContract = defineContract({
+  params: shipmentParams,
+  body: input({
+    version,
+    /** What the carrier charged us (its invoice), minor units of `currency`; null clears it. A cost: the grain wall refuses it without money.cost. */
+    freightCost: money.cost(z.number().int().min(0).max(MAX_FREIGHT).nullable()),
+    /** ISO 4217; default the company's currency. */
+    currency: z.string().regex(/^[A-Z]{3}$/, 'Expected an ISO 4217 currency code.').optional(),
+  }),
+  response: { 200: output({ shipmentId: id(), number: z.string(), status: statusSchema, version: z.number().int(), freight: freightSchema }) },
+})
+
+const carrierReturnView = output({
+  shipmentId: id(),
+  number: z.string(),
+  status: statusSchema,
+  version: z.number().int(),
+  returnedAt: instant().nullable(),
+  /** NOT_RETURNED; AWAITED once the carrier's tracking says RETURNED; RECEIVED once its garments are back in finished goods. */
+  state: z.enum(CARRIER_RETURN_STATES),
+  garments: z.number().int(),
+  cells: z.array(output({ cellId: id(), label: z.string(), garments: z.number().int() })),
+  receivedAt: instant().nullable(),
+  receivedById: id().nullable(),
+  /** The finished-goods place they went back into. */
+  locationId: id().nullable(),
+  moveIds: z.array(id()),
+  /** The site's finished-goods places, and its one finished-goods location (the default). */
+  places: z.array(output({ id: id(), code: z.string(), name: z.string() })),
+  defaultLocationId: id().nullable(),
+})
+
+export const getCarrierReturnContract = defineContract({ params: shipmentParams, response: { 200: output({ carrierReturn: carrierReturnView }) } })
+
+export const receiveCarrierReturnContract = defineContract({
+  params: shipmentParams,
+  body: input({
+    version,
+    /** A finished-goods place of the shipment's site; default its one finished-goods location. */
+    locationId: id().optional(),
+    note: z.string().trim().max(500).nullish(),
+    /** B-W2a-F8: why the moves go into a SOFT-locked month. */
+    periodLockOverride: periodLockOverride.optional(),
+  }),
+  response: { 201: output({ carrierReturn: carrierReturnView, valued: z.boolean() }) },
 })

@@ -383,8 +383,9 @@ async function packerShipment(caller: CommandCaller, shipmentId: string) {
 
 /** shipping.pack: the shipment's parcels, labels, files, print state and today's cut-off. */
 export async function getLabels(caller: CommandCaller, shipmentId: string): Promise<LabelsView> {
-  const { shipment } = await packerShipment(caller, shipmentId)
-  return caller.withClient((client) => labelsView(client, shipment, serverClock.now()))
+  const { context, shipment } = await packerShipment(caller, shipmentId)
+  // B-W2b-19: the office also reads the voided labels (their audit rows); a floor device reads no audit.
+  return caller.withClient((client) => labelsView(client, shipment, serverClock.now(), context.audience === 'office'))
 }
 
 export interface PrintBody {

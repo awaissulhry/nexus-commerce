@@ -107,10 +107,15 @@ export const BASE_REASONS: Readonly<Record<ReasonCodeList, readonly StandardReas
   Object.fromEntries(Object.entries(ROWS).map(([list, rows]) => [list, Object.freeze(rows.map(reasonOf))])) as Record<ReasonCodeList, readonly StandardReason[]>,
 )
 
-/** Any list's standard reasons in tile order: the ReasonCode lists' above, the scan lists' W1 reasons (words only). */
+/**
+ * Any list's standard reasons in tile order: the ReasonCode lists' above, the scan lists' W1 reasons (no icon or colour:
+ * the floor's standard look per code; W2b: OTHER needs detail).
+ */
 export function standardReasonsOf(list: ReasonList): readonly StandardReason[] {
   if (list === 'SCRAP' || list === 'REWORK') {
-    return W1_SCAN_REASONS.filter((reason) => reason.kind === list).map((reason) => Object.freeze({ code: reason.code, labelIt: reason.label.it, labelEn: reason.label.en, icon: null, colour: null, needsDetail: false }))
+    return W1_SCAN_REASONS.filter((reason) => reason.kind === list).map((reason) =>
+      Object.freeze({ code: reason.code, labelIt: reason.label.it, labelEn: reason.label.en, icon: reason.icon ?? null, colour: reason.colour ?? null, needsDetail: reason.needsDetail ?? false }),
+    )
   }
   return BASE_REASONS[list]
 }

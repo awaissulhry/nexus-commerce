@@ -107,6 +107,7 @@ export { DetailPopover, type DetailPopoverProps } from './DetailPopover'
 export { ChangeReview, type ChangeReviewProps, type ChangeReviewItem } from './ChangeReview'
 // PSIE — the picked file before/while it is read, and a background job's progress in a dialog.
 export { FileRow, type FileRowProps } from './FileRow'
+export { FILE_ROW_LABELS, type FileRowLabels } from './FileRowLabels'
 export { JobProgress, jobPercent, type JobProgressProps } from './JobProgress'
 // Sheet publish parity (2026-10-02) — a read-only record of steps; Stepper is wizard navigation.
 export { Timeline, type TimelineProps, type TimelineStep } from './Timeline'

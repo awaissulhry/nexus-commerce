@@ -63,6 +63,8 @@ model ImportJob {
   company Company?    @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   file    StoredFile  @relation(fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   rows    ImportRow[]
+  // W2b: the first-load steps it was the import of.
+  firstLoadSteps FirstLoadStep[]
 
   // The target of the tenant-safe reference from ImportRow.
   @@unique([tenantId, id])
@@ -141,4 +143,37 @@ enum ImportRowAction {
 enum ImportRowOutcome {
   APPLIED
   SKIPPED
+}
+
+/// W2b (B-W2b-03; B-W2a-41's guided first load, design admin.import "First load, in order"): one step of a company's
+/// first load marked done by a person once its sheet matched: the APPLIED import it read (of the company, or a
+/// tenant-wide one), or "nothing to load" with the reason. Replaces the audit rows `imports.firstLoadStepDone`
+/// (B-W2b-24 reads these). One per company and step; written once, never changed or deleted (the
+/// …_followups_platform_w2b_guards trigger): a step done by mistake stays done, said in a new import.
+model FirstLoadStep {
+  id            String   @id @db.Uuid
+  tenantId      String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String   @db.Uuid
+  /// The step: a key of factory-domain imports/first-load FIRST_LOAD_STEPS (`customers`, `suppliers`, `materials`,
+  /// `openingStock`, `openOrders`; text: a new step needs no migration).
+  step          String
+  /// The APPLIED import whose sheet the step matched; null exactly when there was nothing to load.
+  jobId         String?  @db.Uuid
+  nothingToLoad Boolean  @default(false)
+  /// Why there was nothing to load (required then); null otherwise.
+  reason        String?
+  /// When and by whom it was marked done.
+  doneAt        DateTime @db.Timestamptz(3)
+  doneById      String   @db.Uuid
+  version       Int      @default(1)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById   String?  @db.Uuid
+
+  company Company    @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  job     ImportJob? @relation(fields: [tenantId, jobId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, companyId, step])
+  @@index([tenantId, jobId])
 }
