@@ -25,6 +25,14 @@
 // Every child row carries its order's siteId (and work order or workshop) in its reference, so it can never belong to
 // another site's order. Uniqueness made only of references (one operation row per work order operation) is the
 // module's: a unique key of ids alone cannot be copied by the generated isolation tests.
+//
+// W2b (schema wave 1/7, B-W2b-01; the B-W2a-25 and -76 notes): what went out and what came back are rows instead of the
+// commands' audit rows. SubcontractBundle: each bundle of cut pieces that went out with the kit (one row per bundle and
+// order: the module's). SubcontractReceipt: one visit of goods back (when, the workshop's DDT, the TRANSFER moves of the
+// material returned) with its SubcontractReceiptLine rows per operation and bundle (good, defective, scrapped there, the
+// reason); receipts are append-only. A receipt line may report the outside operation on the bundle's way through the
+// work order (production.prisma OperationScan.subcontractReceiptLineId). Office only, like the rest of this file: the
+// floor's kit task (B-W2a-76) writes through the tenant's system caller.
 
 /// An order to an outside workshop for operations of one work order (SCM-138).
 model SubcontractOrder {
@@ -75,6 +83,9 @@ model SubcontractOrder {
   workOrder  WorkOrder              @relation(fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   operations SubcontractOperation[]
   kitLines   SubcontractKitLine[]
+  // W2b (B-W2b-01): the bundles that went out with its kit, and what came back.
+  bundles    SubcontractBundle[]
+  receipts   SubcontractReceipt[]
   // W2a payables.prisma, cost-ledger.prisma (wave 7/7): the subcontractor's invoice lines that bill it, their matches,
   // and the work-order cost entries of its work.
   supplierInvoiceLines   SupplierInvoiceLine[]
@@ -141,8 +152,12 @@ model SubcontractOperation {
 
   subcontractOrder   SubcontractOrder   @relation(fields: [tenantId, siteId, workOrderId, subcontractOrderId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
   workOrderOperation WorkOrderOperation @relation(fields: [tenantId, siteId, workOrderId, workOrderOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (B-W2b-01): what came back of it, receipt by receipt.
+  receiptLines       SubcontractReceiptLine[]
 
   @@unique([tenantId, subcontractOrderId, seq])
+  // W2b: the target of the receipt lines' reference: an operation of the line's own work order.
+  @@unique([tenantId, siteId, workOrderId, id])
 }
 
 /// One component of the kit sent to the workshop (SCM-140): what, which colour, lot and hide, how much; once SENT, the
@@ -194,4 +209,114 @@ enum SubcontractKitLineStatus {
   PLANNED
   SENT
   CANCELLED
+}
+
+/// A bundle of cut pieces that went to the workshop with a subcontract order's kit (W2b, B-W2b-01; SCM-140, SCM-142;
+/// floor.kits "Rows per bundle and size: out / back / rejected"): which bundle (of the order's work order), how many
+/// garments it carried and when; what came back of it is in the receipt lines. Written in the kit's send; never
+/// changed; removed only while nothing of it came back (a send undone). One row per order and bundle is the module's.
+model SubcontractBundle {
+  id                 String   @id @db.Uuid
+  tenantId           String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's site and work order.
+  siteId             String   @db.Uuid
+  workOrderId        String   @db.Uuid
+  subcontractOrderId String   @db.Uuid
+  /// An ACTIVE bundle of the work order when it went out.
+  bundleId           String   @db.Uuid
+  /// The garments (sets of cut pieces) it carried: 1 up to the bundle's.
+  quantity           Int
+  /// When it went out (the kit's send).
+  sentAt             DateTime @db.Timestamptz(3)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  createdById        String?  @db.Uuid
+
+  subcontractOrder SubcontractOrder @relation(fields: [tenantId, siteId, workOrderId, subcontractOrderId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  bundle           Bundle           @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, subcontractOrderId])
+  @@index([tenantId, bundleId])
+}
+
+/// One visit of goods back from the workshop (W2b, B-W2b-01; SCM-142, SCM-145; design purchasing.subcontracting
+/// "Received back", floor.kits "Receive back"): when, the workshop's transport document, the TRANSFER moves of the
+/// material and offcuts it returned, and its lines per operation and bundle. Written once, in the receive command (with
+/// the operations' counts and the order's status); never changed or removed.
+/// @append-only
+model SubcontractReceipt {
+  id                 String    @id @db.Uuid
+  tenantId           String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's site and work order.
+  siteId             String    @db.Uuid
+  workOrderId        String    @db.Uuid
+  subcontractOrderId String    @db.Uuid
+  /// Its place among the order's receipts: 1, 2, 3 …
+  seq                Int
+  /// When the goods came back.
+  receivedAt         DateTime  @db.Timestamptz(3)
+  /// The workshop's DDT the goods came back with, as printed, and its date (only with a number).
+  workshopDdtNumber  String?
+  workshopDdtDate    DateTime? @db.Date
+  /// The material and offcuts sent back: the TRANSFER moves out of the order's workshop location into the site's stock,
+  /// each once (plain ids: the stock ledger keeps the moves; the trigger checks each).
+  returnMoveIds      String[]  @default([]) @db.Uuid
+  note               String?
+  /// The floor device it was received on (B-W2a-76's kit task); null: the office.
+  deviceId           String?   @db.Uuid
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+  /// The office user who received it; null for the floor's kit task (the tenant's system caller; the audit row names
+  /// the tablet and its operator, inside the one record).
+  createdById        String?   @db.Uuid
+
+  subcontractOrder SubcontractOrder         @relation(fields: [tenantId, siteId, workOrderId, subcontractOrderId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  device           Device?                  @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  lines            SubcontractReceiptLine[]
+
+  @@unique([tenantId, subcontractOrderId, seq])
+  // The target of the lines' reference: a receipt of the line's own site and work order.
+  @@unique([tenantId, siteId, workOrderId, id])
+}
+
+/// One operation (and bundle) of a receipt (W2b, B-W2b-01): how many pieces came back good, defective (rejected) and
+/// scrapped at the workshop, and why (a code of the REWORK list, as text, and its words). Written with its receipt;
+/// never changed or removed. A bundle never comes back more than its garments per operation, over every receipt (the
+/// trigger, under a lock per bundle and operation).
+/// @append-only
+model SubcontractReceiptLine {
+  id                     String   @id @db.Uuid
+  tenantId               String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The receipt's site and work order.
+  siteId                 String   @db.Uuid
+  workOrderId            String   @db.Uuid
+  receiptId              String   @db.Uuid
+  /// Its place on the receipt: 10, 20, 30 …
+  seq                    Int
+  /// The operation of the receipt's order it reports.
+  subcontractOperationId String   @db.Uuid
+  /// The bundle that came back (of the work order, of a cell the operation sends); null: pieces counted without one.
+  bundleId               String?  @db.Uuid
+  /// Pieces back: good, defective (rejected at our check) and scrapped at the workshop; each from 0, at least one in all.
+  goodQuantity           Int      @default(0)
+  defectiveQuantity      Int      @default(0)
+  scrappedQuantity       Int      @default(0)
+  /// Why pieces were rejected or scrapped: a code of the REWORK list (not blank, no spaces) and the words.
+  reasonCode             String?
+  reasonNote             String?
+  createdAt              DateTime @default(now()) @db.Timestamptz(3)
+  createdById            String?  @db.Uuid
+
+  receipt   SubcontractReceipt   @relation(fields: [tenantId, siteId, workOrderId, receiptId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  operation SubcontractOperation @relation(fields: [tenantId, siteId, workOrderId, subcontractOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and
+  // workOrderId.
+  bundle    Bundle?              @relation(fields: [tenantId, siteId, workOrderId, bundleId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // production.prisma: the scan that reported the outside operation from it.
+  scans     OperationScan[]
+
+  @@unique([tenantId, receiptId, seq])
+  // The target of the scans' reference: a line of the scan's own site and work order.
+  @@unique([tenantId, siteId, workOrderId, id])
+  // What came back of a bundle (the trigger's sums).
+  @@index([tenantId, bundleId])
 }

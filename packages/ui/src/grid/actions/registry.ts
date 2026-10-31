@@ -308,14 +308,27 @@ export function requiresAcknowledgement(impact: ActionImpact): boolean {
     (impact.reach === 'local' && impact.reversal.fidelity === 'none'))
 }
 
+/** The reversal sentence's words, by fidelity (B-W2b-04: the person's language through `ActionConfirm`'s `labels`). */
+export interface ReversalWords {
+  unchecked: string
+  none: string
+  exact: (verb: string) => string
+  lossy: (verb: string) => string
+}
+
+export const REVERSAL_WORDS: ReversalWords = {
+  unchecked: 'Reversibility has not been checked.',
+  none: 'This cannot be undone.',
+  exact: (verb) => `Undo with “${verb}”. Everything is restored exactly.`,
+  lossy: (verb) => `Return with “${verb}”. Some information cannot be restored.`,
+}
+
 /** One sentence from typed fidelity; callers supply the verb, never the promise. */
-export function reversalSentence(impact: Pick<ActionImpact, 'reversal'>): string {
+export function reversalSentence(impact: Pick<ActionImpact, 'reversal'>, words: ReversalWords = REVERSAL_WORDS): string {
   const reversal = impact.reversal
-  if (!reversal) return 'Reversibility has not been checked.'
-  if (reversal.fidelity === 'none') return 'This cannot be undone.'
-  return reversal.fidelity === 'exact'
-    ? `Undo with “${reversal.verb}”. Everything is restored exactly.`
-    : `Return with “${reversal.verb}”. Some information cannot be restored.`
+  if (!reversal) return words.unchecked
+  if (reversal.fidelity === 'none') return words.none
+  return reversal.fidelity === 'exact' ? words.exact(reversal.verb) : words.lossy(reversal.verb)
 }
 
 const REACH_RANK: Record<Reach, number> = { local: 0, 'local-destructive': 1, channel: 2 }

@@ -20,7 +20,8 @@ export const QUALITY_STATUSES = ['QUARANTINE', 'RELEASED', 'BLOCKED', 'REJECTED'
 export type QualityStatus = (typeof QUALITY_STATUSES)[number]
 export const CR_VI_STATUSES = ['NOT_REQUIRED', 'PENDING', 'PASS', 'FAIL'] as const
 export type CrViStatus = (typeof CR_VI_STATUSES)[number]
-export const HIDE_STATES = ['FULL', 'PARTLY_CUT', 'REMNANT', 'CONSUMED', 'SCRAPPED'] as const
+// W2b (B-W2b-01): RETURNED, a hide sent back to the tannery.
+export const HIDE_STATES = ['FULL', 'PARTLY_CUT', 'REMNANT', 'CONSUMED', 'SCRAPPED', 'RETURNED'] as const
 export type HideState = (typeof HIDE_STATES)[number]
 export const LOCATION_KIND_LIST = LOCATION_KINDS
 export type LocationKind = (typeof LOCATION_KINDS)[number]

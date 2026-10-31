@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
 import { Button, Kbd } from '../primitives'
+import { mergeLabels } from '../lib/labels'
 import { isMacPlatform, saveKeyAction, saveShortcutWords, warnBeforeLeaving } from './editModeBarKeys'
+import { EDIT_MODE_BAR_LABELS, type EditModeBarLabels } from './EditModeBarLabels'
 
 export interface EditModeBarProps {
   /** custom message; defaults to "N unsaved change(s)" from `count` */
@@ -24,6 +26,8 @@ export interface EditModeBarProps {
    * the bar says so ("Save with ⌘S"). While `count` > 0, leaving the page asks first (`beforeunload`).
    */
   saveShortcut?: boolean
+  /** Its words in the person's language (B-W2b-04). Default English; `message` and `applyLabel` win over them. */
+  labels?: Partial<EditModeBarLabels>
 }
 
 const noSubscribe = () => () => {}
@@ -31,7 +35,8 @@ const onMac = () => isMacPlatform(navigator.platform || navigator.userAgent)
 const macOnServer = () => true
 
 /** Sticky discard/apply bar for unsaved edits (H10 `.h10-am-editbar`). */
-export function EditModeBar({ message, count, onDiscard, onApply, applyLabel = 'Apply changes', busy, applyDisabled, applyHeldReason, saveShortcut }: EditModeBarProps) {
+export function EditModeBar({ message, count, onDiscard, onApply, applyLabel, busy, applyDisabled, applyHeldReason, saveShortcut, labels }: EditModeBarProps) {
+  const words = mergeLabels(EDIT_MODE_BAR_LABELS, labels)
   const mac = useSyncExternalStore(noSubscribe, onMac, macOnServer)
   const held = !!applyHeldReason || !!applyDisabled
   const latest = useRef({ onApply, held, busy: !!busy })
@@ -63,28 +68,20 @@ export function EditModeBar({ message, count, onDiscard, onApply, applyLabel = '
     return () => window.removeEventListener('beforeunload', onLeave)
   }, [warn])
 
-  const label =
-    message ??
-    (count != null ? (
-      <>
-        <b>{count}</b> unsaved {count === 1 ? 'change' : 'changes'}
-      </>
-    ) : (
-      'Unsaved changes'
-    ))
+  const label = message ?? (count != null ? words.unsaved(count) : words.unsavedNoCount)
   return (
-    <div className="nds-actionbar" role="region" aria-label="Edit mode">
+    <div className="nds-actionbar" role="region" aria-label={words.region}>
       <span className="lbl">
         {label}
         {saveShortcut && onApply && (
-          <span className="nds-actionbar-key"> · Save with <Kbd>{saveShortcutWords(mac)}</Kbd></span>
+          <span className="nds-actionbar-key">{` · ${words.saveWith} `}<Kbd>{saveShortcutWords(mac)}</Kbd></span>
         )}
       </span>
       <span className="grow" />
       <span className="acts">
         {onDiscard && (
           <Button onClick={onDiscard} disabled={busy}>
-            Discard
+            {words.discard}
           </Button>
         )}
         {onApply && (
@@ -95,7 +92,7 @@ export function EditModeBar({ message, count, onDiscard, onApply, applyLabel = '
             disabled={applyHeldReason ? undefined : busy || applyDisabled}
             aria-keyshortcuts={saveShortcut ? (mac ? 'Meta+S' : 'Control+S') : undefined}
           >
-            {applyLabel}
+            {applyLabel === undefined ? words.apply : applyLabel}
           </Button>
         )}
       </span>

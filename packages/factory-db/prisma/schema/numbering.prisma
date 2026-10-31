@@ -9,7 +9,7 @@
 // NumberAllocation is append-only (`@append-only`, scripts/factory/check-append-only.mjs).
 //
 // Floor tablets number the floor's document kinds (@nexus/factory-domain/numbering/kinds FLOOR_DOCUMENT_KINDS: goods
-// receipts, lots, inspections, releases) from their own commands, online, through the same allocateNumber: the floor's
+// receipts, lots, inspections, releases; W2b: holds and NCRs raised at the bench) from their own commands, online, through the same allocateNumber: the floor's
 // policies reach only the series and numbers of those kinds (ownership/numbering.json onlyValues), and the hand-written
 // …_numbering_floor_documents_guards triggers hold that a tablet never touches a fiscal series, numbers only for its own
 // site's company, moves a counter one number at a time past a number it recorded, and adds only a new year of a series.
@@ -100,12 +100,16 @@ enum NumberKind {
   SUBCONTRACT
   /// W2a wave 4: a stock count's number (CNT-…; stockcount.prisma StockCount.number).
   COUNT
-  /// W2a wave 6: a nonconformance report's number (NCR-…; ncr.prisma Nonconformance.number).
+  /// W2a wave 6: a nonconformance report's number (NCR-…; ncr.prisma Nonconformance.number). W2b: a floor document kind
+  /// too (an NCR raised at the bench).
   NCR
   /// W2a wave 6: a maintenance job's number (MJ-…; plant.prisma MaintenanceJob.number).
   MAINTENANCE_JOB
   /// W2a wave 7: an accounting export batch's number (EXP-…; accounting.prisma AccountingExport.number).
   ACCOUNTING_EXPORT
+  /// W2b wave 2: a quality hold's number (HLD-…; holds.prisma QualityHold.number). A floor document kind: the bench
+  /// numbers the hold it places.
+  HOLD
 }
 
 enum NumberReset {

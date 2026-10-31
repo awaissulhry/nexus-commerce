@@ -191,7 +191,10 @@
     "ADJUSTMENT": "Rettifica",
     "COUNT": "Differenza inventariale",
     "SCRAP": "Scarto",
-    "PRODUCTION_RECEIPT": "Prodotti finiti da ordine di lavoro"
+    "PRODUCTION_RECEIPT": "Prodotti finiti da ordine di lavoro",
+    "CUSTOMER_RETURN": "Reso da cliente",
+    "SUPPLIER_RETURN": "Reso a fornitore",
+    "SHIPMENT": "Spedizione"
   },
   "print": {
     "title": "Valorizzazione del magazzino · {company} · al {day}",

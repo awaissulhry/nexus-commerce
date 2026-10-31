@@ -136,9 +136,13 @@ describe('the walls', () => {
       'PurchaseOrderReminder',
       'PurchaseOrderRevision',
       'ReceiptDiscrepancy',
+      // W2b schema wave 1/7 (B-W2b-01): the bundles out and the receipts back, office only.
+      'SubcontractBundle',
       'SubcontractKitLine',
       'SubcontractOperation',
       'SubcontractOrder',
+      'SubcontractReceipt',
+      'SubcontractReceiptLine',
       'SupplierClaim',
       'SupplierClaimLine',
       'SupplierItem',
