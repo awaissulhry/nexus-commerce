@@ -1,7 +1,7 @@
 import { CHECKLIST_ITEMS } from '@nexus/factory-domain/quality/final/rules'
 import type { Lot } from '../../_shared/lots'
 import { COMPANY_ID, ME, SITE_ID, at, uid } from '../../_shared/fixtures'
-import type { FinalCell, FinalState, GateCheck, Inspection, InspectionRead, InspectionRow, Release, ReleaseDetail, ReleaseRule, WorkOrderCells, WorkOrderPick } from '../api'
+import type { FinalCell, FinalState, GateCheck, Inspection, InspectionRead, InspectionRow, Inspectors, PickedDefect, Release, ReleaseDetail, ReleaseRule, ReturnPick, ReturnRecord, WorkOrderCells, WorkOrderPick } from '../api'
 import type { Evidence } from '../../evidence/api'
 
 /**
@@ -37,16 +37,23 @@ const row = (n: number, over: Partial<InspectionRow>): InspectionRow => ({
   toRelease: 0,
   onHold: false,
   holdWords: null,
+  assigned: null,
+  holds: 0,
+  ncrs: 0,
+  undecided: false,
+  version: 3,
   decidedAt: at(27, 10, 42),
   createdAt: at(27, 9, 15),
   ...over,
 })
 
 export const ROWS: InspectionRow[] = [
-  row(12, { status: 'OPEN', computedResult: null, decidedAt: null, inspector: office(ME), createdAt: at(29, 8, 40), number: 'DEMO-WO-0151', workOrderId: WO.d, lotSize: 24, sampleSize: 5 }),
-  row(11, { status: 'OPEN', computedResult: null, decidedAt: null, createdAt: at(29, 8, 5), number: 'DEMO-WO-0149', workOrderId: WO.c, lotSize: 12, sampleSize: 3 }),
+  row(12, { status: 'OPEN', computedResult: null, decidedAt: null, inspector: office(ME), assigned: { kind: 'USER', userId: ME, workerId: null, name: 'Demo Person' }, createdAt: at(29, 8, 40), number: 'DEMO-WO-0151', workOrderId: WO.d, lotSize: 24, sampleSize: 5 }),
+  row(11, { status: 'OPEN', computedResult: null, decidedAt: null, assigned: { kind: 'WORKER', userId: null, workerId: WORKER, name: null }, createdAt: at(29, 8, 5), number: 'DEMO-WO-0149', workOrderId: WO.c, lotSize: 12, sampleSize: 3 }),
+  row(13, { status: 'OPEN', computedResult: null, decidedAt: null, inspector: office(OTHER_USER), createdAt: at(29, 7, 50), number: 'DEMO-WO-0152', workOrderId: WO.d, lotSize: 10, sampleSize: 3 }),
   row(10, { released: 30, toRelease: 18, decidedAt: at(28, 16, 5), createdAt: at(28, 15, 0) }),
-  row(9, { number: 'DEMO-WO-0147', workOrderId: WO.b, status: 'FAILED', computedResult: 'FAIL', onHold: true, holdWords: 'x', decidedAt: at(28, 11, 20), createdAt: at(28, 10, 0), lotSize: 20, sampleSize: 5 }),
+  row(9, { number: 'DEMO-WO-0147', workOrderId: WO.b, status: 'FAILED', computedResult: 'FAIL', onHold: true, holdWords: 'x', undecided: true, decidedAt: at(28, 11, 20), createdAt: at(28, 10, 0), lotSize: 20, sampleSize: 5 }),
+  row(14, { number: 'DEMO-WO-0144', workOrderId: WO.b, status: 'FAILED', computedResult: 'FAIL', onHold: true, holdWords: 'x', holds: 1, ncrs: 1, decidedAt: at(27, 11, 20), createdAt: at(27, 10, 0), lotSize: 16, sampleSize: 5 }),
   row(8, { number: 'DEMO-WO-0139', released: 12, reversed: 4, onHold: true, holdWords: 'x', decidedAt: at(26, 9, 30), createdAt: at(26, 8, 50), lotSize: 12, sampleSize: 3, inspector: office(OTHER_USER) }),
   row(7, { number: 'DEMO-WO-0137', overridden: true, released: 0, toRelease: 10, computedResult: 'FAIL', lotSize: 10, sampleSize: 3, decidedAt: at(25, 14, 5), createdAt: at(25, 13, 10) }),
   row(6, { number: 'DEMO-WO-0133', released: 36, decidedAt: at(22, 11, 0), createdAt: at(22, 10, 15), lotSize: 36, sampleSize: 8 }),
@@ -212,12 +219,15 @@ export const INSPECTION: Inspection = {
   status: 'OPEN',
   plan: { lotSize: 24, sampleSize: 5, inspectionLevel: 'II', aqlMajor: '2.500', aqlMinor: '4.000', acceptMajor: 0, acceptMinor: 1, hundredPercent: false },
   checklist: answers(7),
-  defects: [{ id: uid('7721', 1), defectClass: 'MINOR', code: 'THREAD-END', description: null, quantity: 1, workOrderSizeId: CELL.a50, note: 'Loose thread end at the collar.' }],
+  defects: [
+    { id: uid('7721', 1), defectClass: 'MINOR', code: 'THREAD-END', defectCodeId: uid('7731', 1), zone: 'COLLAR', description: null, quantity: 1, workOrderSizeId: CELL.a50, note: 'Loose thread end at the collar.' },
+  ],
   counts: { critical: 0, major: 0, minor: 1 },
   computed: { result: 'PASS', words: 'x' },
   overridden: false,
   overrideReason: null,
   inspector: office(ME),
+  assigned: null,
   notMakerStatement: false,
   decidedAt: null,
   signatureSha256: null,
@@ -236,7 +246,7 @@ export const readOf = (inspection: Inspection, over: Partial<InspectionRead> = {
 })
 
 export const ANSWERED: Inspection = { ...INSPECTION, checklist: answers(12), version: 9 }
-export const FAILING_BY_COUNTS: Inspection = { ...ANSWERED, defects: [{ id: uid('7721', 2), defectClass: 'MAJOR', code: 'STITCH-SKIP', description: null, quantity: 2, workOrderSizeId: CELL.a52, note: null }], counts: { critical: 0, major: 2, minor: 0 }, computed: { result: 'FAIL', words: 'x' } }
+export const FAILING_BY_COUNTS: Inspection = { ...ANSWERED, defects: [{ id: uid('7721', 2), defectClass: 'MAJOR', code: 'STITCH-SKIP', defectCodeId: uid('7731', 2), zone: 'SLEEVE_L', description: null, quantity: 2, workOrderSizeId: CELL.a52, note: null }], counts: { critical: 0, major: 2, minor: 0 }, computed: { result: 'FAIL', words: 'x' } }
 export const FAILING_HARD: Inspection = { ...ANSWERED, checklist: answers(12, ['FIBRE_COMPOSITION']), computed: { result: 'FAIL', words: 'x' } }
 export const PASSED: Inspection = { ...ANSWERED, id: uid('7701', 10), inspectionNumber: 'DEMO-INS-0010', label: 'DEMO-INS-0010', workOrderId: WO.a, status: 'PASSED', plan: { ...ANSWERED.plan, lotSize: 48, sampleSize: 8 }, decidedAt: at(28, 16, 5), signatureSha256: 'b7e6d5c4b3a291807f6e5d4c3b2a1908f7e6d5c4b3a2918070f6e5d4c3b2a190', version: 11, createdAt: at(28, 15, 0) }
 export const FAILED: Inspection = { ...FAILING_HARD, id: uid('7701', 9), inspectionNumber: 'DEMO-INS-0009', label: 'DEMO-INS-0009', status: 'FAILED', decidedAt: at(28, 11, 20), signatureSha256: 'c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2', inspector: floor }
@@ -401,4 +411,52 @@ export const EVIDENCE_SERIAL: Evidence = {
   ...EVIDENCE,
   subject: { ...EVIDENCE.subject, kind: 'SERIAL', serial: { id: uid('7951', 9), serial: 'DEMO-SN-0142-017', status: 'SHIPPED', bundleId: uid('9991', 2), releaseId: uid('7801', 1) }, cells: [EVIDENCE.subject.cells[1]!] },
   style: { ...EVIDENCE.style!, tracking: 'SERIAL' },
+}
+
+// ---- W2a (B-W2a-67): the library's picker, inspectors, a return to inspect -------------------------------------------------------
+
+const CATEGORY = { seam: { id: uid('7730', 1), code: 'SEAM', labelIt: 'Cuciture', labelEn: 'Seams' }, label: { id: uid('7730', 2), code: 'LABEL', labelIt: 'Etichette', labelEn: 'Labels' }, leather: { id: uid('7730', 3), code: 'LEATHER', labelIt: 'Pelle', labelEn: 'Leather' } }
+const picked = (n: number, code: string, labelEn: string, labelIt: string, severity: 'CRITICAL' | 'MAJOR' | 'MINOR', zone: string | null, category: (typeof CATEGORY)[keyof typeof CATEGORY]): PickedDefect => ({
+  id: uid('7731', n),
+  code,
+  category,
+  labelIt,
+  labelEn,
+  icon: null,
+  colour: null,
+  pictureFileId: null,
+  severity,
+  zone,
+  needsDetail: false,
+})
+export const LIBRARY: PickedDefect[] = [
+  picked(1, 'THREAD-END', 'Loose thread end', 'Filo non rifilato', 'MINOR', 'COLLAR', CATEGORY.seam),
+  picked(2, 'STITCH-SKIP', 'Skipped stitch', 'Punto saltato', 'MAJOR', 'SLEEVE_L', CATEGORY.seam),
+  picked(3, 'SEAM-OPEN', 'Open seam', 'Cucitura aperta', 'MAJOR', null, CATEGORY.seam),
+  picked(4, 'LABEL-MISSING', 'Wrong or missing label', 'Etichetta errata o mancante', 'CRITICAL', 'LABEL', CATEGORY.label),
+  picked(5, 'GRAIN-CRACK', 'Grain crack', 'Crepa del fiore', 'MAJOR', 'BACK', CATEGORY.leather),
+]
+
+export const INSPECTORS: Inspectors = {
+  floorListed: true,
+  inspectors: [
+    { kind: 'USER', id: ME, name: 'Demo Person', me: true, made: [] },
+    { kind: 'USER', id: OTHER_USER, name: 'Demo Inspector Two', me: false, made: [] },
+    { kind: 'USER', id: uid('3333', 10), name: 'Demo Maker', me: false, made: ['DEMO-WO-0151'] },
+    { kind: 'WORKER', id: WORKER, name: 'Demo Bench Inspector', me: false, made: [] },
+  ],
+}
+
+export const RETURNS: ReturnPick[] = [
+  { id: uid('7951', 1), number: 'DEMO-RMA-0007', siteId: SITE_ID, site: { id: SITE_ID, code: 'DEMO-A1' }, party: { id: uid('8101', 1), code: 'DEMO-CUST', legalName: 'Demo Customer S.r.l.' }, units: 3, receivedUnits: 3, receivedAt: at(28, 9, 0) },
+]
+export const RETURN_RECORD: ReturnRecord = {
+  id: uid('7951', 1),
+  number: 'DEMO-RMA-0007',
+  status: 'RECEIVED',
+  version: 4,
+  lines: [
+    { id: uid('7952', 1), seq: 1, description: 'DEMO-JKT-01 Black 52', serial: 'DEMO-0151-0007', batchNumber: null, quantity: 1, receivedQuantity: 1, safety: true, grade: null, cause: null, conditionNote: null },
+    { id: uid('7952', 2), seq: 2, description: 'DEMO-JKT-01 Black 54', serial: null, batchNumber: 'DEMO-BT-0151', quantity: 2, receivedQuantity: 2, safety: false, grade: null, cause: null, conditionNote: null },
+  ],
 }

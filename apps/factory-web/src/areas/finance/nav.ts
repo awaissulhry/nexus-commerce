@@ -1,4 +1,4 @@
-import { Banknote, FileText, FolderArchive, PieChart, SlidersHorizontal, Receipt } from 'lucide-react'
+import { Banknote, FileText, FolderArchive, PieChart, SlidersHorizontal, Receipt, Scale, TrendingUp } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -27,6 +27,15 @@ export const officeArea: OfficeAreaNav = {
           { id: 'finance-invoices', label: 'shell:nav.finance.invoices', href: '/finance/invoices', icon: FileText, permission: 'invoices.view' },
           // SCR-082: payments received and where they are placed (payments.view).
           { id: 'finance-payments', label: 'shell:nav.finance.payments', href: '/finance/payments', icon: Banknote, permission: 'payments.view' },
+        ],
+      },
+      // B-W2a-72: Costing › Standard vs actual (SCR-154) and Margins (SCR-155): costing.view; amounts by the cost, price and margin grains.
+      {
+        id: 'finance-costing',
+        label: 'shell:nav.finance.costingGroup',
+        items: [
+          { id: 'finance-costing-page', label: 'shell:nav.finance.costing', href: '/finance/costing', icon: Scale, permission: 'costing.view' },
+          { id: 'finance-margins', label: 'shell:nav.finance.margins', href: '/finance/margins', icon: TrendingUp, permission: 'costing.view' },
         ],
       },
       // B-W2a-51: Close › Accounting export (SCR-156: numbered batches for the accountant, the wizard, the period locks).

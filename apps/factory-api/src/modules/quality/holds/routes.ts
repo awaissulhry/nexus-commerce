@@ -2,10 +2,10 @@ import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { requireStepUp } from '../../../platform/auth/office/account'
 import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
-import { countsContract, editContract, getContract, listContract, placeContract, previewContract, releaseContract } from './contract'
+import { countsContract, editContract, getContract, listContract, peopleContract, placeContract, previewContract, releaseContract } from './contract'
 import { editHold, placeHold, releaseHold } from './holds'
 import { manifest } from './manifest'
-import { getHold, holdCounts, listHolds, previewHold } from './reads'
+import { getHold, holdCounts, holdPeople, listHolds, previewHold } from './reads'
 
 const flag = (value: 'true' | 'false' | undefined): boolean | undefined => (value === undefined ? undefined : value === 'true')
 
@@ -18,6 +18,8 @@ export default defineRoutes('quality.holds', manifest, async (app) => {
   app.get('/quality/holds', { schema: listContract }, async (request) => listHolds(request, { ...request.query, overdue: flag(request.query.overdue), system: flag(request.query.system) }))
 
   app.get('/quality/holds/counts', { schema: countsContract }, async (request) => holdCounts(request, request.query))
+
+  app.get('/quality/holds/people', { schema: peopleContract }, async (request) => holdPeople(request, request.query.siteId))
 
   app.get('/quality/holds/:holdId', { schema: getContract }, async (request) => getHold(request, request.params.holdId))
 

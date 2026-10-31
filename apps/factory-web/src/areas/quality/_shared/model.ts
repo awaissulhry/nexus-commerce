@@ -49,6 +49,18 @@ export const QUALITY_PERMISSIONS = {
   partiesView: 'parties.view',
   filesRead: 'files.read',
   filesUpload: 'files.upload',
+  // B-W2a-67 (Holds SCR-078, Defects & dispositions SCR-079, Inspections every day): holds, the library, NCRs, returns.
+  holdsView: 'quality.holds.view',
+  holdsPlace: 'quality.holds.place',
+  holdsRelease: 'quality.holds.release',
+  defectsView: 'quality.defects.view',
+  defectsManage: 'quality.defects.manage',
+  ncrView: 'quality.ncr.view',
+  ncrRaise: 'quality.ncr.raise',
+  returnsView: 'sales.returns.view',
+  returnsInspect: 'sales.returns.inspect',
+  stockView: 'inventory.stock.view',
+  threadsRead: 'threads.read',
 } as const
 
 export type QualityAbility = keyof typeof QUALITY_PERMISSIONS
@@ -132,3 +144,11 @@ export function evidenceAddress(prefix: string, subject: { batch?: string | null
   if (subject.batch) return `${prefix}/compliance/evidence/batch/${encodeURIComponent(subject.batch)}`
   return null
 }
+
+/**
+ * B-W2a-67: the ONE create flow of a nonconformance in the Office is B-W2a-68's New NCR, prefilled from its source record
+ * (`/quality/ncr?new=1&from=<Type>&id=<id>`, Type = the API record type). Every "Create NCR" / "Decide in NCR" of
+ * Inspections and Holds opens it; there is no second dialog.
+ */
+export const newNcrAddress = (prefix: string, from: 'Inspection' | 'QualityHold', id: string): string =>
+  `${prefix}/quality/ncr?new=1&from=${from}&id=${encodeURIComponent(id)}`

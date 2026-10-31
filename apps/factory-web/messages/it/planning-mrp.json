@@ -1,0 +1,139 @@
+{
+  "held": {
+    "noPurchasingRequests": "Gli ordini li creano gli acquisti: chiedi a un buyer. La riga aspetta anche nelle loro Richieste d’acquisto.",
+    "noPoView": "Il tuo ruolo non può aprire gli ordini d’acquisto (purchasing.view).",
+    "lineGone": "La riga non è nella pianificazione mostrata: pianifica di nuovo.",
+    "lineNotOpen": "La riga è già in un ordine, accantonata o coperta.",
+    "notFirm": "Questa riga non ha un ordine pianificato fisso.",
+    "noFirm": "Il tuo ruolo non può modificare gli ordini pianificati fissi (planning.firm).",
+    "noBuyFix": "Nessuna delle righe spuntate ha una riga da comprare.",
+    "noSend": "Il tuo ruolo non può inviare gli ordini d’acquisto (purchasing.send).",
+    "noneReady": "Nessun ordine è pronto per l’invio: sistemali prima sulle loro pagine."
+  },
+  "move": {
+    "title": "Sposta l’ordine pianificato fisso",
+    "confirm": "Sposta",
+    "body": "Porta {quantity} {unit} entro il {date}. Scegli il giorno in cui deve arrivare; la quantità resta.",
+    "date": "Nuovo giorno",
+    "hint": "Oggi o dopo. La prossima pianificazione ne tiene conto.",
+    "pickDate": "Scegli prima un giorno.",
+    "past": "Scegli oggi o un giorno successivo.",
+    "same": "È già in quel giorno.",
+    "changed": "La riga è cambiata da quando è stata letta (una nuova pianificazione o un collega): la pianificazione è stata riletta.",
+    "refused": "Il giorno o la quantità non sono stati accettati: non è cambiato nulla.",
+    "failed": "L’ordine fisso non è stato spostato. Riprova."
+  },
+  "notice": {
+    "moved": "L’ordine pianificato fisso di {material} ora arriva il {date}.",
+    "sent_one": "{count} ordine d’acquisto inviato: il fornitore riceve l’ordine e il link per confermare.",
+    "sent_other": "{count} ordini d’acquisto inviati: ogni fornitore riceve il suo ordine e il link per confermare."
+  },
+  "view": {
+    "shortWo": "Mancanti sugli ordini di produzione aperti"
+  },
+  "menu": {
+    "requests": "Richieste d’acquisto (Acquisti): le stesse righe nella coda dei buyer"
+  },
+  "tile": {
+    "shortWo": "Ordini di produzione senza materiale",
+    "shortWoHint": "aperti o pianificati, contati ora"
+  },
+  "short": {
+    "title": "Mancanti sugli ordini di produzione aperti",
+    "count_one": "{count} mancanza",
+    "count_other": "{count} mancanze",
+    "started": "Iniziato il {date}",
+    "notStarted": "Non iniziato",
+    "due": "Consegna {date}",
+    "noDue": "Nessuna data di consegna",
+    "word": {
+      "NOT_ENOUGH": "Non basta",
+      "DELAYED": "In ritardo"
+    },
+    "neededBy": "serve entro il {date}",
+    "arrives": "arriva il {date}, troppo tardi",
+    "nothingOnOrder": "Nulla in ordine",
+    "noFix": "Nessuna soluzione qui: vedi la riga nella pianificazione",
+    "fix": {
+      "BUY": "Compra",
+      "buyLabel": "Compra {material} per {workOrder}: un ordine in bozza dalla pianificazione",
+      "EXPEDITE": "Sollecita {number}",
+      "expediteLabel": "Sollecita {number} per {workOrder}: apri l’ordine e manda un promemoria al fornitore",
+      "MOVE_FIRM": "Sposta l’ordine fisso"
+    },
+    "col": {
+      "workOrder": "Ordine di produzione",
+      "dates": "Inizio · consegna",
+      "material": "Materiale mancante",
+      "short": "Manca",
+      "expected": "Arrivo previsto",
+      "fix": "Soluzione"
+    },
+    "failed": "Impossibile leggere le mancanze sugli ordini aperti",
+    "empty": {
+      "title": "Nessun ordine di produzione aspetta materiale",
+      "body": "Ogni ordine aperto o pianificato ha il suo materiale in giacenza, impegnato o in arrivo in tempo."
+    },
+    "bulk": {
+      "draft_one": "Ordine in bozza per {count} riga",
+      "draft_other": "Ordini in bozza per {count} righe"
+    }
+  },
+  "why": {
+    "firm": "Un ordine pianificato fisso porta {quantity} {unit} entro il {date}: la pianificazione non lo cambia, ed è ciò che si compra.",
+    "firmCarried": "Un ordine pianificato fisso ripreso da una pianificazione precedente porta {quantity} {unit} entro il {date}: la pianificazione non lo cambia.",
+    "holdHide": "Questa pelle è bloccata: {reason}, dal {date}",
+    "holdLot": "Il lotto è bloccato: {reason}, dal {date}"
+  },
+  "peg": {
+    "title": "Per gli ordini: cosa copre ciascuno",
+    "none": "Questa pianificazione non ha l’assegnazione per la riga (fatta prima che venisse conservata).",
+    "kind": {
+      "ORDER_LINE": "Riga d’ordine",
+      "WORK_ORDER": "Ordine di produzione",
+      "SAFETY_STOCK": "Scorta di sicurezza",
+      "REORDER": "Riordino"
+    },
+    "line": "riga {seq}",
+    "size": "taglia {size}",
+    "mtm": "su misura",
+    "on": "su",
+    "need": "servono {quantity} {unit} entro il {date}",
+    "supply": {
+      "STOCK": "Giacenza",
+      "RESERVATION": "Impegnato",
+      "PURCHASE_ORDER": "In ordine",
+      "PLANNED": "Da comprare o produrre",
+      "FIRM": "Ordine pianificato fisso"
+    },
+    "anyLot": "qualsiasi lotto",
+    "poLine": "{number} riga {seq}",
+    "date": "entro il {date}",
+    "nothing": "Nulla lo copre ancora."
+  },
+  "send": {
+    "review_one": "Controlla e invia",
+    "review_other": "Controlla e invia ({count})",
+    "title_one": "Invia {count} ordine d’acquisto",
+    "title_other": "Invia {count} ordini d’acquisto",
+    "subtitle": "Ogni ordine parte da solo: la sua mail, il suo PDF e il suo link per confermare.",
+    "mailNote": "Nulla parte prima di premere Invia.",
+    "confirm_one": "Invia {count}",
+    "confirm_other": "Invia {count}",
+    "failed": "Non è stato possibile controllare o inviare gli ordini",
+    "ready": "Pronto per l’invio",
+    "notReady": "Non pronto",
+    "to": "A {name} ({email})",
+    "confirmBy": "Conferma richiesta entro {time}",
+    "cardRefused": "Questo ordine non si può leggere per l’invio: aprilo.",
+    "fixOnPo": "Sistemalo sulla sua pagina, poi invialo da lì.",
+    "doneTitle": "Ordini d’acquisto inviati",
+    "doneBody": "{sent} di {count} inviati; ogni fornitore riceve la sua mail e il suo link per confermare.",
+    "sentOne": "Inviato: in attesa della conferma del fornitore",
+    "refused": {
+      "conflict": "Non inviato: è cambiato nel frattempo (aprilo e invialo dalla sua pagina)",
+      "forbidden": "Non inviato: il tuo ruolo non può inviarlo",
+      "other": "Non inviato: aprilo per vedere perché"
+    }
+  }
+}

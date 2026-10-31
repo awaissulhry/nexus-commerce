@@ -6,8 +6,9 @@ import { STEP_UP_CLOSED, type StepUpState } from '../../_shared/hooks'
 import { failedRead, ready, reading } from '../../_shared/model'
 import { canFor, inShell, ME, NOW, PREFIX, type RoleCase } from '../../_shared/fixtures'
 import { QualityMessages, RecordProblem, RecordSkeleton } from '../../_shared/parts'
-import { ANSWERED, CANCELLED, FAILED, FAILING_BY_COUNTS, FAILING_HARD, FINAL, FINAL_SECOND, FINAL_SERIAL, INSPECTION, PASSED, readOf, RELEASES } from '../demo/fixtures'
-import { answer, checklistRows, defectsDraftOf, planDraftOf, releaseDraftOf, signDraftOf, type InspectionRecordModel, type RecordDialog, type RecordTab } from '../model'
+import { ANSWERED, CANCELLED, FAILED, FAILING_BY_COUNTS, FAILING_HARD, FINAL, FINAL_SECOND, FINAL_SERIAL, INSPECTION, INSPECTORS, LIBRARY, PASSED, readOf, RELEASES } from '../demo/fixtures'
+import { answer, changedLine, checklistRows, defectLinesOf, planDraftOf, releaseDraftOf, signDraftOf, withPicked, type DefectsTabModel, type InspectionRecordModel, type RecordDialog, type RecordTab } from '../model'
+import type { DefectBody } from '../api'
 import { InspectionRecordView } from './view/InspectionRecordView'
 
 /**
@@ -45,6 +46,19 @@ const record = (over: Partial<InspectionRecordModel> = {}, role: RoleCase = 'own
   }
 }
 
+/** The Defects & photos tab of an inspection (the library read, two photos of one line). */
+const defectsOf = (lines: readonly DefectBody[], over: Partial<DefectsTabModel> = {}): DefectsTabModel => ({
+  lines,
+  saving: 'idle',
+  library: ready(LIBRARY),
+  photos: ready([{ id: 'photo-1', name: `defect-${lines[0]?.code ?? 'X'}-1.jpg`, createdAt: NOW }]),
+  photoSrc: {},
+  ...over,
+})
+const WITH_DEFECTS = withPicked(withPicked(defectLinesOf(INSPECTION), LIBRARY[1]!), LIBRARY[3]!)
+const defectsCase = (over: Partial<DefectsTabModel> = {}, extra: Partial<InspectionRecordModel> = {}, role: RoleCase = 'owner') =>
+  record({ tab: 'defects', defects: defectsOf(WITH_DEFECTS, over), ...extra }, role)
+
 const passed = (over: Partial<InspectionRecordModel> = {}, role: RoleCase = 'owner') =>
   record({ read: readOf(PASSED, { workOrder: { id: PASSED.workOrderId, number: 'DEMO-WO-0142', status: 'COMPLETED', batchNumber: 'DEMO-BT-0142' } }), tab: 'decision', releases: ready([{ ...RELEASES[0]!, inspectionId: PASSED.id, number: 'DEMO-WO-0142' }]), ...over }, role)
 
@@ -52,11 +66,15 @@ function RecordDesign({ model: design }: { model: DesignModel }) {
   const initial = design.kind === 'record' ? design.model : null
   const [dialog, setDialog] = useState<RecordDialog | null>(initial?.dialog ?? null)
   const [checklist, setChecklist] = useState(initial?.checklist ?? [])
-  const [drafts, setDrafts] = useState({ sign: initial?.signDraft, release: initial?.releaseDraft, plan: initial?.planDraft, defects: initial?.defectsDraft, cancel: initial?.cancelReason ?? '' })
+  const [drafts, setDrafts] = useState({ sign: initial?.signDraft, release: initial?.releaseDraft, plan: initial?.planDraft, cancel: initial?.cancelReason ?? '' })
+  const [defects, setDefects] = useState(initial?.defects)
+  const [assign, setAssign] = useState(initial?.assign ?? null)
   useEffect(() => {
     setDialog(initial?.dialog ?? null)
     setChecklist(initial?.checklist ?? [])
-    setDrafts({ sign: initial?.signDraft, release: initial?.releaseDraft, plan: initial?.planDraft, defects: initial?.defectsDraft, cancel: initial?.cancelReason ?? '' })
+    setDrafts({ sign: initial?.signDraft, release: initial?.releaseDraft, plan: initial?.planDraft, cancel: initial?.cancelReason ?? '' })
+    setDefects(initial?.defects)
+    setAssign(initial?.assign ?? null)
   }, [initial])
   let page: ReactNode
   if (design.kind === 'state') {
@@ -77,8 +95,9 @@ function RecordDesign({ model: design }: { model: DesignModel }) {
       signDraft: drafts.sign ?? (dialog?.kind === 'sign' ? signDraftOf(inspection) : undefined),
       releaseDraft: drafts.release ?? (dialog?.kind === 'release' ? releaseDraftOf(FINAL.cells.find((cell) => cell.workOrderSizeId === dialog.workOrderSizeId) ?? FINAL.cells[1]!) : undefined),
       planDraft: drafts.plan ?? (dialog?.kind === 'plan' ? planDraftOf(inspection) : undefined),
-      defectsDraft: drafts.defects ?? (dialog?.kind === 'defects' ? defectsDraftOf(inspection) : undefined),
       cancelReason: drafts.cancel,
+      defects: defects ?? defectsOf(defectLinesOf(inspection)),
+      assign,
     }
     page = createElement(InspectionRecordView, {
       model,
@@ -89,8 +108,11 @@ function RecordDesign({ model: design }: { model: DesignModel }) {
         onSignDraft: (sign) => setDrafts((current) => ({ ...current, sign })),
         onReleaseDraft: (release) => setDrafts((current) => ({ ...current, release })),
         onPlanDraft: (plan) => setDrafts((current) => ({ ...current, plan })),
-        onDefectsDraft: (defects) => setDrafts((current) => ({ ...current, defects })),
         onCancelReason: (cancel) => setDrafts((current) => ({ ...current, cancel })),
+        onLines: (lines: readonly DefectBody[]) => setDefects((current) => ({ ...(current ?? defectsOf([])), lines: [...lines], saving: 'saved' })),
+        onAssign: () => setAssign({ ids: [inspection.id], siteId: inspection.siteId, people: ready(INSPECTORS), value: '', busy: false, problem: null, lines: [] }),
+        onAssignValue: (value: string) => setAssign((current) => (current ? { ...current, value } : current)),
+        onAssignClose: () => setAssign(null),
       },
     })
   }
@@ -150,7 +172,19 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'failed-checks', label: 'Failed: the checks as signed (read only)', model: record({ read: readOf(FAILED, { yours: false }), checklist: checklistRows(FAILED) }) },
     { id: 'cancelled', label: 'Cancelled', model: record({ read: readOf(CANCELLED), checklist: checklistRows(CANCELLED) }) },
     { id: 'plan', label: 'The sampling plan dialog', model: record({ dialog: { kind: 'plan' } }) },
-    { id: 'defects', label: 'The defects dialog (one line per class and code)', model: record({ dialog: { kind: 'defects' } }) },
+    // W2a (B-W2a-67): Defects & photos, Assign inspector, the decision as Accept · Conditional · Reject.
+    { id: 'defects-tab', label: 'Defects & photos: the library’s codes, severity, zone, garments, size, photo, note', model: defectsCase(), note: 'Saved after each change; a line names a code once per class.' },
+    { id: 'defects-saving', label: 'Defects: a change saving', model: defectsCase({ saving: 'saving' }) },
+    { id: 'defects-refused', label: 'Defects: refused by the API (its words under ours)', model: defectsCase({ saving: 'failed', problem: 'defects.problem.refused', lines_refused: ['At most the sample (5).'] }) },
+    { id: 'defects-pick', label: 'Add defect: pick from the library (grouped, searchable)', model: defectsCase({}, { dialog: { kind: 'pick' } }) },
+    { id: 'defects-zone', label: 'Where on the garment: the GarmentZoneMap (or the list)', model: defectsCase({}, { dialog: { kind: 'zone', index: 1 } }) },
+    { id: 'defects-photo', label: 'A photo with markup (camera or a file; arrows and circles)', model: defectsCase({}, { dialog: { kind: 'photo', index: 0 } }) },
+    { id: 'defects-empty', label: 'No defect recorded yet', model: record({ tab: 'defects', defects: defectsOf([], { photos: ready([]) }) }) },
+    { id: 'defects-library-failed', label: 'The library could not be read (the list still shows)', model: defectsCase({ library: failedRead('problem.unavailable') }, { dialog: { kind: 'pick' } }) },
+    { id: 'defects-signed', label: 'A signed inspection: its defects read only', model: record({ read: readOf(FAILED, { yours: false }), checklist: checklistRows(FAILED), tab: 'defects', defects: defectsOf(changedLine(WITH_DEFECTS, 0, { quantity: 2 })) }) },
+    { id: 'assign', label: 'Assign inspector from the band (a maker held with the reason)', model: record({ assign: { ids: [INSPECTION.id], siteId: INSPECTION.siteId, people: ready(INSPECTORS), value: `USER:${INSPECTORS.inspectors[1]!.id}`, busy: false, problem: null, lines: [] } }) },
+    { id: 'held-assigned', label: 'Held: assigned to another inspector (they record and sign it)', model: record({ read: readOf({ ...ANSWERED, assigned: { kind: 'USER', userId: 'someone', workerId: null, name: 'Demo Inspector Two' } }, { yours: false }), checklist: checklistRows(ANSWERED) }) },
+    { id: 'sign-conditional', label: 'Sign result: Conditional — accepted against a fail by counts, a second person releases', model: record({ read: readOf(FAILING_BY_COUNTS), checklist: checklistRows(FAILING_BY_COUNTS), dialog: { kind: 'sign' }, signDraft: { result: 'PASS', overrideReason: 'Customer concession DEMO-CC-01 in writing.', statement: false, note: '' } }) },
     { id: 'cancel', label: 'Cancel the inspection (a reason)', model: record({ dialog: { kind: 'cancel' } }) },
     { id: 'stale', label: 'Changed by someone else while a dialog is open: Reload', model: record({ stale: '10:42', dialog: null }) },
     { id: 'inspector', label: 'Quality inspector: the same record', model: record({}, 'inspector') },

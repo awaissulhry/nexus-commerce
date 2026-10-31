@@ -86,7 +86,11 @@
       "area": "Qualità",
       "main": "Principali",
       "inspections": "Ispezioni",
+      "holds": "Blocchi",
+      "settings": "Impostazioni",
+      "defects": "Difetti e destinazioni",
       "problems": "Problemi",
+      "ncr": "Non conformità",
       "complaints": "Reclami"
     },
     "compliance": {
@@ -103,6 +107,9 @@
       "main": "Principali",
       "invoices": "Fatture",
       "payments": "Incassi",
+      "costingGroup": "Costi",
+      "costing": "Costi standard ed effettivi",
+      "margins": "Margini",
       "settingsGroup": "Impostazioni",
       "settings": "Impostazioni amministrazione",
       "close": "Chiusura",
@@ -116,6 +123,8 @@
       "mrp": "Cosa comprare e produrre",
       "board": "Tabellone di pianificazione",
       "allocation": "Linee e terzisti",
+      "capacity": "Capacità e carico",
+      "exceptions": "Eccezioni",
       "settingsGroup": "Impostazioni",
       "settings": "Impostazioni pianificazione"
     },

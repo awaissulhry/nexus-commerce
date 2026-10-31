@@ -1,0 +1,47 @@
+/*
+ * What to buy & make (SCR-055), the W2a parts' LAYOUT (B-W2a-70): the pegging tree in "Why this number" and the Send n
+ * step's cards. The controls are the design system's; semantic tokens only; the rest of the page is buying.css.
+ */
+.fw-mrp-peg,
+.fw-mrp-peg-supplies {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-mrp-peg-demand {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding-bottom: var(--nds-space-8);
+  border-bottom: 1px solid var(--nds-border);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-mrp-peg-demand:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.fw-mrp-peg-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-mrp-peg-supplies {
+  gap: var(--nds-space-4);
+  padding-left: var(--nds-space-16);
+  border-left: 2px solid var(--nds-border);
+}
+
+.fw-mrp-send {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--nds-space-12);
+}

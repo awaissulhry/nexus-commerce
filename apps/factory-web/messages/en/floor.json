@@ -294,6 +294,7 @@
     }
   },
   "tile": {
+    "mywork": "My work",
     "operation": "Operation",
     "cut": "Cut a hide",
     "bundles": "Bundles",
@@ -304,6 +305,7 @@
     "final": "Final inspection",
     "scan": "Scan anything",
     "hint": {
+      "mywork": "This station's queue: what comes next",
       "scan": "Any label of the factory",
       "operation": "Report a bundle at your operation",
       "cut": "Check a hide and log what you cut",

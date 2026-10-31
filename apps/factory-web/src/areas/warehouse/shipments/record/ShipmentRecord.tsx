@@ -7,7 +7,6 @@ import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
-import { storeHeaders, storeUrl } from '../../../../record-panels/store'
 import {
   addLines,
   addParcel,
@@ -40,6 +39,20 @@ import {
   shipShipment,
   unpack,
   updateShipment,
+  // B-W2a-71
+  completeEvidence,
+  filePaper,
+  getEvidence,
+  listPackingLists,
+  orderBackorder,
+  reopenEvidence,
+  setEvidenceNeeded,
+  setFreight,
+  voidLabels,
+  type Backorder,
+  type Evidence,
+  type PackingListVersion,
+  type Voided,
   type Bought,
   type Ddt,
   type DdtPreview,
@@ -51,8 +64,9 @@ import {
   type Shipment,
   type Tracking,
 } from '../api'
+import { openPresigned, presignedBytes } from '../files'
 import { useCoalesced, useLive, useThreadDock } from '../hooks'
-import { abilitiesOf, ddtFormFor, ddtRequestOf, hasLeft, knownIds, liveTouches, readProblem, tabOf, writeProblem, type DdtForm } from '../model'
+import { abilitiesOf, ddtFormFor, ddtRequestOf, hasLeft, knownIds, liveTouches, readProblem, tabOf, writeProblem, type DdtForm, type RecordTab } from '../model'
 import { PART_LOADING, type Loaded, type Part, type PdfPart, type RecordDialog, type ShipmentRecordModel } from './record-model'
 import { ShipmentRecordView } from './view/ShipmentRecordView'
 
@@ -63,7 +77,10 @@ import { ShipmentRecordView } from './view/ShipmentRecordView'
  * problems, the number it would take, and the draft's PDF with the SAMPLE banner), the carrier labels (shipping.pack),
  * the tracking, the documents that travel (the DoC and user information per style, the customer's links) — and does
  * what the view asks, one write at a time, each with the shipment's version as read (a 409 reads it again and says so).
- * Live: an event that names the shipment, its parcels or lines reads it again.
+ * Live: an event that names the shipment, its parcels or lines reads it again. B-W2a-71: the order's lines on this
+ * shipment and its backorder, the packing list's versions, the intra-EU transport evidence; void every label, the freight
+ * charged (by hand or back to the rule), the evidence papers (announce, send the bytes, confirm), complete / reopen /
+ * needed.
  */
 export function ShipmentRecord({ shipmentId }: { shipmentId: string }) {
   return (
@@ -74,23 +91,6 @@ export function ShipmentRecord({ shipmentId }: { shipmentId: string }) {
 }
 
 const part = <T,>(value: T): Part<T> => ({ value, problem: null })
-
-/** A presigned GET's bytes (the issued DDT's PDF): the file store's address goes through this app's /api when local. */
-async function presignedBytes(download: { url: string; headers: Record<string, string> }): Promise<Uint8Array> {
-  const response = await fetch(storeUrl(download.url), { headers: storeHeaders(download), credentials: 'omit', cache: 'no-store' })
-  if (!response.ok) throw new Error(`the file store answered ${response.status}`)
-  return new Uint8Array(await response.arrayBuffer())
-}
-
-function openPresigned(download: { url: string }) {
-  const anchor = document.createElement('a')
-  anchor.href = storeUrl(download.url)
-  anchor.target = '_blank'
-  anchor.rel = 'noopener'
-  document.body.append(anchor)
-  anchor.click()
-  anchor.remove()
-}
 
 function RecordContainer({ shipmentId }: { shipmentId: string }) {
   const api = useOfficeApi()
@@ -111,6 +111,10 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
   const [tracking, setTracking] = useState<Part<Tracking> | null>(null)
   const [documents, setDocuments] = useState<Part<Documents>>(PART_LOADING)
   const [ready, setReady] = useState<Part<ReadyOrder | null> | null>(null)
+  const [backorder, setBackorder] = useState<Part<Backorder>>(PART_LOADING)
+  const [packingLists, setPackingLists] = useState<Part<PackingListVersion[]>>(PART_LOADING)
+  const [evidence, setEvidence] = useState<Part<Evidence>>(PART_LOADING)
+  const [voided, setVoided] = useState<Voided | null>(null)
   const [dialog, setDialog] = useState<RecordDialog | null>(null)
   const dialogRef = useRef<RecordDialog | null>(null)
   dialogRef.current = dialog
@@ -234,6 +238,46 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
     [api, can.manage],
   )
 
+  const loadBackorder = useCallback(
+    (value: Shipment) => {
+      orderBackorder(api, value.salesOrderId, value.id)
+        .then((answer) => setBackorder(part(answer)))
+        .catch((error: unknown) => setBackorder({ value: null, problem: readProblem(error) }))
+    },
+    [api],
+  )
+
+  const loadPackingLists = useCallback(
+    (value: Shipment) => {
+      listPackingLists(api, value.id)
+        .then((answer) => setPackingLists(part(answer)))
+        .catch((error: unknown) => setPackingLists({ value: null, problem: readProblem(error) }))
+    },
+    [api],
+  )
+
+  const loadEvidence = useCallback(
+    (value: Shipment) => {
+      getEvidence(api, value.id)
+        .then((answer) => setEvidence(part(answer)))
+        .catch((error: unknown) => setEvidence({ value: null, problem: readProblem(error) }))
+    },
+    [api],
+  )
+
+  // B-W2a-71: the backorder, the packing list's versions and the evidence are read with the tab that shows them (and again
+  // after a write while it is open): a record's first read stays as small as W1's.
+  const tabRef = useRef(tab)
+  tabRef.current = tab
+  const loadTabPart = useCallback(
+    (value: Shipment, which: RecordTab) => {
+      if (which === 'lines') loadBackorder(value)
+      if (which === 'documents') loadPackingLists(value)
+      if (which === 'export') loadEvidence(value)
+    },
+    [loadBackorder, loadPackingLists, loadEvidence],
+  )
+
   const loadParts = useCallback(
     (value: Shipment) => {
       void loadDdts(value)
@@ -241,8 +285,9 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
       loadTracking(value)
       loadDocuments(value)
       loadReady(value)
+      loadTabPart(value, tabRef.current)
     },
-    [loadDdts, loadLabels, loadTracking, loadDocuments, loadReady],
+    [loadDdts, loadLabels, loadTracking, loadDocuments, loadReady, loadTabPart],
   )
 
   const setValue = useCallback((next: Shipment) => {
@@ -267,6 +312,18 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
     void load()
   }, [load])
 
+  // A tab opened later reads its own part (the first read did the tab it opened on).
+  const seenTab = useRef<RecordTab | null>(null)
+  useEffect(() => {
+    if (seenTab.current === null) {
+      seenTab.current = tab
+      return
+    }
+    if (seenTab.current === tab) return
+    seenTab.current = tab
+    if (current.current) loadTabPart(current.current, tab)
+  }, [tab, loadTabPart])
+
   // Live: an event that names this shipment, a parcel or a line; a dialog with typed work open → "changed · Reload".
   const reread = useCoalesced(() => void load(), 700)
   const known = shipment.status === 'ready' ? knownIds(shipment.value, [...(ddts.value ?? []).map((row) => row.id)]) : null
@@ -276,7 +333,8 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
     (change) => {
       if (!knownRef.current || !liveTouches(change, knownRef.current)) return
       const open = dialogRef.current
-      if (open && (open.kind === 'issueDdt' || open.kind === 'annulDdt' || open.kind === 'cancel' || open.kind === 'delivery' || open.kind === 'parcel' || open.kind === 'sendLink')) setChanged({ at: new Date().toISOString() })
+      const typed = ['issueDdt', 'annulDdt', 'cancel', 'delivery', 'parcel', 'sendLink', 'voidLabels', 'freight', 'evidenceFile', 'evidenceComplete', 'evidenceReopen', 'evidenceNeed']
+      if (open && typed.includes(open.kind)) setChanged({ at: new Date().toISOString() })
       else reread()
     },
     () => void load(),
@@ -337,6 +395,10 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
     ddtForm,
     bought,
     sent,
+    backorder,
+    packingLists,
+    evidence,
+    voided,
   }
 
   return (
@@ -353,6 +415,9 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
           if (which === 'tracking') loadTracking(value)
           if (which === 'documents') loadDocuments(value)
           if (which === 'ready') loadReady(value)
+          if (which === 'backorder') loadBackorder(value)
+          if (which === 'packingLists') loadPackingLists(value)
+          if (which === 'evidence') loadEvidence(value)
         },
         onReload: () => void load(),
         onDock: toggleDock,
@@ -362,6 +427,7 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
           setDialogProblem(null)
           setBought(null)
           setSent(null)
+          setVoided(null)
           if (next?.kind === 'issueDdt' && value && !ddtForm) setDdtForm(ddtFormFor(value, preview?.value ?? null))
         },
         // Lines & cartons
@@ -380,7 +446,11 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
           }, parcelId ? 'notice.parcelSaved' : 'notice.parcelAdded')
         },
         onRemoveParcel: (parcelId) => void write(async () => void (await removeParcel(api, shipmentId, parcelId, version())), 'notice.parcelRemoved'),
-        onPackingList: () => void write(async () => void (await makePackingList(api, shipmentId)), 'notice.packingList'),
+        onPackingList: () =>
+          void write(async () => {
+            const answer = await makePackingList(api, shipmentId)
+            setNotice({ tone: 'success', words: { key: answer.reused ? 'notice.packingListSame' : 'notice.packingListVersion', params: { number: answer.number, version: answer.version } } })
+          }, null),
         // Documents
         onDdtForm: (form) => setDdtForm(form),
         onPreview: () => {
@@ -439,6 +509,28 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
         onPrintLabels: () => void write(async () => void (await printLabels(api, shipmentId)), 'notice.labelsPrinted'),
         onHandOver: () => void write(() => shipShipment(api, shipmentId, version()), 'notice.shipped'),
         onCancel: (reason) => void write(() => cancelShipment(api, shipmentId, version(), reason), 'notice.cancelled'),
+        // B-W2a-71 (every day)
+        onVoidLabels: (reason) => {
+          const key = keyOf('voidLabels')
+          void write(
+            async () => {
+              setVoided(await voidLabels(api, shipmentId, version(), reason, key))
+            },
+            null,
+            { keepDialog: true, key: 'voidLabels' },
+          )
+        },
+        onFreight: (charge) => {
+          const key = keyOf('freight')
+          void write(async () => void (await setFreight(api, shipmentId, version(), charge, key)), charge === null ? 'notice.freightRule' : 'notice.freightTyped', { key: 'freight' })
+        },
+        onFilePaper: (kind, file) => {
+          const key = keyOf('filePaper')
+          void write(async () => void setEvidence(part(await filePaper(api, shipmentId, kind, file, key))), 'notice.paperFiled', { key: 'filePaper' })
+        },
+        onCompleteEvidence: (note) => void write(async () => void setEvidence(part(await completeEvidence(api, shipmentId, evidence.value?.version ?? version(), note.trim() || null))), 'notice.evidenceComplete'),
+        onReopenEvidence: (reason) => void write(async () => void setEvidence(part(await reopenEvidence(api, shipmentId, evidence.value?.version ?? version(), reason))), 'notice.evidenceReopened'),
+        onEvidenceNeeded: (needed, reason) => void write(async () => void setEvidence(part(await setEvidenceNeeded(api, shipmentId, evidence.value?.version ?? version(), needed, reason))), needed ? 'notice.evidenceNeeded' : 'notice.evidenceNotNeeded'),
       }}
     />
   )

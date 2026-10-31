@@ -11,6 +11,9 @@ export const manifest = defineManifest({
   'GET /quality/final/work-orders': { audiences: ['office', 'floor'], permission: 'quality.inspections.view', scope: 'record' },
   'GET /quality/final/work-orders/:workOrderId': { audiences: ['office', 'floor'], permission: 'quality.inspections.view', scope: 'record' },
   'GET /quality/inspections': { audiences: ['office'], permission: 'quality.inspections.view', scope: 'record' },
+  // W2a (B-W2a-67; design qi-assign): the office assigns an open inspection to its inspector (./assign.ts).
+  'GET /quality/inspections/inspectors': { audiences: ['office'], permission: 'quality.inspections.record', scope: 'record' },
+  'POST /quality/inspections/assign': { audiences: ['office'], permission: 'quality.inspections.record', scope: 'record' },
   'POST /quality/inspections': { audiences: ['office', 'floor'], permission: 'quality.inspections.record', scope: 'record' },
   'GET /quality/inspections/:inspectionId': { audiences: ['office', 'floor'], permission: 'quality.inspections.view', scope: 'record' },
   'PATCH /quality/inspections/:inspectionId': { audiences: ['office', 'floor'], permission: 'quality.inspections.record', scope: 'record' },

@@ -4,7 +4,7 @@ import { ShipmentRecord } from '../../../../../../../areas/warehouse/shipments/r
 
 export const metadata: Metadata = { title: 'Shipment · Nexus Factory' }
 
-/** Warehouse › a shipment (SCR-067; `?tab=lines|documents|carrier|tracking|activity`). The company layout loaded the shell. */
+/** Warehouse › a shipment (SCR-067; `?tab=lines|documents|carrier|tracking|export|invoice|activity`). The company layout loaded the shell. */
 export default async function WarehouseShipmentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return (

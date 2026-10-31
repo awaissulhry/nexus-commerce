@@ -1,0 +1,47 @@
+{
+  "title": "Scegli il motivo",
+  "what": {
+    "scrap": "Scarto",
+    "rework": "Da rifare",
+    "pause": "Pausa",
+    "putLast": "Metti in fondo",
+    "defect": "Difetti"
+  },
+  "question": {
+    "scrap": "Perché è scarto? Ogni tocco aggiunge un pezzo",
+    "rework": "Perché da rifare? Ogni tocco aggiunge un pezzo",
+    "pause": "Perché ti fermi?",
+    "putLast": "Perché lo metti in fondo?",
+    "defect": "Quale difetto? Ogni tocco ne aggiunge uno"
+  },
+  "counted": {
+    "of": "contati su {of}",
+    "all_one": "pezzo contato",
+    "all_other": "pezzi contati"
+  },
+  "chosen": "Scelto: {reason}",
+  "none": "Nessun motivo scelto",
+  "asOf": "Da questo tablet, aggiornato alle {time}",
+  "atMost": "Al massimo {count}: ogni pezzo ha già un motivo",
+  "loading": "Caricamento dei motivi…",
+  "error": {
+    "title": "Impossibile caricare i motivi",
+    "body": "L’ufficio non ha risposto. Riprova.",
+    "retry": "Riprova"
+  },
+  "offline": {
+    "title": "Non su questo tablet",
+    "body": "I motivi arrivano dall’ufficio la prima volta. Riprova quando torna la rete."
+  },
+  "empty": {
+    "title": "Nessun motivo impostato per questa postazione",
+    "body": "Chiedi all’ufficio (Produzione › Regole di reparto)."
+  },
+  "photoNext": "{reason} richiede una foto: la fotocamera si apre dopo Fatto.",
+  "done": "Fatto",
+  "back": "Indietro",
+  "doneHeld": {
+    "choose": "Scegli prima un motivo",
+    "notReady": "I motivi non sono ancora sullo schermo"
+  }
+}
