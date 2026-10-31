@@ -33,6 +33,7 @@ import {
 } from './api'
 import { handledView, panelRow, queueItem } from './links'
 import { useTodayLive } from './live'
+import { fetchNumbers, type KeyNumbers } from './numbers/api'
 import {
   DECIDED_HERE,
   DEFAULT_LAYOUT,
@@ -110,6 +111,9 @@ export function Today() {
   const [layout, setLayout] = useState<{ readonly layout: TodayLayout; readonly version: number }>({ layout: DEFAULT_LAYOUT, version: 0 })
   const [dialog, setDialog] = useState<TodayDialog | null>(null)
   const [coming, setComing] = useState<Loaded<ComingUpView>>({ status: 'loading' })
+  // B-W2a-79: My numbers (GET /home/numbers), read again with the page at most once a minute.
+  const [numbers, setNumbers] = useState<{ value: KeyNumbers | null; problem: string | null }>({ value: null, problem: null })
+  const numbersReadAt = useRef(0)
   const [comingEvents, setComingEvents] = useState<readonly string[]>([])
   const [alertRecords, setAlertRecords] = useState<Readonly<Record<string, Loaded<string>>>>({})
   const layoutRef = useRef(layout)
@@ -210,6 +214,15 @@ export function Today() {
     }
   }, [api, prefix])
 
+  const loadNumbers = useCallback(async () => {
+    numbersReadAt.current = Date.now()
+    try {
+      setNumbers({ value: await fetchNumbers(api), problem: null })
+    } catch (error) {
+      setNumbers((current) => ({ value: current.value, problem: readProblem(error) }))
+    }
+  }, [api])
+
   // W2a: Coming up (my next five working days); each item opens its record.
   const loadComing = useCallback(async () => {
     try {
@@ -271,6 +284,9 @@ export function Today() {
     if (allowed) void loadComing()
   }, [allowed, loadComing])
   useEffect(() => {
+    if (allowed) void loadNumbers()
+  }, [allowed, loadNumbers])
+  useEffect(() => {
     if (allowed) void loadPanels()
   }, [allowed, loadPanels])
 
@@ -315,8 +331,9 @@ export function Today() {
       void loadFlow()
       void loadPanels()
       void loadComing()
+      if (Date.now() - numbersReadAt.current > 60_000) void loadNumbers()
     }, 500)
-  }, [refreshQueue, loadFlow, loadPanels, loadComing])
+  }, [refreshQueue, loadFlow, loadPanels, loadComing, loadNumbers])
   useEffect(() => () => (pendingRead.current ? clearTimeout(pendingRead.current) : undefined), [])
   const live = useTodayLive({ onChange: (type) => wantsChange(events, type) && readAgain(), onReconnect: readAgain }, allowed)
 
@@ -453,6 +470,7 @@ export function Today() {
     access: allowed ? 'open' : 'refused',
     tileSet: W2A_TILES,
     comingUp: coming,
+    numbers: { ...numbers, prefix },
     alertRecords,
     now,
     live,
@@ -556,6 +574,7 @@ export function Today() {
         onAcknowledge: (key) => act(key, (item) => acknowledgeRow(api, item), () => ({ key: 'today.actions.acknowledged', tone: 'success' })),
         onDone: markDone,
         onSnooze: snooze,
+        onRetryNumbers: () => void loadNumbers(),
         onRetryComing: () => {
           setComing({ status: 'loading' })
           void loadComing()

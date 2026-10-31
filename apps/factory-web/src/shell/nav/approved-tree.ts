@@ -57,6 +57,13 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'home.mail', title: 'Mail to sort', titleIt: 'Posta da smistare', wave: 'W0', href: '/home/mail-to-sort' },
         ],
       },
+      // B-W2a-79: Insights › Reports (SCR-104).
+      {
+        label: 'Insights',
+        labelIt: 'Analisi',
+        hideLabel: false,
+        pages: [{ id: 'home.reports', title: 'Reports', titleIt: 'Report', wave: 'W2a', href: '/home/reports' }],
+      },
     ],
   },
   {

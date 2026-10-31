@@ -47,6 +47,8 @@ import { ArrangeModal } from './ArrangeModal'
 import { DecideModal, type DecideActions } from './DecideModal'
 import { SnoozeDialog } from './SnoozeDialog'
 import { SNOOZE_MAX_DAYS } from '../snooze'
+import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
+import { KeyNumbersSection } from '../numbers/view/KeyNumbers'
 import '../today.css'
 
 export type { TodayViewModel } from '../model'
@@ -75,6 +77,8 @@ export interface TodayActions extends DecideActions {
   onSnooze?: (key: string, until: string | null) => Promise<boolean>
   /** W2a: read Coming up again. */
   onRetryComing?: () => void
+  /** B-W2a-79: read My numbers again. */
+  onRetryNumbers?: () => void
 }
 
 /** What a control asks to open (the container turns it into a TodayDialog with its data). */
@@ -427,6 +431,8 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
   const flowSection = model.flow && shownSection('flow') ? <FlowSection key="flow" model={model} lens={lens} onLens={setLens} onRetry={() => actions?.onRetry?.('flow')} /> : null
   // W2a: Coming up — after the work (not one of the arranged sections yet: the layout's sections are the API's).
   const comingSection = model.comingUp ? <ComingUpSection key="coming-up" state={model.comingUp} onRetry={() => actions?.onRetryComing?.()} /> : null
+  // B-W2a-79: My numbers — the picked lens's key numbers, after the flow strip (design order), before Coming up.
+  const numbersSection = model.numbers ? <KeyNumbersSection key="key-numbers" state={model.numbers} lens={lens} built={OFFICE_PAGES} onRetry={() => actions?.onRetryNumbers?.()} /> : null
 
   // My lists: beside the work on wide screens (one list per row) when it comes after "Needs me now"; above the work,
   // across the page with each list's width, when the person put it first; on narrow screens in its place.
@@ -496,7 +502,7 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
   const at = order.indexOf('needs-me')
   // Before "Needs me now": across the page. From it on: the work column, with My lists beside it (unless it came first).
   const head = order.slice(0, at).map((id) => node[id])
-  const work = [...order.slice(at).filter((id) => id !== 'role-panels').map((id) => node[id]), comingSection]
+  const work = [...order.slice(at).filter((id) => id !== 'role-panels').map((id) => node[id]), numbersSection, comingSection]
   const side = listsFirst ? null : listsSection
   const assignItem = dialog?.kind === 'assign' ? (items.find((entry) => entry.key === dialog.key) ?? null) : null
   const resolveItem = dialog?.kind === 'resolve' ? (items.find((entry) => entry.key === dialog.key) ?? null) : null

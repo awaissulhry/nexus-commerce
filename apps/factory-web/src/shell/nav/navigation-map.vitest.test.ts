@@ -93,6 +93,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/tasks': 'home.view', // GET /tasks (B-W2a-40)
       '/home/notifications': 'home.view', // GET /notifications (B-W2a-40)
       '/home/mail-to-sort': 'email.triage', // GET /email/inbound
+      '/home/reports': 'home.reports.view', // GET /reports (B-W2a-79)
       '/sales/customers': 'parties.view', // GET /parties
       '/sales/quotes': 'quotes.view', // GET /sales/quotes
       '/sales/orders': 'orders.view', // GET /sales/orders
@@ -201,6 +202,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/tasks',
       '/home/notifications',
       '/home/mail-to-sort',
+      // B-W2a-79: Home › Insights › Reports.
+      '/home/reports',
       '/sales/customers',
       '/sales/quotes',
       '/sales/orders',

@@ -6,6 +6,8 @@ import { REGISTER_PERMISSIONS } from '../../compliance/register/permissions'
 import { COSTING_DEFINITIONS, COSTING_PERMISSIONS } from '../../costing/permissions'
 import { FLOOR_SYNC_DEFINITIONS, FLOOR_SYNC_PERMISSIONS } from '../../floor-sync/permissions'
 import { HOME_DEFINITIONS, HOME_PERMISSIONS } from '../../insights/permissions'
+// B-W2a-79: the report library (home.reports.view).
+import { HOME_REPORTS_DEFINITIONS, HOME_REPORTS_PERMISSIONS } from '../../insights/reports/permissions'
 import { TASKS_DEFINITIONS, TASKS_PERMISSIONS } from '../../tasks/permissions'
 // B-W2a-33: exception rules and stored alerts.
 import { ALERTS_DEFINITIONS, ALERTS_PERMISSIONS } from '../../alerts/permissions'
@@ -412,6 +414,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   QUALITY_LAB_DEFINITIONS,
   QUALITY_FINAL_DEFINITIONS,
   HOME_DEFINITIONS,
+  // B-W2a-79: the report library.
+  HOME_REPORTS_DEFINITIONS,
   FLOOR_SYNC_DEFINITIONS,
   CALENDARS_DEFINITIONS,
   // B-W2a-10: approved sources (purchasing.sources.manage).
@@ -541,6 +545,8 @@ for (const name of RECEIVABLES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(
 for (const name of PAYABLES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-65: customer complaints.
 for (const name of QUALITY_COMPLAINTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2a-79: the report library.
+for (const name of HOME_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

@@ -1,4 +1,4 @@
-import { Bell, CheckCheck, Home, Inbox, ListTodo, Sun } from 'lucide-react'
+import { BarChart3, Bell, CheckCheck, Home, Inbox, ListTodo, Sun } from 'lucide-react'
 import type { OfficeAreaNav } from '../../shell/nav/office-nav'
 
 /**
@@ -33,6 +33,13 @@ export const officeArea: OfficeAreaNav = {
           // SCR-019 (B-W0-31): received mail no record took. Sales, buyers and the owner.
           { id: 'home-mail-to-sort', label: 'shell:nav.home.mailToSort', href: '/home/mail-to-sort', icon: Inbox, permission: 'email.triage' },
         ],
+      },
+      // B-W2a-79: Insights (design 01 "Insights · Analisi") › Reports (SCR-104): the report library, each report obeying the
+      // person's data permissions. Dashboards and the KPI library (W2b) and Alerts (B-W2a-78) join this group.
+      {
+        id: 'home-insights',
+        label: 'shell:nav.home.insights',
+        items: [{ id: 'home-reports', label: 'shell:nav.home.reports', href: '/home/reports', icon: BarChart3, permission: 'home.reports.view' }],
       },
     ],
   },

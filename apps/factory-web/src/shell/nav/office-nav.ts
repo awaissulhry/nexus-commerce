@@ -105,6 +105,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/home/tasks',
   '/home/notifications',
   '/home/mail-to-sort',
+  // B-W2a-79: Reports (SCR-104), a report and its print tab.
+  '/home/reports',
+  '/home/reports/[key]',
+  '/home/reports/[key]/print',
   '/records/[type]/[id]',
   '/sales/customers',
   '/sales/customers/[partyId]',

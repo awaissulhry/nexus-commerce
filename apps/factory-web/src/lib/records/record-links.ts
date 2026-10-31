@@ -72,6 +72,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   IntegrationAccount: '/admin/connections/[id]',
   // Home › My tasks (SCR-233, B-W2a-40): a task opens in its DetailModal on the list.
   Task: '/home/tasks?open=[id]',
+  // Home › Insights › Reports (SCR-104, B-W2a-79): a report of the standard pack by its key (`sales.late-orders`).
+  Report: '/home/reports/[id]',
   // B-W2a-53 Plant › Maintenance: a machine (SCR-150), a maintenance job (SCR-149); a request opens in its DetailModal on
   // the queue (SCR-148).
   Machine: '/plant/machines/[id]',
@@ -106,6 +108,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   '/sales/quote-approvals': '/home/approvals',
   // The order list (SCR-038) reads the API's own filters from the address (`?late=true`, `?deposit=OPEN`, `?status=`).
   '/sales/orders': '/sales/orders',
+  // B-W2a-79: the report library (SCR-104).
+  '/reports': '/home/reports',
   '/product/styles': '/products/styles',
   '/product/materials': '/products/materials',
   '/product/operations': '/products/operations',

@@ -203,9 +203,16 @@ const REPORTS_TEMPLATES: Readonly<Record<string, readonly Permission[]>> = Objec
   floor_supervisor: ['production.reports.view', 'production.reports.subscribe'],
 })
 const reportsAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' ? (REPORTS_TEMPLATES[key] ?? []) : [])
+/**
+ * B-W2a-79 (the report library, ANA-029 / ANA-034; design home.reports): every office template that works with business
+ * records runs the standard reports; each report shows only what the person's other permissions and grains reach. The
+ * administrator sees no business data and gets none; the owner and read_only follow the registry. One line per template.
+ */
+const REPORT_LIBRARY_TEMPLATES: ReadonlySet<string> = new Set(['finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor'])
+const reportLibraryAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' && REPORT_LIBRARY_TEMPLATES.has(key) ? ['home.reports.view' as Permission] : [])
 
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience), ...repairsAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience), ...repairsAddedFor(key, audience), ...reportLibraryAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 
