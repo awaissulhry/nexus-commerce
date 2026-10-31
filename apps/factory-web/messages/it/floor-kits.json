@@ -163,7 +163,6 @@
     "weight": "Prima scrivi il peso lordo",
     "noPdf": "Il DDT non è ancora mostrato",
     "count": "Prima scrivi quanti",
-    "reason": "Prima scegli il motivo",
     "place": "Prima scegli il posto",
     "reasonLine": "Un fascio scartato ha bisogno del motivo: toccalo e scegline uno.",
     "back": {
@@ -195,9 +194,7 @@
     },
     "count": "Quanti capi",
     "of": "di {count}",
-    "reason": "Perché?",
-    "reasonsUnread": "I motivi non si sono potuti leggere: lo scarto va senza motivo.",
-    "noReasons": "Non ci sono motivi di rilavorazione: lo scarto va senza motivo.",
+    "withoutReason": "Lo scarto va senza motivo.",
     "drop": "Togli",
     "confirm": "Conferma"
   },

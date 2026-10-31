@@ -163,7 +163,6 @@
     "weight": "Type the gross weight first",
     "noPdf": "The DDT is not shown yet",
     "count": "Type how many first",
-    "reason": "Pick the reason first",
     "place": "Pick the place first",
     "reasonLine": "A rejected bundle needs its reason: tap it and pick one.",
     "back": {
@@ -195,9 +194,7 @@
     },
     "count": "How many garments",
     "of": "of {count}",
-    "reason": "Why?",
-    "reasonsUnread": "The reasons could not be read: the rejection goes without one.",
-    "noReasons": "No rework reasons are set: the rejection goes without one.",
+    "withoutReason": "The rejection goes without a reason.",
     "drop": "Take off",
     "confirm": "Confirm"
   },

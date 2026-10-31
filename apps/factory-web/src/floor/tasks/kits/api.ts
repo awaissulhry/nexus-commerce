@@ -6,8 +6,8 @@ import { floorRead, floorWrite, seg, type TaskOutcome } from '../shared/task-api
 /**
  * Subcontract kits' calls (apps/factory-api modules/purchasing/subcontracting floor.ts, B-W2a-76; the floor at its own site:
  * purchasing.subcontract.kit to send, .receive to take goods back): the site's orders to send or to receive (or the one a
- * scanned number names), one order's kit, the send with its DDT, the receipt, the DDT's PDF, and the reasons a rejected
- * bundle may carry (GET /reasons, the operation screen's REWORK list). No fee, price or value anywhere.
+ * scanned number names), one order's kit, the send with its DDT, the receipt and the DDT's PDF. The reasons a rejected bundle
+ * may carry are read by the floor's one reason picker (reasons/api, the REWORK list). No fee, price or value anywhere.
  */
 
 const codeName = z.object({ code: z.string(), name: z.string() })
@@ -131,12 +131,4 @@ export function receiveBack(api: ApiClient, orderId: string, body: ReceiveBody, 
 /** GET …/kits/:id/ddts/:ddtId/pdf — a presigned GET of the stored PDF (60 seconds: read it at once). */
 export function ddtPdfLink(api: ApiClient, orderId: string, ddtId: string): Promise<TaskOutcome<Presigned>> {
   return floorRead(api, `/purchasing/subcontracting/kits/${seg(orderId)}/ddts/${seg(ddtId)}/pdf`, { schema: z.object({ download: presignedSchema }) }).then((answer) => (answer.ok ? { ok: true, value: answer.value.download } : answer))
-}
-
-const reason = z.object({ id: z.string(), code: z.string(), labelIt: z.string(), labelEn: z.string(), labelI18n: z.record(z.string(), z.string()), icon: z.string().nullable(), colour: z.string().nullable(), needsDetail: z.boolean() })
-export type RejectReason = z.infer<typeof reason>
-
-/** GET /reasons?list=REWORK — the active reasons a rejected bundle may carry (the operation screen's rework list). */
-export function fetchRejectReasons(api: ApiClient): Promise<TaskOutcome<RejectReason[]>> {
-  return floorRead(api, '/reasons', { query: { list: 'REWORK' }, schema: z.object({ reasons: z.array(reason) }) }).then((answer) => (answer.ok ? { ok: true, value: answer.value.reasons } : answer))
 }

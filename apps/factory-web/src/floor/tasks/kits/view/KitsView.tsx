@@ -40,7 +40,9 @@ import { FloorFrameView, type FrameAction, type FrameModel } from '../../../fram
 import { FloorState } from '../../../frame/view/FloorState'
 import type { TaskProblem } from '../../shared/task-api'
 import { HeldLine, ListFooter, ProblemState, TaskCard, TaskLine } from '../../shared/view/TaskParts'
-import type { KitMode, KitOrder, KitRow, RejectReason, TransportBy } from '../api'
+import { listOffers, type PickerList } from '../../reasons/model'
+import { ReasonPickerBody, useDoneHeld, type ReasonPickerModel } from '../../reasons/view/ReasonPicker'
+import type { KitMode, KitOrder, KitRow, TransportBy } from '../api'
 import {
   APPEARANCES,
   backBefore,
@@ -71,8 +73,9 @@ import '../kits.css'
  * count in words — then the DDT's facts (who carries, parcels, weight, appearance) and Send · print DDT: the stock moves to
  * the workshop's place and stays ours, the DDT for work on our behalf (conto lavorazione) opens full screen with Print.
  * Receive back: scan each bundle (no tap: its garments still out come back good); tap a bundle to reject garments or say
- * the workshop scrapped them, with the reason; unused material and offcuts by quantity; Finish receipt. Never a fee, a
- * price or a value. The send and the receipt are online only (the office's numbers); entries stay on screen offline.
+ * the workshop scrapped them, with the reason (the floor's one reason picker over the REWORK list, SCR-091); unused
+ * material and offcuts by quantity; Finish receipt. Never a fee, a price or a value. The send and the receipt are online
+ * only (the office's numbers); entries stay on screen offline.
  */
 
 export interface KitsViewModel {
@@ -95,8 +98,8 @@ export interface KitsViewModel {
   reject?: { readonly bundleId: string; readonly kind: RejectKind; readonly count: number | null; readonly reason: string | null } | null
   /** back: the material line whose return is being entered. */
   material?: { readonly lineId: string; readonly quantity: number | null; readonly toLocationId: string | null } | null
-  /** The reasons a rejected bundle may carry (null: not read). */
-  reasons?: readonly RejectReason[] | null
+  /** The reasons a rejected bundle may carry, for the floor's one reason picker (the REWORK list; null: not read yet). */
+  reasons?: PickerList | null
   received?: { readonly good: number; readonly defective: number; readonly scrapped: number; readonly returned: number } | null
   busy?: 'read' | 'send' | 'receive' | null
   problem?: { readonly problem: TaskProblem; readonly code: string | null } | null
@@ -122,6 +125,7 @@ export type KitsAction =
   | { type: 'rejectKind'; kind: RejectKind }
   | { type: 'rejectCount'; value: number | null }
   | { type: 'rejectReason'; reason: string }
+  | { type: 'rejectReasonsRetry' }
   | { type: 'confirmReject' }
   | { type: 'dropBundle'; bundleId: string }
   | { type: 'openMaterial'; lineId: string }
@@ -168,6 +172,16 @@ function Kits({ model, onAction, onFrame, camera }: KitsViewProps) {
   const reasonWords = useReasonWords()
   const intl = INTL_LOCALE[locale]
   const send = (action: KitsAction) => onAction?.(action)
+  // B-W2a-F6: why garments came back rejected is asked by the floor's one reason picker (purpose reject, the REWORK list).
+  const rejecting = model.stage === 'back' && model.reject ? model.reject : null
+  const rejectBundle = rejecting ? (model.order?.bundles.find((entry) => entry.id === rejecting.bundleId) ?? null) : null
+  const rejectPicker: ReasonPickerModel | null =
+    rejecting && rejectBundle
+      ? { purpose: 'reject', subject: `${rejectBundle.code} · ${t(`reject.${rejecting.kind}`)}`, reasons: model.reasons?.reasons ?? [], state: model.reasons?.state ?? 'loading', asOf: model.reasons?.asOf ?? null, value: rejecting.reason }
+      : null
+  const rejectReasonHeld = useDoneHeld(rejectPicker ?? { purpose: 'reject', value: null })
+  /** The reasons are on screen and not empty: a rejection asks one (else it goes without, as the office has none to offer). */
+  const reasonsOffered = listOffers(model.reasons)
   const place: FormatPlace = { locale, timeZone: model.timeZone }
   const day = (value: string | null) => (value ? formatDate(`${value}T12:00:00Z`, place) : '—')
   const figure = (value: string | number) => formatNumber(Number(value), locale, { maximumFractionDigits: 3 })
@@ -463,8 +477,7 @@ function Kits({ model, onAction, onFrame, camera }: KitsViewProps) {
     const out = bundlesOut(order)
     const material = materialAtWorkshop(order)
     const totals = backTotals(back)
-    const reasonsKnown = (model.reasons?.length ?? 0) > 0
-    const held = backHeld(order, back, reasonsKnown)
+    const held = backHeld(order, back, reasonsOffered)
     if (model.reject) {
       const panel = model.reject
       const bundle = order.bundles.find((entry) => entry.id === panel.bundleId)!
@@ -473,25 +486,33 @@ function Kits({ model, onAction, onFrame, camera }: KitsViewProps) {
         { id: 'defective', label: t('reject.defective'), hint: t('reject.hint.defective'), icon: <Undo2 />, tone: 'warning' },
         { id: 'scrapped', label: t('reject.scrapped'), hint: t('reject.hint.scrapped'), icon: <Trash2 />, tone: 'danger' },
       ]
-      const reasons: ReasonTile[] = (model.reasons ?? []).map((reason) => ({ id: reason.code, label: locale === 'it' ? reason.labelIt : reason.labelEn, icon: <CircleAlert />, tone: 'warning' }))
       body = (
         <div className="fw-floor-stack">
           <TaskCard icon={<Layers />} type={t('reject.type')} code={bundle.code} big={{ value: String(total), label: t('kit.garments', { count: total }) }} facts={[{ label: t('back.cell'), value: `${bundle.colourway} ${bundle.size}`.trim() }]} />
           <ReasonGrid label={t('reject.kind')} reasons={kinds} value={panel.kind} onChange={(id) => send({ type: 'rejectKind', kind: id as RejectKind })} words={reasonWords} locale={intl} />
           <QuantityPad label={t('reject.count')} value={panel.count} onChange={(value) => send({ type: 'rejectCount', value })} min={0} max={total} expected={total} expectedLabel={(value) => t('reject.of', { count: value })} {...padWords} />
-          {reasons.length > 0 ? (
-            <ReasonGrid label={t('reject.reason')} reasons={reasons} value={panel.reason} onChange={(id) => send({ type: 'rejectReason', reason: id })} words={reasonWords} locale={intl} />
-          ) : (
+          {rejectPicker ? (
+            <ReasonPickerBody
+              model={rejectPicker}
+              onAction={(action) => {
+                if (action.type === 'pick') send({ type: 'rejectReason', reason: action.id })
+                else if (action.type === 'retry') send({ type: 'rejectReasonsRetry' })
+              }}
+              onBack={() => send({ type: 'closePanel' })}
+              timeZone={model.timeZone}
+            />
+          ) : null}
+          {!reasonsOffered && rejectPicker?.state !== 'loading' ? (
             <TaskLine tone="info" icon={<CircleAlert />}>
-              {model.reasons === null || model.reasons === undefined ? t('reject.reasonsUnread') : t('reject.noReasons')}
+              {t('reject.withoutReason')}
             </TaskLine>
-          )}
+          ) : null}
         </div>
       )
       actions = [
         { label: t('action.back'), icon: <ArrowLeft />, onPress: () => send({ type: 'closePanel' }) },
         { label: t('reject.drop'), icon: <X />, variant: 'secondary', onPress: () => send({ type: 'dropBundle', bundleId: bundle.id }) },
-        { label: t('reject.confirm'), icon: <Check />, heldReason: panel.count === null ? t('held.count') : panel.count > 0 && reasons.length > 0 && !panel.reason ? t('held.reason') : null, onPress: () => send({ type: 'confirmReject' }) },
+        { label: t('reject.confirm'), icon: <Check />, heldReason: panel.count === null ? t('held.count') : panel.count > 0 && reasonsOffered ? rejectReasonHeld : null, onPress: () => send({ type: 'confirmReject' }) },
       ]
     } else if (model.material) {
       const panel = model.material

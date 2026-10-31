@@ -4,7 +4,8 @@ import type { ReasonTone } from '@nexus/ui/floor/ReasonGrid/index'
 /**
  * SCR-091 — the floor's reason picker (design floor.reasons; MES-125, QHS-007): ONE picker for every "why" on the floor,
  * over the reason lists the office keeps (B-W2a-18, `GET /reasons?list=`; the scans' own scrap and rework reasons, which
- * the bundle card carries; the defect library's picker, B-W2a-26). Pure, so the tests hold it.
+ * the bundle card carries; the defect library's picker, B-W2a-26; the few a screen fixes itself, like a split's rework /
+ * recut / hold). Pure, so the tests hold it.
  *
  *   reasons   one shape for every source: the code, the words in Italian, English and the other floor languages, the
  *             office's icon (a DS tag icon id) and colour (a DS swatch), an example photo's address when the source has
@@ -13,21 +14,36 @@ import type { ReasonTone } from '@nexus/ui/floor/ReasonGrid/index'
  *             office's; the scan lists keep no icon yet, so their standard codes have a look of their own), the colour as
  *             a tone (tones only: a tenant colour is never painted, B-W2a-24)
  *   context   what the reason is for, before asking why ("Scrap · B-000123 · Op 30 Collar") and the running count
+ *   held      a tile stays in view but cannot be picked: no network for the host's call, or a reason asking a written
+ *             note where the call needs one (Hold lot: quality places that hold in the office)
  *   done      pick mode: held until a reason is picked; count mode: never held (no tap = nothing of that kind)
  * No person and no money anywhere (a floor session holds no price, cost or margin grain).
  */
 
-/** What the picker asks about. */
-export const PICKER_PURPOSES = ['scrap', 'rework', 'pause', 'putLast', 'defect'] as const
+/**
+ * What the picker asks about: scrap, rework (Operation's counts), pause, put last (My work), defect, and — B-W2a-F6 — why
+ * garments come off a bundle (split, SCR-095), why a lot is held at the bench (hold, SCR-097), why garments came back
+ * rejected from a workshop (reject, SCR-181 Receive back).
+ */
+export const PICKER_PURPOSES = ['scrap', 'rework', 'pause', 'putLast', 'defect', 'split', 'hold', 'reject'] as const
 export type PickerPurpose = (typeof PICKER_PURPOSES)[number]
 
 export type PickerMode = 'pick' | 'count'
 
 /** The mode each purpose asks in (design floor.reasons "grid": pick one for pause, help type, symptom; count for scrap, defects). */
-export const MODE_OF: Readonly<Record<PickerPurpose, PickerMode>> = { scrap: 'count', rework: 'count', pause: 'pick', putLast: 'pick', defect: 'count' }
+export const MODE_OF: Readonly<Record<PickerPurpose, PickerMode>> = { scrap: 'count', rework: 'count', pause: 'pick', putLast: 'pick', defect: 'count', split: 'pick', hold: 'pick', reject: 'pick' }
 
-/** The reason list each purpose reads (`GET /reasons?list=`), or null when the host has the reasons already (the bundle card). */
-export const LIST_OF: Readonly<Record<PickerPurpose, string | null>> = { scrap: 'SCRAP', rework: 'REWORK', pause: 'PAUSE', putLast: 'PAUSE', defect: null }
+/**
+ * The reason list each purpose reads (`GET /reasons?list=`), or null when the host has the reasons already (the bundle
+ * card's scan reasons; a split's three codes, which the API takes as they are).
+ */
+export const LIST_OF: Readonly<Record<PickerPurpose, string | null>> = { scrap: 'SCRAP', rework: 'REWORK', pause: 'PAUSE', putLast: 'PAUSE', defect: null, split: null, hold: 'HOLD', reject: 'REWORK' }
+
+/**
+ * The purposes whose call needs a written note for a reason that asks for more ("Other"): no typing on the floor, so that
+ * reason stays in view, held with the words (B-W2a-75: a bench hold with Other is placed by quality in the office).
+ */
+export const NOTE_IN_OFFICE: ReadonlySet<PickerPurpose> = new Set<PickerPurpose>(['hold'])
 
 export interface PickerReason {
   /** The tile's id: the code (unique inside one list). */
@@ -47,6 +63,8 @@ export interface PickerReason {
   /** The reason asks for more than its word ("Other"): on the floor a photo, never typing. */
   readonly needsDetail: boolean
   readonly sortOrder: number
+  /** A short second line under the word (a screen's own reasons: "Back to be fixed"); none for the office's lists. */
+  readonly hint?: string | null
 }
 
 /** A reason as `GET /reasons` answers it (platform/reasons contract `pickerReason`). */
@@ -77,6 +95,23 @@ export interface ScanReason {
 
 export function fromScanReason(reason: ScanReason): PickerReason {
   return { id: reason.code, list: reason.kind, code: reason.code, labelIt: reason.label.it, labelEn: reason.label.en, labelI18n: {}, icon: null, colour: null, photo: null, needsDetail: false, sortOrder: reason.sortOrder }
+}
+
+/**
+ * A reason a screen fixes itself (B-W2a-75's split: REWORK, RECUT, HOLD, codes the API takes as they are): its word and
+ * hint come from the screen's catalogue, already in the worker's language, so the word stands for every language.
+ */
+export interface FixedReason {
+  /** A name of the screen's own list (SPLIT): the standard look is kept per list and code. */
+  readonly list: string
+  readonly code: string
+  readonly label: string
+  readonly hint?: string | null
+  readonly sortOrder: number
+}
+
+export function fromFixedReason(reason: FixedReason): PickerReason {
+  return { id: reason.code, list: reason.list, code: reason.code, labelIt: reason.label, labelEn: reason.label, labelI18n: {}, icon: null, colour: null, photo: null, needsDetail: false, sortOrder: reason.sortOrder, hint: reason.hint ?? null }
 }
 
 /** A defect as `GET /quality/defects/picker` answers it (B-W2a-26); its picture's address comes from the host. */
@@ -144,15 +179,16 @@ const TONE_OF_COLOUR: Readonly<Record<string, ReasonTone>> = {
   '#5b6573': 'neutral',
 }
 
-/** The icons a tile may draw: the office's DS tag icon (`tag:<id>`), or a standard look of a scan code (`std:<name>`). */
-export const STANDARD_ICONS = ['flaw', 'scissors', 'stitch', 'stain', 'tear', 'machine', 'ruler', 'zip', 'shield', 'clean', 'scrap', 'rework', 'help', 'dot'] as const
+/** The icons a tile may draw: the office's DS tag icon (`tag:<id>`), or a standard look of a scan or fixed code (`std:<name>`). */
+export const STANDARD_ICONS = ['flaw', 'scissors', 'stitch', 'stain', 'tear', 'machine', 'ruler', 'zip', 'shield', 'clean', 'scrap', 'rework', 'hand', 'help', 'dot'] as const
 export type StandardIcon = (typeof STANDARD_ICONS)[number]
 export type IconKey = `tag:${string}` | `std:${StandardIcon}`
 
 /**
  * The scan lists (SCRAP, REWORK) keep no icon or colour yet (ScrapReason: words only, B-W2a-18's schema need): their
  * standard codes (factory-domain production/scans W1_SCAN_REASONS) get a look of their own, a code the office added gets
- * its kind's. Replaced by the office's own icon the day the table keeps one.
+ * its kind's. Replaced by the office's own icon the day the table keeps one. A screen's fixed codes (SPLIT, factory-domain
+ * production/bundles SPLIT_REASONS) have theirs here too.
  */
 const SCAN_LOOK: Readonly<Record<string, { icon: StandardIcon; tone: ReasonTone }>> = {
   'SCRAP:LEATHER_FLAW': { icon: 'flaw', tone: 'danger' },
@@ -168,6 +204,9 @@ const SCAN_LOOK: Readonly<Record<string, { icon: StandardIcon; tone: ReasonTone 
   'REWORK:PROTECTOR': { icon: 'shield', tone: 'info' },
   'REWORK:CLEANING': { icon: 'clean', tone: 'info' },
   'REWORK:OTHER': { icon: 'help', tone: 'neutral' },
+  'SPLIT:REWORK': { icon: 'rework', tone: 'warning' },
+  'SPLIT:RECUT': { icon: 'scissors', tone: 'info' },
+  'SPLIT:HOLD': { icon: 'hand', tone: 'danger' },
 }
 
 const KIND_LOOK: Readonly<Record<string, { icon: StandardIcon; tone: ReasonTone }>> = {
@@ -192,17 +231,27 @@ export interface PickerTile {
   readonly tone: ReasonTone
   /** "Needs a photo": only where the host keeps one (no typing on the floor). */
   readonly photoNeeded: boolean
+  /** The second line under the word, or null. */
+  readonly hint: string | null
+  /** Why this tile cannot be picked here now (in view, never picked), or null. */
+  readonly heldReason: string | null
 }
 
 export interface TileOptions {
   /** The host takes a photo after Done for a reason that asks for more ("Other"); without it no tile asks for one. */
   readonly withPhotos?: boolean
+  /** Why no tile may be picked now (the host's call needs the network), or null. */
+  readonly held?: string | null
+  /** Why a reason asking for more is held here (a purpose of NOTE_IN_OFFICE, the host keeping no photo), or null. */
+  readonly noteHeld?: string | null
 }
 
 export function tilesOf(reasons: readonly PickerReason[], language: string, options: TileOptions = {}): PickerTile[] {
   return inTileOrder(reasons).map((reason) => {
     const look = lookOf(reason)
-    return { id: reason.id, label: wordOf(reason, language), icon: look.icon, photo: reason.photo, tone: look.tone, photoNeeded: Boolean(options.withPhotos) && reason.needsDetail }
+    const photoNeeded = Boolean(options.withPhotos) && reason.needsDetail
+    const heldReason = options.held ?? (reason.needsDetail && !photoNeeded ? (options.noteHeld ?? null) : null)
+    return { id: reason.id, label: wordOf(reason, language), icon: look.icon, photo: reason.photo, tone: look.tone, photoNeeded, hint: reason.hint ?? null, heldReason }
   })
 }
 
@@ -225,3 +274,15 @@ export function pickedOf(reasons: readonly PickerReason[], value: string | null 
 
 /** What the picker's grid shows: the reasons, or why it cannot yet (loading, failed, offline with nothing kept). */
 export type PickerState = 'ready' | 'loading' | 'error' | 'offline'
+
+/** An office list as a host hands it to the picker: the reasons, the grid's state, and as of when when this tablet kept them. */
+export interface PickerList {
+  readonly state: PickerState
+  readonly reasons: readonly PickerReason[]
+  readonly asOf: string | null
+}
+
+/** The list's reasons may be asked: on screen and not empty (a host whose call goes without a reason otherwise). */
+export function listOffers(list: PickerList | null | undefined): boolean {
+  return list?.state === 'ready' && list.reasons.length > 0
+}

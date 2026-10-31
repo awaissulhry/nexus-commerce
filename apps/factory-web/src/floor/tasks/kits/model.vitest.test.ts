@@ -1,5 +1,11 @@
+import { createElement, type ComponentType } from 'react'
+import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { messagesFor } from '../../../lib/i18n/messages'
+import { I18nProvider } from '../../../lib/i18n/provider'
+import { FLOOR_NAMESPACES } from '../routes'
 import type { KitBundle, KitLine, KitOrder } from './api'
+import { designScreen } from './fixtures'
 import {
   backHeld,
   bringBack,
@@ -148,5 +154,34 @@ describe('Receive back', () => {
       returns: [{ itemId: 'item-k1', itemColourId: null, lotId: 'lot-a', hideId: null, quantity: '4.0000', uom: 'M', toLocationId: 's1' }],
       supplierDdt: { number: 'W-77' },
     })
+  })
+})
+
+describe('SCR-181 Receive back: why a bundle came back rejected (B-W2a-F6: the floor\'s one reason picker)', () => {
+  const render = (id: string, locale: 'it' | 'en' = 'en') => {
+    const item = designScreen.cases.find((entry) => entry.id === id)
+    if (!item) throw new Error(id)
+    const View = designScreen.view as ComponentType<{ model: unknown }>
+    return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, FLOOR_NAMESPACES) }, createElement(View, { model: item.model })))
+  }
+
+  it('asks why in the picker over the REWORK list; Confirm waits for a reason while the list offers some', () => {
+    const picked = render('back-reject')
+    for (const word of ['Back from the workshop', 'Why were they rejected?', 'Chosen: Open seam', 'Wrong stitch']) expect(picked).toContain(word)
+    expect(render('back-reject', 'it')).toContain('Scelto: Cucitura aperta')
+    const missing = render('back-scrapped')
+    expect(missing).toContain('No reason chosen yet')
+    expect(missing).toContain('Choose a reason first')
+  })
+
+  it('without the list (reading, failed, none set) the picker says so, and the rejection goes without a reason', () => {
+    expect(render('back-reasons-loading')).toContain('Loading the reasons')
+    expect(render('back-reasons-loading')).not.toContain('The rejection goes without a reason.')
+    const failed = render('back-no-reasons')
+    expect(failed).toContain('Could not load the reasons')
+    expect(failed).toContain('The rejection goes without a reason.')
+    expect(failed).not.toContain('Choose a reason first')
+    expect(render('back-reasons-none')).toContain('Ask the office')
+    expect(render('back-reasons-none', 'it')).toContain('Lo scarto va senza motivo.')
   })
 })

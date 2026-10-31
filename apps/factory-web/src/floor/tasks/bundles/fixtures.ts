@@ -235,9 +235,11 @@ export const designScreen = defineDesignScreen<BundlesViewModel>({
       id: 'split',
       label: 'Split: how many come off, and why',
       model: model(bundle({ card: card({ scans: 2, operations: OPERATIONS.map((operation, index) => ({ ...operation, done: index < 2 })) }), stage: 'split', split: { quantity: 3, reason: 'REWORK', live: 10 } })),
-      note: 'The pad (1 to the garments in it − 1: at least one stays) and the DS reason grid (rework, recut, hold). One tap splits them off into a new bundle and prints its ticket; the genealogy stays.',
+      note: 'The pad (1 to the garments in it − 1: at least one stays) and why in the floor\'s one reason picker (SCR-091, pick mode: rework, recut, hold; what it is about and the choice first). One tap splits them off into a new bundle and prints its ticket; the genealogy stays.',
     },
     { id: 'split-empty', label: 'Split: nothing typed yet', model: model(bundle({ stage: 'split', split: { quantity: null, reason: null, live: 10 } })), note: 'The main action says what it waits for.' },
+    { id: 'split-why', label: 'Split: how many typed, why not yet', model: model(bundle({ stage: 'split', split: { quantity: 3, reason: null, live: 10 } })), note: 'The main action waits for a reason ("Choose a reason first"), as every floor picker\'s Done.' },
+    { id: 'split-offline', label: 'Split: the network went', model: offline(bundle({ stage: 'split', split: { quantity: 3, reason: 'RECUT', live: 10 } }), 0), note: 'The reasons stay in view, held with the reason (a split needs the network), as the main action.' },
     { id: 'split-reading', label: 'Split: reading the bundle', model: model(bundle({ stage: 'split', split: { quantity: null, reason: null, live: null, reading: true } })), note: 'The garments still in it (as cut, less earlier splits) are read from the work order first.' },
     { id: 'split-one', label: 'Split: one garment left in it', model: model(bundle({ card: card({ quantity: 4, live: 1 }), stage: 'split', split: { quantity: null, reason: null, live: 1 } })), note: 'Three were split off before: nothing more can come off.' },
     {
