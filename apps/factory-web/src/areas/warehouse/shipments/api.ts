@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { ApiClient } from '../../../lib/api/client'
 import { presignedSchema } from '../../../record-panels/api'
+import { putToStore, sha256Hex } from '../../../record-panels/store'
 
 /**
  * Every call of the shipping office screens (SCR-066 the shipments list, SCR-067 a shipment), with the answer's shape
@@ -8,9 +9,11 @@ import { presignedSchema } from '../../../record-panels/api'
  * apps/factory-api modules/shipping: shipments (what is released and not shipped, the list, the record, lines, cancel,
  * the packing list), packing (parcels, garments into parcels, DRAFT ⇄ PACKED), the DDT (preview, issue, read, PDF,
  * annul), carrier labels and tracking (Sendcloud, FAKE locally), the documents that travel (the DDT, the DoC and the
- * user information) and the customer's document link, and the site's shipping settings (the cut-off). No money
- * anywhere: a shipment carries none. The API's English words (problems, refusals) are never drawn as they are when the
- * screen has its own words for the case.
+ * user information) and the customer's document link, and the site's shipping settings (the cut-off). B-W2a-48/71 (every
+ * day): the order's backorder, the packing list's versions, the freight charged (the one price a shipment carries:
+ * money.price, ABSENT for a reader without the grain — never drawn as 0), void every label, print the DDTs, and the
+ * intra-EU transport evidence. The API's English words (problems, refusals) are never drawn as they are when the screen
+ * has its own words for the case.
  */
 
 export const SHIPMENT_STATUSES = ['DRAFT', 'PACKED', 'SHIPPED', 'DELIVERED', 'RETURNED', 'CANCELLED'] as const
@@ -26,6 +29,14 @@ export type TrackingStatus = (typeof TRACKING_STATUSES)[number]
 export const DOCUMENT_KINDS = ['DDT', 'PACKING_LIST', 'DECLARATION_OF_CONFORMITY', 'USER_INFORMATION'] as const
 export const DOCUMENT_STATES = ['ATTACHED', 'ON_FILE', 'MISSING', 'NOT_REQUIRED'] as const
 export const LINK_STATES = ['LIVE', 'REVOKED', 'USED_UP', 'EXPIRED'] as const
+/** B-W2a-48 (LOG-090): factory-domain shipping/evidence TRANSPORT_EVIDENCE_STATUSES and EVIDENCE_KINDS. */
+export const EVIDENCE_STATUSES = ['NOT_NEEDED', 'AWAITED', 'PARTIAL', 'COMPLETE'] as const
+export type EvidenceStatus = (typeof EVIDENCE_STATUSES)[number]
+export const EVIDENCE_KINDS = ['CMR', 'CARRIER_INVOICE', 'POD', 'OTHER'] as const
+export type EvidenceKind = (typeof EVIDENCE_KINDS)[number]
+/** B-W2a-48 (LOG-105): factory-domain shipping/shipments/freight FREIGHT_BASES (why the site's rule gives what it gives). */
+export const FREIGHT_BASES = ['NO_SETTINGS', 'CUSTOMER_COLLECTS', 'BUYER_INCOTERM', 'NO_PRICE', 'OTHER_CURRENCY', 'RULE_NONE', 'FREE_FROM', 'PER_SHIPMENT', 'PER_PARCEL', 'NO_PARCELS'] as const
+export type FreightBasis = (typeof FREIGHT_BASES)[number]
 /** DOCUMENT_VIEW's longest (packages/factory-domain links/purposes). */
 export const LINK_EXPIRY_DAYS = 365
 
@@ -63,6 +74,10 @@ export const shipmentRowSchema = z.object({
   shippedAt: instant.nullable(),
   cancelledAt: instant.nullable(),
   createdAt: instant,
+  /** B-W2a-48: the freight charged (minor units, the order's currency; null: not decided yet). ABSENT without money.price. */
+  freightCharge: z.number().int().nullable().optional(),
+  currency: z.string(),
+  transportEvidence: z.enum(EVIDENCE_STATUSES),
 })
 export type ShipmentRow = z.infer<typeof shipmentRowSchema>
 
@@ -75,6 +90,8 @@ export interface ShipmentQuery {
   /** The ship-today queue: DRAFT and PACKED. */
   open?: boolean | null
   q?: string
+  /** B-W2a-48: `open` = the intra-EU transport evidence still awaited or partial. */
+  evidence?: EvidenceStatus | 'open' | null
   cursor?: string | null
   limit?: number
 }
@@ -85,6 +102,7 @@ export function listShipments(api: ApiClient, query: ShipmentQuery, signal?: Abo
       status: query.status ?? undefined,
       open: query.open === true ? 'true' : query.open === false ? 'false' : undefined,
       q: query.q?.trim() || undefined,
+      evidence: query.evidence ?? undefined,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
     },
@@ -194,6 +212,19 @@ export const parcelSchema = z.object({
 })
 export type Parcel = z.infer<typeof parcelSchema>
 
+/**
+ * B-W2a-48 (LOG-105): the freight charged to the customer — the charge (null: not decided yet, the site's rule sets it
+ * when the goods leave), whether the office typed it, and what the site's rule gives now (its basis says why; the API's
+ * `words` are English and hold no figure: the screen says the basis in its own words). Charges ABSENT without money.price.
+ */
+export const freightSchema = z.object({
+  charge: z.number().int().nullable().optional(),
+  currency: z.string(),
+  byHand: z.boolean(),
+  byRule: z.object({ charge: z.number().int().nullable().optional(), basis: z.enum(FREIGHT_BASES), words: z.string() }),
+})
+export type Freight = z.infer<typeof freightSchema>
+
 export const shipmentSchema = z.object({
   id: z.string(),
   number: z.string(),
@@ -225,6 +256,10 @@ export const shipmentSchema = z.object({
   parcels: z.array(parcelSchema),
   garments: z.number(),
   packingProblems: z.array(z.string()),
+  /** B-W2a-48 (LOG-105): the freight charged; `charge` and `byRule.charge` ABSENT without money.price. */
+  freight: freightSchema,
+  /** B-W2a-48 (LOG-090): the intra-EU transport evidence's state (GET …/evidence has the papers). */
+  transportEvidence: z.object({ status: z.enum(EVIDENCE_STATUSES), completedAt: instant.nullable() }),
 })
 export type Shipment = z.infer<typeof shipmentSchema>
 const oneShipment = z.object({ shipment: shipmentSchema })
@@ -276,9 +311,15 @@ export function cancelShipment(api: ApiClient, id: string, version: number, reas
 
 const storedFileSchema = z.object({ id: z.string(), originalName: z.string(), contentType: z.string(), sizeBytes: z.number(), createdAt: instant })
 
-/** The packing list PDF (stored on the shipment, shared with the site's floor, which prints it at the packing station). */
-export function makePackingList(api: ApiClient, id: string): Promise<z.infer<typeof storedFileSchema>> {
-  return api.post(`/shipping/shipments/${enc(id)}/packing-list`, { body: {}, schema: z.object({ file: storedFileSchema }) }).then((answer) => answer.file)
+/**
+ * The packing list PDF (stored on the shipment, shared with the site's floor, which prints it at the packing station).
+ * B-W2a-48 (LOG-012): its number and version; `reused` when these contents were printed already (the same file again).
+ */
+const packingListAnswer = z.object({ file: storedFileSchema, version: z.number(), number: z.string(), reused: z.boolean() })
+export type PackingListAnswer = z.infer<typeof packingListAnswer>
+
+export function makePackingList(api: ApiClient, id: string): Promise<PackingListAnswer> {
+  return api.post(`/shipping/shipments/${enc(id)}/packing-list`, { body: {}, schema: packingListAnswer })
 }
 
 // ---- packing in the office (the same routes as the floor's) --------------------------------------------------------------
@@ -580,4 +621,127 @@ export type SentLinks = z.infer<typeof sentLinksSchema>
 
 export function sendDocumentLink(api: ApiClient, shipmentId: string, body: { contactIds?: string[]; expiresInDays?: number }, idempotencyKey: string): Promise<SentLinks> {
   return api.post(`/shipping/shipments/${enc(shipmentId)}/documents/link`, { body, schema: sentLinksSchema, idempotencyKey })
+}
+
+// ---- B-W2a-48 (shipping every day): the backorder, the packing list's versions, the freight, void all, print, evidence ----
+
+/** One size of an order line: ordered, closed short, shipped before, on other open shipments, on this one, still to ship. */
+const sizeBackorderSchema = z.object({
+  size: z.string(),
+  ordered: z.number(),
+  closedShort: z.boolean(),
+  closed: z.number(),
+  shipped: z.number(),
+  open: z.number(),
+  thisShipment: z.number(),
+  netReleased: z.number(),
+  onShipments: z.number(),
+  backorder: z.number(),
+  readyNow: z.number(),
+  inProduction: z.number(),
+})
+export type SizeBackorder = z.infer<typeof sizeBackorderSchema>
+
+const backorderTotalsSchema = z.object({ ordered: z.number(), closed: z.number(), shipped: z.number(), open: z.number(), thisShipment: z.number(), backorder: z.number(), readyNow: z.number(), inProduction: z.number() })
+export type BackorderTotals = z.infer<typeof backorderTotalsSchema>
+
+export const backorderSchema = z.object({
+  order: z.object({ salesOrderId: z.string(), number: z.string(), status: z.string(), customerRef: z.string().nullable(), promiseDate: z.string().nullable() }),
+  shipmentId: z.string().nullable(),
+  lines: z.array(
+    z.object({
+      lineId: z.string(),
+      seq: z.number(),
+      styleCode: z.string(),
+      styleName: z.string(),
+      colourwayCode: z.string(),
+      colourwayName: z.string(),
+      closedShort: z.boolean(),
+      closeShortReason: z.string().nullable(),
+      sizes: z.array(sizeBackorderSchema),
+      totals: backorderTotalsSchema,
+    }),
+  ),
+  totals: backorderTotalsSchema,
+  shipments: z.array(z.object({ id: z.string(), number: z.string(), status, shippedAt: instant.nullable() })),
+})
+export type Backorder = z.infer<typeof backorderSchema>
+
+/** What of each order line and size this shipment takes, what left before and what stays behind (GET …/backorder?shipmentId=). */
+export function orderBackorder(api: ApiClient, salesOrderId: string, shipmentId: string, signal?: AbortSignal): Promise<Backorder> {
+  return api.get(`/shipping/orders/${enc(salesOrderId)}/backorder`, { query: { shipmentId }, schema: backorderSchema, signal })
+}
+
+export const packingListVersionSchema = z.object({ fileId: z.string(), version: z.number(), number: z.string(), language: z.string(), current: z.boolean(), parcels: z.number(), garments: z.number(), createdAt: instant })
+export type PackingListVersion = z.infer<typeof packingListVersionSchema>
+
+/** Every packing list printed for the shipment, newest first (`current`: it lists the parcels as they are now). */
+export function listPackingLists(api: ApiClient, shipmentId: string, signal?: AbortSignal): Promise<PackingListVersion[]> {
+  return api.get(`/shipping/shipments/${enc(shipmentId)}/packing-lists`, { schema: z.object({ packingLists: z.array(packingListVersionSchema) }), signal }).then((answer) => answer.packingLists)
+}
+
+/** The freight charged, typed (minor units in the order's currency), or null: back to the site's rule (shipping.freight.manage + money.price). */
+export function setFreight(api: ApiClient, shipmentId: string, version: number, freightCharge: number | null, idempotencyKey: string): Promise<{ version: number; freight: Freight }> {
+  return api.request('PUT', `/shipping/shipments/${enc(shipmentId)}/freight`, { body: { version, freightCharge }, schema: z.object({ version: z.number(), freight: freightSchema }), idempotencyKey })
+}
+
+export const voidOutcomeSchema = z.object({ parcelId: z.string(), seq: z.number(), ok: z.boolean(), carrier: z.enum(['CANCELLED', 'QUEUED', 'NOT_SENT']).nullable(), problem: z.string().nullable() })
+export const voidedSchema = labelsSchema.extend({ outcomes: z.array(voidOutcomeSchema), problem: z.string().nullable() })
+export type Voided = z.infer<typeof voidedSchema>
+
+/** Void every labelled parcel of the shipment (the carrier voids parcel by parcel; a parcel it already has keeps its label). */
+export function voidLabels(api: ApiClient, shipmentId: string, version: number, reason: string, idempotencyKey: string): Promise<Voided> {
+  return api.post(`/shipping/shipments/${enc(shipmentId)}/labels/void`, { body: { version, reason }, schema: voidedSchema, idempotencyKey })
+}
+
+/** The live DDT's PDF on the site's document printer (shipping.pack; the printer is the site's shipping settings'). */
+export function printDdtOf(api: ApiClient, shipmentId: string, idempotencyKey: string): Promise<{ jobs: { jobId: string; document: string; status: string }[] }> {
+  return api.post(`/shipping/packing/${enc(shipmentId)}/documents/print`, { body: { documents: ['DDT'] }, schema: z.object({ jobs: z.array(z.object({ jobId: z.string(), document: z.string(), status: z.string() })) }), idempotencyKey })
+}
+
+export const evidencePaperSchema = z.object({ fileId: z.string(), kind: z.enum(EVIDENCE_KINDS), originalName: z.string(), contentType: z.string(), sizeBytes: z.number(), status: z.string(), createdAt: instant })
+export type EvidencePaper = z.infer<typeof evidencePaperSchema>
+
+/** The intra-EU transport evidence (art. 41 DL 331/1993): its state, the papers on file. The API's `need`/`missing` are English. */
+export const evidenceSchema = z.object({
+  shipmentId: z.string(),
+  number: z.string(),
+  shipmentStatus: z.string(),
+  version: z.number(),
+  status: z.enum(EVIDENCE_STATUSES),
+  completedAt: instant.nullable(),
+  completedById: z.string().nullable(),
+  note: z.string().nullable(),
+  neededBySale: z.boolean(),
+  papers: z.array(evidencePaperSchema),
+})
+export type Evidence = z.infer<typeof evidenceSchema>
+const oneEvidence = z.object({ evidence: evidenceSchema })
+
+export function getEvidence(api: ApiClient, shipmentId: string, signal?: AbortSignal): Promise<Evidence> {
+  return api.get(`/shipping/shipments/${enc(shipmentId)}/evidence`, { schema: oneEvidence, signal }).then((answer) => answer.evidence)
+}
+
+/** One paper (a signed CMR, the carrier's invoice, its proof of delivery, another): announce, send the bytes, confirm. */
+export async function filePaper(api: ApiClient, shipmentId: string, kind: EvidenceKind, file: File, idempotencyKey: string): Promise<Evidence> {
+  const bytes = await file.arrayBuffer()
+  const announced = await api.post(`/shipping/shipments/${enc(shipmentId)}/evidence/papers`, {
+    body: { kind, originalName: file.name || 'paper.pdf', contentType: file.type || 'application/pdf', sizeBytes: bytes.byteLength, sha256: await sha256Hex(bytes) },
+    schema: z.object({ file: z.object({ id: z.string() }), upload: presignedSchema }),
+    idempotencyKey,
+  })
+  await putToStore(announced.upload, bytes)
+  return api.post(`/shipping/shipments/${enc(shipmentId)}/evidence/papers/${enc(announced.file.id)}/complete`, { body: {}, schema: z.object({ evidence: evidenceSchema }), idempotencyKey: `${idempotencyKey}:complete` }).then((answer) => answer.evidence)
+}
+
+export function completeEvidence(api: ApiClient, shipmentId: string, version: number, note: string | null): Promise<Evidence> {
+  return api.post(`/shipping/shipments/${enc(shipmentId)}/evidence/complete`, { body: { version, note }, schema: oneEvidence }).then((answer) => answer.evidence)
+}
+
+export function reopenEvidence(api: ApiClient, shipmentId: string, version: number, reason: string): Promise<Evidence> {
+  return api.post(`/shipping/shipments/${enc(shipmentId)}/evidence/reopen`, { body: { version, reason }, schema: oneEvidence }).then((answer) => answer.evidence)
+}
+
+export function setEvidenceNeeded(api: ApiClient, shipmentId: string, version: number, needed: boolean, reason: string): Promise<Evidence> {
+  return api.post(`/shipping/shipments/${enc(shipmentId)}/evidence/needed`, { body: { version, needed, reason }, schema: oneEvidence }).then((answer) => answer.evidence)
 }

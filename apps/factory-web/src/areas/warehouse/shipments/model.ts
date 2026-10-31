@@ -7,7 +7,7 @@ import { SHIPMENT_STATUSES } from './api'
  * person may do, the saved rows and the address that holds them, the tiles and the carrier cut-off cards of the
  * ship-today queue, a shipment's next step (Mark packed → Issue DDT → Buy labels → Mark handed over) and why it is held,
  * the "Ready to ship" checklist, and the screens' own words for the API's codes. No fetching, no React: the tests hold
- * them. No money anywhere (a shipment carries none).
+ * them. One price since B-W2a-48/71: the freight charged (daily-model.ts; only with the price grain).
  */
 
 export type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
@@ -34,6 +34,19 @@ export interface ShippingAbilities {
   /** The site's shipping settings: the cut-off for the countdowns. */
   viewSettings: boolean
   viewOrders: boolean
+  // B-W2a-71 (every day):
+  /** Void every carrier label before the goods leave. */
+  voidLabels: boolean
+  /** Type the freight charged, or set it back to the site's rule (with the price grain). */
+  freight: boolean
+  /** File the intra-EU transport evidence and say when it is enough. */
+  evidence: boolean
+  /** Upload a file (an evidence paper). */
+  uploadFiles: boolean
+  /** The price grain: the freight charged is drawn (without it the API sends no amount). */
+  price: boolean
+  /** Finance's invoices (the Invoice tab's link). */
+  viewInvoices: boolean
 }
 
 export function abilitiesOf(permissions: readonly string[]): ShippingAbilities {
@@ -49,11 +62,17 @@ export function abilitiesOf(permissions: readonly string[]): ShippingAbilities {
     readFiles: held.has('files.read'),
     viewSettings: held.has('shipping.settings.view'),
     viewOrders: held.has('orders.view'),
+    voidLabels: held.has('shipping.labels.void'),
+    freight: held.has('shipping.freight.manage'),
+    evidence: held.has('shipping.evidence.manage'),
+    uploadFiles: held.has('files.upload'),
+    price: held.has('money.price'),
+    viewInvoices: held.has('invoices.view'),
   }
 }
 
 /** Whether the person can do anything on a shipment (else the record says it is read-only for them). */
-export const actsOnShipments = (can: ShippingAbilities): boolean => can.manage || can.pack || can.issueDdt || can.annulDdt || can.buyLabels
+export const actsOnShipments = (can: ShippingAbilities): boolean => can.manage || can.pack || can.issueDdt || can.annulDdt || can.buyLabels || can.voidLabels || (can.freight && can.price) || can.evidence
 
 // ---- words and tones -----------------------------------------------------------------------------------------------------
 
@@ -109,7 +128,8 @@ export function addressLines(shipTo: Record<string, unknown>): string[] {
 
 // ---- the saved rows ⇄ the address ⇄ the API query ----------------------------------------------------------------------------
 
-export const ROW_VIEWS = ['today', ...SHIPMENT_STATUSES, 'all'] as const
+/** B-W2a-71: `evidence` = gone to another EU state, its transport evidence still awaited or partial (art. 41 DL 331/1993). */
+export const ROW_VIEWS = ['today', ...SHIPMENT_STATUSES, 'evidence', 'all'] as const
 export type RowView = (typeof ROW_VIEWS)[number]
 
 const isRowView = (value: string | null | undefined): value is RowView => !!value && (ROW_VIEWS as readonly string[]).includes(value)
@@ -125,6 +145,7 @@ export function rowsQuery(rows: RowView, q: string, cursor: string | null = null
   const base = { q, cursor, limit: 50 }
   if (rows === 'today') return { ...base, open: true }
   if (rows === 'all') return base
+  if (rows === 'evidence') return { ...base, evidence: 'open' }
   return { ...base, status: rows }
 }
 
@@ -342,7 +363,8 @@ export const openChecks = (checks: readonly ReadyCheck[]): number => checks.filt
 
 // ---- the record's tabs ---------------------------------------------------------------------------------------------------------
 
-export const RECORD_TABS = ['lines', 'documents', 'carrier', 'tracking', 'activity'] as const
+/** B-W2a-71 adds Export (the intra-EU transport evidence, LOG-090) and Invoice (the freight charged, LOG-105). */
+export const RECORD_TABS = ['lines', 'documents', 'carrier', 'tracking', 'export', 'invoice', 'activity'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
 export function tabOf(value: string | null | undefined): RecordTab {
@@ -486,12 +508,14 @@ const cell = (value: string | number | null): string => {
   return /[",\n;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
 }
 
-export function shipmentsCsv(rows: readonly ShipmentRow[], words: { header: (column: string) => string; status: (status: ShipmentStatus) => string; carrier: (row: ShipmentRow) => string }): string {
-  const columns = ['number', 'status', 'customer', 'order', 'shipTo', 'carrier', 'parcels', 'weight', 'ddt', 'tracking', 'shipped'] as const
+/** The selected rows as CSV; B-W2a-71: with the price grain, the freight charged (a decimal in the order's currency) last. */
+export function shipmentsCsv(rows: readonly ShipmentRow[], words: { header: (column: string) => string; status: (status: ShipmentStatus) => string; carrier: (row: ShipmentRow) => string }, options: { price?: boolean } = {}): string {
+  const columns = ['number', 'status', 'customer', 'order', 'shipTo', 'carrier', 'parcels', 'weight', 'ddt', 'tracking', 'shipped', ...(options.price ? (['freight', 'currency'] as const) : [])]
   const lines = [columns.map((column) => cell(words.header(column))).join(',')]
   for (const row of rows) {
+    const freight = options.price ? [row.freightCharge === undefined || row.freightCharge === null ? null : (row.freightCharge / 100).toFixed(2), row.currency] : []
     lines.push(
-      [row.number, words.status(row.status), row.partyName, row.salesOrderNumber, placeOf(row.shipTo), words.carrier(row), row.parcels, row.grossWeightKg, row.ddt?.number ?? null, row.trackingNumbers.join(' '), row.shippedAt]
+      [row.number, words.status(row.status), row.partyName, row.salesOrderNumber, placeOf(row.shipTo), words.carrier(row), row.parcels, row.grossWeightKg, row.ddt?.number ?? null, row.trackingNumbers.join(' '), row.shippedAt, ...freight]
         .map((value) => cell(value as string | number | null))
         .join(','),
     )

@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { ALL_ROWS, at, canOf, inShell, LEFT_ROWS, OPEN_ROWS, PREFIX, READY, SITE, TODAY, type Role } from '../_demo/fixtures'
+import { ALL_ROWS, at, canOf, inShell, LEFT_ROWS, OPEN_ROWS, PREFIX, READY, rowsFor, SITE, TODAY, type Role } from '../_demo/fixtures'
 import { cutOffCards, tileCounts, zonedToday } from '../model'
 import type { NewShipmentModel, ShipmentsListModel } from './list-model'
 import { ShipmentsListView } from './view/ShipmentsListView'
@@ -10,7 +10,8 @@ import { ShipmentsListView } from './view/ShipmentsListView'
  * (its cut-off today, what is ready and still to pack; a pressed card filters the queue), the tiles, every state of the
  * list (loading, error, empty, nothing today, nothing matching, short, more pages, live updates, no permission), the
  * selection and Export N, New shipment (both steps, held, refused), and the roles: Owner, Warehouse, Sales (read-only)
- * and Finance (read-only). Ticks, the header box, shift-click, j / k / x / Enter / c and ? work for real.
+ * and Finance (read-only). Ticks, the header box, shift-click, j / k / x / Enter / c and ? work for real. B-W2a-71: the
+ * Freight charged column (price grain only), Print N DDTs (the dialog, its outcome, held), the EU proof still to file.
  */
 
 interface ListCase {
@@ -22,7 +23,7 @@ interface ListCase {
 const CUT_OFFS = { map: new Map([[SITE, '17:00']]), day: TODAY }
 const NOW_CUT_OFFS = { map: new Map([[SITE, '23:59']]), day: zonedToday() }
 
-const base = (role: Role, over: Partial<ShipmentsListModel> = {}, cutOffs = NOW_CUT_OFFS): ListCase => ({
+const base = (role: Role, over: Partial<ShipmentsListModel> = {}, cutOffs = NOW_CUT_OFFS): ListCase => withRole(role, {
   role,
   list: {
     prefix: PREFIX,
@@ -42,6 +43,11 @@ const base = (role: Role, over: Partial<ShipmentsListModel> = {}, cutOffs = NOW_
     ...over,
   },
 })
+
+/** Without the price grain the API sends no freight amount: the role's rows are drawn as that role reads them. */
+function withRole(role: Role, item: ListCase): ListCase {
+  return { ...item, list: { ...item.list, list: { ...item.list.list, items: item.list.list.items ? rowsFor(item.list.list.items, role) : null } } }
+}
 
 const create = (over: Partial<NewShipmentModel> = {}): NewShipmentModel => ({ step: 1, orders: READY, problem: null, salesOrderId: null, quantities: {}, transportBy: 'CARRIER', carrierCode: 'brt', serviceCode: '', busy: false, refused: null, ...over })
 
@@ -73,6 +79,27 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'sales', label: 'Sales: read-only (no New shipment), no cut-off shown (no settings right)', model: base('sales') },
     { id: 'finance', label: 'Finance: read-only, every shipment', model: base('finance', { rows: 'all', list: { items: ALL_ROWS, more: false, problem: null } }) },
     { id: 'help', label: '? the keys of this list', model: base('warehouse', { helpOpen: true }) },
+    // ---- B-W2a-71 (every day) ----
+    { id: 'freight', label: 'Finance: every shipment with the Freight charged column (price grain)', model: base('finance', { rows: 'all', list: { items: ALL_ROWS, more: false, problem: null } }) },
+    { id: 'evidence', label: 'Rows ▾ EU proof to file: gone to another EU state, the transport evidence awaited or partial', model: base('warehouse', { rows: 'evidence', list: { items: LEFT_ROWS.filter((entry) => entry.transportEvidence === 'AWAITED' || entry.transportEvidence === 'PARTIAL'), more: false, problem: null } }) },
+    { id: 'print-selected', label: 'Four shipments selected: Print 3 DDTs (one has no DDT yet)', model: base('warehouse', { selected: [OPEN_ROWS[1]!.id, OPEN_ROWS[3]!.id, OPEN_ROWS[4]!.id, OPEN_ROWS[5]!.id] }) },
+    { id: 'print-dialog', label: 'Print 3 DDTs: on each site\'s document printer', model: base('warehouse', { selected: [OPEN_ROWS[1]!.id, OPEN_ROWS[3]!.id, OPEN_ROWS[4]!.id, OPEN_ROWS[5]!.id], printDdts: { ids: [OPEN_ROWS[1]!.id, OPEN_ROWS[3]!.id, OPEN_ROWS[4]!.id, OPEN_ROWS[5]!.id], busy: false, outcomes: null } }) },
+    {
+      id: 'print-done',
+      label: 'Print DDTs: queued, one refused (no document printer), one skipped',
+      model: base('warehouse', {
+        printDdts: {
+          ids: [OPEN_ROWS[1]!.id, OPEN_ROWS[3]!.id, OPEN_ROWS[4]!.id],
+          busy: false,
+          outcomes: [
+            { id: OPEN_ROWS[3]!.id, number: OPEN_ROWS[3]!.number, ddt: OPEN_ROWS[3]!.ddt!.number, state: 'queued', words: { key: 'printDdts.why.queued' } },
+            { id: OPEN_ROWS[4]!.id, number: OPEN_ROWS[4]!.number, ddt: OPEN_ROWS[4]!.ddt?.number ?? null, state: 'refused', words: { key: 'printDdts.why.noPrinter' } },
+            { id: OPEN_ROWS[1]!.id, number: OPEN_ROWS[1]!.number, ddt: null, state: 'skipped', words: { key: 'printDdts.why.noDdt' } },
+          ],
+        },
+      }),
+    },
+    { id: 'print-held', label: 'Sales: Print DDTs held (packing right missing)', model: base('sales', { selected: [OPEN_ROWS[3]!.id, OPEN_ROWS[5]!.id] }) },
     { id: 'new-order', label: 'New shipment, step 1: the order and who carries it', model: base('warehouse', { create: create({ salesOrderId: READY[0]!.salesOrderId }) }) },
     { id: 'new-quantities', label: 'New shipment, step 2: garments per size, each capped at what can still ship', model: base('warehouse', { create: create({ step: 2, salesOrderId: READY[0]!.salesOrderId, quantities: { [READY[0]!.cells[0]!.workOrderSizeId]: 3, [READY[0]!.cells[1]!.workOrderSizeId]: 5 } }) }) },
     { id: 'new-too-many', label: 'New shipment: a size asks more than it can ship (held, with the range)', model: base('warehouse', { create: create({ step: 2, salesOrderId: READY[0]!.salesOrderId, quantities: { [READY[0]!.cells[2]!.workOrderSizeId]: 4 } }) }) },

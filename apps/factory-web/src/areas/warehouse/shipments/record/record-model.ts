@@ -1,5 +1,5 @@
 import type { RecordPanelsViewModel } from '../../../../record-panels/model'
-import type { Bought, Ddt, DdtPreview, DdtRow, Documents, Labels, ReadyOrder, SentLinks, Shipment, Tracking, TransportBy } from '../api'
+import type { Backorder, Bought, Ddt, DdtPreview, DdtRow, Documents, Evidence, EvidenceKind, Labels, PackingListVersion, ReadyOrder, SentLinks, Shipment, Tracking, TransportBy, Voided } from '../api'
 import type { LiveState } from '../hooks'
 import type { DdtForm, Phrase, RecordTab, ShippingAbilities } from '../model'
 
@@ -33,6 +33,13 @@ export type RecordDialog =
   | { kind: 'parcel'; parcelId: string | null }
   | { kind: 'sendLink' }
   | { kind: 'unpack' }
+  // B-W2a-71 (every day)
+  | { kind: 'voidLabels' }
+  | { kind: 'freight' }
+  | { kind: 'evidenceFile' }
+  | { kind: 'evidenceComplete' }
+  | { kind: 'evidenceReopen' }
+  | { kind: 'evidenceNeed'; needed: boolean }
 
 export interface ShipmentRecordModel {
   /** `/w/<company>`. */
@@ -54,6 +61,12 @@ export interface ShipmentRecordModel {
   documents: Part<Documents>
   /** What the order can still put on this DRAFT (Add garments). */
   ready: Part<ReadyOrder | null> | null
+  /** B-W2a-71: the order's lines on this shipment and what stays on backorder (GET …/backorder?shipmentId=). */
+  backorder: Part<Backorder>
+  /** B-W2a-71: every packing list printed for it, newest first (Documents › Other documents). */
+  packingLists: Part<PackingListVersion[]>
+  /** B-W2a-71: the intra-EU transport evidence (the Export tab). */
+  evidence: Part<Evidence>
   live: LiveState
   dockOpen: boolean
   /** Someone changed it while a dialog with typed work was open. */
@@ -66,13 +79,15 @@ export interface ShipmentRecordModel {
   ddtForm: DdtForm | null
   bought: Bought | null
   sent: SentLinks | null
+  /** B-W2a-71: the last void's outcome per parcel (the Void labels dialog's receipt). */
+  voided: Voided | null
   /** Design cases: the record panels drawn as a preview. */
   panelsPreview?: RecordPanelsViewModel
 }
 
 export interface ShipmentRecordActions {
   onRetry?: () => void
-  onRetryPart?: (part: 'ddts' | 'pdf' | 'preview' | 'labels' | 'tracking' | 'documents' | 'ready') => void
+  onRetryPart?: (part: 'ddts' | 'pdf' | 'preview' | 'labels' | 'tracking' | 'documents' | 'ready' | 'backorder' | 'packingLists' | 'evidence') => void
   onReload?: () => void
   onDock?: () => void
   onDismissNotice?: () => void
@@ -103,4 +118,12 @@ export interface ShipmentRecordActions {
   onPrintLabels?: () => void
   onHandOver?: () => void
   onCancel?: (reason: string) => void
+  // B-W2a-71 (every day)
+  onVoidLabels?: (reason: string) => void
+  /** Minor units typed, or null: back to the site's rule. */
+  onFreight?: (charge: number | null) => void
+  onFilePaper?: (kind: EvidenceKind, file: File) => void
+  onCompleteEvidence?: (note: string) => void
+  onReopenEvidence?: (reason: string) => void
+  onEvidenceNeeded?: (needed: boolean, reason: string) => void
 }
