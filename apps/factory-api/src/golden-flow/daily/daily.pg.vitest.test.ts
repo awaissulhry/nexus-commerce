@@ -1018,7 +1018,7 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     expect((await ok(P.sales, 'GET', `/sales/orders/${G.order.id}`)).order.status).toBe('SHIPPED')
   })
 
-  it('T11 finance reads P1’s ledger: the statement (both invoices, the payment, the running balance), the open items not due yet, the ageing and the PDF; sales may not read receivables', async () => {
+  it('T11 finance reads P1’s ledger: the statement (both invoices, the payment, the running balance), the open items not due yet, the ageing and the PDF; sales may read receivables (B-W2a-81)', async () => {
     const from = `${today().slice(0, 4)}-01-01`
     const statement = await ok(P.finance, 'GET', `/receivables/customers/${id('party:P1')}/statement?companyId=${companyA()}&from=${from}&to=${today()}&language=it`)
     expect(statement).toMatchObject({ currency: 'EUR', from, to: today(), customer: { id: id('party:P1') } })
@@ -1048,8 +1048,8 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     expect(printed.status, String(printed.response.body).slice(0, 300)).toBe(200)
     expect(printed.response.headers['content-type']).toContain('application/pdf')
     expect(printed.response.rawPayload.subarray(0, 5).toString()).toBe('%PDF-')
-    // Refused: receivables are finance's (the sales template has no receivables.view).
-    expect((await ok(P.sales, 'GET', `/receivables/customers/${id('party:P1')}/statement?companyId=${companyA()}`, undefined, 403)).error.message).toEqual(expect.any(String))
+    // Sales reads the customer's statement (B-W2a-81 gave the sales template receivables.view, view only).
+    expect((await ok(P.sales, 'GET', `/receivables/customers/${id('party:P1')}/statement?companyId=${companyA()}`, undefined, 200)).lines).toEqual(expect.any(Array))
   })
 
   it('T12 the statement is e-mailed to P1’s invoice contact (FAKE SES); the reminder ladder stays OFF (the Owner’s switch): finance cannot switch it on, nothing is prepared for these invoices', async () => {
