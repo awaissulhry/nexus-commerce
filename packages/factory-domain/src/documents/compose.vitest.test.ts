@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { ValidationError } from '../core/errors'
 import { composeDocument, documentProblems, pageLabel } from './compose'
-import type { CompanyLegal, DocumentInput } from './model'
+import { DDT_PARTY_WORDS_PER_REASON, ddtPartyHeading, DOCUMENT_WORDS } from './i18n'
+import type { CompanyLegal, DdtReason, DocumentInput } from './model'
 
 /*
  * Every company, person, tax number and address here is FAKE (as in the FatturaPA fixtures): the Partita IVA uses
@@ -189,6 +190,34 @@ describe('the DDT (DPR 472/1996)', () => {
     expect(factsOf(composeDocument(other))['Causale del trasporto']).toBe('Mostra campionario')
     const work = ddt({ transport: { ...ddt().transport!, reason: 'WORK_ON_ACCOUNT', reasonText: 'cucitura' } })
     expect(factsOf(composeDocument(work))['Causale del trasporto']).toBe('Conto lavorazione - cucitura')
+  })
+
+  it('W2b (B-W2b-19): the party is the "cessionario" only when the goods are sold to it; one switch prints W1\'s words on every DDT', () => {
+    const headingOf = (reason: DdtReason, language: 'it' | 'en' = 'it') => composeDocument(ddt({ language, transport: { ...ddt().transport!, reason, reasonText: reason === 'OTHER' ? 'Mostra' : null } })).blocks[0]!.heading
+    expect(headingOf('SALE')).toBe('Destinatario (cessionario)')
+    for (const reason of ['WORK_ON_ACCOUNT', 'RETURN_FROM_WORK', 'RETURN', 'ON_APPROVAL', 'REPAIR', 'SAMPLE', 'TRANSFER', 'OTHER'] as const) expect(headingOf(reason)).toBe('Destinatario')
+    expect(headingOf('SALE', 'en')).toBe('Recipient (consignee)')
+    expect(headingOf('REPAIR', 'en')).toBe('Recipient')
+    // The switch off: W1's words whatever the reason (until the accountant confirms the wording per reason).
+    expect(ddtPartyHeading(DOCUMENT_WORDS.it, 'REPAIR', false)).toBe('Destinatario (cessionario)')
+    expect(ddtPartyHeading(DOCUMENT_WORDS.it, 'REPAIR', true)).toBe('Destinatario')
+    expect(DDT_PARTY_WORDS_PER_REASON).toBe(true)
+  })
+
+  it('W2b (B-W2b-19): names the record a DDT for another reason travels with: processing order, supplier claim, repair, RMA', () => {
+    const references = [
+      { kind: 'SUBCONTRACT_ORDER' as const, number: 'SC-0001', date: '2026-10-20' },
+      { kind: 'SUPPLIER_CLAIM' as const, number: 'CLM-0002' },
+      { kind: 'REPAIR_ORDER' as const, number: 'REP-0003' },
+      { kind: 'RETURN_AUTHORISATION' as const, number: 'RMA-0004' },
+    ]
+    expect(factsOf(composeDocument(ddt({ references })))).toMatchObject({
+      'Ordine di lavorazione': 'SC-0001 del 20/10/2026',
+      'Reclamo al fornitore': 'CLM-0002',
+      Riparazione: 'REP-0003',
+      'Autorizzazione al reso (RMA)': 'RMA-0004',
+    })
+    expect(factsOf(composeDocument(ddt({ references, language: 'en' })))).toMatchObject({ 'Processing order': 'SC-0001 of 20 Oct 2026', 'Supplier claim': 'CLM-0002', Repair: 'REP-0003', 'Return authorisation (RMA)': 'RMA-0004' })
   })
 
   it('DPR 472/1996: refuses a DDT without its transport fields, a carrier\'s name, the recipient\'s address or the goods\' description', () => {

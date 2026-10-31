@@ -178,8 +178,12 @@ export interface PackingFacts {
   readonly shipTo?: (PostalAddress & { readonly name?: string | null }) | null
 }
 
-/** References to other documents, printed in the header facts. */
-export const REFERENCE_KINDS = ['CUSTOMER_ORDER', 'QUOTE', 'SALES_ORDER', 'PURCHASE_ORDER', 'SUPPLIER_QUOTE', 'DDT', 'INVOICE'] as const
+/**
+ * References to other documents, printed in the header facts. W2b (B-W2b-19, the B-W2a-17 note): a DDT for another
+ * reason names its own record: the subcontract order (ordine di lavorazione) its kit travels with, the supplier claim,
+ * the repair or the return authorisation (RMA) whose goods go back.
+ */
+export const REFERENCE_KINDS = ['CUSTOMER_ORDER', 'QUOTE', 'SALES_ORDER', 'PURCHASE_ORDER', 'SUPPLIER_QUOTE', 'DDT', 'INVOICE', 'SUBCONTRACT_ORDER', 'SUPPLIER_CLAIM', 'REPAIR_ORDER', 'RETURN_AUTHORISATION'] as const
 export type ReferenceKind = (typeof REFERENCE_KINDS)[number]
 
 export interface DocumentReference {
