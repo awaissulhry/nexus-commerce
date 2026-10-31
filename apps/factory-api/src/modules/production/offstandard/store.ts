@@ -1,6 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { CommandTx } from '../../../core/command'
+import { legalGateFor, type GateReader } from '../../people/privacy/gate'
 
 /**
  * Off-standard and indirect time's reads and locks (B-W2b-29): the codes, the blocks, their line days and their labour
@@ -250,10 +251,10 @@ export async function peopleNames(db: Reader, ids: readonly (string | null)[]): 
 /**
  * The site's legal gate for one person's work figures is switched on: a PeopleLegalGate row in force for PERFORMANCE
  * (Statuto dei Lavoratori art. 4 c.1: the site's recorded basis; GATE-LABOUR; B-W2b-06's table). Off by default: no row.
- * B-W2b-27's legalGateFor(site, 'PERFORMANCE') reads the same row (swap this read for it once it is on main). Office reads.
+ * Read through B-W2b-27's legalGateFor (the gate's own dates and state decide). Office reads.
  */
 export async function performanceGateOpen(db: Reader, siteId: string): Promise<boolean> {
-  return (await db.peopleLegalGate.count({ where: { siteId, purpose: 'PERFORMANCE', switchedOffAt: null } })) > 0
+  return (await legalGateFor(db as GateReader, siteId, 'PERFORMANCE')).open
 }
 
 /** The office users these workers also are (Worker.userId; office reads only: the floor role cannot see the column). */
