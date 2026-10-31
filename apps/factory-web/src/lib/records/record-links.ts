@@ -120,6 +120,9 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2a-51: the accounting batches (`?status=`, `?year=`) and the stock valuation (`?asOf=`, `?site=`, `?category=`).
   '/accounting/exports': '/finance/accounting',
   '/costing/valuation': '/finance/reports',
+  // B-W2a-72: standard vs actual (`?rows=`, `?q=`, `?site=`, `?month=`, `?open=<work order>`) and the order margins (`?from=`, `?to=`, `?party=`, `?style=`, `?q=`, `?open=<order>`).
+  '/costing/work-orders': '/finance/costing',
+  '/costing/margins': '/finance/margins',
   // The shipments list (SCR-066) reads `?rows=` and `?q=` from the address.
   '/shipping/shipments': '/warehouse/shipments',
   // The PO list reads `status` (one state, as the API) and `waitingOver48h`; Receipts reads `status`, `view=expected`.

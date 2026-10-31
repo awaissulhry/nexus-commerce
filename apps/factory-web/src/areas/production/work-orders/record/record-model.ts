@@ -3,6 +3,7 @@ import type { BundleScan, CutLog, FinalState, PickList, ReleaseCheck, TicketPrin
 import type { LiveState } from '../../_shared/hooks'
 import type { Phrase, ProductionCan, RecordTab, SizeLayer, StepKind } from '../../_shared/model'
 import type { DailyActions, DailyModel } from '../daily/model'
+import type { LabourModel } from '../labour/model'
 
 /** SCR-070 … SCR-072 — the work order studio's view model (WorkOrderRecordView draws it and fetches nothing). */
 
@@ -65,6 +66,8 @@ export interface WorkOrderRecordModel {
   cutOpen: string | null
   /** B-W2a-46: the work order every day — holds, finished to stock, yield, scrap and rework, readiness, reserve, split. */
   daily?: DailyModel
+  /** B-W2a-72: the Labour & cost tab (the work order's cost from the ledger; cost grain only). */
+  labour?: LabourModel
   /** Design cases: what the panels show (the page mounts the live panels instead). */
   panelsPreview?: RecordPanelsViewModel
   /** Design cases: a dialog's typed reason, the overview's fields in edit, a draft's grid being edited. */
@@ -93,4 +96,6 @@ export interface WorkOrderRecordActions {
   onWaitingAt?: (seq: number | null) => void
   /** B-W2a-46: the W2a parts' actions. */
   daily?: DailyActions
+  /** B-W2a-72: read the Labour & cost tab again. */
+  onRetryLabour?: () => void
 }

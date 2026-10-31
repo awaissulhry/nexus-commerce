@@ -23,6 +23,7 @@ import { say } from '../../daily/view/DailyParts'
 import { MaterialsTab } from './MaterialsTab'
 import { OverviewTab } from './OverviewTab'
 import { QualityTab } from './QualityTab'
+import { LabourTab } from '../../labour/view/LabourTab'
 import '../../../_shared/production.css'
 
 export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
@@ -283,6 +284,7 @@ function ReadyRecord({ workOrder, model, actions, panels }: { workOrder: WorkOrd
           {model.tab === 'bundles' && <BundlesTab workOrder={workOrder} model={model} actions={actions} />}
           {model.tab === 'operations' && <OperationsTab workOrder={workOrder} model={model} actions={actions} />}
           {model.tab === 'quality' && <QualityTab workOrder={workOrder} model={model} actions={actions} />}
+          {model.tab === 'labour' && <LabourTab labour={model.labour} prefix={model.prefix} workOrderId={workOrder.id} draft={workOrder.status === 'DRAFT'} onRetry={actions?.onRetryLabour} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-pr-hint">{t('record.noPanels')}</p>)}
         </div>
         {showDock && (
