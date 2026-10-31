@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { businessDate, defineContract, id, input, instant, output, quantity } from '@nexus/factory-domain/core/contracts'
 import { notMoney } from '@nexus/factory-domain/money/marked'
 import { ITEM_TRACKINGS } from '@nexus/factory-domain/inventory/ledger/moves'
@@ -182,6 +183,7 @@ export const issueContract = defineContract({
     overIssueReason: why().optional(),
     /** When it happened, by the device's clock. Default now. */
     occurredAt: instant().optional(),
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: {
     201: output({
@@ -215,6 +217,7 @@ export const returnContract = defineContract({
     toLocationId: id(),
     note: z.string().trim().max(500).nullish(),
     occurredAt: instant().optional(),
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: {
     201: output({

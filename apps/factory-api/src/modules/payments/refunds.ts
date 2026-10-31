@@ -11,7 +11,8 @@ import { LIVE_REFUND_STATUSES, overpaidOf, paidOnProblem, refundableOnCreditNote
 import { command, type CommandCaller, type CommandTools } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { serverClock } from '../../core/time'
-import { refuseHardLocked } from '../accounting/period-guard'
+import { honourPeriodLocks } from '../accounting/period-guard'
+import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { ordersOfInvoices, settleOrders } from '../invoicing/from-shipment/settlement'
 import { lockAll, lockMoney } from './locks'
 import { allocatedOf, assertMay, officeContextOf, type Reader } from './store'
@@ -298,6 +299,8 @@ export interface RecordRefundInput {
   readonly internalNote?: string | null | undefined
   /** Recorded as made already: the transfer's value date and the bank's reference. */
   readonly paid?: { readonly paidOn: string; readonly externalRef: string } | undefined
+  /** B-W2a-F8: the reason a refund paid inside a SOFT-locked month goes in anyway. */
+  readonly periodLockOverride?: PeriodLockOverride | undefined
 }
 
 /** The value date and the bank's reference of a refund made, checked (400), the reference in one form. */
@@ -326,9 +329,9 @@ async function counted<Result>(work: () => Promise<Result>): Promise<Result> {
   }
 }
 
-/** The refund's period lock (a HARD-locked month refuses a bank date in it), in words before the database's. */
-async function refuseLockedRefund(tools: CommandTools, companyId: string, paidOn: string, externalRef: string, what: string, path: string): Promise<void> {
-  await refuseHardLocked(tools.tx, tools.context, [{ companyId, day: paidOn, refused: `the refund ${what} on ${dayWords(paidOn)} (bank reference ${externalRef}) is not recorded`, path }])
+/** The refund's period lock (a HARD-locked month refuses a bank date in it, in words before the database's; a SOFT one needs the override reason). */
+async function refuseLockedRefund(tools: CommandTools, companyId: string, paidOn: string, externalRef: string, what: string, path: string, refundId: string, override: PeriodLockOverride | undefined): Promise<void> {
+  await honourPeriodLocks(tools, [{ companyId, day: paidOn, refused: `the refund ${what} on ${dayWords(paidOn)} (bank reference ${externalRef}) is not recorded`, path, record: { type: 'Refund', id: refundId } }], override)
 }
 
 /** payments.refund: records a refund of a credit note or of a payment's unplaced part, DUE or PAID. */
@@ -371,8 +374,8 @@ export async function recordRefund(caller: CommandCaller, body: RecordRefundInpu
       const amount = body.amount ?? source.refundable
       const problem = refundAmountProblem(amount, source.refundable, source.currency, source.words)
       if (problem) throw new DomainError('conflict', problem, [{ path: 'body/amount', message: problem }])
-      if (paid) await refuseLockedRefund(tools, source.companyId, paid.paidOn, paid.externalRef, 'paid', 'body/paid/paidOn')
       const id = newId()
+      if (paid) await refuseLockedRefund(tools, source.companyId, paid.paidOn, paid.externalRef, 'paid', 'body/paid/paidOn', id, body.periodLockOverride)
       await tx.refund.create({
         data: {
           id,
@@ -472,7 +475,7 @@ export async function changeRefund(caller: CommandCaller, refundId: string, body
 }
 
 /** payments.refund: DUE → PAID, the transfer's value date and the bank's reference (the office made it in its bank). */
-export async function payRefund(caller: CommandCaller, refundId: string, body: { version: number; paidOn: string; externalRef: string }, idempotencyKey?: string): Promise<{ refund: RefundDetail }> {
+export async function payRefund(caller: CommandCaller, refundId: string, body: { version: number; paidOn: string; externalRef: string; periodLockOverride?: PeriodLockOverride | undefined }, idempotencyKey?: string): Promise<{ refund: RefundDetail }> {
   const refund = await officeRefund(caller, refundId, PAYMENTS_REFUND)
   refuseMove(refund, 'PAID')
   const paid = checkPaid(body)
@@ -482,7 +485,7 @@ export async function payRefund(caller: CommandCaller, refundId: string, body: {
       await lockRefund(tools, refund)
       const current = (await readRefund(tools.tx, refund.id))!
       refuseMove(current, 'PAID')
-      await refuseLockedRefund(tools, current.companyId, paid.paidOn, paid.externalRef, 'paid', 'body/paidOn')
+      await refuseLockedRefund(tools, current.companyId, paid.paidOn, paid.externalRef, 'paid', 'body/paidOn', current.id, body.periodLockOverride)
       await tools.tx.refund.update({ where: { id: current.id }, data: { status: 'PAID', paidOn: dateValue(paid.paidOn), externalRef: paid.externalRef, paidAt: tools.now, paidById: actorIdOf(tools), updatedAt: tools.now }, select: { id: true } })
       tools.audit({ recordType: 'Refund', recordId: current.id, companyId: current.companyId, before: { status: 'DUE' }, after: { status: 'PAID', paidOn: paid.paidOn, externalRef: paid.externalRef, amount: markMoney('price', current.amount) } })
       tools.emit({ type: 'refund.paid', subject: current.id, companyId: current.companyId, payload: { refundId: current.id, partyId: current.partyId } })
@@ -512,7 +515,7 @@ export async function cancelRefund(caller: CommandCaller, refundId: string, body
 }
 
 /** payments.void: PAID → VOIDED with why (recorded as paid by mistake). The money is owed again (or refundable again). */
-export async function voidRefund(caller: CommandCaller, refundId: string, body: { version: number; reason: string }, idempotencyKey?: string): Promise<{ refund: RefundDetail }> {
+export async function voidRefund(caller: CommandCaller, refundId: string, body: { version: number; reason: string; periodLockOverride?: PeriodLockOverride | undefined }, idempotencyKey?: string): Promise<{ refund: RefundDetail }> {
   const refund = await officeRefund(caller, refundId, PAYMENTS_VOID)
   refuseMove(refund, 'VOIDED')
   const reason = blankToNull(body.reason)
@@ -521,7 +524,7 @@ export async function voidRefund(caller: CommandCaller, refundId: string, body: 
     await lockRefund(tools, refund)
     const current = (await readRefund(tools.tx, refund.id))!
     refuseMove(current, 'VOIDED')
-    await refuseLockedRefund(tools, current.companyId, day(current.paidOn)!, current.externalRef ?? '', 'paid', 'refundId')
+    await refuseLockedRefund(tools, current.companyId, day(current.paidOn)!, current.externalRef ?? '', 'paid', 'refundId', current.id, body.periodLockOverride)
     await tools.tx.refund.update({ where: { id: current.id }, data: { status: 'VOIDED', voidedAt: tools.now, voidReason: reason, updatedAt: tools.now }, select: { id: true } })
     tools.audit({ recordType: 'Refund', recordId: current.id, companyId: current.companyId, before: { status: 'PAID' }, after: { status: 'VOIDED', amount: markMoney('price', current.amount) }, reason })
     tools.emit({ type: 'refund.voided', subject: current.id, companyId: current.companyId, payload: { refundId: current.id, partyId: current.partyId } })

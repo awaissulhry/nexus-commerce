@@ -1,5 +1,5 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/subcontract.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office writes subcontract orders with their operations and kit lines through apps/factory-api's modules/purchasing/subcontracting (B-W2a-25), always through command(); the kit's stock moves (TRANSFER into the workshop's SUBCONTRACTOR location) are the stock ledger's, which the floor posts as it does any move. The fee per piece and the order's amount are costs (@grain cost). No W2a step needs the floor or a portal or link session here (a workshop portal is W2b): they read nothing. Nobody deletes an order (it is cancelled); the office deletes the operations of a DRAFT order and the kit lines still PLANNED (the …_supply_w2a_guards triggers hold the states for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/subcontract.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office writes subcontract orders with their operations and kit lines through apps/factory-api's modules/purchasing/subcontracting (B-W2a-25), always through command(); the kit's stock moves (TRANSFER into the workshop's SUBCONTRACTOR location) are the stock ledger's, which the floor posts as it does any move. The fee per piece and the order's amount are costs (@grain cost). No W2a step needs the floor or a portal or link session here (a workshop portal is W2b): they read nothing. Nobody deletes an order (it is cancelled); the office deletes the operations of a DRAFT order and the kit lines still PLANNED (the …_supply_w2a_guards triggers hold the states for every login). W2b (B-W2b-01): the bundles that went out with a kit (SubcontractBundle), and the receipts with their lines (SubcontractReceipt, SubcontractReceiptLine: append-only, the …_followups_stock_w2b_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login) are office only too: the floor's kit task (B-W2a-76) writes them through the tenant's system caller. A bundle row is removed only while nothing of it came back. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "SubcontractOrder": {
       "about": "The office drafts a subcontract order for a work order, issues it to the workshop, moves it as the kit goes out and the goods come back, closes or cancels it. Office only.",
@@ -23,6 +23,30 @@
       "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
+      }
+    },
+    "SubcontractBundle": {
+      "about": "The office (and the floor's kit task, as the tenant's system caller) records each bundle of cut pieces that goes out with a kit; it removes one only while nothing of it came back (a send undone). Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "delete"] }
+      }
+    },
+    "SubcontractReceipt": {
+      "about": "The office (and the floor's kit task, as the tenant's system caller) records each visit of goods back from the workshop: when, the workshop's DDT, the material returned. Append-only: nobody changes or removes one. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
+    },
+    "SubcontractReceiptLine": {
+      "about": "The office writes a receipt's lines with it: per operation and bundle, the pieces back good, defective and scrapped, and why. Append-only: nobody changes or removes one. Office only.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
       }
     }
   }

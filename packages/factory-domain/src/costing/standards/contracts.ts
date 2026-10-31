@@ -133,11 +133,15 @@ export const freezeAnswer = output({
   standard: standardCostRecordView,
   /** The frozen standard this one ended (its last day set to the day before). */
   ended: standardCostView.nullable(),
-  /** Finished-goods receipts of the item that had no value yet, valued at this standard now, and their work orders. */
+  /**
+   * Every stock move of the finished item that had no value yet in the standard's period (production receipts, restocked
+   * returns, shipments taken from stock, counts, write-offs; and their reversals), valued at this standard now, and the
+   * receipts' work orders (their COMPLETION entries posted).
+   */
   valued: output({
     moves: z.number().int(),
     workOrders: z.array(output({ id: id(), number: z.string() })),
-    /** Receipts left unvalued, in words (a locked period, another currency). */
+    /** Moves left unvalued, in words (a locked period, another currency). */
     skipped: z.array(output({ moveId: id(), reason: z.string() })),
   }),
 })

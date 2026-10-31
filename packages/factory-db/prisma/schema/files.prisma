@@ -29,6 +29,11 @@ model StoredFile {
   recordType       String
   recordId         String         @db.Uuid
   kind             FileKind
+  /// W2b (B-W2b-01; the B-W2a-31, -44, -48 notes): what the file is evidence of, when a screen must tell it apart from the
+  /// record's other files: the supplier's DDT photographed at the dock, the proof of delivery, the CMR, the carrier's
+  /// invoice (intra-EU transport evidence), a claim's photo. Null: an ordinary file of its kind. A tag: it may be set or
+  /// corrected later (the API's command audits it); the content never changes.
+  category         FileCategory?
   /// The name it was uploaded with (path and control characters removed); the download's file name.
   originalName     String
   /// The MIME type announced at upload and confirmed by the store; one of the kind's allowed types.
@@ -110,6 +115,8 @@ model StoredFile {
   restoreDrills      RestoreDrill[]
   // W2a sourcing.prisma: the purchase order revisions whose PDF it is.
   purchaseOrderRevisions PurchaseOrderRevision[] @relation("PurchaseOrderRevisionDocument")
+  // W2b gendocs.prisma (B-W2b-01): the generated document versions it is the file of.
+  generatedDocuments     GeneratedDocument[]
 
   @@unique([tenantId, storageKey])
   // The target of the tenant-safe references from other rows (a company's logo, a document's PDF).
@@ -132,6 +139,22 @@ enum FileKind {
   CERTIFICATE
   /// A fiscal document kept ten years (invoice XML and PDF, DDT, signed quote): stored under `legal/`, immutable.
   FISCAL_ARCHIVE
+}
+
+/// What a file is evidence of (W2b, B-W2b-01). Additive.
+enum FileCategory {
+  /// The supplier's transport document as it came with the goods, photographed at the dock (a goods receipt's file).
+  DDT_PHOTO
+  /// Proof of delivery signed by the recipient (a shipment's file).
+  POD
+  /// The international consignment note (CMR) of a road transport (a shipment's file).
+  CMR
+  /// The carrier's invoice for the transport (a shipment's file): evidence of the transport and of its cost.
+  CARRIER_INVOICE
+  /// A photo of goods claimed from a supplier (a supplier claim's or a discrepancy's file).
+  CLAIM_PHOTO
+  /// Another kind of evidence, said in the file's name.
+  OTHER
 }
 
 /// Where a file is: PENDING_UPLOAD (row written, the upload not confirmed) → AVAILABLE (confirmed) or QUARANTINED (it

@@ -312,7 +312,8 @@
     "PARTLY_CUT": "Partly cut",
     "REMNANT": "Remnant",
     "CONSUMED": "Used up",
-    "SCRAPPED": "Scrapped"
+    "SCRAPPED": "Scrapped",
+    "RETURNED": "Sent back to the supplier"
   },
   "pieces": {
     "title": "Pieces by part and size",

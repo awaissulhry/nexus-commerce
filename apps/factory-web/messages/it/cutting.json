@@ -312,7 +312,8 @@
     "PARTLY_CUT": "In parte tagliata",
     "REMNANT": "Ritaglio",
     "CONSUMED": "Esaurita",
-    "SCRAPPED": "Scartata"
+    "SCRAPPED": "Scartata",
+    "RETURNED": "Resa al fornitore"
   },
   "pieces": {
     "title": "Pezzi per parte e taglia",
