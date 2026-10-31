@@ -157,7 +157,6 @@ export type RmaDialog =
   | { readonly kind: 'grade'; readonly lineIds: readonly string[]; readonly grade: string; readonly cause: string; readonly note: string }
   | { readonly kind: 'decide'; readonly lineIds: readonly string[] }
   | { readonly kind: 'replacement'; readonly note: string }
-  | { readonly kind: 'credit' }
   | { readonly kind: 'ddt'; readonly draft: DdtDraft; readonly preview: DdtPreview | null; readonly previewing: boolean }
   | { readonly kind: 'cancel'; readonly reason: string }
 

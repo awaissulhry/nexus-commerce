@@ -439,7 +439,7 @@ export const decideReturn = (api: ApiClient, rma: Versioned, lines: DecisionLine
 export const makeReplacementOrder = (api: ApiClient, rma: Versioned, body: { promiseDate?: string | null; internalNote?: string | null }, idempotencyKey: string) =>
   api.post(`/sales/returns/${seg(rma.id)}/replacement-order`, { body: { version: rma.version, ...body }, schema: z.object({ return: returnSchema, order: numbered }), idempotencyKey })
 
-// ---- the RMA's credit notes (Finance, B-W2a-61) ---------------------------------------------------------------------------
+// ---- the RMA's credit notes (Finance, B-W2a-61): read only here; they are made in Finance (`/finance/invoices?return=<id>`)
 
 const creditNotesSchema = z.object({
   creditDecidedAmount: z.number().optional(),
@@ -464,9 +464,6 @@ const creditNotesSchema = z.object({
 export type CreditNotes = z.infer<typeof creditNotesSchema>
 
 export const returnCreditNotes = (api: ApiClient, returnId: string, signal?: AbortSignal): Promise<CreditNotes> => api.get(`/invoicing/returns/${seg(returnId)}/credit-notes`, { schema: creditNotesSchema, signal })
-
-export const makeCreditNotes = (api: ApiClient, returnId: string, idempotencyKey: string) =>
-  api.post(`/invoicing/returns/${seg(returnId)}/credit-notes`, { body: {}, schema: z.object({ creditNotes: z.array(z.object({ id: z.string() }).passthrough()) }), idempotencyKey })
 
 // ---- repairs: the list and its tiles ------------------------------------------------------------------------------------
 
