@@ -1,0 +1,157 @@
+/*
+ * Quality › Holds (B-W2a-67, SCR-078) LAYOUT on top of the quality screens' classes (../_shared/quality.css): cell
+ * marks, the quarantine popover, the place dialog's preview, the hold tags on paper. Semantic tokens only; no page sets a
+ * max-width (Owner rule 2026-10-29): the page fills the shell's main area.
+ */
+.fw-hd-ellipsis,
+.fw-hd-clip {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-hd-saved {
+  color: var(--nds-success-text);
+}
+
+.fw-hd-refused,
+.fw-hd-danger {
+  color: var(--nds-danger-text);
+}
+
+.fw-hd-move {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.fw-hd-pop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  max-width: 320px;
+}
+
+.fw-hd-api {
+  font-style: italic;
+}
+
+.fw-hd-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-8);
+}
+
+.fw-hd-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+}
+
+.fw-hd-note > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.fw-hd-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-10) var(--nds-space-12);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-hd-blocks {
+  margin: 0;
+}
+
+.fw-hd-problem strong {
+  color: var(--nds-danger-text);
+}
+
+/* ---- the hold tags on paper (a new tab) ---- */
+.fw-hd-print {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-hd-print-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}
+
+.fw-hd-print-title {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  color: var(--nds-text-strong);
+}
+
+.fw-hd-tags {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-hd-tag {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-12);
+  border: 2px solid var(--nds-text-strong);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+
+.fw-hd-tag p {
+  margin: 0;
+}
+
+.fw-hd-tag-big {
+  font-size: var(--nds-font-size-xl);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--nds-text-strong);
+}
+
+.fw-hd-tag-what {
+  font-weight: 600;
+}
+
+.fw-hd-tag-codes {
+  word-break: break-all;
+}
+
+.fw-hd-tag-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+}
+
+.fw-hd-tag-warn {
+  font-weight: 600;
+  color: var(--nds-text-strong);
+}
+
+@media print {
+  .fw-topbar,
+  .h10-rail,
+  .fw-office-subheader,
+  .nds-bottombar,
+  .fw-system-banner,
+  .fw-hd-print-button {
+    display: none !important;
+  }
+
+  .fw-hd-tag {
+    break-inside: avoid;
+  }
+}

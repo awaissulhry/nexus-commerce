@@ -8,7 +8,7 @@ import { FLOOR_SYNC_DISCARD, FLOOR_SYNC_VIEW } from './permissions'
 import { CLIENT_EVENT_ID, errorRefusal, inDeviceOrder, isOwnRefusal, moduleRefusal, otherWorkerRefusal, summaryOf } from './rules'
 
 describe('what queues offline and what waits for the network', () => {
-  it('queues the scan, cut and bundle actions, each under a floor permission the floor roles may hold', () => {
+  it('queues the scan, cut, bundle and machine problem actions, each under a floor permission the floor roles may hold', () => {
     for (const kind of FLOOR_SYNC_KINDS) {
       const behaviour = offlineBehaviourOf(kind)
       expect(behaviour?.queues).toBe(true)
@@ -78,6 +78,8 @@ describe('what an event was, for the lists', () => {
   it('keeps known facts only: no money, no person', () => {
     expect(summaryOf('production.scan.report', { code: 'BN-AB-000123-7', good: 18, scrap: [{ reason: 'STAIN', quantity: 2 }], rework: [], workerId: 'x', price: 9 })).toEqual({ code: 'BN-AB-000123-7', good: 18, scrap: 2, rework: 0 })
     expect(summaryOf('production.bundles.make', { workOrderId: 'w', cells: [{ workOrderSizeId: 'c', quantities: [12] }], ticketCode: 'BN-AB-000201-3' })).toEqual({ code: 'BN-AB-000201-3', quantity: 12, workOrderId: 'w' })
+    // B-W2a-73: a machine problem names the machine's tag, never the person.
+    expect(summaryOf('plant.report', { assetNumber: 'SEW-02', symptomId: 's', down: true, unsafe: true })).toEqual({ code: 'SEW-02' })
     expect(summaryOf('production.cut.log', { code: 'HD-AB-000011-2', lines: [{ workOrderSizeId: 'c', sets: 3 }, { workOrderSizeId: 'd', sets: 2 }] })).toEqual({ code: 'HD-AB-000011-2', sets: 5 })
     expect(summaryOf('production.scan.undo', { undoesClientScanId: 'evt-00000001' })).toEqual({ target: 'evt-00000001' })
     expect(summaryOf('production.scan.report', null)).toEqual({ code: null, good: 0, scrap: 0, rework: 0 })

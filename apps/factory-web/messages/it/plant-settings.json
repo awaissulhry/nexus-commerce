@@ -1,0 +1,191 @@
+{
+  "title": "Sintomi in reparto",
+  "hint": "Le icone che gli operatori scelgono, per tipo di macchina. Un sintomo che blocca la macchina la mette subito in «non usare», finché un tecnico non la firma sicura.",
+  "table": "Sintomi",
+  "search": "Cerca codice o parole",
+  "new": "Nuovo sintomo",
+  "count": "{offered} offerti · {off} non offerti",
+  "close": "Chiudi",
+  "classFilter": {
+    "label": "Tipo di macchina",
+    "all": "Tutti i sintomi",
+    "every": "Per ogni macchina"
+  },
+  "classHint_one": "Una postazione {class} offre ora {count} sintomo: i suoi e quelli per ogni macchina.",
+  "classHint_other": "Una postazione {class} offre ora {count} sintomi: i suoi e quelli per ogni macchina.",
+  "col": {
+    "code": "Codice",
+    "icon": "Icona",
+    "it": "Italiano",
+    "en": "Inglese",
+    "for": "Per",
+    "unsafe": "Blocca la macchina",
+    "needsDetail": "Chiede parole",
+    "active": "In reparto",
+    "used": "Usato"
+  },
+  "for": {
+    "every": "Ogni macchina",
+    "class": "{class}",
+    "retired": "{class} (tipo dismesso)",
+    "unknown": "Un tipo non più in elenco"
+  },
+  "unsafe": {
+    "on": "Blocca",
+    "off": "No",
+    "label": "La segnalazione di {code} blocca la macchina",
+    "ask": "Blocca subito la macchina",
+    "askHint": "Segnalarlo mette la macchina in «non usare» finché un tecnico non la firma sicura (protezione mancante, guasto elettrico).",
+    "newTitle": "Questo sintomo bloccherà la macchina",
+    "newBody": "Ogni sua segnalazione ferma subito la macchina: la postazione non lavora su di essa finché un tecnico non la controlla e la firma sicura."
+  },
+  "detail": {
+    "on": "Sì",
+    "off": "No",
+    "label": "{code} chiede parole",
+    "ask": "Chiede qualche parola",
+    "askHint": "Un sintomo «Altro»: la segnalazione parte solo con qualche parola su cosa non va."
+  },
+  "active": {
+    "on": "Offerto",
+    "off": "Non offerto",
+    "label": "{code} è offerto in reparto"
+  },
+  "used": {
+    "count_one": "{count} segnalazione",
+    "count_other": "{count} segnalazioni",
+    "hint_one": "{count} segnalazione cita questo sintomo: si può togliere dal reparto, mai cancellare.",
+    "hint_other": "{count} segnalazioni citano questo sintomo: si può togliere dal reparto, mai cancellare.",
+    "none": "Nessuna segnalazione cita ancora questo sintomo."
+  },
+  "icon": {
+    "none": "Nessuna icona",
+    "other": "Un'icona che questa versione non disegna",
+    "power": "Accensione",
+    "volume": "Rumore",
+    "droplet": "Goccia",
+    "shield-off": "Protezione tolta",
+    "scissors": "Forbici",
+    "needle": "Ago",
+    "hand": "Mano",
+    "zap": "Fulmine",
+    "stamp": "Pressa",
+    "flame": "Fiamma",
+    "layers": "Strati",
+    "wind": "Aria",
+    "printer": "Stampante",
+    "activity": "Vibrazione"
+  },
+  "iconDialog": {
+    "change": "Icona di {code}: {icon}",
+    "title": "Icona · {code}",
+    "label": "Icona",
+    "hint": "Compare sulla piastrella della postazione prima delle parole.",
+    "done": "Fatto"
+  },
+  "mark": {
+    "saving": "Salvataggio…",
+    "saved": "Salvato"
+  },
+  "state": {
+    "forbiddenTitle": "Non puoi vedere i sintomi",
+    "errorTitle": "Impossibile caricare i sintomi",
+    "retry": "Riprova",
+    "emptyTitle": "Ancora nessun sintomo",
+    "emptyBody": "Aggiungi il set iniziale e adattalo alle tue parole, oppure aggiungi il primo sintomo.",
+    "emptyBodyView": "Nessuno ha ancora aggiunto un sintomo: le postazioni possono descrivere un problema solo a parole.",
+    "first": "Aggiungi il primo sintomo",
+    "noMatch": "Nessun sintomo corrisponde",
+    "clear": "Mostra tutti i sintomi"
+  },
+  "starter": {
+    "add_one": "Aggiungi {count} dal set iniziale",
+    "add_other": "Aggiungi {count} dal set iniziale"
+  },
+  "changed": {
+    "title": "Modificato da un'altra persona",
+    "body": "Un'altra persona ha cambiato i sintomi o i tipi di macchina da quando li hai aperti.",
+    "reload": "Ricarica"
+  },
+  "readOnly": {
+    "title": "Puoi vedere, non modificare",
+    "body": "I sintomi sono di tutto il gruppo: tenerli richiede il diritto di gestire le macchine su ogni società."
+  },
+  "held": {
+    "busy": "Attendi: l'ultima modifica è ancora in salvataggio",
+    "noCode": "Prima dagli un codice",
+    "badCode": "Un codice ha da 2 a 40 lettere maiuscole, cifre e trattini bassi, e inizia con una lettera",
+    "codeTaken": "Il gruppo ha già questo codice",
+    "noWords": "Indica il sintomo in italiano e in inglese",
+    "allOffered": "Ogni sintomo scelto è già offerto",
+    "noneOffered": "Ogni sintomo scelto è già fuori dal reparto",
+    "narrowed": "Mostra tutti i sintomi, senza ricerca, per spostarli: l'ordine è di tutto l'elenco",
+    "atTop": "Già in cima",
+    "atBottom": "Già in fondo",
+    "noManage": "Tenere i sintomi richiede il diritto di gestire le macchine su ogni società",
+    "loading": "L'elenco si sta ancora caricando"
+  },
+  "bulk": {
+    "off_one": "Togli {count} dal reparto",
+    "off_other": "Togli {count} dal reparto",
+    "on_one": "Offri di nuovo {count}",
+    "on_other": "Offri di nuovo {count}",
+    "up": "Sposta su",
+    "down": "Sposta giù"
+  },
+  "keys": {
+    "new": "Nuovo sintomo",
+    "edit": "Modifica le parole, l'interruttore o apri l'icona",
+    "cancel": "Esci dalla cella senza salvare",
+    "title": "Tasti dell'elenco sintomi"
+  },
+  "newDialog": {
+    "title": "Nuovo sintomo",
+    "back": "Indietro",
+    "add": "Aggiungi sintomo",
+    "intro": "Il codice e il tipo di macchina non cambiano più dopo l'aggiunta (le segnalazioni li conservano). Le parole sono ciò che gli operatori leggono, ognuno nella propria lingua.",
+    "codeHint": "Lettere maiuscole, cifre e trattini bassi: CINGHIA_SLITTA.",
+    "forHint": "Le postazioni di un tipo offrono i suoi sintomi e quelli per ogni macchina."
+  },
+  "unsafeOff": {
+    "title": "Smettere di bloccare la macchina per «{symptom}»?",
+    "body": "Una segnalazione di {code} non metterà più subito la macchina in «non usare»: arriva solo alla manutenzione e la macchina resta com'è.",
+    "still": "Chiunque in postazione può ancora segnare una macchina come non sicura nella segnalazione stessa; solo un tecnico la firma di nuovo sicura.",
+    "keep": "Continua a bloccare",
+    "stop": "Smetti di bloccare"
+  },
+  "problem": {
+    "tooLong": "Al massimo 80 caratteri",
+    "labelIt": "Indica il sintomo in italiano: le parole italiane non sono mai vuote",
+    "labelEn": "Indica il sintomo in inglese: le parole inglesi non sono mai vuote",
+    "codeTaken": "Il gruppo ha già questo codice",
+    "codeTakenRetired": "Il gruppo ha già questo codice, tolto dal reparto: offrilo di nuovo invece di aggiungerlo",
+    "tooMany": "Il gruppo ha il massimo dei sintomi che può tenere: prima togline alcuni dal reparto",
+    "stale": "Qualcuno ha cambiato questo sintomo da quando l'hai letto: ricarica l'elenco e riprova",
+    "code": "Un codice ha da 2 a 40 lettere maiuscole, cifre e trattini bassi, e inizia con una lettera",
+    "icon": "Scegli una delle icone offerte",
+    "classId": "Questo tipo di macchina è dismesso o sconosciuto: scegline un altro",
+    "invalid": "La modifica è stata rifiutata così com'è",
+    "forbidden": "Non puoi modificare i sintomi",
+    "gone": "Questo sintomo non è più nell'elenco: ricaricalo",
+    "signedOut": "Sei uscito: accedi di nuovo",
+    "offline": "Nexus Factory non è raggiungibile: torna il valore di prima; riprova quando la connessione torna",
+    "failed": "Qualcosa è andato storto: riprova",
+    "read": "Nexus Factory non ha risposto: riprova",
+    "readForbidden": "Vedere i sintomi richiede il diritto di vedere lo stabilimento."
+  },
+  "done": {
+    "on_one": "{count} sintomo di nuovo offerto: {codes}",
+    "on_other": "{count} sintomi di nuovo offerti: {codes}",
+    "off_one": "{count} sintomo tolto dal reparto: {codes}. Le segnalazioni conservano il codice.",
+    "off_other": "{count} sintomi tolti dal reparto: {codes}. Le segnalazioni conservano i codici.",
+    "partly_one": "{count} di {of} cambiato, poi uno è stato rifiutato: l'elenco è stato riletto.",
+    "partly_other": "{count} di {of} cambiati, poi uno è stato rifiutato: l'elenco è stato riletto.",
+    "starter": "Dal set iniziale: aggiunti {symptoms} sintomi e {classes} tipi di macchina.",
+    "created": "{code} aggiunto in fondo all'elenco."
+  },
+  "noAccess": {
+    "title": "Non puoi vedere le impostazioni dello stabilimento",
+    "body": "Le impostazioni dello stabilimento richiedono il diritto di vedere lo stabilimento (plant.view)."
+  }
+}

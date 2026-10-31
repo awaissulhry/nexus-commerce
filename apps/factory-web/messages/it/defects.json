@@ -1,0 +1,449 @@
+{
+  "approval": {
+    "amount": "merce oltre la regola di valore",
+    "none": "Mai",
+    "noneSeen": "Non per classe (può valere una regola di valore: serve l'accesso ai costi)",
+    "severity": {
+      "CRITICAL": "NC critiche",
+      "MAJOR": "NC maggiori o critiche",
+      "MINOR": "Ogni NC",
+      "none": "Nessuna regola per classe"
+    }
+  },
+  "bulk": {
+    "activate_one": "Rendi attivo {count}",
+    "activate_other": "Rendi attivi {count}",
+    "deactivate_one": "Rendi inattivo {count}",
+    "deactivate_other": "Rendi inattivi {count}",
+    "export_one": "Esporta {count}",
+    "export_other": "Esporta {count}",
+    "restore_one": "Ripristina {count}",
+    "restore_other": "Ripristina {count}",
+    "retire_one": "Ritira {count}",
+    "retire_other": "Ritira {count}"
+  },
+  "col": {
+    "actions": "Azioni",
+    "approval": "Richiede approvazione",
+    "code": "Codice",
+    "en": "Inglese",
+    "it": "Italiano",
+    "outcome": "Decide",
+    "picture": "Immagine",
+    "reinspection": "Ricontrollo",
+    "severity": "Classe predefinita",
+    "severityOf": "Classe predefinita di {code}",
+    "stages": "Vale in",
+    "status": "Stato",
+    "stockAction": "Azione sul magazzino",
+    "used": "Usato",
+    "zone": "Zona del capo"
+  },
+  "common": {
+    "cancel": "Annulla",
+    "dismiss": "Chiudi",
+    "loading": "Lettura…",
+    "retry": "Riprova"
+  },
+  "csv": {
+    "category": "Categoria",
+    "code": "Codice",
+    "en": "Inglese",
+    "it": "Italiano",
+    "needsDetail": "Chiede una nota",
+    "no": "no",
+    "outcome": "Decide",
+    "reinspection": "Ricontrollo",
+    "severity": "Classe predefinita",
+    "stages": "Vale in",
+    "status": "Stato",
+    "stockAction": "Azione sul magazzino",
+    "used": "Usato",
+    "yes": "sì",
+    "zone": "Zona del capo"
+  },
+  "delete": {
+    "body": "{code} ({words}) non è usato su nessuna ispezione o NC. L'eliminazione non si annulla; il ritiro lo conserva.",
+    "confirm": "Elimina",
+    "title": "Eliminare {code}?"
+  },
+  "detail": {
+    "off": "Non chiede altro",
+    "on": "Chiede una nota o una foto"
+  },
+  "dialog": {
+    "saveKey": "aggiunge"
+  },
+  "disp": {
+    "amountFrom": "o da",
+    "amountHidden": "Regola per importo nascosta: serve l'accesso ai costi.",
+    "amountIs": "o merce di valore {amount} o più",
+    "amountOf": "Approvazione da questo valore della merce per {code}",
+    "approvalSeverityOf": "Regola di approvazione per classe di {code}",
+    "count_one": "{count} codice",
+    "count_other": "{count} codici",
+    "empty": {
+      "body_one": "Aggiungi il {count} codice standard (usa così com'è, rilavora, ripara, declassa, rendi al fornitore, quarantena, scarta) o i tuoi.",
+      "body_other": "Aggiungi i {count} codici standard (usa così com'è, rilavora, ripara, declassa, rendi al fornitore, quarantena, scarta) o i tuoi.",
+      "title": "Nessun codice di destinazione ancora"
+    },
+    "failed": "Non è stato possibile leggere i codici di destinazione",
+    "fixed": "Non cambia mai",
+    "footnote": "Un codice usato mantiene ciò che decide: per cambiare esito, movimento o seguito, rendilo inattivo e aggiungi un nuovo codice.",
+    "reinspectHeld": "La merce usata così com'è non viene ricontrollata.",
+    "reinspectOf": "{code}: ricontrollo prima del rilascio",
+    "table": "Codici di destinazione e azione sul magazzino di ciascuno",
+    "title": "Codici di destinazione"
+  },
+  "done": {
+    "activated_one": "{count} codice reso attivo.",
+    "activated_other": "{count} codici resi attivi.",
+    "added": "{code} aggiunto: dagli un'immagine e una zona qui.",
+    "addedCategory": "Categoria {code} aggiunta: aggiungi i suoi difetti.",
+    "addedDisposition": "Destinazione {code} aggiunta.",
+    "deactivated_one": "{count} codice reso inattivo: resta sulle sue decisioni.",
+    "deactivated_other": "{count} codici resi inattivi: restano sulle loro decisioni.",
+    "deleted": "{code} eliminato.",
+    "restored_one": "{count} codice ripristinato: di nuovo negli elenchi di scelta.",
+    "restored_other": "{count} codici ripristinati: di nuovo negli elenchi di scelta.",
+    "retired_one": "{count} codice ritirato: resta sui suoi documenti ed è uscito dagli elenchi di scelta.",
+    "retired_other": "{count} codici ritirati: restano sui loro documenti e sono usciti dagli elenchi di scelta.",
+    "standard_one": "{count} codice standard aggiunto.",
+    "standard_other": "{count} codici standard aggiunti.",
+    "starter_one": "{count} codice del set iniziale aggiunto.",
+    "starter_other": "{count} codici del set iniziale aggiunti."
+  },
+  "drawer": {
+    "categorySub_one": "Una categoria di {count} difetto",
+    "categorySub_other": "Una categoria di {count} difetti",
+    "close": "Chiudi",
+    "defectSub": "Un difetto di {category}",
+    "detail": "Chiede una nota o una foto",
+    "detailHint": "Per \"Altro\" e codici generici: l'ispettore aggiunge dettagli.",
+    "detailOf": "{code} chiede una nota o una foto",
+    "first": "Questo è il primo codice dell'elenco.",
+    "last": "Questo è l'ultimo codice dell'elenco.",
+    "look": "Icona e colore",
+    "lookHint": "Il riquadro in reparto: l'icona porta il significato, il colore distingue i riquadri.",
+    "missing": "Questo codice non è nella libreria (eliminato, o un indirizzo di un'altra società).",
+    "missingTitle": "Codice non trovato",
+    "next": "Codice successivo",
+    "order": "Ordine",
+    "orderHint": "I numeri più bassi vengono prima negli elenchi di scelta.",
+    "orderLabel": "Posizione",
+    "picture": "Immagine di esempio",
+    "pictureHint": "Come appare il difetto, mostrata accanto al codice quando un ispettore lo sceglie.",
+    "previous": "Codice precedente",
+    "severity": "Classe predefinita",
+    "severityHint": "La classe da cui parte un ispettore; critico vuol dire un difetto di sicurezza o conformità, mai accettato.",
+    "stages": "Fasi in cui vale",
+    "stagesEvery": "Nessuna scelta: vale in ogni fase.",
+    "stagesSome": "Viene proposto solo nelle fasi scelte.",
+    "words": "Nomi",
+    "wordsHint": "Salvati quando lasci un campo. Le altre lingue di reparto appaiono qui quando hanno parole.",
+    "zone": "Dove sul capo",
+    "zoneHint": "La zona dove si trova di solito (la mappa di calore conta per zona).",
+    "zoneOf": "Dove sul capo si trova {code}"
+  },
+  "followUp": {
+    "REPAIR_ORDER": "apre una riparazione",
+    "REWORK_ORDER": "apre un ordine di rilavorazione",
+    "SUPPLIER_CLAIM": "apre un reclamo al fornitore",
+    "none": "Non apre altro"
+  },
+  "head": {
+    "addDefect": "Aggiungi difetto",
+    "addDisposition": "Aggiungi destinazione",
+    "export": "Esporta questa scheda (CSV)",
+    "import": "Importa libreria",
+    "importHeld": "Arriva più avanti (W2b): non c'è ancora un import della libreria.",
+    "introDefects": "I codici difetto che gli ispettori scelgono in reparto e in ufficio: due livelli con immagini, una classe predefinita, dove sul capo e quando valgono.",
+    "introDispositions": "Cosa fa una decisione su una non conformità: ogni codice dice quale movimento di magazzino registra e quale documento apre.",
+    "more": "Altre azioni"
+  },
+  "held": {
+    "allActive": "Tutti i codici spuntati sono già attivi.",
+    "allActiveDisp": "Tutti i codici spuntati sono già attivi.",
+    "allInactive": "Tutti i codici spuntati sono già inattivi.",
+    "allRetired": "Tutti i codici spuntati sono già ritirati.",
+    "busy": "Attendi: l'ultima modifica è ancora in salvataggio.",
+    "categoryHasDefects_one": "Questa categoria ha {count} difetto: eliminalo prima, oppure ritira la categoria.",
+    "categoryHasDefects_other": "Questa categoria ha {count} difetti: eliminali prima, oppure ritira la categoria.",
+    "categoryRetired": "Questa categoria è ritirata: ripristinala prima, altrimenti i nuovi difetti non arriverebbero agli elenchi di scelta.",
+    "noManage": "Per modificare la libreria serve quality.defects.manage su tutte le società: i codici sono di tutto il gruppo.",
+    "noUpload": "Per caricare un'immagine serve il permesso files.upload.",
+    "pickRows": "Prima spunta i codici.",
+    "reading": "Attendi: la pagina sta ancora leggendo.",
+    "used_one": "Usato su {count} documento: ritiralo invece (resta su di esso).",
+    "used_other": "Usato su {count} documenti: ritiralo invece (resta su di essi)."
+  },
+  "keys": {
+    "add": "Aggiungi difetto",
+    "addDisposition": "Aggiungi destinazione",
+    "next": "Codice successivo (nel pannello)",
+    "open": "Apri il codice nel suo pannello",
+    "previous": "Codice precedente (nel pannello)",
+    "save": "Aggiungi, in una finestra",
+    "title": "Scorciatoie da tastiera"
+  },
+  "library": {
+    "clear": "Mostra tutti i codici",
+    "countReading": "Lettura…",
+    "count_one": "{count} difetto in {categories} categorie",
+    "count_other": "{count} difetti in {categories} categorie",
+    "empty": {
+      "body_one": "Parti dal set iniziale per l'abbigliamento in pelle ({count} codice) o aggiungi il primo difetto.",
+      "body_other": "Parti dal set iniziale per l'abbigliamento in pelle ({count} codici) o aggiungi il primo difetto.",
+      "title": "Nessun codice difetto ancora"
+    },
+    "failed": "Non è stato possibile leggere la libreria",
+    "none": "Nessun codice corrisponde a questa ricerca o vista.",
+    "rows": "Righe: {view}",
+    "rowsHeading": "Mostra",
+    "search": "Cerca codice o parole",
+    "table": "Libreria difetti: categorie e loro difetti",
+    "title": "Libreria difetti",
+    "view": {
+      "active": "Codici attivi",
+      "all": "Tutti i codici",
+      "retired": "Codici ritirati"
+    }
+  },
+  "move": {
+    "ADJUSTMENT": "Registra una rettifica in uscita (la merce torna al fornitore)",
+    "ISSUE": "Registra un prelievo per l'ordine di lavoro che la usa",
+    "SCRAP": "Registra uno scarto dal magazzino",
+    "TRANSFER": "Registra un trasferimento in un altro luogo del sito",
+    "none": "Nessun movimento di magazzino"
+  },
+  "new": {
+    "category": "Categoria",
+    "code": "Codice",
+    "codeHint": "Da 2 a 40 lettere maiuscole, cifre, trattini e trattini bassi, iniziando con una lettera (SEAM-OPEN). Non cambia mai.",
+    "codeHintCategory": "Da 2 a 40 lettere maiuscole, cifre, trattini e trattini bassi, iniziando con una lettera (SEAM). Non cambia mai.",
+    "create": "Aggiungi difetto",
+    "createCategory": "Aggiungi categoria",
+    "kind": "Cosa aggiungere",
+    "kindCategory": "Una nuova categoria",
+    "kindCategoryHint": "Un gruppo di difetti (cuciture, pelle, etichette…); non ha una classe propria.",
+    "kindDefect": "Un difetto",
+    "kindDefectHint": "In una categoria, con una classe predefinita.",
+    "noCategory": "Nessuna categoria attiva: aggiungi prima una categoria.",
+    "pickCategory": "Scegli una categoria",
+    "title": "Aggiungi difetto",
+    "titleCategory": "Aggiungi categoria",
+    "zone": "Dove sul capo si trova il nuovo difetto"
+  },
+  "newDisp": {
+    "amountHint": "Nella valuta della società (120,50); vuoto: nessuna regola di valore. Un valore sconosciuto chiede approvazione.",
+    "approvalAmount": "Approvazione da un valore",
+    "approvalHint": "Una decisione con questo codice su una NC di questa classe o peggiore attende l'approvazione di un'altra persona.",
+    "approvalSeverity": "Approvazione per classe",
+    "codeHint": "Da 2 a 40 lettere maiuscole, cifre e trattini bassi, iniziando con una lettera (SCRAP_HIDE). Non cambia mai.",
+    "create": "Aggiungi destinazione",
+    "fixed": "Cosa decide, il suo movimento e il suo seguito non cambiano più dopo il salvataggio: le decisioni li conservano.",
+    "followUp": "Documento che apre",
+    "move": "Movimento di magazzino",
+    "onlyOne": "L'unico che questo esito consente.",
+    "outcome": "Cosa decide",
+    "title": "Aggiungi destinazione"
+  },
+  "noAccess": {
+    "body": "Serve il permesso quality.defects.view. Lo assegna un amministratore con un ruolo (Ispettore qualità, Responsabile produzione, Capo reparto).",
+    "title": "Non puoi aprire Difetti e destinazioni"
+  },
+  "outcome": {
+    "QUARANTINE": "Quarantena",
+    "REGRADE": "Declassa",
+    "REPAIR": "Ripara",
+    "RETURN_TO_SUPPLIER": "Rendi al fornitore",
+    "REWORK": "Rilavora",
+    "SCRAP": "Scarta",
+    "USE_AS_IS": "Usa così com'è"
+  },
+  "outcomeHint": {
+    "QUARANTINE": "Spostata in un luogo di quarantena del sito.",
+    "REGRADE": "Spostata in un luogo di seconda scelta.",
+    "REPAIR": "Una riparazione, poi ricontrollo.",
+    "RETURN_TO_SUPPLIER": "Un reclamo al fornitore e la merce esce dal magazzino.",
+    "REWORK": "Un ordine di rilavorazione, poi ricontrollo.",
+    "SCRAP": "Scartata dal magazzino.",
+    "USE_AS_IS": "Accettata così: nessun movimento, nient'altro si apre (solo minori)."
+  },
+  "photo": {
+    "label": "Foto del difetto {code}",
+    "title": "Foto di {code}"
+  },
+  "picture": {
+    "alt": "Esempio di {code}",
+    "failed": "Non è stato possibile caricare l'immagine: riprova.",
+    "has": "Ha un'immagine",
+    "none": "Nessuna immagine",
+    "noneYet": "Nessuna immagine ancora: il reparto sceglie dall'icona e dalle parole.",
+    "nothingToRemove": "Non ha un'immagine.",
+    "reading": "Lettura dell'immagine…",
+    "remove": "Togli l'immagine",
+    "replace": "Sostituisci l'immagine",
+    "take": "Scatta una foto",
+    "upload": "Carica un'immagine",
+    "uploading": "Caricamento dell'immagine…",
+    "wrongType": "Scegli un'immagine JPEG, PNG o WebP."
+  },
+  "problem": {
+    "amount": "Scrivi un importo come 120 o 120,50 (vuoto: nessuna regola di valore).",
+    "approvalAmount": "Il valore è un importo da 0 nella valuta della società.",
+    "approvalSeverity": "Scegli una classe, o nessuna regola per classe.",
+    "categoryDetail": "Solo un difetto chiede una nota.",
+    "categoryHasDefects": "Questa categoria ha difetti: eliminali prima, oppure ritirala.",
+    "categorySeverity": "Una categoria non ha classe: ogni suo difetto ha la sua.",
+    "categoryZone": "Una categoria non ha zona: ogni suo difetto ha la sua.",
+    "code": "Un codice è fatto di 2-40 lettere maiuscole, cifre, trattini e trattini bassi, e inizia con una lettera.",
+    "codeTaken": "Questo codice è già usato: scegline un altro.",
+    "codeTakenRetired": "Un codice ritirato ha questo codice: ripristinalo invece, o scegline un altro.",
+    "colour": "Scegli uno dei colori proposti.",
+    "conflict": "Questo è in conflitto con quanto salvato: rileggi la pagina.",
+    "failed": "Qualcosa non ha funzionato: riprova.",
+    "followUp": "Questo esito non apre quel documento.",
+    "forbidden": "Non puoi modificare la libreria (quality.defects.manage su tutte le società).",
+    "gone": "Questo codice non è più nella libreria.",
+    "icon": "Scegli una delle icone proposte.",
+    "inUse": "Questo codice è usato: ritiralo invece (resta sui suoi documenti).",
+    "invalid": "La modifica è stata rifiutata così com'è.",
+    "labelEn": "Inserisci le parole in inglese.",
+    "labelIt": "Inserisci le parole in italiano.",
+    "language": "Quelle parole non sono valide per quella lingua.",
+    "libraryFull": "La libreria contiene al massimo 500 codici: ritirane o eliminane prima qualcuno.",
+    "needsDetail": "Solo un difetto chiede una nota.",
+    "noCost": "La regola di valore richiede l'accesso ai costi.",
+    "offline": "Nessuna risposta dal server: non sappiamo se è stato salvato. Riprova.",
+    "outcome": "Scegli cosa decide il codice.",
+    "parentId": "Metti il difetto in una categoria della libreria.",
+    "picture": "L'immagine non è pronta: caricala di nuovo.",
+    "pictureFileId": "L'immagine non è pronta: caricala di nuovo.",
+    "read": "Il server non ha risposto come previsto.",
+    "readForbidden": "Non puoi leggerlo (quality.defects.view).",
+    "reinspectUseAsIs": "La merce usata così com'è non viene ricontrollata.",
+    "reinspection": "La merce usata così com'è non viene ricontrollata.",
+    "severity": "Scegli la classe predefinita: critico, maggiore o minore.",
+    "signedOut": "Non hai più una sessione: accedi di nuovo.",
+    "sortOrder": "La posizione è un numero intero da 0.",
+    "stages": "Scegli fasi della fabbrica.",
+    "stale": "Qualcuno ha modificato questo codice nel frattempo: è stato riletto; rifai la modifica.",
+    "stockMoveReason": "Questo esito non consente quel movimento.",
+    "tooLong": "Al massimo 80 caratteri.",
+    "zone": "Scegli una zona della mappa del capo."
+  },
+  "readOnly": {
+    "title": "Puoi leggere la libreria, non modificarla"
+  },
+  "reinspection": {
+    "off": "No",
+    "on": "Sì",
+    "yes": "ricontrollo prima del rilascio"
+  },
+  "retire": {
+    "category_one": "Categoria {code}: il suo {count} difetto esce con essa dagli elenchi di scelta.",
+    "category_other": "Categoria {code}: i suoi {count} difetti escono con essa dagli elenchi di scelta.",
+    "confirm_one": "Ritira {count}",
+    "confirm_other": "Ritira {count}",
+    "restore": "Un codice ritirato si può ripristinare in qualsiasi momento.",
+    "title_one": "Ritirare {count} codice?",
+    "title_other": "Ritirare {count} codici?",
+    "unused": "{code} non è ancora usato: esce dagli elenchi di scelta (si potrebbe anche eliminare).",
+    "used_one": "{code} è usato su {count} ispezione o NC; resta su di essa ed esce dagli elenchi di scelta.",
+    "used_other": "{code} è usato su {count} ispezioni o NC; resta su di esse ed esce dagli elenchi di scelta."
+  },
+  "row": {
+    "activate": "Rendi attivo",
+    "addUnder": "Aggiungi un difetto a questa categoria",
+    "categoryOf_one": "Categoria · {count} difetto",
+    "categoryOf_other": "Categoria · {count} difetti",
+    "copyCode": "Copia codice",
+    "deactivate": "Rendi inattivo",
+    "delete": "Elimina",
+    "lookWords": "Riquadro: {look}",
+    "menu": "Azioni per {code}",
+    "open": "Apri",
+    "openNamed": "Apri {code}",
+    "restore": "Ripristina",
+    "retire": "Ritira"
+  },
+  "severity": {
+    "CRITICAL": "Critico",
+    "MAJOR": "Maggiore",
+    "MINOR": "Minore",
+    "category": "Per difetto",
+    "none": "Nessuna classe",
+    "pick": "Scegli una classe"
+  },
+  "stage": {
+    "AUDIT": "Audit",
+    "CUSTOMER": "Cliente",
+    "CUTTING": "Taglio",
+    "FINAL": "Finale",
+    "INCOMING": "Accettazione",
+    "IN_LINE": "In linea",
+    "PACKING": "Imballo",
+    "STOCK": "Magazzino"
+  },
+  "stages": {
+    "every": "Ogni fase"
+  },
+  "standard": {
+    "add_one": "Aggiungi il {count} codice standard",
+    "add_other": "Aggiungi i {count} codici standard",
+    "body": "Usa così com'è, rilavora, ripara, declassa, rendi al fornitore, quarantena e scarta, ognuno con la sua azione sul magazzino. Si aggiunge solo ciò che manca.",
+    "title_one": "Aggiungi i codici di destinazione standard: ne manca {count}",
+    "title_other": "Aggiungi i codici di destinazione standard: ne mancano {count}"
+  },
+  "starter": {
+    "add": "Aggiungi il set iniziale",
+    "body": "Cucitura aperta, punto saltato, arricciatura, differenza di tonalità, cicatrice o marchio sulla pelle, fiore crepato, fiore staccato, colore che stinge, cerniera storta, tasca protezione mancante, etichetta sbagliata o mancante, macchia, fori d'ago. Si aggiunge solo ciò che la libreria non ha.",
+    "title_one": "Parti dal set iniziale per l'abbigliamento in pelle: manca {count} codice",
+    "title_other": "Parti dal set iniziale per l'abbigliamento in pelle: mancano {count} codici"
+  },
+  "status": {
+    "activateOf": "Rendi {code} attivo",
+    "active": "Attivo",
+    "deactivateOf": "Rendi {code} inattivo",
+    "inactive": "Inattivo",
+    "restoreOf": "Ripristina {code}",
+    "retireOf": "Ritira {code}",
+    "retired": "Ritirato"
+  },
+  "tab": {
+    "causes": "Cause",
+    "defects": "Difetti",
+    "dispositions": "Destinazioni",
+    "grades": "Scelte della pelle",
+    "label": "Sezioni di Difetti e destinazioni",
+    "later": "Più avanti",
+    "severity": "Gravità"
+  },
+  "used": {
+    "count_one": "Usato su {count}",
+    "count_other": "Usato su {count}",
+    "decisions_one": "{count} decisione",
+    "decisions_other": "{count} decisioni",
+    "none": "Non usato"
+  },
+  "zone": {
+    "category": "Per difetto",
+    "none": "Nessuna zona"
+  },
+  "zoneMap": {
+    "clear": "Togli la zona",
+    "elsewhere": "Non nel disegno:",
+    "figure": {
+      "back": "Giacca, dietro",
+      "front": "Giacca, davanti",
+      "trousers": "Pantaloni, davanti"
+    },
+    "hint": "Tocca una zona; da tastiera le frecce passano da una zona all'altra e Invio sceglie. Sinistra e destra sono di chi indossa.",
+    "list": "Oppure scegli dall'elenco",
+    "none": "Nessuna zona",
+    "nonePicked": "Nessuna zona scelta",
+    "nothingToClear": "Nessuna zona è scelta.",
+    "picked": "Zona: {zone}"
+  }
+}

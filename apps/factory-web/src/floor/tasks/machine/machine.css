@@ -1,0 +1,83 @@
+/*
+ * SCR-179 — the machine problem and the technician's job: layout only, inside the DS FloorFrame. Sizes read the floor
+ * tier's `--nds-density-*` tokens, colours are semantic `--nds-*` roles. No raw colour. The one-job screen stays centred
+ * on the tablet (the frame's own column).
+ */
+
+.fw-mc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-density-gap);
+  min-width: 0;
+}
+
+/* ── "It is unsafe: lock it" and the photo (held), side by side on a tablet, stacked on a phone ─────────────────────── */
+.fw-mc-toggles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16em), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+
+/* ── the two ticks under a sent report ─────────────────────────────────────────────────────────────────────────────── */
+.fw-mc-ticks {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+}
+
+/* ── the unsafe requests behind a job, each with its Sign safe ─────────────────────────────────────────────────────── */
+.fw-mc-locks {
+  padding: var(--nds-space-12) var(--nds-density-pad-x);
+  border: 1px solid var(--nds-border);
+  border-inline-start: 6px solid var(--nds-danger);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}
+.fw-mc-lock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-10) var(--nds-density-gap);
+}
+.fw-mc-lock-text {
+  display: inline-flex;
+  flex: 1 1 18em;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  font-size: var(--nds-density-font-body);
+  overflow-wrap: anywhere;
+}
+
+/* ── the machine's state after a hand-back or a sign-safe: one big choice each ─────────────────────────────────────── */
+.fw-mc-after {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12em), 1fr));
+  gap: var(--nds-density-target-gap);
+}
+
+/* ── the machine's last jobs on the job's card ─────────────────────────────────────────────────────────────────────── */
+.fw-mc-last {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-density-font-label);
+}
+.fw-mc-last > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding-block: var(--nds-space-6);
+  border-block-end: 1px solid var(--nds-border);
+  overflow-wrap: anywhere;
+}
+.fw-mc-last > li:last-child {
+  border-block-end: 0;
+}
+.fw-mc-last-problem {
+  color: var(--nds-text-muted);
+}

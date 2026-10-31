@@ -1,7 +1,7 @@
 'use client'
 
-import { Download, FileCheck2, FileText, Link2, Lock, Paperclip, Printer, Send } from 'lucide-react'
-import { Banner, Card, EmptyState, KeyValue, SummaryTable } from '@nexus/ui/components'
+import { Download, FileCheck2, FileStack, FileText, Link2, Lock, Paperclip, Printer, Send } from 'lucide-react'
+import { Banner, Card, EmptyState, FileRow, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
 import { Button, Pill, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
@@ -19,7 +19,8 @@ import { PartState } from './ShipmentRecordView'
  * mistake is fixed only by annulling it (its number stays, "Annulled", with the reason) and issuing a new one; then the
  * Declaration of Conformity and the user information each style travels with, in the order's language (a fallback says
  * so), the copies attached for the customer, and the customer's document link (send, resend; its state and opens). The
- * packing list travels in the parcels only.
+ * packing list travels in the parcels only. B-W2a-71: Other documents (design sh-docs-other: the packing list's versions,
+ * each with its number, version and when it was made) and "Print all" — the driver's pack in a new tab.
  */
 export function DocumentsTab({ shipment, model, actions }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions }) {
   const t = useT('shipments')
@@ -32,6 +33,7 @@ export function DocumentsTab({ shipment, model, actions }: { shipment: Shipment;
         <DdtCard shipment={shipment} model={model} actions={actions} live={!!live} />
         <div className="fw-sh-stack">
           <TravelCard shipment={shipment} model={model} actions={actions} />
+          <OtherDocumentsCard shipment={shipment} model={model} actions={actions} />
           <LinkCard shipment={shipment} model={model} actions={actions} />
         </div>
       </div>
@@ -342,3 +344,52 @@ function LinkCard({ shipment, model, actions }: { shipment: Shipment; model: Shi
 }
 
 const hasLeftOrPacked = (shipment: Shipment): boolean => shipment.status !== 'DRAFT'
+
+/** Design sh-docs-other: every packing list printed for the shipment (kind · number · version · created), newest first. */
+function OtherDocumentsCard({ shipment, model, actions }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions }) {
+  const t = useT('shipments')
+  const locale = useLocale()
+  const versions = model.packingLists.value
+  const packHref = `${model.prefix}/warehouse/shipments/${shipment.id}/pack`
+  return (
+    <Card padded>
+      <div className="fw-sh-card-head">
+        <h2 className="fw-sh-h2">
+          <FileStack size={16} aria-hidden /> {t('other.title')}
+        </h2>
+        {shipment.status !== 'CANCELLED' && (
+          <Button size="sm" asChild>
+            <a href={packHref} target="_blank" rel="noopener">
+              <Printer size={14} aria-hidden /> {t('other.printAll')}
+            </a>
+          </Button>
+        )}
+      </div>
+      {!versions ? (
+        <PartState problem={model.packingLists.problem} onRetry={() => actions?.onRetryPart?.('packingLists')} label={t('other.title')} />
+      ) : versions.length === 0 ? (
+        <p className="fw-sh-hint">{shipment.status === 'CANCELLED' ? t('other.noneCancelled') : t('other.none')}</p>
+      ) : (
+        <ul className="fw-sh-papers" aria-label={t('other.title')}>
+          {versions.map((entry) => (
+            <li key={entry.fileId} className="fw-sh-paper">
+              <FileRow
+                name={t('other.name', { number: entry.number })}
+                status={[t('other.version', { version: entry.version }), languageName(entry.language, locale), t('other.contents', { parcels: entry.parcels, count: entry.garments }), formatDateTime(entry.createdAt, { locale })].join(' · ')}
+              />
+              <span className="fw-sh-inline">
+                {entry.current ? <Tag tone="success">{t('other.current')}</Tag> : <Tag tone="neutral">{t('other.older')}</Tag>}
+                {model.can.readFiles && (
+                  <Button size="sm" variant="quiet" onClick={() => actions?.onOpenFile?.(entry.fileId)} aria-label={t('other.download', { number: entry.number })}>
+                    <Download size={14} aria-hidden />
+                  </Button>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="fw-sh-hint">{t('other.note')}</p>
+    </Card>
+  )
+}

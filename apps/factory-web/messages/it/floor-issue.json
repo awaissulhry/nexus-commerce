@@ -169,6 +169,18 @@
     "REVERSED_ALREADY": {
       "message": "Questa consegna è già stata annullata.",
       "fix": "Non c'è niente da fare."
+    },
+    "NOT_AT_WORK_ORDER": {
+      "message": "Questo ordine di lavoro non ha questo.",
+      "fix": "Scansiona una pelle o un lotto della lista, o tocca una riga."
+    },
+    "MORE_THAN_AT_WORK_ORDER": {
+      "message": "È più di quanto l'ordine di lavoro ha e non ha tagliato.",
+      "fix": "Misura di nuovo e scrivi meno."
+    },
+    "NOTHING_AT_WORK_ORDER": {
+      "message": "L'ordine di lavoro non ha più niente di questo.",
+      "fix": "Rileggi la lista: forse un altro tablet l'ha già reso."
     }
   },
   "unit": {
@@ -189,5 +201,101 @@
     "ROLL": "rotoli",
     "CONE": "coni",
     "BOX": "scatole"
+  },
+  "return": {
+    "open": "Rendi non usato",
+    "nothing": "Niente di questo ordine di lavoro può tornare",
+    "back": "Torna alla lista",
+    "lead": "Ciò che l'ordine di lavoro {workOrder} ha e non ha usato torna a magazzino. Una pelle tagliata torna come ritaglio con la sua superficie.",
+    "title": "Cosa può tornare",
+    "count_one": "{count} cosa può tornare",
+    "count_other": "{count} cose possono tornare",
+    "scan": {
+      "label": "Scansiona ciò che torna",
+      "hint": "Scansiona il cartellino della pelle o l'etichetta del lotto, o tocca una riga."
+    },
+    "empty": {
+      "title": "Niente da rendere",
+      "body": "Questo ordine di lavoro non ha niente che non sia stato tagliato o usato."
+    },
+    "row": {
+      "held": "{quantity} all'ordine",
+      "cut": "{quantity} tagliati",
+      "returnable": "può tornare ({unit})",
+      "kind": {
+        "hide": "Pelle",
+        "lot": "Lotto",
+        "material": "Materiale"
+      }
+    },
+    "pad": {
+      "title": "Quanto di {code} torna?",
+      "area": "Superficie che torna",
+      "quantity": "Quantità che torna",
+      "expected": "Può tornare {quantity}",
+      "whole": "La pelle intera",
+      "all": "Tutto",
+      "empty": "Scrivi quanto torna",
+      "range": "Da {min} a {max}",
+      "remnant": "Torna come ritaglio con questa superficie.",
+      "wholeBack": "Torna la pelle intera."
+    },
+    "place": {
+      "title": "Dove va?",
+      "loading": "Lettura dei posti a magazzino…",
+      "none": "Questo stabilimento non ha posti a magazzino: chiedi al capo squadra.",
+      "picked": "Qui",
+      "count_one": "{count} posto",
+      "count_other": "{count} posti",
+      "held": {
+        "noPermission": "Il tuo ruolo non vede i posti a magazzino: chiedi al capo squadra.",
+        "unavailable": "Non è stato possibile leggere i posti a magazzino: riprova."
+      },
+      "tagNext": "Poi stampa il cartellino nuovo del ritaglio con la sua superficie."
+    },
+    "confirm": "Rendi {quantity}",
+    "confirmNone": "Rendi",
+    "busy": "Reso in corso…",
+    "held": {
+      "offline": "Il reso ha bisogno della rete: aspetta che torni.",
+      "place": "Scegli dove va"
+    },
+    "keyBack": "Torna alla lista",
+    "keyConfirm": "Rendi",
+    "another": "Rendi altro",
+    "done": {
+      "whole": "Tornato a magazzino: {code} · {quantity} → {place}.",
+      "remnant": "Tornato a magazzino come ritaglio: {code} · {quantity} → {place}.",
+      "part": "Tornato a magazzino: {code} · {quantity} → {place}."
+    },
+    "keepsLabel": "Tiene la sua etichetta: non ne serve una nuova.",
+    "tag": {
+      "title": "Il cartellino nuovo del ritaglio",
+      "print": "Stampa il cartellino nuovo",
+      "busy": "Stampa in corso…",
+      "pickPrinter": "Prima scegli una stampante",
+      "choose": "Quale stampante?",
+      "on": {
+        "station": "Stampa sulla stampante di questa postazione: {printer}.",
+        "site": "Stampa sulla stampante etichette dello stabilimento: {printer}."
+      },
+      "looking": "Ricerca della stampante etichette…",
+      "noPrinter": "Nessuna stampante etichette in questo stabilimento: scrivi {area} sul cartellino della pelle.",
+      "notOurs": "Il cartellino di questa pelle ha un codice vecchio che qui non si stampa: scrivici {area}.",
+      "noRight": "Il tuo ruolo non stampa etichette: scrivi {area} sul cartellino della pelle, o chiedi al magazzino.",
+      "retry": "Stampa di nuovo",
+      "state": {
+        "QUEUED": "In coda di stampa",
+        "SENT": "Inviato alla stampante",
+        "PRINTED": "Stampato",
+        "FAILED": "Non stampato"
+      },
+      "name": "Cartellino pelle {code}",
+      "colour": "Colore",
+      "area": "Superficie",
+      "lot": "Lotto",
+      "code": "Codice {code}",
+      "invalid": "Il codice {code} non si può disegnare"
+    }
   }
 }

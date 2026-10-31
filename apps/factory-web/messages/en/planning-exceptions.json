@@ -1,0 +1,297 @@
+{
+  "page": {
+    "asOf": "From the run of {time}",
+    "noRun": "No plan run at this site yet",
+    "site": "Site",
+    "siteOne": "Site {site}",
+    "run": "Run plan now",
+    "running": "Planning…",
+    "more": "More actions",
+    "export": "Export this view (CSV)",
+    "keys": "Keyboard shortcuts",
+    "noSites": "This company has no site you plan at."
+  },
+  "live": {
+    "connecting": "Connecting to live updates…",
+    "live": "Live",
+    "offline": "Offline: the queue is not updated by itself"
+  },
+  "noAccess": {
+    "title": "Exceptions are not open to your role",
+    "body": "Your role cannot read the plan (planning.view). Ask an administrator if you need it."
+  },
+  "keys": {
+    "acknowledge": "Acknowledge the ticked rows (else the focused one)",
+    "snooze": "Snooze the focused row",
+    "resolve": "Resolve the focused row with a note",
+    "walk": "Previous / next exception in the detail"
+  },
+  "held": {
+    "noRun": "Your role cannot run the plan (planning.run).",
+    "running": "A run is going: two runs never overlap.",
+    "noSite": "Pick a site first.",
+    "noManage": "Your role cannot work the exceptions (planning.exceptions.manage).",
+    "resolved": "It is resolved already.",
+    "acknowledged": "It is acknowledged already.",
+    "resolvedRow": "Resolved: nothing is left to do with it.",
+    "noneNew": "None of the ticked rows is new.",
+    "busy": "A change is being saved…",
+    "loading": "Reading…"
+  },
+  "row": {
+    "again": "Found again (occurrence {count})",
+    "today": "Today",
+    "age_one": "{count} day",
+    "age_other": "{count} days",
+    "seen": "Last seen {time}",
+    "menu": "Actions for {what}",
+    "open": "Open the detail",
+    "acknowledge": "Acknowledge",
+    "snooze": "Snooze…",
+    "resolve": "Resolve with a note…"
+  },
+  "col": {
+    "type": "Type",
+    "what": "What",
+    "impact": "Impact",
+    "owner": "Owner",
+    "age": "Age",
+    "status": "Status",
+    "more": "Actions"
+  },
+  "kind": {
+    "label": "Type",
+    "all": "Every type",
+    "SHORT": "Short",
+    "SUPPLY_LATE": "Supply too late",
+    "LANE_OVERLOADED": "Lane overloaded",
+    "LANE_UNDERUSED": "Lane underused",
+    "PAST_DUE": "Past due",
+    "EXCESS": "Excess",
+    "BELOW_SAFETY_STOCK": "Below safety stock",
+    "MOVE_EARLIER": "Move earlier",
+    "MOVE_LATER": "Move later",
+    "CANCEL": "Cancel",
+    "NEGATIVE_STOCK": "Negative stock"
+  },
+  "view": {
+    "label": "Rows",
+    "queue": "To clear",
+    "new": "New",
+    "mine": "Mine",
+    "snoozedToday": "Snoozed until today",
+    "snoozed": "Snoozed",
+    "resolved": "Resolved",
+    "all": "All"
+  },
+  "tile": {
+    "title": "Waiting for you",
+    "new": "New",
+    "mine": "Mine",
+    "snoozedToday": "Snoozed until today",
+    "hint": {
+      "new": "found by a run, nobody has taken them",
+      "mine": "open, with you as their owner",
+      "snoozedToday": "come back before the day ends"
+    }
+  },
+  "list": {
+    "label": "Exceptions",
+    "count_one": "{count} exception",
+    "count_other": "{count} exceptions",
+    "search": "Search material, order, lane…",
+    "more": "Show 50 more",
+    "viewing": "Showing: {view}"
+  },
+  "bulk": {
+    "acknowledge_one": "Acknowledge {count}",
+    "acknowledge_other": "Acknowledge {count}",
+    "export_one": "Export {count}",
+    "export_other": "Export {count}"
+  },
+  "error": {
+    "title": "Couldn’t load exceptions",
+    "failed": "The answer did not come. Try again in a moment.",
+    "forbidden": "Your role cannot read the plan of this site.",
+    "offline": "No connection to the factory server.",
+    "gone": "This exception no longer exists here.",
+    "noSite": "There is no site to plan in this company."
+  },
+  "empty": {
+    "noMatch": {
+      "title": "No exception matches",
+      "body": "Change the search, the type or the rows shown."
+    },
+    "clear": {
+      "title": "Nothing the plan could not solve. Well done.",
+      "body": "Every exception of the last run is acknowledged, snoozed or resolved."
+    },
+    "noRun": "Run the plan once: each run lists what it could not solve here."
+  },
+  "common": {
+    "retry": "Try again",
+    "clearFilters": "Clear the filters",
+    "dismiss": "Dismiss",
+    "cancel": "Cancel"
+  },
+  "notice": {
+    "acknowledged_one": "{count} exception acknowledged: you own it now if nobody did.",
+    "acknowledged_other": "{count} exceptions acknowledged: you own the ones nobody owned.",
+    "snoozed": "Snoozed until {date}: it comes back by itself.",
+    "snoozedRun": "Snoozed until the next run: it comes back when the plan runs again.",
+    "resolved": "Resolved with your note. If a later run finds it again, it comes back as a new occurrence.",
+    "ran": "The plan was run again: the queue shows what it could not solve.",
+    "runBusy": "A run is already going for this site: wait for it to finish."
+  },
+  "refusal": {
+    "failed": "The change was not saved. Try again.",
+    "resolved": "It was resolved meanwhile: nothing changed.",
+    "acknowledged": "Someone acknowledged it meanwhile: nothing changed.",
+    "changed": "It changed since you read it (a run or a colleague): the queue was read again.",
+    "until": "Snooze until a later moment, or until the next run.",
+    "note": "The note must be 3 to 1000 characters.",
+    "sites": "Acknowledge the exceptions of one site at a time.",
+    "invalid": "The request was not valid: nothing changed.",
+    "forbidden": "Your role cannot work this exception.",
+    "gone": "This exception no longer exists here.",
+    "offline": "No connection: nothing was sent."
+  },
+  "status": {
+    "NEW": "New",
+    "ACKNOWLEDGED": "Acknowledged",
+    "SNOOZED": "Snoozed until {date}",
+    "SNOOZED_RUN": "Snoozed until the next run",
+    "RESOLVED": "Resolved",
+    "CLEARED": "Cleared by a run"
+  },
+  "owner": {
+    "none": "Nobody yet",
+    "you": "You"
+  },
+  "what": {
+    "orderLine": "{order} line {seq}"
+  },
+  "words": {
+    "orders_one": "{count} order",
+    "orders_other": "{count} orders"
+  },
+  "s": {
+    "SHORT": {
+      "buy": "{material}: {quantity} short for {who}, needed {date}; nothing is ordered for it yet.",
+      "make": "{material}: {quantity} short for {who}, needed {date}; nothing is planned to make it yet.",
+      "late_one": "Ordered today it arrives {count} day late.",
+      "late_other": "Ordered today it arrives {count} days late."
+    },
+    "SUPPLY_LATE": {
+      "late_one": "{material}: {po} arrives {date}; it is needed {need} ({count} day late).",
+      "late_other": "{material}: {po} arrives {date}; it is needed {need} ({count} days late).",
+      "overdue": "{material}: {po} was due {date} and {quantity} of it has not come yet."
+    },
+    "PAST_DUE_one": "{order} line {seq} was due {date} ({count} day ago) and still needs material.",
+    "PAST_DUE_other": "{order} line {seq} was due {date} ({count} days ago) and still needs material.",
+    "EXCESS": {
+      "po": "{material}: {quantity} of {po} is more than the orders need.",
+      "firm": "{material}: {quantity} of the firm planned order is more than the orders need."
+    },
+    "CANCEL": {
+      "po": "{material}: no order needs the {quantity} of {po} any more.",
+      "firm": "{material}: no order needs the firm planned order ({quantity}) any more."
+    },
+    "MOVE_EARLIER_one": "{material}: the firm planned order is dated {date}; {quantity} of it is needed from {need}. Move it {count} day earlier.",
+    "MOVE_EARLIER_other": "{material}: the firm planned order is dated {date}; {quantity} of it is needed from {need}. Move it {count} days earlier.",
+    "BELOW_SAFETY_STOCK": "{material}: the stock falls to {projected} on {date}, below its safety stock of {safety}.",
+    "NEGATIVE_STOCK": "{material}: {quantity} more is reserved than the usable stock holds (a receipt not posted, or stock moved since).",
+    "LANE_OVERLOADED": "{lane} is booked {pct}% from {from} to {to} ({booked} of {available} min).",
+    "LANE_UNDERUSED": "{what} is underused.",
+    "MOVE_LATER": "{what}: the supply can come later."
+  },
+  "title": {
+    "late_one": "{who} will be {count} day late",
+    "late_other": "{who} will be {count} days late",
+    "lateOrders_one": "{count} order will be up to {days} days late",
+    "lateOrders_other": "{count} orders will be up to {days} days late",
+    "supplyLate_one": "{po} comes {count} day too late",
+    "supplyLate_other": "{po} comes {count} days too late",
+    "pastDue_one": "{what} is {count} day past due",
+    "pastDue_other": "{what} is {count} days past due",
+    "of": "{kind}: {what}"
+  },
+  "impact": {
+    "orders_one": "{count} order",
+    "orders_other": "{count} orders",
+    "late_one": "{count} day late",
+    "late_other": "{count} days late"
+  },
+  "fix": {
+    "buy": "Buy it: the line in What to buy & make",
+    "make": "Plan it: the line in What to buy & make",
+    "board": "Move {number} on the planning board",
+    "workOrder": "Open work order {number}",
+    "chase": "Chase {number} (Remind the supplier)",
+    "elsewhere": "Buy elsewhere: the line in What to buy & make",
+    "cancelLine": "Cancel the line on {number}",
+    "reduceLine": "Change or close short the line on {number}",
+    "firmLine": "The firm planned order: the line in What to buy & make",
+    "moveFirm": "Move the firm planned order earlier: the line in What to buy & make",
+    "order": "Open order {number}",
+    "boardLane": "Open {lane} on the planning board",
+    "capacity": "Capacity & load for that week",
+    "line": "The line in What to buy & make",
+    "stock": "Stock of {code}",
+    "material": "Material {code}"
+  },
+  "detail": {
+    "titleLoading": "Exception",
+    "prev": "Previous exception",
+    "next": "Next exception",
+    "first": "This is the first exception of the list.",
+    "last": "This is the last exception of the list.",
+    "snooze": "Snooze",
+    "resolve": "Resolve",
+    "acknowledge": "Acknowledge",
+    "byAt": "{name}, {time}",
+    "cleared": "Cleared: a later run no longer found it.",
+    "resolvedBy": "Resolved by {name}",
+    "snoozedUntil": "Snoozed until {time}: it comes back by itself.",
+    "snoozedRun": "Snoozed until the next run.",
+    "words": "In plain words",
+    "impact": "Impact",
+    "found": "First found",
+    "age_one": "open for {count} day",
+    "age_other": "open for {count} days",
+    "lastSeen": "Last seen by a run",
+    "owner": "Owner",
+    "ownerYou": "{name} (you)",
+    "acknowledged": "Acknowledged",
+    "record": "About",
+    "chainLater": "The whole chain of causes, step by step to the supplier, comes in a later wave.",
+    "fixes": "Fixes",
+    "noFix": "No record to open for this one: resolve it with a note once it is handled.",
+    "fixHint": "Each fix opens its record; ⌘-click keeps this queue open."
+  },
+  "snooze": {
+    "this": "this exception",
+    "nextRun": "After the next run"
+  },
+  "resolve": {
+    "title": "Resolve with a note",
+    "confirm": "Resolve",
+    "body": "Say what was done. If a later run finds it again, it comes back as a new occurrence.",
+    "note": "What was done",
+    "noteHint": "3 to 1000 characters.",
+    "noteShort": "Write at least 3 characters.",
+    "noteLong": "At most 1000 characters."
+  },
+  "csv": {
+    "type": "Type",
+    "what": "What",
+    "sentence": "In words",
+    "orders": "Orders affected",
+    "daysLate": "Days late",
+    "owner": "Owner",
+    "ageDays": "Age (days)",
+    "status": "Status",
+    "firstSeen": "First found",
+    "lastSeen": "Last seen"
+  }
+}

@@ -8,7 +8,7 @@ import { I18nProvider } from '../../lib/i18n/provider'
 import { RECORD_PAGES, LIST_PAGES, recordAddress, listAddress } from '../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../shell/nav/office-nav'
 import { runWithStepUp, StepUpCancelled, stepUpProblem } from './_shared/hooks'
-import { evidenceAddress, problemKey, qualityCan, refusalLines } from './_shared/model'
+import { evidenceAddress, newNcrAddress, problemKey, qualityCan, refusalLines } from './_shared/model'
 import { ApiError } from '../../lib/api/errors'
 import { chainOf, scansByOperation, verdictOf } from './evidence/model'
 import { designScreen as evidenceScreen } from './evidence/fixtures'
@@ -41,7 +41,20 @@ import {
   viewFromAddress,
   viewKind,
   whoKey,
+  assignedWords,
+  assignHeld,
+  assigneeBody,
+  assigneeValue,
+  defectLineProblems,
+  holdsAddressFor,
+  kindHeld,
+  returnBody,
+  returnProblems,
+  withPicked,
+  changedLine,
+  withoutLine,
 } from './inspections/model'
+import { INSPECTORS, LIBRARY, RETURN_RECORD } from './inspections/demo/fixtures'
 
 const params = (query: string) => new URLSearchParams(query)
 const OWNER = qualityCan(['quality.inspections.view', 'quality.inspections.record', 'quality.garments.release', 'quality.garments.reverse', 'quality.settings.manage'])
@@ -50,13 +63,20 @@ const VIEWER = qualityCan(['quality.inspections.view'])
 describe('Inspections: views, tiles and what a row says', () => {
   it("reads ?view= first, then the API's own filters a link carries (Today, LIST_PAGES), else every inspection", () => {
     expect(viewFromAddress(params('view=reversed'))).toBe('reversed')
-    expect(viewFromAddress(params('onHold=true'))).toBe('onHold')
+    expect(viewFromAddress(params('failedUndecided=true'))).toBe('failed')
+    expect(viewFromAddress(params('assigned=me'))).toBe('mine')
     expect(viewFromAddress(params('waitingRelease=true'))).toBe('waiting')
     expect(viewFromAddress(params('status=OPEN'))).toBe('open')
     expect(viewFromAddress(params('reversed=true'))).toBe('reversed')
     expect(viewFromAddress(params('view=nonsense'))).toBe('all')
     expect(viewFromAddress(null)).toBe('all')
-    expect([viewKind('reversed'), viewKind('lots'), viewKind('onHold')]).toEqual(['releases', 'lots', 'inspections'])
+    expect([viewKind('reversed'), viewKind('lots'), viewKind('failed')]).toEqual(['releases', 'lots', 'inspections'])
+  })
+
+  it('W2a (Owner answer Q3): W1\'s "On hold" address now opens Quality › Holds', () => {
+    expect(holdsAddressFor(params('view=onHold'))).toBe('/quality/holds?subjectType=WorkOrder')
+    expect(holdsAddressFor(params('onHold=true'))).toBe('/quality/holds?subjectType=WorkOrder')
+    expect(holdsAddressFor(params('view=open'))).toBeNull()
   })
 
   it('Show more reads a larger page up to 200 (the lists have no cursor)', () => {
@@ -187,6 +207,69 @@ describe('the evidence trail: the chain in order, the verdict, no person, no mon
   })
 })
 
+describe('W2a (B-W2a-67): assigning an inspector, defects from the library, New inspection kinds, Create NCR', () => {
+  it('says who an inspection is assigned to — a worker never by name in a list — and picks by value', () => {
+    expect(assignedWords(null, 'me')).toEqual({ key: 'assign.nobody' })
+    expect(assignedWords({ kind: 'USER', userId: 'me', workerId: null, name: 'X' }, 'me')).toEqual({ key: 'assign.you' })
+    expect(assignedWords({ kind: 'USER', userId: 'u', workerId: null, name: 'Demo Two' }, 'me')).toEqual({ key: 'assign.named', params: { name: 'Demo Two' } })
+    expect(assignedWords({ kind: 'WORKER', userId: null, workerId: 'w', name: 'Demo Bench' }, 'me')).toEqual({ key: 'assign.bench' })
+    expect(assignedWords({ kind: 'WORKER', userId: null, workerId: 'w', name: 'Demo Bench' }, 'me', true)).toEqual({ key: 'assign.benchNamed', params: { name: 'Demo Bench' } })
+    expect(assigneeValue({ kind: 'WORKER', userId: null, workerId: 'w' })).toBe('WORKER:w')
+    expect(assigneeBody('USER:u')).toEqual({ assigneeId: 'u', assigneeWorkerId: null })
+    expect(assigneeBody('')).toEqual({ assigneeId: null, assigneeWorkerId: null })
+  })
+
+  it('"Assign N inspections" is held before the click: no right, a signed one, two sites', () => {
+    const open = ROWS.filter((row) => row.status === 'OPEN')
+    expect(assignHeld(open.slice(0, 2), OWNER)).toBeNull()
+    expect(assignHeld(open, VIEWER)).toBe('assign.held.noRight')
+    expect(assignHeld([open[0]!, ROWS.find((row) => row.status === 'PASSED')!], OWNER)).toBe('assign.held.notOpen')
+    expect(assignHeld([open[0]!, { ...open[1]!, siteId: 'other' }], OWNER)).toBe('assign.held.sites')
+    expect(INSPECTORS.inspectors.find((person) => person.made.length > 0)?.made).toEqual(['DEMO-WO-0151'])
+  })
+
+  it('a defect from the library adds a line with its class and zone, or one more garment; the list is checked before it is sent', () => {
+    const one = withPicked([], LIBRARY[1]!)
+    expect(one).toEqual([{ defectClass: 'MAJOR', code: 'STITCH-SKIP', quantity: 1, workOrderSizeId: null, note: null, defectCodeId: LIBRARY[1]!.id, zone: 'SLEEVE_L' }])
+    expect(withPicked(one, LIBRARY[1]!)[0]!.quantity).toBe(2)
+    expect(changedLine(one, 0, { zone: 'CUFF' })[0]!.zone).toBe('CUFF')
+    expect(withoutLine(one, 0)).toEqual([])
+    expect(defectLineProblems([{ ...one[0]!, quantity: 9 }], 5)).toEqual(['defects.problem.overSample', 'defects.problem.classOverSample'])
+    expect(defectLineProblems([...one, ...one], 5)).toEqual(['defects.problem.twice'])
+  })
+
+  it('New inspection: in-line comes with W2b; a return needs the right to inspect returns, and every received line its grade', () => {
+    expect(kindHeld('INLINE', OWNER)).toBe('new.kind.held.inline')
+    expect(kindHeld('RETURN', OWNER)).toBe('new.kind.held.return')
+    expect(kindHeld('RETURN', qualityCan(['sales.returns.view', 'sales.returns.inspect']))).toBeNull()
+    expect(kindHeld('FINAL', qualityCan(['quality.inspections.record', 'workorders.view']))).toBeNull()
+    expect(returnProblems({ returnId: null, lines: {} }, null)).toEqual(['new.return.problem.pick'])
+    const lineA = RETURN_RECORD.lines[0]!.id
+    const lineB = RETURN_RECORD.lines[1]!.id
+    expect(returnProblems({ returnId: RETURN_RECORD.id, lines: { [lineA]: { grade: 'GOOD', cause: '', note: '' } } }, RETURN_RECORD)).toEqual(['new.return.problem.grade'])
+    const draft = { returnId: RETURN_RECORD.id, lines: { [lineA]: { grade: 'DAMAGED', cause: 'OUR_DEFECT', note: ' Seam open ' }, [lineB]: { grade: 'GOOD', cause: '', note: '' } } }
+    expect(returnProblems(draft, RETURN_RECORD)).toEqual([])
+    expect(returnBody(draft, RETURN_RECORD)).toEqual({
+      version: 4,
+      lines: [
+        { lineId: lineA, grade: 'DAMAGED', cause: 'OUR_DEFECT', conditionNote: 'Seam open' },
+        { lineId: lineB, grade: 'GOOD', cause: null, conditionNote: null },
+      ],
+    })
+  })
+
+  it('every Create NCR / Decide in NCR opens the one New NCR (B-W2a-68), prefilled from its record', () => {
+    expect(newNcrAddress('/w/SCA', 'Inspection', 'a b')).toBe('/w/SCA/quality/ncr?new=1&from=Inspection&id=a%20b')
+    expect(newNcrAddress('/w/SCA', 'QualityHold', 'h1')).toBe('/w/SCA/quality/ncr?new=1&from=QualityHold&id=h1')
+  })
+
+  it('an assigned inspection is recorded only by its assignee (held with the reason)', () => {
+    const assigned = readOf({ ...ANSWERED, assigned: { kind: 'USER', userId: 'other', workerId: null, name: 'Demo Two' } }, { yours: false })
+    expect(recordAbilities(assigned, OWNER).recordHeld).toBe('held.assignedOther')
+    expect(recordAbilities(readOf(ANSWERED, { yours: false }), OWNER).recordHeld).toBe('held.notYours')
+  })
+})
+
 describe('errors in our words; the API’s refusal lines kept as data', () => {
   it('maps the kinds and reads the gate refusal (`checks/<CODE>` then its fix)', () => {
     expect(problemKey(new ApiError('conflict', 409, 'conflict', 'x'))).toBe('problem.conflict')
@@ -206,6 +289,8 @@ describe('record links: the quality records open their own pages', () => {
     expect(recordAddress({ type: 'QualityRelease', id: 'r1' }, OFFICE_PAGES)).toBe('/quality/inspections?open=r1')
     expect(recordAddress({ type: 'Lot', id: 'l1' }, OFFICE_PAGES)).toBe('/warehouse/lots/l1')
     expect(recordAddress({ type: 'PpeRegisterEntry', id: 'e1' }, OFFICE_PAGES)).toBe('/compliance/register/e1')
+    expect(recordAddress({ type: 'QualityHold', id: 'h1' }, OFFICE_PAGES)).toBe('/quality/holds?open=h1')
+    expect(recordAddress({ type: 'DefectCode', id: 'd1' }, OFFICE_PAGES)).toBe('/quality/defects?open=d1')
     expect(listAddress('/compliance/register', { status: 'OPEN' }, OFFICE_PAGES)).toBe('/compliance/register?status=OPEN')
     expect(listAddress('/quality/lots', { onHold: 'true' }, OFFICE_PAGES)).toBe('/compliance/tests?onHold=true')
     expect(Object.keys(RECORD_PAGES)).toEqual(expect.arrayContaining(['Inspection', 'QualityRelease', 'Lot', 'PpeRegisterEntry']))

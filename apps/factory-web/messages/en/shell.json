@@ -46,7 +46,9 @@
       "maintenance": "Maintenance",
       "requests": "Machine requests",
       "jobs": "Maintenance jobs",
-      "machines": "Machines & tools"
+      "machines": "Machines & tools",
+      "settingsGroup": "Settings",
+      "settings": "Plant settings"
     },
     "admin": {
       "area": "Admin",
@@ -86,7 +88,11 @@
       "area": "Quality",
       "main": "Main",
       "inspections": "Inspections",
+      "holds": "Holds",
+      "settings": "Settings",
+      "defects": "Defects & dispositions",
       "problems": "Problems",
+      "ncr": "Nonconformances",
       "complaints": "Complaints"
     },
     "compliance": {
@@ -119,6 +125,8 @@
       "mrp": "What to buy & make",
       "board": "Planning board",
       "allocation": "Lines & subcontractors",
+      "capacity": "Capacity & load",
+      "exceptions": "Exceptions",
       "settingsGroup": "Settings",
       "settings": "Planning settings"
     },

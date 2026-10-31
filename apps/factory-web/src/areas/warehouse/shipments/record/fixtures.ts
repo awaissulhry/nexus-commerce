@@ -3,7 +3,15 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import type { Shipment } from '../api'
 import {
   at,
+  backorder,
   canOf,
+  evidence,
+  freight,
+  PACKING_LISTS,
+  pricedFor,
+  toGermany,
+  trackingLabelled,
+  voidedOf,
   DDT_ANNULLED,
   DDT_LIVE,
   DDT_ROW,
@@ -36,7 +44,12 @@ import { ShipmentRecordView } from './view/ShipmentRecordView'
  * user information, the customer's link; Carrier & label; Tracking & delivery; Activity), the states (loading, error,
  * not found, no permission, held with the reason, read-only, cancelled, shipped, changed meanwhile), each dialog (Issue
  * DDT, Annul DDT with the typed number, Buy labels and its outcome, Mark handed over, Cancel, Change delivery, Add
- * garments, a carton, Send the link), and the roles: Owner, Warehouse, Sales and Finance (read-only).
+ * garments, a carton, Send the link), and the roles: Owner, Warehouse, Sales and Finance (read-only). B-W2a-71 (every
+ * day): the order's lines and the backorder (partial, complete, a line closed short), Other documents (the packing list's
+ * versions), Void labels (held, open, one parcel the carrier has, the outcome), the DDT reason with its hint, the Invoice
+ * tab (the freight by the rule, by hand, not decided, without the price grain, Change freight), the Export tab (not
+ * needed in Italy, awaited, partial, complete; File a paper, Mark complete, Reopen, Needs no evidence) and Finance with
+ * the freight and the evidence rights.
  */
 
 interface RecordCase {
@@ -44,8 +57,9 @@ interface RecordCase {
   record: ShipmentRecordModel
 }
 
-const base = (role: Role, value: Shipment, over: Partial<ShipmentRecordModel> = {}): RecordCase => {
+const base = (role: Role, input: Shipment, over: Partial<ShipmentRecordModel> = {}): RecordCase => {
   const can = canOf(role)
+  const value = pricedFor(input, role)
   // Gone with a DDT (shipped, delivered, returned); a PACKED case names its DDT itself (packedWithDdt).
   const live = value.status === 'SHIPPED' || value.status === 'DELIVERED' || value.status === 'RETURNED'
   return {
@@ -63,6 +77,10 @@ const base = (role: Role, value: Shipment, over: Partial<ShipmentRecordModel> = 
       tracking: value.parcels.some((entry) => entry.trackingNumber) ? { value: tracking(value, value.status === 'DELIVERED'), problem: null } : null,
       documents: { value: documents(value.status === 'DRAFT' ? 'onFile' : 'attached', value.status === 'SHIPPED' || value.status === 'DELIVERED' ? LINKS : []), problem: null },
       ready: value.status === 'DRAFT' && can.manage ? { value: READY[0]!, problem: null } : null,
+      backorder: { value: backorder(), problem: null },
+      packingLists: { value: value.status === 'DRAFT' || value.status === 'CANCELLED' ? [] : PACKING_LISTS, problem: null },
+      evidence: { value: evidence(value.transportEvidence.status), problem: null },
+      voided: null,
       live: 'live',
       dockOpen: false,
       changed: null,
@@ -85,6 +103,10 @@ const ready = labelled('PACKED')
 const readyCase = (role: Role, over: Partial<ShipmentRecordModel> = {}) => base(role, ready, { ddts: { value: [DDT_ROW], problem: null }, ddt: { value: DDT_LIVE, problem: null }, preview: null, pdf: { data: PDF, problem: null, sample: false }, labels: { value: labels(ready, 'PRINTED'), problem: null }, ...over })
 const shipped = labelled('SHIPPED')
 const delivered = { ...labelled('DELIVERED'), deliveredAt: at(30, 11, 42) }
+// B-W2a-71: labels bought, none collected yet (the carrier has no parcel): Void labels may run.
+const voidCase = (role: Role, over: Partial<ShipmentRecordModel> = {}) => readyCase(role, { tab: 'carrier', tracking: { value: trackingLabelled(ready), problem: null }, ...over })
+const germanCase = (role: Role, status: 'AWAITED' | 'PARTIAL' | 'COMPLETE', over: Partial<ShipmentRecordModel> = {}) =>
+  base(role, { ...toGermany('DELIVERED', status), deliveredAt: at(2, 11, 42, 11) }, { tab: 'export', ddts: { value: [DDT_ROW], problem: null }, ddt: { value: DDT_LIVE, problem: null }, evidence: { value: evidence(status), problem: null }, ...over })
 
 function ShipmentDesign({ model }: { model: RecordCase }) {
   return inShell('/warehouse/shipments', createElement(ShipmentRecordView, { model: model.record }), model.role)
@@ -134,6 +156,38 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'changed', label: 'Changed by someone else while a dialog was open: Reload', model: readyCase('warehouse', { changed: { at: at(29, 11, 20) } }) },
     { id: 'notice', label: 'A refused write said above the tab', model: base('warehouse', draftLoose(), { notice: { tone: 'danger', words: { key: 'problem.write.state' }, detail: 'Parcel 2 holds garments: move them first.' } }) },
     { id: 'part-failed', label: 'A part could not be read (Documents): in words with Try again', model: base('warehouse', packed, { tab: 'documents', documents: { value: null, problem: 'problem.read.unavailable' } }) },
+    // ---- B-W2a-71 (every day) ----
+    { id: 'backorder-partial', label: 'Lines: the order on this shipment, 2 garments stay on backorder (1 ready, 1 to make)', model: base('warehouse', packed) },
+    { id: 'backorder-complete', label: 'Lines: this shipment completes the order', model: base('warehouse', packed, { backorder: { value: backorder('complete'), problem: null } }) },
+    { id: 'backorder-closed', label: 'Lines: a line closed short (its rest never ships)', model: base('warehouse', packed, { backorder: { value: backorder('closed'), problem: null } }) },
+    { id: 'backorder-failed', label: 'Lines: the backorder could not be read (Try again)', model: base('warehouse', packed, { backorder: { value: null, problem: 'problem.read.unavailable' } }) },
+    { id: 'other-documents', label: 'Documents: Other documents — the packing list\'s versions, Print all (the driver\'s pack)', model: packedWithDdt('warehouse', { tab: 'documents' }) },
+    { id: 'other-none', label: 'Documents: no packing list made yet', model: packedWithDdt('warehouse', { tab: 'documents', packingLists: { value: [], problem: null } }) },
+    { id: 'issue-reason', label: 'Issue DDT: the reason Repair with its hint', model: base('warehouse', packed, { dialog: { kind: 'issueDdt' }, ddtForm: { ...ddtFormFor(packed, PREVIEW_OK), reason: 'REPAIR' } }) },
+    { id: 'void-menu', label: 'Carrier & label: labels bought, Labels ⋯ Void labels', model: voidCase('warehouse') },
+    { id: 'void-dialog', label: 'Void labels: "voiding one parcel voids all 2 parcels"', model: voidCase('warehouse', { dialog: { kind: 'voidLabels' } }) },
+    { id: 'void-collected', label: 'Void labels: the carrier has parcel 2 already (its label stays)', model: voidCase('warehouse', { dialog: { kind: 'voidLabels' }, tracking: { value: trackingLabelled(ready, [2]), problem: null } }) },
+    { id: 'void-done', label: 'Void labels: the outcome per parcel (cancelled, queued)', model: voidCase('warehouse', { dialog: { kind: 'voidLabels' }, voided: voidedOf(ready) }) },
+    { id: 'void-partial', label: 'Void labels: the carrier refused parcel 2 (it keeps its label)', model: voidCase('warehouse', { dialog: { kind: 'voidLabels' }, voided: voidedOf(ready, 2) }) },
+    { id: 'void-held', label: 'Sales: Void labels held (no right), shown in the menu', model: voidCase('sales') },
+    { id: 'invoice-rule', label: 'Invoice: the freight by the site\'s rule (7,00 € a parcel), shipped', model: base('finance', shipped, { tab: 'invoice', ddts: { value: [DDT_ROW], problem: null }, ddt: { value: DDT_LIVE, problem: null } }) },
+    { id: 'invoice-open', label: 'Invoice: freight not decided yet (the rule sets it when the goods leave)', model: base('finance', packed, { tab: 'invoice' }) },
+    { id: 'invoice-hand', label: 'Invoice: the freight typed by hand (Owner)', model: base('owner', { ...shipped, freight: freight(900, { byHand: true }) }, { tab: 'invoice', ddts: { value: [DDT_ROW], problem: null }, ddt: { value: DDT_LIVE, problem: null } }) },
+    { id: 'invoice-collects', label: 'Invoice: the customer collects (no freight)', model: base('finance', { ...ownVan(), transportBy: 'RECIPIENT', freight: freight(null, { byRule: { charge: 0, basis: 'CUSTOMER_COLLECTS', words: '' } }) }, { tab: 'invoice' }) },
+    { id: 'invoice-no-price', label: 'Invoice: Warehouse without the price grain (no amount, never 0)', model: base('warehouse', shipped, { tab: 'invoice', ddts: { value: [DDT_ROW], problem: null }, ddt: { value: DDT_LIVE, problem: null } }) },
+    { id: 'freight-dialog', label: 'Change freight: type 9,00 €, or back to the rule', model: base('finance', { ...shipped, freight: freight(900, { byHand: true }) }, { tab: 'invoice', dialog: { kind: 'freight' } }) },
+    { id: 'export-italy', label: 'Export: delivered in Italy — not needed', model: base('warehouse', shipped, { tab: 'export' }) },
+    { id: 'export-awaited', label: 'Export: a zero-rated sale to Germany, the proof awaited (File a paper)', model: germanCase('warehouse', 'AWAITED') },
+    { id: 'export-partial', label: 'Export: one paper on file (proof of delivery), a second one missing', model: germanCase('warehouse', 'PARTIAL') },
+    { id: 'export-complete', label: 'Export: complete (POD and signed CMR), checked by finance', model: germanCase('finance', 'COMPLETE') },
+    { id: 'export-before', label: 'Export: packed for Germany, decided when the goods leave', model: base('warehouse', toGermany('PACKED', 'NOT_NEEDED'), { tab: 'export', evidence: { value: evidence('NOT_NEEDED', { neededBySale: true, shipmentStatus: 'PACKED' }), problem: null } }) },
+    { id: 'export-sales', label: 'Export: Sales reads it (no evidence right: held)', model: germanCase('sales', 'PARTIAL') },
+    { id: 'export-failed', label: 'Export: the evidence could not be read (Try again)', model: germanCase('warehouse', 'AWAITED', { evidence: { value: null, problem: 'problem.read.unavailable' } }) },
+    { id: 'paper-dialog', label: 'File a paper: its kind and the file', model: germanCase('warehouse', 'PARTIAL', { dialog: { kind: 'evidenceFile' } }) },
+    { id: 'complete-dialog', label: 'Mark complete: the person checks the papers are independent', model: germanCase('finance', 'PARTIAL', { dialog: { kind: 'evidenceComplete' }, evidence: { value: evidence('PARTIAL', { papers: evidence('COMPLETE').papers }), problem: null } }) },
+    { id: 'complete-short', label: 'Mark complete held: one paper only', model: germanCase('finance', 'PARTIAL', { dialog: { kind: 'evidenceComplete' } }) },
+    { id: 'reopen-dialog', label: 'Reopen the evidence (a paper found wrong)', model: germanCase('finance', 'COMPLETE', { dialog: { kind: 'evidenceReopen' } }) },
+    { id: 'need-dialog', label: 'Needs no evidence (with the reason)', model: germanCase('finance', 'AWAITED', { dialog: { kind: 'evidenceNeed', needed: false } }) },
     { id: 'loading', label: 'Loading', model: base('warehouse', packed, { shipment: { status: 'loading' } }) },
     { id: 'not-found', label: 'Not found (or another company)', model: base('warehouse', packed, { shipment: { status: 'not_found' } }) },
     { id: 'no-permission', label: 'No permission', model: base('warehouse', packed, { shipment: { status: 'forbidden' } }) },

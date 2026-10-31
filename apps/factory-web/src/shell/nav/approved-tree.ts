@@ -139,7 +139,10 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'planning.mrp', title: 'What to buy & make', titleIt: 'Cosa comprare e produrre', wave: 'W1', href: '/planning/mrp' },
           // W2a: B-W2a-45 Planning board (SCR-122) and Lines & subcontractors (SCR-126). Capacity & load and Exceptions join between and after with their steps.
           { id: 'planning.board', title: 'Planning board', titleIt: 'Tabellone di pianificazione', wave: 'W2a', href: '/planning/board' },
+          // B-W2a-70: Capacity & load (SCR-123) between the board and the allocation; Exceptions (SCR-125) after it.
+          { id: 'planning.capacity', title: 'Capacity & load', titleIt: 'Capacità e carico', wave: 'W2a', href: '/planning/capacity' },
           { id: 'planning.allocation', title: 'Lines & subcontractors', titleIt: 'Linee e terzisti', wave: 'W2a', href: '/planning/allocation' },
+          { id: 'planning.exceptions', title: 'Exceptions', titleIt: 'Eccezioni', wave: 'W2a', href: '/planning/exceptions' },
         ],
       },
       // W2a: B-W2a-59 Planning settings (SCR-124, SCR-127).
@@ -287,14 +290,28 @@ export const OFFICE: readonly TreeArea[] = [
         label: 'Main',
         labelIt: 'Principali',
         hideLabel: true,
-        pages: [{ id: 'quality.inspections', title: 'Inspections', titleIt: 'Ispezioni', wave: 'W1', href: '/quality/inspections' }],
+        pages: [
+          { id: 'quality.inspections', title: 'Inspections', titleIt: 'Ispezioni', wave: 'W1', href: '/quality/inspections' },
+          // W2a: B-W2a-67 Holds (SCR-078).
+          { id: 'quality.holds', title: 'Holds', titleIt: 'Blocchi', wave: 'W2a', href: '/quality/holds' },
+        ],
       },
-      // W2a: B-W2a-65 Complaints (SCR-113 W2a part).
+      // W2a: B-W2a-68 Nonconformances (SCR-144, SCR-145) and B-W2a-65 Complaints (SCR-113 W2a part).
       {
         label: 'Problems',
         labelIt: 'Problemi',
         hideLabel: false,
-        pages: [{ id: 'quality.complaints', title: 'Complaints', titleIt: 'Reclami', wave: 'W2a', href: '/quality/complaints' }],
+        pages: [
+          { id: 'quality.ncr', title: 'Nonconformances', titleIt: 'Non conformità', wave: 'W2a', href: '/quality/ncr' },
+          { id: 'quality.complaints', title: 'Complaints', titleIt: 'Reclami', wave: 'W2a', href: '/quality/complaints' },
+        ],
+      },
+      // W2a: B-W2a-67 Defects & dispositions (SCR-079). After Problems (the tree's order).
+      {
+        label: 'Settings',
+        labelIt: 'Impostazioni',
+        hideLabel: false,
+        pages: [{ id: 'quality.defects', title: 'Defects & dispositions', titleIt: 'Difetti e destinazioni', wave: 'W2a', href: '/quality/defects' }],
       },
     ],
   },
@@ -386,6 +403,22 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'plant.machines', title: 'Machines & tools', titleIt: 'Macchine e attrezzature', wave: 'W2a', href: '/plant/machines' },
         ],
       },
+      // B-W2a-73: Plant settings (a W2b page) ships with its W2a section only, Symptoms on the floor (SCR-241).
+      {
+        label: 'Settings',
+        labelIt: 'Impostazioni',
+        hideLabel: false,
+        pages: [
+          {
+            id: 'plant.settings',
+            title: 'Plant settings',
+            titleIt: 'Impostazioni stabilimento',
+            wave: 'W2b',
+            href: '/plant/settings',
+            early: 'W2A-PLAN §10: its W2a section "Symptoms on the floor" (SCR-241, B-W2a-73) ships on the W2b page.',
+          },
+        ],
+      },
     ],
   },
   {
@@ -467,6 +500,10 @@ export const FLOOR: ReadonlyArray<{
     tile: 'scan',
     modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'supervisor', 'maintenance', 'phone'],
   },
+  // W2a: B-W2a-74 My work (SCR-089), the station's queue. The design's modes are sewing, cutting, warehouse, inspection,
+  // phone: the warehouse's task inbox (SCM-274) and the phone's personal list are W2b, so W2a gives it every station with
+  // a queue — the packing bench too (the dispatch list is per station, whatever its work centre).
+  { id: 'floor.mywork', title: 'My work', titleIt: 'Il mio lavoro', tile: 'mywork', modes: ['sewing', 'cutting', 'packing', 'inspection', 'phone'] },
   { id: 'floor.operation', title: 'Operation', titleIt: 'Operazione', tile: 'operation', modes: ['sewing', 'cutting', 'packing'] },
   { id: 'floor.hidecut', title: 'Hide check & cut log', titleIt: 'Controllo pelle e taglio', tile: 'cut', modes: ['cutting'] },
   { id: 'floor.bundles', title: 'Bundles & tickets', titleIt: 'Fasci e cartellini', tile: 'bundles', modes: ['cutting'] },
@@ -478,6 +515,8 @@ export const FLOOR: ReadonlyArray<{
   { id: 'floor.labels', title: 'Garment labels', titleIt: 'Etichette capo', tile: 'labels', modes: ['packing'] },
   { id: 'floor.pack', title: 'Pack', titleIt: 'Imballa', tile: 'pack', modes: ['packing'] },
   { id: 'floor.final', title: 'Final inspection & release', titleIt: 'Collaudo finale e rilascio', tile: 'final', modes: ['inspection'] },
+  // W2a: B-W2a-73 the floor area Maintenance & safety, its machine problem (SCR-179); Report an incident is W2b.
+  { id: 'floor.machine', title: 'Machine problem & jobs', titleIt: 'Guasto e interventi', tile: 'machine', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection', 'maintenance'] },
 ]
 
 export const LINKS: ReadonlyArray<{ readonly id: string; readonly title: string; readonly scr: readonly string[]; readonly task: string }> = [

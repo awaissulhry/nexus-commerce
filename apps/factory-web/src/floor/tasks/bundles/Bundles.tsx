@@ -12,21 +12,24 @@ import { readScan } from '../../scan/scan-model'
 import { AsOfMemory, codeKey, type Remembered } from '../shared/as-of'
 import { queuedView } from '../shared/queued'
 import type { TaskProblem } from '../shared/task-api'
-import { fetchOrder, fetchTicketJobs, fetchWorkOrders, reprintBundle, retryJob, scanBundle, voidBundle, type BundleOrder, type BundleWorkOrder, type ScannedBundle } from './api'
+import { fetchOrder, fetchTicketJobs, fetchWorkOrders, reprintBundle, retryJob, scanBundle, splitBundle, voidBundle, type BundleOrder, type BundleWorkOrder, type ScannedBundle } from './api'
 import {
   editQuantity,
   jobMoving,
   jobOfCode,
+  liveOf,
   maxAt,
   nextBundleSize,
   pendingByCell,
   proposalOf,
   REPRINT_REASONS,
+  splitMax,
   ticketPrint,
   uncounted,
   VOID_REASONS,
   type JobState,
   type MadeTicket,
+  type SplitReason,
   type TicketContent,
   type VoidReason,
 } from './model'
@@ -60,10 +63,16 @@ type Screen =
   | { kind: 'loading'; code: string | null }
   | { kind: 'pick' }
   | { kind: 'order'; workOrderId: string }
-  | { kind: 'bundle'; key: string; stage: 'card' | 'reprint' | 'void'; reason: VoidReason | null; busy: boolean; done: Done | null; problem: TaskProblem | null; writeKey: string; back: Back }
+  | { kind: 'bundle'; key: string; stage: 'card' | 'reprint' | 'void' | 'split'; reason: VoidReason | null; busy: boolean; done: Done | null; problem: TaskProblem | null; writeKey: string; back: Back; split: Split | null }
   | { kind: 'problem'; problem: TaskProblem; code: string | null; again: (() => void) | null; back: Back | null }
 
-type Done = { kind: 'reprinted'; replacedCode: string; bundleId: string; ticket: TicketContent; printProblem: string | null } | { kind: 'voided'; code: string; quantity: number }
+type Done =
+  | { kind: 'reprinted'; replacedCode: string; bundleId: string; ticket: TicketContent; printProblem: string | null }
+  | { kind: 'voided'; code: string; quantity: number }
+  | { kind: 'split'; parentCode: string; childId: string; ticket: TicketContent; printProblem: string | null; quantity: number; reason: SplitReason; live: number }
+
+/** B-W2a-75: the split step: how many come off, why; the garments still in the bundle once the work order is read. */
+type Split = { quantity: number | null; reason: SplitReason | null; live: number | null; reading: boolean }
 
 const cellLabel = (cell: { colourwayCode: string; size: string }) => `${cell.colourwayCode} ${cell.size}`
 
@@ -167,7 +176,7 @@ export function FloorBundles() {
   const openBundle = useCallback(
     async (code: string, back: Back) => {
       const key = codeKey(code)
-      const card = { kind: 'bundle' as const, key, stage: 'card' as const, reason: null, busy: false, done: null, problem: null, writeKey: newIdempotencyKey(), back }
+      const card = { kind: 'bundle' as const, key, stage: 'card' as const, reason: null, busy: false, done: null, problem: null, writeKey: newIdempotencyKey(), back, split: null }
       if (!navigator.onLine) {
         if (CARDS.get(key)) return setScreen(card)
         return fail({ kind: 'offline' }, code, null, back)
@@ -302,6 +311,7 @@ export function FloorBundles() {
   // ---- print jobs: read while they move (queued, sent), for a while after the office recorded the bundle ----
 
   const reprinted = screen.kind === 'bundle' && screen.done?.kind === 'reprinted' ? screen.done : null
+  const splitOff = screen.kind === 'bundle' && screen.done?.kind === 'split' ? screen.done : null
   const watched = useMemo(() => {
     const ids: string[] = []
     if (remembered && remembered.value.printers.length > 0) {
@@ -311,13 +321,14 @@ export function FloorBundles() {
       }
     }
     if (reprinted && !reprinted.printProblem) ids.push(reprinted.bundleId)
+    if (splitOff && !splitOff.printProblem) ids.push(splitOff.childId)
     return ids.filter((id) => {
       const job = jobOfCode(jobs.get(id) ?? [], null)
       const since = watchedSince.current.get(id) ?? Date.now()
       watchedSince.current.set(id, since)
       return jobMoving(job) && Date.now() - since < WATCH_MS
     })
-  }, [jobs, made, queueSnapshot.items, remembered, reprinted])
+  }, [jobs, made, queueSnapshot.items, remembered, reprinted, splitOff])
   const watchKey = watched.join(',')
 
   useEffect(() => {
@@ -372,7 +383,7 @@ export function FloorBundles() {
 
   const retryPrint = useCallback(
     async (key: string) => {
-      const bundleId = reprinted && key === reprinted.bundleId ? reprinted.bundleId : (() => {
+      const bundleId = reprinted && key === reprinted.bundleId ? reprinted.bundleId : splitOff && key === splitOff.childId ? splitOff.childId : (() => {
         const item = queueSnapshot.items.find((entry) => entry.clientEventId === key)
         return item?.result?.type === 'Bundle' ? item.result.id : null
       })()
@@ -391,7 +402,7 @@ export function FloorBundles() {
       setJobs((current) => new Map(current).set(bundleId, [answer.value, ...(current.get(bundleId) ?? []).filter((entry) => entry.id !== answer.value.id)]))
       feedback('success')
     },
-    [api, feedback, jobs, online, queueSnapshot.items, reprinted],
+    [api, feedback, jobs, online, queueSnapshot.items, reprinted, splitOff],
   )
 
   const card = screen.kind === 'bundle' ? CARDS.get(screen.key) : null
@@ -439,6 +450,45 @@ export function FloorBundles() {
     if (current.back.kind === 'order') ORDERS.forget(current.back.workOrderId)
     feedback('success')
     setScreen({ ...current, stage: 'card', busy: false, problem: null, done: { kind: 'voided', code: answer.value.bundle.code, quantity: answer.value.bundle.quantity } })
+  }, [api, card, feedback, online, screen, store])
+
+  // ---- split (B-W2a-75): how many come off and why → a child bundle with its own ticket; online only ----
+
+  const openSplit = useCallback(async () => {
+    if (screen.kind !== 'bundle' || !card || !online) return
+    const opened = { ...screen, stage: 'split' as const, problem: null, done: null, writeKey: newIdempotencyKey(), split: { quantity: null, reason: null, live: null, reading: true } }
+    setScreen(opened)
+    // The garments still in it: its quantity as cut less the children split off before (the work order's bundles).
+    const order = await fetchOrder(api, card.value.workOrder.id)
+    const live = order.ok ? liveOf(card.value.bundle, order.value.bundles) : card.value.bundle.quantity
+    setScreen((current) => (current.kind === 'bundle' && current.stage === 'split' && current.key === opened.key && current.split ? { ...current, split: { ...current.split, live, reading: false } } : current))
+  }, [api, card, online, screen])
+
+  const confirmSplit = useCallback(async () => {
+    if (screen.kind !== 'bundle' || screen.stage !== 'split' || !card || screen.busy || !online || !screen.split) return
+    const { quantity, reason, live } = screen.split
+    if (quantity === null || reason === null || quantity < 1 || (live !== null && quantity > splitMax(live))) return
+    const current = screen
+    setScreen({ ...current, busy: true, problem: null })
+    const answer = await splitBundle(api, card.value.bundle.id, { quantity, reason, language: store.locale === 'en' ? 'en' : 'it' }, current.writeKey)
+    if (!answer.ok) {
+      if (answer.problem.kind === 'signedOut') return void store.sessionEnded()
+      feedback('error')
+      return setScreen({ ...current, busy: false, problem: answer.problem, writeKey: newIdempotencyKey() })
+    }
+    const { bundle: child, parent, ticket } = answer.value
+    if (ticket.job) setJobs((jobsNow) => new Map(jobsNow).set(child.id, [ticket.job!]))
+    if (current.back.kind === 'order') ORDERS.forget(current.back.workOrderId)
+    feedback('success')
+    setScreen({
+      ...current,
+      stage: 'card',
+      busy: false,
+      problem: null,
+      split: null,
+      writeKey: newIdempotencyKey(),
+      done: { kind: 'split', parentCode: parent.code, childId: child.id, ticket: { ...ticket.ticket, colourway: ticket.ticket.colourway.code, operations: ticket.ticket.operations }, printProblem: ticket.problem, quantity: child.quantity, reason, live: parent.live },
+    })
   }, [api, card, feedback, online, screen, store])
 
   const goBack = useCallback(() => {
@@ -509,8 +559,18 @@ export function FloorBundles() {
       case 'voidConfirm':
         return void voidIt()
       case 'cancel':
-        if (screen.kind === 'bundle') setScreen({ ...screen, stage: 'card', reason: null, busy: false })
+        if (screen.kind === 'bundle') setScreen({ ...screen, stage: 'card', reason: null, busy: false, split: null, problem: screen.stage === 'split' ? null : screen.problem })
         return
+      case 'split':
+        return void openSplit()
+      case 'splitQuantity':
+        if (screen.kind === 'bundle' && screen.split) setScreen({ ...screen, split: { ...screen.split, quantity: action.value } })
+        return
+      case 'splitReason':
+        if (screen.kind === 'bundle' && screen.split) setScreen({ ...screen, split: { ...screen.split, reason: action.reason } })
+        return
+      case 'splitConfirm':
+        return void confirmSplit()
     }
   }
 
@@ -564,6 +624,7 @@ export function FloorBundles() {
       operations: value.operations.map((operation) => ({ seq: operation.seq, code: operation.code, name: operation.name, done: operation.done })),
       replacedCodes: value.bundle.replacedCodes,
       ticket: { ...value.ticket, colourway: value.ticket.colourway.code },
+      live: screen.done?.kind === 'split' ? screen.done.live : (screen.split?.live ?? null),
     }
     let done: BundleDone | null = null
     if (screen.done?.kind === 'voided') done = screen.done
@@ -581,8 +642,26 @@ export function FloorBundles() {
           retrying: retrying.has(printed.bundleId),
         },
       }
+    } else if (screen.done?.kind === 'split') {
+      const split = screen.done
+      const job = jobOfCode(jobs.get(split.childId) ?? [], split.ticket.code)
+      done = {
+        kind: 'split',
+        parentCode: split.parentCode,
+        quantity: split.quantity,
+        reason: split.reason,
+        live: split.live,
+        ticket: {
+          key: split.childId,
+          content: split.ticket,
+          ticks: 'recorded',
+          print: split.printProblem ? { kind: 'none' } : ticketPrint({ recorded: true, printer: 'some', seesJobs, job }),
+          retrying: retrying.has(split.childId),
+        },
+      }
     }
-    step = { kind: 'bundle', card: model, stage: screen.stage, reason: screen.reason, busy: screen.busy, done, problem: screen.problem, asOf: card.asOf }
+    const split = screen.split ? { quantity: screen.split.quantity, reason: screen.split.reason, live: screen.split.live, reading: screen.split.reading } : null
+    step = { kind: 'bundle', card: model, stage: screen.stage, reason: screen.reason, busy: screen.busy, done, problem: screen.problem, asOf: card.asOf, split }
   } else step = { kind: 'loading', code: null }
 
   const low = store.shellQueue.lowNumbers.find((entry) => entry.kind === 'BUNDLE')
@@ -595,8 +674,10 @@ export function FloorBundles() {
           : () => onAction({ type: 'make' })
         : step.kind === 'bundle' && step.stage === 'card' && !step.done && step.card.status === 'ACTIVE' && online
           ? () => onAction({ type: 'reprint' })
-          : null,
-    escape: step.kind === 'proposal' && step.editing ? () => onAction({ type: 'padCancel' }) : step.kind === 'bundle' && step.stage === 'reprint' ? () => onAction({ type: 'cancel' }) : goBack,
+          : step.kind === 'bundle' && step.stage === 'split'
+            ? () => onAction({ type: 'splitConfirm' })
+            : null,
+    escape: step.kind === 'proposal' && step.editing ? () => onAction({ type: 'padCancel' }) : step.kind === 'bundle' && (step.stage === 'reprint' || step.stage === 'split') ? () => onAction({ type: 'cancel' }) : goBack,
   })
 
   if (!me) return null

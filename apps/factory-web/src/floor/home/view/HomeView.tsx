@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { CircleAlert, ClipboardList, CloudOff, Factory, Hash, Layers, Package, PackageOpen, ScanLine, ScrollText, Scissors, ShieldCheck, Shirt, Tag, Undo2, UserRoundCheck } from 'lucide-react'
+import { CircleAlert, ClipboardList, CloudOff, Factory, Hash, Layers, ListTodo, Package, PackageOpen, ScanLine, ScrollText, Scissors, ShieldCheck, Shirt, Tag, Undo2, UserRoundCheck, Wrench } from 'lucide-react'
 import type { ScanIdKind } from '@nexus/factory-domain/numbering/kinds'
 import { FloorButton, FloorTile, FloorTileGrid, ScanInput, type CameraScanner } from '@nexus/ui/floor'
 import { useT } from '../../../lib/i18n/provider'
@@ -44,6 +44,7 @@ export interface HomeViewProps {
 }
 
 export const TILE_ICON: Readonly<Record<TileKey, ReactNode>> = {
+  mywork: <ListTodo />,
   operation: <Shirt />,
   cut: <Scissors />,
   bundles: <Layers />,
@@ -55,6 +56,7 @@ export const TILE_ICON: Readonly<Record<TileKey, ReactNode>> = {
   labels: <Tag />,
   pack: <Package />,
   final: <ShieldCheck />,
+  machine: <Wrench />,
   scan: <ScanLine />,
 }
 

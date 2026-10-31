@@ -86,6 +86,12 @@ describe('the defects', () => {
     )
     expect(defectCounts([{ defectClass: 'MINOR', quantity: 3 }, { defectClass: 'MINOR', quantity: 1 }, { defectClass: 'MAJOR', quantity: 2 }])).toEqual({ critical: 0, major: 2, minor: 4 })
   })
+
+  it('W2a (B-W2a-67): a line placed on the garment names a zone of the garment map', () => {
+    const cells = new Set(['c1'])
+    expect(defectProblems([{ defectClass: 'MINOR', code: 'STITCH-SKIP', quantity: 1, defectCodeId: 'd1', zone: 'SLEEVE_L' }], { sampleSize: 5, cellIds: cells })).toEqual([])
+    expect(paths(defectProblems([{ defectClass: 'MINOR', code: 'STITCH-SKIP', quantity: 1, zone: 'NOSE' }], { sampleSize: 5, cellIds: cells }))).toEqual(['defects/0/zone'])
+  })
 })
 
 describe('the computed result and the override (QHS-013)', () => {

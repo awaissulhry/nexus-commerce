@@ -169,6 +169,18 @@
     "REVERSED_ALREADY": {
       "message": "This issue was undone already.",
       "fix": "Nothing to do."
+    },
+    "NOT_AT_WORK_ORDER": {
+      "message": "This work order does not hold that.",
+      "fix": "Scan a hide or a lot of the list, or tap a row."
+    },
+    "MORE_THAN_AT_WORK_ORDER": {
+      "message": "That is more than the work order holds and has not cut.",
+      "fix": "Measure again and type less."
+    },
+    "NOTHING_AT_WORK_ORDER": {
+      "message": "The work order holds none of this any more.",
+      "fix": "Read the list again: another tablet may have returned it."
     }
   },
   "unit": {
@@ -189,5 +201,101 @@
     "ROLL": "rolls",
     "CONE": "cones",
     "BOX": "boxes"
+  },
+  "return": {
+    "open": "Return unused",
+    "nothing": "Nothing of this work order can come back",
+    "back": "Back to the list",
+    "lead": "What work order {workOrder} holds and has not used goes back to stock. A cut hide comes back as a remnant with its area.",
+    "title": "What can come back",
+    "count_one": "{count} thing can come back",
+    "count_other": "{count} things can come back",
+    "scan": {
+      "label": "Scan what comes back",
+      "hint": "Scan the hide's tag or the lot's label, or tap a row."
+    },
+    "empty": {
+      "title": "Nothing to return",
+      "body": "This work order holds nothing that was not cut or used."
+    },
+    "row": {
+      "held": "{quantity} at the work order",
+      "cut": "{quantity} cut",
+      "returnable": "can come back ({unit})",
+      "kind": {
+        "hide": "Hide",
+        "lot": "Lot",
+        "material": "Material"
+      }
+    },
+    "pad": {
+      "title": "How much of {code} comes back?",
+      "area": "Area that comes back",
+      "quantity": "Quantity that comes back",
+      "expected": "Can come back {quantity}",
+      "whole": "The whole hide",
+      "all": "All of it",
+      "empty": "Type how much comes back",
+      "range": "From {min} to {max}",
+      "remnant": "It comes back as a remnant with this area.",
+      "wholeBack": "The whole hide comes back."
+    },
+    "place": {
+      "title": "Where does it go?",
+      "loading": "Reading the store places…",
+      "none": "This site has no store place: ask your team leader.",
+      "picked": "Here",
+      "count_one": "{count} place",
+      "count_other": "{count} places",
+      "held": {
+        "noPermission": "Your role cannot see the store places: ask your team leader.",
+        "unavailable": "The store places could not be read: try again."
+      },
+      "tagNext": "Then print the remnant's new tag with its area."
+    },
+    "confirm": "Return {quantity}",
+    "confirmNone": "Return",
+    "busy": "Returning…",
+    "held": {
+      "offline": "Returning needs the network: it waits until it is back.",
+      "place": "Pick where it goes"
+    },
+    "keyBack": "Back to the list",
+    "keyConfirm": "Return",
+    "another": "Return more",
+    "done": {
+      "whole": "Back to stock: {code} · {quantity} → {place}.",
+      "remnant": "Back to stock as a remnant: {code} · {quantity} → {place}.",
+      "part": "Back to stock: {code} · {quantity} → {place}."
+    },
+    "keepsLabel": "It keeps its label: no new one is needed.",
+    "tag": {
+      "title": "The remnant's new tag",
+      "print": "Print the new tag",
+      "busy": "Printing…",
+      "pickPrinter": "Pick a printer first",
+      "choose": "Which printer?",
+      "on": {
+        "station": "Prints on this station's printer: {printer}.",
+        "site": "Prints on the site's label printer: {printer}."
+      },
+      "looking": "Looking for the label printer…",
+      "noPrinter": "No label printer at this site: write {area} on the hide's tag.",
+      "notOurs": "This hide's tag is an older code that is not printed here: write {area} on it.",
+      "noRight": "Your role prints no labels: write {area} on the hide's tag, or ask the warehouse.",
+      "retry": "Print again",
+      "state": {
+        "QUEUED": "In the print queue",
+        "SENT": "Sent to the printer",
+        "PRINTED": "Printed",
+        "FAILED": "Not printed"
+      },
+      "name": "Hide tag {code}",
+      "colour": "Colour",
+      "area": "Area",
+      "lot": "Lot",
+      "code": "Code {code}",
+      "invalid": "Code {code} cannot be drawn"
+    }
   }
 }

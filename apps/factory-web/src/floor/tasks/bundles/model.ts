@@ -1,4 +1,5 @@
 import { MAX_BUNDLE_SIZE, splitBundles } from '@nexus/factory-domain/production/bundles/rules'
+import { liveGarments, SPLIT_REASONS, type SplitReason } from '@nexus/factory-domain/production/bundles/split'
 import type { LabelBlock, LabelLayout } from '@nexus/ui/components/LabelPreview/index'
 import type { QueueItem } from '../../queue/model'
 
@@ -172,3 +173,22 @@ export type ReprintReason = keyof typeof REPRINT_REASONS
 /** Why a bundle is voided (design bundles.void "a reason tile"). */
 export const VOID_REASONS = { mistake: 'Made by mistake', wrongSize: 'Wrong size', wrongQuantity: 'Wrong quantity' } as const
 export type VoidReason = keyof typeof VOID_REASONS
+
+// ---- split a bundle (B-W2a-75; design floor.bundles "Split a bundle", MES-071) ------------------------------------------
+
+/** Why garments come off a bundle (the API's codes; the screen's words are `split.reason.<CODE>`). */
+export { SPLIT_REASONS, type SplitReason }
+
+/**
+ * The garments still in a bundle: its quantity as cut less every child split off that is not void (factory-domain
+ * production/bundles liveGarments, the API's own rule), from the work order's bundles as the bundles step reads them.
+ */
+export function liveOf(bundle: { readonly id: string; readonly quantity: number }, bundles: readonly { readonly parentBundleId?: string | null; readonly quantity: number; readonly status: 'ACTIVE' | 'VOID' }[]): number {
+  return liveGarments(
+    bundle.quantity,
+    bundles.filter((other) => other.parentBundleId === bundle.id),
+  )
+}
+
+/** The most garments that may come off: all but one (at least one stays); 0 when nothing can. */
+export const splitMax = (live: number): number => Math.max(0, live - 1)

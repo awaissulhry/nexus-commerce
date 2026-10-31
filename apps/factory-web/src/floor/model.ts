@@ -38,7 +38,7 @@ export function modeOf(station: { workCentreKind: WorkCentreKind } | null): Floo
 
 // ---- the home tiles (design floor.home "tiles": the station's mode AND the person's permissions, fail closed) ----
 
-export const TILE_KEYS = ['operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'scan'] as const
+export const TILE_KEYS = ['mywork', 'operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'machine', 'scan'] as const
 export type TileKey = (typeof TILE_KEYS)[number]
 
 export interface TileRule {
@@ -59,6 +59,9 @@ export interface TileRule {
  * SCR-090, 094, 095, 093, 097); Receive (SCR-092); Garment labels (SCR-096). Their pages: `TASK_ROUTES` (tasks/routes.ts).
  */
 export const TILE_RULES: readonly TileRule[] = [
+  // SCR-089 (B-W2a-74): My work, the station's queue from the published plan (GET /production/dispatch/station asks
+  // floor.work). At every station mode; not at the warehouse (a device with no station has no queue: its task inbox is W2b).
+  { key: 'mywork', permission: 'floor.work', modes: ['sewing', 'cutting', 'packing', 'inspection'], built: true, takesScans: false },
   // design floor.operation: sewing, cutting, packing; and the inspection bench, where a routing's scanned INSPECTION
   // operation is reported (the scans module wants a station of the operation's kind, else a reason).
   { key: 'operation', permission: 'production.scan', modes: ['sewing', 'cutting', 'packing', 'inspection'], built: true, takesScans: true },
@@ -74,6 +77,9 @@ export const TILE_RULES: readonly TileRule[] = [
   { key: 'labels', permission: 'production.serials', modes: ['packing'], built: true, takesScans: true },
   { key: 'pack', permission: 'shipping.pack', modes: ['packing'], built: true, takesScans: true },
   { key: 'final', permission: 'quality.inspections.view', modes: ['inspection'], built: true, takesScans: true },
+  // SCR-179 (B-W2a-73): a machine problem at every station mode (design floor.machine); its API asks plant.report, which
+  // every floor role holds (Owner answer H1). Never held by the worker notice: a safety report names the station instead.
+  { key: 'machine', permission: 'plant.report', modes: ['sewing', 'cutting', 'warehouse', 'packing', 'inspection'], built: true, takesScans: false },
   { key: 'scan', permission: 'floor.work', modes: 'all', built: true, takesScans: true },
 ]
 

@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { at, canOf, COLOURS, inShell, MATERIALS, PREFIX, SITE, SITE_SOUTH, SUPPLIER_LIST, SUPPLIERS, TIME_ZONE, uid, type Role } from '../../_shared/buying/fixtures'
-import type { Explain, OpenDraft, Plan, PlanLine, PlanRun, StockLine } from './api'
+import type { Explain, OpenDraft, PegDemand, Plan, PlanLine, PlanRun, SendCard, Shortages, StockLine } from './api'
 import type { PlanModel } from './model'
 import { PlanView } from './view/PlanView'
 
@@ -202,6 +202,64 @@ const HELD: StockLine[] = [
     reason: 'CR_VI_PENDING',
     held: true,
   },
+  // B-W2a-70: a hide under a quality hold (its lot is released): held, with the hold's reason.
+  {
+    item: { id: MATERIALS.leather.id, code: MATERIALS.leather.code, name: MATERIALS.leather.name, baseUom: 'FT2' },
+    colour: COLOURS.black,
+    lot: { id: uid('6262', 41), code: 'LA-000041', qualityStatus: 'RELEASED', crViStatus: 'PASS', qualityNote: null, receivedAt: at(14, 9), qualityDecidedAt: at(16, 11) },
+    quantity: '24.5000',
+    hides: 1,
+    reason: 'QUALITY_HOLD',
+    held: true,
+    hide: { id: uid('6363', 7), code: 'H-DEMO-0007' },
+    hold: { id: uid('6464', 1), subjectType: 'Hide', reasonCode: 'SHADE', reasonIt: 'Tonalità da verificare', reasonEn: 'Shade to check', placedAt: at(28, 15) },
+  },
+]
+
+/** B-W2a-70: the pegging tree of the black leather — which supply covers which order line, size and work order. */
+const PEGGING: PegDemand[] = [
+  {
+    requirementId: uid('5502', 1),
+    kind: 'WORK_ORDER',
+    order: { id: uid('5151', 43), number: 'SO-DEMO-0043' },
+    orderLine: { id: uid('5152', 2), seq: 20 },
+    size: '54',
+    workOrder: { id: uid('9191', 41), number: 'WO-00041', status: 'RELEASED' },
+    demandDate: '2026-11-20',
+    quantity: '118.0000',
+    planned: '0.0000',
+    supplies: [
+      { seq: 1, kind: 'RESERVATION', quantity: '60.0000', date: null, reservation: { id: uid('6565', 1), kind: 'HIDE', lot: { id: uid('6262', 41), code: 'LA-000041' }, hide: { id: uid('6363', 3), code: 'H-DEMO-0003' } }, purchaseOrder: null, firm: false },
+      { seq: 2, kind: 'STOCK', quantity: '58.0000', date: null, reservation: null, purchaseOrder: null, firm: false },
+    ],
+  },
+  {
+    requirementId: uid('5502', 1),
+    kind: 'ORDER_LINE',
+    order: { id: uid('5151', 42), number: 'SO-DEMO-0042' },
+    orderLine: { id: uid('5152', 1), seq: 10 },
+    size: '52',
+    workOrder: null,
+    demandDate: '2026-11-26',
+    quantity: '176.0000',
+    planned: '76.0000',
+    supplies: [
+      { seq: 3, kind: 'PURCHASE_ORDER', quantity: '100.0000', date: '2026-11-20', reservation: null, purchaseOrder: { id: uid('5801', 3), number: 'PO-2026-0003', status: 'CONFIRMED', lineId: uid('5803', 3), seq: 10 }, firm: false },
+      { seq: 4, kind: 'PLANNED', quantity: '76.0000', date: '2026-11-26', reservation: null, purchaseOrder: null, firm: false },
+    ],
+  },
+  {
+    requirementId: uid('5502', 1),
+    kind: 'ORDER_LINE',
+    order: { id: uid('5151', 42), number: 'SO-DEMO-0042' },
+    orderLine: { id: uid('5152', 1), seq: 10 },
+    size: '50',
+    workOrder: null,
+    demandDate: '2026-11-26',
+    quantity: '126.0000',
+    planned: '124.0000',
+    supplies: [{ seq: 5, kind: 'PLANNED', quantity: '124.0000', date: '2026-11-24', reservation: null, purchaseOrder: null, firm: true }],
+  },
 ]
 
 const EXPLAIN: Explain = {
@@ -214,6 +272,7 @@ const EXPLAIN: Explain = {
       { orderId: ORDERS[1]!.id, orderNumber: ORDERS[1]!.number, orderLineId: uid('5152', 2), lineSeq: 20, size: '54', pieces: 5, made: 1, quantity: '118.0000', issued: '0.0000', dueDate: '2026-12-04', workOrders: ['WO-00041'] },
     ],
   },
+  pegging: PEGGING,
   bridge: [
     { step: 'NEED', quantity: '420.0000', uom: 'FT2' },
     { step: 'USABLE', quantity: '-120.0000', uom: 'FT2' },
@@ -248,6 +307,27 @@ const DRAFTS: OpenDraft[] = [{ id: uid('5801', 7), number: 'PO-2026-0007', party
 
 const plan = (over: Partial<Plan> = {}): Plan => ({ run: run(), latestAttempt: null, summary: SUMMARY, lines: LINES, ...over })
 
+/** B-W2a-70: the line with the firm planned order (Move the firm order). */
+const FIRM_LINE: PlanLine = { ...LINES[1]!, firm: { quantity: '210.0000', uom: 'FT2', baseQuantity: '210.0000', date: '2026-11-24', supplier: { id: SUPPLIERS.tannery.id, code: SUPPLIERS.tannery.code, name: SUPPLIERS.tannery.legalName }, firmedAt: at(28, 10), carried: true } }
+const WITH_FIRM = LINES.map((entry) => (entry.id === FIRM_LINE.id ? FIRM_LINE : entry))
+
+const WO = (n: number, style: string) => ({ id: uid('9191', n), number: `WO-DEMO-00${n}`, status: 'RELEASED', kind: 'PRODUCTION', dueDate: '2026-11-27', startedAt: null, style: { id: uid('7070', n), code: `MOD-${n}`, name: style } })
+const SHORTAGES: Shortages = {
+  siteId: SITE.id,
+  asOf: '2026-10-29',
+  latestRunId: uid('5501', 14),
+  rows: [
+    { workOrder: WO(41, 'Giacca Aero'), material: { itemId: MATERIALS.leather.id, itemColourId: COLOURS.black.id, label: 'DEMO-LEA-01 BLK', uom: 'FT2' }, word: 'NOT_ENOUGH', short: '62.0000', neededBy: '2026-11-20', expected: null, fixes: [{ kind: 'BUY', requirementId: LINES[0]!.id, purchaseOrder: null }] },
+    { workOrder: { ...WO(42, 'Pantalone Strada'), startedAt: at(27, 7) }, material: { itemId: MATERIALS.lining.id, itemColourId: COLOURS.grey.id, label: 'DEMO-FOD-02 GRY', uom: 'M' }, word: 'DELAYED', short: '14.5000', neededBy: '2026-11-18', expected: { date: '2026-11-25', purchaseOrderNumber: 'PO-2026-0005' }, fixes: [{ kind: 'EXPEDITE', requirementId: null, purchaseOrder: { id: uid('5801', 5), number: 'PO-2026-0005', lineId: uid('5803', 2), dueDate: '2026-11-25' } }] },
+    { workOrder: WO(44, 'Gilet Tour'), material: { itemId: MATERIALS.leather.id, itemColourId: COLOURS.red.id, label: 'DEMO-LEA-01 RED', uom: 'FT2' }, word: 'DELAYED', short: '202.1600', neededBy: '2026-11-10', expected: null, fixes: [{ kind: 'MOVE_FIRM', requirementId: FIRM_LINE.id, purchaseOrder: null }] },
+  ],
+}
+
+const SEND_CARDS: SendCard[] = [
+  { id: uid('5801', 8), number: 'PO-2026-0008', partyId: SUPPLIERS.tannery.id, status: 'DRAFT', version: 3, ready: true, checks: [{ code: 'LATE_FOR_LEAD_TIME', severity: 'WARNING', path: 'lines/0', message: '' }], recipient: { contactId: uid('6767', 1), name: 'Ufficio ordini Demo', email: 'ordini@conceria.example.com' }, confirmBy: at(31, 9), refused: null },
+  { id: uid('5801', 9), number: 'PO-2026-0009', partyId: SUPPLIERS.fabric.id, status: 'DRAFT', version: 1, ready: false, checks: [{ code: 'NO_CONTACT_EMAIL', severity: 'BLOCKS', path: 'contact', message: '' }, { code: 'LINE_NOT_PRICED', severity: 'BLOCKS', path: 'lines/0', message: '' }], recipient: null, confirmBy: null, refused: null },
+]
+
 export interface PlanCase {
   role: Role
   model: PlanModel
@@ -275,6 +355,9 @@ function planCase(role: Role, over: Partial<PlanModel> = {}): PlanCase {
       notice: null,
       dialog: null,
       why: null,
+      shortages: { status: 'ready', value: SHORTAGES },
+      today: '2026-10-29',
+      canFirm: role !== 'readOnly' && role !== 'sales',
       timeZone: TIME_ZONE,
       ...over,
     },
@@ -362,6 +445,33 @@ export const designScreen = defineDesignScreen<PlanCase>({
     { id: 'two-sites', label: 'Two sites: the site is picked in the band', model: planCase('buyer', { sites: { status: 'ready', value: [SITE, SITE_SOUTH] } }) },
     { id: 'loading', label: 'Loading', model: planCase('buyer', { plan: { status: 'loading' }, live: 'connecting' }) },
     { id: 'error', label: "The plan couldn't be read", model: planCase('buyer', { plan: { status: 'error', problem: 'problem.offline' }, live: 'offline' }) },
+    { id: 'short-wo', label: 'W2a Short on open work orders: the fix beside each (Buy · Expedite PO · Move the firm order)', model: planCase('buyer', { view: 'shortWo', plan: { status: 'ready', value: plan({ lines: WITH_FIRM }) } }), note: 'Computed now from the live plan. Buy drafts the plan’s line in one click; Expedite opens the PO (Remind chases the supplier); Move asks a day for the firm order. Swap is a later wave.' },
+    { id: 'short-wo-selection', label: 'W2a Short on open work orders: selection drafts the Buy lines', model: planCase('buyer', { view: 'shortWo', selected: [`${uid('9191', 41)}:${MATERIALS.leather.id}:${COLOURS.black.id}`, `${uid('9191', 42)}:${MATERIALS.lining.id}:${COLOURS.grey.id}`] }) },
+    { id: 'short-wo-planner', label: 'W2a Short on open work orders as a planner: Buy held (buyers make POs; the line waits in Requests to buy)', model: planCase('planner', { view: 'shortWo' }) },
+    { id: 'short-wo-empty', label: 'W2a No work order is waiting for material', model: planCase('buyer', { view: 'shortWo', shortages: { status: 'ready', value: { ...SHORTAGES, rows: [] } } }) },
+    { id: 'short-wo-error', label: 'W2a Short on open work orders could not be read', model: planCase('buyer', { view: 'shortWo', shortages: { status: 'error', problem: 'problem.offline' } }) },
+    { id: 'move-firm', label: 'W2a Move the firm planned order earlier', model: planCase('buyer', { view: 'shortWo', plan: { status: 'ready', value: plan({ lines: WITH_FIRM }) }, dialog: { kind: 'moveFirm', requirementId: FIRM_LINE.id, date: '2026-11-09', busy: false, problem: null } }) },
+    { id: 'why-firm', label: 'W2a Why: a firm planned order carried from an earlier plan', model: planCase('buyer', { plan: { status: 'ready', value: plan({ lines: WITH_FIRM }) }, why: { lineId: FIRM_LINE.id, explain: { status: 'ready', value: { ...EXPLAIN, line: { ...FIRM_LINE, sources: [] }, pegging: [] } } } }) },
+    {
+      id: 'send',
+      label: 'W2a Drafts made → Review and send: one card per order, ready or what blocks it',
+      model: planCase('buyer', {
+        dialog: draftDialog(OPEN_BUY, {
+          result: { orders: [{ id: uid('5801', 8), number: 'PO-2026-0008', created: false, lineIds: [uid('5803', 11), uid('5803', 12)], lineCount: 3 }, { id: uid('5801', 9), number: 'PO-2026-0009', created: true, lineIds: [uid('5803', 13)], lineCount: 1 }], lines: [] },
+          send: { cards: SEND_CARDS, problem: null, busy: false, outcomes: null },
+        }),
+      }),
+    },
+    {
+      id: 'send-done',
+      label: 'W2a Send n done: what went, what was refused',
+      model: planCase('buyer', {
+        dialog: draftDialog(OPEN_BUY, {
+          result: { orders: [{ id: uid('5801', 8), number: 'PO-2026-0008', created: false, lineIds: [uid('5803', 11)], lineCount: 3 }], lines: [] },
+          send: { cards: SEND_CARDS, problem: null, busy: false, outcomes: [{ id: uid('5801', 8), number: 'PO-2026-0008', outcome: 'SENT', refused: null }] },
+        }),
+      }),
+    },
     { id: 'owner', label: 'Owner: everything', model: planCase('owner') },
     { id: 'planner', label: 'Planner: no money (no value column); Draft PO held — buyers make POs', model: planCase('planner') },
     { id: 'read-only', label: 'Read-only: sees the plan; Run, Draft PO and Set aside held with their reasons', model: planCase('readOnly', { selected: OPEN_BUY }) },

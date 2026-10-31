@@ -136,6 +136,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-45: Planning board (SCR-122) and Lines & subcontractors (SCR-126).
   '/planning/board',
   '/planning/allocation',
+  // B-W2a-70: Capacity & load (SCR-123) and Exceptions (SCR-125).
+  '/planning/capacity',
+  '/planning/exceptions',
   // B-W2a-59: Planning settings (SCR-124, SCR-127) and its plant calendar print (a new tab).
   '/planning/settings',
   '/planning/settings/calendar-print',
@@ -154,12 +157,21 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W1-46 … 49 part 2 Warehouse: Shipments (SCR-066), a shipment (SCR-067), Carriers & shipping (SCR-068).
   '/warehouse/shipments',
   '/warehouse/shipments/[id]',
+  // B-W2a-71: a shipment's driver's pack (SCR-067-pack, a new tab: the sheet and every document drawn for one print).
+  '/warehouse/shipments/[id]/pack',
   '/warehouse/shipping',
   '/production/floor',
   '/production/work-orders',
   '/production/work-orders/[id]',
   '/quality/inspections',
   '/quality/inspections/[id]',
+  // B-W2a-67: Quality › Holds (SCR-078; a hold opens in its DetailModal, its tag prints in a tab) and Defects & dispositions (SCR-079).
+  '/quality/holds',
+  '/quality/holds/[id]/tag',
+  '/quality/defects',
+  // B-W2a-68: Quality › Problems › Nonconformances (SCR-144 list and board, SCR-145 the NCR record).
+  '/quality/ncr',
+  '/quality/ncr/[id]',
   // B-W2a-65: Quality › Complaints (SCR-113 W2a part).
   '/quality/complaints',
   '/quality/complaints/[id]',
@@ -248,6 +260,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/plant/machines',
   '/plant/machines/[id]',
   '/plant/machines/tags',
+  // B-W2a-73: Plant › Settings › Plant settings (SCR-241, its W2a section: the symptoms on the floor).
+  '/plant/settings',
 ])
 
 /** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */
