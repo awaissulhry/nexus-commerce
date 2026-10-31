@@ -10,7 +10,7 @@ import type { ScanRead } from '../scan/scan-model'
  * opens Scan anything. Pure, so the tests hold it.
  */
 
-export type TaskKey = Extract<TileKey, 'operation' | 'cut' | 'bundles' | 'receive' | 'pick' | 'final' | 'pack' | 'labels' | 'mywork'>
+export type TaskKey = Extract<TileKey, 'operation' | 'cut' | 'bundles' | 'receive' | 'pick' | 'final' | 'pack' | 'labels' | 'mywork' | 'machine'>
 
 export const TASK_ROUTES: Readonly<Record<TaskKey, string>> = {
   // SCR-089 (B-W2a-74): My work, the station's queue.
@@ -23,6 +23,8 @@ export const TASK_ROUTES: Readonly<Record<TaskKey, string>> = {
   final: '/floor/final',
   pack: '/floor/pack',
   labels: '/floor/labels',
+  // SCR-179 (B-W2a-73): the machine problem and the technician's job.
+  machine: '/floor/machine',
 }
 
 /** The task a tile opens, or null (Scan anything has its own page; the rest are later steps). */
@@ -31,7 +33,7 @@ export function taskOfTile(key: TileKey): TaskKey | null {
 }
 
 /** The catalogues the floor app loads (the frame's and each task's). */
-export const FLOOR_NAMESPACES = ['floor', 'floor-tasks', 'floor-scans', 'floor-issue', 'floor-cutting', 'floor-bundles', 'floor-final', 'floor-receive', 'floor-pack', 'floor-labels', 'floor-mywork', 'floor-reasons', 'reason-kit'] as const
+export const FLOOR_NAMESPACES = ['floor', 'floor-tasks', 'floor-scans', 'floor-issue', 'floor-cutting', 'floor-bundles', 'floor-final', 'floor-receive', 'floor-pack', 'floor-labels', 'floor-mywork', 'floor-reasons', 'reason-kit', 'floor-machine'] as const
 
 /**
  * The task a code scanned on Home opens at this station, given the tiles the person has (a tile = mode AND permission),

@@ -314,17 +314,19 @@
       "pick": "Issue materials to a work order",
       "final": "Check, sign and release garments",
       "pack": "Scan garments into cartons, print labels and the DDT",
-      "labels": "Print garment labels behind the certificate check"
+      "labels": "Print garment labels behind the certificate check",
+      "machine": "Report a machine problem; a technician’s jobs"
     },
     "held": {
       "notice": "Read the notice first",
       "coming": "Coming soon"
-    }
+    },
+    "machine": "Machine problem"
   },
   "scan": {
     "title": "Scan anything",
     "label": "Scan any label",
-    "hint": "Bundle, hide, lot, work order or location.",
+    "hint": "Bundle, hide, lot, work order, location or machine tag.",
     "read": "Read {code}",
     "type": "Type a code",
     "camera": {
@@ -340,7 +342,8 @@
     "action": {
       "cut": "Cut this hide",
       "workOrder": "Open at cutting",
-      "move": "Move here"
+      "move": "Move here",
+      "report": "Report a problem"
     },
     "hide": {
       "notUsable": "Do not cut this hide: its lot is not released."
@@ -393,7 +396,20 @@
       "toCut": "Still to cut",
       "sizesLeft": "Sizes left",
       "name": "Name",
-      "path": "Where it is"
+      "path": "Where it is",
+      "machineType": "Type",
+      "makeModel": "Make and model",
+      "station": "Station",
+      "line": "Line",
+      "since": "Since",
+      "openJob": "Open job",
+      "openRequests": "Open problems",
+      "noJob": "None"
+    },
+    "machine": {
+      "locked": "Do not use this machine: it was marked unsafe and waits for a technician to sign it safe.",
+      "doNotUse": "Do not use this machine: the office set it do-not-use.",
+      "retired": "This machine is retired: its tag no longer reports problems."
     }
   },
   "label": {
@@ -404,7 +420,8 @@
     "serial": "Serial",
     "carton": "Carton",
     "location": "Location",
-    "workOrder": "Work order"
+    "workOrder": "Work order",
+    "machine": "Machine"
   },
   "labelPlural": {
     "hide": "hides",
@@ -414,7 +431,8 @@
     "serial": "serials",
     "carton": "cartons",
     "location": "locations",
-    "workOrder": "work orders"
+    "workOrder": "work orders",
+    "machine": "machines"
   },
   "status": {
     "hide": {
@@ -452,6 +470,23 @@
       "QUARANTINE": "Quarantine",
       "PRODUCTION": "Production",
       "SHIPPING": "Shipping"
+    },
+    "machine": {
+      "RUNNING": "Running",
+      "DOWN": "Down",
+      "UNDER_MAINTENANCE": "Under maintenance",
+      "DO_NOT_USE": "Do not use",
+      "RETIRED": "Retired",
+      "LOCKED": "Locked (unsafe)"
+    },
+    "job": {
+      "NEW": "New",
+      "PLANNED": "Planned",
+      "IN_PROGRESS": "In progress",
+      "WAITING_PARTS": "Waiting for parts",
+      "HANDED_BACK": "Handed back",
+      "CLOSED": "Closed",
+      "CANCELLED": "Cancelled"
     }
   },
   "sync": {
@@ -564,7 +599,8 @@
       "scrap_one": "{count} scrap",
       "scrap_other": "{count} scrap",
       "rework_one": "{count} rework",
-      "rework_other": "{count} rework"
+      "rework_other": "{count} rework",
+      "machine": "Machine problem on {code}"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {

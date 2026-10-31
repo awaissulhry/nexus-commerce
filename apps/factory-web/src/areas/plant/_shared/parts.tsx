@@ -2,28 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import {
-  Activity,
-  AlertTriangle,
-  Droplet,
-  FileX,
-  Flame,
-  Hand,
-  HelpCircle,
-  Layers,
-  Lock,
-  Power,
-  Printer,
-  Scissors,
-  ShieldOff,
-  Spline,
-  Stamp,
-  Volume2,
-  Wind,
-  Wrench,
-  Zap,
-  type LucideIcon,
-} from 'lucide-react'
+import { AlertTriangle, FileX, Lock, ShieldOff, Wrench } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, Modal, Tabs, type TabItem } from '@nexus/ui/components'
 import { DetailHeader } from '@nexus/ui/patterns'
 import { Button, Input, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
@@ -31,6 +10,7 @@ import { listKeys, type ListKey } from '../../../list-frame/model'
 import { formatNumber, formatTime } from '../../../lib/i18n/format'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
+import { iconOf } from '../../../lib/plant/symptom-icons'
 import type { JobStatus, MachineStatus, Priority, RequestStatus, Symptom } from './api'
 import { JOB_TONE, labelOf, MACHINE_TONE, PRIORITY_TONE, REQUEST_TONE, TIME_ZONE, type Words } from './model'
 import './plant.css'
@@ -109,27 +89,8 @@ export function UnsafeTag({ signed = false }: { signed?: boolean }) {
 
 // ---- symptoms ----------------------------------------------------------------------------------------------------------------
 
-/** The design-system icon ids the group's lists use (factory-domain plant/starter) → the icons drawn. */
-const ICONS: Readonly<Record<string, LucideIcon>> = {
-  power: Power,
-  volume: Volume2,
-  droplet: Droplet,
-  'shield-off': ShieldOff,
-  scissors: Scissors,
-  needle: Spline,
-  hand: Hand,
-  zap: Zap,
-  stamp: Stamp,
-  flame: Flame,
-  layers: Layers,
-  wind: Wind,
-  printer: Printer,
-  activity: Activity,
-}
-
-export function iconOf(id: string | null | undefined): LucideIcon {
-  return (id && ICONS[id]) || (id === null ? HelpCircle : Wrench)
-}
+/** The icons of the group's lists (factory-domain plant/starter ids → lucide): one map in src/lib, shared with the floor. */
+export { iconOf }
 
 /** A symptom as the queue shows it: its icon and its words (the group's own, in the page's language); none: the words typed. */
 export function SymptomText({ symptom, description }: { symptom: Symptom | null; description?: string | null }) {

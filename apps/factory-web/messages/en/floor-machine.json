@@ -1,0 +1,257 @@
+{
+  "title": "Machine problem",
+  "loading": "Reading the station's machines…",
+  "asOf": "From this tablet, as of {time}: the network is down.",
+  "banner": {
+    "locked": "{machine} is marked do not use (unsafe): do not work on it until a technician signs it safe.",
+    "doNotUse": "{machine} is set do-not-use by the office: do not work on it.",
+    "down": "{machine} is down: maintenance knows.",
+    "maintenance": "{machine} is being worked on by maintenance.",
+    "blocked": "Every machine at this station is do-not-use: the station takes no scans until one is signed safe."
+  },
+  "which": {
+    "scan": "Scan the machine's tag",
+    "scanHint": "The QR tag on the machine, or tap one of this station's machines below.",
+    "read": "Read {code}",
+    "type": "Type the asset number",
+    "reading": "Looking for {code}…",
+    "scanned": {
+      "notFound": "No machine of this site has the tag {code}. Check the tag, or tap the machine below.",
+      "offline": "{code} is not on this tablet and the network is down. Tap the machine below, or try again when the network is back.",
+      "unavailable": "The factory server does not answer for {code}. Try again in a minute."
+    },
+    "station": "This station's machines · {station}",
+    "noStation": "This tablet has no station",
+    "none": "No machine is registered at this station. Scan the machine's tag.",
+    "noStationBody": "Scan the machine's tag to report its problem.",
+    "machines": "This station's machines"
+  },
+  "camera": {
+    "start": "Camera",
+    "stop": "Close camera",
+    "error": "The camera did not start. Allow it in Android, or use the scanner."
+  },
+  "held": {
+    "noReport": "Your role here does not report machine problems. Ask your team leader.",
+    "machineFirst": "Scan or tap the machine first.",
+    "retired": "This machine is retired: its tag no longer reports problems.",
+    "busy": "Sending…",
+    "pickOrWords": "Tap what is wrong, or say it in a few words.",
+    "words": "Say in a few words what is wrong.",
+    "noWork": "Only a maintenance technician works on jobs.",
+    "jobDone": "This job is closed.",
+    "notYours": "This job is given to another technician: the office reassigns it.",
+    "offline": "Needs the network: try again when the tablet is back online.",
+    "whatDone": "Tap what you did.",
+    "after": "Tap how the machine is now.",
+    "signFirst": "Running only once a technician has signed the machine safe.",
+    "noSign": "Only a technician signs a machine safe again.",
+    "checked": "Say what you checked.",
+    "photo": "Photos from the tablet come later: the office can add one to the request."
+  },
+  "status": {
+    "RUNNING": "Running",
+    "DOWN": "Down",
+    "UNDER_MAINTENANCE": "Under maintenance",
+    "DO_NOT_USE": "Do not use",
+    "RETIRED": "Retired",
+    "LOCKED": "Locked (unsafe)"
+  },
+  "action": {
+    "myJobs": "My jobs",
+    "back": "Back",
+    "reportLock": "Lock the machine",
+    "reportRuns": "It still runs",
+    "reportDown": "Machine down",
+    "home": "Home",
+    "another": "Report another",
+    "report": "Report a problem",
+    "handBack": "Hand back",
+    "start": "Start work",
+    "wait": "Wait for parts",
+    "reopen": "Take back to work",
+    "signSafe": "Sign safe",
+    "retry": "Try again",
+    "reportAs": "Report as:"
+  },
+  "symptom": {
+    "title": "What is wrong?",
+    "offline": "The network is down: the report is saved on this tablet and sent when it is back.",
+    "words": "A few words",
+    "wordsOrPick": "Or say it in a few words",
+    "wordsHint": "What you see or hear. Never a person's name.",
+    "unsafe": "It is unsafe: lock it",
+    "unsafeOn": "Marked unsafe",
+    "unsafeBySymptom": "This symptom locks the machine by itself.",
+    "photo": "Add a photo",
+    "unsafeBody": "{machine} will be marked do not use at once: nobody may work on it until a technician signs it safe.",
+    "locks": "Locks the machine",
+    "saysWords": "Say it in a few words",
+    "none": "No symptoms are set up for this machine: say in a few words what is wrong."
+  },
+  "sent": {
+    "title": "Reported: {machine}",
+    "titleUnsafe": "Reported unsafe: {machine}",
+    "sending": "Sending to maintenance now.",
+    "waits": "Saved on this tablet: maintenance learns of it when the network is back. If it is urgent or dangerous, tell your team leader now.",
+    "recorded": "Maintenance has it.",
+    "now": "Maintenance has it. {machine} is now: {status}.",
+    "unsafeNext": "Do not use the machine. A technician checks it and signs it safe.",
+    "downNext": "The machine shows as down until maintenance has looked at it.",
+    "refusedTitle": "Maintenance could not take this report",
+    "refusedFix": "Open the queue to see why, then report it again."
+  },
+  "jobs": {
+    "title": "My jobs",
+    "empty": "No open jobs",
+    "emptyBody": "Jobs given to you or to nobody show here, the most urgent first.",
+    "nobody": "Not given to anyone yet",
+    "waiting": "waiting {age}",
+    "count_one": "{count} open job",
+    "count_other": "{count} open jobs"
+  },
+  "priority": {
+    "P1": "Urgent",
+    "P2": "Soon",
+    "P3": "When there is time"
+  },
+  "jobStatus": {
+    "NEW": "New",
+    "PLANNED": "Planned",
+    "IN_PROGRESS": "In progress",
+    "WAITING_PARTS": "Waiting for parts",
+    "HANDED_BACK": "Handed back",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled"
+  },
+  "jobType": {
+    "CORRECTIVE": "Repair",
+    "PREVENTIVE": "Preventive",
+    "INSPECTION": "Inspection",
+    "IMPROVEMENT": "Improvement",
+    "SAFETY": "Safety"
+  },
+  "keys": {
+    "next": "Next job",
+    "open": "Open the job",
+    "back": "Back"
+  },
+  "done": {
+    "started": "{job} started: {machine} shows as under maintenance.",
+    "waiting": "{job} waits for parts.",
+    "reopened": "{job} is back in progress.",
+    "signed": "{machine} is signed safe.",
+    "handedBack": "{job} handed back: the office closes it.",
+    "tile": {
+      "adjusted": "Adjusted",
+      "replaced": "Replaced a part",
+      "cleaned": "Cleaned and lubricated",
+      "other": "Other"
+    }
+  },
+  "job": {
+    "notYours": "This job is given to another technician: you can read it, the office reassigns it.",
+    "locksTitle": "{machine} waits for a technician's sign-safe",
+    "lock": "{symptom} · reported at {time}",
+    "noSymptom": "No symptom picked",
+    "type": "{number} · {type}",
+    "machineNow": "{machine} is now: {status}.",
+    "overdue": "overdue",
+    "last": "The machine's last jobs",
+    "lastNone": "No earlier job on this machine.",
+    "repeat": "{count} problems in the last 30 days: look for the cause."
+  },
+  "handBack": {
+    "title": "Hand back {job} · {machine}",
+    "what": "What did you do?",
+    "words": "What you did, in a few words",
+    "wordsHint": "The office reads it on the job. Needed for Other.",
+    "after": "How is the machine now?",
+    "retiredNote": "The machine stays do-not-use; the office retires it when it closes the job."
+  },
+  "after": {
+    "RUNNING": "Running",
+    "DO_NOT_USE": "Do not use",
+    "RETIRED": "To be retired"
+  },
+  "sign": {
+    "title": "Sign {machine} safe",
+    "what": "{machine} · {symptom}",
+    "pinTitle": "Your PIN signs {machine} safe",
+    "meaning": "You confirm that you checked the machine and that it may be used again.",
+    "checked": "What did you check?",
+    "checkedHint": "For example: guard refitted and tested, electrics checked.",
+    "after": "How is the machine after the check?",
+    "law": "A machine marked unsafe is used again only after a technician's check (D.Lgs. 81/2008 art. 71)."
+  },
+  "safeAfter": {
+    "RUNNING": "Running",
+    "UNDER_MAINTENANCE": "Still under maintenance"
+  },
+  "fact": {
+    "makeModel": "Make and model",
+    "station": "Station",
+    "line": "Line",
+    "symptom": "Symptom",
+    "problem": "The job",
+    "reporters": "Reported as",
+    "photos": "Photos",
+    "photosValue_one": "{count} photo: open the request in the office",
+    "photosValue_other": "{count} photos: open the request in the office",
+    "noPhotos": "None",
+    "priority": "Priority",
+    "waiting": "Waiting",
+    "where": "Where",
+    "openJobs": "Open jobs",
+    "openRequests": "Open problems"
+  },
+  "age": {
+    "minutes_one": "{count} min",
+    "minutes_other": "{count} min",
+    "hours": "{hours} h {minutes}",
+    "days_one": "{count} day",
+    "days_other": "{count} days"
+  },
+  "refusal": {
+    "RETIRED": {
+      "message": "This machine is retired: its tag no longer reports problems.",
+      "fix": "Scan the machine that stands at the station now, or ask the office."
+    },
+    "SYMPTOM_INACTIVE": {
+      "message": "This symptom is no longer offered.",
+      "fix": "Pick another symptom, or Other with a few words."
+    },
+    "SYMPTOM_OTHER_CLASS": {
+      "message": "This symptom is for another kind of machine.",
+      "fix": "Pick a symptom shown for this machine."
+    },
+    "DETAIL_NEEDED": {
+      "message": "Say in a few words what is wrong.",
+      "fix": "Write what you see or hear, then report again."
+    },
+    "NO_REPORTER": {
+      "message": "This tablet cannot say who reports.",
+      "fix": "Ask the office to set up the station of this tablet."
+    },
+    "LOCKED_UNSAFE": {
+      "message": "The machine is still locked as unsafe.",
+      "fix": "A technician signs it safe first."
+    },
+    "NOT_UNSAFE": {
+      "message": "This problem was not reported unsafe: there is nothing to sign.",
+      "fix": "Go back to the job."
+    },
+    "SIGNED_ALREADY": {
+      "message": "This problem is signed safe already.",
+      "fix": "Go back to the job."
+    },
+    "MOVE_NOT_ALLOWED": {
+      "message": "The job has changed meanwhile: this step is not possible now.",
+      "fix": "Go back to My jobs and open it again."
+    },
+    "NOT_YOUR_JOB": {
+      "message": "This job is given to another technician.",
+      "fix": "Work the jobs given to you or to nobody; the office reassigns it."
+    }
+  }
+}

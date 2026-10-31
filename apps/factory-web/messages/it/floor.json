@@ -314,17 +314,19 @@
       "pick": "Consegna i materiali a un ordine di lavoro",
       "final": "Controlla, firma e rilascia i capi",
       "pack": "Scansiona i capi nei cartoni, stampa etichette e DDT",
-      "labels": "Stampa le etichette capo, solo con certificato valido"
+      "labels": "Stampa le etichette capo, solo con certificato valido",
+      "machine": "Segnala un guasto; gli interventi del tecnico"
     },
     "held": {
       "notice": "Prima leggi l'informativa",
       "coming": "In arrivo"
-    }
+    },
+    "machine": "Guasto macchina"
   },
   "scan": {
     "title": "Scansiona",
     "label": "Scansiona un'etichetta qualsiasi",
-    "hint": "Fascio, pelle, lotto, ordine di lavoro o ubicazione.",
+    "hint": "Fascio, pelle, lotto, ordine di lavoro, ubicazione o targhetta della macchina.",
     "read": "Letto {code}",
     "type": "Digita un codice",
     "camera": {
@@ -340,7 +342,8 @@
     "action": {
       "cut": "Taglia questa pelle",
       "workOrder": "Apri al taglio",
-      "move": "Sposta qui"
+      "move": "Sposta qui",
+      "report": "Segnala un guasto"
     },
     "hide": {
       "notUsable": "Non tagliare questa pelle: il suo lotto non è rilasciato."
@@ -393,7 +396,20 @@
       "toCut": "Ancora da tagliare",
       "sizesLeft": "Taglie rimaste",
       "name": "Nome",
-      "path": "Dove si trova"
+      "path": "Dove si trova",
+      "machineType": "Tipo",
+      "makeModel": "Marca e modello",
+      "station": "Postazione",
+      "line": "Linea",
+      "since": "Da",
+      "openJob": "Intervento aperto",
+      "openRequests": "Guasti aperti",
+      "noJob": "Nessuno"
+    },
+    "machine": {
+      "locked": "Non usare questa macchina: è stata segnalata non sicura e aspetta che un tecnico la firmi sicura.",
+      "doNotUse": "Non usare questa macchina: l’ufficio l’ha messa fuori uso.",
+      "retired": "Questa macchina è dismessa: la sua targhetta non segnala più guasti."
     }
   },
   "label": {
@@ -404,7 +420,8 @@
     "serial": "Matricola",
     "carton": "Collo",
     "location": "Ubicazione",
-    "workOrder": "Ordine di lavoro"
+    "workOrder": "Ordine di lavoro",
+    "machine": "Macchina"
   },
   "labelPlural": {
     "hide": "le pelli",
@@ -414,7 +431,8 @@
     "serial": "le matricole",
     "carton": "i colli",
     "location": "le ubicazioni",
-    "workOrder": "gli ordini di lavoro"
+    "workOrder": "gli ordini di lavoro",
+    "machine": "macchine"
   },
   "status": {
     "hide": {
@@ -452,6 +470,23 @@
       "QUARANTINE": "Quarantena",
       "PRODUCTION": "Produzione",
       "SHIPPING": "Spedizione"
+    },
+    "machine": {
+      "RUNNING": "In funzione",
+      "DOWN": "Ferma",
+      "UNDER_MAINTENANCE": "In manutenzione",
+      "DO_NOT_USE": "Da non usare",
+      "RETIRED": "Dismessa",
+      "LOCKED": "Bloccata (non sicura)"
+    },
+    "job": {
+      "NEW": "Nuovo",
+      "PLANNED": "Pianificato",
+      "IN_PROGRESS": "In corso",
+      "WAITING_PARTS": "In attesa di ricambi",
+      "HANDED_BACK": "Riconsegnato",
+      "CLOSED": "Chiuso",
+      "CANCELLED": "Annullato"
     }
   },
   "sync": {
@@ -564,7 +599,8 @@
       "scrap_one": "{count} scarto",
       "scrap_other": "{count} scarti",
       "rework_one": "{count} da rilavorare",
-      "rework_other": "{count} da rilavorare"
+      "rework_other": "{count} da rilavorare",
+      "machine": "Guasto su {code}"
     },
     "refusal": {
       "UNKNOWN_BUNDLE": {
