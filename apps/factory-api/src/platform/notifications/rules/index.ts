@@ -9,6 +9,8 @@ import { PLANT_RULES } from './plant'
 import { COMPLAINT_RULES } from './complaints'
 // B-W2b-24: the restore drill's reminder (a RESTORE_DRILL_DUE timer fired: SYSTEM to the people who see Security & health).
 import { RESTORE_DRILL_RULES } from '../../timers/restore-drill'
+// B-W2b-35: a help call to the type's responder team (ALERT to its office members, or to the site's team leaders).
+import { CALL_RULES } from '../../../modules/production/calls/notices'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -21,4 +23,6 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   // B-W2a-65: a safety complaint (ALERT to who acknowledges it and who follows complaints up).
   ...COMPLAINT_RULES,
   // B-W2b-24: the restore drill is due within 14 days (SYSTEM to the holders of security.view).
-  ...RESTORE_DRILL_RULES])
+  ...RESTORE_DRILL_RULES,
+  // B-W2b-35: a station called for help (ALERT to the responder team's office members).
+  ...CALL_RULES])

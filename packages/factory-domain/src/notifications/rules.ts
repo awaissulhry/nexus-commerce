@@ -74,6 +74,8 @@ export const MESSAGE_TEMPLATES = {
   // B-W2a-65: a complaint was found to be about safety ({title}: the customer's first words): the owner and quality, at once.
   // B-W2b-24 (platform/timers/restore-drill.ts): the next restore drill is due within 14 days ({record}: the last drill that passed).
   'notifications.security.drillDue': { en: 'The next restore drill is due on {title}: the last one that passed was on {record}', it: 'La prossima prova di ripristino scade il {title}: l’ultima superata è del {record}' },
+  // B-W2b-35 (modules/production/calls): a station called for help, told to the type's responder team ({record}: the station; {title}: the type and the line).
+  'notifications.calls.raised': { en: 'Help call from station {record}: {title}', it: 'Chiamata di aiuto dalla postazione {record}: {title}' },
   'notifications.complaint.safety': { en: 'Safety complaint {record}: {title}. It is in the PPE register; the owner acknowledges it on the complaint', it: 'Reclamo di sicurezza {record}: {title}. È nel registro DPI; il titolare ne prende atto sul reclamo' },
 } as const satisfies Record<string, { readonly en: string; readonly it: string }>
 export type MessageKey = keyof typeof MESSAGE_TEMPLATES

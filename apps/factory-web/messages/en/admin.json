@@ -1791,6 +1791,9 @@
     "people_employees_manage": "Add, change, link and import employees",
     "people_teams_manage": "Add, change and archive teams, set their lead and move people between them",
     "people_loans_manage": "Lend people to another line for hours or days",
-    "people_leavers_manage": "Start, tick and cancel a person's leaver steps"
+    "people_leavers_manage": "Start, tick and cancel a person's leaver steps",
+    "production_calls_view": "See help calls, their times per call and line, and who is called for each type (never per person)",
+    "production_calls_answer": "Answer help calls: seen, on the way, solved or cancelled, and what they led to",
+    "production_calls_manage": "Keep a site's help-call types and who answers them"
   }
 }

@@ -26,6 +26,9 @@ export const FLOOR_SYNC_KINDS = [
   'production.bundles.make',
   // B-W2a-73: a machine problem from the station (design floor.machine "offline: queued"; Owner answer H1).
   'plant.report',
+  // B-W2b-35: a help call from the station and a step of one (design floor.help "offline: the call waits on this tablet").
+  'andon.call.send',
+  'andon.call.answer',
 ] as const
 export type FloorSyncKind = (typeof FLOOR_SYNC_KINDS)[number]
 
@@ -51,6 +54,9 @@ export const QUEUED_ACTIONS: Readonly<Record<FloorSyncKind, QueuedAction>> = Obj
   'production.cut.remnant': { kind: 'production.cut.remnant', permission: 'production.cut', numbers: null, what: "Set a hide's remnant aside" },
   'production.bundles.make': { kind: 'production.bundles.make', permission: 'production.bundles', numbers: 'BUNDLE', what: 'Make a bundle and print its ticket' },
   'plant.report': { kind: 'plant.report', permission: 'plant.report', numbers: null, what: 'Report a machine problem' },
+  // B-W2b-35: every floor role calls (floor.work); the module checks again who may take the step (the station, or a responder).
+  'andon.call.send': { kind: 'andon.call.send', permission: 'floor.work', numbers: null, what: 'Call for help from the station' },
+  'andon.call.answer': { kind: 'andon.call.answer', permission: 'floor.work', numbers: null, what: 'Answer or close a help call' },
 } satisfies Record<FloorSyncKind, QueuedAction>)
 
 export const ONLINE_ONLY_ACTIONS = ['inventory.receive', 'quality.inspection', 'quality.release', 'production.serials.labels'] as const
