@@ -7,6 +7,9 @@ import { defineManifest } from '../../core/manifest'
  * asks calendars.manage (a company's calendar: over every site of the company) or, for a supplier's calendar,
  * calendars.suppliers.manage. Patterns are calendars.manage over every site of their company (tenant-wide: every
  * company). Writes take an Idempotency-Key.
+ *
+ * B-W2b-20: POST /calendars/days (one closure on several calendars: each target kept as above, 403 naming the one that
+ * is not) and POST /calendars/:calendarId/copy-days (the target kept, the source only seen) follow the same rule.
  */
 export const manifest = defineManifest({
   'GET /calendars': { audiences: ['office'], permission: 'calendars.view', scope: 'record' },
@@ -22,6 +25,8 @@ export const manifest = defineManifest({
   'POST /calendars/:calendarId/days': { audiences: ['office'], permission: 'calendars.view', scope: 'record' },
   'POST /calendars/:calendarId/days/remove': { audiences: ['office'], permission: 'calendars.view', scope: 'record' },
   'POST /calendars/:calendarId/holidays': { audiences: ['office'], permission: 'calendars.view', scope: 'record' },
+  'POST /calendars/days': { audiences: ['office'], permission: 'calendars.view', scope: 'record' },
+  'POST /calendars/:calendarId/copy-days': { audiences: ['office'], permission: 'calendars.view', scope: 'record' },
   'GET /shift-patterns': { audiences: ['office'], permission: 'calendars.view', scope: 'record' },
   'POST /shift-patterns': { audiences: ['office'], permission: 'calendars.manage', scope: 'record' },
   'GET /shift-patterns/:patternId': { audiences: ['office'], permission: 'calendars.view', scope: 'record' },

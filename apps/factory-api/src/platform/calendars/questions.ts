@@ -5,10 +5,12 @@ import { closedSpansOf, weeklyDaysOffOf } from '@nexus/factory-domain/calendars/
 import type { WorkingDay } from '@nexus/factory-domain/calendars/working-time'
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { can, type Actor } from '@nexus/factory-domain/core/permissions'
-import { parseInstant, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
+import { businessDate, businessDayStart, parseInstant, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
+import { plusDays } from '@nexus/factory-domain/calendars/dates'
 import type { CommandCaller } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { ApiError } from '../../core/errors'
+import { serverClock } from '../../core/time'
 import type { OwnerQuery, WorkingDayView } from './contract'
 import { addWorkingDaysFor, supplierClosedDaysFor, supplierOrderByFor, workingMinutesFor, workingTimeFor, type CalendarOwner, type LoadedCalendar, type LoadedSupplierCalendar } from './service'
 
@@ -16,6 +18,9 @@ import { addWorkingDaysFor, supplierClosedDaysFor, supplierOrderByFor, workingMi
  * The office's questions (B-W2a-08): what the planning settings, the board's lane, the MRP's Why drawer and the
  * purchase order screens ask, answered by THE service (service.ts) with calendars.view over the owner (its company
  * and site; a supplier: its company and party). Another site's line is a 404, as if it did not exist.
+ *
+ * B-W2b-20: the supplier questions also say the supplier's time zone (its calendar's own, else Europe/Rome), the date
+ * there now (`supplierToday`), and for an order-by date when that day ends at the supplier (`orderByEndsAt`).
  */
 
 function actor(caller: CommandCaller): Actor {
@@ -128,7 +133,12 @@ function supplierVisible(caller: CommandCaller, loaded: LoadedSupplierCalendar):
   if (!can(actor(caller), CALENDARS_VIEW, { companyId: loaded.party.companyId, partyId: loaded.party.id })) throw new NotFoundError('Supplier not found.')
 }
 
-const supplierHead = (loaded: LoadedSupplierCalendar) => ({ party: { id: loaded.party.id, code: loaded.party.code, name: loaded.party.name }, calendar: loaded.calendarRow ? { ...loaded.calendarRow } : null })
+const supplierHead = (loaded: LoadedSupplierCalendar) => ({
+  party: { id: loaded.party.id, code: loaded.party.code, name: loaded.party.name },
+  calendar: loaded.calendarRow ? { ...loaded.calendarRow } : null,
+  timeZone: loaded.timeZone,
+  supplierToday: businessDate(serverClock.now(), loaded.timeZone),
+})
 
 export async function supplierClosedDays(caller: CommandCaller, query: { partyId: string; from: BusinessDate; to: BusinessDate }) {
   checkRange(query.from, query.to)
@@ -146,6 +156,7 @@ export async function supplierOrderBy(caller: CommandCaller, query: { partyId: s
     needDate: query.needDate,
     leadTimeDays: query.leadTimeDays,
     orderBy: loaded.walk.date,
+    orderByEndsAt: toUtcIso(businessDayStart(plusDays(loaded.walk.date, 1), loaded.timeZone)),
     skipped: loaded.walk.skipped.map((day) => ({ ...day })),
     spans: closedSpansOf(loaded.walk.skipped),
     capped: loaded.walk.capped,

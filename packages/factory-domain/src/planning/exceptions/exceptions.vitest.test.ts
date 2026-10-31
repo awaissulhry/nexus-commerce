@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { pegMaterial, type DemandPart } from '../mrp/net'
 import { readinessOf, type ReadinessMaterial } from '../readiness/readiness'
 import { detectExceptions, EVALUATED_KINDS, type DetectMaterial } from './detect'
-import { acknowledgeProblem, isSnoozed, refreshOf, resolveProblems, snoozeProblems } from './lifecycle'
+import { acknowledgeProblem, isSnoozed, refreshOf, resolveProblems, snoozeProblems, workingAgeOf } from './lifecycle'
 
 /**
  * Material readiness (../readiness, PLN-086) and the exception list of a run (./detect, ./lifecycle, PLN-193), pure.
@@ -146,5 +146,26 @@ describe('the exception list of a run (PLN-193)', () => {
     expect(resolveProblems({ status: 'NEW' }, ' ok ').issues).toHaveLength(1)
     expect(isSnoozed({ snoozedAt: now, snoozedUntil: null }, now)).toBe(true)
     expect(isSnoozed({ snoozedAt: now, snoozedUntil: new Date('2026-11-20T07:00:00Z') }, now)).toBe(false)
+  })
+})
+
+describe('the age of an exception in working days (B-W2b-20)', () => {
+  // Thu 29 Oct … Wed 4 Nov 2026: Sat 31 Oct, Sun 1 Nov (also Ognissanti) and Mon 2 Nov (a closure) do not work.
+  const days = [
+    { date: '2026-10-29', working: true },
+    { date: '2026-10-30', working: true },
+    { date: '2026-10-31', working: false },
+    { date: '2026-11-01', working: false },
+    { date: '2026-11-02', working: false },
+    { date: '2026-11-03', working: true },
+    { date: '2026-11-04', working: true },
+  ]
+  it('counts the working days after the first sighting up to today', () => {
+    expect(workingAgeOf(days, '2026-10-29', '2026-10-29')).toBe(0)
+    expect(workingAgeOf(days, '2026-10-29', '2026-10-30')).toBe(1)
+    expect(workingAgeOf(days, '2026-10-30', '2026-11-02')).toBe(0)
+    expect(workingAgeOf(days, '2026-10-30', '2026-11-04')).toBe(2)
+    expect(workingAgeOf(days, '2026-10-29', '2026-11-04')).toBe(3)
+    expect(workingAgeOf(days, '2026-11-04', '2026-11-03')).toBe(0)
   })
 })
