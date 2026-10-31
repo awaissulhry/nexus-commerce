@@ -44,6 +44,14 @@
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
         "factory_floor_runtime": { "privileges": ["select"] }
       }
+    },
+    "CertificateRenewal": {
+      "about": "W2b (schema wave 2/7): the office keeps the application log of a certificate's renewal through apps/factory-api's modules/compliance/renewals (start with the task, the application sent to the notified body, the new certificate linked, or cancelled), always through command(). Office only: the floor reads the certificates themselves, not their renewal paperwork; portal and link sessions read nothing here. Never deleted (no delete grant; the trigger refuses it too).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
     }
   }
 }

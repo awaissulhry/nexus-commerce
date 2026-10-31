@@ -14,6 +14,7 @@ import { seed as seedEmailIn } from '../seed/email-in'
 import { seed as seedFiles } from '../seed/files'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
 import { seed as seedFloorSync } from '../seed/floor-sync'
+import { seed as seedFollowupsQualityMoney } from '../seed/followups-quality-money'
 import { seed as seedHolds } from '../seed/holds'
 import { seed as seedImports } from '../seed/imports'
 import { seed as seedInsights } from '../seed/insights'
@@ -213,6 +214,9 @@ beforeAll(async () => {
     await seedMoneyW2a({ db: factory, namespace: 'iso-a' })
     await seedMoneyW2a({ db: factory, namespace: 'iso-b' })
   }
+  // W2b schema wave 2/7: the follow-ups for quality, planning and money.
+  await seedFollowupsQualityMoney({ db: factory, namespace: 'iso-a' })
+  await seedFollowupsQualityMoney({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -240,6 +244,7 @@ it('covers every classified table and every runtime role', () => {
     'CalendarDay',
     'Certificate',
     'CertificateCoverage',
+    'CertificateRenewal',
     'Colour',
     'Colourway',
     'Company',
@@ -279,6 +284,7 @@ it('covers every classified table and every runtime role', () => {
     'InspectionDefect',
     'IntegrationAccount',
     'IntegrationCall',
+    'InterestReferenceRate',
     'Invitation',
     'Invoice',
     'InvoiceLine',
@@ -326,6 +332,7 @@ it('covers every classified table and every runtime role', () => {
     'PartyContact',
     'PartyTaxIdentity',
     'PasswordReset',
+    'PayablesSettings',
     'Payment',
     'PaymentAllocation',
     'PaymentReminder',
@@ -350,6 +357,7 @@ it('covers every classified table and every runtime role', () => {
     'PurchaseOrderLine',
     'PurchaseOrderReminder',
     'PurchaseOrderRevision',
+    'PurchasingSettings',
     'QualityHold',
     'QualityRelease',
     'QualityReleaseReversal',
@@ -389,6 +397,7 @@ it('covers every classified table and every runtime role', () => {
     'ScanCorrectionRequest',
     'ScheduleSlot',
     'ScrapReason',
+    'SdiInboxItem',
     'SdiNotification',
     'SdiSubmission',
     'SearchEntry',
@@ -421,6 +430,7 @@ it('covers every classified table and every runtime role', () => {
     'SupplierClaim',
     'SupplierClaimLine',
     'SupplierInvoice',
+    'SupplierInvoiceFile',
     'SupplierInvoiceLine',
     'SupplierInvoiceMatch',
     'SupplierItem',

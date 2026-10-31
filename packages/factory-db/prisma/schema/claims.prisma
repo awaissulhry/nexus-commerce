@@ -153,6 +153,8 @@ model SupplierClaim {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   goodsReceipt  GoodsReceipt?       @relation(fields: [tenantId, siteId, goodsReceiptId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   purchaseOrder PurchaseOrder?      @relation(fields: [tenantId, siteId, purchaseOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b payables.prisma (schema wave 2/7): the supplier's credit notes that settle it.
+  creditNotes   SupplierInvoice[]
   // W2b: the nonconformance it came from (Restrict, not Prisma's SetNull default: that would also clear tenantId and siteId).
   ncr           Nonconformance?     @relation(fields: [tenantId, siteId, ncrId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   lines         SupplierClaimLine[]

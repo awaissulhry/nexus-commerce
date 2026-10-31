@@ -24,6 +24,30 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
       }
+    },
+    "PayablesSettings": {
+      "about": "W2b (schema wave 2/7): the office keeps the payables settings of each company and the tenant-wide ones (the match's tolerances, the billing basis, who approves what SDI delivered, the extra separation of duties); the match and the approval read them. Office only. Changed, never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "SupplierInvoiceFile": {
+      "about": "W2b (schema wave 2/7): the worker (SDI's pickup, in the tenant's system context) or the office records a file of several supplier invoices (a lotto) with its invoices and names its XML once. Office only (the supplier portal is later: its party key is ready). A fiscal document: never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    },
+    "SdiInboxItem": {
+      "about": "W2b (schema wave 2/7): the worker (SDI's pickup, in the tenant's system context) keeps the deliveries it could not record, with why and how often it tried; the office reads them and dismisses one with a reason (or opens it again), and the pickup marks one recorded when it becomes an invoice. Office only. Never deleted.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
     }
   }
 }
