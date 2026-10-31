@@ -9,6 +9,8 @@ import { Checkbox } from '../primitives/Checkbox'
 import { ConfirmPhraseField, phraseMatches } from './ConfirmPhraseField'
 import { requiresTypedConfirm, reversalSentence, validateImpact, type ActionImpact } from '../grid/actions/registry'
 import type { AskToConfirm } from '../grid/actions/runAction'
+import { mergeLabels } from '../lib/labels'
+import { ACTION_CONFIRM_LABELS, type ActionConfirmLabels } from './ActionConfirmLabels'
 
 export interface ActionConfirmProps {
   impact: ActionImpact
@@ -16,6 +18,8 @@ export interface ActionConfirmProps {
   onCancel: () => void
   /** Inline review keeps the same arming rules; the host owns its enclosing dialog. */
   mode?: 'modal' | 'inline'
+  /** Its words in the person's language (B-W2b-04): headings, buttons, the reversal sentence. Default English. */
+  labels?: Partial<ActionConfirmLabels>
 }
 /** Kept pure so direct hook users and registry users share the same safety boundary. */
 export function canConfirmAction(impact: ActionImpact, typed: string, acknowledged: boolean): boolean {
@@ -24,7 +28,8 @@ export function canConfirmAction(impact: ActionImpact, typed: string, acknowledg
 }
 
 /** Itemised consequences, exact subject typing, visible instructions and explicit acknowledgement. */
-export function ActionConfirm({ impact, onConfirm, onCancel, mode = 'modal' }: ActionConfirmProps) {
+export function ActionConfirm({ impact, onConfirm, onCancel, mode = 'modal', labels }: ActionConfirmProps) {
+  const words = mergeLabels(ACTION_CONFIRM_LABELS, labels)
   const [typed, setTyped] = useState('')
   const [acknowledged, setAcknowledged] = useState(false)
   const [answeredImpact, setAnsweredImpact] = useState(impact)
@@ -38,40 +43,40 @@ export function ActionConfirm({ impact, onConfirm, onCancel, mode = 'modal' }: A
   const problems = impact.refusal?.reason ?? impact.unavailable ?? validateImpact(impact).join('; ')
   const danger = needsTyping || impact.reach === 'channel' || impact.reach === 'local-destructive' || impact.reversal?.fidelity === 'none'
   const footer = <>
-    <Button variant="secondary" data-autofocus onClick={onCancel}>Cancel</Button>
-    <Button variant={danger ? 'danger' : 'primary'} disabled={!canConfirm} onClick={() => { if (canConfirm) onConfirm() }}>{impact.confirmLabel?.trim() || 'Confirm'}</Button>
+    <Button variant="secondary" data-autofocus onClick={onCancel}>{words.cancel}</Button>
+    <Button variant={danger ? 'danger' : 'primary'} disabled={!canConfirm} onClick={() => { if (canConfirm) onConfirm() }}>{impact.confirmLabel?.trim() || words.confirm}</Button>
   </>
   const content = <>
-    {impact.subject && <p className="nds-confirm-block">{impact.subject.kind}: <strong className="nds-confirm-h">{impact.subject.value}</strong></p>}
-    {impact.asOf !== undefined && <p className="nds-confirm-block">Checked <AsOf at={impact.asOf} /></p>}
+    {impact.subject && <p className="nds-confirm-block">{words.subject(impact.subject.kind)}: <strong className="nds-confirm-h">{impact.subject.value}</strong></p>}
+    {impact.asOf !== undefined && <p className="nds-confirm-block">{words.checked} <AsOf at={impact.asOf} labels={words.asOf} /></p>}
     {impact.consequences?.length ? <div className="nds-confirm-block">
-      <div className="nds-confirm-h">What this changes</div>
+      <div className="nds-confirm-h">{words.whatChanges}</div>
       <ul className="nds-confirm-list">{impact.consequences.map((c, i) => <li key={i}>{c}</li>)}</ul>
     </div> : null}
-    {impact.reversal && <p className="nds-confirm-block nds-confirm-h">{reversalSentence(impact)}</p>}
+    {impact.reversal && <p className="nds-confirm-block nds-confirm-h">{reversalSentence(impact, words.reversal)}</p>}
     {impact.findings?.length ? <div className="nds-confirm-block">
-      <div className="nds-confirm-h">What the check found</div>
+      <div className="nds-confirm-h">{words.whatFound}</div>
       <ul className="nds-confirm-list">{impact.findings.map((f, i) => <li key={i}
         className={f.severity === 'error' ? 'nds-confirm-error' : f.severity === 'warn' || f.severity === 'unknown' ? 'nds-confirm-warn' : undefined}>
-        {f.severity === 'unknown' ? 'Not checked: ' : ''}{f.label}
-        {f.asOf !== undefined && <> · <AsOf at={f.asOf} /></>}
+        {f.severity === 'unknown' ? words.notChecked : ''}{f.label}
+        {f.asOf !== undefined && <> · <AsOf at={f.asOf} labels={words.asOf} /></>}
       </li>)}</ul>
     </div> : null}
     {impact.sideEffects?.length ? <div className="nds-confirm-block nds-confirm-aside">
-      <div className="nds-confirm-h">This also happens</div>
+      <div className="nds-confirm-h">{words.alsoHappens}</div>
       <ul className="nds-confirm-list">{impact.sideEffects.map((s, i) => <li key={i}>{s}</li>)}</ul>
     </div> : null}
     {impact.review && <div className="nds-confirm-block"><SummaryTable label={impact.review.title}
-      columns={['Item', 'Before', 'After']} rows={impact.review.rows.map((r, i) => ({ id: String(i), cells: [r.label, r.before, r.after] }))} /></div>}
+      columns={[words.item, words.before, words.after]} rows={impact.review.rows.map((r, i) => ({ id: String(i), cells: [r.label, r.before, r.after] }))} /></div>}
     {impact.handoffs?.length ? <div className="nds-confirm-block">
-      <div className="nds-confirm-h">Continue elsewhere</div>
+      <div className="nds-confirm-h">{words.continueElsewhere}</div>
       <ul className="nds-confirm-list">{impact.handoffs.map((h, i) => <li key={i}>
         {h.href && /^(https?:\/\/|\/(?!\/))/.test(h.href) ? <a href={h.href}>{h.label}</a> : h.label}: {h.reason}
       </li>)}</ul>
     </div> : null}
     {problems && <p className="nds-inline-error" role="alert">{problems}{impact.refusal?.whatWouldFix ? ` ${impact.refusal.whatWouldFix}` : ''}</p>}
     {needsTyping && <div className="nds-confirm-block">
-      <ConfirmPhraseField id={id} phrase={impact.confirmPhrase ?? ''} value={typed} onChange={setTyped} />
+      <ConfirmPhraseField id={id} phrase={impact.confirmPhrase ?? ''} value={typed} onChange={setTyped} labels={words.confirmPhrase} />
     </div>}
     {impact.acknowledge && <div className="nds-confirm-block"><Checkbox tone="warning" checked={acknowledged}
       onChange={e => setAcknowledged(e.target.checked)} label={impact.acknowledge} /></div>}
@@ -79,12 +84,13 @@ export function ActionConfirm({ impact, onConfirm, onCancel, mode = 'modal' }: A
   if (mode === 'inline') return <section className="nds-confirm" aria-label={impact.title}>
     <div className="nds-confirm-h">{impact.title}</div>{content}<div className="nds-confirm-actions">{footer}</div>
   </section>
-  return <Modal open onClose={onCancel} title={impact.title} size="md" footer={footer}>{content}</Modal>
+  return <Modal open onClose={onCancel} title={impact.title} size="md" footer={footer} labels={{ close: words.close }}>{content}</Modal>
 }
 
 interface Pending { impact: ActionImpact; resolve: (ok: boolean) => void; id: number }
 export interface ActionConfirmApi { ask: AskToConfirm; element: ReactNode }
-export function useActionConfirm(): ActionConfirmApi {
+/** `labels`: the dialog's words in the person's language (B-W2b-04), for every question this hook asks. */
+export function useActionConfirm(labels?: Partial<ActionConfirmLabels>): ActionConfirmApi {
   const [pending, setPending] = useState<Pending | null>(null)
   const pendingRef = useRef<Pending | null>(null)
   const nextId = useRef(0)
@@ -101,5 +107,5 @@ export function useActionConfirm(): ActionConfirmApi {
     p?.resolve(ok)
   }, [])
   useEffect(() => () => { pendingRef.current?.resolve(false); pendingRef.current = null }, [])
-  return { ask, element: pending ? <ActionConfirm key={pending.id} impact={pending.impact} onCancel={() => settle(false)} onConfirm={() => settle(true)} /> : null }
+  return { ask, element: pending ? <ActionConfirm key={pending.id} impact={pending.impact} onCancel={() => settle(false)} onConfirm={() => settle(true)} labels={labels} /> : null }
 }

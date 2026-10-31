@@ -16,6 +16,8 @@
 import { useMemo } from 'react'
 import { DateField, type DateFormat } from './DateField'
 import { Listbox } from './Listbox'
+import { mergeLabels } from '../lib/labels'
+import { DATE_TIME_FIELD_LABELS, type DateTimeFieldLabels } from './DateTimeFieldLabels'
 
 export interface DateTimeFieldProps {
   /** ISO instant, or '' for unset. */
@@ -39,6 +41,8 @@ export interface DateTimeFieldProps {
   ariaLabel?: string
   disabled?: boolean
   className?: string
+  /** Its words in the person's language (B-W2b-04), the date part's in `labels.dateField`. Default English. */
+  labels?: Partial<DateTimeFieldLabels>
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -90,8 +94,9 @@ export function timeZoneWords(at: Date = new Date(), locale = 'en-GB'): string {
 
 export function DateTimeField({
   value, onChange, min, max, stepMinutes = 15, defaultTime = '09:00', format, locale = 'en-GB',
-  id, 'aria-describedby': describedBy, ariaLabel, disabled, className,
+  id, 'aria-describedby': describedBy, ariaLabel, disabled, className, labels,
 }: DateTimeFieldProps) {
+  const words = mergeLabels(DATE_TIME_FIELD_LABELS, labels)
   const current = parse(value)
   const minD = parse(min)
   const maxD = parse(max)
@@ -105,16 +110,17 @@ export function DateTimeField({
 
   const emit = (nextDate: string, nextTime: string) => onChange(momentValue(nextDate, nextTime, defaultTime, minD, maxD))
   const zone = timeZoneWords(current ?? new Date(), locale)
-  const name = ariaLabel ?? 'Date and time'
+  const name = ariaLabel ?? words.dateAndTime
   // The controls' names replace their visible text for a screen reader, so they carry the choice too.
-  const dayWords = current ? current.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'not chosen'
+  const dayWords = current ? current.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : words.notChosen
 
   return <div className={`nds-datetimefield${className ? ` ${className}` : ''}`}>
     <DateField id={id} aria-describedby={describedBy} value={date} format={format} locale={locale}
       min={minD ? localDay(minD) : undefined} max={maxD ? localDay(maxD) : undefined}
-      onChange={(next) => emit(next, time)} ariaLabel={`${name}: date, ${dayWords}`} disabled={disabled} placeholder="Choose a date" />
+      onChange={(next) => emit(next, time)} ariaLabel={`${name}: ${words.date}, ${dayWords}`} disabled={disabled} placeholder={words.chooseDate}
+      labels={words.dateField} />
     <Listbox className="nds-datetimefield-time" value={time} onChange={(next) => emit(date || firstDay, next)}
-      options={times} ariaLabel={`${name}: time, ${time || 'not chosen'} (${zone})`} placeholder="Time" disabled={disabled} width={104} />
+      options={times} ariaLabel={`${name}: ${words.time}, ${time || words.notChosen} (${zone})`} placeholder={words.timePlaceholder} disabled={disabled} width={104} />
     <span className="nds-datetimefield-zone">{zone}</span>
   </div>
 }

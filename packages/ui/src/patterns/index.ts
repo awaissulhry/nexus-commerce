@@ -76,3 +76,9 @@ export * from './shell'
 // Planning board + load bar (gap D18, 2026-10-30) — NOT re-exported here: the web pulls this barrel into its pages, so a
 // part in it reaches pages that never draw a board (with `@dnd-kit/core` and its stylesheet). Its own entry point:
 // `patterns/planning-board` (`@nexus/ui/patterns/planning-board/index` by package path).
+// DS words in the person's language (B-W2b-04, 2026-10-31): each part's optional `labels` prop; English defaults.
+export { EDIT_MODE_BAR_LABELS, type EditModeBarLabels } from './EditModeBarLabels'
+export { REVIEW_CHANGES_LABELS, type ReviewChangesLabels } from './ReviewChangesModalLabels'
+export { DETAIL_MODAL_LABELS, type DetailModalLabels } from './DetailModalLabels'
+export { STEP_UP_MODAL_LABELS, type StepUpModalLabels } from './StepUpModalLabels'
+export { PREFERENCES_MODAL_LABELS, type PreferencesModalLabels } from './PreferencesModalLabels'

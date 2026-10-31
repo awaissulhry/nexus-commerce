@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useClickAway } from './useClickAway'
 import { usePopoverPosition } from './usePopoverPosition'
+import { mergeLabels } from '../lib/labels'
+import { DATE_FIELD_LABELS, type DateFieldLabels } from './DateFieldLabels'
 
 /**
  * How the date READS. `value` and `onChange` are ISO (`yyyy-mm-dd`) whatever this is set to, so
@@ -39,9 +41,11 @@ export interface DateFieldProps {
   ariaLabel?: string
   className?: string
   disabled?: boolean
+  /** Its words in the person's language (B-W2b-04): weekday letters, month buttons, empty and clear words. Default
+   *  English; `placeholder`, `clearLabel` and `ariaLabel` win over them. */
+  labels?: Partial<DateFieldLabels>
 }
 
-const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 const pad = (n: number) => String(n).padStart(2, '0')
 const toIso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 const fromIso = (s: string) => { const [y, m, d] = s.split('-').map(Number); return new Date(y!, (m ?? 1) - 1, d ?? 1) }
@@ -73,7 +77,8 @@ function monthGrid(month: Date): Array<Date | null> {
  * single month, min/max support, optional clear row. Wave 1 gap-fill
  * (2026-07-04).
  */
-export function DateField({ id, 'aria-describedby': describedBy, value, onChange, format = 'dd/mm/yyyy', locale = 'en-GB', min, max, placeholder = 'not set', clearable = true, clearLabel = 'clear', ariaLabel, className, disabled }: DateFieldProps) {
+export function DateField({ id, 'aria-describedby': describedBy, value, onChange, format = 'dd/mm/yyyy', locale = 'en-GB', min, max, placeholder, clearable = true, clearLabel, ariaLabel, className, disabled, labels }: DateFieldProps) {
+  const words = mergeLabels(DATE_FIELD_LABELS, labels)
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   // The calendar is portalled with fixed coordinates, like Listbox (usePopoverPosition): an absolute
@@ -127,25 +132,25 @@ export function DateField({ id, 'aria-describedby': describedBy, value, onChange
   return (
     <div className={`nds-datefield${className ? ` ${className}` : ''}`} ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
       <button ref={triggerRef} type="button" id={id} aria-describedby={describedBy} className="nds-listbox-btn" disabled={disabled} aria-haspopup="dialog" aria-expanded={open} aria-label={ariaLabel} onClick={toggle}>
-        <span className={value ? undefined : 'ph'}>{value ? fmt(value, format) : placeholder}</span>
+        <span className={value ? undefined : 'ph'}>{value ? fmt(value, format) : placeholder === undefined ? words.notSet : placeholder}</span>
         <Calendar size={14} className="chev" aria-hidden />
       </button>
       {open && createPortal(
         // `ag-custom-component-popup`: AG Grid counts a click or focus in an element with this class as
         // inside its editor. A DateField inside a grid cell editor (the Shopify sheet's metafield dialog)
         // would otherwise end the cell edit when a day is clicked, now that the calendar sits in <body>.
-        <div ref={popRef} style={popStyle} className="nds-dp-pop single ag-custom-component-popup" role="dialog" aria-label={ariaLabel ?? 'Pick a date'} onKeyDown={onPopKey}>
+        <div ref={popRef} style={popStyle} className="nds-dp-pop single ag-custom-component-popup" role="dialog" aria-label={ariaLabel ?? words.pickDate} onKeyDown={onPopKey}>
           {/* The same body box as DateRangePicker: without it the title and the grid sat side by side
               (the popover is a flex row) with no padding. */}
           <div className="nds-dp-cal">
           <div className="nds-dp-nav">
-            <button type="button" onClick={() => setView(addMonths(view, -1))} aria-label="Previous month"><ChevronLeft size={15} /></button>
+            <button type="button" onClick={() => setView(addMonths(view, -1))} aria-label={words.previousMonth}><ChevronLeft size={15} /></button>
             <div className="nds-dp-mh">{monthLabel(view, locale)}</div>
-            <button type="button" onClick={() => setView(addMonths(view, 1))} aria-label="Next month"><ChevronRight size={15} /></button>
+            <button type="button" onClick={() => setView(addMonths(view, 1))} aria-label={words.nextMonth}><ChevronRight size={15} /></button>
           </div>
           <div className="nds-dp-month">
             <div className="nds-dp-grid">
-              {WEEKDAYS.map((w, i) => <div key={`wd-${i}`} className="nds-dp-wd">{w}</div>)}
+              {words.weekdays.map((w, i) => <div key={`wd-${i}`} className="nds-dp-wd">{w}</div>)}
               {monthGrid(view).map((day, i) => {
                 if (!day) return <span key={i} className="nds-dp-day empty" />
                 const dis = (minD != null && day < minD) || (maxD != null && day > maxD)
@@ -162,7 +167,7 @@ export function DateField({ id, 'aria-describedby': describedBy, value, onChange
           </div>
           {clearable && value && (
             <div className="nds-datefield-foot">
-              <button type="button" onClick={() => { onChange(''); close() }}>{clearLabel}</button>
+              <button type="button" onClick={() => { onChange(''); close() }}>{clearLabel === undefined ? words.clear : clearLabel}</button>
             </div>
           )}
           </div>
