@@ -532,6 +532,13 @@ export interface CorrectionCountFacts {
   readonly lines: readonly DefectLine[]
   /** The target's own defect lines. */
   readonly targetLines: readonly DefectLine[]
+  /**
+   * W2b (B-W2b-10; B-W2a-13's follow-up): the bundle's standing scans as the cap reads them (../bundles/split
+   * bundleFlow): a split parent's reports count at most its live garments, a child's stand in its parent's place. Pass
+   * it with `bundle.quantity` = the flow's live garments, so a correction of a split parent is capped at the garments
+   * still in it (the database caps at the bundle as cut). Left out: the bundle's own standing scans.
+   */
+  readonly standing?: ReadonlyMap<string, ScanFact> | undefined
 }
 
 /** The counts a correction asks, against the same caps as a report and what the next operation already took. */
@@ -542,7 +549,7 @@ function correctionCountsRefusal(facts: CorrectionCountFacts, target: ScanFact):
     return refusal('SAME_COUNTS', 'The counts and reasons are the same as the report’s.', 'Change a count or a reason, or discard it.')
   }
   const operation = facts.operations.find((candidate) => candidate.id === target.workOrderOperationId)!
-  const standing = standingScans(facts.scans)
+  const standing = facts.standing ?? standingScans(facts.scans)
   const cap = capAt(facts.operations, operation, facts.bundle, standing, target.bundleId)
   if (!cap.ok) return cap.refusal
   const over = overCap(facts.bundle, cap.previous, cap.cap, total)

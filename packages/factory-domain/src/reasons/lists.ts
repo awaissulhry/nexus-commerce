@@ -10,8 +10,8 @@ import { DEFECT_KINDS } from '../production/scans/reasons'
  *   - REASON_CODE (factory-db reasons.prisma ReasonCode): the eleven lists of REASON_CODE_LISTS, with words in Italian,
  *     English and the other floor languages, an icon, a colour and "needs a note";
  *   - SCRAP_REASON (factory-db production.prisma ScrapReason, W1): the operation screen's SCRAP and REWORK reasons, which
- *     the scans reference (OperationScanDefect); they keep Italian and English words only (no icon, colour, other
- *     language or "needs a note" column yet: a schema need of a later wave).
+ *     the scans reference (OperationScanDefect); since W2b (B-W2b-01's columns, B-W2b-10 turns them on; MES-125) they keep
+ *     the same as ReasonCode: words in the other floor languages, an icon, a colour and "needs a note".
  * The defect library (DefectCode, quality wave 6/7) is a third source whose API is quality's (B-W2a-26).
  *
  * Records of other modules keep the code they chose (text plus their list), never a reference; a code never changes; a
@@ -49,10 +49,10 @@ export interface ReasonFields {
 }
 
 const ALL_FIELDS: ReasonFields = Object.freeze({ icon: true, colour: true, languages: true, needsDetail: true })
-const WORDS_ONLY: ReasonFields = Object.freeze({ icon: false, colour: false, languages: false, needsDetail: false })
 
 export const sourceOf = (list: ReasonList): ReasonSource => (isScanReasonList(list) ? 'SCRAP_REASON' : 'REASON_CODE')
-export const fieldsOf = (list: ReasonList): ReasonFields => (sourceOf(list) === 'SCRAP_REASON' ? WORDS_ONLY : ALL_FIELDS)
+/** W2b (B-W2b-10; MES-125): both sources keep every field (ScrapReason's icon, colour, labelI18n and needsDetail columns). */
+export const fieldsOf = (_list: ReasonList): ReasonFields => ALL_FIELDS
 
 /**
  * The lists each settings page shows (the hosts of the one editor): Production › Floor rules & codes (design fr-reasons:
