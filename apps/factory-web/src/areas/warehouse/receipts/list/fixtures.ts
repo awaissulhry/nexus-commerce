@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { canOf, inShell, PREFIX, TIME_ZONE, uid, type Role } from '../../../_shared/buying/fixtures'
 import { DEMO_COMPANIES } from '../../../../shell/design-data'
-import { blankDiscrepancy, claimDraft, draftOf, reportDraft, requestDraft, say, wantedDocuments, withCheck, withRequestCheck, dailyCan } from '../daily-model'
+import { blankDiscrepancy, claimDraft, ddtFixDraftOf, draftOf, reportDraft, requestDraft, say, wantedDocuments, withCheck, withRequestCheck, dailyCan } from '../daily-model'
 import { CHECK, DISCREPANCIES, dailyModel, HIDE_LIST_ID, hideListSheet, hideListSummary, permissionsOf, REPORT_PDF, REQUEST_CHECK } from '../demo/daily/fixtures'
 import { COUNTS, EXPECTED, LOTS, receipt, ROWS } from '../demo/fixtures'
 import type { ReceiptRecordModel, ReceiptsListModel } from '../model'
@@ -150,5 +150,12 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'w2a-lines', label: 'W2a · Lines: a line ⋯ New discrepancy; the supplier invoice match and the discrepancies in the summary', model: recordCase('warehouse', receipt(), { daily: daily('warehouse') }) },
     { id: 'w2a-lots-return', label: 'W2a · Lots & hides: Return to supplier and the lot’s claims (Purchasing › Returns & claims)', model: recordCase('warehouse', receipt(), { tab: 'lots', daily: daily('warehouse') }) },
     { id: 'w2a-changed', label: 'W2a · Changed by someone else while a dialog is open: Reload', model: recordCase('warehouse', receipt(), { tab: 'discrepancies', changed: { at: '2026-10-29T10:12:00.000Z' }, daily: daily('warehouse', { dialog: { kind: 'discrepancy', draft: draftOf(DISCREPANCIES[0]!) } }) }) },
+    // ---- B-W2b-14 (Z1:02): the supplier's DDT number and date corrected on a posted receipt ----
+    { id: 'w2b-ddt-fix', label: 'W2b · Correct the DDT: the number and date as typed, why (a correction on a posted receipt)', model: docsCase('warehouse', { dialog: { kind: 'ddtFix', draft: { ddtNumber: 'DDT-DEMO-526', ddtDate: '2026-10-28', reason: 'Cifre invertite alla banchina' } } }) },
+    { id: 'w2b-ddt-fix-held', label: 'W2b · Correct the DDT: held until the number or date changes and why is said', model: docsCase('warehouse', { dialog: { kind: 'ddtFix', draft: ddtFixDraftOf(R) } }) },
+    { id: 'w2b-ddt-fix-refused', label: 'W2b · Correct the DDT refused: someone changed the receipt meanwhile (our words)', model: docsCase('warehouse', { dialog: { kind: 'ddtFix', draft: { ddtNumber: 'DDT-DEMO-526', ddtDate: '2026-10-28', reason: 'Cifre invertite alla banchina' } }, problem: say('refused.moved') }) },
+    { id: 'w2b-ddt-corrected', label: 'W2b · After a correction: the latest one said under the DDT (when and why); the activity keeps every one', model: docsCase('warehouse', { notice: { tone: 'success', words: say('ddtFix.done') } }, receipt({ supplierDdtNumber: 'DDT-DEMO-526', supplierDdtCorrection: { at: '2026-10-30T09:12:00.000Z', byId: null, reason: 'Cifre invertite alla banchina' } })) },
+    { id: 'w2b-ddt-fix-reversed', label: 'W2b · A reversed receipt: Correct held, saying its DDT no longer changes', model: docsCase('warehouse', {}, receipt({ status: 'REVERSED', reversedAt: '2026-10-30T11:00:00.000Z', reversalReason: 'Registrato sull’ordine sbagliato', reversal: null })) },
+    { id: 'w2b-ddt-fix-no-right', label: 'W2b · A role without inventory.receive (planner): Correct held with the missing permission', model: docsCase('planner') },
   ],
 })

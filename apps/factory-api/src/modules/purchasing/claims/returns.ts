@@ -7,7 +7,7 @@ import { quantityText } from '@nexus/factory-domain/inventory/ledger/moves'
 import { availabilityOf } from '@nexus/factory-domain/inventory/reservations/rules'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { PURCHASING_CLAIMS_MANAGE, PURCHASING_CLAIMS_RETURN } from '@nexus/factory-domain/purchasing/claims/permissions'
-import { expectedCredit, linesValue, returnProblems, type ClaimRemedy } from '@nexus/factory-domain/purchasing/claims/rules'
+import { claimReasonOf, expectedCredit, linesValue, returnProblems, type ClaimRemedy } from '@nexus/factory-domain/purchasing/claims/rules'
 import type { SourceDdtRequest } from '@nexus/factory-domain/shipping/ddt/sources'
 import { SHIPPING_DDT_ISSUE } from '@nexus/factory-domain/shipping/permissions'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
@@ -40,11 +40,13 @@ import type { ClaimDetailView } from './views'
  *
  * The goods out, in the caller's command (the claim's row is held): the reserve lock of each material and colour (a hide
  * an ACTIVE reservation holds is refused in words: release it first) → per line the place its goods leave from (the
- * one named, else the one place that holds all of it) → ONE postMoves batch: an ADJUSTMENT out per line (there is no
- * supplier-return reason in the ledger: the note says why; 409 before anything is written when a place lacks the stock;
- * valued in the command at the lot's cost) → each line's move (set once) and, when it had none, its cost and value from
- * the move's valuation → the credit asked again from the lines (not once the supplier accepted it) → THEN the return DDT
- * with B-W2a-17's issueSourceDdtInCommand (the lines sent now; it sets their DDT, once) → the PDF after the commit.
+ * one named, else the one place that holds all of it) → ONE postMoves batch: a SUPPLIER_RETURN out per line (B-W2b-14:
+ * the ledger's own reason, its reasonCode the claim's CLAIM code; the note still says which claim and line; 409 before
+ * anything is written when a place lacks the stock; valued in the command at the lot's cost) → each line's move (set
+ * once) and, when it had none, its cost and value from the move's valuation → a hide that holds nothing at the site any
+ * more becomes RETURNED (B-W2b-14; the database keeps the state it had as previousState) → the credit asked again from
+ * the lines (not once the supplier accepted it) → THEN the return DDT with B-W2a-17's issueSourceDdtInCommand (the lines
+ * sent now; it sets their DDT) → the PDF after the commit.
  * The answer says what the return leaves over-reserved (a quantity a reservation counted on).
  */
 
@@ -118,14 +120,16 @@ export async function returnGoodsInCommand(
     }
   }
 
-  // One batch: an ADJUSTMENT out per line, from its place.
+  // One batch: a SUPPLIER_RETURN out per line (B-W2b-14), from its place, with the claim's CLAIM code.
   const party = await tx.party.findUnique({ where: { id: claim.partyId }, select: { code: true } })
+  const reasonCode = claimReasonOf(claim).code
   const drafts: MoveDraft[] = []
   for (const [index, line] of going.entries()) {
     const from = await placeOf(tools, claim, line, input.places?.get(line.id) ?? null, `body/lines/${index}/fromLocationId`)
     drafts.push({
       siteId: claim.siteId,
-      reason: 'ADJUSTMENT',
+      reason: 'SUPPLIER_RETURN',
+      reasonCode,
       itemId: line.itemId,
       itemColourId: line.itemColourId,
       lotId: line.lotId,
@@ -156,6 +160,9 @@ export async function returnGoodsInCommand(
       after: { moveId: move.id, fromLocationId: move.fromLocationId, quantity: move.quantity, uom: move.uom, ...(valued ? { unitCost: markMoney('cost', valued.unitCost), creditAmount: markMoney('cost', valued.creditAmount) } : {}) },
     })
   }
+  // B-W2b-14 (HideState RETURNED): a hide that went back whole is RETURNED (the database writes its previousState).
+  const returnedHides = await markReturnedHides(tools, claim, going.flatMap((line) => (line.hideId ? [line.hideId] : [])))
+
   // The credit asked again from the lines' value (an amount the supplier accepted stays as agreed).
   if (claim.status !== 'ACCEPTED') {
     const all = await tx.supplierClaimLine.findMany({ where: { claimId }, select: { creditAmount: true } })
@@ -172,7 +179,7 @@ export async function returnGoodsInCommand(
     recordId: claimId,
     companyId: claim.companyId,
     siteId: claim.siteId,
-    after: { lineIds: going.map((line) => line.id), moveIds: posted.map((move) => move.id), ddtId: issued.ddtId, ddt: issued.number, value: markMoney('cost', linesValue(await tx.supplierClaimLine.findMany({ where: { id: { in: going.map((line) => line.id) } }, select: { creditAmount: true } }))) },
+    after: { lineIds: going.map((line) => line.id), moveIds: posted.map((move) => move.id), hidesReturned: returnedHides, ddtId: issued.ddtId, ddt: issued.number, value: markMoney('cost', linesValue(await tx.supplierClaimLine.findMany({ where: { id: { in: going.map((line) => line.id) } }, select: { creditAmount: true } }))) },
   })
   tools.emit({
     type: 'supplier_claim.goods_returned',
@@ -190,6 +197,34 @@ export async function returnGoodsInCommand(
     if (figures.overReserved) overReserved.push({ itemId: key.itemId, itemColourId: key.itemColourId, available: quantityText(figures.available), reserved: quantityText(figures.reserved) })
   }
   return { moveIds: posted.map((move) => move.id), ddt: { id: issued.ddtId, number: issued.number }, claimLinesKeepingOldDdt: [...issued.claimLinesKeepingOldDdt], overReserved }
+}
+
+/**
+ * The hides of the lines that went back and hold nothing at the claim's site any more become RETURNED, each audited
+ * (B-W2b-14). A hide partly returned (a line of less than it holds) keeps its state. The W2b factory_hide_guard keeps the
+ * state it had as previousState: a reversal of its SUPPLIER_RETURN move brings it back (and must, in the same transaction).
+ */
+async function markReturnedHides(tools: CommandTools, claim: ClaimRow, hideIds: readonly string[]): Promise<string[]> {
+  if (hideIds.length === 0) return []
+  const { tx } = tools
+  const unique = [...new Set(hideIds)]
+  const left = await tx.$queryRaw<{ hideId: string; onHand: string }[]>`
+    SELECT m."hideId"::text AS "hideId",
+           (coalesce(sum(CASE WHEN m."toLocationId" IS NOT NULL THEN m."baseQuantity" ELSE 0 END), 0)
+            - coalesce(sum(CASE WHEN m."fromLocationId" IS NOT NULL THEN m."baseQuantity" ELSE 0 END), 0))::text AS "onHand"
+      FROM "StockMove" m
+     WHERE m."siteId" = ${claim.siteId}::uuid AND m."hideId" = ANY(${unique}::uuid[])
+     GROUP BY m."hideId"`
+  const empty = new Set(left.filter((row) => new Dec(row.onHand).lte(0)).map((row) => row.hideId))
+  const hides = await tx.hide.findMany({ where: { id: { in: unique } }, select: { id: true, code: true, state: true }, orderBy: { id: 'asc' } })
+  const returned: string[] = []
+  for (const hide of hides) {
+    if (!empty.has(hide.id) || hide.state === 'RETURNED' || hide.state === 'SCRAPPED' || hide.state === 'CONSUMED') continue
+    await tx.hide.update({ where: { id: hide.id }, data: { state: 'RETURNED', version: { increment: 1 } }, select: { id: true } })
+    tools.audit({ action: 'purchasing.claims.hideReturned', recordType: 'Hide', recordId: hide.id, companyId: claim.companyId, siteId: claim.siteId, before: { state: hide.state }, after: { state: 'RETURNED', claimId: claim.id, claim: claim.number } })
+    returned.push(hide.id)
+  }
+  return returned
 }
 
 const noDdtRight = (context: OfficeContext, scope: { companyId: string; siteId: string }) =>

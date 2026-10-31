@@ -9,12 +9,13 @@ import { WithMessages } from '../../../../record-panels/i18n'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { storeUrl } from '../../../../record-panels/store'
 import { useCoalesced, useLive, useThreadDock } from '../../../_shared/buying/hooks'
-import { answerClaim, cancelClaim, claimReasons, closeClaim, ddtPdfLink, getClaim, removeLine, returnGoods, sendCheck, sendClaim, updateClaim, type Claim, type PickerReason } from '../api'
+import { answerClaim, cancelClaim, claimReasons, closeClaim, ddtPdfLink, fileAddress, getClaim, makeLetter, removeClaimPhoto, removeLine, returnGoods, sendCheck, sendClaim, updateClaim, uploadClaimPhoto, type Claim, type PickerReason } from '../api'
 import {
   answerBody,
   answerHeld,
   claimsCan,
   dialogRefusal,
+  evidenceRefusal,
   formHeld,
   formPatch,
   formRefusal,
@@ -49,7 +50,7 @@ const TIME_ZONE = 'Europe/Rome'
  */
 export function ClaimRecord({ claimId }: { claimId: string }) {
   return (
-    <WithMessages namespaces={['purchasing-claims', 'lists', 'records']}>
+    <WithMessages namespaces={['purchasing-claims', 'lists', 'records', 'photo-kit']}>
       <Container claimId={claimId} />
     </WithMessages>
   )
@@ -74,6 +75,11 @@ function Container({ claimId }: { claimId: string }) {
   const [formProblem, setFormProblem] = useState<Words | null>(null)
   const [saving, setSaving] = useState(false)
   const [reasons, setReasons] = useState<Part<PickerReason[]>>(LOADING)
+  // B-W2b-14: the photos' addresses, the camera step, an upload running.
+  const [photos, setPhotos] = useState<Readonly<Record<string, string | null>>>({})
+  const [photoStep, setPhotoStep] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const askedPhotos = useRef(new Set<string>())
   const reasonsAsked = useRef(false)
   const open = useRef({ dialog, form })
   open.current = { dialog, form }
@@ -176,6 +182,14 @@ function Container({ claimId }: { claimId: string }) {
           setNotice({ tone: 'success', words: words('notice.cancelled', { number: next.number }) })
           break
         }
+        case 'removePhoto': {
+          const photo = current.photos.find((entry) => entry.id === dialog.fileId)
+          if (photo) await removeClaimPhoto(api, claimId, photo.id, photo.version, key.current)
+          setClaim({ status: 'ready', value: await getClaim(api, claimId) })
+          setDialog(null)
+          setNotice({ tone: 'success', words: words('notice.photoRemoved') })
+          break
+        }
         case 'removeLines': {
           // One call per line, each with the version the previous one answered.
           let next = current
@@ -233,7 +247,71 @@ function Container({ claimId }: { claimId: string }) {
     [api],
   )
 
-  const model: ClaimRecordModel = { prefix, can, tab, claim, live, dockOpen, changed, notice, busy, dialog, dialogProblem, form, formProblem, saving, reasons, timeZone: TIME_ZONE }
+  // ---- B-W2b-14 (SCM-135): the claim's photos and its letter ----------------------------------------------------------------
+  const loadPhotos = useCallback(
+    (ids: readonly string[]) => {
+      for (const id of ids) {
+        if (askedPhotos.current.has(id)) continue
+        askedPhotos.current.add(id)
+        fileAddress(api, id)
+          .then((address) => setPhotos((current) => ({ ...current, [id]: address })))
+          .catch(() => setPhotos((current) => ({ ...current, [id]: null })))
+      }
+    },
+    [api],
+  )
+
+  const addPhoto = useCallback(
+    async (photo: Blob) => {
+      const current = claim.status === 'ready' ? claim.value : null
+      if (!current || uploading) return
+      setUploading(true)
+      try {
+        await uploadClaimPhoto(api, claimId, photo, `${current.number}-${current.photos.length + 1}.jpg`)
+        setPhotoStep(false)
+        setNotice({ tone: 'success', words: words('notice.photoAdded') })
+        setClaim({ status: 'ready', value: await getClaim(api, claimId) })
+      } catch (error) {
+        setNotice({ tone: 'danger', words: evidenceRefusal(error) })
+      } finally {
+        setUploading(false)
+      }
+    },
+    [api, claim, claimId, uploading],
+  )
+
+  const keepLetter = useCallback(async () => {
+    if (busy) return
+    setBusy(true)
+    try {
+      const kept = await makeLetter(api, claimId, newIdempotencyKey())
+      setNotice({ tone: 'success', words: words(kept.made ? 'notice.letterKept' : 'notice.letterSame', { version: kept.letter.version }) })
+      setClaim({ status: 'ready', value: await getClaim(api, claimId) })
+    } catch (error) {
+      setNotice({ tone: 'danger', words: evidenceRefusal(error) })
+    } finally {
+      setBusy(false)
+    }
+  }, [api, busy, claimId])
+
+  const openFile = useCallback(
+    async (fileId: string) => {
+      try {
+        const anchor = document.createElement('a')
+        anchor.href = await fileAddress(api, fileId)
+        anchor.target = '_blank'
+        anchor.rel = 'noopener'
+        document.body.append(anchor)
+        anchor.click()
+        anchor.remove()
+      } catch (error) {
+        setNotice({ tone: 'danger', words: words(readWords(error)) })
+      }
+    },
+    [api],
+  )
+
+  const model: ClaimRecordModel = { prefix, can, tab, claim, live, dockOpen, changed, notice, busy, dialog, dialogProblem, form, formProblem, saving, reasons, timeZone: TIME_ZONE, photos, photoStep, uploading }
 
   return (
     <ClaimRecordView
@@ -255,6 +333,11 @@ function Container({ claimId }: { claimId: string }) {
         },
         onSave: () => void save(),
         onOpenDdt: (ddtId) => void openDdt(ddtId),
+        onPhotoStep: setPhotoStep,
+        onPhoto: addPhoto,
+        onPhotos: loadPhotos,
+        onKeepLetter: () => void keepLetter(),
+        onOpenFile: (fileId) => void openFile(fileId),
         onCopyNumber: () => {
           if (value) void navigator.clipboard?.writeText(value.number).catch(() => undefined)
         },

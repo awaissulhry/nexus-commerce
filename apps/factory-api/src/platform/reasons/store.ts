@@ -67,21 +67,21 @@ const USAGE: Partial<Record<ReasonCodeList, (client: Client, used: Map<string, n
        GROUP BY 1`
     for (const row of rows) add(used, row.code.trim(), Number(row.n))
   },
-  // Receiving discrepancies (B-W2a-31): no column yet; the code leads the note (`DAMAGED: …`).
+  // Receiving discrepancies (B-W2a-31; B-W2b-14: the reasonCode column; one recorded before W2b leads its note with it).
   async DISCREPANCY(client, used) {
     const rows = await client.$queryRaw<{ code: string; n: bigint }[]>`
-      SELECT substring(d."note" from '^([A-Z][A-Z0-9_]{1,39})(?::|$)') AS code, count(*) AS n
+      SELECT coalesce(d."reasonCode", substring(d."note" from '^([A-Z][A-Z0-9_]{1,39})(?::|$)')) AS code, count(*) AS n
         FROM "ReceiptDiscrepancy" d
-       WHERE d."note" ~ '^[A-Z][A-Z0-9_]{1,39}(:|$)'
+       WHERE d."reasonCode" IS NOT NULL OR d."note" ~ '^[A-Z][A-Z0-9_]{1,39}(:|$)'
        GROUP BY 1`
     for (const row of rows) add(used, row.code, Number(row.n))
   },
-  // Supplier claims (B-W2a-44): no column yet; the code leads the claim's reason (`QUALITY: …`).
+  // Supplier claims (B-W2a-44; B-W2b-14: the reasonCode column; one made before W2b leads its reason with it).
   async CLAIM(client, used) {
     const rows = await client.$queryRaw<{ code: string; n: bigint }[]>`
-      SELECT substring(c."reason" from '^([A-Z][A-Z0-9_]{1,39})(?::|$)') AS code, count(*) AS n
+      SELECT coalesce(c."reasonCode", substring(c."reason" from '^([A-Z][A-Z0-9_]{1,39})(?::|$)')) AS code, count(*) AS n
         FROM "SupplierClaim" c
-       WHERE c."reason" ~ '^[A-Z][A-Z0-9_]{1,39}(:|$)'
+       WHERE c."reasonCode" IS NOT NULL OR c."reason" ~ '^[A-Z][A-Z0-9_]{1,39}(:|$)'
        GROUP BY 1`
     for (const row of rows) add(used, row.code, Number(row.n))
   },

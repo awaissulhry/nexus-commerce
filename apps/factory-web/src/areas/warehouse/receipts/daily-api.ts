@@ -7,6 +7,7 @@ import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { PURCHASE_ORDER_STATUSES } from '@nexus/factory-domain/purchasing/orders'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { presignedSchema, type Presigned } from '../../../record-panels/api'
+import { receiptSchema, type Receipt } from './api'
 import { putToStore, sha256Hex, storeUrl } from '../../../record-panels/store'
 
 /**
@@ -276,3 +277,17 @@ export function hideListSummary(api: ApiClient, importId: string, signal?: Abort
 }
 
 export type { Presigned }
+
+// ---- B-W2b-14: the supplier's DDT number and date corrected on a posted receipt -----------------------------------------------
+
+export interface DdtFixBody {
+  version: number
+  supplierDdtNumber: string | null
+  supplierDdtDate: string | null
+  reason: string
+}
+
+/** POST /inventory/receipts/:id/supplier-ddt (inventory.receive): the receipt as it is now. */
+export async function correctSupplierDdt(api: ApiClient, receiptId: string, body: DdtFixBody, idempotencyKey: string): Promise<Receipt> {
+  return (await api.post(`${receiptUrl(receiptId)}/supplier-ddt`, { body, schema: z.object({ receipt: receiptSchema }), idempotencyKey })).receipt
+}
