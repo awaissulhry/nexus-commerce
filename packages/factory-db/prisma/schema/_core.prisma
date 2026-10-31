@@ -164,6 +164,13 @@ model Company {
   // calendar.prisma: its calendars (its own and its sites', lines', workshops' and suppliers') and its shift patterns.
   workCalendars        WorkCalendar[]
   shiftPatterns        ShiftPattern[]
+  // W2b time.prisma (wave 5/7): its absence codes and absences, timesheet approvals, attendance month closes and
+  // working-time limits.
+  absenceCodes          AbsenceCode[]
+  absenceEntries        AbsenceEntry[]
+  timesheetApprovals    TimesheetApproval[]
+  attendanceMonthCloses AttendanceMonthClose[]
+  workingTimeRules      WorkingTimeRule[]
   // views.prisma: the saved views of its lists and the reports sent about it.
   savedViews           SavedView[]
   reportSubscriptions  ReportSubscription[]
@@ -266,6 +273,14 @@ model Site {
   workCalendars       WorkCalendar[]
   reportSubscriptions ReportSubscription[]
   alertRules          AlertRule[]
+  // W2b time.prisma (wave 5/7): its roster, planned overtime, clock events, attendance days, overtime worked and
+  // working-time limits.
+  rosterEntries      RosterEntry[]
+  overtimeRequests   OvertimeRequest[]
+  clockEvents        ClockEvent[]
+  attendanceDays     AttendanceDay[]
+  overtimeEntries    OvertimeEntry[]
+  workingTimeRules   WorkingTimeRule[]
   // W2a claims.prisma, subcontract.prisma: the claims about goods at the site, the work it sends to workshops.
   supplierClaims     SupplierClaim[]
   subcontractOrders  SubcontractOrder[]
@@ -305,6 +320,8 @@ model Line {
   capacity LineCapacity[]
   // calendar.prisma: its calendar.
   workCalendars WorkCalendar[]
+  // W2b time.prisma (wave 5/7): the overtime planned for it.
+  overtimeRequests OvertimeRequest[]
   // W2a production.prisma, schedule.prisma: the work orders allocated to it, its slots on the planning board.
   workOrders    WorkOrder[]
   scheduleSlots ScheduleSlot[]

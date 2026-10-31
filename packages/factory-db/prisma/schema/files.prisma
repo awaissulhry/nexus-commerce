@@ -100,6 +100,8 @@ model StoredFile {
   lotDocuments   LotDocument[]
   // W2a holds.prisma: the defect codes whose picture it is.
   defectCodePictures DefectCode[] @relation("DefectCodePicture")
+  // W2b time.prisma (wave 5/7): the attendance month close whose LUL calendar it is.
+  attendanceLulOf AttendanceMonthClose[] @relation("AttendanceMonthCloseLul")
   // W2a stockcount.prisma: the year-end count whose signed valued list it is.
   stockCountValuedLists StockCount[] @relation("StockCountValuedList")
   // privacy.prisma: the notice language and the DPIA whose PDF it is.

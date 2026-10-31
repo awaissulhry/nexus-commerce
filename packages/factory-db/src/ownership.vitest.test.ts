@@ -16,11 +16,17 @@ describe('model ownership', () => {
     expect(problems(loadOwnership())).toEqual([])
     const inputs = policyInputs(loadSchema(), loadOwnership())
     expect(inputs.model.tables.map((table) => table.table).sort()).toEqual([
+      'AbsenceCode',
+      'AbsenceEntry',
       'AccountingExport',
       'AccountingExportFile',
       'Alert',
       'AlertEvent',
       'AlertRule',
+      'AttendanceAnomaly',
+      'AttendanceCorrection',
+      'AttendanceDay',
+      'AttendanceMonthClose',
       'AttentionAction',
       'AttentionActionLog',
       'AuditLog',
@@ -33,6 +39,7 @@ describe('model ownership', () => {
       'CalendarDay',
       'Certificate',
       'CertificateCoverage',
+      'ClockEvent',
       'Colour',
       'Colourway',
       'Company',
@@ -112,6 +119,9 @@ describe('model ownership', () => {
       'OperationScan',
       'OperationScanDefect',
       'OutboxEvent',
+      'OvertimeAgreement',
+      'OvertimeEntry',
+      'OvertimeRequest',
       'Parcel',
       'Party',
       'PartyAddress',
@@ -170,6 +180,7 @@ describe('model ownership', () => {
       'ReworkOrder',
       'Role',
       'RoleAssignment',
+      'RosterEntry',
       'RoutingOperation',
       'SalesOrder',
       'SalesOrderAmendment',
@@ -217,6 +228,7 @@ describe('model ownership', () => {
       'Task',
       'Tenant',
       'Thread',
+      'TimesheetApproval',
       'TodayLayout',
       'TrackingEvent',
       'TypeChangeReview',
@@ -234,6 +246,7 @@ describe('model ownership', () => {
       'Worker',
       'WorkerNoticeAck',
       'WorkerRole',
+      'WorkingTimeRule',
     ])
     expect(inputs.platformTables).toEqual([{ table: 'Tenant', privileges: ['select', 'insert', 'update'], walled: true }])
   })

@@ -129,6 +129,8 @@ model ShiftPattern {
   segments     ShiftSegment[]
   calendars    WorkCalendar[]
   calendarDays CalendarDay[]
+  // W2b time.prisma (wave 5/7): the roster shifts taken from it.
+  rosterEntries RosterEntry[]
 
   @@unique([tenantId, code])
   // The target of the calendars', days' and segments' tenant-safe references.

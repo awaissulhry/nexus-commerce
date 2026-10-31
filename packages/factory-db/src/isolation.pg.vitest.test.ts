@@ -47,6 +47,7 @@ import { seed as seedSourcing } from '../seed/sourcing'
 import { seed as seedSubcontract } from '../seed/subcontract'
 import { seed as seedSupply } from '../seed/supply'
 import { seed as seedThreads } from '../seed/threads'
+import { seed as seedTime } from '../seed/time'
 import { seed as seedViews } from '../seed/views'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels } from './ownership'
@@ -209,6 +210,9 @@ beforeAll(async () => {
     await seedMoneyW2a({ db: factory, namespace: 'iso-a' })
     await seedMoneyW2a({ db: factory, namespace: 'iso-b' })
   }
+  // The time and attendance schema of W2b (wave 5/7).
+  await seedTime({ db: factory, namespace: 'iso-a' })
+  await seedTime({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -219,11 +223,17 @@ afterAll(async () => {
 
 it('covers every classified table and every runtime role', () => {
   expect(classified.map(({ model }) => model.name).sort()).toEqual([
+    'AbsenceCode',
+    'AbsenceEntry',
     'AccountingExport',
     'AccountingExportFile',
     'Alert',
     'AlertEvent',
     'AlertRule',
+    'AttendanceAnomaly',
+    'AttendanceCorrection',
+    'AttendanceDay',
+    'AttendanceMonthClose',
     'AttentionAction',
     'AttentionActionLog',
     'AuditLog',
@@ -236,6 +246,7 @@ it('covers every classified table and every runtime role', () => {
     'CalendarDay',
     'Certificate',
     'CertificateCoverage',
+    'ClockEvent',
     'Colour',
     'Colourway',
     'Company',
@@ -315,6 +326,9 @@ it('covers every classified table and every runtime role', () => {
     'OperationScan',
     'OperationScanDefect',
     'OutboxEvent',
+    'OvertimeAgreement',
+    'OvertimeEntry',
+    'OvertimeRequest',
     'Parcel',
     'Party',
     'PartyAddress',
@@ -373,6 +387,7 @@ it('covers every classified table and every runtime role', () => {
     'ReworkOrder',
     'Role',
     'RoleAssignment',
+    'RosterEntry',
     'RoutingOperation',
     'SalesOrder',
     'SalesOrderAmendment',
@@ -420,6 +435,7 @@ it('covers every classified table and every runtime role', () => {
     'Task',
     'Tenant',
     'Thread',
+    'TimesheetApproval',
     'TodayLayout',
     'TrackingEvent',
     'TypeChangeReview',
@@ -437,6 +453,7 @@ it('covers every classified table and every runtime role', () => {
     'Worker',
     'WorkerNoticeAck',
     'WorkerRole',
+    'WorkingTimeRule',
   ])
   expect(RUNTIME_ROLES).toHaveLength(4)
   expect(a.tenantId).not.toBe(b.tenantId)

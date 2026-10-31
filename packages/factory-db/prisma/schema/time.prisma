@@ -1,0 +1,766 @@
+// Time and attendance (W2b plan §6 schema wave 5/7; B-W2b-07; features MES-117, MES-199, MES-218, MES-222 … MES-239,
+// MES-303; design people.shifts, people.attendance, people.settings "Absence codes" and "Working-time limits",
+// floor.clock, people.employees › Attendance): who works which shift, the planned overtime the workers agree to, every
+// clock-in and clock-out, the attendance day of each person with its anomalies, absences and overtime, the timesheet
+// approvals, the month close with the LUL attendance calendar, the corrections of a closed day, and the working-time
+// limits of D.Lgs. 66/2003. apps/factory-api's People steps (B-W2b-32 shifts and overtime requests, B-W2b-33 clock in
+// and out, B-W2b-37 attendance days, B-W2b-42 overtime, timesheets and limits, B-W2b-48 month close and the LUL
+// calendar) write them, always through command():
+//
+//   RosterEntry          one person's shift on one day (the roster sheet's cell); a day without a row works the
+//                        person's default shift (People). The shift's window is copied from the planning pattern, so a
+//                        later change of the pattern never rewrites a published roster.
+//   OvertimeRequest      planned overtime for a date and line, asked of some people; OvertimeAgreement is each person's
+//                        answer (D.Lgs. 66/2003 art. 5: overtime by agreement), given on the floor or told to the lead.
+//   ClockEvent           append-only: IN, OUT, BREAK_OUT, BREAK_IN by badge, by name and PIN (forgot badge, flagged),
+//                        queued OFFLINE with the tablet's time, MANUAL with a reason, or AUTO (the automatic clock-out);
+//                        a mistaken event is voided by a VOID event (kept, marked void), never changed.
+//   AttendanceDay        one person's day: the planned shift, the minutes by kind, OPEN → NEEDS_FIX → APPROVED → CLOSED.
+//   AttendanceAnomaly    what is wrong with a day and the rule that found it; resolved once (by whom, when, how).
+//   AbsenceCode          the codes of absences (holiday, permit, sickness …) with the consultant's LUL code; never a
+//                        diagnosis. AbsenceEntry is one person's absence on one day under one code.
+//   OvertimeEntry        overtime worked on one day, by class (day, night, holiday): paid only once APPROVED (MES-229).
+//   TimesheetApproval    one person's period approved by the lead, then by HR (two people).
+//   AttendanceMonthClose a company's month closed, with the LUL attendance calendar (D.L. 112/2008 art. 39); nothing in
+//                        a closed month changes again.
+//   AttendanceCorrection append-only: a closed day's figure changed by a new entry with its reason (from → to), for the
+//                        payroll's correction export.
+//   WorkingTimeRule      the limits the plans and approvals are checked against (daily rest, weekly rest, 48 h weekly
+//                        average, break after six hours, yearly overtime cap, night work), warn or block, law or CCNL.
+//
+// Personal data with its own purpose (GDPR art. 5(1)(b); Statuto dei Lavoratori art. 4 c.2: attendance tools need the
+// worker notice and the DPIA, not a union agreement): every row is about one person, named by `employeeId` (and, for a
+// floor event, the site's `workerId`), tagged `@purpose attendance`. No biometric data (GDPR art. 9; the Garante): a
+// badge or a name and PIN only. No figure about a person goes into a list, a filter, a group or a total of another
+// purpose (Owner answer F2): the API reads these rows behind the legal gate (B-W2b-27) and the People permissions.
+//
+// The person: `employeeId` names an Employee of the People schema (B-W2b-06, people.prisma), which is not on main while
+// this step builds: no foreign key here yet. The merge after B-W2b-06 adds `employee Employee @relation(…)` on each
+// table (the merge recipe in this step's notes).
+//
+// Who sees what (ownership/time.json): the office (HR and the leads, through the API's permissions) reads and writes;
+// the floor of a site records its clock events and reads them, reads its published roster and the overtime it is asked,
+// answers an ask (the worker's own answer), and reads which months are closed; portal and link sessions read nothing.
+// The hand-written migration …_time_w2b_guards holds the rules Prisma does not model.
+
+/// One person's shift on one day (MES-218; design people.shifts "Roster"): the cell of the roster sheet. A day without
+/// a row works the person's default shift (People); OFF is a day off. A PUBLISHED row is the roster the workers read.
+model RosterEntry {
+  id             String            @id @db.Uuid
+  tenantId       String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId      String            @db.Uuid
+  /// The site where the person works that day (their own, or the site of a loan).
+  siteId         String            @db.Uuid
+  /// The person (an Employee of people.prisma).
+  /// @purpose attendance
+  employeeId     String            @db.Uuid
+  date           DateTime          @db.Date
+  kind           RosterEntryKind
+  /// The planning pattern the shift was taken from (calendar.prisma; planning owns the patterns); null for OFF or a shift
+  /// typed by hand.
+  shiftPatternId String?           @db.Uuid
+  /// WORK: the shift's name ("Morning") and its window in minutes from the date's midnight in the site's time zone
+  /// (360-840 is 06:00-14:00; a night shift runs past 1440, at most 24 hours), with the unpaid break inside it. Copied
+  /// when the shift is set, so a later change of the pattern never rewrites a published roster.
+  shiftLabel     String?
+  startMinute    Int?
+  endMinute      Int?
+  breakMinutes   Int               @default(0)
+  status         RosterEntryStatus @default(DRAFT)
+  /// PUBLISHED: when and by whom (the roster the workers read on the floor and on the notice board).
+  publishedAt    DateTime?         @db.Timestamptz(3)
+  publishedById  String?           @db.Uuid
+  note           String?
+  version        Int               @default(1)
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById    String?           @db.Uuid
+
+  site         Site          @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  shiftPattern ShiftPattern? @relation(fields: [tenantId, shiftPatternId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, employeeId, date])
+  // The roster of a site over a range (the sheet, the floor's own shifts).
+  @@index([tenantId, siteId, date])
+}
+
+enum RosterEntryKind {
+  /// A shift (its window set).
+  WORK
+  /// A day off.
+  OFF
+}
+
+enum RosterEntryStatus {
+  /// Being planned: the workers do not see it yet.
+  DRAFT
+  /// The roster the workers read.
+  PUBLISHED
+}
+
+/// Planned overtime for one date, asked of some people (MES-222; design people.shifts "Overtime requests" and
+/// "Request overtime"; D.Lgs. 66/2003 art. 5: overtime by agreement, within the yearly cap): DRAFT → ASKED (each person
+/// asked answers in an OvertimeAgreement) → AGREED (at least one yes) → APPROVED → DONE; CANCELLED with a reason. What
+/// it asks (date, time, minutes, line, reason) is fixed once asked.
+model OvertimeRequest {
+  id           String                @id @db.Uuid
+  tenantId     String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId    String                @db.Uuid
+  siteId       String                @db.Uuid
+  /// The line it is for, on the same site; null: the site.
+  lineId       String?               @db.Uuid
+  date         DateTime              @db.Date
+  /// When the extra time starts, in minutes from the date's midnight (site time zone), when it is planned to the minute.
+  startMinute  Int?
+  /// How long, per person (1-720).
+  minutes      Int
+  reason       String
+  status       OvertimeRequestStatus @default(DRAFT)
+  /// From ASKED on: when the people were asked, and by whom.
+  askedAt      DateTime?             @db.Timestamptz(3)
+  askedById    String?               @db.Uuid
+  /// APPROVED and DONE: the approval.
+  approvedAt   DateTime?             @db.Timestamptz(3)
+  approvedById String?               @db.Uuid
+  /// DONE: when it was worked (its overtime entries recorded).
+  doneAt       DateTime?             @db.Timestamptz(3)
+  cancelledAt  DateTime?             @db.Timestamptz(3)
+  cancelReason String?
+  version      Int                   @default(1)
+  createdAt    DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?               @db.Uuid
+
+  site            Site                @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  line            Line?               @relation(fields: [tenantId, siteId, lineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  agreements      OvertimeAgreement[]
+  overtimeEntries OvertimeEntry[]
+
+  // The target of the agreements' and entries' references: a request of the same site.
+  @@unique([tenantId, siteId, id])
+  @@index([tenantId, siteId, date])
+}
+
+enum OvertimeRequestStatus {
+  DRAFT
+  /// The people are asked (on the floor's My day, or by the lead).
+  ASKED
+  /// At least one person agreed.
+  AGREED
+  APPROVED
+  /// Worked: its overtime entries are recorded. Final.
+  DONE
+  /// Final, with a reason.
+  CANCELLED
+}
+
+/// One person asked to work a planned overtime, and their answer (D.Lgs. 66/2003 art. 5 c.3): given by the worker on a
+/// tablet of the site (FLOOR), or told to the lead or HR, who records it (OFFICE). The answer changes while the request
+/// is asked; once it is approved, done or cancelled it is fixed.
+model OvertimeAgreement {
+  id           String                 @id @db.Uuid
+  tenantId     String                 @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The request's site (its reference includes it): the floor reads and answers its own site's asks.
+  siteId       String                 @db.Uuid
+  requestId    String                 @db.Uuid
+  /// The person asked (an Employee of people.prisma).
+  /// @purpose attendance
+  employeeId   String                 @db.Uuid
+  answer       OvertimeAnswer         @default(PENDING)
+  /// AGREED and DECLINED: when, and how the answer came.
+  answeredAt   DateTime?              @db.Timestamptz(3)
+  answeredVia  OvertimeAnswerChannel?
+  /// FLOOR: the worker who answered (the site's Worker record of the person) and the tablet.
+  /// @purpose attendance
+  workerId     String?                @db.Uuid
+  deviceId     String?                @db.Uuid
+  /// OFFICE: the user who recorded the spoken answer.
+  answeredById String?                @db.Uuid
+  version      Int                    @default(1)
+  createdAt    DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime               @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?                @db.Uuid
+
+  request OvertimeRequest @relation(fields: [tenantId, siteId, requestId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  worker  Worker?         @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device  Device?         @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // No unique key on (request, person): the generated isolation tests insert a copy of a row (ids kept); the API keeps
+  // one answer per person and request.
+  @@index([tenantId, requestId])
+  @@index([tenantId, employeeId])
+}
+
+enum OvertimeAnswer {
+  PENDING
+  AGREED
+  DECLINED
+}
+
+enum OvertimeAnswerChannel {
+  /// The worker answered on a tablet of the site.
+  FLOOR
+  /// The lead or HR recorded what the person said.
+  OFFICE
+}
+
+/// One clock event (MES-223, MES-224, MES-227, MES-239, MES-199; design floor.clock, people.attendance "Day detail"):
+/// append-only; a mistaken event is voided by a VOID event (the original kept, marked void), never changed or removed.
+/// @append-only
+model ClockEvent {
+  id            String           @id @db.Uuid
+  tenantId      String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId     String           @db.Uuid
+  /// The site where it was recorded (a MANUAL one: the person's site that day).
+  siteId        String           @db.Uuid
+  /// The person (an Employee of people.prisma).
+  /// @purpose attendance
+  employeeId    String           @db.Uuid
+  /// BADGE, NAME_PIN, OFFLINE: the floor worker who clocked (the site's Worker record of the person) and the tablet.
+  /// @purpose attendance
+  workerId      String?          @db.Uuid
+  deviceId      String?          @db.Uuid
+  kind          ClockEventKind
+  source        ClockEventSource
+  /// The moment that counts: the server's time for an event sent online, the tablet's time for an OFFLINE one, the time
+  /// typed for a MANUAL one, the rule's time for AUTO (the shift's end plus the tolerance).
+  occurredAt    DateTime         @db.Timestamptz(3)
+  /// BADGE, NAME_PIN, OFFLINE: the tablet's clock when it was recorded (compared with receivedAt: a wrong clock is
+  /// flagged).
+  deviceTime    DateTime?        @db.Timestamptz(3)
+  /// When the server received it (an OFFLINE event arrives later).
+  receivedAt    DateTime         @default(now()) @db.Timestamptz(3)
+  /// What the team leader should look at (empty: nothing): FORGOT_BADGE (signed by name and PIN), CLOCK_SKEW (the
+  /// tablet's clock looked wrong). Only on floor events.
+  flags         ClockEventFlag[] @default([])
+  /// BADGE, NAME_PIN, OFFLINE: the tablet's id of the event; the same id from the same tablet is refused (the offline
+  /// queue sends again).
+  clientEventId String?
+  /// MANUAL and VOID: why (required; the day is marked manual for good). AUTO: the rule in words ("shift end 22:00 +
+  /// 15 min").
+  reason        String?
+  /// MANUAL: work outside the plant (a customer visit, a trade fair), counted as presence.
+  offSite       Boolean          @default(false)
+  /// VOID: the event it voids, an earlier one of the same person (once).
+  voidsEventId  String?          @db.Uuid
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+  createdById   String?          @db.Uuid
+
+  site      Site                @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, siteId and
+  // employeeId.
+  worker    Worker?             @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  device    Device?             @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  voids     ClockEvent?         @relation("ClockEventVoid", fields: [tenantId, employeeId, voidsEventId], references: [tenantId, employeeId, id], onDelete: Restrict, onUpdate: Restrict)
+  voidedBy  ClockEvent[]        @relation("ClockEventVoid")
+  anomalies AttendanceAnomaly[]
+
+  @@unique([tenantId, deviceId, clientEventId])
+  // An event is voided once.
+  @@unique([tenantId, voidsEventId])
+  // The target of the void's and the anomalies' references: an event of the same person.
+  @@unique([tenantId, employeeId, id])
+  @@index([tenantId, employeeId, occurredAt])
+  // Who is in now, per site.
+  @@index([tenantId, siteId, occurredAt])
+}
+
+enum ClockEventKind {
+  IN
+  OUT
+  BREAK_OUT
+  BREAK_IN
+  /// Voids an earlier event (voidsEventId), MANUAL with a reason.
+  VOID
+}
+
+enum ClockEventSource {
+  /// A badge scanned on a tablet, sent online.
+  BADGE
+  /// Forgot badge: the name and the PIN (flagged for the team leader, MES-239).
+  NAME_PIN
+  /// Recorded on a tablet without a connection and sent later, with the tablet's time (MES-199).
+  OFFLINE
+  /// Entered by HR or the lead, with a reason (MES-238).
+  MANUAL
+  /// The automatic clock-out after the shift's end plus the tolerance (MES-227).
+  AUTO
+}
+
+enum ClockEventFlag {
+  FORGOT_BADGE
+  CLOCK_SKEW
+}
+
+/// One person's attendance day (MES-225, MES-226, MES-238; design people.attendance "Days", Employee › Attendance):
+/// the planned shift and the minutes by kind, computed from the clock events, the roster and People settings' rounding
+/// and grace (B-W2b-37). OPEN ⇄ NEEDS_FIX → APPROVED (no anomaly left; the minutes then frozen until reopened) → CLOSED
+/// by the month close; a closed day changes only by an AttendanceCorrection.
+model AttendanceDay {
+  id                 String              @id @db.Uuid
+  tenantId           String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId          String              @db.Uuid
+  /// The site the person worked at that day.
+  siteId             String              @db.Uuid
+  /// The person (an Employee of people.prisma).
+  /// @purpose attendance
+  employeeId         String              @db.Uuid
+  date               DateTime            @db.Date
+  status             AttendanceDayStatus @default(OPEN)
+  /// The shift planned that day (the roster's, else the person's default): its name, window (minutes from the date's
+  /// midnight, site time zone) and working minutes. All null: no shift planned (the NO_SHIFT anomaly).
+  plannedLabel       String?
+  plannedStartMinute Int?
+  plannedEndMinute   Int?
+  plannedMinutes     Int?
+  /// The first clock-in and the last clock-out that count (voided events left out).
+  firstInAt          DateTime?           @db.Timestamptz(3)
+  lastOutAt          DateTime?           @db.Timestamptz(3)
+  /// The day's minutes (0-1440 each): present (in to out, breaks taken off), on breaks, ordinary, overtime (before its
+  /// approval; OvertimeEntry holds it by class), worked at night (D.Lgs. 66/2003 art. 1) and on a holiday, and absent
+  /// (its AbsenceEntry rows).
+  presentMinutes     Int                 @default(0)
+  breakMinutes       Int                 @default(0)
+  ordinaryMinutes    Int                 @default(0)
+  overtimeMinutes    Int                 @default(0)
+  nightMinutes       Int                 @default(0)
+  holidayMinutes     Int                 @default(0)
+  absenceMinutes     Int                 @default(0)
+  /// When the minutes were last computed.
+  computedAt         DateTime?           @db.Timestamptz(3)
+  /// Something was entered or fixed by hand that day (a manual or void event, an absence set by hand): marked for good,
+  /// and shown as manual on the LUL calendar.
+  manual             Boolean             @default(false)
+  /// APPROVED and CLOSED: the approval.
+  approvedAt         DateTime?           @db.Timestamptz(3)
+  approvedById       String?             @db.Uuid
+  /// CLOSED: the month close of its company and month that closed it, and when.
+  monthCloseId       String?             @db.Uuid
+  closedAt           DateTime?           @db.Timestamptz(3)
+  version            Int                 @default(1)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById        String?             @db.Uuid
+
+  site        Site                   @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  monthClose  AttendanceMonthClose?  @relation(fields: [tenantId, companyId, monthCloseId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  anomalies   AttendanceAnomaly[]
+  corrections AttendanceCorrection[]
+
+  @@unique([tenantId, employeeId, date])
+  // The target of the anomalies' and corrections' references: a day of the same person.
+  @@unique([tenantId, employeeId, id])
+  @@index([tenantId, companyId, date])
+  @@index([tenantId, siteId, date])
+}
+
+enum AttendanceDayStatus {
+  OPEN
+  /// An anomaly waits for a fix.
+  NEEDS_FIX
+  APPROVED
+  /// Closed by the month close: changed only by a correction.
+  CLOSED
+}
+
+/// What is wrong with an attendance day and the rule that found it (MES-226; design people.attendance "Anomaly" and
+/// "How this anomaly is found"): resolved once, by whom, when and how; never deleted.
+model AttendanceAnomaly {
+  id                String                @id @db.Uuid
+  tenantId          String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The day's company.
+  companyId         String                @db.Uuid
+  /// The person (an Employee of people.prisma), the day's.
+  /// @purpose attendance
+  employeeId        String                @db.Uuid
+  dayId             String                @db.Uuid
+  kind              AttendanceAnomalyKind
+  /// The rule that found it, as a key the screen puts in words with its setting ("people.maxDayMinutes",
+  /// "time.rule.DAILY_REST").
+  ruleKey           String
+  /// The working-time limit that found it (SHORT_REST, NO_BREAK, LONG_DAY …).
+  workingTimeRuleId String?               @db.Uuid
+  /// The event concerned (a double clock-in, a flagged event), of the same person.
+  clockEventId      String?               @db.Uuid
+  /// What it found, as values for the words ({ "limitMinutes": 960, "foundMinutes": 1010 }); never a note about the
+  /// person.
+  detail            Json?
+  raisedAt          DateTime              @default(now()) @db.Timestamptz(3)
+  /// How it was resolved: FIXED (the day was fixed), ACCEPTED (it stands, with a note), CLEARED (a new computation no
+  /// longer finds it: the system, no person). Set once with resolvedAt.
+  resolution        AnomalyResolution?
+  resolvedAt        DateTime?             @db.Timestamptz(3)
+  resolvedById      String?               @db.Uuid
+  resolutionNote    String?
+  version           Int                   @default(1)
+  createdAt         DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById       String?               @db.Uuid
+
+  day             AttendanceDay    @relation(fields: [tenantId, employeeId, dayId], references: [tenantId, employeeId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and employeeId.
+  clockEvent      ClockEvent?      @relation(fields: [tenantId, employeeId, clockEventId], references: [tenantId, employeeId, id], onDelete: Restrict, onUpdate: Restrict)
+  workingTimeRule WorkingTimeRule? @relation(fields: [tenantId, workingTimeRuleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, dayId])
+  // The open anomalies of a company (the tiles, the month close).
+  @@index([tenantId, companyId, resolvedAt])
+}
+
+enum AttendanceAnomalyKind {
+  MISSING_CLOCK_OUT
+  MISSING_CLOCK_IN
+  DOUBLE_CLOCK_IN
+  /// Longer than People settings' maximum (16 h by default).
+  LONG_DAY
+  /// Clocked in with no shift planned.
+  NO_SHIFT
+  /// Scans by the person while not clocked in (a site that names workers on scans).
+  SCANS_WITHOUT_CLOCK_IN
+  /// A flagged event to look at (forgot badge, a wrong tablet clock).
+  FLAGGED_EVENT
+  /// Rest between two days under the limit (D.Lgs. 66/2003 art. 7).
+  SHORT_REST
+  /// No break once the day passed six hours (art. 8).
+  NO_BREAK
+}
+
+enum AnomalyResolution {
+  FIXED
+  ACCEPTED
+  CLEARED
+}
+
+/// An absence code (MES-228; design people.settings "Absence codes"): holiday, permit, sickness, injury, law 104 leave,
+/// union leave … with the code the labour consultant uses on the LUL calendar. Never a diagnosis: a sickness absence is
+/// a code and, when needed, a certificate's reference. Archived, never deleted.
+model AbsenceCode {
+  id               String          @id @db.Uuid
+  tenantId         String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company that uses it; null: tenant-wide. Never changes.
+  companyId        String?         @db.Uuid
+  /// Our code, unique in the tenant ("FER", "ROL", "MAL"): the attendance grid and the payroll code mapping use it.
+  /// Never changes.
+  code             String
+  /// The name per language ({ "it": "Ferie", "en": "Holiday" }); Italian at least.
+  labelI18n        Json
+  category         AbsenceCategory
+  /// The labour consultant's code for it on the LUL calendar; null until they give it (GATE-PAYROLL).
+  lulCode          String?
+  /// Paid by the employer (true) or not.
+  paid             Boolean
+  /// A document backs it (a sickness certificate's protocol number, a law 104 authorisation): its reference only.
+  documentRequired Boolean         @default(false)
+  status           MasterStatus    @default(ACTIVE)
+  version          Int             @default(1)
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?         @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  company     Company?               @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  entries     AbsenceEntry[]
+  corrections AttendanceCorrection[]
+
+  @@unique([tenantId, code])
+  // The target of the entries' and corrections' tenant-safe references.
+  @@unique([tenantId, id])
+}
+
+enum AbsenceCategory {
+  /// Ferie.
+  HOLIDAY
+  /// Permessi (ROL, ex festività).
+  PERMIT
+  /// Malattia (with the certificate's protocol number, never a diagnosis).
+  SICKNESS
+  /// Infortunio.
+  INJURY
+  /// Maternity, paternity and parental leave.
+  PARENTAL
+  /// Legge 104/1992 leave.
+  LAW_104
+  /// Union leave and assemblies.
+  UNION
+  STRIKE
+  UNPAID_LEAVE
+  OTHER
+}
+
+/// One person's absence on one day under one code (MES-228; design people.attendance "Absence code + hours", "Set
+/// absence code"): entered ahead (a planned holiday) or after; changed or removed while its month is open.
+model AbsenceEntry {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String   @db.Uuid
+  /// The person (an Employee of people.prisma).
+  /// @purpose attendance
+  employeeId  String   @db.Uuid
+  date        DateTime @db.Date
+  /// An ACTIVE code, tenant-wide or of this company.
+  codeId      String   @db.Uuid
+  /// Minutes absent that day (1-1440; a whole day: the planned shift's working minutes).
+  minutes     Int
+  /// The backing document's reference when the code needs one (a certificate's protocol number); never its content.
+  /// @purpose attendance
+  documentRef String?
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  company Company     @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  code    AbsenceCode @relation(fields: [tenantId, codeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, employeeId, date, codeId])
+  @@index([tenantId, companyId, date])
+}
+
+/// Overtime worked by one person on one day, by class (MES-229; design people.attendance "Overtime to approve"): paid
+/// only once APPROVED; PENDING ⇄ APPROVED | REJECTED (a decision taken back returns it to PENDING). Recomputed while
+/// PENDING (removed and written again); nothing changes once its month is closed.
+model OvertimeEntry {
+  id           String              @id @db.Uuid
+  tenantId     String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId    String              @db.Uuid
+  siteId       String              @db.Uuid
+  /// The person (an Employee of people.prisma).
+  /// @purpose attendance
+  employeeId   String              @db.Uuid
+  date         DateTime            @db.Date
+  kind         OvertimeClass
+  /// 1-1440.
+  minutes      Int
+  /// The planned request it was worked for (of the same site), if any: "from a planned request".
+  requestId    String?             @db.Uuid
+  status       OvertimeEntryStatus @default(PENDING)
+  approvedAt   DateTime?           @db.Timestamptz(3)
+  approvedById String?             @db.Uuid
+  rejectedAt   DateTime?           @db.Timestamptz(3)
+  rejectedById String?             @db.Uuid
+  rejectReason String?
+  version      Int                 @default(1)
+  createdAt    DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?             @db.Uuid
+
+  site    Site             @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
+  request OvertimeRequest? @relation(fields: [tenantId, siteId, requestId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, employeeId, date, kind])
+  @@index([tenantId, companyId, date])
+  @@index([tenantId, requestId])
+}
+
+enum OvertimeClass {
+  /// Ordinary overtime by day.
+  DAY
+  /// At night.
+  NIGHT
+  /// On a public holiday or a rest day.
+  HOLIDAY
+}
+
+enum OvertimeEntryStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// One person's timesheet for a period inside one month (MES-230): approved by the lead, then by HR, two different
+/// people; sent back with a reason (the approvals cleared). Frozen once its month is closed; never deleted.
+model TimesheetApproval {
+  id               String          @id @db.Uuid
+  tenantId         String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId        String          @db.Uuid
+  /// The person (an Employee of people.prisma).
+  /// @purpose attendance
+  employeeId       String          @db.Uuid
+  /// The period's first and last day, inside one calendar month (the month, or a week of it).
+  periodStart      DateTime        @db.Date
+  periodEnd        DateTime        @db.Date
+  status           TimesheetStatus @default(PENDING)
+  /// LEAD_APPROVED and APPROVED: the lead's approval.
+  leadApprovedAt   DateTime?       @db.Timestamptz(3)
+  leadApprovedById String?         @db.Uuid
+  /// APPROVED: HR's, by another person than the lead.
+  hrApprovedAt     DateTime?       @db.Timestamptz(3)
+  hrApprovedById   String?         @db.Uuid
+  /// The last time it was sent back: when, by whom, why.
+  returnedAt       DateTime?       @db.Timestamptz(3)
+  returnedById     String?         @db.Uuid
+  returnReason     String?
+  version          Int             @default(1)
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById      String?         @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, employeeId, periodStart, periodEnd])
+  @@index([tenantId, companyId, periodStart])
+}
+
+enum TimesheetStatus {
+  PENDING
+  /// The lead approved; HR next.
+  LEAD_APPROVED
+  /// HR approved.
+  APPROVED
+}
+
+/// A company's month of attendance closed (MES-231; design people.attendance "Month close" and "Close October 2026"):
+/// OPEN while it is being closed (its days close one by one), then CLOSED with the LUL attendance calendar (D.L.
+/// 112/2008 art. 39), its PDF sealed by its SHA-256. A closed month never opens again: a change after the close is an
+/// AttendanceCorrection (and a correction export).
+model AttendanceMonthClose {
+  id          String                @id @db.Uuid
+  tenantId    String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  companyId   String                @db.Uuid
+  /// The month: its first day.
+  month       DateTime              @db.Date
+  status      AttendanceMonthStatus @default(OPEN)
+  /// CLOSED: when and by whom (the typed confirmation is the API's).
+  closedAt    DateTime?             @db.Timestamptz(3)
+  closedById  String?               @db.Uuid
+  /// The LUL attendance calendar (PDF): a StoredFile of this close, and its SHA-256 (the DocumentSeal). Set once, at
+  /// the close or after it.
+  lulFileId   String?               @db.Uuid
+  lulSha256   String?
+  note        String?
+  version     Int                   @default(1)
+  createdAt   DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById String?               @db.Uuid
+
+  company     Company                @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  lulFile     StoredFile?            @relation("AttendanceMonthCloseLul", fields: [tenantId, lulFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  days        AttendanceDay[]
+  corrections AttendanceCorrection[]
+
+  @@unique([tenantId, companyId, month])
+  // The target of the days' and corrections' references: a close of the same company.
+  @@unique([tenantId, companyId, id])
+}
+
+enum AttendanceMonthStatus {
+  /// Being closed: its days close one by one.
+  OPEN
+  /// Locked. Final.
+  CLOSED
+}
+
+/// A closed day's figure changed by a new entry with its reason (MES-231; design people.attendance "Correct a closed
+/// day"): append-only; the minutes before are the closed value or the latest correction's, so the chain from → to is
+/// whole. The payroll's correction export (B-W2b-54) reads them.
+/// @append-only
+model AttendanceCorrection {
+  id            String                   @id @db.Uuid
+  tenantId      String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The day's company.
+  companyId     String                   @db.Uuid
+  /// The person (an Employee of people.prisma), the day's.
+  /// @purpose attendance
+  employeeId    String                   @db.Uuid
+  /// The CLOSED day it corrects, and the month close that closed it.
+  dayId         String                   @db.Uuid
+  monthCloseId  String                   @db.Uuid
+  kind          AttendanceCorrectionKind
+  /// ABSENCE: the absence code whose minutes change.
+  absenceCodeId String?                  @db.Uuid
+  /// The figure before (the closed value, or the latest correction's) and after, in minutes (0-1440).
+  minutesBefore Int
+  minutesAfter  Int
+  reason        String
+  createdAt     DateTime                 @default(now()) @db.Timestamptz(3)
+  createdById   String?                  @db.Uuid
+
+  day         AttendanceDay        @relation(fields: [tenantId, employeeId, dayId], references: [tenantId, employeeId, id], onDelete: Restrict, onUpdate: Restrict)
+  monthClose  AttendanceMonthClose @relation(fields: [tenantId, companyId, monthCloseId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  absenceCode AbsenceCode?         @relation(fields: [tenantId, absenceCodeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, dayId])
+  @@index([tenantId, companyId, createdAt])
+}
+
+/// What a correction changes: a minutes column of the day (PRESENT, ORDINARY, NIGHT, HOLIDAY), the APPROVED overtime of
+/// a class, or the minutes of an absence code.
+enum AttendanceCorrectionKind {
+  PRESENT
+  ORDINARY
+  NIGHT
+  HOLIDAY
+  OVERTIME_DAY
+  OVERTIME_NIGHT
+  OVERTIME_HOLIDAY
+  ABSENCE
+}
+
+/// A working-time limit (MES-232; design people.settings "Working-time limits", people.shifts "Why this warning"):
+/// tenant-wide, a company's or one site's (the most specific ACTIVE one of a kind wins; one ACTIVE per scope and kind),
+/// the law's value or the CCNL's, warn or block, who is alerted. Archived, never deleted.
+model WorkingTimeRule {
+  id              String                @id @db.Uuid
+  tenantId        String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// Whose rule: tenant-wide (both null), a company's, or one site's of that company. Never changes.
+  companyId       String?               @db.Uuid
+  siteId          String?               @db.Uuid
+  kind            WorkingTimeRuleKind
+  /// The limit in minutes. The law's (D.Lgs. 66/2003): DAILY_REST 660 (11 h in 24, art. 7), WEEKLY_REST 1440 (24 h every
+  /// 7 days, art. 9), WEEKLY_AVERAGE 2880 (48 h a week on average, art. 4), BREAK_AFTER 360 (a break once the day passes
+  /// 6 h, art. 8), OVERTIME_YEARLY_CAP 15000 (250 h a year, art. 5), NIGHT_AVERAGE 480 (8 h in 24 for a night worker,
+  /// art. 13). A CCNL may say otherwise.
+  limitMinutes    Int
+  /// BREAK_AFTER: the break's minimum length (10 minutes unless the CCNL says otherwise).
+  breakMinutes    Int?
+  /// WEEKLY_AVERAGE: the reference period in months (4 by law; a CCNL may say up to 12).
+  referenceMonths Int?
+  /// What a plan or an approval that would break it gets: a warning with the law in words, or held with the reason.
+  action          WorkingTimeAction     @default(WARN)
+  /// Who is alerted (role template keys: "hr", "floor_supervisor").
+  alertRoles      String[]              @default([])
+  /// Where the value comes from: the law, or the CCNL (its article in legalReference).
+  source          WorkingTimeRuleSource @default(LAW)
+  /// The law (and article of the CCNL) it applies, as LawRef shows it ("D.Lgs. 66/2003 art. 7").
+  legalReference  String
+  status          MasterStatus          @default(ACTIVE)
+  version         Int                   @default(1)
+  createdAt       DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById     String?               @db.Uuid
+
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and companyId.
+  company   Company?            @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  site      Site?               @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  anomalies AttendanceAnomaly[]
+
+  // The target of the anomalies' tenant-safe reference.
+  @@unique([tenantId, id])
+  @@index([tenantId, companyId])
+}
+
+enum WorkingTimeRuleKind {
+  DAILY_REST
+  WEEKLY_REST
+  WEEKLY_AVERAGE
+  BREAK_AFTER
+  OVERTIME_YEARLY_CAP
+  NIGHT_AVERAGE
+}
+
+enum WorkingTimeAction {
+  WARN
+  BLOCK
+}
+
+enum WorkingTimeRuleSource {
+  LAW
+  CCNL
+}
