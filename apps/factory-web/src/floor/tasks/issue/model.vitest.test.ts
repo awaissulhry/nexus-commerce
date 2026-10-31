@@ -7,7 +7,8 @@ import { LOCALES } from '../../../lib/i18n/locales'
 import { CATALOGUE } from '../../../lib/i18n/messages'
 import { readScan } from '../../scan/scan-model'
 import { designScreen } from './fixtures'
-import { coveredCount, decimalsOf, HELD_REASONS, ISSUE_REFUSAL_WORDS, padBounds, quantityText, stockOfScan, undoStock, UNIT_KEYS, withLine, type PickLine, type PickList } from './model'
+import { comesBackAs, remnantLabel, returnBody, returnBounds, returnOfScan, returnRows, tagPrinterOf } from './returns'
+import { coveredCount, decimalsOf, HELD_REASONS, ISSUE_REFUSAL_WORDS, padBounds, quantityText, SCREEN_REFUSALS, stockOfScan, undoStock, UNIT_KEYS, withLine, type PickLine, type PickList } from './model'
 
 /**
  * Pick & issue's rules (SCR-093): what a scan is on the pick list (a hide is issued at once, a lot or material asks its
@@ -45,7 +46,7 @@ const leather = line({
   tracking: 'HIDE',
   baseUom: 'FT2',
   usable: { onHand: '52.4000', candidates: [{ lotId: 'l7', lotCode: 'LOT-7', hideId: 'h1', hideCode: HIDE, hideState: 'FULL', grade: 'A', locationCode: 'A1', onHand: '52.4000' }], more: 0 },
-  atWorkOrder: [{ lotId: 'l7', lotCode: 'LOT-7', hideId: 'h1', hideCode: HIDE, quantity: '52.4000' }],
+  atWorkOrder: [{ lotId: 'l7', lotCode: 'LOT-7', hideId: 'h1', hideCode: HIDE, quantity: '52.4000', cut: '0.0000', returnable: '52.4000' }],
 })
 const lining = line({ key: 'lining', itemId: 'lining', usable: { onHand: '30.0000', candidates: [{ lotId: 'l31', lotCode: 'LOT-31', hideId: null, hideCode: null, hideState: null, grade: null, locationCode: 'A2', onHand: '30.0000' }], more: 0 } })
 const thread = line({ key: 'thread', itemId: 'thread', itemCode: 'FIL-40', tracking: 'NONE', baseUom: 'CONE', planned: '12.0000', issued: '12.0000', toIssue: '0.0000', covered: true, usable: { onHand: '30.0000', candidates: [], more: 0 } })
@@ -105,7 +106,7 @@ describe('the pick list\'s words', () => {
     expect([...UNIT_KEYS].sort()).toEqual([...UOMS].sort())
     for (const locale of LOCALES) {
       const words = CATALOGUE[locale]['floor-issue'] ?? {}
-      for (const code of [...ISSUE_REFUSAL_WORDS, 'NOT_STOCK']) {
+      for (const code of [...ISSUE_REFUSAL_WORDS, ...SCREEN_REFUSALS, 'NOT_STOCK']) {
         const key = code === 'NOT_STOCK' ? 'notStock' : `refusal.${code}`
         expect(words[`${key}.message`], `${locale} ${code}`).toBeTruthy()
         expect(words[`${key}.fix`], `${locale} ${code}`).toBeTruthy()
@@ -118,5 +119,92 @@ describe('the pick list\'s words', () => {
   it('has the design cases the step asks for', () => {
     const ids = designScreen.cases.map((item) => item.id)
     for (const id of ['choose', 'choose-empty', 'pick-list', 'issued-hide', 'pad-lot', 'pad-on-hand', 'refused-already-issued', 'refused-cr-vi', 'refused-quality-hold', 'not-open', 'offline-list', 'offline-nothing', 'error', 'no-permission', 'undone']) expect(ids).toContain(id)
+  })
+})
+
+describe('Return unused (B-W2a-75; design floor.pick sec "return"; SCM-216)', () => {
+  const line = (key: string, extra: Partial<PickLine>): PickLine => ({
+    key,
+    itemId: `item-${key}`,
+    itemColourId: null,
+    itemCode: key.toUpperCase(),
+    itemName: key,
+    colourCode: null,
+    colourName: null,
+    tracking: 'LOT',
+    baseUom: 'M',
+    planned: '10.0000',
+    issued: '10.0000',
+    toIssue: '0.0000',
+    covered: true,
+    usable: { onHand: '0.0000', candidates: [], more: 0 },
+    held: [],
+    atWorkOrder: [],
+    ...extra,
+  })
+  const withHeld: Pick<PickList, 'lines'> = {
+    lines: [
+      line('leather', {
+        tracking: 'HIDE',
+        baseUom: 'FT2',
+        atWorkOrder: [
+          { lotId: 'l7', lotCode: 'LOT-7', hideId: 'h0', hideCode: HIDE, quantity: '51.1000', cut: '32.5000', returnable: '18.6000' },
+          { lotId: 'l7', lotCode: 'LOT-7', hideId: 'h9', hideCode: 'OLD-9', quantity: '40.0000', cut: '40.0000', returnable: '0.0000' },
+        ],
+      }),
+      line('lining', { atWorkOrder: [{ lotId: 'l31', lotCode: 'LOT-31', hideId: null, hideCode: null, quantity: '96.0000', cut: '0.0000', returnable: '12.0000' }] }),
+      line('thread', { tracking: 'NONE', baseUom: 'CONE', atWorkOrder: [{ lotId: null, lotCode: null, hideId: null, hideCode: null, quantity: '3.0000', cut: '0.0000', returnable: '3.0000' }] }),
+    ],
+  }
+
+  it('lists what the work order holds less what was cut: a cut hide, a lot, a material; a used-up hide not at all', () => {
+    const rows = returnRows(withHeld)
+    expect(rows.map((row) => [row.kind, row.code, row.returnable])).toEqual([
+      ['hide', HIDE, 18.6],
+      ['lot', 'LOT-31', 12],
+      ['material', 'THREAD', 3],
+    ])
+    expect(rows[0]!.stock).toEqual({ hideId: 'h0' })
+    expect(rows[1]!.stock).toEqual({ lotId: 'l31' })
+    expect(rows[2]!.stock).toEqual({ itemId: 'item-thread', itemColourId: null })
+  })
+
+  it('a scan picks the row by its tag, lot or material code (any case); anything else is not held', () => {
+    const rows = returnRows(withHeld)
+    expect(returnOfScan(rows, { kind: 'free', code: 'lot-31' })?.kind).toBe('lot')
+    expect(returnOfScan(rows, { kind: 'free', code: HIDE.toLowerCase() })?.kind).toBe('hide')
+    expect(returnOfScan(rows, { kind: 'free', code: 'NOPE' })).toBeNull()
+  })
+
+  it('the pad: never more than may come back; a hide by its area (two decimals), a count unit whole', () => {
+    const [hideRow, lotRow, threadRow] = returnRows(withHeld)
+    expect(returnBounds(hideRow!)).toEqual({ min: 0.01, max: 18.6, decimals: 2, suggested: 18.6 })
+    expect(returnBounds(threadRow!)).toEqual({ min: 1, max: 3, decimals: 0, suggested: 3 })
+    expect(returnBounds(lotRow!).max).toBe(12)
+  })
+
+  it('a hide cut from comes back as a remnant; one never cut, whole, comes back whole', () => {
+    expect(comesBackAs({ kind: 'hide', cut: 32.5, held: 51.1 }, 18.6)).toBe('remnant')
+    expect(comesBackAs({ kind: 'hide', cut: 0, held: 52.4 }, 52.4)).toBe('whole')
+    expect(comesBackAs({ kind: 'hide', cut: 0, held: 52.4 }, 30)).toBe('remnant')
+    expect(comesBackAs({ kind: 'lot', cut: 0, held: 96 }, 12)).toBe('part')
+  })
+
+  it('the body names the stock by id, the measured quantity and where it goes', () => {
+    const [hideRow] = returnRows(withHeld)
+    expect(returnBody(hideRow!, 18.6, 2, 'loc-1', '2026-10-31T08:00:00.000Z')).toEqual({ hideId: 'h0', quantity: '18.60', toLocationId: 'loc-1', occurredAt: '2026-10-31T08:00:00.000Z' })
+  })
+
+  it('the remnant\'s tag prints on the station\'s printer, else the site\'s only one, else the one picked', () => {
+    const printers = [
+      { id: 'p1', name: 'One' },
+      { id: 'p2', name: 'Two' },
+    ]
+    expect(tagPrinterOf(printers, 'p2')).toEqual({ kind: 'station', id: 'p2', name: 'Two' })
+    expect(tagPrinterOf(printers.slice(0, 1), null)).toEqual({ kind: 'site', id: 'p1', name: 'One' })
+    expect(tagPrinterOf(printers, null)).toEqual({ kind: 'choose', printers })
+    expect(tagPrinterOf([], null)).toEqual({ kind: 'none' })
+    const [hideRow] = returnRows(withHeld)
+    expect(remnantLabel(hideRow!, '18,6 ft²', 'it')).toEqual({ kind: 'HIDE', language: 'it', scanId: HIDE, title: 'LEATHER · leather', fields: { article: 'LEATHER', colour: null, area: '18,6 ft²', lot: 'LOT-7' } })
   })
 })
