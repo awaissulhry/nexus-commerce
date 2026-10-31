@@ -14,6 +14,8 @@ import { operationsImportAdapter } from '../../modules/product/operations/import
 import { hideListImportAdapter } from '../../modules/inventory/receipts/hide-list'
 // W2b (B-W2b-20): how each site plans each item and colour (Planning settings › Item parameters).
 import { itemParametersImportAdapter } from '../../modules/planning/settings/importer'
+// W2b (B-W2b-26): the employees, from the payroll provider's export or a CSV (People › Employees › Import).
+import { employeesImportAdapter } from './importers/employees'
 
 /**
  * The importers this process runs (plan A1 W0-22; feature PLT-176): each is an importer of factory-domain (its columns,
@@ -105,6 +107,8 @@ export const IMPORTERS: readonly ImportAdapter[] = Object.freeze([
   operationsImportAdapter,
   hideListImportAdapter,
   itemParametersImportAdapter,
+  // B-W2b-26
+  employeesImportAdapter,
 ])
 
 let configured: ImporterRegistry<ImportAdapter> | undefined

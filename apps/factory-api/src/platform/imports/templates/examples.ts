@@ -33,6 +33,11 @@ export const TEMPLATE_EXAMPLES: Readonly<Record<string, readonly TemplateExample
     { site: 'A1', item: 'LEA-100', colour: '*', method: 'ORDERS', source: 'BUY', supplier: 'FOR-001', safetyLeadTimeDays: '2' },
     { site: 'A1', item: 'THR-40', colour: 'NER', method: 'REORDER_POINT', reorderPoint: '24', lotSize: '48', orderMultiple: '12', buyLeadTimeDays: '7' },
   ],
+  // B-W2b-26: made-up people only (never a real name or code).
+  'people.employees': [
+    { employeeCode: '0142', firstName: 'Esempio', lastName: 'Persona Uno', kind: 'EMPLOYEE', site: 'A1', homeLine: 'L1', department: 'Sewing', jobRole: 'Machinist', contract: 'FULL_TIME', weeklyHours: '40', startDate: '2026-03-02', language: 'it' },
+    { employeeCode: 'INT-07', firstName: 'Esempio', lastName: 'Persona Due', kind: 'AGENCY', agency: 'AGE-001', site: 'A1', contract: 'PART_TIME', weeklyHours: '20', startDate: '2026-11-02', endDate: '2027-01-29', language: 'ro' },
+  ],
 })
 
 /** The examples of one importer for one number format: `formatted` when they are written for it already. */

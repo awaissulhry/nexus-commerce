@@ -224,8 +224,25 @@ const reportsAddedFor = (key: string, audience: RoleAudience): readonly Permissi
 const REPORT_LIBRARY_TEMPLATES: ReadonlySet<string> = new Set(['finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor'])
 const reportLibraryAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' && REPORT_LIBRARY_TEMPLATES.has(key) ? ['home.reports.view' as Permission] : [])
 
+/**
+ * B-W2b-26 (people: employees, teams and loans, leaver steps; MES-208 … MES-214, PLT-020; design people.employees, the
+ * People area of the HR and payroll office): the administrator keeps the HR register (there is no HR template yet; when
+ * one comes, these move to it); the production manager reads it, keeps the teams and their leads and lends people to
+ * another line; the floor supervisor reads it and lends people at their sites. My team (people.team.view: the teams you
+ * lead or belong to) for the office templates whose people lead or work in a crew (PEOPLE_TEAM_TEMPLATES). Office only:
+ * the floor reads its crews with its own routes. Owner and read-only take theirs from every().
+ */
+const PEOPLE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.view', 'people.employees.manage', 'people.teams.manage', 'people.loans.manage', 'people.leavers.manage'],
+  production_manager: ['people.view', 'people.teams.manage', 'people.loans.manage'],
+  floor_supervisor: ['people.view', 'people.loans.manage'],
+})
+const PEOPLE_TEAM_TEMPLATES: ReadonlySet<string> = new Set(['production_manager', 'floor_supervisor', 'quality_inspector', 'warehouse', 'maintenance'])
+const peopleAddedFor = (key: string, audience: RoleAudience): readonly Permission[] =>
+  audience === 'office' ? [...(PEOPLE_ADDS[key] ?? []), ...(PEOPLE_TEAM_TEMPLATES.has(key) ? ['people.team.view' as Permission] : [])] : []
+
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience), ...repairsAddedFor(key, audience), ...reportLibraryAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience), ...repairsAddedFor(key, audience), ...reportLibraryAddedFor(key, audience), ...peopleAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 

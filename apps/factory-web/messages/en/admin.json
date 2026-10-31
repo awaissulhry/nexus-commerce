@@ -1526,7 +1526,8 @@
     "accounting": "Accounting",
     "security": "Security & health",
     "receivables": "Receivables and reminders",
-    "payables": "Supplier invoices"
+    "payables": "Supplier invoices",
+    "people": "People"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1758,6 +1759,12 @@
     "payables_manage": "Register, map and dispute supplier invoices",
     "payables_differences_accept": "Accept a difference of a supplier invoice in words",
     "payables_approve": "Approve supplier invoices for payment",
-    "payables_pay": "Record that a supplier invoice was paid"
+    "payables_pay": "Record that a supplier invoice was paid",
+    "people_view": "See the employees, teams, loans to other lines and leaver steps (never pay, attendance or health)",
+    "people_team_view": "See the teams you lead or belong to (My team)",
+    "people_employees_manage": "Add, change, link and import employees",
+    "people_teams_manage": "Add, change and archive teams, set their lead and move people between them",
+    "people_loans_manage": "Lend people to another line for hours or days",
+    "people_leavers_manage": "Start, tick and cancel a person's leaver steps"
   }
 }

@@ -1526,7 +1526,8 @@
     "accounting": "Contabilità",
     "security": "Sicurezza e stato del sistema",
     "receivables": "Crediti e solleciti",
-    "payables": "Fatture fornitori"
+    "payables": "Fatture fornitori",
+    "people": "Persone"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1758,6 +1759,12 @@
     "payables_manage": "Registrare, abbinare e contestare le fatture fornitori",
     "payables_differences_accept": "Accettare a parole una differenza di una fattura fornitore",
     "payables_approve": "Approvare le fatture fornitori per il pagamento",
-    "payables_pay": "Registrare il pagamento di una fattura fornitore"
+    "payables_pay": "Registrare il pagamento di una fattura fornitore",
+    "people_view": "Vedere dipendenti, squadre, prestiti ad altre linee e passi di uscita (mai paghe, presenze o salute)",
+    "people_team_view": "Vedere le squadre che guidi o di cui fai parte (La mia squadra)",
+    "people_employees_manage": "Aggiungere, modificare, collegare e importare i dipendenti",
+    "people_teams_manage": "Aggiungere, modificare e archiviare le squadre, nominare il capo squadra e spostare le persone",
+    "people_loans_manage": "Prestare persone a un'altra linea per ore o giorni",
+    "people_leavers_manage": "Avviare, spuntare e annullare i passi di uscita di una persona"
   }
 }

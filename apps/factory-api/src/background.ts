@@ -58,6 +58,8 @@ import { payablesHandlers, sdiPickupCron } from './modules/payables/sdi'
 import { renewalStagesCron } from './modules/compliance/renewals/stages'
 // B-W2b-15
 import { releaseOnWorkOrderDoneHandler, reservationCleanupCron } from './modules/inventory/reservations/system-release'
+// B-W2b-26: the leaver steps the system settles on its own (badge off after the last day, the case closed when done).
+import { leaverStepsCron } from './modules/people/leavers/automatic'
 // B-W2b-11: the report pack, so the worker can export a report (platform/exports/sources/reports.ts).
 import { loadReports } from './modules/insights/reports/registry'
 
@@ -186,6 +188,9 @@ if (mode === 'worker') {
   crons.push(renewalStagesCron({ database, log }))
   // B-W2b-15: the nightly reservation clean-up (SCM-211): reservations whose demand is done, released by the system.
   crons.push(reservationCleanupCron({ database, log }))
+  // B-W2b-26: the open leaver cases, hourly: after the last working day the floor sign-in is switched off, due automatic
+  // steps tick, a case with nothing open closes (the person LEFT).
+  crons.push(leaverStepsCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }
