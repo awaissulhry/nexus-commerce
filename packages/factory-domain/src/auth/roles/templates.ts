@@ -192,6 +192,25 @@ const PEOPLE_PRIVACY_ADDS: Readonly<Record<string, readonly Permission[]>> = Obj
   admin: ['people.privacy.view'],
   production_manager: ['people.privacy.view'],
 })
+/**
+ * B-W2b-35 (help calls, MES-142 … MES-145, MES-147, MES-137; design production.calls, floor.supervisor, floor.help): the
+ * office reads the calls and answers them where its people respond (production, the floor supervisor, maintenance, the
+ * warehouse for material, quality); the production manager keeps the types and who answers them (Floor rules & codes).
+ * On the floor the team leader (the line view), the technician and the floor inspector read their line's calls and
+ * answer them; every floor role SENDS a call with floor.work and needs nothing here. Owner and read-only from every().
+ */
+const CALLS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  production_manager: ['production.calls.view', 'production.calls.answer', 'production.calls.manage'],
+  floor_supervisor: ['production.calls.view', 'production.calls.answer'],
+  maintenance: ['production.calls.view', 'production.calls.answer'],
+  warehouse: ['production.calls.view', 'production.calls.answer'],
+  quality_inspector: ['production.calls.view', 'production.calls.answer'],
+})
+const CALLS_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  team_leader: ['production.calls.view', 'production.calls.answer'],
+  technician: ['production.calls.view', 'production.calls.answer'],
+  floor_inspector: ['production.calls.view', 'production.calls.answer'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -208,7 +227,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-21
   ...(audience === 'office' ? (PAYABLES_SETTINGS_ADDS[key] ?? []) : []),
   // B-W2b-27
-  ...(audience === 'office' ? (PEOPLE_PRIVACY_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (PEOPLE_PRIVACY_ADDS[key] ?? []) : []),
+  // B-W2b-35
+  ...((audience === 'office' ? CALLS_ADDS : CALLS_FLOOR_ADDS)[key] ?? [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
