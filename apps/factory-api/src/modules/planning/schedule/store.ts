@@ -1,7 +1,8 @@
 import type { Prisma } from '@nexus/factory-db'
-import { ConflictError, DomainError, NotFoundError } from '@nexus/factory-domain/core/errors'
+import { DomainError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { refusalIssue, ScheduleRefusal } from '@nexus/factory-domain/planning/schedule/refusals'
 import { laneOfSlot, type DiffSlot, type LaneRef } from '@nexus/factory-domain/planning/schedule/slots'
 import { whenWords } from '@nexus/factory-domain/planning/schedule/time'
 import type { CommandTx } from '../../../core/command'
@@ -149,7 +150,7 @@ export async function lockSchedule(tx: CommandTx, tenantId: string, siteId: stri
 export class PlanChangedError extends DomainError {
   override name = 'PlanChangedError'
   constructor(current: number, sent: number) {
-    super('conflict', `The working plan changed since it was read (version ${sent}); it is now at version ${current}. Review it again.`, [{ path: 'body/version', message: `The current version is ${current}.` }])
+    super('conflict', `The working plan changed since it was read (version ${sent}); it is now at version ${current}. Review it again.`, [{ path: 'body/version', message: `The current version is ${current}.` }, refusalIssue('PLAN_CHANGED')])
   }
 }
 
@@ -181,6 +182,7 @@ export class SlotMovedError extends DomainError {
       [
         { path: 'body/version', message: `The current version is ${current.version}.` },
         { path: 'updatedAt', message: toUtcIso(current.updatedAt) },
+        refusalIssue('MOVED_BY'),
       ],
     )
   }
@@ -202,17 +204,17 @@ export async function laneFacts(db: Reader, site: SiteRow, lane: LaneRef): Promi
   if (lane.kind === 'LINE') {
     const row = isUuid(lane.id) ? await db.line.findUnique({ where: { id: lane.id }, select: { id: true, siteId: true, code: true, name: true, status: true } }) : null
     if (!row || row.siteId !== site.id) throw new NotFoundError('Line not found on this site.')
-    if (row.status !== 'ACTIVE') throw new ConflictError(`Line ${row.code} is archived: place the work on an active lane.`)
+    if (row.status !== 'ACTIVE') throw new ScheduleRefusal('LANE_ARCHIVED', `Line ${row.code} is archived: place the work on an active lane.`)
     return { ref: lane, code: row.code, name: row.name }
   }
   if (lane.kind === 'WORK_CENTRE') {
     const row = isUuid(lane.id) ? await db.workCentre.findUnique({ where: { id: lane.id }, select: { id: true, siteId: true, code: true, name: true, status: true } }) : null
     if (!row || row.siteId !== site.id) throw new NotFoundError('Work centre not found on this site.')
-    if (row.status !== 'ACTIVE') throw new ConflictError(`Work centre ${row.code} is archived: place the work on an active lane.`)
+    if (row.status !== 'ACTIVE') throw new ScheduleRefusal('LANE_ARCHIVED', `Work centre ${row.code} is archived: place the work on an active lane.`)
     return { ref: lane, code: row.code, name: row.name }
   }
   const row = isUuid(lane.id) ? await db.party.findUnique({ where: { id: lane.id }, select: { id: true, code: true, legalName: true, tradeName: true, roles: true, status: true } }) : null
   if (!row || !row.roles.includes('SUBCONTRACTOR')) throw new NotFoundError('Workshop not found: a workshop is a party with the subcontractor role.')
-  if (row.status !== 'ACTIVE') throw new ConflictError(`${row.tradeName ?? row.legalName} is not active: pick another workshop.`)
+  if (row.status !== 'ACTIVE') throw new ScheduleRefusal('LANE_ARCHIVED', `${row.tradeName ?? row.legalName} is not active: pick another workshop.`)
   return { ref: lane, code: row.code, name: row.tradeName ?? row.legalName }
 }

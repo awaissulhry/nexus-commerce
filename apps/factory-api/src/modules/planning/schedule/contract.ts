@@ -4,6 +4,10 @@ import { ALLOCATION_LANE_KINDS } from '@nexus/factory-domain/planning/schedule/a
 import { SCHEDULE_REASONS, SCHEDULE_STATUSES } from '@nexus/factory-domain/planning/schedule/backward'
 import { PUBLISH_LIMITS, SCHEDULE_LANE_KINDS, SLOT_LIMITS } from '@nexus/factory-domain/planning/schedule/slots'
 import { READINESS_WORDS } from '@nexus/factory-domain/planning/readiness/readiness'
+import { PUBLISH_HOLDS, SKIP_CODES } from '@nexus/factory-domain/planning/schedule/refusals'
+import { UOMS } from '@nexus/factory-domain/product/units/units'
+import { CALENDAR_STATES } from '../capacity/contract'
+import { materialArrival } from '../readiness/contract'
 
 /**
  * The planning board (B-W2a-34; PLN-129 backward scheduling and latest safe start, PLN-131 the board, PLN-132 order and
@@ -98,7 +102,29 @@ const operationView = output({
   slotIds: z.array(id()),
 })
 
-const readinessView = output({ word: z.enum(READINESS_WORDS), label: z.string(), date: businessDate().nullable(), reason: z.string() }).nullable()
+const readinessView = output({
+  word: z.enum(READINESS_WORDS),
+  label: z.string(),
+  date: businessDate().nullable(),
+  reason: z.string(),
+  /** B-W2b-20: per material (component): its word, the day it is needed, what is short and what arrives for it, by date. */
+  materials: z.array(
+    output({
+      itemId: id(),
+      itemColourId: id().nullable(),
+      label: z.string(),
+      uom: z.enum(UOMS),
+      word: z.enum(READINESS_WORDS),
+      date: businessDate().nullable(),
+      neededOn: businessDate().nullable(),
+      /** Base unit, four decimals. */
+      needed: z.string(),
+      short: z.string(),
+      reason: z.string(),
+      arrivals: z.array(materialArrival),
+    }),
+  ),
+}).nullable()
 
 export const workOrderView = output({
   id: id(),
@@ -111,6 +137,11 @@ export const workOrderView = output({
   version: z.number().int(),
   dueDate: businessDate().nullable(),
   style: named,
+  /** B-W2b-20: the style's family (its product type: JACKET, TROUSERS, SUIT, GLOVES, VEST, OTHER). */
+  family: z.string(),
+  /** B-W2b-20: the customer whose order lines it makes; null when none or several (`customers` names them). */
+  customer: named.nullable(),
+  customers: z.array(named),
   garments: z.number().int(),
   line: named.nullable(),
   holdReason: z.string().nullable(),
@@ -151,6 +182,11 @@ export const laneView = output({
   does: z.array(id()).nullable(),
   /** A workshop's location at the site (its stock). */
   location: output({ id: id(), code: z.string() }).nullable(),
+  /**
+   * B-W2b-20: where its working time comes from (planning/capacity `calendarState`: OWN, INHERITED, NONE = no calendar,
+   * the planning default) and the calendars, most specific first; null for a workshop.
+   */
+  calendar: output({ state: z.enum(CALENDAR_STATES), calendars: z.array(output({ id: id(), scope: z.string(), name: z.string() })) }).nullable(),
   /** Load per bucket; null for a workshop (no capacity in standard minutes: W2b). */
   cells: z.array(cellView).nullable(),
 })
@@ -168,6 +204,9 @@ const versionHeader = output({
 })
 
 const diffView = output({ moved: z.number().int(), added: z.number().int(), removed: z.number().int(), words: z.string() })
+
+/** B-W2b-20: why publishing is held: NOTHING_CHANGED (since `previousVersion`), NOTHING_ON_DAYS, NO_PERMISSION, RANGE_NOT_VALID. */
+const publishHold = output({ code: z.enum(PUBLISH_HOLDS), previousVersion: z.number().int().nullable(), coversFrom: businessDate().nullable(), coversTo: businessDate().nullable() })
 
 const problemView = output({
   kind: z.enum(PROBLEM_KINDS),
@@ -217,6 +256,8 @@ export const boardContract = defineContract({
         mayPublish: z.boolean(),
         /** Why "Publish to floor" is held, in words; null: it may be published. */
         publishHeld: z.string().nullable(),
+        /** B-W2b-20: why it is held as a stable code with its facts (the version nothing changed since, the days); null: it may be published. */
+        publishHold: publishHold.nullable(),
       }),
       buckets: z.array(output({ key: z.string(), kind: z.enum(BOARD_BUCKETS), from: businessDate(), to: businessDate() })),
       lanes: z.array(laneView),
@@ -323,7 +364,8 @@ export const placeByDueDateContract = defineContract({
       planVersion: z.number().int().nullable(),
       applied: z.boolean(),
       slots: z.array(proposalView),
-      skipped: z.array(output({ workOrderId: id(), operationId: id().nullable(), words: z.string() })),
+      /** B-W2b-20: `code` NOT_OPEN · ON_HOLD · NO_DUE_DATE · LANE_NOT_ACTIVE · NO_WORKING_TIME. */
+      skipped: z.array(output({ workOrderId: id(), operationId: id().nullable(), code: z.enum(SKIP_CODES), words: z.string() })),
       overbooked: z.number().int(),
       replayed: z.boolean(),
     }),
@@ -365,6 +407,9 @@ export const publishPreviewContract = defineContract({
       mayPublish: z.boolean(),
       /** Why publishing is held, in words; null: it may be published. */
       heldReason: z.string().nullable(),
+      /** B-W2b-20: the hold's stable code and facts; null: it may be published. */
+      heldCode: z.enum(PUBLISH_HOLDS).nullable(),
+      hold: publishHold.nullable(),
     }),
   },
 })
@@ -404,7 +449,19 @@ const allocationLane = input({ kind: z.enum(ALLOCATION_LANE_KINDS), id: id() })
 const cardView = output({
   /** `<workOrderId>:LINE` for the work order's line part (or not allocated), `<workOrderId>:<slotId>` for a part. */
   id: z.string(),
-  workOrder: output({ id: id(), number: z.string(), status: z.string(), version: z.number().int(), dueDate: businessDate().nullable(), style: named, garments: z.number().int(), holdReason: z.string().nullable() }),
+  workOrder: output({
+    id: id(),
+    number: z.string(),
+    status: z.string(),
+    version: z.number().int(),
+    dueDate: businessDate().nullable(),
+    style: named,
+    /** B-W2b-20: the style's family (product type) and the customer (null when none or several). */
+    family: z.string(),
+    customer: named.nullable(),
+    garments: z.number().int(),
+    holdReason: z.string().nullable(),
+  }),
   /** Its column: a line or workshop; null: not allocated. */
   lane: output({ kind: z.enum(ALLOCATION_LANE_KINDS), id: id() }).nullable(),
   pieces: z.number().int(),

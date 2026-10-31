@@ -37,6 +37,8 @@ export const exceptionView = output({
   lastSeenAt: instant(),
   /** Whole days since it was first found. */
   ageDays: z.number().int(),
+  /** B-W2b-20: the age in the site's working days (the days after the first sighting up to today that the site works). */
+  ageWorkingDays: z.number().int(),
   owner: person.nullable(),
   mine: z.boolean(),
   acknowledgedAt: instant().nullable(),

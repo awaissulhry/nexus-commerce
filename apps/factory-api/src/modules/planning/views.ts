@@ -77,6 +77,8 @@ export const REQUIREMENT_COLUMNS = {
   firmSupplierId: true,
   firmedAt: true,
   firmedById: true,
+  // B-W2b-20: the earlier run's firm line this line carries (history; stays when the line is made planned again).
+  firmCarriedFromId: true,
   createdAt: true,
 } as const satisfies Prisma.MaterialRequirementSelect
 export type RequirementRow = Prisma.MaterialRequirementGetPayload<{ select: typeof REQUIREMENT_COLUMNS }>
@@ -286,8 +288,9 @@ export function lineViewOf(row: RequirementRow, context: LineContext, today: Bus
             supplier: row.firmSupplierId ? (context.suppliers.get(row.firmSupplierId) ?? null) : null,
             firmedAt: toUtcIso(row.firmedAt),
             firmedById: row.firmedById,
-            // A run writes a carried line firm (version 1); a planner's firm is an update (version 2 on).
-            carried: row.version === 1 || row.firmedAt.getTime() < row.createdAt.getTime(),
+            // B-W2b-20: a run writes a carried line with firmCarriedFromId; before W2b by its shape (version 1, or firmed
+            // before the line was made).
+            carried: row.firmCarriedFromId !== null || row.version === 1 || row.firmedAt.getTime() < row.createdAt.getTime(),
           }
         : null,
     ...(withCost ? { unitCost: asMoney('cost', unitCost), expectedAmount: asMoney('cost', expected) } : {}),

@@ -8,7 +8,7 @@ import { laneKey, laneOfSlot, type LaneRef } from '@nexus/factory-domain/plannin
 import { after, MINUTE_MS, spansOf, startFrom, workingMinutesFor, type LaneRate, type Span } from '@nexus/factory-domain/planning/schedule/time'
 import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { ownerKey, workingCalendarsFor } from '../../../platform/calendars/service'
-import { wipFor } from '../../production/scans/progress'
+import { wipForMany } from '../capacity/wip'
 import { bookedOf, capacityWorld, type CapacityWorld, type LaneState } from '../capacity/service'
 import { dayOf, type Reader, type SiteRow } from '../store'
 import { outsideWorkOf, slotsOf, workingPlanOf, workshopsOf, type PlanRow, type SlotRow, type WorkshopRow } from './store'
@@ -59,6 +59,10 @@ export interface BoardWorkOrder {
   readonly lineId: string | null
   readonly holdReason: string | null
   readonly style: { readonly id: string; readonly code: string; readonly name: string }
+  /** B-W2b-20: the style's family on the allocation cards and the board (its product type: JACKET, TROUSERS, …). */
+  readonly family: string
+  /** B-W2b-20: the customers whose order lines it makes (its cells' parties), by code; usually one. */
+  readonly customers: readonly { readonly id: string; readonly code: string; readonly name: string }[]
   readonly garments: number
   /** Every operation, with its garments still to do. */
   readonly operations: readonly BoardOperation[]
@@ -111,8 +115,8 @@ const WORK_ORDER_COLUMNS = {
   lineId: true,
   holdReason: true,
   heldFromStatus: true,
-  style: { select: { id: true, code: true, name: true } },
-  sizes: { select: { quantity: true } },
+  style: { select: { id: true, code: true, name: true, productType: true } },
+  sizes: { select: { quantity: true, partyId: true } },
   operations: { select: { id: true, seq: true, code: true, name: true, workCentreId: true, standardMinutes: true, styleRevisionId: true, routingSeq: true }, orderBy: { seq: 'asc' as const } },
 } as const
 
@@ -126,14 +130,15 @@ async function readBoardWorkOrders(db: Reader, site: SiteRow, capacity: Capacity
   const outside = await outsideWorkOf(db, rows.flatMap((row) => row.operations))
   const done = new Map<string, number>()
   for (const workOrder of capacity?.workOrders ?? []) for (const operation of workOrder.operations) done.set(operation.id, operation.done)
+  // A held work order that was in progress: what its scans report (the capacity world reads only booking ones); one read.
+  const wips = await wipForMany(db, rows.filter((row) => row.status === 'ON_HOLD' && row.heldFromStatus === 'IN_PROGRESS').map((row) => row.id))
+  for (const wip of wips.values()) for (const operation of wip.operations) done.set(operation.operationId, operation.good + operation.scrap)
+  // B-W2b-20: the customers of the work orders' cells, by code.
+  const partyIds = [...new Set(rows.flatMap((row) => row.sizes.map((size) => size.partyId)))]
+  const parties = new Map((partyIds.length === 0 ? [] : await db.party.findMany({ where: { id: { in: partyIds } }, select: { id: true, code: true, legalName: true, tradeName: true } })).map((party) => [party.id, { id: party.id, code: party.code, name: party.tradeName ?? party.legalName }]))
   const out: BoardWorkOrder[] = []
   for (const row of rows) {
     const garments = row.sizes.reduce((sum, size) => sum + size.quantity, 0)
-    // A held work order that was in progress: what its scans report (the capacity world reads only booking ones).
-    if (row.status === 'ON_HOLD' && row.heldFromStatus === 'IN_PROGRESS') {
-      const wip = await wipFor(db, { id: row.id, siteId: site.id })
-      for (const operation of wip.operations) done.set(operation.operationId, operation.good + operation.scrap)
-    }
     out.push({
       id: row.id,
       companyId: row.companyId,
@@ -145,7 +150,12 @@ async function readBoardWorkOrders(db: Reader, site: SiteRow, capacity: Capacity
       dueDate: row.dueDate ? dayOf(row.dueDate) : null,
       lineId: row.lineId,
       holdReason: row.holdReason,
-      style: row.style,
+      style: { id: row.style.id, code: row.style.code, name: row.style.name },
+      family: row.style.productType,
+      customers: [...new Set(row.sizes.map((size) => size.partyId))]
+        .map((id) => parties.get(id))
+        .filter((party): party is { id: string; code: string; name: string } => party !== undefined)
+        .sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0)),
       garments,
       booksCapacity: BOOKING.has(row.status),
       operations: row.operations.map((operation) => ({
