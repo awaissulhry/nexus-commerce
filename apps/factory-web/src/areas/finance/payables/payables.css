@@ -1,0 +1,248 @@
+/*
+ * Finance › Supplier invoices (SCR-153 list, the record, the XML as received; the PO's Invoices tab) LAYOUT only: the
+ * page column, the band, the sections, the cells, the dialogs' forms, the MatchPanel's three columns and the XML view.
+ * The controls are the design system's; colours are its semantic tokens. No page max-width (Owner rule 2026-10-29): the
+ * page fills the shell's main area; wide screens get more columns.
+ */
+.fw-fpy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+.fw-fpy-band,
+.fw-fpy-section-head,
+.fw-fpy-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-fpy-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-fpy-section,
+.fw-fpy-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-fpy-h2,
+.fw-fpy-h3 {
+  margin: 0;
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-fpy-h2 {
+  font-size: var(--nds-font-size-md);
+}
+
+.fw-fpy-h3 {
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-fpy-muted {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-fpy-muted[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-fpy-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.fw-fpy-cell.is-end {
+  align-items: flex-end;
+}
+
+.fw-fpy-cell-sub {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-fpy-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-fpy-num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fw-fpy-code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-fpy-link {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+
+.fw-fpy-link:hover,
+.fw-fpy-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-fpy-tone.is-danger {
+  color: var(--nds-danger-text);
+}
+
+.fw-fpy-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The Lines tab's mapping cell: the Combobox fills the cell. */
+.fw-fpy-map {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--nds-space-2);
+  width: 100%;
+  min-width: 0;
+  padding: var(--nds-space-4) 0;
+}
+
+.fw-fpy-map-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-fpy-combo {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Two cards side by side on a wide screen; one column on a phone. */
+.fw-fpy-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+/* A dialog's form: two columns where there is room. */
+.fw-fpy-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-fpy-form-wide {
+  grid-column: 1 / -1;
+}
+
+.fw-fpy-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* MatchPanel: per line ordered ↔ received ↔ invoiced (three columns; stacked on a phone). */
+.fw-fpy-match {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-fpy-match-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-12);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  min-width: 0;
+}
+
+.fw-fpy-match-cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .fw-fpy-match-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-fpy-match-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-8);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  min-width: 0;
+}
+
+.fw-fpy-match-label {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-fpy-match-value {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The XML as received: read-only, it scrolls inside its own box (the page never scrolls sideways). */
+.fw-fpy-xml {
+  margin: 0;
+  padding: var(--nds-space-12);
+  max-height: min(70vh, 760px);
+  overflow: auto;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  line-height: 1.5;
+  white-space: pre;
+}

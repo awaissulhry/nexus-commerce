@@ -151,6 +151,8 @@ export const listContract = defineContract({
     kind: z.enum(INVOICE_KINDS).optional(),
     /** A tile clicked: New from SDI, Differences to check, To approve, Due this week (overdue included). */
     tile: z.enum(TILES).optional(),
+    /** The PO's Invoices tab (B-W2a-81): only invoices with a line mapped to one of this purchase order's lines. */
+    purchaseOrderId: id().optional(),
     q: z.string().trim().max(100).optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),

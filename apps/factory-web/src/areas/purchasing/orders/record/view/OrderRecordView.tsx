@@ -42,15 +42,15 @@ export type { OrderRecordActions, OrderRecordModel } from '../../model'
  * tolerance, Cr VI; received per line), Supplier's answer (confirmed by link, declined, or proposed per line, and the
  * buyer's decision — P2: the buyer always decides), Receipts, Documents (the frozen PDFs, links, mails), Activity.
  */
-export function OrderRecordView({ model, actions, panels }: { model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode }) {
+export function OrderRecordView({ model, actions, panels, invoices }: { model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode; /** B-W2a-81: the Invoices tab (Finance's; absent without payables.view: no tab). */ invoices?: ReactNode }) {
   return (
     <WithMessages namespaces={['buying', 'purchasing-orders', 'lists', 'records', 'send']}>
-      <OrderRecord model={model} actions={actions} panels={panels} />
+      <OrderRecord model={model} actions={actions} panels={panels} invoices={invoices} />
     </WithMessages>
   )
 }
 
-function OrderRecord({ model, actions, panels }: { model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode }) {
+function OrderRecord({ model, actions, panels, invoices }: { model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode; invoices?: ReactNode }) {
   const t = useT('buying')
   const listHref = `${model.prefix}/purchasing/orders`
   const loaded = model.order
@@ -94,10 +94,10 @@ function OrderRecord({ model, actions, panels }: { model: OrderRecordModel; acti
       </div>
     )
   }
-  return <ReadyOrder order={loaded.value} model={model} actions={actions} panels={panels} />
+  return <ReadyOrder order={loaded.value} model={model} actions={actions} panels={panels} invoices={invoices} />
 }
 
-function ReadyOrder({ order, model, actions, panels }: { order: PurchaseOrder; model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode }) {
+function ReadyOrder({ order, model, actions, panels, invoices }: { order: PurchaseOrder; model: OrderRecordModel; actions?: OrderRecordActions; panels?: ReactNode; invoices?: ReactNode }) {
   const t = useT('buying')
   const td = useT('purchasing-orders')
   const say = useSay()
@@ -144,7 +144,7 @@ function ReadyOrder({ order, model, actions, panels }: { order: PurchaseOrder; m
     return null
   }
   const dotted = (tab: OrderTab) => (tab === 'lines' && blocking > 0) || (tab === 'answer' && order.status === 'CHANGES_PROPOSED')
-  const tabs: TabItem[] = RECORD_TABS.filter((tab) => tab !== 'receipts' || model.receipts !== null).map((tab) => ({
+  const tabs: TabItem[] = RECORD_TABS.filter((tab) => (tab !== 'receipts' || model.receipts !== null) && (tab !== 'invoices' || (invoices !== undefined && invoices !== null))).map((tab) => ({
     id: tab,
     href: `${recordHref}?tab=${tab}`,
     label: dotted(tab) ? (
@@ -302,6 +302,7 @@ function ReadyOrder({ order, model, actions, panels }: { order: PurchaseOrder; m
           {model.tab === 'lines' && <LinesTab order={order} model={model} actions={actions} />}
           {model.tab === 'answer' && <AnswerTab order={order} model={model} actions={actions} />}
           {model.tab === 'receipts' && <ReceiptsTab order={order} model={model} actions={actions} />}
+          {model.tab === 'invoices' && invoices}
           {model.tab === 'documents' && <DocumentsTab order={order} model={model} actions={actions} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-by-hint">{t('record.noPanels')}</p>)}
         </div>

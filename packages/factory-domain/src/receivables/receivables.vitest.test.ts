@@ -257,6 +257,8 @@ describe('catalogues', () => {
     expect(templateOf('owner')!.permissions).toEqual(expect.arrayContaining([...RECEIVABLES_PERMISSIONS]))
     expect(templateOf('read_only')!.permissions).toContain('receivables.view')
     expect(templateOf('read_only')!.permissions).not.toContain('receivables.reminders.approve')
+    // B-W2a-81: sales reads what a customer owes (the customer's Overdue), never a reminder move.
+    expect(RECEIVABLES_PERMISSIONS.filter((name) => templateOf('sales')!.permissions.includes(name))).toEqual(['receivables.view'])
     for (const type of ['payment_reminder.prepared', 'payment_reminder.approved', 'payment_reminder.sent', 'payment_reminder.skipped', 'payment_reminder.cancelled', 'payment_reminder.changed', 'receivables_settings.changed', 'customer_statement.sent']) {
       expect(EVENT_CATALOGUE.find(type, 1)?.context).toBe('receivables')
     }
