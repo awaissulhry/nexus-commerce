@@ -1,0 +1,289 @@
+{
+  "title": "Kit per terzisti",
+  "unit": {
+    "PCS": "pz",
+    "PAIR": "paia",
+    "SET": "set",
+    "M": "m",
+    "CM": "cm",
+    "MM": "mm",
+    "M2": "m²",
+    "DM2": "dm²",
+    "FT2": "ft²",
+    "KG": "kg",
+    "G": "g",
+    "L": "l",
+    "HIDE": "pelli",
+    "SIDE": "fianchi",
+    "ROLL": "rotoli",
+    "CONE": "coni",
+    "BOX": "scatole"
+  },
+  "offline": {
+    "short": "Serve la rete",
+    "scan": "Niente rete: per aprire un ordine serve l'ufficio. Aspetta la rete.",
+    "send": "Niente rete: Invia aspetta la rete (il DDT prende il numero dall'ufficio).",
+    "receive": "Niente rete: puoi scansionare i fasci; Chiudi il ricevimento aspetta la rete."
+  },
+  "pad": {
+    "less": "Meno",
+    "more": "Più",
+    "clear": "Cancella",
+    "back": "Elimina",
+    "empty": "Scrivi un numero",
+    "separator": "Virgola",
+    "range": "Da {min} a {max}"
+  },
+  "card": {
+    "type": "Ordine di conto lavoro",
+    "workshop": "Terzista",
+    "workOrder": "Ordine di lavoro",
+    "backBy": "Rientro entro",
+    "late": "in ritardo",
+    "place": "Ubicazione del terzista"
+  },
+  "status": {
+    "DRAFT": "Bozza",
+    "ISSUED": "Emesso",
+    "AT_WORKSHOP": "Dal terzista",
+    "PARTLY_RECEIVED": "Rientrato in parte",
+    "RECEIVED": "Tutto rientrato",
+    "CLOSED": "Chiuso",
+    "CANCELLED": "Annullato"
+  },
+  "noPermission": {
+    "title": "I kit per terzisti non sono il tuo compito qui",
+    "body": "Il tuo ruolo non invia kit ai terzisti né riceve la loro merce in questo stabilimento. Chiedi al tuo capo squadra."
+  },
+  "action": {
+    "back": "Indietro",
+    "modes": "Invia o ricevi",
+    "toDdt": "Avanti: il DDT",
+    "send": "Invia · stampa DDT",
+    "print": "Stampa",
+    "done": "Fatto",
+    "receive": "Chiudi il ricevimento",
+    "next": "Ordine successivo"
+  },
+  "mode": {
+    "question": "Invii o ricevi?",
+    "send": "Invia un kit",
+    "sendHint": "Materiale e fasci tagliati al terzista, con il DDT",
+    "sendHeld": "Il tuo ruolo non invia kit",
+    "receive": "Ricevi il rientro",
+    "receiveHint": "Fasci e materiale avanzato che tornano dal terzista",
+    "receiveHeld": "Il tuo ruolo non riceve rientri"
+  },
+  "pick": {
+    "label": "Scansiona l'ordine di conto lavoro",
+    "hintSend": "Il numero sulla scheda di lavoro, oppure tocca un ordine qui sotto.",
+    "hintReceive": "Il numero sul DDT del terzista, oppure tocca un ordine qui sotto.",
+    "opening": "Apro l'ordine…",
+    "loading": "Leggo gli ordini di questo stabilimento…",
+    "emptySend": {
+      "title": "Nessun kit da inviare",
+      "body": "Nessun ordine emesso di questo stabilimento attende il suo kit."
+    },
+    "emptyReceive": {
+      "title": "Niente dai terzisti",
+      "body": "Nessun ordine di questo stabilimento ha merce da un terzista ora."
+    },
+    "toSend": "Kit da inviare",
+    "toReceive": "Merce dai terzisti",
+    "backBy": "rientro entro il {date}",
+    "linesToSend_one": "riga da inviare",
+    "linesToSend_other": "righe da inviare",
+    "piecesOut_one": "pezzo fuori",
+    "piecesOut_other": "pezzi fuori",
+    "count_one": "{count} ordine",
+    "count_other": "{count} ordini"
+  },
+  "kit": {
+    "ticked_one": "spuntato",
+    "ticked_other": "spuntati",
+    "stateHeld": "Questo ordine non può inviare il kit ora: lo controlla l'ufficio.",
+    "stateShort": "Prima l'ufficio deve controllare l'ordine",
+    "scanLabel": "Scansiona il kit",
+    "scanHint": "Il cartellino di ogni fascio, l'etichetta del lotto o della pelle, o il codice del materiale.",
+    "lines": "Materiale (dalla distinta base)",
+    "lot": "lotto {code}",
+    "from": "da {place}",
+    "noStock": "non a magazzino in questo stabilimento",
+    "tickedOne": "Spuntato",
+    "toTick": "Da spuntare",
+    "noStockHeld": "Non a magazzino in questo stabilimento: lo invia l'ufficio o cambia il kit",
+    "bundles": "Fasci tagliati",
+    "part": "parte {part}",
+    "wholeGarments": "capi interi",
+    "garments_one": "capo",
+    "garments_other": "capi",
+    "sentBefore_one": "{count} fascio è già uscito su questo ordine.",
+    "sentBefore_other": "{count} fasci sono già usciti su questo ordine.",
+    "count_one": "{count} cosa da inviare",
+    "count_other": "{count} cose da inviare",
+    "nothing": {
+      "title": "Non resta niente da inviare",
+      "body": "Ogni riga e ogni fascio di questo kit è uscito."
+    },
+    "missingBoth": "Kit non completo: mancano {bundles} fasci e {lines} materiali.",
+    "missingBundles_one": "Kit non completo: manca {count} fascio.",
+    "missingBundles_other": "Kit non completo: mancano {count} fasci.",
+    "missingLines_one": "Kit non completo: manca {count} materiale.",
+    "missingLines_other": "Kit non completo: mancano {count} materiali.",
+    "noStockLine_one": "{count} materiale non è a magazzino in questo stabilimento: lo invia l'ufficio o cambia il kit.",
+    "noStockLine_other": "{count} materiali non sono a magazzino in questo stabilimento: li invia l'ufficio o cambia il kit.",
+    "noStockShort": "Un materiale non è a magazzino qui"
+  },
+  "keys": {
+    "tick": "Spunta o togli la spunta alla riga",
+    "reject": "Scarta capi del fascio"
+  },
+  "ddt": {
+    "what": "Il DDT dice che la merce viaggia in conto lavorazione: resta nostra presso il terzista.",
+    "who": "Chi trasporta la merce?",
+    "SENDER": "Nostro trasporto",
+    "RECIPIENT": "Ritira il terzista",
+    "hint": {
+      "SENDER": "Il nostro furgone o il nostro autista",
+      "RECIPIENT": "Il terzista la ritira qui"
+    },
+    "packages": "Colli",
+    "weight": "Peso lordo",
+    "appearance": "Che aspetto ha la merce?"
+  },
+  "appearance": {
+    "BOXES": "Scatole",
+    "BAGS": "Sacchi",
+    "PALLET": "Bancale",
+    "LOOSE": "Sfuso"
+  },
+  "held": {
+    "busy": "Invio…",
+    "transport": "Prima di' chi trasporta la merce",
+    "weight": "Prima scrivi il peso lordo",
+    "noPdf": "Il DDT non è ancora mostrato",
+    "count": "Prima scrivi quanti",
+    "reason": "Prima scegli il motivo",
+    "place": "Prima scegli il posto",
+    "reasonLine": "Un fascio scartato ha bisogno del motivo: toccalo e scegline uno.",
+    "back": {
+      "nothing": "Prima scansiona un fascio o inserisci del materiale",
+      "reason": "Un fascio scartato ha bisogno del motivo"
+    }
+  },
+  "sent": {
+    "done": "Kit inviato con il DDT {number}: la merce è in {place}, ancora nostra.",
+    "loading": "Apro il DDT…",
+    "missing": {
+      "title": "Il DDT è emesso; il suo PDF non è ancora salvato",
+      "body": "L'ufficio lo ristampa dall'ordine. La merce può partire con il numero del DDT."
+    },
+    "failed": {
+      "title": "Il DDT non si è potuto mostrare",
+      "body": "È emesso e salvato: l'ufficio lo stampa dall'ordine."
+    },
+    "title": "DDT {number}"
+  },
+  "reject": {
+    "type": "Fascio rientrato",
+    "kind": "Cosa non va?",
+    "defective": "Scartato",
+    "scrapped": "Perso dal terzista",
+    "hint": {
+      "defective": "Torna a noi, da rilavorare",
+      "scrapped": "Il terzista dice che è perso"
+    },
+    "count": "Quanti capi",
+    "of": "di {count}",
+    "reason": "Perché?",
+    "reasonsUnread": "I motivi non si sono potuti leggere: lo scarto va senza motivo.",
+    "noReasons": "Non ci sono motivi di rilavorazione: lo scarto va senza motivo.",
+    "drop": "Togli",
+    "confirm": "Conferma"
+  },
+  "back": {
+    "cell": "Colore e taglia",
+    "now_one": "pezzo rientrato ora",
+    "now_other": "pezzi rientrati ora",
+    "scanLabel": "Scansiona ogni fascio che rientra",
+    "scanHint": "Il cartellino di un fascio fa rientrare i suoi capi; il numero del DDT del terzista viene tenuto.",
+    "ddtKept": "DDT del terzista {code} tenuto per il ricevimento.",
+    "ddtClear": "Togli il numero del DDT",
+    "noBundles": {
+      "title": "Nessun fascio è uscito su questo ordine",
+      "body": "Al terzista è andato solo materiale: inserisci qui sotto quello che rientra."
+    },
+    "bundles": "Fasci fuori",
+    "row": "Fuori {out} · rientrati {back} · scartati {rejected}",
+    "rejectedNow": "Scartato ora",
+    "backNow": "Rientrato ora",
+    "allBack": "Tutto rientrato",
+    "out": "Fuori",
+    "thisReceipt": "questo ricevimento",
+    "stillOut": "ancora fuori",
+    "allBackHeld": "Ogni capo di questo fascio è rientrato",
+    "count_one": "{count} fascio fuori",
+    "count_other": "{count} fasci fuori",
+    "material": "Materiale non usato e ritagli",
+    "atWorkshop": "dal terzista {quantity}",
+    "to": "in {place}",
+    "returning": "Rientra",
+    "stays": "Resta lì",
+    "totals": "Questo ricevimento: {good} buoni, {rejected} scartati, {scrapped} persi.",
+    "stateShort": "Niente è dal terzista"
+  },
+  "material": {
+    "type": "Materiale che rientra",
+    "name": "Materiale",
+    "lot": "Lotto",
+    "atWorkshop": "Dal terzista",
+    "quantity": "Quantità che rientra",
+    "place": "Dove va",
+    "confirm": "Conferma"
+  },
+  "received": {
+    "title": "Ricevimento di {number} registrato",
+    "body": "{good} buoni, {rejected} scartati, {scrapped} persi dal terzista.",
+    "material_one": "{count} riga di materiale rientrata nei nostri posti.",
+    "material_other": "{count} righe di materiale rientrate nei nostri posti.",
+    "office": "L'ufficio vede ora il ricevimento sull'ordine."
+  },
+  "refusal": {
+    "NOT_FOUND": {
+      "message": "Nessun ordine di conto lavoro con questo numero in questo stabilimento.",
+      "fix": "Controlla il numero sulla scheda di lavoro o sul DDT, oppure chiedi al compratore."
+    },
+    "NOT_SENDING": {
+      "message": "Questo ordine non invia un kit ora.",
+      "fix": "Il suo stato non lo permette: prima il compratore lo emette, oppure è chiuso."
+    },
+    "NOT_RECEIVING": {
+      "message": "Niente di questo ordine è dal terzista.",
+      "fix": "Prima invia il suo kit, oppure controlla il numero dell'ordine."
+    },
+    "NOT_IN_KIT": {
+      "message": "Questa etichetta non è in questo kit.",
+      "fix": "Scansiona un cartellino di fascio, un'etichetta di lotto o di pelle o un codice materiale della lista."
+    },
+    "SENT_BEFORE": {
+      "message": "Questo fascio è già uscito.",
+      "fix": "Scansiona il fascio successivo del kit."
+    },
+    "NOT_OUT": {
+      "message": "Questo fascio non è uscito su questo ordine.",
+      "fix": "Mettilo da parte e avvisa il compratore."
+    },
+    "ALL_BACK": {
+      "message": "Ogni capo di questo fascio è già rientrato.",
+      "fix": "Scansiona il fascio successivo."
+    },
+    "CHANGED": {
+      "message": "L'ordine è cambiato nel frattempo.",
+      "fix": "È stato riletto: controlla la lista e invia di nuovo."
+    },
+    "BADGE": {
+      "message": "Questo badge non apre questo tablet.",
+      "fix": "Chiedi al tuo capo squadra."
+    }
+  }
+}

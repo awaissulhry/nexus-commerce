@@ -1,0 +1,17 @@
+/*
+ * Subcontract kits (SCR-181): layout only, inside the DS FloorFrame; sizes from the floor tier's `--nds-density-*`
+ * tokens. The shared parts' layout is in ../shared/view/tasks.css.
+ */
+
+/* The DDT's parcels and weight pads side by side on a tablet, one under the other on a phone. */
+.fw-kits-pads {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18em), 1fr));
+  gap: var(--nds-density-gap);
+  align-items: start;
+}
+
+/* The DDT full width of the job column. */
+.fw-kits-pdf {
+  min-width: 0;
+}

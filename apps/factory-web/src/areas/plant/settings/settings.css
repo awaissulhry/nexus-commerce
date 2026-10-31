@@ -1,0 +1,158 @@
+/*
+ * Plant settings › Symptoms on the floor (SCR-241) LAYOUT: the page's card, the cells of the list frame (code, icon,
+ * words, switches, save mark), the dialogs' forms and the icon picker's grid. The grid, the switches and the buttons are
+ * the design system's; semantic tokens only. No max-width: the page fills the shell's main area (Owner rule 2026-10-29);
+ * the list frame scrolls inside its card on a phone (the page never scrolls sideways).
+ */
+.fw-pls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pls-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pls-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pls-text {
+  margin: 0;
+  color: var(--nds-text);
+}
+
+.fw-pls-sub {
+  color: var(--nds-text-3);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-pls-danger {
+  margin: 0;
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-pls-actions,
+.fw-pls-cell,
+.fw-pls-look {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-pls-actions {
+  flex-wrap: wrap;
+}
+
+.fw-pls-cell,
+.fw-pls-look {
+  flex-wrap: nowrap;
+  max-width: 100%;
+}
+
+.fw-pls-words,
+.fw-pls-look .fw-pls-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.fw-pls-code {
+  font-family: var(--nds-font-mono);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-pls-code.off {
+  color: var(--nds-text-3);
+}
+
+.fw-pls-refused {
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pls-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-pls-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-10) var(--nds-space-14);
+}
+
+@media (min-width: 720px) {
+  .fw-pls-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.fw-pls-toggle {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+}
+
+.fw-pls-toggle > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+
+.fw-pls-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-pls-icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-pls-icon {
+  min-width: 36px;
+  min-height: 36px;
+  justify-content: center;
+}
+
+.fw-pls-keys {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+}
+
+.fw-pls-keys > div {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
+  gap: var(--nds-space-10);
+  align-items: center;
+}
+
+.fw-pls-keys dt {
+  display: inline-flex;
+  gap: var(--nds-space-4);
+}
+
+.fw-pls-keys dd {
+  margin: 0;
+}

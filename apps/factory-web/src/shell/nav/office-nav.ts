@@ -167,6 +167,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/production/work-orders/[id]',
   '/quality/inspections',
   '/quality/inspections/[id]',
+  // B-W2a-67: Quality › Holds (SCR-078; a hold opens in its DetailModal, its tag prints in a tab) and Defects & dispositions (SCR-079).
+  '/quality/holds',
+  '/quality/holds/[id]/tag',
+  '/quality/defects',
   // B-W2a-68: Quality › Problems › Nonconformances (SCR-144 list and board, SCR-145 the NCR record).
   '/quality/ncr',
   '/quality/ncr/[id]',
@@ -260,6 +264,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/plant/machines',
   '/plant/machines/[id]',
   '/plant/machines/tags',
+  // B-W2a-73: Plant › Settings › Plant settings (SCR-241, its W2a section: the symptoms on the floor).
+  '/plant/settings',
 ])
 
 /** My profile & security (SCR-007): open to every signed-in person, the page of last resort. */

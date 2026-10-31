@@ -48,7 +48,9 @@
       "maintenance": "Manutenzione",
       "requests": "Richieste di intervento",
       "jobs": "Interventi",
-      "machines": "Macchine e attrezzature"
+      "machines": "Macchine e attrezzature",
+      "settingsGroup": "Impostazioni",
+      "settings": "Impostazioni stabilimento"
     },
     "admin": {
       "area": "Sistema",
@@ -89,6 +91,9 @@
       "area": "Qualità",
       "main": "Principali",
       "inspections": "Ispezioni",
+      "holds": "Blocchi",
+      "settings": "Impostazioni",
+      "defects": "Difetti e destinazioni",
       "problems": "Problemi",
       "ncr": "Non conformità",
       "complaints": "Reclami"

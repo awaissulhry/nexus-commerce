@@ -60,7 +60,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
     const allowed = new Set(OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter(shipped).map((page) => page.href))))
     expect(rows(OFFICE_NAV).map((row) => row.href).filter((href) => !allowed.has(href))).toEqual([])
     const early = OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => page.early).map((page) => page.id)))
-    expect(early).toEqual(['admin.overview'])
+    expect(early).toEqual(['plant.settings', 'admin.overview'])
     const deferred = OFFICE.flatMap((area) => area.groups.flatMap((group) => group.pages.filter((page) => page.deferred).map((page) => page.id)))
     expect(deferred).toEqual(['sales.mtm'])
   })
@@ -130,6 +130,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/production/scrap': 'production.scrap.view', // GET /production/scrap (B-W2a-60)
       '/production/settings': 'production.settings.view', // GET /production/settings
       '/quality/inspections': 'quality.inspections.view', // GET /quality/inspections
+      '/quality/holds': 'quality.holds.view', // GET /quality/holds (B-W2a-67)
+      '/quality/defects': 'quality.defects.view', // GET /quality/defects (B-W2a-67)
       '/quality/ncr': 'quality.ncr.view', // GET /quality/ncr (B-W2a-68)
       '/quality/complaints': 'quality.complaints.view', // GET /quality/complaints (B-W2a-65)
       '/compliance/certificates': 'compliance.certificates.view', // GET /compliance/certificates
@@ -147,6 +149,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/plant/requests': 'plant.view', // GET /plant/requests
       '/plant/jobs': 'plant.view', // GET /plant/jobs
       '/plant/machines': 'plant.view', // GET /plant/machines
+      '/plant/settings': 'plant.view', // GET /plant/symptoms (B-W2a-73)
       '/admin': 'companies.view', // the checklist reads the companies
       '/admin/companies': 'companies.view',
       '/admin/devices': 'devices.view',
@@ -169,11 +172,13 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
   it('the Owner sees every row; the warehouse and sales roles see only theirs, in the same order', () => {
     expect(rows(owner).map((row) => row.id)).toEqual(rows(OFFICE_NAV).map((row) => row.id))
     // The warehouse role: all of Warehouse, what it receives and ships against; of Finance only Finance reports (the stock
-    // valuation's quantities, B-W2a-51); of Admin only Import & export (the opening stock import).
+    // valuation's quantities, B-W2a-51); of Admin only Import & export (the opening stock import); of Quality only Holds
+    // (B-W2a-67: warehouse reads what is on hold).
     const warehouse = officeNavFor(permissionCheck(templateOf('warehouse')!.permissions))
-    // B-W2a-68: of Quality only Nonconformances (the warehouse raises NCRs from lots, hides and receipts).
+    // B-W2a-67 + B-W2a-68: of Quality, Holds (quality.holds.view) and Nonconformances (the warehouse raises NCRs from lots,
+    // hides and receipts).
     expect(warehouse.areas.map((area) => area.id)).toEqual(['home', 'sales', 'products', 'purchasing', 'warehouse', 'production', 'quality', 'compliance', 'finance', 'admin'])
-    expect(rows(warehouse).filter((row) => row.href.startsWith('/quality/')).map((row) => row.href)).toEqual(['/quality/ncr'])
+    expect(rows(warehouse).filter((row) => row.href.startsWith('/quality/')).map((row) => row.href)).toEqual(['/quality/holds', '/quality/ncr'])
     expect(rows(warehouse).filter((row) => row.href.startsWith('/finance/')).map((row) => row.href)).toEqual(['/finance/reports'])
     expect(rows(warehouse).filter((row) => row.href.startsWith('/warehouse/') || row.href.startsWith('/admin')).map((row) => row.href)).toEqual([
       '/warehouse/stock',
@@ -318,14 +323,18 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
 
   it('each tile asks the permission its page\'s API needs, declared in the catalogue', () => {
     expect(Object.fromEntries(TILE_RULES.map((rule) => [rule.key, rule.permission]))).toEqual({
+      mywork: 'floor.work', // GET /production/dispatch/station (B-W2a-74)
       operation: 'production.scan',
       cut: 'production.cut',
       bundles: 'production.bundles',
       receive: 'inventory.receive',
       pick: 'inventory.issue',
+      returnsin: 'sales.returns.receive', // GET /sales/returns/dock (B-W2a-76)
+      kits: 'purchasing.subcontract.kit', // GET /purchasing/subcontracting/kits (B-W2a-76)
       labels: 'production.serials',
       pack: 'shipping.pack',
       final: 'quality.inspections.view',
+      machine: 'plant.report', // GET /plant/floor/machines (B-W2a-73)
       scan: 'floor.work',
     })
     for (const rule of TILE_RULES) expect(everything, rule.key).toContain(rule.permission)
@@ -334,11 +343,11 @@ describe('the floor tiles and the scan router (floor/model.ts, floor/tasks/route
   it('a station shows its mode\'s tiles in order, at most six, each with its word in both languages', () => {
     const keys = (mode: FloorMode) => homeTiles(mode, everything, false).map((tile) => tile.key)
     expect(Object.fromEntries(FLOOR_MODES.map((mode) => [mode, keys(mode)]))).toEqual({
-      cutting: ['operation', 'cut', 'bundles', 'scan'],
-      sewing: ['operation', 'scan'],
-      packing: ['operation', 'labels', 'pack', 'scan'],
-      inspection: ['operation', 'final', 'scan'],
-      warehouse: ['receive', 'pick', 'scan'],
+      cutting: ['mywork', 'operation', 'cut', 'bundles', 'machine', 'scan'],
+      sewing: ['mywork', 'operation', 'machine', 'scan'],
+      packing: ['mywork', 'operation', 'labels', 'pack', 'machine', 'scan'],
+      inspection: ['mywork', 'operation', 'final', 'machine', 'scan'],
+      warehouse: ['receive', 'pick', 'returnsin', 'kits', 'machine', 'scan'],
     })
     for (const mode of FLOOR_MODES) expect(keys(mode).length).toBeLessThanOrEqual(MAX_TILES)
     for (const locale of LOCALES) {

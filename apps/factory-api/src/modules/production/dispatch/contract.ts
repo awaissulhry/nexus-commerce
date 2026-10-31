@@ -25,6 +25,8 @@ const entryView = output({
     holdReason: z.string().nullable(),
   }),
   operation: output({ id: id(), seq: z.number().int(), code: z.string(), name: z.string() }),
+  /** The operation before it on the work order (B-W2a-74: the floor says "Waiting for Op 20 …" in its own words); null: the first. */
+  previous: output({ seq: z.number().int(), code: z.string(), name: z.string() }).nullable(),
   startAt: instant(),
   endAt: instant(),
   /** The garments it is about: the work order's (a part of an order: the part's). */

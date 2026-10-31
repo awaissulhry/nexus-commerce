@@ -1,6 +1,8 @@
 import type { Prisma } from '@nexus/factory-db'
-import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
-import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { sessionGrants } from '@nexus/factory-domain/auth/roles/roles'
+import { ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { isUuid } from '@nexus/factory-domain/core/ids'
+import { can, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import type { WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import { QUALITY_HOLDS_PLACE, QUALITY_HOLDS_RELEASE, QUALITY_HOLDS_VIEW } from '@nexus/factory-domain/quality/holds/permissions'
@@ -18,6 +20,7 @@ import {
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
+import { heldRoles } from '../../../platform/auth/roles/access'
 import { officeOf, releaseChecksFor } from './holds'
 import { HOLD_COLUMNS, holdView, idsOfCodes, quantityWords, readHold, readSubjects, viewFactsOf, type Subject } from './store'
 
@@ -32,6 +35,9 @@ import { HOLD_COLUMNS, holdView, idsOfCodes, quantityWords, readHold, readSubjec
  *   GET  /quality/holds/:holdId  one hold: its records, the work orders it holds, the release checks for the caller.
  *   POST /quality/holds/preview  (quality.holds.place) what a hold of these records (ids or scanned codes) would hold and
  *                                block, each record's problem in words, the site's quarantine places. Writes nothing.
+ *   GET  /quality/holds/people   (quality.holds.place, B-W2a-67) who may own a hold of the site: the ACTIVE office users
+ *                                whose live roles see holds there (quality.holds.view), me first, then by name. A picker
+ *                                only: no floor worker, no figure.
  */
 
 const LIST_LIMIT = 200
@@ -101,7 +107,7 @@ export async function getHold(caller: CommandCaller, holdId: string) {
     const facts = await viewFactsOf(client, [row], now)
     const workOrders =
       row.subjectType === 'WorkOrder'
-        ? (await client.workOrder.findMany({ where: { id: { in: row.subjectIds } }, select: { id: true, number: true, status: true, heldFromStatus: true, holdReason: true, holdRecordType: true, holdRecordId: true }, orderBy: { number: 'asc' } })).map((order) => ({
+        ? (await client.workOrder.findMany({ where: { id: { in: row.subjectIds } }, select: { id: true, number: true, status: true, heldFromStatus: true, holdReason: true, holdRecordType: true, holdRecordId: true, batchNumber: true }, orderBy: { number: 'asc' } })).map((order) => ({
             id: order.id,
             number: order.number,
             status: order.status as WorkOrderStatus,
@@ -109,6 +115,7 @@ export async function getHold(caller: CommandCaller, holdId: string) {
             holdReason: order.holdReason,
             /** ON_HOLD under this hold (else another record's, or not held: COMPLETED). */
             heldByThis: order.holdRecordType === 'QualityHold' && order.holdRecordId === row.id,
+            batchNumber: order.batchNumber,
           }))
         : []
     const checks = await releaseChecksFor(client, row, { userId: context.actorId }, false)
@@ -166,5 +173,28 @@ export async function previewHold(caller: CommandCaller, body: PreviewBody) {
       workOrders,
       quarantinePlaces: places,
     }
+  })
+}
+
+/** The most office people the owner picker reads (a tenant's office staff). */
+const MAX_PEOPLE = 500
+
+/** GET /quality/holds/people?siteId — the owner picker (B-W2a-67; design qh-place "owner", qh-grid "Owner" inline edit). */
+export async function holdPeople(caller: CommandCaller, siteId: string) {
+  const context = officeOf(caller)
+  const actor = actorOf(context)
+  const now = serverClock.now()
+  return caller.withClient(async (client) => {
+    const site = isUuid(siteId) ? await client.site.findUnique({ where: { id: siteId }, select: { id: true, companyId: true } }) : null
+    if (!site || !can(actor, QUALITY_HOLDS_VIEW, { companyId: site.companyId, siteId: site.id })) throw new NotFoundError('Site not found.')
+    const scope = { companyId: site.companyId, siteId: site.id }
+    if (!can(actor, QUALITY_HOLDS_PLACE, scope)) throw new ForbiddenError('Choosing a hold\'s owner needs quality.holds.place at its site.')
+    const people: { id: string; name: string; me: boolean }[] = []
+    const users = await client.user.findMany({ where: { status: 'ACTIVE' }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }], take: MAX_PEOPLE, select: { id: true, displayName: true } })
+    for (const user of users) {
+      const reader: Actor = { audience: 'office', tenantId: context.tenantId, grants: sessionGrants({ requireMfa: false }, await heldRoles(client, user.id, now), true) }
+      if (can(reader, QUALITY_HOLDS_VIEW, scope)) people.push({ id: user.id, name: user.displayName, me: user.id === context.actorId })
+    }
+    return { people: [...people.filter((person) => person.me), ...people.filter((person) => !person.me)] }
   })
 }

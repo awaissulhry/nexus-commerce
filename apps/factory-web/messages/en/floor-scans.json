@@ -141,11 +141,6 @@
   "undo": {
     "done": "Undone: {what}"
   },
-  "reasons": {
-    "scrap": "Why scrap? Each tap adds one piece",
-    "rework": "Why rework? Each tap adds one piece",
-    "remove": "One less: {reason}"
-  },
   "pad": {
     "less": "Less",
     "more": "More",

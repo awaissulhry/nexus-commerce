@@ -179,6 +179,10 @@ export interface HoldViewFacts {
   readonly subjects: ReadonlyMap<string, Subject>
   readonly reasons: ReadonlyMap<string, string>
   readonly locations: ReadonlyMap<string, { readonly id: string; readonly code: string; readonly name: string }>
+  /** The owners' names (office users; B-W2a-67: the Holds list's Owner column and its picker). */
+  readonly owners: ReadonlyMap<string, string>
+  /** The holds' sites (B-W2a-67: the list's Site column). */
+  readonly sites: ReadonlyMap<string, { readonly id: string; readonly code: string; readonly name: string }>
   readonly now: Date
 }
 
@@ -192,6 +196,8 @@ export function holdView(row: HoldRow, facts: HoldViewFacts) {
     id: row.id,
     companyId: row.companyId,
     siteId: row.siteId,
+    /** B-W2a-67: the site in words (the list's Site column). */
+    site: facts.sites.get(row.siteId) ?? null,
     status: row.status as HoldStatus,
     subjectType: type,
     subjects: row.subjectIds.map((id, index) => ({ id, label: subjects[index]?.label ?? null, state: subjects[index]?.state ?? null })),
@@ -207,6 +213,8 @@ export function holdView(row: HoldRow, facts: HoldViewFacts) {
     placedAt: toUtcIso(row.placedAt),
     placedBy: { kind: placedByKind(row), userId: row.placedById },
     ownerId: row.ownerId,
+    /** The owner as the Holds list names them (an office user by name; never a floor worker). */
+    owner: row.ownerId ? { id: row.ownerId, name: facts.owners.get(row.ownerId) ?? '' } : null,
     expectedReleaseOn: dateOf(row.expectedReleaseOn),
     overdue: isOverdue({ status: row.status as HoldStatus, expectedReleaseOn: dateOf(row.expectedReleaseOn) }, today),
     ageDays: ageDays(toUtcIso(row.placedAt), at(row.releasedAt ?? row.closedAt), toUtcIso(facts.now)),
@@ -236,5 +244,9 @@ export async function viewFactsOf(db: Reader, rows: readonly HoldRow[], now: Dat
   for (const [type, ids] of byType) for (const subject of await readSubjects(db, type, ids)) subjects.set(subject.id, subject)
   const locationIds = [...new Set(rows.flatMap((row) => (row.quarantineLocationId ? [row.quarantineLocationId] : [])))]
   const locations = new Map((locationIds.length > 0 ? await db.location.findMany({ where: { id: { in: locationIds } }, select: { id: true, code: true, name: true } }) : []).map((row) => [row.id, row]))
-  return { subjects, reasons: await holdReasonWords(db), locations, now }
+  const ownerIds = [...new Set(rows.flatMap((row) => (row.ownerId ? [row.ownerId] : [])))]
+  const owners = new Map((ownerIds.length > 0 ? await db.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, displayName: true } }) : []).map((user) => [user.id, user.displayName]))
+  const siteIds = [...new Set(rows.map((row) => row.siteId))]
+  const sites = new Map((siteIds.length > 0 ? await db.site.findMany({ where: { id: { in: siteIds } }, select: { id: true, code: true, name: true } }) : []).map((site) => [site.id, site]))
+  return { subjects, reasons: await holdReasonWords(db), locations, owners, sites, now }
 }

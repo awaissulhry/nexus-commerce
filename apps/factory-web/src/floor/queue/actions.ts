@@ -42,6 +42,7 @@ export const WHAT_KEY = {
   'production.cut.log': 'cut',
   'production.cut.remnant': 'remnant',
   'production.bundles.make': 'bundle',
+  'plant.report': 'machine',
 } as const
 
 export type WhatKey = (typeof WHAT_KEY)[keyof typeof WHAT_KEY]

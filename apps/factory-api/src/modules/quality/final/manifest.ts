@@ -11,6 +11,9 @@ export const manifest = defineManifest({
   'GET /quality/final/work-orders': { audiences: ['office', 'floor'], permission: 'quality.inspections.view', scope: 'record' },
   'GET /quality/final/work-orders/:workOrderId': { audiences: ['office', 'floor'], permission: 'quality.inspections.view', scope: 'record' },
   'GET /quality/inspections': { audiences: ['office'], permission: 'quality.inspections.view', scope: 'record' },
+  // W2a (B-W2a-67; design qi-assign): the office assigns an open inspection to its inspector (./assign.ts).
+  'GET /quality/inspections/inspectors': { audiences: ['office'], permission: 'quality.inspections.record', scope: 'record' },
+  'POST /quality/inspections/assign': { audiences: ['office'], permission: 'quality.inspections.record', scope: 'record' },
   'POST /quality/inspections': { audiences: ['office', 'floor'], permission: 'quality.inspections.record', scope: 'record' },
   'GET /quality/inspections/:inspectionId': { audiences: ['office', 'floor'], permission: 'quality.inspections.view', scope: 'record' },
   'PATCH /quality/inspections/:inspectionId': { audiences: ['office', 'floor'], permission: 'quality.inspections.record', scope: 'record' },
@@ -18,6 +21,8 @@ export const manifest = defineManifest({
   'POST /quality/inspections/:inspectionId/decide': { audiences: ['office', 'floor'], permission: 'quality.inspections.record', scope: 'record' },
   'POST /quality/inspections/:inspectionId/cancel': { audiences: ['office', 'floor'], permission: 'quality.inspections.record', scope: 'record' },
   'POST /quality/releases': { audiences: ['office', 'floor'], permission: 'quality.garments.release', scope: 'record' },
+  // B-W2a-75: Hold lot at the bench (the office places holds on Quality › Holds).
+  'POST /quality/final/work-orders/:workOrderId/hold': { audiences: ['floor'], permission: 'quality.inspections.record', scope: 'record' },
   'GET /quality/releases': { audiences: ['office'], permission: 'quality.inspections.view', scope: 'record' },
   'GET /quality/releases/:releaseId': { audiences: ['office'], permission: 'quality.inspections.view', scope: 'record' },
   'POST /quality/releases/:releaseId/reverse': { audiences: ['office'], permission: 'quality.garments.reverse', scope: 'record' },

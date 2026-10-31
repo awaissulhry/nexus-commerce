@@ -85,6 +85,8 @@ export interface Delivery {
   readonly version: number
   /** The supplier's delivery note number (scanned or typed), or null. */
   readonly ddtNumber: string | null
+  /** B-W2a-75 (SCM-115): the delivery note's date (YYYY-MM-DD, the site's day), or null. */
+  readonly ddtDate: string | null
   readonly entries: Readonly<Record<string, LineEntry>>
 }
 
@@ -149,6 +151,7 @@ export function emptyDelivery(order: OrderToReceive, ddtNumber: string | null = 
     orderId: order.order.id,
     version: order.order.version,
     ddtNumber,
+    ddtDate: null,
     entries: {},
   }
 }
@@ -517,6 +520,7 @@ export function receiveBody(order: OrderToReceive, delivery: Delivery, options: 
   return {
     version: delivery.version,
     ...(delivery.ddtNumber ? { supplierDdtNumber: delivery.ddtNumber } : {}),
+    ...(delivery.ddtDate ? { supplierDdtDate: delivery.ddtDate } : {}),
     lines,
     ...(options.printerId ? { printerId: options.printerId } : {}),
     language: options.language,
@@ -569,3 +573,29 @@ export function hideOfCode(receipt: Pick<FloorReceipt, 'hides'>, code: string): 
 /** Order states that take goods (the rest are refused with their state's words). */
 export const RECEIVING_STATUSES = ['SENT', 'CONFIRMED', 'PARTLY_RECEIVED'] as const
 export const receives = (status: string): boolean => (RECEIVING_STATUSES as readonly string[]).includes(status)
+
+// ---- the supplier's delivery note (B-W2a-75; design floor.receive sec "ddt": number pad, date tiles, camera; SCM-115) ----
+
+/** The days the date tiles offer: today, yesterday, then "another day" opens the days before, back to a week. */
+export const DDT_DAYS = 7
+
+/** `count` days back from `today` (YYYY-MM-DD, the site's day), today first. */
+export function ddtDays(today: string, count: number = DDT_DAYS): string[] {
+  const base = Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1, Number(today.slice(8, 10)), 12)
+  return Array.from({ length: count }, (_, back) => new Date(base - back * 86_400_000).toISOString().slice(0, 10))
+}
+
+/** The number pad shows a delivery note number made of digits only; any other (4512/26) stays as scanned or typed. */
+export function ddtDigits(number: string | null): number | null {
+  return number !== null && /^\d{1,12}$/.test(number) ? Number(number) : null
+}
+
+/** A number typed on the pad as the delivery note's number (null: cleared). */
+export const ddtFromPad = (value: number | null): string | null => (value === null || !Number.isFinite(value) || value < 0 ? null : String(Math.trunc(value)))
+
+/** A scanned or typed delivery note number as the API keeps it (trimmed, at most 60 characters), or null. */
+export function ddtNumberOf(text: string): string | null {
+  const value = text.trim().slice(0, 60)
+  return value === '' ? null : value
+}
+

@@ -1,0 +1,92 @@
+/*
+ * Inspections every day (B-W2a-67): the parts the W1 quality.css does not lay out — the inspector picker, an inline cell's
+ * refusal mark, the defects' thumbnails and garments field, the library picker's grid, the return's lines, the kinds.
+ * Layout only, semantic tokens; no page max-width (the page fills .fw-office-main).
+ */
+
+.fw-q-pick {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.fw-q-pick-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-q-refused {
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-semibold);
+  cursor: default;
+}
+
+.fw-q-photo-cell {
+  flex-wrap: nowrap;
+}
+
+.fw-q-thumb {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: none;
+  object-fit: cover;
+  border-radius: var(--nds-radius-sm);
+  border: 1px solid var(--nds-border);
+}
+
+.fw-q-qty {
+  width: 4.5rem;
+}
+
+.fw-q-pick-grid {
+  margin: var(--nds-space-6) 0 var(--nds-space-12);
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-q-pick-grid > li > button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: start;
+  height: auto;
+  padding-block: var(--nds-space-6);
+}
+
+.fw-q-return-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-q-return-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border);
+}
+
+@media (min-width: 720px) {
+  .fw-q-kinds {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fw-q-kinds > legend {
+    grid-column: 1 / -1;
+  }
+}

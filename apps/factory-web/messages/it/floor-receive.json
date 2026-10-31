@@ -72,7 +72,7 @@
     "openLines_other": "righe in arrivo",
     "supplier": "Fornitore",
     "ddt": "DDT",
-    "ddtNone": "Non scansionato",
+    "ddtNone": "Non indicato",
     "dock": "Ricevimento",
     "noDock": "Nessuna baia di ricevimento: chiedi all'ufficio",
     "requested": "Chiesto per",
@@ -383,5 +383,48 @@
     "ROLL": "rotoli",
     "CONE": "coni",
     "BOX": "scatole"
+  },
+  "ddt": {
+    "title": "Documento di trasporto",
+    "noNumber": "Senza numero",
+    "done": "Fatto",
+    "open": {
+      "add": "DDT: numero, data, foto",
+      "change": "DDT: {what}"
+    },
+    "number": {
+      "title": "Il numero del fornitore",
+      "scan": "Scansiona il codice del DDT",
+      "hint": "Scansiona il codice a barre, scrivilo, o usa il tastierino.",
+      "pad": "Numero (cifre)",
+      "empty": "Scrivi il numero del DDT",
+      "kept": "Numero {number}, come scansionato o scritto.",
+      "clear": "Cancella il numero"
+    },
+    "date": {
+      "title": "La sua data",
+      "today": "Oggi",
+      "yesterday": "Ieri",
+      "another": "Un altro giorno",
+      "none": "Non indicata"
+    },
+    "photo": {
+      "title": "Foto del DDT",
+      "take": "Scatta una foto",
+      "retake": "Scattala di nuovo",
+      "remove": "Togli la foto",
+      "after": "La foto va con il ricevimento quando la consegna viene registrata.",
+      "fact": "Foto",
+      "kept": "Su questo tablet, inviata con il ricevimento",
+      "none": "Nessuna",
+      "short": "foto",
+      "alt": "Foto del DDT {number}",
+      "retry": "Invia di nuovo la foto",
+      "send": {
+        "sending": "Invio della foto del DDT…",
+        "sent": "Foto del DDT inviata con il ricevimento.",
+        "failed": "La foto del DDT non è stata inviata."
+      }
+    }
   }
 }

@@ -60,7 +60,8 @@
     "cancelledBanner": "This inspection is cancelled: it releases nothing.",
     "tab": {
       "checks": "Checks & results",
-      "decision": "Decision & signature"
+      "decision": "Decision & signature",
+      "defects": "Defects & photos"
     }
   },
   "check": {
@@ -101,7 +102,9 @@
   "hold": {
     "failed": "On hold: rework, inspect again",
     "reversed_one": "On hold: {count} taken back",
-    "reversed_other": "On hold: {count} taken back"
+    "reversed_other": "On hold: {count} taken back",
+    "placed": "Hold placed. It is on Quality › Holds.",
+    "placedWorkOrder": "Hold placed: the work order is on hold, the floor is told why."
   },
   "lotStatus": {
     "QUARANTINE": "In quarantine",
@@ -242,7 +245,9 @@
     "noSettings": "Only the owner changes the quality rules (quality.settings.manage).",
     "noParties": "Adding customers needs parties.view.",
     "noLots": "Lots need quality.lots.view.",
-    "noBatch": "The work order has no batch number yet."
+    "noBatch": "The work order has no batch number yet.",
+    "noHoldPlace": "Placing a hold needs quality.holds.place (ask the quality manager).",
+    "assignedOther": "Assigned to another inspector: they record and sign it."
   },
   "list": {
     "intro": "Final inspections of finished garments, their release by someone who made none of them, the releases taken back and what is on hold.",
@@ -298,37 +303,42 @@
     "none": {
       "open": "No inspection is open.",
       "waiting": "Nothing passed is waiting for its release.",
-      "onHold": "No garment is on hold through an inspection.",
       "reversed": "No release was taken back.",
       "lots": "No lot is on hold.",
-      "all": "Nothing here."
+      "all": "Nothing here.",
+      "mine": "Nothing is assigned to you.",
+      "failed": "Every failed inspection is decided: a hold or an NCR came from each."
     },
     "noAccess": {
       "title": "Inspections are not open to your role",
       "body": "They need quality.inspections.view; the owner or an administrator grants it in Admin › Roles & permissions."
-    }
+    },
+    "undecided": "Not decided yet: place a hold or create an NCR",
+    "decidedIn": "Holds {holds} · NCRs {ncrs}",
+    "holds": "Holds"
   },
   "view": {
     "all": "Every inspection",
     "open": "Open",
     "waiting": "Waiting for release",
-    "onHold": "On hold",
     "reversed": "Releases taken back",
-    "lots": "Lots on hold"
+    "lots": "Lots on hold",
+    "mine": "Waiting for me",
+    "failed": "Failed - not decided"
   },
   "tile": {
     "open": "Open",
     "openHint": "Inspections not signed yet",
     "waiting": "Waiting for release",
     "waitingHint": "Passed, garments still to release",
-    "onHold": "On hold",
-    "onHoldHint": "Failed, or garments taken back",
     "reversed": "Releases taken back",
     "reversedHint": "With garments on hold or cleared",
     "lots": "Lots on hold",
     "lotsHint": "In quarantine or blocked",
     "unknown": "Could not count",
-    "atLeast": "{count}+"
+    "atLeast": "{count}+",
+    "failed": "Failed - not decided",
+    "failedHint": "No hold or NCR from them yet"
   },
   "col": {
     "inspection": "Inspection",
@@ -348,7 +358,9 @@
     "material": "Material",
     "lotStatus": "Lot status",
     "crVi": "Chromium VI",
-    "why": "Why it is held"
+    "why": "Why it is held",
+    "assigned": "Inspector",
+    "signedBy": "Signed by"
   },
   "row": {
     "menu": "Actions for {name}",
@@ -356,7 +368,9 @@
     "openNewTab": "Open in a new tab",
     "release": "Release to ship…",
     "openInspection": "Open the inspection",
-    "copyNumber": "Copy the number"
+    "copyNumber": "Copy the number",
+    "placeHold": "Place hold…",
+    "createNcr": "Create NCR…"
   },
   "keys": {
     "title": "Keyboard shortcuts",
@@ -428,6 +442,70 @@
       "aql": "An AQL is a percentage with at most three decimals (\"2.5\").",
       "level": "Name the inspection level.",
       "refused": "The inspection was not opened: the work order or its numbering does not allow it now."
+    },
+    "kind": {
+      "label": "What is inspected",
+      "LOT": "Incoming lot",
+      "LOTHint": "A material lot received: its tests and release.",
+      "FINAL": "Final",
+      "FINALHint": "The finished garments of a work order.",
+      "INLINE": "In-line",
+      "INLINEHint": "During production; comes with a later wave.",
+      "RETURN": "Return",
+      "RETURNHint": "Garments a customer sent back: grade each one.",
+      "held": {
+        "inline": "In-line inspections come with a later wave (W2b).",
+        "return": "Inspecting returns needs sales.returns.view and sales.returns.inspect.",
+        "lot": "Lots need quality.lots.view."
+      },
+      "lotElsewhere": "Incoming lots are inspected and released in Compliance › Tests & substances.",
+      "lotOpen": "Open the lots waiting there"
+    },
+    "inspector": "Inspector (optional)",
+    "inspectorHint": "Who records and signs it; never someone who made the garments.",
+    "inspectorAfterPick": "Pick the work order first.",
+    "inspectorMe": "Me (I opened it)",
+    "refusedTitle": "Not saved",
+    "return": {
+      "record": "Record the inspection",
+      "received": "{received} of {units} received · {site}",
+      "failed": "The returns waiting could not be read",
+      "pick": "Return",
+      "pickHint": "Returns received and waiting for their inspection.",
+      "pickPlaceholder": "Pick a return",
+      "none": "No return is waiting for its inspection.",
+      "line": "{received} of {quantity} received",
+      "safety": "Protective garment: back on sale only after a safety check",
+      "grade": "Grade",
+      "gradePick": "Pick",
+      "grades": {
+        "NEW": "As new",
+        "LIKE_NEW": "Like new",
+        "GOOD": "Good",
+        "DAMAGED": "Damaged",
+        "UNUSABLE": "Unusable"
+      },
+      "cause": "Cause",
+      "causeNone": "Not known",
+      "causes": {
+        "OUR_DEFECT": "Our defect",
+        "TRANSIT": "Damaged in transit",
+        "MISUSE": "Misuse",
+        "WEAR": "Normal wear",
+        "NO_FAULT": "No fault found"
+      },
+      "note": "Condition",
+      "after": "What happens next (credit, repair, back to stock) is decided on the return.",
+      "openReturn": "Open {number}",
+      "done": "Return {number} inspected: its lines are graded.",
+      "problem": {
+        "pick": "Pick the return.",
+        "reading": "The return is still being read.",
+        "nothingReceived": "Nothing of this return was received yet: it is inspected once it arrives.",
+        "grade": "Grade every line received.",
+        "note": "A condition note is at most 1000 characters.",
+        "refused": "The inspection of the return was not recorded"
+      }
     }
   },
   "rules": {
@@ -678,18 +756,12 @@
   "defects": {
     "heading": "Defects found in the sample",
     "counts": "Critical {critical} · major {major} · minor {minor}",
-    "edit": "Edit the defects…",
     "none": "No defect recorded.",
-    "title": "Defects found",
-    "subtitle": "One line per class and code; garments of the sample of {sample}.",
-    "add": "Add a line",
-    "save": "Save the defects",
-    "saved": "The defects are saved; the result is worked out again.",
-    "line": "Line {n}",
-    "remove": "Remove line {n}",
+    "add": "Add defect",
+    "saved": "Saved",
+    "remove": "Remove",
     "classLabel": "Class",
     "code": "Code",
-    "codeHint": "Capitals, digits and dashes (\"STITCH-SKIP\").",
     "quantity": "Garments",
     "cell": "Colour and size",
     "anyCell": "Not one cell",
@@ -703,12 +775,53 @@
       "MINOR": "Minor"
     },
     "problem": {
-      "code": "A defect code is 2 to 40 capitals, digits or dashes.",
       "quantity": "A defect is found on at least one garment.",
       "overSample": "At most the sample.",
       "twice": "One line per class and code.",
-      "refused": "The defects were refused as they are."
-    }
+      "refused": "The defects were refused as they are.",
+      "classOverSample": "More garments of one severity than the sample."
+    },
+    "openTab": "Defects & photos",
+    "saving": "Saving…",
+    "notSaved": "Not saved",
+    "photoSaved": "The photo of {code} is saved.",
+    "noZone": "no zone",
+    "libraryWordsUnknown": "From the library",
+    "typed": "Typed (not from the library)",
+    "classFor": "Severity of {code}",
+    "zoneFor": "Where on the garment: {code}, now {zone}",
+    "quantityFor": "Garments with {code}",
+    "cellFor": "Colour and size of {code}",
+    "photoOf": "Photo of {code}",
+    "photos_one": "{count} photo",
+    "photos_other": "{count} photos",
+    "morePhotos_one": "+{count} more",
+    "morePhotos_other": "+{count} more",
+    "noPhoto": "No photo",
+    "addPhotoFor": "Take a photo of {code}",
+    "noteFor": "Note on {code}",
+    "menuFor": "Actions for {code}",
+    "oneMore": "One more garment",
+    "zone": "Where",
+    "photo": "Photo",
+    "countOf": "{klass} {count}",
+    "lines_one": "{count} defect",
+    "lines_other": "{count} defects",
+    "noneHint": "Pick the defects from the library: the floor sees the same codes.",
+    "sampleRule": "Garments of the sample of {sample}; the counts per severity are the result's.",
+    "photosFailed": "The photos could not be read.",
+    "zoneTitle": "Where on the garment: {code}",
+    "pickTitle": "Add a defect",
+    "pickSubtitle": "From the defect library (Quality › Defects & dispositions).",
+    "libraryFailed": "The defect library could not be read",
+    "libraryEmpty": "The defect library is empty",
+    "libraryEmptyHint": "Quality › Defects & dispositions starts it from the leather-apparel starter set.",
+    "pickSearch": "Find by name or code",
+    "pickOne": "{words} ({code}, {klass})",
+    "pickNone": "No defect matches.",
+    "photoTitle": "Photo of {code}",
+    "photoSubtitle": "Mark the defect with an arrow or a circle; the marked photo is kept with the inspection.",
+    "uploading": "Saving the photo…"
   },
   "result": {
     "heading": "Result now",
@@ -750,12 +863,6 @@
   "sign": {
     "title": "Sign the result of {label}",
     "decision": "Your decision",
-    "result": {
-      "PASS": "Pass",
-      "FAIL": "Fail"
-    },
-    "asComputed": "As the rules compute it.",
-    "override": "Against the computed result: an override with your written reason; its release then needs a second person.",
     "overrideReason": "Why you decide against the computed result",
     "overrideHint": "At least 3 characters; it stays with the signature (QHS-013).",
     "statement": "I made none of these garments.",
@@ -777,6 +884,21 @@
       "statement": "Tick that you made none of these garments.",
       "maker": "You made some of these garments: another inspector signs.",
       "refused": "The signature was refused as it is: the lines below say why."
+    },
+    "choice": {
+      "ACCEPT": "Accept",
+      "CONDITIONAL": "Conditional",
+      "REJECT": "Reject"
+    },
+    "choiceHint": {
+      "ACCEPT": "As the rules give it: PASS.",
+      "CONDITIONAL": "Accepted against the computed FAIL, with your written reason; its release needs a second person (four eyes).",
+      "REJECT": "As the rules give it: FAIL. The goods stay on hold until a decision.",
+      "REJECT_override": "Against the computed PASS: say why."
+    },
+    "held": {
+      "acceptFail": "The rules give FAIL: accept it only as Conditional, or reject it.",
+      "conditionalPass": "Nothing to accept with a reserve: the rules give PASS."
     }
   },
   "decision": {
@@ -978,6 +1100,52 @@
         "closed_one": "{count} register entry, closed.",
         "closed_other": "{count} register entries, all closed."
       }
+    }
+  },
+  "raiseNcr": {
+    "held": {
+      "noRight": "Raising an NCR needs quality.ncr.raise (ask the quality manager)."
+    }
+  },
+  "assign": {
+    "menu": "Assign inspector…",
+    "title_one": "Assign {count} inspection",
+    "title_other": "Assign {count} inspections",
+    "subtitle": "The assigned inspector records and signs it; never someone who made the garments.",
+    "keyHint": "assigns",
+    "confirm_one": "Assign {count} inspection",
+    "confirm_other": "Assign {count} inspections",
+    "clear_one": "Clear the inspector of {count} inspection",
+    "clear_other": "Clear the inspector of {count} inspections",
+    "bulk_one": "Assign {count} inspection",
+    "bulk_other": "Assign {count} inspections",
+    "done_one": "{count} inspection assigned.",
+    "done_other": "{count} inspections assigned.",
+    "cleared_one": "The inspector of {count} inspection is cleared.",
+    "cleared_other": "The inspector of {count} inspections is cleared.",
+    "peopleFailed": "The inspectors of the site could not be read",
+    "who": "Who inspects",
+    "whoHint": "Office people who record inspections at this site.",
+    "whoHintFloor": "Office people and the site's bench inspectors who record inspections here.",
+    "nobodyPick": "Nobody (whoever opened it inspects it)",
+    "nobodyAtSite": "Nobody else records inspections at this site.",
+    "nobody": "Not assigned",
+    "you": "You",
+    "named": "{name}",
+    "office": "An office inspector",
+    "bench": "A bench inspector",
+    "benchNamed": "{name} (bench)",
+    "meNamed": "{name} (you)",
+    "made": "Made garments of {orders}",
+    "cellFor": "Inspector of {label}",
+    "held": {
+      "noRight": "Assigning needs quality.inspections.record at the site.",
+      "notOpen": "Only an open inspection is assigned (a signed one keeps its inspector).",
+      "sites": "The picked inspections are at different sites: assign one site at a time.",
+      "none": "Pick the inspections first."
+    },
+    "problem": {
+      "refused": "Nothing was assigned"
     }
   }
 }

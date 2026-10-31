@@ -29,6 +29,9 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // Quality › Inspections (SCR-076); a release is reviewed in its DetailModal on the list (design §2.3).
   Inspection: '/quality/inspections/[id]',
   QualityRelease: '/quality/inspections?open=[id]',
+  // B-W2a-67: a hold is reviewed in its DetailModal on Quality › Holds (SCR-078, design §2.3); a library code in its drawer (SCR-079).
+  QualityHold: '/quality/holds?open=[id]',
+  DefectCode: '/quality/defects?open=[id]',
   // B-W2a-68: Quality › Nonconformances (SCR-145): an NCR's record (problem, containment, disposition, linked, activity).
   Nonconformance: '/quality/ncr/[id]',
   // Quality › Complaints (SCR-113 W2a part, B-W2a-65): a complaint's record (a new one is triaged from the list's DetailModal).
@@ -122,6 +125,9 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2a-65: the complaints list reads `?view=`, `?q=` and the API's own filters (`?partyId=`, `?salesOrderId=`, …).
   '/quality/complaints': '/quality/complaints',
   '/quality/lots': '/compliance/tests',
+  // B-W2a-67: the holds (the page reads the API's own filters: `?status=`, `?overdue=true`, `?system=true`, `?quarantine=`, `?ownerId=me`).
+  '/quality/holds': '/quality/holds',
+  '/quality/defects': '/quality/defects',
   '/compliance/register': '/compliance/register',
   // The invoice list reads the API's own filters from the address (`?status=REJECTED`, `?docType=TD04`).
   '/invoicing/invoices': '/finance/invoices',

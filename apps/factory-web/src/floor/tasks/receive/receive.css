@@ -160,3 +160,14 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
+
+/* B-W2a-75: the supplier's delivery note photo, kept on the tablet until the post: as wide as its column, never wider. */
+.fw-receive-ddt-photo {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  height: auto;
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-density-radius);
+  background: var(--nds-surface);
+}

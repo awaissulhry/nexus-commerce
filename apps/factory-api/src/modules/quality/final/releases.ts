@@ -21,6 +21,7 @@ import { serverClock } from '../../../core/time'
 import { asTenantSystem, assertFloorReady } from '../../production/serials/facts'
 import { readCells, type LabelHeader } from '../../production/serials/store'
 import { holdOnRelease } from '../holds/checks'
+import { benchHolds } from './bench-hold'
 import { finalWorkOrder, inspectorOf, mayOn, officeOf, postedBy, signerOf } from './access'
 import { cellGate, cellText, documentBlockers, identityOf, inspectorSigner, makerCheck, ReleaseRefusedError, ruleInForce, type Identity } from './facts'
 import { callerIdentity, qualityNumber, signatureOf } from './inspections'
@@ -308,6 +309,8 @@ export async function workOrderFinal(caller: CommandCaller, workOrderId: string)
   const inspectionsRows = await caller.withClient((db) => readWorkOrderInspections(db, header.id))
   const newestPassed = [...inspectionsRows].reverse().find((row) => row.status === 'PASSED') ?? null
   const [newestInspector] = newestPassed ? await inspectorsOf([newestPassed]) : [null]
+  // B-W2a-75: the holds the bench shows (the NCR's number: the floor's role reads no NCR, so as the tenant's system).
+  const holds = await (context.audience === 'office' ? caller : asTenantSystem(caller)).withClient((client) => benchHolds(client, header.id))
   return caller.withClient(async (db) => {
     const cells = await readCells(db, header.id)
     const docs = documents ?? (await documentBlockers(db, header))
@@ -344,6 +347,7 @@ export async function workOrderFinal(caller: CommandCaller, workOrderId: string)
       maker: makerCheck(viewer, makers, header.number),
       documents: docs.map((check) => ({ code: check.code, message: check.message })),
       rule: { rule: rule.rule, source: rule.source, words: FOUR_EYES_WORDS[rule.rule], customerListed: cells.some((cell) => rule.partyIds.includes(cell.partyId)) },
+      holds,
     }
   })
 }
