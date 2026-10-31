@@ -30,6 +30,8 @@ import { workingCalendarFor } from '../../../platform/calendars/service'
 import { activeTenants, systemContext } from '../../../platform/outbox/system'
 import type { Reader } from './store'
 import { operationsOf, stationsOf } from './track'
+import { assertPersonDecides } from '../../people/privacy/decide'
+import { legalGateFor, type GateReader } from '../../people/privacy/gate'
 
 /**
  * Scan-pattern checks (B-W2b-41; MES-075; design production.bundles "Scan-pattern checks", "Show who (one finding)").
@@ -51,8 +53,8 @@ import { operationsOf, stationsOf } from './track'
  *            and answers the names. No Idempotency-Key is kept for it (a receipt would store the names).
  *
  * The PERFORMANCE gate is read here through ONE function, `performanceOpen`, over PeopleLegalGate (a row in force:
- * switched on, not off). B-W2b-27 brings the one legal gate (modules/people/privacy/gate.ts legalGateFor /
- * requireLegalGate): at its merge `performanceOpen` becomes that call, and the review asks its assertPersonDecides.
+ * switched on, not off), read through B-W2b-27's one legal gate (modules/people/privacy/gate.ts legalGateFor); the review
+ * asks its assertPersonDecides.
  */
 
 export const FINDINGS_CRON = 'production.scanFindings'
@@ -71,12 +73,11 @@ function officeOf(caller: CommandCaller): OfficeContext {
 
 /**
  * The site's PERFORMANCE purpose is switched on now (a PeopleLegalGate row in force). The ONE place this step reads the
- * gate: B-W2b-27's legalGateFor(db, siteId, 'PERFORMANCE') replaces the body at its merge (office and system reads; the
- * floor role has no grant on the table).
+ * gate, through B-W2b-27's legalGateFor(db, siteId, 'PERFORMANCE', now) (office and system reads; the floor role has no
+ * grant on the table).
  */
 export async function performanceOpen(db: Reader, siteId: string, now: Date): Promise<boolean> {
-  const gate = await db.peopleLegalGate.findFirst({ where: { siteId, purpose: 'PERFORMANCE', switchedOffAt: null, switchedOnAt: { lte: now } }, select: { id: true } })
-  return gate !== null
+  return (await legalGateFor(db as GateReader, siteId, 'PERFORMANCE', now)).open
 }
 
 export type ChecksState = 'ON' | 'STATION_SITE' | 'NO_BASIS' | 'GATE_CLOSED'
@@ -358,7 +359,8 @@ export async function reviewFinding(caller: CommandCaller, findingId: string, bo
   if (row.status !== 'OPEN') throw new InvalidStateError(`This finding was ${row.status.toLowerCase()} already; it is final.`)
   const note = body.note?.trim() || null
   const { result } = await command(caller, { name: 'production.reviewScanFinding', idempotencyKey, input: { findingId, ...body }, record: { type: 'ScanPatternFinding' as const, id: row.id, expectedVersion: body.version } }, async (tools) => {
-    // B-W2b-27 at its merge: assertPersonDecides(tools.context, …) — a person, never a rule, reviews a finding.
+    // B-W2b-27: a person, never a rule, reviews a finding.
+    assertPersonDecides(tools.context, 'SCAN_FINDING_REVIEW')
     const fresh = (await tools.tx.scanPatternFinding.findUnique({ where: { id: row.id }, select: { status: true } }))!
     if (fresh.status !== 'OPEN') throw new InvalidStateError(`This finding was ${fresh.status.toLowerCase()} already; it is final.`)
     await tools.tx.scanPatternFinding.update({ where: { id: row.id }, data: { status: body.status, reviewedAt: tools.now, reviewedById: context.actorId, reviewNote: note }, select: { id: true } })
