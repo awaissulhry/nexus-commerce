@@ -10,6 +10,8 @@ import type { LotFacts } from '@nexus/factory-domain/planning/netting'
 import { demandOpen, readDemands, RESERVATION_COLUMNS } from '../inventory/reservations/store'
 import { activeSourcesOf } from '../purchasing/supplier-items/store'
 import { heldByQualityHolds } from '../quality/holds/stock'
+// B-W2b-20: the work orders' scheduled starts (the planning board) are their material's need days.
+import { scheduledStartsOf } from './pegging/starts'
 import { dayOf, ITEM_COLUMNS, lotFactsOf, planItemOf, readDemand, readLots, readPurchases, readStock, readSupplyRules, readWorkOrders, unitsOf, type DemandRead, type ItemRow, type PlanStockRow as PlanStockOf, type PurchaseRead, type Reader, type SiteRow } from './store'
 
 /**
@@ -23,6 +25,7 @@ import { dayOf, ITEM_COLUMNS, lotFactsOf, planItemOf, readDemand, readLots, read
  *                  so the plan grid and the purchase order line agree (`buyingOf`)
  *
  * Materials with a safety stock but no demand are read too (their stock and purchase lines), for the exception list.
+ * B-W2b-20: a work order on the planning board needs its material on its scheduled start (./pegging/starts).
  */
 
 export const ITEM_PLANNING_COLUMNS = {
@@ -151,6 +154,7 @@ export async function readPlanInputs(db: Reader, site: SiteRow, runDate: Busines
     reservations,
     firmSupply,
     buying: buyingOf({ companyId: site.companyId, items, itemPlanning, sources, supplierLeadTimes }),
+    workOrderStarts: await scheduledStartsOf(db, site),
   }
   return { input, demand, items, purchases, reservations, firmSupply, itemPlanning, sources, safetyOnlyItemIds, supplierLeadTimes }
 }

@@ -1,10 +1,11 @@
 import { plusDays } from '@nexus/factory-domain/calendars/dates'
-import { ConflictError, DomainError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { DomainError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, parseInstant, toUtcIso } from '@nexus/factory-domain/core/time'
 import { trayOrder } from '@nexus/factory-domain/planning/schedule/backward'
 import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import { PLANNING_SCHEDULE_MANAGE } from '@nexus/factory-domain/planning/schedule/permissions'
+import { refusalIssue, ScheduleRefusal, type SkipCode } from '@nexus/factory-domain/planning/schedule/refusals'
 import { laneColumns, laneKey, laneOfSlot, SLOT_LIMITS, slotInputProblems, type LaneRef } from '@nexus/factory-domain/planning/schedule/slots'
 import { dayWords, workingMinutesFor } from '@nexus/factory-domain/planning/schedule/time'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
@@ -70,7 +71,7 @@ async function slotFor(caller: CommandCaller, slotId: string, permission: Permis
 /** The open work order on the world read inside the command (else 409 in words). */
 function openWorkOrder(world: ScheduleWorld, workOrderId: string): BoardWorkOrder {
   const workOrder = world.workOrders.find((candidate) => candidate.id === workOrderId)
-  if (!workOrder) throw new ConflictError('The work order is not open any more (completed, closed or cancelled): it is not placed on the board.')
+  if (!workOrder) throw new ScheduleRefusal('NOT_OPEN', 'The work order is not open any more (completed, closed or cancelled): it is not placed on the board.')
   return workOrder
 }
 
@@ -79,18 +80,18 @@ const centreName = (world: ScheduleWorld, id: string): string => world.lanes.get
 /** A bar fits a lane when the lane does its operation; a whole-order slot goes to a line or a workshop. */
 function assertFits(world: ScheduleWorld, operation: BoardOperation | null, lane: LaneRef, laneName: string): void {
   if (operation === null) {
-    if (lane.kind === 'WORK_CENTRE') throw new ConflictError('A part of an order goes to a line or a workshop; an operation goes to a work centre.')
+    if (lane.kind === 'WORK_CENTRE') throw new ScheduleRefusal('PART_LANE', 'A part of an order goes to a line or a workshop; an operation goes to a work centre.')
     return
   }
   if (lane.kind === 'LINE') {
     const info = world.lanes.get(laneKey(lane))
     if (info && info.does !== null && !info.does.includes(operation.workCentreId)) {
       const does = info.does.map((id) => centreName(world, id)).join(', ')
-      throw new ConflictError(`${laneName} does ${does}; Op ${operation.seq} ${operation.name} is done at ${centreName(world, operation.workCentreId)}.`)
+      throw new ScheduleRefusal('LANE_DOES_NOT', `${laneName} does ${does}; Op ${operation.seq} ${operation.name} is done at ${centreName(world, operation.workCentreId)}.`)
     }
   }
   if (lane.kind === 'WORK_CENTRE' && lane.id !== operation.workCentreId) {
-    throw new ConflictError(`Op ${operation.seq} ${operation.name} is done at ${centreName(world, operation.workCentreId)}: change its work centre on the work order to move it to ${laneName}.`)
+    throw new ScheduleRefusal('LANE_DOES_NOT', `Op ${operation.seq} ${operation.name} is done at ${centreName(world, operation.workCentreId)}: change its work centre on the work order to move it to ${laneName}.`)
   }
 }
 
@@ -117,7 +118,7 @@ function endFor(world: ScheduleWorld, workOrder: BoardWorkOrder, operation: Boar
     duration = { kind: 'WORKING' as const, minutes: workingMinutesFor(minutes, info?.rate ?? { people: 1, efficiencyPct: '100' }), spans: info?.spans ?? world.siteSpans }
   }
   const times = endOf(duration, start.getTime())
-  if (!times) throw new ConflictError(`${workOrder.number} does not fit in the working time loaded from ${toUtcIso(start)}: give an end.`)
+  if (!times) throw new ScheduleRefusal('NO_WORKING_TIME', `${workOrder.number} does not fit in the working time loaded from ${toUtcIso(start)}: give an end.`)
   return new Date(times.end)
 }
 
@@ -133,6 +134,7 @@ class OverloadedError extends DomainError {
     super('conflict', overWords(laneName, over), [
       { path: 'body/overloadReason', message: 'Say why it stays on the overbooked lane.' },
       ...over.map((day) => ({ path: `over/${day.date}`, message: `${day.bookedMinutes} of ${day.availableMinutes} min (${day.loadPct ?? '—'}%), +${day.overMinutes} over.` })),
+      refusalIssue('OVERLOAD'),
     ])
   }
 }
@@ -190,10 +192,10 @@ export async function placeSlot(caller: CommandCaller, body: PlaceSlotBody, idem
     const lane = await laneFacts(tx, target.site, body.lane)
     assertFits(world, operation ?? null, lane.ref, lane.name)
     if (operation) {
-      if (operation.remaining === 0) throw new ConflictError(`Op ${operation.seq} ${operation.name} of ${workOrder.number} is done: nothing to place.`)
-      if (world.slots.some((slot) => slot.workOrderId === workOrder.id && slot.workOrderOperationId === operation.id)) throw new ConflictError(`Op ${operation.seq} ${operation.name} of ${workOrder.number} already has a bar on the board: move that one.`)
+      if (operation.remaining === 0) throw new ScheduleRefusal('OPERATION_DONE', `Op ${operation.seq} ${operation.name} of ${workOrder.number} is done: nothing to place.`)
+      if (world.slots.some((slot) => slot.workOrderId === workOrder.id && slot.workOrderOperationId === operation.id)) throw new ScheduleRefusal('ALREADY_ON_BOARD', `Op ${operation.seq} ${operation.name} of ${workOrder.number} already has a bar on the board: move that one.`)
     } else if (world.slots.some((slot) => slot.workOrderId === workOrder.id && slot.workOrderOperationId === null && laneKey(laneOfSlot(slot)) === laneKey(lane.ref))) {
-      throw new ConflictError(`${workOrder.number} already has a part on ${lane.name}: change it on the allocation board.`)
+      throw new ScheduleRefusal('PART_THERE', `${workOrder.number} already has a part on ${lane.name}: change it on the allocation board.`)
     }
     const garments = operation ? operation.remaining : (body.pieces ?? workOrder.garments)
     const minutes = slotMinutes(world, workOrder, operation ?? null, lane.ref, garments)
@@ -248,7 +250,7 @@ export async function moveSlot(caller: CommandCaller, slotId: string, body: Move
     const lane = body.lane ? await laneFacts(tx, target.site, body.lane) : await laneFacts(tx, target.site, laneOfSlot(current))
     assertFits(world, operation, lane.ref, lane.name)
     if (body.lane && !operation && laneKey(body.lane) !== laneKey(laneOfSlot(current)) && world.slots.some((slot) => slot.id !== current.id && slot.workOrderId === workOrder.id && slot.workOrderOperationId === null && laneKey(laneOfSlot(slot)) === laneKey(lane.ref))) {
-      throw new ConflictError(`${workOrder.number} already has a part on ${lane.name}: change it on the allocation board.`)
+      throw new ScheduleRefusal('PART_THERE', `${workOrder.number} already has a part on ${lane.name}: change it on the allocation board.`)
     }
     const pieces = operation ? null : body.pieces !== undefined ? body.pieces : current.pieces
     const minutes = slotMinutes(world, workOrder, operation, lane.ref, operation ? 0 : (pieces ?? workOrder.garments))
@@ -274,7 +276,7 @@ export async function moveSlot(caller: CommandCaller, slotId: string, body: Move
       updatedById: context.actorId,
     }
     const { count } = await tx.scheduleSlot.updateMany({ where: { id: current.id, version: current.version }, data })
-    if (count !== 1) throw new ConflictError('The slot moved meanwhile: reload the board.')
+    if (count !== 1) throw new ScheduleRefusal('SLOT_MOVED', 'The slot moved meanwhile: reload the board.')
     tools.audit({ action: 'planning.schedule.move', recordType: 'ScheduleSlot', recordId: current.id, companyId: target.companyId, siteId: target.siteId, before: slotAudit(current), after: slotAudit({ ...data, minutes }) })
     emitChange(tools, target.site, plan, 'MOVED', [current.id], [current.workOrderId])
     return { planVersion: plan.version, over }
@@ -292,7 +294,7 @@ export async function removeSlot(caller: CommandCaller, slotId: string, body: { 
     const plan = await lockedWorkingPlan(tx, target.site, context.tenantId, { actorId: context.actorId, now, bump: true })
     const current = await lockedSlot(tx, slotId, body.version, target.site.timezone)
     const { count } = await tx.scheduleSlot.deleteMany({ where: { id: current.id, version: current.version } })
-    if (count !== 1) throw new ConflictError('The slot moved meanwhile: reload the board.')
+    if (count !== 1) throw new ScheduleRefusal('SLOT_MOVED', 'The slot moved meanwhile: reload the board.')
     tools.audit({ action: 'planning.schedule.remove', recordType: 'ScheduleSlot', recordId: current.id, companyId: target.companyId, siteId: target.siteId, before: { workOrderId: current.workOrderId, operationId: current.workOrderOperationId, ...slotAudit(current) }, after: null })
     emitChange(tools, target.site, plan, 'REMOVED', [current.id], [current.workOrderId])
     return { planVersion: plan.version, workOrderId: current.workOrderId }
@@ -311,9 +313,9 @@ interface Proposal {
 /** The tray's operations without a bar or part, placed by their due dates (see above), in the tray's order. */
 function proposalsOf(world: ScheduleWorld, workOrderIds: readonly string[] | undefined) {
   const now = world.now.getTime()
-  const skipped: { workOrderId: string; operationId: string | null; words: string }[] = []
+  const skipped: { workOrderId: string; operationId: string | null; code: SkipCode; words: string }[] = []
   const wanted = workOrderIds ? new Set(workOrderIds) : null
-  for (const id of wanted ?? []) if (!world.workOrders.some((workOrder) => workOrder.id === id)) skipped.push({ workOrderId: id, operationId: null, words: 'Not an open work order of this site.' })
+  for (const id of wanted ?? []) if (!world.workOrders.some((workOrder) => workOrder.id === id)) skipped.push({ workOrderId: id, operationId: null, code: 'NOT_OPEN', words: 'Not an open work order of this site.' })
   const targets = world.workOrders
     .filter((workOrder) => (wanted ? wanted.has(workOrder.id) : true))
     .map((workOrder) => ({ workOrder, schedule: world.schedules.get(workOrder.id)! }))
@@ -325,11 +327,11 @@ function proposalsOf(world: ScheduleWorld, workOrderIds: readonly string[] | und
     const unplaced = schedule.operations.filter((operation) => operation.plannedStart === null)
     if (unplaced.length === 0) continue
     if (workOrder.status === 'ON_HOLD') {
-      skipped.push({ workOrderId: workOrder.id, operationId: null, words: `${workOrder.number} is on hold${workOrder.holdReason ? `: ${workOrder.holdReason}` : ''}; it waits until the hold is lifted.` })
+      skipped.push({ workOrderId: workOrder.id, operationId: null, code: 'ON_HOLD', words: `${workOrder.number} is on hold${workOrder.holdReason ? `: ${workOrder.holdReason}` : ''}; it waits until the hold is lifted.` })
       continue
     }
     if (schedule.status === 'NO_DUE_DATE') {
-      skipped.push({ workOrderId: workOrder.id, operationId: null, words: schedule.words })
+      skipped.push({ workOrderId: workOrder.id, operationId: null, code: 'NO_DUE_DATE', words: schedule.words })
       continue
     }
     const backward = schedule.latestSafeStart !== null && schedule.latestSafeStart >= now
@@ -340,11 +342,11 @@ function proposalsOf(world: ScheduleWorld, workOrderIds: readonly string[] | und
       const start = backward ? times.latestStart : times.earliestStart
       const end = backward ? times.latestFinish : times.earliestFinish
       if (!info) {
-        skipped.push({ workOrderId: workOrder.id, operationId: operation.id, words: `Op ${operation.seq} ${operation.name}: its lane is not active on this site.` })
+        skipped.push({ workOrderId: workOrder.id, operationId: operation.id, code: 'LANE_NOT_ACTIVE', words: `Op ${operation.seq} ${operation.name}: its lane is not active on this site.` })
         continue
       }
       if (start === null || end === null || end <= start) {
-        skipped.push({ workOrderId: workOrder.id, operationId: operation.id, words: `Op ${operation.seq} ${operation.name} does not fit in the working time loaded: place it by hand.` })
+        skipped.push({ workOrderId: workOrder.id, operationId: operation.id, code: 'NO_WORKING_TIME', words: `Op ${operation.seq} ${operation.name} does not fit in the working time loaded: place it by hand.` })
         continue
       }
       const row: PlannedSlot = { id: newId(), workOrderId: workOrder.id, workOrderOperationId: operation.id, ...laneColumns(lane), startAt: new Date(start), endAt: new Date(end), pieces: null, minutes: standardOf(operation, operation.remaining) }
@@ -386,12 +388,13 @@ export async function placeByDueDate(caller: CommandCaller, body: PlaceByDueDate
     const today = businessDate(now, site.timezone)
     const world = await scheduleWorld(tx, site, { from: today, to: plusDays(today, 1) }, now)
     const { proposals, skipped } = proposalsOf(world, body.workOrderIds)
-    if (proposals.length === 0) throw new ConflictError(skipped.length ? `Nothing to place: ${skipped[0]!.words}` : 'Nothing to place: every operation with work left is on the board.')
+    if (proposals.length === 0) throw new ScheduleRefusal('NOTHING_TO_PLACE', skipped.length ? `Nothing to place: ${skipped[0]!.words}` : 'Nothing to place: every operation with work left is on the board.')
     const over = proposals.filter((proposal) => proposal.over.length > 0)
     const reason = reasonOf(body.overloadReason)
     if (over.length > 0 && reason === null) {
       throw new DomainError('conflict', `${over.length} of the ${proposals.length} placements would overbook their lanes (${overWords(over[0]!.laneName, over[0]!.over)}) Give a reason to keep them, or place them by hand.`, [
         { path: 'body/overloadReason', message: 'Say why they stay on the overbooked lanes.' },
+        refusalIssue('OVERLOAD'),
       ])
     }
     if (reason !== null && reason.length < 3) invalid([{ path: 'body/overloadReason', message: 'Say in a few words why they stay on the overbooked lanes.' }])

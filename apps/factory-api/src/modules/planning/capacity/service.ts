@@ -8,11 +8,11 @@ import { LOADING_STATUSES, loadOf, loadParts, spreadPart, type LaneKind, type Lo
 import { planBuckets, uniformBuckets, weekStart, type Bucket } from '@nexus/factory-domain/planning/settings/buckets'
 import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { ownerKey, workingCalendarsFor } from '../../../platform/calendars/service'
-import { wipFor } from '../../production/scans/progress'
+import { wipForMany } from './wip'
 import { dayOf, type Reader, type SiteRow } from '../store'
 import { effectiveOf, readLanes, type LaneFacts } from '../settings/lanes'
 import { readSettings, settingsValuesOf, type SettingsRow } from '../settings/store'
-import { CAPACITY_MAX_DAYS, type CapacityLaneView } from './contract'
+import { CAPACITY_MAX_DAYS, type CalendarState, type CapacityLaneView } from './contract'
 
 /**
  * Capacity against load (B-W2a-16; PLN-115, PLN-116): THE place the capacity screen, and later the planning board and
@@ -73,6 +73,8 @@ async function readWorkOrders(db: Reader, site: SiteRow): Promise<{ loading: Ope
   })
   const loading: OpenWorkOrder[] = []
   const held: { id: string; lineId: string | null; workCentreIds: string[] }[] = []
+  // B-W2b-20: the WIP of every work order in progress in one read (./wip), not ~6 queries each.
+  const wips = await wipForMany(db, rows.filter((row) => row.status === 'IN_PROGRESS').map((row) => row.id))
   for (const row of rows) {
     if (row.status === 'ON_HOLD') {
       if (row.heldFromStatus === 'RELEASED' || row.heldFromStatus === 'IN_PROGRESS') held.push({ id: row.id, lineId: row.lineId, workCentreIds: [...new Set(row.operations.map((operation) => operation.workCentreId))] })
@@ -81,8 +83,7 @@ async function readWorkOrders(db: Reader, site: SiteRow): Promise<{ loading: Ope
     // Whole garments done at each operation (good + scrapped), from the standing scans; none before the first work.
     const done = new Map<string, number>()
     if (row.status === 'IN_PROGRESS') {
-      const wip = await wipFor(db, { id: row.id, siteId: site.id })
-      for (const operation of wip.operations) done.set(operation.operationId, operation.good + operation.scrap)
+      for (const operation of wips.get(row.id)?.operations ?? []) done.set(operation.operationId, operation.good + operation.scrap)
     }
     const operations = row.operations.map((operation) => ({ ...operation, standardMinutes: operation.standardMinutes.toString(), done: done.get(operation.id) ?? 0 }))
     loading.push({
@@ -204,6 +205,13 @@ function patternOf(calendar: WorkingCalendar | null): CapacityLaneView['pattern'
   return pattern ? { id: pattern.id, code: pattern.code, name: pattern.name, source: 'CALENDAR' } : { id: DEFAULT_PATTERN.id, code: DEFAULT_PATTERN.code, name: DEFAULT_PATTERN.name, source: 'DEFAULT' }
 }
 
+/** B-W2b-20: a lane's own calendar, its site's or company's only, or none (the planning default). */
+export function calendarStateOf(state: Pick<LaneState, 'lane' | 'calendar'>): CalendarState {
+  const layers = state.calendar?.layers ?? []
+  if (layers.length === 0) return 'NONE'
+  return layers.some((layer) => layer.scope === state.lane.kind) ? 'OWN' : 'INHERITED'
+}
+
 const setupOf = (state: LaneState) => ({ people: state.people, unit: state.lane.kind === 'LINE' ? ('people' as const) : ('stations' as const), efficiencyPct: state.efficiencyPct })
 
 /** Available and booked over one span of days (the tiles). */
@@ -243,6 +251,7 @@ export function capacityAnswer(world: CapacityWorld, period: CapacityPeriod) {
       peopleSource: state.peopleSource,
       pattern: patternOf(state.calendar),
       calendars: (state.calendar?.layers ?? []).map((layer) => ({ id: layer.id, scope: layer.scope, name: layer.name })),
+      calendarState: calendarStateOf(state),
       does: state.lane.kind === 'LINE' && state.lane.workCentreIds.length > 0 ? state.lane.workCentreIds.map((id) => centreName.get(id) ?? { id, code: '', name: '' }) : null,
       cells,
       overall: { availableMinutes: minutesText(available), bookedMinutes: minutesText(bookedTotal), ...loadOf(bookedTotal, available) },

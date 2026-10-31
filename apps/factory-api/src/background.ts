@@ -58,6 +58,8 @@ import { payablesHandlers, sdiPickupCron } from './modules/payables/sdi'
 import { renewalStagesCron } from './modules/compliance/renewals/stages'
 // B-W2b-15
 import { releaseOnWorkOrderDoneHandler, reservationCleanupCron } from './modules/inventory/reservations/system-release'
+// B-W2b-11: the report pack, so the worker can export a report (platform/exports/sources/reports.ts).
+import { loadReports } from './modules/insights/reports/registry'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -99,6 +101,8 @@ const W2A_61_HANDLERS: readonly EventHandler[] = creditNoteHandlers()
 const W2A_62_HANDLERS: readonly EventHandler[] = payablesHandlers()
 // B-W2b-15: a work order completed, closed or cancelled → the rest of its reservations released by the system.
 const W2B_15_HANDLERS: readonly EventHandler[] = [releaseOnWorkOrderDoneHandler()]
+// B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
+await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 
 const mode = process.argv[2] as Mode
 if (!MODES.includes(mode)) {

@@ -236,6 +236,12 @@ export interface PlanInput {
   readonly firmSupply?: readonly FirmSupply[]
   /** B-W2a-22: the run's supplier and suggestion choice; none: W1's. */
   readonly buying?: BuyingRule
+  /**
+   * B-W2b-20: the day each open work order starts on the site's working plan (its first bar or part on the planning
+   * board), when it has one: its material is needed then (pegging, readiness, the need date), not on its order line's
+   * date. A work order not on the board keeps its order line's date.
+   */
+  readonly workOrderStarts?: ReadonlyMap<string, BusinessDate>
 }
 
 const UP = { scale: QUANTITY_SCALE, rounding: 'UP' } as const
@@ -401,7 +407,8 @@ export function planRequirements(input: PlanInput): PlanResult {
       cumulative += pieces
       const upTo = roundTo(per.times(cumulative), UP)
       parts.push({
-        part: { ...base, key: `${draft.line.orderLineId}|${draft.size}|${workOrderId}`, workOrderId, workOrderNumber: entry.number, pieces, quantity: q(upTo.minus(before)) },
+        // B-W2b-20: a work order on the planning board needs its material on its scheduled start.
+        part: { ...base, dueDate: input.workOrderStarts?.get(workOrderId) ?? base.dueDate, key: `${draft.line.orderLineId}|${draft.size}|${workOrderId}`, workOrderId, workOrderNumber: entry.number, pieces, quantity: q(upTo.minus(before)) },
         own: issuedBy.get(`${slot}|${workOrderId}`) ?? ZERO,
       })
       before = upTo

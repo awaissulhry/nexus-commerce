@@ -10,9 +10,10 @@ import type { Decision, RunStatus } from '../decisions'
  * ../explode); it never changes it. While the line is ORDERED (a purchase order line buys it) the firm order is fixed;
  * a set-aside line is never firm. Making it planned again (unfirm) clears all six columns.
  *
- * W2a: the carried line is written without `firmCarriedFromId`: the …_stock_plan_w2a_guards trigger keeps a carried line
- * firm for good, so it could never be made planned again (named as a schema need in the step's notes). The firm columns
- * are copied as they were (when and by whom it was made firm).
+ * B-W2b-20: the carried line is written WITH `firmCarriedFromId` (the earlier run's firm line); the guard of
+ * …_followups_quality_money_w2b_guards (B-W2b-02) keeps it firm at insert and lets it be made planned again later (the
+ * six firm columns cleared, `firmCarriedFromId` kept as its history). The firm columns are copied as they were (when and
+ * by whom it was made firm).
  */
 
 export interface FirmLine {

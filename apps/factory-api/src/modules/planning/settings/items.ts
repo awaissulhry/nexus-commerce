@@ -22,7 +22,7 @@ import { auditValuesOf, ITEM_PLANNING_SELECT, ITEM_SELECT, itemDefaultsOf, itemP
  * colour or every colour, of the site's company or every company); a make site that is an ACTIVE plant of the company.
  */
 
-const ITEM_FIELDS = Object.keys({
+export const ITEM_FIELDS = Object.keys({
   method: 0,
   source: 0,
   supplierId: 0,
@@ -41,7 +41,7 @@ const ITEM_FIELDS = Object.keys({
   note: 0,
 } satisfies Record<keyof ItemPlanningValues, 0>) as (keyof ItemPlanningValues)[]
 
-const patchOf = (body: Partial<Record<keyof ItemPlanningValues, unknown>>): ItemPlanningPatch => {
+export const patchOf = (body: Partial<Record<keyof ItemPlanningValues, unknown>>): ItemPlanningPatch => {
   const patch: Record<string, unknown> = {}
   for (const key of ITEM_FIELDS) if (body[key] !== undefined) patch[key] = key === 'note' && body[key] === '' ? null : body[key]
   return patch as ItemPlanningPatch
@@ -51,16 +51,16 @@ function refuse(problems: readonly Issue[], message: string): void {
   if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : message, problems)
 }
 
-const readItem = (db: Reader, itemId: string): Promise<ItemRow | null> => db.item.findUnique({ where: { id: itemId }, select: ITEM_SELECT })
+export const readItem = (db: Reader, itemId: string): Promise<ItemRow | null> => db.item.findUnique({ where: { id: itemId }, select: ITEM_SELECT })
 
 /** An ACTIVE item the site may plan: of its company, or of every company. */
-function assertItemAt(item: ItemRow | null, site: SiteRow, path = 'body/itemId'): asserts item is ItemRow {
+export function assertItemAt(item: ItemRow | null, site: SiteRow, path = 'body/itemId'): asserts item is ItemRow {
   if (!item || (item.companyId !== null && item.companyId !== site.companyId)) throw new ValidationError('No such item for this site.', [{ path, message: 'Choose an item of the site’s company.' }])
   if (item.status !== 'ACTIVE') throw new ValidationError('This item is archived: archived items are not planned.', [{ path, message: 'The item is archived.' }])
 }
 
 /** The facts a row's values name: the supplier and make site, checked in words (400) inside the command. */
-async function factProblems(tx: Reader, site: SiteRow, item: ItemRow, itemColourId: string | null, values: ItemPlanningValues, before: ItemPlanningValues | null): Promise<Issue[]> {
+export async function factProblems(tx: Reader, site: SiteRow, item: ItemRow, itemColourId: string | null, values: ItemPlanningValues, before: ItemPlanningValues | null): Promise<Issue[]> {
   const problems: Issue[] = []
   if (values.supplierId !== null && values.supplierId !== before?.supplierId) {
     const party = await tx.party.findUnique({ where: { id: values.supplierId }, select: { id: true, roles: true, status: true } })
@@ -102,10 +102,10 @@ async function rowFor(caller: CommandCaller, itemPlanningId: string, permission:
   return found!
 }
 
-const lockKey = (tx: CommandTx, tenantId: string, site: SiteRow, itemId: string, itemColourId: string | null) =>
+export const lockKey = (tx: CommandTx, tenantId: string, site: SiteRow, itemId: string, itemColourId: string | null) =>
   tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.item-planning', ${tenantId}::uuid, ${site.id}::uuid, ${itemId}::uuid, ${itemColourId ?? '*'}::text), 0))`
 
-function emitChange(tools: { emit: (event: { type: string; subject: string; companyId: string; siteId: string; payload: unknown }) => void }, row: { id: string; siteId: string; itemId: string; itemColourId: string | null }, site: SiteRow, method: string, change: 'CREATED' | 'EDITED' | 'DELETED'): void {
+export function emitChange(tools: { emit: (event: { type: string; subject: string; companyId: string; siteId: string; payload: unknown }) => void }, row: { id: string; siteId: string; itemId: string; itemColourId: string | null }, site: SiteRow, method: string, change: 'CREATED' | 'EDITED' | 'DELETED'): void {
   tools.emit({ type: 'planning.item_parameters_changed', subject: row.id, companyId: site.companyId, siteId: site.id, payload: { itemPlanningId: row.id, siteId: site.id, itemId: row.itemId, itemColourId: row.itemColourId, method, change } })
 }
 
