@@ -16,11 +16,12 @@ import type { Hold, HoldDetail } from '../api'
 import {
   blocksKey,
   changeHeld,
-  checkLineKey,
+  checkLineKeyFor,
   checkNameKey,
   evidenceOf,
   kindKey,
   nounKey,
+  numberText,
   ownerWords,
   placedByKey,
   quantityWords,
@@ -33,6 +34,7 @@ import {
   SUBJECT_RECORD,
   tagAddress,
   traceOf,
+  whoRuleKey,
   type HoldsListModel,
   type RecordTab,
 } from '../model'
@@ -41,8 +43,11 @@ import { HoldPill, SaveMark } from './parts'
 
 const NOBODY = '__nobody__'
 
-/** The hold's release checks as CheckList lines: our words per check, the API's sentence under them (data). */
-export function checkLines(detail: Pick<HoldDetail, 'release'>, t: (key: string, params?: Record<string, string | number>) => string): CheckLine[] {
+/**
+ * The hold's release checks as CheckList lines: our words per check (B-W2b-17: the placer's own release said when the
+ * company's rule allows it), the API's sentence under them (data).
+ */
+export function checkLines(detail: Pick<HoldDetail, 'release' | 'hold'>, t: (key: string, params?: Record<string, string | number>) => string, me = ''): CheckLine[] {
   return detail.release.checks.map((check) => ({
     id: check.key,
     state: check.key === 'STATEMENT' && !check.ok ? 'UNKNOWN' : check.ok ? 'OK' : 'OPEN',
@@ -50,7 +55,7 @@ export function checkLines(detail: Pick<HoldDetail, 'release'>, t: (key: string,
     name: t(checkNameKey(check.key)),
     text: (
       <>
-        {t(checkLineKey(check.key, check.ok))}
+        {t(checkLineKeyFor(check, detail.hold, me, detail.release.placerMayRelease))}
         <span className="fw-q-hint fw-hd-api"> {check.words}</span>
       </>
     ),
@@ -128,7 +133,9 @@ export function HoldDetailModal({
     { id: 'activity', label: t('detail.tab.activity') },
   ]
   const codes = hold ? `${hold.subjects.map((subject) => subject.label ?? '—').slice(0, 3).join(', ')}${hold.subjects.length > 3 ? ` ${t('subject.more', { count: hold.subjects.length - 3 })}` : ''}` : ''
-  const title = hold ? (hold.subjects.length === 1 ? `${t(kindKey(hold.subjectType))} ${codes}` : `${hold.subjects.length} ${t(nounKey(hold.subjectType), { count: hold.subjects.length })}: ${codes}`) : t('detail.title')
+  const what = hold ? (hold.subjects.length === 1 ? `${t(kindKey(hold.subjectType))} ${codes}` : `${hold.subjects.length} ${t(nounKey(hold.subjectType), { count: hold.subjects.length })}: ${codes}`) : null
+  // B-W2b-17: the hold's number first ("HLD-2026-0091 · Lot DEMO-LOT-0231"); an older hold without one: what it holds.
+  const title = hold && what ? (hold.number ? `${numberText(hold)} · ${what}` : what) : t('detail.title')
   return (
     <DetailModal
       open={open}
@@ -247,6 +254,8 @@ function HoldTab({ value, model, actions }: { value: HoldDetail; model: HoldsLis
         columns={2}
         labelCase="sentence"
         items={[
+          // B-W2b-17: the hold's number (HOLD series); an older hold has none.
+          { label: t('detail.number'), value: <span className="fw-q-code">{numberText(hold)}</span>, hint: hold.number ? undefined : t('detail.numberNone') },
           { label: t('detail.records', { count: hold.subjects.length }), value: subjects, hint: t(nounKey(hold.subjectType), { count: hold.subjects.length }) },
           { label: t('detail.quantity'), value: quantityWords(hold.quantity, t) ?? '—' },
           { label: t('detail.blocks'), value: t(blocksKey(hold.subjectType)) },
@@ -358,7 +367,7 @@ function DecisionTab({ value, model, actions, releaseText }: { value: HoldDetail
         <div className="fw-q-section-title">
           <strong>{t('decision.checks')}</strong>
         </div>
-        <CheckList checks={checkLines(value, t)} label={t('decision.checks')} />
+        <CheckList checks={checkLines(value, t, model.me)} label={t('decision.checks')} />
       </div>
       <div className="fw-q-section">
         <div className="fw-q-section-title">
@@ -367,7 +376,7 @@ function DecisionTab({ value, model, actions, releaseText }: { value: HoldDetail
         <ol className="fw-q-lines">
           <li>{t('decision.who.placed', { who: t(placedByKey(hold, model.me)) })}</li>
           <li>{t(value.release.mayRelease ? 'decision.who.youMay' : model.can.holdsRelease ? 'decision.who.notHere' : 'decision.who.quality')}</li>
-          <li>{t('decision.who.rule')}</li>
+          <li>{t(whoRuleKey(value))}</li>
         </ol>
       </div>
       <div className="fw-q-actions">

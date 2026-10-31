@@ -292,14 +292,13 @@
     "assignSubmit": "Assign {count}",
     "assigned_one": "{count} NCR has its owner.",
     "assigned_other": "{count} NCRs have their owner.",
-    "assignedSome": "{done} of {count} NCRs have their owner; the others were refused.",
     "heldAssignNone": "None of the NCRs picked is still open.",
-    "heldAssignSites": "Pick NCRs of one site: the owner must reach its site.",
     "heldAssignOwner": "Pick an owner first.",
     "heldAssignMax": "At most 50 NCRs at once.",
     "foot": "A row opens the NCR. Pick rows to assign an owner or export them.",
     "boardFoot": "The board shows the same rows by stage; Closed shows the last 30 days.",
-    "printFilters": "Rows: {rows} · Site: {site} · Search: {search}"
+    "printFilters": "Rows: {rows} · Site: {site} · Search: {search}",
+    "heldAssignOffline": "Offline: assign when back online."
   },
   "view": {
     "open": "Open",
@@ -410,7 +409,13 @@
     "createdPhotosFailed": "{number} is raised, but a photo was not added: add it on the NCR.",
     "openIt": "Open {number}",
     "refused": "The NCR was not created.",
-    "heldSeverity": "Say how serious it is first."
+    "heldSeverity": "Say how serious it is first.",
+    "fromDefects_one": "From {count} defect line of {inspection}.",
+    "fromDefects_other": "From {count} defect lines of {inspection}.",
+    "defectsGone": "A picked defect line is no longer on the inspection: open the inspection again and pick the lines.",
+    "containmentReading": "Reading the company's containment time…",
+    "containmentFailed": "The containment time could not be read: the factory sets the due time when the NCR is created.",
+    "containmentDue": "Containment due {span} after the problem was found (the company's containment time)."
   },
   "zone": {
     "FRONT": "Front",
@@ -438,5 +443,74 @@
     "POCKET": "Pocket",
     "LINING": "Lining",
     "LABEL": "Label"
+  },
+  "title": {
+    "INSPECTION_DEFECT": "{defectWords} at inspection {inspection}",
+    "INSPECTION_DEFECTS_one": "{count} defect at inspection {inspection}",
+    "INSPECTION_DEFECTS_other": "{count} defects at inspection {inspection}",
+    "INSPECTION_FAILED": "Failed checks at inspection {inspection}",
+    "BUNDLE_REJECTED": "Rejected bundle {bundle}",
+    "SCAN_REJECTED_one": "{count} garment rejected at {operation}",
+    "SCAN_REJECTED_other": "{count} garments rejected at {operation}",
+    "SCAN_REJECTED_op_one": "{count} garment rejected at an operation",
+    "SCAN_REJECTED_op_other": "{count} garments rejected at an operation",
+    "WORK_ORDER": "Problem on work order {workOrder}",
+    "GARMENT": "Problem on garment {serial}",
+    "LOT": "Problem with lot {lot}",
+    "HIDE": "Problem with hide {hide}",
+    "RECEIPT": "Problem with the delivery of receipt {receipt}",
+    "DISCREPANCY": "{kind} on receipt {receipt}",
+    "CLAIM": "Supplier claim {claim}",
+    "HOLD": "Goods on hold: {reasonCode}",
+    "RMA": "Returned garments of {rma}",
+    "RETURN_LINE": "Returned: {description}",
+    "COMPLAINT": "Complaint {complaint}"
+  },
+  "discrepancyKind": {
+    "SHORT": "Short delivery",
+    "OVER": "Over delivery",
+    "DAMAGED": "Damaged goods",
+    "WRONG_ITEM": "Wrong item",
+    "WRONG_COLOUR": "Wrong colour",
+    "MISSING_DOCUMENT": "Missing document",
+    "OTHER": "Discrepancy"
+  },
+  "containmentTime": {
+    "menu": "Containment time…",
+    "title": "Containment time of new NCRs",
+    "intro": "How long after a problem is found its containment is due, when nobody says otherwise. NCRs already raised keep their due time.",
+    "reading": "Reading the containment time…",
+    "readFailed": "The containment time could not be read.",
+    "hours_one": "{count} hour",
+    "hours_other": "{count} hours",
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "source": {
+      "COMPANY": "This company's own time.",
+      "TENANT": "The time of every company (this one has none of its own).",
+      "DEFAULT": "The default (no time is set)."
+    },
+    "followTenant": "Follow the time of every company",
+    "followDefault": "Follow the default (24 hours)",
+    "hours": "Hours after the problem is found",
+    "hoursHint": "Whole hours from 1 to 720 (30 days).",
+    "heldNoRight": "Changing the containment time needs quality.settings.manage; the owner or an administrator grants it.",
+    "heldReading": "The containment time is still being read.",
+    "heldOffline": "Offline: change it when back online.",
+    "heldHours": "Type whole hours from 1 to 720.",
+    "heldSame": "Nothing is changed yet.",
+    "saved_one": "Saved: new NCRs are due for containment {count} hour after the problem is found.",
+    "saved_other": "Saved: new NCRs are due for containment {count} hours after the problem is found."
+  },
+  "assign": {
+    "refused": {
+      "title_one": "{count} of the {total} NCRs cannot take the owner: nothing was changed.",
+      "title_other": "{count} of the {total} NCRs cannot take the owner: nothing was changed.",
+      "stale": "{number}: changed since the list was read — read the list again",
+      "noRight": "{number}: your role does not follow NCRs up at its site (quality.ncr.manage)",
+      "frozen": "{number}: closed or cancelled: it never changes",
+      "notFound": "{number}: no longer found",
+      "other": "{number}: refused by the factory"
+    }
   }
 }

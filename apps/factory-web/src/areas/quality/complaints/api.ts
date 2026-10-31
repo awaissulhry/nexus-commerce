@@ -3,6 +3,7 @@ import {
   COMPLAINT_ACTIONS,
   COMPLAINT_CATEGORIES,
   COMPLAINT_CHANNELS,
+  COMPLAINT_LINK_TYPES,
   COMPLAINT_SEVERITIES,
   COMPLAINT_STATUSES,
   COMPLAINT_VIEWS,
@@ -25,7 +26,7 @@ import { putToStore, sha256Hex } from '../../../record-panels/store'
  * B-W2a-47; a repair, B-W2a-57).
  */
 
-export { COMPLAINT_ACTIONS, COMPLAINT_CATEGORIES, COMPLAINT_CHANNELS, COMPLAINT_SEVERITIES, COMPLAINT_STATUSES, COMPLAINT_VIEWS, HELD_CODES, OFFICE_CHANNELS, SAFETY_STATES, STATUS_MOVES }
+export { COMPLAINT_ACTIONS, COMPLAINT_CATEGORIES, COMPLAINT_CHANNELS, COMPLAINT_LINK_TYPES, COMPLAINT_SEVERITIES, COMPLAINT_STATUSES, COMPLAINT_VIEWS, HELD_CODES, OFFICE_CHANNELS, SAFETY_STATES, STATUS_MOVES }
 export type ComplaintStatus = (typeof COMPLAINT_STATUSES)[number]
 export type ComplaintCategory = (typeof COMPLAINT_CATEGORIES)[number]
 export type ComplaintSeverity = (typeof COMPLAINT_SEVERITIES)[number]
@@ -36,6 +37,8 @@ export type ComplaintAction = (typeof COMPLAINT_ACTIONS)[number]
 export type HeldCode = (typeof HELD_CODES)[number]
 export type StatusMove = (typeof STATUS_MOVES)[number]
 export type SafetyState = (typeof SAFETY_STATES)[number]
+/** B-W2b-17: what Link… links to a complaint (its order, shipment, return, garment — its own facts — or an NCR). */
+export type ComplaintLinkType = (typeof COMPLAINT_LINK_TYPES)[number]
 
 const seg = (value: string) => encodeURIComponent(value)
 const clean = <T extends Record<string, string | number | boolean | null | undefined>>(query: T) =>
@@ -366,4 +369,41 @@ export async function uploadPhoto(api: ApiClient, complaint: { id: string; compa
   })
   await putToStore(upload, bytes)
   await completeUpload(api, stored.id)
+}
+
+// ---- B-W2b-17: Link… / Unlink on Linked records (design cmp-links) --------------------------------------------------------
+
+/** Link a record to the complaint (POST …/links): its order, shipment, return or garment (its own facts), or an NCR. */
+export const linkToComplaint = (api: ApiClient, complaint: Pick<Complaint, 'id' | 'version'>, link: { recordType: ComplaintLinkType; recordId: string }, idempotencyKey: string) =>
+  api.post(`/quality/complaints/${seg(complaint.id)}/links`, { body: { version: complaint.version, ...link }, schema: withWarnings, idempotencyKey })
+
+/** Unlink it (DELETE …/links/:recordType/:recordId?version=); the NCR raised from the complaint stays linked (409). */
+export const unlinkFromComplaint = (api: ApiClient, complaint: Pick<Complaint, 'id' | 'version'>, link: { recordType: ComplaintLinkType; recordId: string }, idempotencyKey: string) =>
+  api.request('DELETE', `/quality/complaints/${seg(complaint.id)}/links/${seg(link.recordType)}/${seg(link.recordId)}`, { query: { version: complaint.version }, schema: withWarnings, idempotencyKey })
+
+const ncrOption = z.object({ id: z.string(), number: z.string(), companyId: z.string(), title: z.string(), stage: z.string(), sourceType: z.string().nullable(), sourceId: z.string().nullable() })
+export type NcrOption = z.infer<typeof ncrOption>
+
+/** Open NCRs the caller sees (quality.ncr.view), the newest first, of one company (the complaint's): Link… offers them. */
+export async function listNcrOptions(api: ApiClient, companyId: string, signal?: AbortSignal): Promise<NcrOption[]> {
+  const answer = await api.get('/quality/ncr', { query: { open: 'true' }, schema: z.object({ ncrs: z.array(ncrOption) }), signal })
+  return answer.ncrs.filter((ncr) => ncr.companyId === companyId)
+}
+
+/** The NCRs raised from or linked to the complaint, with their source (the one raised from it stays linked). */
+export async function ncrsOfComplaint(api: ApiClient, complaintId: string, signal?: AbortSignal): Promise<NcrOption[]> {
+  const answer = await api.get('/quality/ncr', { query: { recordType: 'Complaint', recordId: complaintId, open: 'false' }, schema: z.object({ ncrs: z.array(ncrOption) }), signal })
+  return answer.ncrs
+}
+
+/** A garment by its typed or scanned serial: its id (the evidence trail's read, quality.inspections.view), else null. */
+export async function findGarmentByEvidence(api: ApiClient, serial: string, signal?: AbortSignal): Promise<{ id: string; serial: string } | null> {
+  const answer = await api.get('/quality/evidence', { query: { serial: serial.trim() }, schema: z.object({ subject: z.object({ serial: z.object({ id: z.string(), serial: z.string() }).nullable() }) }), signal })
+  return answer.subject.serial
+}
+
+/** A garment by its serial through the label scan (production.serials), else null. */
+export async function findGarmentByScan(api: ApiClient, serial: string, signal?: AbortSignal): Promise<{ id: string; serial: string } | null> {
+  const answer = await api.get('/production/serials/scan', { query: { code: serial.trim() }, schema: z.object({ kind: z.string(), serial: z.object({ id: z.string(), serial: z.string() }).nullable() }), signal })
+  return answer.kind === 'SERIAL' ? answer.serial : null
 }

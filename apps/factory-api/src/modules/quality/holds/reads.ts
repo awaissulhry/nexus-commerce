@@ -22,6 +22,7 @@ import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { heldRoles } from '../../../platform/auth/roles/access'
 import { officeOf, releaseChecksFor } from './holds'
+import { placerMayReleaseOf } from './settings'
 import { HOLD_COLUMNS, holdView, idsOfCodes, quantityWords, readHold, readSubjects, viewFactsOf, type Subject } from './store'
 
 /**
@@ -30,7 +31,8 @@ import { HOLD_COLUMNS, holdView, idsOfCodes, quantityWords, readHold, readSubjec
  * of any record). Office only, within the caller's companies and sites (quality.holds.view).
  *
  *   GET  /quality/holds          newest first: status (default ACTIVE; ALL), kind, a held record, site, owner (`me`),
- *                                overdue, placed by the system, the quarantine move; at most 200 (`truncated`).
+ *                                overdue, placed by the system, the quarantine move, the number (`q`, B-W2b-17); at
+ *                                most 200 (`truncated`).
  *   GET  /quality/holds/counts   the tiles: open, overdue, placed by the system, mine, waiting for the quarantine move.
  *   GET  /quality/holds/:holdId  one hold: its records, the work orders it holds, the release checks for the caller.
  *   POST /quality/holds/preview  (quality.holds.place) what a hold of these records (ids or scanned codes) would hold and
@@ -52,6 +54,8 @@ export interface ListQuery {
   readonly overdue?: boolean | undefined
   readonly system?: boolean | undefined
   readonly quarantine?: HoldQuarantine | undefined
+  /** B-W2b-17: a hold's number, or part of it ("HLD-2026-0091", "0091"). */
+  readonly q?: string | undefined
 }
 
 function whereOf(caller: CommandCaller, query: ListQuery): Prisma.QualityHoldWhereInput {
@@ -69,6 +73,7 @@ function whereOf(caller: CommandCaller, query: ListQuery): Prisma.QualityHoldWhe
       query.overdue ? { status: 'ACTIVE', expectedReleaseOn: { lt: today } } : {},
       query.system ? { placedById: null, placedByWorkerId: null } : {},
       query.quarantine ? { quarantine: query.quarantine } : {},
+      query.q?.trim() ? { number: { contains: query.q.trim(), mode: 'insensitive' } } : {},
     ],
   }
 }
@@ -120,10 +125,12 @@ export async function getHold(caller: CommandCaller, holdId: string) {
         : []
     const checks = await releaseChecksFor(client, row, { userId: context.actorId }, false)
     const mayRelease = can(actorOf(context), QUALITY_HOLDS_RELEASE, { companyId: row.companyId, siteId: row.siteId })
+    // B-W2b-17: the company's rule on who releases (the release dialog's four-eyes line says it).
+    const rule = await placerMayReleaseOf(client, row.companyId)
     return {
       hold: holdView(row, facts),
       workOrders,
-      release: { checks, releasable: mayRelease && releasable(checks.filter((check) => check.key !== 'STATEMENT')), mayRelease },
+      release: { checks, releasable: mayRelease && releasable(checks.filter((check) => check.key !== 'STATEMENT')), mayRelease, placerMayRelease: rule.placerMayRelease },
       canChange: row.status === 'ACTIVE' && can(actorOf(context), QUALITY_HOLDS_PLACE, { companyId: row.companyId, siteId: row.siteId }),
     }
   })

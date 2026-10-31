@@ -307,7 +307,8 @@
       "lots": "Nessun lotto è bloccato.",
       "all": "Niente qui.",
       "mine": "Nulla è assegnato a te.",
-      "failed": "Ogni ispezione non superata è decisa: da ciascuna è nato un blocco o una non conformità."
+      "failed": "Ogni ispezione non superata è decisa: da ciascuna è nato un blocco o una non conformità.",
+      "overdue": "Nessuna ispezione aperta è oltre la scadenza."
     },
     "noAccess": {
       "title": "Le ispezioni non sono aperte al tuo ruolo",
@@ -324,7 +325,8 @@
     "reversed": "Rilasci revocati",
     "lots": "Lotti bloccati",
     "mine": "In attesa di me",
-    "failed": "Non superate - da decidere"
+    "failed": "Non superate - da decidere",
+    "overdue": "In ritardo"
   },
   "tile": {
     "open": "Aperte",
@@ -338,7 +340,9 @@
     "unknown": "Conteggio non riuscito",
     "atLeast": "{count}+",
     "failed": "Non superate - da decidere",
-    "failedHint": "Ancora senza blocco né non conformità"
+    "failedHint": "Ancora senza blocco né non conformità",
+    "overdue": "In ritardo",
+    "overdueHint": "Ispezioni aperte oltre la scadenza"
   },
   "col": {
     "inspection": "Ispezione",
@@ -360,7 +364,8 @@
     "crVi": "Cromo VI",
     "why": "Perché è bloccato",
     "assigned": "Ispettore",
-    "signedBy": "Firmata da"
+    "signedBy": "Firmata da",
+    "due": "Scadenza"
   },
   "row": {
     "menu": "Azioni per {name}",
@@ -400,7 +405,8 @@
     "material": "Materiale",
     "lotStatus": "Stato del lotto",
     "crVi": "Cromo VI",
-    "why": "Perché è bloccato"
+    "why": "Perché è bloccato",
+    "due": "Scadenza"
   },
   "new": {
     "title": "Nuova ispezione finale",
@@ -441,7 +447,8 @@
       "accept": "I numeri di accettazione sono interi da 0.",
       "aql": "Un AQL è una percentuale con al massimo tre decimali (\"2,5\").",
       "level": "Indica il livello di ispezione.",
-      "refused": "L'ispezione non è stata aperta: l'ordine di produzione o la sua numerazione ora non lo consentono."
+      "refused": "L'ispezione non è stata aperta: l'ordine di produzione o la sua numerazione ora non lo consentono.",
+      "due": "La scadenza è dopo adesso e al massimo tra un anno."
     },
     "kind": {
       "label": "Che cosa si ispeziona",
@@ -506,7 +513,10 @@
         "note": "Una nota sulla condizione è al massimo di 1000 caratteri.",
         "refused": "L'ispezione del reso non è stata registrata"
       }
-    }
+    },
+    "due": "Entro",
+    "dueHint": "Facoltativo: entro quando va ispezionata. La lista del banco lo dice.",
+    "dueClear": "Nessuna scadenza"
   },
   "rules": {
     "title": "Regole qualità: chi rilascia",
@@ -821,7 +831,15 @@
     "pickNone": "Nessun difetto corrisponde.",
     "photoTitle": "Foto di {code}",
     "photoSubtitle": "Segna il difetto con una freccia o un cerchio; la foto segnata resta con l'ispezione.",
-    "uploading": "Salvataggio della foto…"
+    "uploading": "Salvataggio della foto…",
+    "ncr": {
+      "from_one": "Crea NC da {count} difetto",
+      "from_other": "Crea NC da {count} difetti",
+      "held": {
+        "none": "Prima scegli le righe dei difetti.",
+        "unsaved": "Questa riga non è ancora salvata: aspetta «Salvato», poi sceglila."
+      }
+    }
   },
   "result": {
     "heading": "Esito ora",
@@ -1146,6 +1164,43 @@
     },
     "problem": {
       "refused": "Non è stato assegnato nulla"
+    }
+  },
+  "due": {
+    "none": "Nessuna scadenza",
+    "at": "scade il {at}",
+    "overdue": "in ritardo dal {at}",
+    "overdueTag": "In ritardo",
+    "cellFor": "Scadenza di {label}",
+    "bulk_one": "Imposta la scadenza di {count} ispezione",
+    "bulk_other": "Imposta la scadenza di {count} ispezioni",
+    "title_one": "Imposta la scadenza di {count} ispezione",
+    "title_other": "Imposta la scadenza di {count} ispezioni",
+    "when": "Entro",
+    "whenHint": "Dopo adesso, al massimo tra un anno. La lista del banco lo dice.",
+    "oneCall": "Tutte le ispezioni scelte prendono questa scadenza, o nessuna (una sola modifica).",
+    "save_one": "Imposta per {count} ispezione",
+    "save_other": "Imposta per {count} ispezioni",
+    "clear_one": "Togli per {count} ispezione",
+    "clear_other": "Togli per {count} ispezioni",
+    "done_one": "La scadenza di {count} ispezione è impostata.",
+    "done_other": "La scadenza di {count} ispezioni è impostata.",
+    "cleared_one": "La scadenza di {count} ispezione è tolta.",
+    "cleared_other": "La scadenza di {count} ispezioni è tolta.",
+    "held": {
+      "noRight": "Per impostare la scadenza di un'ispezione serve quality.inspections.record.",
+      "notOpen": "Solo un'ispezione aperta ha una scadenza.",
+      "notOpenSome": "Scegli solo ispezioni aperte: una decisa o annullata non ha scadenza.",
+      "none": "Prima scegli le ispezioni.",
+      "tooMany": "Al massimo 50 ispezioni alla volta."
+    },
+    "problem": {
+      "invalid": "Scegli una data e un'ora.",
+      "past": "L'ispezione scade dopo adesso.",
+      "far": "Al massimo tra un anno.",
+      "refused": "La scadenza non è stata salvata:",
+      "conflict": "Non tutte le ispezioni possono prendere questa scadenza: non è cambiato nulla.",
+      "unknown": "Non è stato possibile salvare la scadenza: riprova."
     }
   }
 }

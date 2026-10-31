@@ -128,6 +128,10 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'MAIL_TO_SORT.FAILED_NO_SUBJECT': 'Mail from {sender} could not be read.',
   'MAIL_TO_SORT.FAILED.blocks': 'Throw it away, or ask the sender to send it again.',
 
+  // B-W2b-17: an NCR decision waiting for an approval.
+  'NCR_DECISION.WAITING_APPROVAL': 'NCR {number} waits for the approval of its decision {code} for {quantity}.',
+  'NCR_DECISION.blocks': 'It is not carried out, and the NCR is not decided, until another person approves it.',
+
   'why.ORDER_PROMISE.orders_manage': "You manage this customer's orders and their promise dates.",
   'why.WORK_ORDER_HELD.workorders_release': 'You release work orders at this site.',
   'why.LOT_HOLD.quality_lots_release': 'You release lots at this site.',
@@ -147,6 +151,7 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'why.STYLE_COMPLIANCE.compliance_labels_manage': 'You keep the garment label templates.',
   'why.STYLE_COMPLIANCE.product_bom_release': 'You release style revisions.',
   'why.MAIL_TO_SORT.email_triage': "You sort this company's received mail.",
+  'why.NCR_DECISION.quality_ncr_approve': "You approve NCR decisions at this site, and someone else decided it.",
 })
 
 /** At most five values, then "and N more". */
@@ -302,4 +307,9 @@ export function poConfirmationWords(facts: { readonly number: string; readonly s
 
 export function quoteAnswerWords(facts: { readonly number: string; readonly revision: number; readonly customer: string }): string {
   return `Quote ${facts.number} (revision ${facts.revision}) you sent to ${facts.customer} is not answered yet.`
+}
+
+/** B-W2b-17: an NCR decision waiting for an approval (`quantity`: "12 PCS", the decision's quantity and unit). */
+export function ncrDecisionWords(facts: { readonly number: string; readonly code: string; readonly quantity: string }): RowWords {
+  return { sentence: phrase('NCR_DECISION.WAITING_APPROVAL', { number: facts.number, code: facts.code, quantity: facts.quantity }), blocks: phrase('NCR_DECISION.blocks') }
 }

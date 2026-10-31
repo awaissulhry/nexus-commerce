@@ -7,8 +7,8 @@ import { STEP_UP_CLOSED, type StepUpState } from '../_shared/hooks'
 import { failedRead, qualityCan, ready, reading } from '../_shared/model'
 import { canFor, inShell, ME, NOW, PREFIX, ROLE_PERMISSIONS, uid, type RoleCase } from '../_shared/fixtures'
 import type { Hold, HoldDetail } from './api'
-import { CLOSED, COUNTS, DETAIL_CR_VI, DETAIL_MAKER, DETAIL_PLACER, DETAIL_READY, DETAIL_RELEASED, DETAIL_STATEMENT, detailOf, HOLDS, PEOPLE, PREVIEW, PREVIEW_PROBLEMS, PREVIEW_WORK_ORDER, QUARANTINE_PLACE, REASONS, REASON_WORDS, RELEASED } from './demo/fixtures'
-import { placeDraftOf, RELEASE_DRAFT, type HoldsDialog, type HoldsListModel, type PlaceDraft, type PlaceModel, type RecordTab, type ReleaseDraft, type View } from './model'
+import { CLOSED, COUNTS, DETAIL_CR_VI, DETAIL_MAKER, DETAIL_PLACER, DETAIL_PLACER_MAY, DETAIL_READY, SETTINGS_COMPANY, SETTINGS_DEFAULT, SETTINGS_READ_ONLY, DETAIL_RELEASED, DETAIL_STATEMENT, detailOf, HOLDS, PEOPLE, PREVIEW, PREVIEW_PROBLEMS, PREVIEW_WORK_ORDER, QUARANTINE_PLACE, REASONS, REASON_WORDS, RELEASED } from './demo/fixtures'
+import { placeDraftOf, RELEASE_DRAFT, settingsDraftOf, type HoldsDialog, type HoldSettingsDraft, type HoldsListModel, type PlaceDraft, type PlaceModel, type RecordTab, type ReleaseDraft, type View } from './model'
 import { PlaceHoldDialog } from './place/view/PlaceHoldDialog'
 import { HoldsView } from './view/HoldsView'
 
@@ -30,6 +30,9 @@ interface DesignModel {
 
 const ALL = [...HOLDS, ...RELEASED, ...CLOSED]
 const DETAILS: Record<string, HoldDetail> = Object.fromEntries([DETAIL_READY, DETAIL_PLACER, DETAIL_MAKER, DETAIL_STATEMENT, DETAIL_CR_VI, DETAIL_RELEASED].map((detail) => [detail.hold.id, detail]))
+// B-W2b-17: the search by number (made-up numbers), the older hold without one.
+const SEARCHED = HOLDS.filter((hold) => hold.number?.includes('0093'))
+const OLDER = HOLDS.find((hold) => hold.number === null)!
 const detailFor = (id: string): HoldDetail => DETAILS[id] ?? detailOf(ALL.find((hold) => hold.id === id) ?? HOLDS[0]!)
 
 const rowsOf = (view: View): Hold[] => {
@@ -110,6 +113,12 @@ function HoldsDesign({ model: design }: { model: DesignModel }) {
   const [releaseDraft, setReleaseDraft] = useState<ReleaseDraft>(design.model.releaseDraft ?? RELEASE_DRAFT)
   const [assignTo, setAssignTo] = useState<string | null>(design.model.assignTo ?? null)
   const [place, setPlace] = useState<PlaceModel | null>(design.place ?? null)
+  const [settingsDraft, setSettingsDraft] = useState<HoldSettingsDraft | null>(design.model.settingsDraft ?? null)
+  const [q, setQ] = useState(design.model.q ?? '')
+  useEffect(() => {
+    setSettingsDraft(design.model.settingsDraft ?? (design.model.settings?.value ? settingsDraftOf(design.model.settings.value.settings) : null))
+    setQ(design.model.q ?? '')
+  }, [design])
   useEffect(() => {
     setView(design.model.view)
     setSelected(design.model.selected)
@@ -118,16 +127,20 @@ function HoldsDesign({ model: design }: { model: DesignModel }) {
     setPlace(design.place ?? null)
   }, [design])
   const changedView = view !== design.model.view
+  const settingsRead = design.model.settings ?? (dialog?.kind === 'settings' ? ready(SETTINGS_DEFAULT) : null)
   const model: HoldsListModel = {
     ...design.model,
     view,
-    rows: design.model.rows.value && changedView ? ready(rowsOf(view)) : design.model.rows,
     selected,
     details: { ...DETAILS, ...design.model.details },
     dialog,
     open,
     releaseDraft,
     assignTo,
+    settingsDraft: settingsDraft ?? (settingsRead?.value ? settingsDraftOf(settingsRead.value.settings) : null),
+    settings: settingsRead,
+    q,
+    rows: q === (design.model.q ?? '') ? (design.model.rows.value && changedView ? ready(rowsOf(view)) : design.model.rows) : ready((rowsOf(view)).filter((row) => (row.number ?? '').toLowerCase().includes(q.trim().toLowerCase()))),
   }
   const hold = open?.detail.value?.hold ?? null
   return inShell(
@@ -151,6 +164,8 @@ function HoldsDesign({ model: design }: { model: DesignModel }) {
           onPlace: () => setPlace(placeModel(placeDraftOf(null))),
           onReleaseDraft: setReleaseDraft,
           onAssignTo: setAssignTo,
+          onSearch: setQ,
+          onSettingsDraft: setSettingsDraft,
         },
       }),
       place ? createElement(PlaceHoldDialog, { model: place, onDraft: (draft: PlaceDraft) => setPlace({ ...place, draft, preview: draft.ids.length + draft.codes.length > 0 ? place.preview ?? ready(PREVIEW) : null }), onClose: () => setPlace(null) }) : null,
@@ -203,6 +218,24 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'place-problems', label: 'Place hold: a code not found and a rejected lot (held with the reason)', model: { ...list(), place: placeModel({ ...LOT_DRAFT, codes: [...LOT_DRAFT.codes, 'DEMO-LOT-9999', 'DEMO-LOT-0190'] }, { preview: ready(PREVIEW_PROBLEMS) }) } },
     { id: 'place-from-inspection', label: 'Place hold from a failed inspection: the work order goes on hold', model: { ...list(), place: placeModel(FROM_INSPECTION, { preview: ready(PREVIEW_WORK_ORDER) }) } },
     { id: 'place-refused', label: 'Place hold refused (400: the fields named)', model: { ...list(), place: placeModel(LOT_DRAFT, { problem: 'place.problem.refused', lines: ['The expected release is today or later.'], fields: ['expectedReleaseOn'] }) } },
+    // ---- B-W2b-17: hold numbers, who releases holds (design qh-grid "Hold (HLD-0091)", quality.settings qs-sod / qs-loosen) ----
+    { id: 'w2b-numbers', label: 'W2b The Hold column: each hold’s number (a hold placed before numbering shows "—")', model: list({ focusRow: HOLDS.indexOf(OLDER) }), note: 'Numbers come from the company’s HOLD series (HLD-2026-0091 in production; made-up DEMO-HLD-… here).' },
+    { id: 'w2b-search', label: 'W2b Find a hold by its number', model: list({ q: '0093', rows: ready(SEARCHED) }) },
+    { id: 'w2b-search-none', label: 'W2b A number no hold has (Clear search)', model: list({ q: 'DEMO-HLD-9999', rows: ready([]) }) },
+    { id: 'w2b-detail-number', label: 'W2b A hold in its DetailModal: the number first, also in its facts', model: list(openOn(DETAIL_READY)) },
+    { id: 'w2b-detail-older', label: 'W2b A hold placed before holds were numbered (said, never a blank)', model: list(openOn(detailOf(OLDER))) },
+    { id: 'w2b-placer-may', label: 'W2b Decision: you placed it and your company lets the placer release — said as such', model: list(openOn(DETAIL_PLACER_MAY, 'decision')) },
+    { id: 'w2b-release-placer-may', label: 'W2b Release by the person who placed it (the company’s rule allows it)', model: list({ ...openOn(DETAIL_PLACER_MAY), dialog: { kind: 'release', ids: [DETAIL_PLACER_MAY.hold.id] } }) },
+    { id: 'w2b-settings', label: 'W2b Who releases holds: the standard rule, the owner may change it (⋯ › Who releases holds…)', model: list({ dialog: { kind: 'settings' }, settings: ready(SETTINGS_DEFAULT) }) },
+    { id: 'w2b-settings-loosen', label: 'W2b Letting the placer release: the looser rule asks why (Save held until said)', model: list({ dialog: { kind: 'settings' }, settings: ready(SETTINGS_DEFAULT), settingsDraft: { choice: true, reason: '' } }) },
+    { id: 'w2b-settings-reason', label: 'W2b The looser rule with its reason: Save asks a fresh code', model: list({ dialog: { kind: 'settings' }, settings: ready(SETTINGS_DEFAULT), settingsDraft: { choice: true, reason: 'One quality person on the night shift.' } }) },
+    { id: 'w2b-settings-step-up', label: 'W2b Who releases holds: the fresh code (step-up)', model: { ...list({ dialog: { kind: 'settings' }, settings: ready(SETTINGS_DEFAULT), settingsDraft: { choice: true, reason: 'One quality person on the night shift.' }, busy: true }), stepUp: { open: true, busy: false, sentence: 'settings.stepUpSentence', problem: null } } },
+    { id: 'w2b-settings-company', label: 'W2b Set for this company (the placer may): back to someone else asks nothing', model: list({ dialog: { kind: 'settings' }, settings: ready(SETTINGS_COMPANY), settingsDraft: { choice: false, reason: '' } }) },
+    { id: 'w2b-settings-read-only', label: 'W2b A quality inspector reads the rule: Save held with the reason', model: list({ dialog: { kind: 'settings' }, settings: ready(SETTINGS_READ_ONLY) }, 'inspector') },
+    { id: 'w2b-settings-refused', label: 'W2b The rule was not saved (someone changed it meanwhile)', model: list({ dialog: { kind: 'settings' }, settings: ready(SETTINGS_DEFAULT), settingsDraft: { choice: true, reason: 'Night shift.' }, dialogProblem: 'settings.conflict', dialogLines: ['QualitySettings changed since it was read.'] }) },
+    { id: 'w2b-settings-loading', label: 'W2b Who releases holds: reading the rule', model: list({ dialog: { kind: 'settings' }, settings: reading() }) },
+    { id: 'w2b-settings-error', label: 'W2b Who releases holds: the rule could not be read', model: list({ dialog: { kind: 'settings' }, settings: failedRead('problem.unavailable') }) },
+    { id: 'w2b-settings-saved', label: 'W2b A receipt: the looser rule saved', model: list({ notice: { key: 'settings.savedLoosened', tone: 'success' } }) },
     { id: 'live-updates', label: 'Live: 3 updates waiting behind Show', model: list({ updates: 3 }), note: 'Rows never move under the cursor.' },
     { id: 'offline', label: 'Offline: the last copy with its time', model: list({ live: 'offline' }) },
     { id: 'more', label: 'More than one page (Show more)', model: list({ rows: ready(Array.from({ length: 60 }, (_, index) => ({ ...HOLDS[index % HOLDS.length]!, id: uid('7899', index + 1) }))) }) },

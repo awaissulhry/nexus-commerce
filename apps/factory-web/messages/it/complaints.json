@@ -546,5 +546,97 @@
     "register": "Registro DPI",
     "orderValue": "Valore ordine",
     "currency": "Valuta"
+  },
+  "links": {
+    "intro": "Collega l'ordine, la spedizione, il reso o il capo del reclamo, oppure una NC; scollega ciò che non c'entra.",
+    "closed": "Un reclamo chiuso non cambia più: i suoi collegamenti restano come sono.",
+    "link": "Collega…",
+    "unlink": "Scollega",
+    "unlinkOf": "Scollega {label}",
+    "raisedFrom": "aperta da questo reclamo",
+    "title": "Collega un record a {number}",
+    "save": "Collega",
+    "body": "Scegli di cosa tratta il reclamo. Ordine, spedizione, reso e capo sono dati del reclamo stesso (uno per tipo); una NC si collega dal suo lato e nomina questo reclamo.",
+    "what": "Cosa collegare",
+    "serial": "Matricola del capo",
+    "serialHint": "Scansiona l'etichetta del capo o scrivine la matricola: il capo viene cercato quando lo colleghi.",
+    "reading": "Lettura di ciò che puoi scegliere…",
+    "search": "Cerca per numero…",
+    "namedAlready": "Collegato ora: {label}. Scollegalo prima di collegarne un altro.",
+    "type": {
+      "SalesOrder": "Ordine",
+      "Shipment": "Spedizione",
+      "ReturnAuthorisation": "Reso",
+      "GarmentSerial": "Capo",
+      "Nonconformance": "Non conformità (NC)"
+    },
+    "typeHint": {
+      "SalesOrder": "Uno degli ordini di questo cliente.",
+      "Shipment": "Una delle spedizioni di questo cliente.",
+      "ReturnAuthorisation": "Il reso con cui il capo è tornato.",
+      "GarmentSerial": "Un nostro capo, dalla matricola sull'etichetta.",
+      "Nonconformance": "Una NC aperta dell'azienda che indaga su questo reclamo."
+    },
+    "pick": {
+      "SalesOrder": "Ordine",
+      "Shipment": "Spedizione",
+      "ReturnAuthorisation": "Reso",
+      "Nonconformance": "NC"
+    },
+    "pickHint": {
+      "SalesOrder": "Gli ordini di questo cliente, dal più recente.",
+      "Shipment": "Le spedizioni di questo cliente, dalla più recente.",
+      "ReturnAuthorisation": "I resi di questo cliente.",
+      "Nonconformance": "NC aperte dell'azienda non ancora collegate, dalla più recente."
+    },
+    "noneToPick": {
+      "SalesOrder": "Questo cliente non ha ordini da scegliere.",
+      "Shipment": "Questo cliente non ha spedizioni da scegliere.",
+      "ReturnAuthorisation": "Questo cliente non ha resi da scegliere.",
+      "Nonconformance": "Non resta nessuna NC aperta dell'azienda da collegare."
+    },
+    "unlinkTitle": "Scollegare {label}?",
+    "unlinkBody": {
+      "SalesOrder": "L'ordine {label} non è più l'oggetto di {number}. Puoi ricollegarlo più tardi.",
+      "Shipment": "La spedizione {label} non è più l'oggetto di {number}. Puoi ricollegarla più tardi.",
+      "ReturnAuthorisation": "Il reso {label} non è più collegato a {number}. Puoi ricollegarlo più tardi.",
+      "GarmentSerial": "La matricola {label} viene tolta da {number}: i dati del capo e la sua traccia delle prove vanno con lei.",
+      "Nonconformance": "{label} non nomina più {number}. La NC in sé resta com'è."
+    },
+    "held": {
+      "log": "Collegare record a un reclamo nuovo richiede quality.complaints.log.",
+      "manage": "Dopo la presa in carico, i collegamenti di un reclamo li cambia la qualità (quality.complaints.manage).",
+      "orders": "Il tuo ruolo non vede gli ordini (orders.view).",
+      "shipments": "Il tuo ruolo non vede le spedizioni (shipping.view).",
+      "returns": "Il tuo ruolo non vede i resi (sales.returns.view).",
+      "garment": "Cercare un capo dalla matricola richiede quality.inspections.view o production.serials: scrivi invece la matricola nei dati del reclamo.",
+      "ncrView": "Il tuo ruolo non vede le NC (quality.ncr.view).",
+      "ncrRaise": "Collegare una NC richiede quality.ncr.raise nel suo stabilimento.",
+      "ncrManage": "Scollegare una NC richiede quality.ncr.manage nel suo stabilimento.",
+      "source": "Questa NC è stata aperta da questo reclamo: resta collegata."
+    },
+    "problem": {
+      "type": "Scegli prima cosa collegare.",
+      "taken": "Il reclamo nomina già {label}: scollegalo prima.",
+      "serial": "Scansiona o scrivi prima la matricola del capo.",
+      "record": "Scegli prima il record da collegare.",
+      "ncr": "Scegli prima la NC da collegare.",
+      "ncrLinked": "Questa NC nomina già il reclamo."
+    },
+    "refused": {
+      "taken": "Il reclamo è già collegato a un altro record di questo tipo: scollegalo prima.",
+      "ncrTaken": "Questa NC nomina già il reclamo, o ha già tutti i collegamenti che può avere.",
+      "source": "Questa NC è stata aperta da questo reclamo: resta collegata.",
+      "gone": "Non è più collegato: il reclamo è stato riletto.",
+      "garment": "Nessun nostro capo ha questa matricola: controlla l'etichetta, o lascia la matricola com'è stata riferita nei dati del reclamo.",
+      "notFound": "Questo record non c'è più, o non è di questo cliente: scegline un altro."
+    },
+    "done": {
+      "linked": "{type} {label} collegato al reclamo.",
+      "unlinked": "{label} scollegato dal reclamo."
+    }
+  },
+  "mail": {
+    "intoThread": "Le e-mail dei contatti del cliente con {number} nell'oggetto arrivano da sole su questa conversazione."
   }
 }

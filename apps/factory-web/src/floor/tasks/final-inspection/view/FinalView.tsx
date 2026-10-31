@@ -5,7 +5,7 @@ import { ArrowLeft, Ban, Check as CheckIcon, CircleAlert, CircleCheck, CircleMin
 import { Modal } from '@nexus/ui/components'
 import { LABEL_PRINT_TONE } from '@nexus/ui/components/LabelPreview/index'
 import { FloorActionBar, FloorButton, FloorList, FloorListRow, QuantityPad, ScanInput, type CameraScanner, type FloorAction, type FloorActions, type FloorTone } from '@nexus/ui/floor'
-import { formatDate, formatTime } from '../../../../lib/i18n/format'
+import { formatDate, formatDateTime, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { Translate } from '../../../../lib/i18n/messages'
 import { FloorFrameView, type FrameAction, type FrameModel } from '../../../frame/view/FloorFrameView'
@@ -14,7 +14,7 @@ import type { TaskProblem } from '../../shared/task-api'
 import { HeldLine, ListFooter, PinSign, ProblemState, ReasonGrid, TaskCard, TaskLine, type PinProblem } from '../../shared/view/TaskParts'
 import type { PickerList } from '../../reasons/model'
 import { ReasonPickerBody, useDoneHeld, type ReasonPickerModel } from '../../reasons/view/ReasonPicker'
-import { CHECKLIST_GROUPS, groupsDone, groupState, itemsOf, openOf, reasonsOf, type Answer, type Check, type ChecklistGroup, type HoldHeld, type Plan, type PlanField, type ReleaseHeld } from '../model'
+import { assigneeKey, CHECKLIST_GROUPS, groupsDone, groupState, itemsOf, openOf, reasonsOf, type Answer, type BenchAssignee, type Check, type ChecklistGroup, type HoldHeld, type Plan, type PlanField, type ReleaseHeld } from '../model'
 import '../final.css'
 
 /**
@@ -45,6 +45,10 @@ export interface BenchRowModel {
   finished: number | null
   released: number
   open: boolean
+  /** B-W2b-17: who its open inspection is assigned to (never another worker's name), by when it is due. */
+  assigned?: BenchAssignee | null
+  inspectionDueAt?: string | null
+  overdue?: boolean
 }
 
 export interface CellModel {
@@ -304,10 +308,19 @@ export function FinalView({ model, onAction, onFrame, camera }: FinalViewProps) 
                   <FloorListRow
                     key={row.id}
                     icon={<ClipboardCheck />}
-                    tone={row.open ? 'info' : 'neutral'}
+                    tone={row.overdue ? 'warning' : row.open ? 'info' : 'neutral'}
                     title={<span className="fw-floor-code">{row.number}</span>}
-                    meta={[row.style, row.batchNumber ? t('strip.batch', { batch: row.batchNumber }) : null, row.dueDate ? t('pick.due', { date: formatDate(`${row.dueDate}T12:00:00Z`, { locale, timeZone: model.timeZone }) }) : null].filter(Boolean).join(' · ')}
-                    status={row.open ? t('pick.open') : t('pick.ready')}
+                    meta={[
+                      row.style,
+                      row.batchNumber ? t('strip.batch', { batch: row.batchNumber }) : null,
+                      row.dueDate ? t('pick.due', { date: formatDate(`${row.dueDate}T12:00:00Z`, { locale, timeZone: model.timeZone }) }) : null,
+                      // B-W2b-17: who the open inspection is for, and by when (words, not colour alone).
+                      row.assigned ? t(assigneeKey(row.assigned).key, assigneeKey(row.assigned).params) : null,
+                      row.inspectionDueAt ? t(row.overdue ? 'pick.inspectionOverdue' : 'pick.inspectionDue', { time: formatDateTime(row.inspectionDueAt, { locale, timeZone: model.timeZone }) }) : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    status={row.overdue ? t('pick.overdue') : row.open ? t('pick.open') : t('pick.ready')}
                     count={Math.max(0, (row.finished ?? 0) - row.released)}
                     countLabel={t('pick.toRelease')}
                     onPress={() => send({ type: 'open', id: row.id })}

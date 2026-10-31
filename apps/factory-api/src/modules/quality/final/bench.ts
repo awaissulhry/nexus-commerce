@@ -6,6 +6,7 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { scanProgressOf } from '../../production/scans/progress'
 import { inspectorOf } from './access'
+import { assigneeNames } from './assign'
 import { releasedPerCell } from './store'
 
 /**
@@ -46,11 +47,19 @@ export async function benchWorkOrders(caller: CommandCaller, query: BenchQuery) 
     const styles = new Map(
       (await db.style.findMany({ where: { id: { in: [...new Set(orders.map((order) => order.styleId))] } }, select: { id: true, code: true, name: true } })).map((style) => [style.id, { code: style.code, name: style.name }]),
     )
-    const open = new Map(
-      (await db.inspection.findMany({ where: { workOrderId: { in: orders.map((order) => order.id) }, status: 'OPEN' }, select: { id: true, workOrderId: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }))
-        .reverse()
-        .map((row) => [row.workOrderId, row.id]),
-    )
+    const openRows = await db.inspection.findMany({
+      where: { workOrderId: { in: orders.map((order) => order.id) }, status: 'OPEN' },
+      select: { id: true, workOrderId: true, number: true, dueAt: true, assignedInspectorId: true, assignedInspectorWorkerId: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    })
+    const open = new Map(openRows.reverse().map((row) => [row.workOrderId, row.id]))
+    const openOf = new Map(openRows.map((row) => [row.workOrderId, row]))
+    // B-W2b-17 (B-W2a-67's gap): who the open inspection is assigned to. An office person by name; a floor inspector is
+    // "mine" or another bench inspector, never named in a list (Owner answer W1).
+    // (The floor's role reads no office users: a tablet sees "an office inspector", unnamed.)
+    const officeNames = context.audience === 'office' ? await assigneeNames(db, openRows.map((row) => ({ assignedInspectorId: row.assignedInspectorId, assignedInspectorWorkerId: null }))) : new Map<string, string>()
+    const me = context.audience === 'floor' ? { workerId: context.actorId, userId: null } : { workerId: null, userId: context.actorId }
+    const now = new Date()
     const rows = []
     for (const order of orders) {
       const cells = await db.workOrderSize.findMany({ where: { workOrderId: order.id }, select: { id: true, quantity: true } })
@@ -75,6 +84,19 @@ export async function benchWorkOrders(caller: CommandCaller, query: BenchQuery) 
         finished,
         released,
         openInspectionId: open.get(order.id) ?? null,
+        openInspection: (() => {
+          const row = openOf.get(order.id)
+          if (!row) return null
+          const kind = row.assignedInspectorId ? ('USER' as const) : row.assignedInspectorWorkerId ? ('WORKER' as const) : null
+          const mine = (row.assignedInspectorId !== null && row.assignedInspectorId === me.userId) || (row.assignedInspectorWorkerId !== null && row.assignedInspectorWorkerId === me.workerId)
+          return {
+            id: row.id,
+            number: row.number,
+            dueAt: row.dueAt ? row.dueAt.toISOString() : null,
+            overdue: row.dueAt !== null && row.dueAt.getTime() < now.getTime(),
+            assigned: kind ? { kind, mine, name: kind === 'USER' ? (officeNames.get(row.assignedInspectorId!) ?? null) : null } : null,
+          }
+        })(),
         ready,
       })
       if (rows.length >= query.limit) break

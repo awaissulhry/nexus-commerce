@@ -11,6 +11,10 @@ export const manifest = defineManifest({
   'GET /quality/holds/counts': { audiences: ['office'], permission: 'quality.holds.view', scope: 'record' },
   // B-W2a-67: the owner picker (who sees holds at the site), for whoever places or changes holds there.
   'GET /quality/holds/people': { audiences: ['office'], permission: 'quality.holds.place', scope: 'record' },
+  // B-W2b-17: who releases a hold, as a setting (read with holds.view; changed with quality.settings.manage, checked in
+  // the handler over the company: the route's permission is the read's).
+  'GET /quality/holds/settings': { audiences: ['office'], permission: 'quality.holds.view', scope: 'record' },
+  'PUT /quality/holds/settings': { audiences: ['office'], permission: 'quality.settings.manage', scope: 'record' },
   'GET /quality/holds/:holdId': { audiences: ['office'], permission: 'quality.holds.view', scope: 'record' },
   'POST /quality/holds/preview': { audiences: ['office'], permission: 'quality.holds.place', scope: 'record' },
   'POST /quality/holds': { audiences: ['office'], permission: 'quality.holds.place', scope: 'record' },

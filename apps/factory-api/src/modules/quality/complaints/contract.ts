@@ -6,6 +6,7 @@ import {
   COMPLAINT_ACTIONS,
   COMPLAINT_CATEGORIES,
   COMPLAINT_CHANNELS,
+  COMPLAINT_LINK_TYPES,
   COMPLAINT_SEVERITIES,
   COMPLAINT_STATUSES,
   COMPLAINT_VIEWS,
@@ -295,4 +296,20 @@ export const registerContract = defineContract({
   params: complaintParams,
   body: input({ version, risk: z.enum(['NO', 'ASSESSING', 'YES']).optional() }),
   response: { 200: output({ complaint: complaintView, register: output({ entryId: id(), reference: z.string(), opened: z.boolean() }) }) },
+})
+
+// ---- B-W2b-17: Link… / Unlink (design cmp-links) ---------------------------------------------------------------------------
+
+/** Link a record to the complaint: its order, shipment, return or garment (the complaint's own facts), or an NCR. */
+export const linkContract = defineContract({
+  params: complaintParams,
+  body: input({ version, recordType: z.enum(COMPLAINT_LINK_TYPES), recordId: id() }),
+  response: { 200: withWarnings },
+})
+
+/** Unlink it (an NCR raised from the complaint stays linked: 409 in words). */
+export const unlinkContract = defineContract({
+  params: input({ complaintId: id(), recordType: z.enum(COMPLAINT_LINK_TYPES), recordId: id() }),
+  querystring: input({ version: z.coerce.number().int().min(1) }),
+  response: { 200: withWarnings },
 })

@@ -38,6 +38,7 @@ import {
 } from '../api'
 import {
   answer,
+  ncrFromDefectsAddress,
   assigneeBody,
   assigneeValue,
   checklistBody,
@@ -508,6 +509,12 @@ function Container({ inspectionId }: { inspectionId: string }) {
         onRaiseNcr: () => {
           const value = read.value
           if (value) router.push(newNcrAddress(prefix, 'Inspection', value.inspection.id))
+        },
+        // B-W2b-17: the picked defect lines, and New NCR from them (`&defects=`: the NCR prefill reads only those lines).
+        onPickDefects: (keys) => setDefects((current) => ({ ...current, selected: [...keys] })),
+        onRaiseNcrFrom: (defectIds) => {
+          const value = read.value
+          if (value && defectIds.length > 0) router.push(ncrFromDefectsAddress(newNcrAddress(prefix, 'Inspection', value.inspection.id), defectIds))
         },
         onCancelReason: setCancelReason,
         onCancel: () => void cancel(),

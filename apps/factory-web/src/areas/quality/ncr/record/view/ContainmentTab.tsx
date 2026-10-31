@@ -17,7 +17,8 @@ import { CellMark, type RecordWords } from './words'
  * on the shared list frame (a short list inside a record: no saved views, no selection). Owner, due time and what the
  * action is autosave per cell with the action's version (a mark per cell); done needs evidence — a note, or a photo of
  * the action — and "Hold stock" names its hold (placed here through the hold's fields, or one of the goods). Cancel keeps
- * its reason. Held with the reason once the NCR is decided, or for a role that does not follow NCRs up.
+ * its reason (B-W2b-17: in its own place under the state, never as evidence). Held with the reason once the NCR is
+ * decided, or for a role that does not follow NCRs up.
  */
 export function ContainmentTab({ model, record, words, actions }: { model: NcrRecordModel; record: NcrRecord; words: RecordWords; actions?: NcrRecordActions }) {
   const { t, r, say, person, when } = words
@@ -103,15 +104,24 @@ export function ContainmentTab({ model, record, words, actions }: { model: NcrRe
             <Tag tone={data.status === 'DONE' ? 'success' : data.status === 'CANCELLED' ? 'neutral' : data.overdue ? 'danger' : 'warning'}>{r(`actionStatus.${data.status}`)}</Tag>
           </span>
           {data.doneAt && <span className="fw-ncr-r-sub">{`${when(data.doneAt)} · ${person(data.doneById)}`}</span>}
+          {data.status === 'CANCELLED' && data.cancelReason && (
+            <span className="fw-ncr-r-sub" title={data.cancelReason}>
+              {r('containment.cancelledBecause', { reason: data.cancelReason })}
+            </span>
+          )}
         </span>
       ) : null
-    const EvidenceCell = ({ data }: ICellRendererParams<ContainmentAction>) =>
-      data ? (
-        <span className="fw-ncr-r-cell" title={data.evidenceNote ?? undefined}>
-          <span className="fw-ncr-r-sub">{data.evidenceNote ?? '—'}</span>
+    const EvidenceCell = ({ data }: ICellRendererParams<ContainmentAction>) => {
+      if (!data) return null
+      // An action cancelled before B-W2b-17 kept its reason as "Cancelled: …" in its evidence: shown as the reason only.
+      const evidence = data.status === 'CANCELLED' && data.evidenceNote?.startsWith('Cancelled: ') ? null : data.evidenceNote
+      return (
+        <span className="fw-ncr-r-cell" title={evidence ?? undefined}>
+          <span className="fw-ncr-r-sub">{evidence ?? '—'}</span>
           {data.files > 0 && <span className="fw-ncr-r-sub">{r('containment.files', { count: data.files })}</span>}
         </span>
-      ) : null
+      )
+    }
     const LinkCell = ({ data }: ICellRendererParams<ContainmentAction>) => {
       if (!data) return null
       if (data.hold)

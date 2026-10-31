@@ -4,6 +4,7 @@ import {
   invoiceToIssueWords,
   lotHoldWords,
   mailToSortWords,
+  ncrDecisionWords,
   orderPromiseWords,
   phrase,
   poNotConfirmedWords,
@@ -217,6 +218,19 @@ const ROWS = {
     record: { type: 'FloorScanRefusal', id: id(14), label: 'BN-000377' },
     said: scanRefusalWords({ device: 'Demo tablet cutting', message: 'This is not a bundle ticket of this site.', workOrder: null }),
     act: 'production.scan.correct',
+  }),
+  // B-W2b-17: an NCR decision that waits for an approval (the Approvals tile; it opens the NCR's record).
+  ncrDecision: row(15, {
+    kind: 'NCR_DECISION',
+    state: 'WAITING_APPROVAL',
+    severity: 'MEDIUM',
+    group: 'TODAY',
+    category: 'APPROVAL',
+    siteId: SITE,
+    record: { type: 'Nonconformance', id: id(15), label: 'NCR-2026-0031' },
+    said: ncrDecisionWords({ number: 'NCR-2026-0031', code: 'SCRAP', quantity: '5 PCS' }),
+    act: 'quality.ncr.approve',
+    actions: { version: 0, verbs: [], assigned: null, acknowledged: null },
   }),
 } satisfies Record<string, QueueItem>
 
@@ -746,6 +760,20 @@ export const designScreen = defineDesignScreen<TodayViewModel>({
         reviews: {},
       },
       note: 'Lots, the PPE register and styles held by compliance; no money anywhere.',
+    },
+    {
+      id: 'w2b-inspector-ncr-decision',
+      label: 'W2b — Quality inspector: an NCR decision waits for my approval',
+      model: {
+        ...base,
+        lens: 'LOTS',
+        queue: { status: 'ready', data: queueOf([ROWS.ncrDecision, ...INSPECTOR_ITEMS]) },
+        flow: flowOf('WORK_ORDERS', 'LOTS'),
+        panels: panelsOf('registerOpen', 'certificatesExpiring'),
+        newVerbs: verbs('registerEntry', 'certificate'),
+        reviews: {},
+      },
+      note: 'B-W2b-17: counted in the Approvals tile; it opens the NCR, where the Disposition tab approves it (never the person who decided it).',
     },
     {
       id: 'finance',

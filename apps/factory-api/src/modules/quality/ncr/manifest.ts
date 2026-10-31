@@ -13,6 +13,11 @@ export const manifest = defineManifest({
   'GET /quality/ncr/board': { audiences: ['office'], permission: 'quality.ncr.view', scope: 'record' },
   'GET /quality/ncr/prefill': { audiences: ['office'], permission: 'quality.ncr.raise', scope: 'record' },
   'POST /quality/ncr': { audiences: ['office'], permission: 'quality.ncr.raise', scope: 'record' },
+  // B-W2b-17: one owner for many NCRs (each checked with quality.ncr.manage at its site); the containment time (read with
+  // ncr.view; changed with quality.settings.manage over the company, checked in the handler).
+  'POST /quality/ncr/assign': { audiences: ['office'], permission: 'quality.ncr.manage', scope: 'record' },
+  'GET /quality/ncr/settings': { audiences: ['office'], permission: 'quality.ncr.view', scope: 'record' },
+  'PUT /quality/ncr/settings': { audiences: ['office'], permission: 'quality.settings.manage', scope: 'record' },
   'GET /quality/ncr/:ncrId': { audiences: ['office'], permission: 'quality.ncr.view', scope: 'record' },
   'PATCH /quality/ncr/:ncrId': { audiences: ['office'], permission: 'quality.ncr.manage', scope: 'record' },
   'POST /quality/ncr/:ncrId/stage': { audiences: ['office'], permission: 'quality.ncr.manage', scope: 'record' },

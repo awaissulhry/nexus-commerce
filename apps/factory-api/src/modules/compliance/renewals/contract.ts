@@ -54,15 +54,21 @@ export const renewalsView = output({
   window: output({ opens: businessDate(), closes: businessDate(), phase: z.enum(WINDOW_PHASES) }),
   stages: z.array(stage),
   renewal: output({
+    /** B-W2b-17: the renewal's row (CertificateRenewal) and its state. */
+    id: id(),
+    status: z.enum(['STARTED', 'APPLIED', 'RENEWED', 'CANCELLED']),
     startedAt: instant(),
     startedBy: z.string().nullable(),
     /** The renewal task (null: not visible to the reader, or gone). */
     task: output({ id: id(), title: z.string(), status: z.enum(['OPEN', 'DONE', 'CANCELLED']), dueDate: businessDate().nullable(), assignee: z.string().nullable(), checklist: z.array(checklistItem) }).nullable(),
-    taskId: id(),
+    /** Null: a renewal started by recording its application or its new certificate (no task). */
+    taskId: id().nullable(),
     appliedOn: businessDate().nullable(),
     reference: z.string().nullable(),
     note: z.string().nullable(),
     inWindow: z.boolean().nullable(),
+    /** B-W2b-17: the window when it was started. */
+    window: output({ opens: businessDate(), closes: businessDate() }),
   }).nullable(),
   successor: certificateRef.nullable(),
   /** The certificate this one renews. */

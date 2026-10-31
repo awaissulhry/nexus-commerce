@@ -32,6 +32,8 @@ export const ROLE_PERMISSIONS = {
     'compliance.register.manage',
     'quality.ncr.view',
     'quality.ncr.raise',
+    // B-W2b-17: unlinking an NCR from a complaint.
+    'quality.ncr.manage',
     'sales.repairs.view',
     'sales.repairs.manage',
     'parties.view',

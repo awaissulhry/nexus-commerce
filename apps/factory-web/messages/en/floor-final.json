@@ -34,7 +34,16 @@
     "ready": "Ready",
     "toRelease": "to release",
     "count_one": "{count} work order",
-    "count_other": "{count} work orders"
+    "count_other": "{count} work orders",
+    "overdue": "Inspection overdue",
+    "inspectionDue": "inspection due {time}",
+    "inspectionOverdue": "inspection overdue since {time}",
+    "assigned": {
+      "mine": "assigned to you",
+      "office": "assigned to {name} (office)",
+      "officeUnnamed": "assigned to an office inspector",
+      "other": "assigned to another inspector"
+    }
   },
   "strip": {
     "batch": "batch {batch}",
