@@ -179,6 +179,6 @@ export const events = [
       added: z.number().int().min(0),
       removed: z.number().int().min(0),
     }),
-    live: { permission: 'planning.view', floor: true, fields: ['siteId', 'planVersionId', 'number', 'effectiveFrom'] },
+    live: { permission: 'planning.view', floor: 'floor.work', fields: ['siteId', 'planVersionId', 'number', 'effectiveFrom'] },
   }),
 ] as const

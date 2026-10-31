@@ -121,6 +121,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (`record-panels/tasks/` = every task and follower call and its zod, `view/TaskNewDialog.tsx` = the ONE New task dialog),
   and Today with `include=TASKS,MENTIONS,ALERTS` (six tiles, my tasks and mentions with Done / Snooze, Coming up). "Snooze
   until" is ONE dialog (`areas/home/today/view/SnoozeDialog.tsx` over `today/snooze.ts`: the site's times).
+- B-W2a-78 (alerts and the exception rules): `src/areas/home/alerts/` Home › Insights › Alerts (SCR-234, `/home/alerts?tile=
+  &severity=&kind=&q=&open=<alert>&rule=<id>|new`, `#rules`; catalogue `home-alerts`: an alert is said from its phrase `w.<key>` =
+  factory-domain ALERT_TEMPLATES, held equal by a test): tiles, the open alerts (list frame, Acknowledge N), the alert's
+  DetailModal (D acknowledge, Assign through `GET /alerts/:id/assignees`, Snooze = today's SnoozeDialog ≤ 30 days, Resolve with a
+  note), the Rules; `RECORD_PAGES.Alert`. `src/areas/admin/automation/` Admin › Platform › Approvals, automation & AI (SCR-167
+  W2a part, `?view=timers`, keys 1–5; the other four lists held with their wave; catalogue `admin-automation`). Both keep rules
+  through `src/areas/_shared/rules/` (catalogue `rules`): `use-rules.ts` (THE hook: list, switch, number, the dialog's choices
+  / dry run / timers / save), `view/RuleSentence.tsx` (the NEW part: a rule as one sentence with its parts as fields; its words
+  equal factory-domain `ruleSentence`, held by a test), `view/RuleDialog.tsx`, `view/RulesList.tsx`, `demo.ts` (made-up rules).
 - `src/lib/records/record-links.ts` — where a record opens: its own page once built (`RECORD_PAGES`, one line per record
   page; list pages in `LIST_PAGES`), else the record panel route `/w/<company>/records/<type>/<id>` (SCR-006 panels).
   Home › Today (`src/areas/home/today/`, SCR-029) and its lists open records through it.

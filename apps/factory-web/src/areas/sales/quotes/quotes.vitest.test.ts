@@ -213,7 +213,7 @@ describe('approvals and the accept link', () => {
 describe('the navigation: Sales › Quotes and Home › Approvals', () => {
   it('a sales person opens Approvals first, then Quotes', () => {
     const nav = officeNavFor(permissionCheck(['quotes.view', 'quotes.manage']))
-    expect(navPages(nav).map((page) => page.href)).toEqual(['/home/approvals', '/sales/quotes'])
+    expect(navPages(nav).map((page) => page.href)).toEqual(['/home/approvals', '/sales/quotes', '/sales/settings'])
     expect(firstOfficePage(nav, { areaId: 'sales' })).toBe('/sales/quotes')
     expect(firstOfficePage(nav)).toBe('/home/approvals')
   })

@@ -1,0 +1,65 @@
+{
+  "refused": {
+    "title": "Non è tua da aprire",
+    "body": "Questa pagina richiede il permesso di vedere le regole degli avvisi. Chiedi a un amministratore se ti serve per il tuo lavoro."
+  },
+  "band": {
+    "label": "Approvazioni, automazioni e IA",
+    "reading": "Lettura…",
+    "more": "Altro",
+    "runLog": "Registro esecuzioni",
+    "aiOff": "Spegni tutta l'IA",
+    "keys": "Scorciatoie da tastiera",
+    "new": "Nuova regola"
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In diretta",
+    "offline": "Offline"
+  },
+  "later": {
+    "W2b": "Arriva nella prossima ondata (W2b).",
+    "W3": "Arriva più avanti (W3)."
+  },
+  "views": {
+    "label": "Elenchi di regole",
+    "approvals": "Regole di approvazione",
+    "timers": "Promemoria e timer",
+    "automation": "Automazioni",
+    "runs": "Registro esecuzioni",
+    "ai": "IA",
+    "later": "Le regole di approvazione arrivano nella prossima ondata: fino ad allora i preventivi usano il margine minimo delle impostazioni di vendita. Le automazioni, il loro registro e gli agenti IA arrivano più avanti (W3)."
+  },
+  "timers": {
+    "title": "Promemoria e timer",
+    "label": "Regole a data",
+    "body": "Regole che scattano rispetto a una data: ogni record ha un timer che aspetta il suo giorno, poi solleva l'avviso. Una regola indica un ruolo, mai una persona.",
+    "empty": "Ancora nessuna regola a data.",
+    "emptyBody": "Quelle di serie (certificato in scadenza, scadenza di fatturazione) le crea il primo controllo dopo l'avvio di una società."
+  },
+  "module": {
+    "title": "Promemoria tenuti dai moduli",
+    "none": "Nessun modulo tiene ancora promemoria propri.",
+    "PAYMENT_REMINDER": {
+      "title": "Solleciti di pagamento",
+      "body": "La scala dei solleciti delle fatture di ogni società, tenuta in Amministrazione: ogni sollecito lo invia una persona, e quelli automatici restano spenti finché il titolare non li attiva per la società."
+    },
+    "other": {
+      "title": "Promemoria di un altro modulo",
+      "body": "Tenuto dal suo modulo: la sua pagina lo mostra e lo cambia."
+    }
+  },
+  "dismiss": "Chiudi",
+  "keysTitle": "Scorciatoie da tastiera",
+  "keys": {
+    "new": "Nuova regola",
+    "views": "Cambia elenco",
+    "save": "Salva la regola (nella sua finestra)",
+    "close": "Chiudi"
+  },
+  "why": {
+    "noManage": "Per aggiungere e cambiare regole serve il permesso di gestire le regole degli avvisi.",
+    "offline": "Offline — cambiala quando torni online.",
+    "reading": "Le regole sono ancora in lettura."
+  }
+}

@@ -105,6 +105,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/home/tasks',
   '/home/notifications',
   '/home/mail-to-sort',
+  // B-W2a-78: Home › Insights › Alerts (SCR-234).
+  '/home/alerts',
   '/records/[type]/[id]',
   '/sales/customers',
   '/sales/customers/[partyId]',
@@ -117,6 +119,11 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   // B-W2a-49: Sales › Pricing › Price lists & contracts (SCR-106) and a price list.
   '/sales/price-lists',
   '/sales/price-lists/[listId]',
+  // B-W2a-77: Sales › After-sales › Returns & repairs (SCR-111), a return and a repair (SCR-112), Sales settings (SCR-235).
+  '/sales/returns',
+  '/sales/returns/[id]',
+  '/sales/returns/repairs/[id]',
+  '/sales/settings',
   '/purchasing/suppliers',
   '/purchasing/suppliers/[partyId]',
   // B-W1-30/31 part 2: Purchase orders (SCR-058) and the PO studio (SCR-059).
@@ -213,6 +220,8 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/admin/roles/[roleId]',
   // B-W2a-36: Security & health (SCR-166).
   '/admin/security',
+  // B-W2a-78: Approvals, automation & AI (SCR-167, W2a part: Reminders & timers).
+  '/admin/automation',
   // B-W0-28 Admin: Documents & numbering, Languages & formats, Connections & API (and a connection), Import & export,
   // Audit log.
   '/admin/documents',

@@ -12,11 +12,15 @@ export const manifest = defineManifest({
   'POST /alerts/acknowledge': { audiences: ['office'], permission: 'alerts.handle', scope: 'record' },
   'GET /alerts/rules': { audiences: ['office'], permission: 'alerts.view', scope: 'record' },
   'POST /alerts/rules': { audiences: ['office'], permission: 'alerts.rules.manage', scope: 'record' },
+  // B-W2a-78: the rule dialog's roles and places (the same place check as the save).
+  'GET /alerts/rules/choices': { audiences: ['office'], permission: 'alerts.rules.manage', scope: 'record' },
   'GET /alerts/rules/:id': { audiences: ['office'], permission: 'alerts.view', scope: 'record' },
   'PUT /alerts/rules/:id': { audiences: ['office'], permission: 'alerts.rules.manage', scope: 'record' },
   'POST /alerts/rules/:id/test': { audiences: ['office'], permission: 'alerts.view', scope: 'record' },
   'GET /alerts/rules/:id/timers': { audiences: ['office'], permission: 'alerts.rules.manage', scope: 'record' },
   'GET /alerts/:id': { audiences: ['office'], permission: 'alerts.view', scope: 'record' },
+  // B-W2a-78: who the alert may be given to (the reader handles it there).
+  'GET /alerts/:id/assignees': { audiences: ['office'], permission: 'alerts.handle', scope: 'record' },
   'POST /alerts/:id/acknowledge': { audiences: ['office'], permission: 'alerts.handle', scope: 'record' },
   'POST /alerts/:id/assign': { audiences: ['office'], permission: 'alerts.handle', scope: 'record' },
   'POST /alerts/:id/snooze': { audiences: ['office'], permission: 'alerts.handle', scope: 'record' },
