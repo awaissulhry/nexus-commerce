@@ -3,6 +3,7 @@ import { CALENDAR_LIMITS } from '@nexus/factory-domain/calendars/rules'
 import { HOLIDAY_SETS, HOLIDAY_YEARS } from '@nexus/factory-domain/calendars/holidays'
 import { PATTERN_CODE, PATTERN_LIMITS, SEGMENT_KINDS } from '@nexus/factory-domain/calendars/patterns'
 import { CALENDAR_SCOPES, DAY_KINDS } from '@nexus/factory-domain/calendars/working-time'
+import { COPY_SKIP_REASONS, MAX_TARGETS } from '@nexus/factory-domain/calendars/copy'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 
 /**
@@ -12,6 +13,12 @@ import { businessDate, defineContract, id, input, instant, output } from '@nexus
  * with their shifts and breaks, and the questions every module asks the same way: working time over days, working
  * minutes between two times, the next working day, a supplier's closed days and the order-by date across them.
  * Every write carries the version it read (days: optional); calendars and patterns are archived, never deleted.
+ *
+ * B-W2b-20 (B-W2a-08 and B-W2a-59 gaps; B-W2b-03's column): one holiday, closure or working day on several calendars
+ * in ONE command (POST /calendars/days: calendars by id, or owners whose ACTIVE calendar takes it — one is made when
+ * the owner has none), the days of one calendar copied onto another (POST /calendars/:id/copy-days: an archived one
+ * into its successor), and a supplier calendar's own time zone (`timeZone`; the supplier questions answer the date at
+ * the supplier and when its order-by day ends there).
  */
 
 export const MASTER_STATUSES = ['ACTIVE', 'ARCHIVED'] as const
@@ -22,6 +29,9 @@ const name = () => z.string().trim().min(1).max(CALENDAR_LIMITS.name)
 const reason = z.string().trim().min(1).max(CALENDAR_LIMITS.reason).optional()
 const weekdays = z.array(z.number().int().min(1).max(7)).min(1).max(7)
 const flag = z.enum(['true', 'false']).optional()
+const timeZone = z.string().trim().min(1).max(64)
+const dayName = () => z.string().trim().min(1).max(CALENDAR_LIMITS.dayName)
+const dayNote = () => z.string().trim().max(CALENDAR_LIMITS.note).nullable().optional()
 
 export const patternRef = output({ id: id(), code: z.string(), name: z.string(), status: z.enum(MASTER_STATUSES) })
 
@@ -39,6 +49,8 @@ export const calendarView = output({
   workingWeekdays: z.array(z.number().int()),
   shiftPattern: patternRef.nullable(),
   status: z.enum(MASTER_STATUSES),
+  /** B-W2b-20: a supplier's own time zone (IANA); null: the company's (Europe/Rome). Only a supplier's calendar has one. */
+  timeZone: z.string().nullable(),
   /** Dated days set on it (every date). */
   exceptions: z.number().int(),
   version: z.number().int(),
@@ -148,6 +160,8 @@ export const createCalendarContract = defineContract({
     name: name().optional(),
     workingWeekdays: weekdays.optional(),
     shiftPatternId: id().nullable().optional(),
+    /** B-W2b-20: a supplier's calendar only — its own time zone (IANA: "Asia/Karachi"); left out or null: Europe/Rome. */
+    timeZone: timeZone.nullable().optional(),
   }),
   response: { 201: output({ calendar: calendarView }) },
 })
@@ -155,7 +169,7 @@ export type CreateCalendarBody = z.infer<typeof createCalendarContract.body>
 
 export const editCalendarContract = defineContract({
   params: input({ calendarId: id() }),
-  body: input({ version, name: name().optional(), workingWeekdays: weekdays.optional(), shiftPatternId: id().nullable().optional(), reason }),
+  body: input({ version, name: name().optional(), workingWeekdays: weekdays.optional(), shiftPatternId: id().nullable().optional(), timeZone: timeZone.nullable().optional(), reason }),
   response: { 200: output({ calendar: calendarView }) },
 })
 export type EditCalendarBody = z.infer<typeof editCalendarContract.body>
@@ -184,6 +198,58 @@ export const setDaysContract = defineContract({
   response: { 200: output({ calendar: calendarView, days: z.array(dayView), replaced: z.number().int() }) },
 })
 export type SetDaysBody = z.infer<typeof setDaysContract.body>
+
+/** B-W2b-20: a calendar by its id (with the version read, optional), or an owner whose ACTIVE calendar takes the days. */
+const daysTarget = z.union([input({ calendarId: id(), version: version.optional() }), input({ scope: z.enum(CALENDAR_SCOPES), ownerId: id() })])
+
+export const setDaysManyContract = defineContract({
+  body: input({
+    /** Each calendar or owner once (an owner without an ACTIVE calendar gets one, its week the calendar above it's). */
+    targets: z.array(daysTarget).min(1).max(MAX_TARGETS),
+    from: businessDate(),
+    to: businessDate().optional(),
+    kind: z.enum(DAY_KINDS),
+    name: dayName(),
+    /** Only on a WORKING day of ours (every target must be allowed to use it). */
+    shiftPatternId: id().nullable().optional(),
+    note: dayNote(),
+    /** Replace the days already set in the range on every target (else they are refused, each named per target). */
+    replace: z.boolean().optional(),
+  }),
+  response: {
+    200: output({
+      /** In the order of the targets. */
+      calendars: z.array(output({ calendar: calendarView, days: z.array(dayView), replaced: z.number().int(), created: z.boolean() })),
+    }),
+  },
+})
+export type SetDaysManyBody = z.infer<typeof setDaysManyContract.body>
+
+export const copyDaysContract = defineContract({
+  params: input({ calendarId: id() }),
+  body: input({
+    version: version.optional(),
+    /** The calendar whose days are copied (an ARCHIVED one too: into its successor). */
+    fromCalendarId: id(),
+    /** Default: today. */
+    from: businessDate().optional(),
+    /** Default: two years and a day from `from` (the longest copy). */
+    to: businessDate().optional(),
+    /** Replace the target's days already set on the copied dates (else they are refused, each named). */
+    replace: z.boolean().optional(),
+  }),
+  response: {
+    200: output({
+      calendar: calendarView,
+      /** The days copied, as now set on the target. */
+      days: z.array(dayView),
+      replaced: z.number().int(),
+      /** The source's days not copied: their shift pattern is archived, another company's or gone (set them by hand). */
+      skipped: z.array(output({ date: businessDate(), name: z.string(), reason: z.enum(COPY_SKIP_REASONS), words: z.string() })),
+    }),
+  },
+})
+export type CopyDaysBody = z.infer<typeof copyDaysContract.body>
 
 export const removeDaysContract = defineContract({
   params: input({ calendarId: id() }),
@@ -324,12 +390,19 @@ const partyRef = output({ id: id(), code: z.string(), name: z.string() })
 const closedDay = output({ date: businessDate(), kind: z.enum(['HOLIDAY', 'CLOSURE']), name: z.string() })
 const closedSpan = output({ from: businessDate(), to: businessDate(), kind: z.enum(['HOLIDAY', 'CLOSURE']), name: z.string(), days: z.number().int() })
 
+/** B-W2b-20: the supplier's time zone (its calendar's own, else Europe/Rome) and the date there now. */
+const supplierClock = {
+  timeZone: z.string(),
+  supplierToday: businessDate(),
+}
+
 export const supplierClosedDaysContract = defineContract({
   querystring: input({ partyId: id(), from: businessDate(), to: businessDate() }),
   response: {
     200: output({
       party: partyRef,
       calendar: output({ id: id(), name: z.string() }).nullable(),
+      ...supplierClock,
       from: businessDate(),
       to: businessDate(),
       /** ISO weekdays it never works in a normal week. */
@@ -346,6 +419,9 @@ export const supplierOrderByContract = defineContract({
     200: output({
       party: partyRef,
       calendar: output({ id: id(), name: z.string() }).nullable(),
+      ...supplierClock,
+      /** B-W2b-20: when the order-by day ends at the supplier (its time zone): the latest moment to place the order there. */
+      orderByEndsAt: instant(),
       needDate: businessDate(),
       leadTimeDays: z.number().int(),
       /** The need date less the lead time, the supplier's closed days not counted. */

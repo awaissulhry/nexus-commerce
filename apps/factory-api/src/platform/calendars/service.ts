@@ -15,6 +15,7 @@ import {
   type WorkingCalendar,
   type WorkingDay,
 } from '@nexus/factory-domain/calendars/working-time'
+import { isTimeZone } from '@nexus/factory-domain/calendars/dates'
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { BUSINESS_TIME_ZONE, businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
@@ -36,6 +37,10 @@ import { BUSINESS_TIME_ZONE, businessDate, type BusinessDate } from '@nexus/fact
  *   supplierCalendarsFor(client, partyIds, window)    suppliers' calendars (null: none, so never closed)
  *   supplierClosedDaysFor(client, partyId, from, to)  a supplier's dated closed days
  *   supplierOrderByFor / supplierArrivalFor           the lead time across a supplier's closed days
+ *
+ * B-W2b-20: a supplier's calendar may have its own time zone (WorkCalendar.timeZone, B-W2b-03; a supplier abroad):
+ * `LoadedSupplierCalendar.timeZone` is it (else Europe/Rome), so a caller can say the date at the supplier and when a
+ * day ends there. The lead-time walks stay date-only (calendar days; the supplier's dated closed days not counted).
  */
 
 type Client = Prisma.TransactionClient
@@ -108,8 +113,10 @@ interface CalendarRow {
   name: string
   workingWeekdays: number[]
   shiftPatternId: string | null
+  /** B-W2b-20: a supplier's own time zone (null: Europe/Rome; ours never have one). */
+  timeZone: string | null
 }
-const CALENDAR = { id: true, scope: true, companyId: true, siteId: true, lineId: true, workCentreId: true, partyId: true, name: true, workingWeekdays: true, shiftPatternId: true } as const satisfies Prisma.WorkCalendarSelect
+const CALENDAR = { id: true, scope: true, companyId: true, siteId: true, lineId: true, workCentreId: true, partyId: true, name: true, workingWeekdays: true, shiftPatternId: true, timeZone: true } as const satisfies Prisma.WorkCalendarSelect
 
 /** The calendars' days in the window and every pattern the calendars and days name, as layers. */
 async function layersOf(client: Client, calendars: readonly CalendarRow[], window: DateWindow): Promise<{ layers: Map<string, CalendarLayer>; patterns: Map<string, Pattern> }> {
@@ -227,7 +234,12 @@ export interface LoadedSupplierCalendar {
   /** Its ACTIVE calendar, or null: it has none (never closed on a date). */
   readonly calendar: WorkingCalendar | null
   readonly calendarRow: { readonly id: string; readonly name: string } | null
+  /** B-W2b-20: the supplier's time zone: its calendar's own, else Europe/Rome (no calendar, or none set). */
+  readonly timeZone: string
 }
+
+/** A supplier calendar's zone: its own when the platform knows it (the guard checked PostgreSQL's list), else Europe/Rome. */
+export const supplierZoneOf = (row: { readonly timeZone: string | null } | null): string => (row?.timeZone && isTimeZone(row.timeZone) ? row.timeZone : BUSINESS_TIME_ZONE)
 
 /** The suppliers' calendars over one window. Unknown parties are left out. */
 export async function supplierCalendarsFor(client: Client, partyIds: readonly string[], window: DateWindow): Promise<Map<string, LoadedSupplierCalendar>> {
@@ -239,11 +251,13 @@ export async function supplierCalendarsFor(client: Client, partyIds: readonly st
   const out = new Map<string, LoadedSupplierCalendar>()
   for (const party of parties) {
     const row = calendars.find((calendar) => calendar.partyId === party.id) ?? null
-    const calendar = row ? workingCalendar({ layers: [layers.get(row.id)!], patterns: new Map(), timeZone: BUSINESS_TIME_ZONE, window, supplier: true }) : null
+    const timeZone = supplierZoneOf(row)
+    const calendar = row ? workingCalendar({ layers: [layers.get(row.id)!], patterns: new Map(), timeZone, window, supplier: true }) : null
     out.set(party.id, {
       party: { id: party.id, code: party.code, name: party.tradeName ?? party.legalName, companyId: party.companyId, roles: party.roles },
       calendar,
       calendarRow: row ? { id: row.id, name: row.name } : null,
+      timeZone,
     })
   }
   return out

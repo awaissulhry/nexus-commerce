@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
-import { READINESS_WORDS } from '@nexus/factory-domain/planning/readiness/readiness'
+import { ARRIVAL_STATES, READINESS_WORDS } from '@nexus/factory-domain/planning/readiness/readiness'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 
 /**
@@ -13,6 +13,20 @@ const quantity = () => z.string()
 const uom = z.enum(UOMS)
 const workOrderRef = output({ id: id(), number: z.string(), status: z.string(), kind: z.string(), dueDate: businessDate().nullable(), startedAt: instant().nullable(), style: output({ id: id(), code: z.string(), name: z.string() }) })
 const materialRef = output({ itemId: id(), itemColourId: id().nullable(), label: z.string(), uom })
+
+/** B-W2b-20: one arrival of a material for a work order (a purchase order line or the firm planned order). */
+export const materialArrival = output({
+  kind: z.enum(['PURCHASE_ORDER', 'FIRM']),
+  purchaseOrderLineId: id().nullable(),
+  purchaseOrderNumber: z.string().nullable(),
+  /** Its purchase order is a DRAFT (not sent to the supplier yet). */
+  draft: z.boolean(),
+  date: businessDate().nullable(),
+  /** For this work order (LATE purchase lines: what the material's plan does not count of them). */
+  quantity: quantity(),
+  /** IN_TIME · OVERDUE (due before today, not received) · LATE (after the need). */
+  state: z.enum(ARRIVAL_STATES),
+})
 
 const materialReadiness = output({
   itemId: id(),
@@ -30,6 +44,10 @@ const materialReadiness = output({
   short: quantity(),
   purchaseOrderLineIds: z.array(id()),
   reason: z.string(),
+  /** B-W2b-20: the first day it is needed (the work order's scheduled start on the planning board, else its order line's date). */
+  neededOn: businessDate().nullable(),
+  /** B-W2b-20: what arrives for it, by date. */
+  arrivals: z.array(materialArrival),
 })
 
 export const workOrderReadiness = output({

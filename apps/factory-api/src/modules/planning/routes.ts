@@ -32,6 +32,9 @@ import { readinessContract, shortagesContract, workOrderReadinessContract } from
 import { readiness, shortages, workOrderReadiness } from './readiness/readiness'
 import { acknowledgeExceptionsContract, getExceptionContract, listExceptionsContract, resolveExceptionContract, snoozeExceptionContract } from './exceptions/contract'
 import { acknowledgeExceptions, getException, listExceptions, resolveException, snoozeException } from './exceptions/exceptions'
+// B-W2b-20: bulk writes of item parameters and lanes.
+import { bulkItemParameters, bulkLanes } from './settings/bulk'
+import { bulkItemParametersContract, bulkLanesContract } from './settings/contract'
 // B-W2a-34: the planning board (backward scheduling, the working plan, publish to the floor, allocation).
 import { allocate, allocationBoard } from './schedule/allocation'
 import { board, workOrderSchedule } from './schedule/board'
@@ -61,6 +64,10 @@ import { moveSlot, placeByDueDate, placeSlot, removeSlot } from './schedule/slot
  * start and why it is late or at risk, the tray, the problems), moves into the site's shared working plan (place, move,
  * remove, place by due date), publishing it to the floor as a numbered version, the published versions, and the
  * allocation of work orders to lines and workshops.
+ *
+ * B-W2b-20 (W2a follow-ups): bulk writes of a site's item parameters (POST /planning/item-parameters/bulk) and lanes
+ * (PATCH /planning/lanes), each ONE command; the other follow-ups are fields of the routes above (stable refusal codes,
+ * per-component readiness, customer and family, lanes without a calendar, exceptions' age in working days).
  */
 export default defineRoutes('planning', manifest, async (app) => {
   app.post('/planning/runs', { schema: runPlanContract }, async (request, reply) => reply.code(201).send(await runPlan(request, request.body, idempotencyKeyFrom(request))))
@@ -78,11 +85,14 @@ export default defineRoutes('planning', manifest, async (app) => {
   app.patch('/planning/settings/:siteId', { schema: editSettingsContract }, async (request) => editSettings(request, request.params.siteId, request.body, idempotencyKeyFrom(request)))
   app.get('/planning/item-parameters', { schema: listItemParametersContract }, async (request) => listItemParameters(request, request.query))
   app.post('/planning/item-parameters', { schema: createItemParametersContract }, async (request, reply) => reply.code(201).send(await createItemParameters(request, request.body, idempotencyKeyFrom(request))))
+  // B-W2b-20: before /:itemPlanningId (a static path).
+  app.post('/planning/item-parameters/bulk', { schema: bulkItemParametersContract }, async (request) => bulkItemParameters(request, request.body, idempotencyKeyFrom(request)))
   app.get('/planning/item-parameters/:itemPlanningId', { schema: getItemParametersContract }, async (request) => getItemParameters(request, request.params.itemPlanningId))
   app.patch('/planning/item-parameters/:itemPlanningId', { schema: editItemParametersContract }, async (request) => editItemParameters(request, request.params.itemPlanningId, request.body, idempotencyKeyFrom(request)))
   app.post('/planning/item-parameters/:itemPlanningId/delete', { schema: deleteItemParametersContract }, async (request) => deleteItemParameters(request, request.params.itemPlanningId, request.body, idempotencyKeyFrom(request)))
   app.get('/planning/reorder-rules', { schema: reorderRulesContract }, async (request) => reorderRules(request, request.query.siteId))
   app.get('/planning/lanes', { schema: lanesContract }, async (request) => listLanes(request, request.query.siteId))
+  app.patch('/planning/lanes', { schema: bulkLanesContract }, async (request) => bulkLanes(request, request.body, idempotencyKeyFrom(request)))
   app.patch('/planning/lines/:lineId/capacity', { schema: editLineCapacityContract }, async (request) => editLineCapacity(request, request.params.lineId, request.body, idempotencyKeyFrom(request)))
   app.patch('/planning/work-centres/:workCentreId/capacity', { schema: editWorkCentreCapacityContract }, async (request) => editWorkCentreCapacity(request, request.params.workCentreId, request.body, idempotencyKeyFrom(request)))
   app.get('/planning/capacity', { schema: capacityContract }, async (request) => capacity(request, request.query))
