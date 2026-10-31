@@ -1791,6 +1791,9 @@
     "people_employees_manage": "Aggiungere, modificare, collegare e importare i dipendenti",
     "people_teams_manage": "Aggiungere, modificare e archiviare le squadre, nominare il capo squadra e spostare le persone",
     "people_loans_manage": "Prestare persone a un'altra linea per ore o giorni",
-    "people_leavers_manage": "Avviare, spuntare e annullare i passi di uscita di una persona"
+    "people_leavers_manage": "Avviare, spuntare e annullare i passi di uscita di una persona",
+    "production_offstandard_view": "Vedere i blocchi di tempo fuori standard e indiretto e i loro conteggi (nessuna persona negli elenchi)",
+    "production_offstandard_codes": "Aggiungere e cambiare i codici di tempo fuori standard e indiretto e le loro regole di paga",
+    "production_offstandard_approve": "Approvare, respingere, riaprire e correggere i blocchi di tempo fuori standard (mai i propri)"
   }
 }
