@@ -12,6 +12,7 @@ import { abilitiesOf, boardLanes, laneQuery, layoutFromAddress, listAddress, lis
 import { newOrderAddress } from '../new/new-model'
 import type { NewOrderDialogModel, OrdersListModel } from './list-model'
 import { OrdersListView } from './view/OrdersListView'
+import { useListMargins } from './margin/use-list-margins'
 
 /**
  * `/w/<company>/sales/orders` (SCR-038): reads the orders of the saved rows view and the search from the address (the
@@ -179,7 +180,10 @@ function OrdersContainer() {
     [list.items, can.price, t, locale],
   )
 
-  const model: OrdersListModel = { prefix, can, today: romeToday(), layout, rows, q, list, lanes, board, asOf, live, updates, notice, newOrder }
+  // B-W2a-72: the Margin % column (margin grain): the margins of the orders on screen.
+  const margins = useListMargins(api, layout === 'board' ? null : list.items, q, session.permissions, asOf)
+
+  const model: OrdersListModel = { prefix, can, today: romeToday(), layout, rows, q, list, lanes, board, asOf, live, updates, notice, newOrder, margins }
 
   return (
     <OrdersListView

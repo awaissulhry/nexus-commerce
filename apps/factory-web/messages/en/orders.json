@@ -162,6 +162,8 @@
     "promised": "Promised",
     "shipped": "Shipped",
     "net": "Net",
+    "margin": "Margin %",
+    "marginHint": "As estimated now",
     "quote": "From quote",
     "more": "More"
   },
@@ -226,6 +228,7 @@
     "shipments": "Shipments",
     "money": "Invoices & payments",
     "documents": "Documents",
+    "margin": "Margin",
     "activity": "Activity",
     "depositOpen": "A deposit is open",
     "changes": "Changes"

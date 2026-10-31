@@ -51,6 +51,7 @@ import {
 } from '../_demo/fixtures'
 import { COMPOSER_EMPTY, type AmendState, type OrderRecordModel } from './record-model'
 import { OrderRecordView } from './view/OrderRecordView'
+import { MARGIN, marginAs } from './margin/fixtures'
 
 /**
  * SCR-039 — the order studio (design sales.orders "Record: Sales order") with made-up data only: every tab, the states
@@ -294,5 +295,11 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'new-missing', label: 'W2a · New order: an address without a customer (start again from the list)', model: draftCase('sales', { header: null, party: { status: 'missing' } }) },
     { id: 'new-error', label: 'W2a · New order: the customer could not be read (Try again)', model: draftCase('sales', { party: { status: 'error', problem: 'problem.read.unavailable' } }) },
     { id: 'new-no-manage', label: 'W2a · Finance · New order held: taking orders is the sales right', model: draftCase('finance', { draft: typedDraft, styles: { [STYLE_ID]: STYLE }, preview: { phase: 'ready', value: MANUAL_PREVIEW, problem: null } }) },
+    // ---- B-W2a-72: the Margin tab (margin grain only; Owner answer S2: sales see %, never cost amounts) ----
+    { id: 'w2a-margin', label: 'W2a · Finance · Margin: quoted → now → so far, where the margin went, by line', model: base('finance', production, { tab: 'margin', margin: marginAs('finance', MARGIN) }), note: 'Quoted 5,160.00 (43.0 %) → material −200.00 → subcontract −60.00 → overhead −80.00 → now 4,820.00 (40.2 %): −340.00.' },
+    { id: 'w2a-margin-sales', label: 'W2a · Sales · Margin: the margin % only — no cost amount, no difference €, no waterfall', model: base('sales', production, { tab: 'margin', margin: marginAs('sales', MARGIN) }) },
+    { id: 'w2a-margin-no-grain', label: 'W2a · Production manager · Margin: no margin grain, said in words', model: base('manager', production, { tab: 'margin', margin: marginAs('manager', null) }) },
+    { id: 'w2a-margin-loading', label: 'W2a · Margin reading', model: base('finance', production, { tab: 'margin', margin: marginAs('finance', { value: null, problem: null }) }) },
+    { id: 'w2a-margin-error', label: "W2a · Margin couldn't load: Try again (the rest of the order stays usable)", model: base('finance', production, { tab: 'margin', margin: marginAs('finance', { value: null, problem: 'problem.unavailable' }) }) },
   ],
 })

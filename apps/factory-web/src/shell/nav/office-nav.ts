@@ -185,6 +185,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/finance/accounting/files',
   '/finance/reports',
   '/finance/reports/print',
+  // B-W2a-72: Costing › Standard vs actual (SCR-154) with its variance report (print), and Margins (SCR-155).
+  '/finance/costing',
+  '/finance/costing/print',
+  '/finance/margins',
   // B-W0-27 Admin: All settings, Companies & sites, Devices & printers, Users, Roles & permissions, and their records.
   '/admin',
   '/admin/companies',
