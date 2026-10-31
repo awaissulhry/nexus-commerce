@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Camera, MoreHorizontal, Plus, TriangleAlert } from 'lucide-react'
 import { Banner, EmptyState, Field, Menu, Modal } from '@nexus/ui/components'
-import { CellSaveMark, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
+import { CellSaveMark, SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { PhotoCapture } from '@nexus/ui/components/PhotoCapture/index'
 import { Button, Input, Select, Spinner, Tag } from '@nexus/ui/primitives'
 import { DEFECT_CLASSES } from '@nexus/factory-domain/quality/final/rules'
@@ -14,7 +14,7 @@ import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { Section } from '../../../_shared/parts'
 import { GarmentZoneMap, zoneWords } from '../../../defects/zones/GarmentZoneMap'
 import type { DefectBody, FinalCell, PickedDefect } from '../../api'
-import { changedLine, defectWords, photosOf, withoutLine, withPicked, type DefectsTabModel } from '../../model'
+import { changedLine, defectKey, defectWords, ncrFromDefectsHeld, photosOf, pickedDefectIds, withoutLine, withPicked, type DefectsTabModel } from '../../model'
 import '../../inspections.css'
 
 export interface DefectsTabActions {
@@ -23,6 +23,9 @@ export interface DefectsTabActions {
   onRetry?: () => void
   onDismiss?: () => void
   onRaiseNcr?: () => void
+  /** B-W2b-17: the lines picked (their keys) and "Create NCR from N defects" (their saved ids). */
+  onSelect?: (keys: readonly string[]) => void
+  onRaiseNcrFrom?: (defectIds: readonly string[]) => void
   onDialog?: (dialog: { kind: 'pick' } | { kind: 'zone'; index: number } | { kind: 'photo'; index: number } | null) => void
 }
 
@@ -43,6 +46,7 @@ export function DefectsTab({
   sampleSize,
   held,
   canRaise,
+  saved,
   dialog,
   actions,
 }: {
@@ -52,17 +56,19 @@ export function DefectsTab({
   /** Why the defects cannot be changed (signed, not yours, no right), or null. */
   held: string | null
   canRaise: boolean
+  /** B-W2b-17: the saved lines' ids by key (`<class>|<code>`): a line not saved yet cannot be picked for an NCR. */
+  saved?: Readonly<Record<string, string>>
   dialog: { kind: 'pick' } | { kind: 'zone'; index: number } | { kind: 'photo'; index: number } | null
   actions?: DefectsTabActions
 }) {
   return (
     <WithMessages namespaces={[PHOTO_KIT_NAMESPACE, 'defects']}>
-      <Tab model={model} cells={cells} sampleSize={sampleSize} held={held} canRaise={canRaise} dialog={dialog} actions={actions} />
+      <Tab model={model} cells={cells} sampleSize={sampleSize} held={held} canRaise={canRaise} saved={saved} dialog={dialog} actions={actions} />
     </WithMessages>
   )
 }
 
-function Tab({ model, cells, sampleSize, held, canRaise, dialog, actions }: Parameters<typeof DefectsTab>[0]) {
+function Tab({ model, cells, sampleSize, held, canRaise, saved = {}, dialog, actions }: Parameters<typeof DefectsTab>[0]) {
   const t = useT('quality')
   const locale = useLocale()
   const editable = held === null
@@ -217,6 +223,14 @@ function Tab({ model, cells, sampleSize, held, canRaise, dialog, actions }: Para
   }, [t, locale, editable, cells])
 
   const raiseHeld = !canRaise ? t('raiseNcr.held.noRight') : null
+  // B-W2b-17 ("Create NCR from N defects", design ins-defects): the picked lines; only saved ones can be picked.
+  const picked = (model.selected ?? []).filter((key) => lines.some((line) => defectKey(line) === key))
+  const fromHeld = ncrFromDefectsHeld(picked, saved, canRaise)
+  const bulk = (
+    <Button size="sm" variant="primary" heldReason={fromHeld ? t(fromHeld) : null} onClick={() => actions?.onRaiseNcrFrom?.(pickedDefectIds(picked, saved))} aria-label={t('defects.ncr.from', { count: picked.length })}>
+      <TriangleAlert size={13} aria-hidden /> <SelectionLabel>{t('defects.ncr.from', { count: picked.length })}</SelectionLabel>
+    </Button>
+  )
   const zoneLine = dialog?.kind === 'zone' ? lines[dialog.index] : undefined
   const photoLine = dialog?.kind === 'photo' ? lines[dialog.index] : undefined
 
@@ -272,9 +286,11 @@ function Tab({ model, cells, sampleSize, held, canRaise, dialog, actions }: Para
           label={t('defects.heading')}
           listKey={null}
           rows={rows}
-          rowId={(row) => `${row.defectClass}|${row.code}`}
+          rowId={(row) => defectKey(row)}
           columns={columns}
           count={t('defects.lines', { count: rows.length })}
+          selection={{ selected: picked, onChange: (next) => actions?.onSelect?.(next), actions: bulk }}
+          isRowSelectable={(row) => (saved[defectKey(row)] !== undefined ? null : t('defects.ncr.held.unsaved'))}
           state={
             lines.length === 0 ? (
               <EmptyState

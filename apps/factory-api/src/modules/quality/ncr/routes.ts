@@ -6,6 +6,9 @@ import { addAction, cancelAction, doneAction, editAction } from './containment'
 import {
   addActionContract,
   addDecisionContract,
+  assignContract,
+  getSettingsContract,
+  saveSettingsContract,
   approveDecisionContract,
   boardContract,
   cancelActionContract,
@@ -33,6 +36,8 @@ import { addDecision, approveDecision, carryOut, editDecision, removeDecision, r
 import { manifest } from './manifest'
 import { cancelNcr, closeNcr, closeNcrHold, editNcr, linkRecord, moveNcr, raiseNcr, registerNcr, unlinkRecord } from './ncr'
 import { listNcrs, ncrBoard, ncrCounts, ncrPrefill, ncrRecord } from './reads'
+import { assignNcrs } from './assign'
+import { getNcrSettings, saveNcrSettings } from './settings'
 
 const flag = (value: 'true' | 'false' | undefined): boolean | undefined => (value === undefined ? undefined : value === 'true')
 
@@ -48,6 +53,10 @@ export default defineRoutes('quality.ncr', manifest, async (app) => {
   app.get('/quality/ncr/counts', { schema: countsContract }, async (request) => ncrCounts(request, request.query))
   app.get('/quality/ncr/board', { schema: boardContract }, async (request) => ncrBoard(request, { ...request.query, overdue: flag(request.query.overdue), waiting: flag(request.query.waiting) }))
   app.get('/quality/ncr/prefill', { schema: prefillContract }, async (request) => ncrPrefill(request, request.query))
+  // B-W2b-17: one owner for the selected NCRs (one command), and the default containment time as a setting.
+  app.post('/quality/ncr/assign', { schema: assignContract }, async (request) => assignNcrs(request, request.body, idempotencyKeyFrom(request)))
+  app.get('/quality/ncr/settings', { schema: getSettingsContract }, async (request) => getNcrSettings(request, request.query))
+  app.put('/quality/ncr/settings', { schema: saveSettingsContract }, async (request) => saveNcrSettings(request, request.body, idempotencyKeyFrom(request)))
   app.post('/quality/ncr', { schema: raiseContract }, async (request, reply) => reply.code(201).send(await raiseNcr(request, request.body, idempotencyKeyFrom(request))))
   app.get('/quality/ncr/:ncrId', { schema: getContract }, async (request) => ncrRecord(request, request.params.ncrId))
   app.patch('/quality/ncr/:ncrId', { schema: editContract }, async (request) => editNcr(request, request.params.ncrId, request.body, idempotencyKeyFrom(request)))

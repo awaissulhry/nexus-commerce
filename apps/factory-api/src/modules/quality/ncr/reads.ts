@@ -10,6 +10,7 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { may, officeOf, recordOf, visibleNcr } from './ncr'
+import { containmentHoursOf } from './settings'
 import { prefillFrom } from './sources'
 import { factsOf, NCR_COLUMNS, ncrSummary, summaryFactsOf, type NcrRow, type Reader } from './store'
 
@@ -173,10 +174,10 @@ export async function ncrRecord(caller: CommandCaller, ncrId: string) {
   return caller.withClient(async (client) => ({ record: await recordOf(client, row, context, serverClock.now()) }))
 }
 
-export async function ncrPrefill(caller: CommandCaller, query: { readonly recordType: NcrFromType; readonly recordId: string }) {
+export async function ncrPrefill(caller: CommandCaller, query: { readonly recordType: NcrFromType; readonly recordId: string; readonly defectIds?: readonly string[] | undefined }) {
   const context = officeOf(caller)
   return caller.withClient(async (client) => {
-    const prefill = await prefillFrom(client, query.recordType, query.recordId)
+    const prefill = await prefillFrom(client, query.recordType, query.recordId, { defectIds: query.defectIds })
     if (!prefill) throw new NotFoundError(`${query.recordType.replace(/([a-z])([A-Z])/g, '$1 $2')} not found.`)
     if (prefill.siteId && prefill.companyId && !may(context, QUALITY_NCR_RAISE, { companyId: prefill.companyId, siteId: prefill.siteId })) throw new ForbiddenError('You raise NCRs only at the sites your role reaches.')
     const files = await client.storedFile.findMany({ where: { recordType: query.recordType, recordId: query.recordId, status: 'AVAILABLE' }, select: { id: true, kind: true, originalName: true }, orderBy: { createdAt: 'asc' }, take: 20 })
@@ -187,8 +188,12 @@ export async function ncrPrefill(caller: CommandCaller, query: { readonly record
         foundOn: prefill.foundOn?.toISOString() ?? null,
         links: prefill.links.map((link) => ({ recordType: link.recordType, recordId: link.recordId, note: link.note })),
         holdIds: [...prefill.holdIds],
+        defectIds: [...prefill.defectIds],
+        titleParts: prefill.titleParts ? { key: prefill.titleParts.key, values: { ...prefill.titleParts.values } } : null,
         files: files.map((file) => ({ id: file.id, kind: file.kind, originalName: file.originalName })),
         existing: existing.map((ncr) => ({ id: ncr.id, number: ncr.number, stage: ncr.stage as NcrStage })),
+        /** B-W2b-17: the company's containment time (hours after it was found; null when the record names no company). */
+        containmentHours: prefill.companyId ? (await containmentHoursOf(client, prefill.companyId)).hours : null,
       },
     }
   })

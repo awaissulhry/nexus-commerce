@@ -68,6 +68,9 @@ export const inspectionOut = output({
   overrideReason: z.string().nullable(),
   inspector: who,
   assigned: assignedOut.nullable(),
+  /** B-W2b-17: by when it is due (the office sets it while OPEN), and whether it is past it. */
+  dueAt: instant().nullable(),
+  overdue: z.boolean(),
   notMakerStatement: z.boolean(),
   decidedAt: instant().nullable(),
   signatureSha256: z.string().nullable(),
@@ -217,6 +220,17 @@ export const benchWorkOrdersContract = defineContract({
           released: z.number().int(),
           /** The OPEN inspection of the work order (the bench continues it), or null. */
           openInspectionId: id().nullable(),
+          /**
+           * B-W2b-17 (B-W2a-67's gap: the bench list says who is assigned): the open inspection's number, due time and assignee —
+           * the caller's own (`mine`), an office person (named for the office only) or another bench inspector (never named).
+           */
+          openInspection: output({
+            id: id(),
+            number: z.string().nullable(),
+            dueAt: instant().nullable(),
+            overdue: z.boolean(),
+            assigned: output({ kind: z.enum(['USER', 'WORKER']), mine: z.boolean(), name: z.string().nullable() }).nullable(),
+          }).nullable(),
           /** Released, in progress or completed with finished garments not yet released. */
           ready: z.boolean(),
         }),
@@ -229,7 +243,7 @@ export const benchWorkOrdersContract = defineContract({
 
 export const openInspectionContract = defineContract({
   /** W2a (B-W2a-67; design qi-new "Inspector (optional)"): the office may assign it at once (never a maker). */
-  body: input({ workOrderId: id(), ...plan, note: note().nullable().optional(), assigneeId: id().nullable().optional(), assigneeWorkerId: id().nullable().optional() }),
+  body: input({ workOrderId: id(), ...plan, note: note().nullable().optional(), assigneeId: id().nullable().optional(), assigneeWorkerId: id().nullable().optional(), /** B-W2b-17: by when it is due (office only). */ dueAt: instant().nullable().optional() }),
   response: { 200: inspectionAnswer, 201: inspectionAnswer },
 })
 
@@ -310,6 +324,8 @@ export const listInspectionsContract = defineContract({
     failedUndecided: flag.optional(),
     /** W2a: assigned to the caller (`me`), or not decided and assigned to nobody (`none`). */
     assigned: z.enum(['me', 'none']).optional(),
+    /** B-W2b-17: open and past its due time. */
+    overdue: flag.optional(),
     limit,
   }),
   response: {
@@ -337,6 +353,9 @@ export const listInspectionsContract = defineContract({
           holdWords: z.string().nullable(),
           /** W2a: who it is assigned to (a worker without a name: names only inside one inspection). */
           assigned: assignedOut.nullable(),
+          /** B-W2b-17: by when it is due, and whether it is past it. */
+          dueAt: instant().nullable(),
+          overdue: z.boolean(),
           /** W2a: the quality holds placed from it (any state) and the NCRs raised from or linked to it (not cancelled). */
           holds: z.number().int(),
           ncrs: z.number().int(),
@@ -517,4 +536,12 @@ export const evidenceContract = defineContract({
       registerEntries: z.array(output({ id: id(), reference: z.string(), kind: z.string(), status: z.string(), risk: z.string(), reportedAt: instant() })),
     }),
   },
+})
+
+// ---- B-W2b-17: by when an inspection is due (design qi-grid inline "Due") --------------------------------------------------
+
+/** Set (or clear) the due time of OPEN inspections, all in one command: every one or none (409 `inspections/<i>`). */
+export const dueContract = defineContract({
+  body: input({ inspections: z.array(input({ id: id(), version })).min(1).max(50), dueAt: instant().nullable() }),
+  response: { 200: output({ inspections: z.array(output({ id: id(), version: z.number().int(), dueAt: instant().nullable(), overdue: z.boolean() })) }) },
 })

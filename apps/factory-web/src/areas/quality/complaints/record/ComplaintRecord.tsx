@@ -17,7 +17,14 @@ import {
   changeComplaint,
   closeComplaint,
   complaintPeople,
+  findGarmentByEvidence,
+  findGarmentByScan,
   getComplaint,
+  linkToComplaint,
+  listNcrOptions,
+  listOrders,
+  listReturns,
+  listShipments,
   listPhotos,
   listSites,
   listStyles,
@@ -26,17 +33,20 @@ import {
   photoAddress,
   raiseNcrFrom,
   registerComplaint,
+  ncrsOfComplaint,
   triageComplaint,
+  unlinkFromComplaint,
   type Complaint,
+  type ComplaintLinkType,
   type ComplaintPeople,
   type ComplaintPatch,
   type SiteOption,
   type StyleOption,
 } from '../api'
-import { complaintsCan, isStale, raisesSafety, refusalKey, romeToday, triageDraftOf, triageProblems } from '../model'
+import { complaintsCan, isStale, linkRefusalKey, linkTypeKey, raisesSafety, refusalKey, romeToday, triageDraftOf, triageProblems } from '../model'
 import type { Notice, PhotoView, TriageModel } from '../view-model'
 import { ComplaintsMessages, useWords } from '../view/parts'
-import { RECORD_TABS, type FactsDraft, type RecordDialog } from './view-model'
+import { RECORD_TABS, type FactsDraft, type LinkOptions, type RecordDialog } from './view-model'
 import { ComplaintRecordView } from './view/ComplaintRecordView'
 
 /**
@@ -56,6 +66,13 @@ export function ComplaintRecord({ complaintId }: { complaintId: string }) {
 }
 
 const WIDE = '(min-width: 1280px)'
+
+/** A link the page refuses before the API (a serial that finds no garment): its words. */
+class LinkProblem extends Error {
+  constructor(readonly key: string) {
+    super(key)
+  }
+}
 const DOCK_KEY = 'fw.complaints.dock'
 
 const factsOf = (complaint: Complaint): FactsDraft => ({
@@ -123,6 +140,9 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
   const [people, setPeople] = useState<{ value: ComplaintPeople | null; problem: string | null } | null>(null)
   const [triage, setTriage] = useState<TriageModel | null>(null)
   const [dockOpen, setDockOpen] = useState(false)
+  // B-W2b-17: Link…'s choices for the type picked, and the NCRs raised from this complaint (their Unlink is held).
+  const [linkOptions, setLinkOptions] = useState<LinkOptions | null>(null)
+  const [raisedFrom, setRaisedFrom] = useState<readonly string[] | null>(null)
   const busy = useRef(false)
   const triageKey = useRef<string | null>(null)
   const quietRef = useRef(false)
@@ -191,6 +211,42 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
       .then(setSites)
       .catch(() => setSites(null))
   }, [api, can.sitesView, complaint, needSites, sites])
+
+  // B-W2b-17: on Linked records, which NCRs were raised from this complaint (read with quality.ncr.view).
+  const ncrCount = complaint?.ncrs.length ?? 0
+  useEffect(() => {
+    if (tab !== 'linked' || !can.ncrView || ncrCount === 0) return
+    let live = true
+    ncrsOfComplaint(api, complaintId)
+      .then((ncrs) => live && setRaisedFrom(ncrs.filter((ncr) => ncr.sourceType === 'Complaint' && ncr.sourceId === complaintId).map((ncr) => ncr.id)))
+      .catch(() => live && setRaisedFrom(null))
+    return () => {
+      live = false
+    }
+  }, [api, can.ncrView, complaintId, ncrCount, tab])
+
+  // B-W2b-17: Link…'s choices once a type is picked: the customer's orders, shipments, returns; the company's open NCRs.
+  const linkType = dialog?.kind === 'link' ? dialog.type : ''
+  useEffect(() => {
+    if (!complaint || linkType === '' || linkType === 'GarmentSerial') return
+    const type: ComplaintLinkType = linkType
+    let live = true
+    setLinkOptions({ type, items: null, problem: null })
+    const read = async () => {
+      if (type === 'Nonconformance') {
+        const linked = new Set(complaint.ncrs.map((ncr) => ncr.id))
+        return (await listNcrOptions(api, complaint.companyId)).filter((ncr) => !linked.has(ncr.id)).map((ncr) => ({ id: ncr.id, label: ncr.number, sub: ncr.title }))
+      }
+      const docs = type === 'SalesOrder' ? await listOrders(api, complaint.party.id) : type === 'Shipment' ? await listShipments(api, complaint.party.id) : await listReturns(api, complaint.party.id)
+      return docs.map((doc) => ({ id: doc.id, label: doc.number }))
+    }
+    read()
+      .then((items) => live && setLinkOptions({ type, items, problem: null }))
+      .catch((error) => live && setLinkOptions({ type, items: null, problem: refusalKey(error) }))
+    return () => {
+      live = false
+    }
+  }, [api, complaint, linkType])
 
   // `?do=ncr|register` (the list's verbs) opens the step once the complaint is read; then the address forgets it.
   const asked = params?.get('do') ?? null
@@ -314,6 +370,34 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
     [load],
   )
 
+  /** B-W2b-17: a link or an unlink, its refusals in the link's own words (a stale version reads the complaint again). */
+  const linkWrite = useCallback(
+    async (step: 'link' | 'unlink', type: ComplaintLinkType, work: () => Promise<{ complaint: Complaint | null; words: Notice['words'] }>) => {
+      if (busy.current) return
+      busy.current = true
+      setDialogBusy(true)
+      setDialogProblem(null)
+      try {
+        const done = await work()
+        if (done.complaint) setComplaint(done.complaint)
+        else await load()
+        setAsOf(new Date().toISOString())
+        setDialog(null)
+        setLinkOptions(null)
+        setChangedAt(null)
+        setNotice({ tone: 'success', words: done.words })
+      } catch (error) {
+        const key = error instanceof LinkProblem ? error.key : linkRefusalKey(error, step, type)
+        if (key === 'refusal.conflict' || key === 'links.refused.gone') await load()
+        setDialogProblem(key)
+      } finally {
+        busy.current = false
+        setDialogBusy(false)
+      }
+    },
+    [load],
+  )
+
   const submitDialog = useCallback(
     (note?: string | null) => {
       if (!complaint || !dialog) return
@@ -333,6 +417,33 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
           const ncr = await raiseNcrFrom(api, complaint.id, { ...(dialog.siteId ? { siteId: dialog.siteId } : {}), ...(dialog.severity ? { severity: dialog.severity } : {}) }, key)
           return { complaint: null, words: { key: 'done.ncr', params: { number: ncr.number } } }
         })
+      } else if (dialog.kind === 'link' && dialog.type !== '') {
+        const type = dialog.type
+        const key = newIdempotencyKey()
+        void linkWrite('link', type, async () => {
+          let recordId = dialog.recordId
+          let label = linkOptions?.items?.find((item) => item.id === recordId)?.label ?? ''
+          if (type === 'GarmentSerial') {
+            // The garment by its serial: the evidence trail's read (quality), else the label scan (production).
+            const look = can.inspectionsView ? findGarmentByEvidence : findGarmentByScan
+            const garment = await look(api, dialog.serial).catch((error: unknown) => {
+              if (refusalKey(error) === 'quality:problem.notFound') return null
+              throw error
+            })
+            if (!garment) throw new LinkProblem('links.refused.garment')
+            recordId = garment.id
+            label = garment.serial
+          }
+          const answer = await linkToComplaint(api, complaint, { recordType: type, recordId }, key)
+          return { complaint: answer.complaint, words: { key: 'links.done.linked', params: { label, type: t(linkTypeKey(type)) } } }
+        })
+      } else if (dialog.kind === 'unlink') {
+        const key = newIdempotencyKey()
+        void linkWrite('unlink', dialog.type, async () => {
+          // The garment is unlinked by name (the facts' serial: the complaint carries no garment id).
+          const answer = dialog.type === 'GarmentSerial' ? await changeComplaint(api, complaint, { serial: null }) : await unlinkFromComplaint(api, complaint, { recordType: dialog.type, recordId: dialog.recordId }, key)
+          return { complaint: answer.complaint, words: { key: 'links.done.unlinked', params: { label: dialog.label } } }
+        })
       } else if (dialog.kind === 'repair') {
         const key = newIdempotencyKey()
         void write(async () => {
@@ -341,7 +452,7 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
         })
       }
     },
-    [api, complaint, dialog, write],
+    [api, can.inspectionsView, complaint, dialog, linkOptions, linkWrite, t, write],
   )
 
   const saveEdit = useCallback(async () => {
@@ -399,7 +510,7 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
 
   return (
     <ComplaintRecordView
-      model={{ prefix, can, tab, complaint, photos, asOf, live, offline, today, notice, changedAt, edit, styles, dialog, dialogBusy, dialogProblem, sites, triage: triageModel, dockOpen, hrefs }}
+      model={{ prefix, can, tab, complaint, photos, asOf, live, offline, today, notice, changedAt, edit, styles, dialog, dialogBusy, dialogProblem, sites, triage: triageModel, dockOpen, hrefs, linkOptions, raisedFrom }}
       panels={panels}
       actions={{
         onTriage: openTriage,

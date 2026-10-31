@@ -1,7 +1,8 @@
 import type { Uom } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { CLASS_RANK, type DefectClass, type QualityStage } from '@nexus/factory-domain/quality/defects/rules'
-import { FROM_DEFAULTS, holdDefaults, type NcrFromType, type NcrSource } from '@nexus/factory-domain/quality/ncr/rules'
+import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { FROM_DEFAULTS, holdDefaults, NCR_PICKED_DEFECTS_LIMIT, type NcrFromType, type NcrSource, type NcrTitleKey, type NcrTitleParts } from '@nexus/factory-domain/quality/ncr/rules'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { readSiteStock } from '../../inventory/issue/store'
 import { readSubjects } from '../holds/store'
@@ -26,6 +27,10 @@ export interface Prefill {
   readonly source: NcrSource
   readonly foundAt: QualityStage
   readonly title: string | null
+  /** B-W2b-17: the title in parts (the screen words it in the reader's language); `title` is its English sentence. */
+  readonly titleParts: NcrTitleParts | null
+  /** B-W2b-17: the inspection's defect lines it was raised from ("Create NCR from N defects"); empty: all of them. */
+  readonly defectIds: readonly string[]
   readonly description: string | null
   readonly foundOn: Date | null
   readonly foundById: string | null
@@ -54,6 +59,8 @@ export interface Prefill {
 type Draft = Partial<Omit<Prefill, 'fromType' | 'fromId' | 'label'>> & { readonly label: string }
 
 const text = (value: Decimal): string => value.toFixed(4)
+/** B-W2b-17: a title in parts. */
+const parts = (key: NcrTitleKey, values: Record<string, string>): NcrTitleParts => ({ key, values })
 const sumOf = (values: readonly Decimal[]): Decimal => values.reduce((sum, value) => sum.plus(value), ZERO)
 
 async function cellOf(db: Reader, workOrderSizeId: string | null) {
@@ -78,26 +85,49 @@ async function onHand(db: Reader, siteId: string, itemId: string, key: { readonl
 
 const worst = (classes: readonly DefectClass[]): DefectClass | null => (classes.length === 0 ? null : [...classes].sort((a, b) => CLASS_RANK[a] - CLASS_RANK[b])[0]!)
 
-const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string) => Promise<Draft | null>>> = Object.freeze({
-  Inspection: async (db, id) => {
+/** What a reader may be asked beyond the record (B-W2b-17: the picked defect lines of an inspection). */
+export interface ReadOptions {
+  readonly defectIds?: readonly string[] | undefined
+}
+
+const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string, options?: ReadOptions) => Promise<Draft | null>>> = Object.freeze({
+  Inspection: async (db, id, options) => {
     const row = await db.inspection.findUnique({
       where: { id },
-      select: { id: true, number: true, companyId: true, siteId: true, workOrderId: true, decidedAt: true, inspectorUserId: true, inspectorWorkerId: true, status: true, note: true, defects: { select: { defectClass: true, code: true, defectCodeId: true, zone: true, quantity: true, workOrderSizeId: true, description: true } } },
+      select: { id: true, number: true, companyId: true, siteId: true, workOrderId: true, decidedAt: true, inspectorUserId: true, inspectorWorkerId: true, status: true, note: true, defects: { select: { id: true, defectClass: true, code: true, defectCodeId: true, zone: true, quantity: true, workOrderSizeId: true, description: true }, orderBy: { id: 'asc' } } },
     })
     if (!row) return null
+    // B-W2b-17 ("Create NCR from N defects", design ins-defects): only the picked lines, when lines are picked.
+    const picked = options?.defectIds ?? []
+    if (picked.length > NCR_PICKED_DEFECTS_LIMIT) throw new ValidationError(`Pick at most ${NCR_PICKED_DEFECTS_LIMIT} defect lines.`, [{ path: 'defectIds', message: `At most ${NCR_PICKED_DEFECTS_LIMIT}.` }])
+    const unknown = picked.filter((defectId) => !row.defects.some((defect) => defect.id === defectId))
+    if (unknown.length > 0) throw new NotFoundError(`${unknown.length === 1 ? 'A picked defect line is' : `${unknown.length} picked defect lines are`} not a line of this inspection: read it again.`)
+    const defects = picked.length > 0 ? row.defects.filter((defect) => picked.includes(defect.id)) : row.defects
     const workOrder = await workOrderOf(db, row.workOrderId)
-    const cells = [...new Set(row.defects.map((defect) => defect.workOrderSizeId).filter((cell): cell is string => cell !== null))]
+    const cells = [...new Set(defects.map((defect) => defect.workOrderSizeId).filter((cell): cell is string => cell !== null))]
     const cell = cells.length === 1 ? await cellOf(db, cells[0]!) : null
-    const severity = worst(row.defects.map((defect) => defect.defectClass as DefectClass))
-    const lead = row.defects.find((defect) => defect.defectClass === severity && defect.defectCodeId) ?? row.defects.find((defect) => defect.defectCodeId) ?? row.defects[0]
-    const pieces = row.defects.reduce((sum, defect) => sum + defect.quantity, 0)
-    const label = `Inspection ${row.number ?? row.id.slice(0, 8)}`
+    const severity = worst(defects.map((defect) => defect.defectClass as DefectClass))
+    const lead = defects.find((defect) => defect.defectClass === severity && defect.defectCodeId) ?? defects.find((defect) => defect.defectCodeId) ?? defects[0]
+    const zones = [...new Set(defects.map((defect) => defect.zone).filter((zone): zone is string => zone !== null))]
+    const pieces = defects.reduce((sum, defect) => sum + defect.quantity, 0)
+    const number = row.number ?? row.id.slice(0, 8)
+    const label = `Inspection ${number}`
+    const leadWords = lead ? lead.description?.trim() || lead.code : null
+    const several = picked.length > 1
+    // The picked lines in the description ("STITCH-SKIP × 2 (CUFF)"), before the inspection's note.
+    const lines = several ? defects.map((defect) => `${defect.code} × ${defect.quantity}${defect.zone ? ` (${defect.zone})` : ''}`).join('; ') : null
     return {
       label,
       companyId: row.companyId,
       siteId: row.siteId,
-      title: lead ? `${lead.description?.trim() || lead.code} at ${label}` : `Failed checks at ${label}`,
-      description: row.note,
+      title: several ? `${defects.length} defects at ${label}` : lead ? `${leadWords} at ${label}` : `Failed checks at ${label}`,
+      titleParts: several
+        ? parts('INSPECTION_DEFECTS', { count: String(defects.length), inspection: number })
+        : lead
+          ? parts('INSPECTION_DEFECT', { defect: lead.code, defectWords: leadWords ?? lead.code, inspection: number, ...(lead.defectCodeId ? { defectCodeId: lead.defectCodeId } : {}) })
+          : parts('INSPECTION_FAILED', { inspection: number }),
+      defectIds: picked.length > 0 ? defects.map((defect) => defect.id) : [],
+      description: [lines, row.note].filter(Boolean).join('\n') || null,
       foundOn: row.decidedAt,
       foundById: row.inspectorUserId,
       foundByWorkerId: row.inspectorUserId ? null : row.inspectorWorkerId,
@@ -105,7 +135,7 @@ const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string) => Promise<
       uom: 'PCS',
       severity,
       defectCodeId: lead?.defectCodeId ?? null,
-      zone: lead?.zone ?? null,
+      zone: zones.length === 1 ? zones[0]! : (lead?.zone ?? null),
       styleId: cell?.styleId ?? workOrder?.styleId ?? null,
       colourwayId: cell?.colourwayId ?? null,
       size: cell?.size ?? null,
@@ -123,6 +153,7 @@ const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string) => Promise<
       companyId: workOrder?.companyId ?? null,
       siteId: row.siteId,
       title: `Rejected bundle ${row.code}`,
+      titleParts: parts('BUNDLE_REJECTED', { bundle: row.code }),
       quantityAffected: text(new Dec(row.quantity)),
       uom: 'PCS',
       styleId: cell?.styleId ?? workOrder?.styleId ?? null,
@@ -145,6 +176,7 @@ const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string) => Promise<
       companyId: workOrder?.companyId ?? null,
       siteId: row.siteId,
       title: `${pieces} ${pieces === 1 ? 'garment' : 'garments'} rejected at ${operation?.name ?? 'an operation'}${row.scrapReason ? ` (${row.scrapReason})` : ''}`,
+      titleParts: parts('SCAN_REJECTED', { count: String(pieces), ...(operation ? { operation: operation.name, operationCode: operation.code } : {}), ...(row.scrapReason ? { reason: row.scrapReason } : {}) }),
       description: row.reason,
       foundOn: row.serverTime,
       quantityAffected: pieces > 0 ? text(new Dec(pieces)) : null,
@@ -159,7 +191,7 @@ const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string) => Promise<
   WorkOrder: async (db, id) => {
     const row = await workOrderOf(db, id)
     if (!row) return null
-    return { label: `Work order ${row.number}`, companyId: row.companyId, siteId: row.siteId, title: `Problem on work order ${row.number}`, uom: 'PCS', styleId: row.styleId, workOrderId: row.id, links: [{ recordType: 'WorkOrder', recordId: row.id, note: null }] }
+    return { label: `Work order ${row.number}`, companyId: row.companyId, siteId: row.siteId, title: `Problem on work order ${row.number}`, titleParts: parts('WORK_ORDER', { workOrder: row.number }), uom: 'PCS', styleId: row.styleId, workOrderId: row.id, links: [{ recordType: 'WorkOrder', recordId: row.id, note: null }] }
   },
   GarmentSerial: async (db, id) => {
     const row = await db.garmentSerial.findUnique({ where: { id }, select: { id: true, serial: true, siteId: true, workOrderId: true, workOrderSizeId: true } })
@@ -171,6 +203,7 @@ const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string) => Promise<
       companyId: workOrder?.companyId ?? null,
       siteId: row.siteId,
       title: `Problem on garment ${row.serial}`,
+      titleParts: parts('GARMENT', { serial: row.serial }),
       quantityAffected: text(new Dec(1)),
       uom: 'PCS',
       styleId: cell?.styleId ?? workOrder?.styleId ?? null,
@@ -191,6 +224,7 @@ const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string) => Promise<
       siteId: lot.siteId,
       foundAt: lot.qualityStatus === 'QUARANTINE' ? 'INCOMING' : 'STOCK',
       title: `Problem with lot ${lot.code}`,
+      titleParts: parts('LOT', { lot: lot.code }),
       quantityAffected: held ? text(held) : null,
       uom: lot.item.baseUom,
       itemId: lot.itemId,
@@ -210,6 +244,7 @@ const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string) => Promise<
       siteId: hide.siteId,
       foundAt: hide.state === 'PARTLY_CUT' ? 'CUTTING' : 'STOCK',
       title: `Problem with hide ${hide.code}`,
+      titleParts: parts('HIDE', { hide: hide.code }),
       description: hide.defects,
       quantityAffected: text(held ?? new Dec(hide.baseArea.toString())),
       uom: lot?.item.baseUom ?? null,
@@ -229,6 +264,7 @@ const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string) => Promise<
       companyId: row.companyId,
       siteId: row.siteId,
       title: `Problem with the delivery of receipt ${row.number}`,
+      titleParts: parts('RECEIPT', { receipt: row.number }),
       foundOn: row.receivedAt,
       itemId: lot?.itemId ?? null,
       lotId: lot?.id ?? null,
@@ -248,6 +284,7 @@ const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string) => Promise<
       companyId: receipt?.companyId ?? null,
       siteId: row.siteId,
       title: `${kind.charAt(0).toUpperCase()}${kind.slice(1)} on receipt ${receipt?.number ?? ''}`.trim(),
+      titleParts: parts('DISCREPANCY', { kind: row.kind, receipt: receipt?.number ?? '' }),
       description: row.note,
       foundOn: receipt?.receivedAt ?? null,
       quantityAffected: row.quantity && row.quantity.gt(0) ? text(new Dec(row.quantity.toString())) : null,
@@ -269,6 +306,7 @@ const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string) => Promise<
       companyId: row.companyId,
       siteId: row.siteId,
       title: `Supplier claim ${row.number}`,
+      titleParts: parts('CLAIM', { claim: row.number }),
       quantityAffected: units.length === 1 && row.lines.length > 0 ? text(sumOf(row.lines.map((line) => new Dec(line.quantity.toString())))) : null,
       uom: units.length === 1 ? units[0]! : null,
       itemId: items.length === 1 ? items[0]! : null,
@@ -297,6 +335,7 @@ const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string) => Promise<
       source: defaults.source,
       foundAt: defaults.foundAt,
       title: about?.title ?? `Goods on hold: ${hold.reasonCode.toLowerCase().replace(/_/g, ' ')}`,
+      titleParts: about?.titleParts ?? parts('HOLD', { reasonCode: hold.reasonCode }),
       description: hold.reasonNote ?? about?.description ?? null,
       foundOn: hold.placedAt,
       foundById: hold.placedById,
@@ -321,6 +360,7 @@ const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string) => Promise<
       companyId: rma.companyId,
       siteId: rma.siteId,
       title: `Returned garments of ${rma.number}`,
+      titleParts: parts('RMA', { rma: rma.number }),
       foundOn: rma.receivedAt,
       quantityAffected: (quantity._sum.quantity ?? 0) > 0 ? text(new Dec(quantity._sum.quantity ?? 0)) : null,
       uom: 'PCS',
@@ -337,6 +377,7 @@ const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string) => Promise<
       companyId: rma?.companyId ?? null,
       siteId: line.siteId,
       title: `Returned: ${line.description}`,
+      titleParts: parts('RETURN_LINE', { description: line.description, rma: rma?.number ?? '' }),
       description: [line.reasonNote, line.conditionNote].filter(Boolean).join(' ') || null,
       foundOn: line.inspectedAt ?? line.receivedAt,
       quantityAffected: text(new Dec(line.quantity)),
@@ -357,6 +398,7 @@ const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string) => Promise<
       companyId: row.companyId,
       siteId: shipment?.siteId ?? null,
       title: `Complaint ${row.number}`,
+      titleParts: parts('COMPLAINT', { complaint: row.number }),
       description: row.description,
       foundOn: row.receivedAt,
       quantityAffected: text(new Dec(1)),
@@ -374,9 +416,10 @@ const READERS: Readonly<Record<NcrFromType, (db: Reader, id: string) => Promise<
 })
 
 /** The prefill of an NCR raised from this record (null: no such record for this caller). */
-export async function prefillFrom(db: Reader, fromType: NcrFromType, fromId: string): Promise<Prefill | null> {
+export async function prefillFrom(db: Reader, fromType: NcrFromType, fromId: string, options: ReadOptions = {}): Promise<Prefill | null> {
   if (!isUuid(fromId)) return null
-  const draft = await READERS[fromType](db, fromId)
+  if ((options.defectIds?.length ?? 0) > 0 && fromType !== 'Inspection') throw new ValidationError('Defect lines are picked on an inspection only.', [{ path: 'defectIds', message: 'Only with an inspection.' }])
+  const draft = await READERS[fromType](db, fromId, options)
   if (!draft) return null
   const defaults = FROM_DEFAULTS[fromType]
   const seen = new Set<string>()
@@ -395,6 +438,8 @@ export async function prefillFrom(db: Reader, fromType: NcrFromType, fromId: str
     source: draft.source ?? defaults.source,
     foundAt: draft.foundAt ?? defaults.foundAt,
     title: draft.title ?? null,
+    titleParts: draft.titleParts ?? null,
+    defectIds: draft.defectIds ?? [],
     description: draft.description ?? null,
     foundOn: draft.foundOn ?? null,
     foundById: draft.foundById ?? null,

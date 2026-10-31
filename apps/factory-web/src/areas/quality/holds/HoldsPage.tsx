@@ -10,7 +10,7 @@ import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { RecordPanels } from '../../../record-panels/RecordPanels'
 import { csvLine, downloadText, isStepUpCancelled, liveMatches, useLive, useStepUp } from '../_shared/hooks'
 import { failedRead, newNcrAddress, problemKey, qualityCan, ready, reading, type Notice, type Read } from '../_shared/model'
-import { editHold, getHold, holdCounts, holdPeople, holdReasons, listHolds, releaseHold, type EditBody, type Hold, type HoldCounts, type HoldDetail, type Person } from './api'
+import { editHold, getHold, getHoldSettings, holdCounts, holdPeople, holdReasons, listHolds, releaseHold, saveHoldSettings, type EditBody, type Hold, type HoldCounts, type HoldDetail, type HoldSettingsAnswer, type Person } from './api'
 import {
   bulkNotice,
   CSV_HEAD,
@@ -25,10 +25,13 @@ import {
   reasonText,
   RELEASE_DRAFT,
   scopeFromAddress,
+  settingsDraftOf,
+  settingsLoosens,
   tabFromAddress,
   viewFromAddress,
   type CellMark,
   type HoldsDialog,
+  type HoldSettingsDraft,
   type PlaceHoldPrefill,
   type RecordTab,
   type ReleaseDraft,
@@ -64,7 +67,7 @@ function HoldsContainer() {
   const pathname = usePathname()
   const params = useSearchParams()
   const t = useT('holds')
-  const q = useT('quality')
+  const qt = useT('quality')
   const locale = useLocale()
   const can = useMemo(() => qualityCan(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
@@ -99,6 +102,17 @@ function HoldsContainer() {
   const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
   const request = useRef<AbortController | null>(null)
   const releaseKeys = useRef<Map<string, string>>(new Map())
+  // B-W2b-17: the number search (sent to the API a moment after the last key), who releases holds.
+  const [search, setSearch] = useState('')
+  const [q, setQ] = useState('')
+  useEffect(() => {
+    const timer = setTimeout(() => setQ(search.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [search])
+  const [settings, setSettings] = useState<Read<HoldSettingsAnswer> | null>(null)
+  const [settingsDraft, setSettingsDraft] = useState<HoldSettingsDraft | null>(null)
+  const settingsKey = useRef<string | null>(null)
+  const companyId = session.company?.id ?? null
   const justPlaced = useRef(false)
   const today = officeToday()
 
@@ -111,7 +125,7 @@ function HoldsContainer() {
     [openId, pathname, router, scope, tab, view],
   )
 
-  const queryKey = JSON.stringify(queryOf(view, scope))
+  const queryKey = JSON.stringify({ ...queryOf(view, scope), q: q || null })
   const load = useCallback(async () => {
     if (!can.holdsView) return
     request.current?.abort()
@@ -193,6 +207,10 @@ function HoldsContainer() {
 
   const live = useLive(
     (change) => {
+      if (change.type === 'quality.hold_rule_changed') {
+        if (openId) void loadDetail()
+        return
+      }
       if (liveMatches(change, LIVE_EVENTS)) {
         setUpdates((count) => count + 1)
         void loadCounts()
@@ -276,7 +294,7 @@ function HoldsContainer() {
         } catch (error) {
           if (isStepUpCancelled(error)) throw error
           releaseKeys.current.delete(id)
-          const words = isApiError(error) ? error.issues.map((issue) => issue.message ?? '').filter(Boolean).join(' ') || error.message : q(problemKey(error))
+          const words = isApiError(error) ? error.issues.map((issue) => issue.message ?? '').filter(Boolean).join(' ') || error.message : qt(problemKey(error))
           refused.push({ code: label(hold), words })
         }
       }
@@ -317,7 +335,7 @@ function HoldsContainer() {
         replace((await editHold(api, id, { version: hold.version, ownerId: owner })).hold)
         done += 1
       } catch (error) {
-        refused.push({ code: label(hold), words: isApiError(error) ? error.message : q(problemKey(error)) })
+        refused.push({ code: label(hold), words: isApiError(error) ? error.message : qt(problemKey(error)) })
       }
     }
     setBusy(false)
@@ -336,9 +354,56 @@ function HoldsContainer() {
     [locale, me, reasons, rows.value, t],
   )
 
+  // ---- B-W2b-17: who releases holds (read when the dialog opens; loosening asks a reason, then the fresh code) ----
+  const loadSettings = useCallback(async () => {
+    setSettings(reading())
+    try {
+      const answer = await getHoldSettings(api, companyId)
+      setSettings(ready(answer))
+      setSettingsDraft(settingsDraftOf(answer.settings))
+    } catch (error) {
+      setSettings(failedRead(problemKey(error)))
+    }
+  }, [api, companyId])
+
+  const saveSettings = useCallback(async () => {
+    const answer = settings?.value
+    if (!answer || !settingsDraft) return
+    const loosens = settingsLoosens(answer.settings, settingsDraft)
+    setBusy(true)
+    setDialogProblem(null)
+    setDialogLines([])
+    settingsKey.current ??= newIdempotencyKey()
+    const key = settingsKey.current
+    try {
+      const saved = await guard('settings.stepUpSentence', () =>
+        saveHoldSettings(api, { companyId, placerMayRelease: settingsDraft.choice, version: answer.settings.version, reason: loosens ? settingsDraft.reason.trim() : null }, key),
+      )
+      settingsKey.current = null
+      setSettings(ready({ settings: saved.settings, mayChange: saved.mayChange }))
+      setDialog(null)
+      setNotice({ key: saved.loosened ? 'settings.savedLoosened' : 'settings.saved', tone: 'success' })
+      void loadDetail()
+    } catch (error) {
+      if (isStepUpCancelled(error)) setDialogProblem('settings.cancelled')
+      else {
+        settingsKey.current = null
+        setDialogProblem(isApiError(error) && error.kind === 'conflict' ? 'settings.conflict' : 'settings.refused')
+        setDialogLines(isApiError(error) ? [error.issues.map((issue) => issue.message ?? '').filter(Boolean).join(' ') || error.message] : [])
+        if (isApiError(error) && error.kind === 'conflict') void loadSettings()
+      }
+    } finally {
+      setBusy(false)
+    }
+  }, [api, companyId, guard, loadDetail, loadSettings, settings, settingsDraft])
+
   const openDialog = (next: HoldsDialog | null) => {
     setDialogProblem(null)
     setDialogLines([])
+    if (next?.kind === 'settings') {
+      settingsKey.current = null
+      void loadSettings()
+    }
     if (next?.kind === 'release') {
       setReleaseDraft(RELEASE_DRAFT)
       // The checks of each hold are read again now: they change with time (a result recorded, an inspection signed).
@@ -397,6 +462,10 @@ function HoldsContainer() {
           busy,
           dialogProblem,
           dialogLines,
+          q: search,
+          settings,
+          settingsDraft,
+          companyName: session.company?.name ?? '',
         }}
         stepUp={stepUp}
         panels={panels}
@@ -434,6 +503,13 @@ function HoldsContainer() {
           onDismissNotice: () => setNotice(null),
           onStepUpSubmit: (code) => void submitStepUp(code),
           onStepUpCancel: cancelStepUp,
+          onSearch: (next) => {
+            setSearch(next)
+            setSelected([])
+          },
+          onSettingsDraft: setSettingsDraft,
+          onSaveSettings: () => void saveSettings(),
+          onRetrySettings: () => void loadSettings(),
         }}
       />
       <PlaceHold

@@ -276,3 +276,49 @@ export function evidenceOf(facts: { readonly serial: string | null; readonly bat
 /** The fields a change names (complaint.changed's `fields`). */
 export const CHANGED_FIELDS = ['customerRef', 'contactId', 'channel', 'receivedAt', 'description', 'salesOrderId', 'shipmentId', 'returnId', 'styleId', 'size', 'serial', 'batchNumber', 'internalNote', 'category', 'severity', 'ownerId', 'answerDueOn'] as const
 export type ChangedField = (typeof CHANGED_FIELDS)[number]
+
+// ---- W2b follow-ups (B-W2b-17) ---------------------------------------------------------------------------------------
+
+/**
+ * Link… / Unlink on a complaint's Linked records (design quality.complaints cmp-links "NCR, CAPA, return, register entry,
+ * shipment, garment"): the complaint's own facts (the order, the shipment, the return it came with, the garment's serial)
+ * and the NCRs that name it (an NcrLink of recordType Complaint). The register entry is opened by the triage (one per
+ * complaint); CAPA comes with W2b-2.
+ */
+export const COMPLAINT_LINK_TYPES = ['SalesOrder', 'Shipment', 'ReturnAuthorisation', 'GarmentSerial', 'Nonconformance'] as const
+export type ComplaintLinkType = (typeof COMPLAINT_LINK_TYPES)[number]
+
+/** The complaint's own column each fact link sets (the NCR link lives on the NCR). */
+export const LINK_FIELDS: Readonly<Record<Exclude<ComplaintLinkType, 'Nonconformance'>, 'salesOrderId' | 'shipmentId' | 'returnId' | 'serial'>> = Object.freeze({
+  SalesOrder: 'salesOrderId',
+  Shipment: 'shipmentId',
+  ReturnAuthorisation: 'returnId',
+  GarmentSerial: 'serial',
+})
+
+/**
+ * Mail in (B-W2a-65's gap; design quality.complaints conn "home (mail to sort) — complaints from e-mail"): the complaint
+ * numbers a mail's subject names, as written by the series ("CMP-2026-0012"), upper-cased, each once, in order. A
+ * number is a run of letters, digits, '-' and '/' with at least one digit, between word boundaries.
+ */
+export function complaintNumbersIn(subject: string | null | undefined, numbers: readonly string[]): string[] {
+  if (!subject) return []
+  const text = subject.toUpperCase()
+  const found: { number: string; at: number }[] = []
+  for (const number of new Set(numbers.map((entry) => entry.toUpperCase()))) {
+    if (!/\d/.test(number)) continue
+    let from = 0
+    for (;;) {
+      const at = text.indexOf(number, from)
+      if (at < 0) break
+      const before = at === 0 ? '' : text[at - 1]!
+      const after = text[at + number.length] ?? ''
+      if (!/[A-Z0-9/-]/.test(before) && !/[A-Z0-9/-]/.test(after)) {
+        found.push({ number, at })
+        break
+      }
+      from = at + 1
+    }
+  }
+  return found.sort((a, b) => a.at - b.at).map((entry) => entry.number)
+}

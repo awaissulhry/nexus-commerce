@@ -84,6 +84,8 @@ export const ACTION_COLUMNS = {
   doneAt: true,
   doneById: true,
   evidenceNote: true,
+  /** B-W2b-17: why it was cancelled (before: "Cancelled: …" in evidenceNote). */
+  cancelReason: true,
   recordType: true,
   recordId: true,
   version: true,
@@ -268,6 +270,8 @@ export async function actionViews(db: Reader, actions: readonly ActionRow[], now
       doneAt: action.doneAt?.toISOString() ?? null,
       doneById: action.doneById,
       evidenceNote: action.evidenceNote,
+      /** B-W2b-17: why it was cancelled; an action cancelled before kept it in evidenceNote ("Cancelled: …"). */
+      cancelReason: action.cancelReason ?? (action.status === 'CANCELLED' && action.evidenceNote?.startsWith('Cancelled: ') ? action.evidenceNote.slice('Cancelled: '.length) : null),
       files: fileCount.get(action.id) ?? 0,
       record: action.recordType && action.recordId ? { type: action.recordType, id: action.recordId } : null,
       hold: hold ? { id: hold.id, status: hold.status, subjectType: hold.subjectType, count: hold.subjectIds.length } : null,

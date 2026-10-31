@@ -307,7 +307,8 @@
       "lots": "No lot is on hold.",
       "all": "Nothing here.",
       "mine": "Nothing is assigned to you.",
-      "failed": "Every failed inspection is decided: a hold or an NCR came from each."
+      "failed": "Every failed inspection is decided: a hold or an NCR came from each.",
+      "overdue": "No open inspection is past its due time."
     },
     "noAccess": {
       "title": "Inspections are not open to your role",
@@ -324,7 +325,8 @@
     "reversed": "Releases taken back",
     "lots": "Lots on hold",
     "mine": "Waiting for me",
-    "failed": "Failed - not decided"
+    "failed": "Failed - not decided",
+    "overdue": "Overdue"
   },
   "tile": {
     "open": "Open",
@@ -338,7 +340,9 @@
     "unknown": "Could not count",
     "atLeast": "{count}+",
     "failed": "Failed - not decided",
-    "failedHint": "No hold or NCR from them yet"
+    "failedHint": "No hold or NCR from them yet",
+    "overdue": "Overdue",
+    "overdueHint": "Open inspections past their due time"
   },
   "col": {
     "inspection": "Inspection",
@@ -360,7 +364,8 @@
     "crVi": "Chromium VI",
     "why": "Why it is held",
     "assigned": "Inspector",
-    "signedBy": "Signed by"
+    "signedBy": "Signed by",
+    "due": "Due"
   },
   "row": {
     "menu": "Actions for {name}",
@@ -400,7 +405,8 @@
     "material": "Material",
     "lotStatus": "Lot status",
     "crVi": "Chromium VI",
-    "why": "Why it is held"
+    "why": "Why it is held",
+    "due": "Due"
   },
   "new": {
     "title": "New final inspection",
@@ -441,7 +447,8 @@
       "accept": "The acceptance numbers are whole numbers from 0.",
       "aql": "An AQL is a percentage with at most three decimals (\"2.5\").",
       "level": "Name the inspection level.",
-      "refused": "The inspection was not opened: the work order or its numbering does not allow it now."
+      "refused": "The inspection was not opened: the work order or its numbering does not allow it now.",
+      "due": "The due time is later than now and at most a year ahead."
     },
     "kind": {
       "label": "What is inspected",
@@ -506,7 +513,10 @@
         "note": "A condition note is at most 1000 characters.",
         "refused": "The inspection of the return was not recorded"
       }
-    }
+    },
+    "due": "Due by",
+    "dueHint": "Optional: by when it should be inspected. The bench list says it.",
+    "dueClear": "No due time"
   },
   "rules": {
     "title": "Quality rules: who releases",
@@ -821,7 +831,15 @@
     "pickNone": "No defect matches.",
     "photoTitle": "Photo of {code}",
     "photoSubtitle": "Mark the defect with an arrow or a circle; the marked photo is kept with the inspection.",
-    "uploading": "Saving the photo…"
+    "uploading": "Saving the photo…",
+    "ncr": {
+      "from_one": "Create NCR from {count} defect",
+      "from_other": "Create NCR from {count} defects",
+      "held": {
+        "none": "Pick the defect lines first.",
+        "unsaved": "This line is not saved yet: wait for “Saved”, then pick it."
+      }
+    }
   },
   "result": {
     "heading": "Result now",
@@ -1146,6 +1164,43 @@
     },
     "problem": {
       "refused": "Nothing was assigned"
+    }
+  },
+  "due": {
+    "none": "No due time",
+    "at": "due {at}",
+    "overdue": "overdue since {at}",
+    "overdueTag": "Overdue",
+    "cellFor": "Due time of {label}",
+    "bulk_one": "Set due date for {count} inspection",
+    "bulk_other": "Set due date for {count} inspections",
+    "title_one": "Set the due date of {count} inspection",
+    "title_other": "Set the due date of {count} inspections",
+    "when": "Due by",
+    "whenHint": "Later than now, at most a year ahead. The bench list says it.",
+    "oneCall": "Every inspection picked takes this time, or none does (one change).",
+    "save_one": "Set for {count} inspection",
+    "save_other": "Set for {count} inspections",
+    "clear_one": "Clear for {count} inspection",
+    "clear_other": "Clear for {count} inspections",
+    "done_one": "The due time of {count} inspection is set.",
+    "done_other": "The due time of {count} inspections is set.",
+    "cleared_one": "The due time of {count} inspection is cleared.",
+    "cleared_other": "The due time of {count} inspections is cleared.",
+    "held": {
+      "noRight": "Setting by when an inspection is due needs quality.inspections.record.",
+      "notOpen": "Only an open inspection has a due time.",
+      "notOpenSome": "Pick open inspections only: a decided or cancelled one has no due time.",
+      "none": "Pick the inspections first.",
+      "tooMany": "At most 50 inspections at once."
+    },
+    "problem": {
+      "invalid": "Pick a date and a time.",
+      "past": "The inspection is due later than now.",
+      "far": "At most a year ahead.",
+      "refused": "The due time was not saved:",
+      "conflict": "Not every inspection can take this due time: nothing was changed.",
+      "unknown": "The due time could not be saved: try again."
     }
   }
 }
