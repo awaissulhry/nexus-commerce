@@ -207,7 +207,7 @@ describe('Columns ▾ quick parts (PLT-165): freeze the first column, the densit
       const items = columnsMenuItems(
         t,
         { answer: null, problem: null, active: null, changed: false, asBuilt: true },
-        { apply: noop, reload: noop, save: noop, update: noop, edit: noop, copy: noop, remove: noop, customise: noop },
+        { apply: noop, reload: noop, save: noop, update: noop, edit: noop, copy: noop, remove: noop, customise: noop, setDefault: noop },
         { density: 'compact', onDensity: noop, first: { label: 'Number', frozen: true }, onFreeze: noop, withheld: [{ label: 'Net', reason: 'needs price rights' }] },
       )
       const ids = items.map((item) => item.id)
