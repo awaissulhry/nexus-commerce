@@ -7,11 +7,14 @@ import {
   ageingContract,
   approveContract,
   bulkApproveContract,
+  correctInterestRateContract,
   editContract,
   getReminderContract,
   letterPdfContract,
+  listInterestRatesContract,
   listRemindersContract,
   prepareContract,
+  recordInterestRateContract,
   putSettingsContract,
   reasonContract,
   reminderCountsContract,
@@ -22,6 +25,7 @@ import {
   statementPdfContract,
   switchContract,
 } from './contract'
+import { correctInterestRate, listInterestRates, recordInterestRate } from './interest-rates'
 import { manifest } from './manifest'
 import { inlineDisposition, letterPreview } from './pdf'
 import { approveMany, approveReminder, cancelReminder, editReminder, getReminder, listReminders, prepareReminder, reminderCounts, sendReminder, skipReminder } from './reminders'
@@ -79,4 +83,11 @@ export default defineRoutes('receivables', manifest, async (app) => {
   app.post('/receivables/reminders/:reminderId/skip', { schema: reasonContract }, async (request) => skipReminder(request, request.params.reminderId, request.body, idempotencyKeyFrom(request)))
 
   app.post('/receivables/reminders/:reminderId/cancel', { schema: reasonContract }, async (request) => cancelReminder(request, request.params.reminderId, request.body, idempotencyKeyFrom(request)))
+
+  // B-W2b-21: the half-year reference rates statutory late-payment interest is computed from (D.Lgs. 231/2002 art. 5).
+  app.get('/receivables/interest-rates', { schema: listInterestRatesContract }, async (request) => listInterestRates(request))
+
+  app.post('/receivables/interest-rates', { schema: recordInterestRateContract }, async (request, reply) => reply.code(201).send(await recordInterestRate(request, request.body, idempotencyKeyFrom(request))))
+
+  app.patch('/receivables/interest-rates/:rateId', { schema: correctInterestRateContract }, async (request) => correctInterestRate(request, request.params.rateId, request.body, idempotencyKeyFrom(request)))
 })

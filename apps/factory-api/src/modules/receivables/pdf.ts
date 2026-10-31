@@ -4,7 +4,7 @@ import type { PostalAddress } from '@nexus/factory-domain/documents/model'
 import { letterDocument } from '@nexus/factory-domain/receivables/documents'
 import type { EffectiveSettings } from '@nexus/factory-domain/receivables/ladder'
 import { daysBetween } from '@nexus/factory-domain/receivables/ledger'
-import { claimLine, claimNow, type OpenInvoice } from '@nexus/factory-domain/receivables/reminders'
+import { claimLinesOf, claimNow, type OpenInvoice } from '@nexus/factory-domain/receivables/reminders'
 import { reminderLanguageOf } from '@nexus/factory-domain/receivables/wording'
 import type { CommandCaller } from '../../core/command'
 import { companyLegalOf } from '../../platform/documents/documents'
@@ -48,13 +48,7 @@ async function letterBytes(caller: CommandCaller, row: ReminderRow, text: { read
   const byId = new Map<string, OpenInvoice>(facts.open.map((invoice) => [invoice.id, invoice]))
   const known = knownReminderOf(row)
   if (claimNow(known, byId, settings.ladder) !== row.amountDue) throw refused('CHANGED')
-  const offset = known.byHand ? null : (settings.ladder.find((step) => step.level === row.level)?.offsetDays ?? null)
-  const lines = row.invoiceIds
-    .map((id) => byId.get(id))
-    .filter((invoice): invoice is OpenInvoice => invoice !== undefined)
-    .map((invoice) => claimLine(invoice, offset, known.preparedOn, { mode: 'NONE', agreedPct: null }))
-    .filter((line) => line !== null)
-    .map((line) => ({ number: line.number, issueDate: line.issueDate, dueDate: line.dueDate, claimed: line.claimed, daysLate: daysBetween(line.dueDate, on) }))
+  const lines = claimLinesOf(known, byId, settings.ladder).map((line) => ({ number: line.number, issueDate: line.issueDate, dueDate: line.dueDate, claimed: line.claimed, daysLate: daysBetween(line.dueDate, on) }))
   const vat = facts.identity?.vatNumber ? (/^[A-Z]{2}/.test(facts.identity.vatNumber) ? facts.identity.vatNumber : `${facts.identity.country}${facts.identity.vatNumber}`) : null
   const composed = letterDocument({
     language: reminderLanguageOf(row.language),

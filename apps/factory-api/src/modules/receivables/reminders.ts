@@ -7,7 +7,7 @@ import type { ApproveBody, BulkApproveBody, EditBody, PrepareBody, ReasonBody, R
 import { stepWords, type EffectiveSettings, type LadderStep } from '@nexus/factory-domain/receivables/ladder'
 import { firstOpenDueDate, instalmentsOf } from '@nexus/factory-domain/receivables/ledger'
 import { RECEIVABLES_REMINDERS_APPROVE, RECEIVABLES_REMINDERS_MANAGE, RECEIVABLES_VIEW } from '@nexus/factory-domain/receivables/permissions'
-import { claimLine, claimNow, HELD_REASONS, reminderByHand, type HeldReason, type OpenInvoice, type PlannedReminder } from '@nexus/factory-domain/receivables/reminders'
+import { claimLinesOf, claimNow, claimOffsetOf, HELD_REASONS, reminderByHand, type HeldReason, type OpenInvoice, type PlannedReminder } from '@nexus/factory-domain/receivables/reminders'
 import { reminderLanguageOf, reminderText } from '@nexus/factory-domain/receivables/wording'
 import type { CommandCaller, CommandTools } from '../../core/command'
 import { actorOf, type OfficeContext, type RequestContext } from '../../core/context'
@@ -19,6 +19,7 @@ import {
   assertMay,
   COMPANY_REF,
   holdsPrice,
+  interestRuleFor,
   invoiceContactsOf,
   knownReminderOf,
   lockCustomer,
@@ -126,6 +127,8 @@ function heldOf(row: ReminderRow, view: ViewContext): HeldReason[] {
   if (!open) return held
   if (view.unplaced.has(key(row.companyId, row.partyId))) held.push('UNPLACED_PAYMENT')
   if (row.invoiceIds.some((id) => view.creditDrafts.has(id))) held.push('CREDIT_NOTE_DRAFT')
+  // B-W2b-21: a deposit paid without a deposit invoice (NONE) waits to be carried onto one of its invoices.
+  if (row.invoiceIds.some((id) => view.open.get(id)?.depositToCarry === true)) held.push('DEPOSIT_TO_CARRY')
   if (claimNow(knownReminderOf(row), view.open, settings?.ladder ?? []) !== row.amountDue) held.push('CHANGED')
   if (row.action === 'EMAIL' && !view.contacts.has(row.partyId)) held.push('NO_CONTACT')
   if (!settings?.remindersEnabled) held.push('SWITCHED_OFF')
@@ -279,7 +282,7 @@ export async function prepareReminder(caller: CommandCaller, body: PrepareBody, 
     const currencies = [...new Set(open.map((invoice) => invoice.currency))]
     if (currencies.length > 1) throw new ValidationError('One reminder asks for one currency.', [{ path: 'body/invoiceIds', message: `Choose the invoices of one currency (${currencies.join(', ')}).` }])
     const reminders = (await remindersOf(tx, scope, open.map((invoice) => invoice.id))).map(knownReminderOf)
-    const planned = reminderByHand(settings.ladder, open, reminders, day, { mode: settings.lateInterestMode, agreedPct: settings.lateInterestAgreedPct })
+    const planned = reminderByHand(settings.ladder, open, reminders, day, await interestRuleFor(tx, settings))
     if (!planned) throw refused('NOTHING_OPEN')
     const blocking = reminders.find((reminder) => (reminder.status === 'PREPARED' || reminder.status === 'APPROVED') && reminder.level === planned.level && reminder.currency === planned.currency)
     if (blocking) throw refused('OPEN_AT_LEVEL', 'reminder/OPEN_AT_LEVEL', `A reminder of this level (${planned.level}) is already waiting for this customer (${blocking.id}): approve, skip or cancel it first.`)
@@ -312,9 +315,7 @@ async function claimOf(tools: Pick<CommandTools, 'tx'>, row: ReminderRow, settin
   const open = await openInvoices(tools.tx, { invoiceIds: row.invoiceIds, asOf })
   const byId = new Map<string, OpenInvoice>(open.map((invoice) => [invoice.id, invoice]))
   const known = knownReminderOf(row)
-  const offset = known.byHand ? null : (settings.ladder.find((step) => step.level === row.level)?.offsetDays ?? null)
-  const lines = row.invoiceIds.map((id) => byId.get(id)).filter((invoice): invoice is OpenInvoice => invoice !== undefined).map((invoice) => claimLine(invoice, offset, known.preparedOn, { mode: 'NONE', agreedPct: null })).filter((line) => line !== null)
-  return { claimed: claimNow(known, byId, settings.ladder), lines, offset, iban: open.find((invoice) => invoice.iban)?.iban ?? null }
+  return { claimed: claimNow(known, byId, settings.ladder), lines: claimLinesOf(known, byId, settings.ladder), offset: claimOffsetOf(known, settings.ladder), iban: open.find((invoice) => invoice.iban)?.iban ?? null }
 }
 
 /** PATCH /receivables/reminders/:id (reminders.manage): the text or language while it waits for approval. */

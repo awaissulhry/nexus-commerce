@@ -1,9 +1,10 @@
 import { toUtcIso } from '@nexus/factory-domain/core/time'
-import { MATCH_SETTINGS, matchWords, sameFacts } from '@nexus/factory-domain/payables/match'
+import { matchWords, sameFacts } from '@nexus/factory-domain/payables/match'
 import { actionProblems, approvalProblems, isTyped, type InvoiceKind, type InvoiceSource, type InvoiceStatus } from '@nexus/factory-domain/payables/rules'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { MatchStatus } from '@nexus/factory-domain/payables/match'
-import { freshMatch } from './matching'
+import { freshMatch, matchSettingsFor } from './matching'
+import { sdiRuleRefusals } from './settings'
 import { dayOf, peopleNames, preparationOf, readLines, readMatches, type InvoiceRow, type LineRow, type Reader } from './store'
 
 /**
@@ -143,6 +144,9 @@ export async function detailOf(db: Reader, invoice: InvoiceRow, viewer: { readon
   const fileOf = (id: string | null) => (id === null ? null : (files.find((file) => file.id === id) ?? null))
   const creditOf = invoice.creditOfId ? await db.supplierInvoice.findUnique({ where: { id: invoice.creditOfId }, select: { id: true, number: true, issueDate: true } }) : null
   const credits = await db.supplierInvoice.findMany({ where: { creditOfId: invoice.id }, select: { id: true, number: true, issueDate: true, status: true }, orderBy: { issueDate: 'asc' } })
+  // B-W2b-21: the file of several invoices it came in (a lotto), and the claim a credit note settles.
+  const sdiFile = invoice.sdiFileId ? await db.supplierInvoiceFile.findUnique({ where: { id: invoice.sdiFileId }, select: { id: true, sdiIdentifier: true, sdiFileName: true, invoiceCount: true, xmlFileId: true } }) : null
+  const claim = invoice.claimId ? await db.supplierClaim.findUnique({ where: { id: invoice.claimId }, select: { id: true, number: true, status: true } }) : null
   const unaccepted = matches.filter((row) => !row.withinTolerance && row.acceptedAt === null).length
   const linesNet = isTyped(invoice.source as InvoiceSource) ? lines.reduce((total, line) => total + line.netAmount, 0) : null
   const { mappedByIds, acceptedByIds } = await preparationOf(db, invoice.id)
@@ -161,13 +165,15 @@ export async function detailOf(db: Reader, invoice: InvoiceRow, viewer: { readon
     netTotal: invoice.netTotal,
     lines: lines.length,
   }
-  const approval = approvalProblems(facts, viewer.userId)
+  // B-W2b-21: the payables settings' SDI rule (LISTED approvers, not the buyer) after the four eyes.
+  const approval = [...approvalProblems(facts, viewer.userId), ...(invoice.status === 'RECEIVED' ? await sdiRuleRefusals(db, invoice, viewer.userId) : [])]
   const held = actionProblems(facts)
+  const settings = await matchSettingsFor(db, invoice.companyId)
 
   const matchViews = []
   for (const row of matches) {
     const line = lines.find((entry) => entry.id === row.invoiceLineId)!
-    const fresh = await freshMatch(db, invoice, line)
+    const fresh = await freshMatch(db, invoice, line, settings)
     const unit = fresh?.goods?.orderLine.uom ?? 'PCS'
     const stored = {
       invoicedQuantity: row.invoicedQuantity.toString(),
@@ -230,11 +236,13 @@ export async function detailOf(db: Reader, invoice: InvoiceRow, viewer: { readon
     paymentTerms: termsOf(invoice.paymentTerms),
     creditOf: creditOf ? { id: creditOf.id, number: creditOf.number, issueDate: dayOf(creditOf.issueDate)! } : null,
     credits: credits.map((row) => ({ id: row.id, number: row.number, issueDate: dayOf(row.issueDate)!, status: row.status as InvoiceStatus })),
+    sdiFile: sdiFile ? { id: sdiFile.id, sdiIdentifier: sdiFile.sdiIdentifier, fileName: sdiFile.sdiFileName, invoiceCount: sdiFile.invoiceCount, bodyIndex: invoice.sdiBodyIndex ?? 1, xmlFileId: sdiFile.xmlFileId } : null,
+    claim: claim ? { id: claim.id, number: claim.number, status: claim.status } : null,
     files: { xml: fileOf(invoice.xmlFileId), pdf: fileOf(invoice.pdfFileId) },
     registeredBy: invoice.createdById === null ? null : person(invoice.createdById),
     lines: await linesOf(db, lines),
     matches: matchViews,
-    tolerance: { basis: MATCH_SETTINGS.basis, quantityTolerancePct: MATCH_SETTINGS.quantityTolerancePct, priceTolerancePct: MATCH_SETTINGS.priceTolerancePct, decided: MATCH_SETTINGS.decided, words: MATCH_SETTINGS.words },
+    tolerance: { basis: settings.basis, quantityTolerancePct: settings.quantityTolerancePct, priceTolerancePct: settings.priceTolerancePct, differenceToleranceAmount: asMoney('cost', settings.differenceToleranceAmount ?? 0), decided: settings.decided, words: settings.words },
     approval: {
       approvedAt: iso(invoice.approvedAt),
       approvedBy: person(invoice.approvedById),

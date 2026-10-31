@@ -26,9 +26,11 @@ import { Dec, type Decimal } from '../tax/decimal'
  * below) what we owe.
  *
  * The billing basis (SCM-131: bill on received or on ordered) and the tolerances are settings the accountant and the
- * buyer agree; there is no payables settings table yet (W2b, or a schema follow-up), so MATCH_SETTINGS says what applies
- * and that it is not decided: received, and an exact match. An order line that names its own area tolerance (leather,
- * PurchaseOrderLine.areaTolerancePct) brings it for the quantity: that was agreed with the supplier on the order.
+ * buyer agree: B-W2b-21 reads them from the company's payables settings (./settings matchSettingsOf); with none set,
+ * MATCH_SETTINGS says what applies and that it is not decided: received, and an exact match. An order line that names its
+ * own area tolerance (leather, PurchaseOrderLine.areaTolerancePct) brings it for the quantity: that was agreed with the
+ * supplier on the order. A difference up to the settings' amount tolerance (minor units) is within whatever the
+ * percentages say (rounding on a long invoice).
  */
 
 export const MATCH_BASES = ['RECEIVED', 'ORDERED'] as const
@@ -38,8 +40,10 @@ export interface MatchSettings {
   readonly basis: MatchBasis
   readonly quantityTolerancePct: string
   readonly priceTolerancePct: string
-  /** False until the accountant and the buyer agree the figures (a setting to come). */
+  /** False until the accountant and the buyer agree the figures (the payables settings hold them). */
   readonly decided: boolean
+  /** B-W2b-21: a difference (what the line asks beyond what is owed) up to this many minor units is within; 0 or absent: none. */
+  readonly differenceToleranceAmount?: number | undefined
   readonly words: { readonly en: string; readonly it: string }
 }
 
@@ -152,7 +156,9 @@ export function matchLine(line: InvoicedLine, facts: GoodsFacts | SubcontractFac
     : facts.piecesBackGood > 0
       ? minorOf(dec(facts.goodValue).dividedBy(facts.piecesBackGood).times(Dec.min(invoiced, available)), currency)
       : 0
-  const within = quantityOk && priceOk
+  const differenceAmount = line.netAmount - owed
+  const amountTolerance = Math.max(0, settings.differenceToleranceAmount ?? 0)
+  const within = (quantityOk && priceOk) || (amountTolerance > 0 && differenceAmount <= amountTolerance)
   const stillComing = !facts.ended && received.lessThan(ordered) && invoiced.lessThanOrEqualTo(Dec.max(0, ordered.minus(billed)).times(dec(1).plus(quantityTolerance.dividedBy(100))))
   return {
     invoicedQuantity: q4(invoiced),
@@ -160,7 +166,7 @@ export function matchLine(line: InvoicedLine, facts: GoodsFacts | SubcontractFac
     orderedQuantity: q4(ordered),
     orderedUnitPrice: p6(orderedPrice),
     invoicedUnitPrice: p6(invoicedPrice),
-    differenceAmount: line.netAmount - owed,
+    differenceAmount,
     quantityTolerancePct: pct(quantityTolerance),
     priceTolerancePct: pct(priceTolerance),
     withinTolerance: within,

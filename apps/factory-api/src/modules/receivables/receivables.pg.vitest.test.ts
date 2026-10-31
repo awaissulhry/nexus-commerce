@@ -346,3 +346,53 @@ describe("the Owner's switch, sending, a letter by hand, skip, the statement e-m
     expect((await call('clerk', 'POST', `/receivables/customers/${ids.P1}/statement/send`, { companyId: ids.companyA })).statusCode).toBe(403)
   })
 })
+
+describe('statutory interest from the half-year reference rates (B-W2b-21; D.Lgs. 231/2002 art. 5)', () => {
+  it('finance records and corrects a half-year rate; the same half-year twice, a wrong day or a role over one company are refused', async () => {
+    const empty = await ok(call('finance', 'GET', '/receivables/interest-rates'))
+    expect(empty).toMatchObject({ rates: [], today: { halfYearStart: '2026-07-01', ratePct: null }, missing: ['2026-07-01'], mayManage: true })
+    expect(empty.today.words).toContain('No reference rate is recorded for the half-year from 1 July 2026')
+    expect(await refusal(call('finance', 'POST', '/receivables/interest-rates', { halfYearStart: '2026-03-01', referenceRatePct: '2.15', addedPointsPct: '8', source: 'Test placeholder' }), 400)).toEqual(['body/halfYearStart'])
+    expect((await call('clerk', 'POST', '/receivables/interest-rates', { halfYearStart: '2026-07-01', referenceRatePct: '2.15', addedPointsPct: '8', source: 'Test placeholder' })).statusCode).toBe(403)
+    expect((await call('companyB', 'GET', '/receivables/interest-rates')).statusCode).toBe(200)
+    const recorded = (await ok(call('finance', 'POST', '/receivables/interest-rates', { halfYearStart: '2026-07-01', referenceRatePct: '2.4', addedPointsPct: '8', source: 'Test placeholder, not the published rate' }), 201)).rate
+    expect(recorded).toMatchObject({ halfYearStart: '2026-07-01', halfYearEnd: '2026-12-31', referenceRatePct: '2.4', addedPointsPct: '8', statutoryRatePct: '10.4', version: 1, createdBy: { id: ids.finance, name: 'Fiona Neri' } })
+    expect(await refusal(call('finance', 'POST', '/receivables/interest-rates', { halfYearStart: '2026-07-01', referenceRatePct: '2.15', addedPointsPct: '8', source: 'Again' }), 409)).toEqual(['body/halfYearStart'])
+    expect(await refusal(call('finance', 'PATCH', `/receivables/interest-rates/${recorded.id}`, { version: 7, referenceRatePct: '2.15' }), 409)).toEqual(['body/version'])
+    const corrected = (await ok(call('finance', 'PATCH', `/receivables/interest-rates/${recorded.id}`, { version: 1, referenceRatePct: '2.15', note: 'Typed again from the notice' }))).rate
+    expect(corrected).toMatchObject({ referenceRatePct: '2.15', statutoryRatePct: '10.15', note: 'Typed again from the notice', version: 2 })
+    const listed = await ok(call('viewer', 'GET', '/receivables/interest-rates'))
+    expect(listed).toMatchObject({ rates: [{ id: recorded.id, statutoryRatePct: '10.15' }], today: { ratePct: '10.15' }, missing: [], mayManage: false })
+    expect((await outbox('interest_rate.recorded')).map((event) => event.payload)).toEqual([{ rateId: recorded.id, halfYearStart: '2026-07-01' }])
+    expect((await outbox('interest_rate.changed')).map((event) => event.payload)).toEqual([{ rateId: recorded.id, halfYearStart: '2026-07-01' }])
+    const audit = await admin<{ action: string }>(`SELECT action FROM "AuditLog" WHERE "tenantId" = $1 AND "recordType" = 'InterestReferenceRate' ORDER BY at, id`, [ids.tenant])
+    expect(audit.map((row) => row.action)).toEqual(['receivables.interestRate', 'receivables.interestRateCorrect'])
+  })
+
+  it('the STATUTORY rule: the settings say the half-year has its rate; a reminder carries 13 days at 10.15 %; without the rate it says interest is due, without an amount', async () => {
+    const ladder = [
+      { offsetDays: -3, action: 'EMAIL', template: 'BEFORE_DUE' },
+      { offsetDays: 7, action: 'EMAIL', template: 'LATE_7' },
+      { offsetDays: 30, action: 'LETTER', template: 'LATE_30' },
+    ]
+    const settings = await ok(call('finance', 'PUT', '/receivables/settings', { companyId: null, version: 3, ladder, lateInterestMode: 'STATUTORY', recoveryChargeAmount: 4000, minimumAmount: null }))
+    expect(settings.interest).toMatchObject({ mode: 'STATUTORY', statutory: { halfYearStart: '2026-07-01', ratePct: '10.15', missing: [] } })
+    // 360.00 open since 27 Nov: 13 days at 10.15 % = 1.30.
+    const prepared = (await ok(call('clerk', 'POST', '/receivables/reminders', { companyId: ids.companyA, partyId: ids.P1, invoiceIds: [SAMPLE()] }), 201)).reminder
+    expect(prepared).toMatchObject({ level: 3, amountDue: 36000, interestAmount: 130 })
+    expect(prepared.text.body).toContain('Interessi di mora (D.Lgs. 231/2002) maturati a oggi: € 1,30')
+    await ok(call('clerk', 'POST', `/receivables/reminders/${prepared.id}/cancel`, { version: prepared.version, reason: 'Test: the next half-year has no rate' }))
+    // In January 2027 the half-year from 1 January has no rate: no amount, the D.Lgs. 231/2002 mention only.
+    clock.at = new Date('2027-01-05T09:00:00.000Z')
+    try {
+      expect((await ok(call('finance', 'GET', `/receivables/settings?companyId=${ids.companyA}`))).interest.statutory).toMatchObject({ halfYearStart: '2027-01-01', ratePct: null, missing: ['2027-01-01'] })
+      const without = (await ok(call('clerk', 'POST', '/receivables/reminders', { companyId: ids.companyA, partyId: ids.P1, invoiceIds: [SAMPLE()] }), 201)).reminder
+      expect(without).toMatchObject({ level: 3, amountDue: 36000, interestAmount: null })
+      expect(without.text.body).toContain('Sulle somme scadute sono dovuti gli interessi di mora ai sensi del D.Lgs. 231/2002.')
+      const [audit] = await admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE "tenantId" = $1 AND "recordType" = 'PaymentReminder' AND "recordId" = $2 AND action = 'receivables.prepare'`, [ids.tenant, without.id])
+      expect(audit!.after.interestMissing).toEqual(['2027-01-01'])
+    } finally {
+      clock.at = new Date('2026-12-10T09:00:00.000Z')
+    }
+  })
+})

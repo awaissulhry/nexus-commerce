@@ -2,7 +2,7 @@ import type { FactoryDatabase } from '@nexus/factory-db'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import type { EffectiveSettings } from '@nexus/factory-domain/receivables/ladder'
-import { PAYMENT_REMINDER_TIMER, planLadder, type LadderPlan, type PlannedReminder } from '@nexus/factory-domain/receivables/reminders'
+import { PAYMENT_REMINDER_TIMER, planLadder, type InterestRule, type LadderPlan, type PlannedReminder } from '@nexus/factory-domain/receivables/reminders'
 import { reminderLanguageOf, reminderText } from '@nexus/factory-domain/receivables/wording'
 import { dueAtOf, parseTimerKey, timerKeyOf, timerPlan, type TimerPlan, type WantedTimer } from '@nexus/factory-domain/timers/rules'
 import { callerFor, type CommandCaller, type CommandTools } from '../../core/command'
@@ -17,6 +17,7 @@ import {
   openInvoices,
   receivablesClock,
   receivablesCommand,
+  interestRuleFor,
   remindersOf,
   settingsFor,
   tenantIdOf,
@@ -52,6 +53,8 @@ import {
 
 interface CustomerFacts {
   readonly settings: EffectiveSettings
+  /** The company's late-payment rule as applied (STATUTORY: with the half-year rates, B-W2b-21). */
+  readonly interest: InterestRule
   readonly invoices: readonly OpenInvoiceRow[]
   readonly reminders: readonly ReminderRow[]
   readonly pending: readonly TimerRow[]
@@ -62,12 +65,13 @@ const TIMER_WHERE = (scope: CustomerScope) => ({ companyId: scope.companyId, par
 
 async function customerFacts(db: Reader, scope: CustomerScope, day: BusinessDate): Promise<CustomerFacts> {
   const settings = await settingsFor(db, scope.companyId)
+  const interest = await interestRuleFor(db, settings)
   const invoices = await openInvoices(db, { companyId: scope.companyId, partyId: scope.partyId, asOf: day })
   const ids = invoices.map((invoice) => invoice.id)
   const reminders = await remindersOf(db, scope, ids)
   const pending = await db.dueTimer.findMany({ where: { ...TIMER_WHERE(scope), status: 'PENDING' }, select: TIMER_COLUMNS })
   const fired = ids.length === 0 ? [] : await db.dueTimer.findMany({ where: { ...TIMER_WHERE(scope), status: 'FIRED', recordId: { in: ids } }, select: TIMER_COLUMNS })
-  return { settings, invoices, reminders, pending, fired }
+  return { settings, interest, invoices, reminders, pending, fired }
 }
 
 const asTimer = (row: TimerRow): WantedTimer => ({ recordType: row.recordType, recordId: row.recordId, timerKey: row.timerKey, dueAt: row.dueAt, fireAt: row.fireAt })
@@ -94,7 +98,7 @@ function customerPlan(facts: CustomerFacts, day: BusinessDate, prepare: boolean)
       invoices: facts.invoices,
       reminders: facts.reminders.map(knownReminderOf),
       minimumAmount: facts.settings.minimumAmount,
-      interest: { mode: facts.settings.lateInterestMode, agreedPct: facts.settings.lateInterestAgreedPct },
+      interest: facts.interest,
       prepare: now,
     })
   let ladder = planOf(prepare)
@@ -180,7 +184,7 @@ export async function insertReminder(tools: CommandTools, scope: CustomerScope, 
     recordType: 'PaymentReminder',
     recordId: id,
     companyId: scope.companyId,
-    after: { partyId: scope.partyId, level: planned.level, action: planned.action, invoiceIds: planned.invoiceIds, oldestDueDate: planned.oldestDueDate, template: text.template, language: text.language, byHand: byId !== null },
+    after: { partyId: scope.partyId, level: planned.level, action: planned.action, invoiceIds: planned.invoiceIds, oldestDueDate: planned.oldestDueDate, template: text.template, language: text.language, byHand: byId !== null, ...(planned.interestMissing ? { interestMissing: planned.interestMissing } : {}) },
   })
   tools.emit({ type: 'payment_reminder.prepared', subject: id, companyId: scope.companyId, payload: { reminderId: id, partyId: scope.partyId, level: planned.level, action: planned.action, invoices: planned.invoiceIds.length, byHand: byId !== null } })
   return id

@@ -3,6 +3,7 @@ import { businessDate, id, input, instant, output } from '../core/contracts'
 import { MAX_ADDRESS_LENGTH, MAX_RECIPIENTS } from '../email/rules'
 import { money } from '../money/marked'
 import { LATE_INTEREST_MODES, MAX_LADDER_STEPS, MAX_OFFSET_DAYS, MIN_OFFSET_DAYS, REMINDER_ACTIONS, SWITCH_BLOCKERS, TEMPLATE_KEY } from './ladder'
+import { RATE_LIMITS, RATE_PATTERN } from './interest'
 import { AGEING_BUCKETS, MOVEMENT_KINDS } from './ledger'
 import { HELD_REASONS, MAX_BULK_REMINDERS, MAX_REMINDER_TEXT, REMINDER_STATUSES } from './reminders'
 import { REMINDER_TEMPLATES } from './wording'
@@ -198,7 +199,12 @@ export const settingsAnswer = output({
   company: settingsView.nullable(),
   tenant: settingsView.nullable(),
   switch: output({ on: z.boolean(), words: z.string(), blockers: z.array(output({ code: z.enum(Object.keys(SWITCH_BLOCKERS) as [keyof typeof SWITCH_BLOCKERS]), words: z.string() })), mayChange: z.boolean() }),
-  interest: output({ mode: z.enum(LATE_INTEREST_MODES), words: z.string() }),
+  interest: output({
+    mode: z.enum(LATE_INTEREST_MODES),
+    words: z.string(),
+    /** B-W2b-21: whether statutory interest has an amount today (the half-year's rate recorded), the half-years without one, in words. */
+    statutory: output({ halfYearStart: businessDate(), ratePct: z.string().nullable(), missing: z.array(businessDate()), words: z.string() }),
+  }),
   wording: output({ toConfirm: z.literal(true), words: z.string(), templates: z.array(output({ key: z.enum(REMINDER_TEMPLATES), words })) }),
   mayManage: z.boolean(),
 })
@@ -315,3 +321,59 @@ export const reminderAnswer = output({ reminder: reminderView })
 
 export const bulkApproveAnswer = output({ reminders: z.array(reminderView) })
 
+
+// ---- the half-year reference rates of statutory interest (B-W2b-21; D.Lgs. 231/2002 art. 5) --------------------------------
+
+const ratePct = (min: number, max: number) => z.string().trim().regex(RATE_PATTERN).refine((value) => Number(value) >= min && Number(value) <= max, `From ${min} to ${max}.`)
+
+export const interestRateParams = input({ rateId: id() })
+
+export const interestRateBody = input({
+  /** 1 January or 1 July. */
+  halfYearStart: businessDate(),
+  /** The reference rate in force on that day, percent a year, as published ("2.15"; −10 to 100). */
+  referenceRatePct: ratePct(RATE_LIMITS.reference.min, RATE_LIMITS.reference.max),
+  /** The points the law adds ("8" for commercial transactions; 0 to 100). */
+  addedPointsPct: ratePct(RATE_LIMITS.points.min, RATE_LIMITS.points.max),
+  /** Where it was published (the Ministry notice in the Gazzetta Ufficiale, the ECB page). */
+  source: text(RATE_LIMITS.source),
+  note: z.string().trim().max(RATE_LIMITS.note).nullable().optional(),
+})
+export type InterestRateBody = z.infer<typeof interestRateBody>
+
+export const interestRatePatchBody = input({
+  version: version(),
+  referenceRatePct: ratePct(RATE_LIMITS.reference.min, RATE_LIMITS.reference.max).optional(),
+  addedPointsPct: ratePct(RATE_LIMITS.points.min, RATE_LIMITS.points.max).optional(),
+  source: text(RATE_LIMITS.source).optional(),
+  note: z.string().trim().max(RATE_LIMITS.note).nullable().optional(),
+})
+export type InterestRatePatchBody = z.infer<typeof interestRatePatchBody>
+
+export const interestRateView = output({
+  id: id(),
+  halfYearStart: businessDate(),
+  halfYearEnd: businessDate(),
+  referenceRatePct: z.string(),
+  addedPointsPct: z.string(),
+  /** The statutory yearly rate of the half-year: the reference rate plus the points. */
+  statutoryRatePct: z.string(),
+  source: z.string(),
+  note: z.string().nullable(),
+  version: z.number().int(),
+  createdAt: instant(),
+  createdBy: personRef.nullable(),
+  updatedAt: instant(),
+})
+
+export const interestRatesAnswer = output({
+  rates: z.array(interestRateView),
+  /** Today's half-year: its statutory rate, or null when not recorded; the half-years without a rate (from the oldest recorded, or today's, to today's). */
+  today: output({ halfYearStart: businessDate(), ratePct: z.string().nullable(), words: z.string() }),
+  missing: z.array(businessDate()),
+  /** The figures are the Ministry's: typed by finance with their source, never assumed. */
+  words: z.string(),
+  mayManage: z.boolean(),
+})
+
+export const interestRateAnswer = output({ rate: interestRateView })
