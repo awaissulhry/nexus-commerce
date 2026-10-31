@@ -9,6 +9,7 @@ import { useLocale } from '../../../../../lib/i18n/provider'
 import { heldPhrase, nextStep, RECORD_TABS, type RecordTab } from '../../model'
 import { CountsMessages, KindTag, RecordFrame, say, scopeText, StatusPill, useWords } from '../../parts'
 import type { CountRecordActions, CountRecordModel } from '../../view-model'
+import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
 import { ApprovalTab } from './ApprovalTab'
 import { DifferencesTab } from './DifferencesTab'
 import { LinesTab } from './LinesTab'
@@ -23,12 +24,13 @@ export type { CountRecordActions, CountRecordModel } from '../../view-model'
  * the expected quantities; ⋯ edit, valued list, cancel) and the tabs: Lines (the expected snapshot against what was
  * counted, typed fast: Enter down, autosave per cell, 0 for not found, ⌘Z takes the last count back), Differences (what
  * differs, by how much, its value with the cost grain, the reason, recounts) and Approval (the steps, the decision, the
- * apply, the year-end sign-off and its frozen valued list). No person's name outside this one record.
+ * apply, the year-end sign-off and its frozen valued list); B-W2b-15: Activity (the count's thread, files and history: the
+ * record panels). No person's name outside this one record.
  */
-export function CountRecordView({ model, actions }: { model: CountRecordModel; actions?: CountRecordActions }) {
+export function CountRecordView({ model, actions, panels }: { model: CountRecordModel; actions?: CountRecordActions; panels?: ReactNode }) {
   return (
     <CountsMessages>
-      <CountRecordBody model={model} actions={actions} />
+      <CountRecordBody model={model} actions={actions} panels={panels} />
     </CountsMessages>
   )
 }
@@ -41,7 +43,7 @@ const STEP_ICON: Record<string, ReactNode> = {
   signOff: <Stamp size={14} aria-hidden />,
 }
 
-function CountRecordBody({ model, actions }: { model: CountRecordModel; actions?: CountRecordActions }) {
+function CountRecordBody({ model, actions, panels }: { model: CountRecordModel; actions?: CountRecordActions; panels?: ReactNode }) {
   const t = useWords()
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -231,6 +233,7 @@ function CountRecordBody({ model, actions }: { model: CountRecordModel; actions?
       {value && model.tab === 'lines' && <LinesTab value={value} model={model} actions={actions} />}
       {value && model.tab === 'differences' && <DifferencesTab value={value} model={model} actions={actions} />}
       {value && model.tab === 'approval' && <ApprovalTab value={value} model={model} actions={actions} />}
+      {value && model.tab === 'activity' && (panels ?? (model.panelsPreview ? <RecordPanelsView model={model.panelsPreview} /> : <p className="fw-cn-hint">{t(model.can.threads ? 'record.noPanels' : 'record.noThreads')}</p>))}
       {value && model.dialog && <RecordDialogs value={value} model={model} actions={actions} />}
     </RecordFrame>
   )

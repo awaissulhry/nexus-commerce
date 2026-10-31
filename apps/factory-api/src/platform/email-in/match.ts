@@ -2,6 +2,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { companyDomainOf, knownSender, replyTokensOf, type SortFacts, type Verdicts } from '@nexus/factory-domain/email-in/rules'
 import type { CommandTx } from '../../core/command'
 import { resolveRecord } from '../threads/records'
+import { complaintOfMail } from './matchers/complaint'
 
 /**
  * What the sorting needs to know about one received mail (plan A1 §3.7 "Matching"; COL-020, COL-022, COL-023), read in
@@ -68,8 +69,11 @@ async function namedThread(tx: CommandTx, row: MailFacts): Promise<SortFacts['th
   return null
 }
 
-/** The facts of one mail, and the suggestion for a person. */
-export async function sortFactsOf(tx: CommandTx, row: MailFacts): Promise<{ facts: SortFacts; suggestion: Suggestion }> {
+/**
+ * The facts of one mail, and the suggestion for a person. B-W2b-17: `record` is the record whose thread a known sender's
+ * mail joins when that is not the party's own (a complaint its subject names, ./matchers/complaint.ts); null: the party's.
+ */
+export async function sortFactsOf(tx: CommandTx, row: MailFacts & { readonly subject?: string | null }): Promise<{ facts: SortFacts; suggestion: Suggestion; record: { readonly type: string; readonly id: string } | null }> {
   const sender = row.fromAddress
   const duplicate = row.emailMessageId !== null && (await tx.message.findFirst({ where: { emailMessageId: row.emailMessageId }, select: { id: true } })) !== null
   const thread = await namedThread(tx, row)
@@ -78,6 +82,7 @@ export async function sortFactsOf(tx: CommandTx, row: MailFacts): Promise<{ fact
   let senderKnown: SortFacts['senderKnown'] = null
   let senderParty: SortFacts['senderParty'] = null
   let suggestion: Suggestion = { senderPartyId: null, senderContactId: null }
+  let record: { readonly type: string; readonly id: string } | null = null
   if (thread) {
     const contact = senderContacts.find((entry) => entry.partyId === thread.partyId)
     if (contact) suggestion = { senderPartyId: contact.partyId, senderContactId: contact.id }
@@ -94,6 +99,12 @@ export async function sortFactsOf(tx: CommandTx, row: MailFacts): Promise<{ fact
       const existing = await tx.thread.findFirst({ where: { recordType: PARTY_RECORD, recordId: partyId }, select: THREAD })
       const resolvable = existing !== null || (await resolveRecord(tx, PARTY_RECORD, partyId)) !== null
       senderParty = { partyId, thread: resolvable ? { id: existing?.id ?? null, status: existing?.status ?? 'OPEN' } : null }
+      // B-W2b-17: an open complaint of this customer that the subject names takes the mail instead of the party's thread.
+      const complaint = await complaintOfMail(tx, { subject: row.subject ?? null, partyId })
+      if (complaint) {
+        record = complaint.record
+        senderParty = { partyId, thread: { id: complaint.thread?.id ?? null, status: complaint.thread?.status ?? 'OPEN' } }
+      }
     }
   }
   if (suggestion.senderPartyId === null && sender !== null && senderContacts.length === 0) {
@@ -104,5 +115,5 @@ export async function sortFactsOf(tx: CommandTx, row: MailFacts): Promise<{ fact
       if (parties.length === 1) suggestion = { senderPartyId: parties[0]!.partyId, senderContactId: null }
     }
   }
-  return { facts: { verdicts: verdictsOf(row), duplicate, thread, senderKnown, senderParty }, suggestion }
+  return { facts: { verdicts: verdictsOf(row), duplicate, thread, senderKnown, senderParty }, suggestion, record }
 }

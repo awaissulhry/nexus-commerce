@@ -4,11 +4,11 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { useT } from '../../../../lib/i18n/provider'
 import { STEP_UP_CLOSED, type StepUpState } from '../../_shared/hooks'
 import { failedRead, ready, reading } from '../../_shared/model'
-import { canFor, inShell, ME, NOW, PREFIX, type RoleCase } from '../../_shared/fixtures'
+import { at, canFor, inShell, ME, NOW, PREFIX, uid, type RoleCase } from '../../_shared/fixtures'
 import { QualityMessages, RecordProblem, RecordSkeleton } from '../../_shared/parts'
 import { ANSWERED, CANCELLED, FAILED, FAILING_BY_COUNTS, FAILING_HARD, FINAL, FINAL_SECOND, FINAL_SERIAL, INSPECTION, INSPECTORS, LIBRARY, PASSED, readOf, RELEASES } from '../demo/fixtures'
-import { answer, changedLine, checklistRows, defectLinesOf, planDraftOf, releaseDraftOf, signDraftOf, withPicked, type DefectsTabModel, type InspectionRecordModel, type RecordDialog, type RecordTab } from '../model'
-import type { DefectBody } from '../api'
+import { answer, changedLine, checklistRows, defectKey, defectLinesOf, planDraftOf, releaseDraftOf, signDraftOf, withPicked, type DefectsTabModel, type InspectionRecordModel, type RecordDialog, type RecordTab } from '../model'
+import type { DefectBody, Inspection } from '../api'
 import { InspectionRecordView } from './view/InspectionRecordView'
 
 /**
@@ -58,6 +58,13 @@ const defectsOf = (lines: readonly DefectBody[], over: Partial<DefectsTabModel> 
 const WITH_DEFECTS = withPicked(withPicked(defectLinesOf(INSPECTION), LIBRARY[1]!), LIBRARY[3]!)
 const defectsCase = (over: Partial<DefectsTabModel> = {}, extra: Partial<InspectionRecordModel> = {}, role: RoleCase = 'owner') =>
   record({ tab: 'defects', defects: defectsOf(WITH_DEFECTS, over), ...extra }, role)
+
+/** B-W2b-17: the inspection with the three lines saved (each with its id: they can be picked for an NCR). */
+const SAVED_DEFECTS: Inspection = {
+  ...INSPECTION,
+  defects: WITH_DEFECTS.map((line, index) => ({ id: uid('7722', index + 1), defectClass: line.defectClass, code: line.code, defectCodeId: line.defectCodeId ?? null, zone: line.zone ?? null, description: null, quantity: line.quantity, workOrderSizeId: line.workOrderSizeId ?? null, note: line.note ?? null })),
+}
+const picksCase = (selected: readonly string[], role: RoleCase = 'owner') => record({ read: readOf(SAVED_DEFECTS), tab: 'defects', defects: defectsOf(WITH_DEFECTS, { selected }) }, role)
 
 const passed = (over: Partial<InspectionRecordModel> = {}, role: RoleCase = 'owner') =>
   record({ read: readOf(PASSED, { workOrder: { id: PASSED.workOrderId, number: 'DEMO-WO-0142', status: 'COMPLETED', batchNumber: 'DEMO-BT-0142' } }), tab: 'decision', releases: ready([{ ...RELEASES[0]!, inspectionId: PASSED.id, number: 'DEMO-WO-0142' }]), ...over }, role)
@@ -113,6 +120,7 @@ function RecordDesign({ model: design }: { model: DesignModel }) {
         onAssign: () => setAssign({ ids: [inspection.id], siteId: inspection.siteId, people: ready(INSPECTORS), value: '', busy: false, problem: null, lines: [] }),
         onAssignValue: (value: string) => setAssign((current) => (current ? { ...current, value } : current)),
         onAssignClose: () => setAssign(null),
+        onPickDefects: (keys: readonly string[]) => setDefects((current) => ({ ...(current ?? defectsOf([])), selected: [...keys] })),
       },
     })
   }
@@ -182,6 +190,13 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'defects-empty', label: 'No defect recorded yet', model: record({ tab: 'defects', defects: defectsOf([], { photos: ready([]) }) }) },
     { id: 'defects-library-failed', label: 'The library could not be read (the list still shows)', model: defectsCase({ library: failedRead('problem.unavailable') }, { dialog: { kind: 'pick' } }) },
     { id: 'defects-signed', label: 'A signed inspection: its defects read only', model: record({ read: readOf(FAILED, { yours: false }), checklist: checklistRows(FAILED), tab: 'defects', defects: defectsOf(changedLine(WITH_DEFECTS, 0, { quantity: 2 })) }) },
+    // ---- B-W2b-17: due in the band; "Create NCR from N defects" (design ins-defects) ----
+    { id: 'w2b-due', label: 'W2b Due in the band: by when the open inspection is due', model: record() },
+    { id: 'w2b-due-overdue', label: 'W2b Overdue in the band: said in words and in the danger tone', model: record({ read: readOf({ ...INSPECTION, dueAt: at(28, 16, 0), overdue: true }) }) },
+    { id: 'w2b-defects-picked', label: 'W2b Defects: 2 lines picked — "Create NCR from 2 defects" (New NCR takes only them)', model: picksCase(WITH_DEFECTS.slice(1, 3).map((line) => defectKey(line))), note: 'The NCR prefill reads only the picked lines: their worst class, the lead defect, their zone and garments.' },
+    { id: 'w2b-defects-none', label: 'W2b Defects: nothing picked — the head "Create NCR…" takes every line', model: picksCase([]) },
+    { id: 'w2b-defects-unsaved', label: 'W2b Defects: a line not saved yet cannot be picked (its box says why)', model: record({ tab: 'defects', defects: defectsOf(WITH_DEFECTS, { selected: [defectKey(WITH_DEFECTS[0]!)] }) }) },
+    { id: 'w2b-defects-no-ncr', label: 'W2b Defects picked by a reader who raises no NCR: held with the reason', model: picksCase(WITH_DEFECTS.slice(1, 3).map((line) => defectKey(line)), 'readOnly') },
     { id: 'assign', label: 'Assign inspector from the band (a maker held with the reason)', model: record({ assign: { ids: [INSPECTION.id], siteId: INSPECTION.siteId, people: ready(INSPECTORS), value: `USER:${INSPECTORS.inspectors[1]!.id}`, busy: false, problem: null, lines: [] } }) },
     { id: 'held-assigned', label: 'Held: assigned to another inspector (they record and sign it)', model: record({ read: readOf({ ...ANSWERED, assigned: { kind: 'USER', userId: 'someone', workerId: null, name: 'Demo Inspector Two' } }, { yours: false }), checklist: checklistRows(ANSWERED) }) },
     { id: 'sign-conditional', label: 'Sign result: Conditional — accepted against a fail by counts, a second person releases', model: record({ read: readOf(FAILING_BY_COUNTS), checklist: checklistRows(FAILING_BY_COUNTS), dialog: { kind: 'sign' }, signDraft: { result: 'PASS', overrideReason: 'Customer concession DEMO-CC-01 in writing.', statement: false, note: '' } }) },

@@ -73,6 +73,11 @@ function Tags({ model }: { model: HoldTagsModel }) {
                 </p>
                 <p className="fw-hd-tag-codes fw-q-code">{hold.subjects.map((subject) => subject.label ?? '—').join(' · ')}</p>
                 <dl className="fw-q-facts">
+                  {/* B-W2b-17: the hold's number, as on its record (HOLD series). */}
+                  <div className="fw-q-fact">
+                    <dt>{t('tag.number')}</dt>
+                    <dd className="fw-q-code">{hold.number ?? '—'}</dd>
+                  </div>
                   <div className="fw-q-fact">
                     <dt>{t('tag.reason')}</dt>
                     <dd>{reasonText(hold, model.reasons, locale)}</dd>
@@ -99,7 +104,7 @@ function Tags({ model }: { model: HoldTagsModel }) {
                   )}
                 </dl>
                 <div className="fw-hd-tag-foot">
-                  <QrCode value={model.addressOf[hold.id] ?? hold.id} code={hold.subjects[0]?.label ?? undefined} label={t('tag.qr', { code: hold.subjects[0]?.label ?? '—' })} size={112} labels={labels} />
+                  <QrCode value={model.addressOf[hold.id] ?? hold.id} code={hold.number ?? hold.subjects[0]?.label ?? undefined} label={t('tag.qr', { code: hold.subjects[0]?.label ?? '—' })} size={112} labels={labels} />
                   <p className="fw-hd-tag-warn">{t('tag.doNotUse')}</p>
                 </div>
               </section>

@@ -32,6 +32,8 @@ export const INSPECTION_COLUMNS = {
   // W2a (B-W2a-67): who it is assigned to before it is decided (an office user or a worker of the site).
   assignedInspectorId: true,
   assignedInspectorWorkerId: true,
+  // B-W2b-17: by when it is due (the office sets it while OPEN; W2b schema wave 2).
+  dueAt: true,
   notMakerStatement: true,
   decidedAt: true,
   signatureSha256: true,

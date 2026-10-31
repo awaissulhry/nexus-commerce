@@ -17,6 +17,8 @@ import { reserve, type ReserveLineInput } from '../reservations/reserve'
 import { demandOpen, orderLinesOf, readDemands, RESERVATION_COLUMNS } from '../reservations/store'
 import { byCutDate, inView, kitOf, MAX_PICK_LISTS, MAX_SHEETS, proposePicks, type KitStatus, type OpenReservation, type PickView, type ProposedPick } from './kit-rules'
 import { pickListView } from './picking'
+// B-W2b-15: the kit record of each work order (its place, the check).
+import { kitViewOf, readKits } from '../kits/store'
 import { readPickHeader, type PickHeader, type Reader } from './store'
 
 /**
@@ -33,8 +35,8 @@ import { readPickHeader, type PickHeader, type Reader } from './store'
  *   GET  /inventory/picking/pick-lists/sheet     inventory.stock.view   the sheets of ?workOrderIds= (1–20)
  *   POST /inventory/picking/pick-lists           inventory.reserve      reserve for each of workOrderIds (1–50)
  *
- * Not built (no schema in W2a): a kit's staging place, a kit marked complete by hand (a kit is COMPLETE when every line
- * is issued in full), substitutes (W2b).
+ * B-W2b-15: each row and sheet carries its kit record (modules/inventory/kits: the staging place, the check by hand, its
+ * version); the kit's status stays the picks' (COMPLETE when every line is issued in full). Not built: substitutes (W2b-5).
  */
 
 const LISTED = ['RELEASED', 'IN_PROGRESS', 'ON_HOLD'] as const
@@ -213,6 +215,7 @@ export async function listPickLists(caller: CommandCaller, query: PickListsQuery
     const siteMap = new Map(sites.map((site) => [site.id, site]))
     const { readiness, plans } = await readinessBySite(db, sites, workOrders)
     const facts = workOrders.length === 0 ? [] : await factsOf(db, workOrders, siteMap)
+    const kits = await readKits(db, workOrders.map((row) => row.id))
     const now = serverClock.now()
     const rows = workOrders
       .map((row, index) => {
@@ -222,7 +225,7 @@ export async function listPickLists(caller: CommandCaller, query: PickListsQuery
           cutDate: fact.cutDate,
           readiness: readinessView(readiness.get(row.id), plans.get(row.siteId)),
           lines: { all: fact.kit.all, picked: fact.kit.picked, short: fact.kit.short },
-          kit: { status: fact.kit.status as KitStatus, location: null },
+          kit: kitViewOf(fact.kit.status as KitStatus, kits.get(row.id)),
           pickList: fact.pickList,
           pickedBy: fact.pickedBy,
           startedAt: fact.startedAt,
@@ -322,6 +325,7 @@ export async function pickListSheets(caller: CommandCaller, query: { readonly wo
     const ordered = ids.map((id) => workOrders.find((row) => row.id === id)!)
     const { readiness, plans } = await readinessBySite(db, sites, ordered)
     const facts = await factsOf(db, ordered, siteMap)
+    const kits = await readKits(db, ids)
     const sheets = []
     for (const [index, header] of headers.entries()) {
       const sheet = await sheetOf(db, context, header)
@@ -331,7 +335,7 @@ export async function pickListSheets(caller: CommandCaller, query: { readonly wo
         workOrder: { ...workOrderView(row, fact.pieces), batchNumber: header.batchNumber, version: header.version, issuable: sheet.workOrder.issuable },
         cutDate: fact.cutDate,
         readiness: readinessView(readiness.get(row.id), plans.get(row.siteId)),
-        kit: { status: fact.kit.status as KitStatus, location: null, all: fact.kit.all, picked: fact.kit.picked, short: fact.kit.short },
+        kit: { ...kitViewOf(fact.kit.status as KitStatus, kits.get(row.id)), all: fact.kit.all, picked: fact.kit.picked, short: fact.kit.short },
         pickList: fact.pickList,
         pickedBy: fact.pickedBy,
         startedAt: fact.startedAt,

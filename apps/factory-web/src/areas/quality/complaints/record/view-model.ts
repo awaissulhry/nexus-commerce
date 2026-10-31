@@ -1,5 +1,5 @@
 import type { LiveState } from '../../_shared/model'
-import type { Complaint, ComplaintSeverity, OfficeChannel, SiteOption, StatusMove, StyleOption } from '../api'
+import type { Complaint, ComplaintLinkType, ComplaintSeverity, OfficeChannel, SiteOption, StatusMove, StyleOption } from '../api'
 import type { ComplaintsCan } from '../model'
 import type { Notice, PhotoView, TriageActions, TriageModel } from '../view-model'
 
@@ -26,6 +26,17 @@ export type RecordDialog =
   | { readonly kind: 'register'; readonly risk: 'NO' | 'ASSESSING' | 'YES' }
   | { readonly kind: 'ncr'; readonly siteId: string; readonly severity: ComplaintSeverity | '' }
   | { readonly kind: 'repair'; readonly siteId: string; readonly received: boolean }
+  // B-W2b-17 (design cmp-links): Link… (what, and which record; a garment by its serial) and Unlink of one linked record.
+  | { readonly kind: 'link'; readonly type: ComplaintLinkType | ''; readonly recordId: string; readonly serial: string }
+  | { readonly kind: 'unlink'; readonly type: ComplaintLinkType; readonly recordId: string; readonly label: string }
+
+/** B-W2b-17: what Link… offers for the type picked (read when the type is picked; null while not read or not readable). */
+export interface LinkOptions {
+  readonly type: ComplaintLinkType
+  readonly items: readonly { readonly id: string; readonly label: string; readonly sub?: string | null }[] | null
+  /** Why the list could not be read (a message key), or null. */
+  readonly problem: string | null
+}
 
 export interface ComplaintRecordModel {
   readonly prefix: string
@@ -53,6 +64,10 @@ export interface ComplaintRecordModel {
   readonly dockOpen: boolean
   /** Where the records it names open (`<type>:<id>` → the company's address: their page once built, else their panels). */
   readonly hrefs: Readonly<Record<string, string>>
+  /** B-W2b-17: Link…'s choices for the type picked. */
+  readonly linkOptions?: LinkOptions | null
+  /** B-W2b-17: the NCRs raised FROM this complaint (they stay linked: their Unlink is held); null while not read. */
+  readonly raisedFrom?: readonly string[] | null
 }
 
 export interface ComplaintRecordActions extends TriageActions {

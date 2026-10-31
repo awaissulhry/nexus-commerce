@@ -67,7 +67,8 @@
       "fix": "Chiedi a un altro ispettore qualità.",
       "name": "Un’altra persona",
       "ok": "Sbloccato da qualcuno diverso da chi lo ha messo.",
-      "open": "Hai messo tu questo blocco: deve sbloccarlo un’altra persona."
+      "open": "Hai messo tu questo blocco: deve sbloccarlo un’altra persona.",
+      "placerMay": "Hai messo tu questo blocco; la tua azienda permette a chi lo mette di sbloccarlo."
     },
     "REINSPECTION": {
       "fix": "Ispeziona di nuovo i capi in Qualità › Ispezioni.",
@@ -96,7 +97,9 @@
     "site": "Sede",
     "source": "Origine",
     "status": "Stato",
-    "subject": "Cosa è bloccato"
+    "subject": "Cosa è bloccato",
+    "number": "Blocco",
+    "held": "In blocco"
   },
   "csv": {
     "ageDays": "Età (giorni)",
@@ -110,7 +113,8 @@
     "reason": "Motivo",
     "records": "Record",
     "site": "Sede",
-    "status": "Stato"
+    "status": "Stato",
+    "number": "Numero"
   },
   "decision": {
     "checks": "Cosa deve essere vero per sbloccarlo",
@@ -126,7 +130,8 @@
       "placed": "Messo da: {who}.",
       "quality": "Solo la qualità sblocca un blocco: tu lo leggi.",
       "rule": "Quattro occhi: chi ha messo il blocco non lo sblocca mai, e nessuno sblocca capi che ha prodotto.",
-      "youMay": "Puoi sbloccare blocchi in questa sede, quando i controlli qui sopra sono soddisfatti."
+      "youMay": "Puoi sbloccare blocchi in questa sede, quando i controlli qui sopra sono soddisfatti.",
+      "rulePlacerMay": "La tua azienda permette a chi mette un blocco di sbloccarlo; nessuno sblocca capi che ha confezionato."
     },
     "whoTitle": "Chi decide"
   },
@@ -173,7 +178,9 @@
       "yes": "Questo blocco"
     },
     "workOrders": "Ordini di lavoro che blocca",
-    "workOrdersHint": "Un ordine di lavoro torna dov’era quando nessun blocco attivo lo nomina più."
+    "workOrdersHint": "Un ordine di lavoro torna dov’era quando nessun blocco attivo lo nomina più.",
+    "number": "Numero",
+    "numberNone": "Messo prima che i blocchi fossero numerati."
   },
   "expected": {
     "none": "Non indicato",
@@ -255,7 +262,9 @@
     "scope": "un record",
     "scopeRecord": "I blocchi di un record",
     "showMore": "Mostra altri",
-    "table": "Blocchi"
+    "table": "Blocchi",
+    "search": "Cerca un numero di blocco…",
+    "noNumber": "Nessun numero di blocco in questa vista contiene «{q}»."
   },
   "move": {
     "asked": "Chiesto il",
@@ -432,7 +441,8 @@
     "raiseNcrHint": "Scarto, rilavorazione e rottamazione si decidono in una NC",
     "release": "Sblocca…",
     "tag": "Stampa cartellino di blocco",
-    "trace": "Traccia in Lotti e tracciabilità"
+    "trace": "Traccia in Lotti e tracciabilità",
+    "copyNumber": "Copia il numero"
   },
   "source": {
     "Certificate": "Certificato sospeso o scaduto",
@@ -474,7 +484,8 @@
     "since": "Dal",
     "title_one": "Cartellino di blocco",
     "title_other": "Cartellini di blocco ({count})",
-    "tooLong": "Troppo lungo per un codice"
+    "tooLong": "Troppo lungo per un codice",
+    "number": "Numero"
   },
   "tile": {
     "mine": "In attesa della mia decisione",
@@ -516,5 +527,53 @@
     "IN_PROGRESS": "In corso",
     "ON_HOLD": "Bloccato",
     "RELEASED": "Rilasciato"
+  },
+  "number": {
+    "none": "Messo prima che i blocchi fossero numerati: non ha numero."
+  },
+  "settings": {
+    "menu": "Chi sblocca i blocchi…",
+    "title": "Chi sblocca i blocchi",
+    "subtitle": "Per {company}",
+    "inForce": {
+      "title": "In vigore: {rule}",
+      "placerMay": "anche chi ha messo il blocco può sbloccarlo",
+      "someoneElse": "lo sblocca una persona diversa da chi l'ha messo"
+    },
+    "source": {
+      "COMPANY": "Impostato per questa azienda.",
+      "TENANT": "Impostato per tutte le aziende.",
+      "DEFAULT": "La regola standard: non è impostato nulla."
+    },
+    "savedAt": "Salvato il {at}.",
+    "question": "Chi può sbloccare un blocco?",
+    "choice": {
+      "someoneElse": "Lo sblocca un'altra persona",
+      "someoneElseHint": "Quattro occhi: chi mette un blocco non lo sblocca mai (la regola standard).",
+      "placerMay": "Anche chi l'ha messo può sbloccarlo",
+      "placerMayHint": "Per un piccolo gruppo in cui una sola persona della qualità mette e toglie i blocchi. Gli altri controlli restano: chi ha confezionato, il Cr VI, la nuova ispezione.",
+      "follow": "Segui la regola di tutte le aziende",
+      "followHint": "Questa azienda non ha una regola propria."
+    },
+    "makerStays": "Qualunque sia la scelta, nessuno sblocca capi che ha confezionato, e lo sblocco resta una firma elettronica con un codice nuovo.",
+    "reason": "Perché",
+    "reasonHint": "Permettere a chi mette un blocco di sbloccarlo è una regola meno severa: di' perché (almeno 3 caratteri). Il codice è chiesto al salvataggio.",
+    "tightens": "Una regola più severa: non servono motivo né codice.",
+    "save": "Salva",
+    "saveLoosen": "Salva la regola meno severa",
+    "held": {
+      "reading": "Lettura della regola…",
+      "noRight": "Per cambiare chi sblocca i blocchi serve quality.settings.manage per questa azienda: chiedi al titolare.",
+      "busy": "Salvataggio…",
+      "nothing": "Non è cambiato ancora nulla.",
+      "reason": "Prima di' perché (almeno 3 caratteri)."
+    },
+    "failed": "Non è stato possibile leggere la regola",
+    "stepUpSentence": "Permettere a chi mette un blocco di sbloccarlo è una regola meno severa: confermalo con un codice nuovo.",
+    "saved": "Chi sblocca i blocchi è salvato.",
+    "savedLoosened": "Salvato: ora anche chi mette un blocco può sbloccarlo.",
+    "cancelled": "Non è stato salvato nulla: il codice non è stato dato.",
+    "conflict": "Qualcuno ha cambiato la regola nel frattempo: è stata riletta.",
+    "refused": "La regola non è stata salvata:"
   }
 }

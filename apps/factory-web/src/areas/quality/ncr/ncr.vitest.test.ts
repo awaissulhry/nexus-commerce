@@ -3,7 +3,7 @@ import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { GARMENT_ZONES } from '@nexus/factory-domain/quality/defects/rules'
-import { CONTAINMENT_KINDS, NCR_FROM_TYPES, NCR_LINK_TYPES, NCR_SOURCES, NCR_STAGES, STAGE_CHECKS } from '@nexus/factory-domain/quality/ncr/rules'
+import { CONTAINMENT_KINDS, NCR_FROM_TYPES, NCR_LINK_TYPES, NCR_SOURCES, NCR_STAGES, NCR_TITLE_KEYS, STAGE_CHECKS } from '@nexus/factory-domain/quality/ncr/rules'
 import { QUALITY_STAGES, DEFECT_CLASSES } from '@nexus/factory-domain/quality/defects/rules'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { createApiClient } from '../../../lib/api/client'
@@ -15,14 +15,22 @@ import { I18nProvider } from '../../../lib/i18n/provider'
 import { LIST_PAGES, recordAddress } from '../../../lib/records/record-links'
 import { permissionCheck } from '../../../lib/session/session'
 import { OFFICE_PAGES, officeNavFor } from '../../../shell/nav/office-nav'
-import { editNcr, moveNcr, raiseNcr } from './api'
-import { LANES, RECORD, RECORD_OPEN, RECORD_READY, ROWS } from './demo/fixtures'
+import { assignNcrs, editNcr, getNcrSettings, moveNcr, ncrPrefill, raiseNcr, saveNcrSettings } from './api'
+import { CONTAINMENT_SETTINGS, LANES, PREFILL_BUNDLE, PREFILL_DEFECTS, RECORD, RECORD_OPEN, RECORD_READY, ROWS } from './demo/fixtures'
 import { designScreen as listScreen } from './list/fixtures'
 import { newHeldKey } from './list/view/NewNcrDialog'
 import { draftOf, EMPTY_DRAFT } from './list/view-model'
 import {
+  assignRefusalKey,
+  assignRefusals,
   bandHeld,
   checkSay,
+  containmentDraftOf,
+  containmentHoursOf,
+  containmentSaveHeld,
+  containmentSpan,
+  defectIdsOf,
+  titleWords,
   decidedOf,
   decisionHeld,
   factsOfRecord,
@@ -80,6 +88,17 @@ describe('ncr: the address and the rows', () => {
     expect(ncrAddressText(from)).toBe(`?new=1&from=Inspection&id=${ROWS[0]!.id}`)
     expect(ncrAddressOf(params('new=1&from=drop table&id=1')).from).toBeNull()
     expect(newNcrAddress('/w/DEMO', { recordType: 'Lot', recordId: ROWS[1]!.id })).toBe(`/w/DEMO/quality/ncr?new=1&from=Lot&id=${ROWS[1]!.id}`)
+  })
+
+  it('B-W2b-17: picked defect lines ride on the address of New NCR from an inspection only', () => {
+    const [a, b] = [ROWS[0]!.id, ROWS[1]!.id]
+    const picked = ncrAddressOf(params(`new=1&from=Inspection&id=${RECORD.ncr.id}&defects=${a},${b},${a},nope`))
+    expect(picked.defects).toEqual([a, b])
+    expect(ncrAddressText(picked)).toBe(`?new=1&from=Inspection&id=${RECORD.ncr.id}&defects=${a}%2C${b}`)
+    expect(ncrAddressOf(params(`new=1&from=Lot&id=${RECORD.ncr.id}&defects=${a}`)).defects).toEqual([])
+    expect(ncrAddressOf(params('view=open')).defects).toEqual([])
+    expect(newNcrAddress('/w/DEMO', { recordType: 'Inspection', recordId: RECORD.ncr.id }, [a])).toContain(`defects=${a}`)
+    expect(defectIdsOf(Array.from({ length: 60 }, (_, index) => `0190f0e2-5399-7000-8000-${String(index).padStart(12, '0')}`).join(','))).toHaveLength(50)
   })
 
   it('every saved row is one of the API filters', () => {
@@ -186,7 +205,7 @@ describe('ncr: words from the facts, never the API English', () => {
 describe('ncr: New NCR', () => {
   it('Create is held with its reason until the NCR can be made', () => {
     const can = { raise: true }
-    const dialog = { kind: 'new' as const, draft: EMPTY_DRAFT, from: null, defects: [], busy: false, notice: null }
+    const dialog = { kind: 'new' as const, draft: EMPTY_DRAFT, from: null, defects: [], containment: null, busy: false, notice: null }
     expect(newHeldKey(dialog, { raise: false })).toBe('new.heldRaise')
     expect(newHeldKey(dialog, can)).toBe('new.heldSite')
     expect(newHeldKey({ ...dialog, draft: { ...EMPTY_DRAFT, siteId: 's' } }, can)).toBe('new.heldTitle')
@@ -196,13 +215,119 @@ describe('ncr: New NCR', () => {
     expect(newHeldKey({ ...dialog, from: { recordType: 'Lot', recordId: 'x', prefill: null, problem: null } }, can)).toBe('new.heldReading')
   })
 
+  it('B-W2b-17: a prefill with title parts leaves the title to the reader\'s words; picked lines and the containment time', () => {
+    expect(draftOf(PREFILL_DEFECTS, EMPTY_DRAFT).title).toBe('')
+    expect(draftOf(PREFILL_DEFECTS, EMPTY_DRAFT, 'Due difetti').title).toBe('Due difetti')
+    expect(draftOf(PREFILL_DEFECTS, { ...EMPTY_DRAFT, title: 'Typed first' }, 'Due difetti').title).toBe('Typed first')
+    expect(draftOf(PREFILL_DEFECTS, EMPTY_DRAFT)).toMatchObject({ quantityAffected: '5', zone: '' })
+    const dialog = listScreen.cases.find((item) => item.id === 'w2b-new-from-defects')!.model.model.dialog as { from: { prefill: { defectIds: string[] } } }
+    expect(dialog.from.prefill.defectIds).toHaveLength(2)
+  })
+
   it('a prefill fills what the record says', () => {
     const draft = draftOf({ ...(listScreen.cases.find((item) => item.id === 'new-from')!.model.model.dialog as { from: { prefill: Parameters<typeof draftOf>[0] } }).from.prefill }, EMPTY_DRAFT)
     expect(draft).toMatchObject({ title: 'Open seam at the left shoulder', quantityAffected: '13', severity: 'MAJOR', zone: 'SHOULDER_L', source: 'INSPECTION', foundAt: 'FINAL' })
   })
 })
 
+describe('ncr: B-W2b-17 words (titles in parts, the containment time, refused owners)', () => {
+  it('every title key has words in both languages, plurals by count, no key or placeholder left', () => {
+    const SAMPLE: Record<string, string> = { defect: 'SEAM-OPEN', defectWords: 'Cucitura aperta', inspection: 'INS-DEMO-0412', count: '2', operation: 'Attaccatura manica', operationCode: 'OP-30', reason: 'BROKEN', bundle: 'DEMO-BN-0031', workOrder: 'WO-DEMO-0150', serial: 'DEMO-SN-000412', lot: 'DEMO-LOT-0007', hide: 'DEMO-H-0031', receipt: 'GR-DEMO-0004', kind: 'WRONG_COLOUR', claim: 'CLM-DEMO-0003', reasonCode: 'SUSPECT', rma: 'RMA-DEMO-0002', description: 'Giacca Demo', complaint: 'CMP-DEMO-0004' }
+    for (const locale of LOCALES) {
+      const tr = createTranslator(locale, messagesFor(locale, ['ncr']).ncr!)
+      for (const key of NCR_TITLE_KEYS) {
+        const text = titleWords(tr, { key, values: SAMPLE })!
+        expect(text, `${locale} ${key}`).not.toMatch(/title\.|\{[a-zA-Z]+\}/)
+        expect(text.length, `${locale} ${key}`).toBeGreaterThan(5)
+      }
+      expect(titleWords(tr, { key: 'SCAN_REJECTED', values: { count: '1' } })).not.toMatch(/\{|title\./)
+      expect(titleWords(tr, { key: 'DISCREPANCY', values: { kind: 'SHORT', receipt: 'GR-1' } })).not.toContain('SHORT')
+      expect(titleWords(tr, { key: 'DISCREPANCY', values: { kind: 'NEW_KIND', receipt: 'GR-1' } })).toContain('NEW_KIND')
+    }
+    const it = createTranslator('it', messagesFor('it', ['ncr']).ncr!)
+    expect(titleWords(it, PREFILL_BUNDLE.titleParts)).toBe('Pacco DEMO-BN-0031 scartato')
+    expect(titleWords(it, PREFILL_DEFECTS.titleParts)).toBe("2 difetti all'ispezione INS-DEMO-0412")
+    expect(titleWords(it, { key: 'INSPECTION_DEFECT', values: { defect: 'SEAM', defectWords: 'Open seam', inspection: 'INS-1', defectCodeId: 'd1' } }, () => 'Cucitura aperta')).toBe("Cucitura aperta all'ispezione INS-1")
+    expect(titleWords(it, null)).toBeNull()
+  })
+
+  it('the containment time in words, its draft and why Save is held', () => {
+    expect(containmentSpan(24)).toEqual({ key: 'containmentTime.days', params: { count: 1 } })
+    expect(containmentSpan(36)).toEqual({ key: 'containmentTime.hours', params: { count: 36 } })
+    expect(containmentSpan(8)).toEqual({ key: 'containmentTime.hours', params: { count: 8 } })
+    const settings = CONTAINMENT_SETTINGS.settings
+    expect(containmentDraftOf(settings)).toEqual({ follow: false, hours: '48' })
+    expect(containmentDraftOf({ ...settings, own: null, inForce: { hours: 24, source: 'TENANT' } })).toEqual({ follow: true, hours: '24' })
+    expect(containmentHoursOf({ follow: true, hours: 'x' })).toBeNull()
+    expect(containmentHoursOf({ follow: false, hours: '8' })).toBe(8)
+    expect(containmentHoursOf({ follow: false, hours: '721' })).toBeUndefined()
+    expect(containmentHoursOf({ follow: false, hours: '0' })).toBeUndefined()
+    expect(containmentSaveHeld({ mayChange: false, settings, draft: { follow: false, hours: '8' } })).toBe('containmentTime.heldNoRight')
+    expect(containmentSaveHeld({ mayChange: true, settings: null, draft: { follow: false, hours: '8' } })).toBe('containmentTime.heldReading')
+    expect(containmentSaveHeld({ mayChange: true, settings, draft: { follow: false, hours: '8' }, offline: true })).toBe('containmentTime.heldOffline')
+    expect(containmentSaveHeld({ mayChange: true, settings, draft: { follow: false, hours: '900' } })).toBe('containmentTime.heldHours')
+    expect(containmentSaveHeld({ mayChange: true, settings, draft: { follow: false, hours: '48' } })).toBe('containmentTime.heldSame')
+    expect(containmentSaveHeld({ mayChange: true, settings, draft: { follow: false, hours: '8' } })).toBeNull()
+    expect(containmentSaveHeld({ mayChange: true, settings, draft: { follow: true, hours: '48' } })).toBeNull()
+    for (const locale of LOCALES) {
+      const tr = createTranslator(locale, messagesFor(locale, ['ncr']).ncr!)
+      for (const hours of [1, 8, 24, 48, 720]) expect(sayWith(tr, locale, containmentSpan(hours))).not.toMatch(/containmentTime|\{/)
+      for (const key of ['heldNoRight', 'heldReading', 'heldOffline', 'heldHours', 'heldSame', 'source.COMPANY', 'source.TENANT', 'source.DEFAULT']) expect(tr(`containmentTime.${key}`)).not.toBe(`containmentTime.${key}`)
+    }
+  })
+
+  it('a refused bulk owner: each NCR by its number and why, in our words', () => {
+    expect(assignRefusalKey('NCR-1 changed since it was read: read the list again.')).toBe('assign.refused.stale')
+    expect(assignRefusalKey('NCR-1: assigning an owner needs quality.ncr.manage at its site.')).toBe('assign.refused.noRight')
+    expect(assignRefusalKey('NCR-1: The NCR is closed: it never changes.')).toBe('assign.refused.frozen')
+    expect(assignRefusalKey('NCR not found.')).toBe('assign.refused.notFound')
+    expect(assignRefusalKey('Something new')).toBe('assign.refused.other')
+    // The API's codes win over the sentence (B-W2b-17: `ncrs/<i>/<CODE>`).
+    expect(assignRefusalKey('Something new', 'CLOSED')).toBe('assign.refused.frozen')
+    const picked = [ROWS[0]!, ROWS[1]!, ROWS[2]!]
+    expect(assignRefusals([{ path: 'ncrs/0/NO_RIGHT', message: 'x' }], picked)).toEqual([{ number: picked[0]!.number, key: 'assign.refused.noRight' }])
+    expect(assignRefusals([{ path: 'ncrs/1', message: 'changed since it was read' }, { path: 'ncrs/2', message: 'needs quality.ncr.manage' }, { path: 'body/ownerId', message: 'x' }], picked)).toEqual([
+      { number: ROWS[1]!.number, key: 'assign.refused.stale' },
+      { number: ROWS[2]!.number, key: 'assign.refused.noRight' },
+    ])
+    for (const locale of LOCALES) {
+      const tr = createTranslator(locale, messagesFor(locale, ['ncr']).ncr!)
+      for (const key of ['stale', 'noRight', 'frozen', 'notFound', 'other']) expect(tr(`assign.refused.${key}`, { number: 'NCR-1' })).toMatch(/^NCR-1: /)
+      expect(tr('assign.refused.title', { count: 2, total: 3 })).not.toMatch(/\{/)
+    }
+  })
+})
+
 describe('ncr: the calls as the API takes them', () => {
+  it('B-W2b-17: the prefill with picked lines, one bulk owner call, the containment time', async () => {
+    const calls: { url: string; method: string; body: unknown; headers: Headers }[] = []
+    const answers: Record<string, unknown> = {
+      'GET /api/quality/ncr/prefill': { prefill: PREFILL_DEFECTS },
+      'POST /api/quality/ncr/assign': { ncrs: [ROWS[0], ROWS[1]], changed: [ROWS[1]!.id] },
+      'GET /api/quality/ncr/settings': CONTAINMENT_SETTINGS,
+      'PUT /api/quality/ncr/settings': CONTAINMENT_SETTINGS,
+    }
+    const fetcher = (async (url: string, init: RequestInit) => {
+      const method = init.method ?? 'GET'
+      calls.push({ url, method, body: init.body ? JSON.parse(String(init.body)) : null, headers: new Headers(init.headers) })
+      return new Response(JSON.stringify(answers[`${method} ${url.split('?')[0]}`]), { status: 200, headers: { 'content-type': 'application/json' } })
+    }) as unknown as typeof fetch
+    const api = createApiClient({ baseUrl: '/api', fetch: fetcher, csrfToken: () => 'csrf-demo', company: 'DEMO' })
+    const prefill = await ncrPrefill(api, { recordType: 'Inspection', recordId: PREFILL_DEFECTS.fromId, defectIds: PREFILL_DEFECTS.defectIds })
+    expect(prefill.defectIds).toEqual(PREFILL_DEFECTS.defectIds)
+    expect(new URL(calls[0]!.url, 'http://x').searchParams.get('defectIds')).toBe(PREFILL_DEFECTS.defectIds.join(','))
+    await ncrPrefill(api, { recordType: 'Lot', recordId: PREFILL_DEFECTS.fromId })
+    expect(new URL(calls[1]!.url, 'http://x').searchParams.has('defectIds')).toBe(false)
+    const assigned = await assignNcrs(api, { ncrs: [{ id: ROWS[0]!.id, version: 3 }, { id: ROWS[1]!.id, version: 1 }], ownerId: 'u1' }, 'key-assign')
+    expect(assigned.changed).toEqual([ROWS[1]!.id])
+    expect(calls[2]!.body).toEqual({ ncrs: [{ id: ROWS[0]!.id, version: 3 }, { id: ROWS[1]!.id, version: 1 }], ownerId: 'u1' })
+    expect(calls[2]!.headers.get('idempotency-key')).toBe('key-assign')
+    expect((await getNcrSettings(api, 'c1')).settings.inForce.hours).toBe(48)
+    await saveNcrSettings(api, { companyId: 'c1', defaultContainmentHours: 8, version: 3 })
+    expect(calls[4]!.body).toEqual({ companyId: 'c1', defaultContainmentHours: 8, version: 3 })
+    expect(calls[4]!.headers.get('idempotency-key')).toBeTruthy()
+  })
+
   it('every write sends an Idempotency-Key and the version read', async () => {
     const calls: { url: string; method: string; body: unknown; headers: Headers }[] = []
     const fetcher = (async (url: string, init: RequestInit) => {
@@ -224,7 +349,7 @@ describe('ncr: the calls as the API takes them', () => {
 })
 
 const LEFT_KEY =
-  /\b(?:common|stage|severity|source|foundAt|recordType|uom|quantity|decided|due|age|check|checkName|board|held|problem|keys|close|list|view|tile|col|csv|new|zone)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
+  /\b(?:common|stage|severity|source|foundAt|recordType|uom|quantity|decided|due|age|check|checkName|board|held|problem|keys|close|list|view|tile|col|csv|new|zone|containmentTime|assign|discrepancyKind)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 const LEFT_PLACEHOLDER = /\{[a-zA-Z]+\}/
 /** Permission names are said on purpose ("needs quality.ncr.manage"); file names are not keys. */
 const SAID = /\b(?:quality\.ncr\.[a-z]+|quality\.defects\.view|tasks\.manage|files\.upload|production\.rework|purchasing\.claims\.manage|inventory\.[a-z]+|zip-pull\.jpg|shoulder-seam\.jpg)\b/g

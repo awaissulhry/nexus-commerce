@@ -238,3 +238,25 @@ export function holdHeld(input: { readonly online: boolean; readonly mayRecord: 
 export function holdQuantity(open: { readonly lotSize: number } | null, order: { readonly finished: number | null; readonly released: number; readonly pieces: number }): number {
   return open ? Math.max(1, open.lotSize) : suggestedLot(order)
 }
+
+// ---- B-W2b-17: who the open inspection is assigned to, on the bench list ----------------------------------------------------
+
+/** The open inspection's assignee as the bench list says it: mine, an office person (named), another bench inspector. */
+export type BenchAssignee = { readonly kind: 'MINE' } | { readonly kind: 'OFFICE'; readonly name: string | null } | { readonly kind: 'OTHER' }
+
+/**
+ * The API's `openInspection.assigned` (B-W2b-17; B-W2a-67's gap) as the bench says it. A floor inspector other than me is
+ * never named in a list (Owner answer W1): "another inspector"; an office person by name when the API names them.
+ */
+export function benchAssignee(assigned: { readonly kind: 'USER' | 'WORKER'; readonly mine: boolean; readonly name: string | null } | null | undefined): BenchAssignee | null {
+  if (!assigned) return null
+  if (assigned.mine) return { kind: 'MINE' }
+  return assigned.kind === 'USER' ? { kind: 'OFFICE', name: assigned.name } : { kind: 'OTHER' }
+}
+
+/** The message key and params of an assignee (`floor-final` pick.assigned.*). */
+export function assigneeKey(assignee: BenchAssignee): { key: string; params?: Record<string, string> } {
+  if (assignee.kind === 'MINE') return { key: 'pick.assigned.mine' }
+  if (assignee.kind === 'OFFICE') return assignee.name ? { key: 'pick.assigned.office', params: { name: assignee.name } } : { key: 'pick.assigned.officeUnnamed' }
+  return { key: 'pick.assigned.other' }
+}

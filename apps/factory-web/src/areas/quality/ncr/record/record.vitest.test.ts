@@ -102,6 +102,18 @@ describe('SCR-145 the NCR record: every design case draws in both languages with
   })
 })
 
+describe('B-W2b-17 containment cancel reason', () => {
+  it('a cancelled action carries its reason in its own column; one cancelled before keeps it out of the evidence', () => {
+    const screen = designScreen as unknown as DesignScreen<{ record: { loaded: { status: string; record?: { containment: { status: string; cancelReason: string | null; evidenceNote: string | null }[] } } } }>
+    const item = screen.cases.find((entry) => entry.id === 'w2b-containment-cancelled')!
+    const cancelled = item.model.record.loaded.record!.containment.filter((action) => action.status === 'CANCELLED')
+    expect(cancelled).toHaveLength(2)
+    expect(cancelled.every((action) => action.cancelReason && action.cancelReason.length > 3)).toBe(true)
+    expect(cancelled.filter((action) => action.evidenceNote?.startsWith('Cancelled: '))).toHaveLength(1)
+    for (const locale of LOCALES) expect(flattenMessages(messagesFor(locale, ['ncr-record'])['ncr-record'])['containment.cancelledBecause']).toContain('{reason}')
+  })
+})
+
 describe('the record rules', () => {
   it('a draft saves only what changed, quantities as typed', () => {
     const draft = draftOf(RECORD.ncr, TIME_ZONE)

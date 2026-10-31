@@ -35,6 +35,7 @@ import {
   type PrintJob,
 } from './api'
 import {
+  benchAssignee,
   checklistComplete,
   failItem,
   FAIL_REASONS,
@@ -631,6 +632,9 @@ const benchRowModel = (row: BenchRow): BenchRowModel => ({
   finished: row.finished,
   released: row.released,
   open: row.openInspectionId !== null,
+  assigned: benchAssignee(row.openInspection?.assigned),
+  inspectionDueAt: row.openInspection?.dueAt ?? null,
+  overdue: row.openInspection?.overdue ?? false,
 })
 
 export function orderModel(loaded: Loaded, context: { online: boolean; can: { record: boolean; release: boolean; labels: boolean }; locale?: 'it' | 'en' }): OrderModel {

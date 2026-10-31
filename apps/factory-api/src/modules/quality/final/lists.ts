@@ -2,7 +2,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { QUALITY_INSPECTIONS_VIEW } from '@nexus/factory-domain/quality/final/permissions'
-import { inspectionLabel, type InspectionStatus } from '@nexus/factory-domain/quality/final/rules'
+import { inspectionLabel, inspectionOverdue, type InspectionStatus } from '@nexus/factory-domain/quality/final/rules'
 import { inspectionHold } from '@nexus/factory-domain/quality/release/rules'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
@@ -28,6 +28,8 @@ export interface InspectionQuery {
   readonly failedUndecided?: boolean | undefined
   /** W2a: assigned to the caller, or open and assigned to nobody. */
   readonly assigned?: 'me' | 'none' | undefined
+  /** B-W2b-17: open and past its due time. */
+  readonly overdue?: boolean | undefined
   readonly limit: number
 }
 
@@ -47,6 +49,7 @@ export async function listInspections(caller: CommandCaller, query: InspectionQu
     ...(query.failedUndecided ? { status: 'FAILED' } : {}),
     ...(query.assigned === 'me' ? { OR: [{ assignedInspectorId: context.actorId }, { assignedInspectorWorkerId: { in: await linkedWorkersOf(caller, context.actorId) } }] } : {}),
     ...(query.assigned === 'none' ? { status: 'OPEN', assignedInspectorId: null, assignedInspectorWorkerId: null } : {}),
+    ...(query.overdue ? { status: 'OPEN', dueAt: { lt: new Date() } } : {}),
   }
   const filtered = Boolean(query.onHold || query.waitingRelease || query.failedUndecided)
   return caller.withClient(async (db) => {
@@ -115,6 +118,9 @@ export async function listInspections(caller: CommandCaller, query: InspectionQu
         holdWords: hold.words,
         // A worker is never named in a list (Owner answer W1): the inspection's own page names them.
         assigned: assignedView(row, names, false),
+        /** B-W2b-17: by when it is due, and whether it is past it. */
+        dueAt: row.dueAt ? toUtcIso(row.dueAt) : null,
+        overdue: inspectionOverdue(row, new Date()),
         holds,
         ncrs,
         undecided,

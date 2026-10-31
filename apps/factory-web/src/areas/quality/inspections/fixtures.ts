@@ -2,9 +2,9 @@ import { createElement, Fragment, useEffect, useState } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { STEP_UP_CLOSED, type StepUpState } from '../_shared/hooks'
 import { failedRead, ready, reading } from '../_shared/model'
-import { canFor, inShell, ME, NOW, PREFIX, uid, type RoleCase } from '../_shared/fixtures'
+import { at, canFor, inShell, ME, NOW, PREFIX, uid, type RoleCase } from '../_shared/fixtures'
 import { INSPECTORS, LOTS, RELEASE_DETAIL, RELEASES, RETURN_RECORD, RETURNS, ROWS, RULE, SERIAL_DETAIL, SHIPPED_DETAIL, WO_CELLS, WORK_ORDERS } from './demo/fixtures'
-import { NEW_DRAFT, RETURN_DRAFT, ruleDraftOf, REVERSE_DRAFT, type AssignState, type InspectionsListModel, type ListDialog, type NewDraft, type ReturnDraft, type View } from './model'
+import { NEW_DRAFT, RETURN_DRAFT, ruleDraftOf, REVERSE_DRAFT, type AssignState, type DueState, type InspectionsListModel, type ListDialog, type NewDraft, type ReturnDraft, type View } from './model'
 import { InspectionsView } from './view/InspectionsView'
 
 /**
@@ -21,7 +21,7 @@ interface DesignModel {
   readonly stepUp?: StepUpState
 }
 
-const counts = { open: { count: 3, capped: false }, waiting: { count: 2, capped: false }, failed: { count: 1, capped: false }, reversed: { count: 2, capped: false }, lots: { count: 3, capped: false } }
+const counts = { open: { count: 3, capped: false }, overdue: { count: 1, capped: false }, waiting: { count: 2, capped: false }, failed: { count: 1, capped: false }, reversed: { count: 2, capped: false }, lots: { count: 3, capped: false } }
 
 const list = (over: Partial<InspectionsListModel> = {}, role: RoleCase = 'owner'): DesignModel => ({
   role,
@@ -54,9 +54,12 @@ const viewRows = (view: View) =>
         ? ROWS.filter((row) => row.undecided)
         : view === 'mine'
           ? ROWS.filter((row) => row.assigned?.userId === ME)
-          : ROWS
+          : view === 'overdue'
+            ? ROWS.filter((row) => row.overdue)
+            : ROWS
 
 const OPEN_ROWS = ROWS.filter((row) => row.status === 'OPEN')
+const dueState = (over: Partial<DueState> = {}): DueState => ({ ids: OPEN_ROWS.slice(0, 2).map((row) => row.id), value: at(31, 16, 0), busy: false, problem: null, lines: [], ...over })
 const assignState = (over: Partial<AssignState> = {}): AssignState => ({ ids: [OPEN_ROWS[1]!.id], siteId: OPEN_ROWS[1]!.siteId, people: ready(INSPECTORS), value: '', busy: false, problem: null, lines: [], ...over })
 const returnNew = (draft: Partial<NewDraft>, returnDraft: ReturnDraft = RETURN_DRAFT, record = false) =>
   list({ dialog: { kind: 'new' }, pick: { workOrders: ready(WORK_ORDERS), cells: null }, newDraft: { ...NEW_DRAFT, ...draft }, returns: ready(RETURNS), returnRecord: record ? ready(RETURN_RECORD) : null, returnDraft })
@@ -70,7 +73,9 @@ function InspectionsDesign({ model: design }: { model: DesignModel }) {
   const [reverseDraft, setReverseDraft] = useState(design.model.reverseDraft ?? REVERSE_DRAFT)
   const [assign, setAssign] = useState(design.model.assign ?? null)
   const [returnDraft, setReturnDraft] = useState(design.model.returnDraft ?? RETURN_DRAFT)
+  const [due, setDue] = useState(design.model.due ?? null)
   useEffect(() => {
+    setDue(design.model.due ?? null)
     setAssign(design.model.assign ?? null)
     setNewDraft(design.model.newDraft ?? NEW_DRAFT)
     setReturnDraft(design.model.returnDraft ?? RETURN_DRAFT)
@@ -93,6 +98,7 @@ function InspectionsDesign({ model: design }: { model: DesignModel }) {
     reverseDraft,
     assign,
     returnDraft,
+    due,
   }
   return inShell(
     '/quality/inspections',
@@ -118,6 +124,9 @@ function InspectionsDesign({ model: design }: { model: DesignModel }) {
         onAssignValue: (value: string) => setAssign((current) => (current ? { ...current, value } : current)),
         onAssignClose: () => setAssign(null),
         onReturnDraft: setReturnDraft,
+        onDue: (rows: readonly { id: string }[]) => setDue(dueState({ ids: rows.map((row) => row.id) })),
+        onDueValue: (value: string) => setDue((current) => (current ? { ...current, value } : current)),
+        onDueClose: () => setDue(null),
       },
       }),
     ),
@@ -142,6 +151,16 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'assign-held', label: 'Selection with a signed inspection: Assign held with its reason', model: list({ selected: [OPEN_ROWS[0]!.id, ROWS[3]!.id] }) },
     { id: 'assign-refused', label: 'Assign refused by the API (each inspection in words)', model: list({ assign: assignState({ value: `USER:${INSPECTORS.inspectors[1]!.id}`, problem: 'assign.problem.refused', lines: ['DEMO-INS-0011: Made garments of work order DEMO-WO-0149: another inspector, who made none of them, inspects it.'] }) }) },
     { id: 'assign-inline', label: 'Inline Inspector cell: saving one, refused another', model: list({ people: { [OPEN_ROWS[0]!.siteId]: ready(INSPECTORS) }, marks: { [OPEN_ROWS[0]!.id]: { state: 'saving' }, [OPEN_ROWS[1]!.id]: { state: 'refused', problem: 'assign.problem.refused', lines: ['Changed meanwhile: read it again.'] } } }) },
+    // ---- B-W2b-17: by when an inspection is due (design qi-grid inline "Due", the Overdue view) ----
+    { id: 'w2b-due', label: 'W2b Due column: due later, overdue (said in words), none; autosaved inline', model: list({ marks: { [`due:${OPEN_ROWS[0]!.id}`]: { state: 'saved' } } }), note: 'A decided inspection shows its due time read only; the bench list says the due time and who it is assigned to (the API answers both).' },
+    { id: 'w2b-tile-overdue', label: 'W2b Tile pressed: overdue (open and past the due time)', model: list({ view: 'overdue', rows: ready(viewRows('overdue')) }) },
+    { id: 'w2b-due-saving', label: 'W2b Inline Due: saving one, refused another (in the API’s words under ours)', model: list({ marks: { [`due:${OPEN_ROWS[0]!.id}`]: { state: 'saving' }, [`due:${OPEN_ROWS[1]!.id}`]: { state: 'refused', problem: 'due.problem.refused', lines: ['The inspection is due later than now.'] } } }) },
+    { id: 'w2b-due-bulk', label: 'W2b Selection: Set due date for 2 open inspections (one call)', model: list({ selected: OPEN_ROWS.slice(0, 2).map((row) => row.id), due: dueState() }) },
+    { id: 'w2b-due-clear', label: 'W2b Set due date: no due time (clears it)', model: list({ selected: OPEN_ROWS.slice(0, 2).map((row) => row.id), due: dueState({ value: '' }) }) },
+    { id: 'w2b-due-held', label: 'W2b Selection with a signed inspection: Set due date held with its reason', model: list({ selected: [OPEN_ROWS[0]!.id, ROWS[3]!.id] }) },
+    { id: 'w2b-due-refused', label: 'W2b Set due date refused by the API (each inspection named)', model: list({ selected: OPEN_ROWS.slice(0, 2).map((row) => row.id), due: dueState({ problem: 'due.problem.conflict', lines: ['DEMO-INS-0011 is passed: only an open inspection has a due time.'] }) }) },
+    { id: 'w2b-due-read-only', label: 'W2b Production manager: Due read only (held: no right)', model: list({ view: 'open', rows: ready(viewRows('open')) }, 'production') },
+    { id: 'w2b-new-due', label: 'W2b New inspection: due by (the office sets it)', model: list({ dialog: { kind: 'new' }, pick: { workOrders: ready(WORK_ORDERS), cells: ready(WO_CELLS) }, newDraft: { ...NEW_DRAFT, workOrderId: WORK_ORDERS[0]!.id, lotSize: '24', sampleSize: '5', acceptMajor: '0', acceptMinor: '1', dueAt: at(31, 16, 0) } }) },
     { id: 'tile-reversed', label: 'Tile pressed: the releases taken back (their own list)', model: list({ view: 'reversed' }) },
     { id: 'tile-lots', label: 'Tile pressed: the lots on hold (open a lot in Tests & substances)', model: list({ view: 'lots' }) },
     { id: 'release', label: 'A release in its DetailModal: what was released and by whom', model: list({ view: 'reversed', open: openRelease() }) },
@@ -181,8 +200,8 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'read-only', label: 'Read-only: every action held with its reason', model: list({ selected: [ROWS[0]!.id] }, 'readOnly') },
     { id: 'no-permission', label: 'Sales: no permission (which permission, who grants it)', model: list({}, 'sales') },
     { id: 'loading', label: 'Loading', model: list({ rows: reading(), tiles: {}, rule: reading(), asOf: null, live: 'connecting' }) },
-    { id: 'error', label: "The API didn't answer (never an empty list; tiles say they could not count)", model: list({ rows: failedRead('problem.unavailable'), rule: failedRead('problem.unavailable'), tiles: { open: { count: null, capped: false }, waiting: { count: null, capped: false }, failed: { count: null, capped: false }, reversed: { count: null, capped: false }, lots: { count: null, capped: false } }, asOf: null, live: 'offline' }) },
-    { id: 'empty', label: 'First day: no inspection yet', model: list({ rows: ready([]), tiles: { open: { count: 0, capped: false }, waiting: { count: 0, capped: false }, failed: { count: 0, capped: false }, reversed: { count: 0, capped: false }, lots: { count: 0, capped: false } } }) },
+    { id: 'error', label: "The API didn't answer (never an empty list; tiles say they could not count)", model: list({ rows: failedRead('problem.unavailable'), rule: failedRead('problem.unavailable'), tiles: { open: { count: null, capped: false }, overdue: { count: null, capped: false }, waiting: { count: null, capped: false }, failed: { count: null, capped: false }, reversed: { count: null, capped: false }, lots: { count: null, capped: false } }, asOf: null, live: 'offline' }) },
+    { id: 'empty', label: 'First day: no inspection yet', model: list({ rows: ready([]), tiles: { open: { count: 0, capped: false }, overdue: { count: 0, capped: false }, waiting: { count: 0, capped: false }, failed: { count: 0, capped: false }, reversed: { count: 0, capped: false }, lots: { count: 0, capped: false } } }) },
     { id: 'filtered-empty', label: 'A view with nothing in it (every failed inspection decided)', model: list({ view: 'failed', rows: ready([]) }) },
   ],
 })

@@ -10,8 +10,8 @@ import { createTranslator, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
 import { LIST_PAGES, recordAddress } from '../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
-import { applyCount, countLines, createCount, listCounts, recordLines, signOffCount } from './api'
-import { canAs, COUNT_ROWS, COUNTING, LINES, OWN_VARIANCE, SUBMITTED, YEAR_END_APPLIED, YEAR_END_DRAFT } from './demo/fixtures'
+import { applyCount, countLines, countPlaces, createCount, findMaterials, listCounts, recordLines, signOffCount } from './api'
+import { canAs, COUNT_PLACES, COUNT_ROWS, COUNTING, LINES, MATERIALS, OWN_VARIANCE, SUBMITTED, YEAR_END_APPLIED, YEAR_END_DRAFT } from './demo/fixtures'
 import { designScreen as listScreen } from './list/fixtures'
 import {
   addressOf,
@@ -48,16 +48,18 @@ import { designScreen as recordScreen } from './record/fixtures'
 const row = COUNT_ROWS[0]!
 
 describe('counts: saved rows, the address and the tiles', () => {
-  it('maps each saved row to the API filter and keeps only what the API cannot filter', () => {
+  it('maps each saved row to the API filter (B-W2b-15: waiting and to apply too)', () => {
     expect(viewQuery('open').query).toEqual({ open: true })
     expect(viewQuery('counting').query).toEqual({ status: 'COUNTING' })
     expect(viewQuery('yearEnd').query).toEqual({ kind: 'YEAR_END', open: true })
     expect(viewQuery('all').query).toEqual({})
+    // B-W2b-15: the API filters waiting for approval and to apply (`view`) as the tiles count them; nothing is dropped here.
     const waiting = viewQuery('waiting')
-    expect(waiting.query).toEqual({ status: 'SUBMITTED' })
-    expect(COUNT_ROWS.filter(waiting.keep).map((count) => count.number)).toEqual(['CNT-D-0002'])
+    expect(waiting.query).toEqual({ view: 'waitingApproval' })
+    expect(COUNT_ROWS.filter(waiting.keep).length).toBe(COUNT_ROWS.length)
     const toApply = viewQuery('toApply')
-    expect(COUNT_ROWS.filter(toApply.keep).map((count) => count.number)).toEqual(['CNT-D-0003', 'CNT-D-0006'])
+    expect(toApply.query).toEqual({ view: 'toApply' })
+    expect(COUNT_ROWS.filter(toApply.keep).length).toBe(COUNT_ROWS.length)
     expect(TILES.map((tile) => tile.count({ drafts: 1, counting: 2, waitingApproval: 3, toApply: 4, yearEnd: 5 }))).toEqual([2, 3, 4, 5])
   })
 
@@ -201,6 +203,21 @@ describe('counts: the calls as the API takes them', () => {
     const page = await countLines(api, row.id, { filter: 'differs', cursor: 40, limit: 200 })
     expect(page.nextCursor).toBe(80)
     expect(calls[1]!.url).toBe(`/api/inventory/stock-counts/${row.id}/lines?filter=differs&cursor=40&limit=200`)
+  })
+
+  it('B-W2b-15: the saved rows waiting / to apply as the API\'s view, the lines per place, and the item search with finished garments', async () => {
+    const { api, calls } = mockApi([
+      { status: 200, body: { counts: COUNT_ROWS, nextCursor: null } },
+      { status: 200, body: { places: COUNT_PLACES } },
+      { status: 200, body: { items: MATERIALS } },
+    ])
+    await listCounts(api, { ...viewQuery('waiting').query, siteId: 's1', limit: 50 })
+    expect(calls[0]!.url).toBe('/api/inventory/stock-counts?siteId=s1&view=waitingApproval&limit=50')
+    expect(await countPlaces(api, row.id)).toEqual(COUNT_PLACES)
+    expect(calls[1]!.url).toBe(`/api/inventory/stock-counts/${row.id}/places`)
+    const found = await findMaterials(api, 's1', ' giacca ')
+    expect(calls[2]!.url).toBe('/api/inventory/stock-counts/items?siteId=s1&q=giacca&limit=20')
+    expect(found.find((item) => item.kind === 'FINISHED')).toMatchObject({ code: 'GIACCA-DEMO-01-NER-50', colours: [] })
   })
 
   it('saves one typed line with its version (autosave per cell); ⌘Z sends counted null; every write has its own key', async () => {

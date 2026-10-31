@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Download, Hand, MoreHorizontal, Printer, ShieldCheck, UserRound, X } from 'lucide-react'
+import { Download, Hand, MoreHorizontal, Printer, Settings2, ShieldCheck, UserRound, X } from 'lucide-react'
 import { Banner, DetailPopover, EmptyState, Field, Menu, MetricStrip, Modal, type MenuItemDef } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Kbd, Select, Skeleton } from '@nexus/ui/primitives'
@@ -39,12 +39,14 @@ import {
   traceOf,
   VIEWS,
   type HoldsDialog,
+  type HoldSettingsDraft,
   type HoldsListModel,
   type RecordTab,
   type ReleaseDraft,
   type View,
 } from '../model'
 import { HoldDetailModal } from './HoldDetailModal'
+import { HoldSettingsDialog } from './HoldSettingsDialog'
 import { HoldPill, HoldsMessages, HoldsStepUp, SaveMark } from './parts'
 import { ReleaseHoldDialog } from './ReleaseHoldDialog'
 
@@ -73,6 +75,11 @@ export interface HoldsListActions {
   onDismissNotice?: () => void
   onStepUpSubmit?: (code: string) => void
   onStepUpCancel?: () => void
+  /** B-W2b-17: the number search; who releases holds (the settings dialog). */
+  onSearch?: (q: string) => void
+  onSettingsDraft?: (draft: HoldSettingsDraft) => void
+  onSaveSettings?: () => void
+  onRetrySettings?: () => void
 }
 
 const NOBODY = '__nobody__'
@@ -125,6 +132,28 @@ function Holds({ model, actions, stepUp, panels }: { model: HoldsListModel; acti
   const columns = useMemo<ColDef<Hold>[]>(() => {
     const me = model.me
     const prefix = model.prefix
+    // B-W2b-17 (design qh-grid "Hold (HLD-0091, link)"): the hold's number opens it; an older hold has none ("—").
+    const NumberCell = ({ data }: ICellRendererParams<Hold>) => {
+      if (!data) return null
+      return data.number ? (
+        <Link
+          className="fw-q-name fw-q-code"
+          href={`${prefix}/quality/holds?open=${encodeURIComponent(data.id)}`}
+          tabIndex={-1}
+          onClick={(event) => {
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return
+            event.preventDefault()
+            latest.current.actions?.onOpen?.(data.id)
+          }}
+        >
+          {data.number}
+        </Link>
+      ) : (
+        <span className="fw-q-hint" title={t('number.none')}>
+          —
+        </span>
+      )
+    }
     const HoldCell = ({ data }: ICellRendererParams<Hold>) => {
       if (!data) return null
       const codes = subjectCodes(data, 1)
@@ -308,12 +337,14 @@ function Holds({ model, actions, stepUp, panels }: { model: HoldsListModel; acti
           : { id: 'evidence', label: t('row.evidence'), disabled: data.subjectType !== 'WorkOrder', description: t(data.subjectType === 'WorkOrder' ? 'held.evidenceOpen' : 'held.evidenceKind'), onSelect: () => latest.current.actions?.onOpen?.(data.id) },
         { id: 'genealogy', label: t('row.genealogy'), disabled: true, description: t('held.later') },
         { id: 'copy', label: t('row.copy'), onSelect: () => void navigator.clipboard?.writeText(data.subjects.map((subject) => subject.label ?? '').filter(Boolean).join(' ')) },
+        { id: 'copyNumber', label: t('row.copyNumber'), disabled: !data.number, description: data.number ? undefined : t('number.none'), onSelect: () => void (data.number && navigator.clipboard?.writeText(data.number)) },
       ]
       return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('row.menu', { code: data.subjects[0]?.label ?? '—' }) }} items={items} />
     }
     const column = (colId: string, header: string, cellRenderer: ColDef<Hold>['cellRenderer'], size: { flex?: number; minWidth?: number; width?: number; maxWidth?: number }): ColDef<Hold> => ({ colId, headerName: header, cellRenderer, sortable: false, ...size })
     return [
-      column('hold', t('col.hold'), HoldCell, { flex: 1.5, minWidth: 190 }),
+      column('number', t('col.number'), NumberCell, { flex: 0.9, minWidth: 140 }),
+      column('hold', t('col.held'), HoldCell, { flex: 1.5, minWidth: 190 }),
       column('status', t('col.status'), StatusCell, { flex: 0.9, minWidth: 160 }),
       column('subject', t('col.subject'), SubjectCell, { flex: 1.3, minWidth: 170 }),
       column('quantity', t('col.quantity'), QuantityCell, { flex: 0.9, minWidth: 120 }),
@@ -403,14 +434,14 @@ function Holds({ model, actions, stepUp, panels }: { model: HoldsListModel; acti
       }
     />
   ) : model.rows.value !== null && all.length === 0 ? (
-    model.view === 'open' && !model.subjectId && !model.subjectType ? (
+    model.view === 'open' && !model.subjectId && !model.subjectType && !model.q?.trim() ? (
       <EmptyState icon={<Hand size={24} aria-hidden />} title={t('list.empty.title')} description={t('list.empty.body')} action={<Button variant="primary" onClick={() => actions?.onPlace?.()} heldReason={placeHeld}>{t('list.place')}</Button>} />
     ) : (
       <EmptyState
         title={t('list.none')}
-        description={t(`view.${model.view}Hint`)}
+        description={model.q?.trim() ? t('list.noNumber', { q: model.q.trim() }) : t(`view.${model.view}Hint`)}
         action={
-          <Button size="sm" onClick={() => (model.subjectId || model.subjectType ? actions?.onClearScope?.() : actions?.onView?.('open'))}>
+          <Button size="sm" onClick={() => (model.q?.trim() ? actions?.onSearch?.('') : model.subjectId || model.subjectType ? actions?.onClearScope?.() : actions?.onView?.('open'))}>
             {t('list.clear')}
           </Button>
         }
@@ -426,6 +457,8 @@ function Holds({ model, actions, stepUp, panels }: { model: HoldsListModel; acti
     { id: 'tags', label: t('list.printTags'), disabled: rows.length === 0, description: rows.length === 0 ? t('held.noRows') : t('list.printTagsHint', { count: Math.min(rows.length, MAX) }), onSelect: () => window.open(tagAddress(model.prefix, rows.map((row) => row.id)) ?? '', '_blank') },
     { id: 'export', label: t('list.exportView'), disabled: rows.length === 0, description: rows.length === 0 ? t('held.noRows') : undefined, onSelect: () => actions?.onExport?.(rows.map((row) => row.id)) },
     { id: 'sep', separator: true },
+    // B-W2b-17: who releases holds (the company's rule; changed with quality.settings.manage, read by everyone here).
+    { id: 'settings', label: t('settings.menu'), icon: <Settings2 size={14} aria-hidden />, onSelect: () => open({ kind: 'settings' }) },
     { id: 'keys', label: t('keys.title'), onSelect: () => open({ kind: 'shortcuts' }) },
   ]
   const openHold = model.open ?? null
@@ -469,6 +502,7 @@ function Holds({ model, actions, stepUp, panels }: { model: HoldsListModel; acti
         rowId={(row) => row.id}
         columns={columns}
         count={model.rows.value === null ? t('list.countReading') : model.truncated ? t('list.countAtLeast', { count: all.length }) : t('list.count', { count: all.length })}
+        search={<Input type="search" size="sm" value={model.q ?? ''} onChange={(event) => actions?.onSearch?.(event.target.value)} placeholder={t('list.search')} aria-label={t('list.search')} />}
         tools={tools}
         selection={{ selected: model.selected, onChange: (next) => actions?.onSelect?.(next), actions: bulk }}
         updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
@@ -505,6 +539,19 @@ function Holds({ model, actions, stepUp, panels }: { model: HoldsListModel; acti
         onClose={() => open(null)}
       />
       {dialog?.kind === 'assign' && <AssignDialog ids={assignIds} model={model} actions={actions} onClose={() => open(null)} />}
+      <HoldSettingsDialog
+        open={dialog?.kind === 'settings'}
+        answer={model.settings ?? null}
+        draft={model.settingsDraft ?? null}
+        busy={model.busy ?? false}
+        problem={dialog?.kind === 'settings' ? (model.dialogProblem ?? null) : null}
+        lines={model.dialogLines ?? []}
+        companyName={model.companyName ?? ''}
+        onDraft={(draft) => actions?.onSettingsDraft?.(draft)}
+        onSave={() => actions?.onSaveSettings?.()}
+        onRetry={actions?.onRetrySettings}
+        onClose={() => open(null)}
+      />
       <KeysModal open={dialog?.kind === 'shortcuts'} keys={listKeys(ownKeys, true).map((entry) => ({ keys: entry.keys, does: lists(entry.does) === entry.does ? entry.does : lists(entry.does) }))} onClose={() => open(null)} />
       {stepUp && <HoldsStepUp state={stepUp} onSubmit={(code) => actions?.onStepUpSubmit?.(code)} onCancel={() => actions?.onStepUpCancel?.()} />}
     </div>

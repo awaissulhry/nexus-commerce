@@ -1,6 +1,8 @@
 import type { Tone } from '@nexus/ui/primitives'
-import { decimalValue, phrase, type Phrase } from '../../_shared/stock/model'
-import { PICK_VIEWS, type CreateResult, type HeldEntry, type KitStatus, type PickRow, type PickSheet, type PickTiles, type PickView, type ReadinessMaterial, type ReadinessWord, type SheetLine } from './api'
+import { kitActions, type KitAction } from '@nexus/factory-domain/inventory/kits/rules'
+import type { SiteLocations } from '../../_shared/stock/api'
+import { decimalValue, phrase, writeProblem, type Phrase } from '../../_shared/stock/model'
+import { PICK_VIEWS, type CreateResult, type HeldEntry, type KitStatus, type KitView, type PickRow, type PickSheet, type PickTiles, type PickView, type ReadinessMaterial, type ReadinessWord, type SheetLine } from './api'
 
 /**
  * Warehouse › Picking & kits (SCR-237) — the pure rules of the page, the pick list dialog, the readiness popover, Create
@@ -26,6 +28,10 @@ export interface PickingCan {
   purchasing: boolean
   /** "Buy" in the readiness popover (Planning › What to buy & make). */
   planning: boolean
+  /** B-W2b-15: stage a kit, check it complete, open it again (POST /inventory/kits/…: inventory.issue). */
+  kits: boolean
+  /** The places a kit is staged at (GET /inventory/locations: inventory.locations.view). */
+  places: boolean
 }
 
 export function pickingCan(permissions: readonly string[]): PickingCan {
@@ -36,6 +42,8 @@ export function pickingCan(permissions: readonly string[]): PickingCan {
     workOrders: held.has('workorders.view'),
     purchasing: held.has('purchasing.view'),
     planning: held.has('planning.view'),
+    kits: held.has('inventory.issue'),
+    places: held.has('inventory.locations.view'),
   }
 }
 
@@ -168,12 +176,52 @@ export function kitCheck(sheet: Pick<PickSheet, 'lines'>): { complete: boolean; 
 }
 
 /**
- * "Mark kit complete" is held (Owner rule: held buttons say why): while lines are short, by how many; once every line is
- * picked the kit already reads Complete — marking it by hand needs a kit record of its own (no schema in W2a: a named gap).
+ * B-W2b-15: why a kit action is held (Owner rule: held buttons say why), or null when it may be done: no right to pick
+ * (inventory.issue), a work order not picked for, lines still short (by how many), nothing planned, already checked or
+ * not checked — factory-domain inventory/kits `kitActions`, the API's own rule, on the sheet's figures.
  */
-export function markCompleteHeld(sheet: Pick<PickSheet, 'lines'>): Phrase {
-  const check = kitCheck(sheet)
-  return check.complete ? phrase('kit.markRecordLater') : phrase('kit.markShort', { count: check.short.length })
+export function kitHeld(sheet: Pick<PickSheet, 'workOrder' | 'kit'>, can: Pick<PickingCan, 'kits'>, action: KitAction): Phrase | null {
+  if (!can.kits) return phrase('kit.heldNoRight')
+  const state = kitActions({ workOrderStatus: sheet.workOrder.status, lines: sheet.kit.all, short: sheet.kit.short, checked: sheet.kit.checkedAt !== null })[action]
+  if (state.allowed) return null
+  switch (state.held) {
+    case 'LINES_SHORT':
+      return phrase('kit.markShort', { count: state.count ?? sheet.kit.short })
+    case 'NOTHING_PLANNED':
+      return phrase('kit.heldNothing')
+    case 'ALREADY_CHECKED':
+      return phrase('kit.heldChecked')
+    case 'NOT_CHECKED':
+      return phrase('kit.heldNotChecked')
+    default:
+      return phrase('kit.heldNotOpen')
+  }
+}
+
+/** "Mark kit complete" held with why, or null (the pick list dialog's footer). */
+export const markCompleteHeld = (sheet: Pick<PickSheet, 'workOrder' | 'kit'>, can: Pick<PickingCan, 'kits'>): Phrase | null => kitHeld(sheet, can, 'complete')
+
+/** The places a kit may wait at: the site's locations in use, never a workshop's (the API's rule), in walking order. */
+export function stagingChoices(site: Pick<SiteLocations, 'locations'> | undefined): { id: string; code: string; name: string; depth: number }[] {
+  if (!site) return []
+  return site.locations
+    .filter((location) => location.status === 'ACTIVE' && location.kind !== 'SUBCONTRACTOR')
+    .sort((a, b) => (a.path.join('/') < b.path.join('/') ? -1 : a.path.join('/') > b.path.join('/') ? 1 : 0))
+    .map((location) => ({ id: location.id, code: location.code, name: location.name, depth: location.depth }))
+}
+
+/** The kit's place in words: its code and name, else "Not staged". */
+export const kitPlaceWords = (kit: Pick<KitView, 'location'>): Phrase => (kit.location ? phrase('kit.placeAt', { code: kit.location.code, name: kit.location.name }) : phrase('kit.placeNone'))
+
+/** A refused kit write in our words: the API's held code (409 `kit/<CODE>`), a place refused, else the stock screens' words. */
+export function kitProblem(error: unknown): Phrase {
+  return writeProblem(error, (paths) => {
+    const held = paths.map((path) => /^kit\/([A-Z_]+)$/.exec(path)?.[1]).find(Boolean)
+    if (held === 'LINES_SHORT') return phrase('kit.refused.LINES_SHORT')
+    if (held) return phrase(`kit.refused.${held === 'WORK_ORDER_NOT_OPEN' || held === 'NOTHING_PLANNED' || held === 'ALREADY_CHECKED' || held === 'NOT_CHECKED' ? held : 'OTHER'}`)
+    if (paths.includes('body/locationId')) return phrase('kit.refused.PLACE')
+    return null
+  })
 }
 
 // ---- the paper: one walk through the store for many work orders (rule 1) -------------------------------------------------------
@@ -228,7 +276,7 @@ export function resultPhrase(result: CreateResult): Phrase {
 
 // ---- live --------------------------------------------------------------------------------------------------------------------
 
-const LIVE_PREFIXES = ['inventory.issued', 'inventory.returned', 'inventory.pick_reversed', 'inventory.reserved', 'inventory.reservations_released', 'quality.hold_', 'purchasing.', 'planning.', 'workorder.']
+const LIVE_PREFIXES = ['inventory.issued', 'inventory.returned', 'inventory.pick_reversed', 'inventory.reserved', 'inventory.reservations_released', 'inventory.kit_changed', 'quality.hold_', 'purchasing.', 'planning.', 'workorder.']
 
 /** An event that can change a row: an issue (picked counts), a reservation, a hold, a purchase order's dates, the plan. */
 export const isPickingEvent = (type: string): boolean => LIVE_PREFIXES.some((prefix) => type.startsWith(prefix))

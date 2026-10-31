@@ -144,7 +144,8 @@
     "done": "Done…",
     "cancel": "Cancel…",
     "cancelOne": "Cancel action {seq}",
-    "foot": "Containment is complete when at least one action is done and none is open."
+    "foot": "Containment is complete when at least one action is done and none is open.",
+    "cancelledBecause": "Cancelled: {reason}"
   },
   "hold": {
     "subject": "What is held",

@@ -30,6 +30,17 @@ export const benchRowSchema = z.object({
   finished: z.number().nullable(),
   released: z.number(),
   openInspectionId: z.string().nullable(),
+  /** B-W2b-17: the open inspection's number, due time and assignee (optional: an older API leaves it out). */
+  openInspection: z
+    .object({
+      id: z.string(),
+      number: z.string().nullable(),
+      dueAt: z.string().nullable(),
+      overdue: z.boolean(),
+      assigned: z.object({ kind: z.enum(['USER', 'WORKER']), mine: z.boolean(), name: z.string().nullable() }).nullable(),
+    })
+    .nullable()
+    .optional(),
   ready: z.boolean(),
 })
 export type BenchRow = z.infer<typeof benchRowSchema>

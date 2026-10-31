@@ -373,4 +373,19 @@ export const events = [
     payload: z.strictObject({ complaintId: z.uuid(), number: z.string(), from: complaintStatus, to: complaintStatus }),
     live: { ...complaintLive, fields: ['complaintId', 'number', 'from', 'to'] },
   }),
+  // B-W2b-17: who releases a hold and the default containment time, as settings (QualitySettings, W2b schema wave 2).
+  defineEvent({
+    type: 'quality.hold_rule_changed',
+    context: 'quality',
+    description: 'Who releases a quality hold changed for a company or tenant-wide: whether the person who placed a hold may release it too.',
+    payload: z.strictObject({ companyId: z.uuid().nullable(), placerMayRelease: z.boolean().nullable(), previous: z.boolean().nullable(), loosened: z.boolean() }),
+    live: { permission: 'quality.holds.view', fields: ['companyId', 'placerMayRelease'] },
+  }),
+  defineEvent({
+    type: 'ncr.settings_changed',
+    context: 'quality',
+    description: "The default containment time of new NCRs changed for a company or tenant-wide (hours after the problem was found).",
+    payload: z.strictObject({ companyId: z.uuid().nullable(), defaultContainmentHours: z.number().int().nullable(), previous: z.number().int().nullable() }),
+    live: { permission: 'quality.ncr.view', fields: ['companyId', 'defaultContainmentHours'] },
+  }),
 ] as const
