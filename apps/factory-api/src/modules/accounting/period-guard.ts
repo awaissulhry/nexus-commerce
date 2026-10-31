@@ -1,10 +1,10 @@
 import { hardLockedWords, monthOfDay, PERIOD_LOCK_ISSUES, PERIOD_LOCK_OVERRIDE_REASON, softLockedWords, type HardLockFacts } from '@nexus/factory-domain/accounting/periods'
-import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
+import type { PeriodLockLine, PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { ConflictError, type Issue } from '@nexus/factory-domain/core/errors'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import type { CommandTools, CommandTx } from '../../core/command'
 import type { RequestContext } from '../../core/context'
-import { dayOf, liveLocksOver, peopleNames, type LockRow } from './store'
+import { dayOf, liveLocksOver, peopleNames, type LockRow, type Reader } from './store'
 
 /**
  * The month locks on every write that dates money or stock into a month (B-W2a-F1: HARD; B-W2a-F8: SOFT). One call per
@@ -107,7 +107,7 @@ async function locksOn(tx: CommandTx, context: RequestContext, writes: readonly 
 }
 
 /** A lock as its refusal names it: the company, the day it was locked, by whom. */
-async function factsOf(tx: CommandTx, lock: LockRow): Promise<HardLockFacts> {
+async function factsOf(tx: Reader, lock: LockRow): Promise<HardLockFacts> {
   const company = await tx.company.findUnique({ where: { id: lock.companyId }, select: { legalName: true } })
   const names = await peopleNames(tx, [lock.lockedById])
   return { start: dayOf(lock.periodStart), end: dayOf(lock.periodEnd), company: company?.legalName ?? 'its company', lockedOn: lockDayOf(lock.lockedAt), lockedBy: names.get(lock.lockedById) ?? null }
@@ -144,5 +144,27 @@ export async function honourPeriodLocks(tools: CommandTools, writes: readonly Da
       reason,
       after: { periodStart: dayOf(lock.periodStart), periodEnd: dayOf(lock.periodEnd), level: 'SOFT', writes: inside.map((write) => ({ day: write.day, path: write.path, record: write.record ?? null })) },
     })
+  }
+}
+
+/**
+ * B-W2b-22 (Z9:01): the month lock over one write, read WITHOUT a command — the preview a screen shows before it sends the
+ * write (the invoice's issue checks), by the same rule as honourPeriodLocks: a HARD lock first (nothing goes in), else a
+ * SOFT one (the write needs `periodLockOverride.reason`), with the words the write's refusal would say. null: none. A
+ * preview only: the write's own command checks again under the lock.
+ */
+export async function periodLockPreview(db: Reader, write: Pick<DatedWrite, 'companyId' | 'day' | 'refused'>): Promise<PeriodLockLine | null> {
+  const locks = await liveLocksOver(db, write.companyId, { month: monthOfDay(write.day), start: write.day, end: write.day })
+  const lock = locks.find((row) => row.level === 'HARD') ?? locks[0]
+  if (!lock) return null
+  const facts = await factsOf(db, lock)
+  const hard = lock.level === 'HARD'
+  return {
+    level: hard ? 'HARD' : 'SOFT',
+    lockId: lock.id,
+    periodStart: dayOf(lock.periodStart),
+    periodEnd: dayOf(lock.periodEnd),
+    needsReason: !hard,
+    words: hard ? hardLockedWords(facts, write.refused) : softLockedWords(facts, write.refused),
   }
 }

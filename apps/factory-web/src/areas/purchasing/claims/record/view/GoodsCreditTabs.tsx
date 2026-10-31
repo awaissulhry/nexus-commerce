@@ -164,11 +164,15 @@ export function CreditTab({ claim, model }: { claim: Claim; model: ClaimRecordMo
             </div>
             <div className="fw-cl-match-side">
               <span className="fw-cl-match-label">{t('credit.matched')}</span>
-              <span className="fw-cl-match-value">{t('credit.notMatched')}</span>
+              <span className="fw-cl-match-value">
+                {claim.credit.matched
+                  ? `${claim.credit.matched.creditNotes.map((note) => note.number).join(', ')}${model.can.cost && claim.credit.matched.total != null ? ` · ${money(claim.credit.matched.total, claim.credit.currency, locale)}` : ''}`
+                  : t('credit.notMatched')}
+              </span>
             </div>
             <div className="fw-cl-match-side">
               <span className="fw-cl-match-label">{t('credit.difference')}</span>
-              <span className="fw-cl-match-value">—</span>
+              <span className="fw-cl-match-value">{model.can.cost && claim.credit.difference != null ? money(claim.credit.difference, claim.credit.currency, locale) : '—'}</span>
             </div>
           </div>
           <p className="fw-by-hint">{t('credit.matchWhere')}</p>

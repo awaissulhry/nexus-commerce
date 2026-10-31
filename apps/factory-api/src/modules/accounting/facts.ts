@@ -263,7 +263,10 @@ async function readIntrastat(db: Reader, issued: readonly IssuedInvoice[]): Prom
     orderBy: [{ invoiceId: 'asc' }, { seq: 'asc' }],
   })
   const ddtIds = [...new Set(lines.map((line) => line.ddtId).filter((value): value is string => value !== null))]
-  const ddts = new Map((ddtIds.length > 0 ? await db.ddt.findMany({ where: { id: { in: ddtIds } }, select: { id: true, recipient: true, destination: true } }) : []).map((row) => [row.id, row]))
+  const ddts = new Map((ddtIds.length > 0 ? await db.ddt.findMany({ where: { id: { in: ddtIds } }, select: { id: true, recipient: true, destination: true, transportMode: true, shipmentId: true } }) : []).map((row) => [row.id, row]))
+  // B-W2b-22 (Z9:01's Intrastat part): the mode of transport the DDT froze at its issue, else its shipment's (B-W2b-19).
+  const shipmentIds = [...new Set([...ddts.values()].filter((ddt) => ddt.transportMode === null && ddt.shipmentId !== null).map((ddt) => ddt.shipmentId!))]
+  const shipmentModes = new Map((shipmentIds.length > 0 ? await db.shipment.findMany({ where: { id: { in: shipmentIds } }, select: { id: true, transportMode: true } }) : []).map((row) => [row.id, row.transportMode]))
   const orderLineIds = [...new Set(lines.map((line) => line.salesOrderLineId).filter((value): value is string => value !== null))]
   const orderLines = new Map((orderLineIds.length > 0 ? await db.salesOrderLine.findMany({ where: { id: { in: orderLineIds } }, select: { id: true, styleId: true } }) : []).map((row) => [row.id, row.styleId]))
   const styleIds = [...new Set(orderLines.values())]
@@ -284,6 +287,7 @@ async function readIntrastat(db: Reader, issued: readonly IssuedInvoice[]): Prom
       buyer: { ...buyer, partyId: invoice.buyerPartyId, code: invoice.buyer.code, incoterm: invoice.buyer.incoterm },
       destination,
       style: style ? { id: style.id, code: style.code, hsCode: style.hsCode, originCountry: style.originCountry, netMassKg: style.netMassKg === null ? null : style.netMassKg.toFixed(3) } : null,
+      transportMode: ddt ? (ddt.transportMode ?? (ddt.shipmentId ? (shipmentModes.get(ddt.shipmentId) ?? null) : null)) : null,
     }
     if (isEuSale(facts)) rows.push(intrastatRowOf(facts))
   }

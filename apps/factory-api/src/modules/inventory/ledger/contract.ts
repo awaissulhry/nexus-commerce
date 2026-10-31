@@ -86,6 +86,8 @@ export const adjustContract = defineContract({
     reference: reference(),
     /** The cost per base unit to value it at (MANUAL); left out: the lot's cost, else the item's standard cost. */
     unitCost: money.cost(unitPrice()),
+    /** B-W2b-22: why it goes into a soft-locked month (B-W2a-F8's field; a HARD lock refuses it whatever). */
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: oneMove,
 })
@@ -102,6 +104,8 @@ export const transferContract = defineContract({
     note: z.string().trim().max(500).nullish(),
     /** When it happened, by the device's clock (a floor scan sent later). Default now. */
     occurredAt: instant().optional(),
+    /** B-W2b-22: why it goes into a soft-locked month (office; the floor's moves read no lock). */
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: oneMove,
 })
@@ -115,13 +119,19 @@ export const scrapContract = defineContract({
     /** Why (damaged, defect, obsolete): required. */
     note: why(),
     reference: reference(),
+    /** B-W2b-22: why it goes into a soft-locked month. */
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: oneMove,
 })
 
 export const reverseContract = defineContract({
   params: input({ moveId: id() }),
-  body: input({ note: why() }),
+  body: input({
+    note: why(),
+    /** B-W2b-22: why the reversal goes into a soft-locked month (it is dated now). */
+    periodLockOverride: periodLockOverride.optional(),
+  }),
   response: {
     201: output({
       move: moveView,
@@ -149,6 +159,8 @@ export const countContract = defineContract({
       )
       .min(1)
       .max(500),
+    /** B-W2b-22: why the differences go into a soft-locked month (they are dated now). */
+    periodLockOverride: periodLockOverride.optional(),
   }),
   response: {
     201: output({

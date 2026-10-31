@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   activationPlan,
+  assignmentPlan,
   changedRows,
   compareEntries,
   endProblems,
@@ -131,5 +132,27 @@ describe('prices', () => {
   it("checks a list's plain fields", () => {
     expect(listFieldProblems({ code: 'seed-pl-p1', name: 'Listino', currency: 'EUR' })).toEqual([])
     expect(listFieldProblems({ code: '!', name: ' ', currency: 'euro' }).map((issue) => issue.path)).toEqual(['code', 'name', 'currency'])
+  })
+})
+
+describe('assignmentPlan (B-W2b-16: a customer\'s list with its "From" day)', () => {
+  const words = { party: 'C1', listCode: (id: string) => id.toUpperCase() }
+  const open = (priceListId: string, validFrom: string) => ({ id: `a-${priceListId}`, priceListId, validFrom, validTo: null })
+  it('ends the open list the day before the new one starts; nothing when the list is the same', () => {
+    expect(assignmentPlan([open('a', '2026-10-01')], 'b', '2026-10-31', '2026-10-31', words)).toEqual({ kind: 'CHANGE', end: { id: 'a-a', validTo: '2026-10-30' }, start: { priceListId: 'b', validFrom: '2026-10-31' } })
+    expect(assignmentPlan([], 'b', '2026-10-31', '2026-10-31', words)).toEqual({ kind: 'CHANGE', end: null, start: { priceListId: 'b', validFrom: '2026-10-31' } })
+    expect(assignmentPlan([open('a', '2026-10-01')], 'a', '2026-10-31', '2026-10-31', words)).toEqual({ kind: 'NOTHING' })
+    expect(assignmentPlan([], null, '2026-10-31', '2026-10-31', words)).toEqual({ kind: 'NOTHING' })
+  })
+  it('takes a list away: it ends the day before, or today when it was given today', () => {
+    expect(assignmentPlan([open('a', '2026-10-01')], null, '2026-10-31', '2026-10-31', words)).toEqual({ kind: 'CHANGE', end: { id: 'a-a', validTo: '2026-10-30' }, start: null })
+    expect(assignmentPlan([open('a', '2026-10-31')], null, '2026-10-31', '2026-10-31', words)).toEqual({ kind: 'CHANGE', end: { id: 'a-a', validTo: '2026-10-31' }, start: null })
+  })
+  it('refuses a second change on one day, a day after today, and a new list over a day already held', () => {
+    expect(assignmentPlan([open('a', '2026-10-31')], 'b', '2026-10-31', '2026-10-31', words)).toMatchObject({ kind: 'REFUSED', path: 'validFrom', message: 'C1 has had A since 2026-10-31: a customer\'s list changes at most once a day (its history keeps one list per day). Give the new list from 2026-11-01.' })
+    expect(assignmentPlan([], 'b', '2026-11-02', '2026-10-31', words)).toMatchObject({ kind: 'REFUSED', path: 'validFrom' })
+    expect(assignmentPlan([{ id: 'x', priceListId: 'a', validFrom: '2026-10-01', validTo: '2026-10-31' }], 'b', '2026-10-31', '2026-10-31', words)).toMatchObject({ kind: 'REFUSED', message: 'C1 had A until 2026-10-31: a customer\'s list changes at most once a day. Give the new list from 2026-11-01.' })
+    // A past "From" after the open list's own start is taken.
+    expect(assignmentPlan([open('a', '2026-10-01')], 'b', '2026-10-15', '2026-10-31', words)).toMatchObject({ kind: 'CHANGE', end: { validTo: '2026-10-14' } })
   })
 })

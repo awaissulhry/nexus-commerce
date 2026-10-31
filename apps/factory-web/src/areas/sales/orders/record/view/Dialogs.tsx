@@ -239,7 +239,7 @@ function LinkDialog({ order, requestId, model, actions }: { order: Order; reques
         dense
         labelCase="sentence"
         items={[
-          { label: t('link.to'), value: request.link?.to ?? t('link.contact') },
+          { label: t('link.to'), value: request.link?.to ?? t(request.quoteVersionId ? 'link.contact' : 'link.contactTyped') },
           ...(model.can.price ? [{ label: t('deposit.amount'), value: money(stillToPay(request) ?? request.amount, request.currency, locale) }] : []),
           { label: t('deposit.due'), value: formatDate(dayInstant(request.dueDate), { locale }) },
           { label: t('link.valid'), value: t('link.validValue') },

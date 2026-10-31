@@ -11,6 +11,7 @@ import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { mayWrite as mayWriteParty } from '../../parties/store'
 import { officeContextOf, type Reader } from '../quotes/store'
+import { assignmentStartsOf, givePriceListInCommand } from './assignments'
 import { assertMayChangeList, dayValue, LIST_COLUMNS, LIST_SCOPE, listRowsOf, lockList, readListFor, versionsOf, versionViewOf, type ListRow } from './store'
 
 /**
@@ -34,7 +35,10 @@ export async function listDetailOf(db: Reader, list: ListRow, today: BusinessDat
   const versions = await versionsOf(db, [list.id])
   const counts = await db.priceListEntry.groupBy({ by: ['versionId'], where: { versionId: { in: versions.map((version) => version.id) } }, _count: { _all: true } })
   const entriesOf = new Map(counts.map((entry) => [entry.versionId, entry._count._all]))
-  const customers = await db.party.findMany({ where: { priceListId: list.id }, select: { id: true, code: true, legalName: true, status: true, companyId: true, version: true }, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: 500 })
+  const parties = await db.party.findMany({ where: { priceListId: list.id }, select: { id: true, code: true, legalName: true, status: true, companyId: true, version: true, priceListId: true }, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: 500 })
+  // B-W2b-16: since when each customer has the list (its open assignment row; before W2b: the audit's day).
+  const starts = await assignmentStartsOf(db, parties)
+  const customers = parties.map(({ priceListId: _list, ...party }) => ({ ...party, from: starts.get(party.id)?.from ?? null, fromSource: starts.get(party.id)?.source ?? null }))
   const fallbackOf = await db.priceList.findMany({ where: { baseListId: list.id }, select: { id: true, code: true, name: true, kind: true, status: true }, orderBy: { code: 'asc' } })
   return {
     ...row!,
@@ -252,7 +256,7 @@ export function listProblemFor(list: Pick<ListRow, 'code' | 'status' | 'companyI
  * (a GROUP list: its members). Each customer is changed with parties.manage on it; one command; each party's version
  * moves (its record re-reads on party.updated).
  */
-export async function setCustomers(caller: CommandCaller, listId: string, action: 'add' | 'remove', body: { partyIds: readonly string[] }, idempotencyKey?: string): Promise<{ list: ListDetail }> {
+export async function setCustomers(caller: CommandCaller, listId: string, action: 'add' | 'remove', body: { partyIds: readonly string[]; validFrom?: BusinessDate | undefined }, idempotencyKey?: string): Promise<{ list: ListDetail }> {
   const context = officeContextOf(caller)
   const seen = await readListFor(caller, listId)
   assertMayChangeList(context, PRICE_LISTS_MANAGE, seen.companyId)
@@ -262,7 +266,7 @@ export async function setCustomers(caller: CommandCaller, listId: string, action
     // FOR SHARE: an archive waits for this command, then counts its customers.
     await tx.$queryRaw`SELECT id FROM "PriceList" WHERE id = ${listId}::uuid FOR SHARE`
     const list = await tx.priceList.findUniqueOrThrow({ where: { id: listId }, select: LIST_COLUMNS })
-    const parties = await tx.party.findMany({ where: { id: { in: ids } }, select: { id: true, code: true, companyId: true, currency: true, status: true, priceListId: true } })
+    const parties = await tx.party.findMany({ where: { id: { in: ids } }, select: { id: true, code: true, companyId: true, currency: true, status: true, priceListId: true, createdAt: true } })
     const issues: Issue[] = []
     for (const [index, partyId] of ids.entries()) {
       const party = parties.find((row) => row.id === partyId)
@@ -277,7 +281,10 @@ export async function setCustomers(caller: CommandCaller, listId: string, action
     }
     if (issues.length > 0) throw new ValidationError(issues.length === 1 ? issues[0]!.message : 'Some customers cannot be changed.', issues)
     const changed = parties.filter((party) => (action === 'add' ? party.priceListId !== listId : true))
+    // B-W2b-16: the customers' list history follows (from `validFrom`, default today; one change per day).
+    const codes = await listCodesOf(tx, [listId, ...changed.flatMap((party) => (party.priceListId ? [party.priceListId] : []))])
     for (const party of changed) {
+      await givePriceListInCommand(tools, party, action === 'add' ? listId : null, (id) => codes.get(id) ?? id, action === 'add' ? body.validFrom : undefined)
       await tx.party.update({ where: { id: party.id }, data: { priceListId: action === 'add' ? listId : null, version: { increment: 1 }, updatedAt: now }, select: { id: true } })
       tools.audit({ action: action === 'add' ? 'parties.setPriceList' : 'parties.clearPriceList', recordType: 'Party', recordId: party.id, companyId: party.companyId, before: { listId: party.priceListId }, after: { listId: action === 'add' ? listId : null } })
       tools.emit({ type: 'party.updated', subject: party.id, companyId: party.companyId, payload: { partyId: party.id, code: party.code, fields: ['priceListId'] } })
@@ -289,3 +296,9 @@ export async function setCustomers(caller: CommandCaller, listId: string, action
   return result
 }
 
+
+/** B-W2b-16: the codes of price lists, for the words of a refused list change. */
+export async function listCodesOf(db: Reader, ids: readonly string[]): Promise<Map<string, string>> {
+  const rows = await db.priceList.findMany({ where: { id: { in: [...new Set(ids)] } }, select: { id: true, code: true } })
+  return new Map(rows.map((row) => [row.id, row.code]))
+}

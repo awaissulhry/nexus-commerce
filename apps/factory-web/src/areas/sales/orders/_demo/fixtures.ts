@@ -229,6 +229,7 @@ export function deposit(over: Partial<DepositRequest> = {}): DepositRequest {
     paidAmount: 0,
     link: null,
     stepKind: 'DEPOSIT',
+    version: 1,
     ...over,
   }
 }

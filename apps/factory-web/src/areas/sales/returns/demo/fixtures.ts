@@ -276,6 +276,7 @@ export const RMA_AUTHORISED: Rma = {
     { step: 'OUTCOME', state: 'WAITING', at: null },
   ],
   actions: ACTIONS_AUTHORISED,
+  closeWarnings: [],
   policy: { windowDays: 30, goodsDueDays: 15, freightPaidBy: 'BY_CAUSE', restockingFeePct: '10', conditions: 'Unworn, with labels (made-up).', freightPaidByNow: null },
   version: 3,
   createdAt: at(29, 10),
@@ -386,6 +387,8 @@ export const REPAIR_RECEIVED: Repair = {
   receivedAt: at(29, 11),
   inboundDdt: { number: 'C-DDT-DEMO-12', date: '2026-10-28' },
   workOrder: null,
+  earlierWorkOrders: [],
+  reworkRound: false,
   repairedAt: null,
   safety: { required: true, state: 'NOT_CHECKED', result: null, checklist: null, failures: [], checkedAt: null, checkedById: null },
   shippedAt: null,
@@ -470,4 +473,26 @@ export const REPAIR_SHIPPED: Repair = {
   steps: REPAIR_PASSED.steps.map((step) => (step.stage === 'REPAIRED' ? { ...step, state: 'DONE' as const } : step.stage === 'SHIPPED' ? { ...step, state: 'CURRENT' as const, at: at(31, 11) } : step)),
   actions: REPAIR_PASSED.actions.map((entry) => ({ ...entry, allowed: false })),
   version: 10,
+}
+
+/** B-W2b-16: back into repair after a failed check — the first work order is done, a new one for the rework may follow. */
+export const REPAIR_REWORK: Repair = {
+  ...REPAIR_REPAIRED,
+  stage: 'IN_REPAIR',
+  repairedAt: null,
+  reworkRound: true,
+  safety: { required: true, state: 'OUTDATED', result: 'FAIL', checklist: { seams: 'FAIL', abrasionZones: 'PASS', closures: 'NOT_APPLICABLE', protectors: { result: 'PASS', replaced: false, lot: null, level: null }, certificateCovers: true, note: 'The new seam pulls at the elbow (made-up).' }, failures: ['the seams'], checkedAt: at(31, 9), checkedById: PEOPLE[1]!.id },
+  stages: [...REPAIR_REPAIRED.stages, { id: uid('7780', 6), from: 'REPAIRED', to: 'IN_REPAIR', at: at(31, 10), note: 'Open the seam and sew it again (made-up).', byId: ME }],
+  steps: REPAIR_REPAIRED.steps.map((step) => (step.stage === 'IN_REPAIR' ? { ...step, state: 'CURRENT' as const, at: at(31, 10) } : step.stage === 'REPAIRED' ? { ...step, state: 'WAITING' as const } : step)),
+  actions: REPAIR_REPAIRED.actions.map((entry) => (entry.action === 'makeWorkOrder' || entry.action === 'finishRepair' ? { ...entry, allowed: true } : entry.action === 'reopenRepair' || entry.action === 'safetyCheck' ? { ...entry, allowed: false } : entry)),
+  version: 10,
+}
+
+/** B-W2b-16: the rework's own work order made: the first one is listed among the earlier ones. */
+export const REPAIR_REWORK_ORDERED: Repair = {
+  ...REPAIR_REWORK,
+  workOrder: { id: uid('7730', 2), number: 'WO-DEMO-0207', status: 'RELEASED' },
+  earlierWorkOrders: [{ id: uid('7730', 1), number: 'WO-DEMO-0201', status: 'COMPLETED' }],
+  actions: REPAIR_REWORK.actions.map((entry) => (entry.action === 'makeWorkOrder' || entry.action === 'finishRepair' ? { ...entry, allowed: false } : entry)),
+  version: 12,
 }

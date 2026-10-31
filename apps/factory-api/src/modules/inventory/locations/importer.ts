@@ -6,7 +6,10 @@ import { locationsImporter } from '@nexus/factory-domain/inventory/locations/imp
 import { wouldCycle } from '@nexus/factory-domain/inventory/locations/rules'
 import { INVENTORY_LOCATIONS_MANAGE, INVENTORY_LOCATIONS_VIEW } from '@nexus/factory-domain/inventory/permissions'
 import type { CommandTx } from '../../../core/command'
+// W2b (B-W2b-25): the Workshop column (load, check, write).
+import { checkWorkshops, workshopCodesOf, workshopForWrite } from '../../../platform/imports/importers/locations-workshop'
 import type { ImportAdapter, ImportScope } from '../../../platform/imports/registry'
+import { locationChanged } from './locations'
 
 /**
  * The locations import's adapter (factory-domain inventory/locations/importer.ts; platform/imports): finds a row's
@@ -14,7 +17,8 @@ import type { ImportAdapter, ImportScope } from '../../../platform/imports/regis
  * (inside its parent, which an earlier row or the database already holds), or a new name, kind or parent for an
  * existing one. Running and applying it needs inventory.locations.manage, seeing its plans inventory.locations.view.
  * A row naming a site of another company, a missing or archived parent, or a parent that would put a location inside
- * itself stops its batch with that reason (fix the sheet, apply again).
+ * itself stops its batch with that reason (fix the sheet, apply again). W2b (B-W2b-25): a workshop's stock location
+ * (SUBCONTRACTOR) names its workshop in the Workshop column (platform/imports/importers/locations-workshop.ts).
  *
  * The registry lists this adapter, so it imports only the registry's types (no load-order cycle) and freezes itself as
  * defineImportAdapter would.
@@ -41,32 +45,42 @@ export const locationsImportAdapter: ImportAdapter = Object.freeze({
   importer: locationsImporter,
   permission: INVENTORY_LOCATIONS_MANAGE,
   viewPermission: INVENTORY_LOCATIONS_VIEW,
+  check: (client, rows, scope) => checkWorkshops(client, rows, scope),
   async load(client, keys, scope) {
     const siteCodes = [...new Set(keys.map((key) => String(key.site)))]
     const sites = await client.site.findMany({ where: { code: { in: siteCodes }, ...(scope.companyId ? { companyId: scope.companyId } : {}) }, select: { id: true, code: true } })
     const codeOfSite = new Map(sites.map((site) => [site.id, site.code]))
     const rows = await client.location.findMany({
       where: { siteId: { in: sites.map((site) => site.id) }, code: { in: [...new Set(keys.map((key) => String(key.code)))] } },
-      select: { id: true, siteId: true, code: true, name: true, kind: true, parent: { select: { code: true } } },
+      select: { id: true, siteId: true, code: true, name: true, kind: true, partyId: true, parent: { select: { code: true } } },
     })
+    const workshops = await workshopCodesOf(client, rows.map((row) => row.partyId))
     return rows.map((row) => ({
       id: row.id,
-      values: { site: codeOfSite.get(row.siteId)!, code: row.code, name: row.name, kind: row.kind, parent: row.parent?.code ?? null },
+      values: { site: codeOfSite.get(row.siteId)!, code: row.code, name: row.name, kind: row.kind, parent: row.parent?.code ?? null, workshop: row.partyId === null ? null : (workshops.get(row.partyId) ?? null) },
     }))
   },
   async write(tools, row, scope) {
     const { tx, audit, now, context } = tools
     const values = row.values
-    // B-W2a-25: a workshop's stock location names its workshop, which this sheet has no column for (the trigger refuses a
-    // SUBCONTRACTOR location without one); it is made on the locations page, and a location never turns into one.
-    if (values.kind === 'SUBCONTRACTOR' || (row.action !== 'CREATE' && row.before?.kind === 'SUBCONTRACTOR' && values.kind !== undefined && values.kind !== 'SUBCONTRACTOR')) {
-      throw new Error(`Location ${String(row.key.code)}: a workshop's stock location (Subcontractor) is made on the locations page with its workshop, not from a sheet.`)
+    // B-W2a-25, W2b B-W2b-25: a location never turns into a workshop's stock location or stops being one (the plan refuses
+    // it in the dry run; this holds for a row that changed since), and only that kind names its workshop.
+    if (row.action !== 'CREATE' && values.kind !== undefined && (values.kind === 'SUBCONTRACTOR') !== (row.before?.kind === 'SUBCONTRACTOR')) {
+      throw new Error(`Location ${String(row.key.code)}: a workshop location stays one (its workshop never changes); make a new location instead.`)
+    }
+    if (row.action !== 'CREATE' && values.workshop !== undefined) {
+      throw new Error(`Location ${String(row.key.code)}: its workshop never changes; make a new location for another workshop.`)
     }
     if (row.action === 'CREATE') {
       const site = await siteByCode(tx, String(row.key.site), scope)
       const id = newId()
+      const workshopCode = text(values.workshop)
+      if ((values.kind === 'SUBCONTRACTOR') !== (workshopCode !== undefined)) {
+        throw new Error(`Location ${String(row.key.code)}: ${values.kind === 'SUBCONTRACTOR' ? 'a Subcontractor location names its workshop' : 'only a Subcontractor location names a workshop'}.`)
+      }
+      const partyId = workshopCode === undefined ? null : await workshopForWrite(tx, workshopCode, site, String(row.key.code))
       const parentCode = text(values.parent)
-      await tx.location.create({
+      const made = await tx.location.create({
         data: {
           id,
           companyId: site.companyId,
@@ -75,16 +89,18 @@ export const locationsImportAdapter: ImportAdapter = Object.freeze({
           code: String(row.key.code),
           name: String(values.name),
           kind: String(values.kind) as LocationKind,
+          partyId,
           createdAt: now,
           updatedAt: now,
           createdById: context.audience === 'office' ? context.actorId : null,
         },
-        select: { id: true },
+        select: { id: true, companyId: true, siteId: true, code: true, status: true },
       })
       audit({ action: 'inventory.importLocation', recordType: 'Location', recordId: id, companyId: site.companyId, siteId: site.id, after: markValues(locationsImporter, values) })
+      locationChanged(tools.emit, made, 'CREATED')
       return { recordId: id }
     }
-    const current = await tx.location.findUniqueOrThrow({ where: { id: row.recordId! }, select: { id: true, companyId: true, siteId: true } })
+    const current = await tx.location.findUniqueOrThrow({ where: { id: row.recordId! }, select: { id: true, companyId: true, siteId: true, code: true, status: true } })
     const parentCode = text(values.parent)
     await tx.location.update({
       where: { id: current.id },
@@ -105,6 +121,7 @@ export const locationsImportAdapter: ImportAdapter = Object.freeze({
       before: markValues(locationsImporter, row.before),
       after: markValues(locationsImporter, values),
     })
+    locationChanged(tools.emit, current, 'EDITED')
     return { recordId: current.id }
   },
 } satisfies ImportAdapter)

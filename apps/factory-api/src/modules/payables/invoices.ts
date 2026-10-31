@@ -274,8 +274,8 @@ async function duplicateProblem(db: Reader, input: { companyId: string; partyId:
     where: { companyId: input.companyId, partyId: input.partyId, number: input.number, issueDate: { gte: dayDate(`${year}-01-01`), lte: dayDate(`${year}-12-31`) }, ...(except ? { id: { not: except } } : {}) },
     select: { id: true, issueDate: true, status: true, source: true },
   })
-  const same = rows.find((row) => dayOf(row.issueDate) === input.issueDate)
-  if (same && same.status === 'VOIDED') return `Invoice ${input.number} of ${dayWords(input.issueDate)} of this supplier was registered and voided: the same number and date cannot be registered again (correct a typed invoice instead of voiding it).`
+  // B-W2b-21 (Z8:04): a VOIDED typed invoice frees its number and date (the database's live key, SupplierInvoice_one_live_per_number,
+  // leaves VOIDED rows out): only a live one of the same year refuses it.
   const live = rows.find((row) => row.status !== 'VOIDED')
   return live ? `Invoice ${input.number} of this supplier is already registered for ${year} (${dayOf(live.issueDate)}, ${live.source === 'SDI' ? 'from SDI' : 'typed'}, ${live.status.toLowerCase()}).` : null
 }

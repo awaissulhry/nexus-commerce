@@ -111,9 +111,13 @@ const claimDetail = output({
     remedy: remedy.nullable(),
     expected: money.cost(z.number().int().nullable()),
     value: money.cost(z.number().int().nullable()),
-    /** The supplier's credit note matched to the claim (Finance, B-W2a-62): none yet. */
-    matched: z.null(),
-    difference: z.null(),
+    /**
+     * B-W2b-21 (Z8:07): the supplier's credit notes that settle the claim (Finance › Payables "settle claim":
+     * SupplierInvoice.claimId), their taxable amount in all (the claim's value is net of VAT); null: none matched yet.
+     */
+    matched: output({ total: money.cost(z.number().int()), creditNotes: z.array(output({ id: id(), number: z.string(), issueDate: businessDate(), status: z.string(), netTotal: money.cost(z.number().int()), grossTotal: money.cost(z.number().int()) })) }).nullable(),
+    /** What the credit notes give less the credit expected (the agreed amount, else the lines' value); null: nothing to compare. */
+    difference: money.cost(z.number().int().nullable()),
   }),
   /** Each action: null = allowed now, else why not in words. */
   actions: output(Object.fromEntries(CLAIM_ACTIONS.map((action) => [action, z.string().nullable()])) as Record<(typeof CLAIM_ACTIONS)[number], z.ZodNullable<z.ZodString>>),

@@ -3,7 +3,7 @@ import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { amountMinor, businessDate, currency, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { money } from '@nexus/factory-domain/money/marked'
 import { ALLOCATION_TARGETS, MAX_ALLOCATIONS_PER_REQUEST, PAYMENT_METHODS, PAYMENT_STATUSES } from '@nexus/factory-domain/payments/payments'
-import { REFUND_SOURCES, REFUND_STATUSES, REFUND_VIEWS } from '@nexus/factory-domain/payments/refunds'
+import { REFUND_REASONS, REFUND_SOURCES, REFUND_STATUSES, REFUND_VIEWS } from '@nexus/factory-domain/payments/refunds'
 import { invoiceView } from '../invoicing/contract'
 
 /**
@@ -27,6 +27,8 @@ const allocationView = output({
   targetId: id(),
   amount: money.price(z.number().int()),
   reversalOfId: id().nullable(),
+  /** B-W2b-21: this allocation carries a deposit paid without a deposit invoice onto the invoice (the reversal it carries). */
+  carriedFromId: id().nullable(),
   /** A later row takes it back. */
   reversed: z.boolean(),
   note: z.string().nullable(),
@@ -168,10 +170,13 @@ export const depositReceivedContract = defineContract({
 
 // ---- the deposit page by link (DEPOSIT_INFO) ---------------------------------------------------------------------------
 
-/** Office: mail the deposit page's link to the quote's contact (an OPEN request). The link's token is never in an answer. */
+/**
+ * Office: mail the deposit page's link to the quote's contact (an OPEN request). The link's token is never in an answer.
+ * B-W2b-16: a request made on an order (no quote) goes to `contactId`, else the INVOICES contact, else the ORDERS one.
+ */
 export const sendDepositLinkContract = defineContract({
   params: input({ depositRequestId: id() }),
-  body: input({ message: z.string().trim().max(2000).optional() }),
+  body: input({ message: z.string().trim().max(2000).optional(), contactId: id().optional() }),
   response: {
     201: output({
       link: output({ id: id(), expiresAt: instant(), to: z.string(), revokedLinkIds: z.array(id()) }),
@@ -195,7 +200,8 @@ export const depositLinkViewContract = defineContract({
         status: z.string(),
         paid: z.boolean(),
       }),
-      quote: output({ document: z.string() }),
+      /** B-W2b-16: null for a request made on an order without a quote (the order names it). */
+      quote: output({ document: z.string() }).nullable(),
       order: output({ number: z.string() }).nullable(),
       from: output({ legalName: z.string(), tradeName: z.string().nullable() }),
       instructions: output({
@@ -248,8 +254,15 @@ export const openItemsContract = defineContract({
           openAmount: money.price(z.number().int()),
           /** B-W2a-61: with paymentId or amount, what "Suggest" places on it (oldest first). */
           suggestedAmount: money.price(z.number().int()),
-          /** B-W2a-61: an invoice of an order whose deposit was paid on a request that issues no TD02 (NONE): what it holds. */
+          /**
+           * B-W2a-61: an invoice of an order whose deposit was paid on a request that issues no TD02 (NONE): what it still
+           * holds; B-W2b-21: null once it is carried onto the invoice (POST /payments/deposit-requests/:id/carry).
+           */
           noInvoiceDepositAmount: money.price(z.number().int().nullable()),
+          /** B-W2b-21: the deposit requests whose money waits to be carried onto this invoice's order invoices, and how much. */
+          depositToCarry: z.array(output({ depositRequestId: id(), amount: money.price(z.number().int()) })),
+          /** B-W2b-21: what carried deposits place on this invoice (part of what is paid on it). */
+          carriedDepositAmount: money.price(z.number().int()),
         }),
       ),
       /** B-W2a-61: what is left to place, and what stays on the payment after the suggestion (the credit balance). */
@@ -285,6 +298,9 @@ const refundBase = {
   voidedAt: instant().nullable(),
   voidReason: z.string().nullable(),
   internalNote: z.string().nullable(),
+  /** B-W2b-21 (Z8:02): why the money goes back (null: a refund recorded before W2b), and in words. */
+  reasonCode: z.enum(REFUND_REASONS).nullable(),
+  reasonWords: output({ it: z.string(), en: z.string() }).nullable(),
   createdAt: instant(),
 }
 const refundRow = output(refundBase)
@@ -340,6 +356,8 @@ export const recordRefundContract = defineContract({
     amount: money.price(amountMinor()),
     dueDate: businessDate().nullish(),
     internalNote: z.string().trim().max(2000).nullish(),
+    /** B-W2b-21: why the money goes back; absent: the reason its source says (a return, a deposit, an overpayment …). */
+    reasonCode: z.enum(REFUND_REASONS).optional(),
     /** Recorded as made already: the transfer's value date and the bank's reference (CRO / TRN). */
     paid: input({ paidOn: businessDate(), externalRef: reference }).optional(),
     periodLockOverride: periodLockOverride.optional(),
@@ -349,7 +367,14 @@ export const recordRefundContract = defineContract({
 
 export const changeRefundContract = defineContract({
   params: refundParams,
-  body: input({ version: requiredVersion, amount: money.price(amountMinor()), dueDate: businessDate().nullish(), internalNote: z.string().trim().max(2000).nullish() }),
+  body: input({
+    version: requiredVersion,
+    amount: money.price(amountMinor()),
+    dueDate: businessDate().nullish(),
+    internalNote: z.string().trim().max(2000).nullish(),
+    /** B-W2b-21: the reason, while DUE. */
+    reasonCode: z.enum(REFUND_REASONS).optional(),
+  }),
   response: { 200: oneRefund },
 })
 
@@ -411,6 +436,28 @@ export const releaseOverpaymentContract = defineContract({
       releasedAmount: money.price(z.number().int()),
       payments: z.array(output({ paymentId: id(), unplacedAmount: money.price(z.number().int()) })),
       balances,
+    }),
+  },
+})
+
+// ---- B-W2b-21 (Z8:01): a deposit paid without a deposit invoice, carried onto its order's invoice ------------------------
+
+/**
+ * POST /payments/deposit-requests/:depositRequestId/carry: the PAID deposit of a request that issues no TD02 (NONE) placed on
+ * its order's issued TD01 / TD24 in ONE command (a reversal of each live allocation + an allocation of the same payment to
+ * the invoice naming it). `invoiceId` absent: the order's oldest invoices that take each allocation whole.
+ */
+export const carryDepositContract = defineContract({
+  params: input({ depositRequestId: id() }),
+  body: input({ invoiceId: id().optional(), note: z.string().trim().max(500).nullish() }),
+  response: {
+    200: output({
+      depositRequestId: id(),
+      orderId: id(),
+      orderNumber: z.string().nullable(),
+      amount: money.price(z.number().int()),
+      carried: z.array(output({ paymentId: id(), reversalId: id(), allocationId: id(), invoiceId: id(), invoiceNumber: z.string().nullable(), amount: money.price(z.number().int()) })),
+      invoices: z.array(output({ id: id(), number: z.string().nullable(), openAmount: money.price(z.number().int()) })),
     }),
   },
 })

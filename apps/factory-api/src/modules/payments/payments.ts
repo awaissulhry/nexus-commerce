@@ -341,7 +341,9 @@ export async function reverseAllocation(caller: CommandCaller, paymentId: string
     if (original.reversalOfId) throw new InvalidStateError('This row is a reversal itself; it is not taken back.')
     if (await tools.tx.paymentAllocation.findFirst({ where: { reversalOfId: original.id }, select: { id: true } })) throw new InvalidStateError('This allocation is taken back already.')
     if (original.depositRequestId) {
-      const request = await tools.tx.depositRequest.findUnique({ where: { id: original.depositRequestId }, select: { status: true } })
+      const request = await tools.tx.depositRequest.findUnique({ where: { id: original.depositRequestId }, select: { status: true, fiscalDocument: true, orderId: true } })
+      // B-W2b-21: a PAID deposit that issues no deposit invoice moves onto its order's invoice only by the carry (it reverses and places in one command).
+      if (request?.status === 'PAID' && request.fiscalDocument === 'NONE' && request.orderId) throw new InvalidStateError("The deposit request is PAID with this payment and issues no deposit invoice: carry it onto the order's invoice (POST /payments/deposit-requests/:id/carry) instead of taking it back.")
       if (request?.status === 'PAID') throw new InvalidStateError('The deposit request is PAID with this payment: its allocations stay (a refund is a credit note and a refund, W2).')
     }
     const id = newId()

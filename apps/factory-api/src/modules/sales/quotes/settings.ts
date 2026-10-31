@@ -73,8 +73,17 @@ export interface SaveSalesSettingsInput {
 
 const FIELDS = ['marginFloorPct', 'discountLimitPct', 'defaultValidityDays', 'defaultDepositPct'] as const
 
+/**
+ * B-W2b-16 (design ssettings.approval "Raising a limit asks for step-up"): a change that lets more quotes through without
+ * an approver — a higher discount limit or a lower margin floor than the rules in force before (the row's own, or for a
+ * company's first row the rules it followed) — asks for a fresh step-up. Tightening, or other fields, does not.
+ */
+export function raisesApprovalLimit(before: { readonly marginFloorPct: string; readonly discountLimitPct: string }, after: { readonly marginFloorPct: string; readonly discountLimitPct: string }): boolean {
+  return Number(after.discountLimitPct) > Number(before.discountLimitPct) || Number(after.marginFloorPct) < Number(before.marginFloorPct)
+}
+
 /** PUT /sales/settings (sales.settings.manage): a company's quote rules, or the tenant-wide ones. */
-export async function saveSalesSettings(caller: CommandCaller, body: SaveSalesSettingsInput, idempotencyKey?: string) {
+export async function saveSalesSettings(caller: CommandCaller, body: SaveSalesSettingsInput, idempotencyKey?: string, stepUp: () => void | Promise<void> = () => undefined) {
   const context = officeContextOf(caller)
   const companyId = body.companyId ?? null
   if (!mayWrite(actorOf(context), SALES_SETTINGS_MANAGE, companyId)) throw new ForbiddenError(companyId === null ? 'The tenant-wide sales settings are changed only by a role over every company.' : undefined)
@@ -92,6 +101,9 @@ export async function saveSalesSettings(caller: CommandCaller, body: SaveSalesSe
   const existing = await caller.withClient((client) => client.salesSettings.findUnique({ where: { id }, select: SALES_SETTINGS_COLUMNS }))
   if (existing && body.version === undefined) throw new ConflictError('These sales settings exist: send their version to change them.')
   if (!existing && body.version !== undefined) throw new ConflictError('These sales settings do not exist yet: save them without a version.')
+  // B-W2b-16: raising a limit (a higher discount limit, a lower margin floor) asks for a fresh step-up first.
+  const inForce = existing ? settingsView(existing) : rulesInForce(await caller.withClient((client) => settingsRowsFor(client, companyId)), companyId)
+  if (raisesApprovalLimit({ marginFloorPct: String(inForce.marginFloorPct), discountLimitPct: String(inForce.discountLimitPct) }, wanted)) await stepUp()
 
   const { result } = await command(
     caller,

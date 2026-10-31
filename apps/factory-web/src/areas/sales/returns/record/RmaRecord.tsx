@@ -10,6 +10,7 @@ import { liveMatches, useLive, useRecordTab } from '../../../quality/_shared/hoo
 import { problemKey } from '../../../quality/_shared/model'
 import { RecordProblem, RecordSkeleton } from '../../../quality/_shared/parts'
 import {
+  addReturnLines,
   cancelReturn,
   changeReturnLine,
   closeReturn,
@@ -20,6 +21,7 @@ import {
   issueSourceDdt,
   listPeople,
   listRepairs,
+  listReturnable,
   listReturnReasons,
   makeReplacementOrder,
   previewDecisions,
@@ -35,6 +37,8 @@ import {
   type Rma,
 } from '../api'
 import {
+  addLinesBody,
+  addLinesProblems,
   BLANK_REPAIR,
   closeReasonText,
   ddtBody,
@@ -47,10 +51,11 @@ import {
   returnHref,
   returnsCan,
   romeToday,
+  takenOf,
   type DecisionDraft,
   type Words,
 } from '../model'
-import { RMA_TABS, type CloseModel, type NewRepairModel, type RmaDialog, type RmaModel } from '../view-model'
+import { RMA_TABS, type AddLinesModel, type CloseModel, type NewRepairModel, type RmaDialog, type RmaModel } from '../view-model'
 import { ReturnsMessages, useWords } from '../view/parts'
 import { RmaRecordView } from './view/RmaRecordView'
 
@@ -114,11 +119,12 @@ function Container({ returnId }: { returnId: string }) {
   const [dialogProblem, setDialogProblem] = useState<Words | null>(null)
   const [close, setClose] = useState<CloseModel | null>(null)
   const [newRepair, setNewRepair] = useState<NewRepairModel | null>(null)
+  const [addLines, setAddLines] = useState<AddLinesModel | null>(null)
   const [dockOpen, setDockOpen] = useState(false)
   const latest = useRef<Rma | null>(null)
   latest.current = rma
   const quiet = useRef(false)
-  quiet.current = dialog !== null || close !== null || newRepair !== null
+  quiet.current = dialog !== null || close !== null || newRepair !== null || addLines !== null
   const dialogKey = useRef<string>(newIdempotencyKey())
   // A row's cell edits wait for each other, so each carries the version the previous answer gave.
   const chain = useRef<Promise<unknown>>(Promise.resolve())
@@ -399,6 +405,42 @@ function Container({ returnId }: { returnId: string }) {
     }
   }
 
+  // ---- Add lines (B-W2b-16): what may still come back, picked; one POST at the version read ------------------------------
+  const addKey = useRef<string>(newIdempotencyKey())
+  const openAddLines = async () => {
+    const current = latest.current
+    if (!current) return
+    addKey.current = newIdempotencyKey()
+    setAddLines({ lines: {}, returnable: { value: null, loading: true, problem: null }, showProblems: false, busy: false, problem: null })
+    try {
+      const value = await listReturnable(api, { companyId: current.companyId, partyId: current.partyId })
+      setAddLines((open) => (open ? { ...open, returnable: { value, loading: false, problem: null } } : open))
+    } catch (error) {
+      setAddLines((open) => (open ? { ...open, returnable: { value: null, loading: false, problem: `quality:${problemKey(error)}` } } : open))
+    }
+  }
+  const submitAddLines = async () => {
+    const current = latest.current
+    const open = addLines
+    if (!current || !open || open.busy) return
+    const returnable = open.returnable.value?.lines ?? []
+    const taken = takenOf(current)
+    if (addLinesProblems(open.lines, returnable, taken).length > 0) {
+      setAddLines({ ...open, showProblems: true })
+      return
+    }
+    setAddLines({ ...open, busy: true, problem: null, showProblems: true })
+    try {
+      const answer = await addReturnLines(api, current, addLinesBody(open.lines, returnable, taken), addKey.current)
+      setRma(answer.return)
+      setAddLines(null)
+      setReceipt({ tone: 'success', words: { key: 'addLines.done', params: { count: answer.lineIds.length } } })
+    } catch (error) {
+      setAddLines((latestOpen) => (latestOpen ? { ...latestOpen, busy: false, problem: refusalOf(error) } : latestOpen))
+      addKey.current = newIdempotencyKey()
+    }
+  }
+
   // ---- Close --------------------------------------------------------------------------------------------------------------
   const closeKey = useRef<string>(newIdempotencyKey())
   const submitClose = async () => {
@@ -444,6 +486,7 @@ function Container({ returnId }: { returnId: string }) {
     dialogProblem,
     close,
     newRepair,
+    addLines,
     dockOpen,
   }
 
@@ -504,11 +547,15 @@ function Container({ returnId }: { returnId: string }) {
         onNewRepairClose: () => setNewRepair(null),
         onCloseOpen: () => {
           closeKey.current = newIdempotencyKey()
-          setClose({ number: rma.number, reason: '', note: '', busy: false, problem: null, warnings: null })
+          setClose({ number: rma.number, reason: '', note: '', busy: false, problem: null, warnings: null, pending: rma.closeWarnings })
         },
         onCloseDraft: (patch) => setClose((current) => (current ? { ...current, ...patch } : current)),
         onCloseSubmit: () => void submitClose(),
         onCloseDismiss: () => setClose(null),
+        onAddLinesOpen: () => void openAddLines(),
+        onAddLinesLine: (key, patch) => setAddLines((open) => (open ? { ...open, lines: { ...open.lines, [key]: { ...(open.lines[key] ?? { quantity: '', reasonCode: '', note: '' }), ...patch } } } : open)),
+        onAddLinesSubmit: () => void submitAddLines(),
+        onAddLinesClose: () => setAddLines(null),
         onCopy: (text) => {
           void navigator.clipboard?.writeText(text).then(
             () => setReceipt({ tone: 'success', words: { key: 'done.copied' } }),

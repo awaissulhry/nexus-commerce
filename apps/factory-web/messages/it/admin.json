@@ -1664,6 +1664,7 @@
     "orders_view": "Vedere gli ordini clienti",
     "orders_manage": "Lavorare sugli ordini clienti",
     "orders_close": "Chiudere un ordine spedito non saldato",
+    "orders_waive": "Rinunciare all’acconto di un ordine o a una scadenza prima della spedizione",
     "privacy_view": "Vedere gli adempimenti privacy della società",
     "privacy_manage": "Scrivere e pubblicare informative; registrare le prese visione",
     "quality_lots_view": "Vedere la scheda qualità di un lotto",
@@ -1758,6 +1759,7 @@
     "payables_manage": "Registrare, abbinare e contestare le fatture fornitori",
     "payables_differences_accept": "Accettare a parole una differenza di una fattura fornitore",
     "payables_approve": "Approvare le fatture fornitori per il pagamento",
-    "payables_pay": "Registrare il pagamento di una fattura fornitore"
+    "payables_pay": "Registrare il pagamento di una fattura fornitore",
+    "payables_settings": "Modificare le impostazioni fornitori: tolleranze del confronto, base di fatturazione e chi approva le fatture SDI"
   }
 }

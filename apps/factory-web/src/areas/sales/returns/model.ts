@@ -655,6 +655,26 @@ export function newReturnBody(draft: NewReturnDraft, returnable: readonly Return
   }
 }
 
+// ---- Add lines on an open RMA (B-W2b-16; design rma.lines "Add lines by picking from the customer's invoiced lines") ------
+
+/** The lines already on the return, by the key of what may come back: their seq (their pieces change on the Lines tab). */
+export function takenOf(rma: Pick<Rma, 'lines'>): Record<string, number> {
+  return Object.fromEntries(rma.lines.map((line) => [returnableKey(line), line.seq]))
+}
+
+/** What stops Add lines before the API is asked (the lines picked, their pieces and reasons; lines already on it never). */
+export function addLinesProblems(lines: Readonly<Record<string, NewReturnLineDraft>>, returnable: readonly ReturnableLine[] | null, taken: Readonly<Record<string, number>>): Words[] {
+  const open = (returnable ?? []).filter((line) => taken[returnableKey(line)] === undefined)
+  const problems = newReturnProblems({ ...BLANK_RETURN, partyId: 'picked', lines }, open)
+  return problems
+}
+
+/** The lines Add lines sends (POST /sales/returns/:id/lines). */
+export function addLinesBody(lines: Readonly<Record<string, NewReturnLineDraft>>, returnable: readonly ReturnableLine[], taken: Readonly<Record<string, number>>): NewReturnBody['lines'] {
+  const open = returnable.filter((line) => taken[returnableKey(line)] === undefined)
+  return newReturnBody({ ...BLANK_RETURN, lines }, open, '').lines
+}
+
 /** Delivered outside the return window: a warning only (the policy check itself is SAL-338, W2b). */
 export function outsideWindow(line: Pick<ReturnableLine, 'deliveredOn'>, windowDays: number | null, today: string): number | null {
   if (!line.deliveredOn || windowDays === null) return null

@@ -201,16 +201,26 @@ describe('copying a style (PRD-011)', () => {
   it('offers each part with what it holds, and says why one cannot be picked', async () => {
     const offer = (await ok('engineer', 'GET', `/product/styles/${jacket}/duplicate`)).offer
     expect(offer).toMatchObject({ source: { id: jacket, code: 'SEED-JKT-01', status: 'ACTIVE' }, revision: { id: revision1, revision: 1, status: 'RELEASED' }, colourways: 2, droppedSizes: [] })
+    // W2b (B-W2b-25): each reason also as a code with its facts.
+    const facts = (more: Json = {}) => ({ style: 'SEED-JKT-01', revision: null, label: null, labelRevision: null, permission: null, everyCompany: false, ...more })
+    const can = { reasonCode: null, reasonFacts: null }
     expect(offer.parts).toEqual([
-      { part: 'BOM', available: true, count: 3, reason: null },
-      { part: 'ROUTING', available: true, count: 4, reason: null },
-      { part: 'MEASUREMENTS', available: true, count: null, reason: null },
-      { part: 'LABELS', available: false, count: null, reason: 'Revision 1 has no garment label.' },
-      { part: 'PICTURES', available: false, count: null, reason: "The style's sketches and pictures are copied once the gallery arrives (W2b)." },
-      { part: 'OPTIONS', available: false, count: null, reason: 'Style options are copied once option groups arrive (W2b).' },
+      { part: 'BOM', available: true, count: 3, reason: null, ...can },
+      { part: 'ROUTING', available: true, count: 4, reason: null, ...can },
+      { part: 'MEASUREMENTS', available: true, count: null, reason: null, ...can },
+      { part: 'LABELS', available: false, count: null, reason: 'Revision 1 has no garment label.', reasonCode: 'NO_LABEL', reasonFacts: facts({ revision: 1 }) },
+      { part: 'PICTURES', available: false, count: null, reason: "The style's sketches and pictures are copied once the gallery arrives (W2b).", reasonCode: 'NOT_YET', reasonFacts: facts() },
+      { part: 'OPTIONS', available: false, count: null, reason: 'Style options are copied once option groups arrive (W2b).', reasonCode: 'NOT_YET', reasonFacts: facts() },
     ])
     const limited = (await ok('stylesOnly', 'GET', `/product/styles/${jacket}/duplicate`)).offer.parts
-    expect(limited[0]).toEqual({ part: 'BOM', available: false, count: null, reason: 'Copying the BOM needs product.bom.manage over every company.' })
+    expect(limited[0]).toEqual({
+      part: 'BOM',
+      available: false,
+      count: null,
+      reason: 'Copying the BOM needs product.bom.manage over every company.',
+      reasonCode: 'NEEDS_PERMISSION',
+      reasonFacts: facts({ permission: 'product.bom.manage', everyCompany: true }),
+    })
   })
 
   it('makes a new draft style with its own code, the colourways, SKUs and the BOM and routing in a new draft revision', async () => {
@@ -247,6 +257,12 @@ describe('copying a style (PRD-011)', () => {
     expect(answer.revision).toMatchObject({ revision: 1, status: 'DRAFT', changeNote: 'Copied from SEED-JKT-01 revision 1.' })
     expect(answer.copied).toEqual({ from: { styleId: jacket, code: 'SEED-JKT-01', revisionId: revision1, revision: 1 }, parts: ['BOM', 'ROUTING', 'MEASUREMENTS'], colourways: 2, bomLines: 3, routingSteps: 4, label: false, skus: 6 })
     expect(answer.notes).toEqual([])
+    expect(answer.noteCodes).toEqual([])
+    // W2b (B-W2b-25): the copy names its source and the revision its parts came from, on the record too; the source names none.
+    expect(copy.copiedFrom).toEqual({ styleId: jacket, code: 'SEED-JKT-01', name: expect.any(String), revisionId: revision1, revision: 1 })
+    expect((await ok('viewer', 'GET', `/product/styles/${copy.id}`)).style.copiedFrom).toEqual(copy.copiedFrom)
+    expect((await ok('viewer', 'GET', `/product/styles/${jacket}`)).style.copiedFrom).toBeNull()
+    expect(await admin(`SELECT "copiedFromStyleId"::text AS "styleId", "copiedFromRevisionId"::text AS "revisionId" FROM "Style" WHERE id = $1`, [copy.id])).toEqual([{ styleId: jacket, revisionId: revision1 }])
 
     // The BOM onto the copy's colourways, its size quantities; the routing with its subcontracted step.
     const bom = (await ok('viewer', 'GET', `/product/styles/${copy.id}/revisions/${answer.revision.id}/bom`)).bom
@@ -280,6 +296,11 @@ describe('copying a style (PRD-011)', () => {
       expect(answer.style).toMatchObject({ sizes: ['50', '52'], mtmAllowed: false, measurementTemplate: null, skuCount: 0 })
       expect(answer.style.colourways.map((colourway: Json) => colourway.code)).toEqual(['BLK'])
       expect(answer.notes).toEqual(["Size(s) 54 are archived in the scale: the copy's range leaves them out.", '1 archived colourway(s) are not copied.'])
+      expect(answer.noteCodes).toEqual([
+        { code: 'SIZES_ARCHIVED', sizes: ['54'], count: null, colourway: null },
+        { code: 'COLOURWAYS_ARCHIVED', sizes: [], count: 1, colourway: null },
+      ])
+      expect(answer.style.copiedFrom).toMatchObject({ styleId: jacket, revisionId: revision1, revision: 1 })
       const bom = (await ok('viewer', 'GET', `/product/styles/${answer.style.id}/revisions/${answer.revision.id}/bom`)).bom
       expect(bom.lines[0].sizes).toEqual([{ size: '50', qty: '43' }, { size: '52', qty: '45' }])
       expect(bom.lines[0].colours.map((cell: Json) => cell.colourwayId)).toEqual([answer.style.colourways[0].id])

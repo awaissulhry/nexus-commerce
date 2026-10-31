@@ -17,12 +17,17 @@ import { defineEvent } from '../events/define'
  * B-W2a-61 (FIN-127 refunds, FIN-122 the credit balance; modules/payments/refunds.ts, credit-balance.ts):
  *   refund.recorded               a refund to a customer was recorded, DUE (to make) or PAID (made): its source is a
  *                                 credit note or a payment's unplaced part (the tile "Refunds to make", the record)
- *   refund.changed                a DUE refund's amount, due date or note changed
+ *   refund.changed                a DUE refund's amount, due date, note or reason (B-W2b-21) changed
  *   refund.paid                   a DUE refund was paid: the bank's date and reference are recorded
  *   refund.cancelled              a DUE refund is not paid after all (the customer keeps the credit)
  *   refund.voided                 a refund recorded as paid by mistake was voided
  *   payment.overpayment_released  an invoice paid beyond what it is worth after a credit note gave the excess back to
  *                                 its payments' unplaced part: the customer's credit balance
+ *
+ * B-W2b-21 (Z8:01; modules/payments/deposit-carry.ts):
+ *   payment.deposit_carried       a PAID deposit that issues no deposit invoice (fiscal document NONE) was carried onto its
+ *                                 order's invoice (each allocation reversed and placed on the invoice: payment.allocation_
+ *                                 reversed and payment.allocated are emitted too)
  */
 const target = z.enum(['DEPOSIT_REQUEST', 'INVOICE'])
 const live = { permission: 'payments.view', fields: ['paymentId'] } as const
@@ -75,8 +80,8 @@ export const events = [
   defineEvent({
     type: 'refund.changed',
     context: 'payments',
-    description: "A due refund's amount, due date or note changed.",
-    payload: z.strictObject({ refundId: z.uuid(), fields: z.array(z.enum(['amount', 'dueDate', 'internalNote'])).min(1) }),
+    description: "A due refund's amount, due date, note or reason changed.",
+    payload: z.strictObject({ refundId: z.uuid(), fields: z.array(z.enum(['amount', 'dueDate', 'internalNote', 'reasonCode'])).min(1) }),
     live: refundLive,
   }),
   defineEvent({
@@ -107,11 +112,19 @@ export const events = [
     payload: z.strictObject({ invoiceId: z.uuid(), partyId: z.uuid(), paymentIds: z.array(z.uuid()).min(1) }),
     live: { permission: 'payments.view', fields: ['invoiceId'] },
   }),
+  // B-W2b-21: a deposit paid without a deposit invoice, carried onto the order's invoice.
+  defineEvent({
+    type: 'payment.deposit_carried',
+    context: 'payments',
+    description: "A paid deposit that issues no deposit invoice was carried onto its order's invoice (its allocations reversed and placed on the invoice).",
+    payload: z.strictObject({ depositRequestId: z.uuid(), partyId: z.uuid(), orderId: z.uuid(), invoiceIds: z.array(z.uuid()).min(1), allocations: z.number().int().min(1) }),
+    live: { permission: 'payments.view', fields: ['depositRequestId', 'orderId'] },
+  }),
   defineEvent({
     type: 'deposit_request.link_sent',
     context: 'payments',
-    description: 'The customer was mailed a DEPOSIT_INFO link to its deposit request: the amount, the due date and the bank details for the transfer.',
-    payload: z.strictObject({ depositRequestId: z.uuid(), quoteId: z.uuid(), partyId: z.uuid(), linkId: z.uuid() }),
+    description: 'The customer was mailed a DEPOSIT_INFO link to its deposit request: the amount, the due date and the bank details for the transfer (B-W2b-16: also for a request made on an order without a quote, orderId set, quoteId null).',
+    payload: z.strictObject({ depositRequestId: z.uuid(), quoteId: z.uuid().nullable(), orderId: z.uuid().nullable(), partyId: z.uuid(), linkId: z.uuid() }),
     live: { permission: 'payments.view', fields: ['depositRequestId', 'quoteId'] },
   }),
 ] as const

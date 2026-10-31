@@ -23,6 +23,10 @@ describe('the repair order', () => {
     expect(liveWorkOrderProblem('REP-1', null)).toBeNull()
     expect(liveWorkOrderProblem('REP-1', { number: 'WO-9', status: 'CANCELLED' })).toBeNull()
     expect(liveWorkOrderProblem('REP-1', { number: 'WO-9', status: 'DRAFT' })).toBe('Repair REP-1 already has repair work order WO-9 (DRAFT); cancel it first to make another.')
+    // B-W2b-16: back into repair after it was repaired, a done work order no longer stops the rework's; a live one does.
+    expect(liveWorkOrderProblem('REP-1', { number: 'WO-9', status: 'COMPLETED' }, true)).toBeNull()
+    expect(liveWorkOrderProblem('REP-1', { number: 'WO-9', status: 'COMPLETED' })).toBe('Repair REP-1 already has repair work order WO-9 (COMPLETED); cancel it first to make another.')
+    expect(liveWorkOrderProblem('REP-1', { number: 'WO-9', status: 'RELEASED' }, true)).toBe('Repair REP-1 already has repair work order WO-9 (RELEASED); cancel it first to make another.')
   })
 })
 

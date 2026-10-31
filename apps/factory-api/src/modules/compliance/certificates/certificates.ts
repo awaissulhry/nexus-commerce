@@ -325,6 +325,12 @@ const columns = (fields: CertificateFields, note: string | null) => ({
   note,
 })
 
+/** B-W2b-23: what a person did to a certificate, once per command (the search index follows it; live screens refetch). */
+type CertificateChange = 'CREATED' | 'EDITED' | 'ISSUED' | 'SUSPENDED' | 'REINSTATED' | 'WITHDRAWN'
+function certificateChanged(emit: CommandTools['emit'], row: Pick<CertificateRow, 'id' | 'companyId' | 'number' | 'status'>, change: CertificateChange): void {
+  emit({ type: 'compliance.certificate_changed', subject: row.id, companyId: row.companyId, payload: { certificateId: row.id, number: row.number, status: row.status, change } })
+}
+
 /** compliance.certificates.create: a DRAFT certificate, typed in from the notified body's document. */
 export async function createCertificate(caller: CommandCaller, input: CertificateInput, idempotencyKey?: string): Promise<CertificateDetail> {
   const fields = fieldsFrom(input)
@@ -334,13 +340,14 @@ export async function createCertificate(caller: CommandCaller, input: Certificat
   mayManage(caller, fields)
   await checkReferences(caller, fields)
   try {
-    const { result } = await certificateCommand(caller, { name: 'compliance.certificates.create', idempotencyKey, input }, async ({ tx, audit, now, context }) => {
+    const { result } = await certificateCommand(caller, { name: 'compliance.certificates.create', idempotencyKey, input }, async ({ tx, audit, emit, now, context }) => {
       const id = newId()
       const row = await tx.certificate.create({
         data: { id, ...columns(fields, note), status: 'DRAFT', createdAt: now, updatedAt: now, createdById: context.audience === 'office' ? context.actorId : null },
         select: CERTIFICATE_SELECT,
       })
       audit({ recordType: 'Certificate', recordId: id, companyId: row.companyId, after: audited(row) })
+      certificateChanged(emit, row, 'CREATED')
       return certificateDetail(tx, id, businessDate(now))
     })
     return result
@@ -376,12 +383,13 @@ export async function updateCertificate(caller: CommandCaller, certificateId: st
     const { result } = await certificateCommand(
       caller,
       { name: 'compliance.certificates.update', idempotencyKey, input: { certificateId, ...input }, record: { type: 'Certificate', id: certificateId, expectedVersion: input.version } },
-      async ({ tx, audit, now }) => {
+      async ({ tx, audit, emit, now }) => {
         // The row is locked now: a move that committed meanwhile is seen here.
         const locked = await tx.certificate.findUniqueOrThrow({ where: { id: certificateId }, select: { status: true, number: true } })
         if (!isCertificateEditable(locked.status)) throw draftOnly(locked)
         const row = await tx.certificate.update({ where: { id: certificateId }, data: columns(fields, note), select: CERTIFICATE_SELECT })
         audit({ recordType: 'Certificate', recordId: certificateId, companyId: row.companyId, before: audited(before), after: audited(row) })
+        certificateChanged(emit, row, 'EDITED')
         return certificateDetail(tx, certificateId, businessDate(now))
       },
     )
@@ -400,6 +408,7 @@ export const MOVES = {
   withdraw: 'WITHDRAWN',
 } as const satisfies Record<string, CertificateStatus>
 export type Move = keyof typeof MOVES
+const MOVE_CHANGES = { issue: 'ISSUED', suspend: 'SUSPENDED', reinstate: 'REINSTATED', withdraw: 'WITHDRAWN' } as const satisfies Record<Move, CertificateChange>
 
 export interface MoveInput {
   readonly version: number
@@ -434,7 +443,7 @@ export async function moveCertificate(caller: CommandCaller, certificateId: stri
         transition: { machine: certificateMachine, to, facts: (tx) => certificateFacts(tx, certificateId, today, reason) },
       },
     },
-    async ({ tx, audit, now, record }) => {
+    async ({ tx, audit, emit, now, record }) => {
       const statusReason = move === 'issue' ? null : reason
       const row = await tx.certificate.update({ where: { id: certificateId }, data: { statusReason, statusChangedAt: now }, select: CERTIFICATE_SELECT })
       // Registered (or reinstated): its PDF is kept, in the same transaction as the move.
@@ -447,6 +456,7 @@ export async function moveCertificate(caller: CommandCaller, certificateId: stri
         after: { status: row.status, statusReason: row.statusReason },
         ...(reason ? { reason } : {}),
       })
+      certificateChanged(emit, row, MOVE_CHANGES[move])
       return certificateDetail(tx, certificateId, businessDate(now))
     },
   )

@@ -208,7 +208,8 @@ const linesBody = input({
 
 export const closeLinesContract = defineContract({
   params: orderParams,
-  body: linesBody,
+  // B-W2b-16: the close's reason code, an active code of the CANCEL reason list (B-W2a-18) beside the words.
+  body: linesBody.extend({ reasonCode: z.string().trim().min(1).max(40).regex(/^[A-Z][A-Z0-9_]*$/).optional() }),
   response: {
     200: output({
       order: orderView,
@@ -315,3 +316,16 @@ export const stepRequestContract = defineContract({
   }),
   response: { 201: output({ ...scheduleFields, depositRequestId: id() }) },
 })
+
+// ---- B-W2b-16: the owner waives a deposit or a step before shipping -------------------------------------------------------
+
+const waiveBody = input({
+  /** The step's version (a step), or the deposit request's (a request no step names). */
+  version,
+  /** Why the customer need not pay it in advance. */
+  reason: z.string().trim().min(3).max(500),
+})
+const waiveAnswer = output({ ...scheduleFields, waived: output({ milestoneIds: z.array(id()), depositRequestId: id().nullable() }) })
+
+export const waiveStepContract = defineContract({ params: input({ orderId: id(), milestoneId: id() }), body: waiveBody, response: { 200: waiveAnswer } })
+export const waiveDepositRequestContract = defineContract({ params: input({ orderId: id(), requestId: id() }), body: waiveBody, response: { 200: waiveAnswer } })

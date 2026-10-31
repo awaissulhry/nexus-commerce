@@ -243,7 +243,7 @@ describe('deposit received → request PAID → TD02 issued (DPR 633/1972 art. 6
     const draft = (await as(finance, 'POST', '/invoicing/invoices/deposit-draft', { depositRequestId: ids.partRequest }, 201)).invoice
     expect(draft).toMatchObject({ docType: 'TD02', status: 'DRAFT', number: null, grossTotal: 40000 })
     const checks = await as(finance, 'GET', `/invoicing/invoices/${draft.id}/checks`)
-    expect(checks).toMatchObject({ ready: true, problems: [], numberPreview: numberOf(await seriesNext()) })
+    expect(checks).toMatchObject({ ready: true, problems: [], numberPreview: numberOf(await seriesNext()), periodLock: null })
     await stepUp(h, finance, financeSecret)
     const issued = await as(finance, 'POST', `/invoicing/invoices/${draft.id}/issue`, { version: draft.version })
     expect(issued).toMatchObject({ filesPending: false, invoice: { status: 'ISSUED', number: checks.numberPreview } })
@@ -498,6 +498,11 @@ describe('a write dated in a month closed for good (a HARD period lock) is refus
   it('issues no invoice today (invoices.issue): the lock is a problem of the issue, and no number is taken', async () => {
     const draft = (await td01()).invoice
     const before = await seriesNext()
+    // B-W2b-22: the checks before issue say it first, by the same rule (a PERIOD_LOCKED problem and the lock line).
+    const checks = await as(finance, 'GET', `/invoicing/invoices/${draft.id}/checks`)
+    expect(checks).toMatchObject({ ready: false, periodLock: { level: 'HARD', lockId, periodStart: month.start, periodEnd: month.end, needsReason: false } })
+    expect(checks.problems).toEqual([expect.objectContaining({ code: 'PERIOD_LOCKED', path: 'issueDate', message: checks.periodLock.words })])
+    saysTheLock(checks.periodLock.words)
     await stepUp(h, finance, financeSecret)
     const answer = await finance.post(`/invoicing/invoices/${draft.id}/issue`, {})
     expect(answer.status, JSON.stringify(answer.body)).toBe(409)
@@ -534,6 +539,10 @@ describe('an invoice issued today inside a SOFT-locked month needs an override r
   it('refuses the issue without a reason (period/SOFT_LOCKED, no number taken), issues it with one and audits the override', async () => {
     const draft = (await td01()).invoice
     const before = await seriesNext()
+    // B-W2b-22: the checks before issue warn of the soft lock (ready, but the issue needs a reason).
+    const checks = await as(finance, 'GET', `/invoicing/invoices/${draft.id}/checks`)
+    expect(checks).toMatchObject({ ready: true, problems: [], periodLock: { level: 'SOFT', lockId, periodStart: month.start, periodEnd: month.end, needsReason: true } })
+    expect(checks.periodLock.words).toMatch(new RegExp(`^${monthLabel(month.month)} is soft-locked for .+ \\(since ${dayWords(today)}, by fiona finance\\): the invoice is not issued today `))
     await stepUp(h, finance, financeSecret)
     const refused = await finance.post(`/invoicing/invoices/${draft.id}/issue`, {})
     expect(refused.status, JSON.stringify(refused.body)).toBe(409)

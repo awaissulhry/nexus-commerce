@@ -21,6 +21,7 @@ import { RECEIVABLES_REMINDERS_SWITCH, RECEIVABLES_SETTINGS_MANAGE, RECEIVABLES_
 import { REMINDER_TEMPLATES, TEMPLATE_WORDS, WORDING_TO_CONFIRM } from '@nexus/factory-domain/receivables/wording'
 import type { CommandCaller, CommandTools } from '../../core/command'
 import { actorOf, type OfficeContext } from '../../core/context'
+import { statutoryToday } from './interest-rates'
 import { mayEveryCompany, officeContextOf, receivablesCommand, SETTINGS_COLUMNS, settingsRowOf, settingsRows, tenantIdOf, type SettingsRecord } from './store'
 
 /**
@@ -29,7 +30,8 @@ import { mayEveryCompany, officeContextOf, receivablesCommand, SETTINGS_COLUMNS,
  * the tenant's, a grant over every company).
  *
  *   GET /receivables/settings?companyId          receivables.view: the company's row, the tenant row, which holds, the
- *                                                 switch and what keeps it off, the interest rule in words, the wording
+ *                                                 switch and what keeps it off, the interest rule in words (and, B-W2b-21,
+ *                                                 whether statutory interest has today's half-year rate), the wording
  *                                                 (placeholders TO CONFIRM with the accountant)
  *   PUT /receivables/settings                     receivables.settings.manage: the ladder (levels numbered in order), the
  *                                                 late-payment rule as the accountant decided it, the recovery charge and
@@ -68,9 +70,9 @@ export async function getSettings(caller: CommandCaller, query: { readonly compa
   const companyId = query.companyId ?? null
   if (companyId !== null && !can(actorOf(context), RECEIVABLES_VIEW, { companyId })) throw new NotFoundError('Company not found.')
   if (companyId === null && !mayEveryCompany(context, RECEIVABLES_VIEW) && !can(actorOf(context), RECEIVABLES_VIEW, {})) throw new ForbiddenError()
-  const rows = await caller.withClient(async (db) => {
+  const { rows, statutory } = await caller.withClient(async (db) => {
     if (companyId !== null && !(await db.company.findUnique({ where: { id: companyId }, select: { id: true } }))) throw new NotFoundError('Company not found.')
-    return settingsRows(db, companyId)
+    return { rows: await settingsRows(db, companyId), statutory: await statutoryToday(db) }
   })
   const effective = effectiveSettings(rows.company ? settingsRowOf(rows.company) : null, rows.tenant ? settingsRowOf(rows.tenant) : null)
   const effectiveRow = effective.source === 'COMPANY' ? rows.company : effective.source === 'TENANT' ? rows.tenant : null
@@ -82,7 +84,8 @@ export async function getSettings(caller: CommandCaller, query: { readonly compa
     company: viewOf(rows.company),
     tenant: viewOf(rows.tenant),
     switch: { on: effective.remindersEnabled, words: switchWords(effective), blockers: blockers.map((code) => ({ code, words: SWITCH_BLOCKERS[code] })), mayChange: mayAt(context, RECEIVABLES_REMINDERS_SWITCH, companyId) },
-    interest: { mode: effective.lateInterestMode, words: INTEREST_WORDS[effective.lateInterestMode] },
+    // B-W2b-21: whether STATUTORY interest has an amount today (the half-year's rate recorded, GET /receivables/interest-rates).
+    interest: { mode: effective.lateInterestMode, words: INTEREST_WORDS[effective.lateInterestMode], statutory: { halfYearStart: statutory.halfYearStart, ratePct: statutory.ratePct, missing: statutory.missing, words: statutory.words } },
     wording: { toConfirm: true as const, words: WORDING_TO_CONFIRM, templates: REMINDER_TEMPLATES.map((key) => ({ key, words: TEMPLATE_WORDS[key] })) },
     mayManage: mayAt(context, RECEIVABLES_SETTINGS_MANAGE, companyId),
   }

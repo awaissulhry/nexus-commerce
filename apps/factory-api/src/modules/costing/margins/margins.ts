@@ -286,6 +286,8 @@ function whereOf(caller: CommandCaller, query: MarginsQuery): Prisma.SalesOrderW
   return {
     AND: [
       scopeWhere(actor, COSTING_VIEW, SCOPE) as Prisma.SalesOrderWhereInput,
+      // B-W2b-22 (Z9:05): only the orders asked for (the orders list's Margin % column: the rows on screen).
+      query.ids ? { id: { in: [...query.ids] } } : {},
       query.companyId ? { companyId: query.companyId } : {},
       query.partyId ? { partyId: query.partyId } : {},
       query.styleId ? { lines: { some: { styleId: query.styleId } } } : {},

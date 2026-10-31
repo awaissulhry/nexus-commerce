@@ -80,6 +80,11 @@ export const INVOICE_COLUMNS = {
   creditOfId: true,
   xmlFileId: true,
   pdfFileId: true,
+  // B-W2b-21: the file of several invoices it came in (a lotto) and its body; the claim a credit note settles.
+  sdiFileId: true,
+  sdiBodyIndex: true,
+  claimId: true,
+  claimSiteId: true,
   status: true,
   matchStatus: true,
   matchedAt: true,

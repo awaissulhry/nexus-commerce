@@ -19,6 +19,9 @@ import type { Permission } from '../core/permissions'
  *                        withdraw the approval before payment
  *   pay                  record the payment: the day the transfer left the bank and its reference (the payment proposal
  *                        is W2b)
+ *   settings             B-W2b-21 (Z8:03): change the payables settings of a company (or of every company: a grant over
+ *                        every company): the match's tolerances and billing basis (the accountant's figures), who approves
+ *                        what SDI delivered; and dismiss or reopen what waits in the SDI inbox stays `manage`
  */
 export const PAYABLES_DEFINITIONS = definePermissions('payables', {
   view: {
@@ -41,6 +44,11 @@ export const PAYABLES_DEFINITIONS = definePermissions('payables', {
     risk: 'write',
     description: 'Record that an approved supplier invoice was paid: the day the transfer left the bank and its reference.',
   },
+  // B-W2b-21 (Z8:03): the payables settings.
+  settings: {
+    risk: 'write',
+    description: "Change the payables settings: the three-way match's tolerances and billing basis (as the accountant agrees them) and who approves the invoices SDI delivers.",
+  },
 })
 
 export const PAYABLES_VIEW = 'payables.view' satisfies Permission
@@ -48,5 +56,6 @@ export const PAYABLES_MANAGE = 'payables.manage' satisfies Permission
 export const PAYABLES_DIFFERENCES_ACCEPT = 'payables.differences.accept' satisfies Permission
 export const PAYABLES_APPROVE = 'payables.approve' satisfies Permission
 export const PAYABLES_PAY = 'payables.pay' satisfies Permission
+export const PAYABLES_SETTINGS = 'payables.settings' satisfies Permission
 
-export const PAYABLES_PERMISSIONS: readonly Permission[] = Object.freeze([PAYABLES_VIEW, PAYABLES_MANAGE, PAYABLES_DIFFERENCES_ACCEPT, PAYABLES_APPROVE, PAYABLES_PAY])
+export const PAYABLES_PERMISSIONS: readonly Permission[] = Object.freeze([PAYABLES_VIEW, PAYABLES_MANAGE, PAYABLES_DIFFERENCES_ACCEPT, PAYABLES_APPROVE, PAYABLES_PAY, PAYABLES_SETTINGS])

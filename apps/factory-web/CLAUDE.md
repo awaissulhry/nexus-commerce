@@ -117,7 +117,9 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   its company's Office, `recordAddress`, a supplier on the buying side —, the type/status words of `search.json`;
   `RecordTypeIcon`). The palette's record search is `shell/palette/use-record-search.ts` (the shell container asks
   `GET /search`; the view only reads `model.records`). A step that indexes a new record type adds its words
-  (`type.<Type>`, `chip.<Type>`, new status codes) to `messages/*/search.json` and the type to `SEARCH_TYPES`.
+  (`type.<Type>`, `chip.<Type>`, new status codes) to `messages/*/search.json` and the type to `SEARCH_TYPES`, its icon to
+  `RecordTypeIcon` and its view permission to `SEARCH_VIEW_PERMISSIONS` (B-W2b-23: 32 types; a type without a page of its own,
+  `Ddt`, opens its record panels — the navigation test's PANELS_ONLY).
 - `src/record-panels/` — SCR-006, the panels every record page mounts: `<RecordPanels record={{ type, id, companyId,
   siteId }} title party />` (thread, files, history; live refresh from `/live`). A screen with its own catalogue wraps its
   view in `WithMessages` (record-panels/i18n.tsx): the layouts load `shell` only.
