@@ -7,6 +7,8 @@ import { asMoney } from '@nexus/factory-domain/money/marked'
 import { SHIPPING_MANAGE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { carrierNameFor } from '@nexus/factory-domain/shipping/labels/labels'
 import { lineProblems, lineQuantityProblems, shipmentMachine, type ShipmentStatus, type TransportBy } from '@nexus/factory-domain/shipping/shipments'
+import { repairCellWords } from '@nexus/factory-domain/shipping/shipments/backorder'
+import { transportModeProblems, type TransportMode } from '@nexus/factory-domain/shipping/shipments/transport'
 import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
@@ -35,7 +37,7 @@ export async function shipmentDetail(db: CommandTx, shipment: ShipmentHeader) {
   const contents = await contentsView(db, shipment.id)
   // B-W2a-48: the freight charged (money.price) and the intra-EU transport evidence's state; office reads only.
   const freight = await freightView(db, shipment)
-  const evidence = await db.shipment.findUnique({ where: { id: shipment.id }, select: { transportEvidence: true, transportEvidenceAt: true } })
+  const evidence = await db.shipment.findUnique({ where: { id: shipment.id }, select: { transportEvidence: true, transportEvidenceAt: true, transportMode: true } })
   return {
     ...headerView(shipment),
     party: party ?? { code: '', legalName: '' },
@@ -43,6 +45,8 @@ export async function shipmentDetail(db: CommandTx, shipment: ShipmentHeader) {
     ...contents,
     freight,
     transportEvidence: { status: evidence?.transportEvidence ?? 'NOT_NEEDED', completedAt: evidence?.transportEvidenceAt ? toUtcIso(evidence.transportEvidenceAt) : null },
+    // B-W2b-19 (Intrastat): the mode of transport the office recorded (null: not recorded).
+    transportMode: evidence?.transportMode ?? null,
   }
 }
 
@@ -228,7 +232,7 @@ async function cellsFor(
     }
     // B-W2a-12 / B-W2a-48: a repaired garment goes back with its repair's DDT (B-W2a-17), never on a shipment of the order.
     if (cell.workOrder.kind === 'REPAIR') {
-      problems.push({ path: `${at}/workOrderSizeId`, message: `${cell.workOrder.number} is a repair work order: its garment goes back with the repair's DDT, never on a shipment of the order.` })
+      problems.push({ path: `${at}/workOrderSizeId`, message: repairCellWords(cell.workOrder.number) })
       continue
     }
     problems.push(...lineProblems(shipment, { siteId: cell.siteId, partyId: cell.partyId, salesOrderId: cell.salesOrderLine.orderId }, quantity, at))
@@ -414,7 +418,7 @@ export async function addLines(caller: CommandCaller, shipmentId: string, body: 
 
 async function lineOf(tx: CommandTx, shipmentId: string, lineId: string) {
   const line = isUuid(lineId)
-    ? await tx.shipmentLine.findFirst({ where: { id: lineId, shipmentId }, select: { id: true, quantity: true, workOrderSizeId: true, parcelId: true, serials: { select: { id: true, serial: true } }, workOrderSize: { select: { size: true, workOrder: { select: { number: true } }, colourway: { select: { code: true } } } } } })
+    ? await tx.shipmentLine.findFirst({ where: { id: lineId, shipmentId }, select: { id: true, quantity: true, workOrderSizeId: true, parcelId: true, serials: { select: { id: true, serial: true } }, workOrderSize: { select: { size: true, workOrder: { select: { number: true, kind: true } }, colourway: { select: { code: true } } } } } })
     : null
   if (!line) throw new NotFoundError('Shipment line not found.')
   return line
@@ -429,6 +433,8 @@ export async function changeLine(caller: CommandCaller, shipmentId: string, line
     const problems = lineQuantityProblems({ id: line.id, workOrderSizeId: line.workOrderSizeId, parcelId: line.parcelId, quantity: line.quantity, serials: line.serials.length, serialTracked: false }, body.quantity)
     if (problems.length > 0) throw new ConflictError(problems.join(' '))
     const label = `${line.workOrderSize.workOrder.number} ${line.workOrderSize.colourway.code} ${line.workOrderSize.size}`
+    // B-W2b-19: a repair cell's line (made before the rule) never grows; it can only come off.
+    if (body.quantity > line.quantity && line.workOrderSize.workOrder.kind === 'REPAIR') throw new InvalidStateError(repairCellWords(line.workOrderSize.workOrder.number))
     if (body.quantity > line.quantity) {
       await reserveReleased(tools.tx, tenantOf(tools.context), new Map([[line.workOrderSizeId, body.quantity - line.quantity]]), new Map([[line.workOrderSizeId, label]]))
       // B-W2a-48: the order line's size and its short close hold too.
@@ -473,11 +479,15 @@ export interface UpdateShipmentInput {
   readonly carrierCode?: string | null | undefined
   readonly serviceCode?: string | null | undefined
   readonly internalNote?: string | null | undefined
+  /** B-W2b-19 (Intrastat): the mode of transport; null clears it. */
+  readonly transportMode?: TransportMode | null | undefined
 }
 
 /**
  * shipping.manage: the delivery details (address, who carries, carrier and service) while the goods are planned or
- * packed and nothing was declared yet (no carrier label, no live DDT); the internal note at any time.
+ * packed and nothing was declared yet (no carrier label, no live DDT); the internal note at any time; the mode of
+ * transport (B-W2b-19, Intrastat) until the shipment is cancelled, also after the goods left (a DDT keeps the one it was
+ * issued with).
  */
 export async function updateShipment(caller: CommandCaller, shipmentId: string, body: UpdateShipmentInput, idempotencyKey?: string) {
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
@@ -490,6 +500,9 @@ export async function updateShipment(caller: CommandCaller, shipmentId: string, 
       const facts = await shipmentFacts(tools.tx, current.id)
       if (facts.parcels.some((parcel) => parcel.labelled) || facts.liveDdts > 0) throw new InvalidStateError('A carrier label or a DDT names these delivery details: void the labels and cancel the DDT first.')
     }
+    const mode = body.transportMode !== undefined ? transportModeProblems(current.status) : []
+    if (mode.length > 0) throw new InvalidStateError(mode.join(' '))
+    const modeBefore = body.transportMode !== undefined ? ((await tools.tx.shipment.findUnique({ where: { id: current.id }, select: { transportMode: true } }))?.transportMode ?? null) : null
     const data: Prisma.ShipmentUncheckedUpdateInput = {
       ...(body.shipToAddressId ? { shipToAddressId: body.shipToAddressId, shipTo } : {}),
       ...(body.transportBy ? { transportBy: body.transportBy } : {}),
@@ -500,11 +513,19 @@ export async function updateShipment(caller: CommandCaller, shipmentId: string, 
         : {}),
       ...(body.serviceCode !== undefined ? { serviceCode: blankToNull(body.serviceCode) } : {}),
       ...(body.internalNote !== undefined ? { internalNote: blankToNull(body.internalNote) } : {}),
+      ...(body.transportMode !== undefined ? { transportMode: body.transportMode } : {}),
     }
-    const before = { shipToAddressId: current.shipToAddressId, transportBy: current.transportBy, carrierCode: current.carrierCode, carrierName: current.carrierName, serviceCode: current.serviceCode, internalNote: current.internalNote }
+    const before = { shipToAddressId: current.shipToAddressId, transportBy: current.transportBy, carrierCode: current.carrierCode, carrierName: current.carrierName, serviceCode: current.serviceCode, internalNote: current.internalNote, ...(body.transportMode !== undefined ? { transportMode: modeBefore } : {}) }
     await tools.tx.shipment.update({ where: { id: current.id }, data, select: { id: true } })
     const after = (await readShipment(tools.tx, current.id))!
-    tools.audit({ recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before, after: { shipToAddressId: after.shipToAddressId, transportBy: after.transportBy, carrierCode: after.carrierCode, carrierName: after.carrierName, serviceCode: after.serviceCode, internalNote: after.internalNote } })
+    tools.audit({
+      recordType: 'Shipment',
+      recordId: current.id,
+      companyId: current.companyId,
+      siteId: current.siteId,
+      before,
+      after: { shipToAddressId: after.shipToAddressId, transportBy: after.transportBy, carrierCode: after.carrierCode, carrierName: after.carrierName, serviceCode: after.serviceCode, internalNote: after.internalNote, ...(body.transportMode !== undefined ? { transportMode: body.transportMode } : {}) },
+    })
     changed(tools, current, current.status, 'details')
     return { shipment: await shipmentDetail(tools.tx, after) }
   })

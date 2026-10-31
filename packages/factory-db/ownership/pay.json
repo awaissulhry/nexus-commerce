@@ -1,5 +1,5 @@
 {
-  "$comment": "Who may read and write each model of prisma/schema/pay.prisma (rules: src/ownership.ts; roles: src/roles.ts). HR keeps the piece-rate tables, their versions and rates, publishes them to the workers and records paper receipts, sets the incentive schemes, records the legal switch's preconditions and turns it on or off, runs, reviews and locks the pay periods, resolves held scans, approves statements, keeps the payroll layouts and the code mapping, and makes the payroll exports, through apps/factory-api's modules/people (B-W2b-34, -38, -43, -54), always through command(); the worker and scheduler write the earnings ledger and the held scans in the tenant's system context (the office role); the API keeps staff to the companies and sites their grants reach, asks the people permissions and the wages grain, and never lists, filters, groups or totals one person's figures (Owner answers W1, F2). The floor (factory_floor_runtime) works on its OWN site only and sees no rate and no figure: it reads the rate publications of its site and records a worker's reading of one (RateAcknowledgement, channel DEVICE); a worker's own earnings and statement reach the floor through the API (B-W2b-68), never through these grants. Portal, link and platform sessions read nothing here. Every rate and amount is `@grain wages`; the personal columns carry `@personal piece-pay`. EarningsEntry and RateAcknowledgement are append-only (`@append-only`; the …_pay_w2b_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes them. Deleted only: a DRAFT rate version's entries, a DRAFT rate version with no publication, a DRAFT scheme, the files of a DRAFT export; everything else is archived, withdrawn, cancelled, superseded or kept. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "$comment": "Who may read and write each model of prisma/schema/pay.prisma (rules: src/ownership.ts; roles: src/roles.ts). HR keeps the piece-rate tables, their versions and rates, publishes them to the workers and records paper receipts, sets the incentive schemes, records the legal switch's preconditions and turns it on or off, runs, reviews and locks the pay periods, resolves held scans, approves statements, keeps the payroll layouts and the code mapping, and makes the payroll exports, through apps/factory-api's modules/people (B-W2b-34, -38, -43, -54), always through command(); the worker and scheduler write the earnings ledger and the held scans in the tenant's system context (the office role); the API keeps staff to the companies and sites their grants reach, asks the people permissions and the wages grain, and never lists, filters, groups or totals one person's figures (Owner answers W1, F2). The floor (factory_floor_runtime), portal, link and platform sessions read nothing here: a worker's reading of the rates on the tablet (RateAcknowledgement, channel DEVICE), their own earnings and statement go through the API in the tenant's system context once the floor session is checked (B-W2b-34, B-W2b-68), never through floor grants. Every rate and amount is `@grain wages`. Personal data (PLT-207, PLT-209): the rows about one person (earnings, held scans, statements, receipts) name them by employeeId (people.prisma Employee) and list their personal columns under `personal`, purpose PAY (c.c. arts. 2099-2101); the publication's workerIds (a list inside a rate version's publication) and the payroll export's values (the file for the consultant, many people) are not rows about one person. EarningsEntry and RateAcknowledgement are append-only (`@append-only`; the …_pay_w2b_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login): no role updates or deletes them. Deleted only: a DRAFT rate version's entries, a DRAFT rate version with no publication, a DRAFT scheme, the files of a DRAFT export; everything else is archived, withdrawn, cancelled, superseded or kept. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
   "models": {
     "PieceRateTable": {
       "about": "HR keeps a site's piece-rate tables (one style's or the site's general rates, optionally per line); archived, never deleted. Office only.",
@@ -26,21 +26,33 @@
       }
     },
     "RatePublication": {
-      "about": "HR publishes a version to workers of its site (on the floor and/or printed), names its printed sheet, or withdraws a publication of a version still in DRAFT. The floor reads its site's publications to show a worker what to read (no rate here), not who in the office made them.",
+      "about": "HR publishes a version to workers of its site (on the floor and/or printed), names its printed sheet, or withdraws a publication of a version still in DRAFT. Office only (the tablet shows it through the API).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
-        "factory_runtime": { "privileges": ["select", "insert", "update"] },
-        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"], "hiddenColumns": ["publishedById", "withdrawnById", "createdById"] }
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
       }
     },
     "RateAcknowledgement": {
-      "about": "A worker's receipt of a publication: the floor records the signed-in worker's reading on its device (its OWN site); HR records a signed paper copy. Append-only: nobody changes or removes one.",
+      "about": "A person's receipt of a publication: read on a floor device (the API writes it in the system context once the floor session is checked) or on a signed paper copy HR records. Append-only: nobody changes or removes one. Office only.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
-        "factory_runtime": { "privileges": ["select", "insert"] },
-        "factory_floor_runtime": { "privileges": ["select", "insert"], "scopedBy": ["site"] }
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "workerId": ["PAY"],
+          "publicationId": ["PAY"],
+          "versionId": ["PAY"],
+          "channel": ["PAY"],
+          "deviceId": ["PAY"],
+          "deviceTime": ["PAY"],
+          "clientEventId": ["PAY"],
+          "paperFileId": ["PAY"],
+          "serverTime": ["PAY"]
+        }
       }
     },
     "IncentiveScheme": {
@@ -73,6 +85,28 @@
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "workerId": ["PAY"],
+          "payPeriodId": ["PAY"],
+          "workDate": ["PAY"],
+          "kind": ["PAY"],
+          "operationScanId": ["PAY"],
+          "rateEntryId": ["PAY"],
+          "pieces": ["PAY"],
+          "minutes": ["PAY"],
+          "rate": ["PAY"],
+          "sharePct": ["PAY"],
+          "amount": ["PAY"],
+          "heldScanId": ["PAY"],
+          "sourceType": ["PAY"],
+          "sourceId": ["PAY"],
+          "correctsPeriodId": ["PAY"],
+          "reversalOfId": ["PAY"],
+          "reason": ["PAY"]
+        }
       }
     },
     "HeldScan": {
@@ -81,14 +115,42 @@
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "workerId": ["PAY"],
+          "payPeriodId": ["PAY"],
+          "operationScanId": ["PAY"],
+          "reason": ["PAY"],
+          "heldAt": ["PAY"],
+          "status": ["PAY"],
+          "resolutionNote": ["PAY"],
+          "fixRecordType": ["PAY"],
+          "fixRecordId": ["PAY"]
+        }
       }
     },
     "WorkerStatement": {
-      "about": "HR prepares, approves and supersedes a worker's statement of a period and names its PDF; frozen once its period is locked; never deleted. Office only (the worker's own statement reaches the floor through the API).",
+      "about": "HR prepares, approves and supersedes a person's statement of a period and names its PDF; frozen once its period is locked; never deleted. Office only (the worker's own statement reaches the floor through the API).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      },
+      "personal": {
+        "subject": "employeeId",
+        "columns": {
+          "payPeriodId": ["PAY"],
+          "revision": ["PAY"],
+          "status": ["PAY"],
+          "summary": ["PAY"],
+          "earningsAmount": ["PAY"],
+          "makeUpAmount": ["PAY"],
+          "fileId": ["PAY"],
+          "approvedAt": ["PAY"],
+          "supersededAt": ["PAY"]
+        }
       }
     },
     "PayrollExportLayout": {

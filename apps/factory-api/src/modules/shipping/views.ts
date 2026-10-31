@@ -1,13 +1,15 @@
 import { z } from 'zod'
 import { id, instant, output } from '@nexus/factory-domain/core/contracts'
-import { money } from '@nexus/factory-domain/money/marked'
+import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { TRANSPORT_EVIDENCE_STATUSES } from '@nexus/factory-domain/shipping/evidence/evidence'
 import { SHIPMENT_STATUSES, TRANSPORT_BY } from '@nexus/factory-domain/shipping/shipments'
 import { FREIGHT_BASES } from '@nexus/factory-domain/shipping/shipments/freight'
+import { TRANSPORT_MODES } from '@nexus/factory-domain/shipping/shipments/transport'
 
 /**
  * The answers' shapes the office and packing routes share. No money in what packers see; the office's shipment carries
- * one price since B-W2a-48 (the freight charged, money.price: dropped for a reader without the price grain).
+ * one price since B-W2a-48 (the freight charged, money.price: dropped for a reader without the price grain) and one cost
+ * since B-W2b-19 (the carrier's freight cost, money.cost).
  */
 
 export const lineSchema = output({
@@ -63,6 +65,8 @@ export const freightSchema = output({
   currency: z.string(),
   byHand: z.boolean(),
   byRule: output({ charge: money.price(z.number().int().nullable()), basis: z.enum(FREIGHT_BASES), words: z.string() }),
+  /** B-W2b-19: what the carrier charged us (its invoice; money.cost, dropped without the grain), null until recorded. */
+  cost: notMoney(output({ amount: money.cost(z.number().int().nullable()), currency: z.string().nullable() })),
 })
 
 /** The office's shipment: header, order and party, and its contents. */
@@ -100,6 +104,8 @@ export const shipmentSchema = output({
   freight: freightSchema,
   /** B-W2a-48 (LOG-090): the intra-EU transport evidence's state (GET …/evidence has the papers). */
   transportEvidence: output({ status: z.enum(TRANSPORT_EVIDENCE_STATUSES), completedAt: instant().nullable() }),
+  /** B-W2b-19 (Intrastat): the mode of transport the office recorded; null: not recorded. */
+  transportMode: z.enum(TRANSPORT_MODES).nullable(),
 })
 
 export const oneShipment = output({ shipment: shipmentSchema })

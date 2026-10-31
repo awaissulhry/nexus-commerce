@@ -15,6 +15,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ProgressBar } from './ProgressBar'
 import { formatElapsed } from '../lib/format'
+import { mergeLabels } from '../lib/labels'
+import { JOB_PROGRESS_LABELS, type JobProgressLabels } from './JobProgressLabels'
 
 export interface JobProgressProps {
   /** What the job is doing — "Saving changes". Also the progress bar's accessible name. */
@@ -30,6 +32,8 @@ export interface JobProgressProps {
   /** Muted line under the count — "You can close this window. The job continues in Nexus." */
   note?: ReactNode
   className?: string
+  /** Its words in the person's language (B-W2b-04): the elapsed clock's name. Default English. */
+  labels?: Partial<JobProgressLabels>
 }
 
 /** Percent done, or null when the job's size is unknown. */
@@ -49,7 +53,8 @@ function useNow(active: boolean): number | null {
   return now
 }
 
-export function JobProgress({ label, value, max, detail, startedAt, note, className }: JobProgressProps) {
+export function JobProgress({ label, value, max, detail, startedAt, note, className, labels }: JobProgressProps) {
+  const words = mergeLabels(JOB_PROGRESS_LABELS, labels)
   const pct = jobPercent(value, max)
   const now = useNow(startedAt != null)
   // Before the first tick (and on the server) the clock reads 0 s, so server and client agree.
@@ -59,7 +64,7 @@ export function JobProgress({ label, value, max, detail, startedAt, note, classN
       <div className="nds-jobprogress-head">
         <span className="nds-jobprogress-label">{label}</span>
         {elapsed != null && (
-          <span className="nds-jobprogress-elapsed" role="timer" aria-label={`${elapsed} elapsed`}>{elapsed}</span>
+          <span className="nds-jobprogress-elapsed" role="timer" aria-label={words.elapsed(elapsed)}>{elapsed}</span>
         )}
       </div>
       <ProgressBar ariaLabel={label} value={pct ?? 0} indeterminate={pct == null} />

@@ -65,6 +65,10 @@
     "GoodsReceipt": "Ricevimento merce",
     "Shipment": "Spedizione",
     "Invoice": "Fattura",
+    "ReturnAuthorisation": "Reso cliente",
+    "RepairOrder": "Riparazione",
+    "Complaint": "Reclamo",
+    "SupplierClaim": "Reso o reclamo al fornitore",
     "other": "Record"
   },
   "chip": {
@@ -80,6 +84,10 @@
     "GoodsReceipt": "Ricevimenti",
     "Shipment": "Spedizioni",
     "Invoice": "Fatture",
+    "ReturnAuthorisation": "Resi",
+    "RepairOrder": "Riparazioni",
+    "Complaint": "Reclami",
+    "SupplierClaim": "Reclami ai fornitori",
     "other": "Altri record"
   },
   "status": {
@@ -118,6 +126,17 @@
     "RETURNED": "Reso",
     "ISSUED": "Emesso",
     "NOT_DELIVERABLE": "Non recapitabile",
-    "ERROR": "Errore"
+    "ERROR": "Errore",
+    "REQUESTED": "Richiesto",
+    "AUTHORISED": "Autorizzato",
+    "INSPECTED": "Controllato",
+    "AWAITING_GOODS": "In attesa del capo",
+    "ESTIMATED": "Preventivato",
+    "IN_REPAIR": "In riparazione",
+    "REPAIRED": "Riparato",
+    "NEW": "Nuovo",
+    "TRIAGED": "Smistato",
+    "INVESTIGATING": "In analisi",
+    "ANSWERED": "Risposto"
   }
 }

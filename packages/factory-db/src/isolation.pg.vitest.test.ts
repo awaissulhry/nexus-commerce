@@ -14,6 +14,7 @@ import { seed as seedEmailIn } from '../seed/email-in'
 import { seed as seedFiles } from '../seed/files'
 import { seed as seedFloorAuth } from '../seed/floor-auth'
 import { seed as seedFloorSync } from '../seed/floor-sync'
+import { seed as seedFollowupsQualityMoney } from '../seed/followups-quality-money'
 import { seed as seedHolds } from '../seed/holds'
 import { seed as seedImports } from '../seed/imports'
 import { seed as seedInsights } from '../seed/insights'
@@ -29,6 +30,7 @@ import { seed as seedParties } from '../seed/parties'
 import { seed as seedPay } from '../seed/pay'
 import { seed as seedPlanning } from '../seed/planning'
 import { seed as seedPlant } from '../seed/plant'
+import { seed as seedPeople } from '../seed/people'
 import { seed as seedPricing } from '../seed/pricing'
 import { seed as seedPrint } from '../seed/print'
 import { seed as seedPrivacy } from '../seed/privacy'
@@ -44,11 +46,15 @@ import { seed as seedSales } from '../seed/sales'
 import { seed as seedSchedule } from '../seed/schedule'
 import { seed as seedSearch } from '../seed/search'
 import { seed as seedShipping } from '../seed/shipping'
+import { seed as seedSkills } from '../seed/skills'
 import { seed as seedSourcing } from '../seed/sourcing'
 import { seed as seedSubcontract } from '../seed/subcontract'
+import { seed as seedSubcontractReceipts } from '../seed/subcontract-receipts'
 import { seed as seedSupply } from '../seed/supply'
 import { seed as seedThreads } from '../seed/threads'
+import { seed as seedTime } from '../seed/time'
 import { seed as seedViews } from '../seed/views'
+import { seed as seedFollowupsPlatformW2b } from '../seed/w2b-followups-platform'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels } from './ownership'
 import { PLATFORM_ROLE, POLICY_KEYS, RUNTIME_LOGIN, RUNTIME_ROLES, WALL, type PolicyKeyName, type RuntimeRole } from './roles'
@@ -194,6 +200,9 @@ beforeAll(async () => {
   await seedSourcing({ db: factory, namespace: 'iso-b' })
   await seedSubcontract({ db: factory, namespace: 'iso-a' })
   await seedSubcontract({ db: factory, namespace: 'iso-b' })
+  // W2b schema wave 1/7: goods out to and back from a workshop, a job sheet version.
+  await seedSubcontractReceipts({ db: factory, namespace: 'iso-a' })
+  await seedSubcontractReceipts({ db: factory, namespace: 'iso-b' })
   // The stock and planning schema of W2a (wave 4/7).
   await seedPlanning({ db: factory, namespace: 'iso-a' })
   await seedPlanning({ db: factory, namespace: 'iso-b' })
@@ -210,6 +219,20 @@ beforeAll(async () => {
     await seedMoneyW2a({ db: factory, namespace: 'iso-a' })
     await seedMoneyW2a({ db: factory, namespace: 'iso-b' })
   }
+  // W2b schema wave 2/7: the follow-ups for quality, planning and money.
+  await seedFollowupsQualityMoney({ db: factory, namespace: 'iso-a' })
+  await seedFollowupsQualityMoney({ db: factory, namespace: 'iso-b' })
+  // The W2a follow-ups for sales, product and platform (W2b schema wave 3/7).
+  await seedFollowupsPlatformW2b({ db: factory, namespace: 'iso-a' })
+  await seedFollowupsPlatformW2b({ db: factory, namespace: 'iso-b' })
+  // The people schema of W2b (wave 4/7).
+  for (const seedPeopleW2b of [seedPeople, seedSkills]) {
+    await seedPeopleW2b({ db: factory, namespace: 'iso-a' })
+    await seedPeopleW2b({ db: factory, namespace: 'iso-b' })
+  }
+  // The time and attendance schema of W2b (wave 5/7).
+  await seedTime({ db: factory, namespace: 'iso-a' })
+  await seedTime({ db: factory, namespace: 'iso-b' })
   // The piece pay and payroll export schema of W2b (wave 6/7).
   await seedPay({ db: factory, namespace: 'iso-a' })
   await seedPay({ db: factory, namespace: 'iso-b' })
@@ -223,11 +246,17 @@ afterAll(async () => {
 
 it('covers every classified table and every runtime role', () => {
   expect(classified.map(({ model }) => model.name).sort()).toEqual([
+    'AbsenceCode',
+    'AbsenceEntry',
     'AccountingExport',
     'AccountingExportFile',
     'Alert',
     'AlertEvent',
     'AlertRule',
+    'AttendanceAnomaly',
+    'AttendanceCorrection',
+    'AttendanceDay',
+    'AttendanceMonthClose',
     'AttentionAction',
     'AttentionActionLog',
     'AuditLog',
@@ -240,6 +269,8 @@ it('covers every classified table and every runtime role', () => {
     'CalendarDay',
     'Certificate',
     'CertificateCoverage',
+    'CertificateRenewal',
+    'ClockEvent',
     'Colour',
     'Colourway',
     'Company',
@@ -259,7 +290,10 @@ it('covers every classified table and every runtime role', () => {
     'EarningsEntry',
     'EmailIdentity',
     'EmailOutbound',
+    'Employee',
+    'EmployeeSkill',
     'ExportJob',
+    'FirstLoadStep',
     'FloorRefusedAction',
     'FloorScanRefusal',
     'FloorSession',
@@ -267,6 +301,7 @@ it('covers every classified table and every runtime role', () => {
     'FloorSyncEvent',
     'GarmentLabelPrint',
     'GarmentSerial',
+    'GeneratedDocument',
     'GoodsReceipt',
     'GoodsReceiptLine',
     'HeldScan',
@@ -281,6 +316,7 @@ it('covers every classified table and every runtime role', () => {
     'InspectionDefect',
     'IntegrationAccount',
     'IntegrationCall',
+    'InterestReferenceRate',
     'Invitation',
     'Invoice',
     'InvoiceLine',
@@ -290,13 +326,17 @@ it('covers every classified table and every runtime role', () => {
     'LabResult',
     'LabelTemplate',
     'LabourRate',
+    'LeaverCase',
+    'LeaverStep',
     'Line',
     'LineCapacity',
+    'LineLoan',
     'LinkEvidence',
     'Location',
     'Lot',
     'LotDocument',
     'Machine',
+    'MachineAuthorisation',
     'MachineClass',
     'MachineSymptom',
     'MaintenanceJob',
@@ -321,14 +361,20 @@ it('covers every classified table and every runtime role', () => {
     'Operation',
     'OperationScan',
     'OperationScanDefect',
+    'OrgArea',
     'OutboxEvent',
+    'OvertimeAgreement',
+    'OvertimeEntry',
+    'OvertimeRequest',
     'Parcel',
     'Party',
     'PartyAddress',
     'PartyContact',
+    'PartyPriceListAssignment',
     'PartyTaxIdentity',
     'PasswordReset',
     'PayPeriod',
+    'PayablesSettings',
     'Payment',
     'PaymentAllocation',
     'PaymentReminder',
@@ -337,6 +383,8 @@ it('covers every classified table and every runtime role', () => {
     'PayrollExport',
     'PayrollExportFile',
     'PayrollExportLayout',
+    'PeopleLegalGate',
+    'PeopleSettings',
     'PeriodLock',
     'PiecePaySwitch',
     'PieceRateEntry',
@@ -361,6 +409,7 @@ it('covers every classified table and every runtime role', () => {
     'PurchaseOrderLine',
     'PurchaseOrderReminder',
     'PurchaseOrderRevision',
+    'PurchasingSettings',
     'QualityHold',
     'QualityRelease',
     'QualityReleaseReversal',
@@ -381,6 +430,7 @@ it('covers every classified table and every runtime role', () => {
     'RepairOrder',
     'RepairStageEvent',
     'ReplacementRequest',
+    'ReportRun',
     'ReportSubscription',
     'RequirementPegging',
     'Reservation',
@@ -391,6 +441,7 @@ it('covers every classified table and every runtime role', () => {
     'ReworkOrder',
     'Role',
     'RoleAssignment',
+    'RosterEntry',
     'RoutingOperation',
     'SalesOrder',
     'SalesOrderAmendment',
@@ -402,6 +453,7 @@ it('covers every classified table and every runtime role', () => {
     'ScanCorrectionRequest',
     'ScheduleSlot',
     'ScrapReason',
+    'SdiInboxItem',
     'SdiNotification',
     'SdiSubmission',
     'SearchEntry',
@@ -415,6 +467,7 @@ it('covers every classified table and every runtime role', () => {
     'Site',
     'Size',
     'SizeScale',
+    'Skill',
     'StaffNoticeAck',
     'StandardCost',
     'Station',
@@ -425,19 +478,26 @@ it('covers every classified table and every runtime role', () => {
     'StoredFile',
     'Style',
     'StyleRevision',
+    'SubcontractBundle',
     'SubcontractKitLine',
     'SubcontractOperation',
     'SubcontractOrder',
+    'SubcontractReceipt',
+    'SubcontractReceiptLine',
     'SupplierClaim',
     'SupplierClaimLine',
     'SupplierInvoice',
+    'SupplierInvoiceFile',
     'SupplierInvoiceLine',
     'SupplierInvoiceMatch',
     'SupplierItem',
     'Suppression',
     'Task',
+    'Team',
+    'TeamMember',
     'Tenant',
     'Thread',
+    'TimesheetApproval',
     'TodayLayout',
     'TrackingEvent',
     'TypeChangeReview',
@@ -449,6 +509,7 @@ it('covers every classified table and every runtime role', () => {
     'WorkCentreCapacity',
     'WorkOrder',
     'WorkOrderCostEntry',
+    'WorkOrderKit',
     'WorkOrderMaterial',
     'WorkOrderOperation',
     'WorkOrderSize',
@@ -456,6 +517,7 @@ it('covers every classified table and every runtime role', () => {
     'WorkerNoticeAck',
     'WorkerRole',
     'WorkerStatement',
+    'WorkingTimeRule',
   ])
   expect(RUNTIME_ROLES).toHaveLength(4)
   expect(a.tenantId).not.toBe(b.tenantId)

@@ -8,6 +8,7 @@ export { GridFooterStrip, GridFooterSpacer } from './GridFooterStrip'
 // Listing readiness rebuild (2026-10-23) — the row under an open family ("Showing 10 of 40 variations"), moved from /products.
 export { FamilyFooterFrame, type FamilyFooterFrameProps } from './FamilyFooterFrame'
 export { GridDensityToggle, GRID_DENSITY_OPTIONS, type GridDensityToggleProps } from './GridDensityToggle'
+export { GRID_DENSITY_TOGGLE_LABELS, type GridDensityToggleLabels } from './GridDensityToggleLabels' // B-W2b-04
 export { GridSelectionActions, SelectionLabel, SelectionNote, GridSearchSlot } from './GridSelectionActions'
 // LX.F2 / R-LX-18 — the toolbar's overflow rule, measured. The reasoning and the numbers are in the file.
 // CLOSE.1 / R-LX-27 — `useToolbarStatusCompaction` is the fold's LAST TIER (status pills go

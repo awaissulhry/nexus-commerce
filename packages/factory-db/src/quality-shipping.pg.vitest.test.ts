@@ -340,24 +340,33 @@ describe('the walls', () => {
     // W2a schema wave 6/7 (LOG-105): the freight figures are prices (the shipment's charge, the site's rule), hidden from
     // the floor; nothing else here holds money.
     const prices: Record<string, string[]> = { Shipment: ['freightCharge'], ShippingSettings: ['freightAmount', 'freightFreeFrom'] }
+    // W2b schema wave 1/7 (B-W2b-01): the shipment's freight cost (the carrier's invoice) is a cost, office only; its
+    // currency goes with it (hidden from the floor and the partner too).
+    const costs: Record<string, string[]> = { Shipment: ['freightCost'] }
+    const withCosts: Record<string, string[]> = { Shipment: ['freightCost', 'freightCostCurrency'] }
     for (const { model, ownership } of models) {
       const grained = model.fields.filter((field) => field.tags.some((entry) => entry.startsWith('@grain')))
-      expect(grained.map((field) => field.column), model.name).toEqual(prices[model.name] ?? [])
-      expect(grained.every((field) => field.tags.includes('@grain price')), model.name).toBe(true)
-      expect(model.columns.filter((column) => /cost|margin|price|amount|total|wage/i.test(column) && !(prices[model.name] ?? []).includes(column)), model.name).toEqual([])
+      expect(grained.map((field) => field.column), model.name).toEqual([...(prices[model.name] ?? []), ...(costs[model.name] ?? [])])
+      expect(grained.every((field) => field.tags.includes('@grain price') || (costs[model.name] ?? []).includes(field.column)), model.name).toBe(true)
+      expect(grained.filter((field) => (costs[model.name] ?? []).includes(field.column)).every((field) => field.tags.includes('@grain cost')), model.name).toBe(true)
+      expect(
+        model.columns.filter((column) => /cost|margin|price|amount|total|wage/i.test(column) && ![...(prices[model.name] ?? []), ...(withCosts[model.name] ?? [])].includes(column)),
+        model.name,
+      ).toEqual([])
       const floorAccess = ownership.access[FLOOR_ROLE]
       if (floorAccess && model.name === 'QualitySettings') {
         // Tenant-wide rules, no site key: the floor reads them (a floor release's trigger reads the four-eyes rule, B-W1-45).
         expect(floorAccess, model.name).toEqual({ privileges: ['select'] })
       } else if (floorAccess) {
         expect(floorAccess.scopedBy, model.name).toEqual(['site'])
-        expect(floorAccess.hiddenColumns ?? [], model.name).toEqual(prices[model.name] ?? [])
+        expect(floorAccess.hiddenColumns ?? [], model.name).toEqual([...(prices[model.name] ?? []), ...(withCosts[model.name] ?? [])])
       }
       const partnerAccess = ownership.access[PARTNER_ROLE]
       if (model.file === 'quality.prisma') expect(partnerAccess, model.name).toBeUndefined()
       if (partnerAccess) {
         expect(partnerAccess.privileges, model.name).toEqual(['select'])
         expect(partnerAccess.hiddenColumns, model.name).toContain('createdById')
+        for (const column of withCosts[model.name] ?? []) expect(partnerAccess.hiddenColumns, model.name).toContain(column)
       }
     }
     const partnerTables = models.filter(({ ownership }) => ownership.access[PARTNER_ROLE]).map(({ model }) => model.name)

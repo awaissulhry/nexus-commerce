@@ -119,6 +119,8 @@ model Nonconformance {
   item          Item?                   @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   lot           Lot?                    @relation(fields: [tenantId, siteId, itemId, lotId], references: [tenantId, siteId, itemId, id], onDelete: Restrict, onUpdate: Restrict)
   supplier      Party?                  @relation(fields: [tenantId, supplierId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b claims.prisma (B-W2b-01): the supplier claims it led to.
+  supplierClaims SupplierClaim[]
   containment   NcrContainmentAction[]
   dispositions  NcrDispositionLine[]
   links         NcrLink[]
@@ -172,6 +174,9 @@ model NcrContainmentAction {
   doneAt       DateTime?         @db.Timestamptz(3)
   doneById     String?           @db.Uuid
   evidenceNote String?
+  /// W2b (schema wave 2/7; B-W2a-47's "Cancelled: <reason>" in evidenceNote): why it was CANCELLED, in words; only on a
+  /// CANCELLED action, never blank (the …_followups_quality_money_w2b_guards trigger).
+  cancelReason String?
   /// The record it made or names: its type and id, both or neither (a HOLD_STOCK action names its QualityHold once DONE).
   recordType   String?
   recordId     String?           @db.Uuid

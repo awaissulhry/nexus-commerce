@@ -21,6 +21,8 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
 import { countdownSnapshot, countdownTarget, countdownTicker, readCountdownSnapshot } from './countdownTicker'
+import { mergeLabels } from '../lib/labels'
+import { COUNTDOWN_LABELS, countdownWords, type CountdownLabels } from './CountdownLabels'
 
 export interface CountdownProps {
   /** When it reaches zero — an ISO instant or epoch milliseconds. */
@@ -36,14 +38,19 @@ export interface CountdownProps {
   /** The read's clock, for a server render that matches the first client render (as `AsOf`). */
   now?: number
   className?: string
+  /** Its words in the person's language (B-W2b-04): "in …", "now" and the unit letters. Default English; `label` and
+   *  `doneLabel` win over `in` and `now`. */
+  labels?: Partial<CountdownLabels>
 }
 
-const defaultLabel = (left: string) => `in ${left}`
 /** How long an announcement stays in the live region before it is cleared. */
 const SPOKEN_FOR_MS = 4000
 const noop = () => () => {}
 
-export function Countdown({ to, label = defaultLabel, doneLabel = 'now', onDone, announce = true, now, className }: CountdownProps) {
+export function Countdown({ to, label, doneLabel, onDone, announce = true, now, className, labels }: CountdownProps) {
+  const lw = mergeLabels(COUNTDOWN_LABELS, labels)
+  const around = label ?? lw.in
+  const doneWords = doneLabel === undefined ? lw.now : doneLabel
   const target = countdownTarget(to)
   const valid = Number.isFinite(target)
   const subscribe = useCallback((notify: () => void) => countdownTicker().subscribe(target, notify), [target])
@@ -55,7 +62,7 @@ export function Countdown({ to, label = defaultLabel, doneLabel = 'now', onDone,
   )
   const view = snapshot === null ? null : readCountdownSnapshot(snapshot)
   const done = view?.done ?? false
-  const words = view === null ? '' : view.done ? doneLabel : label(view.text)
+  const words = view === null ? '' : view.done ? doneWords : around(countdownWords(view.text, lw))
 
   // onDone: once, and only after this instance saw time left.
   const onDoneRef = useRef(onDone)

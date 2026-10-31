@@ -30,7 +30,8 @@ import { quantityText } from '../ledger/moves'
 /** A work order receives stock only while it is released or in progress. */
 export const ISSUABLE_STATUSES: readonly WorkOrderStatus[] = Object.freeze(['RELEASED', 'IN_PROGRESS'])
 
-export const HIDE_STATES = ['FULL', 'PARTLY_CUT', 'REMNANT', 'CONSUMED', 'SCRAPPED'] as const
+// W2b (B-W2b-01): RETURNED, a hide sent back to the tannery (factory-db HideState).
+export const HIDE_STATES = ['FULL', 'PARTLY_CUT', 'REMNANT', 'CONSUMED', 'SCRAPPED', 'RETURNED'] as const
 export type HideState = (typeof HIDE_STATES)[number]
 
 /** Why an issue, a return, an undo or a reversal is refused: a stable code (the screens' words) and its sentence. */
@@ -115,8 +116,8 @@ export function issueDecision(facts: IssueFacts): IssueDecision {
     const usability = usabilityOf(facts.lot)
     if (!usability.usable) return refuse(usability.reason, unusableWords(facts.lot.code, usability.reason))
   }
-  if (facts.hide && (facts.hide.state === 'CONSUMED' || facts.hide.state === 'SCRAPPED')) {
-    return refuse('HIDE_USED_UP', `Hide ${facts.hide.code} is ${facts.hide.state === 'CONSUMED' ? 'used up' : 'scrapped'}; it is not issued.`)
+  if (facts.hide && (facts.hide.state === 'CONSUMED' || facts.hide.state === 'SCRAPPED' || facts.hide.state === 'RETURNED')) {
+    return refuse('HIDE_USED_UP', `Hide ${facts.hide.code} is ${facts.hide.state === 'CONSUMED' ? 'used up' : facts.hide.state === 'RETURNED' ? 'sent back to its supplier' : 'scrapped'}; it is not issued.`)
   }
   const onHand = dec(facts.onHand)
   if (onHand.lte(0)) return refuse('NOTHING_ON_HAND', `None of ${facts.hide ? `hide ${facts.hide.code}` : label} is in stock at this site.`)

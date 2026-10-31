@@ -54,6 +54,12 @@ import { createCarrierRuntime, useCarrier } from '../labels/carrier'
  *              delivery, COMPLETE refused with one paper, complete with the CMR, reopened
  *   caps       (tenant B) an order line never ships more than ordered, a closed-short line nothing more, a repair cell
  *              never
+ *
+ * W2b (B-W2b-19, the W2a follow-ups): the garment leaves as a SHIPMENT move naming its line; the packing list versions are
+ * GeneratedDocument rows (contents back to version 1 make version 3 with version 1's file); the freight basis column and
+ * the carrier's freight cost (the cost grain); the paper's kind as the file's category; the voided labels in the labels
+ * read; the mode of transport and the DDT's language; a repair cell's line never grows; a carrier-returned shipment's
+ * garment back into finished goods.
  */
 
 let db: MigratedDatabase
@@ -89,6 +95,12 @@ const SESSIONS: Record<string, SessionContext> = {
   sales: office(A.tenant, [grant(['orders.view', 'orders.manage'])]),
   quality: office(A.tenant, [grant(TRAVEL_DOCUMENT_PERMISSIONS)]),
   warehouseB: office(B.tenant, [grant([...SHIPPING, 'files.read'])]),
+  /** B-W2b-19: a SHIPMENT move is never reversed on its own. */
+  reverser: office(A.tenant, [grant(['inventory.reverse', 'inventory.stock.view'])]),
+  /** B-W2b-19: the carrier's freight cost needs the cost grain too. */
+  freightCost: office(A.tenant, [grant(['shipping.view', 'shipping.freight.manage', 'money.cost'])]),
+  /** Finance's standards (B-W2a-21): the shipped garment's frozen standard (B-W2a-F7). */
+  costing: office(A.tenant, [grant(['costing.view', 'costing.standards.manage', 'money.cost'])]),
   plannerB: office(B.tenant, [grant(['workorders.view', 'workorders.manage'])]),
 }
 
@@ -110,6 +122,18 @@ async function refused(session: string, method: Method, url: string, payload: un
   return response.json().error
 }
 const key = () => `daily-ship-${run}-${++keys}`
+/** A write past the database's guards (the seed's facts only: never what the test then proves). */
+async function force(sql: string, values: unknown[] = []): Promise<void> {
+  await admin('SET session_replication_role = replica')
+  try {
+    await admin(sql, values)
+  } finally {
+    await admin('SET session_replication_role = DEFAULT')
+  }
+}
+/** The value the stock ledger gave a move (none: not valued). */
+const valuationOf = async (moveId: string) => (await admin<{ method: string; unitCost: string; valueAmount: number }>(`SELECT method::text, "unitCost"::text AS "unitCost", "valueAmount" FROM "StockValuation" WHERE "moveId" = $1`, [moveId]))[0] ?? null
+const fromStockMove = async (shipmentId: string) => (await admin<{ id: string }>(`SELECT id FROM "StockMove" WHERE "idempotencyKey" = $1`, [`shipping.fromStock:${shipmentId}:1`]))[0]!.id
 
 async function addAccount(tenantId: string, companyId: string): Promise<string> {
   const id = newId()
@@ -245,6 +269,9 @@ describe('a partial shipment from finished-goods stock and its backorder (LOG-00
     // The freight is not decided while it is planned: the rule's figure is shown (with the grain), the charge is null.
     const priced = (await ok('finance', 'GET', `/shipping/shipments/${sb.id}`)).shipment
     expect(priced.freight).toMatchObject({ charge: null, byHand: false, byRule: { basis: expect.any(String) } })
+    // B-W2b-19: no charge decided, so no basis; nothing recorded of the transport yet.
+    expect(await admin(`SELECT "freightBasis"::text AS basis, "transportMode"::text AS mode FROM "Shipment" WHERE id = $1`, [sb.id])).toEqual([{ basis: null, mode: null }])
+    expect(priced).toMatchObject({ transportMode: null, freight: { cost: { currency: null } } })
     const blind = (await ok('warehouse', 'GET', `/shipping/shipments/${sb.id}`)).shipment
     expect(blind.freight).not.toHaveProperty('charge')
     expect(blind.freight.byRule).not.toHaveProperty('charge')
@@ -265,6 +292,7 @@ describe('a partial shipment from finished-goods stock and its backorder (LOG-00
   it('packs SB; the packing list prints once per packing (the same file again), a new weight makes version 2', async () => {
     S.sbParcel = (await ok('warehouse', 'POST', `/shipping/packing/${S.sb}/parcels`, { grossWeightKg: '2.5' }, 201)).parcelId
     const line = (await ok('warehouse', 'GET', `/shipping/shipments/${S.sb}`)).shipment.lines[0]
+    S.sbLine = line.id
     await ok('warehouse', 'PUT', `/shipping/packing/${S.sb}/lines/${line.id}/parcel`, { parcelId: S.sbParcel })
     expect((await ok('warehouse', 'POST', `/shipping/packing/${S.sb}/pack`, {})).shipment.status).toBe('PACKED')
     const first = await ok('warehouse', 'POST', `/shipping/shipments/${S.sb}/packing-list`, {}, 201)
@@ -276,11 +304,25 @@ describe('a partial shipment from finished-goods stock and its backorder (LOG-00
     expect(second).toMatchObject({ version: 2, reused: false })
     expect(second.number).toMatch(/\/2$/)
     expect(second.file.id).not.toBe(first.file.id)
+    // B-W2b-19: back to version 1's weight: version 3, printed with version 1's file and number (the newest is current).
+    await ok('warehouse', 'PATCH', `/shipping/packing/${S.sb}/parcels/${S.sbParcel}`, { grossWeightKg: '2.5' })
+    const third = await ok('warehouse', 'POST', `/shipping/shipments/${S.sb}/packing-list`, {}, 201)
+    expect(third).toMatchObject({ version: 3, reused: true, number: first.number, file: { id: first.file.id } })
     const lists = await ok('viewer', 'GET', `/shipping/shipments/${S.sb}/packing-lists`)
-    expect(lists.packingLists.map((entry: Json) => [entry.version, entry.current])).toEqual([
-      [2, true],
-      [1, false],
+    expect(lists.packingLists.map((entry: Json) => [entry.version, entry.current, entry.parcels, entry.garments])).toEqual([
+      [3, true, 1, 1],
+      [2, false, 1, 1],
+      [1, false, 1, 1],
     ])
+    const rows = await admin(`SELECT version, "fileId", number, language, kind::text AS kind, "recordType" FROM "GeneratedDocument" WHERE "recordId" = $1 ORDER BY version`, [S.sb])
+    expect(rows).toEqual([
+      { version: 1, fileId: first.file.id, number: first.number, language: 'it', kind: 'PACKING_LIST', recordType: 'Shipment' },
+      { version: 2, fileId: second.file.id, number: second.number, language: 'it', kind: 'PACKING_LIST', recordType: 'Shipment' },
+      { version: 3, fileId: first.file.id, number: first.number, language: 'it', kind: 'PACKING_LIST', recordType: 'Shipment' },
+    ])
+    // The packers print the newest version's file (here version 1's again).
+    const packing = await ok('warehouse', 'GET', `/shipping/packing/${S.sb}`)
+    expect(packing.shipment.documents.packingList.fileId).toBe(first.file.id)
   })
 
   it('SAL-210: a line closed short after packing stops the shipment in words; reopened, SB leaves from finished goods', async () => {
@@ -293,12 +335,16 @@ describe('a partial shipment from finished-goods stock and its backorder (LOG-00
     const left = await ok('warehouse', 'POST', `/shipping/shipments/${S.sb}/ddt`, { ship: true }, 201)
     expect(left.shipment.status).toBe('SHIPPED')
     const moves = await admin(
-      `SELECT reason::text AS reason, "fromLocationId", "toLocationId", "workOrderId", reference, note, "baseQuantity"::text AS quantity, "idempotencyKey" FROM "StockMove" WHERE "idempotencyKey" LIKE $1`,
+      `SELECT reason::text AS reason, "shipmentLineId", "fromLocationId", "toLocationId", "workOrderId", reference, note, "baseQuantity"::text AS quantity, "idempotencyKey" FROM "StockMove" WHERE "idempotencyKey" LIKE $1`,
       [`shipping.fromStock:${S.sb}:%`],
     )
+    // B-W2b-19: a SHIPMENT move naming the shipment line (W2a posted an ADJUSTMENT).
     expect(moves).toEqual([
-      { reason: 'ADJUSTMENT', fromLocationId: scheduleA.finishedLocationId, toLocationId: null, workOrderId: wo1(), reference: left.shipment.number, note: expect.stringMatching(/^Shipped on .+ out of finished goods to the customer\.$/), quantity: '1.0000', idempotencyKey: `shipping.fromStock:${S.sb}:1` },
+      { reason: 'SHIPMENT', shipmentLineId: S.sbLine, fromLocationId: scheduleA.finishedLocationId, toLocationId: null, workOrderId: wo1(), reference: left.shipment.number, note: expect.stringMatching(/^Shipped on .+ out of finished goods to the customer\.$/), quantity: '1.0000', idempotencyKey: `shipping.fromStock:${S.sb}:1` },
     ])
+    // Never reversed on its own: the garment left with the shipment (a carrier return brings it back).
+    const reverse = await refused('reverser', 'POST', `/inventory/moves/${await fromStockMove(S.sb!)}/reverse`, { note: 'Mistake' }, 409)
+    expect(reverse.message).toBe("A shipment's move out of finished goods is not reversed: the garments left with the shipment (a carrier return brings them back into finished goods).")
     const leftAudit = await admin(`SELECT after FROM "AuditLog" WHERE action = 'shipping.left' AND "recordId" = $1`, [S.sb])
     expect(leftAudit[0]!.after.cells).toEqual([expect.objectContaining({ cellId: blk52(), garments: 1, fromStock: 1, fromRelease: 0 })])
 
@@ -330,13 +376,44 @@ describe('the freight charged (LOG-105): the rule when the goods leave, the offi
     expect((await ok('warehouse', 'GET', `/shipping/shipments?salesOrderId=${so2()}`)).shipments.find((row: Json) => row.id === S.sb)).not.toHaveProperty('freightCharge')
 
     expect((await refused('warehouse', 'PUT', `/shipping/shipments/${S.sb}/freight`, { freightCharge: 900 }, 403)).code).toBe('forbidden')
+    const basis = async () => (await admin<{ basis: string | null }>(`SELECT "freightBasis"::text AS basis FROM "Shipment" WHERE id = $1`, [S.sb]))[0]!.basis
+    expect(await basis()).toBe('RULE')
     const typed = await ok('finance', 'PUT', `/shipping/shipments/${S.sb}/freight`, { freightCharge: 900 })
     expect(typed.freight).toMatchObject({ charge: 900, byHand: true })
+    // B-W2b-19: the basis is a column now (MANUAL typed, RULE the rule's), not the last audit row.
+    expect(await basis()).toBe('MANUAL')
     const back = await ok('finance', 'PUT', `/shipping/shipments/${S.sb}/freight`, { freightCharge: null })
     expect(back.freight).toMatchObject({ charge: shipped.freight.charge, byHand: false })
+    expect(await basis()).toBe('RULE')
     const events = await admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'shipment.freight_changed' AND subject = $1 ORDER BY "occurredAt", id`, [S.sb])
     expect(events.map((row) => row.payload.byHand)).toEqual([false, true, false])
     expect(JSON.stringify(events)).not.toMatch(/900/)
+  })
+
+  it('B-W2b-19: the carrier\'s freight cost, a cost: the permission and the cost grain to set it, the grain to read it', async () => {
+    expect((await refused('warehouse', 'PUT', `/shipping/shipments/${S.sb}/freight-cost`, { freightCost: 1850 }, 403)).code).toBe('forbidden')
+    // Finance holds the freight permission but not the cost grain: the grain wall refuses the body.
+    expect((await refused('finance', 'PUT', `/shipping/shipments/${S.sb}/freight-cost`, { freightCost: 1850 }, 403)).code).toBe('forbidden')
+    const recorded = await ok('freightCost', 'PUT', `/shipping/shipments/${S.sb}/freight-cost`, { freightCost: 1850 })
+    expect(recorded.freight.cost).toEqual({ amount: 1850, currency: 'EUR' })
+    expect(await admin(`SELECT "freightCost", "freightCostCurrency" FROM "Shipment" WHERE id = $1`, [S.sb])).toEqual([{ freightCost: 1850, freightCostCurrency: 'EUR' }])
+    // A reader without the cost grain sees that one is recorded (its currency), never the amount.
+    const blind = (await ok('finance', 'GET', `/shipping/shipments/${S.sb}`)).shipment
+    expect(blind.freight.cost).toEqual({ currency: 'EUR' })
+    const audit = await admin(`SELECT after FROM "AuditLog" WHERE action = 'shipping.setFreightCost' AND "recordId" = $1`, [S.sb])
+    expect(audit[0]!.after).toMatchObject({ freightCost: { $money: 'cost', value: 1850 }, currency: 'EUR' })
+    const cleared = await ok('freightCost', 'PUT', `/shipping/shipments/${S.sb}/freight-cost`, { freightCost: null })
+    expect(cleared.freight.cost).toEqual({ amount: null, currency: null })
+    const events = await admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'shipment.freight_cost_changed' AND subject = $1 ORDER BY "occurredAt", id`, [S.sb])
+    expect(events.map((row) => row.payload.recorded)).toEqual([true, false])
+    expect(JSON.stringify(events)).not.toMatch(/1850/)
+  })
+
+  it('B-W2b-19: the mode of transport (Intrastat) is recorded after the goods left too', async () => {
+    const shipment = (await ok('warehouse', 'PATCH', `/shipping/shipments/${S.sb}`, { transportMode: 'ROAD' })).shipment
+    expect(shipment.transportMode).toBe('ROAD')
+    expect((await refused('warehouse', 'PATCH', `/shipping/shipments/${S.sb}`, { transportMode: 'TRUCK' }, 400)).code).toBe('validation_failed')
+    expect((await ok('viewer', 'GET', `/shipping/shipments/${S.sb}`)).shipment.transportMode).toBe('ROAD')
   })
 })
 
@@ -357,8 +434,15 @@ describe('labels voided every day (LOG-028)', () => {
     await ok('warehouse', 'PATCH', `/shipping/packing/${sh2()}/parcels/${S.p1}`, { grossWeightKg: '1.85' })
     await ok('warehouse', 'PATCH', `/shipping/packing/${sh2()}/parcels/${S.p2}`, { grossWeightKg: '2.1' })
     await ok('warehouse', 'POST', `/shipping/packing/${sh2()}/pack`, {})
-    await ok('warehouse', 'POST', `/shipping/shipments/${sh2()}/ddt`, {}, 201)
-    expect((await ok('warehouse', 'POST', `/shipping/shipments/${sh2()}/labels`, {}, 201)).outcomes.every((outcome: Json) => outcome.ok)).toBe(true)
+    // B-W2b-19: the shipment's mode of transport goes onto its DDT, with the language the DDT is printed in.
+    await ok('warehouse', 'PATCH', `/shipping/shipments/${sh2()}`, { transportMode: 'ROAD' })
+    const issued = await ok('warehouse', 'POST', `/shipping/shipments/${sh2()}/ddt`, {}, 201)
+    expect(issued.ddt).toMatchObject({ transportMode: 'ROAD', language: expect.stringMatching(/^(it|en)$/) })
+    expect(await admin(`SELECT "transportMode"::text AS mode, language FROM "Ddt" WHERE id = $1`, [issued.ddt.id])).toEqual([{ mode: 'ROAD', language: issued.ddt.language }])
+    const bought = await ok('warehouse', 'POST', `/shipping/shipments/${sh2()}/labels`, {}, 201)
+    expect(bought.outcomes.every((outcome: Json) => outcome.ok)).toBe(true)
+    expect(bought.voided).toEqual([])
+    S.p1Tracking = bought.parcels.find((parcel: Json) => parcel.seq === 1).trackingNumber
     // The carrier collected parcel 2 (a tracking event, as a webhook records it).
     await admin(
       `INSERT INTO "TrackingEvent" (id, "tenantId", "siteId", "partyId", "shipmentId", "parcelId", status, "occurredAt", source, "externalEventId") SELECT $1, s."tenantId", s."siteId", s."partyId", s.id, $2, 'IN_TRANSIT', now(), 'WEBHOOK', $3 FROM "Shipment" s WHERE s.id = $4`,
@@ -381,6 +465,12 @@ describe('labels voided every day (LOG-028)', () => {
     expect((await refused('warehouse', 'POST', `/shipping/shipments/${sh2()}/labels/void`, { reason: 'Again' }, 409)).message).toMatch(/The carrier has parcel 2 already/)
     // Parcel 1 takes a new label, and the goods leave.
     expect((await ok('warehouse', 'POST', `/shipping/shipments/${sh2()}/labels`, {}, 201)).outcomes).toEqual([expect.objectContaining({ seq: 1, ok: true })])
+    // B-W2b-19: the labels read lists the voided label (its tracking number, the carrier's answer, the reason, its files).
+    const labels = await ok('warehouse', 'GET', `/shipping/shipments/${sh2()}/labels`)
+    expect(labels.voided).toEqual([
+      expect.objectContaining({ parcelId: S.p1, seq: 1, trackingNumber: S.p1Tracking, carrier: 'CANCELLED', reason: 'Wrong service', voidedById: (SESSIONS.warehouse as { actorId: string }).actorId, files: [expect.objectContaining({ format: 'PDF' })] }),
+    ])
+    expect(labels.parcels.find((parcel: Json) => parcel.seq === 1).trackingNumber).not.toBe(S.p1Tracking)
   })
 })
 
@@ -398,6 +488,8 @@ describe('intra-EU transport evidence (LOG-090; art. 41 DL 331/1993)', () => {
   it('PARTIAL with the proof of delivery; COMPLETE refused with one paper, given with the CMR; reopened with its reason', async () => {
     const pod = await filePaper('warehouse', sh2(), 'POD', 'pod-sh0002.pdf')
     expect(pod.evidence).toMatchObject({ status: 'PARTIAL', onFile: '1 proof of delivery', papers: [expect.objectContaining({ kind: 'POD', status: 'AVAILABLE' })] })
+    // B-W2b-19: the paper's kind is the file's category (W2a: an audit row).
+    expect(await admin(`SELECT category::text AS category FROM "StoredFile" WHERE id = $1`, [pod.file.id])).toEqual([{ category: 'POD' }])
     const one = await refused('finance', 'POST', `/shipping/shipments/${sh2()}/evidence/complete`, {}, 409)
     expect(one.message).toMatch(/On file: 1 proof of delivery\.$/)
     await filePaper('warehouse', sh2(), 'CMR', 'cmr-sh0002.pdf')
@@ -431,5 +523,89 @@ describe('what a shipment may take of its order (tenant B: LOG-004 with SAL-210)
     const { workOrder } = await ok('plannerB', 'POST', '/production/work-orders/repairs', { repairOrderId: returnsB.repairId, routingSeqs: [20] }, 201)
     const repair = await refused('warehouseB', 'POST', '/shipping/shipments', { salesOrderId: qb().production.salesOrderId, lines: [{ workOrderSizeId: workOrder.cells[0].id, quantity: 1 }] }, 400)
     expect(repair.issues).toEqual([{ path: 'body/lines/0/workOrderSizeId', message: `${workOrder.number} is a repair work order: its garment goes back with the repair's DDT, never on a shipment of the order.` }])
+
+    // B-W2b-19: a repair cell's line made before the rule (forced here, past the guards) never grows.
+    const draft = returnsB.money.shipping.draftShipmentId
+    const lineId = newId()
+    await force(
+      `INSERT INTO "ShipmentLine" (id, "tenantId", "siteId", "partyId", "shipmentId", "workOrderId", "workOrderSizeId", "salesOrderLineId", size, quantity)
+       SELECT $1, c."tenantId", c."siteId", s."partyId", s.id, c."workOrderId", c.id, c."salesOrderLineId", c.size, 1 FROM "WorkOrderSize" c, "Shipment" s WHERE c.id = $2 AND s.id = $3`,
+      [lineId, workOrder.cells[0].id, draft],
+    )
+    const grown = await refused('warehouseB', 'PATCH', `/shipping/shipments/${draft}/lines/${lineId}`, { quantity: 2 }, 409)
+    expect(grown.message).toBe(`${workOrder.number} is a repair work order: its garment goes back with the repair's DDT, never on a shipment of the order.`)
+    await force(`DELETE FROM "ShipmentLine" WHERE id = $1`, [lineId])
+  })
+})
+
+describe('a garment shipped from finished goods leaves at its frozen standard (B-W2a-F7)', () => {
+  let standard: Json
+
+  it('a standard frozen after SB left values its move out of finished goods, with the receipt before it', async () => {
+    const out = await fromStockMove(S.sb!)
+    // SB left before any standard of the garment existed: no value yet.
+    expect(await valuationOf(out)).toBeNull()
+    const made = await ok('costing', 'POST', '/costing/standards', { companyId: A.companyA, itemId: scheduleA.finishedItemId, validFrom: `${businessDate(new Date()).slice(0, 7)}-01`, materialCost: '210.000000', labourCost: '80.000000', note: 'Season standard of the black 52 (made up).' }, 201)
+    const frozen = await ok('costing', 'POST', `/costing/standards/${made.standard.id}/freeze`, { version: made.standard.version })
+    // The receipt into finished goods (its work order's completion posted) and SB's move out of it.
+    expect(frozen.valued).toMatchObject({ moves: 2, workOrders: [{ id: wo1() }], skipped: [] })
+    // Out of stock: the value is signed (290.00 a garment leaves).
+    expect(await valuationOf(out)).toMatchObject({ method: 'STANDARD_COST', valueAmount: -29_000 })
+    expect(Number((await valuationOf(out))!.unitCost)).toBe(290)
+    standard = frozen.standard
+  })
+
+  it('a garment shipped after the freeze carries the standard at once', async () => {
+    // One more BLK 52 released (made up: the seeded reversal of WO-0001's second release taken back), into finished goods.
+    await force(`DELETE FROM "QualityReleaseReversal" WHERE "workOrderSizeId" = $1`, [blk52()])
+    const report = await ok('production', 'POST', `/production/work-orders/${wo1()}/finished`, { cells: [{ cellId: blk52(), quantity: 1 }] }, 201)
+    expect(await valuationOf(report.report.moveIds[0])).toMatchObject({ method: 'STANDARD_COST', valueAmount: 29_000 })
+    const sc = (await ok('warehouse', 'POST', '/shipping/shipments', { salesOrderId: so2(), lines: [{ workOrderSizeId: blk52(), quantity: 1 }] }, 201)).shipment
+    S.sc = sc.id
+    const parcelId = (await ok('warehouse', 'POST', `/shipping/packing/${sc.id}/parcels`, { grossWeightKg: '2.4' }, 201)).parcelId
+    const line = (await ok('warehouse', 'GET', `/shipping/shipments/${sc.id}`)).shipment.lines[0]
+    await ok('warehouse', 'PUT', `/shipping/packing/${sc.id}/lines/${line.id}/parcel`, { parcelId })
+    expect((await ok('warehouse', 'POST', `/shipping/packing/${sc.id}/pack`, {})).shipment.status).toBe('PACKED')
+    expect((await ok('warehouse', 'POST', `/shipping/shipments/${sc.id}/ddt`, { ship: true }, 201)).shipment.status).toBe('SHIPPED')
+    // Out of finished goods at the standard in force today (inventory/finished/post.ts standardCostFor).
+    const out = await fromStockMove(sc.id)
+    expect(await valuationOf(out)).toMatchObject({ method: 'STANDARD_COST', valueAmount: -29_000 })
+    expect(Number((await valuationOf(out))!.unitCost)).toBe(Number(standard.unitCost))
+  })
+})
+
+describe('B-W2b-19: a carrier-returned shipment back into finished goods (the B-W2a-48 gap)', () => {
+  it('only once the carrier brought it back; then its garment goes back into finished goods at its standard, once', async () => {
+    expect((await ok('viewer', 'GET', `/shipping/shipments/${S.sc}/carrier-return`)).carrierReturn).toMatchObject({ state: 'NOT_RETURNED', garments: 1, moveIds: [] })
+    const early = await refused('warehouse', 'POST', `/shipping/shipments/${S.sc}/carrier-return`, {}, 409)
+    expect(early.message).toMatch(/is SHIPPED: its garments go back into finished goods once the carrier brought it back/)
+    // The carrier's tracking says it went back to the sender (as a webhook records it: SHIPPED → RETURNED).
+    await admin(`UPDATE "Shipment" SET status = 'RETURNED', "returnedAt" = now() WHERE id = $1`, [S.sc])
+    const awaited = (await ok('viewer', 'GET', `/shipping/shipments/${S.sc}/carrier-return`)).carrierReturn
+    expect(awaited).toMatchObject({ state: 'AWAITED', garments: 1, defaultLocationId: scheduleA.finishedLocationId, cells: [{ cellId: blk52(), garments: 1 }] })
+    expect((await refused('viewer', 'POST', `/shipping/shipments/${S.sc}/carrier-return`, {}, 403)).code).toBe('forbidden')
+    expect((await refused('warehouse', 'POST', `/shipping/shipments/${S.sc}/carrier-return`, { locationId: newId() }, 400)).issues).toEqual([
+      { path: 'body/locationId', message: 'Expected a FINISHED_GOODS location of the site, or a place inside one, not archived.' },
+    ])
+
+    const back = await ok('warehouse', 'POST', `/shipping/shipments/${S.sc}/carrier-return`, { note: 'Refused by the customer.' }, 201)
+    expect(back.carrierReturn).toMatchObject({ state: 'RECEIVED', locationId: scheduleA.finishedLocationId, receivedById: (SESSIONS.warehouse as { actorId: string }).actorId })
+    expect(back.valued).toBe(true)
+    const moves = await admin(`SELECT id, reason::text AS reason, "fromLocationId", "toLocationId", "workOrderId", "shipmentLineId", reference, "baseQuantity"::text AS quantity, "idempotencyKey" FROM "StockMove" WHERE "idempotencyKey" LIKE $1`, [`shipping.carrierReturn:${S.sc}:%`])
+    expect(moves).toEqual([
+      { id: back.carrierReturn.moveIds[0], reason: 'ADJUSTMENT', fromLocationId: null, toLocationId: scheduleA.finishedLocationId, workOrderId: wo1(), shipmentLineId: null, reference: expect.stringMatching(/^SH-/), quantity: '1.0000', idempotencyKey: `shipping.carrierReturn:${S.sc}:1` },
+    ])
+    // At the garment's frozen standard, as it left (B-W2a-F7).
+    expect(await valuationOf(moves[0]!.id)).toMatchObject({ method: 'STANDARD_COST', valueAmount: 29_000 })
+    expect((await refused('warehouse', 'POST', `/shipping/shipments/${S.sc}/carrier-return`, {}, 409)).message).toMatch(/back in finished goods already/)
+
+    // On hand in finished goods again; "Report finished to stock" counts nothing twice (the returned shipment keeps its line).
+    const stock = await ok('production', 'GET', `/inventory/finished?workOrderId=${wo1()}`)
+    const item = (stock.items as Json[]).find((entry) => entry.id === scheduleA.finishedItemId || entry.itemId === scheduleA.finishedItemId)
+    expect(item?.onHand).toBe(1)
+    const finished = await ok('production', 'GET', `/production/work-orders/${wo1()}/finished`)
+    expect(finished.finished.cells.find((entry: Json) => entry.cellId === blk52())).toMatchObject({ canReport: 0 })
+    const events = await admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'shipment.carrier_return_received' AND subject = $1`, [S.sc])
+    expect(events.map((row) => row.payload)).toEqual([{ shipmentId: S.sc, number: expect.stringMatching(/^SH-/), garments: 1, locationId: scheduleA.finishedLocationId }])
   })
 })

@@ -14,6 +14,7 @@ import {
   stateAfterReopen,
   stateWhenNeeded,
   summary,
+  EVIDENCE_KINDS,
   type EvidenceKind,
   type TransportEvidenceStatus,
 } from '@nexus/factory-domain/shipping/evidence/evidence'
@@ -30,8 +31,8 @@ import { officeShipment } from '../shipments/shipments'
  * Intra-EU transport evidence (B-W2a-48; LOG-090; art. 41 DL 331/1993, Reg. (EU) 282/2011 art. 45a; design
  * warehouse.shipments Export "intra-EU evidence files (art. 41 DL 331/93: POD, CMR, carrier invoice; W2a)"): the papers
  * are files of the shipment (StoredFile recordType "Shipment", kind ATTACHMENT, kept ten years), each filed through these
- * routes with its kind (the audit row `shipping.evidencePaper` names the file and its kind: no column does); the
- * shipment keeps the state (factory-domain shipping/evidence). Office only.
+ * routes with its kind, kept as the file's category (W2b, B-W2b-19: StoredFile.category CMR | CARRIER_INVOICE | POD |
+ * OTHER; W2a named it in an audit row); the shipment keeps the state (factory-domain shipping/evidence). Office only.
  *
  *   GET  /shipping/shipments/:id/evidence                       shipping.view: the state, why it is needed, the papers,
  *                                                                what is missing
@@ -61,21 +62,14 @@ export interface Paper {
   readonly createdAt: string
 }
 
-/** The papers filed for a shipment: its files named by `shipping.evidencePaper` audit rows, not deleted. */
+/** The papers filed for a shipment: its files with an evidence category (B-W2b-19), not deleted. */
 async function papersOf(db: CommandTx, shipmentId: string): Promise<Paper[]> {
-  const rows = await db.auditLog.findMany({ where: { recordType: 'Shipment', recordId: shipmentId, action: PAPER }, select: { after: true }, orderBy: [{ at: 'asc' }, { id: 'asc' }] })
-  const kinds = new Map<string, EvidenceKind>()
-  for (const row of rows) {
-    const after = row.after as { fileId?: unknown; kind?: unknown } | null
-    if (typeof after?.fileId === 'string' && typeof after.kind === 'string') kinds.set(after.fileId, after.kind as EvidenceKind)
-  }
-  if (kinds.size === 0) return []
   const files = await db.storedFile.findMany({
-    where: { id: { in: [...kinds.keys()] }, recordType: 'Shipment', recordId: shipmentId, status: { not: 'DELETED' } },
-    select: { id: true, originalName: true, contentType: true, sizeBytes: true, status: true, createdAt: true },
+    where: { recordType: 'Shipment', recordId: shipmentId, category: { in: [...EVIDENCE_KINDS] }, status: { not: 'DELETED' } },
+    select: { id: true, category: true, originalName: true, contentType: true, sizeBytes: true, status: true, createdAt: true },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   })
-  return files.map((file) => ({ fileId: file.id, kind: kinds.get(file.id)!, originalName: file.originalName, contentType: file.contentType, sizeBytes: file.sizeBytes, status: file.status, createdAt: toUtcIso(file.createdAt) }))
+  return files.map((file) => ({ fileId: file.id, kind: file.category as EvidenceKind, originalName: file.originalName, contentType: file.contentType, sizeBytes: file.sizeBytes, status: file.status, createdAt: toUtcIso(file.createdAt) }))
 }
 
 const available = (papers: readonly Paper[]) => papers.filter((paper) => paper.status === 'AVAILABLE')
@@ -180,11 +174,16 @@ export async function announcePaper(files: FilesRuntime, caller: CommandCaller, 
     { companyId: shipment.companyId, recordType: 'Shipment', recordId: shipment.id, kind: 'ATTACHMENT', originalName: body.originalName, contentType: body.contentType, sizeBytes: body.sizeBytes, sha256: body.sha256, retainUntil: retainUntil.toISOString() },
     idempotencyKey,
   )
-  // The paper's kind (no column says it): an audit row of the shipment, once per file.
+  // B-W2b-19: the paper's kind is the file's category (set here, on the shipment's own file; the audit row keeps who and when).
   await command(caller, { name: PAPER, ...(idempotencyKey ? { idempotencyKey: `${idempotencyKey}:kind` } : {}), input: { shipmentId, fileId: upload.file.id, kind: body.kind } }, async (tools) => {
-    const known = await tools.tx.auditLog.findFirst({ where: { recordType: 'Shipment', recordId: shipment.id, action: PAPER, after: { path: ['fileId'], equals: upload.file.id } }, select: { id: true } })
-    if (!known) tools.audit({ action: PAPER, recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, after: { fileId: upload.file.id, kind: body.kind, originalName: upload.file.originalName } })
-    else tools.audit({ action: 'shipping.evidencePaperAgain', recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, after: { fileId: upload.file.id } })
+    const file = await tools.tx.storedFile.findFirst({ where: { id: upload.file.id, recordType: 'Shipment', recordId: shipment.id }, select: { category: true } })
+    if (!file) throw new NotFoundError('The paper is not a file of this shipment.')
+    if (file.category === body.kind) {
+      tools.audit({ action: 'shipping.evidencePaperAgain', recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, after: { fileId: upload.file.id } })
+      return { fileId: upload.file.id }
+    }
+    await tools.tx.storedFile.update({ where: { id: upload.file.id }, data: { category: body.kind }, select: { id: true } })
+    tools.audit({ action: PAPER, recordType: 'Shipment', recordId: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, before: { category: file.category }, after: { fileId: upload.file.id, kind: body.kind, originalName: upload.file.originalName } })
     return { fileId: upload.file.id }
   })
   return upload

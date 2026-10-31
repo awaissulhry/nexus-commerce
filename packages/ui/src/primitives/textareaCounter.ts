@@ -54,8 +54,10 @@ export function textareaCount(
   text: string | null | undefined,
   limit: number,
   label: (used: number, limit: number) => string = counterWords,
+  /** The over-limit words (B-W2b-04: the person's language). Default "38 characters too long". */
+  tooLong: (over: number) => string = overWords,
 ): TextareaCount {
   const used = countCharacters(text)
   const over = charactersOver(used, limit)
-  return { used, over, text: over > 0 ? `${label(used, limit)} · ${overWords(over)}` : label(used, limit) }
+  return { used, over, text: over > 0 ? `${label(used, limit)} · ${tooLong(over)}` : label(used, limit) }
 }

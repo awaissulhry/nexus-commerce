@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FISCAL_KINDS, FLOOR_DOCUMENT_KINDS } from '@nexus/factory-domain/numbering/kinds'
-import { checkOwnership, OwnershipError, partnerWalledColumns, policyInputs, type OwnershipFile } from './ownership'
+import { checkOwnership, OwnershipError, partnerWalledColumns, PERSONAL_PURPOSES, personalDataOf, policyInputs, type OwnershipFile } from './ownership'
 import { TENANT_ID_DEFAULT } from './roles'
 import { parseSchema } from './schema-models'
 import { loadOwnership, loadSchema } from './tools'
@@ -16,11 +16,17 @@ describe('model ownership', () => {
     expect(problems(loadOwnership())).toEqual([])
     const inputs = policyInputs(loadSchema(), loadOwnership())
     expect(inputs.model.tables.map((table) => table.table).sort()).toEqual([
+      'AbsenceCode',
+      'AbsenceEntry',
       'AccountingExport',
       'AccountingExportFile',
       'Alert',
       'AlertEvent',
       'AlertRule',
+      'AttendanceAnomaly',
+      'AttendanceCorrection',
+      'AttendanceDay',
+      'AttendanceMonthClose',
       'AttentionAction',
       'AttentionActionLog',
       'AuditLog',
@@ -33,6 +39,8 @@ describe('model ownership', () => {
       'CalendarDay',
       'Certificate',
       'CertificateCoverage',
+      'CertificateRenewal',
+      'ClockEvent',
       'Colour',
       'Colourway',
       'Company',
@@ -52,7 +60,10 @@ describe('model ownership', () => {
       'EarningsEntry',
       'EmailIdentity',
       'EmailOutbound',
+      'Employee',
+      'EmployeeSkill',
       'ExportJob',
+      'FirstLoadStep',
       'FloorRefusedAction',
       'FloorScanRefusal',
       'FloorSession',
@@ -60,6 +71,7 @@ describe('model ownership', () => {
       'FloorSyncEvent',
       'GarmentLabelPrint',
       'GarmentSerial',
+      'GeneratedDocument',
       'GoodsReceipt',
       'GoodsReceiptLine',
       'HeldScan',
@@ -74,6 +86,7 @@ describe('model ownership', () => {
       'InspectionDefect',
       'IntegrationAccount',
       'IntegrationCall',
+      'InterestReferenceRate',
       'Invitation',
       'Invoice',
       'InvoiceLine',
@@ -83,13 +96,17 @@ describe('model ownership', () => {
       'LabResult',
       'LabelTemplate',
       'LabourRate',
+      'LeaverCase',
+      'LeaverStep',
       'Line',
       'LineCapacity',
+      'LineLoan',
       'LinkEvidence',
       'Location',
       'Lot',
       'LotDocument',
       'Machine',
+      'MachineAuthorisation',
       'MachineClass',
       'MachineSymptom',
       'MaintenanceJob',
@@ -114,14 +131,20 @@ describe('model ownership', () => {
       'Operation',
       'OperationScan',
       'OperationScanDefect',
+      'OrgArea',
       'OutboxEvent',
+      'OvertimeAgreement',
+      'OvertimeEntry',
+      'OvertimeRequest',
       'Parcel',
       'Party',
       'PartyAddress',
       'PartyContact',
+      'PartyPriceListAssignment',
       'PartyTaxIdentity',
       'PasswordReset',
       'PayPeriod',
+      'PayablesSettings',
       'Payment',
       'PaymentAllocation',
       'PaymentReminder',
@@ -130,6 +153,8 @@ describe('model ownership', () => {
       'PayrollExport',
       'PayrollExportFile',
       'PayrollExportLayout',
+      'PeopleLegalGate',
+      'PeopleSettings',
       'PeriodLock',
       'PiecePaySwitch',
       'PieceRateEntry',
@@ -154,6 +179,7 @@ describe('model ownership', () => {
       'PurchaseOrderLine',
       'PurchaseOrderReminder',
       'PurchaseOrderRevision',
+      'PurchasingSettings',
       'QualityHold',
       'QualityRelease',
       'QualityReleaseReversal',
@@ -174,6 +200,7 @@ describe('model ownership', () => {
       'RepairOrder',
       'RepairStageEvent',
       'ReplacementRequest',
+      'ReportRun',
       'ReportSubscription',
       'RequirementPegging',
       'Reservation',
@@ -184,6 +211,7 @@ describe('model ownership', () => {
       'ReworkOrder',
       'Role',
       'RoleAssignment',
+      'RosterEntry',
       'RoutingOperation',
       'SalesOrder',
       'SalesOrderAmendment',
@@ -195,6 +223,7 @@ describe('model ownership', () => {
       'ScanCorrectionRequest',
       'ScheduleSlot',
       'ScrapReason',
+      'SdiInboxItem',
       'SdiNotification',
       'SdiSubmission',
       'SearchEntry',
@@ -208,6 +237,7 @@ describe('model ownership', () => {
       'Site',
       'Size',
       'SizeScale',
+      'Skill',
       'StaffNoticeAck',
       'StandardCost',
       'Station',
@@ -218,19 +248,26 @@ describe('model ownership', () => {
       'StoredFile',
       'Style',
       'StyleRevision',
+      'SubcontractBundle',
       'SubcontractKitLine',
       'SubcontractOperation',
       'SubcontractOrder',
+      'SubcontractReceipt',
+      'SubcontractReceiptLine',
       'SupplierClaim',
       'SupplierClaimLine',
       'SupplierInvoice',
+      'SupplierInvoiceFile',
       'SupplierInvoiceLine',
       'SupplierInvoiceMatch',
       'SupplierItem',
       'Suppression',
       'Task',
+      'Team',
+      'TeamMember',
       'Tenant',
       'Thread',
+      'TimesheetApproval',
       'TodayLayout',
       'TrackingEvent',
       'TypeChangeReview',
@@ -242,6 +279,7 @@ describe('model ownership', () => {
       'WorkCentreCapacity',
       'WorkOrder',
       'WorkOrderCostEntry',
+      'WorkOrderKit',
       'WorkOrderMaterial',
       'WorkOrderOperation',
       'WorkOrderSize',
@@ -249,6 +287,7 @@ describe('model ownership', () => {
       'WorkerNoticeAck',
       'WorkerRole',
       'WorkerStatement',
+      'WorkingTimeRule',
     ])
     expect(inputs.platformTables).toEqual([{ table: 'Tenant', privileges: ['select', 'insert', 'update'], walled: true }])
   })
@@ -411,6 +450,93 @@ describe('model ownership', () => {
       expect(problems(files)).toEqual([expect.stringMatching(/OneOffLink: factory_partner_runtime: column note is an internal note \(@internal\)/)])
       const oneOffLink = loadSchema().find((model) => model.name === 'OneOffLink')!
       expect(partnerWalledColumns(oneOffLink)).toEqual([{ column: 'note', why: 'an internal note (@internal)' }])
+    })
+  })
+
+  describe('personal data and its purposes (PLT-207, PLT-209; W2b people schema)', () => {
+    const people = (files: ReturnType<typeof copy>) => files.find((file) => file.file === 'people.json')!.data.models
+
+    it('maps every model that holds personal data: who it is about and the purposes of each column', () => {
+      const map = personalDataOf(loadSchema(), loadOwnership())
+      expect(map.map((entry) => entry.model).sort()).toEqual(
+        [
+          ...['Employee', 'EmployeeSkill', 'LeaverCase', 'LeaverStep', 'LineLoan', 'MachineAuthorisation', 'TeamMember'],
+          // W2b time and attendance (wave 5/7): purpose ATTENDANCE.
+          ...['AbsenceEntry', 'AttendanceAnomaly', 'AttendanceCorrection', 'AttendanceDay', 'ClockEvent', 'OvertimeAgreement', 'OvertimeEntry', 'RosterEntry', 'TimesheetApproval'],
+          // W2b piece pay and the payroll export (wave 6/7): purpose PAY.
+          ...['EarningsEntry', 'HeldScan', 'RateAcknowledgement', 'WorkerStatement'],
+        ].sort(),
+      )
+      const employee = map.find((entry) => entry.model === 'Employee')!
+      expect(employee.subject).toBe('id')
+      expect(employee.columns.firstName).toEqual(['EMPLOYMENT'])
+      expect(employee.columns.employeeCode).toEqual(['EMPLOYMENT', 'PAY'])
+      expect(map.find((entry) => entry.model === 'LeaverStep')).toMatchObject({ subject: 'caseId', via: 'LeaverCase' })
+      // Every other personal model names the person by employeeId.
+      for (const entry of map.filter((row) => !['Employee', 'LeaverStep'].includes(row.model))) expect(entry.subject).toBe('employeeId')
+      // The purposes are the fixed list; no figure about one person's work is in this schema (PERFORMANCE unused).
+      const used = new Set(map.flatMap((entry) => Object.values(entry.columns).flat()))
+      for (const purpose of used) expect(Object.keys(PERSONAL_PURPOSES)).toContain(purpose)
+      expect(used.has('PERFORMANCE')).toBe(false)
+    })
+
+    it('fails on an unknown purpose, a column that does not exist, a subject that is not a uuid column, an empty list', () => {
+      const files = copy()
+      people(files).Employee!.personal.columns.firstName = ['MARKETING']
+      people(files).Employee!.personal.columns.nickname = ['EMPLOYMENT']
+      people(files).TeamMember!.personal.subject = 'createdAt'
+      people(files).LineLoan!.personal.columns = {}
+      expect(problems(files)).toEqual([
+        expect.stringMatching(/Employee: personal: firstName must list one or more purposes of EMPLOYMENT, ATTENDANCE, PERFORMANCE, PAY, SAFETY, PRODUCTION/),
+        expect.stringMatching(/Employee: personal: nickname is not a column of Employee/),
+        expect.stringMatching(/TeamMember: personal: subject createdAt is not a uuid column of TeamMember/),
+        expect.stringMatching(/LineLoan: personal: columns must tag at least one column with its purposes/),
+      ])
+    })
+
+    it('lets the floor read a personal column only for a purpose of its tools (production, attendance, safety)', () => {
+      const files = copy()
+      const floor = people(files).Employee!.access.factory_floor_runtime
+      floor.hiddenColumns = floor.hiddenColumns.filter((column: string) => column !== 'firstName' && column !== 'jobRole')
+      // jobRole is also for SAFETY (the floor may read it); firstName is only for EMPLOYMENT.
+      expect(problems(files)).toEqual([expect.stringMatching(/Employee: personal: the floor reads firstName, whose purposes \(EMPLOYMENT\) are none of the floor's \(PRODUCTION, ATTENDANCE, SAFETY\); hide it from the floor or name the purpose/)])
+    })
+
+    it('never lets the partner role read a personal column, and a subject reached through a model needs that model\'s subject', () => {
+      const workers = parseSchema([
+        {
+          file: 'example-people.prisma',
+          text: [
+            'model ExamplePerson {',
+            '  id         String @id @db.Uuid',
+            `  tenantId   String @default(dbgenerated(${JSON.stringify(TENANT_ID_DEFAULT)})) @db.Uuid`,
+            '  partyId    String @db.Uuid',
+            '  personId   String @db.Uuid',
+            '  name       String',
+            '}',
+          ].join('\n'),
+        },
+      ])
+      const classify = (hiddenColumns: string[], via?: string): OwnershipFile => ({
+        file: 'example-people.json',
+        data: {
+          models: {
+            ExamplePerson: {
+              kind: 'tenant',
+              keyColumns: { tenant: 'tenantId', party: 'partyId' },
+              access: { factory_partner_runtime: { privileges: ['select'], scopedBy: ['party'], hiddenColumns } },
+              personal: { subject: 'personId', ...(via ? { via } : {}), columns: { name: ['EMPLOYMENT'] } },
+            },
+          },
+        },
+      })
+      expect(problems([...loadOwnership(), classify([])], [...loadSchema(), ...workers])).toEqual([
+        'ownership/example-people.json: ExamplePerson: personal: name is personal data; the partner role never reads it (add it to its hiddenColumns)',
+      ])
+      expect(problems([...loadOwnership(), classify(['name'])], [...loadSchema(), ...workers])).toEqual([])
+      expect(problems([...loadOwnership(), classify(['name'], 'Skill')], [...loadSchema(), ...workers])).toEqual([
+        'ownership/example-people.json: ExamplePerson: personal.via names Skill, which lists no personal data of its own (its subject is the person)',
+      ])
     })
   })
 })

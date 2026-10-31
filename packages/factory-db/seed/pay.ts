@@ -7,6 +7,7 @@ import {
   HeldScanStatus,
   IncentiveKind,
   IncentiveSchemeStatus,
+  MonitoringBasis,
   PayPeriodStatus,
   PayrollCodeKind,
   PayrollExportFileKind,
@@ -16,23 +17,28 @@ import {
   PieceRateChangeReason,
   PieceRateVersionStatus,
   PiecePayState,
+  PeoplePurpose,
   RateAckChannel,
   TeamSplitBasis,
 } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
 import { seed as seedNumbering } from './numbering'
+import { seed as seedPeople } from './people'
 import { seed as seedPrivacy } from './privacy'
 import { seed as seedProduction, type ProductionSeed } from './production'
 
 /**
  * The piece pay and payroll export seed (W2b schema wave 6/7), per tenant of seed/_core.ts, written in the tenant's
- * office scope as the app does (the receipt as the floor writes it: the operator on A1's cutting tablet). Every figure,
- * name and reference is MADE UP (no real CCNL rate, no real consultant, no real payroll code):
+ * office scope as the app does (the receipt too: the API writes a tablet reading in the tenant's system context). Every
+ * figure, name and reference is MADE UP (no real CCNL rate, no real consultant, no real payroll code). The rows about one
+ * person name them by employeeId: the operator is seed/people.ts's E1 (SEED-A1-1), the team leader E2.
  *
  *   legal switch  A1: ON from 2026-11-13 with its preconditions on record: a made-up CCNL and article, company A's worker
  *                 notice 2026-10 in force and its stored DPIA (seed/privacy.ts), a made-up labour consultant's agreement,
- *                 the company's ACTIVE scheme, and A1's floor rules naming workers on a union agreement (seed/production.ts).
+ *                 the company's ACTIVE scheme, A1's floor rules naming workers on a union agreement (seed/production.ts) and
+ *                 A1's PERFORMANCE legal gate, switched on by this seed (a made-up union agreement; people.prisma
+ *                 PeopleLegalGate; seed/people.ts's ATTENDANCE gate stays off).
  *                 B1: OFF with nothing on record (it records the station only, so piece pay can never start there as it is).
  *                 A new site has no row: OFF by default.
  *   scheme        company A's pure piece rate from 2026-11-01, guaranteed 9.00 an hour (made up), own-fault rework and
@@ -72,6 +78,7 @@ const T = {
   ratesDrafted: new Date('2026-11-11T08:00:00.000Z'),
   published: new Date('2026-11-12T10:00:00.000Z'),
   read: new Date('2026-11-12T14:00:00.000Z'),
+  gateOn: new Date('2026-11-12T15:00:00.000Z'),
   switchedOn: new Date('2026-11-12T16:00:00.000Z'),
   octoberRun: new Date('2026-11-02T08:00:00.000Z'),
   octoberReview: new Date('2026-11-03T08:00:00.000Z'),
@@ -125,6 +132,10 @@ const GENERIC_CSV = {
 
 export interface PaySeed {
   readonly production: ProductionSeed
+  /** seed/people.ts's employees of A1's operator (E1) and team leader (E2). */
+  readonly employeeIds: { readonly operator: string; readonly lead: string }
+  /** A1's PERFORMANCE legal gate this seed switched on (piece pay's precondition). */
+  readonly performanceGateId: string
   /** The legal switches: A1 ON, B1 OFF (each with its site's id). */
   readonly switchIds: { readonly on: string; readonly off: string }
   /** Company A's ACTIVE scheme and A1 line's DRAFT one. */
@@ -157,9 +168,12 @@ export async function seed(context: SeedContext): Promise<PaySeed> {
   const { db, namespace } = context
   // The CLI runs the seeds in name order: run what this one builds on (all idempotent): the production seed (A1's floor
   // rules naming workers, SEED-JKT-02 and its work order, the operator's scans, the cutting tablet, the worker notice),
-  // the privacy seed (company A's stored DPIA), numbering (the PAYROLL_EXPORT series) and files (the store).
+  // the privacy seed (company A's stored DPIA), the people seed (the employees of the floor workers), numbering (the
+  // PAYROLL_EXPORT series) and files (the store).
   const production = await seedProduction(context)
   const privacy = await seedPrivacy(context)
+  const people = await seedPeople(context)
+  const employee = { operator: people.employeeIds.e1, lead: people.employeeIds.e2 }
   await seedNumbering(context)
   await seedFiles(context)
   const id = (key: string): string => seedUuid(namespace, key)
@@ -177,7 +191,6 @@ export async function seed(context: SeedContext): Promise<PaySeed> {
   const operatorCode = 'SEED-A1-1'
   const exportSeriesId = `ffffffff${id(`series:A:PAYROLL_EXPORT:MAIN:${YEAR}`).slice(8)}`
   const office = { audience: 'office' as const, tenantId, actorId }
-  const floor = { audience: 'floor' as const, tenantId, actorId, siteId: siteA }
   const stamp = (at: Date) => ({ createdAt: at, updatedAt: at, createdById: actorId })
   const select = { id: true } as const
   const document = (key: string, recordType: string, recordId: string, name: string, contentType: string, at: Date): Prisma.StoredFileCreateManyInput => ({
@@ -199,6 +212,9 @@ export async function seed(context: SeedContext): Promise<PaySeed> {
   })
 
   const switchIds = { on: siteA, off: siteB }
+  // Sorts after seed/people.ts's switched-off gate (the isolation tests copy the first row: one gate in force per site
+  // and purpose).
+  const performanceGateId = lastId('pay:gate:A1:PERFORMANCE')
   const schemeIds = { active: id('pay:scheme:A:2026-11'), draft: firstId('pay:scheme:A1:L1:2027-01') }
   const rateTableId = id('pay:rates:A1:JKT-02')
   const rateVersionIds = { published: id('pay:rates:A1:JKT-02:1'), draft: firstId('pay:rates:A1:JKT-02:2') }
@@ -338,8 +354,8 @@ export async function seed(context: SeedContext): Promise<PaySeed> {
       })
     }),
   )
-  // The operator reads the published rates on the cutting tablet: the floor writes the receipt.
-  await db.withScope(floor, (client) =>
+  // The operator reads the published rates on the cutting tablet: the API records the receipt (system context).
+  await db.withScope(office, (client) =>
     client.$transaction(async (tx) => {
       if (await tx.rateAcknowledgement.findUnique({ where: { id: acknowledgementId }, select })) return
       await tx.rateAcknowledgement.create({
@@ -348,6 +364,7 @@ export async function seed(context: SeedContext): Promise<PaySeed> {
           siteId: siteA,
           publicationId,
           versionId: rateVersionIds.published,
+          employeeId: employee.operator,
           workerId: production.operatorId,
           channel: RateAckChannel.DEVICE,
           deviceId: production.deviceId,
@@ -400,6 +417,22 @@ export async function seed(context: SeedContext): Promise<PaySeed> {
   await db.withScope(office, (client) =>
     client.$transaction(async (tx) => {
       if (await tx.piecePaySwitch.findUnique({ where: { id: switchIds.on }, select })) return
+      await tx.peopleLegalGate.create({
+        data: {
+          id: performanceGateId,
+          companyId: companyA,
+          siteId: siteA,
+          purpose: PeoplePurpose.PERFORMANCE,
+          basis: MonitoringBasis.UNION_AGREEMENT,
+          basisReference: 'SAMPLE - accordo RSU 2026/02 on piece rates (made up)',
+          noticeId: production.workerNoticeId,
+          dpiaId: privacy.dpiaId,
+          switchedOnAt: T.gateOn,
+          switchedOnById: actorId,
+          ...stamp(T.gateOn),
+        },
+        select,
+      })
       await tx.piecePaySwitch.createMany({
         data: [
           {
@@ -459,6 +492,7 @@ export async function seed(context: SeedContext): Promise<PaySeed> {
             companyId: companyA,
             siteId: siteA,
             payPeriodId: periodIds.november,
+            employeeId: employee.operator,
             workerId: production.operatorId,
             operationScanId: misScan,
             reason: HeldScanReason.NOT_CLOCKED_IN,
@@ -471,6 +505,7 @@ export async function seed(context: SeedContext): Promise<PaySeed> {
             companyId: companyA,
             siteId: siteA,
             payPeriodId: periodIds.november,
+            employeeId: employee.operator,
             workerId: production.operatorId,
             operationScanId: report,
             reason: HeldScanReason.NOT_CLOCKED_IN,
@@ -501,6 +536,7 @@ export async function seed(context: SeedContext): Promise<PaySeed> {
           companyId: companyA,
           siteId: siteA,
           payPeriodId: periodIds.november,
+          employeeId: employee.operator,
           workerId: production.operatorId,
           workDate: DAY.worked,
           kind: EarningsKind.SCAN,
@@ -522,6 +558,7 @@ export async function seed(context: SeedContext): Promise<PaySeed> {
           companyId: companyA,
           siteId: siteA,
           payPeriodId: periodIds.november,
+          employeeId: employee.operator,
           workerId: production.operatorId,
           workDate: DAY.worked,
           kind: EarningsKind.ADJUSTMENT,
@@ -539,6 +576,7 @@ export async function seed(context: SeedContext): Promise<PaySeed> {
           companyId: companyA,
           siteId: siteA,
           payPeriodId: periodIds.november,
+          employeeId: employee.operator,
           workerId: production.operatorId,
           workDate: DAY.worked,
           kind: EarningsKind.ADJUSTMENT,
@@ -552,7 +590,7 @@ export async function seed(context: SeedContext): Promise<PaySeed> {
         select,
       })
       await tx.workerStatement.create({
-        data: { id: statementId, companyId: companyA, siteId: siteA, payPeriodId: periodIds.november, workerId: production.operatorId, ...stamp(T.statement) },
+        data: { id: statementId, companyId: companyA, siteId: siteA, payPeriodId: periodIds.november, employeeId: employee.operator, ...stamp(T.statement) },
         select,
       })
     }),
@@ -669,6 +707,8 @@ export async function seed(context: SeedContext): Promise<PaySeed> {
 
   return {
     production,
+    employeeIds: employee,
+    performanceGateId,
     switchIds,
     schemeIds,
     rateTableId,

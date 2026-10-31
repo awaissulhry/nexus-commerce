@@ -44,6 +44,12 @@ model Device {
   batteryCharging  Boolean?
   queuedActions    Int?
   statusReportedAt DateTime?    @db.Timestamptz(3)
+  /// W2b (B-W2b-03; design admin.devices Status › Health "network"): how it was connected when it last reported its
+  /// state (the browser's own answer); null: not reported (many tablets' browsers do not say).
+  network          DeviceNetwork?
+  /// W2b (B-W2b-03; design "In use since 07:02", never who: Statuto art. 4): when its open floor session began; set
+  /// when a session opens on it and cleared when that session ends (with currentSessionId); null: not in use.
+  inUseSince       DateTime?    @db.Timestamptz(3)
   /// The open floor session, if any: the one operator signed in on it.
   currentSessionId String?      @db.Uuid
   revokedAt        DateTime?    @db.Timestamptz(3)
@@ -76,8 +82,13 @@ model Device {
   // B-W1-44: the garment labels printed on it; the bundle tickets printed again on it.
   garmentLabelPrints     GarmentLabelPrint[]
   bundleReprints         BundleReprint[]
+  // W2b subcontract.prisma (B-W2b-01): the subcontract receipts taken on it (the floor's kit task).
+  subcontractReceipts    SubcontractReceipt[]
   // numbering.prisma: the numbers of its blocks it used.
   numberBlockUses NumberBlockUse[]
+  // W2b time.prisma (wave 5/7): the clock events and overtime answers recorded on it.
+  clockEvents        ClockEvent[]
+  overtimeAgreements OvertimeAgreement[]
   // floor-sync.prisma: its queue's recorded events and refused actions.
   syncEvents      FloorSyncEvent[]
   refusedActions  FloorRefusedAction[]
@@ -99,6 +110,15 @@ enum DeviceStatus {
   ACTIVE
   /// Lost or retired: its token opens nothing, its sessions ended. Final.
   REVOKED
+}
+
+/// How a device is connected, as its browser reports it (W2b; the Network Information API's type).
+enum DeviceNetwork {
+  WIFI
+  ETHERNET
+  CELLULAR
+  /// Another kind (bluetooth, wimax, mixed …).
+  OTHER
 }
 
 /// A one-time enrolment code for a device, shown as a QR code in the Office; the tablet trades it for its token. It
@@ -138,6 +158,9 @@ model Worker {
   employeeCode      String?
   /// The office user this worker also is (a team leader with an Office account), if any.
   userId            String?      @db.Uuid
+  /// W2b (wave 4/7): the employee record of this person (People › Employees), of the worker's company; null: none yet
+  /// (design "Floor workers with no employee record"). A person has one employee record and at most one worker per site.
+  employeeId        String?      @db.Uuid
   status            WorkerStatus @default(ACTIVE)
   /// scrypt, `$scrypt$ln=…` (factory-domain auth/floor/pin). Null: no PIN yet, the worker cannot sign in.
   pinHash           String?
@@ -155,6 +178,8 @@ model Worker {
   site     Site           @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
   user     User?          @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b (wave 4/7). Restrict, not Prisma's SetNull default: that would also clear tenantId and companyId.
+  employee Employee?      @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   badges   Badge[]
   roles    WorkerRole[]
   sessions FloorSession[]
@@ -162,16 +187,18 @@ model Worker {
   noticeAcks     WorkerNoticeAck[]
   cutLogs        CutLog[]
   operationScans OperationScan[]
-  // W2b pay.prisma (schema wave 6/7): their receipts of rate publications, earnings, held scans and statements.
+  // W2b pay.prisma (schema wave 6/7): their receipts of rate publications, the earnings and held scans of their work.
   rateAcknowledgements RateAcknowledgement[]
   earningsEntries      EarningsEntry[]
   heldScans            HeldScan[]
-  workerStatements     WorkerStatement[]
   // B-W1-42: the correction requests they asked and the refused scans they sent (a site that names workers).
   scanCorrectionRequests ScanCorrectionRequest[]
   scanRefusals           FloorScanRefusal[]
   // floor-sync.prisma: its refused queued actions (a site that names workers).
   refusedActions         FloorRefusedAction[]
+  // W2b time.prisma (wave 5/7): the worker's clock events and overtime answers on the site's tablets.
+  clockEvents            ClockEvent[]
+  overtimeAgreements     OvertimeAgreement[]
   // quality.prisma: the final inspections the worker made as the inspector.
   inspections    Inspection[]   @relation("InspectionInspector")
   // W2a (wave 6/7) quality.prisma, holds.prisma, ncr.prisma, plant.prisma: the inspections assigned to the worker, the
@@ -191,6 +218,7 @@ model Worker {
   @@unique([tenantId, employeeCode])
   // The target of the tenant- and site-safe references from the worker's rows.
   @@unique([tenantId, siteId, id])
+  @@index([tenantId, employeeId])
 }
 
 /// The life of a worker (factory-domain auth/floor/status: workerStatus).

@@ -5,7 +5,7 @@ import { templateOf } from '../auth/roles/templates'
 import { readFatturaPa, sameTaxId } from './fatturapa'
 import { matchLine, matchStatusOf, matchWords, MATCH_SETTINGS, sameUnit, type GoodsFacts } from './match'
 import { PAYABLES_PERMISSIONS } from './permissions'
-import { approvalProblems, actionProblems, receivedLineKind, suggestMapping, toApprove, typedSupplierProblem, vatSummaryOf, type InvoiceFacts } from './rules'
+import { approvalProblems, actionProblems, preparersOf, receivedLineKind, suggestMapping, toApprove, typedSupplierProblem, vatSummaryOf, type InvoiceFacts } from './rules'
 import { supplierInvoiceXml } from './testing'
 import { parseXml, XmlReadError } from './xml'
 
@@ -150,6 +150,26 @@ describe('mapping a received line to its order', () => {
     expect(suggestMapping({ seq: 1, itemCode: 'PROT-SH' }, { orders: [], ddts: [] }, lines, subcontracts)).toMatchObject({ purchaseOrderLineId: 'l2', how: 'CODE' })
     expect(suggestMapping({ seq: 1, itemCode: null }, { orders: [{ lines: [], document: 'SC-2026-0001', item: null }], ddts: [] }, lines, subcontracts)).toEqual({ kind: 'SUBCONTRACT', subcontractOrderId: 'sc1', siteId: 's1', how: 'ORDER' })
   })
+  it('an invoice naming two orders without line numbers never puts a line on an order line of another article (B-W2a-F7)', () => {
+    const two = [
+      { id: 'a1', siteId: 's1', orderNumber: 'PO-A', seq: 10, supplierArticleCode: 'ART-LEA', itemCode: 'LEA-BLK', ddtNumbers: ['DDT-1'], open: true },
+      { id: 'b1', siteId: 's1', orderNumber: 'PO-B', seq: 10, supplierArticleCode: 'ART-PRO', itemCode: 'PROT-SH', ddtNumbers: ['DDT-1'], open: true },
+    ]
+    const both = { orders: [{ lines: [], document: 'PO-A', item: null }, { lines: [], document: 'PO-B', item: null }], ddts: [] }
+    // The protector line goes on PO-B's protector line, never on PO-A's only line (the leather).
+    expect(suggestMapping({ seq: 2, itemCode: 'ART-PRO' }, both, two, [])).toEqual({ kind: 'GOODS', purchaseOrderLineId: 'b1', siteId: 's1', how: 'ORDER_CODE' })
+    expect(suggestMapping({ seq: 1, itemCode: 'art-lea' }, both, two, [])).toMatchObject({ purchaseOrderLineId: 'a1', how: 'ORDER_CODE' })
+    // An article neither order has stays unmapped (the person maps it); so does a line without an article (two equal lines).
+    expect(suggestMapping({ seq: 3, itemCode: 'ART-ZIP' }, both, two, [])).toBeNull()
+    expect(suggestMapping({ seq: 3, itemCode: null }, both, two, [])).toBeNull()
+    // One order named: its only line when the article fits or none is named; never one of another article.
+    const onlyA = { orders: [{ lines: [], document: 'PO-A', item: null }], ddts: [] }
+    expect(suggestMapping({ seq: 1, itemCode: null }, onlyA, two, [])).toMatchObject({ purchaseOrderLineId: 'a1', how: 'ORDER_ONLY_LINE' })
+    expect(suggestMapping({ seq: 1, itemCode: 'ART-ZIP' }, onlyA, two, [])).toBeNull()
+    // The order's line number does not override another article; the delivery note's only line neither.
+    expect(suggestMapping({ seq: 1, itemCode: 'ART-PRO' }, { orders: [{ lines: [1], document: 'PO-A', item: '10' }], ddts: [] }, two, [])).toMatchObject({ purchaseOrderLineId: 'b1', how: 'CODE' })
+    expect(suggestMapping({ seq: 1, itemCode: 'ART-ZIP' }, { orders: [], ddts: [{ lines: [], number: 'DDT-9' }] }, [{ ...two[0]!, ddtNumbers: ['DDT-9'] }], [])).toBeNull()
+  })
   it('an accessory, discount or rebate line is a charge', () => {
     expect(receivedLineKind('AC', null)).toBe('CHARGE')
     expect(receivedLineKind('SC', null)).toBe('CHARGE')
@@ -171,6 +191,31 @@ describe('approval, separation of duties and the actions', () => {
     expect(approvalProblems(typed, 'u1')).toEqual([{ code: 'OWN_INVOICE', message: 'You entered this invoice, so someone else approves it.' }])
     expect(approvalProblems(typed, 'u2')).toEqual([])
     expect(approvalProblems({ ...typed, linesNet: 40_000 }, 'u2').map((problem) => problem.code)).toEqual(['LINES_DO_NOT_ADD_UP'])
+  })
+  it('four eyes on an SDI invoice: never by the person who mapped or matched its lines, or accepted one of its differences (B-W2a-F7)', () => {
+    const prepared = { ...base, mappedByIds: ['mapper'], acceptedByIds: ['accepter'] }
+    expect(approvalProblems(prepared, 'mapper')).toEqual([{ code: 'OWN_MAPPING', message: 'You mapped or matched its lines, so someone else approves it.' }])
+    expect(approvalProblems(prepared, 'accepter')).toEqual([{ code: 'OWN_ACCEPTANCE', message: 'You accepted one of its differences, so someone else approves it.' }])
+    expect(approvalProblems(prepared, 'third')).toEqual([])
+    // One refusal says it: whoever entered a typed invoice is told that first.
+    expect(approvalProblems({ ...prepared, source: 'MANUAL', createdById: 'mapper', xmlFileId: null, linesNet: 46_650 }, 'mapper').map((problem) => problem.code)).toEqual(['OWN_INVOICE'])
+  })
+  it('who prepared it, from its rows and its audit: the system is nobody, a figure change maps nothing', () => {
+    const changeLine = (actorId: string, before: unknown, after: unknown) => ({ action: 'payables.changeLine', actorId, before, after })
+    const marked = (value: unknown) => ({ $money: 'cost', value })
+    expect(
+      preparersOf({
+        lines: [{ createdById: null }, { createdById: 'typist' }],
+        matches: [{ createdById: null, acceptedById: null }, { createdById: 'matcher', acceptedById: 'buyer' }],
+        audit: [
+          changeLine('mapper', marked({ lineId: 'l1', kind: 'GOODS', purchaseOrderLineId: null, subcontractOrderId: null }), marked({ lineId: 'l1', kind: 'GOODS', purchaseOrderLineId: 'pol1', subcontractOrderId: null })),
+          changeLine('corrector', marked({ lineId: 'l2', kind: 'CHARGE', purchaseOrderLineId: null, subcontractOrderId: null, netAmount: 100 }), marked({ lineId: 'l2', kind: 'CHARGE', purchaseOrderLineId: null, subcontractOrderId: null, netAmount: 120 })),
+          { action: 'payables.withoutOrder', actorId: 'servicer', before: null, after: { lines: [3], kind: 'SERVICE' } },
+          { action: 'payables.acceptDifference', actorId: 'earlier', before: null, after: { matchId: 'm0' } },
+        ],
+      }),
+    ).toEqual({ mappedByIds: ['mapper', 'matcher', 'servicer', 'typist'], acceptedByIds: ['buyer', 'earlier'] })
+    expect(preparersOf({ lines: [{ createdById: null }], matches: [{ createdById: null, acceptedById: null }], audit: [] })).toEqual({ mappedByIds: [], acceptedByIds: [] })
   })
   it('an SDI invoice is never edited or voided; a paid one moves no more', () => {
     expect(actionProblems({ number: 'n', status: 'RECEIVED', source: 'SDI' })).toMatchObject({ edit: expect.stringContaining('SDI'), void: expect.stringContaining('never voided'), map: null, dispute: null })

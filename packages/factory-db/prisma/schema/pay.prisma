@@ -17,7 +17,8 @@
 //   - Pay per piece is a figure about one person's work: Statuto dei Lavoratori art. 4 c.1 (a union agreement or the
 //     Ispettorato's authorisation) and a DPIA (GDPR art. 35) come first. So each site has a legal switch, OFF by
 //     default, that turns ON only with its preconditions on record (the CCNL article, the worker notice, the DPIA, the
-//     labour consultant's agreement, a scheme, and the site's recorded legal basis for naming workers in floor records),
+//     labour consultant's agreement, a scheme, the site's floor rules naming workers with a recorded legal basis, and
+//     the site's PERFORMANCE legal gate in force: people.prisma PeopleLegalGate),
 //     and the ledger refuses a piece-pay figure dated outside the site's ON window. Nothing here is computed while OFF.
 //   - Waiting that is not the worker's doing does not cut pay (MES-148, c.c. art. 2100): a scheme pays it at the
 //     average or the guaranteed rate; there is no "unpaid" choice for waiting.
@@ -25,22 +26,24 @@
 //     vendor format in this public code; the generic CSV is a layout row too.
 //
 // Money (plan A1 §2.6): every rate and amount is `@grain wages` (the W0 grain for piece rates and earnings,
-// factory-domain auth/grains; the W2b plan calls it "pay"): HR and the worker only. No floor or partner role reads a
-// money column of this file; a worker's own figures reach the floor through the API (B-W2b-68, after the PIN again),
-// never through the floor role's grants.
+// factory-domain auth/grains; the W2b plan calls it "pay"): HR and the worker only. No floor or partner role reads any
+// table of this file.
 //
-// Personal data (GDPR arts. 4, 5(1)(c)): the pay tables hold a worker's id, never a name (the name lives only on
-// floor-auth's Worker, the one place to erase or pseudonymise it); the personal columns carry `/// @personal piece-pay`
-// (the purpose) for the privacy export and erase (B-W2b-27). No per-person figure in a list, filter, group or total
-// (Owner answer W1, F2): the API's rule; these tables keep one person's figures in their own rows, office only.
+// Personal data (GDPR arts. 4, 5(1)(c); PLT-207, PLT-209): a row about one person names them by `employeeId` (people.prisma
+// Employee), and the floor sign-in that did the work by `workerId` where the floor is involved; never a name (the name
+// lives on Employee and Worker, the one place to erase or pseudonymise it). The personal columns and their purpose (PAY)
+// are listed in ownership/pay.json `personal` (the privacy export and erasure read it). No per-person figure in a list,
+// filter, group or total (Owner answer W1, F2): the API's rule; these tables keep one person's figures in their own rows,
+// office only.
 //
-// People tables of W2b schema waves 4/5/7 (Employee, AttendanceDay, OffStandardEntry, LabourEdit…) are not on main yet:
-// a link to one is `…RecordType` + `…RecordId` (no foreign key); the worker is floor-auth's Worker (Worker.employeeCode is
-// the payroll's employee code until Employee lands).
+// Records of W2b schema waves 5 and 7 named here (the attendance day a held scan's fix rests on, an off-standard entry, a
+// labour edit) are `…RecordType` + `…RecordId` (no foreign key): the record is the other step's, and a held scan may be
+// fixed by more than one kind of record (an attendance day, a clock correction); wave 7 is not on main yet.
 //
 // Who sees what (ownership/pay.json): the office reads and writes (the API asks the people permissions of B-W2b-34,
-// -38, -43, -54 and the wages grain); the floor reads the publications of its site and records a worker's reading of
-// one (nothing else here: no rate, no figure); portal, link and platform sessions read nothing. EarningsEntry and
+// -38, -43, -54 and the wages grain); the floor, portal, link and platform sessions read nothing here: a worker's reading
+// of the rates on the tablet, their own earnings and statement go through the API in the tenant's system scope once the
+// floor session is checked (B-W2b-34, B-W2b-68), never through the floor role's grants. EarningsEntry and
 // RateAcknowledgement are append-only. Nothing else is deleted but a DRAFT rate version's entries, a DRAFT rate version
 // with no publication, a DRAFT scheme, and the files of a DRAFT export (the …_pay_w2b_guards triggers).
 
@@ -206,8 +209,9 @@ model RatePublication {
   versionId     String                  @db.Uuid
   /// The line it was published on, of the same site; null: the site.
   lineId        String?                 @db.Uuid
-  /// The workers it was published to: ACTIVE workers of the site, at least one, each once (checked when it is made).
-  /// @personal piece-pay
+  /// The floor sign-ins it was published to: ACTIVE workers of the site, at least one, each once (checked when it is
+  /// made). A list inside the publication of a rate version, not a record about one person: each person's own record is
+  /// their receipt (RateAcknowledgement, by employeeId).
   workerIds     String[]                @db.Uuid
   /// Shown on the floor (My day, the worker reads and the reading is recorded).
   onFloor       Boolean                 @default(true)
@@ -256,8 +260,9 @@ model RateAcknowledgement {
   publicationId String             @db.Uuid
   /// The publication's version.
   versionId     String             @db.Uuid
-  /// One of the publication's workers.
-  /// @personal piece-pay
+  /// The person (people.prisma Employee): the worker's employee.
+  employeeId    String             @db.Uuid
+  /// One of the publication's workers (the floor sign-in that read it, or on whose behalf the office recorded paper).
   workerId      String             @db.Uuid
   channel       RateAckChannel
   /// DEVICE: the floor device the worker read it on, its clock, and its id for the event (unique per device: a resent
@@ -273,14 +278,16 @@ model RateAcknowledgement {
   publication RatePublication  @relation(fields: [tenantId, siteId, publicationId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   rateVersion PieceRateVersion @relation(fields: [tenantId, siteId, versionId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   worker      Worker           @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  // No company column here: tenant-safe; the trigger holds it to the worker's employee.
+  employee    Employee         @relation(fields: [tenantId, employeeId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   device      Device?          @relation(fields: [tenantId, siteId, deviceId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   paperFile   StoredFile?      @relation("RateAcknowledgementPaper", fields: [tenantId, paperFileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, deviceId, clientEventId])
   // "Read by n of m" and the employee's list.
-  @@index([tenantId, publicationId, workerId])
-  @@index([tenantId, workerId])
+  @@index([tenantId, publicationId, employeeId])
+  @@index([tenantId, employeeId])
 }
 
 /// How a worker acknowledged a rate publication.
@@ -408,8 +415,9 @@ enum IncentiveSchemeStatus {
 /// The legal switch of piece pay at one site (design people.piecerates "Legal switch"; GATE-PIECE-PAY, GATE-LABOUR): OFF
 /// by default. Its preconditions are recorded here (the CCNL and its article allowing piece work, c.c. art. 2100; the
 /// worker notice that covers piece pay, Statuto art. 4 c.3 and GDPR art. 13; the stored DPIA, GDPR art. 35; the labour
-/// consultant's agreement; the scheme) or read where they live (the site's legal basis for naming workers in floor
-/// records, production.prisma ProductionSettings, Statuto art. 4 c.1). It turns ON from a day not before the day it is
+/// consultant's agreement; the scheme) or read where they live (the site's floor rules naming workers with a legal basis,
+/// production.prisma ProductionSettings, MES-278; and the site's PERFORMANCE legal gate in force, people.prisma
+/// PeopleLegalGate: one person's work figures, Statuto art. 4 c.1). It turns ON from a day not before the day it is
 /// turned on, only with all of them; the earnings ledger then accepts piece-pay figures dated from that day until the day
 /// it is turned off (onFrom … offFrom, the latest window; the earlier ones are kept in earlierWindows). While ON its
 /// preconditions never change. The site's row has the site's own id (as ProductionSettings); never deleted.
@@ -471,7 +479,7 @@ enum PiecePayState {
 /// A month of piece pay for a company (MES-260; design "Pay periods"): OPEN while entries accrue → PREVIEW (the run
 /// computed make-up and team splits; run again at will) → REVIEW (leads and HR check the statements; back to PREVIEW
 /// for a fix) → LOCKED (typed confirm): final. A period locks only with no scan still held and an APPROVED statement for
-/// every worker paid in it (c.c. art. 2101); after the lock a change is a new entry in a later period that names it.
+/// every person paid in it (c.c. art. 2101); after the lock a change is a new entry in a later period that names it.
 model PayPeriod {
   id               String          @id @db.Uuid
   tenantId         String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -532,7 +540,9 @@ model EarningsEntry {
   siteId           String       @db.Uuid
   /// The period it is paid in (not LOCKED when written).
   payPeriodId      String       @db.Uuid
-  /// @personal piece-pay
+  /// The person paid (people.prisma Employee, of the entry's company): the worker's employee.
+  employeeId       String       @db.Uuid
+  /// The floor sign-in at the entry's site whose work it pays (SCAN: the scan's worker).
   workerId         String       @db.Uuid
   /// The day of the work (Europe/Rome): inside the period's month, or inside the month of the LOCKED period it corrects.
   workDate         DateTime     @db.Date
@@ -574,6 +584,7 @@ model EarningsEntry {
 
   site           Site             @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   payPeriod      PayPeriod        @relation("EarningsEntryPeriod", fields: [tenantId, companyId, payPeriodId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee       Employee         @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   worker         Worker           @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId.
   operationScan  OperationScan?   @relation(fields: [tenantId, siteId, operationScanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -586,8 +597,8 @@ model EarningsEntry {
   @@unique([tenantId, idempotencyKey])
   // The target of a reversal's reference: an entry of the same site.
   @@unique([tenantId, siteId, id])
-  // A worker's statement and the period's checks.
-  @@index([tenantId, payPeriodId, workerId])
+  // A person's statement and the period's checks.
+  @@index([tenantId, payPeriodId, employeeId])
   @@index([tenantId, operationScanId])
 }
 
@@ -615,8 +626,9 @@ model HeldScan {
   siteId          String           @db.Uuid
   /// The period of the scan's day.
   payPeriodId     String           @db.Uuid
+  /// The person (people.prisma Employee, of the hold's company): the scan's worker's employee.
+  employeeId      String           @db.Uuid
   /// The scan's worker.
-  /// @personal piece-pay
   workerId        String           @db.Uuid
   operationScanId String           @db.Uuid
   reason          HeldScanReason
@@ -640,6 +652,7 @@ model HeldScan {
 
   site          Site            @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   payPeriod     PayPeriod       @relation(fields: [tenantId, companyId, payPeriodId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee      Employee        @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   worker        Worker          @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   operationScan OperationScan   @relation(fields: [tenantId, siteId, operationScanId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
   earnings      EarningsEntry[]
@@ -665,26 +678,27 @@ enum HeldScanStatus {
   NOT_PAID
 }
 
-/// A worker's statement of a pay period (MES-261; c.c. art. 2101 c.3; design "Worker statement", floor.myday
+/// A person's statement of a pay period (MES-261; c.c. art. 2101 c.3; design "Worker statement", floor.myday
 /// "Statement for the period"): the pieces per operation, minutes, rates, earnings and make-up, as a snapshot when it is
 /// approved, and its PDF. DRAFT while reviewed → APPROVED → SUPERSEDED by a later revision (figures changed before the
 /// lock); once its period is LOCKED it never changes (but its PDF, named once). The database does not hold "one live
-/// statement per worker and period" (the generated isolation tests insert a copy): the API does, under a lock.
+/// statement per person and period" (the generated isolation tests insert a copy): the API does, under a lock.
 model WorkerStatement {
   id             String                @id @db.Uuid
   tenantId       String                @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
   companyId      String                @db.Uuid
+  /// The person's site when it is made (Employee.siteId): the office's site scope.
   siteId         String                @db.Uuid
   payPeriodId    String                @db.Uuid
-  /// @personal piece-pay
-  workerId       String                @db.Uuid
-  /// 1, 2, 3 … per worker and period (a later revision supersedes an earlier one).
+  /// The person (people.prisma Employee, of the statement's company): one statement covers all their work in the
+  /// period, at every site they worked.
+  employeeId     String                @db.Uuid
+  /// 1, 2, 3 … per person and period (a later revision supersedes an earlier one).
   revision       Int                   @default(1)
   status         WorkerStatementStatus @default(DRAFT)
   /// The statement's lines: [{ operationCode, operationName, pieces, minutes, rate, amount }] and the make-up, held scans
   /// and disputes; required to approve.
   /// @grain wages
-  /// @personal piece-pay
   summary        Json?
   /// Minor units of `currency`: the period's earnings (any sign: corrections) and make-up (0 or more); required to approve.
   /// @grain wages
@@ -707,12 +721,12 @@ model WorkerStatement {
 
   site      Site        @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   payPeriod PayPeriod   @relation(fields: [tenantId, companyId, payPeriodId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
-  worker    Worker      @relation(fields: [tenantId, siteId, workerId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  employee  Employee    @relation(fields: [tenantId, companyId, employeeId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
   file      StoredFile? @relation("WorkerStatementFile", fields: [tenantId, fileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
-  @@unique([tenantId, payPeriodId, workerId, revision])
-  @@index([tenantId, workerId])
+  @@unique([tenantId, payPeriodId, employeeId, revision])
+  @@index([tenantId, employeeId])
 }
 
 enum WorkerStatementStatus {
@@ -797,7 +811,6 @@ model PayrollExport {
   /// The values it sends, per employee code (design "4 · Preview"; a correction shows from → to against them):
   /// [{ "employeeCode": "…", "code": "ORD", "quantity"?: "…", "amount"?: 0 }].
   /// @grain wages
-  /// @personal piece-pay
   values         Json                @default("[]")
   /// Set exactly from EXPORTED on: who made it, and when.
   exportedAt     DateTime?           @db.Timestamptz(3)

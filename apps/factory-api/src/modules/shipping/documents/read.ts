@@ -22,6 +22,7 @@ import { serverClock, type Clock } from '../../../core/time'
 import { currentDocFor, STYLE_SELECT, styleFactsOf } from '../../product/compliance/read'
 import { pdfFileIdOf } from '../ddt/store'
 import { readShipment, type ShipmentHeader } from '../store'
+import { currentPackingListFile } from '../shipments/packing-list'
 
 /**
  * The documents of a shipment, read side (B-W1-49; A2 SCR-067 Documents tab): the facts factory-domain
@@ -143,11 +144,9 @@ export async function readDocuments(db: Reader, shipment: ShipmentHeader): Promi
   const live = await db.ddt.findFirst({ where: { shipmentId: shipment.id, cancellations: { none: {} } }, select: { id: true, number: true, documentDate: true }, orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }] })
   const pdfId = live ? await pdfFileIdOf(db, live.id) : null
   const pdf: FileFacts | null = pdfId ? await db.storedFile.findUnique({ where: { id: pdfId }, select: FILE_FACTS }) : null
-  const packingList = await db.storedFile.findFirst({
-    where: { recordType: 'Shipment', recordId: shipment.id, kind: 'DOCUMENT', status: 'AVAILABLE', visibility: { has: 'FLOOR' } },
-    select: FILE_FACTS,
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-  })
+  // B-W2b-19: the current packing list is the newest version's file (GeneratedDocument rows).
+  const current = await currentPackingListFile(db, shipment.id)
+  const packingList = current ? await db.storedFile.findUnique({ where: { id: current.id }, select: FILE_FACTS }) : null
   const facts: ShipmentDocumentsFacts = {
     shipment: { number: shipment.number, status: shipment.status },
     wantedLanguage: order?.language ?? null,

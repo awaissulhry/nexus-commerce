@@ -34,6 +34,8 @@ import {
   toggleLock as toggleLockIn,
   togglableKeysOf,
 } from './preferencesLogic'
+import { mergeLabels } from '../lib/labels'
+import { PREFERENCES_MODAL_LABELS, type PreferencesModalLabels } from './PreferencesModalLabels'
 
 /**
  * PreferencesModal — the two-panel grid "Customise" dialog (ported to the DS
@@ -140,7 +142,6 @@ export interface PreferencesValue {
 }
 
 export type PreferencesAggFunc = 'sum' | 'avg' | 'min' | 'max' | 'count'
-const AGG_LABELS: Record<PreferencesAggFunc, string> = { sum: 'Sum', avg: 'Average', min: 'Minimum', max: 'Maximum', count: 'Count' }
 
 /**
  * A QUICK PICK — a set of columns derived from a column FACT ("Required here", "Axes", "Has
@@ -231,6 +232,9 @@ export interface PreferencesModalProps {
   rememberInteraction?: boolean
   /** The primary button's words. Default "Save". */
   confirmLabel?: string
+  /** Its words in the person's language (B-W2b-04), the panes' too. Default English; `title`, `listLabel`, `listHint`
+   *  and `confirmLabel` win where they apply. */
+  labels?: Partial<PreferencesModalLabels>
 }
 
 const DEFAULT_PAGE_SIZE_CHOICES = [20, 50, 100, 250]
@@ -263,6 +267,8 @@ export interface PreferencesPanesOptions {
   attributeGroups?: boolean
   /** "Select all · Clear all" above the tick-list (see `PreferencesModalProps.bulkPick`). */
   bulkPick?: boolean
+  /** The panes' words in the person's language (B-W2b-04, see `PreferencesModalProps.labels`). Default English. */
+  labels?: Partial<PreferencesModalLabels>
 }
 
 /**
@@ -288,7 +294,7 @@ export function usePreferencesPanes({
   showSticky = true,
   groupByOptions = [],
   aggregationOptions = [],
-  listLabel = 'Columns',
+  listLabel: listLabelProp,
   listHint,
   workspaceSlot,
   quickPicks = [],
@@ -299,7 +305,10 @@ export function usePreferencesPanes({
   inViewCount: showInViewCount = true,
   attributeGroups = false,
   bulkPick = false,
+  labels,
 }: PreferencesPanesOptions) {
+  const w = mergeLabels(PREFERENCES_MODAL_LABELS, labels)
+  const listLabel = listLabelProp === undefined ? w.columns : listLabelProp
   // Offer padlocks only to hosts that persist them. Advertising adapters and product grids do;
   // section-layout hosts omit the field because their panels have no frozen-column behavior.
   const locksPersist = value.lockedColumns !== undefined
@@ -345,7 +354,7 @@ export function usePreferencesPanes({
     if (attributeGroups) {
       const structural = allColumns.filter((c) => c.locked)
       return [
-        ...(structural.length ? [{ key: '__grid_fixed', heading: 'Fixed columns', columns: structural, tone: undefined as string | undefined }] : []),
+        ...(structural.length ? [{ key: '__grid_fixed', heading: w.fixedColumns, columns: structural, tone: undefined as string | undefined }] : []),
         // A group whose every column was moved into another lists nothing to tick: it is left out here (2026-09-27).
         // The In-view pane keeps it as a drop target, marked Empty.
         ...attributeSections.filter((g) => g.columns.length > 0).map((g) => ({ key: g.key, heading: g.label, columns: g.columns, tone: g.tone })),
@@ -361,7 +370,7 @@ export function usePreferencesPanes({
     // A heading wears its group's colour here too (the Matrix, 2026-10-08): the first of its columns that names one.
     return [...byHeading.entries()].map(([heading, columns]) => ({ key: heading, heading, columns, tone: columns.find((c) => c.groupTone)?.groupTone }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allColumns, listLabel, attributeGroups, attributeSections])
+  }, [allColumns, listLabel, attributeGroups, attributeSections, w.fixedColumns])
 
   /**
    * FINDING a column, which on a wide grid is the whole job. Measured 2026-09-02 on the studio's
@@ -567,7 +576,7 @@ export function usePreferencesPanes({
     <>
           {pageSizeChoices.length > 0 && (
             <fieldset className="nds-prefs-set">
-              <legend>Rows per page</legend>
+              <legend>{w.rowsPerPage}</legend>
               <div className="nds-prefs-radios">
                 {pageSizeChoices.map((n) => (
                   <label key={n}>
@@ -586,15 +595,15 @@ export function usePreferencesPanes({
 
           {showSticky && (
             <fieldset className="nds-prefs-set">
-              <legend>Sticky columns</legend>
-              <p className="nds-prefs-help">Keep the first / last column pinned while scrolling sideways.</p>
+              <legend>{w.sticky}</legend>
+              <p className="nds-prefs-help">{w.stickyHelp}</p>
               <label className="nds-prefs-check">
                 <input
                   type="checkbox"
                   checked={draft.stickyFirstColumn}
                   onChange={(e) => setDraft((d) => ({ ...d, stickyFirstColumn: e.target.checked }))}
                 />
-                <span>Pin first column</span>
+                <span>{w.pinFirst}</span>
               </label>
               <label className="nds-prefs-check">
                 <input
@@ -602,7 +611,7 @@ export function usePreferencesPanes({
                   checked={draft.stickyLastColumn}
                   onChange={(e) => setDraft((d) => ({ ...d, stickyLastColumn: e.target.checked }))}
                 />
-                <span>Pin last column</span>
+                <span>{w.pinLast}</span>
               </label>
             </fieldset>
           )}
@@ -611,7 +620,7 @@ export function usePreferencesPanes({
 
           {sortFieldOptions.length > 0 && (
             <fieldset className="nds-prefs-set">
-              <legend>Sort order</legend>
+              <legend>{w.sortOrder}</legend>
               <div className="nds-prefs-sort">
                 <select
                   className="nds-select"
@@ -627,8 +636,8 @@ export function usePreferencesPanes({
                   value={draft.sortDir}
                   onChange={(e) => setDraft((d) => ({ ...d, sortDir: e.target.value as 'asc' | 'desc' }))}
                 >
-                  <option value="desc">↓ Descending</option>
-                  <option value="asc">↑ Ascending</option>
+                  <option value="desc">{`↓ ${w.descending}`}</option>
+                  <option value="asc">{`↑ ${w.ascending}`}</option>
                 </select>
               </div>
             </fieldset>
@@ -640,22 +649,22 @@ export function usePreferencesPanes({
   const pickHead = (
     <>
               <legend>{listLabel}</legend>
-              <p className="nds-prefs-help">{listHint ?? 'Tick a column to add it to the view.'}</p>
+              <p className="nds-prefs-help">{listHint ?? w.tickHint}</p>
               {quickPicks.length > 0 && (
-                <div className="nds-prefs-quick" role="group" aria-label="Quick picks">
+                <div className="nds-prefs-quick" role="group" aria-label={w.quickPicks}>
                   <FilterChip
                     pressed={togglableKeys.length > 0 && togglableKeys.every((k) => draft.visibleColumns.includes(k))}
                     onClick={() => (togglableKeys.every((k) => draft.visibleColumns.includes(k)) ? removeColumns(togglableKeys) : addColumns(togglableKeys))}
-                    title="Every column"
+                    title={w.everyColumn}
                   >
-                    All
+                    {w.all}
                   </FilterChip>
                   <FilterChip
                     pressed={draft.visibleColumns.filter((k) => togglableSet.has(k)).length === 0}
                     onClick={() => removeColumns(togglableKeys)}
-                    title="Only the locked columns"
+                    title={w.onlyLocked}
                   >
-                    None
+                    {w.none}
                   </FilterChip>
                   <span className="nds-prefs-quicksep" aria-hidden />
                   {quickPicks.map((q) => {
@@ -681,8 +690,8 @@ export function usePreferencesPanes({
                     size="sm"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Filter columns…"
-                    aria-label={`Filter ${listLabel.toLowerCase()}`}
+                    placeholder={w.filterPlaceholder}
+                    aria-label={w.filter(listLabel)}
                     leadingIcon={<Search size={13} aria-hidden />}
                     fieldClassName="nds-prefs-findfield"
                   />
@@ -690,7 +699,7 @@ export function usePreferencesPanes({
                       question 13 screens of unlabelled scrolling cannot answer. It is stated in
                       both states, because "98 columns" is as much a fact as "3 of 98". */}
                   <span className="nds-prefs-findcount" role="status" aria-live="polite">
-                    {needle ? `${matchCount} of ${totalCount}` : `${totalCount} columns`}
+                    {needle ? w.matchCount(matchCount, totalCount) : w.columnCount(totalCount)}
                   </span>
                   {showHeadings && !needle && pickSections.length > 1 && (
                     <button
@@ -698,7 +707,7 @@ export function usePreferencesPanes({
                       className="nds-prefs-findall"
                       onClick={() => setAllCollapsed(!allCollapsed)}
                     >
-                      {allCollapsed ? 'Expand all' : 'Collapse all'}
+                      {allCollapsed ? w.expandAll : w.collapseAll}
                     </button>
                   )}
                 </div>
@@ -710,12 +719,12 @@ export function usePreferencesPanes({
                 if (!keys.length) return null
                 const shown = keys.filter((k) => draft.visibleColumns.includes(k)).length
                 return (
-                  <div className="nds-prefs-pickall" role="group" aria-label={needle ? 'Select the matching columns' : 'Select every column'}>
+                  <div className="nds-prefs-pickall" role="group" aria-label={needle ? w.selectMatchingGroup : w.selectEveryGroup}>
                     <button type="button" className="nds-prefs-findall" disabled={shown === keys.length} onClick={() => addColumns(keys)}>
-                      {needle ? `Select ${keys.length === 1 ? 'the match' : `all ${keys.length} matches`}` : 'Select all'}
+                      {needle ? w.selectMatches(keys.length) : w.selectAll}
                     </button>
                     <button type="button" className="nds-prefs-findall" disabled={shown === 0} onClick={() => removeColumns(keys)}>
-                      {needle ? `Clear ${keys.length === 1 ? 'the match' : `${keys.length} matches`}` : 'Clear all'}
+                      {needle ? w.clearMatches(keys.length) : w.clearAll}
                     </button>
                   </div>
                 )
@@ -725,7 +734,7 @@ export function usePreferencesPanes({
   const pickBox = (
               <div className="nds-prefs-cols nds-prefs-picks">
                 {needle && filteredSections.length === 0 && (
-                  <p className="nds-prefs-help nds-prefs-nomatch">No column matches “{query.trim()}”.</p>
+                  <p className="nds-prefs-help nds-prefs-nomatch">{w.noMatch(query.trim())}</p>
                 )}
                 {filteredSections.map((section) => {
                   // 🔴 A filter OVERRIDES collapse. A section that stays shut while holding a match
@@ -743,7 +752,7 @@ export function usePreferencesPanes({
                     >
                       {isCollapsed ? <ChevronRight size={12} aria-hidden /> : <ChevronDown size={12} aria-hidden />}
                       <span className="nds-prefs-grouphd-text">{section.heading}</span>
-                      <span className="nds-prefs-groupcount">{attributeGroups ? `${sectionShown}/${fullSection.columns.length} shown${needle ? ` · ${section.columns.length} match` : ''}` : section.columns.length}</span>
+                      <span className="nds-prefs-groupcount">{attributeGroups ? `${w.groupShown(sectionShown, fullSection.columns.length)}${needle ? ` · ${w.groupMatches(section.columns.length)}` : ''}` : section.columns.length}</span>
                     </button>
                   )
                   // The group's togglable keys; "All" when any is missing from the view, "Clear" when
@@ -761,9 +770,9 @@ export function usePreferencesPanes({
                           variant="ghost"
                           className="nds-prefs-grouptoggle"
                           onClick={() => (groupAllIn ? removeColumns(groupKeys) : addColumns(groupKeys))}
-                          aria-label={`${groupAllIn ? 'Remove' : 'Add'} ${needle ? 'matching' : 'every'} ${section.heading} column`}
+                          aria-label={w.groupToggle(!groupAllIn, !!needle, section.heading)}
                         >
-                          {groupAllIn ? 'Clear' : 'All'}
+                          {groupAllIn ? w.clear : w.all}
                         </Button>
                       </div>
                     ) : (
@@ -785,11 +794,11 @@ export function usePreferencesPanes({
                               <span className="nds-prefs-picklbl">
                                 <span className="nds-prefs-lbl">{nameOf(c)}</span>
                                 {locked ? (
-                                  <span className="nds-prefs-locked" title={c.locked ? 'Locked by the grid' : `Locked — frozen at the ${c.lockSide === 'right' ? 'right' : 'left'} while you scroll`}>
-                                    <Lock size={11} aria-hidden /> Locked
+                                  <span className="nds-prefs-locked" title={c.locked ? w.lockedByGrid : w.lockedAt(c.lockSide === 'right' ? 'right' : 'left')}>
+                                    <Lock size={11} aria-hidden /> {w.locked}
                                   </span>
                                 ) : c.alwaysShown && (
-                                  <span className="nds-prefs-locked" title="Always on screen — move or pin it in In view">Always shown</span>
+                                  <span className="nds-prefs-locked" title={w.alwaysShownHint}>{w.alwaysShown}</span>
                                 )}
                               </span>
                             }
@@ -824,24 +833,24 @@ export function usePreferencesPanes({
     const companion = !!drag && drag.key !== c.key && drag.keys.includes(c.key)
     return (
       <Sortable key={c.key} id={dragId(kind, c.key)} disabled={!draggable} still={still} toneOf={kind === 'col' ? toneOfTarget : undefined}
-        grip={{ label: `Drag ${nameOf(c)} — Space to lift, arrow keys to move, Space to drop` }}
+        grip={{ label: w.dragColumn(nameOf(c)) }}
         className={['nds-prefs-row', draggable ? 'draggable' : '', locked ? 'locked' : '', selected.has(c.key) ? 'selected' : '',
           companion ? 'is-drag-companion' : '', justMoved.has(c.key) ? 'just-moved' : ''].filter(Boolean).join(' ')}>
         <>
-          {attributeGroups && !c.locked && selectionBox([c.key], `Select ${nameOf(c)} for bulk actions`)}
+          {attributeGroups && !c.locked && selectionBox([c.key], w.selectForBulk(nameOf(c)))}
           <span className="nds-prefs-lbl" title={nameOf(c)}>{nameOf(c)}</span>
           {attributeGroups && draggable && <span className="nds-prefs-orderbtns">
-            <Button size="xs" variant="ghost" onClick={() => moveOne(-1)} disabled={index === 0 || !!peers[index - 1]?.locked} aria-label={`Move ${nameOf(c)} up`}><ArrowUp size={12} /></Button>
-            <Button size="xs" variant="ghost" onClick={() => moveOne(1)} disabled={index === peers.length - 1 || !!peers[index + 1]?.locked} aria-label={`Move ${nameOf(c)} down`}><ArrowDown size={12} /></Button>
+            <Button size="xs" variant="ghost" onClick={() => moveOne(-1)} disabled={index === 0 || !!peers[index - 1]?.locked} aria-label={w.moveUp(nameOf(c))}><ArrowUp size={12} /></Button>
+            <Button size="xs" variant="ghost" onClick={() => moveOne(1)} disabled={index === peers.length - 1 || !!peers[index + 1]?.locked} aria-label={w.moveDown(nameOf(c))}><ArrowDown size={12} /></Button>
           </span>}
-          {c.locked ? <span className="nds-prefs-locked">{attributeGroups ? 'Fixed' : 'Locked'}</span> : locksPersist ? (
+          {c.locked ? <span className="nds-prefs-locked">{attributeGroups ? w.fixed : w.locked}</span> : locksPersist ? (
             <button type="button" className={`nds-prefs-lockbtn${locked ? ' on' : ''}`} onClick={() => toggleLock(c.key)} aria-pressed={locked}
-              aria-label={locked ? `Unlock ${nameOf(c)} — back into the scrolling columns` : `Lock ${nameOf(c)} — frozen while you scroll`}
-              title={locked ? 'Unlock — back into the scrolling columns' : 'Lock — frozen while you scroll'}>
+              aria-label={locked ? w.unlockColumn(nameOf(c)) : w.lockColumn(nameOf(c))}
+              title={locked ? w.unlockHint : w.lockHint}>
               {locked ? <Lock size={13} aria-hidden /> : <Unlock size={13} aria-hidden />}
             </button>
-          ) : locked && <span className="nds-prefs-locked">Locked</span>}
-          <span className="nds-prefs-xslot">{!locked && !c.alwaysShown && <button type="button" className="nds-prefs-x" onClick={() => toggleColumn(c.key)} aria-label={`Remove ${nameOf(c)} from the view`}><X size={13} aria-hidden /></button>}</span>
+          ) : locked && <span className="nds-prefs-locked">{w.locked}</span>}
+          <span className="nds-prefs-xslot">{!locked && !c.alwaysShown && <button type="button" className="nds-prefs-x" onClick={() => toggleColumn(c.key)} aria-label={w.removeColumn(nameOf(c))}><X size={13} aria-hidden /></button>}</span>
         </>
       </Sortable>
     )
@@ -851,8 +860,8 @@ export function usePreferencesPanes({
   const renderPinned = (side: 'left' | 'right') => {
     const columns = pinnedOn(side)
     const kind: DragKind = side === 'left' ? 'pin-left' : 'pin-right'
-    return columns.length > 0 && <div className="nds-prefs-group" role="group" aria-label={side === 'left' ? 'Pinned columns' : 'Pinned right columns'}>
-      <div className="nds-prefs-pinnedhd"><Lock size={12} /> {side === 'left' ? 'Pinned' : 'Pinned right'} · {columns.length}</div>
+    return columns.length > 0 && <div className="nds-prefs-group" role="group" aria-label={side === 'left' ? w.pinnedColumns : w.pinnedRightColumns}>
+      <div className="nds-prefs-pinnedhd"><Lock size={12} /> {side === 'left' ? w.pinned : w.pinnedRight} · {columns.length}</div>
       <SortableContext items={columns.map((c) => dragId(kind, c.key))} strategy={verticalListSortingStrategy}>
         {columns.map((c) => renderViewRow(c, columns, kind))}
       </SortableContext>
@@ -950,10 +959,10 @@ export function usePreferencesPanes({
     flash([lifted.key])
   }
   const announcements = {
-    onDragStart: ({ active }: DragStartEvent) => `Picked up ${labelOfDrag(active.id)}. Arrow keys move it, Space drops it, Escape cancels.`,
-    onDragOver: ({ active, over }: DragOverEvent) => over ? `${labelOfDrag(active.id)} is over ${labelOfDrag(over.id)}.` : `${labelOfDrag(active.id)} is not over a place it can go.`,
-    onDragEnd: ({ active, over }: DragEndEvent) => over ? `${labelOfDrag(active.id)} dropped at ${labelOfDrag(over.id)}.` : `${labelOfDrag(active.id)} put back.`,
-    onDragCancel: ({ active }: DragEndEvent) => `Moving ${labelOfDrag(active.id)} cancelled. It is back where it was.`,
+    onDragStart: ({ active }: DragStartEvent) => w.dragPicked(labelOfDrag(active.id)),
+    onDragOver: ({ active, over }: DragOverEvent) => over ? w.dragOver(labelOfDrag(active.id), labelOfDrag(over.id)) : w.dragNowhere(labelOfDrag(active.id)),
+    onDragEnd: ({ active, over }: DragEndEvent) => over ? w.dragDropped(labelOfDrag(active.id), labelOfDrag(over.id)) : w.dragPutBack(labelOfDrag(active.id)),
+    onDragCancel: ({ active }: DragEndEvent) => w.dragCancelled(labelOfDrag(active.id)),
   }
   const draggedGroup = drag?.kind === 'group' ? attributeSections.find((g) => g.key === drag.key) : undefined
   const dragOverlay = drag && (draggedGroup
@@ -965,7 +974,7 @@ export function usePreferencesPanes({
     <DndContext sensors={sensors} collisionDetection={collisionDetection} modifiers={[followPointer]} onDragStart={onDragStart} onDragOver={onDragOver}
       onDragEnd={onDragEnd} onDragCancel={endDrag} measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
       autoScroll={{ threshold: { x: 0, y: 0.18 }, acceleration: 14 }}
-      accessibility={{ announcements, screenReaderInstructions: { draggable: 'To move a column or a group, focus its grip and press Space. Arrow keys move it, Space drops it, Escape cancels.' } }}>
+      accessibility={{ announcements, screenReaderInstructions: { draggable: w.dragInstructions } }}>
       {list}
       {typeof document !== 'undefined' && createPortal(
         <DragOverlay className="nds-prefs-dragoverlay" zIndex={overlayZ} dropAnimation={still ? null : { duration: 200, easing: SLIDE.easing, sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0' } } }) }}>
@@ -976,24 +985,24 @@ export function usePreferencesPanes({
 
   const groupedInView = <>
     <div className="nds-prefs-group-tools">
-      {selectionBox(matchingShown.map((c) => c.key), needle ? 'Select matching columns in view' : 'Select all columns in view')}
-      <span>Select {needle ? 'matching columns' : 'columns'} for bulk actions</span>
-      <Button size="xs" variant="ghost" onClick={() => setViewCollapsed(viewCollapsed.size ? new Set() : new Set(attributeSections.map((g) => g.key)))}>{viewCollapsed.size ? 'Expand all' : 'Collapse all'}</Button>
+      {selectionBox(matchingShown.map((c) => c.key), needle ? w.selectMatchingInView : w.selectAllInView)}
+      <span>{needle ? w.selectBulkMatching : w.selectBulk}</span>
+      <Button size="xs" variant="ghost" onClick={() => setViewCollapsed(viewCollapsed.size ? new Set() : new Set(attributeSections.map((g) => g.key)))}>{viewCollapsed.size ? w.expandAll : w.collapseAll}</Button>
     </div>
-    {selectedKeys.length > 0 && <div className="nds-prefs-bulk" role="group" aria-label="Selected column actions">
-      <span className="nds-prefs-bulk-count" role="status">{selectedKeys.length} selected{concealedSelected > 0 ? ` · ${concealedSelected} hidden from this list` : ''}</span>
-      <Button size="xs" variant="ghost" onClick={() => setSelected(new Set())}>Clear selection</Button>
-      <select className="nds-select" aria-label="Move selected columns to group" value="" onChange={(e) => moveSelection(e.target.value)}>
-        <option value="" disabled>Move to group…</option>
+    {selectedKeys.length > 0 && <div className="nds-prefs-bulk" role="group" aria-label={w.selectedActions}>
+      <span className="nds-prefs-bulk-count" role="status">{w.selected(selectedKeys.length)}{concealedSelected > 0 ? ` · ${w.hiddenFromList(concealedSelected)}` : ''}</span>
+      <Button size="xs" variant="ghost" onClick={() => setSelected(new Set())}>{w.clearSelection}</Button>
+      <select className="nds-select" aria-label={w.moveToGroupLabel} value="" onChange={(e) => moveSelection(e.target.value)}>
+        <option value="" disabled>{w.moveToGroup}</option>
         {attributeSections.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
       </select>
-      <Button size="xs" variant="secondary" onClick={() => addColumns(selectedKeys)} disabled={selectedKeys.every((key) => draft.visibleColumns.includes(key) || operatorLocks.includes(key))}>Show</Button>
-      <Button size="xs" variant="secondary" onClick={() => removeColumns(selectedKeys)} disabled={!selectedKeys.some((key) => draft.visibleColumns.includes(key) && !operatorLocks.includes(key) && !alwaysShown.has(key))}>Hide</Button>
+      <Button size="xs" variant="secondary" onClick={() => addColumns(selectedKeys)} disabled={selectedKeys.every((key) => draft.visibleColumns.includes(key) || operatorLocks.includes(key))}>{w.show}</Button>
+      <Button size="xs" variant="secondary" onClick={() => removeColumns(selectedKeys)} disabled={!selectedKeys.some((key) => draft.visibleColumns.includes(key) && !operatorLocks.includes(key) && !alwaysShown.has(key))}>{w.hide}</Button>
       {locksPersist && <>
-        <Button size="xs" variant="secondary" onClick={() => setSelectedLocks(true)} disabled={selectedKeys.every((key) => operatorLocks.includes(key))}>Pin</Button>
-        <Button size="xs" variant="secondary" onClick={() => setSelectedLocks(false)} disabled={!selectedKeys.some((key) => operatorLocks.includes(key))}>Unpin</Button>
+        <Button size="xs" variant="secondary" onClick={() => setSelectedLocks(true)} disabled={selectedKeys.every((key) => operatorLocks.includes(key))}>{w.pin}</Button>
+        <Button size="xs" variant="secondary" onClick={() => setSelectedLocks(false)} disabled={!selectedKeys.some((key) => operatorLocks.includes(key))}>{w.unpin}</Button>
       </>}
-      <Button size="xs" variant="ghost" onClick={() => setDraft((d) => resetAttributeGroups(d, selectedKeys))} disabled={!selectedKeys.some((key) => draft.groupOverrides?.[key])}>Reset group</Button>
+      <Button size="xs" variant="ghost" onClick={() => setDraft((d) => resetAttributeGroups(d, selectedKeys))} disabled={!selectedKeys.some((key) => draft.groupOverrides?.[key])}>{w.resetGroup}</Button>
     </div>}
     {withDrag(<div className={['nds-prefs-cols', 'nds-prefs-viewgroups', drag ? 'is-sorting' : ''].filter(Boolean).join(' ')}>
       {renderPinned('left')}
@@ -1004,18 +1013,18 @@ export function usePreferencesPanes({
             if (target) setDraft((d) => moveAttributeGroup(allColumns, d, group.key, target.key, direction === 1))
           }
           const headingId = dragId('group', group.key)
-          return <div key={group.key} className="nds-prefs-group" data-tone={group.tone} role="group" aria-label={`${group.label} in view`}>
-            <Sortable id={headingId} still={still} heading grip={{ size: 13, label: `Drag the ${group.label} group — Space to lift, arrow keys to move, Space to drop` }}
+          return <div key={group.key} className="nds-prefs-group" data-tone={group.tone} role="group" aria-label={w.groupInView(group.label)}>
+            <Sortable id={headingId} still={still} heading grip={{ size: 13, label: w.dragGroup(group.label) }}
               className={['nds-prefs-viewgrouphd', justMoved.has(headingId) ? 'just-moved' : ''].filter(Boolean).join(' ')}>
               <>
-                {selectionBox(visible.map((c) => c.key), `Select ${needle ? 'matching ' : ''}${group.label} columns in view`)}
+                {selectionBox(visible.map((c) => c.key), w.selectGroupInView(group.label, !!needle))}
                 <button type="button" className="nds-prefs-group-label" aria-expanded={!isCollapsed} onClick={() => setViewCollapsed((prev) => { const next = new Set(prev); if (next.has(group.key)) next.delete(group.key); else next.add(group.key); return next })}>
                   {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}<span>{group.label}</span>
                 </button>
-                <span className="nds-prefs-groupcount" title={`${shown} shown of ${group.columns.length} columns${pinned ? `, including ${pinned} pinned` : ''}`}>{shown}/{group.columns.length}{pinned > 0 ? ` · ${pinned} pinned` : ''}</span>
+                <span className="nds-prefs-groupcount" title={w.groupCountTitle(shown, group.columns.length, pinned)}>{w.groupCount(shown, group.columns.length, pinned)}</span>
                 <span className="nds-prefs-orderbtns">
-                  <Button size="xs" variant="ghost" onClick={() => reorder(-1)} disabled={groupIndex === 0} aria-label={`Move ${group.label} group up`}><ArrowUp size={12} /></Button>
-                  <Button size="xs" variant="ghost" onClick={() => reorder(1)} disabled={groupIndex === attributeSections.length - 1} aria-label={`Move ${group.label} group down`}><ArrowDown size={12} /></Button>
+                  <Button size="xs" variant="ghost" onClick={() => reorder(-1)} disabled={groupIndex === 0} aria-label={w.moveGroupUp(group.label)}><ArrowUp size={12} /></Button>
+                  <Button size="xs" variant="ghost" onClick={() => reorder(1)} disabled={groupIndex === attributeSections.length - 1} aria-label={w.moveGroupDown(group.label)}><ArrowDown size={12} /></Button>
                 </span>
               </>
             </Sortable>
@@ -1023,27 +1032,27 @@ export function usePreferencesPanes({
               {visible.map((c) => renderViewRow(c, visible, 'col'))}
               {visible.length === 0 && (group.columns.length === 0
                 // Every column of this group was moved into another one: say so, and leave it as a drop target.
-                ? <p className="nds-prefs-groupempty">Empty · drag a column here to put it back</p>
-                : <p className="nds-prefs-groupempty">{pinned ? `${pinned} pinned above` : 'No scrolling columns in view'}<Button size="xs" variant="ghost" onClick={() => addColumns(matching.map((c) => c.key))} disabled={matching.every((c) => isLocked(c) || draft.visibleColumns.includes(c.key))}>Show {needle ? 'matches' : 'group'}</Button></p>)}
+                ? <p className="nds-prefs-groupempty">{w.groupEmpty}</p>
+                : <p className="nds-prefs-groupempty">{pinned ? w.pinnedAbove(pinned) : w.noScrolling}<Button size="xs" variant="ghost" onClick={() => addColumns(matching.map((c) => c.key))} disabled={matching.every((c) => isLocked(c) || draft.visibleColumns.includes(c.key))}>{needle ? w.showMatches : w.showGroup}</Button></p>)}
             </>}
           </div>
         })}
       </SortableContext>
       {renderPinned('right')}
-      {needle && !matchingShown.length && <p className="nds-prefs-nomatch nds-prefs-help">No columns in view match “{query.trim()}”.</p>}
+      {needle && !matchingShown.length && <p className="nds-prefs-nomatch nds-prefs-help">{w.noViewMatch(query.trim())}</p>}
     </div>)}
   </>
   const viewHead = (
           <div className="nds-prefs-set">
             <legend>
-              In view
+              {w.inView}
               {showInViewCount && (
                 <span className="nds-prefs-inview-n">
-                  {' · '}{inViewCount(allColumns, draft, defaultLocked).shown} of {inViewCount(allColumns, draft, defaultLocked).total}
+                  {' · '}{w.inViewCount(inViewCount(allColumns, draft, defaultLocked).shown, inViewCount(allColumns, draft, defaultLocked).total)}
                 </span>
               )}
             </legend>
-            <p className="nds-prefs-help">{attributeGroups ? 'Select columns to move or edit together. Drag groups or columns to reorder.' : 'Drag to reorder · ✕ removes a column from the view.'}</p>
+            <p className="nds-prefs-help">{attributeGroups ? w.viewHelpGroups : w.viewHelp}</p>
           </div>
   )
   const viewBox = attributeGroups ? groupedInView : withDrag(
@@ -1105,11 +1114,11 @@ export function usePreferencesPanes({
     <div className="nds-prefs nds-prefs-tabbed">
       <div className="nds-prefs-pane">
         <div className="nds-prefs-set">
-          <legend>Row groups</legend>
-          <p className="nds-prefs-help">Drag a column here to fold the rows into groups — outermost first. While grouped, families do not expand.</p>
+          <legend>{w.rowGroups}</legend>
+          <p className="nds-prefs-help">{w.rowGroupsHelp}</p>
         </div>
-        <div className={['nds-prefs-zone', zoneOver === 'group' ? 'over' : '', groups.length ? '' : 'empty'].filter(Boolean).join(' ')} {...zoneProps('group')} role="list" aria-label="Row groups">
-          {groups.length === 0 && <p className="nds-prefs-zonehint">No grouping · drop a column here</p>}
+        <div className={['nds-prefs-zone', zoneOver === 'group' ? 'over' : '', groups.length ? '' : 'empty'].filter(Boolean).join(' ')} {...zoneProps('group')} role="list" aria-label={w.rowGroups}>
+          {groups.length === 0 && <p className="nds-prefs-zonehint">{w.noGrouping}</p>}
           {groups.map((key, i) => {
             const o = groupByOptions.find((x) => x.key === key)
             return (
@@ -1117,52 +1126,52 @@ export function usePreferencesPanes({
                 <GripVertical size={14} className="nds-prefs-grip" aria-hidden />
                 <span className="nds-prefs-chiplvl">{i + 1}</span>
                 <span className="nds-prefs-lbl">{o?.label ?? key}</span>
-                <button type="button" className="nds-prefs-x" onClick={() => removeGroup(key)} aria-label={`Stop grouping by ${o?.label ?? key}`}><X size={13} aria-hidden /></button>
+                <button type="button" className="nds-prefs-x" onClick={() => removeGroup(key)} aria-label={w.stopGrouping(o?.label ?? key)}><X size={13} aria-hidden /></button>
               </div>
             )
           })}
         </div>
         <div className="nds-prefs-set">
-          <legend>Columns you can group by</legend>
+          <legend>{w.groupable}</legend>
         </div>
-        <div className="nds-prefs-cols nds-prefs-avail" role="list" aria-label="Columns you can group by">
-          {availableGroups.length === 0 && <p className="nds-prefs-zonehint">Every groupable column is in use.</p>}
+        <div className="nds-prefs-cols nds-prefs-avail" role="list" aria-label={w.groupable}>
+          {availableGroups.length === 0 && <p className="nds-prefs-zonehint">{w.allGroupableUsed}</p>}
           {availableGroups.map((o) => (
             <div key={o.key} role="listitem" className="nds-prefs-chip draggable" {...dragProps('group', o.key)}>
               <GripVertical size={14} className="nds-prefs-grip" aria-hidden />
               <span className="nds-prefs-lbl">{o.label}</span>
-              <button type="button" className="nds-prefs-add" onClick={() => addGroup(o.key)} aria-label={`Group by ${o.label}`}><Plus size={13} aria-hidden /></button>
+              <button type="button" className="nds-prefs-add" onClick={() => addGroup(o.key)} aria-label={w.groupBy(o.label)}><Plus size={13} aria-hidden /></button>
             </div>
           ))}
         </div>
       </div>
       <div className="nds-prefs-pane">
         <div className="nds-prefs-set">
-          <legend>Totals</legend>
-          <p className="nds-prefs-help">What a group row shows for a column. Drag a column here and pick its total.</p>
+          <legend>{w.totals}</legend>
+          <p className="nds-prefs-help">{w.totalsHelp}</p>
         </div>
-        <div className={['nds-prefs-zone', zoneOver === 'agg' ? 'over' : '', Object.keys(aggs).length ? '' : 'empty'].filter(Boolean).join(' ')} {...zoneProps('agg')} role="list" aria-label="Totals">
-          {Object.keys(aggs).length === 0 && <p className="nds-prefs-zonehint">No totals · drop a column here</p>}
+        <div className={['nds-prefs-zone', zoneOver === 'agg' ? 'over' : '', Object.keys(aggs).length ? '' : 'empty'].filter(Boolean).join(' ')} {...zoneProps('agg')} role="list" aria-label={w.totals}>
+          {Object.keys(aggs).length === 0 && <p className="nds-prefs-zonehint">{w.noTotals}</p>}
           {aggregationOptions.filter((o) => o.key in aggs).map((o) => (
             <div key={o.key} role="listitem" className="nds-prefs-chip">
               <span className="nds-prefs-lbl">{o.label}</span>
-              <select className="nds-select nds-prefs-chipsel" aria-label={`Total for ${o.label}`} value={aggs[o.key]} onChange={(e) => setAgg(o.key, e.target.value as PreferencesAggFunc)}>
-                {o.funcs.map((f) => <option key={f} value={f}>{AGG_LABELS[f]}</option>)}
+              <select className="nds-select nds-prefs-chipsel" aria-label={w.totalFor(o.label)} value={aggs[o.key]} onChange={(e) => setAgg(o.key, e.target.value as PreferencesAggFunc)}>
+                {o.funcs.map((f) => <option key={f} value={f}>{w.aggregates[f]}</option>)}
               </select>
-              <button type="button" className="nds-prefs-x" onClick={() => setAgg(o.key, null)} aria-label={`Remove the total for ${o.label}`}><X size={13} aria-hidden /></button>
+              <button type="button" className="nds-prefs-x" onClick={() => setAgg(o.key, null)} aria-label={w.removeTotal(o.label)}><X size={13} aria-hidden /></button>
             </div>
           ))}
         </div>
         <div className="nds-prefs-set">
-          <legend>Columns you can total</legend>
+          <legend>{w.totalable}</legend>
         </div>
-        <div className="nds-prefs-cols nds-prefs-avail" role="list" aria-label="Columns you can total">
-          {availableAggs.length === 0 && <p className="nds-prefs-zonehint">Every column with a total is in use.</p>}
+        <div className="nds-prefs-cols nds-prefs-avail" role="list" aria-label={w.totalable}>
+          {availableAggs.length === 0 && <p className="nds-prefs-zonehint">{w.allTotalsUsed}</p>}
           {availableAggs.map((o) => (
             <div key={o.key} role="listitem" className="nds-prefs-chip draggable" {...dragProps('agg', o.key)}>
               <GripVertical size={14} className="nds-prefs-grip" aria-hidden />
               <span className="nds-prefs-lbl">{o.label}</span>
-              <button type="button" className="nds-prefs-add" onClick={() => setAgg(o.key, o.funcs[0])} aria-label={`Add a total for ${o.label}`}><Plus size={13} aria-hidden /></button>
+              <button type="button" className="nds-prefs-add" onClick={() => setAgg(o.key, o.funcs[0])} aria-label={w.addTotal(o.label)}><Plus size={13} aria-hidden /></button>
             </div>
           ))}
         </div>
@@ -1191,8 +1200,8 @@ export function PreferencesModal({
   showSticky = true,
   groupByOptions = [],
   aggregationOptions = [],
-  title = 'Customise',
-  listLabel = 'Columns',
+  title,
+  listLabel: listLabelProp,
   listHint,
   workspaceSlot,
   quickPicks,
@@ -1203,9 +1212,12 @@ export function PreferencesModal({
   onReloadSaved,
   bulkPick,
   rememberInteraction = false,
-  confirmLabel = 'Save',
+  confirmLabel,
   className,
+  labels,
 }: PreferencesModalProps) {
+  const w = mergeLabels(PREFERENCES_MODAL_LABELS, labels)
+  const listLabel = listLabelProp === undefined ? w.columns : listLabelProp
   // Draft mirrors `value`; reset on every open so a prior Cancel can't leak.
   const [draft, setDraft] = useState<PreferencesValue>(value)
   const [tab, setTab] = useState<'columns' | 'grouping' | 'display'>('columns')
@@ -1217,7 +1229,7 @@ export function PreferencesModal({
   const busyRef = useRef(false)
   const wasOpen = useRef(false)
   const { pickList, pickHead, pickBox, inView, viewHead, viewBox, groupingTab, displaySections, resetValue, resetInteraction, resetSelection, tabbed, hasDisplay, hasLeftPanel, groupingCount } = usePreferencesPanes({
-    value: draft, onChange: (next) => { if (!busyRef.current) setDraft(next) }, allColumns, defaultVisible, sortFieldOptions, pageSizeChoices, showSticky, groupByOptions, aggregationOptions, listLabel, listHint, workspaceSlot, quickPicks, groupToggles, inViewCount, attributeGroups, bulkPick,
+    value: draft, onChange: (next) => { if (!busyRef.current) setDraft(next) }, allColumns, defaultVisible, sortFieldOptions, pageSizeChoices, showSticky, groupByOptions, aggregationOptions, listLabel, listHint, workspaceSlot, quickPicks, groupToggles, inViewCount, attributeGroups, bulkPick, labels,
   })
   useEffect(() => {
     if (open && !wasOpen.current) {
@@ -1261,8 +1273,9 @@ export function PreferencesModal({
     <Modal
       open={open}
       onClose={close}
-      title={title}
+      title={title === undefined ? w.title : title}
       className={className}
+      labels={{ close: w.close }}
       // The width follows the LAYOUT. `xl` (920px) is sized for two panels side by side; with the
       // left one collapsed it stretched a list of one-word column names to 884px, putting 748px
       // of empty space between each label and its control. `md` (560px) puts the list back at
@@ -1270,38 +1283,38 @@ export function PreferencesModal({
       size={hasLeftPanel ? 'xl' : 'md'}
       footer={
         <>
-          <Button variant="ghost" onClick={resetAll} disabled={viewBusy} className="nds-prefs-reset">Reset to default</Button>
+          <Button variant="ghost" onClick={resetAll} disabled={viewBusy} className="nds-prefs-reset">{w.reset}</Button>
           {viewSave && !naming && (
             <>
-              <Button variant="ghost" onClick={() => { setViewName(''); setNaming(true) }} disabled={viewBusy}>Save as view…</Button>
+              <Button variant="ghost" onClick={() => { setViewName(''); setNaming(true) }} disabled={viewBusy}>{w.saveAsView}</Button>
               {viewSave.activeName && viewSave.onUpdate && (
                 <Button variant="ghost" onClick={() => runViewWrite(() => viewSave.onUpdate!(confirmedDraft()))} disabled={viewBusy}>
-                  Update “{viewSave.activeName}”
+                  {w.update(viewSave.activeName)}
                 </Button>
               )}
             </>
           )}
           {viewSave && naming && (
-            <span className="nds-prefs-saveview" role="group" aria-label="Save as view">
+            <span className="nds-prefs-saveview" role="group" aria-label={w.saveAsViewGroup}>
               <Input
                 autoFocus
                 size="sm"
                 value={viewName}
                 onChange={(e) => setViewName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') saveAs(); if (e.key === 'Escape') setNaming(false) }}
-                placeholder="View name"
-                aria-label="View name"
+                placeholder={w.viewName}
+                aria-label={w.viewName}
                 fieldClassName="nds-prefs-viewname"
                 disabled={viewBusy}
               />
-              <Button variant="primary" onClick={saveAs} disabled={!viewName.trim() || viewBusy}>Save view</Button>
-              <Button variant="ghost" onClick={() => setNaming(false)} disabled={viewBusy}>Cancel</Button>
+              <Button variant="primary" onClick={saveAs} disabled={!viewName.trim() || viewBusy}>{w.saveView}</Button>
+              <Button variant="ghost" onClick={() => setNaming(false)} disabled={viewBusy}>{w.cancel}</Button>
             </span>
           )}
-          {viewError && <span className="nds-prefs-saveview-err" role="alert">{viewError}{onReloadSaved && <Button size="xs" variant="ghost" disabled={viewBusy} onClick={() => runViewWrite(async () => { setDraft(await onReloadSaved()); resetInteraction() }, false)}>Reload saved layout</Button>}</span>}
+          {viewError && <span className="nds-prefs-saveview-err" role="alert">{viewError}{onReloadSaved && <Button size="xs" variant="ghost" disabled={viewBusy} onClick={() => runViewWrite(async () => { setDraft(await onReloadSaved()); resetInteraction() }, false)}>{w.reloadSaved}</Button>}</span>}
           <span className="grow" />
-          <Button onClick={close} disabled={viewBusy}>Cancel</Button>
-          <Button variant="primary" onClick={handleConfirm} disabled={viewBusy}>{viewBusy ? 'Saving…' : confirmLabel}</Button>
+          <Button onClick={close} disabled={viewBusy}>{w.cancel}</Button>
+          <Button variant="primary" onClick={handleConfirm} disabled={viewBusy}>{viewBusy ? w.saving : confirmLabel === undefined ? w.save : confirmLabel}</Button>
         </>
       }
     >
@@ -1309,14 +1322,14 @@ export function PreferencesModal({
       {tabbed ? (
         <>
           <Tabs
-            ariaLabel="Customise sections"
+            ariaLabel={w.sections}
             className="nds-prefs-tabs"
             active={tab}
             onChange={(id) => setTab(id as typeof tab)}
             tabs={[
-              { id: 'columns', label: 'Columns' },
-              { id: 'grouping', label: 'Grouping', count: groupingCount > 0 ? groupingCount : null },
-              ...(hasDisplay ? [{ id: 'display', label: 'Display' }] : []),
+              { id: 'columns', label: w.tabColumns },
+              { id: 'grouping', label: w.tabGrouping, count: groupingCount > 0 ? groupingCount : null },
+              ...(hasDisplay ? [{ id: 'display', label: w.tabDisplay }] : []),
             ]}
           />
           {tab === 'columns' && (attributeGroups ? (

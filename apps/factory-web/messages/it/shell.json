@@ -209,7 +209,17 @@
     "allSites": "Tutte le sedi",
     "companies": "Società",
     "sites": "Sede",
-    "label": "Società e sede: {company}, {site}"
+    "label": "Società e sede: {company}, {site}",
+    "allMySites": "Tutte le mie sedi",
+    "findCompany": "Trova una società… ({count})",
+    "finder": {
+      "title": "Società",
+      "search": "Trova una società per nome o codice",
+      "placeholder": "Nome o codice",
+      "none": "Nessuna società corrisponde a “{query}”.",
+      "count_one": "{count} società",
+      "count_other": "{count} società"
+    }
   },
   "palette": {
     "title": "Cerca",
@@ -375,6 +385,61 @@
       "title": "Nexus Factory non risponde",
       "body": "Il servizio non ha risposto come dovrebbe (codice {code}). Riprova tra un momento.",
       "action": "Riprova"
+    }
+  },
+  "live": {
+    "connecting": "Connessione…",
+    "live": "In diretta",
+    "offline": "Non in diretta: rilegge ogni 30 s"
+  },
+  "window": {
+    "back": "Torna all'ufficio",
+    "close": "Chiudi questa finestra"
+  },
+  "print": {
+    "print": "Stampa",
+    "record": "Vista di stampa del record (nuova scheda)",
+    "view": "Stampa questa vista (nuova scheda)",
+    "page": "Pagina",
+    "toolbar": "Vista di stampa",
+    "back": "Torna alla vista",
+    "hint": {
+      "record": "Il record come viene stampato: l'intestazione e ogni pannello. I numeri di pagina sono in fondo a ogni foglio.",
+      "view": "Questa vista come viene stampata: i filtri come li mostra la pagina e ogni riga caricata. I numeri di pagina sono in fondo a ogni foglio."
+    },
+    "site": "Sede: {site}",
+    "allSites": "Tutte le sedi",
+    "allMySites": "Tutte le mie sedi",
+    "printedBy": "Stampato da {name} il {when}"
+  },
+  "scope": {
+    "chip": {
+      "allSites": "Tutte le sedi",
+      "allMySites": "Tutte le mie sedi"
+    },
+    "fromTopBar": "Sede dalla barra in alto",
+    "start": {
+      "title": "Dove lavoro",
+      "description": "Cosa si apre dopo l'accesso.",
+      "legend": "Pagina iniziale",
+      "today": "Oggi",
+      "todayHint": "La tua giornata: cosa ti aspetta adesso (predefinita).",
+      "view": "Una vista salvata che scelgo",
+      "viewHint": "Una delle viste salvate di un elenco che apri.",
+      "page": "Elenco",
+      "pickPage": "Scegli un elenco",
+      "savedView": "Vista salvata",
+      "pickView": "Scegli una vista salvata",
+      "pickPageFirst": "Prima scegli un elenco",
+      "noViews": "Questo elenco non ha ancora una vista salvata che puoi aprire: salvane una dal menu Colonne.",
+      "loadingViews": "Lettura delle viste salvate…",
+      "viewsFailed": "Non è stato possibile leggere le viste salvate. Riprova più tardi.",
+      "signIn": "L'accesso apre la società e la sede usate per ultime. Questa scelta resta su questo dispositivo.",
+      "save": "Salva",
+      "discard": "Annulla modifiche",
+      "saved": "Salvato: si apre al prossimo accesso.",
+      "heldNoChange": "Nulla è cambiato",
+      "heldPickView": "Prima scegli una vista salvata"
     }
   }
 }

@@ -17,6 +17,8 @@ import { Field } from '../components/Field'
 import { Modal } from '../components/Modal'
 import { Button } from '../primitives/Button'
 import { Input } from '../primitives/Input'
+import { mergeLabels } from '../lib/labels'
+import { STEP_UP_MODAL_LABELS, type StepUpModalLabels } from './StepUpModalLabels'
 
 export interface StepUpModalProps {
   open: boolean
@@ -31,9 +33,13 @@ export interface StepUpModalProps {
   confirmLabel?: string
   /** Passed to the Modal: a light-pinned surface passes its portal class (the fleet's `fleet-portal`). */
   className?: string
+  /** Its words in the person's language (B-W2b-04): buttons, the code field, the close button. Default English;
+   *  `confirmLabel` wins. */
+  labels?: Partial<StepUpModalLabels>
 }
 
-export function StepUpModal({ open, title, sentence, busy, error, onSubmit, onClose, confirmLabel = 'Confirm', className }: StepUpModalProps) {
+export function StepUpModal({ open, title, sentence, busy, error, onSubmit, onClose, confirmLabel, className, labels }: StepUpModalProps) {
+  const words = mergeLabels(STEP_UP_MODAL_LABELS, labels)
   const [code, setCode] = useState('')
   const id = useId()
   const input = useRef<HTMLInputElement>(null)
@@ -56,11 +62,12 @@ export function StepUpModal({ open, title, sentence, busy, error, onSubmit, onCl
       title={title}
       size="sm"
       className={className}
+      labels={{ close: words.close }}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>{words.cancel}</Button>
           <Button variant="primary" disabled={!ready} onClick={() => ready && onSubmit(code)}>
-            {busy ? 'Checking…' : confirmLabel}
+            {busy ? words.checking : confirmLabel === undefined ? words.confirm : confirmLabel}
           </Button>
         </>
       }
@@ -74,7 +81,7 @@ export function StepUpModal({ open, title, sentence, busy, error, onSubmit, onCl
       >
         <p className="nds-stepup-note">{sentence}</p>
         {error && <Banner tone="danger">{error}</Banner>}
-        <Field label="Two-factor code" required hint="The 6-digit code from your authenticator app." htmlFor={id}>
+        <Field label={words.code} required hint={words.codeHint} htmlFor={id}>
           <Input
             ref={input}
             id={id}

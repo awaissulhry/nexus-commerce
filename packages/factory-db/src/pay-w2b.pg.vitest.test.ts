@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed as seedCore, type CoreSeed } from '../seed/_core'
 import { seed as seedPay, type PaySeed } from '../seed/pay'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
-import { classifiedModels } from './ownership'
+import { classifiedModels, personalDataOf } from './ownership'
 import { FLOOR_ROLE, PARTNER_ROLE, RUNTIME_LOGIN } from './roles'
 import { seedUuid } from './seeding'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
@@ -12,15 +12,15 @@ import { loadOwnership, loadSchema } from './tools'
 /**
  * W2b schema wave 6/7 (piece pay and the payroll export) beyond the generated isolation tests, on a database built from
  * the migrations and seeded, through the real login and the scoped client (…_pay_w2b_guards):
- *   - the walls: office only, but the floor reads its site's rate publications (not who made them) and records a
- *     worker's reading; every rate and amount is `@grain wages`; the personal columns are tagged; no name, tax code,
- *     IBAN or birth date is kept; the legal switch ships OFF;
+ *   - the walls: office only (the floor reads and writes nothing here); every rate and amount is `@grain wages`; the rows
+ *     about one person name the Employee and list their personal columns (purpose PAY); no name, tax code, IBAN or
+ *     birth date is kept; the legal switch ships OFF;
  *   - rate versions leave DRAFT only once published to the workers on or before their first day (c.c. art. 2101), never
  *     overlap, never change after; their rates are exact; publications go to ACTIVE workers of the site; receipts are
  *     append-only;
  *   - incentive schemes: their shapes, a guaranteed pay before ACTIVE, no overlap;
  *   - the legal switch: ON only with every precondition on record (CCNL, notice, DPIA, consultant, scheme, the site's
- *     legal basis for naming workers), never from a day in the past, frozen while ON, its windows kept;
+ *     legal basis for naming workers and its PERFORMANCE legal gate), never from a day in the past, frozen while ON, its windows kept;
  *   - the earnings ledger: append-only for every login; a scan pays only once (standing, of its worker, at a rate in
  *     force for its operation, not held); nothing outside the switch's windows; corrections are mirrored reversals and
  *     late work names the LOCKED period it corrects;
@@ -71,6 +71,7 @@ const A = {
   store: key('files:account:r2'),
 }
 
+const E = { operator: () => pay.employeeIds.operator, lead: () => pay.employeeIds.lead }
 const office = (actorId: string = a.actorId): FactoryScope => ({ audience: 'office', tenantId: a.tenantId, actorId })
 const floor = (): FactoryScope => ({ audience: 'floor', tenantId: a.tenantId, actorId: randomUUID(), siteId: A.siteA })
 const as = <T>(scope: FactoryScope, work: (client: FactoryClient) => Promise<T>): Promise<T> => factory.withScope(scope, work)
@@ -148,6 +149,7 @@ const receiptRow = (extra: Record<string, unknown> = {}) => ({
   siteId: A.siteA,
   publicationId: pay.publicationId,
   versionId: pay.rateVersionIds.published,
+  employeeId: E.operator(),
   workerId: pay.production.operatorId,
   channel: 'DEVICE',
   deviceId: pay.production.deviceId,
@@ -167,6 +169,7 @@ const earningRow = (extra: Record<string, unknown> = {}) => ({
   companyId: A.companyA,
   siteId: A.siteA,
   payPeriodId: pay.periodIds.november,
+  employeeId: E.operator(),
   workerId: pay.production.operatorId,
   workDate: '2026-11-20',
   kind: 'MAKE_UP',
@@ -219,21 +222,41 @@ describe('the seeds and the walls', () => {
     expect(before.every((n) => n > 0)).toBe(true)
   })
 
-  it('the office keeps every table; the floor reads its site’s publications (not who made them) and records a reading; no portal', async () => {
+  it('the office keeps every table; the floor and the portal read and write none of them', async () => {
     const models = classifiedModels(loadSchema(), loadOwnership()).filter(({ model }) => model.file === FILE)
     expect(models.map(({ model }) => model.name).sort()).toEqual([...TABLES].sort())
     for (const { model, ownership } of models) {
       expect(ownership.access[PARTNER_ROLE], model.name).toBeUndefined()
-      if (model.name === 'RatePublication' || model.name === 'RateAcknowledgement') continue
       expect(ownership.access[FLOOR_ROLE], model.name).toBeUndefined()
       await expect(sql(floor(), `SELECT id FROM "${model.table}" LIMIT 1`), model.name).rejects.toThrow(DENIED)
     }
-    expect(await sql(floor(), `SELECT id::text AS id, "workerIds" AS workers FROM "RatePublication"`)).toEqual([{ id: pay.publicationId, workers: [pay.production.operatorId] }])
-    await expect(sql(floor(), `SELECT "publishedById" FROM "RatePublication"`)).rejects.toThrow(DENIED)
-    expect((await sql(floor(), `SELECT id::text AS id FROM "RateAcknowledgement"`)).map((row) => row.id)).toContain(pay.acknowledgementId)
+    await expect(insert(floor(), 'RateAcknowledgement', receiptRow())).rejects.toThrow(DENIED)
   })
 
-  it('every rate and amount is a wages figure; the personal columns are tagged; no name, tax code, IBAN or birth date is kept', async () => {
+  it('the rows about one person name the Employee and list every personal column with the purpose PAY', async () => {
+    const personal = personalDataOf(loadSchema(), loadOwnership()).filter((entry) => (TABLES as readonly string[]).includes(entry.model))
+    expect(personal.map((entry) => entry.model).sort()).toEqual(['EarningsEntry', 'HeldScan', 'RateAcknowledgement', 'WorkerStatement'])
+    for (const entry of personal) {
+      expect(entry.subject, entry.model).toBe('employeeId')
+      expect(new Set(Object.values(entry.columns).flat()), entry.model).toEqual(new Set(['PAY']))
+    }
+    expect(personal.find((entry) => entry.model === 'EarningsEntry')!.columns.amount).toEqual(['PAY'])
+    expect(personal.find((entry) => entry.model === 'WorkerStatement')!.columns.summary).toEqual(['PAY'])
+    // Each is a foreign key to Employee of the row's company (the receipt: of the tenant), Restrict both ways.
+    const keys = await admin(
+      `SELECT conrelid::regclass::text AS t, confdeltype AS d, confupdtype AS u, pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE contype = 'f' AND confrelid = '"Employee"'::regclass AND conrelid::regclass::text = ANY($1::text[]) ORDER BY 1`,
+      [['"EarningsEntry"', '"HeldScan"', '"RateAcknowledgement"', '"WorkerStatement"']],
+    )
+    expect(keys.map((key) => [key.t, key.d, key.u])).toEqual([
+      ['"EarningsEntry"', 'r', 'r'],
+      ['"HeldScan"', 'r', 'r'],
+      ['"RateAcknowledgement"', 'r', 'r'],
+      ['"WorkerStatement"', 'r', 'r'],
+    ])
+    expect(keys.filter((key) => String(key.def).includes('"companyId"')).map((key) => key.t)).toEqual(['"EarningsEntry"', '"HeldScan"', '"WorkerStatement"'])
+  })
+
+  it('every rate and amount is a wages figure; no name, tax code, IBAN or birth date is kept', async () => {
     const models = loadSchema().filter((model) => model.file === FILE)
     const tagged = (grain: string) => models.flatMap((model) => model.fields.filter((field) => field.tags.includes(grain)).map((field) => `${model.name}.${field.name}`))
     expect(tagged('@grain wages').sort()).toEqual(
@@ -251,17 +274,6 @@ describe('the seeds and the walls', () => {
       ].sort(),
     )
     expect(models.flatMap((model) => model.fields.filter((field) => field.tags.some((t) => t.startsWith('@grain') && t !== '@grain wages')).map((field) => field.name))).toEqual([])
-    expect(tagged('@personal piece-pay').sort()).toEqual(
-      [
-        'EarningsEntry.workerId',
-        'HeldScan.workerId',
-        'PayrollExport.values',
-        'RateAcknowledgement.workerId',
-        'RatePublication.workerIds',
-        'WorkerStatement.summary',
-        'WorkerStatement.workerId',
-      ].sort(),
-    )
     const columns = await admin(`SELECT table_name AS t, column_name AS c FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ANY($1::text[])`, [[...TABLES]])
     expect(columns.filter((column) => /displayName|firstName|lastName|fiscal|taxCode|iban|birth|address|photo/i.test(String(column.c)))).toEqual([])
   })
@@ -379,27 +391,28 @@ describe('publications and receipts', () => {
     await update('PieceRateVersion', draft.id, { status: 'CANCELLED', cancelledAt: now, cancelReason: 'Not needed' })
     await expect(insert(office(), 'RatePublication', publicationRow(draft.id))).rejects.toThrow(/is CANCELLED; it is published no more/)
     // A withdrawn publication is acknowledged by nobody.
-    await expect(insert(office(), 'RateAcknowledgement', receiptRow({ publicationId: publication.id, versionId: draft.id, workerId: pay.production.leadId }))).rejects.toThrow(/nobody acknowledges it/)
+    await expect(insert(office(), 'RateAcknowledgement', receiptRow({ publicationId: publication.id, versionId: draft.id, workerId: pay.production.leadId, employeeId: E.lead() }))).rejects.toThrow(/nobody acknowledges it/)
   })
 
-  it('receipts are append-only for every login; the floor records the signed-in worker’s reading of a publication made to them', async () => {
+  it('receipts are append-only for every login; one records a person’s reading of a publication made to them, by their floor sign-in', async () => {
     const id = pay.acknowledgementId
     await expect(run(office(), `UPDATE "RateAcknowledgement" SET "serverTime" = now() WHERE id = $1::uuid`, id)).rejects.toThrow(DENIED)
-    await expect(run(floor(), `DELETE FROM "RateAcknowledgement" WHERE id = $1::uuid`, id)).rejects.toThrow(DENIED)
+    await expect(run(office(), `DELETE FROM "RateAcknowledgement" WHERE id = $1::uuid`, id)).rejects.toThrow(DENIED)
     await expect(admin(`UPDATE "RateAcknowledgement" SET "serverTime" = now() WHERE id = $1`, [id])).rejects.toThrow(/append-only: UPDATE on "RateAcknowledgement" is refused/)
     await expect(admin(`DELETE FROM "RateAcknowledgement" WHERE id = $1`, [id])).rejects.toThrow(/append-only: DELETE/)
     await expect(admin(`TRUNCATE "RateAcknowledgement"`)).rejects.toThrow(/TRUNCATE on "RateAcknowledgement" is refused/)
-    expect(await insert(floor(), 'RateAcknowledgement', receiptRow())).toBe(1)
-    await expect(insert(floor(), 'RateAcknowledgement', receiptRow({ workerId: pay.production.leadId }))).rejects.toThrow(/one of the workers it went to/)
-    await expect(insert(floor(), 'RateAcknowledgement', receiptRow({ versionId: pay.rateVersionIds.draft }))).rejects.toThrow(/names the version of publication/)
-    await expect(insert(floor(), 'RateAcknowledgement', receiptRow({ deviceId: null }))).rejects.toThrow(/on a device names the device/)
+    expect(await insert(office(), 'RateAcknowledgement', receiptRow())).toBe(1)
+    await expect(insert(office(), 'RateAcknowledgement', receiptRow({ workerId: pay.production.leadId, employeeId: E.lead() }))).rejects.toThrow(/one of the workers it went to/)
+    await expect(insert(office(), 'RateAcknowledgement', receiptRow({ employeeId: E.lead() }))).rejects.toThrow(/names employee .* but worker .* is the floor sign-in of/)
+    await expect(insert(office(), 'RateAcknowledgement', receiptRow({ versionId: pay.rateVersionIds.draft }))).rejects.toThrow(/names the version of publication/)
+    await expect(insert(office(), 'RateAcknowledgement', receiptRow({ deviceId: null }))).rejects.toThrow(/on a device names the device/)
     await expect(insert(office(), 'RateAcknowledgement', receiptRow({ channel: 'PAPER' }))).rejects.toThrow(/on paper it names no device/)
     expect(await insert(office(), 'RateAcknowledgement', receiptRow({ channel: 'PAPER', deviceId: null, clientEventId: null }))).toBe(1)
     await expect(insert(office(), 'RateAcknowledgement', receiptRow({ channel: 'PAPER', deviceId: null, clientEventId: null, paperFileId: A.officeFile }))).rejects.toThrow(/signed copy .* stored file of publication/)
     // A resent reading is recorded once (per device and event id).
     const resent = receiptRow()
-    await insert(floor(), 'RateAcknowledgement', resent)
-    await expect(insert(floor(), 'RateAcknowledgement', { ...resent, id: randomUUID() })).rejects.toThrow(/unique|duplicate/i)
+    await insert(office(), 'RateAcknowledgement', resent)
+    await expect(insert(office(), 'RateAcknowledgement', { ...resent, id: randomUUID() })).rejects.toThrow(/unique|duplicate/i)
   })
 })
 
@@ -463,19 +476,20 @@ describe('the earnings ledger', () => {
     await expect(insert(office(), 'EarningsEntry', scanEntry({ sharePct: '50' }))).rejects.toThrow(/share .* exactly for a team split/)
     await expect(insert(office(), 'EarningsEntry', scanEntry({ operationScanId: pay.production.scanIds[undo] }))).rejects.toThrow(/standing report or correction \(scan .* is a UNDO/)
     await expect(insert(office(), 'EarningsEntry', scanEntry({ operationScanId: pay.production.scanIds[misScan] }))).rejects.toThrow(/voided/)
-    await expect(insert(office(), 'EarningsEntry', scanEntry({ workerId: pay.production.leadId }))).rejects.toThrow(/of another worker/)
+    await expect(insert(office(), 'EarningsEntry', scanEntry({ workerId: pay.production.leadId, employeeId: E.lead() }))).rejects.toThrow(/of another worker/)
+    await expect(insert(office(), 'EarningsEntry', scanEntry({ employeeId: E.lead() }))).rejects.toThrow(/pays employee .* but worker .* is the floor sign-in of .*link the worker to its employee first/)
     await expect(insert(office(), 'EarningsEntry', scanEntry({ rateEntryId: pay.rateEntryIds.pack }))).rejects.toThrow(/rate of another operation or style/)
     await expect(insert(office(), 'EarningsEntry', scanEntry({ rateEntryId: pay.rateEntryIds.sew2 }))).rejects.toThrow(/its version is DRAFT .* rates apply only once published/)
     await expect(insert(office(), 'EarningsEntry', scanEntry({ heldScanId: pay.heldScanIds.open }))).rejects.toThrow(/which is no COUNTED hold of scan/)
     // A team split pays another worker their share of the same scan.
-    expect(await insert(office(), 'EarningsEntry', scanEntry({ kind: 'TEAM_SPLIT', workerId: pay.production.leadId, sharePct: '40', amount: 926, heldScanId: pay.heldScanIds.counted }))).toBe(1)
-    await expect(insert(office(), 'EarningsEntry', scanEntry({ kind: 'TEAM_SPLIT', workerId: pay.production.leadId, sharePct: '0' }))).rejects.toThrow(/share \(above 0/)
+    expect(await insert(office(), 'EarningsEntry', scanEntry({ kind: 'TEAM_SPLIT', workerId: pay.production.leadId, employeeId: E.lead(), sharePct: '40', amount: 926, heldScanId: pay.heldScanIds.counted }))).toBe(1)
+    await expect(insert(office(), 'EarningsEntry', scanEntry({ kind: 'TEAM_SPLIT', workerId: pay.production.leadId, employeeId: E.lead(), sharePct: '0' }))).rejects.toThrow(/share \(above 0/)
     // A new hold of the paid scan stops any further pay for it until it is counted.
-    const hold = { id: randomUUID(), companyId: A.companyA, siteId: A.siteA, payPeriodId: pay.periodIds.november, workerId: pay.production.operatorId, operationScanId: pay.production.scanIds[report], reason: 'ON_BREAK', heldAt: now, key: `held:test:${tag()}` }
+    const hold = { id: randomUUID(), companyId: A.companyA, siteId: A.siteA, payPeriodId: pay.periodIds.november, employeeId: E.operator(), workerId: pay.production.operatorId, operationScanId: pay.production.scanIds[report], reason: 'ON_BREAK', heldAt: now, key: `held:test:${tag()}` }
     await insert(office(), 'HeldScan', hold)
-    await expect(insert(office(), 'EarningsEntry', scanEntry({ kind: 'TEAM_SPLIT', workerId: pay.production.leadId, sharePct: '10', amount: 231 }))).rejects.toThrow(/is held .* pays nothing until it is counted/)
+    await expect(insert(office(), 'EarningsEntry', scanEntry({ kind: 'TEAM_SPLIT', workerId: pay.production.leadId, employeeId: E.lead(), sharePct: '10', amount: 231 }))).rejects.toThrow(/is held .* pays nothing until it is counted/)
     await update('HeldScan', hold.id, { status: 'NOT_PAID', resolvedAt: now, resolvedById: a.actorId, resolutionNote: 'On a break: not paid (test)' })
-    await expect(insert(office(), 'EarningsEntry', scanEntry({ kind: 'TEAM_SPLIT', workerId: pay.production.leadId, sharePct: '10', amount: 231 }))).rejects.toThrow(/is held/)
+    await expect(insert(office(), 'EarningsEntry', scanEntry({ kind: 'TEAM_SPLIT', workerId: pay.production.leadId, employeeId: E.lead(), sharePct: '10', amount: 231 }))).rejects.toThrow(/is held/)
   })
 
   it('records nothing outside the site’s piece-pay window, and checks each kind’s shape', async () => {
@@ -499,7 +513,7 @@ describe('the earnings ledger', () => {
     const reversal = earningRow({ reversalOfId: original.id, amount: -1200, minutes: '-80.000', reason: 'Wrong minutes', idempotencyKey: `reversal:${original.id}` })
     await expect(insert(office(), 'EarningsEntry', { ...reversal, amount: -1000 })).rejects.toThrow(/mirrors entry/)
     await expect(insert(office(), 'EarningsEntry', { ...reversal, kind: 'ADJUSTMENT' })).rejects.toThrow(/mirrors entry/)
-    await expect(insert(office(), 'EarningsEntry', { ...reversal, workerId: pay.production.leadId })).rejects.toThrow(/mirrors entry/)
+    await expect(insert(office(), 'EarningsEntry', { ...reversal, workerId: pay.production.leadId, employeeId: E.lead() })).rejects.toThrow(/mirrors entry/)
     await expect(insert(office(), 'EarningsEntry', { ...reversal, reason: null })).rejects.toThrow(/says why/)
     expect(await insert(office(), 'EarningsEntry', reversal)).toBe(1)
     await expect(insert(office(), 'EarningsEntry', { ...reversal, id: randomUUID(), idempotencyKey: `test:${tag()}` })).rejects.toThrow(/EarningsEntry_reversed_once|duplicate key/)
@@ -530,12 +544,12 @@ describe('pay periods, held scans and statements', () => {
 
   it('locks only with no scan held and an APPROVED statement for every worker paid in it; then nothing in it changes', async () => {
     await insert(office(), 'EarningsEntry', earningRow({ payPeriodId: december.id, workDate: '2026-12-05' }))
-    await expect(lockDecember()).rejects.toThrow(/0 scan\(s\) still held, 0 statement\(s\) in DRAFT, 1 worker\(s\) paid without an APPROVED statement/)
-    const hold = { id: randomUUID(), companyId: A.companyA, siteId: A.siteA, payPeriodId: december.id, workerId: pay.production.operatorId, operationScanId: pay.production.scanIds[2], reason: 'NOT_CLOCKED_IN', heldAt: now, key: `held:test:${tag()}` }
+    await expect(lockDecember()).rejects.toThrow(/0 scan\(s\) still held, 0 statement\(s\) in DRAFT, 1 person\(s\) paid without an APPROVED statement/)
+    const hold = { id: randomUUID(), companyId: A.companyA, siteId: A.siteA, payPeriodId: december.id, employeeId: E.operator(), workerId: pay.production.operatorId, operationScanId: pay.production.scanIds[2], reason: 'NOT_CLOCKED_IN', heldAt: now, key: `held:test:${tag()}` }
     await insert(office(), 'HeldScan', hold)
-    const statement = { id: randomUUID(), companyId: A.companyA, siteId: A.siteA, payPeriodId: december.id, workerId: pay.production.operatorId }
+    const statement = { id: randomUUID(), companyId: A.companyA, siteId: A.siteA, payPeriodId: december.id, employeeId: E.operator() }
     await insert(office(), 'WorkerStatement', statement)
-    await expect(lockDecember()).rejects.toThrow(/1 scan\(s\) still held, 1 statement\(s\) in DRAFT, 1 worker\(s\) paid/)
+    await expect(lockDecember()).rejects.toThrow(/1 scan\(s\) still held, 1 statement\(s\) in DRAFT, 1 person\(s\) paid/)
     await expect(update('WorkerStatement', statement.id, { status: 'APPROVED', approvedAt: now, approvedById: a.actorId })).rejects.toThrow(/wrong columns/)
     expect(await update('WorkerStatement', statement.id, { status: 'APPROVED', approvedAt: now, approvedById: a.actorId, summary: { lines: [] }, earningsAmount: 900, makeUpAmount: 0 })).toBe(1)
     await expect(update('WorkerStatement', statement.id, { earningsAmount: 901 })).rejects.toThrow(/APPROVED; it never changes/)
@@ -565,17 +579,18 @@ describe('pay periods, held scans and statements', () => {
 
   it('a held scan holds a report of its own worker, starts OPEN and is decided once; a statement is a DRAFT until approved, its PDF named once', async () => {
     const base = { companyId: A.companyA, siteId: A.siteA, payPeriodId: pay.periodIds.november, operationScanId: pay.production.scanIds[2], reason: 'NOT_CLOCKED_IN', heldAt: now }
-    await expect(insert(office(), 'HeldScan', { ...base, id: randomUUID(), workerId: pay.production.leadId, key: `held:test:${tag()}` })).rejects.toThrow(/of its own worker/)
-    await expect(insert(office(), 'HeldScan', { ...base, id: randomUUID(), workerId: pay.production.operatorId, operationScanId: pay.production.scanIds[1], key: `held:test:${tag()}` })).rejects.toThrow(/of its own worker/)
-    await expect(insert(office(), 'HeldScan', { ...base, id: randomUUID(), workerId: pay.production.operatorId, key: ' ' })).rejects.toThrow(/starts OPEN, with its key/)
+    await expect(insert(office(), 'HeldScan', { ...base, id: randomUUID(), workerId: pay.production.leadId, employeeId: E.lead(), key: `held:test:${tag()}` })).rejects.toThrow(/of its own worker/)
+    await expect(insert(office(), 'HeldScan', { ...base, id: randomUUID(), workerId: pay.production.operatorId, employeeId: E.operator(), operationScanId: pay.production.scanIds[1], key: `held:test:${tag()}` })).rejects.toThrow(/of its own worker/)
+    await expect(insert(office(), 'HeldScan', { ...base, id: randomUUID(), workerId: pay.production.operatorId, employeeId: E.lead(), key: `held:test:${tag()}` })).rejects.toThrow(/names employee .* but worker .* is the floor sign-in of/)
+    await expect(insert(office(), 'HeldScan', { ...base, id: randomUUID(), workerId: pay.production.operatorId, employeeId: E.operator(), key: ' ' })).rejects.toThrow(/starts OPEN, with its key/)
     await expect(update('HeldScan', pay.heldScanIds.open, { reason: 'ON_BREAK' })).rejects.toThrow(/changes only by its decision/)
     await refusedToAll(`DELETE FROM "HeldScan" WHERE id = $1::uuid`, pay.heldScanIds.open, /never deleted/)
     // Statements.
-    const statement = { id: randomUUID(), companyId: A.companyA, siteId: A.siteA, payPeriodId: pay.periodIds.november, workerId: pay.production.leadId, revision: 3 }
+    const statement = { id: randomUUID(), companyId: A.companyA, siteId: A.siteA, payPeriodId: pay.periodIds.november, employeeId: E.lead(), revision: 3 }
     await expect(insert(office(), 'WorkerStatement', { ...statement, status: 'APPROVED' })).rejects.toThrow(/starts as a DRAFT/)
     await insert(office(), 'WorkerStatement', statement)
     await expect(update('WorkerStatement', statement.id, { makeUpAmount: -1 })).rejects.toThrow(/make-up 0 or more/)
-    await expect(update('WorkerStatement', statement.id, { revision: 4 })).rejects.toThrow(/revision and creation .* never change/)
+    await expect(update('WorkerStatement', statement.id, { revision: 4 })).rejects.toThrow(/person, revision and creation .* never change/)
     await expect(update('WorkerStatement', statement.id, { fileId: A.officeFile })).rejects.toThrow(/a stored file of the statement/)
     const pdf = fileRow('WorkerStatement', statement.id)
     await insert(office(), 'StoredFile', pdf)
@@ -623,6 +638,12 @@ describe('the legal switch', () => {
     await update('ProductionSettings', site.id, { scanSubject: 'WORKER' })
     await expect(update('PiecePaySwitch', sw.id, on)).rejects.toThrow(/floor rules to name workers/)
     await update('ProductionSettings', site.id, { monitoringBasis: 'UNION_AGREEMENT', monitoringReference: 'Accordo RSU (test)', monitoringRecordedAt: now, monitoringRecordedById: a.actorId })
+    await expect(update('PiecePaySwitch', sw.id, on)).rejects.toThrow(/PERFORMANCE legal gate switched on/)
+    // An ATTENDANCE gate is not enough: one person's work figures are PERFORMANCE (Statuto art. 4 c.1).
+    const gate = { companyId: A.companyA, siteId: site.id, basis: 'UNION_AGREEMENT', basisReference: 'Accordo RSU (test)', noticeId: pay.production.workerNoticeId, dpiaId: dpias.find((d) => d.status === 'STORED')!.id, switchedOnAt: now, switchedOnById: a.actorId }
+    await insert(office(), 'PeopleLegalGate', { ...gate, id: randomUUID(), purpose: 'ATTENDANCE' })
+    await expect(update('PiecePaySwitch', sw.id, on)).rejects.toThrow(/PERFORMANCE legal gate switched on/)
+    await insert(office(), 'PeopleLegalGate', { ...gate, id: randomUUID(), purpose: 'PERFORMANCE' })
     await expect(update('PiecePaySwitch', sw.id, { ...on, onFrom: '2026-11-19' })).rejects.toThrow(/never in the past/)
     expect(await update('PiecePaySwitch', sw.id, on)).toBe(1)
     // While ON its basis never changes; its note may.

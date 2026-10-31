@@ -31,6 +31,7 @@ import { hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
 import { floorOf, floorOrOffice, mayScan, officeOf, scanWorkOrder } from './access'
 import { readCorrectionRequests } from './corrections-store'
 import { readDefects } from './defects-store'
+import type { ScanReason } from '@nexus/factory-domain/production/scans/reasons'
 import { readReasons } from './reasons-store'
 import { discardRefusal, readRefusal, readRefusals, type RefusalState } from './refusals-store'
 import { requestView, scanView } from './scans'
@@ -45,10 +46,15 @@ import { deviceStationOf, latestOnDevice, readBundleScans, readHeader, readOpera
  * reasons. A floor viewer never sees another worker's name or figures: "another person" (Statuto dei Lavoratori art. 4).
  */
 
-/** The reasons' tiles (the seam: W1's list until the ScrapReason table). */
+/** One reason tile as the screens read it (B-W2b-10, MES-125: with its icon, colour, other languages and "needs detail"). */
+function reasonView(reason: ScanReason) {
+  return { kind: reason.kind, code: reason.code, label: { ...reason.label }, sortOrder: reason.sortOrder, icon: reason.icon ?? null, colour: reason.colour ?? null, labelI18n: { ...(reason.labelI18n ?? {}) }, needsDetail: reason.needsDetail ?? false }
+}
+
+/** The reasons' tiles (the seam: the tenant's ScrapReason rows). */
 export async function reasons(caller: CommandCaller) {
   floorOrOffice(caller)
-  return { reasons: (await caller.withClient((client) => readReasons(client))).map((reason) => ({ kind: reason.kind, code: reason.code, label: { ...reason.label }, sortOrder: reason.sortOrder })) }
+  return { reasons: (await caller.withClient((client) => readReasons(client))).map(reasonView) }
 }
 
 // ---- the bundle card -------------------------------------------------------------------------------------------------------------
@@ -145,7 +151,7 @@ export async function bundleCard(caller: CommandCaller, query: { readonly code: 
     next: card.next,
     choose: card.choose,
     hint: card.hint,
-    reasons: (await caller.withClient((client) => readReasons(client))).map((reason) => ({ kind: reason.kind, code: reason.code, label: { ...reason.label }, sortOrder: reason.sortOrder })),
+    reasons: (await caller.withClient((client) => readReasons(client))).map(reasonView),
   }
 }
 

@@ -194,6 +194,11 @@ model QualityHold {
   /// The site the goods are at, and its company.
   companyId              String            @db.Uuid
   siteId                 String            @db.Uuid
+  /// W2b (schema wave 2/7; design quality.holds "Hold (HLD-0091, link)"): its number from the company's HOLD series
+  /// (allocateNumber; a floor document kind, so the bench numbers the hold it places). Given once, when the hold is
+  /// placed (or once later for a hold placed before the series existed, while it is ACTIVE), never changed, never blank
+  /// (the …_followups_quality_money_w2b_guards trigger); null: placed before holds were numbered.
+  number                 String?
   /// What it holds: one record type (Lot, Hide, WorkOrder, Bundle, GarmentSerial, Shipment, Parcel) and one or more of
   /// its ids, distinct, every one a row of the hold's site (no foreign key: an array's elements cannot have one; the
   /// trigger checks them). Never changes: a hold of more goods is a new hold.
@@ -250,6 +255,8 @@ model QualityHold {
 
   @@index([tenantId, status])
   @@index([tenantId, ncrId])
+  // W2b: one hold per number in the tenant (NULLs, the holds placed before numbering, do not clash).
+  @@unique([tenantId, number])
   // What is on hold: the guards' and the API's lookup of the ACTIVE holds of a record.
   @@index([subjectIds(ops: ArrayOps)], type: Gin)
 }

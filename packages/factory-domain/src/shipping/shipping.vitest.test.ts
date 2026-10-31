@@ -223,6 +223,8 @@ describe('declarations', () => {
     expect(SHIPPING_FLOOR_PERMISSIONS).toEqual(['shipping.pack'])
     expect(events.map((event) => event.type)).toEqual(['shipment.created', 'shipment.status_changed', 'shipment.packing_changed', 'shipping.settings_saved', 'ddt.issued', 'ddt.cancelled', 'shipment.labels_bought', 'shipment.label_voided', 'shipment.tracking_recorded', 'shipment.tracking_poll_due', 'shipment.documents_attached', 'shipment.documents_link_sent', 'ddt.source_issued', 'ddt.source_cancelled',
       // B-W2a-48: the freight charged and the intra-EU transport evidence.
-      'shipment.freight_changed', 'shipping.freight_rule_saved', 'shipment.evidence_changed'])
+      'shipment.freight_changed', 'shipping.freight_rule_saved', 'shipment.evidence_changed',
+      // B-W2b-19: the carrier's freight cost and a carrier return back into finished goods.
+      'shipment.freight_cost_changed', 'shipment.carrier_return_received'])
   })
 })

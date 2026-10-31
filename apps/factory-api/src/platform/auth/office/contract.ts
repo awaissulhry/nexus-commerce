@@ -55,6 +55,13 @@ export const meContract = defineContract({
        * it up. Empty for a person with no role.
        */
       companies: z.array(output({ id: id(), code: z.string(), name: z.string() })),
+      /**
+       * B-W2b-05 (PLT-008): the active sites of the screen's company that the person's live roles reach (the top bar's
+       * switcher offers them), by code; empty without a company.
+       */
+      sites: z.array(output({ id: id(), code: z.string(), name: z.string() })),
+      /** The person reaches every site of the screen's company (a role that reaches it has no site limit). */
+      allSites: z.boolean(),
       session: sessionTimes.extend({ id: id(), createdAt: instant(), stepUpUntil: instant().nullable() }),
       mfa: mfaView.extend({ recoveryCodesLeft: z.number().int() }),
       /** The screen's company's staff privacy notice in force and whether this person acknowledged it (B-W1-36); null: none. */

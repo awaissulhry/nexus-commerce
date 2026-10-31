@@ -85,16 +85,35 @@ export function fromListReason(reason: ListReason): PickerReason {
   return { id: reason.code, list: reason.list, code: reason.code, labelIt: reason.labelIt, labelEn: reason.labelEn, labelI18n: reason.labelI18n, icon: reason.icon, colour: reason.colour, photo: null, needsDetail: reason.needsDetail, sortOrder: reason.sortOrder }
 }
 
-/** A scrap or rework reason as the bundle card carries it (ScrapReason: words only, no icon, colour or other language yet). */
+/**
+ * A scrap or rework reason as the bundle card carries it (ScrapReason; W2b B-W2b-10, MES-125: with the office's icon,
+ * colour, other languages and "needs detail" — absent or null: the standard look of the code and its words).
+ */
 export interface ScanReason {
   readonly kind: 'SCRAP' | 'REWORK'
   readonly code: string
   readonly label: { readonly it: string; readonly en: string }
   readonly sortOrder: number
+  readonly icon?: string | null | undefined
+  readonly colour?: string | null | undefined
+  readonly labelI18n?: Readonly<Record<string, string>> | undefined
+  readonly needsDetail?: boolean | undefined
 }
 
 export function fromScanReason(reason: ScanReason): PickerReason {
-  return { id: reason.code, list: reason.kind, code: reason.code, labelIt: reason.label.it, labelEn: reason.label.en, labelI18n: {}, icon: null, colour: null, photo: null, needsDetail: false, sortOrder: reason.sortOrder }
+  return {
+    id: reason.code,
+    list: reason.kind,
+    code: reason.code,
+    labelIt: reason.label.it,
+    labelEn: reason.label.en,
+    labelI18n: reason.labelI18n ?? {},
+    icon: reason.icon ?? null,
+    colour: reason.colour ?? null,
+    photo: null,
+    needsDetail: reason.needsDetail ?? false,
+    sortOrder: reason.sortOrder,
+  }
 }
 
 /**
@@ -185,10 +204,10 @@ export type StandardIcon = (typeof STANDARD_ICONS)[number]
 export type IconKey = `tag:${string}` | `std:${StandardIcon}`
 
 /**
- * The scan lists (SCRAP, REWORK) keep no icon or colour yet (ScrapReason: words only, B-W2a-18's schema need): their
- * standard codes (factory-domain production/scans W1_SCAN_REASONS) get a look of their own, a code the office added gets
- * its kind's. Replaced by the office's own icon the day the table keeps one. A screen's fixed codes (SPLIT, factory-domain
- * production/bundles SPLIT_REASONS) have theirs here too.
+ * The scan lists' (SCRAP, REWORK) standard codes (factory-domain production/scans W1_SCAN_REASONS) have a look of their
+ * own, a code the office added gets its kind's; since W2b (B-W2b-10, MES-125) the office's own icon and colour on the
+ * ScrapReason row replace it (lookOf). A screen's fixed codes (SPLIT, factory-domain production/bundles SPLIT_REASONS)
+ * have theirs here too.
  */
 const SCAN_LOOK: Readonly<Record<string, { icon: StandardIcon; tone: ReasonTone }>> = {
   'SCRAP:LEATHER_FLAW': { icon: 'flaw', tone: 'danger' },

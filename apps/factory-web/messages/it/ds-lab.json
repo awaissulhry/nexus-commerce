@@ -1,0 +1,96 @@
+{
+  "title": "Parole del design system nella lingua della persona",
+  "subtitle": "Ogni parte del design system che parla, con le parole del catalogo ds-words. Dati inventati.",
+  "section": {
+    "fields": "Campi",
+    "time": "Tempo",
+    "files": "File e immagini",
+    "grid": "Griglie ed etichette",
+    "dialogs": "Finestre",
+    "editing": "Modifica"
+  },
+  "field": {
+    "due": "Scadenza",
+    "ends": "Fine",
+    "period": "Periodo",
+    "customer": "Cliente",
+    "note": "Nota",
+    "icon": "Icona",
+    "colour": "Colore",
+    "density": "Densità",
+    "marks": "Segni di salvataggio della cella",
+    "confirm": "Conferma digitata"
+  },
+  "timeline": {
+    "label": "Passi dell’ordine",
+    "received": "Ordine ricevuto",
+    "deposit": "Acconto pagato",
+    "customs": "Controllo doganale non superato",
+    "shipped": "Spedito"
+  },
+  "asOf": {
+    "label": "Giacenza letta"
+  },
+  "countdown": {
+    "label": "Risposta dovuta"
+  },
+  "job": {
+    "label": "Esportazione delle righe",
+    "detail": "{done} di {total} righe"
+  },
+  "media": {
+    "label": "Foto",
+    "front": "Fronte",
+    "back": "Retro",
+    "files": "Documenti"
+  },
+  "open": {
+    "review": "Rivedi le modifiche",
+    "detail": "Apri una riga",
+    "stepUp": "Chiedi il codice",
+    "confirm": "Elimina una bozza",
+    "preferences": "Personalizza le colonne",
+    "modal": "Apri una finestra"
+  },
+  "review": {
+    "summary": "Salvato solo in fabbrica.",
+    "list": "Listino DEMO-A",
+    "discount": "Sconto",
+    "level": "Livello di automazione",
+    "watch": "Osserva",
+    "act": "Agisci",
+    "refused": "Rifiutato: il limite è 10%"
+  },
+  "detail": {
+    "title": "Riga demo {code}",
+    "overview": "Panoramica",
+    "history": "Storico",
+    "body": "Qui va il contenuto della riga."
+  },
+  "stepUp": {
+    "title": "Alza il limite di sconto",
+    "sentence": "Il codice permette di alzare il limite di sconto al 15%.",
+    "refused": "Il codice non è giusto. Prova il prossimo."
+  },
+  "confirm": {
+    "title": "Elimina la bozza DEMO-7",
+    "consequence": "La bozza e le sue righe vengono eliminate.",
+    "finding": "Nessun ordine la usa",
+    "unknown": "Offerte aperte",
+    "sideEffect": "Il cliente non viene avvisato.",
+    "acknowledge": "Capisco che non si può annullare.",
+    "verb": "Elimina bozza"
+  },
+  "prefs": {
+    "identity": "Identità",
+    "money": "Importi",
+    "column": "Colonna {n}"
+  },
+  "modal": {
+    "title": "Una finestra",
+    "body": "Il pulsante di chiusura parla la lingua della pagina."
+  },
+  "edit": {
+    "message": "Modifica un campo: la barra conta le modifiche."
+  }
+}
