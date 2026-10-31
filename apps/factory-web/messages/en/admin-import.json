@@ -235,6 +235,14 @@
       "inventory_hideList": {
         "name": "Tannery's hide list",
         "fills": "The hides of one delivery from the tannery, one row per hide, for one of our purchase orders: received as one goods receipt (lots by dye batch, hides one by one with their areas). Check the totals against the order before receiving."
+      },
+      "plant_machines": {
+        "name": "Machines",
+        "fills": "Machines and equipment by the asset number on their tag, with their site, class, make, model, station and supplier."
+      },
+      "planning_itemParameters": {
+        "name": "Item planning",
+        "fills": "How each site plans each item and colour: method, source, supplier, lead times and stock levels."
       }
     },
     "keys": {

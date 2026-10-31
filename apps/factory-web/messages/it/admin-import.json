@@ -235,6 +235,14 @@
       "inventory_hideList": {
         "name": "Distinta pelli della conceria",
         "fills": "Le pelli di una consegna della conceria, una riga per pelle, per un nostro ordine d'acquisto: ricevute come un unico ricevimento (lotti per bagno, pelli una per una con le superfici). Controlla i totali rispetto all'ordine prima di ricevere."
+      },
+      "plant_machines": {
+        "name": "Macchine",
+        "fills": "Macchine e attrezzature per numero di cespite della targhetta, con sede, classe, marca, modello, postazione e fornitore."
+      },
+      "planning_itemParameters": {
+        "name": "Pianificazione articoli",
+        "fills": "Come ogni sede pianifica ogni articolo e colore: metodo, origine, fornitore, tempi e livelli di scorta."
       }
     },
     "keys": {
