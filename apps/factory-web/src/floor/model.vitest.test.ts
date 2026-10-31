@@ -68,7 +68,7 @@ describe('the home tiles: mode AND permission, fail closed, only built pages ope
   })
 
   it('the floor tasks are built: receive (SCR-092) and garment labels (SCR-096) too', () => {
-    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['operation', 'cut', 'bundles', 'receive', 'pick', 'labels', 'pack', 'final', 'scan'])
+    expect(TILE_RULES.filter((rule) => rule.built).map((rule) => rule.key)).toEqual(['operation', 'cut', 'bundles', 'receive', 'pick', /* B-W2a-76 */ 'returnsin', 'kits', 'labels', 'pack', 'final', 'scan'])
   })
 })
 

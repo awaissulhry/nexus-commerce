@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { CircleAlert, ClipboardList, CloudOff, Hash, Layers, Package, PackageOpen, ScanLine, ScrollText, Scissors, ShieldCheck, Shirt, Tag, UserRoundCheck } from 'lucide-react'
+import { CircleAlert, ClipboardList, CloudOff, Factory, Hash, Layers, Package, PackageOpen, ScanLine, ScrollText, Scissors, ShieldCheck, Shirt, Tag, Undo2, UserRoundCheck } from 'lucide-react'
 import type { ScanIdKind } from '@nexus/factory-domain/numbering/kinds'
 import { FloorButton, FloorTile, FloorTileGrid, ScanInput, type CameraScanner } from '@nexus/ui/floor'
 import { useT } from '../../../lib/i18n/provider'
@@ -49,6 +49,9 @@ export const TILE_ICON: Readonly<Record<TileKey, ReactNode>> = {
   bundles: <Layers />,
   receive: <PackageOpen />,
   pick: <ClipboardList />,
+  // B-W2a-76
+  returnsin: <Undo2 />,
+  kits: <Factory />,
   labels: <Tag />,
   pack: <Package />,
   final: <ShieldCheck />,

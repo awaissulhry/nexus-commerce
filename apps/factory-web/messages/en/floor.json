@@ -299,6 +299,8 @@
     "bundles": "Bundles",
     "receive": "Receive",
     "pick": "Pick & issue",
+    "returnsin": "Receive a return",
+    "kits": "Subcontract kits",
     "labels": "Garment labels",
     "pack": "Pack",
     "final": "Final inspection",
@@ -310,6 +312,8 @@
       "bundles": "Make bundles and print their tickets",
       "receive": "Receive goods and print the hide tags",
       "pick": "Issue materials to a work order",
+      "returnsin": "Scan the RMA, receive and grade the garments",
+      "kits": "Send a kit with its DDT, receive goods back",
       "final": "Check, sign and release garments",
       "pack": "Scan garments into cartons, print labels and the DDT",
       "labels": "Print garment labels behind the certificate check"

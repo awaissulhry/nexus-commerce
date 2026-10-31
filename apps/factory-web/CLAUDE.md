@@ -189,6 +189,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `locations/` (SCR-065 + record); `areas/production/settings/` (SCR-074: who floor records name, its legal basis, step-up
   when widening); `areas/admin/privacy/` (SCR-086: duties, notices, DPIA, register; sample texts said on screen);
   `floor/tasks/labels/` (SCR-096, `/floor/labels`: garment labels behind the certificate gate; online only).
+  B-W2a-76: `floor/tasks/returns-in/` (SCR-180, `/floor/returnsin`: scan the RMA → parcel condition + photos → lines by serial/batch
+  scan or tap → ONE receipt, photos onto it → grade per garment (suggestion = factory-domain suggestedOutcome; the office
+  decides) → the inspection place scanned) and `floor/tasks/kits/` (SCR-181, `/floor/kits`: Send a kit = ticks by scan,
+  held while incomplete, the DDT's facts, send + the DDT PDF full screen with Print; Receive back = bundles by scan,
+  reject/scrapped with a REWORK reason, material back) on the floor routes `/purchasing/subcontracting/kits…`; both online
+  only for the write; each view wraps its catalogues (+ reason-kit, photo-kit, shell for the PDF words) in WithMessages.
 
 ## Rules
 - `FACTORY_API_URL` has NO fallback: without it `next dev`, `next build` and `next start` refuse to start

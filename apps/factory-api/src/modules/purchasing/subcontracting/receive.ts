@@ -14,8 +14,8 @@ import { RECEIPT_ACTION, receiptViews, storedReceipts, type OrderDetailView } fr
 /**
  * Receive back (B-W2a-25; SCM-142; design purchasing.subcontracting "Received back", floor.kits "Receive back"): what
  * the workshop returns, operation by operation and bundle by bundle (back good, defective, scrapped there), and the
- * unused material and offcuts it sends back. Office only (the floor's screen, B-W2a-76, needs a floor route of its own:
- * see the step notes). ONE command on the order (its version bump holds the row):
+ * unused material and offcuts it sends back. The office here; the floor's kit task (B-W2a-76, floor.ts) runs
+ * `receiveBackAs` after its own checks. ONE command on the order (its version bump holds the row):
  *
  *   pieces    the order AT_WORKSHOP or PARTLY_RECEIVED; per operation of the order, at least one piece and at most what is
  *             at the workshop (sent less back); a named bundle is of the order's work order, of a cell the operation
@@ -45,9 +45,20 @@ export interface ReceiveInput {
   readonly note?: string | null | undefined
 }
 
+export type ReceiveAnswer = { order: OrderDetailView; receipt: OrderDetailView['receipts'][number]; ledger: { posted: number; waiting: string[] } }
+
 /** purchasing.subcontract.receive: goods back from the workshop. */
-export async function receiveBack(caller: CommandCaller, orderId: string, input: ReceiveInput, idempotencyKey?: string): Promise<{ order: OrderDetailView; receipt: OrderDetailView['receipts'][number]; ledger: { posted: number; waiting: string[] } }> {
+export async function receiveBack(caller: CommandCaller, orderId: string, input: ReceiveInput, idempotencyKey?: string): Promise<ReceiveAnswer> {
   await officeOrder(caller, orderId, PURCHASING_SUBCONTRACT_RECEIVE)
+  return receiveBackAs(caller, orderId, input, idempotencyKey)
+}
+
+/**
+ * B-W2a-76: the receipt itself, once the caller's access is checked (the office above; the floor's kit task, floor.ts,
+ * runs it as the tenant's system caller after checking the device's site and the floor permission). `floor` names the
+ * tablet and its worker in the receipt's audit row (inside the one record).
+ */
+export async function receiveBackAs(caller: CommandCaller, orderId: string, input: ReceiveInput, idempotencyKey?: string, floor?: { readonly deviceId: string; readonly operatorId: string }): Promise<ReceiveAnswer> {
   if (input.lines.length === 0 && input.returns.length === 0) throw refuse([{ path: 'body/lines', message: 'Report the pieces back or the material returned.' }])
   const { result } = await command(
     caller,
@@ -159,6 +170,7 @@ export async function receiveBack(caller: CommandCaller, orderId: string, input:
           returns: returns.map(({ goods, to: place }, index) => ({ moveId: posted[index]!.id, itemId: goods.item.id, itemColourId: goods.itemColourId, lotId: goods.lotId, hideId: goods.hideId, quantity: goods.quantity, uom: goods.uom, toLocationId: place.id })),
           supplierDdt: input.supplierDdt ? { number: input.supplierDdt.number.trim(), date: input.supplierDdt.date ?? null } : null,
           note: blankToNull(input.note),
+          ...(floor ? { floor } : {}),
         },
       })
 
