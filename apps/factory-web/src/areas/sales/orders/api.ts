@@ -204,6 +204,8 @@ export const depositRequestSchema = z.object({
   createdAt: instant,
   paidAmount: z.number().optional(),
   link: z.object({ sentAt: instant, to: z.string().nullable(), expiresAt: instant, state: z.enum(LINK_STATES) }).nullable().default(null),
+  /** B-W2a-F2: the schedule step the request pays — DEPOSIT, or BEFORE_SHIPPING (the balance before shipping, not the deposit). */
+  stepKind: z.enum(['DEPOSIT', 'BEFORE_SHIPPING']).nullable().default(null),
 })
 export type DepositRequest = z.infer<typeof depositRequestSchema>
 

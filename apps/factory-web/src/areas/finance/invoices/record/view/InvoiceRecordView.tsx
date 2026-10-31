@@ -15,6 +15,7 @@ import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import type { Invoice } from '../../../_shared/api'
 import { creditHeld, dayInstant, journeyOf, nextStepOf, PAY_TONE, payStateOf, SDI_TONE, sdiCodeOf, STATUS_TONE, dueDateOf, type JourneyStep } from '../../../_shared/model'
 import { JourneyStrip } from '../../../_shared/parts'
+import { refundHref, xmlHref } from '../../daily/model'
 import { RECORD_TABS, type InvoiceRecordActions, type InvoiceRecordModel, type RecordTab } from '../record-model'
 import { InvoiceDialogs } from './Dialogs'
 import { DocumentsTab } from './DocumentsTab'
@@ -37,7 +38,7 @@ export type { InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
  */
 export function InvoiceRecordView({ model, actions, panels }: { model: InvoiceRecordModel; actions?: InvoiceRecordActions; panels?: ReactNode }) {
   return (
-    <WithMessages namespaces={['finance', 'lists', 'records']}>
+    <WithMessages namespaces={['finance', 'finance-daily', 'lists', 'records']}>
       <InvoiceRecord model={model} actions={actions} panels={panels} />
     </WithMessages>
   )
@@ -92,6 +93,7 @@ function InvoiceRecord({ model, actions, panels }: { model: InvoiceRecordModel; 
 
 function ReadyRecord({ invoice, model, actions, panels }: { invoice: Invoice; model: InvoiceRecordModel; actions?: InvoiceRecordActions; panels?: ReactNode }) {
   const t = useT('finance')
+  const d = useT('finance-daily')
   const locale = useLocale()
   const recordHref = `${model.prefix}/finance/invoices/${invoice.id}`
   const checks = model.checks?.value ?? null
@@ -161,9 +163,12 @@ function ReadyRecord({ invoice, model, actions, panels }: { invoice: Invoice; mo
       </Button>
     ) : null
 
-  const creditWait = creditHeld(invoice, model.can)
   const draft = invoice.status === 'DRAFT'
+  const creditWait = creditHeld(invoice, model.can)
+  // B-W2a-80: an issued credit note is refunded from Finance › Payments (the ONE Refund dialog, preset with it).
+  const refundable = invoice.docType === 'TD04' && !draft && invoice.status !== 'REJECTED'
   const more: MenuItemDef[] = [
+    ...(invoice.xmlFileId ? [{ id: 'xml-view', label: d('xml.open'), href: xmlHref(model.prefix, invoice.id), target: '_blank' as const }] : []),
     ...(invoice.xmlFileId ? [{ id: 'xml', label: t('action.downloadXml'), onSelect: () => actions?.onDownload?.(invoice.xmlFileId!) }] : []),
     ...(invoice.pdfFileId ? [{ id: 'pdf', label: t('action.downloadPdf'), onSelect: () => actions?.onDownload?.(invoice.pdfFileId!) }] : []),
     ...(invoice.filesPending && model.can.issueInvoices ? [{ id: 'files', label: t('action.makeFiles'), onSelect: () => actions?.onMakeFiles?.() }] : []),
@@ -209,6 +214,16 @@ function ReadyRecord({ invoice, model, actions, panels }: { invoice: Invoice; mo
           actions={
             <span className="fw-fin-actions">
               {primary}
+              {refundable &&
+                (model.can.viewPayments ? (
+                  <Button size="sm" asChild>
+                    <Link href={refundHref(model.prefix, invoice.id)}>{d('refundLink.go')}</Link>
+                  </Button>
+                ) : (
+                  <Button size="sm" heldReason={d('refundLink.noRight')}>
+                    {d('refundLink.go')}
+                  </Button>
+                ))}
               {copyWanted && activity && (
                 <Button size="sm" heldReason={model.can.email ? null : t('held.noEmail')} onClick={() => actions?.onDock?.()} title={t('record.sendCopyHint')}>
                   <Mail size={14} aria-hidden /> <span>{t('action.sendCopy')}</span>
@@ -233,6 +248,11 @@ function ReadyRecord({ invoice, model, actions, panels }: { invoice: Invoice; mo
             {draft ? <Pill tone={STATUS_TONE[invoice.status]}>{t(`invoiceStatus.${invoice.status}`)}</Pill> : <Pill tone={SDI_TONE[sdiCode]}>{t(`sdi.state.${sdiCode}`)}</Pill>}
             {model.can.price && pay && pay.state !== 'NONE' && <Pill tone={PAY_TONE[pay.state]}>{t(`pay.${pay.state}`, { count: pay.days })}</Pill>}
             {rejected && sdi?.deadline && <Pill tone="danger">{t(sdi.deadline.overdue ? 'record.resendOverdue' : 'record.resendBy', { date: day(sdi.deadline.deadline), count: sdi.deadline.workingDaysLeft })}</Pill>}
+            {draft && invoice.deadline && (
+              <Pill tone={invoice.deadline.state === 'LATE' ? 'danger' : invoice.deadline.state === 'DUE_SOON' ? 'warning' : 'neutral'}>
+                {d(invoice.deadline.state === 'LATE' ? 'deferred.issueLate' : 'deferred.issueBy', { date: day(invoice.deadline.dueBy), count: Math.abs(invoice.deadline.daysLeft), type: invoice.deadline.docType })}
+              </Pill>
+            )}
             {invoice.issueDate && <span className="fw-fin-hint">{t('record.issuedOn', { date: day(invoice.issueDate) })}</span>}
             {hasRecordPage('Party', OFFICE_PAGES) && model.can.viewParties ? (
               <Link className="fw-fin-link fw-fin-hint" href={`${model.prefix}${recordAddress({ type: 'Party', id: invoice.buyerPartyId }, OFFICE_PAGES)}`}>

@@ -9,6 +9,8 @@ import { WithMessages } from '../../../../record-panels/i18n'
 import { getSdi, invoiceFromDdts, listInvoices, shippedNotInvoiced, type InvoiceRow } from '../../_shared/api'
 import { downloadText, useCoalesced, useLive } from '../../_shared/hooks'
 import { abilitiesOf, invoicesAddress, invoicesCsv, invoicesTouched, queryFromAddress, readProblem, romeToday, writeProblem, type RowView } from '../../_shared/model'
+import { createDeferred, deferredDue, draftReturnCredit, returnCredit as readReturnCredit, type Deferred } from '../daily/api'
+import { shippedViewOf, type ShippedView } from '../daily/model'
 import type { InvoicesListModel } from './list-model'
 import { InvoicesListView } from './view/InvoicesListView'
 
@@ -22,7 +24,7 @@ import { InvoicesListView } from './view/InvoicesListView'
  */
 export function InvoicesPage() {
   return (
-    <WithMessages namespaces={['finance', 'lists']}>
+    <WithMessages namespaces={['finance', 'finance-daily', 'lists']}>
       <InvoicesContainer />
     </WithMessages>
   )
@@ -51,7 +53,12 @@ function InvoicesContainer() {
   const [asOf, setAsOf] = useState<string | null>(null)
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<InvoicesListModel['notice']>(null)
-  const [dialog, setDialog] = useState<InvoicesListModel['dialog']>(params?.get('new') === '1' ? { kind: 'fromDdts', ddtIds: [], partyId: null } : null)
+  const returnId = params?.get('return') ?? null
+  const [dialog, setDialog] = useState<InvoicesListModel['dialog']>(params?.get('new') === '1' ? { kind: 'fromDdts', ddtIds: [], partyId: null } : returnId ? { kind: 'returnCredit', returnId } : null)
+  // B-W2a-80: the deferred invoices due (tile + saved filter), a return's credit notes (`?return=<id>`).
+  const shippedView = shippedViewOf(params)
+  const [deferred, setDeferred] = useState<Deferred | null>(null)
+  const [returnCredit, setReturnCredit] = useState<NonNullable<InvoicesListModel['returnCredit']>>({ value: null, problem: null })
   const [dialogProblem, setDialogProblem] = useState<InvoicesListModel['dialogProblem']>(null)
   const [busy, setBusy] = useState(false)
   const readId = useRef(0)
@@ -81,12 +88,31 @@ function InvoicesContainer() {
   }, [api])
 
   const readQueue = useCallback(async () => {
+    // The deferred invoices due come from the same DDTs: read beside them ("—" on the tile when it fails).
+    deferredDue(api)
+      .then(setDeferred)
+      .catch(() => setDeferred(null))
     try {
       setQueue({ value: await shippedNotInvoiced(api), problem: null })
     } catch (error) {
       setQueue({ value: null, problem: readProblem(error) })
     }
   }, [api])
+
+  const readReturn = useCallback(
+    async (id: string) => {
+      setReturnCredit({ value: null, problem: null })
+      try {
+        setReturnCredit({ value: await readReturnCredit(api, id), problem: null })
+      } catch (error) {
+        setReturnCredit({ value: null, problem: readProblem(error) })
+      }
+    },
+    [api],
+  )
+  useEffect(() => {
+    if (returnId) void readReturn(returnId)
+  }, [returnId, readReturn])
 
   const load = useCallback(async () => {
     const id = ++readId.current
@@ -164,7 +190,49 @@ function InvoicesContainer() {
     [api, busy, prefix, router, readQueue],
   )
 
-  const model: InvoicesListModel = { prefix, can, today: romeToday(), rows, query, list, tiles, queue, rejected, asOf, live, updates, notice, dialog, dialogProblem, busy }
+  const createMonth = useCallback(
+    async (group: { companyId: string; partyId: string; month: string }) => {
+      if (busy) return
+      setBusy(true)
+      setDialogProblem(null)
+      try {
+        const invoice = await createDeferred(api, group, newIdempotencyKey())
+        setDialog(null)
+        router.push(`${prefix}/finance/invoices/${invoice.id}?tab=lines`)
+      } catch (error) {
+        const words = writeProblem(error)
+        setDialogProblem(words)
+        if (words.reload) void readQueue()
+      } finally {
+        setBusy(false)
+      }
+    },
+    [api, busy, prefix, router, readQueue],
+  )
+
+  const createReturnCredit = useCallback(
+    async (lineIds: string[] | null) => {
+      if (busy || !returnId) return
+      setBusy(true)
+      setDialogProblem(null)
+      try {
+        const answer = await draftReturnCredit(api, returnId, lineIds, newIdempotencyKey())
+        setDialog(null)
+        const first = answer.creditNotes[0]
+        if (first) router.push(`${prefix}/finance/invoices/${first.id}?tab=lines`)
+        else void readReturn(returnId)
+      } catch (error) {
+        const words = writeProblem(error)
+        setDialogProblem(words)
+        if (words.reload) void readReturn(returnId)
+      } finally {
+        setBusy(false)
+      }
+    },
+    [api, busy, prefix, returnId, router, readReturn],
+  )
+
+  const model: InvoicesListModel = { prefix, can, today: romeToday(), rows, query, list, tiles, queue, deferred, shippedView, returnCredit, rejected, asOf, live, updates, notice, dialog, dialogProblem, busy }
 
   return (
     <InvoicesListView
@@ -178,10 +246,26 @@ function InvoicesContainer() {
         onOpen: (id) => router.push(`${prefix}/finance/invoices/${id}`),
         onExport: exportRows,
         onDialog: (next) => {
+          if (!next && dialog?.kind === 'returnCredit') {
+            const search = new URLSearchParams(params?.toString() ?? '')
+            search.delete('return')
+            const text = search.toString()
+            router.replace(text ? `${pathname}?${text}` : pathname)
+          }
           setDialog(next)
           setDialogProblem(null)
         },
         onCreateFromDdts: (input) => void create(input),
+        onShippedView: (next: ShippedView) => {
+          const search = new URLSearchParams(params?.toString() ?? '')
+          if (next === 'deferred') search.set('shipped', 'deferred')
+          else search.delete('shipped')
+          const text = search.toString()
+          router.replace(text ? `${pathname}?${text}` : pathname)
+        },
+        onCreateDeferred: (group) => void createMonth(group),
+        onRetryReturnCredit: () => returnId && void readReturn(returnId),
+        onCreateReturnCredit: (lineIds) => void createReturnCredit(lineIds),
         onDismissNotice: () => setNotice(null),
       }}
     />

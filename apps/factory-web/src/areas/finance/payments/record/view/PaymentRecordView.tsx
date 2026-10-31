@@ -13,6 +13,8 @@ import type { Payment } from '../../../_shared/api'
 import { allocationsOf, dayInstant, money, PLACED_TONE, placedLabel, placedStateOf, placementProblems, standing } from '../../../_shared/model'
 import { DialogFrame } from '../../../_shared/parts'
 import { Placement, planOf } from '../../../_shared/placement'
+import { moveHeld, REFUND_TONE, refundHeld, type RefundMove, type RefundTarget } from '../../refunds/model'
+import { RefundDialog, RefundMoveDialog } from '../../refunds/view/RefundDialogs'
 import { PAYMENT_TABS, type PaymentRecordActions, type PaymentRecordModel } from '../record-model'
 import '../../../_shared/finance.css'
 
@@ -28,7 +30,7 @@ export type { PaymentRecordActions, PaymentRecordModel } from '../record-model'
  */
 export function PaymentRecordView({ model, actions }: { model: PaymentRecordModel; actions?: PaymentRecordActions }) {
   return (
-    <WithMessages namespaces={['finance', 'lists']}>
+    <WithMessages namespaces={['finance', 'finance-daily', 'lists']}>
       <PaymentRecord model={model} actions={actions} />
     </WithMessages>
   )
@@ -78,6 +80,7 @@ function PaymentRecord({ model, actions }: { model: PaymentRecordModel; actions?
 
 function ReadyPayment({ payment, model, actions }: { payment: Payment; model: PaymentRecordModel; actions?: PaymentRecordActions }) {
   const t = useT('finance')
+  const d = useT('finance-daily')
   const locale = useLocale()
   const recordHref = `${model.prefix}/finance/payments/${payment.id}`
   const state = placedStateOf(payment)
@@ -86,7 +89,13 @@ function ReadyPayment({ payment, model, actions }: { payment: Payment; model: Pa
   const placeHeld = !model.can.recordPayments ? t('held.noRecord') : voided ? t('held.voided') : (payment.unallocated ?? 1) <= 0 ? t('held.allPlaced') : model.busy ? t('held.busy') : null
   const voidHeld = !model.can.voidPayments ? t('held.noVoid') : voided ? t('held.voided') : (payment.allocated ?? 1) !== 0 ? t('held.voidPlaced') : null
   const tabs: TabItem[] = PAYMENT_TABS.map((tab) => ({ id: tab, href: `${recordHref}?tab=${tab}`, label: t(`payment.tab.${tab}`), count: tab === 'allocation' ? payment.allocations.length : null }))
+  // B-W2a-80 (design rec:Payment match "Overpayment → customer credit balance"): what is not placed is the customer's
+  // credit balance — placed later, or refunded from here.
+  const refundCan = model.refundCan ?? { view: model.can.viewPayments, refund: false, void: model.can.voidPayments, price: model.can.price }
+  const refundRight = refundHeld(refundCan, model.live === 'offline')
+  const balanceHeld = refundRight ? d(refundRight.key, refundRight.params) : voided ? t('held.voided') : (payment.unallocated ?? 0) <= 0 ? d('balance.held.nothing') : null
   const more: MenuItemDef[] = [
+    { id: 'refund', label: d('balance.refund'), disabled: !!balanceHeld, description: balanceHeld ?? undefined, onSelect: () => actions?.onDialog?.({ kind: 'refund' }) },
     { id: 'void', label: t('payment.void'), tone: 'danger', disabled: !!voidHeld, description: voidHeld ?? undefined, onSelect: () => actions?.onDialog?.({ kind: 'void' }) },
     {
       id: 'copy',
@@ -159,9 +168,23 @@ function ReadyPayment({ payment, model, actions }: { payment: Payment; model: Pa
                 { label: t('recordPay.receivedOn'), value: formatDate(dayInstant(payment.receivedOn), { locale }) },
                 { label: t('recordPay.method'), value: t('payments.method.BANK_TRANSFER') },
                 { label: t('recordPay.reference'), value: <span className="fw-fin-code">{payment.externalRef}</span> },
-                ...(model.can.price ? [{ label: t('payment.placed'), value: m(payment.allocated) }, { label: t('payment.left'), value: m(payment.unallocated) }] : []),
+                ...(model.can.price ? [{ label: t('payment.placed'), value: m(payment.allocated) }, { label: t('payment.left'), value: m(payment.unallocated), hint: (payment.unallocated ?? 0) > 0 && !voided ? d('balance.hint') : undefined }] : []),
+                ...(model.can.price && (payment.refunded ?? 0) > 0 ? [{ label: d('balance.refunded'), value: m(payment.refunded) }] : []),
               ]}
             />
+            {!voided && (payment.unallocated ?? 0) > 0 && (
+              <Banner
+                tone="info"
+                title={model.can.price ? d('balance.banner', { amount: m(payment.unallocated) }) : d('balance.bannerPlain')}
+                action={
+                  <Button size="sm" heldReason={balanceHeld} onClick={() => actions?.onDialog?.({ kind: 'refund' })}>
+                    {d('balance.refund')}
+                  </Button>
+                }
+              >
+                {d('balance.bannerBody')}
+              </Banner>
+            )}
           </Card>
           <Card padded className="fw-fin-card">
             <h2 className="fw-fin-h2">{t('payment.where')}</h2>
@@ -210,6 +233,8 @@ function ReadyPayment({ payment, model, actions }: { payment: Payment; model: Pa
         </div>
       )}
 
+      {model.tab === 'allocation' && model.refunds && <RefundsCard payment={payment} model={model} actions={actions} />}
+
       {model.tab === 'bank' && (
         <Card padded className="fw-fin-card">
           <h2 className="fw-fin-h2">{t('payment.bankTitle')}</h2>
@@ -233,6 +258,7 @@ function ReadyPayment({ payment, model, actions }: { payment: Payment; model: Pa
 
 function PaymentDialogs({ payment, model, actions }: { payment: Payment; model: PaymentRecordModel; actions?: PaymentRecordActions }) {
   const t = useT('finance')
+  const d = useT('finance-daily')
   const locale = useLocale()
   const [typed, setTyped] = useState<Record<string, string>>(model.draft?.plan ?? {})
   const [note, setNote] = useState(model.draft?.note ?? '')
@@ -245,12 +271,31 @@ function PaymentDialogs({ payment, model, actions }: { payment: Payment; model: 
     const problems = model.items.value ? placementProblems(model.items.value, plan, left) : { items: {}, total: null }
     const allocations = model.items.value ? allocationsOf(model.items.value, plan) : []
     const held = model.busy ? t('held.busy') : allocations.length === 0 ? t('match.problem.none') : Object.keys(problems.items).length > 0 ? t('match.problem.fix') : problems.total ? t(problems.total) : null
+    const after = left - Object.values(plan).reduce((sum, value) => sum + value, 0)
     return (
       <DialogFrame title={t('payment.placeTitle', { reference: payment.externalRef })} held={held} go={() => actions?.onPlace?.(plan)} goLabel={model.busy ? t('common.working') : t('payment.placeGo')} onClose={closeDialog} problem={model.dialogProblem} size="lg">
         <p className="fw-fin-hint">{t('payment.placeBody', { amount: model.can.price ? money(left, payment.currency, locale) : '—' })}</p>
         <Placement items={model.items.value} problem={model.items.problem} amount={left} currency={payment.currency} typed={typed} setTyped={setTyped} onRetry={() => actions?.onRetryItems?.()} price={model.can.price} />
+        {/* B-W2a-80: what stays unplaced is the customer's credit balance (its total from the matcher's answer). */}
+        {model.can.price && model.items.value && after > 0 && <p className="fw-fin-hint">{d('balance.afterPlace', { amount: money(after, payment.currency, locale) })}</p>}
+        {model.can.price && typeof model.creditBalance === 'number' && model.creditBalance > 0 && <p className="fw-fin-hint">{d('balance.customerTotal', { amount: money(model.creditBalance, payment.currency, locale) })}</p>}
       </DialogFrame>
     )
+  }
+  if (dialog.kind === 'refund') {
+    const target: RefundTarget = { kind: 'payment', paymentId: payment.id, label: payment.externalRef, partyName: payment.party.legalName, currency: payment.currency, cap: payment.unallocated ?? null }
+    const refundCan = model.refundCan ?? { view: model.can.viewPayments, refund: false, void: model.can.voidPayments, price: model.can.price }
+    return (
+      <RefundDialog
+        model={{ targets: [target], targetsProblem: null, start: payment.id, can: refundCan, today: model.today, busy: model.busy, problem: model.dialogProblem, draft: model.draft?.refund }}
+        onRecord={(picked, draft) => actions?.onRefund?.(picked, draft)}
+        onClose={closeDialog}
+      />
+    )
+  }
+  if (dialog.kind === 'refundMove') {
+    const refundCan = model.refundCan ?? { view: model.can.viewPayments, refund: false, void: model.can.voidPayments, price: model.can.price }
+    return <RefundMoveDialog refund={dialog.refund} move={dialog.move} can={refundCan} today={model.today} busy={model.busy} problem={model.dialogProblem} onMove={(input) => actions?.onRefundMove?.(dialog.refund, dialog.move, input)} onClose={closeDialog} />
   }
   if (dialog.kind === 'reverse') {
     const allocation = payment.allocations.find((entry) => entry.id === dialog.allocationId)
@@ -273,5 +318,62 @@ function PaymentDialogs({ payment, model, actions }: { payment: Payment; model: 
         <Textarea value={note} rows={3} maxLength={500} onChange={(event) => setNote(event.target.value)} />
       </Field>
     </DialogFrame>
+  )
+}
+
+/** B-W2a-80: the refunds of this payment's credit balance — made, due (Made… / Cancel…), cancelled or voided (Void… once paid). */
+function RefundsCard({ payment, model, actions }: { payment: Payment; model: PaymentRecordModel; actions?: PaymentRecordActions }) {
+  const t = useT('finance')
+  const d = useT('finance-daily')
+  const locale = useLocale()
+  const part = model.refunds
+  const refundCan = model.refundCan ?? { view: model.can.viewPayments, refund: false, void: model.can.voidPayments, price: model.can.price }
+  const day = (value: string | null) => (value ? formatDate(dayInstant(value), { locale }) : '—')
+  return (
+    <Card padded className="fw-fin-card">
+      <h2 className="fw-fin-h2">{d('balance.refundsTitle')}</h2>
+      {!part?.value ? (
+        part?.problem ? (
+          <EmptyState title={d('refunds.failed')} description={t(part.problem)} action={<Button size="sm" onClick={() => actions?.onRetryRefunds?.()}>{t('common.retry')}</Button>} />
+        ) : (
+          <p className="fw-fin-hint" role="status">
+            <Spinner size={12} /> {d('refunds.loading')}
+          </p>
+        )
+      ) : (
+        <SummaryTable
+          label={d('balance.refundsTitle')}
+          columns={[d('refunds.col.state'), d('refunds.col.when'), ...(model.can.price ? [t('col.amount')] : []), t('payment.col.action')]}
+          rows={part.value.map((refund) => ({
+            id: refund.id,
+            cells: [
+              <span key="s" className="fw-fin-cell">
+                <Pill tone={REFUND_TONE[refund.status]}>{d(`refunds.state.${refund.status}`)}</Pill>
+                {(refund.cancelReason || refund.voidReason) && <span className="nds-summary-sub">{refund.cancelReason ?? refund.voidReason}</span>}
+              </span>,
+              <span key="w" className="fw-fin-cell">
+                <span>{refund.status === 'PAID' || refund.status === 'VOIDED' ? d('refunds.paidOn', { date: day(refund.paidOn) }) : refund.dueDate ? d('refunds.dueOn', { date: day(refund.dueDate) }) : '—'}</span>
+                {refund.externalRef && <span className="nds-summary-sub fw-fin-code">{refund.externalRef}</span>}
+              </span>,
+              ...(model.can.price ? [money(refund.amount, payment.currency, locale)] : []),
+              <span key="a" className="fw-fin-inline">
+                {(['paid', 'cancel', 'void'] as RefundMove[])
+                  .filter((move) => moveHeld(refund, move, { ...refundCan, refund: true, void: true }) === null)
+                  .map((move) => {
+                    const wait = moveHeld(refund, move, refundCan)
+                    return (
+                      <Button key={move} size="sm" variant="link" heldReason={wait ? d(wait.key, wait.params) : model.busy ? t('held.busy') : null} onClick={() => actions?.onDialog?.({ kind: 'refundMove', refund, move })}>
+                        {d(`refunds.move.${move}.verb`)}
+                      </Button>
+                    )
+                  })}
+              </span>,
+            ],
+          }))}
+          density="roomy"
+          stackOnPhone
+        />
+      )}
+    </Card>
   )
 }

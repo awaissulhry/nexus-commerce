@@ -29,6 +29,7 @@ import {
   type LineDraft,
 } from '../../../_shared/model'
 import { CheckList, DialogFrame } from '../../../_shared/parts'
+import { CarryDialog, ChargeDialog } from '../../daily/view/DailyDialogs'
 import type { InvoiceRecordActions, InvoiceRecordModel } from '../record-model'
 
 /**
@@ -57,6 +58,21 @@ export function InvoiceDialogs({ invoice, model, actions }: { invoice: Invoice; 
       return <DetailsDialog invoice={invoice} model={model} actions={actions} />
     case 'delete':
       return <DeleteDialog invoice={invoice} model={model} actions={actions} />
+    case 'charge':
+      return (
+        <ChargeDialog
+          invoice={invoice}
+          ddtNumbers={Object.fromEntries((model.related.value?.ddts ?? []).map((ddt) => [ddt.id, ddt.number]))}
+          busy={model.busy}
+          problem={model.dialogProblem}
+          can={model.can}
+          start={model.draft?.charge}
+          onSave={(draft) => actions?.onAddCharge?.(draft)}
+          onClose={close(actions)}
+        />
+      )
+    case 'carry':
+      return <CarryDialog invoice={invoice} busy={model.busy} problem={model.dialogProblem} start={model.draft?.note} onCarry={(note) => actions?.onCarry?.(note)} onClose={close(actions)} />
     default:
       return null
   }

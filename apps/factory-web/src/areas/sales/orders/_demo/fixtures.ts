@@ -228,6 +228,7 @@ export function deposit(over: Partial<DepositRequest> = {}): DepositRequest {
     createdAt: at(28, 15),
     paidAmount: 0,
     link: null,
+    stepKind: 'DEPOSIT',
     ...over,
   }
 }

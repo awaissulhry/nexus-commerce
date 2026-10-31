@@ -983,7 +983,30 @@
     "dueDeposit": "Scade il {date} (la richiesta d'acconto)",
     "paidOn": "Pagata il {date}",
     "cancelled_one": "{count} scadenza precedente è stata sostituita quando una modifica ha rifatto il piano.",
-    "cancelled_other": "{count} scadenze precedenti sono state sostituite quando una modifica ha rifatto il piano."
+    "cancelled_other": "{count} scadenze precedenti sono state sostituite quando una modifica ha rifatto il piano.",
+    "verbs": {
+      "day": "Scade il",
+      "held": {
+        "busy": "In corso…",
+        "goodsLeft": "La merce è già partita: il saldo va sulla fattura della merce.",
+        "noInvoice": "Per fatturare una rata serve il permesso di gestire le fatture.",
+        "noManage": "Per aprire una rata serve il permesso di gestire gli ordini."
+      },
+      "invoice": "Fattura questa rata",
+      "open": "Apri al pagamento",
+      "openBody": "La richiesta di pagamento nasce ora: si paga come l’acconto e la fattura d’acconto (TD02) segue il pagamento (art. 6 c.4 DPR 633/1972).",
+      "openGo": "Apri al pagamento, scadenza {date}",
+      "openTitle": "Apri “{step}” al pagamento",
+      "opened": "La rata è aperta al pagamento.",
+      "problem": {
+        "day": "Scegli il giorno di scadenza.",
+        "forbidden": "Il tuo ruolo non può farlo.",
+        "moved": "Il piano è cambiato nel frattempo: rileggilo.",
+        "past": "Oggi o più avanti.",
+        "state": "Non ora: nessun pagamento attende una fattura, o la rata è cambiata.",
+        "write": "Non è stato possibile: riprova."
+      }
+    }
   },
   "changes": {
     "title": "Modifiche",

@@ -272,7 +272,8 @@ export const actionOf = (order: Pick<Order, 'actions'>, action: OrderAction) => 
 export type GateState = 'NOT_NEEDED' | 'WAITING' | 'PAID' | 'WAIVED' | 'MISSING'
 
 export function depositGate(order: Pick<Order, 'depositRequired' | 'chain'>): { state: GateState; request: DepositRequest | null } {
-  const requests = order.chain.depositRequests.filter((request) => request.status !== 'CANCELLED')
+  // B-W2a-F2: the balance before shipping has a request of its own; only the deposit's request gates production.
+  const requests = order.chain.depositRequests.filter((request) => request.status !== 'CANCELLED' && request.stepKind !== 'BEFORE_SHIPPING')
   if (!order.depositRequired) return { state: 'NOT_NEEDED', request: requests[0] ?? null }
   const paid = requests.find((request) => request.status === 'PAID')
   if (paid) return { state: 'PAID', request: paid }

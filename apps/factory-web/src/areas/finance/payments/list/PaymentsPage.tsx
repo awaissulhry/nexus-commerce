@@ -8,7 +8,9 @@ import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { depositReceived, findCustomers, getInvoice, listPayments, openItems, recordPayment, type PaymentQuery, type PaymentRow } from '../../_shared/api'
 import { downloadText, isStepUpCancelled, useCoalesced, useLive, useStepUp } from '../../_shared/hooks'
-import { abilitiesOf, allocationsOf, paymentsCsv, paymentsTouched, placedLabel, readProblem, romeToday, writeProblem } from '../../_shared/model'
+import { abilitiesOf, allocationsOf, money, paymentsCsv, paymentsTouched, placedLabel, readProblem, romeToday, writeProblem } from '../../_shared/model'
+import { cancelRefund, listRefunds, openRefunds as readOpenRefunds, payRefund, recordRefund, voidRefund, type OpenRefunds, type Refund } from '../refunds/api'
+import { refundAbilitiesOf, refundAskOf, refundRowsFrom, refundRowsOf, refundsCsv, refundsTouched, settlesWords, targetOfNote, type RefundMove, type RefundRow, type RefundRows } from '../refunds/model'
 import { PAYMENT_ROWS_VIEWS, type PaymentRowsView, type PaymentsListModel, type PickedCustomer, type RecordInput } from './list-model'
 import { PaymentsListView } from './view/PaymentsListView'
 
@@ -21,7 +23,7 @@ import { PaymentsListView } from './view/PaymentsListView'
  */
 export function PaymentsPage() {
   return (
-    <WithMessages namespaces={['finance', 'lists']}>
+    <WithMessages namespaces={['finance', 'finance-daily', 'lists']}>
       <PaymentsContainer />
     </WithMessages>
   )
@@ -30,9 +32,11 @@ export function PaymentsPage() {
 const TILE_LIMIT = 200
 const rowsOf = (value: string | null): PaymentRowsView => ((PAYMENT_ROWS_VIEWS as readonly string[]).includes(value ?? '') ? (value as PaymentRowsView) : 'all')
 const queryOf = (rows: PaymentRowsView): PaymentQuery => (rows === 'received' ? { status: 'RECEIVED' } : rows === 'voided' ? { status: 'VOIDED' } : {})
+const REFUND_PAGE = 50
 
 function PaymentsContainer() {
   const t = useT('finance')
+  const d = useT('finance-daily')
   const locale = useLocale()
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -58,6 +62,45 @@ function PaymentsContainer() {
   const [dialogProblem, setDialogProblem] = useState<PaymentsListModel['dialogProblem']>(null)
   const readId = useRef(0)
   const { stepUp, guard, ensureFresh, submitStepUp, cancelStepUp } = useStepUp(api)
+  // B-W2a-80: refunds — the tile, the rows view (`?rows=refunds&refunds=open|due|paid|closed|all`), the dialogs.
+  const refundCan = useMemo(() => refundAbilitiesOf(session.permissions), [session.permissions])
+  const refundRows: RefundRows = refundRowsOf(params?.get('refunds'))
+  const refundStart = params?.get('refund') ?? null
+  const [openRefunds, setOpenRefunds] = useState<OpenRefunds | null>(null)
+  const [openProblem, setOpenProblem] = useState<string | null>(null)
+  const [refundList, setRefundList] = useState<{ items: Refund[] | null; more: boolean; problem: string | null; cursor: string | null }>({ items: null, more: false, problem: null, cursor: null })
+  const [refundDialog, setRefundDialog] = useState<{ start: string | null } | null>(refundStart ? { start: refundStart } : null)
+  const [refundMove, setRefundMove] = useState<{ refund: Refund; move: RefundMove } | null>(null)
+  const [refundProblem, setRefundProblem] = useState<PaymentsListModel['dialogProblem']>(null)
+
+  const readOpen = useCallback(async () => {
+    if (!refundCan.view) return
+    try {
+      setOpenRefunds(await readOpenRefunds(api))
+      setOpenProblem(null)
+    } catch (error) {
+      setOpenRefunds(null)
+      setOpenProblem(readProblem(error))
+    }
+  }, [api, refundCan.view])
+
+  const readRefunds = useCallback(async () => {
+    if (rows !== 'refunds' || refundRows === 'open') return
+    setRefundList({ items: null, more: false, problem: null, cursor: null })
+    try {
+      const page = await listRefunds(api, { view: refundRows, limit: REFUND_PAGE })
+      setRefundList({ items: page.refunds, more: page.nextCursor !== null, problem: null, cursor: page.nextCursor })
+    } catch (error) {
+      setRefundList({ items: null, more: false, problem: readProblem(error), cursor: null })
+    }
+  }, [api, rows, refundRows])
+
+  useEffect(() => {
+    void readOpen()
+  }, [readOpen])
+  useEffect(() => {
+    void readRefunds()
+  }, [readRefunds])
 
   const readTiles = useCallback(async () => {
     try {
@@ -75,6 +118,7 @@ function PaymentsContainer() {
   const load = useCallback(async () => {
     const id = ++readId.current
     void readTiles()
+    if (rows === 'refunds') return
     setList((current) => ({ ...current, problem: null }))
     try {
       const page = await listPayments(api, queryOf(rows))
@@ -106,8 +150,13 @@ function PaymentsContainer() {
   }, [api, cursor, rows])
 
   const recount = useCoalesced(() => void readTiles(), 800)
+  const rereadRefunds = useCoalesced(() => {
+    void readOpen()
+    void readRefunds()
+  }, 800)
   const live = useLive(
     (change) => {
+      if (refundsTouched(change)) rereadRefunds()
       if (!paymentsTouched(change)) return
       if (change.type.startsWith('payment.')) setUpdates((count) => count + 1)
       recount()
@@ -219,7 +268,65 @@ function PaymentsContainer() {
     [list.items, can.price, t, locale],
   )
 
-  const model: PaymentsListModel = { prefix, can, today: romeToday(), companyId, rows, list, tiles, asOf, live, updates, notice, dialog, customers, items, recorded, busy, dialogProblem, stepUp }
+  const refundItems: RefundRow[] | null = refundRowsFrom(refundRows, openRefunds, refundList.items)
+  const refunds: PaymentsListModel['refunds'] =
+    rows === 'refunds'
+      ? { prefix, can: refundCan, rows: refundRows, items: refundItems, problem: refundRows === 'open' ? openProblem : refundList.problem, more: refundRows === 'open' ? false : refundList.more }
+      : null
+
+  const refundTargets = openRefunds ? openRefunds.creditNotesToRefund.map(targetOfNote) : openProblem ? [] : null
+  const model: PaymentsListModel = {
+    prefix,
+    can,
+    today: romeToday(),
+    companyId,
+    rows,
+    list,
+    tiles,
+    asOf,
+    live,
+    updates,
+    notice,
+    dialog,
+    customers,
+    items,
+    recorded,
+    busy,
+    dialogProblem,
+    stepUp,
+    refundCan,
+    openRefunds,
+    refunds,
+    refundDialog: refundDialog ? { targets: refundTargets, targetsProblem: openProblem, start: refundDialog.start, can: refundCan, today: romeToday(), busy, problem: refundProblem } : null,
+    refundMove: refundMove ? { ...refundMove, busy, problem: refundProblem } : null,
+  }
+
+  const refundWrite = async (run: () => Promise<Refund>, words: (refund: Refund) => NonNullable<PaymentsListModel['notice']>) => {
+    if (busy) return
+    setBusy(true)
+    setRefundProblem(null)
+    try {
+      const refund = await run()
+      setRefundDialog(null)
+      setRefundMove(null)
+      setNotice(words(refund))
+      void readOpen()
+      void readRefunds()
+      void readTiles()
+    } catch (error) {
+      setRefundProblem(writeProblem(error))
+      void readOpen()
+    } finally {
+      setBusy(false)
+    }
+  }
+  const dropRefundParam = () => {
+    if (!params?.get('refund')) return
+    const search = new URLSearchParams(params.toString())
+    search.delete('refund')
+    const text = search.toString()
+    router.replace(text ? `${pathname}?${text}` : pathname)
+  }
 
   return (
     <PaymentsListView
@@ -251,6 +358,74 @@ function PaymentsContainer() {
         onDismissNotice: () => setNotice(null),
         onStepUpSubmit: (code) => void submitStepUp(code),
         onStepUpCancel: cancelStepUp,
+        onRefundRows: (next) => router.replace(next === 'open' ? `${pathname}?rows=refunds` : `${pathname}?rows=refunds&refunds=${next}`),
+        onRefundMore: () => {
+          if (!refundList.cursor || refundRows === 'open') return
+          void (async () => {
+            try {
+              const page = await listRefunds(api, { view: refundRows, cursor: refundList.cursor, limit: REFUND_PAGE })
+              setRefundList((current) => ({ items: [...(current.items ?? []), ...page.refunds.filter((row) => !current.items?.some((seen) => seen.id === row.id))], more: page.nextCursor !== null, problem: null, cursor: page.nextCursor }))
+            } catch (error) {
+              setNotice({ tone: 'danger', words: { key: readProblem(error) } })
+            }
+          })()
+        },
+        onRetryRefunds: () => {
+          void readOpen()
+          void readRefunds()
+        },
+        onOpenRefund: (note) => {
+          setRefundProblem(null)
+          setRefundDialog({ start: note?.creditNoteId ?? null })
+          void readOpen()
+        },
+        onRecordRefund: (target, draft) => {
+          const key = newIdempotencyKey()
+          void refundWrite(
+            () => recordRefund(api, refundAskOf(target, draft), key),
+            (refund) => ({ tone: 'success', words: { key: refund.status === 'PAID' ? 'notice.refundPaid' : 'notice.refundDue', params: { amount: money(refund.amount, refund.currency, locale), customer: refund.party.legalName } } }),
+          ).then(dropRefundParam)
+        },
+        onCloseRefund: () => {
+          setRefundDialog(null)
+          setRefundProblem(null)
+          dropRefundParam()
+        },
+        onMoveRefund: (refund, move) => {
+          setRefundProblem(null)
+          setRefundMove({ refund, move })
+        },
+        onDoMove: (input) => {
+          const current = refundMove
+          if (!current) return
+          const key = newIdempotencyKey()
+          const run = current.move === 'paid' ? () => payRefund(api, current.refund, { paidOn: input.paidOn, externalRef: input.reference }, key) : current.move === 'cancel' ? () => cancelRefund(api, current.refund, input.reason, key) : () => voidRefund(api, current.refund, input.reason, key)
+          void refundWrite(run, () => ({ tone: 'success', words: { key: `notice.refundMoved.${current.move}` } }))
+        },
+        onCloseMove: () => {
+          setRefundMove(null)
+          setRefundProblem(null)
+        },
+        onExportRefunds: (ids) => {
+          const picked = (refundItems ?? []).filter((row) => ids.includes(row.id))
+          downloadText(
+            `refunds-${romeToday()}.csv`,
+            refundsCsv(
+              picked,
+              can.price,
+              {
+                header: (column) => d(`refunds.csv.${column}`),
+                state: (row) => (row.kind === 'toRefund' ? d('refunds.state.toRefund') : d(`refunds.state.${row.refund.status}`)),
+                settles: (row) => {
+                  if (row.kind === 'toRefund') return d('refunds.creditNote', { number: row.note.number ?? '—' })
+                  const words = settlesWords(row.refund)
+                  return d(words.key, words.params)
+                },
+              },
+              locale,
+            ),
+          )
+        },
       }}
     />
   )

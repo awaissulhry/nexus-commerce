@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Download, FilePlus2, MoreHorizontal } from 'lucide-react'
 import { Banner, EmptyState, KeyValue, Menu, MetricStrip, Modal } from '@nexus/ui/components'
@@ -33,6 +33,8 @@ import {
   type RowView,
 } from '../../../_shared/model'
 import { DialogFrame } from '../../../_shared/parts'
+import { bulkWords, ddtDeadline, deferredDdtIds, deferredHeld, deferredTile, freightWords, groupOf, monthWords, SHIPPED_VIEWS, xmlHref, type ShippedView } from '../../daily/model'
+import { DeferredDialog, ReturnCreditDialog } from '../../daily/view/DailyDialogs'
 import type { InvoicesListActions, InvoicesListModel } from '../list-model'
 import '../../../_shared/finance.css'
 
@@ -55,21 +57,26 @@ interface ShippedRow extends QueueDdt {
  */
 export function InvoicesListView({ model, actions }: { model: InvoicesListModel; actions?: InvoicesListActions }) {
   return (
-    <WithMessages namespaces={['finance', 'lists']}>
+    <WithMessages namespaces={['finance', 'finance-daily', 'lists']}>
       <InvoicesList model={model} actions={actions} />
     </WithMessages>
   )
 }
 
-const shippedRowsOf = (model: InvoicesListModel): ShippedRow[] | null =>
-  model.queue.value
-    ? model.queue.value.customers.flatMap((customer) =>
-        customer.ddts.map((ddt) => ({ ...ddt, customer, monthDeadline: customer.months.find((month) => month.ddtIds.includes(ddt.ddtId))?.deadline ?? null })),
-      )
-    : null
+const shippedRowsOf = (model: InvoicesListModel): ShippedRow[] | null => {
+  if (!model.queue.value) return null
+  const rows = model.queue.value.customers.flatMap((customer) =>
+    customer.ddts.map((ddt) => ({ ...ddt, customer, monthDeadline: customer.months.find((month) => month.ddtIds.includes(ddt.ddtId))?.deadline ?? null })),
+  )
+  // B-W2a-80: the tile's saved filter — the DDTs a deferred invoice due by the 15th takes.
+  if (model.shippedView !== 'deferred') return rows
+  const ids = deferredDdtIds(model.deferred ?? null)
+  return rows.filter((row) => ids.has(row.ddtId))
+}
 
 function InvoicesList({ model, actions }: { model: InvoicesListModel; actions?: InvoicesListActions }) {
   const t = useT('finance')
+  const d = useT('finance-daily')
   const lists = useT('lists')
   const locale = useLocale()
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
@@ -102,6 +109,44 @@ function InvoicesList({ model, actions }: { model: InvoicesListModel; actions?: 
   const ownKeys: ListKey[] = [{ keys: ['c'], does: t('list.keyInvoiceShipped') }]
 
   // ---- Shipped, not invoiced --------------------------------------------------------------------------------------------
+  // B-W2a-80: a DDT's verbs — invoice it alone, the month's deferred invoice of its customer, its draft. The cell reads the
+  // page's latest state through a ref, so the grid's columns stay the same object between renders.
+  const deferredState = model.deferred ?? null
+  const latest = useRef({ deferred: deferredState, rows: shipped ?? [], can: model.can, actions, prefix: model.prefix })
+  latest.current = { deferred: deferredState, rows: shipped ?? [], can: model.can, actions, prefix: model.prefix }
+  const ShippedMoreCell = useMemo(
+    () =>
+      function ShippedMore({ data }: ICellRendererParams<ShippedRow>) {
+        if (!data) return null
+        const now = latest.current
+        const group = groupOf(now.deferred, data.ddtId)
+        const groupWait = group ? deferredHeld(group, now.rows, now.can) : null
+        const ddtWait = ddtHeld(data)
+        return (
+          <Menu
+            label={<MoreHorizontal size={16} aria-hidden />}
+            align="right"
+            triggerProps={{ 'aria-label': d('deferred.rowMenu', { number: data.number }) }}
+            items={[
+              { id: 'one', label: d('deferred.invoiceOne'), disabled: !now.can.manageInvoices || !!ddtWait, description: !now.can.manageInvoices ? t('held.noManage') : ddtWait ? t(ddtWait.key) : undefined, onSelect: () => latest.current.actions?.onDialog?.({ kind: 'fromDdts', ddtIds: [data.ddtId], partyId: data.partyId }) },
+              ...(group
+                ? [
+                    {
+                      id: 'month',
+                      label: d('deferred.monthVerb', { month: monthWords(group.month, locale), count: group.ddts.length }),
+                      disabled: !!groupWait,
+                      description: groupWait ? d(groupWait.key, groupWait.params) : undefined,
+                      onSelect: () => latest.current.actions?.onDialog?.({ kind: 'deferred', group }),
+                    },
+                  ]
+                : []),
+              ...data.drafts.map((id, index) => ({ id: `draft-${index}`, label: t('shipped.openDraft'), href: `${now.prefix}/finance/invoices/${id}` })),
+            ]}
+          />
+        )
+      },
+    [locale, t, d],
+  )
   const shippedColumns = useMemo<ColDef<ShippedRow>[]>(() => {
     const CustomerCell = ({ data }: ICellRendererParams<ShippedRow>) =>
       data ? (
@@ -147,21 +192,31 @@ function InvoicesList({ model, actions }: { model: InvoicesListModel; actions?: 
         </span>
       )
     }
-    const ValueCell = ({ data }: ICellRendererParams<ShippedRow>) => (data ? <span className="fw-fin-num">{money(data.valueAmount, 'EUR', locale)}</span> : null)
+    const ValueCell = ({ data }: ICellRendererParams<ShippedRow>) => {
+      if (!data) return null
+      const freight = freightWords(data)
+      return (
+        <span className="fw-fin-cell fw-fin-num">
+          <span>{money(data.valueAmount, 'EUR', locale)}</span>
+          {freight && <span className="fw-fin-cell-sub">{d(freight.key, { amount: money(freight.amount, data.freight?.currency ?? 'EUR', locale) })}</span>}
+        </span>
+      )
+    }
     const DepositCell = ({ data }: ICellRendererParams<ShippedRow>) => (data ? <span className="fw-fin-num">{data.depositPaidAmount ? money(data.depositPaidAmount, 'EUR', locale) : '—'}</span> : null)
     const TypeCell = ({ data }: ICellRendererParams<ShippedRow>) => {
       if (!data) return null
-      const type = data.immediate.state === 'LATE' && data.monthDeadline?.state !== 'LATE' ? 'TD24' : data.customer.months.find((month) => month.ddtIds.includes(data.ddtId))?.suggested ?? 'TD01'
+      // B-W2a-54: the deadline by the customer's preset names the type its goods get; else W1's rule.
+      const type = data.deadline?.docType ?? (data.immediate.state === 'LATE' && data.monthDeadline?.state !== 'LATE' ? 'TD24' : (data.customer.months.find((month) => month.ddtIds.includes(data.ddtId))?.suggested ?? 'TD01'))
       return (
         <span className="fw-fin-cell">
           <span>{t(`shipType.${type}`)}</span>
-          <span className="fw-fin-cell-sub">{type}</span>
+          <span className="fw-fin-cell-sub">{data.customer.invoiceTiming ? d(`deferred.timing.${data.customer.invoiceTiming}`, { code: type }) : type}</span>
         </span>
       )
     }
     const DeadlineCell = ({ data }: ICellRendererParams<ShippedRow>) => {
       if (!data) return null
-      const deadline = data.immediate.state !== 'LATE' || !data.monthDeadline ? data.immediate : data.monthDeadline
+      const deadline = ddtDeadline(data, data.monthDeadline)
       const words = deadlineWords(deadline)
       return (
         <span className="fw-fin-cell">
@@ -191,24 +246,40 @@ function InvoicesList({ model, actions }: { model: InvoicesListModel; actions?: 
       { colId: 'pieces', headerName: t('col.toInvoice'), minWidth: 120, flex: 0.8, cellRenderer: PiecesCell },
       ...(model.can.price
         ? [
-            { colId: 'value', headerName: t('col.value'), minWidth: 110, flex: 0.8, type: 'rightAligned', cellRenderer: ValueCell },
+            { colId: 'value', headerName: t('col.value'), minWidth: 140, flex: 0.9, type: 'rightAligned', cellRenderer: ValueCell },
             { colId: 'deposit', headerName: t('col.depositPaid'), minWidth: 136, flex: 0.9, type: 'rightAligned', cellRenderer: DepositCell },
           ]
         : []),
       { colId: 'type', headerName: t('col.suggested'), minWidth: 150, flex: 1, cellRenderer: TypeCell },
       { colId: 'deadline', headerName: t('col.deadline'), minWidth: 160, flex: 1, cellRenderer: DeadlineCell },
       { colId: 'draft', headerName: t('col.draft'), minWidth: 110, flex: 0.7, cellRenderer: DraftCell },
+      { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: ShippedMoreCell },
     ]
-  }, [t, locale, model.prefix, model.can.price, model.can.viewOrders])
+  }, [t, d, locale, model.prefix, model.can.price, model.can.viewOrders, ShippedMoreCell])
 
   const pickedShipped = (shipped ?? []).filter((row) => shippedSelected.includes(row.ddtId))
   const shippedWait = selectionHeld(pickedShipped)
   const createHeld = !model.can.manageInvoices ? t('held.noManage') : shippedWait ? t(shippedWait.key) : null
+  const bulk = bulkWords(pickedShipped, deferredState)
   const shippedState = model.queue.problem ? (
     <EmptyState title={t('shipped.failed')} description={t(model.queue.problem)} action={<Button size="sm" onClick={() => actions?.onRetryQueue?.()}>{t('common.retry')}</Button>} />
   ) : shipped && shipped.length === 0 ? (
-    <EmptyState title={t('shipped.empty.title')} description={t('shipped.empty.body')} />
+    model.shippedView === 'deferred' ? (
+      <EmptyState title={d('deferred.empty.title')} description={d('deferred.empty.body')} action={<Button size="sm" onClick={() => actions?.onShippedView?.('all')}>{d('deferred.showAll')}</Button>} />
+    ) : (
+      <EmptyState title={t('shipped.empty.title')} description={t('shipped.empty.body')} />
+    )
   ) : undefined
+  const shippedTools = (
+    <Select size="sm" aria-label={d('deferred.rowsLabel')} value={model.shippedView ?? 'all'} onChange={(event) => actions?.onShippedView?.(event.target.value as ShippedView)}>
+      {SHIPPED_VIEWS.map((view) => (
+        <option key={view} value={view}>
+          {d(`deferred.rows.${view}`)}
+        </option>
+      ))}
+    </Select>
+  )
+  const deferredMetric = deferredTile(deferredState)
 
   // ---- All invoices -----------------------------------------------------------------------------------------------------------
   const columns = useMemo<ColDef<InvoiceRow>[]>(() => {
@@ -261,6 +332,9 @@ function InvoicesList({ model, actions }: { model: InvoicesListModel; actions?: 
             { id: 'tab', label: t('list.openNewTab'), href: invoiceHref(data.id), target: '_blank' },
             ...(data.status === 'DRAFT' ? [{ id: 'issue', label: t('step.issue'), href: `${invoiceHref(data.id)}?tab=lines` }] : [{ id: 'sdi', label: t('tab.sdi'), href: `${invoiceHref(data.id)}?tab=sdi` }]),
             ...(model.can.recordPayments && (data.openAmount ?? 0) > 0 ? [{ id: 'pay', label: t('step.recordPayment'), href: `${model.prefix}/finance/payments?new=1&invoice=${data.id}` }] : []),
+            // B-W2a-80: the row verbs Credit note and the readable XML (a new tab).
+            ...(data.status !== 'DRAFT' && data.docType !== 'TD04' && model.can.manageInvoices ? [{ id: 'credit', label: t('action.creditNote'), href: `${invoiceHref(data.id)}?tab=lines&do=credit` }] : []),
+            ...(data.status !== 'DRAFT' && !data.filesPending ? [{ id: 'xml', label: d('xml.open'), href: xmlHref(model.prefix, data.id), target: '_blank' as const }] : []),
           ]}
         />
       ) : null
@@ -280,7 +354,7 @@ function InvoicesList({ model, actions }: { model: InvoicesListModel; actions?: 
       { colId: 'due', headerName: t('col.due'), field: 'dueDate', minWidth: 100, flex: 0.7, cellRenderer: DueCell },
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, model.prefix, model.today, model.can.price, model.can.recordPayments])
+  }, [t, d, locale, model.prefix, model.today, model.can.price, model.can.recordPayments, model.can.manageInvoices])
 
   const picked = (items ?? []).filter((row) => selected.includes(row.id))
   const narrowed = model.rows !== 'all'
@@ -355,16 +429,32 @@ function InvoicesList({ model, actions }: { model: InvoicesListModel; actions?: 
       ))}
 
       <MetricStrip
-        metrics={TILES.map((tile) => ({
-          label: t(`tile.${tile.key}`),
-          value: tileValue(tile.key),
-          hint: tile.key === 'shipped' && oldest ? t('tile.oldest', { count: Math.max(0, Math.round((Date.parse(`${model.today}T00:00:00Z`) - Date.parse(`${oldest}T00:00:00Z`)) / 86_400_000)) }) : tile.key === 'rejected' && (model.tiles?.rejected ?? 0) > 0 ? t('tile.fixIn5') : undefined,
-          onClick:
-            tile.rows === null
-              ? () => document.getElementById('fw-fin-shipped')?.scrollIntoView({ block: 'start', behavior: 'smooth' })
-              : () => actions?.onRows?.(model.rows === tile.rows ? 'all' : tile.rows),
-          active: pressed === tile.key,
-        }))}
+        metrics={[
+          ...TILES.map((tile) => ({
+            label: t(`tile.${tile.key}`),
+            value: tileValue(tile.key),
+            hint: tile.key === 'shipped' && oldest ? t('tile.oldest', { count: Math.max(0, Math.round((Date.parse(`${model.today}T00:00:00Z`) - Date.parse(`${oldest}T00:00:00Z`)) / 86_400_000)) }) : tile.key === 'rejected' && (model.tiles?.rejected ?? 0) > 0 ? t('tile.fixIn5') : undefined,
+            onClick:
+              tile.rows === null
+                ? () => {
+                    if (model.shippedView === 'deferred') actions?.onShippedView?.('all')
+                    document.getElementById('fw-fin-shipped')?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+                  }
+                : () => actions?.onRows?.(model.rows === tile.rows ? 'all' : tile.rows),
+            active: pressed === tile.key,
+          })),
+          // B-W2a-80 (design sec:tiles "Deferred invoices due by the 15th"): a saved filter on Shipped, not invoiced.
+          {
+            label: d('deferred.tile'),
+            value: deferredMetric.value,
+            hint: deferredMetric.hint ? d(deferredMetric.hint.key, deferredMetric.hint.params) : undefined,
+            onClick: () => {
+              actions?.onShippedView?.(model.shippedView === 'deferred' ? 'all' : 'deferred')
+              document.getElementById('fw-fin-shipped')?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+            },
+            active: model.shippedView === 'deferred',
+          },
+        ]}
       />
 
       <section className="fw-fin-section" id="fw-fin-shipped" aria-labelledby="fw-fin-shipped-title">
@@ -380,12 +470,13 @@ function InvoicesList({ model, actions }: { model: InvoicesListModel; actions?: 
           rowId={(row) => row.ddtId}
           columns={shippedColumns}
           count={shipped ? t('shipped.count', { count: shipped.length }) : '—'}
+          tools={shippedTools}
           selection={{
             selected: shippedSelected,
             onChange: setShippedSelected,
             actions: (
-              <Button size="sm" variant="primary" heldReason={createHeld} aria-label={t('bulk.invoiceDdts', { count: pickedShipped.length })} onClick={() => actions?.onDialog?.({ kind: 'fromDdts', ddtIds: pickedShipped.map((row) => row.ddtId), partyId: pickedShipped[0]?.partyId ?? null })}>
-                <FilePlus2 size={13} aria-hidden /> <SelectionLabel>{t('bulk.invoiceDdts', { count: pickedShipped.length })}</SelectionLabel>
+              <Button size="sm" variant="primary" heldReason={createHeld} aria-label={d(bulk.key, bulk.params)} onClick={() => actions?.onDialog?.({ kind: 'fromDdts', ddtIds: pickedShipped.map((row) => row.ddtId), partyId: pickedShipped[0]?.partyId ?? null })}>
+                <FilePlus2 size={13} aria-hidden /> <SelectionLabel>{d(bulk.key, bulk.params)}</SelectionLabel>
               </Button>
             ),
           }}
@@ -433,6 +524,30 @@ function InvoicesList({ model, actions }: { model: InvoicesListModel; actions?: 
       </section>
 
       {model.dialog?.kind === 'fromDdts' && <FromDdtsDialog model={model} actions={actions} shipped={shipped ?? []} />}
+      {model.dialog?.kind === 'deferred' && (
+        <DeferredDialog
+          group={model.dialog.group}
+          busy={model.busy}
+          problem={model.dialogProblem}
+          can={model.can}
+          held={deferredHeld(model.dialog.group, shippedRowsOf({ ...model, shippedView: 'all' }) ?? [], model.can)}
+          onCreate={() => model.dialog?.kind === 'deferred' && actions?.onCreateDeferred?.(model.dialog.group)}
+          onClose={() => actions?.onDialog?.(null)}
+        />
+      )}
+      {model.dialog?.kind === 'returnCredit' && (
+        <ReturnCreditDialog
+          answer={model.returnCredit?.value ?? null}
+          readProblem={model.returnCredit?.problem ?? null}
+          busy={model.busy}
+          problem={model.dialogProblem}
+          can={model.can}
+          prefix={model.prefix}
+          onRetry={() => actions?.onRetryReturnCredit?.()}
+          onCreate={(lineIds) => actions?.onCreateReturnCredit?.(lineIds)}
+          onClose={() => actions?.onDialog?.(null)}
+        />
+      )}
 
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('list.keysTitle')} size="sm">
