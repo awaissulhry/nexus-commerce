@@ -58,6 +58,12 @@ import { payablesHandlers, sdiPickupCron } from './modules/payables/sdi'
 import { renewalStagesCron } from './modules/compliance/renewals/stages'
 // B-W2b-15
 import { releaseOnWorkOrderDoneHandler, reservationCleanupCron } from './modules/inventory/reservations/system-release'
+// B-W2b-26: the leaver steps the system settles on its own (badge off after the last day, the case closed when done).
+import { leaverStepsCron } from './modules/people/leavers/automatic'
+// B-W2b-24: the W2b data catch-ups (two-factor since, lifted blocks, first-load steps from their W2a audit rows).
+import { fillTwoFactorSinceAll, twoFactorSinceCron } from './platform/auth/roles/two-factor-since'
+import { liftCatchUpCron, moveLiftsAll } from './platform/email-out/delivery/lift-catch-up'
+import { firstLoadCatchUpCron, writeStepsAll } from './platform/imports/guided/catch-up'
 // B-W2b-22: the cost ledger's nightly catch-up (what waited for a value or a rate).
 import { costCatchUpCron } from './modules/costing/actual/catch-up'
 // B-W2b-11: the report pack, so the worker can export a report (platform/exports/sources/reports.ts).
@@ -164,6 +170,10 @@ if (mode === 'worker') {
   await syncAllTenants({ database, log }).catch((error) => log.error({ err: error }, 'the system roles could not be synced at start'))
   await standardReasonsForNewTenants({ database, log }).catch((error) => log.error({ err: error }, 'the standard reasons could not be given at start'))
   await indexNewTenants({ database, indexers: SEARCH_INDEXERS, log }).catch((error) => log.error({ err: error }, 'the search index could not be built at start'))
+  // B-W2b-24: rows W2a kept in the audit log move to their W2b columns and table at the first start after the deploy.
+  await fillTwoFactorSinceAll({ database, log }).catch((error) => log.error({ err: error }, 'the two-factor times could not be filled at start'))
+  await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
+  await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
   const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
@@ -188,6 +198,11 @@ if (mode === 'worker') {
   crons.push(renewalStagesCron({ database, log }))
   // B-W2b-15: the nightly reservation clean-up (SCM-211): reservations whose demand is done, released by the system.
   crons.push(reservationCleanupCron({ database, log }))
+  // B-W2b-26: the open leaver cases, hourly: after the last working day the floor sign-in is switched off, due automatic
+  // steps tick, a case with nothing open closes (the person LEFT).
+  crons.push(leaverStepsCron({ database, log }))
+  // B-W2b-24: the W2b data catch-ups again each night (idle passes write nothing).
+  crons.push(twoFactorSinceCron({ database, log }), liftCatchUpCron({ database, log }), firstLoadCatchUpCron({ database, log }))
   crons.push(costCatchUpCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())

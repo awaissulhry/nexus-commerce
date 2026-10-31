@@ -1,12 +1,14 @@
 import { WORK_ORDER_STATUSES, type WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
+import { isRelativeDay } from '@nexus/factory-domain/views/quick/relative'
 import { listWorkOrders, type ListQuery } from '../../../modules/production/work-orders/work-orders'
 import { defineExportSource } from '../source'
 
 /**
  * Production › Work orders (SCR-069, `/production/work-orders`): the export of the list as the screen shows it. The
  * address is the list's own (apps/factory-web areas/production/_shared model.ts viewFromAddress): `?view=open|late|
- * DRAFT|…|all`, or the API's own `?late=true` / `?status=…`, and `?q=`; nothing: the open ones. Read through the
+ * DRAFT|…|all`, or the API's own `?late=true` / `?status=…`, `?q=` and the quick filter `?due=<relative day>` (B-W2b-13);
+ * nothing: the open ones. Read through the
  * module's listWorkOrders (workorders.view, its companies and sites). Totals per work order only: no person, no money.
  */
 
@@ -19,11 +21,14 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
   permission: WORKORDERS_VIEW,
   query(address) {
     const q = address.get('q')?.trim().slice(0, 100) || undefined
+    // B-W2b-13 (PLT-167): the quick filter's relative day, as the list reads it.
+    const dueWord = address.get('due')
+    const due = isRelativeDay(dueWord) ? dueWord : undefined
     const view = address.get('view') ?? (address.get('late') === 'true' ? 'late' : (address.get('status') ?? 'open'))
-    if (view === 'late') return { late: true, q }
-    if (view === 'all') return { q }
-    if (isStatus(view)) return { status: view, q }
-    return { open: true, q }
+    if (view === 'late') return { late: true, q, due }
+    if (view === 'all') return { q, due }
+    if (isStatus(view)) return { status: view, q, due }
+    return { open: true, q, due }
   },
   async read(caller, query, cursor, limit) {
     const page = await listWorkOrders(caller, { ...query, cursor: cursor ?? undefined, limit })

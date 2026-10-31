@@ -27,7 +27,8 @@ const [, statusChanged, addressSuppressed] = emailEvents
 /** Puts an address on the list, or renews its entry; answers the row's id. */
 async function suppress(tools: CommandTools, address: string, reason: SuppressionReason, detail: string, at: Date, outboundId: string | null): Promise<string> {
   const { tx, now } = tools
-  const existing = await tx.suppression.findFirst({ where: { address }, select: { id: true, reason: true, version: true } })
+  // B-W2b-24: the block IN FORCE is renewed; a lifted one stays as it was (a new bounce blocks the address in a new row).
+  const existing = await tx.suppression.findFirst({ where: { address, liftedAt: null }, select: { id: true, reason: true, version: true } })
   let id: string
   if (existing) {
     id = existing.id

@@ -15,6 +15,8 @@ import { listSubscriptions } from '../../production/reports/subscriptions'
 import { officeContextOf } from '../viewer'
 import { processReports, reportOf } from './registry'
 import type { ReportDefinition } from './report'
+// B-W2b-24 (Z12:06): every run logged; "last run by me" from the person's own runs.
+import { lastRunByMe, lastRunsByMe, recordRun, runParamsOf } from './runs/runs'
 
 /**
  * Home › Reports (B-W2a-79; ANA-029, ANA-034; design home.reports, SCR-104): the library, a report's About, its results
@@ -78,6 +80,7 @@ export async function library(caller: CommandCaller) {
   const reports = sorted(processReports())
   const mails = [...new Set(reports.map((report) => report.mail).filter((mail): mail is string => mail !== null))]
   const mailed = await mailedToMe(caller, context.actorId, mails)
+  const lastRuns = await lastRunsByMe(caller, context.actorId, reports.map((report) => report.key))
   return {
     asOf: toUtcIso(serverClock.now()),
     areas: REPORT_AREAS.filter((area) => reports.some((report) => report.area === area)).map((area) => ({ area, label: AREA_LABELS[area] })),
@@ -94,6 +97,7 @@ export async function library(caller: CommandCaller) {
         formats: [...report.formats],
         mail: report.mail,
         mailed: report.mail !== null && mailed.has(report.mail),
+        lastRunByMe: lastRuns.get(report.key) ?? null,
       }
     }),
   }
@@ -131,6 +135,7 @@ export async function reportAbout(caller: CommandCaller, key: string) {
     numbers: report.numbers.map((number) => ({ key: number, label: NUMBER_RULES.find((entry) => entry.key === number)?.label ?? number })),
     mail: report.mail,
     formats: [...report.formats],
+    lastRunByMe: await lastRunByMe(caller, context.actorId, report.key),
   }
 }
 
@@ -188,6 +193,7 @@ export async function reportResults(caller: CommandCaller, key: string, query: R
     }
     return filter?.choices.find((choice) => choice.value === value)?.label ?? value
   }
+  await recordRun(caller, { userId: context.actorId, reportKey: report.key, params: runParamsOf(applied.values, groupColumn?.key ?? (query.group === 'none' ? 'none' : null)), at: now })
   return {
     key: report.key,
     asOf: toUtcIso(read.asOf ?? now),

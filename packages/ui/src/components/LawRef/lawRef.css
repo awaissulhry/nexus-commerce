@@ -1,0 +1,60 @@
+/*
+ * DS — LawRef (B-W2b-28). The same chip on every page: the scale icon and the law's name in `--nds-text` on
+ * `--nds-surface-sunken`, a hairline `--nds-border`; the panel is the DetailPopover's (components.css), its link in
+ * `--nds-text-link`. Sizes read `--nds-density-*` so the chip follows a comfortable or floor screen.
+ */
+.nds-lawref-trigger {
+  vertical-align: baseline;
+  border-radius: var(--nds-radius-round);
+}
+.nds-lawref-trigger:focus-visible {
+  outline: var(--nds-density-focus-w) solid var(--nds-primary);
+  outline-offset: var(--nds-density-focus-offset);
+}
+.nds-lawref {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-height: calc(var(--nds-density-font-label) * 1.6);
+  padding: 0 var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+@media (hover: hover) {
+  .nds-lawref-trigger:hover .nds-lawref {
+    border-color: var(--nds-border-strong);
+  }
+}
+.nds-lawref-icon {
+  flex-shrink: 0;
+  width: 1.1em;
+  height: 1.1em;
+  color: var(--nds-text-2);
+}
+.nds-lawref-law {
+  white-space: normal;
+}
+.nds-lawref-head {
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-lawref-plain {
+  margin: var(--nds-space-6) 0 0;
+}
+.nds-lawref-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  margin-top: var(--nds-space-8);
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-lawref-link-icon {
+  width: 1em;
+  height: 1em;
+}

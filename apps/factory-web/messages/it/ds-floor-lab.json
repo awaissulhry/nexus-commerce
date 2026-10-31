@@ -1,0 +1,143 @@
+{
+  "title": "Parti del design system per reparto e persone",
+  "subtitle": "Le nuove parti del kit di reparto e le parti per persone e impianti che due o più aree usano, ora nel design system. Dati di fantasia.",
+  "section": {
+    "floor": "Parti di reparto (livello reparto)",
+    "floorNote": "Disegnate a misura di tablet e di guanti, come su un tablet di reparto.",
+    "people": "Parti per persone e impianti",
+    "display": "Livello display (TV di linea)",
+    "displayNote": "Il quarto livello di densità, per gli schermi a parete letti da lontano: testo da 32 px e numeri da 96 px."
+  },
+  "part": {
+    "card": "Scheda di reparto",
+    "elapsed": "Tempo trascorso",
+    "names": "Scelta del nome",
+    "list": "Elenco di reparto con lo spazio aggiornamenti",
+    "read": "Lettura ad alta voce",
+    "sign": "Firma con il PIN",
+    "privacy": "Nota sulla riservatezza",
+    "law": "Riferimento di legge",
+    "protected": "Valore protetto",
+    "gate": "Condizioni di legge",
+    "day": "Striscia della giornata",
+    "due": "Scadenze",
+    "seal": "Sigillo del documento"
+  },
+  "card": {
+    "kind": "Fascio",
+    "title": "Giacca demo · Nero",
+    "ready": "Pronto",
+    "pieces": "Pezzi",
+    "op": "Fase",
+    "opValue": "Fase 30 Cucitura",
+    "size": "Taglia",
+    "colour": "Colore",
+    "colourValue": "Nero",
+    "short": "Mancanti",
+    "shortValue": "Manca 1 pezzo",
+    "order": "Ordine di lavoro",
+    "flagCheck": "In attesa di controllo"
+  },
+  "elapsed": {
+    "running": "In lavorazione",
+    "call": "Chiamata aperta",
+    "today": "Presente oggi",
+    "break": "Fine pausa",
+    "paused": "Fase in pausa"
+  },
+  "names": {
+    "label": "Niente badge? Scegli il tuo nome",
+    "offline": "Nome e PIN richiedono la rete. Usa il badge.",
+    "picked": "Scelto: {name}. Ora il PIN."
+  },
+  "list": {
+    "label": "Il mio lavoro",
+    "op": {
+      "sew": "Cucitura",
+      "cut": "Taglio",
+      "pack": "Imballo"
+    },
+    "status": {
+      "ready": "Pronto",
+      "waiting": "In attesa",
+      "done": "Fatto"
+    },
+    "pieces": "pezzi",
+    "simulate": "Cambia l’elenco (demo)"
+  },
+  "read": {
+    "text": "Questo tablet registra le tue scansioni, l’ora e la postazione. Non registra mai dove sei, il tuo volto o la tua impronta. Puoi vedere i tuoi dati in La mia giornata.",
+    "note": "Nascosto quando il browser non ha una voce per la lingua della pagina."
+  },
+  "sign": {
+    "title": "Firma il controllo finale",
+    "summary": "32 capi su 32 controllati · lotto L-0042 · ordine SO-0101",
+    "meaning": "Firmando confermi di aver controllato ogni capo con la lista di controllo e che sono conformi.",
+    "detail": "Collaudo finale",
+    "held": "Per firmare serve la rete. La firma viene tenuta e inviata quando il tablet torna in linea.",
+    "locked": "Bloccato fino alle 10:47. Chiedi al capo squadra di reimpostare il PIN.",
+    "wrong_one": "PIN errato. Resta {count} tentativo.",
+    "wrong_other": "PIN errato. Restano {count} tentativi.",
+    "done": "Firmato alle {time}. Il controllo è registrato.",
+    "demo": "PIN di prova: {pin}"
+  },
+  "law": {
+    "statuto": "Il controllo a distanza dei lavoratori richiede un accordo con le rappresentanze sindacali o un’autorizzazione dell’Ispettorato del lavoro.",
+    "training": "Il datore di lavoro assicura a ogni lavoratore una formazione sufficiente e adeguata su salute e sicurezza, aggiornata nel tempo.",
+    "gdpr": "I dati sulla salute sono una categoria particolare: trattati solo dove la legge lo consente, da chi ne ha bisogno.",
+    "piece": "Le tariffe a cottimo sono comunicate ai lavoratori prima dell’inizio del lavoro.",
+    "sentence": "I preposti ripetono la formazione sulla sicurezza ogni due anni, in presenza."
+  },
+  "privacy": {
+    "lineText": "Totali di linea · dati individuali riservati",
+    "who": "HR e il lavoratore vedono i dati individuali",
+    "individualWho": "Solo questo lavoratore e HR",
+    "protectedWho": "Solo i ruoli HR e sicurezza"
+  },
+  "gate": {
+    "title": "Cottimo a Sito Demo",
+    "basis": "Le scansioni nominano i lavoratori con una base giuridica registrata",
+    "notice": "L’informativa ai lavoratori copre il cottimo ed è stata letta",
+    "noticeDetail": "{done} su {total} confermate",
+    "noticeLink": "Apri l’informativa",
+    "scheme": "Schema e contratto collettivo scelti",
+    "rates": "Tariffe pubblicate ai lavoratori prima dell’inizio",
+    "codes": "Codici voce collegati per l’export paghe",
+    "start": "Avvia il cottimo dal 1° dicembre",
+    "started": "Qui partirebbe il cottimo (demo: non viene inviato nulla)."
+  },
+  "due": {
+    "general": "Formazione generale sicurezza",
+    "supervisor": "Aggiornamento preposti",
+    "firstAid": "Primo soccorso",
+    "fire": "Antincendio",
+    "forklift": "Patentino carrello elevatore",
+    "note": "Ordinate per urgenza: prima le più urgenti."
+  },
+  "seal": {
+    "title": "Calendario LUL · ottobre 2026",
+    "source": "Orologio del server Nexus",
+    "hr": "HR",
+    "consultant": "Consulente del lavoro",
+    "download": "Scarica il file di prova per verificarlo"
+  },
+  "protected": {
+    "label": "Giudizio di idoneità",
+    "value": "Idoneo con limitazioni: niente sollevamenti oltre 10 kg",
+    "who": "Lo vedono solo i ruoli HR e sicurezza"
+  },
+  "day": {
+    "label": "Marta Demo · mar 3 nov",
+    "badge": "badge al lettore",
+    "machine": "Stato macchina (postazione 4)",
+    "running": "In funzione",
+    "down": "Ferma",
+    "anomaly": "Uscita mancante; uscita automatica dopo la fine turno + 15 min",
+    "showText": "Mostra la giornata a parole",
+    "hideText": "Nascondi la giornata a parole"
+  },
+  "display": {
+    "call": "Linea 1 · chiamata aperta",
+    "stop": "Linea 2 · dall’ultima fermata"
+  }
+}

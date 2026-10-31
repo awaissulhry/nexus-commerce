@@ -57,7 +57,7 @@ export const MODULE_TIMERS: readonly string[] = Object.freeze(Object.keys(TIMER_
 
 /** The words of a module's timer kind (a key of `admin-automation`); one this page does not know yet: the generic words. */
 export const moduleTimerKey = (kind: string, known: readonly string[]): string => (known.includes(kind) ? `module.${kind}` : 'module.other')
-export const KNOWN_MODULE_TIMERS: readonly string[] = Object.freeze(['PAYMENT_REMINDER'])
+export const KNOWN_MODULE_TIMERS: readonly string[] = Object.freeze(['PAYMENT_REMINDER', 'RESTORE_DRILL_DUE'])
 
 export type LiveState = 'connecting' | 'live' | 'offline'
 

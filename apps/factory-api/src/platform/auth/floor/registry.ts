@@ -77,7 +77,9 @@ const DEVICE_VIEW_SELECT = {
   statusReportedAt: true,
   revokedAt: true,
   version: true,
-  currentSession: { select: { endedAt: true, idleExpiresAt: true, endsAt: true } },
+  network: true,
+  inUseSince: true,
+  currentSession: { select: { endedAt: true, idleExpiresAt: true, endsAt: true, startedAt: true } },
 } as const
 
 type DeviceRow = Prisma.DeviceGetPayload<{ select: typeof DEVICE_VIEW_SELECT }>
@@ -99,6 +101,9 @@ function deviceViewOf(row: DeviceRow, now: Date): DeviceView {
     statusReportedAt: row.statusReportedAt ? toUtcIso(row.statusReportedAt) : null,
     revokedAt: row.revokedAt ? toUtcIso(row.revokedAt) : null,
     inUse: row.currentSession !== null && isLiveSession(row.currentSession, now),
+    // B-W2b-24: since the session opened (the column the sign-in sets; the session's own start for one opened before it).
+    inUseSince: row.currentSession !== null && isLiveSession(row.currentSession, now) ? toUtcIso(row.inUseSince ?? row.currentSession.startedAt) : null,
+    network: row.network,
     version: row.version,
   }
 }
@@ -220,7 +225,7 @@ export async function revokeDevice(auth: OfficeAuth, request: FastifyRequest, de
     { name: 'devices.revoke', input: body, record: { type: 'Device', id: deviceId, ...(body.version ? { expectedVersion: body.version } : {}), transition: { machine: deviceStatus, to: 'REVOKED' } } },
     async ({ tx, now, audit }) => {
       const ended = await endSessions(tx, { deviceId }, 'DEVICE_REVOKED', now)
-      await tx.device.updateMany({ where: { id: deviceId }, data: { tokenHash: null, currentSessionId: null, revokedAt: now, revokedById: context.actorId } })
+      await tx.device.updateMany({ where: { id: deviceId }, data: { tokenHash: null, currentSessionId: null, inUseSince: null, revokedAt: now, revokedById: context.actorId } })
       const retired = await tx.deviceEnrolment.updateMany({ where: { deviceId, usedAt: null, revokedAt: null }, data: { revokedAt: now } })
       // Its scan-id blocks close with it: a label it printed and never sent is refused, its numbers left never used.
       const blocksClosed = await closeDeviceBlocks({ tx, now, audit }, { id: deviceId, companyId: before.companyId, siteId: before.siteId }, `Tablet revoked${body.reason ? `: ${body.reason}` : ''}`)

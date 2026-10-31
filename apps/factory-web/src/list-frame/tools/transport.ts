@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react'
 import type { ExportFormat, ExportStatus } from '@nexus/factory-domain/views/exports'
 import type { ViewAudience } from '@nexus/factory-domain/views/rules'
 import type { ColumnLayout, Density, ViewState } from '@nexus/factory-domain/views/state'
+import type { BulkApplyRow, BulkPreviewRow, BulkResult, BulkValue } from '@nexus/factory-domain/views/bulk/rules'
 
 /**
  * The list tools' seam (B-W2a-23; design shell.lists toolbar "Columns ▾ · Export ▾", pop:customise, pop:save-view,
@@ -22,6 +23,8 @@ export interface SavedView {
   readonly roleId: string | null
   readonly roleName: string | null
   readonly roleDefault: boolean
+  /** B-W2b-24: my own default view of the list (only ever a view of mine; the list opens on it before a role default). */
+  readonly personalDefault: boolean
   readonly state: ViewState
   /** Why the reader may not change or remove it, in the API's words (the screen says its own). Null: they may. */
   readonly changeHeld: string | null
@@ -36,6 +39,8 @@ export interface RoleRef {
 export interface ViewsAnswer {
   readonly views: readonly SavedView[]
   readonly roleDefaultId: string | null
+  /** B-W2b-24: my own default view of the list, or null. */
+  readonly personalDefaultId: string | null
   readonly roles: readonly RoleRef[]
   readonly allRoles: readonly RoleRef[]
   readonly can: { readonly save: boolean; readonly manage: boolean; readonly export: boolean }
@@ -64,6 +69,8 @@ export interface ExportJob {
   readonly startedAt: string | null
   readonly finishedAt: string | null
   readonly expiresAt: string | null
+  /** B-W2b-13: how many selected rows were asked (the selection row's Export N); null: the whole view. */
+  readonly selected?: number | null
 }
 
 /** A view as the Save view dialog sends it. */
@@ -82,6 +89,22 @@ export interface ExportAsk {
   readonly columns: readonly ExportColumn[]
   readonly title: string
   readonly viewName?: string
+  /** B-W2b-13 (Z16:02): only these rows of the view (the selection row's Export N). */
+  readonly ids?: readonly string[]
+}
+
+/** B-W2b-13 (PLT-182, PLT-166): a bulk edit's preview (old → new per row, or why not). */
+export interface BulkPreviewAsk {
+  readonly listKey: string
+  readonly ids: readonly string[]
+  readonly changes: Readonly<Record<string, BulkValue>>
+}
+
+/** The rows a bulk edit (or a cell edited in the grid, or Undo) writes, each with the version the person saw. */
+export interface BulkApplyAsk {
+  readonly listKey: string
+  readonly rows: readonly BulkApplyRow[]
+  readonly undo?: boolean
 }
 
 /** What went wrong, as the tools say it (their own words: `lists` tools.problem.<key>). */
@@ -131,6 +154,8 @@ export interface ListToolsTransport {
   createView(listKey: string, draft: ViewDraft, idempotencyKey: string): Promise<SavedView>
   updateView(view: SavedView, change: Partial<ViewDraft>, idempotencyKey: string): Promise<SavedView>
   removeView(view: SavedView): Promise<void>
+  /** B-W2b-24: makes my own view my default of its list (on) or no longer (off); the old default loses its mark. */
+  setPersonalDefault(view: SavedView, on: boolean, idempotencyKey: string): Promise<{ readonly view: SavedView; readonly personalDefaultId: string | null }>
   startExport(ask: ExportAsk, idempotencyKey: string): Promise<ExportJob>
   readExport(jobId: string): Promise<ExportJob>
   listExports(listKey: string): Promise<readonly ExportJob[]>
@@ -143,6 +168,10 @@ export interface ListToolsTransport {
   newKey(): string
   /** Design only: where the gallery starts. */
   readonly design?: ToolsDesignState
+  /** B-W2b-13: a bulk edit's preview, read as the rows are now (platform/views/bulk). */
+  bulkPreview(ask: BulkPreviewAsk): Promise<readonly BulkPreviewRow[]>
+  /** B-W2b-13: writes the rows through each record's own command (a bulk edit, a cell, Undo). */
+  bulkApply(ask: BulkApplyAsk, idempotencyKey: string): Promise<readonly BulkResult[]>
 }
 
 export const ListToolsContext = createContext<ListToolsTransport | null>(null)

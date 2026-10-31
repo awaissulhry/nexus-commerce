@@ -19,17 +19,30 @@ import {
   type IRowNode,
 } from '@nexus/ui/grid'
 import { X } from 'lucide-react'
-import { Banner } from '@nexus/ui/components'
+import { Banner, useToast } from '@nexus/ui/components'
+import { SaveStatus } from '@nexus/ui/components/SaveStatus/index'
+import { GridCardList, useCardList } from '@nexus/ui/grid/card-list/index'
+import { columnText } from '@nexus/ui/grid/card-list/index'
 import { Button, Skeleton, Spinner } from '@nexus/ui/primitives'
-import { useT } from '../lib/i18n/provider'
+import { DEFAULT_TIME_ZONE, formatTime } from '../lib/i18n/format'
+import { useDsLabels } from '../lib/i18n/ds-labels'
+import { useLocale, useT } from '../lib/i18n/provider'
 import { WithMessages } from '../record-panels/i18n'
 import { usePrintMode } from '../shell/print/print-mode'
 import { ListKeysInfo } from './ListKeysInfo'
 import { FIT_ROWS, gridLayout, isListKey, listKeys, nextRowIndex, ownsKeys, sameIds, toggleId, type ListKey } from './model'
-import { ListToolsBar } from './tools/ListToolsBar'
+import { ListToolsBar, type WithheldColumn } from './tools/ListToolsBar'
 import { useListTools } from './tools/useListTools'
+import { BulkEditButton, BulkEditFlow, ExportSelected } from './w2b/bulk'
+import { useInlineEdit } from './w2b/edit'
+import { BoardMode, CalendarMode, ModeSwitch } from './w2b/modes'
+import { offeredModes, type ListCards, type ListEdit, type ListModes, type ListQuick } from './w2b/model'
+import { QuickChips, QuickMenu } from './w2b/quick'
+import { MODE_NAMESPACES, useModeWords } from './w2b/words'
+import type { BulkValue } from '@nexus/factory-domain/views/bulk/rules'
 import './list-frame.css'
 import './tools/tools.css'
+import './w2b/w2b.css'
 
 /** AG's own selection column (the row checkboxes and the header's select-all). */
 const SELECTION_COLUMN = 'ag-Grid-SelectionColumn'
@@ -45,6 +58,12 @@ export interface ListFrameSelection {
    * button carries an icon and its words in the DS `SelectionLabel`: on a narrow card the DS hides the words first.
    */
   actions: ReactNode
+  /**
+   * B-W2b-13 (the W2a gap Z16:02): the frame adds "Export N" — this view's columns, only the selected rows, through the
+   * shared export engine — when the list has an export and the person may export. Off by default (a list keeps its own
+   * "Export N" until it opts in).
+   */
+  exportSelected?: boolean
 }
 
 export interface ListFrameProps<T> {
@@ -100,6 +119,38 @@ export interface ListFrameProps<T> {
   /** Design cases: the row that has the focus, the keys panel open. */
   focusRow?: number
   keysOpen?: boolean
+  /*
+   * B-W2b-13 — the W2b list frame (design shell.lists sec:view-modes, sec:grid, sec:toolbar, pop:bulk-edit). Each part is
+   * opt-in: a list without the prop keeps its table exactly as before.
+   */
+  /** Table · Board · Calendar (· Cards with `cards`): the mode is the list's address term (`?mode=`), so a view keeps it. */
+  modes?: ListModes<T> | null
+  /** The phone card list below 720 px (and the Cards mode): the list's own columns as DS GridCardList cards. */
+  cards?: ListCards<T> | null
+  /** Inline edit of simple fields (autosaved per cell with its save mark, version-checked; paste a range) and Edit N. */
+  edit?: ListEdit<T> | null
+  /** Quick filters with "me" and relative days, their words kept in the list's address. */
+  quick?: ListQuick | null
+  /** Columns a person's rights leave out, listed in Columns ▾ as "Hidden: …" (design sec:grid). */
+  withheld?: readonly WithheldColumn[]
+  /** The site's day (YYYY-MM-DD) for the calendar; default today in the site's zone. */
+  today?: string
+  /** Design cases: the calendar's day open, the bulk edit open at a step with its values. */
+  design?: { day?: string | null; bulk?: { values?: Record<string, BulkValue>; review?: boolean } }
+}
+
+/** Today in the site's zone (YYYY-MM-DD). */
+const todayInZone = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: DEFAULT_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+
+/** The DS toast, or nothing when no provider is mounted. */
+function useReceipt(): (message: string, tone?: 'success' | 'danger') => void {
+  let api: ReturnType<typeof useToast> | null = null
+  try {
+    api = useToast()
+  } catch {
+    api = null
+  }
+  return (message, tone = 'success') => api?.toast(message, tone)
 }
 
 /**
@@ -113,14 +164,19 @@ export interface ListFrameProps<T> {
  */
 export function ListFrame<T>(props: ListFrameProps<T>) {
   return (
-    <WithMessages namespaces={['lists']}>
+    <WithMessages namespaces={['lists', ...MODE_NAMESPACES]}>
       <Frame {...props} />
     </WithMessages>
   )
 }
 
-function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen }: ListFrameProps<T>) {
+function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen, modes, cards, edit, quick, withheld, today, design }: ListFrameProps<T>) {
   const t = useT('lists')
+  const locale = useLocale()
+  const ds = useDsLabels()
+  const modeWords = useModeWords()
+  const receipt = useReceipt()
+  const phone = useCardList()
   // B-W2b-05 (PLT-171): the print view draws every loaded row for paper, without the list's controls.
   const printing = usePrintMode()
   const frameRef = useRef<HTMLDivElement>(null)
@@ -128,6 +184,19 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
   const listTools = useListTools({ frame: frameRef, listKey, columns, title: title ?? label })
   const apiRef = useRef<GridApi<T> | null>(null)
   const [ready, setReady] = useState(false)
+  // B-W2b-13: inline edit (the cells save through the list's bulk target), the modes, the bulk edit.
+  const inline = useInlineEdit<T>({ edit: printing ? undefined : (edit ?? undefined), transport: listTools.transport, listKey: listTools.listKey, rowId, api: () => apiRef.current, t, markLabels: ds.cellSaveMark })
+  const gridColumns = useMemo(() => inline.columns(listTools.columns), [inline.columns, listTools.columns])
+  const offered = offeredModes(modes, !!cards)
+  const mode = printing ? 'table' : modes && offered.includes(modes.mode) ? modes.mode : 'table'
+  const asCards = !printing && !!cards && (mode === 'cards' || (phone && mode === 'table'))
+  const [bulkOpen, setBulkOpen] = useState(!!design?.bulk)
+  // A card's ⋯: the list's trailing column pinned at the right (its row menu) is the card's actions unless the list says.
+  const cardFields = useMemo(() => {
+    const last = listTools.columns[listTools.columns.length - 1]
+    const id = last ? (last.colId ?? (typeof last.field === 'string' ? last.field : null)) : null
+    return { ...(last && id && last.pinned === 'right' ? { [id]: { role: 'actions' as const } } : {}), ...(cards?.fields ?? {}) }
+  }, [listTools.columns, cards?.fields])
   const selected = useMemo(() => selection?.selected ?? [], [selection?.selected])
   const selectedRef = useRef(selected)
   selectedRef.current = selected
@@ -217,13 +286,16 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
     return () => window.removeEventListener('keydown', onKey)
   }, [focusRowAt, isRowSelectable, onHelp, rowId, selection])
 
-  // Enter on a row opens it (not on its checkbox: Space ticks there).
+  // Enter on a row opens it (not on its checkbox: Space ticks there; not on a cell that edits: Enter edits it).
   const onCellKeyDown = useCallback(
     (event: { data?: T; event?: Event | null; column?: { getColId(): string } }) => {
       const key = (event.event as KeyboardEvent | null | undefined)?.key
-      if (key === 'Enter' && event.data && event.column?.getColId() !== SELECTION_COLUMN) onOpen?.(event.data)
+      const colId = event.column?.getColId()
+      if (key !== 'Enter' || !event.data || colId === SELECTION_COLUMN) return
+      if (colId && inline.editableFor(event.data, colId)) return
+      onOpen?.(event.data)
     },
-    [onOpen],
+    [onOpen, inline],
   )
 
   const getRowId = useCallback((params: { data: T }) => rowId(params.data), [rowId])
@@ -264,6 +336,37 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
   )
 
   const picked = selection && !printing ? selected.length : 0
+  const exportsOn = !!listTools.answer?.exports && !!listTools.answer?.can.export
+  const pickedRows = useMemo(() => (rows ?? []).filter((row) => selected.includes(rowId(row))), [rows, selected, rowId])
+  const frameActions =
+    selection && !printing ? (
+      <>
+        {selection.actions}
+        {edit?.bulk && (
+          <BulkEditButton
+            count={picked}
+            noun={edit.bulk.noun}
+            held={edit.held ?? (!listTools.transport ? t('bulk.heldNoTools') : null)}
+            t={t}
+            onOpen={() => setBulkOpen(true)}
+          />
+        )}
+        {selection.exportSelected && exportsOn && listTools.transport && listTools.listKey && (
+          <ExportSelected ids={selected} columns={listTools.columns} formats={listTools.answer!.exports!.formats} transport={listTools.transport} listKey={listTools.listKey} title={listTools.title} t={t} onReceipt={receipt} />
+        )}
+      </>
+    ) : null
+  const frameTools = printing ? null : (
+    <>
+      {quick && quick.filters.length > 0 && <QuickMenu quick={quick} t={t} />}
+      {listTools.transport && <ListToolsBar state={listTools} withheld={withheld} />}
+      {modes && <ModeSwitch modes={offered} mode={mode} onMode={modes.onMode} t={t} />}
+    </>
+  )
+  const saveStatus =
+    inline.active && inline.status.kind !== 'idle' ? (
+      <SaveStatus state={inline.status} size="sm" {...(inline.retryable ? { onRetry: inline.retry } : {})} formatTime={(iso) => formatTime(iso, { locale })} labels={ds.saveStatus} />
+    ) : null
   // Straight into the card (no wrapper): the DS toolbar's wrap rules match only `.nds-grid-card > .nds-toolbar`, so a
   // phone's card takes a second line instead of pushing tools past its clipped edge.
   const toolbar = printing ? (
@@ -276,6 +379,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
       count={picked > 0 ? t('selected', { count: picked }) : count}
       right={
         <>
+          {saveStatus}
           {updates && updates.count > 0 && (
             <Button size="sm" variant="tonal" onClick={updates.onShow}>
               {t('updates', { count: updates.count })}
@@ -287,7 +391,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
     >
       {picked > 0 && selection ? (
         <GridSelectionActions>
-          {selection.actions}
+          {frameActions}
           <Button size="sm" variant="link" onClick={() => selection.onChange([])} aria-label={t('clear')}>
             <X size={13} aria-hidden /> <SelectionLabel>{t('clear')}</SelectionLabel>
           </Button>
@@ -296,7 +400,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
         <>
           {search && <GridSearchSlot>{search}</GridSearchSlot>}
           {tools}
-          {listTools.transport && <ListToolsBar state={listTools} />}
+          {frameTools}
         </>
       )}
     </GridToolbar>
@@ -309,7 +413,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
         </Button>
       )}
       <GridFooterSpacer />
-      <ListKeysInfo keys={listKeys(keys, !!selection)} onHelp={onHelp} open={keysOpen} />
+      <ListKeysInfo keys={listKeys(inline.active ? [...(keys ?? []), ...EDIT_KEYS] : keys, !!selection)} onHelp={onHelp} open={keysOpen} />
     </GridFooterStrip>
   )
 
@@ -328,7 +432,29 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
         </div>
       </div>
     )
-  else {
+  else if (mode === 'board' && modes?.board) {
+    body = <BoardMode label={label} rows={rows} rowId={rowId} columns={listTools.columns} board={modes.board} hrefOf={cards?.hrefOf} onOpen={onOpen} words={modeWords.board} locale={locale} />
+  } else if (mode === 'calendar' && modes?.calendar) {
+    const first = listTools.columns.find((column) => !column.hide && (column.colId ?? column.field) !== SELECTION_COLUMN)
+    body = (
+      <CalendarMode
+        label={label}
+        rows={rows}
+        rowId={rowId}
+        nameOf={(row) => (first ? columnText(first, row) : '') || (edit ? edit.labelOf(row) : rowId(row))}
+        calendar={modes.calendar}
+        today={today ?? todayInZone()}
+        hrefOf={cards?.hrefOf}
+        onOpen={onOpen}
+        edit={inline.active ? inline : null}
+        words={modeWords.calendar}
+        dateWords={ds.dateField}
+        locale={locale}
+        t={t}
+        day={design?.day ?? null}
+      />
+    )
+  } else {
     // The long grid keeps its fixed height only while it has more than one page or more to read: a short, complete ledger
     // is as tall as its rows, like every list (no empty band).
     const long = !printing && !!endless && !(endless.done && rows.length <= FIT_ROWS)
@@ -341,7 +467,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
           {...(long ? { onBodyScroll, onModelUpdated: onBodyScroll } : {})}
           rows={rowKind}
           rowData={rows as T[]}
-          columnDefs={listTools.columns}
+          columnDefs={gridColumns}
           {...(listTools.layout.density ? { density: listTools.layout.density } : {})}
           getRowId={getRowId}
           onGridReady={onGridReady}
@@ -350,7 +476,61 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
           onSelectionChanged={onSelectionChanged}
           onCellKeyDown={onCellKeyDown}
           suppressCellFocus={false}
+          {...(inline.active ? { readOnlyEdit: true, onCellEditRequest: inline.onCellEditRequest, cellSelection: true } : {})}
         />
+      </div>
+    )
+  }
+
+  const chips = quick && !printing ? <QuickChips quick={quick} t={t} /> : null
+  const bulk =
+    bulkOpen && edit?.bulk && listTools.transport && listTools.listKey ? (
+      <BulkEditFlow<T>
+        rows={pickedRows}
+        rowId={rowId}
+        edit={edit}
+        columns={listTools.columns}
+        transport={listTools.transport}
+        listKey={listTools.listKey}
+        locale={locale}
+        t={t}
+        words={{ review: ds.review, doneVerb: ds.reviewDoneVerb, modal: ds.modal, dateField: ds.dateField }}
+        onClose={() => setBulkOpen(false)}
+        onDone={() => selection?.onChange([])}
+        start={design?.bulk}
+      />
+    ) : null
+
+  if (asCards && rows !== null) {
+    // The phone card list (PLT-170) and the Cards mode: the same rows, columns, search, filters and selection as cards.
+    return (
+      <div className="fw-list" ref={frameRef}>
+        {chips}
+        <GridCardList<T>
+          label={label}
+          rows={state ? [] : rows}
+          rowId={rowId}
+          columns={listTools.columns}
+          fields={cardFields}
+          className={mode === 'cards' && !phone ? 'fw-list-cards wide' : 'fw-list-cards'}
+          {...(cards?.hrefOf ? { hrefOf: cards.hrefOf } : {})}
+          count={picked > 0 ? t('selected', { count: picked }) : count}
+          search={search}
+          tools={
+            <>
+              {tools}
+              {frameTools}
+              {saveStatus}
+            </>
+          }
+          {...(cards?.onSortChange ? { sort: cards.sort ?? null, onSortChange: cards.onSortChange } : {})}
+          {...(selection ? { selection: { selected, onChange: selection.onChange, actions: frameActions } } : {})}
+          {...(isRowSelectable ? { isRowSelectable } : {})}
+          state={state}
+          more={more ?? null}
+          labels={ds.cardList}
+        />
+        {bulk}
       </div>
     )
   }
@@ -371,8 +551,16 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
         </div>
       )}
       <GridCard toolbar={toolbar} footer={footer}>
+        {chips}
         {body}
       </GridCard>
+      {bulk}
     </div>
   )
 }
+
+/** The keys of a list whose cells edit (the footer's information icon adds them). */
+const EDIT_KEYS: readonly ListKey[] = Object.freeze([
+  { keys: ['F2'], does: 'keys.edit' },
+  { keys: ['⌘', 'V'], does: 'keys.paste' },
+])

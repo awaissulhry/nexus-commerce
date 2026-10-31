@@ -177,6 +177,40 @@ const poNotConfirmed: Find = async (tx, rule, now, only) => {
     }))
 }
 
+/**
+ * INTEGRATION_FAILING (B-W2b-24; the design's built-in "integration failing"; the same health as Security & health's
+ * "Needs attention"): ACTIVE connections whose last call failed after their last success (the gateway keeps lastOkAt, at
+ * most a minute stale, and lastErrorAt), with no call that worked for the rule's hours — since the last success, or, when
+ * none ever worked, since the connection was set up. A paused or disabled connection is a person's choice: no alert, and
+ * an open one clears. A tenant-wide connection (no company) is seen by holders of integrations.view over every company.
+ */
+const integrationFailing: Find = async (tx, rule, now, only) => {
+  const { hours } = thresholdOf('INTEGRATION_FAILING', rule.threshold) as { hours: number }
+  const since = new Date(now.getTime() - hours * HOUR)
+  const company = rule.companyId ? { OR: [{ companyId: rule.companyId }, { companyId: null }] } : {}
+  const rows = await tx.integrationAccount.findMany({
+    where: { ...idIn(only), ...company, status: 'ACTIVE', lastErrorAt: { not: null }, OR: [{ lastOkAt: null, createdAt: { lte: since } }, { lastOkAt: { lte: since } }] },
+    orderBy: [{ lastErrorAt: 'desc' }, { id: 'asc' }],
+    take: FIND_LIMIT,
+    select: { id: true, label: true, provider: true, companyId: true, lastOkAt: true, lastErrorAt: true, createdAt: true },
+  })
+  return rows
+    .filter((row) => row.lastOkAt === null || row.lastErrorAt!.getTime() > row.lastOkAt.getTime())
+    .map((row) => ({
+      recordType: 'IntegrationAccount',
+      recordId: row.id,
+      label: row.label,
+      scope: { companyId: row.companyId, siteId: null, partyId: null },
+      facts: {
+        hours: Math.floor((now.getTime() - (row.lastOkAt ?? row.createdAt).getTime()) / HOUR),
+        threshold: hours,
+        never: row.lastOkAt === null,
+        provider: row.provider,
+        lastErrorAt: row.lastErrorAt!.toISOString(),
+      },
+    }))
+}
+
 /** CERTIFICATE_EXPIRING: VALID certificates whose last valid day comes within the rule's lead and the timers' horizon; a renewed one (B-W2a-66: its successor linked) leaves the window. */
 const certificatesExpiring: Dated = async (tx, rule, now, only) => {
   const { daysBefore } = thresholdOf('CERTIFICATE_EXPIRING', rule.threshold) as { daysBefore: number }
@@ -214,6 +248,8 @@ export const FINDERS: Readonly<Partial<Record<RuleKind, Find>>> = Object.freeze(
   MATERIAL_SHORT: materialShort,
   APPROVAL_OVERDUE: approvalOverdue,
   PO_NOT_CONFIRMED: poNotConfirmed,
+  // B-W2b-24: the connections' health.
+  INTEGRATION_FAILING: integrationFailing,
 })
 
 export const DATED: Readonly<Partial<Record<RuleKind, Dated>>> = Object.freeze({

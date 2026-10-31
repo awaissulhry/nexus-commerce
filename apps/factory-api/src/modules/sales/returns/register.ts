@@ -1,16 +1,27 @@
+import { REGISTER_LIMITS } from '@nexus/factory-domain/compliance/register/rules'
 import { isSafetyReturn, type ReturnCause } from '@nexus/factory-domain/sales/returns/rules'
 import type { CommandTools } from '../../../core/command'
-import { openRegisterEntryFor } from '../../compliance/register/hook'
+import { addToRegisterEntryFor, openRegisterEntryFor } from '../../compliance/register/hook'
+import { readEntryBySource } from '../../compliance/register/store'
 import { soldFactsOf, lineKeyOf, type LineRow, type RmaRow } from './store'
 
 /**
  * A protective garment returned for a defect (or found defective or misused at the inspection) goes into the PPE
  * register (Reg. (EU) 2016/425 art. 8(4): the manufacturer keeps a register of complaints; W1's register, B-W1-43), in
- * the same command as the return or the decision: one entry per shipment the garment left on (the register's source
- * Shipment: the database takes no return as a source yet, schema need named in the notes), kind COMPLAINT, the
- * customer as the reporting party, the style, the batch and serial as read, risk ASSESSING. A second return from the
- * same shipment answers the entry it opened. Office and system commands only (the floor's grading opens it at the
- * decision). A line with no order line (a sample invoiced alone) names no shipment: none is opened, the answer says so.
+ * the same command as the return or the decision: ONE entry per return (B-W2b-F1, Z4:02: its source is the
+ * ReturnAuthorisation; the register's partial unique index holds one entry per source), kind COMPLAINT, the customer as
+ * the reporting party, the style, risk ASSESSING. Its lists name every shipment the return's safety lines left on (lines
+ * from several shipments share the one entry), with their batches and serials as read:
+ *
+ *   the first call    the safety lines it is given open the entry together (one description, every line in it)
+ *   a later line      (added to the RMA, its reason changed, or decided later) adds its shipment, batch and serial to
+ *                     the entry while it is OPEN, and its words when they still fit (compliance's addToRegisterEntryFor);
+ *                     a line the entry names already adds nothing
+ *   left to a person  a line of another style than the entry's (one entry concerns one style), a line that comes after
+ *                     the entry was CLOSED, or a line with no shipment known (a sample invoiced alone): none is written,
+ *                     the line's words say to record it in Compliance › PPE register by hand
+ *
+ * Office and system commands only (the floor's grading opens it at the decision).
  */
 
 export interface SafetyEntry {
@@ -23,11 +34,23 @@ export interface SafetyEntry {
   readonly words: string
 }
 
+/** A safety line with what the register needs of it. */
+interface SafetyLine {
+  readonly line: LineRow
+  readonly styleId: string
+  readonly shipmentId: string
+  /** "Line 10: …, returned for defect." (the entry's description names each line by it). */
+  readonly sentence: string
+}
+
+const byHand = (seq: number) => `record line ${seq} in Compliance › PPE register by hand.`
+
 export async function openSafetyEntries(tools: CommandTools, rma: Pick<RmaRow, 'id' | 'number' | 'companyId' | 'partyId' | 'requestedAt'>, lines: readonly LineRow[]): Promise<SafetyEntry[]> {
   if (tools.context.audience !== 'office' && tools.context.audience !== 'system') return []
   const { tx } = tools
   const sold = await soldFactsOf(tx, lines)
-  const entries: SafetyEntry[] = []
+  const answers = new Map<string, SafetyEntry>()
+  const safety: SafetyLine[] = []
   for (const line of lines) {
     const facts = sold.get(lineKeyOf(line))
     const ppe = facts?.style?.ppe ?? false
@@ -41,23 +64,63 @@ export async function openSafetyEntries(tools: CommandTools, rma: Pick<RmaRow, '
         })
       : null
     if (!shipment || !facts?.style) {
-      entries.push({ lineId: line.id, seq: line.seq, entryId: null, reference: null, opened: false, words: `Line ${line.seq} names no shipment: record it in Compliance › PPE register by hand.` })
+      answers.set(line.id, { lineId: line.id, seq: line.seq, entryId: null, reference: null, opened: false, words: `Line ${line.seq} names no shipment: ${byHand(line.seq)}` })
       continue
     }
     const why = line.cause ? `found ${line.cause.toLowerCase().replace('_', ' ')} at the inspection` : `returned for ${line.reasonCode.toLowerCase().replace(/_/g, ' ')}`
-    const opened = await openRegisterEntryFor(tools, {
-      companyId: rma.companyId,
-      kind: 'COMPLAINT',
-      styleId: facts.style.id,
-      shipmentIds: [shipment.shipmentId],
-      serials: line.serial ? [line.serial] : [],
-      batchNumbers: line.batchNumber ? [line.batchNumber] : [],
-      description: `Return ${rma.number} line ${line.seq}: ${line.description}, ${why}.${line.reasonNote ? ` The customer: ${line.reasonNote}` : ''}${line.conditionNote ? ` Condition: ${line.conditionNote}` : ''}`.slice(0, 2000),
-      partyId: rma.partyId,
-      reportedAt: rma.requestedAt,
-      source: { type: 'Shipment', id: shipment.shipmentId },
-    })
-    entries.push({ lineId: line.id, seq: line.seq, entryId: opened.entryId, reference: opened.reference, opened: opened.opened, words: opened.opened ? `PPE register entry ${opened.reference} opened.` : `In PPE register entry ${opened.reference} (its shipment's).` })
+    const sentence = `Line ${line.seq}: ${line.description}, ${why}.${line.reasonNote ? ` The customer: ${line.reasonNote}` : ''}${line.conditionNote ? ` Condition: ${line.conditionNote}` : ''}`
+    safety.push({ line, styleId: facts.style.id, shipmentId: shipment.shipmentId, sentence })
   }
-  return entries
+
+  if (safety.length > 0) {
+    const source = { type: 'ReturnAuthorisation', id: rma.id } as const
+    const existing = await readEntryBySource(tx, source.type, source.id)
+    const styleId = existing?.styleId ?? safety[0]!.styleId
+    const joining = safety.filter((entry) => entry.styleId === styleId)
+    const facts = (entries: readonly SafetyLine[]) => ({
+      shipmentIds: entries.map((entry) => entry.shipmentId),
+      serials: entries.flatMap((entry) => (entry.line.serial ? [entry.line.serial] : [])),
+      batchNumbers: entries.flatMap((entry) => (entry.line.batchNumber ? [entry.line.batchNumber] : [])),
+    })
+    let entry: { id: string; reference: string }
+    if (!existing) {
+      const opened = await openRegisterEntryFor(tools, {
+        companyId: rma.companyId,
+        kind: 'COMPLAINT',
+        styleId,
+        ...facts(joining),
+        // "Return RMA-2026-0001 line 10: … Line 20: …" (W2a's words for one line).
+        description: `Return ${rma.number} ${joining.map((line) => line.sentence).join(' ').replace(/^Line /, 'line ')}`.slice(0, REGISTER_LIMITS.description),
+        partyId: rma.partyId,
+        reportedAt: rma.requestedAt,
+        source,
+      })
+      entry = { id: opened.entryId, reference: opened.reference }
+      const first = joining[0]!.line
+      for (const { line } of joining) {
+        answers.set(line.id, line === first
+          ? { lineId: line.id, seq: line.seq, entryId: entry.id, reference: entry.reference, opened: true, words: `PPE register entry ${entry.reference} opened.` }
+          : { lineId: line.id, seq: line.seq, entryId: entry.id, reference: entry.reference, opened: false, words: `In PPE register entry ${entry.reference} (the return's), with line ${first.seq}.` })
+      }
+    } else {
+      entry = { id: existing.id, reference: existing.reference }
+      // A line the description names already (the same line decided later) adds no words again.
+      const fresh = joining.filter(({ line }) => !existing.description.toLowerCase().includes(`line ${line.seq}:`))
+      const added = await addToRegisterEntryFor(tools, existing.id, { ...facts(joining), description: fresh.map((line) => line.sentence).join(' ') })
+      for (const { line } of joining) {
+        answers.set(line.id, {
+          lineId: line.id,
+          seq: line.seq,
+          entryId: entry.id,
+          reference: entry.reference,
+          opened: false,
+          words: added.closed ? `The return's PPE register entry ${entry.reference} is closed: ${byHand(line.seq)}` : `In PPE register entry ${entry.reference} (the return's).`,
+        })
+      }
+    }
+    for (const { line } of safety.filter((candidate) => candidate.styleId !== styleId)) {
+      answers.set(line.id, { lineId: line.id, seq: line.seq, entryId: null, reference: null, opened: false, words: `Line ${line.seq} is of another style than the return's PPE register entry ${entry.reference}: ${byHand(line.seq)}` })
+    }
+  }
+  return lines.flatMap((line) => answers.get(line.id) ?? [])
 }

@@ -52,6 +52,8 @@ export const libraryContract = defineContract({
           mail: z.string().nullable(),
           /** The person receives that e-mail now (the library's schedule badge). */
           mailed: z.boolean(),
+          /** B-W2b-24: when the person last ran it (their own run log, ReportRun; never another person's runs), or null. */
+          lastRunByMe: instant().nullable(),
         }),
       ),
     }),
@@ -80,6 +82,8 @@ export const reportAboutContract = defineContract({
       numbers: z.array(output({ key: z.string(), label: z.string() })),
       mail: z.string().nullable(),
       formats: z.array(z.enum(REPORT_FORMATS)),
+      /** B-W2b-24: when the person last ran this report (their own run log), or null. */
+      lastRunByMe: instant().nullable(),
     }),
   },
 })

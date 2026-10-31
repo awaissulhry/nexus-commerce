@@ -1,0 +1,70 @@
+/*
+ * DS — ProtectedValue (B-W2b-28). Colours are semantic roles paired as the contrast gate measures them (the field on
+ * `--nds-surface`; the view mark in `--nds-warning-text` on `--nds-warning-soft`; a failure in `--nds-danger-text`).
+ * Restricted is a lock and a word, never colour alone. Sizes read `--nds-density-*`.
+ */
+.nds-protected {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  font-size: var(--nds-density-font-body);
+  color: var(--nds-text);
+}
+.nds-protected-label {
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+.nds-protected-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  min-width: 0;
+}
+.nds-protected-restricted,
+.nds-protected-closed,
+.nds-protected-failed {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+}
+.nds-protected-icon {
+  flex-shrink: 0;
+  width: 1.1em;
+  height: 1.1em;
+}
+.nds-protected-restricted {
+  padding: var(--nds-space-2) var(--nds-space-10);
+  border: 1px dashed var(--nds-border-strong);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+}
+.nds-protected-word {
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-protected-note {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-protected-value {
+  min-width: 0;
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.nds-protected-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-2) var(--nds-space-8);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+  font-size: var(--nds-density-font-label);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-protected-failed .nds-protected-word {
+  color: var(--nds-danger-text);
+}

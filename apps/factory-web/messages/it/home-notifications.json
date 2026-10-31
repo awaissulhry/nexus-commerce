@@ -234,6 +234,12 @@
       },
       "complaint": {
         "safety": "Reclamo di sicurezza {record}: {title}. È nel registro DPI; il titolare ne prende atto sul reclamo"
+      },
+      "security": {
+        "drillDue": "La prossima prova di ripristino scade il {title}: l’ultima superata è del {record}"
+      },
+      "calls": {
+        "raised": "Chiamata di aiuto dalla postazione {record}: {title}"
       }
     },
     "fallback": "Novità su {record}",

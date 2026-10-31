@@ -334,7 +334,7 @@ export function opened(tools: Pick<CommandTools, 'emit'>, record: EntryRecord, s
 
 const about = (record: EntryRecord) => ({ entryId: record.id, reference: record.reference, kind: record.kind, styleId: record.styleId, risk: record.risk })
 
-function changed(tools: Pick<CommandTools, 'emit'>, before: EntryRecord, after: EntryRecord, change: 'EDITED' | 'ACTION_COMPLETED' | 'DISTRIBUTORS_INFORMED' | 'AUTHORITY_NOTIFIED'): void {
+export function changed(tools: Pick<CommandTools, 'emit'>, before: EntryRecord, after: EntryRecord, change: 'EDITED' | 'ACTION_COMPLETED' | 'DISTRIBUTORS_INFORMED' | 'AUTHORITY_NOTIFIED'): void {
   tools.emit({ type: 'compliance.register_entry_changed', subject: after.id, companyId: after.companyId, payload: { ...about(after), change, previousRisk: before.risk } })
 }
 

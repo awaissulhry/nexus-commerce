@@ -4,18 +4,19 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Columns3, Download } from 'lucide-react'
 import { Menu, useToast, type MenuItemDef } from '@nexus/ui/components'
 import type { ExportFormat } from '@nexus/factory-domain/views/exports'
+import type { Density } from '@nexus/factory-domain/views/state'
 import { formatNumber, formatTime } from '../../lib/i18n/format'
 import { useLocale, useT } from '../../lib/i18n/provider'
 import type { Translate } from '../../lib/i18n/messages'
-import { CustomiseDialog, ExportJobDialog, RemoveViewDialog, SaveViewDialog } from './dialogs'
+import { CustomiseDialog, DENSITY_CHOICES, ExportJobDialog, RemoveViewDialog, SaveViewDialog } from './dialogs'
 import { exportColumnsOf, isActiveJob, recentJobs } from './model'
 import { problemOf, type ExportJob, type SavedView, type ToolsProblem, type ViewDraft, type ViewsAnswer } from './transport'
 import { stateOfScreen, type ListToolsState } from './useListTools'
 
 /**
  * The list toolbar's shared words (B-W2a-23; design shell.lists sec:toolbar "Search · Rows ▾ · Columns ▾ · density ·
- * Export ▾ · ⋯"): Columns ▾ (the person's views and the shared ones, Save view as…, Update, Rename or share, Copy
- * link, Remove, then Customise columns…) and Export ▾ (this view as CSV or Excel, the full file for re-import when the
+ * Export ▾ · ⋯"): Columns ▾ (the person's views and the shared ones, Save view as…, Update, Rename or share, Make it
+ * my default / Stop using it as my default (B-W2b-24: my own views only), Copy link, Remove, then Customise columns…) and Export ▾ (this view as CSV or Excel, the full file for re-import when the
  * list has one, then the person's recent exports of the list). The density is chosen in Customise (the one Customise
  * dialog), never a third control in a toolbar that already wraps on a phone. A list without an export has no Export ▾;
  * a person without views.export neither (the section is absent, never a locked box).
@@ -26,7 +27,8 @@ type Dialog = { kind: 'save' } | { kind: 'edit'; view: SavedView } | { kind: 're
 /** Who sees a view, in words, for its menu line. */
 export function sharingWords(t: Translate, view: SavedView): string {
   const who = view.audience === 'ONLY_ME' ? t('tools.onlyMe') : view.audience === 'EVERYONE' ? t('tools.everyone') : view.roleDefault ? t('tools.defaultFor', { role: view.roleName ?? '' }) : t('tools.forRole', { role: view.roleName ?? '' })
-  return view.mine ? who : t('tools.sharedBy', { name: view.ownerName, who })
+  if (!view.mine) return t('tools.sharedBy', { name: view.ownerName, who })
+  return view.personalDefault ? `${who} · ${t('tools.myDefault')}` : who
 }
 
 export interface ColumnsMenuInput {
@@ -45,11 +47,33 @@ export interface ColumnsMenuActions {
   readonly edit: (view: SavedView) => void
   readonly copy: (view: SavedView) => void
   readonly remove: (view: SavedView) => void
+  /** B-W2b-24: make my own view my default of the list (on) or no longer (off). */
+  readonly setDefault: (view: SavedView, on: boolean) => void
   readonly customise: () => void
 }
 
+/** A column the person's rights leave out (design sec:grid: "the Columns menu lists them as 'Hidden: needs cost rights'"). */
+export interface WithheldColumn {
+  readonly label: string
+  /** Why, in the list's words ("needs cost rights"). */
+  readonly reason: string
+}
+
+/**
+ * B-W2b-13 (PLT-165 "Column chooser, freeze and density"): beside Customise, the quick ones — freeze the first column,
+ * the rows' density — and the columns the person's rights leave out, each said, never a locked box.
+ */
+export interface ColumnsMenuQuick {
+  readonly density: Density
+  readonly onDensity: (density: Density) => void
+  /** The first column's name, and whether it is frozen at the left edge now. */
+  readonly first: { readonly label: string; readonly frozen: boolean } | null
+  readonly onFreeze: (frozen: boolean) => void
+  readonly withheld?: readonly WithheldColumn[]
+}
+
 /** Columns ▾: views, then the active view's verbs, then Customise (pure, for the tests). */
-export function columnsMenuItems(t: Translate, input: ColumnsMenuInput, act: ColumnsMenuActions): MenuItemDef[] {
+export function columnsMenuItems(t: Translate, input: ColumnsMenuInput, act: ColumnsMenuActions, quick?: ColumnsMenuQuick): MenuItemDef[] {
   const { answer, problem, active, changed } = input
   const items: MenuItemDef[] = [{ id: 'h-views', heading: true, label: t('tools.views') }]
   items.push({ id: 'built', label: t('tools.standard'), checked: active === null && input.asBuilt, description: t('tools.standardHint'), onSelect: () => act.apply(null) })
@@ -75,11 +99,25 @@ export function columnsMenuItems(t: Translate, input: ColumnsMenuInput, act: Col
     } else {
       items.push({ id: 'edit', label: t('tools.edit', { name: active.name }), disabled: true, description: active.mine ? t('tools.held.manage') : t('tools.held.change') })
     }
+    // B-W2b-24: my default view of the list (only a view of my own: the mark is its owner's).
+    if (!active.mine) items.push({ id: 'default', label: t('tools.makeDefault', { name: active.name }), disabled: true, description: t('tools.held.defaultNotOwn') })
+    else if (active.personalDefault) items.push({ id: 'default', label: t('tools.stopDefault', { name: active.name }), description: t('tools.stopDefaultHint'), onSelect: () => act.setDefault(active, false) })
+    else if (canSave) items.push({ id: 'default', label: t('tools.makeDefault', { name: active.name }), description: t('tools.makeDefaultHint'), onSelect: () => act.setDefault(active, true) })
+    else items.push({ id: 'default', label: t('tools.makeDefault', { name: active.name }), disabled: true, description: t('tools.held.save') })
     items.push({ id: 'link', label: t('tools.copyLink', { name: active.name }), onSelect: () => act.copy(active) })
     if (active.changeHeld === null) items.push({ id: 'remove', label: t('tools.remove', { name: active.name }), tone: 'danger', onSelect: () => act.remove(active) })
   }
   items.push({ id: 's-customise', separator: true })
   items.push({ id: 'customise', label: t('tools.customiseItem'), onSelect: act.customise })
+  if (quick) {
+    if (quick.first) items.push({ id: 'freeze', label: t('tools.freezeFirst', { column: quick.first.label }), checked: quick.first.frozen, description: t('tools.freezeHint'), onSelect: () => quick.onFreeze(!quick.first!.frozen) })
+    items.push({ id: 'h-density', heading: true, label: t('tools.customise.density') })
+    for (const density of DENSITY_CHOICES) items.push({ id: `d-${density}`, label: t(`tools.density.${density}`), checked: quick.density === density, onSelect: () => quick.onDensity(density) })
+    if (quick.withheld && quick.withheld.length > 0) {
+      items.push({ id: 'h-withheld', heading: true, label: t('tools.withheld') })
+      for (const column of quick.withheld) items.push({ id: `w-${column.label}`, label: column.label, disabled: true, description: t('tools.withheldItem', { reason: column.reason }) })
+    }
+  }
   return items
 }
 
@@ -102,6 +140,12 @@ export function exportMenuItems(t: Translate, formats: readonly ExportFormat[], 
   return items
 }
 
+/** The list's first column and whether the layout freezes it (Columns ▾ "Freeze …"). */
+function firstColumn<T>(state: ListToolsState<T>): ColumnsMenuQuick['first'] {
+  const first = state.tools.find((column) => column.fixed === 'first')
+  return first ? { label: first.label, frozen: (state.layout.columns?.pinned ?? []).includes(first.id) } : null
+}
+
 /** The DS toast, or nothing when no provider is mounted (the grid card mounts one). */
 function useReceipt(): (message: string, tone?: 'success' | 'danger') => void {
   let api: ReturnType<typeof useToast> | null = null
@@ -113,7 +157,7 @@ function useReceipt(): (message: string, tone?: 'success' | 'danger') => void {
   return (message, tone = 'success') => api?.toast(message, tone)
 }
 
-export function ListToolsBar<T>({ state }: { state: ListToolsState<T> }) {
+export function ListToolsBar<T>({ state, withheld }: { state: ListToolsState<T>; withheld?: readonly WithheldColumn[] }) {
   const t = useT('lists')
   const locale = useLocale()
   const receipt = useReceipt()
@@ -241,7 +285,29 @@ export function ListToolsBar<T>({ state }: { state: ListToolsState<T> }) {
       edit: (view) => setDialog({ kind: 'edit', view }),
       copy: (view) => void copy(transport.viewLink(view.id)),
       remove: (view) => setDialog({ kind: 'remove', view }),
+      setDefault: (view, on) =>
+        void transport
+          .setPersonalDefault(view, on, transport.newKey())
+          .then((next) => {
+            state.defaulted(next.view, next.personalDefaultId)
+            receipt(on ? t('tools.save.defaultOn', { name: view.name }) : t('tools.save.defaultOff', { name: view.name }))
+          })
+          .catch((error: unknown) => receipt(t(`tools.problem.${problemOf(error)}`), 'danger')),
       customise: () => setDialog({ kind: 'customise' }),
+    },
+    {
+      density: state.layout.density ?? 'cozy',
+      onDensity: (density) => state.setLayout({ ...state.layout, density: density === 'cozy' ? undefined : density }),
+      first: firstColumn(state),
+      onFreeze: (frozen) => {
+        const first = state.tools.find((column) => column.fixed === 'first')
+        if (!first) return
+        const current = state.layout.columns ?? { order: [], hidden: [], pinned: [] }
+        const pinned = frozen ? [first.id, ...current.pinned.filter((id) => id !== first.id)] : current.pinned.filter((id) => id !== first.id)
+        const next = { ...current, pinned }
+        state.setLayout({ ...state.layout, columns: next.order.length + next.hidden.length + next.pinned.length > 0 ? next : undefined })
+      },
+      ...(withheld ? { withheld } : {}),
     },
   )
 

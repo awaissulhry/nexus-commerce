@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { DEVICES } from '../shared/fixtures'
-import { batteryOf, BATTERY_LOW_PERCENT, isOutdated } from './model'
+import { CATALOGUE, createTranslator } from '../../../lib/i18n/messages'
+import { at, DEVICES, NOW } from '../shared/fixtures'
+import { batteryOf, BATTERY_LOW_PERCENT, inUseSinceOf, isOutdated, networkKey } from './model'
+import { inUseSinceWords } from './view/columns'
 
 /**
  * Admin › Devices, the W2a part (B-W2a-42; design admin.devices "App version (outdated marked)", "Battery"): what the
@@ -25,5 +27,23 @@ describe('a tablet\'s own state', () => {
     expect(batteryOf({ ...tablet, batteryPercent: 5, batteryCharging: true })).toMatchObject({ low: false, charging: true })
     expect(batteryOf({ ...tablet, batteryPercent: null })).toBeNull()
     expect(batteryOf(tablet)).toBeNull()
+  })
+})
+
+describe('B-W2b-24: the network and since when it is in use (never who)', () => {
+  const t = createTranslator('en', CATALOGUE.en.admin!)
+
+  it('says the network only as the tablet reported it', () => {
+    expect(networkKey({ network: 'WIFI' })).toBe('devices.network.WIFI')
+    expect(networkKey({ network: null })).toBeNull()
+    expect(networkKey({})).toBeNull()
+  })
+
+  it('says since when only for a device in use whose time is known; the time alone today, else the day too', () => {
+    expect(inUseSinceOf({ inUse: false, inUseSince: at(29, 5, 12) })).toBeNull()
+    expect(inUseSinceOf({ inUse: true, inUseSince: null })).toBeNull()
+    expect(inUseSinceWords({ inUse: true, inUseSince: at(29, 5, 12) }, { t, locale: 'en', now: Date.parse(NOW) })).toBe('In use since 06:12')
+    expect(inUseSinceWords({ inUse: true, inUseSince: at(28, 15, 40) }, { t, locale: 'en', now: Date.parse(NOW) })).toMatch(/^In use since 28\/10\/2026/)
+    expect(inUseSinceWords({ inUse: false, inUseSince: null }, { t, locale: 'en', now: Date.parse(NOW) })).toBeNull()
   })
 })

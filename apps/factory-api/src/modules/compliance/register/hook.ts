@@ -1,11 +1,11 @@
-import { cleanList, entryProblems, type RegisterKind, type RegisterRisk, type RegisterSource } from '@nexus/factory-domain/compliance/register/rules'
+import { cleanList, entryProblems, REGISTER_LIMITS, type RegisterKind, type RegisterRisk, type RegisterSource } from '@nexus/factory-domain/compliance/register/rules'
 import { ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { uniqueIds } from '@nexus/factory-domain/threads/rules'
 import type { CommandTools } from '../../../core/command'
 import { ApiError } from '../../../core/errors'
-import { opened } from './register'
-import { insertEntry, nextReference, readEntryBySource } from './store'
+import { changed, opened } from './register'
+import { insertEntry, lockEntry, nextReference, readEntryBySource, updateEntry, type EntryChanges } from './store'
 import { traceOf } from './trace'
 
 /**
@@ -105,4 +105,46 @@ export async function openRegisterEntryFor(tools: CommandTools, opening: Registe
   const trace = await traceOf(tx, record.companyId, record)
   opened(tools, record, trace.shippedGoods)
   return { entryId: record.id, reference, opened: true, shippedGoods: trace.shippedGoods }
+}
+
+/** What another step learnt later about the entry its source opened (B-W2b-F1: a later line of a customer's return). */
+export interface RegisterAddition {
+  readonly shipmentIds?: readonly string[]
+  readonly serials?: readonly string[]
+  readonly batchNumbers?: readonly string[]
+  /** Words added at the end of the description, when they still fit in it. */
+  readonly description?: string
+}
+
+/**
+ * B-W2b-F1: adds what the caller learnt later to the entry its source opened, INSIDE the caller's command (the entry's
+ * row locked): while the entry is OPEN its lists take the new shipments, serials and batch numbers, and its description
+ * the new words when they still fit; audit row (action compliance.register.addFrom) and the event
+ * compliance.register_entry_changed (EDITED). Nothing new: nothing written. A CLOSED entry never changes: the answer
+ * says so and the caller says what to do. Office and system callers only.
+ */
+export async function addToRegisterEntryFor(tools: CommandTools, entryId: string, addition: RegisterAddition): Promise<{ readonly reference: string; readonly closed: boolean; readonly added: boolean }> {
+  const { tx, context, now } = tools
+  if (context.audience !== 'office' && context.audience !== 'system') {
+    throw new ApiError('internal_error', `The PPE register is kept by office and system commands, not the ${context.audience} audience.`)
+  }
+  const locked = await lockEntry(tx, entryId)
+  if (locked.status !== 'OPEN') return { reference: locked.reference, closed: true, added: false }
+  const shipmentIds = uniqueIds([...locked.shipmentIds, ...(addition.shipmentIds ?? [])])
+  const serials = cleanList([...locked.serials, ...(addition.serials ?? [])])
+  const batchNumbers = cleanList([...locked.batchNumbers, ...(addition.batchNumbers ?? [])])
+  const words = addition.description?.trim() ?? ''
+  const description = `${locked.description} ${words}`
+  const changes: EntryChanges = {
+    ...(shipmentIds.length > locked.shipmentIds.length ? { shipmentIds } : {}),
+    ...(serials.length > locked.serials.length ? { serials } : {}),
+    ...(batchNumbers.length > locked.batchNumbers.length ? { batchNumbers } : {}),
+    ...(words !== '' && description.length <= REGISTER_LIMITS.description ? { description } : {}),
+  }
+  if (Object.keys(changes).length === 0) return { reference: locked.reference, closed: false, added: false }
+  const problems = entryProblems({ ...locked, ...changes }, now)
+  if (problems.length > 0) throw new ValidationError('The register entry is not valid.', problems)
+  const written = await updateEntry(tools, locked, changes, { action: 'compliance.register.addFrom' })
+  changed(tools, locked, written, 'EDITED')
+  return { reference: locked.reference, closed: false, added: true }
 }

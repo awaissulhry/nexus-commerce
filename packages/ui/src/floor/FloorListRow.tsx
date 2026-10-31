@@ -25,13 +25,25 @@ export interface FloorListProps {
   children: ReactNode
   /** The list's name for a screen reader. */
   label?: string
+  /**
+   * The updates slot (B-W2b-28, the floor form of D11): drawn above the rows — a `FloorListUpdates` button
+   * (`floor/FloorListUpdates`), so rows never move under a finger. Unset: the list draws exactly as before.
+   */
+  updates?: ReactNode
 }
 
-export function FloorList({ children, label }: FloorListProps) {
-  return (
+export function FloorList({ children, label, updates }: FloorListProps) {
+  const list = (
     <ul className="nds-floor-list" aria-label={label}>
       {children}
     </ul>
+  )
+  if (!updates) return list
+  return (
+    <>
+      {updates}
+      {list}
+    </>
   )
 }
 
