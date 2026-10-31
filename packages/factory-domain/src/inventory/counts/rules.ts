@@ -43,6 +43,18 @@ export type CountLineOrigin = (typeof COUNT_LINE_ORIGINS)[number]
 export const COUNT_ITEM_KINDS = [...ITEM_KINDS, 'FINISHED'] as const
 export type CountItemKind = (typeof COUNT_ITEM_KINDS)[number]
 
+/**
+ * B-W2b-15: the counts list's saved rows that the state alone does not say (the tiles' own rows): waiting for approval
+ * (submitted, over the approval limit) and to apply (approved, or submitted under the limit: the apply approves it).
+ */
+export const COUNT_LIST_VIEWS = ['waitingApproval', 'toApply'] as const
+export type CountListView = (typeof COUNT_LIST_VIEWS)[number]
+
+/** The rows of a saved row, as a filter on the count's state and approval (the same the tiles count). */
+export function countListViewFilter(view: CountListView): { readonly status: 'SUBMITTED' | 'APPROVED'; readonly approvalRequired?: boolean }[] {
+  return view === 'waitingApproval' ? [{ status: 'SUBMITTED', approvalRequired: true }] : [{ status: 'APPROVED' }, { status: 'SUBMITTED', approvalRequired: false }]
+}
+
 export const stockCountMachine = defineMachine({
   name: 'stock count',
   states: STOCK_COUNT_STATUSES,

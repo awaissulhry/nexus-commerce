@@ -23,7 +23,7 @@ import { ACTION_COLUMNS, type ActionRow, type NcrRow } from './store'
  *   change   the words, owner, due time of an OPEN action.
  *   done     with its evidence (a note, or a file of the action uploaded first: POST /files recordType
  *            "NcrContainmentAction"), the hold for HOLD_STOCK, or the record it made (a message).
- *   cancel   with the reason (kept as its evidence). An NCR is contained once every action is done or cancelled and one
+ *   cancel   with the reason (B-W2b-17: NcrContainmentAction.cancelReason; before, "Cancelled: …" in its evidence note). An NCR is contained once every action is done or cancelled and one
  *            is done.
  */
 
@@ -213,7 +213,7 @@ export async function doneAction(caller: CommandCaller, ncrId: string, actionId:
   return result
 }
 
-/** POST /quality/ncr/:ncrId/containment/:actionId/cancel: not needed after all, with the reason (kept as its evidence). */
+/** POST /quality/ncr/:ncrId/containment/:actionId/cancel: not needed after all, with the reason (B-W2b-17: its own column). */
 export async function cancelAction(caller: CommandCaller, ncrId: string, actionId: string, body: { readonly version: number; readonly reason: string }, idempotencyKey?: string) {
   const { row } = await visibleNcr(caller, ncrId, QUALITY_NCR_MANAGE)
   assertContainable(row)
@@ -223,7 +223,7 @@ export async function cancelAction(caller: CommandCaller, ncrId: string, actionI
     assertContainable(ncr)
     await openAction(tools, ncrId, actionId, body.version)
     const reason = body.reason.trim()
-    const after = await tx.ncrContainmentAction.update({ where: { id: actionId }, data: { status: 'CANCELLED', evidenceNote: `Cancelled: ${reason}`, version: { increment: 1 }, updatedAt: now }, select: ACTION_COLUMNS })
+    const after = await tx.ncrContainmentAction.update({ where: { id: actionId }, data: { status: 'CANCELLED', cancelReason: reason, version: { increment: 1 }, updatedAt: now }, select: ACTION_COLUMNS })
     tools.audit({ action: 'quality.cancelNcrAction', recordType: 'NcrContainmentAction', recordId: actionId, ...scopeOf(ncr), before: { status: 'OPEN' }, after: { status: 'CANCELLED' }, reason })
     emit(tools, ncr, after, 'CANCELLED', null)
     return answerOf(tools, ncrId)

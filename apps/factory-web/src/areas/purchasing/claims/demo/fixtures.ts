@@ -127,7 +127,7 @@ const hideLine = (seq: number, hide: number, area: string, over: Partial<ClaimLi
   item: { ...leather, baseUom: 'FT2', tracking: 'HIDE' },
   colour: COLOURS.black,
   lot: { id: LOTS.leather.id, code: LOTS.leather.code, qualityStatus: 'QUARANTINE' },
-  hide: { id: uid('8282', hide), code: `HD-DEMO-0042-${hide}` },
+  hide: { id: uid('8282', hide), code: `HD-DEMO-0042-${hide}`, state: 'FULL' },
   discrepancy: null,
   receiptLineId: uid('6302', 1),
   quantity: area,
@@ -153,9 +153,9 @@ export function claim(kind: 'RETURN' | 'CLAIM', status: ClaimStatus, over: Parti
   const lines: ClaimLine[] =
     kind === 'RETURN'
       ? [hideLine(10, 1, '52.4000'), hideLine(20, 2, '51.8000'), hideLine(30, 3, '52.0000')].map((line) =>
-          returned ? { ...line, move: { id: uid('6464', line.seq), reason: 'ADJUSTMENT', occurredAt: at(17, 9, 20), quantity: line.quantity, uom: line.uom, fromLocation: { id: uid('2323', 2), code: 'N-STORE' } }, ddt: { id: DDT.id, number: DDT.number, cancelled: false }, liveDdt: { id: DDT.id, number: DDT.number } } : line,
+          returned ? { ...line, hide: line.hide ? { ...line.hide, state: 'RETURNED' } : null, move: { id: uid('6464', line.seq), reason: 'SUPPLIER_RETURN', occurredAt: at(17, 9, 20), quantity: line.quantity, uom: line.uom, fromLocation: { id: uid('2323', 2), code: 'N-STORE' } }, ddt: { id: DDT.id, number: DDT.number, cancelled: false }, liveDdt: { id: DDT.id, number: DDT.number } } : line,
         )
-      : [hideLine(10, 7, '4.5000', { lot: { id: LOTS.leatherB.id, code: LOTS.leatherB.code, qualityStatus: 'RELEASED' }, hide: { id: uid('8282', 7), code: 'HD-DEMO-0043-7' }, discrepancy: { id: uid('6303', 1), seq: 10, kind: 'DAMAGED', status: sent ? (answered ? 'AGREED' : 'SENT') : 'OPEN', receiptId: RECEIPT.id }, reason: 'Graffio profondo sul fiore' })]
+      : [hideLine(10, 7, '4.5000', { lot: { id: LOTS.leatherB.id, code: LOTS.leatherB.code, qualityStatus: 'RELEASED' }, hide: { id: uid('8282', 7), code: 'HD-DEMO-0043-7', state: 'PARTLY_CUT' }, discrepancy: { id: uid('6303', 1), seq: 10, kind: 'DAMAGED', status: sent ? (answered ? 'AGREED' : 'SENT') : 'OPEN', receiptId: RECEIPT.id }, reason: 'Graffio profondo sul fiore' })]
   const value = lines.reduce((sum, line) => sum + (line.creditAmount ?? 0), 0)
   return {
     id: kind === 'RETURN' ? CLAIM_IDS.ret : CLAIM_IDS.claim,
@@ -194,6 +194,12 @@ export function claim(kind: 'RETURN' | 'CLAIM', status: ClaimStatus, over: Parti
     lines,
     ddts: returned ? [{ id: DDT.id, number: DDT.number, documentDate: '2026-11-17', reason: 'RETURN', startAt: at(17, 9, 30), cancelled: false, lineIds: lines.map((line) => line.id) }] : [],
     credit: { currency: 'EUR', remedy: 'CREDIT', expected: status === 'ACCEPTED' && kind === 'CLAIM' ? 1500 : value, value, matched: null, difference: null },
+    // B-W2b-14: photos, letters, the supplier's contact (made up; the design cases add them).
+    photos: [],
+    discrepancyPhotos: [],
+    letters: [],
+    supplierContact: { id: uid('6161', 1), name: 'Ufficio qualità Demo', email: 'qualita@conceria-demo.example.com', roles: ['QUALITY'] },
+    ncr: null,
     people: [PEOPLE.buyer, PEOPLE.warehouse],
     ...over,
   }
@@ -215,6 +221,7 @@ export const SEND_CHECK: SendCheck = {
   language: 'it',
   subject: 'Reclamo CLM-DEMO-0013 — ricevimento GR-DEMO-0022',
   message: 'Buongiorno,\nsegnaliamo per la consegna DDT-CD-118 del 10/11/2026 una fornitura incompleta del lotto LT-DEMO-0043 (4,5 ft²).\nChiediamo una nota di credito.\nCordiali saluti',
+  letter: { attached: true, problems: [] },
 }
 
 export const REASON_LIST: PickerReason[] = [
@@ -304,3 +311,16 @@ export function returnAnswer(over: Partial<ReturnAnswer> = {}): ReturnAnswer {
     ...over,
   }
 }
+
+// ---- B-W2b-14 (SCM-135): a claim's evidence — photos, the discrepancy's photos, letter versions (made up) ---------------
+
+/** A made-up picture (no store): a hide with a hole. */
+export const PHOTO_ADDRESS = `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120" viewBox="0 0 160 120"><rect width="160" height="120" fill="#8a6a4f"/><ellipse cx="80" cy="60" rx="58" ry="40" fill="#6d4f38"/><circle cx="104" cy="48" r="9" fill="none" stroke="#f3e3c3" stroke-width="3"/></svg>')}`
+const claimPhoto = (n: number, over: Record<string, unknown> = {}) => ({ id: uid('7171', n), originalName: `CLM-DEMO-0013-${n}.jpg`, contentType: 'image/jpeg', sizeBytes: 182_000 + n, status: 'AVAILABLE', version: 2, createdAt: at(16, 9, 10 + n), createdById: PEOPLE.buyer.id, ...over })
+export const CLAIM_PHOTOS = [claimPhoto(1), claimPhoto(2)]
+export const DISCREPANCY_PHOTOS = [{ ...claimPhoto(9, { originalName: 'GR-DEMO-0022-10.jpg', createdById: PEOPLE.warehouse.id }), discrepancyId: uid('6303', 1), discrepancySeq: 10 }]
+export const LETTERS = [
+  { id: uid('7272', 2), version: 2, language: 'it', number: 'CLM-DEMO-0013', fileId: uid('7373', 2), createdAt: at(17, 9, 5), createdById: PEOPLE.buyer.id },
+  { id: uid('7272', 1), version: 1, language: 'it', number: 'CLM-DEMO-0013', fileId: uid('7373', 1), createdAt: at(16, 11, 30), createdById: PEOPLE.buyer.id },
+]
+export const PHOTO_ADDRESSES: Record<string, string> = Object.fromEntries([...CLAIM_PHOTOS, ...DISCREPANCY_PHOTOS].map((photo) => [photo.id, PHOTO_ADDRESS]))

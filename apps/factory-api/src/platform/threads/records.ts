@@ -189,6 +189,12 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const complaint = await client.complaint.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
     return complaint ? { companyId: complaint.companyId, siteId: null, partyId: complaint.partyId } : null
   },
+  // B-W2b-15 (modules/inventory/counts, follow-up Z2:05): a stock count's thread, of its company and site; internal notes
+  // only (no party).
+  StockCount: async (client, id) => {
+    const count = await client.stockCount.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
+    return count ? { companyId: count.companyId, siteId: count.siteId, partyId: null } : null
+  },
 })
 
 let extra: Readonly<Record<string, RecordResolver>> = {}

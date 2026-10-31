@@ -23,13 +23,15 @@ export interface CountsCan {
   apply: boolean
   /** The cost grain: the differences' value, unit costs, the valued list. */
   cost: boolean
-  /** Choosing a material in New count / Found stock (Products › Materials & trims' list). */
+  /** Choosing what to count in New count / Found stock: B-W2b-15, the count's own item search (materials and finished garments: inventory.counts.view). */
   materials: boolean
   /** Choosing a lot or hide (Lots & traceability, Hides) and opening Movements. */
   stock: boolean
   locations: boolean
   /** The frozen valued list's files. */
   files: boolean
+  /** B-W2b-15: the count's thread, files and history (Activity: threads.read). */
+  threads: boolean
 }
 
 export function countsCan(permissions: readonly string[]): CountsCan {
@@ -41,10 +43,11 @@ export function countsCan(permissions: readonly string[]): CountsCan {
     signOff: held.has('inventory.counts.signoff'),
     apply: held.has('inventory.adjust'),
     cost: held.has('money.cost'),
-    materials: held.has('product.materials.view'),
+    materials: held.has('inventory.counts.view'),
     stock: held.has('inventory.stock.view'),
     locations: held.has('inventory.locations.view'),
     files: held.has('files.read'),
+    threads: held.has('threads.read'),
   }
 }
 
@@ -57,8 +60,8 @@ export const isListView = (value: string | null | undefined): value is ListView 
 export const listViewOf = (value: string | null | undefined): ListView => (isListView(value) ? value : 'open')
 
 /**
- * A saved row → the API's own filter, and the part the API cannot filter (approval needed or not) checked on the rows it
- * answers: "Waiting for approval" = submitted and over the limit; "To apply" = approved, or submitted under the limit.
+ * A saved row → the API's own filter: "Waiting for approval" = submitted and over the limit; "To apply" = approved, or
+ * submitted under the limit (B-W2b-15: the API's `view`); `keep` stays for a row the API cannot say.
  */
 export function viewQuery(view: ListView): { query: CountQuery; keep: (row: CountRow) => boolean } {
   const all = () => true
@@ -69,10 +72,11 @@ export function viewQuery(view: ListView): { query: CountQuery; keep: (row: Coun
       return { query: { status: 'DRAFT' }, keep: all }
     case 'counting':
       return { query: { status: 'COUNTING' }, keep: all }
+    // B-W2b-15: the API filters these two as the tiles count them (no short page any more).
     case 'waiting':
-      return { query: { status: 'SUBMITTED' }, keep: (row) => row.status === 'SUBMITTED' && row.approvalRequired === true }
+      return { query: { view: 'waitingApproval' }, keep: all }
     case 'toApply':
-      return { query: { open: true }, keep: (row) => row.status === 'APPROVED' || (row.status === 'SUBMITTED' && row.approvalRequired === false) }
+      return { query: { view: 'toApply' }, keep: all }
     case 'yearEnd':
       return { query: { kind: 'YEAR_END', open: true }, keep: all }
     case 'applied':
@@ -144,7 +148,8 @@ export const COUNT_CSV_COLUMNS = ['number', 'kind', 'status', 'site', 'scope', '
 
 // ---- the record --------------------------------------------------------------------------------------------------------------
 
-export const RECORD_TABS = ['lines', 'differences', 'approval'] as const
+/** B-W2b-15: Activity = the count's thread, files and history (the record panels). */
+export const RECORD_TABS = ['lines', 'differences', 'approval', 'activity'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 export const recordTabOf = (value: string | null | undefined): RecordTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as RecordTab) : 'lines')
 

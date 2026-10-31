@@ -32,6 +32,7 @@ import { actorOf, type OfficeContext } from '../../../core/context'
 import { allocateNumber } from '../../../platform/numbering/allocate'
 import { openRegisterEntryFor } from '../../compliance/register/hook'
 import { closeHoldInCommand } from '../holds/holds'
+import { containmentHoursOf } from './settings'
 import { linkTarget, prefillFrom, type Prefill } from './sources'
 import {
   actionViews,
@@ -60,7 +61,8 @@ import {
  *
  *   raise    (quality.ncr.raise over the site) by hand or from a record (sources.ts prefills what the body leaves out):
  *            its number from the company's NCR series (allocateNumber), found by the person raising it unless the
- *            source names the finder, containment due 24 hours after it was found unless said; linked to its source's
+ *            source names the finder, containment due the company's containment time after it was found unless said
+ *            (B-W2b-17: QualitySettings.defaultContainmentHours, else the tenant's, else 24 hours); linked to its source's
  *            records; raised from a hold, it decides that hold (the hold's NCR set once) and its first containment
  *            action is the hold, done; a PPE nonconformity that may present a risk opens its PPE register entry.
  *   change   (quality.ncr.manage) the problem while OPEN or CONTAINED; the owner and the containment due time until it
@@ -78,8 +80,6 @@ import {
 export const typeWords = (recordType: string): string => recordType.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()
 
 const SCOPE_FIELDS = (row: { readonly companyId: string; readonly siteId: string }) => ({ companyId: row.companyId, siteId: row.siteId })
-/** The containment is due a day after the problem was found, unless the person says otherwise. */
-const DEFAULT_CONTAINMENT_HOURS = 24
 
 export function officeOf(caller: Pick<CommandCaller, 'factoryContext'>): OfficeContext {
   const context = caller.factoryContext
@@ -310,7 +310,8 @@ async function openRegister(tools: CommandTools, row: NcrRow, description: strin
 // ---- raise --------------------------------------------------------------------------------------------------------------
 
 export interface RaiseBody extends NcrContent {
-  readonly from?: { readonly recordType: NcrFromType; readonly recordId: string } | undefined
+  /** B-W2b-17: `defectIds` = the inspection's defect lines it is raised from ("Create NCR from N defects"). */
+  readonly from?: { readonly recordType: NcrFromType; readonly recordId: string; readonly defectIds?: readonly string[] | undefined } | undefined
   readonly siteId?: string | undefined
   readonly links?: readonly { readonly recordType: string; readonly recordId: string; readonly note?: string | null | undefined }[] | undefined
   readonly register?: boolean | undefined
@@ -327,6 +328,8 @@ const take = <Key extends keyof Prefill & keyof RaiseBody>(body: RaiseBody, pref
 export interface NcrRaiser {
   readonly actorId: string | null
   readonly may: (permission: Permission, row: { readonly companyId: string; readonly siteId: string }) => boolean
+  /** B-W2b-17: the NCR's id and number taken before this command (the bench: the tablet numbers it on the floor). */
+  readonly numbered?: { readonly id: string; readonly number: string } | undefined
 }
 
 /** POST /quality/ncr: raise an NCR, by hand or from a record (its prefill fills what the body leaves out). */
@@ -342,7 +345,7 @@ export async function raiseNcr(caller: CommandCaller, body: RaiseBody, idempoten
 /** Raises the NCR inside the caller's command (the office route's, or a system's): answers its id. */
 export async function raiseNcrInCommand(tools: CommandTools, body: RaiseBody, raiser: NcrRaiser): Promise<string> {
   const { tx, now } = tools
-  const prefill = body.from ? await prefillFrom(tx, body.from.recordType, body.from.recordId) : null
+  const prefill = body.from ? await prefillFrom(tx, body.from.recordType, body.from.recordId, { defectIds: body.from.defectIds }) : null
   if (body.from && !prefill) throw new NotFoundError(`${typeWords(body.from.recordType).replace(/^./, (first) => first.toUpperCase())} not found.`)
   if (prefill?.problem) throw new ConflictError(prefill.problem)
   if (prefill?.siteId && body.siteId && prefill.siteId !== body.siteId) refuse([{ path: 'siteId', message: `${prefill.label} is at another site.` }], 'The record is at another site.')
@@ -388,13 +391,16 @@ export async function raiseNcrInCommand(tools: CommandTools, body: RaiseBody, ra
   if (problems.length > 0) refuse(problems, 'The NCR is not complete.')
   if (body.containmentDueAt && new Date(body.containmentDueAt).getTime() < foundOn.getTime()) refuse([{ path: 'containmentDueAt', message: 'The containment is due after the problem was found.' }], 'The containment due time is before the problem.')
 
-  const id = newId()
-  const issued = await allocateNumber(tools, { companyId: site!.companyId, kind: 'NCR' }, { type: NCR_RECORD, id })
+  // B-W2b-17: the containment time of the company (QualitySettings, else the tenant's, else 24 hours).
+  const containmentHours = body.containmentDueAt === undefined ? (await containmentHoursOf(tx, site!.companyId)).hours : null
+  // B-W2b-17: an NCR raised at the bench comes numbered from the tablet's own command (bench-hold.ts).
+  const id = raiser.numbered?.id ?? newId()
+  const number = raiser.numbered?.number ?? (await allocateNumber(tools, { companyId: site!.companyId, kind: 'NCR' }, { type: NCR_RECORD, id })).formatted
   const data: Prisma.NonconformanceUncheckedCreateInput = {
     id,
     companyId: site!.companyId,
     siteId: site!.id,
-    number: issued.formatted,
+    number,
     title: draft.title!.trim(),
     description: draft.description?.trim() || null,
     source: body.source ?? prefill?.source ?? 'OTHER',
@@ -419,7 +425,7 @@ export async function raiseNcrInCommand(tools: CommandTools, body: RaiseBody, ra
     lotId: named.lotId,
     supplierId: named.supplierId,
     ownerId: named.ownerId,
-    containmentDueAt: body.containmentDueAt !== undefined ? (body.containmentDueAt ? new Date(body.containmentDueAt) : null) : new Date(foundOn.getTime() + DEFAULT_CONTAINMENT_HOURS * 3_600_000),
+    containmentDueAt: body.containmentDueAt !== undefined ? (body.containmentDueAt ? new Date(body.containmentDueAt) : null) : new Date(foundOn.getTime() + containmentHours! * 3_600_000),
     createdAt: now,
     updatedAt: now,
     createdById: raiser.actorId,

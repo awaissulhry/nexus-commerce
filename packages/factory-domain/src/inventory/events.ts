@@ -6,6 +6,8 @@ import { COUNT_ITEM_KINDS, STOCK_COUNT_KINDS, STOCK_COUNT_STATUSES } from './cou
 import { STOCK_MOVE_REASONS } from './ledger/moves'
 // B-W2a-31: receiving every day.
 import { DISCREPANCY_KINDS, DISCREPANCY_STATUSES } from './receipts/discrepancies'
+// B-W2b-15: kit staging.
+import { KIT_CHANGES } from './kits/rules'
 
 /**
  * The inventory module's events (plan A1 §3.4; SCM-189). apps/factory-api's modules/inventory/ledger `postMoves` emits
@@ -39,6 +41,7 @@ import { DISCREPANCY_KINDS, DISCREPANCY_STATUSES } from './receipts/discrepancie
  * discrepancy recorded, changed, removed or settled (agreed, credited, closed) on a receipt, and
  * `inventory.receipt_discrepancies_reported` once per report sent to the supplier (the OPEN ones it names become SENT).
  * They reach the receipt's Discrepancies tab and the Receipts tiles (inventory.stock.view); never a price or a person.
+ * B-W2b-14: `inventory.receipt_ddt_corrected` once per correction of a posted receipt's supplier DDT number or date.
  */
 const decimal = () => z.string().regex(/^\d{1,14}\.\d{4}$/)
 
@@ -217,6 +220,8 @@ export const events = [
       salesOrderLineIds: z.array(z.uuid()),
       itemIds: z.array(z.uuid()).min(1),
       hideIds: z.array(z.uuid()),
+      /** B-W2b-15: released by the system, not a person (its demand is done): the work order's own event, or the nightly clean-up. */
+      bySystem: z.enum(['WORK_ORDER_DONE', 'NIGHTLY_CLEANUP']).optional(),
     }),
     live: { permission: 'inventory.stock.view', fields: ['reservationIds', 'workOrderIds', 'itemIds', 'hideIds'] },
   }),
@@ -338,5 +343,34 @@ export const events = [
       recipients: z.number().int().min(1),
     }),
     live: { permission: 'inventory.stock.view', fields: ['receiptId', 'number', 'discrepancyIds'] },
+  }),
+  // B-W2b-15: kit staging (modules/inventory/kits; SCM-213): once per change of a work order's kit — staged at a place or
+  // taken off it, checked complete, opened again. It reaches Picking & kits (inventory.stock.view); never a person.
+  defineEvent({
+    type: 'inventory.kit_changed',
+    context: 'inventory',
+    description: "A work order's kit was staged at a place (or taken off it), checked complete, or opened again.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      change: z.enum(KIT_CHANGES),
+      stagingLocationId: z.uuid().nullable(),
+      checked: z.boolean(),
+    }),
+    live: { permission: 'inventory.stock.view', fields: ['workOrderId', 'number', 'change', 'stagingLocationId', 'checked'] },
+  }),
+  // B-W2b-14: the supplier's DDT number or date corrected on a posted receipt (the receipt's audit row keeps every one).
+  defineEvent({
+    type: 'inventory.receipt_ddt_corrected',
+    context: 'inventory',
+    description: "The supplier's DDT number or date of a posted goods receipt was corrected, with why.",
+    payload: z.strictObject({
+      receiptId: z.uuid(),
+      number: z.string(),
+      /** What the receipt names now (the transport document's own number, not a person). */
+      supplierDdtNumber: z.string().nullable(),
+      supplierDdtDate: z.iso.date().nullable(),
+    }),
+    live: { permission: 'inventory.stock.view', fields: ['receiptId', 'number'] },
   }),
 ] as const

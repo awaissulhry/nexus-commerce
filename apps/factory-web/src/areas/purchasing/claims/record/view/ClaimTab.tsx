@@ -2,16 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Trash2 } from 'lucide-react'
+import { Camera, ExternalLink, FileText, Trash2 } from 'lucide-react'
 import { Banner, Card, Field, KeyValue } from '@nexus/ui/components'
+import { PhotoCapture } from '@nexus/ui/components/PhotoCapture/index'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, Input, Radio, Select, Tag, Textarea } from '@nexus/ui/primitives'
+import { Button, Input, Radio, Select, Spinner, Tag, Textarea } from '@nexus/ui/primitives'
+import { usePhotoWords } from '../../../../../lib/ds-words/photo-capture'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { dayAt, money, quantity, unitPrice } from '../../../../_shared/buying/model'
-import { CLAIM_FOUND_AT, CLAIM_KINDS, type Claim, type ClaimLine } from '../../api'
-import { actHeld, changedFields, editableFields, formHeld, formOf, reasonWords, say, type ClaimForm, type ClaimRecordActions, type ClaimRecordModel } from '../../model'
+import { CLAIM_FOUND_AT, CLAIM_KINDS, letterPreviewHref, type Claim, type ClaimFile, type ClaimLine } from '../../api'
+import { actHeld, changedFields, editableFields, fileOpenHeld, formHeld, formOf, letterKeepHeld, photoAddHeld, photoRemoveHeld, reasonWords, say, type ClaimForm, type ClaimRecordActions, type ClaimRecordModel } from '../../model'
 
 /**
  * The Claim tab (design rec "Supplier claim › Claim", saved with an explicit bar): what is wrong and what is asked — the
@@ -20,7 +22,10 @@ import { actHeld, changedFields, editableFields, formHeld, formOf, reasonWords, 
  * found, reason and note, remedy; once sent: the remedy and the credit agreed (cost grain); always: the internal note),
  * saved with ⌘S (Discard; Save held with why; the browser asks before leaving with changes), and the lines (material,
  * lot or hide, the receipt discrepancy it pursues, quantity, value with the cost grain, whether the goods went back) —
- * a draft's lines removed in bulk. Photos and new lines are W2b in the design (the discrepancy keeps its photos).
+ * a draft's lines removed in bulk. B-W2b-14 (SCM-135, the design's W2b "Claim" section): the evidence card — the area
+ * affected, the claim's photos (added until it is settled, removed from a draft) beside the photos of the discrepancies it
+ * pursues, the supplier's contact with a link to the supplier, the NCR it came from, and the claim letter (preview, a
+ * version kept, every version to open).
  */
 export function ClaimTab({ claim, model, actions }: { claim: Claim; model: ClaimRecordModel; actions?: ClaimRecordActions }) {
   const t = useT('purchasing-claims')
@@ -153,6 +158,8 @@ export function ClaimTab({ claim, model, actions }: { claim: Claim; model: Claim
           </div>
         </Card>
       </div>
+
+      <EvidenceCard claim={claim} model={model} actions={actions} />
 
       {changed.length > 0 && <SaveBar count={changed.length} held={(() => { const held = formHeld(form, claim, model.can, reasons); return held ? say(t, held) : null })()} busy={model.saving} onSave={() => actions?.onSave?.()} onDiscard={() => actions?.onForm?.(null)} />}
       {model.formProblem && <Banner tone="danger" title={say(t, model.formProblem)} />}
@@ -312,5 +319,151 @@ function LinesList({ claim, model, actions }: { claim: Claim; model: ClaimRecord
           : undefined
       }
     />
+  )
+}
+
+/** B-W2b-14 (SCM-135): what the claim rests on and the letter the supplier gets. */
+function EvidenceCard({ claim, model, actions }: { claim: Claim; model: ClaimRecordModel; actions?: ClaimRecordActions }) {
+  const t = useT('purchasing-claims')
+  const locale = useLocale()
+  const photoWords = usePhotoWords()
+  const place = { locale, timeZone: model.timeZone }
+  const addresses = model.photos ?? {}
+  const ids = [...claim.photos, ...claim.discrepancyPhotos].map((photo) => photo.id).join(',')
+  useEffect(() => {
+    if (model.can.files) actions?.onPhotos?.([...claim.photos, ...claim.discrepancyPhotos].filter((photo) => photo.status === 'AVAILABLE').map((photo) => photo.id))
+    // Each new set of photos once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ids])
+  const addHeld = photoAddHeld(claim, model.can)
+  const removeHeld = photoRemoveHeld(claim, model.can)
+  const openHeld = fileOpenHeld(model.can)
+  const keepHeld = letterKeepHeld(model.can)
+  const person = (id: string | null) => (id ? (claim.people.find((entry) => entry.id === id)?.name ?? null) : null)
+  const area = claim.quantity
+
+  return (
+    <Card padded>
+      <div className="fw-by-card">
+        <h2 className="fw-by-h2">{t('evidence.title')}</h2>
+        <KeyValue
+          dense
+          columns={2}
+          labelCase="sentence"
+          items={[
+            { label: t('evidence.area'), value: area ? `${quantity(area.quantity, locale, 4)} ${t(`uom.${area.uom}`)}` : t('evidence.areaMixed', { count: claim.lines.length }) },
+            { label: t('evidence.lots'), value: claim.lots.length > 0 ? claim.lots.map((lot) => lot.code).join(', ') : '—', hint: claim.materials.map((item) => `${item.code} ${item.name}`).join(', ') || undefined },
+            {
+              label: t('evidence.supplier'),
+              value: (
+                <Link className="fw-by-link" href={`${model.prefix}/purchasing/suppliers/${claim.supplier.id}`}>
+                  {claim.supplier.name}
+                </Link>
+              ),
+              hint: claim.supplierContact ? t('evidence.contact', { name: claim.supplierContact.name, email: claim.supplierContact.email }) : t('evidence.noContact'),
+            },
+            ...(claim.ncr ? [{ label: t('evidence.ncr'), value: <Link className="fw-by-link" href={`${model.prefix}/quality/ncr/${claim.ncr.id}`}>{claim.ncr.number}</Link> }] : []),
+          ]}
+        />
+
+        <div className="fw-by-card-head">
+          <h3 className="fw-by-h3">{t('evidence.photos', { count: claim.photos.length })}</h3>
+          {!model.photoStep && (
+            <Button size="sm" heldReason={addHeld ? say(t, addHeld) : model.uploading ? t('held.busy') : null} onClick={() => actions?.onPhotoStep?.(true)}>
+              <Camera size={13} aria-hidden /> {t('evidence.addPhoto')}
+            </Button>
+          )}
+        </div>
+        {model.photoStep ? (
+          <PhotoCapture label={t('evidence.capture', { number: claim.number })} words={photoWords} markup={false} onCapture={async (photo) => void (await actions?.onPhoto?.(photo.photo))} onCancel={() => actions?.onPhotoStep?.(false)} />
+        ) : (
+          <PhotoGrid photos={claim.photos} addresses={addresses} label={t('evidence.photosLabel', { number: claim.number })} canSee={!openHeld} remove={(photo) => (removeHeld ? null : () => actions?.onDialog?.({ kind: 'removePhoto', fileId: photo.id }))} removeHeld={removeHeld ? say(t, removeHeld) : null} />
+        )}
+        {claim.discrepancyPhotos.length > 0 && (
+          <>
+            <h3 className="fw-by-h3">{t('evidence.discrepancyPhotos', { count: claim.discrepancyPhotos.length })}</h3>
+            <PhotoGrid photos={claim.discrepancyPhotos} addresses={addresses} label={t('evidence.discrepancyPhotosLabel')} canSee={!openHeld} caption={(photo) => ('discrepancySeq' in photo && photo.discrepancySeq !== null ? t('evidence.fromDiscrepancy', { seq: photo.discrepancySeq as number }) : null)} />
+          </>
+        )}
+        <p className="fw-by-hint">{t('evidence.photosHint')}</p>
+
+        <div className="fw-by-card-head">
+          <h3 className="fw-by-h3">
+            <FileText size={14} aria-hidden /> {t('letter.title')}
+          </h3>
+          <span className="fw-by-actions">
+            <Button size="sm" variant="quiet" asChild>
+              <a href={letterPreviewHref(claim.id)} target="_blank" rel="noopener">
+                <ExternalLink size={13} aria-hidden /> {t('letter.preview')}
+              </a>
+            </Button>
+            <Button size="sm" heldReason={keepHeld ? say(t, keepHeld) : model.busy ? t('held.busy') : null} onClick={() => actions?.onKeepLetter?.()}>
+              {t('letter.keep')}
+            </Button>
+          </span>
+        </div>
+        {claim.letters.length === 0 ? (
+          <p className="fw-by-hint">{t('letter.none')}</p>
+        ) : (
+          <ul className="fw-by-list" aria-label={t('letter.versions')}>
+            {claim.letters.map((letter, index) => (
+              <li key={letter.id} className="fw-cl-letter">
+                <span>
+                  {t('letter.version', { version: letter.version, language: t(`language.${letter.language === 'it' ? 'it' : 'en'}`) })} · {formatDateTime(letter.createdAt, place)}
+                  {person(letter.createdById) ? ` · ${t('fact.by', { name: person(letter.createdById)! })}` : ''}
+                  {index === 0 ? <> {' '}<Tag tone="info">{t('letter.current')}</Tag></> : null}
+                </span>
+                <Button size="sm" variant="quiet" heldReason={openHeld ? say(t, openHeld) : null} onClick={() => actions?.onOpenFile?.(letter.fileId)} aria-label={t('letter.openVersion', { version: letter.version })}>
+                  <ExternalLink size={13} aria-hidden /> {t('letter.open')}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="fw-by-hint">{t('letter.hint')}</p>
+      </div>
+    </Card>
+  )
+}
+
+/** Thumbnails of stored photos (composed: the DS MediaGallery speaks English only — named in the step's notes). */
+function PhotoGrid({ photos, addresses, label, canSee, remove, removeHeld, caption }: { photos: readonly ClaimFile[]; addresses: Readonly<Record<string, string | null>>; label: string; canSee: boolean; remove?: (photo: ClaimFile) => (() => void) | null; removeHeld?: string | null; caption?: (photo: ClaimFile) => string | null }) {
+  const t = useT('purchasing-claims')
+  if (photos.length === 0) return <p className="fw-by-hint">{t('evidence.noPhotos')}</p>
+  return (
+    <ul className="fw-cl-photos" aria-label={label}>
+      {photos.map((photo, index) => {
+        const address = addresses[photo.id]
+        const alt = t('evidence.photoAlt', { label, n: index + 1 })
+        const onRemove = remove?.(photo)
+        return (
+          <li key={photo.id} className="fw-cl-photo">
+            <span className="fw-cl-photo-frame">
+              {!canSee ? (
+                <span className="fw-cl-photo-wait">{t('evidence.noFilesRight')}</span>
+              ) : photo.status !== 'AVAILABLE' ? (
+                <span className="fw-cl-photo-wait">{t('evidence.photoPending')}</span>
+              ) : address ? (
+                <a href={address} target="_blank" rel="noopener" aria-label={t('evidence.openPhoto', { n: index + 1 })}>
+                  <img src={address} alt={alt} loading="lazy" />
+                </a>
+              ) : address === null ? (
+                <span className="fw-cl-photo-wait">{t('evidence.photoFailed')}</span>
+              ) : (
+                <span className="fw-cl-photo-wait" role="status">
+                  <Spinner size={12} /> {t('common.loading')}
+                </span>
+              )}
+            </span>
+            {caption?.(photo) && <span className="fw-by-cell-sub">{caption(photo)}</span>}
+            {remove && (
+              <Button size="sm" variant="quiet" tone="danger" heldReason={onRemove ? null : (removeHeld ?? null)} onClick={() => onRemove?.()} aria-label={t('evidence.removePhoto', { n: index + 1 })}>
+                <Trash2 size={13} aria-hidden />
+              </Button>
+            )}
+          </li>
+        )
+      })}
+    </ul>
   )
 }

@@ -3,7 +3,8 @@
     "cancel": "Annulla",
     "dismiss": "Chiudi",
     "done": "Fatto",
-    "retry": "Riprova"
+    "retry": "Riprova",
+    "clear": "Cancella"
   },
   "problem": {
     "read": "Lettura non riuscita: riprova.",
@@ -466,6 +467,35 @@
       "APPLIED": "Ricevuta.",
       "FAILED": "Interrotta: vedi l’importazione per il motivo.",
       "CANCELLED": "Annullata: nulla è stato ricevuto."
+    }
+  },
+  "ddtFix": {
+    "open": "Correggi",
+    "never": "Numero e data del DDT sono quelli inseriti al ricevimento.",
+    "last": "Corretto il {when}: {reason}",
+    "title": "Correggi il DDT di {number}",
+    "now": "Ora: DDT {number} del {date}",
+    "nowNone": "Ora: nessun DDT registrato",
+    "body": "Merce, lotti e movimenti di un ricevimento registrato non cambiano mai; numero e data del DDT del fornitore sì, se sono stati scritti male. La fattura del fornitore viene abbinata su di essi.",
+    "numberHint": "Come lo ha stampato il fornitore; vuoto: la consegna è arrivata senza DDT.",
+    "reason": "Perché viene corretto",
+    "reasonHint": "Poche parole: restano sul ricevimento e nella sua attività.",
+    "kept": "Ogni correzione resta nell’attività del ricevimento con il valore di prima.",
+    "confirm": "Salva la correzione",
+    "done": "Numero e data del DDT corretti.",
+    "held": {
+      "open": "Il ricevimento è ancora aperto: il DDT si indica quando viene registrato.",
+      "REVERSED": "Il ricevimento è stato stornato: il suo DDT non cambia più.",
+      "CANCELLED": "Il ricevimento è stato annullato: il suo DDT non cambia più.",
+      "same": "Cambia prima il numero o la data.",
+      "number": "Al massimo {max} caratteri.",
+      "date": "Scegli una data dal calendario.",
+      "future": "Un DDT non ha mai una data successiva a oggi.",
+      "dateAlone": "La data del DDT va insieme al suo numero.",
+      "reason": "Scrivi perché viene corretto (almeno 3 caratteri)."
+    },
+    "refused": {
+      "state": "Questo ricevimento non accetta più correzioni del DDT: ricaricalo."
     }
   }
 }

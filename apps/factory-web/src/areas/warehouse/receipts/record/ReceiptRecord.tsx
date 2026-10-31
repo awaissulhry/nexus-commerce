@@ -15,6 +15,7 @@ import { getReceipt, receiptLots, reverseReceipt, type LotWithHides, type Receip
 import {
   changeDiscrepancy,
   claimFromDiscrepancies,
+  correctSupplierDdt,
   listDiscrepancies,
   photoAddress,
   receiptEmails,
@@ -34,6 +35,8 @@ import {
   claimBody,
   claimProblem,
   dailyCan,
+  ddtFixBody,
+  ddtFixProblem,
   discrepancyBody,
   discrepancyProblem,
   NAMESPACE,
@@ -361,6 +364,17 @@ function RecordContainer({ receiptId }: { receiptId: string }) {
       setDaily({ kind: 'request', draft: { ...current.draft, sentTo: sent.to } })
     }, requestProblem)
 
+  // B-W2b-14 (Z1:02): the supplier's DDT number and date corrected on the posted receipt.
+  const saveDdtFix = () =>
+    run(async () => {
+      const current = dailyRef.current
+      if (current?.kind !== 'ddtFix' || !value) return
+      await correctSupplierDdt(api, receiptId, ddtFixBody(current.draft, value), dailyKey.current)
+      setDaily(null)
+      setDailyNotice({ tone: 'success', words: say('ddtFix.done') })
+      await reloadReceipt()
+    }, ddtFixProblem)
+
   const openDetail = useCallback(
     (id: string | null) => {
       const query = new URLSearchParams(params?.toString() ?? '')
@@ -447,6 +461,7 @@ function RecordContainer({ receiptId }: { receiptId: string }) {
           onSendReport: () => void sendTheReport(),
           onClaim: () => void claim(),
           onRequest: () => void request(),
+          onSaveDdtFix: () => void saveDdtFix(),
           onOpen: openDetail,
           onDdtStep: setDdtStep,
           onDdtPhoto: ddtPhoto,

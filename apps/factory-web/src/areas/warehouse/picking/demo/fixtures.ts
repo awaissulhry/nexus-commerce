@@ -95,7 +95,7 @@ export function pickRow(n: number, over: Partial<PickRow> & { word?: PickRow['re
     cutDate: '2026-10-30',
     readiness: { word: word ?? 'RECEIVED', date: null, materials: materials ?? [leather({ reserved: '48.0000' }), lining({ reserved: '3.2000' }), protector({ reserved: '4.0000' })] },
     lines: { all: 3, picked: 0, short: 3 },
-    kit: { status: 'OPEN', location: null },
+    kit: { status: 'OPEN', location: null, checkedAt: null, version: 0 },
     pickList: { created: true, reservations: 4, createdAt: at(29, 16) },
     pickedBy: [],
     startedAt: null,
@@ -105,7 +105,7 @@ export function pickRow(n: number, over: Partial<PickRow> & { word?: PickRow['re
 }
 
 export const PICK_ROWS: PickRow[] = [
-  pickRow(1, { lines: { all: 9, picked: 6, short: 3 }, kit: { status: 'PARTLY', location: null }, pickedBy: [{ kind: 'TEAM', name: 'Taglio' }], startedAt: at(30, 7, 12) }),
+  pickRow(1, { lines: { all: 9, picked: 6, short: 3 }, kit: { status: 'PARTLY', location: { id: LOCATIONS.cutting.id, code: LOCATIONS.cutting.code, name: LOCATIONS.cutting.name }, checkedAt: null, version: 1 }, pickedBy: [{ kind: 'TEAM', name: 'Taglio' }], startedAt: at(30, 7, 12) }),
   pickRow(2, {
     word: 'DELAYED',
     materials: [leather({ word: 'DELAYED', date: '2026-11-05', short: '48.0000', onOrder: '48.0000', purchaseOrders: [PO.late] }), lining({ reserved: '3.2000' }), protector({ word: 'NOT_BOOKED', inStock: '4.0000' })],
@@ -119,7 +119,7 @@ export const PICK_ROWS: PickRow[] = [
     materials: [material({ itemId: ITEMS.suede.id, label: ITEMS.suede.code, uom: 'M2', needed: '9.6000', short: '9.6000', word: 'NOT_ENOUGH' }), lining({ word: 'NOT_BOOKED', inStock: '3.2000' })],
     pickList: { created: false, reservations: 0, createdAt: null },
   }),
-  pickRow(5, { lines: { all: 3, picked: 3, short: 0 }, kit: { status: 'COMPLETE', location: null }, pickedBy: [{ kind: 'TEAM', name: 'Taglio' }, { kind: 'OFFICE', name: null }], startedAt: at(29, 14, 5), finishedAt: at(29, 15, 40), cutDate: '2026-10-29' }),
+  pickRow(5, { lines: { all: 3, picked: 3, short: 0 }, kit: { status: 'COMPLETE', location: { id: LOCATIONS.cutting.id, code: LOCATIONS.cutting.code, name: LOCATIONS.cutting.name }, checkedAt: at(29, 15, 52), version: 3 }, pickedBy: [{ kind: 'TEAM', name: 'Taglio' }, { kind: 'OFFICE', name: null }], startedAt: at(29, 14, 5), finishedAt: at(29, 15, 40), cutDate: '2026-10-29' }),
   pickRow(6, {
     workOrder: { ...pickRow(6).workOrder, status: 'ON_HOLD', onHold: { reason: 'Controllo qualità: differenza di tonalità', from: 'RELEASED' } },
     word: 'NOT_BOOKED',
@@ -229,10 +229,16 @@ export function pickSheet(row: PickRow, over: Partial<PickSheet> = {}): PickShee
 }
 
 const covered = (line: SheetLine): SheetLine => ({ ...line, issued: line.planned, toIssue: '0.0000', covered: true, held: [], pick: { ...line.pick, proposed: [], reservations: line.pick.reservations.map((row) => ({ ...row, status: 'ISSUED' as const, issued: row.quantity })) } })
-export const COMPLETE_SHEET = pickSheet(PICK_ROWS[4]!, { lines: SHEET_LINES.map(covered) })
+/** B-W2b-15: every line picked, staged at the cutting rack, not checked yet: "Mark kit complete" may be pressed. */
+export const COMPLETE_SHEET = pickSheet(PICK_ROWS[4]!, { lines: SHEET_LINES.map(covered), kit: { ...pickSheet(PICK_ROWS[4]!).kit, checkedAt: null, version: 2 } })
+/** The same kit checked complete (when, never who): "Open again" offered. */
+export const CHECKED_SHEET = pickSheet(PICK_ROWS[4]!, { lines: SHEET_LINES.map(covered) })
+
+/** The places a kit may wait at (the site's in use, never a workshop's): the design's store, its shelves and the cutting rack. */
+export const STAGING_PLACES = [LOCATIONS.store, LOCATIONS.rackA, LOCATIONS.binA1, LOCATIONS.binA2, LOCATIONS.receiving, LOCATIONS.quarantine, LOCATIONS.cutting].map((location) => ({ id: location.id, code: location.code, name: location.name, depth: location.depth }))
 
 export function sheetModel(over: Partial<SheetModel> = {}): SheetModel {
-  return { id: PICK_ROWS[0]!.workOrder.id, ids: PICK_ROWS.map((row) => row.workOrder.id), sheet: pickSheet(PICK_ROWS[0]!), problem: null, ...over }
+  return { id: PICK_ROWS[0]!.workOrder.id, ids: PICK_ROWS.map((row) => row.workOrder.id), sheet: pickSheet(PICK_ROWS[0]!), problem: null, places: { items: STAGING_PLACES, problem: null }, kitBusy: false, kitProblem: null, reopen: null, ...over }
 }
 
 // ---- Create pick lists ------------------------------------------------------------------------------------------------------------

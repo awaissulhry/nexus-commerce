@@ -1,6 +1,7 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
-import { acknowledgeContract, changeContract, closeContract, countsContract, getContract, listContract, logContract, peopleContract, previewContract, registerContract, statusContract, triageContract } from './contract'
+import { acknowledgeContract, changeContract, closeContract, countsContract, getContract, linkContract, listContract, logContract, peopleContract, previewContract, registerContract, statusContract, triageContract, unlinkContract } from './contract'
+import { linkToComplaint, unlinkFromComplaint } from './links'
 import { complaintCounts, complaintPeople, listComplaints } from './list'
 import { logComplaint, previewComplaint } from './log'
 import { manifest } from './manifest'
@@ -25,5 +26,10 @@ export default defineRoutes('quality.complaints', manifest, async (app) => {
   app.post('/quality/complaints/:complaintId/acknowledge', { schema: acknowledgeContract }, async (request) => acknowledgeComplaint(request, request.params.complaintId, request.body, idempotencyKeyFrom(request)))
   app.post('/quality/complaints/:complaintId/status', { schema: statusContract }, async (request) => moveComplaint(request, request.params.complaintId, request.body, idempotencyKeyFrom(request)))
   app.post('/quality/complaints/:complaintId/close', { schema: closeContract }, async (request) => closeComplaint(request, request.params.complaintId, request.body, idempotencyKeyFrom(request)))
+  // B-W2b-17: Link… / Unlink on Linked records (the complaint's own facts, or an NCR that names it).
+  app.post('/quality/complaints/:complaintId/links', { schema: linkContract }, async (request) => linkToComplaint(request, request.params.complaintId, request.body, idempotencyKeyFrom(request)))
+  app.delete('/quality/complaints/:complaintId/links/:recordType/:recordId', { schema: unlinkContract }, async (request) =>
+    unlinkFromComplaint(request, request.params.complaintId, { recordType: request.params.recordType, recordId: request.params.recordId }, request.query, idempotencyKeyFrom(request)),
+  )
   app.post('/quality/complaints/:complaintId/register', { schema: registerContract }, async (request) => registerComplaint(request, request.params.complaintId, request.body, idempotencyKeyFrom(request)))
 })

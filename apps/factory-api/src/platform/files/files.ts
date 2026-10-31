@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import type { FastifyRequest } from 'fastify'
-import type { FactoryClient, Prisma } from '@nexus/factory-db'
+import type { FactoryClient, FileCategory, Prisma } from '@nexus/factory-db'
 import { FILES_DELETE, FILES_MANAGE, FILES_READ, FILES_UPLOAD } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { ConflictError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
@@ -263,6 +263,8 @@ export interface UploadRequest {
   readonly floorSiteId?: string | null | undefined
   readonly partyId?: string | null | undefined
   readonly retainUntil?: string | null | undefined
+  /** B-W2b-14: what the file is (StoredFile.category, a tag: DDT_PHOTO, CLAIM_PHOTO …), set by the module that uploads it. */
+  readonly category?: FileCategory | null | undefined
 }
 
 /**
@@ -317,13 +319,14 @@ export async function requestUpload(runtime: FilesRuntime, caller: CommandCaller
         floorSiteId: sharing.floorSiteId,
         partyId: sharing.partyId,
         retainUntil: retention.retainUntil,
+        ...(input.category ? { category: input.category } : {}),
         createdAt: at,
         updatedAt: at,
         createdById: context.audience === 'office' ? context.actorId : null,
       },
       select: SELECT_FOR.office,
     })
-    audit({ recordType: 'StoredFile', recordId: id, companyId: sharing.companyId, after: audited(row) })
+    audit({ recordType: 'StoredFile', recordId: id, companyId: sharing.companyId, after: { ...audited(row), ...(input.category ? { category: input.category } : {}) } })
     return { file: viewOf(row), storageKey }
   })
   const upload = await storeCall(() =>

@@ -3,8 +3,8 @@ import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { STEP_UP_CLOSED } from '../../_shared/hooks'
 import { inShell, PREFIX, ROLE_PERMISSIONS, type RoleCase } from '../../_shared/fixtures'
-import { COUNTS, DEFECTS, LANES, NOW, PEOPLE, PREFILL, RECORD_READY, ROWS, SITES } from '../demo/fixtures'
-import { checksSay, factsOfRecord, ncrCan, ncrQueryOf, type NcrCan, type NcrView } from '../model'
+import { CONTAINMENT_SETTINGS, COUNTS, DEFECTS, LANES, NOW, PEOPLE, PREFILL, PREFILL_BUNDLE, PREFILL_DEFECTS, RECORD_READY, ROWS, SITES } from '../demo/fixtures'
+import { checksSay, containmentDraftOf, factsOfRecord, ncrCan, ncrQueryOf, type NcrCan, type NcrView } from '../model'
 import { draftOf, EMPTY_DRAFT, type ListDialog, type NcrListModel } from './view-model'
 import { NcrListView } from './view/NcrListView'
 
@@ -78,8 +78,10 @@ const list = (over: Partial<NcrListModel> = {}, role: Role = 'owner'): DesignMod
 
 const board = (over: Partial<NcrListModel> = {}, role: Role = 'owner'): DesignModel => list({ address: { view: 'open', q: '', siteId: null, mode: 'board' }, ...over }, role)
 
-const newDialog = (over: Partial<Extract<ListDialog, { kind: 'new' }>> = {}): ListDialog => ({ kind: 'new', draft: EMPTY_DRAFT, from: null, defects: DEFECTS, busy: false, notice: null, ...over })
+const newDialog = (over: Partial<Extract<ListDialog, { kind: 'new' }>> = {}): ListDialog => ({ kind: 'new', draft: EMPTY_DRAFT, from: null, defects: DEFECTS, containment: { hours: 24 }, busy: false, notice: null, ...over })
 const fromRecord = { recordType: 'Inspection', recordId: PREFILL.fromId }
+/** B-W2b-17: the containment-time dialog. */
+const containmentTime = (over: Partial<Extract<ListDialog, { kind: 'containmentTime' }>> = {}): ListDialog => ({ kind: 'containmentTime', answer: CONTAINMENT_SETTINGS, problem: null, draft: containmentDraftOf(CONTAINMENT_SETTINGS.settings), busy: false, notice: null, ...over })
 
 const closeModel = (over: Partial<NonNullable<NcrListModel['close']>> = {}): NonNullable<NcrListModel['close']> => ({
   ncrId: RECORD_READY.ncr.id,
@@ -121,6 +123,9 @@ function NcrDesign({ model: design }: { model: DesignModel }) {
         onNewDraft: (patch) => setDialog((current) => (current?.kind === 'new' ? { ...current, draft: { ...current.draft, ...patch } } : current)),
         onAssign: (ids) => setDialog({ kind: 'assign', ids, ownerId: '', busy: false, notice: null }),
         onAssignOwner: (ownerId) => setDialog((current) => (current?.kind === 'assign' ? { ...current, ownerId } : current)),
+        onContainmentTime: () => setDialog(containmentTime({ answer: { ...CONTAINMENT_SETTINGS, mayChange: design.model.can.manage } })),
+        onContainmentDraft: (patch) => setDialog((current) => (current?.kind === 'containmentTime' ? { ...current, draft: { ...current.draft, ...patch } } : current)),
+        onSubmitContainmentTime: () => setDialog(null),
         onDialogClose: () => setDialog(null),
         onBoardMove: async (card, to) => {
           if (to === 'CLOSED') {
@@ -183,5 +188,25 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'error', label: "The API didn't answer (never an empty list; tiles say —)", model: list({ rows: { items: null, truncated: false, problem: 'problem.unavailable' }, counts: null, asOf: null, live: 'offline' }) },
     { id: 'empty', label: 'First day: no NCR yet', model: list({ rows: { items: [], truncated: false, problem: null }, counts: { open: 0, containmentOverdue: 0, waitingDisposition: 0, criticalOpen: 0, closedThisMonth: 0, mine: 0 } }) },
     { id: 'filtered-empty', label: 'A row with nothing in it (Clear filters)', model: list({ address: { view: 'critical', q: 'zip', siteId: null, mode: 'list' }, rows: { items: [], truncated: false, problem: null } }) },
+    // ---- B-W2b-17 ------------------------------------------------------------------------------------------------------
+    { id: 'w2b-new-from-defects', label: 'W2b New NCR from 2 picked defect lines of an inspection (the lines it took; its title in the reader\'s words)', model: list({ dialog: newDialog({ from: { ...fromRecord, prefill: PREFILL_DEFECTS, problem: null }, draft: draftOf(PREFILL_DEFECTS, EMPTY_DRAFT), containment: { hours: 48 } }) }), note: 'The address carries &defects=<id>,<id> (Inspections › Defects › Create NCR from N defects).' },
+    { id: 'w2b-new-title-parts', label: 'W2b New NCR from a bundle: the prefilled title worded from its parts in the reader\'s language', model: list({ dialog: newDialog({ from: { recordType: 'Bundle', recordId: PREFILL_BUNDLE.fromId, prefill: PREFILL_BUNDLE, problem: null }, draft: draftOf(PREFILL_BUNDLE, EMPTY_DRAFT) }) }) },
+    { id: 'w2b-new-defects-gone', label: 'W2b New NCR from picked lines no longer on the inspection (said in words)', model: list({ dialog: newDialog({ from: { ...fromRecord, prefill: null, problem: 'new.defectsGone' }, containment: { hours: 24 } }) }) },
+    { id: 'w2b-new-containment', label: 'W2b New NCR by hand: the containment due time it gets (the company\'s containment time, 2 days)', model: list({ dialog: newDialog({ draft: { ...EMPTY_DRAFT, siteId: SITES[0]!.id, title: 'Zip pull loose on a size run', quantityAffected: '6', severity: 'MINOR' }, containment: { hours: 48 } }) }) },
+    { id: 'w2b-new-containment-reading', label: 'W2b New NCR: the containment time still being read', model: list({ dialog: newDialog({ containment: null }) }) },
+    { id: 'w2b-new-containment-failed', label: 'W2b New NCR: the containment time could not be read (the factory sets it at Create)', model: list({ dialog: newDialog({ containment: 'failed' }) }) },
+    { id: 'w2b-containment-time', label: 'W2b Containment time…: the company\'s own 48 hours', model: list({ dialog: containmentTime() }), note: 'Opened from the page\'s ⋯ menu.' },
+    { id: 'w2b-containment-time-change', label: 'W2b Containment time: changed to 8 hours (Save allowed)', model: list({ dialog: containmentTime({ draft: { follow: false, hours: '8' } }) }) },
+    { id: 'w2b-containment-time-follow', label: 'W2b Containment time: follow the time of every company', model: list({ dialog: containmentTime({ draft: { follow: true, hours: '48' } }) }) },
+    { id: 'w2b-containment-time-invalid', label: 'W2b Containment time: hours out of range (Save held with the reason)', model: list({ dialog: containmentTime({ draft: { follow: false, hours: '900' } }) }) },
+    { id: 'w2b-containment-time-held', label: 'W2b Containment time for a production manager: read only, Save held (quality.settings.manage)', model: list({ dialog: containmentTime({ answer: { ...CONTAINMENT_SETTINGS, mayChange: false } }) }, 'production') },
+    { id: 'w2b-containment-time-tenant', label: 'W2b Containment time: no own time, the tenant\'s 24 hours in force', model: list({ dialog: containmentTime({ answer: { settings: { companyId: CONTAINMENT_SETTINGS.settings.companyId, inForce: { hours: 24, source: 'TENANT' }, own: null, version: 0 }, mayChange: true }, draft: { follow: true, hours: '24' } }) }) },
+    { id: 'w2b-containment-time-offline', label: 'W2b Containment time offline: Save held', model: list({ live: 'offline', dialog: containmentTime({ draft: { follow: false, hours: '8' } }) }) },
+    { id: 'w2b-containment-time-reading', label: 'W2b Containment time: reading', model: list({ dialog: containmentTime({ answer: null }) }) },
+    { id: 'w2b-containment-time-error', label: 'W2b Containment time: could not be read (Try again)', model: list({ dialog: containmentTime({ answer: null, problem: 'problem.unavailable' }) }) },
+    { id: 'w2b-containment-time-refused', label: 'W2b Containment time: Save refused (changed meanwhile, read again)', model: list({ dialog: containmentTime({ draft: { follow: false, hours: '8' }, notice: { say: { key: 'problem.stale' }, tone: 'danger' } }) }) },
+    { id: 'w2b-assign-done', label: 'W2b Assign owner: one command for 3 NCRs of two sites (done)', model: list({ notice: { say: { key: 'list.assigned', params: { count: 3 } }, tone: 'success' } }) },
+    { id: 'w2b-assign-refused', label: 'W2b Assign owner refused: each refused NCR in words, nothing changed', model: list({ selected: [ROWS[0]!.id, ROWS[1]!.id, ROWS[2]!.id], dialog: { kind: 'assign', ids: [ROWS[0]!.id, ROWS[1]!.id, ROWS[2]!.id], ownerId: PEOPLE[1]!.id, busy: false, notice: { say: { key: 'assign.refused.title', params: { count: 2, total: 3 } }, tone: 'danger', lines: [{ key: 'assign.refused.stale', params: { number: ROWS[1]!.number } }, { key: 'assign.refused.noRight', params: { number: ROWS[2]!.number } }] } } }) },
+    { id: 'w2b-assign-offline', label: 'W2b Assign owner offline: held with the reason', model: list({ live: 'offline', selected: [ROWS[0]!.id, ROWS[1]!.id] }) },
   ],
 })

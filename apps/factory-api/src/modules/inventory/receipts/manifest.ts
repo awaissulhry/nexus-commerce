@@ -36,4 +36,6 @@ export const manifest = defineManifest({
   'POST /inventory/receipts/:receiptId/documents/request': { audiences: ['office'], permission: 'inventory.receipts.documents.request', scope: 'record' },
   // B-W2a-31 (SCM-248): a tannery hide list's totals against its order (the import itself: POST /imports, importer inventory.hideList).
   'GET /inventory/receipts/hide-lists/:importId': { audiences: ['office'], permission: 'inventory.stock.view', scope: 'record' },
+  // B-W2b-14 (Z1:02): the supplier DDT number/date of a posted receipt corrected, with why (who records receipts types it).
+  'POST /inventory/receipts/:receiptId/supplier-ddt': { audiences: ['office'], permission: 'inventory.receive', scope: 'record' },
 })

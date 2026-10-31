@@ -1,19 +1,23 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useId, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { X } from 'lucide-react'
-import { Banner, Field, Listbox, Modal } from '@nexus/ui/components'
+import { Banner, DateTimeField, Field, Listbox, Modal } from '@nexus/ui/components'
 import { Button, Checkbox, Input, Kbd, RadioCard, Select, Tag, Textarea } from '@nexus/ui/primitives'
 import { REVERSAL_REASONS } from '@nexus/factory-domain/quality/release/rules'
 import { RETURN_CAUSES, RETURN_GRADES } from '@nexus/factory-domain/sales/returns/rules'
-import { useT } from '../../../../lib/i18n/provider'
+import { useDsLabels } from '../../../../lib/i18n/ds-labels'
+import { INTL_LOCALE } from '../../../../lib/i18n/locales'
+import { useLocale, useT } from '../../../../lib/i18n/provider'
+import { WithMessages } from '../../../../record-panels/i18n'
 import { recordAddress } from '../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import { dash, Facts } from '../../_shared/parts'
 import type { QualityCan, Read } from '../../_shared/model'
 import type { Inspectors, PartyPick, ReleaseDetail, ReleaseRule, ReturnPick, ReturnRecord, WorkOrderCells, WorkOrderPick } from '../api'
 import {
+  DUE_MAX_DAYS,
   finishedOf,
   impactLines,
   inspectorHeld,
@@ -265,6 +269,8 @@ export function NewInspectionModal({
                 </Select>
               )}
             </Field>
+            {/* B-W2b-17: by when it is due (the office sets it; the bench list says it). */}
+            <NewDueField value={draft.dueAt} onChange={(dueAt) => set({ dueAt })} />
             <Field label={t('new.note')}>
               <Textarea value={draft.note} onChange={(event) => set({ note: event.target.value })} rows={2} />
             </Field>
@@ -275,6 +281,35 @@ export function NewInspectionModal({
         {problem && <Problems keys={[problem]} lines={lines} title={t('new.refusedTitle')} />}
       </div>
     </Modal>
+  )
+}
+
+/** New inspection's Due (B-W2b-17): the DS DateTimeField in the reader's language, later than now; empty = none. */
+function NewDueField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return (
+    <WithMessages namespaces={['ds-words']}>
+      <NewDue value={value} onChange={onChange} />
+    </WithMessages>
+  )
+}
+
+function NewDue({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const t = useT('quality')
+  const locale = useLocale()
+  const ds = useDsLabels()
+  const id = useId()
+  const [now] = useState(() => new Date())
+  return (
+    <Field label={t('new.due')} hint={t('new.dueHint')} htmlFor={id}>
+      <span className="fw-q-cell-row">
+        <DateTimeField id={id} value={value} onChange={onChange} min={now.toISOString()} max={new Date(now.getTime() + DUE_MAX_DAYS * 86_400_000).toISOString()} defaultTime="16:00" locale={INTL_LOCALE[locale]} ariaLabel={t('new.due')} labels={ds.dateTimeField} />
+        {value && (
+          <Button size="sm" variant="quiet" onClick={() => onChange('')}>
+            {t('new.dueClear')}
+          </Button>
+        )}
+      </span>
+    </Field>
   )
 }
 

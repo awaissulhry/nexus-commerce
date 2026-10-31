@@ -23,6 +23,7 @@ import {
   reverseReceiptContract,
   sendReportContract,
   settleDiscrepancyContract,
+  correctSupplierDdtContract,
 } from './contract'
 import { changeDiscrepancy, listDiscrepancies, recordDiscrepancy, removeDiscrepancy, settleDiscrepancy } from './discrepancies'
 import { documentRequestCheck, requestDocuments } from './document-request'
@@ -30,6 +31,8 @@ import { hideListSummary } from './hide-list-summary'
 import { manifest } from './manifest'
 import { announceDdtPhoto, announceDiscrepancyPhoto, completeDdtPhoto, completeDiscrepancyPhoto } from './photos'
 import { countReceipts, expectedLines, getReceipt, listReceipts, receiptLots } from './read'
+// B-W2b-14: the supplier DDT number/date corrected on a posted receipt.
+import { correctSupplierDdt } from './ddt-correction'
 import { recordReceipt } from './record'
 import { inlineDisposition, previewReport, reportCheck, sendReport } from './report'
 import { reverseReceipt } from './reverse'
@@ -101,4 +104,6 @@ export default defineRoutes('inventory.receipts', manifest, async (app) => {
 
   // B-W2a-31 (SCM-248): a tannery hide list's totals against its order.
   app.get('/inventory/receipts/hide-lists/:importId', { schema: hideListSummaryContract }, async (request) => hideListSummary(request, request.params.importId))
+  // B-W2b-14 (Z1:02): the supplier's DDT number and date corrected on a posted receipt, with why.
+  app.post('/inventory/receipts/:receiptId/supplier-ddt', { schema: correctSupplierDdtContract }, async (request) => correctSupplierDdt(request, request.params.receiptId, request.body, idempotencyKeyFrom(request)))
 })

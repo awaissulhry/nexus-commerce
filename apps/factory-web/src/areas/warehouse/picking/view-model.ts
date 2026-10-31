@@ -27,6 +27,17 @@ export interface SheetModel {
   sheet: PickSheet | null
   /** A key of `stock` (problem.*) when the read failed. */
   problem: string | null
+  /**
+   * B-W2b-15: the places the kit may be staged at (the work order's site, never a workshop's); null without
+   * inventory.locations.view (the place is then shown, not chosen).
+   */
+  places?: { items: { id: string; code: string; name: string; depth: number }[] | null; problem: string | null } | null
+  /** A kit write is on its way. */
+  kitBusy?: boolean
+  /** The last kit write refused, in our words. */
+  kitProblem?: Phrase | null
+  /** "Open again": the reason being typed (null: the form is closed). */
+  reopen?: { reason: string } | null
 }
 
 export interface CreateModel {
@@ -72,6 +83,12 @@ export interface PickingListActions {
   /** The pick list dialog of a row (null closes it). */
   onOpen?: (id: string | null) => void
   onRetrySheet?: () => void
+  /** B-W2b-15: the kit staged at a place (null: taken off it), checked complete, opened again with the reason. */
+  onStageKit?: (locationId: string | null) => void
+  onCompleteKit?: () => void
+  onReopenKit?: (reason: string | null) => void
+  onReopenReason?: (reason: string) => void
+  onConfirmReopen?: () => void
   /** The paper of these work orders, in a new tab. */
   onPrint?: (ids: readonly string[]) => void
   onCreate?: () => void

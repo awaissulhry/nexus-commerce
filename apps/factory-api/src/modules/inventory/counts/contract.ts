@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { periodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { amountMinor, businessDate, currency, defineContract, id, input, instant, output, quantity, unitPrice } from '@nexus/factory-domain/core/contracts'
 import { DOCUMENT_LANGUAGES } from '@nexus/factory-domain/documents/model'
-import { COUNT_ITEM_KINDS, COUNT_LIMITS, COUNT_LINE_ORIGINS, STOCK_COUNT_KINDS, STOCK_COUNT_STATUSES } from '@nexus/factory-domain/inventory/counts/rules'
+import { COUNT_ITEM_KINDS, COUNT_LIMITS, COUNT_LINE_ORIGINS, COUNT_LIST_VIEWS, STOCK_COUNT_KINDS, STOCK_COUNT_STATUSES } from '@nexus/factory-domain/inventory/counts/rules'
 import { ITEM_TRACKINGS } from '@nexus/factory-domain/inventory/ledger/moves'
 import { money } from '@nexus/factory-domain/money/marked'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
@@ -159,6 +159,11 @@ export const listCountsContract = defineContract({
     kind: z.enum(STOCK_COUNT_KINDS).optional(),
     /** Only counts not done yet (DRAFT to APPROVED, and an APPLIED year-end inventory not signed off). */
     open: flag,
+    /**
+     * B-W2b-15: the tiles' saved rows the state alone cannot say — waitingApproval (submitted over the limit) and toApply
+     * (approved, or submitted under the limit): the same rows the tiles count.
+     */
+    view: z.enum(COUNT_LIST_VIEWS).optional(),
     /** In the number, the team or the note. */
     q: z.string().trim().min(1).max(80).optional(),
     cursor: id().optional(),
@@ -177,6 +182,44 @@ export const countTilesContract = defineContract({
       toApply: z.number().int(),
       /** Year-end inventories not signed off yet. */
       yearEnd: z.number().int(),
+    }),
+  },
+})
+
+/** B-W2b-15: the lines of a count per place (the Lines tab's place filter: every place with its line counts). */
+export const placesContract = defineContract({
+  params: countParams,
+  response: {
+    200: output({
+      places: z.array(output({ location: output({ id: id(), code: z.string(), name: z.string(), path: z.string() }), lines: z.number().int(), counted: z.number().int(), differing: z.number().int() })),
+    }),
+  },
+})
+
+/**
+ * B-W2b-15 (follow-up Z2:06): what a count names, by code or name — every item kind of the site's company and the
+ * tenant's shared ones, finished garments (FINISHED, one per SKU) included, with their colours.
+ */
+export const countItemsContract = defineContract({
+  querystring: input({
+    siteId: id(),
+    q: z.string().trim().min(1).max(80),
+    kind: z.enum(COUNT_ITEM_KINDS).optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+  }),
+  response: {
+    200: output({
+      items: z.array(
+        output({
+          id: id(),
+          code: z.string(),
+          name: z.string(),
+          kind: z.enum(COUNT_ITEM_KINDS),
+          baseUom: z.enum(UOMS),
+          tracking: z.enum(ITEM_TRACKINGS),
+          colours: z.array(output({ id: id(), code: z.string(), name: z.string() })),
+        }),
+      ),
     }),
   },
 })

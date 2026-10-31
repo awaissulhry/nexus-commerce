@@ -283,6 +283,12 @@ describe('certificate renewals (QHS-105, PRD-283)', () => {
     const applied = (await ok('quality', 'POST', `${url()}/applied`, { version: started.certificate.version, appliedOn: today, reference: 'NB-REQ-1' })).renewals
     expect(applied).toMatchObject({ nextStep: 'LINK', renewal: { appliedOn: today, reference: 'NB-REQ-1', inWindow: false } })
     expect(applied.log.map((entry: Json) => entry.action)).toEqual(['STARTED', 'APPLIED'])
+    // B-W2b-17: the renewal is a CertificateRenewal row — STARTED with its task, window and language, then APPLIED once.
+    expect(await admin(`SELECT status::text AS status, "taskId"::text AS "taskId", language, "appliedOn"::text AS "appliedOn", "applicationReference" AS reference, "appliedInWindow" AS "inWindow" FROM "CertificateRenewal" WHERE "certificateId" = $1`, [ids.cert])).toEqual([
+      { status: 'APPLIED', taskId: started.renewal.taskId, language: 'en', appliedOn: today, reference: 'NB-REQ-1', inWindow: false },
+    ])
+    expect(applied.renewal).toMatchObject({ status: 'APPLIED', window: { opens: started.window.opens, closes: started.window.closes } })
+    expect(await refused('quality', 'POST', `${url()}/applied`, { version: applied.certificate.version, appliedOn: today }, 409)).toEqual(['refusal/ALREADY_APPLIED'])
     state.renewals = applied
   })
 
@@ -294,6 +300,9 @@ describe('certificate renewals (QHS-105, PRD-283)', () => {
     expect((await ok('quality', 'GET', url())).renewals.candidates.map((entry: Json) => entry.number)).toEqual(['TEST-CERT-RENEW'])
     const linked = (await ok('quality', 'POST', `${url()}/successor`, { version: state.renewals.certificate.version, successorId: issued.id })).renewals
     expect(linked).toMatchObject({ nextStep: 'RENEWED', successor: { id: issued.id, number: 'TEST-CERT-RENEW' }, candidates: [], carriedOver: [{ code: 'SEED-JKT-01', covered: false }] })
+    // B-W2b-17: the renewal row is RENEWED with the new certificate; the log reads the rows.
+    expect(await admin(`SELECT status::text AS status, "newCertificateId"::text AS "newCertificateId" FROM "CertificateRenewal" WHERE "certificateId" = $1`, [ids.cert])).toEqual([{ status: 'RENEWED', newCertificateId: issued.id }])
+    expect(linked.log.map((entry: Json) => [entry.action, entry.detail])).toEqual([['STARTED', expect.any(String)], ['APPLIED', today], ['RENEWED', 'TEST-CERT-RENEW']])
     expect((await admin(`SELECT "timerKey", status FROM "DueTimer" WHERE "recordId" = $1 ORDER BY "fireAt"`, [ids.cert])).map((row) => `${row.timerKey} ${row.status}`)).toEqual(['CERTIFICATE_EXPIRY:-180d FIRED', 'CERTIFICATE_EXPIRY:-90d CANCELLED'])
     expect(await one(`SELECT state, resolution FROM "Alert" WHERE "recordId" = $1`, [ids.cert])).toEqual({ state: 'RESOLVED', resolution: 'CLEARED' })
     expect((await admin(`SELECT type FROM "OutboxEvent" WHERE subject = $1 AND type LIKE 'compliance.%' ORDER BY "occurredAt"`, [ids.cert])).map((row) => row.type)).toEqual(['compliance.renewal_started', 'compliance.renewal_applied', 'compliance.certificate_renewed'])

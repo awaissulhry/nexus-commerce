@@ -99,7 +99,8 @@
       "MAIL_TO_SORT": "Mail to sort",
       "TASK_DUE": "My tasks due",
       "MENTION": "Mentions",
-      "RULE_ALERT": "Exception rule alerts"
+      "RULE_ALERT": "Exception rule alerts",
+      "NCR_DECISION": "NCR decisions to approve"
     },
     "severity": {
       "HIGH": "Urgent",
@@ -411,6 +412,8 @@
       "MAIL_TO_SORT.FAILED": "\"{subject}\" from {sender} could not be read.",
       "MAIL_TO_SORT.FAILED_NO_SUBJECT": "Mail from {sender} could not be read.",
       "MAIL_TO_SORT.FAILED.blocks": "Throw it away, or ask the sender to send it again.",
+      "NCR_DECISION.WAITING_APPROVAL": "NCR {number} waits for the approval of its decision {code} for {quantity}.",
+      "NCR_DECISION.blocks": "It is not carried out, and the NCR is not decided, until another person approves it.",
       "why.ORDER_PROMISE.orders_manage": "You manage this customer's orders and their promise dates.",
       "why.WORK_ORDER_HELD.workorders_release": "You release work orders at this site.",
       "why.LOT_HOLD.quality_lots_release": "You release lots at this site.",
@@ -430,6 +433,7 @@
       "why.STYLE_COMPLIANCE.compliance_labels_manage": "You keep the garment label templates.",
       "why.STYLE_COMPLIANCE.product_bom_release": "You release style revisions.",
       "why.MAIL_TO_SORT.email_triage": "You sort this company's received mail.",
+      "why.NCR_DECISION.quality_ncr_approve": "You approve NCR decisions at this site, and someone else decided it.",
       "code": {
         "checks": {
           "REVISION": "revision",

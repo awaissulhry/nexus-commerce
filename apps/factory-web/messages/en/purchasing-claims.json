@@ -281,7 +281,8 @@
     "openPdf": "Open the DDT PDF",
     "openPdfOf": "Open the PDF of DDT {number}",
     "pdfMissing": "The DDT’s PDF is not there yet.",
-    "replaced": "first on {number} (annulled)"
+    "replaced": "first on {number} (annulled)",
+    "hideReturned": "{code} · returned to the supplier"
   },
   "goodsBack": {
     "body": "The goods leave the stock from where they lie and travel with one return DDT.",
@@ -411,7 +412,8 @@
     "RECEIPT": "Receipt",
     "RETURN": "Return",
     "SCRAP": "Scrapped",
-    "TRANSFER": "Transfer"
+    "TRANSFER": "Transfer",
+    "SUPPLIER_RETURN": "Back to the supplier"
   },
   "notice": {
     "accepted": "{number}: accepted by the supplier.",
@@ -422,7 +424,11 @@
     "rejected": "{number}: rejected by the supplier.",
     "saved": "Saved.",
     "sent": "{number} marked as sent.",
-    "sentMail": "{number} sent to the supplier by e-mail."
+    "sentMail": "{number} sent to the supplier by e-mail.",
+    "photoAdded": "Photo added to the claim.",
+    "photoRemoved": "Photo removed.",
+    "letterKept": "Claim letter version {version} kept.",
+    "letterSame": "Version {version} already shows exactly this."
   },
   "page": {
     "export": "Export this list (CSV)",
@@ -433,7 +439,9 @@
       "title": "You cannot see returns and claims"
     },
     "return": "Return to supplier",
-    "shortcuts": "Keyboard shortcuts"
+    "shortcuts": "Keyboard shortcuts",
+    "newClaim": "New claim",
+    "keyNewClaim": "New claim"
   },
   "problem": {
     "changed": "Someone changed it meanwhile: it was read again. Check and try again.",
@@ -621,7 +629,10 @@
     "subject": "Subject",
     "title": "Send claim {number} to {supplier}",
     "titleAgain": "Send claim {number} to {supplier} again",
-    "withMail": "Send it by e-mail"
+    "withMail": "Send it by e-mail",
+    "letterAttached": "The claim letter (PDF, no price) goes with the e-mail; it counts {photos} photos.",
+    "letterNoFiles": "The claim letter does not go with this e-mail: your role may not read files (files.read). The e-mail goes as text.",
+    "letterNoLetterhead": "The claim letter does not go with this e-mail: the company’s letterhead is incomplete. The e-mail goes as text."
   },
   "status": {
     "ACCEPTED": "Accepted",
@@ -685,5 +696,80 @@
     "open": "Open",
     "rejected": "Rejected",
     "sent": "Waiting for the supplier"
+  },
+  "newClaim": {
+    "title": "New claim",
+    "subtitle": "A claim for credit or replacement: the goods stay in stock. It starts as a draft you send from its record.",
+    "create": "Create claim",
+    "goodsTitle": "What the claim is about",
+    "noStockRight": "Finding a lot needs inventory.stock.view.",
+    "foundAtHint": "Left empty: from the lot (in quarantine: at receiving; rejected or blocked: at inspection; else in stock).",
+    "foundAtDefault": "From the lot",
+    "quantityHint": "Quantities in {unit}; the whole lot is {total}. The claim is about what you type; nothing leaves the stock.",
+    "does": {
+      "draft": "A draft claim to {supplier}, numbered from the claim series.",
+      "goods": "The goods stay in stock: only a return sends goods back.",
+      "next": "Add photos and send it from the claim’s record; the letter goes with the e-mail."
+    },
+    "refused": {
+      "forbidden": "Your role may not make claims (purchasing.claims.manage)."
+    },
+    "noLotsBody": "Only lots with stock at the site can be claimed here."
+  },
+  "evidence": {
+    "title": "Evidence and letter",
+    "area": "Area affected",
+    "areaMixed": "{count} lines in different units",
+    "lots": "Lots",
+    "supplier": "Supplier",
+    "contact": "The claim goes first to {name} · {email}",
+    "noContact": "No contact of the supplier has an e-mail yet.",
+    "ncr": "From nonconformance",
+    "photos": "Photos of the claim ({count})",
+    "addPhoto": "Add a photo",
+    "capture": "Photo of what is wrong · {number}",
+    "photosLabel": "Photos of claim {number}",
+    "discrepancyPhotos": "Photos of the receipt discrepancies ({count})",
+    "discrepancyPhotosLabel": "Photos of the receipt discrepancies",
+    "fromDiscrepancy": "Discrepancy {seq}",
+    "photosHint": "Photos stay in the office: the letter says how many there are; the supplier gets them on request.",
+    "noPhotos": "No photo yet.",
+    "photoAlt": "{label}, photo {n}",
+    "openPhoto": "Open photo {n} in full",
+    "photoPending": "Not ready yet",
+    "photoFailed": "Couldn’t show it",
+    "noFilesRight": "Needs files.read",
+    "removePhoto": "Remove photo {n}",
+    "removeTitle": "Remove photo {n}?",
+    "removeBody": "“{name}” is removed from the draft claim (taken by mistake). Its removal stays in the activity.",
+    "removeConfirm": "Remove photo"
+  },
+  "letter": {
+    "title": "Claim letter (PDF)",
+    "preview": "Preview",
+    "keep": "Keep a version",
+    "none": "No version kept yet: the first goes with the e-mail, or keep one to print.",
+    "versions": "Versions of the claim letter",
+    "version": "Version {version} · {language}",
+    "current": "Current",
+    "open": "Open",
+    "openVersion": "Open version {version}",
+    "hint": "No price is on the letter. The same contents keep the same version.",
+    "refused": {
+      "letterhead": "The company’s letterhead is incomplete (VAT number, registered office, REA): complete it under Admin › Companies & sites."
+    }
+  },
+  "photos": {
+    "held": {
+      "settled": "The claim is {status}: it takes no more photos.",
+      "full": "A claim holds at most {max} photos.",
+      "sent": "Only a draft’s photos are removed."
+    },
+    "refused": {
+      "forbidden": "Your role may not change the claim’s photos.",
+      "settled": "The claim was settled meanwhile: it takes no more photos.",
+      "type": "Only a picture can be added (JPEG, PNG, WebP or HEIC).",
+      "store": "The photo couldn’t reach the file store: try again."
+    }
   }
 }
