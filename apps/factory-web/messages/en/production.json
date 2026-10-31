@@ -819,5 +819,13 @@
     "opLink": "{seq} {code}: {waiting} waiting, {good} done — open the bundles waiting here",
     "late": "Late work orders",
     "noLate": "No late work orders."
+  },
+  "w2b": {
+    "heldFinal": "Closed and cancelled work orders keep their due date and priority",
+    "noun_one": "work order",
+    "noun_other": "work orders",
+    "quickDue": "Due",
+    "dueDate": "due date",
+    "boardHeld": "A work order changes state through its own step (release, hold, complete, close): open it to move it."
   }
 }

@@ -19,6 +19,7 @@ import {
 } from '@nexus/factory-domain/production/work-orders/cells'
 import { daysLate, OPEN_STATUSES, type WorkOrderKind, type WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_MANAGE, WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
+import { relativeRange, type DayRange, type RelativeDay } from '@nexus/factory-domain/views/quick/relative'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
@@ -84,8 +85,15 @@ export interface ListQuery {
   readonly open?: boolean | undefined
   /** Part of the number, the batch number, or the style's code or name (any case). */
   readonly q?: string | undefined
+  /** B-W2b-13 (PLT-167): due on the days a relative word covers from today (a saved view keeps the word). */
+  readonly due?: RelativeDay | undefined
   readonly cursor?: string | undefined
   readonly limit: number
+}
+
+/** Due inside a range of days (both ends included; an open end reaches every day that way); no due date is never inside. */
+function dueWhere(range: DayRange): Prisma.WorkOrderWhereInput {
+  return { dueDate: { not: null, ...(range.from ? { gte: asDay(range.from as BusinessDate) } : {}), ...(range.to ? { lte: asDay(range.to as BusinessDate) } : {}) } }
 }
 
 /** The list's filters as one where (the list and its counts read the same rows). */
@@ -101,6 +109,7 @@ function listWhere(context: ReturnType<typeof officeContextOf>, query: Omit<List
       query.siteId ? { siteId: query.siteId } : {},
       query.salesOrderId ? { sizes: { some: { salesOrderLine: { orderId: query.salesOrderId } } } } : {},
       query.late ? { status: { in: [...OPEN_STATUSES] }, dueDate: { lt: asDay(today) } } : {},
+      query.due ? dueWhere(relativeRange(query.due, today)) : {},
       q
         ? {
             OR: [

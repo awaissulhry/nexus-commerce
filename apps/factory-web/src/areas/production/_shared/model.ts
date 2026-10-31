@@ -490,43 +490,6 @@ export function releaseRefusalCodes(error: unknown): ReleaseCheckCode[] {
   return [...codes]
 }
 
-// ---- the list as CSV ---------------------------------------------------------------------------------------------------------
-
-const csvCell = (value: string | number | null): string => {
-  const text = value === null ? '' : String(value)
-  return /[",\n;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
-}
-
-/** The selected rows as CSV (Export N): what the list shows, in the person's words for the header and the status. */
-export function workOrdersCsv(rows: readonly WorkOrderRow[], words: { header: readonly string[]; status: (status: WorkOrderStatus) => string }): string {
-  const lines = [words.header.map(csvCell).join(',')]
-  for (const row of rows) {
-    lines.push(
-      [
-        row.number,
-        row.batchNumber,
-        words.status(row.status),
-        row.styleCode,
-        row.styleName,
-        row.colourways.join(' '),
-        row.orders.map((order) => order.partyName).join('; '),
-        row.orders.map((order) => order.number).join(' '),
-        row.pieces,
-        row.progress?.cut ?? null,
-        row.progress?.bundled ?? null,
-        row.progress?.sewn ?? null,
-        row.progress?.finished ?? null,
-        row.dueDate,
-        row.daysLate,
-        row.priority,
-        row.siteCode,
-      ]
-        .map(csvCell)
-        .join(','),
-    )
-  }
-  return `${lines.join('\n')}\n`
-}
 
 /** A live change that touches this work order (its id in the event's fields), or any work order (list pages). */
 export function liveTouches(change: { type: string; fields: Readonly<Record<string, unknown>> }, workOrderId?: string): boolean {

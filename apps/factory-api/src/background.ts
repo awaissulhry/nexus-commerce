@@ -58,6 +58,8 @@ import { payablesHandlers, sdiPickupCron } from './modules/payables/sdi'
 import { renewalStagesCron } from './modules/compliance/renewals/stages'
 // B-W2b-15
 import { releaseOnWorkOrderDoneHandler, reservationCleanupCron } from './modules/inventory/reservations/system-release'
+// B-W2b-26: the leaver steps the system settles on its own (badge off after the last day, the case closed when done).
+import { leaverStepsCron } from './modules/people/leavers/automatic'
 // B-W2b-24: the W2b data catch-ups (two-factor since, lifted blocks, first-load steps from their W2a audit rows).
 import { fillTwoFactorSinceAll, twoFactorSinceCron } from './platform/auth/roles/two-factor-since'
 import { liftCatchUpCron, moveLiftsAll } from './platform/email-out/delivery/lift-catch-up'
@@ -66,6 +68,8 @@ import { firstLoadCatchUpCron, writeStepsAll } from './platform/imports/guided/c
 import { costCatchUpCron } from './modules/costing/actual/catch-up'
 // B-W2b-11: the report pack, so the worker can export a report (platform/exports/sources/reports.ts).
 import { loadReports } from './modules/insights/reports/registry'
+// B-W2b-41: stuck bundles told once per wait; the scan-pattern checks (only at sites whose checks are ON).
+import { scanFindingsCron, stuckBundlesCron } from './modules/production/bundles/jobs'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -196,9 +200,14 @@ if (mode === 'worker') {
   crons.push(renewalStagesCron({ database, log }))
   // B-W2b-15: the nightly reservation clean-up (SCM-211): reservations whose demand is done, released by the system.
   crons.push(reservationCleanupCron({ database, log }))
+  // B-W2b-26: the open leaver cases, hourly: after the last working day the floor sign-in is switched off, due automatic
+  // steps tick, a case with nothing open closes (the person LEFT).
+  crons.push(leaverStepsCron({ database, log }))
   // B-W2b-24: the W2b data catch-ups again each night (idle passes write nothing).
   crons.push(twoFactorSinceCron({ database, log }), liftCatchUpCron({ database, log }), firstLoadCatchUpCron({ database, log }))
   crons.push(costCatchUpCron({ database, log }))
+  // B-W2b-41: every 15 minutes the stuck bundles (MES-168); hourly the scan-pattern checks about bundles (MES-075).
+  crons.push(stuckBundlesCron({ database, log }), scanFindingsCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

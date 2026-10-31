@@ -195,6 +195,16 @@ export function summaryOf(kind: FloorSyncKind, payload: unknown): EventSummary {
     }
     case 'plant.report':
       return { code: text(p.assetNumber, 40) ?? text(p.machineId, 40) }
+    // B-W2b-29: the code's id (the tablet shows its own tile words); an end names nothing.
+    case 'production.offStandard.start':
+      return { code: text(p.codeId, 40) }
+    case 'production.offStandard.end':
+      return {}
+    // B-W2b-35: the call type's id (the tablet shows its own tile words), the call a step is about.
+    case 'andon.call.send':
+      return { code: text(p.typeId, 40) }
+    case 'andon.call.answer':
+      return { target: text(p.callId, 40) }
   }
 }
 

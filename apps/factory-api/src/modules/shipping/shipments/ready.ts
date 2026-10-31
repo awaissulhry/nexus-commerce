@@ -59,7 +59,7 @@ export async function readyToShip(caller: CommandCaller, query: ReadyQuery) {
               AND (${scope.parties === null}::boolean OR c."partyId" = ANY(${scope.parties ?? []}::uuid[]))
               AND COALESCE((SELECT SUM(q.quantity) FROM "QualityRelease" q WHERE q."workOrderSizeId" = c.id), 0)
                 - COALESCE((SELECT SUM(r.quantity) FROM "QualityReleaseReversal" r WHERE r."workOrderSizeId" = c.id), 0)
-                - COALESCE((SELECT SUM(sl.quantity) FROM "ShipmentLine" sl JOIN "Shipment" s ON s.id = sl."shipmentId" WHERE sl."workOrderSizeId" = c.id AND s.status::text <> 'CANCELLED'), 0) > 0)
+                - COALESCE((SELECT SUM(sl.quantity) FROM "ShipmentLine" sl JOIN "Shipment" s ON s.id = sl."shipmentId" WHERE sl."workOrderSizeId" = c.id AND s.status::text <> 'CANCELLED' AND NOT (s.status::text = 'RETURNED' AND s."carrierReturnReceivedAt" IS NOT NULL)), 0) > 0)
        ORDER BY o.number, o.id
        LIMIT ${limit + 1}`
     const orderIds = page.slice(0, limit).map((row) => row.id)

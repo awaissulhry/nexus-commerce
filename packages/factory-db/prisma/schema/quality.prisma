@@ -335,7 +335,9 @@ enum ReleaseReversalReason {
 /// garment of a cell of a work order whose style is serial-tracked, printed on its label. MADE → RELEASED (a quality
 /// release of its cell names it) → SHIPPED (packed in a line of a shipment that left); VOID (a garment scrapped or a
 /// label spoilt) from MADE; RELEASED → MADE or VOID only through a QualityReleaseReversal of its release that names it.
-/// Never deleted. A cell never has more live (not VOID) serials than pieces.
+/// W2b (B-W2b-F1): SHIPPED → RELEASED, unpacked, once the warehouse received its shipment back from the carrier
+/// (Shipment.carrierReturnReceivedAt), so the garment ships again. Never deleted. A cell never has more live (not VOID)
+/// serials than pieces.
 model GarmentSerial {
   id              String              @id @db.Uuid
   tenantId        String              @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -378,8 +380,8 @@ model GarmentSerial {
   @@index([tenantId, bundleId])
 }
 
-/// MADE → RELEASED → SHIPPED; VOID from MADE; RELEASED → MADE | VOID through a release reversal. SHIPPED and VOID are
-/// final (returns come with W2).
+/// MADE → RELEASED → SHIPPED; VOID from MADE; RELEASED → MADE | VOID through a release reversal. VOID is final; SHIPPED
+/// too, but for a shipment the carrier brought back and the warehouse received (SHIPPED → RELEASED, W2b B-W2b-F1).
 enum GarmentSerialStatus {
   MADE
   RELEASED
@@ -421,7 +423,7 @@ model PpeRegisterEntry {
   /// The office user who follows it up.
   ownerId                String?              @db.Uuid
   /// The record that opened it (QualityReleaseReversal, QualityRelease, Inspection, Shipment; later the complaint and the
-  /// NCR), both or neither; one entry per source record.
+  /// NCR; W2b B-W2b-F1: the customer's return, ReturnAuthorisation), both or neither; one entry per source record.
   sourceType             String?
   sourceId               String?              @db.Uuid
   /// When it was received or found.

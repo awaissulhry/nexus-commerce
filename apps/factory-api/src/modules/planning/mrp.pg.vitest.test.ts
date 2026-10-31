@@ -392,8 +392,8 @@ describe('held stock in the Why drawer and the unusable-stock view (B-W2a-70, th
   async function placeHold(subjectType: 'Lot' | 'Hide', subjectIds: readonly string[]): Promise<string> {
     const holdId = newId()
     await admin(
-      `INSERT INTO "QualityHold" (id, "tenantId", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "reasonNote", "placedAt", "placedById", "createdById")
-       VALUES ($1, $2, $3, $4, $5, $6::uuid[], 'QUALITY_CHECK', 'A shade difference seen at the table (made up).', '2026-11-21T09:00:00Z', $7, $7)`,
+      `INSERT INTO "QualityHold" (id, "tenantId", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "reasonNote", "placedAt", "placedById", "createdById", "number")
+       VALUES ($1, $2, $3, $4, $5, $6::uuid[], 'QUALITY_CHECK', 'A shade difference seen at the table (made up).', '2026-11-21T09:00:00Z', $7, $7, 'HLD-T-' || gen_random_uuid())`,
       [holdId, A.tenant, A.companyA, A.siteA1, subjectType, [...subjectIds], A.actor],
     )
     return holdId

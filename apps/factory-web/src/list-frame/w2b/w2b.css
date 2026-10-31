@@ -1,0 +1,136 @@
+/*
+ * The list frame's W2b parts (B-W2b-13) LAYOUT only: the modes' bodies, the quick filters' chips, the day list beside
+ * the calendar, an editable cell's save mark, the bulk edit's fields. Every control is the design system's; semantic
+ * tokens only. Nothing sets a page width: each part fills the grid card.
+ */
+.fw-list-edit-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fw-list-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-list-board {
+  min-width: 0;
+  padding: var(--nds-space-12);
+}
+
+.fw-list-calendar {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+  padding: var(--nds-space-12);
+}
+
+@media (max-width: 960px) {
+  .fw-list-calendar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fw-list-agenda {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-list-agenda-title {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-list-agenda-note {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-list-agenda-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-list-agenda-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) 0;
+  border-bottom: 1px solid var(--nds-border);
+}
+
+.fw-list-agenda-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.fw-list-agenda-move {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-list-agenda-undated > summary {
+  cursor: pointer;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-list-bulk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+}
+
+.fw-list-bulk-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-list-bulk-held,
+.fw-list-bulk-note {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-list-bulk-lead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-list-bulk-refused {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* The Cards mode on a wide screen uses the width: cards side by side (the phone keeps one column). */
+.fw-list-cards.wide .nds-cardlist-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: var(--nds-space-10);
+}

@@ -1538,7 +1538,8 @@
     "accounting": "Accounting",
     "security": "Security & health",
     "receivables": "Receivables and reminders",
-    "payables": "Supplier invoices"
+    "payables": "Supplier invoices",
+    "people": "People"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1695,6 +1696,7 @@
     "production_bundles": "Make bundles and print their tickets",
     "production_scan": "Report bundles done at an operation",
     "production_scan_correct": "Decide scan corrections from the floor",
+    "production_scan_override": "Override a held floor scan with your PIN (team leader)",
     "production_serials": "Print garment labels at the final operation",
     "quality_inspections_view": "See final inspections and release checks",
     "quality_inspections_record": "Record a final inspection",
@@ -1785,6 +1787,29 @@
     "quality_complaints_log": "Log a customer complaint",
     "quality_complaints_manage": "Triage, follow up and close customer complaints",
     "quality_complaints_acknowledge": "Acknowledge a safety complaint's alert (the owner)",
-    "numbering_override": "Type a number for a migrated document (never a fiscal series; clashes refused, reason kept)"
+    "numbering_override": "Type a number for a migrated document (never a fiscal series; clashes refused, reason kept)",
+    "people_view": "See the employees, teams, loans to other lines and leaver steps (never pay, attendance or health)",
+    "people_team_view": "See the teams you lead or belong to (My team)",
+    "people_employees_manage": "Add, change, link and import employees",
+    "people_teams_manage": "Add, change and archive teams, set their lead and move people between them",
+    "people_loans_manage": "Lend people to another line for hours or days",
+    "people_leavers_manage": "Start, tick and cancel a person's leaver steps",
+    "people_privacy_view": "See the legal gate of people data per site and purpose, and its impact assessment record",
+    "people_privacy_manage": "Switch a purpose of people data on or off, set the minimum group size and the roles that see one person's figures",
+    "people_figures_view": "See one person's work figures (only for a role named in the company's privacy settings, while the gate is on)",
+    "production_offstandard_view": "See off-standard and indirect time blocks and their counts (no person in the lists)",
+    "production_offstandard_codes": "Add and change off-standard and indirect time codes and their pay rules",
+    "production_offstandard_approve": "Approve, reject, reopen and correct off-standard time blocks (never your own)",
+    "production_calls_view": "See help calls, their times per call and line, and who is called for each type (never per person)",
+    "production_calls_answer": "Answer help calls: seen, on the way, solved or cancelled, and what they led to",
+    "production_calls_manage": "Keep a site's help-call types and who answers them",
+    "people_shifts_view": "See the roster (who works which shift) and the planned overtime requests",
+    "people_shifts_manage": "Plan the roster of everyone: set shifts, assign, copy last week, publish",
+    "people_shifts_team": "Plan the roster of the teams you lead",
+    "people_overtime_manage": "Ask people for planned overtime, record a spoken answer, cancel a request",
+    "people_overtime_approve": "Approve planned overtime that people agreed to",
+    "production_bundles_view": "See where every bundle is, the stuck ones and the scan-pattern counts (never who)",
+    "production_bundles_findings": "Review scan-pattern findings (a dismissal needs a note)",
+    "production_bundles_who": "See who is behind one finding (only with the site's legal basis on; logged)"
   }
 }

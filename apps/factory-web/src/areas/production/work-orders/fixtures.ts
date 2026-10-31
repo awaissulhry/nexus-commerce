@@ -119,6 +119,12 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'sales', label: 'Sales (read-only): sees the work orders of its orders; New and Release held with the reason', model: base('sales', { selected: [drafts[0]!.id] }) },
     { id: 'team-leader', label: 'Team leader (floor supervisor in the Office): reads, releases nothing', model: base('teamLeader') },
     { id: 'help', label: '? the keys of this list', model: base('manager', { helpOpen: true }) },
+    // B-W2b-13: the W2b list frame on this list (the design's own example, "Edit 12 work orders").
+    { id: 'w2b-board', label: 'W2b · Board by state (lanes with the tiles’ counts): a state changes through its own step, said on the board', model: base('manager', { mode: 'board', view: 'all', rows: { items: LIST_ROWS, more: false, problem: null }, today: '2026-10-30' }) },
+    { id: 'w2b-calendar', label: 'W2b · Calendar by due date: work orders per day, the day’s list, the ones without a due date', model: base('manager', { mode: 'calendar', view: 'all', rows: { items: LIST_ROWS, more: false, problem: null }, today: '2026-10-30' }) },
+    { id: 'w2b-cards', label: 'W2b · Cards (a phone draws these by itself): the same columns and Select mode', model: base('manager', { mode: 'cards' }) },
+    { id: 'w2b-due', label: 'W2b · Quick filter “Due: This week” as a chip (the word stays in the address; the API resolves it)', model: base('manager', { due: 'this-week', rows: { items: OPEN_ROWS.slice(0, 2), more: false, problem: null } }) },
+    { id: 'w2b-due-none', label: 'W2b · Quick filter “Due: Overdue” matching nothing: Clear filters', model: base('manager', { due: 'overdue', rows: { items: [], more: false, problem: null } }) },
     { id: 'new-search', label: 'New work order: the open sales orders', model: base('manager', { newOrder: { ...NO_NEW_ORDER, orders: ORDER_OPTIONS } }) },
     { id: 'new-lines', label: 'New work order: an order chosen, its open lines of one style, the pieces per size, the number it will get', model: base('manager', { newOrder: chosen() }) },
     {

@@ -2,6 +2,7 @@ import { createElement, type ReactNode } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { permissionCheck } from '../../../lib/session/session'
 import type { ExportJob, SavedView, ViewsAnswer } from '../../../list-frame/tools/transport'
+import type { BulkRowFacts } from '@nexus/factory-domain/views/bulk/rules'
 import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../shell/design-data'
 import { officeNavFor } from '../../../shell/nav/office-nav'
 import { OfficeShellView } from '../../../shell/office/view/OfficeShellView'
@@ -28,7 +29,16 @@ export const DEMO_ORDERS: DemoOrder[] = Array.from({ length: 18 }, (_, index) =>
   promised: `2026-${index % 3 === 0 ? '10' : '11'}-${String(10 + (index % 18)).padStart(2, '0')}`,
   late: index % 3 === 0 && STATUSES[index % STATUSES.length] !== 'SHIPPED',
   net: 125_000 + index * 13_750,
+  priority: index % 4,
+  owner: index % 2 === 0 ? 'me' : 'u-demo-bianchi',
+  version: 1,
 }))
+
+/** B-W2b-13: the made-up orders as the bulk target reads them (shipped ones keep their promised day and priority). */
+export const DEMO_BULK: BulkRowFacts[] = DEMO_ORDERS.map((row) => {
+  const held = row.status === 'SHIPPED' ? { code: 'held' as const, status: row.status } : null
+  return { id: row.id, label: row.number, version: row.version, values: { promised: row.promised, priority: row.priority }, held: { promised: held, priority: held } }
+})
 
 const view = (over: Partial<SavedView> & Pick<SavedView, 'id' | 'name'>): SavedView => ({
   listKey: 'sales.orders',
@@ -112,6 +122,10 @@ const JOBS = [RUNNING, DONE, FAILED, EXPIRED]
 
 const tools = (over: Partial<MemoryToolsModel> = {}): MemoryToolsModel => ({ pageKey: 'sales.orders', locale: 'en', answer: answer(), jobs: JOBS, layout: { viewId: null }, ...over })
 const page = (over: Partial<ListToolsModel> = {}, toolsOver: Partial<MemoryToolsModel> = {}): ListToolsModel => ({ tools: tools(toolsOver), rows: DEMO_ORDERS, query: '', price: true, ...over })
+/** B-W2b-13: the W2b frame on (modes, cards, edit, quick filters, Export N of the selection), the bulk rows in memory. */
+const w2b = (over: Partial<ListToolsModel> = {}, toolsOver: Partial<MemoryToolsModel> = {}): ListToolsModel => page({ w2b: true, ...over }, { bulk: DEMO_BULK, ...toolsOver })
+const PICKED = DEMO_ORDERS.filter((row) => row.status !== 'SHIPPED').slice(0, 4).map((row) => row.id)
+const PICKED_WITH_SHIPPED = DEMO_ORDERS.slice(0, 6).map((row) => row.id)
 
 /** The Office shell around the list, at Sales › Orders (the owner's navigation). */
 function inShell(content: ReactNode): ReactNode {
@@ -168,5 +182,22 @@ export const designScreen = defineDesignScreen<ListToolsModel>({
     { id: 'views-failed', label: "The saved views couldn't be read: Try again in the menu, the list works", model: page({}, { answer: 'failed', design: { menu: 'columns' } }) },
     { id: 'link-not-shared', label: 'A link to a view not shared with me: the list opens as it is, said in a notice', model: page({}, { linked: { view: 'v-not-shared', export: null } }) },
     { id: 'empty', label: 'No rows yet: the toolbar stays', model: page({ rows: [] }) },
+    // B-W2b-13 — the W2b list frame.
+    { id: 'w2b-table', label: 'W2b · Table: mode switch, quick filters, editable Promised and Priority cells (F2 or type; saves by itself)', model: w2b(), note: 'Edit a Promised day or a Priority: ↻ while saving, then green; a shipped order says why it keeps them. Paste a column from a sheet with ⌘V.' },
+    { id: 'w2b-board', label: 'W2b · Board by status: drag or Move to… where no review is needed; Shipped held with the reason', model: w2b({ query: 'mode=board' }), note: 'Space picks a card up, ← → choose the lane, Enter drops. Ready from Confirmed and every move to Shipped are held with their reason.' },
+    { id: 'w2b-calendar', label: 'W2b · Calendar by the promised day: rows per day, the chosen day’s orders, Move to another day', model: w2b({ query: 'mode=calendar&rows=all', design: { day: '2026-11-11' } }), note: 'Arrows move between days, Enter opens a day. Moving a day goes through the same save as the cell (version-checked).' },
+    { id: 'w2b-cards', label: 'W2b · Cards (on a phone the table is these cards by itself): same columns, filters, Select mode', model: w2b({ query: 'mode=cards' }) },
+    { id: 'w2b-quick', label: 'W2b · Quick filters on: “Followed by me” and “Promised: This week” as chips with ✕', model: w2b({ query: 'owner=me&promised=this-week&rows=all' }), note: 'The words stay in the address (owner=me, promised=this-week): a saved view keeps meaning the same week and the person who opens it.' },
+    { id: 'w2b-quick-none', label: 'W2b · A quick filter that matches nothing: the list says so, the chips stay', model: w2b({ query: 'promised=today' }) },
+    { id: 'w2b-selected', label: 'W2b · Rows selected: Edit N and Export N beside the list’s own actions', model: w2b({ selected: PICKED }) },
+    { id: 'w2b-bulk-form', label: 'W2b · Edit 4 orders: choose the fields and the new values', model: w2b({ selected: PICKED, design: { bulk: { values: { promised: '2026-11-20' } } } }) },
+    { id: 'w2b-bulk-held', label: 'W2b · Edit with shipped orders selected: the fields they keep are held with how many and why', model: w2b({ selected: PICKED_WITH_SHIPPED, design: { bulk: {} } }) },
+    { id: 'w2b-bulk-review', label: 'W2b · Review: old → new per order, the ones already so, the ones refused; Save, then Done with Undo', model: w2b({ selected: PICKED_WITH_SHIPPED, design: { bulk: { values: { priority: 2 }, review: true } } }), note: 'Change → the Done screen counts what was saved; Undo puts back what changed (a row changed again since is refused, never overwritten).' },
+    { id: 'w2b-bulk-failed', label: 'W2b · Save refused for every row: each says why, nothing written', model: w2b({ selected: PICKED, design: { bulk: { values: { priority: 3 }, review: true } } }, { bulkFails: true }) },
+    { id: 'w2b-bulk-offline', label: 'W2b · The review cannot read the rows: Save held, Try again', model: w2b({ selected: PICKED, design: { bulk: { values: { priority: 3 }, review: true } } }, { bulk: undefined }) },
+    { id: 'w2b-edit-held', label: 'W2b · No right to change orders: cells read only, Edit N held with the reason', model: w2b({ editHeld: true, selected: PICKED }) },
+    { id: 'w2b-export-selected', label: 'W2b · Export N of the selected orders went through the shared engine: the job says “only the 4 selected rows”', model: w2b({}, { design: { dialog: 'job', job: job({ id: 'j-selected', status: 'RUNNING', rowsDone: 2, rowCount: 4, selected: 4 }) } }), note: 'Select rows, then Export N › CSV or Excel: the same job dialog follows the export of the selection.' },
+    { id: 'w2b-no-price', label: 'W2b · No price grain: Columns ▾ lists Net as “Hidden: needs price rights”', model: w2b({ price: false }, { answer: SALES, design: { menu: 'columns' } }) },
+    { id: 'w2b-loading', label: 'W2b · Board while the rows are read', model: w2b({ query: 'mode=board', loading: true }) },
   ],
 })
