@@ -18,7 +18,8 @@ import { openEventStream, testRedis, type TestRedis } from './testing'
 /**
  * GET /live on the local Redis (no database: the stream reads only the session and the feed). Live messages are
  * published straight on the tenant channels, also tampered ones, to prove what the API lets through per viewer:
- * only the viewer's tenant, only what its grants reach, the floor only its site's floor events, never a money field.
+ * only the viewer's tenant, only what its grants reach, the floor only its site's floor events and only through the
+ * rule's floor permission (B-W2a-F5: never the office read), never a money field.
  */
 
 const tenantA = newId()
@@ -34,25 +35,29 @@ const siteRenamed = defineEvent({
   context: 'sites',
   description: 'test',
   payload: z.strictObject({ name: z.string() }),
-  live: { permission: 'sites.read', floor: true, fields: ['name'] },
+  live: { permission: 'sites.read', floor: 'floor.work', fields: ['name'] },
 })
 const quotePriced = defineEvent({
   type: 'quote.priced',
   context: 'sales',
   description: 'test',
   payload: z.strictObject({ quoteId: z.string(), totalMinor: z.number() }),
-  live: { permission: 'sites.read', floor: true, fields: ['quoteId'] },
+  live: { permission: 'sites.read', floor: 'floor.work', fields: ['quoteId'] },
 })
 const officeOnly = defineEvent({ type: 'quote.sent', context: 'sales', description: 'test', payload: z.strictObject({}), live: { permission: 'sites.read' } })
 const CATALOGUE = createCatalogue([siteRenamed, quotePriced, officeOnly])
 
 const grant = (companies: Grant['companies'] = 'all'): Grant => ({ permissions: ['sites.read'], companies, sites: 'all', parties: 'all' })
+/** A floor role's grant: the floor permission, never the office read (auth/roles/templates.ts). */
+const floorGrant: Grant = { permissions: ['floor.work'], companies: 'all', sites: 'all', parties: 'all' }
 const SESSIONS: Record<string, SessionContext> = {
   'office-a': { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant()] },
   'office-a-other-company': { audience: 'office', tenantId: tenantA, actorId: user, grants: [grant([otherCompany])] },
   'office-b': { audience: 'office', tenantId: tenantB, actorId: user, grants: [grant()] },
-  'floor-a': { audience: 'floor', tenantId: tenantA, actorId: user, siteId: plant, deviceId: newId(), grants: [grant()] },
-  'floor-a-other-site': { audience: 'floor', tenantId: tenantA, actorId: user, siteId: otherPlant, deviceId: newId(), grants: [grant()] },
+  'floor-a': { audience: 'floor', tenantId: tenantA, actorId: user, siteId: plant, deviceId: newId(), grants: [floorGrant] },
+  'floor-a-other-site': { audience: 'floor', tenantId: tenantA, actorId: user, siteId: otherPlant, deviceId: newId(), grants: [floorGrant] },
+  // A floor session holding the office read but not the floor permission: nothing reaches it.
+  'floor-a-office-read': { audience: 'floor', tenantId: tenantA, actorId: user, siteId: plant, deviceId: newId(), grants: [grant()] },
   partner: { audience: 'partner', tenantId: tenantA, actorId: user, partyId: newId(), grants: [grant()] },
 }
 
@@ -179,6 +184,7 @@ describe('GET /live', () => {
         { id: pricedA.eventId, fields: { quoteId: 'Q-1' } },
       ])
       expect(await received('floor-a-other-site')).toEqual([])
+      expect(await received('floor-a-office-read')).toEqual([])
       for (const screen of Object.values(screens)) {
         expect(JSON.stringify(screen.events)).not.toMatch(/totalMinor|unitPrice|Misrouted|tenantId/)
       }

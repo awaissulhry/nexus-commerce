@@ -42,14 +42,14 @@ export const events = [
     context: 'plant',
     description: 'A machine or piece of equipment was registered at a site, with its class, place and asset number (its QR tag).',
     payload: z.strictObject({ machineId: z.uuid(), assetNumber: z.string(), classId: z.uuid(), stationId: z.uuid().nullable(), workCentreId: z.uuid().nullable() }),
-    live: { permission: 'plant.view', floor: true, fields: ['machineId', 'assetNumber'] },
+    live: { permission: 'plant.view', floor: 'plant.report', fields: ['machineId', 'assetNumber'] },
   }),
   defineEvent({
     type: 'machine.changed',
     context: 'plant',
     description: "A machine's facts changed: class, make, model, serial, year, station, work centre, supplier, cost or note (the names of the fields only).",
     payload: z.strictObject({ machineId: z.uuid(), assetNumber: z.string(), fields: z.array(z.string()) }),
-    live: { permission: 'plant.view', floor: true, fields: ['machineId', 'assetNumber', 'fields'] },
+    live: { permission: 'plant.view', floor: 'plant.report', fields: ['machineId', 'assetNumber', 'fields'] },
   }),
   defineEvent({
     type: 'machine.status_changed',
@@ -66,7 +66,7 @@ export const events = [
       locked: z.boolean(),
       by,
     }),
-    live: { permission: 'plant.view', floor: true, fields: ['machineId', 'assetNumber', 'from', 'to', 'locked'] },
+    live: { permission: 'plant.view', floor: 'plant.report', fields: ['machineId', 'assetNumber', 'from', 'to', 'locked'] },
   }),
   defineEvent({
     type: 'maintenance_request.reported',
@@ -85,7 +85,7 @@ export const events = [
       openOnMachine: z.number().int().min(0),
       by,
     }),
-    live: { permission: 'plant.view', floor: true, fields: ['requestId', 'machineId', 'assetNumber', 'unsafe'] },
+    live: { permission: 'plant.view', floor: 'plant.report', fields: ['requestId', 'machineId', 'assetNumber', 'unsafe'] },
   }),
   defineEvent({
     type: 'maintenance_request.triaged',
@@ -101,14 +101,14 @@ export const events = [
       mergedIntoId: z.uuid().nullable(),
       closeReason: z.enum(CLOSE_REASONS).nullable(),
     }),
-    live: { permission: 'plant.view', floor: true, fields: ['requestId', 'machineId', 'action', 'status'] },
+    live: { permission: 'plant.view', floor: 'plant.report', fields: ['requestId', 'machineId', 'action', 'status'] },
   }),
   defineEvent({
     type: 'maintenance_request.signed_safe',
     context: 'plant',
     description: "A technician checked a machine that was marked unsafe and signed its request safe (D.Lgs. 81/2008 art. 71; Owner answer H1); `stillLocked`: another unsafe request of the machine still waits.",
     payload: z.strictObject({ requestId: z.uuid(), machineId: z.uuid(), assetNumber: z.string(), machineStatus: z.enum(MACHINE_STATUSES), stillLocked: z.boolean(), by }),
-    live: { permission: 'plant.view', floor: true, fields: ['requestId', 'machineId', 'assetNumber', 'machineStatus', 'stillLocked'] },
+    live: { permission: 'plant.view', floor: 'plant.report', fields: ['requestId', 'machineId', 'assetNumber', 'machineStatus', 'stillLocked'] },
   }),
   defineEvent({
     type: 'maintenance_job.created',
@@ -125,14 +125,14 @@ export const events = [
       status: z.enum(JOB_STATUSES),
       requestIds: z.array(z.uuid()),
     }),
-    live: { permission: 'plant.view', floor: true, fields: ['jobId', 'number', 'machineId', 'priority'] },
+    live: { permission: 'plant.view', floor: 'plant.jobs.work', fields: ['jobId', 'number', 'machineId', 'priority'] },
   }),
   defineEvent({
     type: 'maintenance_job.changed',
     context: 'plant',
     description: "A maintenance job's problem, type, priority or due time changed (the names of the fields only).",
     payload: z.strictObject({ jobId: z.uuid(), number: z.string(), machineId: z.uuid(), fields: z.array(z.string()) }),
-    live: { permission: 'plant.view', floor: true, fields: ['jobId', 'number', 'fields'] },
+    live: { permission: 'plant.view', floor: 'plant.jobs.work', fields: ['jobId', 'number', 'fields'] },
   }),
   defineEvent({
     type: 'maintenance_job.assigned',
@@ -147,7 +147,7 @@ export const events = [
       assigneeId: z.uuid().nullable(),
       assignedById: z.uuid().nullable(),
     }),
-    live: { permission: 'plant.view', floor: true, fields: ['jobId', 'number', 'assignee'] },
+    live: { permission: 'plant.view', floor: 'plant.jobs.work', fields: ['jobId', 'number', 'assignee'] },
   }),
   defineEvent({
     type: 'maintenance_job.moved',
@@ -163,6 +163,6 @@ export const events = [
       machineAfter: z.enum(MACHINE_AFTER).nullable(),
       by,
     }),
-    live: { permission: 'plant.view', floor: true, fields: ['jobId', 'number', 'machineId', 'from', 'to'] },
+    live: { permission: 'plant.view', floor: 'plant.jobs.work', fields: ['jobId', 'number', 'machineId', 'from', 'to'] },
   }),
 ] as const

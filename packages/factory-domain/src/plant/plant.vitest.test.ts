@@ -58,7 +58,9 @@ describe('permissions and templates (H1: anyone reports, only a technician signs
     for (const definition of events) {
       expect(EVENT_CATALOGUE.find(definition.type, definition.version), definition.type).toBeDefined()
       expect(definition.live?.permission).toBe('plant.view')
-      expect(definition.live?.floor, definition.type).toBe(definition.type !== 'plant.lists_changed')
+      // B-W2a-F5: the station's machine card (plant.report, every floor role) and the technician's My jobs (plant.jobs.work).
+      const floor = definition.type === 'plant.lists_changed' ? null : definition.type.startsWith('maintenance_job.') ? 'plant.jobs.work' : 'plant.report'
+      expect(definition.live?.floor, definition.type).toBe(floor)
     }
   })
 })
