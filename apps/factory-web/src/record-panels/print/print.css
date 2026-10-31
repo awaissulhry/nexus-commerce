@@ -1,0 +1,37 @@
+/* B-W2b-05 — the record panels for paper: every panel under its name, one after the other. Layout only. */
+.fw-rp-print {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-20);
+}
+
+.fw-rp-print-record {
+  margin: 0;
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-rp-print-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-rp-print-title {
+  margin: 0;
+  padding-bottom: var(--nds-space-4);
+  border-bottom: 1px solid var(--nds-border);
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+@media print {
+  /* Buttons do nothing on paper (Older, Download, filters keep their chosen word). */
+  .fw-rp-print button:not([aria-pressed='true']):not([aria-checked='true']) {
+    display: none !important;
+  }
+
+  .fw-rp-print-part {
+    break-inside: auto;
+  }
+}

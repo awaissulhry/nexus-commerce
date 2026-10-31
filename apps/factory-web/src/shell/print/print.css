@@ -1,0 +1,115 @@
+/* B-W2b-05 — the print view of any Office page (PLT-171): the page on screen as it will print, then paper. Layout only,
+   semantic tokens; the sheet's numbers come from the page margin boxes. */
+.fw-print {
+  min-height: 100vh;
+  background: var(--nds-bg);
+  color: var(--nds-text);
+}
+
+.fw-print-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-10) var(--nds-space-24);
+  border-bottom: 1px solid var(--nds-border);
+  background: var(--nds-surface);
+}
+
+.fw-print-hint {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-print-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-20) var(--nds-space-24) var(--nds-space-12);
+  border-bottom: 2px solid var(--nds-border-strong);
+}
+
+.fw-print-company {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-10);
+}
+
+.fw-print-code {
+  color: var(--nds-text-muted);
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-print-site {
+  color: var(--nds-text-2);
+}
+
+.fw-print-title {
+  margin: 0;
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-print-meta {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-print-body {
+  padding: var(--nds-space-16) var(--nds-space-24) var(--nds-space-32);
+  outline: none;
+}
+
+@media (max-width: 719px) {
+  .fw-print-toolbar,
+  .fw-print-head,
+  .fw-print-body {
+    padding-left: var(--nds-space-16);
+    padding-right: var(--nds-space-16);
+  }
+}
+
+@media print {
+  @page {
+    margin: 14mm 12mm 16mm;
+
+    @bottom-right {
+      content: counter(page) ' / ' counter(pages);
+      font-size: 9pt;
+    }
+  }
+
+  .fw-print-toolbar {
+    display: none !important;
+  }
+
+  .fw-print {
+    min-height: 0;
+  }
+
+  .fw-print-head,
+  .fw-print-body {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* Buttons do nothing on paper: the page's actions and the grid's column menus are left out; a pressed one (an active
+     filter, a chosen view) stays, so the paper says what it shows. */
+  .fw-print-body .nds-btn:not(.on):not([aria-pressed='true']),
+  .fw-print-body .ag-header-cell-menu-button,
+  .fw-print-body .ag-header-cell-filter-button {
+    display: none !important;
+  }
+
+  /* A record's rows and a list's rows are not cut in the middle of a line. */
+  .fw-print-body .ag-row,
+  .fw-print-body li {
+    break-inside: avoid;
+  }
+}

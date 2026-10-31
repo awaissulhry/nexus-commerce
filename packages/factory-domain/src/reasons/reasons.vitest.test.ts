@@ -12,7 +12,8 @@ describe('reason lists (B-W2a-18; PLT-116)', () => {
     expect(sourceOf('WRITE_OFF')).toBe('REASON_CODE')
     expect(sourceOf('SCRAP')).toBe('SCRAP_REASON')
     expect(fieldsOf('RETURN')).toEqual({ icon: true, colour: true, languages: true, needsDetail: true })
-    expect(fieldsOf('REWORK')).toEqual({ icon: false, colour: false, languages: false, needsDetail: false })
+    // W2b (B-W2b-10; MES-125): the scan lists keep every field too (ScrapReason's icon, colour, labelI18n, needsDetail).
+    expect(fieldsOf('REWORK')).toEqual({ icon: true, colour: true, languages: true, needsDetail: true })
     expect(isReasonList('HOLD')).toBe(true)
     expect(isReasonList('DEFECT')).toBe(false)
     for (const group of Object.values(REASON_LIST_GROUPS)) for (const list of group) expect(isReasonList(list)).toBe(true)
@@ -25,10 +26,11 @@ describe('reason lists (B-W2a-18; PLT-116)', () => {
       expect(new Set(reasons.map((reason) => reason.code)).size).toBe(reasons.length)
       for (const reason of reasons) expect(reasonDraftProblems(list, reason), `${list} ${reason.code}`).toEqual([])
     }
-    // "Other" asks for a note; the scan lists are W1's, words only.
+    // "Other" asks for a note; the scan lists are W1's: no icon (the floor's standard look per code), OTHER needs detail (W2b).
     expect(BASE_REASONS.RETURN.find((reason) => reason.code === 'OTHER')).toMatchObject({ needsDetail: true, icon: 'camera' })
     expect(standardReasonsOf('SCRAP').map((reason) => reason.code)).toEqual(['LEATHER_FLAW', 'CUT_WRONG', 'STITCHING', 'STAIN', 'TEAR', 'MACHINE', 'OTHER'])
-    expect(standardReasonsOf('REWORK').every((reason) => reason.icon === null && !reason.needsDetail)).toBe(true)
+    expect(standardReasonsOf('REWORK').every((reason) => reason.icon === null && reason.needsDetail === (reason.code === 'OTHER'))).toBe(true)
+    for (const list of ['SCRAP', 'REWORK'] as const) for (const reason of standardReasonsOf(list)) expect(reasonDraftProblems(list, reason), `${list} ${reason.code}`).toEqual([])
   })
 
   it('adds only the standard codes a list does not have, active or not', () => {
@@ -43,8 +45,9 @@ describe('reason lists (B-W2a-18; PLT-116)', () => {
     expect(reasonDraftProblems('RETURN', { icon: 'rocket', colour: '#123456' }).map((issue) => issue.path)).toEqual(['icon', 'colour'])
     expect(reasonDraftProblems('RETURN', { icon: 'truck', colour: '#1F6FDE', labelI18n: { ro: 'Mărime greșită', ur: null } })).toEqual([])
     expect(reasonDraftProblems('RETURN', { labelI18n: { it: 'x', RO: 'y', de: ' ' } }).map((issue) => issue.path)).toEqual(['labelI18n/it', 'labelI18n/RO', 'labelI18n/de'])
-    // A scan list keeps words only: icon, colour, other languages and the note are refused, clearing them is not.
-    expect(reasonDraftProblems('SCRAP', { icon: 'alert', colour: '#e5484d', labelI18n: { ro: 'x' }, needsDetail: true }).map((issue) => issue.path)).toEqual(['labelI18n', 'icon', 'colour', 'needsDetail'])
+    // W2b (MES-125): a scan list keeps an icon, a colour, other languages and the note like any list, by the same rules.
+    expect(reasonDraftProblems('SCRAP', { icon: 'alert', colour: '#e5484d', labelI18n: { ro: 'Pată' }, needsDetail: true })).toEqual([])
+    expect(reasonDraftProblems('SCRAP', { icon: 'rocket', colour: '#123456' }).map((issue) => issue.path)).toEqual(['icon', 'colour'])
     expect(reasonDraftProblems('SCRAP', { icon: null, colour: null, needsDetail: false })).toEqual([])
   })
 

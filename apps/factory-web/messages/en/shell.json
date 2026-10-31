@@ -209,7 +209,17 @@
     "allSites": "All sites",
     "companies": "Company",
     "sites": "Site",
-    "label": "Company and site: {company}, {site}"
+    "label": "Company and site: {company}, {site}",
+    "allMySites": "All my sites",
+    "findCompany": "Find a company… ({count})",
+    "finder": {
+      "title": "Company",
+      "search": "Find a company by name or code",
+      "placeholder": "Name or code",
+      "none": "No company matches “{query}”.",
+      "count_one": "{count} company",
+      "count_other": "{count} companies"
+    }
   },
   "palette": {
     "title": "Search",
@@ -375,6 +385,61 @@
       "title": "Nexus Factory is not answering",
       "body": "The service did not answer as it should (code {code}). Try again in a moment.",
       "action": "Try again"
+    }
+  },
+  "live": {
+    "connecting": "Connecting…",
+    "live": "Live",
+    "offline": "Not live: reading again every 30 s"
+  },
+  "window": {
+    "back": "Back to Office",
+    "close": "Close this window"
+  },
+  "print": {
+    "print": "Print",
+    "record": "Print view of the record (new tab)",
+    "view": "Print this view (new tab)",
+    "page": "Page",
+    "toolbar": "Print view",
+    "back": "Back to the view",
+    "hint": {
+      "record": "The record as it prints: its header and every panel. Page numbers come at the foot of each sheet.",
+      "view": "This view as it prints: its filters as the page shows them and every row it has loaded. Page numbers come at the foot of each sheet."
+    },
+    "site": "Site: {site}",
+    "allSites": "All sites",
+    "allMySites": "All my sites",
+    "printedBy": "Printed by {name} on {when}"
+  },
+  "scope": {
+    "chip": {
+      "allSites": "All sites",
+      "allMySites": "All my sites"
+    },
+    "fromTopBar": "Site from the top bar",
+    "start": {
+      "title": "Where I work",
+      "description": "What opens after you sign in.",
+      "legend": "Start page",
+      "today": "Today",
+      "todayHint": "Your day: what needs you now (the default).",
+      "view": "A saved view I pick",
+      "viewHint": "One of the saved views of a list you open.",
+      "page": "List",
+      "pickPage": "Choose a list",
+      "savedView": "Saved view",
+      "pickView": "Choose a saved view",
+      "pickPageFirst": "Choose a list first",
+      "noViews": "This list has no saved view you can open yet: save one from its Columns menu.",
+      "loadingViews": "Reading the saved views…",
+      "viewsFailed": "The saved views could not be read. Try again later.",
+      "signIn": "Sign-in opens the company and site you used last. This choice is kept on this device.",
+      "save": "Save",
+      "discard": "Discard",
+      "saved": "Saved: it opens at your next sign-in.",
+      "heldNoChange": "Nothing changed",
+      "heldPickView": "Choose a saved view first"
     }
   }
 }

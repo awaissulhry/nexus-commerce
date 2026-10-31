@@ -131,6 +131,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   through `src/areas/_shared/rules/` (catalogue `rules`): `use-rules.ts` (THE hook: list, switch, number, the dialog's choices
   / dry run / timers / save), `view/RuleSentence.tsx` (the NEW part: a rule as one sentence with its parts as fields; its words
   equal factory-domain `ruleSentence`, held by a test), `view/RuleDialog.tsx`, `view/RulesList.tsx`, `demo.ts` (made-up rules).
+- B-W2b-05 shell foundations: `src/shell/scope/` (`useOfficeScope()` = the top bar's company and site: `siteId` for the
+  API, `allSites` → `siteColumn(...)` + `<ScopeSiteChip model={scope} />` "Site from the top bar"; the sites are
+  `me.sites`, the person's reach; a switch re-reads the pages that put `scope.siteId` in their reads; `start/` = My
+  profile's "Where I work" start page, kept in the scope cookie), `src/shell/live/` (ONE live connection per tab:
+  `useLiveBus` / `useLiveChanges`; never `new EventSource` in a screen), `src/shell/print/` (`?print=1` on any office
+  address = its print view; `usePrintMode()`; the band's Print opens a page's own `<page>/print` when it has one),
+  window pages = `WINDOW_PAGES` in shell/nav/office-nav.ts (window frame, their row opens a new tab), the phone's tabs
+  per person (`shell/office/phone-bar.ts`).
 - `src/lib/records/record-links.ts` — where a record opens: its own page once built (`RECORD_PAGES`, one line per record
   page; list pages in `LIST_PAGES`), else the record panel route `/w/<company>/records/<type>/<id>` (SCR-006 panels).
   Home › Today (`src/areas/home/today/`, SCR-029) and its lists open records through it.

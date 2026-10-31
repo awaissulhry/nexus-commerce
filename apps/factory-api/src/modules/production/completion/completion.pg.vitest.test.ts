@@ -52,6 +52,8 @@ const SESSIONS: Record<string, SessionContext> = {
   companyB: office(A.tenant, [grant(ALL, [A.companyB])]),
   otherTenant: office(B.tenant, [grant(ALL)]),
   floor: { audience: 'floor', tenantId: A.tenant, actorId: newId(), siteId: A.siteA1, deviceId: newId(), grants: [grant(['floor.work', ...ALL], [A.companyA], [A.siteA1])] },
+  /** B-W2b-10: quality takes released garments back (and the record shows where they went). */
+  quality: office(A.tenant, [grant(['quality.inspections.view', 'quality.garments.reverse', ...ALL])]),
 }
 
 type Json = Record<string, any>
@@ -217,5 +219,30 @@ describe('the work order and the SKU', () => {
     // Taking a report back is a correction: it is not held.
     const back = await ok('warehouse', 'POST', `/production/work-orders/${wo3()}/finished/${view.reports[0].id}/reverse`, { reason: 'Wrong jacket' })
     expect(back.reversed.pieces).toBe(1)
+  })
+})
+
+// ---- B-W2b-10 (B-W2a-12's gap): a release reversal takes the garments out of finished goods --------------------------------
+
+describe('a quality release reversal takes the garments out of finished goods (B-W2b-10)', () => {
+  it('the garment taken back leaves finished goods in the same command; the report shows it taken back with the reason', async () => {
+    const before = cellOf(await finished(wo1()), cells().blk52)
+    expect(before).toMatchObject({ netReleased: 1, inStock: 1, canReport: 0 })
+    const [release] = await admin<{ id: string }>(
+      `SELECT r.id FROM "QualityRelease" r LEFT JOIN "QualityReleaseReversal" v ON v."releaseId" = r.id
+        WHERE r."workOrderSizeId" = $1 GROUP BY r.id, r.quantity HAVING r.quantity > coalesce(sum(v.quantity), 0) LIMIT 1`,
+      [cells().blk52],
+    )
+    const answer = await ok('quality', 'POST', `/quality/releases/${release!.id}/reverse`, { quantity: 1, reasonCode: 'DEFECT_FOUND_LATER', reason: 'A seam opened on the shelf' }, 201, key())
+    expect(answer.finishedGoods).toMatchObject({ takenOut: 1, putBack: 0, left: 0, words: 'BLK 52: 1 garment left finished goods with the reversal.' })
+    expect(answer.words).toContain('BLK 52: 1 garment left finished goods with the reversal.')
+    const after = await finished(wo1())
+    expect(cellOf(after, cells().blk52)).toMatchObject({ netReleased: 0, inStock: 0, canReport: 0 })
+    expect(after.reports[0]).toMatchObject({ open: 0, reversed: { reason: 'Release reversed: A seam opened on the shelf' } })
+    const [mirror] = await admin(`SELECT reason, "reversalOfId" IS NOT NULL AS reversal, "fromLocationId", "workOrderId" FROM "StockMove" WHERE id = $1`, [answer.finishedGoods.moveIds[0]])
+    expect(mirror).toEqual({ reason: 'PRODUCTION_RECEIPT', reversal: true, fromLocationId: seedA.finishedLocationId, workOrderId: wo1() })
+    expect((await ok('warehouse', 'GET', `/inventory/finished?workOrderId=${wo1()}`)).items.find((item: Json) => item.itemId === seedA.finishedItemId)?.onHand ?? 0).toBe(0)
+    expect(await admin(`SELECT payload->>'pieces' AS pieces FROM "OutboxEvent" WHERE type = 'workorder.finished_reversed' AND payload->'moveIds' ? $1`, [answer.finishedGoods.moveIds[0]])).toEqual([{ pieces: '1' }])
+    expect(await admin(`SELECT after->'finishedTakenOut'->>'pieces' AS pieces FROM "AuditLog" WHERE "recordType" = 'WorkOrder' AND "recordId" = $1 AND after ? 'finishedTakenOut'`, [wo1()])).toEqual([{ pieces: '1' }])
   })
 })

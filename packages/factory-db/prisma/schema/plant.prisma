@@ -41,6 +41,9 @@ model MachineClass {
 
   symptoms MachineSymptom[]
   machines Machine[]
+  // W2b skills.prisma (wave 4/7): the skills about it, and who may operate it.
+  skills         Skill[]
+  authorisations MachineAuthorisation[]
 
   @@unique([tenantId, code])
   // The target of the symptoms' and machines' tenant-safe references.

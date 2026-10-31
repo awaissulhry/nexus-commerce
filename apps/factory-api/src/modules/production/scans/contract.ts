@@ -48,6 +48,8 @@ const scan = output({
   serverTime: instant(),
   /** A floor REPORT: the last moment its undo is taken (or the next scan on the device, whichever first). */
   undoUntil: instant().nullable(),
+  /** B-W2b-10: a REPORT of an outside operation names the subcontract receipt line that brought the bundle back (no worker, station or device). */
+  subcontractReceiptLineId: id().nullable(),
 })
 
 const request = output({
@@ -102,7 +104,17 @@ const refusalRow = output({
   resolvedByRequestId: id().nullable(),
 })
 
-const reason = output({ kind: z.enum(DEFECT_KINDS), code: z.string(), label: output({ it: z.string(), en: z.string() }), sortOrder: z.number().int() })
+const reason = output({
+  kind: z.enum(DEFECT_KINDS),
+  code: z.string(),
+  label: output({ it: z.string(), en: z.string() }),
+  sortOrder: z.number().int(),
+  /** B-W2b-10 (MES-125): the tile's look and words as the office keeps them (icon null: the code's standard look). */
+  icon: z.string().nullable(),
+  colour: z.string().nullable(),
+  labelI18n: z.record(z.string(), z.string()),
+  needsDetail: z.boolean(),
+})
 
 const scanAnswer = output({ scan, replayed: z.boolean() })
 const requestAnswer = output({ request, replayed: z.boolean() })
@@ -322,6 +334,8 @@ export const workOrderWipContract = defineContract({
       allFinished: z.boolean(),
       readyToComplete: z.boolean(),
       correctionsWaiting: z.number().int(),
+      /** B-W2b-10: the rework orders: open ones and their garments, and what DONE ones gave back (good, scrapped). */
+      rework: output({ open: z.number().int(), inRework: z.number().int(), done: z.number().int(), good: z.number().int(), scrapped: z.number().int() }),
     }),
   },
 })
@@ -398,4 +412,26 @@ export const refusalContract = defineContract({
 export const discardContract = defineContract({
   params: refusalParams,
   response: { 200: output({ refusal: refusalRow }) },
+})
+
+// ---- B-W2b-10: an outside operation reported from its subcontract receipt line ----------------------------------------------
+
+/** What a receipt line wrote at its outside operation: the scan (a REPORT, or a CORRECTION adding a later receipt), or why not. */
+export const outsideReport = output({
+  receiptLineId: id(),
+  bundleId: id().nullable(),
+  bundleCode: z.string().nullable(),
+  operation: operationRef,
+  scanId: id().nullable(),
+  kind: kind.nullable(),
+  goodQuantity: z.number().int(),
+  scrapQuantity: z.number().int(),
+  reworkQuantity: z.number().int(),
+  /** Why nothing was written (null when a scan was). */
+  words: z.string().nullable(),
+})
+
+export const receiptLineReportContract = defineContract({
+  params: input({ lineId: id() }),
+  response: { 200: output({ report: outsideReport }), 201: output({ report: outsideReport }) },
 })

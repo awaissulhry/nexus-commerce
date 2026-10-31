@@ -26,4 +26,6 @@ export const manifest = defineManifest({
   'GET /production/scans/wip': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'GET /production/scans/work-orders/:workOrderId/wip': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
   'GET /production/scans/work-orders/:workOrderId/scans': { audiences: ['office'], permission: 'workorders.view', scope: 'record' },
+  // B-W2b-10: the outside operation of one subcontract receipt line, reported by the office (the one who receives goods back).
+  'POST /production/scans/receipt-lines/:lineId/report': { audiences: ['office'], permission: 'purchasing.subcontract.receive', scope: 'record' },
 })
