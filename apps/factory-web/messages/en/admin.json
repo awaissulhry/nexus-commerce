@@ -1791,6 +1791,11 @@
     "people_employees_manage": "Add, change, link and import employees",
     "people_teams_manage": "Add, change and archive teams, set their lead and move people between them",
     "people_loans_manage": "Lend people to another line for hours or days",
-    "people_leavers_manage": "Start, tick and cancel a person's leaver steps"
+    "people_leavers_manage": "Start, tick and cancel a person's leaver steps",
+    "people_shifts_view": "See the roster (who works which shift) and the planned overtime requests",
+    "people_shifts_manage": "Plan the roster of everyone: set shifts, assign, copy last week, publish",
+    "people_shifts_team": "Plan the roster of the teams you lead",
+    "people_overtime_manage": "Ask people for planned overtime, record a spoken answer, cancel a request",
+    "people_overtime_approve": "Approve planned overtime that people agreed to"
   }
 }

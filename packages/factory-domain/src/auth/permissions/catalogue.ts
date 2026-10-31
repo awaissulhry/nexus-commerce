@@ -102,6 +102,8 @@ import { QUALITY_COMPLAINTS_DEFINITIONS, QUALITY_COMPLAINTS_PERMISSIONS } from '
 import { PEOPLE_EMPLOYEES_DEFINITIONS, PEOPLE_EMPLOYEES_PERMISSIONS } from '../../people/employees/permissions'
 import { PEOPLE_TEAMS_DEFINITIONS, PEOPLE_TEAMS_PERMISSIONS } from '../../people/teams/permissions'
 import { PEOPLE_LEAVERS_DEFINITIONS, PEOPLE_LEAVERS_PERMISSIONS } from '../../people/leavers/permissions'
+// B-W2b-32: shifts and overtime requests (people.shifts.view | manage | team, people.overtime.manage | approve).
+import { PEOPLE_SHIFTS_DEFINITIONS, PEOPLE_SHIFTS_PERMISSIONS } from '../../people/shifts/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -482,6 +484,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PEOPLE_EMPLOYEES_DEFINITIONS,
   PEOPLE_TEAMS_DEFINITIONS,
   PEOPLE_LEAVERS_DEFINITIONS,
+  // B-W2b-32: shifts and overtime requests.
+  PEOPLE_SHIFTS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -573,6 +577,8 @@ for (const name of PURCHASING_REMINDERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.is
 for (const name of NUMBERING_OVERRIDE_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-26: people.
 for (const name of [...PEOPLE_EMPLOYEES_PERMISSIONS, ...PEOPLE_TEAMS_PERMISSIONS, ...PEOPLE_LEAVERS_PERMISSIONS]) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-32: shifts and overtime requests.
+for (const name of PEOPLE_SHIFTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

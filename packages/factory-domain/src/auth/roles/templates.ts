@@ -249,6 +249,19 @@ const PEOPLE_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.free
 const PEOPLE_TEAM_TEMPLATES: ReadonlySet<string> = new Set(['production_manager', 'floor_supervisor', 'quality_inspector', 'warehouse', 'maintenance'])
 const peopleAddedFor = (key: string, audience: RoleAudience): readonly Permission[] =>
   audience === 'office' ? [...(PEOPLE_ADDS[key] ?? []), ...(PEOPLE_TEAM_TEMPLATES.has(key) ? ['people.team.view' as Permission] : [])] : []
+/**
+ * B-W2b-32 (shifts and overtime requests; MES-218, MES-222; design people.shifts): the administrator (who keeps the HR
+ * register until an HR template comes: move these with B-W2b-26's) and the production manager plan every roster of their
+ * sites and ask and approve planned overtime; the floor supervisor reads the roster, plans the roster of the teams they
+ * lead (design: "Leads edit their team; others read") and asks overtime, never approves it. Office only: a worker reads
+ * their own published shifts and answers an ask on the tablet with floor.work. Owner and read-only from every().
+ */
+const PEOPLE_SHIFTS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  admin: ['people.shifts.view', 'people.shifts.manage', 'people.overtime.manage', 'people.overtime.approve'],
+  production_manager: ['people.shifts.view', 'people.shifts.manage', 'people.overtime.manage', 'people.overtime.approve'],
+  floor_supervisor: ['people.shifts.view', 'people.shifts.team', 'people.overtime.manage'],
+})
+const peopleShiftsAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' ? (PEOPLE_SHIFTS_ADDS[key] ?? []) : [])
 
 /**
  * B-W2b-24 (PLT-125, design admin.documents popup `override`): type the number a migrated document had in the old system —
@@ -259,7 +272,7 @@ const NUMBERING_OVERRIDE_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'fin
 const numberingOverrideAddedFor = (key: string, audience: RoleAudience): readonly Permission[] => (audience === 'office' && NUMBERING_OVERRIDE_TEMPLATES.has(key) ? ['numbering.override' as Permission] : [])
 
 const template = (key: string, content: Omit<RoleTemplate, 'key' | 'audience'>, audience: RoleAudience = 'office'): RoleTemplate =>
-  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience), ...repairsAddedFor(key, audience), ...reportLibraryAddedFor(key, audience), ...numberingOverrideAddedFor(key, audience), ...peopleAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
+  Object.freeze({ key, audience, ...content, permissions: Object.freeze([...new Set([...content.permissions, ...addedFor(key, audience), ...alertsAddedFor(key, audience), ...reportsAddedFor(key, audience), ...repairsAddedFor(key, audience), ...reportLibraryAddedFor(key, audience), ...numberingOverrideAddedFor(key, audience), ...peopleAddedFor(key, audience), ...peopleShiftsAddedFor(key, audience)])].sort()), grains: Object.freeze([...content.grains]) })
 const floorTemplate = (key: string, content: Omit<RoleTemplate, 'key' | 'audience' | 'requireMfa'>): RoleTemplate =>
   template(key, { ...content, requireMfa: false }, 'floor')
 

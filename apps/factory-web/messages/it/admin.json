@@ -1791,6 +1791,11 @@
     "people_employees_manage": "Aggiungere, modificare, collegare e importare i dipendenti",
     "people_teams_manage": "Aggiungere, modificare e archiviare le squadre, nominare il capo squadra e spostare le persone",
     "people_loans_manage": "Prestare persone a un'altra linea per ore o giorni",
-    "people_leavers_manage": "Avviare, spuntare e annullare i passi di uscita di una persona"
+    "people_leavers_manage": "Avviare, spuntare e annullare i passi di uscita di una persona",
+    "people_shifts_view": "Vedere i turni (chi lavora in quale turno) e le richieste di straordinario programmato",
+    "people_shifts_manage": "Pianificare i turni di tutti: impostare turni, assegnare, copiare la settimana scorsa, pubblicare",
+    "people_shifts_team": "Pianificare i turni delle squadre che guidi",
+    "people_overtime_manage": "Chiedere lo straordinario programmato, registrare una risposta data a voce, annullare una richiesta",
+    "people_overtime_approve": "Approvare lo straordinario programmato che le persone hanno accettato"
   }
 }
