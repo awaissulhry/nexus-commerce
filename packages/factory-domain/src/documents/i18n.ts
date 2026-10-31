@@ -16,6 +16,8 @@ export interface DocumentWords {
   readonly headings: {
     readonly issuer: Readonly<Record<DocumentType, string>>
     readonly party: Readonly<Record<DocumentType, string>>
+    /** W2b (B-W2b-19): the DDT's party when the goods are not sold (see `ddtPartyHeading`). */
+    readonly ddtPartyNotSold: string
     readonly destination: string
     readonly deliverTo: string
     readonly carrier: string
@@ -94,6 +96,7 @@ const IT: DocumentWords = {
   headings: {
     issuer: { QUOTE: 'Emittente', PURCHASE_ORDER: 'Committente', DDT: 'Mittente (cedente)', INVOICE_COPY: 'Cedente / prestatore', PACKING_LIST: 'Mittente' },
     party: { QUOTE: 'Cliente', PURCHASE_ORDER: 'Fornitore', DDT: 'Destinatario (cessionario)', INVOICE_COPY: 'Cessionario / committente', PACKING_LIST: 'Destinatario' },
+    ddtPartyNotSold: 'Destinatario',
     destination: 'Luogo di destinazione',
     deliverTo: 'Consegnare a',
     carrier: 'Vettore',
@@ -136,6 +139,10 @@ const IT: DocumentWords = {
       SUPPLIER_QUOTE: 'Vs. offerta',
       DDT: 'DDT',
       INVOICE: 'Fattura',
+      SUBCONTRACT_ORDER: 'Ordine di lavorazione',
+      SUPPLIER_CLAIM: 'Reclamo al fornitore',
+      REPAIR_ORDER: 'Riparazione',
+      RETURN_AUTHORISATION: 'Autorizzazione al reso (RMA)',
     },
     referenceDated: (number, date) => `${number} del ${date}`,
     reason: 'Causale del trasporto',
@@ -198,6 +205,7 @@ const EN: DocumentWords = {
   headings: {
     issuer: { QUOTE: 'Issued by', PURCHASE_ORDER: 'Buyer', DDT: 'Sender (consignor)', INVOICE_COPY: 'Seller', PACKING_LIST: 'Sender' },
     party: { QUOTE: 'Customer', PURCHASE_ORDER: 'Supplier', DDT: 'Recipient (consignee)', INVOICE_COPY: 'Buyer', PACKING_LIST: 'Recipient' },
+    ddtPartyNotSold: 'Recipient',
     destination: 'Place of delivery',
     deliverTo: 'Deliver to',
     carrier: 'Carrier',
@@ -240,6 +248,10 @@ const EN: DocumentWords = {
       SUPPLIER_QUOTE: 'Your quotation',
       DDT: 'DDT',
       INVOICE: 'Invoice',
+      SUBCONTRACT_ORDER: 'Processing order',
+      SUPPLIER_CLAIM: 'Supplier claim',
+      REPAIR_ORDER: 'Repair',
+      RETURN_AUTHORISATION: 'Return authorisation (RMA)',
     },
     referenceDated: (number, date) => `${number} of ${date}`,
     reason: 'Reason for transport',
@@ -294,6 +306,23 @@ const EN: DocumentWords = {
 }
 
 export const DOCUMENT_WORDS: Readonly<Record<DocumentLanguage, DocumentWords>> = Object.freeze({ it: IT, en: EN })
+
+/**
+ * W2b (B-W2b-19; the B-W2a-17 note; GATE-ACCOUNTANT): the DDT names its party "Destinatario (cessionario)" only when the
+ * goods are sold to it. Goods sent for processing (conto lavorazione), back from processing, returned, sent on approval,
+ * for repair, as samples, between sites or for another reason are not a sale: the party is the "Destinatario" only. The
+ * lead's wording, shipped behind this ONE switch until the accountant confirms it: `false` prints W1's
+ * "Destinatario (cessionario)" on every DDT again.
+ */
+export const DDT_PARTY_WORDS_PER_REASON = true
+
+/** The reasons whose goods are sold to the DDT's party (the only ones that print "cessionario"). */
+export const DDT_SOLD_REASONS: readonly DdtReason[] = Object.freeze(['SALE'])
+
+/** The heading of a DDT's party block for its reason (the switch above decides whether the reason matters). */
+export function ddtPartyHeading(words: DocumentWords, reason: DdtReason, perReason: boolean = DDT_PARTY_WORDS_PER_REASON): string {
+  return !perReason || DDT_SOLD_REASONS.includes(reason) ? words.headings.party.DDT : words.headings.ddtPartyNotSold
+}
 
 /** The country names printed in addresses abroad; Italian addresses print no country. */
 const COUNTRIES: Readonly<Record<string, Readonly<Record<DocumentLanguage, string>>>> = {
