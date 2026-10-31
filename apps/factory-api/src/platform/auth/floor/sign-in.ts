@@ -206,7 +206,7 @@ async function startSession(
       },
       select: { id: true },
     })
-    await tx.device.updateMany({ where: { id: device.id }, data: { currentSessionId: sessionId, lastSeenAt: now } })
+    await tx.device.updateMany({ where: { id: device.id }, data: { currentSessionId: sessionId, inUseSince: now, lastSeenAt: now } })
     audit({ recordType: 'FloorSession', recordId: sessionId, after: { workerId: worker.id, deviceId: device.id, method: badgeId ? 'badge' : 'name', pin: proved.pinVerified, endsAt: toUtcIso(endsAt) } })
     const stepUpUntil = floorStepUpUntil(pinVerifiedAt)
     return {

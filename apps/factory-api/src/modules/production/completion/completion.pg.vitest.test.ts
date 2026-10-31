@@ -212,7 +212,7 @@ describe('the work order and the SKU', () => {
     expect(held.message).toBe('Work order SEED-WO-0001 is on hold (Seam check): its garments go into finished goods once the hold is lifted.')
     await admin(`UPDATE "WorkOrder" SET status = 'IN_PROGRESS', "heldFromStatus" = NULL, "heldAt" = NULL, "holdReason" = NULL WHERE id = $1`, [wo1()])
 
-    await admin(`INSERT INTO "QualityHold" (id, "tenantId", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "placedAt") VALUES ($1, $2, $3, $4, 'WorkOrder', ARRAY[$5]::uuid[], 'STAIN', now())`, [newId(), A.tenant, A.companyA, A.siteA1, wo3()])
+    await admin(`INSERT INTO "QualityHold" (id, "tenantId", "companyId", "siteId", "subjectType", "subjectIds", "reasonCode", "placedAt", "number") VALUES ($1, $2, $3, $4, 'WorkOrder', ARRAY[$5]::uuid[], 'STAIN', now(), 'HLD-T-' || gen_random_uuid())`, [newId(), A.tenant, A.companyA, A.siteA1, wo3()])
     const view = await finished(wo3())
     expect(view.blockers).toEqual(['Work order SEED-WO-0003 is on quality hold (STAIN): its garments go into finished goods once the hold is released.'])
     expect((await refused('warehouse', 'POST', `/production/work-orders/${wo3()}/finished`, {}, 409)).code).toBe('invalid_state')

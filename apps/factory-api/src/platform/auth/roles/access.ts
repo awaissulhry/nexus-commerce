@@ -24,7 +24,9 @@ const HELD_SELECT = {
   companyIds: true,
   siteIds: true,
   partyIds: true,
-  role: { select: { key: true, system: true, requireMfa: true, permissions: true, grains: true } },
+  // B-W2b-24: when the assignment was given and since when its role asks for two-factor (sessions/grants.ts grace).
+  createdAt: true,
+  role: { select: { key: true, system: true, requireMfa: true, requireMfaSince: true, permissions: true, grains: true } },
 } as const
 
 export interface HeldAssignment extends HeldRole {
@@ -32,6 +34,10 @@ export interface HeldAssignment extends HeldRole {
   readonly roleId: string
   readonly roleKey: string
   readonly system: boolean
+  /** B-W2b-24: when the assignment was given. */
+  readonly givenAt: Date
+  /** B-W2b-24: since when the role asks for two-factor (Role.requireMfaSince; null: not asking, or asking from before W2b). */
+  readonly requireMfaSince: Date | null
 }
 
 /** The person's live office assignments with their roles, oldest first. */
@@ -46,6 +52,8 @@ export async function heldRoles(client: FactoryClient | CommandTx, userId: strin
     roleId: row.roleId,
     roleKey: row.role.key,
     system: row.role.system,
+    givenAt: row.createdAt,
+    requireMfaSince: row.role.requireMfaSince,
     role: { requireMfa: row.role.requireMfa, permissions: row.role.permissions as Permission[], grains: row.role.grains.filter(isGrain) },
     scope: { allCompanies: row.allCompanies, companyIds: row.companyIds, siteIds: row.siteIds, partyIds: row.partyIds },
   }))

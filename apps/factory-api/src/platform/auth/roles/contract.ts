@@ -26,6 +26,8 @@ export const roleView = content.extend({
   system: z.boolean(),
   basedOn: z.string().nullable(),
   audience: z.enum(ROLE_AUDIENCES),
+  /** B-W2b-24: since when it asks for two-factor (UTC); null when it does not ask, or asked from before the time was kept. */
+  requireMfaSince: instant().nullable(),
   version: z.number().int(),
   /** People holding it now. */
   holders: z.number().int(),

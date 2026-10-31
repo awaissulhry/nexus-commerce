@@ -44,6 +44,16 @@
         "name": "VAT check (VIES)",
         "for": "Checks EU customers’ and suppliers’ VAT numbers with the European Commission.",
         "how": "One for every company."
+      },
+      "CLAMAV": {
+        "name": "Virus scan (ClamAV)",
+        "for": "Checks every uploaded file for viruses before anyone can open it; a file it has not cleared stays held.",
+        "how": "One for every company. Not running yet: it waits for the Owner's yes with its cost; until then uploads are not scanned."
+      },
+      "ERROR_TRACKING": {
+        "name": "Error tracking (EU)",
+        "for": "Tells Nexus support about unexpected errors, with personal data and amounts removed first.",
+        "how": "One for every company. Not running yet: it waits for the Owner's yes with its cost and the processor agreement."
       }
     },
     "laterService": {

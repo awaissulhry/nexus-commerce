@@ -175,9 +175,12 @@ export function importRecordValues(party: ImportedParty): RecordValues {
   for (const name of TAX_COLUMNS) columns[name] = party.identity ? party.identity[name] : null
   for (const [column, field] of Object.entries(ADDRESS_COLUMNS)) columns[column] = party.registered ? party.registered[field] : null
   for (const column of Object.keys(CONTACT_COLUMNS)) columns[column] = null
-  Object.assign(columns, termsColumnsOf(party.terms ?? null, party.fields.currency))
+  // Commercial terms are a customer's: a supplier's row leaves them blank (its file for re-import comes back UNCHANGED).
+  Object.assign(columns, isCustomer(party.fields.roles) ? termsColumnsOf(party.terms ?? null, party.fields.currency) : NO_TERMS)
   return { ...columns, [RECORD]: JSON.stringify(party) }
 }
+
+const NO_TERMS = Object.fromEntries(TERMS_COLUMNS.map((column) => [column, null])) as Record<TermsColumn, null>
 
 /** A minor-units amount as the sheet writes it: a plain decimal in the currency's units ("150" for 15000 EUR cents). */
 const majorText = (amount: number, currency: string): string => decimalText(fromMinorUnits(amount, isCurrencyCode(currency) ? currency : 'EUR').toFixed())

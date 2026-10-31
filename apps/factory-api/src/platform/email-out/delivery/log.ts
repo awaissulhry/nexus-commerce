@@ -21,7 +21,7 @@ import {
 } from '@nexus/factory-domain/email-delivery/rules'
 import type { OutboundStatus, SuppressionReason } from '@nexus/factory-domain/email/rules'
 import { command, type CommandCaller } from '../../../core/command'
-import { actorOf, type RequestContext } from '../../../core/context'
+import { actorOf, SYSTEM_ACTOR_ID, type RequestContext } from '../../../core/context'
 import { ApiError } from '../../../core/errors'
 import { eventFor } from '@nexus/factory-domain/events/define'
 import { recordLabelOf } from '../../threads/labels'
@@ -38,10 +38,11 @@ import type { BlockedView, DeliveryView } from './contract'
  *                                              links must be visible). Counts per state over 30 days, blocked now.
  *   GET  /email/blocked                        the addresses no mail goes to (Suppression, tenant-wide), why, and the
  *                                              mail that blocked them; or the unblocked ones (kept as the record).
- *   POST /email/blocked/:suppressionId/unblock  one command: the row stays (never deleted) with its address moved aside
- *                                              (factory-domain email/delivery/rules), audited from → to with the reason,
- *                                              event email.address_unblocked. Every send looks the address up, so mail
- *                                              goes to it again; a later bounce blocks it again in a new row.
+ *   POST /email/blocked/:suppressionId/unblock  one command: the row stays (never deleted), lifted in its columns (B-W2b-24:
+ *                                              liftedAt, liftedById, liftReason; it keeps its address and never changes
+ *                                              again), audited from → to with the reason, event email.address_unblocked.
+ *                                              Every send looks for a block IN FORCE, so mail goes to it again; a later
+ *                                              bounce blocks it again in a new row.
  *
  * Reads the outbox rows (EmailOutbound) and, for digests, NotificationDelivery (how many notifications a mail carried).
  */
@@ -193,14 +194,23 @@ export async function listDelivery(caller: CommandCaller, query: DeliveryQuery, 
     const grouped = await client.emailOutbound.groupBy({ by: ['status'], where: { AND: [scope, query.companyId ? { companyId: query.companyId } : {}, { queuedAt: { gte: since } }] }, _count: { _all: true } })
     const counts = Object.fromEntries(DELIVERY_STATES.map((state) => [state, 0])) as Record<DeliveryState, number>
     for (const row of grouped) counts[deliveryStateOf(row.status as OutboundStatus)] += row._count._all
-    const blocked = await client.suppression.count({ where: { NOT: { address: { startsWith: UNBLOCKED_PREFIX } } } })
+    const blocked = await client.suppression.count({ where: IN_FORCE })
     return { mails, nextBefore: more ? shown[shown.length - 1]!.id : null, counts, blocked }
   })
 }
 
 // ---- blocked addresses ----------------------------------------------------------------------------------------------
 
-const SUPPRESSION = { id: true, address: true, reason: true, detail: true, at: true, outboundId: true, version: true, updatedAt: true } as const satisfies Prisma.SuppressionSelect
+const SUPPRESSION = { id: true, address: true, reason: true, detail: true, at: true, outboundId: true, liftedAt: true, liftedById: true, liftReason: true, version: true, updatedAt: true } as const satisfies Prisma.SuppressionSelect
+
+/**
+ * B-W2b-24: a block is lifted by its columns (liftedAt, liftedById, liftReason; B-W2b-03). A row B-W2a-41 lifted by moving
+ * its address aside (`~unblocked:<id>:<address>`) counts as lifted too until the catch-up (./lift-catch-up.ts) moves it to
+ * the columns: these two filters are every reader's.
+ */
+export const IN_FORCE: Prisma.SuppressionWhereInput = { liftedAt: null, NOT: { address: { startsWith: UNBLOCKED_PREFIX } } }
+export const LIFTED: Prisma.SuppressionWhereInput = { OR: [{ liftedAt: { not: null } }, { address: { startsWith: UNBLOCKED_PREFIX } }] }
+const isLifted = (row: Pick<SuppressionRow, 'liftedAt' | 'address'>): boolean => row.liftedAt !== null || isUnblocked(row.address)
 type SuppressionRow = Prisma.SuppressionGetPayload<{ select: typeof SUPPRESSION }>
 
 /** The blocked list is tenant-wide: any grant of email.delivery.view reads it. */
@@ -219,7 +229,8 @@ async function blockedViews(client: Client, actor: Actor, rows: readonly Suppres
   const mailIds = rows.flatMap((row) => (row.outboundId ? [row.outboundId] : []))
   const mails = mailIds.length === 0 ? [] : await client.emailOutbound.findMany({ where: { id: { in: mailIds } }, select: { id: true, companyId: true, recordType: true, recordId: true } })
   const mailOf = new Map(mails.map((mail) => [mail.id, mail]))
-  const unblockedIds = rows.filter((row) => isUnblocked(row.address)).map((row) => row.id)
+  // Rows lifted before B-W2b-24 (address moved aside) say who and why from their audit row until the catch-up moves them.
+  const unblockedIds = rows.filter((row) => row.liftedAt === null && isUnblocked(row.address)).map((row) => row.id)
   const audits = unblockedIds.length === 0
     ? []
     : await client.auditLog.findMany({ where: { recordType: 'Suppression', recordId: { in: unblockedIds }, action: 'email.unblockAddress' }, select: { recordId: true, at: true, actorId: true, audience: true, reason: true }, orderBy: { at: 'desc' } })
@@ -241,7 +252,11 @@ async function blockedViews(client: Client, actor: Actor, rows: readonly Suppres
       detail: row.detail,
       at: toUtcIso(row.at),
       mail: mail && mayMail ? { id: mail.id, companyId: mail.companyId, record: await recordRefOf(client, labels, mail.recordType, mail.recordId) } : null,
-      unblocked: isUnblocked(row.address) ? { at: toUtcIso(audit?.at ?? row.updatedAt), byId: audit && audit.audience === 'OFFICE' ? audit.actorId : null, reason: audit?.reason ?? null } : null,
+      unblocked: row.liftedAt
+        ? { at: toUtcIso(row.liftedAt), byId: row.liftedById === SYSTEM_ACTOR_ID ? null : row.liftedById, reason: row.liftReason }
+        : isUnblocked(row.address)
+          ? { at: toUtcIso(audit?.at ?? row.updatedAt), byId: audit && audit.audience === 'OFFICE' ? audit.actorId : null, reason: audit?.reason ?? null }
+          : null,
       version: row.version,
     })
   }
@@ -258,7 +273,7 @@ export async function listBlocked(
   const limit = query.limit ?? 50
   return caller.withClient(async (client) => {
     const filters: Prisma.SuppressionWhereInput[] = [
-      query.state === 'UNBLOCKED' ? { address: { startsWith: UNBLOCKED_PREFIX } } : { NOT: { address: { startsWith: UNBLOCKED_PREFIX } } },
+      query.state === 'UNBLOCKED' ? LIFTED : IN_FORCE,
       query.reason ? { reason: query.reason } : {},
     ]
     if (query.before) {
@@ -285,22 +300,23 @@ export async function unblockAddress(caller: CommandCaller, suppressionId: strin
     if (!(await mayUnblock(actor, client))) throw new ForbiddenError()
     return found
   })
-  const problems = unblockProblems({ address: row.address, reason: input.reason })
+  const problems = unblockProblems({ address: isLifted(row) ? unblockedAddress(row.id, addressOfSuppression(row.address)) : row.address, reason: input.reason })
   if (problems.length > 0) throw new DomainError('conflict', problems[0]!.message, problems)
   const { result } = await command(
     caller,
     { name: 'email.unblockAddress', idempotencyKey, input: { suppressionId, ...input }, record: { type: 'Suppression', id: row.id, expectedVersion: input.version } },
-    async ({ tx, audit, emit }) => {
+    async ({ tx, audit, emit, now }) => {
       const current = await tx.suppression.findUniqueOrThrow({ where: { id: row.id }, select: SUPPRESSION })
-      if (isUnblocked(current.address)) throw new DomainError('conflict', 'This address was unblocked already: mail may go to it.', [{ path: 'suppression/unblocked', message: 'unblocked' }])
-      const address = current.address
-      await tx.suppression.update({ where: { id: row.id }, data: { address: unblockedAddress(row.id, address) }, select: { id: true } })
+      if (isLifted(current)) throw new DomainError('conflict', 'This address was unblocked already: mail may go to it.', [{ path: 'suppression/unblocked', message: 'unblocked' }])
+      // B-W2b-24: the block is lifted in its columns (when, who, why); the row keeps its address and never changes again.
+      const context = contextOf(caller)
+      const liftedById = context.audience === 'office' ? context.actorId : SYSTEM_ACTOR_ID
+      await tx.suppression.update({ where: { id: row.id }, data: { liftedAt: now, liftedById, liftReason: input.reason.trim() }, select: { id: true } })
       audit({ recordType: 'Suppression', recordId: row.id, companyId: null, before: { blocked: true, reason: current.reason }, after: { blocked: false }, reason: input.reason.trim() })
       emit(eventFor(unblocked, { subject: row.id, companyId: null, payload: { suppressionId: row.id, reason: current.reason as SuppressionReason } }))
       const saved = await tx.suppression.findUniqueOrThrow({ where: { id: row.id }, select: SUPPRESSION })
       const [view] = await blockedViews(tx, actor, [saved])
-      const context = contextOf(caller)
-      return { ...view!, unblocked: { at: view!.unblocked!.at, byId: context.audience === 'office' ? context.actorId : null, reason: input.reason.trim() } }
+      return view!
     },
   )
   return result

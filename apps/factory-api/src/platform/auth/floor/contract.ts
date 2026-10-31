@@ -58,6 +58,9 @@ export const enrolDeviceContract = defineContract({
 
 export const deviceContract = defineContract({ response: { 200: deviceInfo } })
 
+/** B-W2b-24 (design admin.devices Status "Network"): the networks a tablet may say it is on (DeviceNetwork). */
+export const DEVICE_NETWORKS = ['WIFI', 'ETHERNET', 'CELLULAR', 'OTHER'] as const
+
 /**
  * B-W2a-42 (PLT-241; design admin.devices "Battery", "App version", "actions waiting to sync"): what the tablet says of
  * itself — the floor app's version, its battery when the browser tells it (else null), and how many actions wait in its
@@ -69,6 +72,8 @@ export const reportDeviceStateContract = defineContract({
     batteryPercent: z.number().int().min(0).max(100).nullable(),
     batteryCharging: z.boolean().nullable(),
     queuedActions: z.number().int().min(0).max(100_000),
+    /** B-W2b-24: the tablet's network as the browser says it (navigator.connection.type); null or left out: it did not say. */
+    network: z.enum(DEVICE_NETWORKS).nullable().optional(),
   }),
   response: { 200: output({ reportedAt: instant(), appUpdated: z.boolean() }) },
 })
@@ -141,6 +146,10 @@ export const deviceView = output({
   revokedAt: instant().nullable(),
   /** Someone is signed in on it now (never who: the registry is not a presence board). */
   inUse: z.boolean(),
+  /** B-W2b-24: since when it is in use (the session's start; null when nobody is signed in). Never who. */
+  inUseSince: instant().nullable(),
+  /** B-W2b-24: the network the tablet last said it was on (null: it never said, or its browser does not tell). */
+  network: z.enum(DEVICE_NETWORKS).nullable(),
   version: z.number().int(),
 })
 export type DeviceView = z.infer<typeof deviceView>

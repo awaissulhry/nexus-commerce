@@ -1,0 +1,44 @@
+{
+  "line": {
+    "label": "Number",
+    "loading": "reading the next number…",
+    "failed": "the next number could not be read; the document still takes it when it is saved.",
+    "preview": "{number} — the next of its series, given when it is saved (not reserved).",
+    "newPeriod": "{number} — the first of {year}, given when it is saved (not reserved).",
+    "typed": "{number} — the number it had in the old system ({reason}).",
+    "typeOne": "Type a number for a migrated document…",
+    "useSeries": "Use the series' number",
+    "held": {
+      "noSeries": "no number series for this kind of document yet: an admin sets it up in Admin › Documents & numbering.",
+      "several": "this company keeps several series of this kind: the number comes from the one the document names.",
+      "closed": "its number series is closed: an admin opens a new one in Admin › Documents & numbering.",
+      "exhausted": "its number series has given its last number: an admin opens a new one in Admin › Documents & numbering."
+    }
+  },
+  "override": {
+    "title": "Type a number for a migrated document",
+    "body": "A document carried over from the old system keeps the number it had there instead of the next number of its series. Invoices, credit notes and DDTs never do: their series never skips or reuses a number.",
+    "number": "Number as it was printed",
+    "numberHint": "Letters, digits and / . _ - , up to 40, no spaces.",
+    "reason": "Why it keeps this number",
+    "reasonHint": "For example: an open order carried over from the old system. It is kept in the record's history.",
+    "checking": "Checking the number…",
+    "ok": "No document has this number, and the series will not give it.",
+    "failed": "The number could not be checked: type it again, or try later.",
+    "use": "Use this number",
+    "cancel": "Cancel",
+    "refusal": {
+      "kind": "This kind of document always takes the next number of its series.",
+      "shape": "Type the number as it was printed: letters, digits and / . _ - , up to 40, no spaces.",
+      "reason": "Say why this document keeps its old number.",
+      "taken": "This number is used already: another document of this kind has it.",
+      "future": "The series will give this number later: type another, or move the series past it first (Admin › Documents & numbering)."
+    },
+    "held": {
+      "number": "Type the number first.",
+      "checking": "Wait for the check of the number.",
+      "failed": "The number could not be checked yet.",
+      "reason": "Say why it keeps this number."
+    }
+  }
+}

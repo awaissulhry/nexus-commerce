@@ -35,7 +35,9 @@ import { seed as seedReturns } from './returns'
  *   dispositions  use as is, rework, repair, regrade, return to the supplier, quarantine and scrap: the stock move and
  *                 the follow-up record each makes, a decision above 500.00 (cost) or on a critical NCR needs approval.
  *   hold          the operator holds hide SEED-HIDE-0002 at the cutting table (a grain crack across the butt): ACTIVE,
- *                 the move to A1's quarantine shelf asked; the office decides it in SEED-NCR-0002.
+ *                 the move to A1's quarantine shelf asked; the office decides it in SEED-NCR-0002. Numbered HLD-2026-0001
+ *                 from company A's HOLD series by the cutting table's tablet, as the bench numbers a hold it places
+ *                 (B-W2b-F1: a new hold always has its number).
  *   SEED-NCR-0001 OPEN: skipped stitches on a sleeve found at the final inspection of SEED-WO-0001 (one garment,
  *                 minor).
  *   SEED-NCR-0002 CONTAINED: the grain crack on SEED-HIDE-0002 (51.8 ft² of P2's lot SEED-LOT-LEA-01, major), found at
@@ -249,12 +251,37 @@ export async function seed(context: SeedContext): Promise<HoldsSeed> {
 
   // --- the hold: the operator holds SEED-HIDE-0002 at the cutting table ------------------------------------------------
   const holdId = firstId('holds:hold:HIDE-0002')
+  const holdSeriesId = lastId(`series:A:HOLD:MAIN:${YEAR}`)
   await db.withScope(cutting, (client) =>
     client.$transaction(async (tx) => {
       if (await tx.qualityHold.findUnique({ where: { id: holdId }, select })) return
+      // Its number, as allocateNumber does on the tablet: the series row locked, its next number recorded, the counter moved.
+      const [series] = await tx.$queryRaw<{ nextValue: number }[]>`SELECT "nextValue" FROM "NumberSeries" WHERE "id" = ${holdSeriesId}::uuid FOR UPDATE`
+      const value = series!.nextValue
+      const number = `HLD-${YEAR}-${String(value).padStart(4, '0')}`
+      await tx.numberAllocation.create({
+        data: {
+          id: lastId(`holds:allocation:HOLD:${value}`),
+          companyId: companyA,
+          seriesId: holdSeriesId,
+          kind: 'HOLD',
+          value,
+          formatted: number,
+          documentDate: new Date('2026-11-21T00:00:00.000Z'),
+          recordType: 'QualityHold',
+          recordId: holdId,
+          allocatedAt: T.held,
+          // The floor's ledger names the tablet, never the worker (seed/floor-auth.ts's cutting table device).
+          allocatedById: id('device:A1:cutting'),
+          requestId: `seed-holds-${namespace}-hold`,
+        },
+        select,
+      })
+      await tx.numberSeries.update({ where: { id: holdSeriesId }, data: { nextValue: value + 1, lastIssuedDate: new Date('2026-11-21T00:00:00.000Z'), updatedAt: T.held }, select })
       await tx.qualityHold.create({
         data: {
           id: holdId,
+          number,
           companyId: companyA,
           siteId: siteA,
           subjectType: 'Hide',
