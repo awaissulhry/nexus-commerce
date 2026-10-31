@@ -1,0 +1,111 @@
+{
+  "title": "My work",
+  "scan": {
+    "label": "Scan the bundle to start",
+    "hint": "Scanning the real bundle starts it: no row to pick"
+  },
+  "loading": "Loading this station's queue…",
+  "status": {
+    "station": "{station}",
+    "plan": "plan v{number}",
+    "asOf": "as of {time}"
+  },
+  "fromTablet": "From this tablet",
+  "changed": "List changed · Show",
+  "upcoming": "New plan v{number} from {time}",
+  "next": {
+    "title": "Next",
+    "type": "Next",
+    "none": {
+      "title": "Nothing ready to start yet",
+      "body": "Every task here waits for something: see why in the list. Scan a bundle to work on it."
+    }
+  },
+  "then": {
+    "title": "Then",
+    "count_one": "{count} more task",
+    "count_other": "{count} more tasks",
+    "done_one": "{count} done",
+    "done_other": "{count} done"
+  },
+  "entry": {
+    "title": "In the queue",
+    "gone": {
+      "title": "No longer in the queue",
+      "body": "It was finished or the plan changed. Go back to the list."
+    }
+  },
+  "state": {
+    "READY": "Ready",
+    "WAITING_FOR_PREVIOUS": "Waiting",
+    "waitingFor": "Waiting for Op {seq}",
+    "NOT_RELEASED": "Not released yet",
+    "ON_HOLD": "On hold",
+    "DONE": "Done"
+  },
+  "op": "Op {seq} · {name}",
+  "pieces_one": "piece left",
+  "pieces_other": "pieces left",
+  "rush": "Rush",
+  "onHoldWhy": "On hold: {reason}",
+  "due": "due {date}",
+  "waitingHere_one": "{count} piece here",
+  "waitingHere_other": "{count} pieces here",
+  "scanToStart": "Scan the bundle to start it.",
+  "fact": {
+    "style": "Style",
+    "due": "Due",
+    "planned": "Planned for",
+    "waiting": "Waiting here"
+  },
+  "cantFind": {
+    "open": "I can't find it",
+    "title": "Can't find it?",
+    "body": "Put it last and go on with the next one, or call for help.",
+    "help": "Call for help: material",
+    "helpHeld": "Calling for help comes with a later update: ask your team leader.",
+    "putLast": "Put it last"
+  },
+  "putLast": {
+    "done": "Done",
+    "row": "Put last: {reason}",
+    "said": "{number} · Op {seq} put last on this tablet ({reason}). The office's plan does not change."
+  },
+  "error": {
+    "title": "Could not load the queue",
+    "body": "Scan a bundle to work anyway."
+  },
+  "offline": {
+    "body": "The queue comes from the office the first time. Scan a bundle to work anyway."
+  },
+  "empty": {
+    "noStation": {
+      "title": "This tablet is not at a station",
+      "body": "The office places it at one (Admin › Devices & printers). Scan a bundle to work on it."
+    },
+    "nothingPublished": {
+      "title": "No plan published yet",
+      "body": "Work from the bundles until the office publishes the plan."
+    },
+    "firstUpcoming": {
+      "title": "The first plan, v{number}, starts at {time}",
+      "body": "Until then, scan a bundle to work on it."
+    },
+    "nothingQueued": {
+      "title": "Nothing queued for this station",
+      "body": "Scan a bundle to work on it."
+    },
+    "allDone": {
+      "title": "Everything planned here is done",
+      "body": "Scan a bundle to work on it."
+    }
+  },
+  "noPermission": {
+    "title": "Nothing to do here with your role",
+    "body": "Ask your team leader."
+  },
+  "keys": {
+    "rows": "Move between the tasks",
+    "open": "Open the task with the focus"
+  }
+}

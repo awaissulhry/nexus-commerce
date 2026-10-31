@@ -97,6 +97,8 @@ describe('the dispatch list per line and station (MES-021, Owner answer P3)', ()
     expect(answer.entries[0]).toMatchObject({ startAt: '2026-11-17T08:00:00.000Z', garments: 7, workOrder: { rush: false, dueDate: '2026-12-04' } })
     expect(['READY', 'WAITING_FOR_PREVIOUS']).toContain(answer.entries[0].state)
     expect(answer.entries[0].words.length).toBeGreaterThan(5)
+    // The operation before it, for the floor's own words (B-W2a-74): sewing follows the seeded cut.
+    expect(answer.entries[0].previous).toMatchObject({ code: 'SEED-CUT-LEA' })
     // The floor's own reads hide the working plan altogether (the policies).
     const kinds = await database.withScope({ audience: 'floor', tenantId: T, actorId: newId(), siteId: siteA1 }, (client) => client.planVersion.findMany({ select: { kind: true } }))
     expect([...new Set(kinds.map((row) => row.kind))]).toEqual(['PUBLISHED'])
