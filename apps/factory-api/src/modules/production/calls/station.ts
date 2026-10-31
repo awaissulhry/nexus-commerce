@@ -8,6 +8,7 @@ import { actorOf, type FloorContext } from '../../../core/context'
 import { hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
 import { bodyIssue, floorOf, refuse } from './access'
 import type { SendBody } from './contract'
+import { endWaitingInCommand, startWaitingInCommand } from './waiting'
 import { callByClientEvent, callRecord, devicePlaceOf, lockCall, openCallOf, readCall, readType, siteOf, stationOf, typesOfSite, typeViews, type CallRow } from './store'
 
 /**
@@ -165,9 +166,10 @@ export async function sendCall(caller: CommandCaller, body: SendBody, key?: stri
           ...scope,
           payload: { callId: id, typeId: type.id, code: type.code, kind: type.kind as CallKind, stationId: station.id, lineId: station.lineId, responderTeamId: type.responderTeamId, workOrderId: body.workOrderId ?? null, bundleId: body.bundleId ?? null, by: 'FLOOR' },
         })
-        // MES-148 (B-W2b-29, wired at the merge): when `type.offStandardCodeId` is set and the call is the tablet's own
-        // station's, the station's waiting starts here with offstandard/writes.ts insertBlock(tools, { source: 'HELP_CALL',
-        // helpCallId: id, startedAt: sentAt, … }) — see the step notes (w2b-35-help-calls.md, "Merge with B-W2b-29").
+        // MES-148: the station's waiting books to the type's off-standard code while the call is open (B-W2b-29's writes).
+        if (type.offStandardCodeId && station.id === place.stationId) {
+          await startWaitingInCommand(tools, { tenantId: context.tenantId, site: place.site, station, codeId: type.offStandardCodeId, named, callId: id, at: sentAt, deviceId: context.deviceId })
+        }
         return { call: await callRecord(tx, (await readCall(tx, id))!, context, tools.now), existing: false }
       },
     )
@@ -246,8 +248,9 @@ export async function stepInCommand(
     ...scope,
     payload: { callId, typeId: call.typeId, kind: call.type.kind as CallKind, stationId: call.stationId, lineId: call.lineId, step, status: change.status, actor: input.actor, by: context.audience === 'floor' ? 'FLOOR' : 'OFFICE' },
   })
-  // MES-148 (B-W2b-29, wired at the merge): a SOLVED or CANCELLED call ends its OPEN waiting block here with
-  // offstandard/writes.ts endBlock(tools, block, code, { at: change.solvedAt ?? change.cancelledAt, endedBy: 'HELP_CALL', bump: true }).
+  // MES-148: a solved or cancelled call ends the station's waiting it booked.
+  const ended = change.solvedAt ?? change.cancelledAt
+  if (ended) await endWaitingInCommand(tools, { tenantId: (context as { readonly tenantId: string }).tenantId, callId, at: ended })
   return (await readCall(tx, callId))!
 }
 

@@ -113,6 +113,7 @@ const keysOf = (value: unknown): string[] =>
   Array.isArray(value) ? value.flatMap(keysOf) : value && typeof value === 'object' ? Object.entries(value).flatMap(([key, item]) => [key, ...keysOf(item)]) : []
 const callRow = async (id: string) => (await admin('SELECT status::text AS status, "workerId", "employeeId", "lineId", "seenAt", "seenById", "onTheWayAt", "onTheWayById", "solvedAt", "solvedById", "cancelledById", "resolutionCode", "outcomeRecordType", note, version FROM "HelpCall" WHERE id = $1', [id]))[0]!
 const eventsOf = async (type: string, subject: string) => admin('SELECT payload FROM "OutboxEvent" WHERE type = $1 AND subject = $2 ORDER BY "occurredAt", id', [type, subject])
+const waitingOf = async (callId: string) => admin('SELECT b.status::text AS status, b.source::text AS source, b."workerId", b."stationId", b."startedAt", b."endedAt", c.code FROM "OffStandardEntry" b JOIN "OffStandardCode" c ON c.id = b."codeId" WHERE b."helpCallId" = $1 ORDER BY b."startedAt"', [callId])
 const auditOf = async (recordId: string) => admin('SELECT action, before, after, reason FROM "AuditLog" WHERE "recordId" = $1 ORDER BY "at", id', [recordId])
 let cid = 0
 const clientId = () => `call-${run}-${++cid}`
@@ -228,6 +229,10 @@ describe('one tap from the station (MES-142, MES-143, MES-137)', () => {
     expect(raised!.payload).toMatchObject({ callId: materialCallId, kind: 'MATERIAL', code: 'MATERIAL', stationId: A.sew1, lineId: A.lineL1, workOrderId: A.wo1, bundleId: A.bundle1, by: 'FLOOR' })
     expect(keysOf(raised!.payload).filter((key) => PERSON_KEYS.test(key))).toEqual([])
     expect((await auditOf(materialCallId))[0]).toMatchObject({ action: 'production.sendCall', after: { stationId: A.sew1, workerId: A.operator } })
+    // MES-148: the station's waiting books to the type's off-standard code (WAIT_HELP) while the call is open.
+    expect(await waitingOf(materialCallId)).toMatchObject([{ status: 'OPEN', source: 'HELP_CALL', workerId: A.operator, stationId: A.sew1, code: 'WAIT_HELP', endedAt: null }])
+    expect(sent.call).toMatchObject({ waitingBooked: true, waiting: { code: 'WAIT_HELP', status: 'OPEN', endedAt: null } })
+    expect((await eventsOf('production.off_standard_started', (await admin('SELECT id FROM "OffStandardEntry" WHERE "helpCallId" = $1', [materialCallId]))[0]!.id))).toHaveLength(1)
   })
 
   it('a second tap shows the open call, never a second one; a queued call sent again is made once', async () => {
@@ -241,6 +246,8 @@ describe('one tap from the station (MES-142, MES-143, MES-137)', () => {
     // The station cancels the team-leader call it did not mean.
     const cancelled = await ok('operator', 'POST', `/production/calls/station/${first.call.id}/cancel`, {})
     expect(cancelled.call).toMatchObject({ status: 'CANCELLED', timeline: [{ step: 'SENT' }, { step: 'CANCELLED', by: { kind: 'WORKER', name: 'Seed Worker A1-1' } }] })
+    // The operator already waits on the material call: that block covers the time, no second one.
+    expect(await waitingOf(first.call.id)).toEqual([])
   })
 
   it('REFUSED: a switched-off type, a tablet with no station, another station without being the team leader, a bundle of another work order', async () => {
@@ -256,6 +263,8 @@ describe('one tap from the station (MES-142, MES-143, MES-137)', () => {
     leadCallId = sent.call.id
     expect(sent.call).toMatchObject({ station: { code: 'SEW-02' }, caller: null, responderTeam: null })
     expect(await callRow(leadCallId)).toMatchObject({ workerId: null, employeeId: null })
+    // Whose waiting it is at SEW-02 is not known: nothing is booked.
+    expect(await waitingOf(leadCallId)).toEqual([])
   })
 
   it('adds words to the open call at its station; REFUSED: from another station', async () => {
@@ -311,6 +320,10 @@ describe('Sent → Seen → On the way → Solved, with times (MES-145)', () => 
     expect(solved.call.timeline.map((step: Json) => step.step)).toEqual(['SENT', 'SEEN', 'ON_THE_WAY', 'SOLVED'])
     expect(solved.call.times.resolveSeconds).toBeGreaterThanOrEqual(0)
     expect(await callRow(materialCallId)).toMatchObject({ status: 'SOLVED', solvedById: A.operator })
+    // The waiting ends with the call: WAIT_HELP needs no approval, so it is approved as it ends.
+    const [waited] = await waitingOf(materialCallId)
+    expect(waited).toMatchObject({ status: 'APPROVED', source: 'HELP_CALL' })
+    expect(new Date(waited!.endedAt).toISOString()).toBe(solved.call.solvedAt)
     expect(refusalOf(await no('operator', 'POST', `/production/calls/station/${materialCallId}/solve`, {}, 409))).toBe('refusal/SOLVED')
   })
 
@@ -392,6 +405,7 @@ describe('a site that records stations, and the floor’s queue', () => {
     const close = { clientEventId: clientId(), kind: 'andon.call.answer' as const, payload: { callId: id, step: 'CANCELLED' } }
     expect(await applyQueued(floorCaller('operatorAtSew2'), close, { key: `${A.sew2Tablet}.${close.clientEventId}` })).toMatchObject({ status: 'accepted' })
     expect(await callRow(id)).toMatchObject({ status: 'CANCELLED', onTheWayById: A.lead, cancelledById: A.operator })
+    expect(await waitingOf(id)).toMatchObject([{ status: 'APPROVED', workerId: A.operator, stationId: A.sew2 }])
     const refused = { clientEventId: clientId(), kind: 'andon.call.answer' as const, payload: { callId: id, step: 'SOLVED' } }
     expect(await applyQueued(floorCaller('operatorAtSew2'), refused, { key: `${A.sew2Tablet}.${refused.clientEventId}` })).toMatchObject({ status: 'refused', refusal: { code: 'CANCELLED' } })
   })
