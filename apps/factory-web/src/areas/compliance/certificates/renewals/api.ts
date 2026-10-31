@@ -58,7 +58,7 @@ export const renewalsSchema = z.object({
     .object({
       startedAt: z.string(),
       startedBy: z.string().nullable(),
-      taskId: z.string(),
+      taskId: z.string().nullable(),
       task: z
         .object({
           id: z.string(),

@@ -546,5 +546,97 @@
     "register": "PPE register",
     "orderValue": "Order value",
     "currency": "Currency"
+  },
+  "links": {
+    "intro": "Link the complaint's order, shipment, return or garment, or an NCR; unlink what does not belong.",
+    "closed": "A closed complaint never changes: its links stay as they are.",
+    "link": "Link…",
+    "unlink": "Unlink",
+    "unlinkOf": "Unlink {label}",
+    "raisedFrom": "raised from this complaint",
+    "title": "Link a record to {number}",
+    "save": "Link",
+    "body": "Pick what the complaint is about. The order, shipment, return and garment are the complaint's own facts (one each); an NCR is linked on its side and names this complaint.",
+    "what": "What to link",
+    "serial": "Garment serial",
+    "serialHint": "Scan the garment's label or type its serial: the garment is looked up when you link it.",
+    "reading": "Reading what you can pick…",
+    "search": "Search by number…",
+    "namedAlready": "Linked now: {label}. Unlink it first to link another one.",
+    "type": {
+      "SalesOrder": "Order",
+      "Shipment": "Shipment",
+      "ReturnAuthorisation": "Return",
+      "GarmentSerial": "Garment",
+      "Nonconformance": "Nonconformance (NCR)"
+    },
+    "typeHint": {
+      "SalesOrder": "One of this customer's orders.",
+      "Shipment": "One of this customer's shipments.",
+      "ReturnAuthorisation": "The return the garment came back with.",
+      "GarmentSerial": "Our garment, by the serial on its label.",
+      "Nonconformance": "An open NCR of the company that investigates this complaint."
+    },
+    "pick": {
+      "SalesOrder": "Order",
+      "Shipment": "Shipment",
+      "ReturnAuthorisation": "Return",
+      "Nonconformance": "NCR"
+    },
+    "pickHint": {
+      "SalesOrder": "This customer's orders, newest first.",
+      "Shipment": "This customer's shipments, newest first.",
+      "ReturnAuthorisation": "This customer's returns.",
+      "Nonconformance": "Open NCRs of the company not linked yet, newest first."
+    },
+    "noneToPick": {
+      "SalesOrder": "This customer has no order to pick.",
+      "Shipment": "This customer has no shipment to pick.",
+      "ReturnAuthorisation": "This customer has no return to pick.",
+      "Nonconformance": "No open NCR of the company is left to link."
+    },
+    "unlinkTitle": "Unlink {label}?",
+    "unlinkBody": {
+      "SalesOrder": "Order {label} is no longer what {number} is about. You can link it again later.",
+      "Shipment": "Shipment {label} is no longer what {number} is about. You can link it again later.",
+      "ReturnAuthorisation": "Return {label} is no longer linked to {number}. You can link it again later.",
+      "GarmentSerial": "The serial {label} is taken off {number}: the garment's facts and its evidence trail go with it.",
+      "Nonconformance": "{label} no longer names {number}. The NCR itself stays as it is."
+    },
+    "held": {
+      "log": "Linking records to a new complaint needs quality.complaints.log.",
+      "manage": "Once triaged, a complaint's links are changed by quality (quality.complaints.manage).",
+      "orders": "Your role does not see orders (orders.view).",
+      "shipments": "Your role does not see shipments (shipping.view).",
+      "returns": "Your role does not see returns (sales.returns.view).",
+      "garment": "Finding a garment by its serial needs quality.inspections.view or production.serials: type the serial in the complaint's facts instead.",
+      "ncrView": "Your role does not see NCRs (quality.ncr.view).",
+      "ncrRaise": "Linking an NCR needs quality.ncr.raise at its site.",
+      "ncrManage": "Unlinking an NCR needs quality.ncr.manage at its site.",
+      "source": "This NCR was raised from this complaint: it stays linked."
+    },
+    "problem": {
+      "type": "Pick what to link first.",
+      "taken": "The complaint names {label} already: unlink it first.",
+      "serial": "Scan or type the garment's serial first.",
+      "record": "Pick the record to link first.",
+      "ncr": "Pick the NCR to link first.",
+      "ncrLinked": "This NCR names the complaint already."
+    },
+    "refused": {
+      "taken": "The complaint is linked to another one of these already: unlink it first.",
+      "ncrTaken": "This NCR names the complaint already, or links all it may.",
+      "source": "This NCR was raised from this complaint: it stays linked.",
+      "gone": "It is no longer linked: the complaint was read again.",
+      "garment": "No garment of ours has this serial: check the label, or keep the serial as reported in the complaint's facts.",
+      "notFound": "This record is no longer there, or is not this customer's: pick another one."
+    },
+    "done": {
+      "linked": "{type} {label} is linked to the complaint.",
+      "unlinked": "{label} is unlinked from the complaint."
+    }
+  },
+  "mail": {
+    "intoThread": "Mail from the customer's contacts with {number} in its subject lands on this thread by itself."
   }
 }

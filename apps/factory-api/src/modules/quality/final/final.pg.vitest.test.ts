@@ -874,6 +874,17 @@ describe('Hold lot at the bench (design floor.final "Hold lot": a reason, and an
       ),
     ).toEqual([{ source: 'INSPECTION', foundAt: 'FINAL', severity: 'MAJOR', quantity: '2.0000', uom: 'PCS', foundBy: null, worker: A.operatorA1, createdBy: null, wo: workOrderId }])
     expect(await admin('SELECT kind::text AS kind, status::text AS status, "recordId"::text AS hold FROM "NcrContainmentAction" WHERE "ncrId" = $1', [held.ncr.id])).toEqual([{ kind: 'HOLD_STOCK', status: 'DONE', hold: held.hold.id }])
+    // B-W2b-17: numbered on the floor — the tablet took the hold's HLD number and the NCR's number in its own command
+    // (allocator = the device), the system placed and raised them with those numbers; a resend took no new number.
+    const numbers = await admin<{ recordType: string; kind: string; formatted: string; allocatedById: string }>(
+      'SELECT "recordType", kind::text AS kind, formatted, "allocatedById"::text AS "allocatedById" FROM "NumberAllocation" WHERE "recordId" = ANY($1::uuid[]) ORDER BY kind',
+      [[held.hold.id, held.ncr.id]],
+    )
+    expect(numbers).toEqual([
+      { recordType: 'QualityHold', kind: 'HOLD', formatted: expect.stringMatching(/^HLD-\d{4}-\d{4}$/), allocatedById: A.qc },
+      { recordType: 'Nonconformance', kind: 'NCR', formatted: held.ncr.number, allocatedById: A.qc },
+    ])
+    expect(await admin('SELECT number FROM "QualityHold" WHERE id = $1', [held.hold.id])).toEqual([{ number: numbers[0]!.formatted }])
     // The ledger names the tablet and the worker.
     const audit = await admin<{ after: Json }>('SELECT after FROM "AuditLog" WHERE action = \'quality.benchHold\' AND "recordId" = $1', [held.hold.id])
     expect(audit).toHaveLength(1)

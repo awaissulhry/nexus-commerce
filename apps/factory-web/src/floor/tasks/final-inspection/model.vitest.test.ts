@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { CHECKLIST_CODES, checklistProblems, planProblems } from '@nexus/factory-domain/quality/final/rules'
 import { designScreen } from './fixtures'
-import { checklistComplete, FAIL_REASONS, failItem, groupsDone, groupState, labelsToPrint, mainAction, nextGroup, noteOf, passGroup, passItem, reasonOfNote, releaseHeld, suggestedLot, suggestedPlan, withDefect, withoutDefect, withPlanValue, type Check, holdHeld, holdQuantity } from './model'
+import { CATALOGUE } from '../../../lib/i18n/messages'
+import { assigneeKey, benchAssignee, checklistComplete, FAIL_REASONS, failItem, groupsDone, groupState, labelsToPrint, mainAction, nextGroup, noteOf, passGroup, passItem, reasonOfNote, releaseHeld, suggestedLot, suggestedPlan, withDefect, withoutDefect, withPlanValue, type Check, holdHeld, holdQuantity } from './model'
 
 /** SCR-097's rules without a screen: the checklist taps, the suggested plan, the defect of a failed check, the release's holds. */
 
@@ -110,5 +111,28 @@ describe('Hold lot at the bench (B-W2a-75; design floor.final "Hold lot": a reas
     expect(holdQuantity({ lotSize: 24 }, { finished: 48, released: 0, pieces: 48 })).toBe(24)
     expect(holdQuantity(null, { finished: 48, released: 12, pieces: 48 })).toBe(36)
     expect(holdQuantity(null, { finished: null, released: 0, pieces: 10 })).toBe(1)
+  })
+})
+
+describe('B-W2b-17: the bench list says who the open inspection is assigned to', () => {
+  it('mine, an office person by name, another bench inspector never named; none without an assignee', () => {
+    expect(benchAssignee(null)).toBeNull()
+    expect(benchAssignee(undefined)).toBeNull()
+    expect(benchAssignee({ kind: 'WORKER', mine: true, name: null })).toEqual({ kind: 'MINE' })
+    expect(benchAssignee({ kind: 'USER', mine: true, name: 'Bea Demo' })).toEqual({ kind: 'MINE' })
+    expect(benchAssignee({ kind: 'USER', mine: false, name: 'Bea Demo' })).toEqual({ kind: 'OFFICE', name: 'Bea Demo' })
+    // A worker's name never reaches a list, even if an answer carried one.
+    expect(benchAssignee({ kind: 'WORKER', mine: false, name: 'Someone' })).toEqual({ kind: 'OTHER' })
+    expect(assigneeKey({ kind: 'MINE' })).toEqual({ key: 'pick.assigned.mine' })
+    expect(assigneeKey({ kind: 'OFFICE', name: 'Bea Demo' })).toEqual({ key: 'pick.assigned.office', params: { name: 'Bea Demo' } })
+    expect(assigneeKey({ kind: 'OFFICE', name: null })).toEqual({ key: 'pick.assigned.officeUnnamed' })
+    expect(assigneeKey({ kind: 'OTHER' })).toEqual({ key: 'pick.assigned.other' })
+  })
+
+  it('every assignee and due word is in both languages', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const words = CATALOGUE[locale]['floor-final']!
+      for (const key of ['pick.assigned.mine', 'pick.assigned.office', 'pick.assigned.officeUnnamed', 'pick.assigned.other', 'pick.overdue', 'pick.inspectionDue', 'pick.inspectionOverdue']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+    }
   })
 })

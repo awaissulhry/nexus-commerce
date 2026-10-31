@@ -99,7 +99,8 @@
       "MAIL_TO_SORT": "Posta da smistare",
       "TASK_DUE": "Le mie attività in scadenza",
       "MENTION": "Menzioni",
-      "RULE_ALERT": "Avvisi delle regole di eccezione"
+      "RULE_ALERT": "Avvisi delle regole di eccezione",
+      "NCR_DECISION": "Decisioni di NC da approvare"
     },
     "severity": {
       "HIGH": "Urgente",
@@ -411,6 +412,8 @@
       "MAIL_TO_SORT.FAILED": "«{subject}» da {sender} non è stata letta.",
       "MAIL_TO_SORT.FAILED_NO_SUBJECT": "La posta da {sender} non è stata letta.",
       "MAIL_TO_SORT.FAILED.blocks": "Buttala via, o chiedi al mittente di inviarla di nuovo.",
+      "NCR_DECISION.WAITING_APPROVAL": "La NC {number} aspetta l'approvazione della sua decisione {code} per {quantity}.",
+      "NCR_DECISION.blocks": "Non viene eseguita, e la NC non è decisa, finché un'altra persona non la approva.",
       "why.ORDER_PROMISE.orders_manage": "Gestisci gli ordini di questo cliente e le loro date promesse.",
       "why.WORK_ORDER_HELD.workorders_release": "Rilasci gli ordini di lavoro di questo stabilimento.",
       "why.LOT_HOLD.quality_lots_release": "Rilasci i lotti di questo stabilimento.",
@@ -430,6 +433,7 @@
       "why.STYLE_COMPLIANCE.compliance_labels_manage": "Tieni i modelli delle etichette dei capi.",
       "why.STYLE_COMPLIANCE.product_bom_release": "Rilasci le revisioni dei modelli.",
       "why.MAIL_TO_SORT.email_triage": "Smisti la posta ricevuta da questa azienda.",
+      "why.NCR_DECISION.quality_ncr_approve": "Approvi le decisioni delle NC di questo stabilimento, e l'ha decisa qualcun altro.",
       "code": {
         "checks": {
           "REVISION": "revisione",

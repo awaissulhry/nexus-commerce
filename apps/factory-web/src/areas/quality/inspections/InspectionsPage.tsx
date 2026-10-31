@@ -29,6 +29,7 @@ import {
   openInspection,
   reverseRelease,
   saveReleaseRule,
+  setInspectionsDue,
   type InspectionRow,
   type Inspectors,
   type PartyPick,
@@ -67,6 +68,7 @@ import {
   whoKey,
   type AssignState,
   type CellMark,
+  type DueState,
   type ListDialog,
   type NewDraft,
   type ReverseAnswerWords,
@@ -140,6 +142,9 @@ function InspectionsContainer() {
   const [returns, setReturns] = useState<Read<readonly ReturnPick[]> | null>(null)
   const [returnRecord, setReturnRecord] = useState<Read<ReturnRecord> | null>(null)
   const [returnDraft, setReturnDraft] = useState<ReturnDraft>(RETURN_DRAFT)
+  // B-W2b-17: Set due date (the bulk dialog) and the inline Due cell.
+  const [due, setDue] = useState<DueState | null>(null)
+  const dueKey = useRef<string | null>(null)
   const assignKey = useRef<string | null>(null)
   const gradeKey = useRef<string | null>(null)
   const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
@@ -176,7 +181,7 @@ function InspectionsContainer() {
     request.current = controller
     try {
       if (kind === 'inspections') {
-        const query = { status: view === 'open' ? ('OPEN' as const) : null, waitingRelease: view === 'waiting', failedUndecided: view === 'failed', mine: view === 'mine', limit }
+        const query = { status: view === 'open' ? ('OPEN' as const) : null, waitingRelease: view === 'waiting', failedUndecided: view === 'failed', mine: view === 'mine', overdue: view === 'overdue', limit }
         const answer = await listInspections(api, query, controller.signal)
         if (controller.signal.aborted) return
         setRows(ready(answer))
@@ -210,6 +215,7 @@ function InspectionsContainer() {
     const counted = (rowsRead: readonly unknown[]): TileCount => ({ count: rowsRead.length, capped: rowsRead.length >= 200 })
     const readers: Record<TileId, () => Promise<TileCount>> = {
       open: async () => counted(await listInspections(api, { status: 'OPEN', limit: 200 })),
+      overdue: async () => counted(await listInspections(api, { overdue: true, limit: 200 })),
       waiting: async () => counted(await listInspections(api, { waitingRelease: true, limit: 200 })),
       failed: async () => counted(await listInspections(api, { failedUndecided: true, limit: 200 })),
       reversed: async () => counted(await listReleases(api, { reversed: true, limit: 200 })),
@@ -355,7 +361,11 @@ function InspectionsContainer() {
     setDialogProblem(null)
     createKey.current ??= newIdempotencyKey()
     try {
-      const inspection = await openInspection(api, { workOrderId: newDraft.workOrderId, ...planBody(newDraft), note: newDraft.note.trim() || null, ...(newDraft.assignee ? assigneeBody(newDraft.assignee) : {}) }, createKey.current)
+      const inspection = await openInspection(
+        api,
+        { workOrderId: newDraft.workOrderId, ...planBody(newDraft), note: newDraft.note.trim() || null, ...(newDraft.assignee ? assigneeBody(newDraft.assignee) : {}), ...(newDraft.dueAt ? { dueAt: newDraft.dueAt } : {}) },
+        createKey.current,
+      )
       createKey.current = null
       setDialog(null)
       setNewDraft(NEW_DRAFT)
@@ -514,6 +524,60 @@ function InspectionsContainer() {
     [api],
   )
 
+  // ---- B-W2b-17: by when inspections are due — the inline cell (one) and Set due date (the selection): one call each ----
+  const applyDue = (answers: readonly { id: string; version: number; dueAt: string | null; overdue: boolean }[]) =>
+    setRows((current) => (current.value ? ready(current.value.map((entry) => {
+      const answer = answers.find((item) => item.id === entry.id)
+      return answer ? { ...entry, version: answer.version, dueAt: answer.dueAt, overdue: answer.overdue } : entry
+    })) : current))
+  const refusalOf = (error: unknown): CellMark =>
+    isApiError(error) && (error.kind === 'conflict' || error.kind === 'invalid')
+      ? { state: 'refused', problem: error.kind === 'invalid' ? 'due.problem.refused' : 'due.problem.conflict', lines: error.issues.map((issue) => issue.message ?? '').filter(Boolean) }
+      : isApiError(error)
+        ? { state: 'refused', problem: problemKey(error) }
+        : { state: 'unknown' }
+
+  const dueCell = useCallback(
+    async (row: InspectionRow, dueAt: string | null) => {
+      const key = `due:${row.id}`
+      setMarks((current) => ({ ...current, [key]: { state: 'saving' } }))
+      try {
+        applyDue(await setInspectionsDue(api, { inspections: [{ id: row.id, version: row.version }], dueAt }))
+        setMarks((current) => ({ ...current, [key]: { state: 'saved' } }))
+      } catch (error) {
+        setMarks((current) => ({ ...current, [key]: refusalOf(error) }))
+        if (isApiError(error) && error.kind === 'conflict') void load()
+      }
+    },
+    [api, load],
+  )
+
+  const openDue = useCallback((picked: readonly InspectionRow[]) => {
+    if (picked.length === 0) return
+    dueKey.current = null
+    const first = picked[0]!.dueAt ?? ''
+    setDue({ ids: picked.map((row) => row.id), value: picked.every((row) => (row.dueAt ?? '') === first) ? first : '', busy: false, problem: null, lines: [] })
+  }, [])
+
+  const saveDue = useCallback(async () => {
+    if (!due) return
+    const picked = (rows.value ?? []).filter((row) => due.ids.includes(row.id))
+    setDue({ ...due, busy: true, problem: null, lines: [] })
+    dueKey.current ??= newIdempotencyKey()
+    try {
+      applyDue(await setInspectionsDue(api, { inspections: picked.map((row) => ({ id: row.id, version: row.version })), dueAt: due.value || null }, dueKey.current))
+      dueKey.current = null
+      setDue(null)
+      setSelected([])
+      setNotice({ key: due.value ? 'due.done' : 'due.cleared', tone: 'success', params: { count: picked.length } })
+      void loadTiles()
+    } catch (error) {
+      if (!isApiError(error) || error.kind !== 'conflict') dueKey.current = null
+      const mark = refusalOf(error)
+      setDue((current) => (current ? { ...current, busy: false, problem: mark.state === 'refused' ? mark.problem : 'due.problem.unknown', lines: mark.state === 'refused' ? (mark.lines ?? []) : [] } : current))
+    }
+  }, [api, due, loadTiles, rows.value])
+
   // ---- export ----
   const exportRows = useCallback(
     (exportKind: 'inspections' | 'releases' | 'lots', ids: readonly string[]) => {
@@ -610,6 +674,7 @@ function InspectionsContainer() {
         returns,
         returnRecord,
         returnDraft,
+        due,
       }}
       stepUp={stepUp}
       actions={{
@@ -652,6 +717,11 @@ function InspectionsContainer() {
         onPickReturn: pickReturn,
         onReturnDraft: setReturnDraft,
         onGradeReturn: () => void gradeTheReturn(),
+        onDue: openDue,
+        onDueValue: (value) => setDue((current) => (current ? { ...current, value } : current)),
+        onDueSave: () => void saveDue(),
+        onDueClose: () => setDue(null),
+        onDueCell: (row, dueAt) => void dueCell(row, dueAt),
       }}
     />
     <PlaceHold

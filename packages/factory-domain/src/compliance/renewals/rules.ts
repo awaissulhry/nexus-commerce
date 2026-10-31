@@ -95,6 +95,8 @@ export const RENEWAL_REFUSALS = [
   'SUCCESSOR_NOT_REGISTERED',
   'SUCCESSOR_TAKEN',
   'APPLIED_IN_FUTURE',
+  // B-W2b-17 (renewals as CertificateRenewal rows): an application is recorded once per renewal.
+  'ALREADY_APPLIED',
 ] as const
 export type RenewalRefusalCode = (typeof RENEWAL_REFUSALS)[number]
 
@@ -195,3 +197,17 @@ export function renewalNextStep(input: { readonly status: string; readonly succe
   if (input.appliedOn === null && isRenewable(input.status)) return 'APPLY'
   return 'LINK'
 }
+
+// ---- W2b follow-ups (B-W2b-17) ---------------------------------------------------------------------------------------
+
+/** A renewal still followed up (CertificateRenewal.status). */
+export const OPEN_RENEWAL_STATUSES = ['STARTED', 'APPLIED'] as const
+export const isOpenRenewal = (status: string): boolean => (OPEN_RENEWAL_STATUSES as readonly string[]).includes(status)
+
+/** The application is recorded once per renewal (the …_followups_quality_money_w2b_guards trigger holds the same). */
+export function alreadyAppliedRefusal(certificate: Pick<RenewalCertificate, 'number'>, appliedOn: string | null): RenewalRefusal | null {
+  return appliedOn ? { code: 'ALREADY_APPLIED', message: `The application of the renewal of certificate ${certificate.number} is recorded already (sent on ${appliedOn}): it is recorded once.` } : null
+}
+
+/** Why an open renewal is cancelled when a new one starts after its task was closed. */
+export const RENEWAL_RESTARTED = 'Its task was closed without the renewal; a new renewal was started.'

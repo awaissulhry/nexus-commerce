@@ -25,11 +25,13 @@ import {
 } from '@nexus/factory-domain/quality/holds/rules'
 import { command, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
+import { allocateNumber } from '../../../platform/numbering/allocate'
 import { reasonFor } from '../../../platform/reasons/service'
 import { lockWorkOrderIssues } from '../../inventory/issue/store'
 import { identityOf, madeAny } from '../final/facts'
 import { makersOf } from '../final/store'
 import { activeHoldsOf } from './checks'
+import { placerMayReleaseOf } from './settings'
 import { holdReasonWords, HOLD_COLUMNS, holdView, readHold, readSubjects, viewFactsOf, type HoldRow, type Reader, type Subject } from './store'
 
 /**
@@ -37,7 +39,8 @@ import { holdReasonWords, HOLD_COLUMNS, holdView, readHold, readSubjects, viewFa
  * hold-main; production.workorders wo-hold). Each write is ONE command(); the refusals come first in words, the database
  * (…_quality_plant_w2a_guards, …_production_w2a_guards) holds the same rules for every login.
  *
- *   place    (quality.holds.place over the site) the records of one kind, all of one site, each holdable; a reason of
+ *   place    (quality.holds.place over the site) numbered from the company's HOLD series (B-W2b-17: HLD-2026-0091, in
+ *            the same command), the records of one kind, all of one site, each holdable; a reason of
  *            the HOLD list (reasonFor; its note when it asks one); the owner an active office person; the quarantine
  *            move asked to a QUARANTINE place of the site (only stock). Lock order: for held work orders, each one's
  *            issue lock (an issue in flight finishes first; one after waits and sees the hold) and gate lock
@@ -47,7 +50,7 @@ import { holdReasonWords, HOLD_COLUMNS, holdView, readHold, readSubjects, viewFa
  *            hold locks EXCLUSIVE). One already ON_HOLD stays held; a COMPLETED one keeps its status.
  *   change   (quality.holds.place) the owner, the expected release, the notes, while ACTIVE.
  *   release  (quality.holds.release, the office's step-up: an e-signature) every release check (rules.ts): never the
- *            person who placed it; for garments never one who made them (the signed statement where the floor names
+ *            person who placed it unless the company's rule lets the placer release (B-W2b-17, ./settings.ts); for garments never one who made them (the signed statement where the floor names
  *            stations only); a lab hold's Cr VI PASS; an inspection's hold a passed inspection after it. The hold →
  *            RELEASED with the SHA-256 of what was signed; each held work order no other ACTIVE hold names goes back to
  *            the status it was held from (another hold still naming it: it stays ON_HOLD under that one).
@@ -195,6 +198,11 @@ export interface PlaceHoldInput {
   readonly note?: string | null | undefined
   /** B-W2a-75: the floor worker who held it at the inspection bench (a system command after the floor's checks only). */
   readonly placedByWorkerId?: string | null | undefined
+  /**
+   * B-W2b-17: the hold's id and number taken before this command (the inspection bench: the tablet numbers its hold in the
+   * floor's own command, quality/final/bench-hold.ts). Absent: the hold takes its number from the company's HOLD series here.
+   */
+  readonly numbered?: { readonly id: string; readonly number: string } | undefined
 }
 
 export interface PlacedHold {
@@ -266,13 +274,16 @@ export async function placeHoldInCommand(tools: CommandTools, input: PlaceHoldIn
     }
   }
 
-  const holdId = newId()
+  const holdId = input.numbered?.id ?? newId()
   const words = workOrderHoldReason(reason!.labelEn, reasonNote)
   // The work orders FIRST (their issue and gate locks, then ON_HOLD), then the hold's row (its trigger: the hold locks).
   const workOrdersHeld = input.subjectType === 'WorkOrder' ? await holdWorkOrders(tools, input.subjectIds, { id: holdId, reason: words, byId: placedById }) : []
+  // B-W2b-17: every new hold is numbered from its company's HOLD series ("HLD-2026-0091"), in this command (no gap).
+  const number = input.numbered?.number ?? (await allocateNumber(tools, { companyId, kind: 'HOLD' }, { type: 'QualityHold', id: holdId })).formatted
   const hold = await tx.qualityHold.create({
     data: {
       id: holdId,
+      number,
       companyId,
       siteId,
       subjectType: input.subjectType,
@@ -301,7 +312,7 @@ export async function placeHoldInCommand(tools: CommandTools, input: PlaceHoldIn
     recordId: hold.id,
     companyId,
     siteId,
-    after: { subjectType: hold.subjectType, subjectIds: hold.subjectIds, reasonCode: hold.reasonCode, reasonNote, sourceType: hold.sourceType, sourceId: hold.sourceId, ownerId: hold.ownerId, expectedReleaseOn: input.expectedReleaseOn ?? null, quarantine: hold.quarantine, quarantineLocationId, workOrdersHeld: workOrdersHeld.map((entry) => entry.id) },
+    after: { number, subjectType: hold.subjectType, subjectIds: hold.subjectIds, reasonCode: hold.reasonCode, reasonNote, sourceType: hold.sourceType, sourceId: hold.sourceId, ownerId: hold.ownerId, expectedReleaseOn: input.expectedReleaseOn ?? null, quarantine: hold.quarantine, quarantineLocationId, workOrdersHeld: workOrdersHeld.map((entry) => entry.id) },
     ...(reasonNote ? { reason: reasonNote } : {}),
   })
   tools.emit({
@@ -425,7 +436,9 @@ export async function releaseChecksFor(db: Reader, hold: HoldRow, releaser: { re
       if (!passed) reinspectionOpen.push(order.number)
     }
   }
-  return releaseChecks({ status: hold.status as 'ACTIVE' | 'RELEASED' | 'CLOSED', subjectType: hold.subjectType as HoldSubjectType, placedByReleaser, madeBy, makersUnnamed, notMakerStatement, crViOpen, reinspectionOpen })
+  // B-W2b-17: the company's rule may let the person who placed it release it (QualitySettings.placerMayRelease).
+  const placerMayRelease = placedByReleaser ? (await placerMayReleaseOf(db, hold.companyId)).placerMayRelease : false
+  return releaseChecks({ status: hold.status as 'ACTIVE' | 'RELEASED' | 'CLOSED', subjectType: hold.subjectType as HoldSubjectType, placedByReleaser, madeBy, makersUnnamed, notMakerStatement, crViOpen, reinspectionOpen, placerMayRelease })
 }
 
 /** A release refused by its checks: a 409 with `release/<CHECK>` and its words. */
