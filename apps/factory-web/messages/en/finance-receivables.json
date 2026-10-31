@@ -199,7 +199,8 @@
     "CREDIT_NOTE_DRAFT": "Credit note pending: a credit note is being prepared for one of its invoices.",
     "CHANGED": "Paid or credited since it was prepared: cancel it, the ladder prepares it again.",
     "NO_CONTACT": "No active contact of the customer receives invoices with an e-mail address.",
-    "SWITCHED_OFF": "Reminders are switched off for the company: it can be approved, not sent."
+    "SWITCHED_OFF": "Reminders are switched off for the company: it can be approved, not sent.",
+    "DEPOSIT_TO_CARRY": "Deposit to carry: a deposit paid without a deposit invoice is not placed on one of its invoices yet. Carry it in Payments first; the customer may owe less than this asks."
   },
   "reminder": {
     "byHand": "Prepared by hand",

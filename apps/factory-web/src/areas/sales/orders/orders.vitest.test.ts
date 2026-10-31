@@ -17,7 +17,8 @@ import { LIST_PAGES, listAddress as pageOfList, recordAddress, RECORD_PAGES } fr
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { BOARD_LANES, DEPOSIT_KINDS, DEPOSIT_REQUEST_STATUSES, DEPOSIT_STATES, INVOICE_DOC_TYPES, INVOICE_STATUSES, LINK_STATES, ORDER_ACTIONS, ORDER_STATUSES, SDI_NEXT_ACTIONS, SDI_STATE_CODES, SETTLEMENT_GAPS, SHIPMENT_STATUSES, WORK_ORDER_STATUSES } from './api'
 import { AMEND_PREVIEW, AMENDMENTS, BOARD, BRN, CANCEL_BLOCKED, CANCEL_CHECK, canOf, deposit, LIST_ROWS, MANUAL_PREVIEW, order, PAID, PARTY, SCHEDULE, SENT_LINK, STYLE, STYLE_ID, TD02, TODAY } from './_demo/fixtures'
-import { DAILY_ORDER_ACTIONS, IMPACT_CODES, LINE_CHANGES, MILESTONE_KINDS, MILESTONE_STATUSES } from './api'
+import { DAILY_ORDER_ACTIONS, IMPACT_CODES, LINE_CHANGES, MILESTONE_KINDS, MILESTONE_STATUSES, type Milestone } from './api'
+import { stepVerbs, waiveHeld, waiveReasonProblem, waiveVerbOf } from './record/schedule/model'
 import {
   AMEND_STATUSES,
   amendHeld,
@@ -241,6 +242,8 @@ describe('the deposit (Q12: an acconto by bank transfer)', () => {
     expect(linkHeld(deposit(), canOf('sales'))?.key).toBe('held.noPayments')
     expect(linkHeld(deposit(), canOf('finance'))).toBeNull()
     expect(linkHeld(PAID, canOf('finance'))?.key).toBe('held.depositNotOpen')
+    // B-W2b-16: a typed order's deposit (no quote) has its page too.
+    expect(linkHeld(deposit({ quoteVersionId: null }), canOf('finance'))).toBeNull()
     expect(paymentHeld(deposit(), canOf('finance'))).toBeNull()
     expect(paymentHeld(deposit(), canOf('manager'))?.key).toBe('held.noPayments')
   })
@@ -414,7 +417,7 @@ describe('the band’s daily verbs, held with this app’s words', () => {
   it('Reopen: only closed lines, not on a final order; Copy as quote needs quotes.manage', () => {
     const value = order('PARTLY_SHIPPED')
     expect(reopenHeld(value, canOf('sales'))?.key).toBe('held.reopenNone')
-    const closed = { ...value, lines: value.lines.map((line) => (line.seq === 20 ? { ...line, closedShort: { quantity: 2, at: null, byId: null, reason: 'x' } } : line)) }
+    const closed = { ...value, lines: value.lines.map((line) => (line.seq === 20 ? { ...line, closedShort: { quantity: 2, at: null, byId: null, reason: 'x', reasonCode: null } } : line)) }
     expect(reopenHeld(closed, canOf('sales'))).toBeNull()
     expect(reopenHeld({ ...closed, status: 'CLOSED' }, canOf('sales'))?.key).toBe('held.reopenState')
     expect(copyHeld(canOf('sales'))).toBeNull()
@@ -463,7 +466,7 @@ describe('the amendment draft: what it sends, what it changes, why Review waits'
   })
   it('a closed-short line stays as it is (sent by id only) and is not in the grid', () => {
     const partly = order('IN_PRODUCTION')
-    const closed = { ...partly, lines: partly.lines.map((line) => (line.seq === 20 ? { ...line, closedShort: { quantity: 2, at: null, byId: null, reason: null } } : line)) }
+    const closed = { ...partly, lines: partly.lines.map((line) => (line.seq === 20 ? { ...line, closedShort: { quantity: 2, at: null, byId: null, reason: null, reasonCode: null } } : line)) }
     const draft = draftOf(closed)
     expect(draft.find((line) => line.lineId === lineOf(closed, 20).id)?.locked).toBe(true)
     expect(amendLines(draft, closed)).toContainEqual({ id: lineOf(closed, 20).id })
@@ -564,5 +567,32 @@ describe('a typed New order (no draft row: the page holds it)', () => {
     expect(newOrderHeld({ ...PARTY, status: 'BLOCKED' })).toEqual({ key: 'newOrder.held.party', params: { status: 'BLOCKED' } })
     expect(newOrderHeld({ ...PARTY, taxIdentities: [] })?.key).toBe('newOrder.held.identity')
     expect(OFFICE_PAGES.has('/sales/orders/new')).toBe(true)
+  })
+})
+
+describe('B-W2b-16: waive a step, the close\'s reason code', () => {
+  const can = { manageOrders: true, manageInvoices: true, waive: true }
+  const step = (over: Partial<Milestone> = {}): Milestone => ({ ...SCHEDULE.steps[1]!, ...over })
+  it('offers Waive… on an open deposit or before-shipping step, held without the right or on a final order', () => {
+    expect(waiveVerbOf(step(), order('CONFIRMED'), can)).toEqual({ kind: 'waive', held: null })
+    expect(waiveVerbOf(step({ kind: 'DEPOSIT' }), order('CONFIRMED'), can)).toEqual({ kind: 'waive', held: null })
+    expect(waiveVerbOf(step({ status: 'PAID' }), order('CONFIRMED'), can)).toBeNull()
+    expect(waiveVerbOf(step({ kind: 'ON_INVOICE' }), order('CONFIRMED'), can)).toBeNull()
+    expect(waiveVerbOf(step(), order('CONFIRMED'), { ...can, waive: false })?.held?.key).toBe('schedule.verbs.held.noWaive')
+    // The step's other verbs are unchanged (the finance tests hold them).
+    expect(stepVerbs(step(), order('CONFIRMED'), can).map((verb) => verb.kind)).toEqual(['open'])
+    expect(waiveHeld(order('CANCELLED'), can)?.key).toBe('schedule.verbs.held.final')
+    expect(waiveReasonProblem('ok')).toBe('schedule.verbs.waiveReasonHeld')
+    expect(waiveReasonProblem('Long-standing customer.')).toBeNull()
+  })
+  it('asks a code of the cancel list when the list is read; none when it could not be read', () => {
+    const value = order('PARTLY_SHIPPED')
+    const reasons = [{ code: 'CUSTOMER_REQUEST' }, { code: 'OTHER' }]
+    const first = value.lines[0]!.id
+    expect(closeChoiceProblem(value, [first], 'The rest is not wanted.', '', reasons)?.key).toBe('closeLines.problem.reasonCode')
+    expect(closeChoiceProblem(value, [first], 'The rest is not wanted.', 'NOPE', reasons)?.key).toBe('closeLines.problem.reasonCode')
+    expect(closeChoiceProblem(value, [first], 'The rest is not wanted.', 'CUSTOMER_REQUEST', reasons)).toBeNull()
+    expect(closeChoiceProblem(value, [first], 'The rest is not wanted.', '', null)).toBeNull()
+    expect(closeChoiceProblem(value, [first], ' ', 'CUSTOMER_REQUEST', reasons)?.key).toBe('closeLines.problem.reason')
   })
 })

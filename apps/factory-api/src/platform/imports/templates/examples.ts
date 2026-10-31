@@ -25,6 +25,11 @@ export const TEMPLATE_EXAMPLES: Readonly<Record<string, readonly TemplateExample
   ],
   'product.bom': [{ style: 'JK-210', seq: '10', material: 'LEA-100', placement: 'Front panel', qty: '1.25', uom: 'M2', wastagePct: '8' }],
   'product.operations': [{ code: 'SEW-010', name: 'Sew the shoulders', nameIt: 'Cucitura spalle', nameEn: 'Sew the shoulders', workCentreKind: 'SEWING', standardMinutes: '4.5' }],
+  // W2b (B-W2b-25): the machines import (Plant).
+  'plant.machines': [
+    { assetNumber: 'SEW-L2-07', site: 'A1', machineClass: 'LOCKSTITCH', make: 'Esempio', modelName: 'LS-200', year: '2021', station: 'SEW-02', workCentre: 'SEW', purchaseCost: '1850.00' },
+    { assetNumber: 'CUT-T-02', site: 'A1', machineClass: 'CUTTING_TABLE', note: 'Next to the leather store' },
+  ],
   'inventory.hideList': [
     { order: 'PO-2026-00012', tanneryNumber: 'T-4471', area: '5.20', unit: 'M2', grade: 'A' },
     { order: 'PO-2026-00012', tanneryNumber: 'T-4472', area: '4.85', unit: 'M2', grade: 'B' },

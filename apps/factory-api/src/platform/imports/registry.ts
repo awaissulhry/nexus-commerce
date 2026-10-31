@@ -12,6 +12,8 @@ import { bomImportAdapter } from '../../modules/product/bom/importer'
 import { operationsImportAdapter } from '../../modules/product/operations/importer'
 // W2a (B-W2a-31): a tannery's hide list, received as one goods receipt.
 import { hideListImportAdapter } from '../../modules/inventory/receipts/hide-list'
+// W2b (B-W2b-25): the machine register of Plant.
+import { machinesImportAdapter } from '../../modules/plant/machines/import'
 // W2b (B-W2b-20): how each site plans each item and colour (Planning settings › Item parameters).
 import { itemParametersImportAdapter } from '../../modules/planning/settings/importer'
 // W2b (B-W2b-26): the employees, from the payroll provider's export or a CSV (People › Employees › Import).
@@ -106,6 +108,7 @@ export const IMPORTERS: readonly ImportAdapter[] = Object.freeze([
   bomImportAdapter,
   operationsImportAdapter,
   hideListImportAdapter,
+  machinesImportAdapter,
   itemParametersImportAdapter,
   // B-W2b-26
   employeesImportAdapter,

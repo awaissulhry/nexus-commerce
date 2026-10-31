@@ -474,7 +474,7 @@ describe('the earnings ledger', () => {
     await expect(insert(office(), 'EarningsEntry', scanEntry({ rateEntryId: null }))).rejects.toThrow(/names its scan and rate/)
     await expect(insert(office(), 'EarningsEntry', scanEntry({ amount: -1 }))).rejects.toThrow(/of 0 or more/)
     await expect(insert(office(), 'EarningsEntry', scanEntry({ sharePct: '50' }))).rejects.toThrow(/share .* exactly for a team split/)
-    await expect(insert(office(), 'EarningsEntry', scanEntry({ operationScanId: pay.production.scanIds[undo] }))).rejects.toThrow(/standing report or correction \(scan .* is a UNDO/)
+    await expect(insert(office(), 'EarningsEntry', scanEntry({ operationScanId: pay.production.scanIds[undo] }))).rejects.toThrow(/standing report, correction or partial \(scan .* is a UNDO/)
     await expect(insert(office(), 'EarningsEntry', scanEntry({ operationScanId: pay.production.scanIds[misScan] }))).rejects.toThrow(/voided/)
     await expect(insert(office(), 'EarningsEntry', scanEntry({ workerId: pay.production.leadId, employeeId: E.lead() }))).rejects.toThrow(/of another worker/)
     await expect(insert(office(), 'EarningsEntry', scanEntry({ employeeId: E.lead() }))).rejects.toThrow(/pays employee .* but worker .* is the floor sign-in of .*link the worker to its employee first/)

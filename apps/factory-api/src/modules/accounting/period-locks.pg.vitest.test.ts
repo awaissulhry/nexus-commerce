@@ -246,6 +246,25 @@ describe('stock moves (a write-off) and the HARD close', () => {
     expect(await overrides()).toHaveLength(5)
   })
 
+  it('B-W2b-22: the stock ledger\'s own routes take the reason too (adjust, scrap, reverse), one audit row each', async () => {
+    const stock = { siteId: ids.siteA, itemId: lining.itemId, lotId: lining.lotId }
+    const adjust = (extra: Json = {}) => ({ ...stock, locationId: lining.locationId, direction: 'OUT', quantity: '1', note: 'Counted one short at the month-end walk.', ...extra })
+    softRefused(await call('owner', 'POST', '/inventory/adjustments', adjust()), 'body/occurredAt', `the stock move (adjustment) dated ${dayWords(today)} is not posted`)
+    const adjusted = await call('owner', 'POST', '/inventory/adjustments', adjust({ periodLockOverride: { reason: 'The walk was on the last day.' } }))
+    expectStatus(adjusted, 201)
+    const scrapped = await call('owner', 'POST', '/inventory/scraps', { ...stock, fromLocationId: lining.locationId, quantity: '0.5', note: 'Torn.', periodLockOverride: { reason: 'Torn at the month-end walk.' } })
+    expectStatus(scrapped, 201)
+    softRefused(await call('owner', 'POST', `/inventory/moves/${adjusted.body.move.id}/reverse`, { note: 'Found it after all.' }), 'body/occurredAt', `the stock move (adjustment) dated ${dayWords(today)} is not posted`)
+    const reversed = await call('owner', 'POST', `/inventory/moves/${adjusted.body.move.id}/reverse`, { note: 'Found it after all.', periodLockOverride: { reason: 'Same walk, found behind the rack.' } })
+    expectStatus(reversed, 201)
+    expect((await overrides()).slice(-3)).toEqual([
+      expect.objectContaining({ recordId: lock.id, reason: 'The walk was on the last day.', after: expect.objectContaining({ writes: [expect.objectContaining({ path: 'body/occurredAt', record: { type: 'StockMove', id: adjusted.body.move.id } })] }) }),
+      expect.objectContaining({ reason: 'Torn at the month-end walk.', after: expect.objectContaining({ writes: [expect.objectContaining({ record: { type: 'StockMove', id: scrapped.body.move.id } })] }) }),
+      expect.objectContaining({ reason: 'Same walk, found behind the rack.', after: expect.objectContaining({ writes: [expect.objectContaining({ record: { type: 'StockMove', id: reversed.body.move.id } })] }) }),
+    ])
+    expect(await overrides()).toHaveLength(8)
+  })
+
   it('once the month is closed for good, a reason opens nothing; the database’s own refusal is a 409 in words too, not a 500', async () => {
     await admin(`UPDATE "PeriodLock" SET level = 'HARD', version = version + 1 WHERE id = $1`, [lock.id])
     hardRefused(await call('owner', 'POST', '/inventory/write-offs', writeOff({ periodLockOverride: { reason: 'Found wet at the month-end walk.' } })), monthLabel(month), 'body/lines/0/occurredAt', `the stock move (scrap) dated ${dayWords(today)} is not posted`)
@@ -265,6 +284,6 @@ describe('stock moves (a write-off) and the HARD close', () => {
       issues: [{ path: 'period/HARD_LOCKED', message: 'Dated inside a month closed for good.' }],
       unexpected: false,
     })
-    expect(await overrides()).toHaveLength(5)
+    expect(await overrides()).toHaveLength(8)
   })
 })

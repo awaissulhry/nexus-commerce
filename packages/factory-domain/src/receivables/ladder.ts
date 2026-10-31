@@ -173,7 +173,7 @@ export const INTEREST_WORDS: Readonly<Record<LateInterestMode, string>> = Object
   UNDECIDED: 'Not decided yet (a question for the accountant, D.Lgs. 231/2002): no interest is computed, and reminders cannot be switched on.',
   NONE: 'No late-payment interest is charged.',
   STATUTORY:
-    'The legal rate of D.Lgs. 231/2002 art. 5 (the ECB reference rate of the half-year plus 8 points). The half-year rate is not recorded in the factory yet: reminders say interest is due without an amount.',
+    'The legal rate of D.Lgs. 231/2002 art. 5: the ECB reference rate of each half-year plus the points the law adds, from the half-year rates finance records with their source. A delay crossing a half-year without its rate has no amount: reminders then say interest is due without one.',
   AGREED: 'The yearly rate agreed with the customers.',
 })
 

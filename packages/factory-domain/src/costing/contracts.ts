@@ -403,6 +403,11 @@ export const costingSettingsView = output({
   companyId: id().nullable(),
   /** Percent on material + labour. */
   overheadPct: z.string(),
+  /**
+   * B-W2b-22 (Z9:02): a company's row that holds its costing method only and follows the tenant-wide overhead (its own
+   * overheadPct is then 0 and not read). Always false on the tenant-wide row.
+   */
+  overheadFromTenant: z.boolean(),
   version: z.number().int(),
   updatedAt: instant(),
 })
@@ -415,7 +420,7 @@ export type SettingsQuery = z.output<typeof settingsQuery>
 export const settingsListView = output({
   tenant: costingSettingsView.nullable(),
   company: costingSettingsView.nullable(),
-  /** The id of the row in force (the company's, else the tenant's); null: no overhead. */
+  /** The id of the row in force (the company's own overhead, else the tenant's: a company row that follows the tenant-wide overhead is not); null: no overhead. */
   inForce: id().nullable(),
 })
 export type SettingsListView = z.infer<typeof settingsListView>
@@ -424,6 +429,11 @@ export type SettingsListView = z.infer<typeof settingsListView>
 export const saveSettingsBody = input({
   companyId: id().nullish(),
   overheadPct: percent(),
+  /**
+   * B-W2b-22 (Z9:02): true: the company follows the tenant-wide overhead again (its row keeps its costing method; send
+   * overheadPct 0). Left out or false: the overhead sent is the company's own. Never on the tenant-wide row.
+   */
+  overheadFromTenant: z.boolean().optional(),
   version: z.number().int().min(1).optional(),
 })
 export type SaveSettingsBody = z.output<typeof saveSettingsBody>

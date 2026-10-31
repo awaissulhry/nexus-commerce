@@ -67,7 +67,7 @@ describe('Duplicate style: the offer, the draft, the body', () => {
     expect(at('LABELS', held)).toEqual({ key: 'duplicate.reason.ownLabel', params: { label: 'LBL-DEMO-01 r2', code: 'DEMO-JKT-01' } })
     const none = demoOffer({ noRevision: true })
     expect(at('ROUTING', none)).toEqual({ key: 'duplicate.reason.noRevision', params: { code: 'DEMO-JKT-01' } })
-    const part = (reason: string, name: 'BOM' | 'ROUTING' | 'LABELS') => partWords({ part: name, available: false, count: null, reason }, offer)
+    const part = (reason: string, name: 'BOM' | 'ROUTING' | 'LABELS') => partWords({ part: name, available: false, count: null, reason, reasonCode: null, reasonFacts: null }, offer)
     expect(part('Copying the BOM needs product.bom.manage over every company.', 'BOM')).toEqual({ key: 'duplicate.reason.noRight.BOM' })
     expect(part('Revision 2 has no BOM lines.', 'BOM')).toEqual({ key: 'duplicate.reason.noLines', params: { revision: 2 } })
     expect(part('Revision 2 has no routing steps.', 'ROUTING')).toEqual({ key: 'duplicate.reason.noSteps', params: { revision: 2 } })

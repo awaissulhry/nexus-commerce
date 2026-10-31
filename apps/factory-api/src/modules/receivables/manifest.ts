@@ -25,4 +25,9 @@ export const manifest = defineManifest({
   'POST /receivables/reminders/:reminderId/send': { audiences: ['office'], permission: 'receivables.reminders.approve', scope: 'record' },
   'POST /receivables/reminders/:reminderId/skip': { audiences: ['office'], permission: 'receivables.reminders.manage', scope: 'record' },
   'POST /receivables/reminders/:reminderId/cancel': { audiences: ['office'], permission: 'receivables.reminders.manage', scope: 'record' },
+  // B-W2b-21 (D.Lgs. 231/2002 art. 5; interest-rates.ts): the half-year reference rates of statutory interest, tenant-wide
+  // (written only with receivables.settings.manage over every company, like the tenant settings row).
+  'GET /receivables/interest-rates': { audiences: ['office'], permission: 'receivables.view', scope: 'record' },
+  'POST /receivables/interest-rates': { audiences: ['office'], permission: 'receivables.settings.manage', scope: 'record' },
+  'PATCH /receivables/interest-rates/:rateId': { audiences: ['office'], permission: 'receivables.settings.manage', scope: 'record' },
 })

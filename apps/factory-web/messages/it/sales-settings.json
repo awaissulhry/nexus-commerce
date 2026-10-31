@@ -8,7 +8,8 @@
     "marginHint": "Percentuale sull’importo netto, da 0 a 100",
     "marginNoGrain": "Mostrata solo con il permesso margini",
     "sub": "Quando un preventivo ha bisogno di un approvatore prima dell’invio.",
-    "title": "Regole di approvazione dei preventivi"
+    "title": "Regole di approvazione dei preventivi",
+    "raiseStepUp": "Alzare un limite (uno sconto massimo più alto o una soglia di margine più bassa) chiede un nuovo codice dall’app di autenticazione."
   },
   "card": {
     "apply": "Applica le modifiche",
@@ -143,5 +144,16 @@
     "companyOwn": "I valori propri di questa società.",
     "groupDefault": "Ancora nessun valore del gruppo: valgono quelli standard.",
     "groupOwn": "I valori propri del gruppo."
+  },
+  "stepUp": {
+    "title": "Conferma che sei tu",
+    "sentence": "Un limite più alto fa partire più preventivi senza approvazione: confermalo con un nuovo codice.",
+    "confirm": "Conferma e salva",
+    "cancelled": "Non è stato salvato nulla: il codice non è stato dato.",
+    "problem": {
+      "wrong": "Il codice non è stato accettato. Digita il più recente.",
+      "locked": "Troppi codici errati. Attendi qualche minuto.",
+      "unavailable": "Il codice non si è potuto verificare. Riprova."
+    }
   }
 }

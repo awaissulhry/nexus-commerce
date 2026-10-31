@@ -363,3 +363,30 @@ describe("a quote takes the customer's terms and reads its list prices", () => {
     expect(renamed).toMatchObject({ name: "Acconto 30% all'ordine, saldo prima della spedizione", version: current.version + 1, instalments: current.instalments })
   })
 })
+
+describe('a customer\'s list with its "From" day (B-W2b-16: PartyPriceListAssignment)', () => {
+  it('the Customers tab says since when; the history row follows every change of the list, one change a day', async () => {
+    const record = (await ok('sales', 'GET', `/sales/price-lists/${lists.P1.id}`)).list
+    // P1 got PL-P1 today through its commercial terms: its open row says so.
+    expect(record.customers).toEqual([expect.objectContaining({ id: P1, code: 'SEED-C1', from: TODAY, fromSource: 'ROW' })])
+    expect(await admin(`SELECT "priceListId", "validFrom"::text AS "validFrom", "validTo" FROM "PartyPriceListAssignment" WHERE "partyId" = $1`, [P1])).toEqual([{ priceListId: lists.P1.id, validFrom: TODAY, validTo: null }])
+    // A second change on the same day is refused in words (the history keeps one list per day); a later day too.
+    const again = await refused('sales', 'POST', `/sales/price-lists/${lists.BASE.id}/customers`, { partyIds: [P1] }, 409)
+    expect(again.issues).toEqual([{ path: 'body/validFrom', message: `SEED-C1 has had PL-P1 since ${TODAY}: a customer's list changes at most once a day (its history keeps one list per day). Give the new list from ${addDays(TODAY, 1)}.` }])
+    expect((await refused('sales', 'POST', `/sales/price-lists/${lists.BASE.id}/customers`, { partyIds: [P1], validFrom: addDays(TODAY, 3) }, 400)).issues[0].path).toBe('body/validFrom')
+  })
+
+  it('a customer given its list before W2b has no row: the tab says no day; the first change writes the missing row, then ends it', async () => {
+    // Planted as a W2a write left it: the list on the party, no history row, no audit row.
+    await admin(`UPDATE "Party" SET "priceListId" = $2 WHERE id = $1`, [P4, lists.P1.id])
+    const record = (await ok('sales', 'GET', `/sales/price-lists/${lists.P1.id}`)).list
+    expect(record.customers.find((row: Json) => row.id === P4)).toMatchObject({ from: null, fromSource: null })
+    const removed = (await ok('sales', 'POST', `/sales/price-lists/${lists.P1.id}/customers/remove`, { partyIds: [P4] })).list
+    expect(removed.customers.map((row: Json) => row.id)).toEqual([P1])
+    const rows = await admin(`SELECT "priceListId", "validFrom"::text AS "validFrom", "validTo"::text AS "validTo" FROM "PartyPriceListAssignment" WHERE "partyId" = $1`, [P4])
+    expect(rows).toHaveLength(1)
+    // Written from the day the customer was made (no audit row), ended the day before today (today when made today).
+    expect(rows[0]).toMatchObject({ priceListId: lists.P1.id, validTo: rows[0]!.validFrom === TODAY ? TODAY : YESTERDAY })
+    expect(await admin(`SELECT action FROM "AuditLog" WHERE "recordId" = $1 AND action LIKE 'priceLists.assign%' ORDER BY at, id`, [P4])).toEqual([{ action: 'priceLists.assignmentBackfilled' }, { action: 'priceLists.assign' }])
+  })
+})

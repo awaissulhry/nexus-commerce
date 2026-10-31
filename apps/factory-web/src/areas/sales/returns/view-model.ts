@@ -26,6 +26,7 @@ import type {
   ListAddress,
   NewRepairDraft,
   NewReturnDraft,
+  NewReturnLineDraft,
   ReceiptDraft,
   ReturnsCan,
   Words,
@@ -84,6 +85,17 @@ export interface CloseModel {
   readonly problem: Words | null
   /** After the close: the API's warnings (lines to replace without the order, goods without their return DDT). */
   readonly warnings: number | null
+  /** B-W2b-16: what the close would leave behind, said before the click (the record's closeWarnings); null: not read yet. */
+  readonly pending?: Rma['closeWarnings'] | null
+}
+
+/** B-W2b-16: Add lines on an open RMA (design rma.lines "Add lines by picking from the customer's invoiced lines"). */
+export interface AddLinesModel {
+  readonly lines: Readonly<Record<string, NewReturnLineDraft>>
+  readonly returnable: { readonly value: Returnable | null; readonly loading: boolean; readonly problem: string | null }
+  readonly showProblems: boolean
+  readonly busy: boolean
+  readonly problem: Words | null
 }
 
 // ---- the list ----------------------------------------------------------------------------------------------------------------
@@ -187,10 +199,17 @@ export interface RmaModel {
   readonly dialogProblem: Words | null
   readonly close: CloseModel | null
   readonly newRepair: NewRepairModel | null
+  /** B-W2b-16: Add lines (null: closed). */
+  readonly addLines?: AddLinesModel | null
   readonly dockOpen: boolean
 }
 
 export interface RmaActions extends CloseActions, NewRepairActions {
+  /** B-W2b-16: Add lines on an open RMA. */
+  onAddLinesOpen?: () => void
+  onAddLinesLine?: (key: string, patch: Partial<NewReturnLineDraft>) => void
+  onAddLinesSubmit?: () => void
+  onAddLinesClose?: () => void
   onReload?: () => void
   onDismissReceipt?: () => void
   onDock?: () => void

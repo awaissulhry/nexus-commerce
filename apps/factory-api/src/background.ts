@@ -60,6 +60,8 @@ import { renewalStagesCron } from './modules/compliance/renewals/stages'
 import { releaseOnWorkOrderDoneHandler, reservationCleanupCron } from './modules/inventory/reservations/system-release'
 // B-W2b-26: the leaver steps the system settles on its own (badge off after the last day, the case closed when done).
 import { leaverStepsCron } from './modules/people/leavers/automatic'
+// B-W2b-22: the cost ledger's nightly catch-up (what waited for a value or a rate).
+import { costCatchUpCron } from './modules/costing/actual/catch-up'
 // B-W2b-11: the report pack, so the worker can export a report (platform/exports/sources/reports.ts).
 import { loadReports } from './modules/insights/reports/registry'
 
@@ -191,6 +193,7 @@ if (mode === 'worker') {
   // B-W2b-26: the open leaver cases, hourly: after the last working day the floor sign-in is switched off, due automatic
   // steps tick, a case with nothing open closes (the person LEFT).
   crons.push(leaverStepsCron({ database, log }))
+  crons.push(costCatchUpCron({ database, log }))
   const scheduler = startCrons(crons, { redis, prefix, log })
   stops.push(() => scheduler.stop())
 }

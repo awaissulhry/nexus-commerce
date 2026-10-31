@@ -22,6 +22,13 @@ import { defineEvent } from '../events/define'
  *   supplier_invoice.claim_settled        a supplier credit note settled a supplier claim (the claim is closed)
  *   supplier_invoice.sdi_pickup_due       the scheduler asks the worker to pick up a company's invoices from SDI
  *   supplier_invoice.sdi_picked_up        a pickup ran: how many invoices were recorded and how many wait for a person
+ *
+ * B-W2b-21 (Z8:03, Z8:06, Z8:07):
+ *   supplier_invoice.claim_matched        a supplier's credit note was matched to a claim closed before it arrived (the
+ *                                         claim stays closed; claim_settled closes an accepted one)
+ *   payables_settings.changed             the payables settings of a company (or every company) changed
+ *   sdi_inbox_item.dismissed              a person dismissed a delivery waiting in the SDI inbox, with why
+ *   sdi_inbox_item.reopened               a dismissed delivery is back in the inbox (the next pickup tries it again)
  */
 const invoice = { supplierInvoiceId: z.uuid(), partyId: z.uuid() }
 const source = z.enum(['SDI', 'EMAIL', 'MANUAL'])
@@ -129,5 +136,34 @@ export const events = [
     description: 'A pickup from SDI ran for a company: how many invoices it recorded, and how many wait for a person.',
     payload: z.strictObject({ companyId: z.uuid(), accountId: z.uuid(), listed: count, recorded: count, waiting: count, byPerson: z.boolean() }),
     live: { permission: 'payables.view', fields: ['companyId', 'recorded', 'waiting'] },
+  }),
+  // B-W2b-21.
+  defineEvent({
+    type: 'supplier_invoice.claim_matched',
+    context: 'payables',
+    description: "A supplier's credit note was matched to a supplier claim that was closed before it arrived.",
+    payload: z.strictObject({ ...invoice, status, matchStatus, supplierClaimId: z.uuid() }),
+    live: { permission: 'payables.view', fields: ['supplierInvoiceId', 'partyId', 'supplierClaimId'] },
+  }),
+  defineEvent({
+    type: 'payables_settings.changed',
+    context: 'payables',
+    description: "The payables settings changed: the match's tolerances or billing basis, or who approves what SDI delivered.",
+    payload: z.strictObject({ settingsId: z.uuid(), companyId: z.uuid().nullable(), fields: z.array(z.string().min(1).max(60)).max(20), created: z.boolean() }),
+    live: { permission: 'payables.view', fields: ['settingsId', 'companyId'] },
+  }),
+  defineEvent({
+    type: 'sdi_inbox_item.dismissed',
+    context: 'payables',
+    description: 'A person dismissed a delivery waiting in the SDI inbox (not ours, a test delivery …), with why.',
+    payload: z.strictObject({ itemId: z.uuid(), companyId: z.uuid(), accountId: z.uuid() }),
+    live: { permission: 'payables.view', fields: ['itemId', 'companyId'] },
+  }),
+  defineEvent({
+    type: 'sdi_inbox_item.reopened',
+    context: 'payables',
+    description: 'A dismissed delivery is back in the SDI inbox: the next pickup tries it again.',
+    payload: z.strictObject({ itemId: z.uuid(), companyId: z.uuid(), accountId: z.uuid() }),
+    live: { permission: 'payables.view', fields: ['itemId', 'companyId'] },
   }),
 ] as const

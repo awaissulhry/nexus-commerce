@@ -62,7 +62,8 @@
       "sdiNotNeeded": "Niente da inviare",
       "sdiAfterInvoice": "Inviata una volta emessa la TD02",
       "sdiNoRight": "Lo stato SDI è visibile a chi vede le fatture",
-      "sdiReading": "Lettura dello stato SDI…"
+      "sdiReading": "Lettura dello stato SDI…",
+      "requestedTyped": "Richiesto quando l’ufficio ha inserito l’ordine ({date})"
     },
     "none": {
       "title": "Nessun acconto richiesto",
@@ -306,7 +307,6 @@
     "final": "Un ordine chiuso o annullato non cambia mai",
     "noPayments": "Registrare pagamenti richiede il diritto dell'amministrazione",
     "depositNotOpen": "Su questo acconto non resta nulla da pagare",
-    "noQuote": "Questo acconto non appartiene a un preventivo: la sua pagina va con il preventivo",
     "noPrice": "Gli importi sono visibili a chi vede i prezzi",
     "noIssue": "Inviare allo SDI richiede il diritto di emettere fatture",
     "sdiNotNow": "Ora non si può inviare: vedi il suo stato",
@@ -569,7 +569,8 @@
     "sentTo": "Inviata a {to}: la pagina si apre fino al {until}.",
     "sentFailed": "La pagina è pronta per {to}, ma l'e-mail non è partita: inviala di nuovo.",
     "revoked_one": "La pagina precedente ha smesso di aprirsi.",
-    "revoked_other": "{count} pagine precedenti hanno smesso di aprirsi."
+    "revoked_other": "{count} pagine precedenti hanno smesso di aprirsi.",
+    "contactTyped": "il contatto amministrativo del cliente"
   },
   "payment": {
     "title": "Registra il pagamento dell'acconto · {number}",
@@ -704,7 +705,8 @@
     "confirm": "Conferma",
     "sentence": {
       "td02": "Emettere la fattura di acconto le dà il numero per sempre. Inserisci il codice dell'app di autenticazione.",
-      "sdi": "Inviare una fattura allo SDI non si può annullare. Inserisci il codice dell'app di autenticazione."
+      "sdi": "Inviare una fattura allo SDI non si può annullare. Inserisci il codice dell'app di autenticazione.",
+      "waive": "Rinunciare a un pagamento anticipato del cliente è una decisione del titolare. Digita il codice dell’app di autenticazione."
     },
     "problem": {
       "wrong": "Il codice è sbagliato o già usato. Inserisci il più recente.",
@@ -874,8 +876,12 @@
     "problem": {
       "none": "Scegli almeno una riga",
       "all": "Non è partito nulla: chiudendo tutte le righe l'ordine resterebbe vuoto. Annulla l'ordine",
-      "reason": "Scrivi perché le righe si chiudono"
-    }
+      "reason": "Scrivi perché le righe si chiudono",
+      "reasonCode": "Scegli un motivo dall’elenco"
+    },
+    "reasonCode": "Motivo",
+    "reasonCodeNone": "L’elenco dei motivi non si è potuto leggere: scrivi il perché a parole.",
+    "pickReasonCode": "Scegli un motivo"
   },
   "reopen": {
     "title": "Riapri righe di {number}",
@@ -990,7 +996,10 @@
         "busy": "In corso…",
         "goodsLeft": "La merce è già partita: il saldo va sulla fattura della merce.",
         "noInvoice": "Per fatturare una rata serve il permesso di gestire le fatture.",
-        "noManage": "Per aprire una rata serve il permesso di gestire gli ordini."
+        "noManage": "Per aprire una rata serve il permesso di gestire gli ordini.",
+        "noWaive": "Solo il titolare rinuncia a una scadenza di pagamento.",
+        "final": "L’ordine è chiuso o annullato: non si rinuncia più a nulla.",
+        "partPaid": "Ci sono già pagamenti su questa richiesta: non si rinuncia (il resto va sulla fattura della merce)."
       },
       "invoice": "Fattura questa rata",
       "open": "Apri al pagamento",
@@ -1004,8 +1013,21 @@
         "moved": "Il piano è cambiato nel frattempo: rileggilo.",
         "past": "Oggi o più avanti.",
         "state": "Non ora: nessun pagamento attende una fattura, o la rata è cambiata.",
-        "write": "Non è stato possibile: riprova."
-      }
+        "write": "Non è stato possibile: riprova.",
+        "stepUp": "Conferma prima che sei tu con un nuovo codice."
+      },
+      "waive": "Rinuncia…",
+      "waiveTitle": "Rinuncia a “{step}”",
+      "waiveBody": {
+        "DEPOSIT": "Il cliente non deve pagare l’acconto prima della produzione: gli ordini di lavoro possono essere rilasciati senza. Non ci sono pagamenti.",
+        "BEFORE_SHIPPING": "Il cliente non deve pagarlo prima della spedizione: la merce può partire e l’importo va sulla fattura della merce. Non ci sono pagamenti."
+      },
+      "waiveReason": "Perché",
+      "waiveHint": "Resta sulla scadenza e sulla sua richiesta di pagamento. Dopo Rinuncia confermi con un nuovo codice dell’app di autenticazione.",
+      "waiveReasonHeld": "Scrivi perché (almeno 3 caratteri)",
+      "waiveReasonLong": "Al massimo 500 caratteri",
+      "waiveGo": "Rinuncia",
+      "waived": "Rinuncia a “{step}” registrata."
     }
   },
   "changes": {

@@ -30,4 +30,6 @@ export const manifest = defineManifest({
   'POST /payments/refunds/:refundId/void': { audiences: ['office'], permission: 'payments.void', scope: 'record' },
   'GET /payments/credit-balance': { audiences: ['office'], permission: 'payments.view', scope: 'record' },
   'POST /payments/release-overpayment': { audiences: ['office'], permission: 'payments.record', scope: 'record' },
+  // B-W2b-21 (Z8:01; deposit-carry.ts): a PAID deposit that issues no deposit invoice (NONE) carried onto its order's invoice.
+  'POST /payments/deposit-requests/:depositRequestId/carry': { audiences: ['office'], permission: 'payments.record', scope: 'record' },
 })

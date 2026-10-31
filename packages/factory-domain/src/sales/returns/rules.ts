@@ -491,3 +491,48 @@ export function returnActions(facts: ActionFacts): ActionState[] {
     held('close', final ? `The return is ${state}.` : facts.status === 'REQUESTED' ? 'Authorise or reject it first.' : undecided.length > 0 ? `Decide the ${undecided.length} received line(s) first.` : null),
   ]
 }
+
+// ---- B-W2b-16: what closing still leaves open (the close dialog says it before the click) ----------------------------
+
+export const CLOSE_WARNING_CODES = ['REPLACE_WITHOUT_ORDER', 'BACK_WITHOUT_DDT', 'REPAIR_WITHOUT_ORDER'] as const
+export type CloseWarningCode = (typeof CLOSE_WARNING_CODES)[number]
+
+export interface CloseWarningLine {
+  readonly id: string
+  readonly seq: number
+  readonly received: number
+  readonly disposition: ReturnDisposition | null
+  readonly goodsOutcome: GoodsOutcome | null
+  readonly replaced: boolean
+  /** Repair orders made from the line that are not cancelled (one per garment received on it). */
+  readonly repairs: number
+}
+
+export interface CloseWarning {
+  readonly code: CloseWarningCode
+  /** Where it points (as the close's warnings always did): replacementOrder, ddt, repairOrder. */
+  readonly path: string
+  readonly lineIds: string[]
+  readonly seqs: number[]
+  readonly message: string
+}
+
+const seqWords = (lines: readonly CloseWarningLine[]) => `${lines.length === 1 ? 'Line' : 'Lines'} ${lines.map((line) => line.seq).join(', ')}`
+
+/**
+ * What a close would leave behind, never a refusal (B-W2a-43's two warnings, and B-W2b-16 the third one, B-W2a-57's
+ * note): Replace lines without the replacement order, unchanged goods without a live return DDT, and lines decided Repair
+ * with fewer live repair orders than garments received (each garment gets its own repair order).
+ */
+export function closeWarningsOf(lines: readonly CloseWarningLine[], liveReturnDdt: boolean): CloseWarning[] {
+  const warnings: CloseWarning[] = []
+  const add = (code: CloseWarningCode, path: string, found: readonly CloseWarningLine[], words: string) => {
+    if (found.length > 0) warnings.push({ code, path, lineIds: found.map((line) => line.id), seqs: found.map((line) => line.seq), message: `${seqWords(found)} ${words}` })
+  }
+  add('REPLACE_WITHOUT_ORDER', 'replacementOrder', lines.filter((line) => line.disposition === 'REPLACE' && !line.replaced), `${lines.filter((line) => line.disposition === 'REPLACE' && !line.replaced).length === 1 ? 'is' : 'are'} decided Replace and no replacement order was made.`)
+  const back = lines.filter((line) => line.disposition === 'RETURN_UNCHANGED' || line.goodsOutcome === 'BACK_TO_CUSTOMER')
+  if (!liveReturnDdt) add('BACK_WITHOUT_DDT', 'ddt', back, `${back.length === 1 ? 'goes' : 'go'} back unchanged and no return DDT is issued yet (it can still be issued after the close).`)
+  const repair = lines.filter((line) => line.disposition === 'REPAIR' && line.received > 0 && line.repairs < line.received)
+  add('REPAIR_WITHOUT_ORDER', 'repairOrder', repair, `${repair.length === 1 ? 'is' : 'are'} decided Repair and no repair order was made for ${repair.length === 1 && repair[0]!.received - repair[0]!.repairs === 1 ? 'the garment' : 'every garment'} (make it from the line, or the garment stays here unrepaired).`)
+  return warnings
+}

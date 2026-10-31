@@ -12,7 +12,8 @@ import type { ReminderLine } from './reminders'
  * before approving it. Italian and English; another customer language gets the English text.
  *
  * The text names the invoices (number, date, due date, what is open), the total, the late-payment interest only when the
- * company's rule computes it (AGREED), the D.Lgs. 231/2002 mention when the rule is STATUTORY (no rate recorded yet), the
+ * company's rule computes it (AGREED, or STATUTORY from the half-year rates recorded), the D.Lgs. 231/2002 mention when
+ * the rule is STATUTORY and a half-year of the delay has no rate (no amount then), the
  * recovery charge of art. 6 when the company claims one, and the bank account the invoices name.
  */
 

@@ -5,7 +5,7 @@ import { standardOn, type StandardPeriod } from '@nexus/factory-domain/costing/s
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
 import type { CommandTx } from '../../../core/command'
-import { companyOrTenant, dayOf, RATE_COLUMNS, rateOf, SETTINGS_COLUMNS } from '../inputs'
+import { companyOrTenant, dayOf, ownOverheadRows, RATE_COLUMNS, rateOf, SETTINGS_COLUMNS } from '../inputs'
 
 /**
  * What the work-order cost ledger reads (B-W2a-21), with one client (no relation selects: inside a transaction Prisma
@@ -186,9 +186,12 @@ export async function ratesOf(db: Reader, companyId: string): Promise<LabourRate
   return (await db.labourRate.findMany({ where: companyOrTenant(companyId), select: RATE_COLUMNS, orderBy: [{ validFrom: 'asc' }, { id: 'asc' }] })).map(rateOf)
 }
 
-/** The overhead percent in force for a company now (its own settings, else the tenant-wide ones); null: none set. */
+/**
+ * The overhead percent in force for a company now (its own settings, else the tenant-wide ones); null: none set. A company
+ * row that holds only its costing method follows the tenant-wide overhead (B-W2b-22).
+ */
 export async function overheadPctOf(db: Reader, companyId: string): Promise<string | null> {
-  const rows = await db.costingSettings.findMany({ where: companyOrTenant(companyId), select: SETTINGS_COLUMNS })
+  const rows = ownOverheadRows(await db.costingSettings.findMany({ where: companyOrTenant(companyId), select: SETTINGS_COLUMNS }))
   const rule = pickOverhead(
     rows.map((row) => ({ id: row.id, companyId: row.companyId, overheadPct: text(row.overheadPct), updatedAt: null })),
     companyId,

@@ -62,7 +62,8 @@
       "sdiNotNeeded": "Nothing to send",
       "sdiAfterInvoice": "Sent once the TD02 is issued",
       "sdiNoRight": "The SDI state is shown to people who see invoices",
-      "sdiReading": "Reading the SDI state…"
+      "sdiReading": "Reading the SDI state…",
+      "requestedTyped": "Asked when the office entered the order ({date})"
     },
     "none": {
       "title": "No deposit asked",
@@ -306,7 +307,6 @@
     "final": "A closed or cancelled order never changes",
     "noPayments": "Recording payments needs the finance right",
     "depositNotOpen": "Nothing is left to pay on this deposit",
-    "noQuote": "This deposit belongs to no quote: its page goes with the quote",
     "noPrice": "Amounts are shown to people who see prices",
     "noIssue": "Sending to SDI needs the right to issue invoices",
     "sdiNotNow": "It cannot be sent now: see its state",
@@ -569,7 +569,8 @@
     "sentTo": "Sent to {to}: the page opens until {until}.",
     "sentFailed": "The page was made for {to}, but the e-mail did not leave: send it again.",
     "revoked_one": "The older page stopped opening.",
-    "revoked_other": "{count} older pages stopped opening."
+    "revoked_other": "{count} older pages stopped opening.",
+    "contactTyped": "the customer’s invoices contact"
   },
   "payment": {
     "title": "Record the deposit payment · {number}",
@@ -704,7 +705,8 @@
     "confirm": "Confirm",
     "sentence": {
       "td02": "Issuing the deposit invoice gives it its number for good. Type the code from your authenticator app.",
-      "sdi": "Sending an invoice to SDI cannot be undone. Type the code from your authenticator app."
+      "sdi": "Sending an invoice to SDI cannot be undone. Type the code from your authenticator app.",
+      "waive": "Waiving a payment the customer owes in advance is the owner’s decision. Type the code from your authenticator app."
     },
     "problem": {
       "wrong": "That code is wrong or was used already. Type the newest one.",
@@ -874,8 +876,12 @@
     "problem": {
       "none": "Choose at least one line",
       "all": "Nothing has shipped: closing every line would leave an empty order. Cancel the order instead",
-      "reason": "Say why the lines close"
-    }
+      "reason": "Say why the lines close",
+      "reasonCode": "Pick a reason from the list"
+    },
+    "reasonCode": "Reason",
+    "reasonCodeNone": "The reason list could not be read: say why in words.",
+    "pickReasonCode": "Pick a reason"
   },
   "reopen": {
     "title": "Reopen lines of {number}",
@@ -990,7 +996,10 @@
         "busy": "Working…",
         "goodsLeft": "Goods have left already: the balance goes on the goods’ invoice.",
         "noInvoice": "Invoicing a step needs the right to manage invoices.",
-        "noManage": "Opening a step needs the right to manage orders."
+        "noManage": "Opening a step needs the right to manage orders.",
+        "noWaive": "Only the owner waives a payment step.",
+        "final": "The order is closed or cancelled: nothing on it is waived any more.",
+        "partPaid": "Money is placed on it already: it is not waived (the rest goes on the goods’ invoice)."
       },
       "invoice": "Invoice this step",
       "open": "Open for payment",
@@ -1004,8 +1013,21 @@
         "moved": "The schedule changed meanwhile: read it again.",
         "past": "Today or later.",
         "state": "Not now: nothing paid waits for an invoice, or the step changed.",
-        "write": "It could not be done: try again."
-      }
+        "write": "It could not be done: try again.",
+        "stepUp": "Confirm it’s you with a fresh code first."
+      },
+      "waive": "Waive…",
+      "waiveTitle": "Waive “{step}”",
+      "waiveBody": {
+        "DEPOSIT": "The customer need not pay the deposit before production: the work orders may be released without it. Nothing paid is on it.",
+        "BEFORE_SHIPPING": "The customer need not pay this before shipping: the goods may leave, and the amount is billed on the goods’ invoice. Nothing paid is on it."
+      },
+      "waiveReason": "Why",
+      "waiveHint": "It stays on the step and its payment request. After Waive you confirm with a fresh code from your authenticator app.",
+      "waiveReasonHeld": "Say why (at least 3 characters)",
+      "waiveReasonLong": "At most 500 characters",
+      "waiveGo": "Waive",
+      "waived": "“{step}” is waived."
     }
   },
   "changes": {

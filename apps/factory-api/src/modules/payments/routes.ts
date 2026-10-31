@@ -7,6 +7,7 @@ import { processFiles } from '../../platform/files/service'
 import {
   allocateContract,
   cancelRefundContract,
+  carryDepositContract,
   changeRefundContract,
   creditBalanceContract,
   depositLinkViewContract,
@@ -27,6 +28,7 @@ import {
   voidRefundContract,
 } from './contract'
 import { creditBalance, releaseOverpayment } from './credit-balance'
+import { carryDeposit } from './deposit-carry'
 import { depositLinkView, sendDepositLink } from './deposit-link'
 import { depositReceived } from './deposits'
 import { manifest } from './manifest'
@@ -78,6 +80,9 @@ export default defineRoutes('payments', manifest, async (app) => {
   )
 
   app.get('/payments/link/deposit', { schema: depositLinkViewContract }, async (request) => depositLinkView(request))
+
+  // B-W2b-21: a PAID deposit that issues no deposit invoice (NONE) carried onto its order's invoice, in one command.
+  app.post('/payments/deposit-requests/:depositRequestId/carry', { schema: carryDepositContract }, async (request) => carryDeposit(request, request.params.depositRequestId, request.body, idempotencyKeyFrom(request)))
 
   app.post('/payments/:paymentId/allocations', { schema: allocateContract }, async (request) => allocatePayment(request, request.params.paymentId, request.body, idempotencyKeyFrom(request)))
 
