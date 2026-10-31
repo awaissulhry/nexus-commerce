@@ -59,6 +59,8 @@ import {
   type ScanHeader,
   type ScanRow,
 } from './store'
+// B-W2b-46 hook (modules/production/guards): the site's checks before a scan counts, the override, the lots at the operation.
+import { guardReportInCommand, recordGuardsInCommand, type ComponentInput, type VerifiedOverride } from './hooks/guards'
 
 /**
  * The floor's scans (B-W1-42; MES-069, MES-090, MES-095, MES-096, MES-308; PLAN §4.7 stage 12-scans, risk 17; A1 §3.8;
@@ -103,6 +105,10 @@ export interface ReportInput {
   readonly kindReason?: string | undefined
   /** When it happened, by the device's clock. */
   readonly occurredAt?: string | undefined
+  /** B-W2b-46 (MES-114): the lots scanned at the operation, each with the garments it traces. */
+  readonly components?: readonly ComponentInput[] | undefined
+  /** B-W2b-46: a team leader's verified override of the held checks (POST /production/guards/override; never a PIN). */
+  readonly override?: VerifiedOverride | undefined
 }
 
 export interface UndoInput {
@@ -449,8 +455,11 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
     viewer: { scanSubject, workerId: context.actorId, stationId: work.stationId },
     stationCodes: new Map([...stations.values()].map((row) => [row.id, row.code])),
     timeZone: work.timeZone,
+    guarded: true,
   })
   if (!decision.ok) return refuse(decision.refusal)
+  // B-W2b-46 hook (production/guards): the site's checks hold the report (or a team leader's override lifts them); the lots at the operation.
+  const guard = await guardReportInCommand(tools, { workOrder, bundle: { id: locked.bundle.id, code: locked.bundle.code, workOrderSizeId: work.bundle.workOrderSizeId }, quantity: flow.quantity, operations, operation: decision.operation, standing: flow.standing, counts: work.counts, stationId: work.stationId, components: work.input.components, override: work.input.override })
   // Who it names: the site's floor rules (the trigger checks the same).
   const subject = await floorRecordSubjectFor(tx, { siteId: workOrder.siteId, workerId: context.actorId, stationId: work.stationId })
   const otherKind = station !== null && station.kind !== decision.operation.workCentreKind
@@ -484,10 +493,12 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   // W2b B-W2b-29 hook (offstandard/writes.ts; MES-156): scanning a bundle returns to standard work — the subject's running off-standard block ends at the scan.
   await endRunningBlock(tools, { tenantId: context.tenantId, siteId: workOrder.siteId, subject, at: believedTime(work.deviceTime, tools.now), endedBy: 'SCAN' })
   const row = (await readScan(tx, id))!
-  const after = { workOrderId: workOrder.id, bundleId: locked.bundle.id, operationId: decision.operation.id, operationSeq: decision.operation.seq, goodQuantity: row.goodQuantity, scrapQuantity: row.scrapQuantity, reworkQuantity: row.reworkQuantity, cap: decision.cap, workerId: row.workerId, stationId: row.stationId, clientScanId: row.clientScanId }
+  const after = { workOrderId: workOrder.id, bundleId: locked.bundle.id, operationId: decision.operation.id, operationSeq: decision.operation.seq, goodQuantity: row.goodQuantity, scrapQuantity: row.scrapQuantity, reworkQuantity: row.reworkQuantity, cap: guard.cap, workerId: row.workerId, stationId: row.stationId, clientScanId: row.clientScanId }
   tools.audit({ action: 'production.reportScan', recordType: 'OperationScan', recordId: id, companyId: workOrder.companyId, siteId: workOrder.siteId, after, ...(row.reason ? { reason: row.reason } : {}) })
   tools.audit({ action: 'production.reportScan', recordType: 'WorkOrder', recordId: workOrder.id, companyId: workOrder.companyId, siteId: workOrder.siteId, after: { scanId: id, bundleId: locked.bundle.id, operationId: decision.operation.id, goodQuantity: row.goodQuantity, scrapQuantity: row.scrapQuantity, reworkQuantity: row.reworkQuantity } })
   tools.emit(scanEvent(workOrder, row, decision.operation.seq, 'FLOOR'))
+  // B-W2b-46 hook: what the checks found, the override and the lots, kept and told.
+  recordGuardsInCommand(tools, guard, { scan: row, workOrder, bundleId: locked.bundle.id, operation: decision.operation })
   return scanView(row, operations, locked.bundle.code, work.lines)
 }
 

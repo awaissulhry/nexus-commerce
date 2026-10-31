@@ -106,6 +106,18 @@ export const SCAN_REFUSALS = [
   'ON_HOLD',
   // B-W2a-35b (Owner answer H1): every machine at the scanning station is do-not-use (apps/factory-api modules/plant/checks.ts stationBlock).
   'MACHINE_UNSAFE',
+  // B-W2b-46 (MES-070, MES-114; production/guards GUARD_REFUSALS): a bundle of another line, the lots scanned at the
+  // operation, and a team leader's override that is refused.
+  'WRONG_BUNDLE',
+  'COMPONENTS_MISSING',
+  'WRONG_COMPONENT',
+  'UNKNOWN_LOT',
+  'LOT_NOT_RELEASED',
+  'COMPONENT_COUNT',
+  'OVERRIDE_PIN_WRONG',
+  'OVERRIDE_NOT_LEAD',
+  'OVERRIDE_SELF',
+  'OVERRIDE_NOTE_MISSING',
 ] as const
 export type ScanRefusalCode = (typeof SCAN_REFUSALS)[number]
 
@@ -412,6 +424,13 @@ export interface ReportFacts {
   /** The station codes of the standing scans (for "on SEW-01"). */
   readonly stationCodes: ReadonlyMap<string, string>
   readonly timeZone: string
+  /**
+   * B-W2b-46 hook (production/guards): the site's checks before a scan counts decide a skipped operation and more than
+   * the operation before passed (FREE / WARN / STRICT, with a team leader's override); this then decides only the
+   * operation, its kind, "already reported" and the bundle's own garments (cap = the bundle's). Left out: W1's strict
+   * refusals (PREVIOUS_NOT_REPORTED, MORE_THAN_PASSED).
+   */
+  readonly guarded?: boolean | undefined
 }
 
 export type ReportDecision = { readonly ok: true; readonly operation: ScanOperation; readonly cap: number; readonly previous: ScanOperation | null } | { readonly ok: false; readonly refusal: ScanRefusal }
@@ -476,6 +495,13 @@ export function reportDecision(facts: ReportFacts): ReportDecision {
   const standing = facts.standing.get(standingKey(facts.bundleId, operation.id))
   if (standing) {
     return { ok: false, refusal: alreadyReported(facts.bundle.code, standing, facts.viewer, { operation, stationCode: standing.stationId ? (facts.stationCodes.get(standing.stationId) ?? null) : null, timeZone: facts.timeZone }) }
+  }
+  if (facts.guarded) {
+    if (total <= facts.bundle.quantity) return { ok: true, operation, cap: facts.bundle.quantity, previous: previousScanned(facts.operations, operation.id) }
+    // Beyond the bundle's own (live) garments: never taken, not even with an override; in W1's words (what the operation
+    // before passed, when it passed it and that is the lower figure).
+    const cap = capAt(facts.operations, operation, facts.bundle, facts.standing, facts.bundleId)
+    return { ok: false, refusal: (cap.ok ? overCap(facts.bundle, cap.previous, cap.cap, total) : null) ?? overCap(facts.bundle, null, facts.bundle.quantity, total)! }
   }
   const cap = capAt(facts.operations, operation, facts.bundle, facts.standing, facts.bundleId)
   if (!cap.ok) return cap

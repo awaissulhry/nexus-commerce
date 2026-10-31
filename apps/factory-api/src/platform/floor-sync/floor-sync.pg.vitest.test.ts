@@ -179,6 +179,8 @@ beforeAll(async () => {
     await tx.certificateCoverage.create({ data: { id: newId(), certificateId, styleId: A.style, sizes: ['50', '52'] }, select: { id: true } })
   })
   await addHides(3)
+  // B-W2b-46: W1's strict order, a skipped operation held (PREVIOUS_NOT_REPORTED), is the site rule STRICT now (the default WARN lets it count and tells the team leader).
+  await admin(`UPDATE "ProductionSettings" SET "skippedOperationRule" = 'STRICT' WHERE id = $1`, [A.siteA1])
   for (const [deviceId, stationId, name] of [
     [A.cut2, A.cutStation, 'Second cutting tablet'],
     [A.sew1, A.sew1Station, 'Sewing tablet 1'],

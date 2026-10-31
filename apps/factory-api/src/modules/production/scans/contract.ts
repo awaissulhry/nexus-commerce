@@ -6,6 +6,8 @@ import { CLIENT_SCAN_ID, MAX_BATCH_ITEMS, SCAN_REFUSALS } from '@nexus/factory-d
 import { WORK_ORDER_STATUSES } from '@nexus/factory-domain/production/work-orders/machine'
 import { CORRECTION_STATUSES } from './corrections-store'
 import { REFUSED_ACTIONS } from './refusals-store'
+// B-W2b-46 hook: the lots scanned at the operation (modules/production/guards).
+import { guardReportFields } from './hooks/guards'
 
 /**
  * Operation scans (B-W1-42; MES-069, MES-090, MES-095, MES-096, MES-167, MES-308; A2 SCR-090, SCR-072, SCR-073,
@@ -131,6 +133,8 @@ const report = {
   rework: defects(),
   /** Why a station reports an operation of another kind of work (kept on the scan). */
   kindReason: z.string().trim().min(3).max(200).optional(),
+  /** B-W2b-46 (MES-114): the lots scanned at the operation, each with the garments it traces. */
+  ...guardReportFields,
 }
 
 const timed = {
