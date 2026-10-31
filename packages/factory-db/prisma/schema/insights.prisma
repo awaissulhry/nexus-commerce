@@ -141,3 +141,27 @@ model TodayLayout {
 
   @@index([tenantId, userId])
 }
+
+/// W2b (B-W2b-03; B-W2a-79; design home.reports "last run by me"): one run of one report by one person: when, and the
+/// filters it ran with. The report library answers "last run by me" from the caller's own rows only; nobody lists
+/// another person's runs (no per-person figure: Owner answer W1). Never changed (the …_followups_platform_w2b_guards
+/// trigger); the office may delete old rows (a retention rule is the privacy step's: none is set yet).
+model ReportRun {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The office user who ran it.
+  userId      String   @db.Uuid
+  /// The report: its definition key in the report registry (`production.daily`).
+  reportKey   String
+  /// The filters it ran with, as the report reads them ({ companyId?, siteId?, from?, to?, … }): an object.
+  params      Json     @default("{}")
+  at          DateTime @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  user User @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // "Last run by me" per report.
+  @@index([tenantId, userId, reportKey, at])
+}
+

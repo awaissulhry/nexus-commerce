@@ -17,6 +17,8 @@ export interface CompanyRef {
 export interface SiteRef {
   id: string
   name: string
+  /** Short code (B-W2b-05: the API lists it; design data may leave it out). */
+  code?: string
 }
 
 export interface OfficeSession {
@@ -29,8 +31,16 @@ export interface OfficeSession {
    * tenant of several companies starts a session in none (`company` null) until the address names one.
    */
   companies: CompanyRef[]
-  /** The current company's sites (W0: none listed by the API yet; the switcher then offers "All sites"). */
+  /**
+   * The current company's active sites this person's roles reach (B-W2b-05, `me.sites`): the top bar's switcher offers
+   * them. Empty without a company or a site.
+   */
   sites: SiteRef[]
+  /**
+   * The person reaches every site of the company (no site limit on a role that reaches it). False with a limit: "All
+   * sites" then means all of THEIR sites, and a person limited to one site works in it without a choice.
+   */
+  allSites?: boolean
   permissions: readonly string[]
   mfa: { enabled: boolean; required: boolean; satisfied: boolean }
 }
@@ -41,7 +51,8 @@ export function sessionFromMe(me: OfficeMe): OfficeSession {
     tenant: me.tenant,
     company: me.company,
     companies: me.companies.length > 0 ? me.companies : me.company ? [me.company] : [],
-    sites: [],
+    sites: (me.sites ?? []).map((site) => ({ id: site.id, code: site.code, name: site.name })),
+    allSites: me.allSites ?? false,
     permissions: me.permissions,
     mfa: { enabled: me.mfa.enabled, required: me.mfa.required, satisfied: me.mfa.satisfied },
   }

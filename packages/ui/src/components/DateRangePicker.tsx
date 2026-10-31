@@ -3,6 +3,8 @@
 import { useRef, useState } from 'react'
 import { Calendar, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useClickAway } from './useClickAway'
+import { labelFor, mergeLabels } from '../lib/labels'
+import { DATE_RANGE_PICKER_LABELS, type DateRangePickerLabels } from './DateRangePickerLabels'
 
 export interface DateRange {
   start: Date
@@ -23,6 +25,9 @@ export interface DateRangePickerProps {
    * that way.
    */
   presets?: ReadonlyArray<{ label: string; get: () => DateRange }>
+  /** Its words in the person's language (B-W2b-04): locale, weekday letters, month buttons, preset names. Default
+   *  English. */
+  labels?: Partial<DateRangePickerLabels>
 }
 
 function sod(d: Date) {
@@ -55,11 +60,11 @@ function addMonths(d: Date, n: number) {
 function sameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
-function fmt(d: Date) {
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+function fmt(d: Date, locale = 'en-GB') {
+  return d.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' })
 }
-function monthLabel(d: Date) {
-  return d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+function monthLabel(d: Date, locale = 'en-GB') {
+  return d.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
 }
 function monthGrid(month: Date): Array<Date | null> {
   const lead = new Date(month.getFullYear(), month.getMonth(), 1).getDay()
@@ -100,9 +105,8 @@ export const DEFAULT_PRESETS: ReadonlyArray<{ label: string; get: () => DateRang
   { label: 'Last 12 Months', get: () => ({ start: sod(addMonths(new Date(), -12)), end: sod(new Date()) }) },
 ]
 
-const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
-
-export function DateRangePicker({ value, onChange, className, presets = DEFAULT_PRESETS }: DateRangePickerProps) {
+export function DateRangePicker({ value, onChange, className, presets = DEFAULT_PRESETS, labels }: DateRangePickerProps) {
+  const words = mergeLabels(DATE_RANGE_PICKER_LABELS, labels)
   const [open, setOpen] = useState(false)
   const [view, setView] = useState(() => new Date(value.start.getFullYear(), value.start.getMonth(), 1))
   const [draftStart, setDraftStart] = useState<Date | null>(null)
@@ -125,9 +129,9 @@ export function DateRangePicker({ value, onChange, className, presets = DEFAULT_
 
   const renderMonth = (month: Date) => (
     <div className="nds-dp-month">
-      <div className="nds-dp-mh">{monthLabel(month)}</div>
+      <div className="nds-dp-mh">{monthLabel(month, words.locale)}</div>
       <div className="nds-dp-grid">
-        {WEEKDAYS.map((w, i) => (
+        {words.weekdays.map((w, i) => (
           <div key={`wd-${i}`} className="nds-dp-wd">{w}</div>
         ))}
         {monthGrid(month).map((day, i) => {
@@ -153,7 +157,7 @@ export function DateRangePicker({ value, onChange, className, presets = DEFAULT_
     <div className={`nds-dp${className ? ` ${className}` : ''}`} ref={ref}>
       <button type="button" className="nds-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <Calendar size={15} />
-        {fmt(value.start)} – {fmt(value.end)}
+        {fmt(value.start, words.locale)} – {fmt(value.end, words.locale)}
         <ChevronDown size={15} />
       </button>
       {open && (
@@ -170,16 +174,16 @@ export function DateRangePicker({ value, onChange, className, presets = DEFAULT_
                   setOpen(false)
                 }}
               >
-                {p.label}
+                {labelFor(words.presets, p.label, p.label)}
               </button>
             ))}
           </div>
           <div className="nds-dp-cal">
             <div className="nds-dp-nav">
-              <button type="button" onClick={() => setView(addMonths(view, -1))} aria-label="Previous month">
+              <button type="button" onClick={() => setView(addMonths(view, -1))} aria-label={words.previousMonth}>
                 <ChevronLeft size={16} />
               </button>
-              <button type="button" onClick={() => setView(addMonths(view, 1))} aria-label="Next month">
+              <button type="button" onClick={() => setView(addMonths(view, 1))} aria-label={words.nextMonth}>
                 <ChevronRight size={16} />
               </button>
             </div>

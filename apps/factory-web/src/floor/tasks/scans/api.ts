@@ -11,7 +11,17 @@ import type { BundleCard, CorrectionTarget } from './model'
 
 const kind = z.enum(['REPORT', 'UNDO', 'CORRECTION'])
 const operationRef = z.object({ id: z.string(), seq: z.number(), code: z.string(), name: z.string() })
-const reason = z.object({ kind: z.enum(['SCRAP', 'REWORK']), code: z.string(), label: z.object({ it: z.string(), en: z.string() }), sortOrder: z.number() })
+// B-W2b-10 (MES-125): the office's icon, colour, other languages and "needs detail" of each tile (optional: an older API).
+const reason = z.object({
+  kind: z.enum(['SCRAP', 'REWORK']),
+  code: z.string(),
+  label: z.object({ it: z.string(), en: z.string() }),
+  sortOrder: z.number(),
+  icon: z.string().nullable().optional(),
+  colour: z.string().nullable().optional(),
+  labelI18n: z.record(z.string(), z.string()).optional(),
+  needsDetail: z.boolean().optional(),
+})
 
 export const cardSchema = z.object({
   scanned: z.string(),

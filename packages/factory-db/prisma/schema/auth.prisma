@@ -62,6 +62,8 @@ model User {
   // insights.prisma: Today's alerts assigned to the person, and the person's arrangement of Today (one: its id is theirs).
   attentionAssigned AttentionAction[] @relation("AttentionAssignee")
   todayLayouts      TodayLayout[]
+  // W2b insights.prisma: the reports they ran ("last run by me").
+  reportRuns        ReportRun[]
   // collab.prisma: the person's notifications, the records they follow, their @mentions, the tasks assigned to them.
   notifications       Notification[]
   followedRecords     RecordFollower[]

@@ -3,6 +3,7 @@ import { LOCKOUT } from '@nexus/factory-domain/auth/lockout/lockout'
 import { SESSION_COOKIE } from '../sessions/cookies'
 import { SESSION_LIFETIME } from '../sessions/session-store'
 import { tokenHash } from '../sessions/secrets'
+import { newId } from '@nexus/factory-domain/core/ids'
 import { addTenant, addUser, Browser, codeAt, enrolTotp, PASSWORD, startHarness, START, type Harness, type TestTenant } from '../sessions/testing/harness'
 
 /**
@@ -379,6 +380,36 @@ describe('company context', () => {
     // Another tenant's company is unknown here.
     expect((await browser.get('/auth/office/me', { headers: { 'x-factory-company': tenant.companies[0]!.id } })).status).toBe(403)
     expect((await browser.get('/auth/office/me', { headers: { 'x-factory-company': 'NOPE' } })).status).toBe(403)
+  })
+
+  it('B-W2b-05: lists the screen company\'s active sites the person reaches — every one without a site limit, else those named', async () => {
+    h.clock.set(START)
+    const [first, second] = twoCompanies.companies
+    const site = { north: newId(), south: newId(), closed: newId(), other: newId() }
+    const wide = await addUser(h, twoCompanies, { email: 'sites.wide@example.com', role: 'warehouse' })
+    const narrow = await addUser(h, twoCompanies, { email: 'sites.narrow@example.com' })
+    await h.database.withScope({ audience: 'office', tenantId: twoCompanies.id, actorId: twoCompanies.id }, async (client) => {
+      await client.site.create({ data: { id: site.north, companyId: first!.id, code: 'N1', name: 'North plant', kind: 'PLANT' } })
+      await client.site.create({ data: { id: site.south, companyId: first!.id, code: 'S1', name: 'South store', kind: 'WAREHOUSE' } })
+      await client.site.create({ data: { id: site.closed, companyId: first!.id, code: 'X1', name: 'Closed site', kind: 'PLANT', status: 'ARCHIVED' } })
+      await client.site.create({ data: { id: site.other, companyId: second!.id, code: 'O1', name: 'Other plant', kind: 'PLANT' } })
+      const role = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: twoCompanies.id, key: 'warehouse' } }, select: { id: true } })
+      await client.roleAssignment.create({
+        data: { id: newId(), userId: narrow.id, roleId: role.id, allCompanies: false, companyIds: [first!.id], siteIds: [site.south], validFrom: new Date(START) },
+      })
+    })
+    const sitesOf = async (browser: Browser, company: string) => {
+      const me = await browser.get('/auth/office/me', { headers: { 'x-factory-company': company } })
+      return { sites: (me.body.sites as { code: string }[]).map((entry) => entry.code), allSites: me.body.allSites }
+    }
+    const everywhere = await signedInAs(wide.email, wide.password, undefined, 'beta')
+    expect(await sitesOf(everywhere, 'C1')).toEqual({ sites: ['N1', 'S1'], allSites: true })
+    expect(await sitesOf(everywhere, 'C2')).toEqual({ sites: ['O1'], allSites: true })
+    const limited = await signedInAs(narrow.email, narrow.password, undefined, 'beta')
+    expect(await sitesOf(limited, 'C1')).toEqual({ sites: ['S1'], allSites: false })
+    expect(await sitesOf(limited, 'C2')).toEqual({ sites: [], allSites: false })
+    // No company on the screen: no sites.
+    expect((await limited.get('/auth/office/me')).body).toMatchObject({ company: null, sites: [], allSites: false })
   })
 })
 

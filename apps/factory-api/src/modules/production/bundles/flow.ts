@@ -6,7 +6,9 @@ import type { Reader } from './store'
 /**
  * The flow of a split bundle (B-W2a-13; MES-071, MES-126): what B-W1-42's scan rules read for a bundle that was split,
  * split off another one, or sent back for rework (factory-domain production/bundles/split.ts `bundleFlow`). The ONE hook
- * the scans module calls (modules/production/scans scans.ts report, views.ts card): it hands the bundle's live garments
+ * the scans module calls (modules/production/scans scans.ts report and correction ask, corrections.ts approval (W2b,
+ * B-W2b-10: capped at a split parent's live garments), outside.ts, views.ts card; W2b's WIP reads the same flow in
+ * factory-domain production/scans/wip): it hands the bundle's live garments
  * and its standing scans as the cap reads them, and why no scan takes it now (every garment in an open rework).
  *
  * Reads as the caller (the floor at its own site; row-level security keeps it there): the bundle's parent and children,
@@ -46,16 +48,4 @@ export async function bundleFlowOf<S extends ScanFact>(db: Reader, bundle: FlowB
   }
   if (!row?.parentBundleId && children.length === 0 && reworks.length === 0) return { quantity: bundle.quantity, standing: new Map(standing), refusal: null }
   return bundleFlow({ bundle: { ...bundle, createdAt: row?.createdAt ?? new Date(0) }, operations, standing, children, reworks, parent })
-}
-
-/**
- * The work order's bundles with each parent's live garments (its quantity as cut less its ACTIVE children's): what the
- * WIP sums (modules/production/scans progress.ts, the one hook there), so a split counts its garments once.
- */
-export async function liveBundlesOf<B extends { readonly id: string; readonly quantity: number }>(db: Reader, workOrderId: string, bundles: B[]): Promise<B[]> {
-  const children = await db.bundle.findMany({ where: { workOrderId, parentBundleId: { not: null }, status: 'ACTIVE' }, select: { parentBundleId: true, quantity: true } })
-  if (children.length === 0) return bundles
-  const taken = new Map<string, number>()
-  for (const child of children) taken.set(child.parentBundleId!, (taken.get(child.parentBundleId!) ?? 0) + child.quantity)
-  return bundles.map((bundle) => (taken.has(bundle.id) ? { ...bundle, quantity: bundle.quantity - taken.get(bundle.id)! } : bundle))
 }

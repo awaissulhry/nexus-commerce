@@ -125,7 +125,9 @@ describe('reading the lists (PLT-116)', () => {
     expect(languages).toEqual(['ro'])
     expect(canManage).toBe(true)
     const [scrap, rework, hold, returns, adjustment, pause] = lists as Json[]
-    expect(scrap).toMatchObject({ source: 'SCRAP_REASON', fields: { icon: false, colour: false, languages: false, needsDetail: false }, active: 7, inactive: 0, standardMissing: [] })
+    // W2b (B-W2b-10; MES-125): the scan lists keep icon, colour, other languages and "needs detail" too; OTHER needs detail.
+    expect(scrap).toMatchObject({ source: 'SCRAP_REASON', fields: { icon: true, colour: true, languages: true, needsDetail: true }, active: 7, inactive: 0, standardMissing: [] })
+    expect(reasonIn(scrap!, 'OTHER')).toMatchObject({ needsDetail: true, icon: null, colour: null, labelI18n: {} })
     expect(reasonIn(scrap!, 'STAIN').usedCount).toBeGreaterThanOrEqual(1)
     expect(reasonIn(scrap!, 'TEAR').usedCount).toBe(0)
     expect(reasonIn(rework!, 'ALIGNMENT').usedCount).toBeGreaterThanOrEqual(1)
@@ -152,15 +154,17 @@ describe('keeping a list', () => {
     expect((await ok('keeper', 'POST', '/reasons/RETURN', body, 201, key)).reason.id).toBe(reason.id)
     expect(await admin(`SELECT action, after->>'code' AS code FROM "AuditLog" WHERE "recordId" = $1`, [reason.id])).toEqual([{ action: 'reasons.create', code: 'TOO_LATE' }])
     expect((await events(A.tenant, 'RETURN')).at(-1)).toEqual({ list: 'RETURN', change: 'CREATED', codes: ['TOO_LATE'] })
-    // Taken (active or not), not a code, not an offered icon or colour; a scan list keeps words only.
+    // Taken (active or not), not a code, not an offered icon or colour; W2b: a scan list keeps an icon, colour and words too.
     expect(await refused('keeper', 'POST', '/reasons/RETURN', { ...body, labelIt: 'Altro testo' }, 409)).toMatchObject({ code: 'conflict', issues: [{ path: 'body/code' }] })
     expect((await refused('keeper', 'POST', '/reasons/RETURN', { ...body, code: 'too late' }, 400)).issues).toEqual([expect.objectContaining({ path: 'body/code' })])
     expect((await refused('keeper', 'POST', '/reasons/RETURN', { ...body, code: 'ROCKET', icon: 'rocket', colour: '#000000' }, 400)).issues.map((issue: Json) => issue.path)).toEqual(['body/icon', 'body/colour'])
-    expect((await refused('keeper', 'POST', '/reasons/SCRAP', { code: 'BURN', labelIt: 'Bruciatura', labelEn: 'Burn', icon: 'flame' }, 400)).issues).toEqual([expect.objectContaining({ path: 'body/icon' })])
-    const burn = (await ok('keeper', 'POST', '/reasons/SCRAP', { code: 'BURN', labelIt: 'Bruciatura', labelEn: 'Burn' }, 201)).reason
-    expect(burn).toMatchObject({ list: 'SCRAP', code: 'BURN', sortOrder: 100, icon: null })
-    // The scans' own seam reads the same row: the operation screen offers it at once.
-    expect(await admin(`SELECT kind::text, code, "labelEn" FROM "ScrapReason" WHERE id = $1`, [burn.id])).toEqual([{ kind: 'SCRAP', code: 'BURN', labelEn: 'Burn' }])
+    expect((await refused('keeper', 'POST', '/reasons/SCRAP', { code: 'BURN', labelIt: 'Bruciatura', labelEn: 'Burn', icon: 'rocket' }, 400)).issues).toEqual([expect.objectContaining({ path: 'body/icon' })])
+    const burn = (await ok('keeper', 'POST', '/reasons/SCRAP', { code: 'BURN', labelIt: 'Bruciatura', labelEn: 'Burn', icon: 'flame', colour: '#EA580C', labelI18n: { ro: 'Arsură' }, needsDetail: true }, 201)).reason
+    expect(burn).toMatchObject({ list: 'SCRAP', code: 'BURN', sortOrder: 100, icon: 'flame', colour: '#ea580c', labelI18n: { ro: 'Arsură' }, needsDetail: true })
+    // The scans' own seam reads the same row: the operation screen offers it at once, with its look and words (MES-125).
+    expect(await admin(`SELECT kind::text, code, "labelEn", icon, colour, "labelI18n", "needsDetail" FROM "ScrapReason" WHERE id = $1`, [burn.id])).toEqual([{ kind: 'SCRAP', code: 'BURN', labelEn: 'Burn', icon: 'flame', colour: '#ea580c', labelI18n: { ro: 'Arsură' }, needsDetail: true }])
+    const tiles = (await ok('floor', 'GET', '/reasons?list=SCRAP')).reasons as Json[]
+    expect(tiles.find((tile) => tile.code === 'BURN')).toMatchObject({ list: 'SCRAP', labelIt: 'Bruciatura', labelEn: 'Burn', icon: 'flame', colour: '#ea580c', labelI18n: { ro: 'Arsură' }, needsDetail: true })
   })
 
   it('edits one cell at a time at the version read: a language merges, null takes it out, a stale version is refused', async () => {

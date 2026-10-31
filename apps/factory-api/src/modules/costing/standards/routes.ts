@@ -15,8 +15,9 @@ import { createStandard, discardStandard, freezeStandard, listStandards, prepare
 /**
  * Standard cost per item (B-W2a-21; FIN-024; design finance.costing "Standard cost per item"): the list and one standard
  * with how it was built; prepare DRAFTs for a period (a garment from its cost sheet, a material from its standard
- * purchase price), type one, correct or discard a DRAFT, freeze it (the one before it ends; receipts that waited for a
- * standard are valued and their work orders' completions posted). A repeated Idempotency-Key answers from its receipt.
+ * purchase price), type one, correct or discard a DRAFT, freeze it (the one before it ends; the finished item's moves that
+ * waited for a standard, receipts and restocked returns, are valued and the receipts' work orders' completions posted). A
+ * repeated Idempotency-Key answers from its receipt.
  */
 export default defineRoutes('costing.standards', manifest, async (app) => {
   app.get('/costing/standards', { schema: listStandardsContract }, async (request) => listStandards(request, request.query))

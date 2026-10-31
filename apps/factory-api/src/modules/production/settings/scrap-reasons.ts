@@ -6,19 +6,23 @@ import type { NewReasonRow, ReasonChange, ReasonRow, ReasonStore } from '../../.
  * The operation screen's scrap and rework reasons as a source of the ONE reason list editor (B-W2a-18; platform/reasons
  * sources.ts): the tenant's ScrapReason rows (W1, B-W1-42; seeded with factory-domain production/scans W1_SCAN_REASONS),
  * which the scans reference (OperationScanDefect: kind + code, Restrict). They keep Italian and English words, the tile
- * order and the active flag; no icon, colour, other language or "needs a note" column (factory-domain reasons/lists
- * fieldsOf: the editor holds those cells and the API refuses them in words). A code and its kind never change; a reason is
+ * order and the active flag, and since W2b (B-W2b-01's columns, B-W2b-10 turns them on; MES-125) the other floor
+ * languages, an icon, a colour and "needs a note", as ReasonCode keeps them. A code and its kind never change; a reason is
  * set inactive, never deleted (the …_production_scan_records_guards trigger). The scans keep reading them through their
  * own seam (modules/production/scans/reasons-store.ts); a code set inactive leaves the operation screen's tiles at once.
  *
- * Used: the scan lines that name a code (OperationScanDefect, SCRAP and REWORK) and the rework orders opened with it
- * (ReworkOrder.reasonCode, REWORK).
+ * Used: the scan lines that name a code (OperationScanDefect, SCRAP and REWORK), the rework orders opened with it
+ * (ReworkOrder.reasonCode, REWORK) and the subcontract receipt lines that kept it (REWORK).
  */
 
 type Client = Prisma.TransactionClient
 
-const SELECT = { id: true, kind: true, code: true, labelIt: true, labelEn: true, sortOrder: true, active: true, version: true, createdAt: true, updatedAt: true } as const
+const SELECT = { id: true, kind: true, code: true, labelIt: true, labelEn: true, labelI18n: true, icon: true, colour: true, needsDetail: true, sortOrder: true, active: true, version: true, createdAt: true, updatedAt: true } as const
 type Row = Prisma.ScrapReasonGetPayload<{ select: typeof SELECT }>
+
+/** The other languages' words as the row keeps them ({ "ro": "…" }; the database's guard keeps the shape). */
+const wordsOf = (value: Prisma.JsonValue): Record<string, string> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) : {}
 
 const rowOf = (row: Row): ReasonRow => ({
   id: row.id,
@@ -26,10 +30,10 @@ const rowOf = (row: Row): ReasonRow => ({
   code: row.code,
   labelIt: row.labelIt,
   labelEn: row.labelEn,
-  labelI18n: {},
-  icon: null,
-  colour: null,
-  needsDetail: false,
+  labelI18n: wordsOf(row.labelI18n),
+  icon: row.icon,
+  colour: row.colour,
+  needsDetail: row.needsDetail,
   sortOrder: row.sortOrder,
   active: row.active,
   version: row.version,
@@ -37,11 +41,15 @@ const rowOf = (row: Row): ReasonRow => ({
   updatedAt: row.updatedAt,
 })
 
-/** Only the columns ScrapReason has (the rules refused the others before this is called). */
+/** The columns a change names (W2b, B-W2b-10: the other languages, icon, colour and needs detail too). */
 function dataOf(change: ReasonChange): Prisma.ScrapReasonUpdateManyMutationInput {
   return {
     ...(change.labelIt === undefined ? {} : { labelIt: change.labelIt }),
     ...(change.labelEn === undefined ? {} : { labelEn: change.labelEn }),
+    ...(change.labelI18n === undefined ? {} : { labelI18n: change.labelI18n }),
+    ...(change.icon === undefined ? {} : { icon: change.icon }),
+    ...(change.colour === undefined ? {} : { colour: change.colour }),
+    ...(change.needsDetail === undefined ? {} : { needsDetail: change.needsDetail }),
     ...(change.active === undefined ? {} : { active: change.active }),
     ...(change.sortOrder === undefined ? {} : { sortOrder: change.sortOrder }),
   }
@@ -71,7 +79,7 @@ export const scrapReasonStore: ReasonStore = {
 
   async create(tx: Client, list, data: NewReasonRow) {
     const row = await tx.scrapReason.create({
-      data: { id: data.id, kind: list as ScanReasonList, code: data.code, labelIt: data.labelIt, labelEn: data.labelEn, sortOrder: data.sortOrder, createdAt: data.at, updatedAt: data.at, createdById: data.createdById },
+      data: { id: data.id, kind: list as ScanReasonList, code: data.code, labelIt: data.labelIt, labelEn: data.labelEn, labelI18n: data.labelI18n, icon: data.icon, colour: data.colour, needsDetail: data.needsDetail, sortOrder: data.sortOrder, createdAt: data.at, updatedAt: data.at, createdById: data.createdById },
       select: SELECT,
     })
     return rowOf(row)
@@ -94,6 +102,8 @@ export const scrapReasonStore: ReasonStore = {
     const kind = list as ScanReasonList
     for (const row of await client.operationScanDefect.groupBy({ by: ['reasonCode'], where: { kind }, _count: { _all: true } })) count(used, row.reasonCode, row._count._all)
     if (kind === 'REWORK') for (const row of await client.reworkOrder.groupBy({ by: ['reasonCode'], _count: { _all: true } })) count(used, row.reasonCode, row._count._all)
+    // W2b (B-W2b-10): the subcontract receipt lines that kept a REWORK code (pieces rejected or scrapped at the workshop).
+    if (kind === 'REWORK') for (const row of await client.subcontractReceiptLine.groupBy({ by: ['reasonCode'], where: { reasonCode: { not: null } }, _count: { _all: true } })) count(used, row.reasonCode!, row._count._all)
     return used
   },
 }

@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { permissionCheck } from '../../lib/session/session'
 import { OWNER_PERMISSIONS, SALES_PERMISSIONS } from '../design-data'
-import { firstOfficePage, OFFICE_NAV, OFFICE_PAGES, officeNavFor, PROFILE_PAGE } from '../nav/office-nav'
+import { firstOfficePage, isWindowPage, OFFICE_NAV, OFFICE_PAGES, officeNavFor, PROFILE_PAGE, WINDOW_PAGES } from '../nav/office-nav'
+import { rolePermissions } from '../design-data'
 
 /**
  * No dead landing: an office entry (`/w/<company>`, an area's own address, the brand link, a new session) opens the
@@ -62,5 +63,18 @@ describe('the built pages are the page files (a page added without its address, 
     expect(addresses.has('/')).toBe(true)
     for (const area of OFFICE_NAV.areas) expect(addresses.has(area.href), area.href).toBe(true)
     expect(existsSync(join(OFFICE_DIR, 'home', 'page.tsx'))).toBe(true)
+  })
+})
+
+describe('window pages (B-W2b-05: a page in its own window, opened from its row in a new tab)', () => {
+  it('are built office pages, and an office entry never lands on one (it has no rail to go on from)', () => {
+    for (const page of WINDOW_PAGES) expect(OFFICE_PAGES.has(page), page).toBe(true)
+    expect(isWindowPage('/planning/board?site=x')).toBe(true)
+    expect(isWindowPage('/planning/board/')).toBe(true)
+    expect(isWindowPage('/planning/mrp')).toBe(false)
+    const planner = officeNavFor(permissionCheck(rolePermissions('planner')))
+    expect(isWindowPage(firstOfficePage(planner, { areaId: 'planning' }))).toBe(false)
+    // Someone whose only Planning page is the board lands outside it.
+    expect(firstOfficePage(planner, { areaId: 'planning', built: new Set(['/planning/board', '/home/today']) })).toBe('/home/today')
   })
 })

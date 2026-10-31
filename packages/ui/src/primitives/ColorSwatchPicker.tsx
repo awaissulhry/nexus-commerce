@@ -3,6 +3,8 @@
 import { Check } from 'lucide-react'
 
 import { tagSwatches } from '../tokens/colors'
+import { labelFor, mergeLabels } from '../lib/labels'
+import { COLOR_SWATCH_PICKER_LABELS, type ColorSwatchPickerLabels } from './ColorSwatchPickerLabels'
 
 /**
  * ColorSwatchPicker — pick a colour from a FIXED palette, not from the whole spectrum.
@@ -28,6 +30,9 @@ export interface ColorSwatchPickerProps {
   ariaLabel?: string
   disabled?: boolean
   className?: string
+  /** Its words in the person's language (B-W2b-04): the group's name and each swatch's name. Default English;
+   *  `ariaLabel` wins. */
+  labels?: Partial<ColorSwatchPickerLabels>
 }
 
 /**
@@ -44,16 +49,18 @@ export const SWATCHES: ReadonlyArray<{ hex: string; name: string }> = tagSwatche
 export function ColorSwatchPicker({
   value,
   onChange,
-  ariaLabel = 'Colour',
+  ariaLabel,
   disabled,
   className,
+  labels,
 }: ColorSwatchPickerProps) {
+  const words = mergeLabels(COLOR_SWATCH_PICKER_LABELS, labels)
   return (
     // A radiogroup, not a row of buttons: this is one choice among several, and arrow keys
     // should move between the options the way they do in every other radio group.
     <div
       role="radiogroup"
-      aria-label={ariaLabel}
+      aria-label={ariaLabel === undefined ? words.group : ariaLabel}
       className={`nds-swatches${className ? ` ${className}` : ''}`}
     >
       {SWATCHES.map((s) => {
@@ -66,8 +73,8 @@ export function ColorSwatchPicker({
             aria-checked={selected}
             // The colour is not the accessible name. A screen reader announcing a raw hex value
             // has told the listener nothing they can act on.
-            aria-label={s.name}
-            title={s.name}
+            aria-label={labelFor(words.names, s.name, s.name)}
+            title={labelFor(words.names, s.name, s.name)}
             disabled={disabled}
             onClick={() => onChange(s.hex)}
             className={`nds-swatch${selected ? ' on' : ''}`}

@@ -10,6 +10,10 @@
  * there), or in a list, menu or slider (type-ahead) — so they never take a letter from someone typing. Esc stays the
  * Modal's: it closes the top dialog only.
  */
+import { DETAIL_MODAL_LABELS, type DetailModalLabels } from './DetailModalLabels'
+
+/** The words these rules write (B-W2b-04: `DetailModal`'s `labels`); English by default. */
+type DetailWords = Pick<DetailModalLabels, 'position' | 'previous' | 'next' | 'notInTable' | 'first' | 'last'>
 
 export interface DetailPosition {
   /** 0-based place of the current row in `ids`; -1 when it is not in the list. */
@@ -37,7 +41,7 @@ function placeOf(ids: readonly string[], place: DetailPlace = {}): { offset: num
   return { offset, total: Math.max(place.total ?? 0, offset + ids.length) }
 }
 
-export function detailPosition(ids: readonly string[], current: string | null | undefined, place?: DetailPlace): DetailPosition {
+export function detailPosition(ids: readonly string[], current: string | null | undefined, place?: DetailPlace, words: DetailWords = DETAIL_MODAL_LABELS): DetailPosition {
   const { offset, total } = placeOf(ids, place)
   const index = current == null ? -1 : ids.indexOf(current)
   if (index < 0) return { index: -1, total, prevId: null, nextId: null, words: null }
@@ -46,27 +50,28 @@ export function detailPosition(ids: readonly string[], current: string | null | 
     total,
     prevId: index > 0 ? ids[index - 1] : null,
     nextId: index < ids.length - 1 ? ids[index + 1] : null,
-    words: `${offset + index + 1} of ${total}`,
+    words: words.position(offset + index + 1, total),
   }
 }
 
 export type DetailDirection = 'prev' | 'next'
 
 /** The button's name: "Previous rule", "Next keyword". */
-export const detailNavLabel = (dir: DetailDirection, noun = 'row'): string => `${dir === 'prev' ? 'Previous' : 'Next'} ${noun}`
+export const detailNavLabel = (dir: DetailDirection, noun = 'row', words: DetailWords = DETAIL_MODAL_LABELS): string =>
+  dir === 'prev' ? words.previous(noun) : words.next(noun)
 
 /** Why Previous / Next is held, or null when it can go. At a page's end with more rows beyond: "… on this page". */
-export function detailNavHeld(pos: DetailPosition, noun = 'row', place?: DetailPlace): Record<DetailDirection, string | null> {
+export function detailNavHeld(pos: DetailPosition, noun = 'row', place?: DetailPlace, words: DetailWords = DETAIL_MODAL_LABELS): Record<DetailDirection, string | null> {
   if (pos.index < 0) {
-    const why = `This ${noun} is not in the table now`
+    const why = words.notInTable(noun)
     return { prev: why, next: why }
   }
   const offset = Math.max(0, Math.floor(place?.offset ?? 0))
   const moreBefore = offset > 0
   const moreAfter = offset + pos.index + 1 < pos.total
   return {
-    prev: pos.prevId == null ? `This is the first ${noun}${moreBefore ? ' on this page' : ''}` : null,
-    next: pos.nextId == null ? `This is the last ${noun}${moreAfter ? ' on this page' : ''}` : null,
+    prev: pos.prevId == null ? words.first(noun, moreBefore) : null,
+    next: pos.nextId == null ? words.last(noun, moreAfter) : null,
   }
 }
 

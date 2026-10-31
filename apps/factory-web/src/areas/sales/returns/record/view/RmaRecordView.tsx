@@ -476,6 +476,8 @@ function CreditTab({ model, actions }: { model: RmaModel; actions?: RmaActions }
   const replacementHeld = returnStep('makeReplacement', rma, can, model.offline)
   const credit = model.credit.value
   const creditHeld = !can.invoicesManage ? t('held.right.invoicesManage') : model.offline ? t('held.offline') : !credit ? t('quality:common.loading') : credit.toCredit.length === 0 ? t('credit.nothingToCredit') : null
+  // One edit path (lead decision, B-W2a-83): the credit note is made ONLY in Finance, in B-W2a-80's dialog over this return.
+  const creditHref = `${prefix}/finance/invoices?return=${encodeURIComponent(rma.id)}`
   return (
     <div className="fw-q-two">
       <Section
@@ -506,9 +508,15 @@ function CreditTab({ model, actions }: { model: RmaModel; actions?: RmaActions }
         sub={t('credit.notesSub')}
         actions={
           can.invoicesView ? (
-            <Button size="sm" heldReason={creditHeld} onClick={() => actions?.onDialog?.({ kind: 'credit' })}>
-              {t('credit.make')}
-            </Button>
+            creditHeld ? (
+              <Button size="sm" heldReason={creditHeld}>
+                {t('credit.makeInFinance')}
+              </Button>
+            ) : (
+              <Button size="sm" asChild>
+                <Link href={creditHref}>{t('credit.makeInFinance')}</Link>
+              </Button>
+            )
           ) : undefined
         }
       >

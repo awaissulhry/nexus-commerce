@@ -1,0 +1,14 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/gendocs.prisma (rules: src/ownership.ts; roles: src/roles.ts). The office (and the worker, in the tenant's system context, for a document a handler makes) writes a version of a generated document with its file through apps/factory-api's modules (W2b: B-W2b-14 claim letters, B-W2b-16 RMA sheets, B-W2b-19 packing lists), always through command(); the API keeps staff to the companies and sites their grants reach. The floor of the record's site reads the rows (its packing station prints the current packing list); the files keep their own audiences (files.prisma). Portal and link sessions read none. Append-only: the …_followups_stock_w2b_guards triggers refuse UPDATE, DELETE and TRUNCATE for every login, so no role updates or deletes. No money here. After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "GeneratedDocument": {
+      "about": "The office records each version of a document it generates for a record (a packing list, a claim letter, a job sheet, an RMA sheet) with its stored PDF. The floor of the record's site reads them. Nobody changes or removes one.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] },
+        "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
+      }
+    }
+  }
+}

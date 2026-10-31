@@ -128,3 +128,18 @@ export { heatKey, isHeatMarked, heatMax, heatAlpha, heatCellWords } from './heat
 // load. Each has an entry point of its own — `components/BottomBar`, `components/PdfViewer`, `components/QrCode`.
 // Factory gaps G11 G12 (2026-10-28) — the label preview (+ Code128) and the sign / accept block are NOT re-exported here
 // either, for the same reason: each has its own entry point — `components/LabelPreview`, `components/SignBlock`.
+// DS words in the person's language (B-W2b-04, 2026-10-31): each part's optional `labels` prop takes these words; the
+// constants are the English defaults (a part without `labels` renders exactly what it did before).
+export { MODAL_LABELS, type ModalLabels } from './ModalLabels'
+export { DATE_FIELD_LABELS, type DateFieldLabels } from './DateFieldLabels'
+export { DATE_TIME_FIELD_LABELS, type DateTimeFieldLabels } from './DateTimeFieldLabels'
+export { DATE_RANGE_PICKER_LABELS, type DateRangePickerLabels } from './DateRangePickerLabels'
+export { AS_OF_LABELS, type AsOfLabels } from './AsOfLabels'
+export { TIMELINE_LABELS, type TimelineLabels } from './TimelineLabels'
+export { COUNTDOWN_LABELS, countdownWords, type CountdownLabels } from './CountdownLabels'
+export { JOB_PROGRESS_LABELS, type JobProgressLabels } from './JobProgressLabels'
+export { FILE_DROPZONE_LABELS, type FileDropzoneLabels } from './FileDropzoneLabels'
+export { MEDIA_STRIP_LABELS, type MediaStripLabels } from './MediaStripLabels'
+export { COMBOBOX_LABELS, type ComboboxLabels } from './ComboboxLabels'
+export { CONFIRM_PHRASE_FIELD_LABELS, type ConfirmPhraseFieldLabels } from './ConfirmPhraseFieldLabels'
+export { ACTION_CONFIRM_LABELS, type ActionConfirmLabels } from './ActionConfirmLabels'

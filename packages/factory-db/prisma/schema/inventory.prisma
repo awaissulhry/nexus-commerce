@@ -38,6 +38,14 @@
 // Units (A1 §2.1, SCM-184, SCM-187): Decimal(18,4) with an explicit unit (enum Uom), never a float; each hide carries
 // its own measured area, and stock is the sum of the hides, never a count times an average. Physical rows carry their
 // site (and company), and every reference between them includes it, so a row can never point at another site's row.
+//
+// W2b (schema wave 1/7, B-W2b-01; the B-W2a-11, -31, -43, -44 and -48 notes): a move keeps the reason code it was made
+// for (write-off, adjustment, production scrap) as data instead of a note prefix; goods back from a customer, goods back
+// to a supplier and garments leaving with a shipment have reasons of their own (CUSTOMER_RETURN naming its return line,
+// SUPPLIER_RETURN, SHIPMENT naming its shipment line) instead of an ADJUSTMENT; a hide sent back to the tannery is
+// RETURNED; a SCRAPPED or RETURNED hide comes back to the state it had (previousState, kept by the database) once the move
+// that took it out is reversed; a posted receipt's supplier DDT number and date can be corrected, with when, who and why
+// (the …_followups_stock_w2b_guards triggers).
 
 /// A place on a site where stock lies (SCM-176): a warehouse, a zone, a bin, the goods-in dock, the quarantine shelf,
 /// a line-side supply point. A tree inside the site. Archived (never deleted) once used; an archived location takes no
@@ -77,6 +85,8 @@ model Location {
   // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
   party             Party?             @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   subcontractOrders SubcontractOrder[]
+  // W2b kits.prisma: the work-order kits staged here.
+  workOrderKits     WorkOrderKit[]
 
   @@unique([tenantId, siteId, code])
   // The target of the tenant- and site-safe references from the moves and the child locations.
@@ -114,9 +124,15 @@ model GoodsReceipt {
   supplierId        String             @db.Uuid
   /// The purchase order it receives against, delivered to this site; null for goods without an order.
   purchaseOrderId   String?            @db.Uuid
-  /// The supplier's transport document (DDT, DPR 472/1996) the goods came with.
+  /// The supplier's transport document (DDT, DPR 472/1996) the goods came with. W2b: still corrected once the receipt
+  /// is POSTED (a number typed wrong at the dock), with the correction below.
   supplierDdtNumber String?
   supplierDdtDate   DateTime?          @db.Date
+  /// W2b (B-W2a-31): the latest correction of the supplier's DDT number or date on a POSTED receipt: when, by whom and
+  /// why (all three or none; the command's audit row keeps every one). None while OPEN.
+  supplierDdtCorrectedAt      DateTime? @db.Timestamptz(3)
+  supplierDdtCorrectedById    String?   @db.Uuid
+  supplierDdtCorrectionReason String?
   receivedAt        DateTime           @db.Timestamptz(3)
   status            GoodsReceiptStatus @default(OPEN)
   note              String?
@@ -327,6 +343,10 @@ model Hide {
   /// Defects seen (holes, scars, brand marks) and where; its photos are its files.
   defects      String?
   state        HideState @default(FULL)
+  /// W2b (B-W2a-11, -44): the state it had before it became SCRAPPED or RETURNED, written by the database itself when it
+  /// moves there (the …_followups_stock_w2b_guards trigger) and cleared when it comes back to it; null otherwise (and on
+  /// a hide scrapped before W2b: it stays SCRAPPED).
+  previousState HideState?
   /// Set exactly while the hide is CONSUMED: the cut log entry after which nothing of it was left (the Hide done's
   /// entry, or the last cut when Hide done used nothing more). Reversing that entry, and only that one, opens the hide
   /// again (CONSUMED → PARTLY_CUT, this cleared): a wrong closing cut is corrected (B-W1-40's gap).
@@ -354,8 +374,10 @@ model Hide {
   @@unique([tenantId, siteId, lotId, id])
 }
 
-/// FULL → PARTLY_CUT | REMNANT | CONSUMED | SCRAPPED; between PARTLY_CUT and REMNANT freely; SCRAPPED is final, and so
-/// is CONSUMED but for one move: CONSUMED → PARTLY_CUT when its closing cut log entry is reversed.
+/// FULL → PARTLY_CUT | REMNANT | CONSUMED | SCRAPPED | RETURNED; between PARTLY_CUT and REMNANT freely; CONSUMED is
+/// final but for one move: CONSUMED → PARTLY_CUT when its closing cut log entry is reversed. W2b: SCRAPPED and RETURNED
+/// are final but for one move: back to the state it had (previousState) once the SCRAP (SUPPLIER_RETURN) move that took
+/// it out is reversed.
 enum HideState {
   FULL
   PARTLY_CUT
@@ -363,6 +385,8 @@ enum HideState {
   REMNANT
   CONSUMED
   SCRAPPED
+  /// W2b (B-W2a-44): sent back to the tannery (a SUPPLIER_RETURN move took it out).
+  RETURNED
 }
 
 /// One movement of stock (SCM-189): the append-only ledger of the site's stock. Never changed or removed (the
@@ -397,8 +421,20 @@ model StockMove {
   workOrderId    String?         @db.Uuid
   /// A human reference: the work order number, the count sheet, the supplier's DDT.
   reference      String?
-  /// Why; required for an ADJUSTMENT, a COUNT difference and a SCRAP (SCM-192).
+  /// Why; required for an ADJUSTMENT, a COUNT difference and a SCRAP (SCM-192), unless the reason code says it (W2b).
   note           String?
+  /// W2b (B-W2a-11, -18): the code of the reason list the move was made for, as text (records keep the code, never a
+  /// reference: reasons.prisma): WRITE_OFF for a write-off's SCRAP, ADJUSTMENT for an adjustment or a count, the scrap
+  /// list (ScrapReason) for production scrap, CLAIM for goods back to a supplier, RETURN for goods back from a customer.
+  /// Not blank and without spaces when set; the API checks it against the tenant's list.
+  reasonCode     String?
+  /// W2b (B-W2a-43): CUSTOMER_RETURN, exactly: the return line whose goods it puts into stock (a line of an RMA of the
+  /// move's company and site), and that line's customer (the reference's key: ReturnLine is keyed by its party).
+  returnPartyId  String?         @db.Uuid
+  returnLineId   String?         @db.Uuid
+  /// W2b (B-W2a-48): SHIPMENT, exactly: the shipment line (of the move's site and company) whose garments leave
+  /// finished-goods stock.
+  shipmentLineId String?         @db.Uuid
   /// The move this one reverses: the same move with its locations swapped. At most one reversal per move.
   reversalOfId   String?         @db.Uuid
   /// Unique in the tenant: the command's idempotency key, so a retried scan or request posts once.
@@ -434,16 +470,23 @@ model StockMove {
   // W2a claims.prisma, subcontract.prisma: the claim line it returned, the kit line it sent.
   claimLines   SupplierClaimLine[]
   kitLines     SubcontractKitLine[]
+  // W2b (B-W2b-01): the return line a CUSTOMER_RETURN puts into stock and the shipment line a SHIPMENT takes out
+  // (Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId and siteId).
+  returnLine   ReturnLine?       @relation(fields: [tenantId, returnPartyId, returnLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  shipmentLine ShipmentLine?     @relation(fields: [tenantId, siteId, shipmentLineId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, idempotencyKey])
   // The target of the reversals' and valuations' references: on the move's own site.
   @@unique([tenantId, siteId, id])
   // The balances: the moves of one stock key.
   @@index([tenantId, siteId, itemId, lotId, hideId])
+  // W2b: the moves of a return line and of a shipment line.
+  @@index([tenantId, returnLineId])
+  @@index([tenantId, shipmentLineId])
 }
 
-/// Why stock moved. Into the site's stock: OPENING, RECEIPT, RETURN, PRODUCTION_RECEIPT; out of it: ISSUE, SCRAP; inside
-/// it: TRANSFER; either way: ADJUSTMENT, COUNT.
+/// Why stock moved. Into the site's stock: OPENING, RECEIPT, RETURN, PRODUCTION_RECEIPT, CUSTOMER_RETURN; out of it:
+/// ISSUE, SCRAP, SUPPLIER_RETURN, SHIPMENT; inside it: TRANSFER; either way: ADJUSTMENT, COUNT.
 enum StockMoveReason {
   /// Stock the site held before the factory app (B-W1-35).
   OPENING
@@ -463,6 +506,14 @@ enum StockMoveReason {
   /// FINISHED item of their SKU, partial or whole; never more than the work order's cell makes (the …_production_w2a_guards
   /// trigger).
   PRODUCTION_RECEIPT
+  /// W2b (B-W2a-43): goods back from a customer put into stock by the return's decision (restock, second quality,
+  /// quarantine), naming the return line (StockMove.returnLineId).
+  CUSTOMER_RETURN
+  /// W2b (B-W2a-44): goods sent back to their supplier (a supplier claim's return; the claim line names the move).
+  SUPPLIER_RETURN
+  /// W2b (B-W2a-48): garments leaving finished-goods stock with a shipment, naming the shipment line
+  /// (StockMove.shipmentLineId).
+  SHIPMENT
 }
 
 /// The value of one move that changes the site's stock value (A1 §2.6: a cost, office only): its signed base quantity
