@@ -20,8 +20,14 @@ import type { MaterialPegging } from '../mrp/net'
  *                repair (the release check decides by itself)
  *
  * The worst material decides the word (in the order NOT_ENOUGH, DELAYED, REQUESTED, EXPECTED, NOT_BOOKED, RECEIVED).
- * A material is needed on its order line's date (the plan's netting date; backward scheduling of the start, B-W2a-34,
- * comes later). Quantities only: no money, no person.
+ * A material is needed on the work order's scheduled start when it is on the planning board (B-W2b-20: its first bar or
+ * part on the site's working plan), else on its order line's date (the plan's netting date). Quantities only: no money,
+ * no person.
+ *
+ * B-W2b-20 (design planning.board "material status per component with arrival dates"): each material also says the day
+ * it is needed (`neededOn`) and what arrives for it (`arrivals`): the purchase order lines it counts on (in time, or past
+ * their date and not received), the firm planned order (in time or late), and, when it is short, the purchase order lines
+ * of the material that arrive after the need (not counted).
  */
 
 export const READINESS_WORDS = ['NOT_ENOUGH', 'DELAYED', 'REQUESTED', 'EXPECTED', 'NOT_BOOKED', 'RECEIVED', 'NOT_PLANNED'] as const
@@ -74,6 +80,30 @@ export interface MaterialReadiness {
   /** The purchase order lines it counts on (numbers, dates). */
   readonly purchaseOrderLineIds: readonly string[]
   readonly reason: string
+  /** B-W2b-20: the first day it is needed for the work order (the scheduled start, else the order line's date). */
+  readonly neededOn: BusinessDate | null
+  /** B-W2b-20: what arrives for it, by date (see above). */
+  readonly arrivals: readonly MaterialArrival[]
+}
+
+export const ARRIVAL_STATES = ['IN_TIME', 'LATE', 'OVERDUE'] as const
+export type ArrivalState = (typeof ARRIVAL_STATES)[number]
+
+/**
+ * One arrival of a material for a work order (B-W2b-20). PURCHASE_ORDER: a purchase order line (`draft` while its order is
+ * a DRAFT): IN_TIME when it is counted for the need, OVERDUE when it was due before today and is not received, LATE when
+ * it arrives after the need (not counted: the material is short until then). FIRM: the firm planned order, IN_TIME or
+ * LATE (dated after the need).
+ */
+export interface MaterialArrival {
+  readonly kind: 'PURCHASE_ORDER' | 'FIRM'
+  readonly purchaseOrderLineId: string | null
+  readonly purchaseOrderNumber: string | null
+  readonly draft: boolean
+  readonly date: BusinessDate | null
+  /** For this work order (a LATE purchase line: what of it the material's plan does not count, every work order). */
+  readonly quantity: string
+  readonly state: ArrivalState
 }
 
 export interface WorkOrderReadiness {
@@ -127,6 +157,12 @@ function materialReadiness(material: ReadinessMaterial, coverages: MaterialPeggi
   let draftLine: string | null = null
   const days: BusinessDate[] = []
   const lines = new Set<string>()
+  // B-W2b-20: what arrives for it, per purchase order line (and the firm planned order).
+  const arrivals = new Map<string, { kind: 'PURCHASE_ORDER' | 'FIRM'; purchaseOrderLineId: string | null; purchaseOrderNumber: string | null; draft: boolean; date: BusinessDate | null; quantity: Decimal; state: ArrivalState }>()
+  const arrive = (key: string, entry: Omit<NonNullable<ReturnType<typeof arrivals.get>>, 'quantity'>, quantity: Decimal) => {
+    const found = arrivals.get(key)
+    arrivals.set(key, found ? { ...found, quantity: found.quantity.plus(quantity), date: later(found.date, entry.date), state: found.state === 'IN_TIME' ? entry.state : found.state } : { ...entry, quantity })
+  }
   for (const coverage of coverages) {
     sum.needed = sum.needed.plus(decimalOf(coverage.part.quantity))
     sum.issued = sum.issued.plus(decimalOf(coverage.part.issued))
@@ -137,6 +173,7 @@ function materialReadiness(material: ReadinessMaterial, coverages: MaterialPeggi
       else if (supply.kind === 'STOCK') sum.inStock = sum.inStock.plus(quantity)
       else if (supply.kind === 'PLANNED') sum.short = sum.short.plus(quantity)
       else if (supply.kind === 'FIRM') {
+        arrive('FIRM', { kind: 'FIRM', purchaseOrderLineId: null, purchaseOrderNumber: null, draft: false, date: supply.date ?? null, state: supply.late ? 'LATE' : 'IN_TIME' }, quantity)
         if (supply.late) {
           sum.firmLate = sum.firmLate.plus(quantity)
           firmLateDate = later(firmLateDate, supply.date ?? null)
@@ -144,6 +181,19 @@ function materialReadiness(material: ReadinessMaterial, coverages: MaterialPeggi
       } else if (supply.kind === 'PURCHASE_ORDER' && supply.purchaseOrderLineId) {
         lines.add(supply.purchaseOrderLineId)
         const facts = purchaseOf(supply.purchaseOrderLineId)
+        const arrivesOn = supply.date ?? facts?.dueDate ?? null
+        arrive(
+          supply.purchaseOrderLineId,
+          {
+            kind: 'PURCHASE_ORDER',
+            purchaseOrderLineId: supply.purchaseOrderLineId,
+            purchaseOrderNumber: facts?.purchaseOrderNumber ?? null,
+            draft: facts?.purchaseOrderStatus === DRAFT,
+            date: arrivesOn,
+            state: facts?.purchaseOrderStatus !== DRAFT && arrivesOn !== null && arrivesOn < today ? 'OVERDUE' : 'IN_TIME',
+          },
+          quantity,
+        )
         if (facts?.purchaseOrderStatus === DRAFT) {
           sum.draft = sum.draft.plus(quantity)
           draftLine ??= facts.purchaseOrderNumber
@@ -163,6 +213,16 @@ function materialReadiness(material: ReadinessMaterial, coverages: MaterialPeggi
   // A purchase line that arrives after the need (not counted) makes a short part "delayed", not "not enough".
   const tooLate = material.pegging.purchases.filter((purchase) => purchase.why === 'TOO_LATE' && decimalOf(purchase.notCounted).gt(0))
   const lateLine = tooLate[0] ?? null
+  if (sum.short.gt(0)) {
+    for (const purchase of tooLate) {
+      const facts = purchaseOf(purchase.line.purchaseOrderLineId)
+      arrive(
+        `late|${purchase.line.purchaseOrderLineId}`,
+        { kind: 'PURCHASE_ORDER', purchaseOrderLineId: purchase.line.purchaseOrderLineId, purchaseOrderNumber: purchase.line.purchaseOrderNumber, draft: facts?.purchaseOrderStatus === DRAFT, date: purchase.line.dueDate, state: 'LATE' },
+        decimalOf(purchase.notCounted),
+      )
+    }
+  }
   let word: MaterialReadiness['word']
   let date: BusinessDate | null = null
   let reason: string
@@ -212,5 +272,9 @@ function materialReadiness(material: ReadinessMaterial, coverages: MaterialPeggi
     short: q(sum.short),
     purchaseOrderLineIds: [...lines].sort(),
     reason,
+    neededOn: firstDay,
+    arrivals: [...arrivals.values()]
+      .sort((a, b) => (a.date ?? '9999-12-31').localeCompare(b.date ?? '9999-12-31') || (a.purchaseOrderNumber ?? '').localeCompare(b.purchaseOrderNumber ?? ''))
+      .map((entry) => ({ ...entry, quantity: q(entry.quantity) })),
   }
 }

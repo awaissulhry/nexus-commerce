@@ -1,9 +1,10 @@
 import { idempotencyKeyFrom } from '../../core/command'
 import { defineRoutes } from '../../core/manifest'
-import { archiveCalendar, createCalendar, editCalendar, getCalendar, listCalendars, loadHolidays, removeDays, setDays } from './calendars'
+import { archiveCalendar, copyDays, createCalendar, editCalendar, getCalendar, listCalendars, loadHolidays, removeDays, setDays, setDaysMany } from './calendars'
 import {
   archiveCalendarContract,
   archivePatternContract,
+  copyDaysContract,
   createCalendarContract,
   createPatternContract,
   editCalendarContract,
@@ -17,6 +18,7 @@ import {
   removeDaysContract,
   saveSegmentsContract,
   setDaysContract,
+  setDaysManyContract,
   supplierClosedDaysContract,
   supplierOrderByContract,
   workingMinutesContract,
@@ -36,11 +38,15 @@ import { nextWorkingDay, supplierClosedDays, supplierOrderBy, workingMinutes, wo
  *   POST  /calendars/:id/days                        a holiday, closure or working day from a date to a date
  *   POST  /calendars/:id/days/remove                 the days from a date to a date taken back
  *   POST  /calendars/:id/holidays                    a year of a public holiday list (IT) loaded
+ *   POST  /calendars/days                            B-W2b-20: one holiday, closure or working day on several calendars
+ *                                                    (or owners: one without a calendar gets one), in one command
+ *   POST  /calendars/:id/copy-days                   B-W2b-20: the days of another calendar (an archived one too) copied
  *   GET   /calendars/working-time                    days, working days and minutes of a company, site, line or workshop
  *   GET   /calendars/working-minutes                 working minutes between two times
  *   GET   /calendars/next-working-day                the next (or Nth, or previous) working day
  *   GET   /calendars/supplier-closed-days            a supplier's closed days
- *   GET   /calendars/supplier-order-by               need date − lead time across the supplier's closed days
+ *   GET   /calendars/supplier-order-by               need date − lead time across the supplier's closed days (B-W2b-20:
+ *                                                    with the supplier's time zone, its today and when the day ends there)
  *   GET   /shift-patterns, /shift-patterns/:id       the patterns with their shifts, breaks and minutes
  *   POST  /shift-patterns                            a pattern with its shifts and breaks
  *   PATCH /shift-patterns/:id                        name, description
@@ -50,6 +56,8 @@ import { nextWorkingDay, supplierClosedDays, supplierOrderBy, workingMinutes, wo
 export default defineRoutes('calendars', manifest, async (app) => {
   app.get('/calendars', { schema: listCalendarsContract }, async (request) => ({ calendars: await listCalendars(request, request.query) }))
   app.post('/calendars', { schema: createCalendarContract }, async (request, reply) => reply.code(201).send({ calendar: await createCalendar(request, request.body, idempotencyKeyFrom(request)) }))
+  // B-W2b-20: one closure on several calendars (registered before /calendars/:calendarId/...: a static path).
+  app.post('/calendars/days', { schema: setDaysManyContract }, async (request) => setDaysMany(request, request.body, idempotencyKeyFrom(request)))
 
   app.get('/calendars/working-time', { schema: workingTimeContract }, async (request) => workingTime(request, request.query))
   app.get('/calendars/working-minutes', { schema: workingMinutesContract }, async (request) => workingMinutes(request, request.query))
@@ -65,6 +73,7 @@ export default defineRoutes('calendars', manifest, async (app) => {
   app.post('/calendars/:calendarId/days', { schema: setDaysContract }, async (request) => setDays(request, request.params.calendarId, request.body, idempotencyKeyFrom(request)))
   app.post('/calendars/:calendarId/days/remove', { schema: removeDaysContract }, async (request) => removeDays(request, request.params.calendarId, request.body, idempotencyKeyFrom(request)))
   app.post('/calendars/:calendarId/holidays', { schema: loadHolidaysContract }, async (request) => loadHolidays(request, request.params.calendarId, request.body, idempotencyKeyFrom(request)))
+  app.post('/calendars/:calendarId/copy-days', { schema: copyDaysContract }, async (request) => copyDays(request, request.params.calendarId, request.body, idempotencyKeyFrom(request)))
 
   app.get('/shift-patterns', { schema: listPatternsContract }, async (request) => ({ patterns: await listPatterns(request, request.query) }))
   app.post('/shift-patterns', { schema: createPatternContract }, async (request, reply) => reply.code(201).send({ pattern: await createPattern(request, request.body, idempotencyKeyFrom(request)) }))

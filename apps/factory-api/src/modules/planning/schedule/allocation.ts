@@ -1,10 +1,11 @@
 import { plusDays } from '@nexus/factory-domain/calendars/dates'
-import { ConflictError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import { allocationProblems, mainPiecesOf, type Allocation } from '@nexus/factory-domain/planning/schedule/allocation'
 import { PLANNING_SCHEDULE_MANAGE } from '@nexus/factory-domain/planning/schedule/permissions'
+import { ScheduleRefusal } from '@nexus/factory-domain/planning/schedule/refusals'
 import { laneColumns, laneKey, laneOfSlot, type LaneRef } from '@nexus/factory-domain/planning/schedule/slots'
 import { MINUTE_MS } from '@nexus/factory-domain/planning/schedule/time'
 import { OPEN_STATUSES as SUBCONTRACT_OPEN } from '@nexus/factory-domain/purchasing/subcontracting/rules'
@@ -45,7 +46,19 @@ function cardsOf(world: ScheduleWorld, workOrder: BoardWorkOrder) {
   const parts = world.slots.filter((slot) => slot.workOrderId === workOrder.id && slot.workOrderOperationId === null && slot.workCentreId === null)
   const allocation: Allocation = { lineId: workOrder.lineId, parts: parts.map((slot) => ({ lane: laneOfSlot(slot) as { kind: 'LINE' | 'WORKSHOP'; id: string }, pieces: slot.pieces ?? workOrder.garments })) }
   const head = {
-    workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status, version: workOrder.version, dueDate: workOrder.dueDate, style: workOrder.style, garments: workOrder.garments, holdReason: workOrder.holdReason },
+    workOrder: {
+      id: workOrder.id,
+      number: workOrder.number,
+      status: workOrder.status,
+      version: workOrder.version,
+      dueDate: workOrder.dueDate,
+      style: workOrder.style,
+      // B-W2b-20: the style's family (design "Cards: order, style, pieces, minutes, due date, family") and the customer.
+      family: workOrder.family,
+      customer: workOrder.customers.length === 1 ? workOrder.customers[0]! : null,
+      garments: workOrder.garments,
+      holdReason: workOrder.holdReason,
+    },
     schedule: { status: schedule.status, words: schedule.words, latestSafeStart: schedule.latestSafeStart === null ? null : toUtcIso(new Date(schedule.latestSafeStart)) },
   }
   const main = mainPiecesOf(allocation, workOrder.garments)
@@ -118,13 +131,13 @@ export async function allocate(caller: CommandCaller, workOrderId: string, body:
     const plan = await lockedWorkingPlan(tx, target.site, context.tenantId, { actorId: context.actorId, now, bump: true })
     const row = await tx.workOrder.findUniqueOrThrow({ where: { id: target.id }, select: { version: true, status: true, number: true, lineId: true } })
     if (row.version !== body.version) throw new StaleVersionError('WorkOrder', target.id, row.version, body.version)
-    if (LOCKED.has(row.status)) throw new ConflictError(`${row.number} is ${row.status.toLowerCase()}: its allocation is kept as it was.`)
+    if (LOCKED.has(row.status)) throw new ScheduleRefusal('WORK_ORDER_LOCKED', `${row.number} is ${row.status.toLowerCase()}: its allocation is kept as it was.`)
     const { count } = await tx.workOrder.updateMany({ where: { id: target.id, version: row.version }, data: { version: row.version + 1 } })
     if (count !== 1) throw new StaleVersionError('WorkOrder', target.id, row.version + 1, body.version)
     const today = businessDate(now, target.site.timezone)
     const world = await scheduleWorld(tx, target.site, { from: today, to: plusDays(today, 1) }, now)
     const workOrder = world.workOrders.find((candidate) => candidate.id === target.id)
-    if (!workOrder) throw new ConflictError(`${row.number} is not open: it is not allocated.`)
+    if (!workOrder) throw new ScheduleRefusal('NOT_OPEN', `${row.number} is not open: it is not allocated.`)
     const problems = allocationProblems({ lineId: body.lineId, parts: body.parts }, workOrder.garments)
     if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
     if (body.lineId) await laneFacts(tx, target.site, { kind: 'LINE', id: body.lineId })
@@ -171,7 +184,7 @@ export async function allocate(caller: CommandCaller, workOrderId: string, body:
         }
       }
     }
-    if (audits.length === 0 && body.lineId === row.lineId) throw new ConflictError(`${row.number} is already allocated so.`)
+    if (audits.length === 0 && body.lineId === row.lineId) throw new ScheduleRefusal('ALREADY_ALLOCATED', `${row.number} is already allocated so.`)
     tools.audit({
       action: 'planning.schedule.allocate',
       recordType: 'WorkOrder',

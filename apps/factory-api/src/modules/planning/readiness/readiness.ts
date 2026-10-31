@@ -46,7 +46,10 @@ export async function readiness(caller: CommandCaller, query: { readonly siteId:
   })
 }
 
-const without = ({ workOrderId: _id, materials, ...rest }: WorkOrderReadiness) => ({ ...rest, materials: materials.map((material) => ({ ...material, purchaseOrderLineIds: [...material.purchaseOrderLineIds] })) })
+const without = ({ workOrderId: _id, materials, ...rest }: WorkOrderReadiness) => ({
+  ...rest,
+  materials: materials.map((material) => ({ ...material, purchaseOrderLineIds: [...material.purchaseOrderLineIds], arrivals: material.arrivals.map((arrival) => ({ ...arrival })) })),
+})
 
 export async function workOrderReadiness(caller: CommandCaller, workOrderId: string) {
   const context = officeContextOf(caller)

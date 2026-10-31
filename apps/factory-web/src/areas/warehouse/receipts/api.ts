@@ -175,6 +175,8 @@ export const receiptSchema = z.object({
   purchaseOrder: z.object({ id: z.string(), number: z.string(), status: z.enum(PURCHASE_ORDER_STATUSES), version: z.number() }).nullable(),
   supplierDdtNumber: z.string().nullable(),
   supplierDdtDate: z.string().nullable(),
+  /** B-W2b-14: the latest correction of the supplier DDT number/date on the posted receipt (when, who, why). */
+  supplierDdtCorrection: z.object({ at: z.string(), byId: z.string().nullable(), reason: z.string() }).nullable().default(null),
   receivedAt: z.string(),
   note: z.string().nullable(),
   location: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullable(),

@@ -3,6 +3,10 @@ import { businessDate, defineContract, id, input, instant, output } from '@nexus
 import { BUCKET_KINDS } from '@nexus/factory-domain/planning/settings/buckets'
 import { LANE_KINDS } from '@nexus/factory-domain/planning/capacity/load'
 
+/** B-W2b-20: where a lane's working time comes from (see `calendarState`). */
+export const CALENDAR_STATES = ['OWN', 'INHERITED', 'NONE'] as const
+export type CalendarState = (typeof CALENDAR_STATES)[number]
+
 /**
  * Capacity & load (B-W2a-16; PLN-115 capacity per line and work centre, PLN-116 load in standard minutes; design
  * planning.capacity, SCR-123, and the planning board's "Load per lane"): per lane (each ACTIVE line and work centre of a
@@ -60,6 +64,13 @@ export const capacityLaneView = output({
   pattern: output({ id: z.string(), code: z.string(), name: z.string(), source: z.enum(['CALENDAR', 'DEFAULT']) }),
   /** The ACTIVE calendars its days are read from, most specific first; empty: the planning default (no calendar). */
   calendars: z.array(output({ id: id(), scope: z.string(), name: z.string() })),
+  /**
+   * B-W2b-20: where its working time comes from — OWN: a calendar of the lane itself; INHERITED: its site's or company's
+   * calendar only; NONE: no calendar anywhere (the planning default week, Monday to Friday 08:00-17:00): "No working time
+   * set — set the calendar". A day with no working time on a lane that has a calendar is a closed day or a weekday its
+   * shift pattern does not cover (`closedDays`, `noShiftDays`), never NONE.
+   */
+  calendarState: z.enum(CALENDAR_STATES),
   /** A line: the work centres it does (its active stations'); null: every operation (no stations) or a work centre. */
   does: z.array(named).nullable(),
   cells: z.array(cellView),

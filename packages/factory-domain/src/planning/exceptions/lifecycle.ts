@@ -84,3 +84,14 @@ export function resolveProblems(row: { readonly status: ExceptionStatus }, note:
   if (text.length > RESOLVE_NOTE.max) return { conflict: null, issues: [{ path: 'body/note', message: `At most ${RESOLVE_NOTE.max} characters.` }] }
   return { conflict: null, issues: [] }
 }
+
+/**
+ * B-W2b-20 (design planning.exceptions "Age in working days"; B-W2a-22's gap): how many of the site's working days have
+ * passed since the exception was first seen — the working days after `first` up to and including `today` (0 on the day
+ * it was seen and over a weekend or a shutdown that follows it). `days`: the site's days over at least that span (the
+ * calendars service's `daysOf`), each with whether it is working.
+ */
+export function workingAgeOf(days: readonly { readonly date: string; readonly working: boolean }[], first: string, today: string): number {
+  if (today <= first) return 0
+  return days.filter((day) => day.working && day.date > first && day.date <= today).length
+}

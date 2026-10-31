@@ -555,3 +555,59 @@ export function requestProblem(error: unknown): Say {
   if (has(paths, 'identity')) return say('report.problem.identity')
   return kindSay(error)
 }
+
+// ---- B-W2b-14: the supplier's DDT number and date corrected on a posted receipt (Z1:02) --------------------------------------
+
+export const DDT_FIX_LIMITS = Object.freeze({ number: 60, reason: 500 })
+
+export interface DdtFixDraft {
+  ddtNumber: string
+  /** YYYY-MM-DD, or empty. */
+  ddtDate: string
+  reason: string
+}
+
+/** The draft starts from what the receipt names now. */
+export const ddtFixDraftOf = (receipt: Pick<Receipt, 'supplierDdtNumber' | 'supplierDdtDate'>): DdtFixDraft => ({ ddtNumber: receipt.supplierDdtNumber ?? '', ddtDate: receipt.supplierDdtDate ?? '', reason: '' })
+
+/** Why "Correct" is held on the Documents tab (null: it may open). */
+export function ddtFixOpenHeld(receipt: Pick<Receipt, 'status'>, can: ReceiptDailyCan): Say | null {
+  if (!can.receive) return say('held.noReceive')
+  if (receipt.status === 'OPEN') return say('ddtFix.held.open')
+  if (receipt.status !== 'POSTED') return say(`ddtFix.held.${receipt.status}`)
+  return null
+}
+
+/** Why its Save is held: a real change, a date not after today and with its number, a few words of why. */
+export function ddtFixHeld(draft: DdtFixDraft, receipt: Pick<Receipt, 'status' | 'supplierDdtNumber' | 'supplierDdtDate'>, can: ReceiptDailyCan, busy: boolean, today: string): Say | null {
+  const open = ddtFixOpenHeld(receipt, can)
+  if (open) return open
+  if (busy) return say('held.busy')
+  const number = draft.ddtNumber.trim()
+  const date = draft.ddtDate.trim()
+  if (number === (receipt.supplierDdtNumber ?? '') && date === (receipt.supplierDdtDate ?? '')) return say('ddtFix.held.same')
+  if (number.length > DDT_FIX_LIMITS.number) return say('ddtFix.held.number', { max: DDT_FIX_LIMITS.number })
+  if (date !== '' && !isBusinessDate(date)) return say('ddtFix.held.date')
+  if (date !== '' && date > today) return say('ddtFix.held.future')
+  if (date !== '' && number === '') return say('ddtFix.held.dateAlone')
+  if (draft.reason.trim().length < 3) return say('ddtFix.held.reason')
+  return null
+}
+
+export const ddtFixBody = (draft: DdtFixDraft, receipt: Pick<Receipt, 'version'>) => ({
+  version: receipt.version,
+  supplierDdtNumber: draft.ddtNumber.trim() === '' ? null : draft.ddtNumber.trim(),
+  supplierDdtDate: draft.ddtDate.trim() === '' ? null : draft.ddtDate.trim(),
+  reason: draft.reason.trim(),
+})
+
+/** A correction refused, in our words (by the path the API names). */
+export function ddtFixProblem(error: unknown): Say {
+  const paths = pathsOf(error)
+  if (isApiError(error) && error.code === 'invalid_state') return say('ddtFix.refused.state')
+  if (isApiError(error) && error.kind === 'conflict') return say('refused.moved')
+  if (has(paths, 'supplierDdtDate')) return say('ddtFix.held.future')
+  if (has(paths, 'supplierDdtNumber')) return say('ddtFix.held.same')
+  if (has(paths, 'reason')) return say('ddtFix.held.reason')
+  return kindSay(error)
+}

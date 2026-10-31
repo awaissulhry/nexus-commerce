@@ -43,6 +43,7 @@ import { LOCATION_STATUSES } from './locations/rules'
  * discrepancy recorded, changed, removed or settled (agreed, credited, closed) on a receipt, and
  * `inventory.receipt_discrepancies_reported` once per report sent to the supplier (the OPEN ones it names become SENT).
  * They reach the receipt's Discrepancies tab and the Receipts tiles (inventory.stock.view); never a price or a person.
+ * B-W2b-14: `inventory.receipt_ddt_corrected` once per correction of a posted receipt's supplier DDT number or date.
  *
  * Locations (B-W2b-23, modules/inventory/locations): `inventory.location_changed` once per location made (on its page or
  * from a sheet), renamed or given another kind, moved inside another, or archived. The search index follows it; it
@@ -376,5 +377,19 @@ export const events = [
       checked: z.boolean(),
     }),
     live: { permission: 'inventory.stock.view', fields: ['workOrderId', 'number', 'change', 'stagingLocationId', 'checked'] },
+  }),
+  // B-W2b-14: the supplier's DDT number or date corrected on a posted receipt (the receipt's audit row keeps every one).
+  defineEvent({
+    type: 'inventory.receipt_ddt_corrected',
+    context: 'inventory',
+    description: "The supplier's DDT number or date of a posted goods receipt was corrected, with why.",
+    payload: z.strictObject({
+      receiptId: z.uuid(),
+      number: z.string(),
+      /** What the receipt names now (the transport document's own number, not a person). */
+      supplierDdtNumber: z.string().nullable(),
+      supplierDdtDate: z.iso.date().nullable(),
+    }),
+    live: { permission: 'inventory.stock.view', fields: ['receiptId', 'number'] },
   }),
 ] as const

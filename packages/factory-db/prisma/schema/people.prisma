@@ -97,6 +97,11 @@ model Employee {
   overtimeEntries       OvertimeEntry[]
   timesheetApprovals    TimesheetApproval[]
   attendanceCorrections AttendanceCorrection[]
+  // W2b pay.prisma (wave 6/7): the person's receipts of rate publications, earnings, held scans and pay statements.
+  rateAcknowledgements  RateAcknowledgement[]
+  earningsEntries       EarningsEntry[]
+  heldScans             HeldScan[]
+  workerStatements      WorkerStatement[]
 
   @@unique([tenantId, employeeCode])
   @@unique([tenantId, userId])

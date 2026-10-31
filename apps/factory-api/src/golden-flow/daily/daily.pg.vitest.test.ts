@@ -1646,7 +1646,7 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     expect(mail, 'the reminder in the FAKE mailbox').toBeTruthy()
     expect(textOf(mail!.raw)).toContain('Vi preghiamo di confermare entro oggi.')
     expect(textOf(mail!.raw)).not.toMatch(/#token=/)
-    // The Owner's switch: no automatic reminder (purchasing/reminders/daily.ts automaticRemindersOn = OFF).
+    // The Owner's switch: no automatic reminder (B-W2b-14: PurchasingSettings, OFF until the owner turns it on).
     expect(await ok(P.buyer, 'GET', `/purchasing/orders/${order.id}/reminders`)).toMatchObject({ automatic: false, reminders: [{ revision: 1, automatic: false }] })
     G.poSendN.protectors = reminded.order
   })
@@ -1744,7 +1744,7 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     )
     expect(returned.claim).toMatchObject({ kind: 'RETURN', status: 'SENT', supplier: { id: bP2() }, foundAt: 'RECEIPT', returned: 2 })
     expect(returned.claim.lines).toHaveLength(2)
-    expect(returned.claim.lines.every((line: BJson) => line.move?.reason === 'ADJUSTMENT' && line.ddt?.id === returned.ddt.id && line.lot?.qualityStatus === 'QUARANTINE')).toBe(true)
+    expect(returned.claim.lines.every((line: BJson) => line.move?.reason === 'SUPPLIER_RETURN' && line.ddt?.id === returned.ddt.id && line.lot?.qualityStatus === 'QUARANTINE')).toBe(true)
     expect(returned.moveIds).toHaveLength(2)
     expect(returned.ddt).toMatchObject({ number: expect.stringMatching(/\/\d{4}$/), pdfProblem: null })
     expect(returned.claim.ddts).toEqual([expect.objectContaining({ id: returned.ddt.id, reason: 'RETURN', cancelled: false })])
