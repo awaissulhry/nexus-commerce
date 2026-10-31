@@ -24,6 +24,11 @@ model Role {
   audience    RoleAudience @default(OFFICE)
   /// A session holds none of this role's permissions until two-factor was proved on it.
   requireMfa  Boolean      @default(false)
+  /// W2b (B-W2b-03; B-W2a-36's grace): since when it asks for two-factor: a session made before this keeps the role
+  /// until its next sign-in. Kept by the database (the …_followups_platform_w2b_guards trigger): set when requireMfa is
+  /// switched on (the time given, else the transaction's), cleared when it is switched off, never moved while it stays
+  /// on. Null on a role that asked before W2b (no grace: the audit rows say when).
+  requireMfaSince DateTime? @db.Timestamptz(3)
   /// Declared `<area>.<action>` permissions (factory-domain auth/permissions), sorted; never a `money.*` one.
   permissions String[]     @default([])
   /// The money grains it sees: price, cost, margin, wages (factory-domain auth/grains).

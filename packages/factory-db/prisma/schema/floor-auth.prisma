@@ -44,6 +44,12 @@ model Device {
   batteryCharging  Boolean?
   queuedActions    Int?
   statusReportedAt DateTime?    @db.Timestamptz(3)
+  /// W2b (B-W2b-03; design admin.devices Status › Health "network"): how it was connected when it last reported its
+  /// state (the browser's own answer); null: not reported (many tablets' browsers do not say).
+  network          DeviceNetwork?
+  /// W2b (B-W2b-03; design "In use since 07:02", never who: Statuto art. 4): when its open floor session began; set
+  /// when a session opens on it and cleared when that session ends (with currentSessionId); null: not in use.
+  inUseSince       DateTime?    @db.Timestamptz(3)
   /// The open floor session, if any: the one operator signed in on it.
   currentSessionId String?      @db.Uuid
   revokedAt        DateTime?    @db.Timestamptz(3)
@@ -99,6 +105,15 @@ enum DeviceStatus {
   ACTIVE
   /// Lost or retired: its token opens nothing, its sessions ended. Final.
   REVOKED
+}
+
+/// How a device is connected, as its browser reports it (W2b; the Network Information API's type).
+enum DeviceNetwork {
+  WIFI
+  ETHERNET
+  CELLULAR
+  /// Another kind (bluetooth, wimax, mixed …).
+  OTHER
 }
 
 /// A one-time enrolment code for a device, shown as a QR code in the Office; the tablet trades it for its token. It
