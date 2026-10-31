@@ -4,6 +4,7 @@ import { ADMIN_PERMISSION } from '@nexus/factory-domain/auth/roles/roles'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { DomainError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { holds } from '@nexus/factory-domain/core/permissions'
+import { toUtcIso } from '@nexus/factory-domain/core/time'
 import {
   affectedHolders,
   strandsAdmins,
@@ -43,8 +44,8 @@ type Client = FactoryClient | CommandTx
 
 const officeContextOf = (request: FastifyRequest): OfficeContext => requireContext(request) as OfficeContext
 
-const ROLE_SELECT = { id: true, key: true, name: true, system: true, audience: true, requireMfa: true, grains: true, permissions: true, version: true } as const
-type RoleRow = { id: string; key: string; name: string; system: boolean; audience: 'OFFICE' | 'FLOOR'; requireMfa: boolean; grains: string[]; permissions: string[]; version: number }
+const ROLE_SELECT = { id: true, key: true, name: true, system: true, audience: true, requireMfa: true, requireMfaSince: true, grains: true, permissions: true, version: true } as const
+type RoleRow = { id: string; key: string; name: string; system: boolean; audience: 'OFFICE' | 'FLOOR'; requireMfa: boolean; requireMfaSince: Date | null; grains: string[]; permissions: string[]; version: number }
 
 const asRole = (row: RoleRow): TwoFactorRole => ({ id: row.id, key: row.key, system: row.system, audience: row.audience === 'FLOOR' ? 'floor' : 'office', requireMfa: row.requireMfa, grains: row.grains })
 
@@ -76,6 +77,8 @@ function viewOf(row: RoleRow, holders: readonly TwoFactorHolder[], options: { na
     name: row.name,
     system: row.system,
     requireMfa: row.requireMfa,
+    // B-W2b-24: since when it asks (the database keeps it on every write path; null: not asking, or from before W2b).
+    requireMfaSince: row.requireMfaSince ? toUtcIso(row.requireMfaSince) : null,
     lock: twoFactorLockOf(asRole(row)),
     templateAsks: row.system && templateOf(row.key)?.requireMfa === true,
     version: row.version,
@@ -122,8 +125,8 @@ interface Weighed {
   readonly holders: Map<string, TwoFactorHolder[]>
 }
 
-/** Reads the roles of a change and weighs it: every refusal, with its change's path. */
-async function weigh(client: Client, body: Pick<TwoFactorChangeBody, 'changes'>, actorId: string, now: Date): Promise<Weighed> {
+/** Reads the roles of a change and weighs it: every refusal, with its change's path (B-W2b-24: PATCH /auth/roles weighs a requireMfa change here too). */
+export async function weigh(client: Client, body: Pick<TwoFactorChangeBody, 'changes'>, actorId: string, now: Date): Promise<Weighed> {
   const ids = body.changes.map((change) => change.roleId)
   if (new Set(ids).size !== ids.length) throw new ValidationError('A role is named twice.', [{ path: 'body/changes', message: 'Name each role once.' }])
   const rows = (await client.role.findMany({ where: { id: { in: ids } }, select: ROLE_SELECT })) as RoleRow[]
@@ -174,7 +177,7 @@ export async function changeTwoFactor(auth: OfficeAuth, request: FastifyRequest,
     }
     for (const [index, change] of body.changes.entries()) {
       const row = weighed.rows[index]!
-      const { count } = await tx.role.updateMany({ where: { id: row.id, version: row.version }, data: { requireMfa: change.requireMfa, version: { increment: 1 } } })
+      const { count } = await tx.role.updateMany({ where: { id: row.id, version: row.version }, data: { requireMfa: change.requireMfa, requireMfaSince: change.requireMfa ? (row.requireMfa ? row.requireMfaSince : now) : null, version: { increment: 1 } } })
       if (count !== 1) throw new DomainError('conflict', 'This role changed meanwhile: read it again.', [{ path: `body/changes/${index}`, message: 'Read the role again.' }])
       audit({ recordType: 'Role', recordId: row.id, before: { requireMfa: row.requireMfa }, after: { requireMfa: change.requireMfa }, ...(body.reason ? { reason: body.reason } : {}) })
       emit({ type: 'security.two_factor_changed', subject: row.id, payload: { roleId: row.id, requireMfa: change.requireMfa } })

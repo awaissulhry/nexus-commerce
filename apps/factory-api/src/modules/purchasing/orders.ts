@@ -18,6 +18,7 @@ import { actorOf } from '../../core/context'
 import { serverClock } from '../../core/time'
 import { sendEmail } from '../../platform/email-out/outbound'
 import { allocateNumber } from '../../platform/numbering/allocate'
+import { typedNumber } from '../../platform/numbering/override'
 import { unorderRequirement } from '../planning/hooks'
 import { revokeConfirmLinks } from './confirm-links'
 import { lockOrderReceiving, receiptStopsCancel } from './receiving'
@@ -119,7 +120,7 @@ async function contactProblems(tools: CommandTools, partyId: string, contactId: 
  * PURCHASE_ORDER series, with the supplier's defaults (currency, payment terms, its first orders contact). Audited, and
  * purchase_order.created. The caller checked the permission and the supplier.
  */
-export async function insertDraft(tools: CommandTools, input: { readonly companyId: string; readonly siteId: string; readonly party: PartyRow; readonly header: DraftHeader; readonly source: 'OFFICE' | 'PLAN' }): Promise<{ id: string; number: string }> {
+export async function insertDraft(tools: CommandTools, input: { readonly companyId: string; readonly siteId: string; readonly party: PartyRow; readonly header: DraftHeader; readonly source: 'OFFICE' | 'PLAN'; readonly typedNumber?: { readonly number: string; readonly reason: string } | undefined }): Promise<{ id: string; number: string }> {
   const { tx, now } = tools
   const { party, header } = input
   const contactId =
@@ -127,7 +128,10 @@ export async function insertDraft(tools: CommandTools, input: { readonly company
       ? (ordersContactOf(await tx.partyContact.findMany({ where: { partyId: party.id }, select: CONTACT_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }))?.id ?? null)
       : header.contactId
   const id = newId()
-  const issued = await allocateNumber(tools, { companyId: input.companyId, kind: 'PURCHASE_ORDER' }, { type: 'PurchaseOrder', id })
+  // B-W2b-24 (PLT-125): a migrated open order keeps its old number (checked and audited there); else the series' next.
+  const issued = input.typedNumber
+    ? await typedNumber(tools, { companyId: input.companyId, kind: 'PURCHASE_ORDER' }, { type: 'PurchaseOrder', id }, input.typedNumber)
+    : await allocateNumber(tools, { companyId: input.companyId, kind: 'PURCHASE_ORDER' }, { type: 'PurchaseOrder', id })
   const currency = header.currency ?? party.currency
   const data = {
     id,
@@ -164,6 +168,8 @@ export interface CreateOrderInput extends DraftHeader {
   readonly companyId: string
   readonly siteId: string
   readonly partyId: string
+  /** B-W2b-24: a migrated open order's old number and why (numbering.override). */
+  readonly typedNumber?: { readonly number: string; readonly reason: string } | undefined
 }
 
 /** purchasing.manage over the company, site and supplier: a new DRAFT order (lines come next). */
@@ -182,7 +188,8 @@ export async function createOrder(caller: CommandCaller, body: CreateOrderInput,
     if (body.currency !== undefined && !isCurrencyCode(body.currency)) issues.push({ path: 'body/currency', message: 'Expected an ISO 4217 currency code.' })
     if (body.requestedDate && body.requestedDate < businessDate(now)) issues.push({ path: 'body/requestedDate', message: 'The delivery date asked for is today or later.' })
     if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
-    const { id } = await insertDraft(tools, { companyId: body.companyId, siteId: site.id, party, header: body, source: 'OFFICE' })
+    const { typedNumber: typed, ...header } = body
+    const { id } = await insertDraft(tools, { companyId: body.companyId, siteId: site.id, party, header, source: 'OFFICE', typedNumber: typed })
     return detailInCommand(tools, id)
   })
   return result

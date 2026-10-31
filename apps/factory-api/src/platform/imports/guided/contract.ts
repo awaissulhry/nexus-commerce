@@ -35,7 +35,14 @@ export const firstLoadStepView = output({
   matches: z.boolean().nullable(),
   differences: z.array(issue),
   /** A person's "Done": when, by whom, whether it was "nothing to load", and whether the step still matches now. */
-  done: output({ at: instant(), byId: id().nullable(), nothing: z.boolean(), stillMatches: z.boolean().nullable() }).nullable(),
+  done: output({
+    at: instant(),
+    byId: id().nullable(),
+    nothing: z.boolean(),
+    /** B-W2b-24: why there was nothing to load (the step's row keeps it); null when an import was matched. */
+    reason: z.string().nullable(),
+    stillMatches: z.boolean().nullable(),
+  }).nullable(),
   /** The reader may import this step's sheet (the importer's permission and imports.run). */
   canImport: z.boolean(),
   /** The reader may mark it done (imports.apply and the importer's permission). */
@@ -56,6 +63,7 @@ export const markDoneContract = defineContract({
     jobId: id().optional(),
     /** Nothing to load for this step (no import). */
     nothing: z.boolean().optional(),
+    /** B-W2b-24: required with `nothing` (3 to 500 characters: why there was nothing to load; the step's row keeps it). */
     reason: z.string().trim().max(500).optional(),
   }),
   response: { 200: output({ companyId: id(), steps: z.array(firstLoadStepView), complete: z.boolean() }) },

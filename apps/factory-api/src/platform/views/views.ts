@@ -5,6 +5,8 @@ import { holds } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { VIEWS_EXPORT, VIEWS_MANAGE, VIEWS_SAVE } from '@nexus/factory-domain/views/permissions'
 import { changeRefusal, menuOrder, roleDefaultFor, sharingProblems, viewSeenBy, type ViewAudience, type ViewReader, type ViewSharing } from '@nexus/factory-domain/views/rules'
+// B-W2b-24 (Z12:07): my default view of a list (./defaults: mark and unmark).
+import { personalDefaultFor } from '@nexus/factory-domain/views/defaults/rules'
 import { normaliseState, VIEW_LIMITS, viewStateSchema, type ViewState } from '@nexus/factory-domain/views/state'
 import { command, type CommandCaller, type CommandTx } from '../../core/command'
 import { actorOf, type OfficeContext } from '../../core/context'
@@ -26,7 +28,7 @@ import type { CreateViewBody, SavedViewView, UpdateViewBody } from './contract'
 
 type Client = FactoryClient | CommandTx
 
-const VIEW = {
+export const VIEW = {
   id: true,
   listKey: true,
   name: true,
@@ -34,6 +36,7 @@ const VIEW = {
   audience: true,
   roleId: true,
   roleDefault: true,
+  isPersonalDefault: true,
   companyId: true,
   state: true,
   version: true,
@@ -42,9 +45,9 @@ const VIEW = {
   owner: { select: { displayName: true } },
   role: { select: { name: true } },
 } as const satisfies Prisma.SavedViewSelect
-type ViewRow = Prisma.SavedViewGetPayload<{ select: typeof VIEW }>
+export type ViewRow = Prisma.SavedViewGetPayload<{ select: typeof VIEW }>
 
-function officeOf(caller: CommandCaller): OfficeContext {
+export function officeOf(caller: CommandCaller): OfficeContext {
   const context = caller.factoryContext
   if (!context) throw new ApiError('unauthenticated')
   if (context.audience !== 'office') throw new ApiError('forbidden')
@@ -77,7 +80,7 @@ const stateOf = (value: Prisma.JsonValue): ViewState => {
   return parsed.success ? parsed.data : { query: '' }
 }
 
-function viewOf(row: ViewRow, reader: ViewReader): SavedViewView {
+export function viewOf(row: ViewRow, reader: ViewReader): SavedViewView {
   return {
     id: row.id,
     listKey: row.listKey,
@@ -89,6 +92,7 @@ function viewOf(row: ViewRow, reader: ViewReader): SavedViewView {
     roleId: row.roleId,
     roleName: row.role?.name ?? null,
     roleDefault: row.roleDefault,
+    personalDefault: row.isPersonalDefault && row.ownerId === reader.userId,
     companyId: row.companyId,
     state: stateOf(row.state),
     changeHeld: changeRefusal({ ownerId: row.ownerId, audience: row.audience as ViewAudience, roleId: row.roleId, roleDefault: row.roleDefault }, reader),
@@ -122,6 +126,7 @@ export async function listViews(caller: CommandCaller, listKey: string) {
     return {
       views: ordered.map((row) => viewOf(row, reader)),
       roleDefaultId: roleDefaultFor(facts, reader)?.id ?? null,
+      personalDefaultId: personalDefaultFor(facts, reader)?.id ?? null,
       roles: [...reader.roles],
       allRoles,
       can: { save: reader.save, manage: reader.manage, export: reader.export },
@@ -131,7 +136,7 @@ export async function listViews(caller: CommandCaller, listKey: string) {
 }
 
 /** A view the reader sees (else one 404, whoever's it is). */
-async function readVisible(client: Client, viewId: string, reader: ViewReader): Promise<ViewRow> {
+export async function readVisible(client: Client, viewId: string, reader: ViewReader): Promise<ViewRow> {
   const row = await client.savedView.findUnique({ where: { id: viewId }, select: VIEW })
   if (!row || !viewSeenBy({ ownerId: row.ownerId, audience: row.audience as ViewAudience, roleId: row.roleId, roleDefault: row.roleDefault }, reader)) throw new NotFoundError('View not found.')
   return row
@@ -147,7 +152,7 @@ export async function getView(caller: CommandCaller, viewId: string): Promise<{ 
 }
 
 const isUniqueViolation = (error: unknown): boolean => (error as { code?: unknown } | null)?.code === 'P2002'
-const audited = (row: { listKey: string; name: string; audience: string; roleId: string | null; roleDefault: boolean; state: Prisma.JsonValue }) => ({
+export const audited = (row: { listKey: string; name: string; audience: string; roleId: string | null; roleDefault: boolean; state: Prisma.JsonValue }) => ({
   listKey: row.listKey,
   name: row.name,
   audience: row.audience,

@@ -393,6 +393,8 @@ describe('the guided first load', () => {
     expect(differenceWords({ reconciliation: null, differences: [{ path: 'step/other', message: 'An API sentence.' }] }, money)).toEqual([{ said: 'An API sentence.' }])
     expect(doneWords(firstStep('first-done', 'materials'), () => 'then')).toEqual({ key: 'imp.first.done.changed', params: { when: 'then' } })
     expect(doneWords(firstStep('first-done', 'openOrders'), () => 'then')).toEqual({ key: 'imp.first.done.nothing', params: { when: 'then' } })
+    // B-W2b-24: with the reason the step's row keeps.
+    expect(doneWords(firstStep('first-done-reason', 'openOrders'), () => 'then')).toEqual({ key: 'imp.first.done.nothingWhy', params: { when: 'then', reason: 'No open orders before the go-live (made-up example).' } })
     expect(reasonProblem('ok')).toBe('imp.first.confirm.reasonShort')
     expect(reasonProblem('No orders before the go-live.')).toBeNull()
   })

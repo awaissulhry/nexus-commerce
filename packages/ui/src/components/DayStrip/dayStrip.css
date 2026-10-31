@@ -1,0 +1,209 @@
+/*
+ * DS — DayStrip (B-W2b-28). Fills are non-text marks against `--nds-surface-sunken` (the work span in `--nds-primary`,
+ * overtime `--nds-warning`, absence `--nds-info` on its tint, overlays in their tone's fill); every kind also differs by
+ * pattern or shape (breaks hatched, the shift an outline, idle dashed, events a mark, anomalies a warning icon), and the
+ * key names each one. Words: `--nds-text` / `--nds-text-2`. Sizes read `--nds-density-*`.
+ */
+.nds-daystrip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  margin: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-body);
+}
+.nds-daystrip-caption {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-daystrip-visual {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  padding-inline: var(--nds-space-8);
+  overflow: hidden;
+  container: nds-daystrip / inline-size;
+}
+.nds-daystrip-bar,
+.nds-daystrip-overlay-row {
+  position: relative;
+  height: calc(var(--nds-density-font-body) * 2.2);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-sunken);
+}
+.nds-daystrip-overlay-row {
+  height: calc(var(--nds-density-font-body) * 1.1);
+}
+.nds-daystrip-shift {
+  position: absolute;
+  inset-block: 0;
+  border: 2px dashed var(--nds-text-2);
+  border-radius: var(--nds-radius-sm);
+}
+.nds-daystrip-seg {
+  position: absolute;
+  inset-block: 22%;
+  border-radius: var(--nds-radius-xs);
+}
+.nds-daystrip-seg[data-kind='work'],
+.nds-daystrip-swatch[data-kind='work'] {
+  background: var(--nds-primary);
+}
+.nds-daystrip-seg[data-kind='overtime'],
+.nds-daystrip-swatch[data-kind='overtime'] {
+  background: repeating-linear-gradient(45deg, var(--nds-warning) 0 4px, var(--nds-primary) 4px 8px);
+}
+.nds-daystrip-seg[data-kind='break'],
+.nds-daystrip-swatch[data-kind='break'] {
+  background: repeating-linear-gradient(135deg, var(--nds-text-2) 0 2px, transparent 2px 6px);
+  box-shadow: inset 0 0 0 1px var(--nds-text-2);
+}
+.nds-daystrip-seg[data-kind='absence'],
+.nds-daystrip-swatch[data-kind='absence'] {
+  background: var(--nds-info-soft);
+  box-shadow: inset 0 0 0 2px var(--nds-info);
+}
+.nds-daystrip-seg[data-kind='idle'],
+.nds-daystrip-swatch[data-kind='idle'] {
+  background: transparent;
+  outline: 2px dashed var(--nds-text-2);
+  outline-offset: -2px;
+}
+.nds-daystrip-swatch[data-kind='shift'] {
+  border: 2px dashed var(--nds-text-2);
+}
+.nds-daystrip-event {
+  position: absolute;
+  inset-block: 0;
+  width: 0;
+  border-inline-start: 2px solid var(--nds-text);
+  transform: translateX(-1px);
+}
+.nds-daystrip-event::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -5px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-text);
+}
+.nds-daystrip-event[data-kind='auto-out']::after,
+.nds-daystrip-event[data-kind='manual']::after,
+.nds-daystrip-event[data-flagged='true']::after {
+  border-radius: 0;
+  transform: rotate(45deg);
+  background: var(--nds-warning);
+  box-shadow: 0 0 0 1px var(--nds-text);
+}
+.nds-daystrip-anomaly {
+  position: absolute;
+  top: 50%;
+  display: inline-flex;
+  width: calc(var(--nds-density-font-body) * 1.4);
+  height: calc(var(--nds-density-font-body) * 1.4);
+  padding: 2px;
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+  box-shadow: 0 0 0 1px var(--nds-warning);
+  transform: translate(-50%, -50%);
+}
+.nds-daystrip-anomaly[data-untimed='true'] {
+  right: 0;
+  transform: translate(0, -50%);
+}
+.nds-daystrip-anomaly > svg {
+  width: 100%;
+  height: 100%;
+}
+.nds-daystrip-overlay {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+}
+.nds-daystrip-overlay-name {
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-daystrip-ospan {
+  position: absolute;
+  inset-block: 15%;
+  border-radius: var(--nds-radius-xs);
+  background: var(--nds-text-2);
+}
+.nds-daystrip-ospan[data-tone='success'] {
+  background: var(--nds-success);
+}
+.nds-daystrip-ospan[data-tone='warning'] {
+  background: var(--nds-warning);
+}
+.nds-daystrip-ospan[data-tone='danger'] {
+  background: var(--nds-danger);
+}
+.nds-daystrip-ospan[data-tone='info'] {
+  background: var(--nds-info);
+}
+.nds-daystrip-axis {
+  position: relative;
+  height: calc(var(--nds-density-font-label) * 1.5);
+}
+.nds-daystrip-tick {
+  position: absolute;
+  top: 0;
+  font-size: var(--nds-density-font-label);
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-2);
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.nds-daystrip-tick[data-edge='start'] {
+  transform: none;
+}
+.nds-daystrip-tick[data-edge='end'] {
+  transform: translateX(-100%);
+}
+/* A narrow strip: every other hour keeps its words. */
+@container nds-daystrip (max-width: 30rem) {
+  .nds-daystrip-tick[data-odd='true'] {
+    visibility: hidden;
+  }
+}
+.nds-daystrip-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-4) var(--nds-space-14);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-density-font-label);
+  color: var(--nds-text-2);
+}
+.nds-daystrip-legend > li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.nds-daystrip-swatch {
+  display: inline-block;
+  width: 1.4em;
+  height: 0.9em;
+  border-radius: var(--nds-radius-xs);
+}
+.nds-daystrip-legend-icon {
+  width: 1.1em;
+  height: 1.1em;
+  color: var(--nds-warning-text);
+}
+.nds-daystrip-text {
+  font-size: var(--nds-density-font-label);
+}
+.nds-daystrip-text-title {
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-daystrip-text > ol {
+  margin: var(--nds-space-4) 0 0;
+  padding-inline-start: var(--nds-space-20);
+}

@@ -4,12 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { getLibrary, type Library } from './api'
-import { libraryAddressOf, libraryHref, readLastOpened, readProblem, reportHref, reportsCanOf, type LibraryAddress } from './model'
+import { libraryAddressOf, libraryHref, readProblem, reportHref, reportsCanOf, type LibraryAddress } from './model'
 import { LibraryView } from './view/LibraryView'
 
 /**
  * `/w/<company>/home/reports?q=&area=&outside=1` (SCR-104, the library): reads the pack once (GET /reports: every report
- * with what the person may do with it) and keeps the search and the chips in the address. Without home.reports.view the
+ * with what the person may do with it, and when they last ran it: B-W2b-24) and keeps the search and the chips in the address. Without home.reports.view the
  * page says so and asks the API nothing.
  */
 export function ReportsPage() {
@@ -34,7 +34,6 @@ export function ReportsPage() {
     setAddress(fromUrl)
   }, [params])
   const [library, setLibrary] = useState<{ value: Library | null; problem: string | null }>({ value: null, problem: null })
-  const [lastOpened, setLastOpened] = useState<Record<string, string>>({})
 
   const load = useCallback(async () => {
     if (!can.view) return
@@ -47,12 +46,11 @@ export function ReportsPage() {
 
   useEffect(() => {
     void load()
-    setLastOpened(readLastOpened(typeof window === 'undefined' ? null : safeStorage()))
   }, [load])
 
   return (
     <LibraryView
-      model={{ can, prefix, address, library, lastOpened }}
+      model={{ can, prefix, address, library }}
       actions={{
         onAddress: (next: LibraryAddress) => {
           setAddress(next)
@@ -64,13 +62,4 @@ export function ReportsPage() {
       }}
     />
   )
-}
-
-/** localStorage, or null where the browser refuses it (a private window). */
-export function safeStorage(): Storage | null {
-  try {
-    return window.localStorage
-  } catch {
-    return null
-  }
 }

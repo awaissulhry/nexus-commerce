@@ -14,7 +14,7 @@ import { OFFICE_NAV, OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { NUMBER_UNITS, TARGET_WORDS } from '../today/numbers/api'
 import { OWNER_NUMBERS } from '../today/numbers/demo'
 import { numberHref, numbersOfLens, problemKey, targetText, valueText } from '../today/numbers/model'
-import { COLUMN_KINDS, FILTER_KINDS, GRAINS, LIBRARY_STATES, REPORT_AREAS, REPORT_FORMATS } from './api'
+import { COLUMN_KINDS, FILTER_KINDS, GRAINS, LIBRARY_STATES, librarySchema, REPORT_AREAS, REPORT_FORMATS } from './api'
 import { DAILY, OPEN_ORDERS, OWNER_LIBRARY, PLANNER_LIBRARY } from './demo/fixtures'
 import { designScreen as libraryScreen } from './fixtures'
 import {
@@ -26,10 +26,8 @@ import {
   libraryAddressOf,
   libraryHref,
   libraryRows,
-  markOpened,
   outsideCount,
   printHref,
-  readLastOpened,
   readProblem,
   reportAddressOf,
   reportHref,
@@ -106,23 +104,16 @@ describe('the library (design home.reports library)', () => {
     expect(libraryRows(OWNER_LIBRARY.reports, { q: '', area: 'production', outside: false }, words).map((report) => report.key)).toEqual(['production.daily', 'production.scrap-by-reason', 'production.wip-by-stage'])
   })
 
-  it('remembers "last opened by me" in this browser, and survives a browser that refuses storage', () => {
-    const store = new Map<string, string>()
-    const storage = { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => void store.set(key, value) }
-    markOpened(storage, 'sales.late-orders', '2026-10-30T08:00:00.000Z')
-    markOpened(storage, 'production.daily', '2026-10-30T09:00:00.000Z')
-    expect(readLastOpened(storage)).toEqual({ 'sales.late-orders': '2026-10-30T08:00:00.000Z', 'production.daily': '2026-10-30T09:00:00.000Z' })
-    const refusing = {
-      getItem: () => {
-        throw new Error('denied')
-      },
-      setItem: () => {
-        throw new Error('denied')
-      },
-    }
-    expect(() => markOpened(refusing, 'x', 'y')).not.toThrow()
-    expect(readLastOpened(refusing)).toEqual({})
-    expect(readLastOpened(null)).toEqual({})
+  it('says when I last ran each report from the server’s run log (B-W2b-24), "Not yet" for one I never ran', () => {
+    const answer = librarySchema.parse(OWNER_LIBRARY)
+    expect(answer.reports.find((report) => report.key === 'sales.late-orders')?.lastRunByMe).toBe('2026-10-29T15:10:00.000Z')
+    expect(answer.reports.find((report) => report.key === 'sales.orders-in')?.lastRunByMe).toBeNull()
+    expect(PLANNER_LIBRARY.reports.every((report) => report.lastRunByMe === null)).toBe(true)
+    // The answer always says it (null for never): an answer without it is not this API's.
+    const { lastRunByMe: _dropped, ...without } = OWNER_LIBRARY.reports[0]!
+    expect(librarySchema.safeParse({ ...OWNER_LIBRARY, reports: [without] }).success).toBe(false)
+    expect(en('library.col.last')).toBe('Last run by me')
+    expect(it_('library.never')).toBe('Non ancora')
   })
 })
 

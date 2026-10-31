@@ -1,0 +1,44 @@
+{
+  "line": {
+    "label": "Numero",
+    "loading": "lettura del prossimo numero…",
+    "failed": "non è stato possibile leggere il prossimo numero; il documento lo riceve comunque al salvataggio.",
+    "preview": "{number} — il prossimo della sua serie, assegnato al salvataggio (non riservato).",
+    "newPeriod": "{number} — il primo del {year}, assegnato al salvataggio (non riservato).",
+    "typed": "{number} — il numero che aveva nel vecchio sistema ({reason}).",
+    "typeOne": "Digita un numero per un documento migrato…",
+    "useSeries": "Usa il numero della serie",
+    "held": {
+      "noSeries": "non c'è ancora una serie di numerazione per questo tipo di documento: la imposta un amministratore in Sistema › Documenti e numerazioni.",
+      "several": "questa società tiene più serie di questo tipo: il numero viene da quella indicata dal documento.",
+      "closed": "la sua serie di numerazione è chiusa: un amministratore ne apre una nuova in Sistema › Documenti e numerazioni.",
+      "exhausted": "la sua serie di numerazione ha dato l'ultimo numero: un amministratore ne apre una nuova in Sistema › Documenti e numerazioni."
+    }
+  },
+  "override": {
+    "title": "Digita un numero per un documento migrato",
+    "body": "Un documento portato dal vecchio sistema tiene il numero che aveva lì invece del prossimo numero della sua serie. Fatture, note di credito e DDT mai: la loro serie non salta né riusa un numero.",
+    "number": "Numero come era stampato",
+    "numberHint": "Lettere, cifre e / . _ - , fino a 40, senza spazi.",
+    "reason": "Perché tiene questo numero",
+    "reasonHint": "Per esempio: un ordine aperto portato dal vecchio sistema. Resta nella cronologia del documento.",
+    "checking": "Controllo del numero…",
+    "ok": "Nessun documento ha questo numero e la serie non lo assegnerà.",
+    "failed": "Non è stato possibile controllare il numero: digitalo di nuovo o riprova più tardi.",
+    "use": "Usa questo numero",
+    "cancel": "Annulla",
+    "refusal": {
+      "kind": "Questo tipo di documento prende sempre il prossimo numero della sua serie.",
+      "shape": "Digita il numero come era stampato: lettere, cifre e / . _ - , fino a 40, senza spazi.",
+      "reason": "Indica perché questo documento tiene il vecchio numero.",
+      "taken": "Questo numero è già usato: un altro documento di questo tipo lo ha.",
+      "future": "La serie assegnerà questo numero più avanti: digitane un altro, o prima porta la serie oltre (Sistema › Documenti e numerazioni)."
+    },
+    "held": {
+      "number": "Prima digita il numero.",
+      "checking": "Attendi il controllo del numero.",
+      "failed": "Non è ancora stato possibile controllare il numero.",
+      "reason": "Indica perché tiene questo numero."
+    }
+  }
+}

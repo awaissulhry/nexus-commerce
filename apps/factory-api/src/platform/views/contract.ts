@@ -29,6 +29,8 @@ export const savedViewView = output({
   roleId: id().nullable(),
   roleName: z.string().nullable(),
   roleDefault: z.boolean(),
+  /** B-W2b-24: the reader's own default view of the list (only ever a view of their own; the list opens on it first). */
+  personalDefault: z.boolean(),
   companyId: id().nullable(),
   state: viewStateSchema,
   /** Why the reader may not change or remove it (null: they may). */
@@ -46,6 +48,8 @@ export const listViewsContract = defineContract({
       views: z.array(savedViewView),
       /** The view the list opens on for the reader: the default of the first role they hold that has one. */
       roleDefaultId: id().nullable(),
+      /** B-W2b-24: the reader's own default view of the list (it opens before any role default), or null. */
+      personalDefaultId: id().nullable(),
       /** The office roles the reader holds now (they may share a view with one of them). */
       roles: z.array(output({ id: id(), name: z.string() })),
       /** Every office role, for views.manage (a role default for any role); empty otherwise. */

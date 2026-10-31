@@ -205,6 +205,8 @@ export const roleSchema = z.object({
   name: z.string(),
   description: z.string().nullable(),
   requireMfa: z.boolean(),
+  /** B-W2b-24: since when the role asks for two-factor (UTC); null while it does not, or when it asked before the date was kept. */
+  requireMfaSince: z.string().nullable().default(null),
   permissions: z.array(z.string()),
   grains: z.array(grain),
   system: z.boolean(),
@@ -255,6 +257,9 @@ export const DEVICE_KINDS = ['TABLET', 'HANDHELD', 'PC'] as const
 export type DeviceKind = (typeof DEVICE_KINDS)[number]
 export const DEVICE_STATUSES = ['PENDING', 'ACTIVE', 'REVOKED'] as const
 export type DeviceStatus = (typeof DEVICE_STATUSES)[number]
+/** B-W2b-24: the network a tablet says it uses (navigator.connection), as the API keeps it (Device.network). */
+export const DEVICE_NETWORKS = ['WIFI', 'ETHERNET', 'CELLULAR', 'OTHER'] as const
+export type DeviceNetwork = (typeof DEVICE_NETWORKS)[number]
 export const deviceSchema = z.object({
   id: z.string(),
   siteId: z.string(),
@@ -270,6 +275,9 @@ export const deviceSchema = z.object({
   batteryCharging: z.boolean().nullable().optional(),
   queuedActions: z.number().nullable().optional(),
   statusReportedAt: z.string().nullable().optional(),
+  // B-W2b-24: the network it last said (null: the browser does not say) and since when someone is signed in on it (never who).
+  network: z.enum(DEVICE_NETWORKS).nullable().optional(),
+  inUseSince: z.string().nullable().optional(),
   revokedAt: z.string().nullable(),
   inUse: z.boolean(),
   version: z.number(),

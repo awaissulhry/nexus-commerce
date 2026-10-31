@@ -22,6 +22,8 @@ export interface SavedView {
   readonly roleId: string | null
   readonly roleName: string | null
   readonly roleDefault: boolean
+  /** B-W2b-24: my own default view of the list (only ever a view of mine; the list opens on it before a role default). */
+  readonly personalDefault: boolean
   readonly state: ViewState
   /** Why the reader may not change or remove it, in the API's words (the screen says its own). Null: they may. */
   readonly changeHeld: string | null
@@ -36,6 +38,8 @@ export interface RoleRef {
 export interface ViewsAnswer {
   readonly views: readonly SavedView[]
   readonly roleDefaultId: string | null
+  /** B-W2b-24: my own default view of the list, or null. */
+  readonly personalDefaultId: string | null
   readonly roles: readonly RoleRef[]
   readonly allRoles: readonly RoleRef[]
   readonly can: { readonly save: boolean; readonly manage: boolean; readonly export: boolean }
@@ -131,6 +135,8 @@ export interface ListToolsTransport {
   createView(listKey: string, draft: ViewDraft, idempotencyKey: string): Promise<SavedView>
   updateView(view: SavedView, change: Partial<ViewDraft>, idempotencyKey: string): Promise<SavedView>
   removeView(view: SavedView): Promise<void>
+  /** B-W2b-24: makes my own view my default of its list (on) or no longer (off); the old default loses its mark. */
+  setPersonalDefault(view: SavedView, on: boolean, idempotencyKey: string): Promise<{ readonly view: SavedView; readonly personalDefaultId: string | null }>
   startExport(ask: ExportAsk, idempotencyKey: string): Promise<ExportJob>
   readExport(jobId: string): Promise<ExportJob>
   listExports(listKey: string): Promise<readonly ExportJob[]>

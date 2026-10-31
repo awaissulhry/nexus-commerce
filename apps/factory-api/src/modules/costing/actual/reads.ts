@@ -239,7 +239,7 @@ function rowOf(computed: Computed): WorkOrderCostRowView {
   }
 }
 
-const orderWhere = (caller: CommandCaller, query: Pick<WorkOrderCostsQuery, 'companyId' | 'siteId' | 'status' | 'q'>): Prisma.WorkOrderWhereInput => {
+const orderWhere = (caller: CommandCaller, query: Pick<WorkOrderCostsQuery, 'companyId' | 'siteId' | 'status' | 'q' | 'completedFrom' | 'completedTo'>): Prisma.WorkOrderWhereInput => {
   const actor = actorOf(contextOf(caller))
   return {
     AND: [
@@ -248,6 +248,9 @@ const orderWhere = (caller: CommandCaller, query: Pick<WorkOrderCostsQuery, 'com
       query.siteId ? { siteId: query.siteId } : {},
       { status: { in: query.status && query.status.length > 0 ? [...query.status] : [...OPEN_STATUSES] } },
       query.q ? { OR: [{ number: { contains: query.q, mode: 'insensitive' } }, { batchNumber: { contains: query.q, mode: 'insensitive' } }] } : {},
+      // B-W2b-22 (Z9:05): completed on these Europe/Rome days ("Closed in <month>"); the tiles then count the same work orders.
+      query.completedFrom ? { completedAt: { gte: businessDayStart(query.completedFrom) } } : {},
+      query.completedTo ? { completedAt: { lt: businessDayRange(query.completedTo).end } } : {},
     ],
   }
 }
@@ -434,6 +437,16 @@ export async function ledger(caller: CommandCaller, query: LedgerQuery): Promise
       query.kind && query.kind.length > 0 ? { kind: { in: [...query.kind] } } : {},
       query.from ? { occurredAt: { gte: businessDayStart(query.from) } } : {},
       query.to ? { occurredAt: { lt: businessDayRange(query.to).end } } : {},
+      // B-W2b-22 (Z9:05): words — the work order's number, the item's code or name, the entry's reason (no person anywhere).
+      query.q
+        ? {
+            OR: [
+              { workOrder: { number: { contains: query.q, mode: 'insensitive' } } },
+              { item: { OR: [{ code: { contains: query.q, mode: 'insensitive' } }, { name: { contains: query.q, mode: 'insensitive' } }] } },
+              { reason: { contains: query.q, mode: 'insensitive' } },
+            ],
+          }
+        : {},
       query.cursor ? { id: { lt: query.cursor } } : {},
     ],
   }

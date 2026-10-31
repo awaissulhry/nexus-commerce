@@ -1239,7 +1239,9 @@
     "mfa": {
       "title": "Doppio fattore",
       "on": "Richiesto: il ruolo non dà nulla finché nella sessione non è provato il doppio fattore.",
-      "off": "Non richiesto da questo ruolo."
+      "off": "Non richiesto da questo ruolo.",
+      "since": "Richiesto dal {day}.",
+      "sinceUnknown": "Richiesto da prima che Nexus ne tenesse la data."
     },
     "floorHolders": "Un ruolo di reparto è degli operatori ({count} ora); li trovi in Utenti › Reparto.",
     "nobody": "Nessuno ha questo ruolo.",
@@ -1274,7 +1276,8 @@
       "station": "Postazione",
       "lastSeen": "Ultimo contatto",
       "version": "Versione app",
-      "battery": "Batteria"
+      "battery": "Batteria",
+      "network": "Rete"
     },
     "status": {
       "PENDING": "In attesa",
@@ -1287,6 +1290,7 @@
       "PC": "PC"
     },
     "inUse": "In uso",
+    "inUseSince": "In uso dalle {time}",
     "notSeenTag": "Non visto da 24 ore",
     "outdatedTag": "Versione precedente",
     "battery": {
@@ -1295,11 +1299,18 @@
       "lowTag": "Bassa",
       "unknown": "Non indicata da questo browser"
     },
+    "network": {
+      "WIFI": "Wi-Fi",
+      "ETHERNET": "Cavo",
+      "CELLULAR": "Dati mobili",
+      "OTHER": "Altra rete",
+      "unknown": "Non comunicata da questo browser"
+    },
     "empty": {
       "title": "Ancora nessun tablet",
       "body": "Registrane uno: basta un minuto con il codice QR."
     },
-    "later": "La coda di stampa (ogni etichetta con i tentativi e Riprova) arriva in W1; la rete usata da un tablet non è ancora comunicata.",
+    "later": "La coda di stampa (ogni etichetta con i tentativi e Riprova) arriva in W1.",
     "step": {
       "where": "Dove lavorerà?",
       "scan": "Inquadra sul tablet",
@@ -1461,11 +1472,12 @@
       "silent": "Non visto dal {at}: potrebbe essere spento o fuori dal Wi-Fi.",
       "enrolled": "Registrato il",
       "inUse": "In questo momento",
+      "network": "Rete",
       "inUseYes": "In uso",
       "inUseNo": "Nessuno collegato",
       "neverWho": "Mai chi (Statuto dei Lavoratori art. 4).",
       "revoked": "Revocato il",
-      "later": "La rete usata dal tablet non è ancora comunicata.",
+      "later": "Batteria, rete e coda sono ciò che il tablet ha detto di sé l'ultima volta; un browser che non lo dice li lascia non comunicati.",
       "outdated": "È uscita una versione più nuova dell'app del reparto ({version}). Il tablet si aggiorna da solo quando nella sua coda non attende più nulla.",
       "queued": "Azioni in attesa di invio",
       "queuedValue_one": "{count} azione",
@@ -1526,7 +1538,8 @@
     "accounting": "Contabilità",
     "security": "Sicurezza e stato del sistema",
     "receivables": "Crediti e solleciti",
-    "payables": "Fatture fornitori"
+    "payables": "Fatture fornitori",
+    "people": "Persone"
   },
   "perm": {
     "companies_view": "Vedere le società e se possono fatturare",
@@ -1760,6 +1773,24 @@
     "payables_differences_accept": "Accettare a parole una differenza di una fattura fornitore",
     "payables_approve": "Approvare le fatture fornitori per il pagamento",
     "payables_pay": "Registrare il pagamento di una fattura fornitore",
-    "payables_settings": "Modificare le impostazioni fornitori: tolleranze del confronto, base di fatturazione e chi approva le fatture SDI"
+    "payables_settings": "Modificare le impostazioni fornitori: tolleranze del confronto, base di fatturazione e chi approva le fatture SDI",
+    "plant_view": "Vedere macchine, richieste di intervento e lavori di manutenzione",
+    "plant_machines_manage": "Registrare, modificare e dismettere macchine; tenere classi e sintomi",
+    "plant_report": "Segnalare un problema a una macchina (segnarla non sicura la ferma)",
+    "plant_requests_triage": "Smistare le richieste di intervento",
+    "plant_jobs_manage": "Creare, pianificare, assegnare e chiudere lavori di manutenzione",
+    "plant_jobs_work": "Eseguire un lavoro di manutenzione come tecnico",
+    "plant_signSafe": "Dichiarare di nuovo sicura una macchina non sicura (solo tecnici)",
+    "quality_complaints_view": "Vedere i reclami dei clienti",
+    "quality_complaints_log": "Registrare un reclamo del cliente",
+    "quality_complaints_manage": "Smistare, seguire e chiudere i reclami dei clienti",
+    "quality_complaints_acknowledge": "Prendere atto dell'allerta di un reclamo di sicurezza (il titolare)",
+    "numbering_override": "Digitare il numero di un documento migrato (mai una serie fiscale; doppioni rifiutati, motivo conservato)",
+    "people_view": "Vedere dipendenti, squadre, prestiti ad altre linee e passi di uscita (mai paghe, presenze o salute)",
+    "people_team_view": "Vedere le squadre che guidi o di cui fai parte (La mia squadra)",
+    "people_employees_manage": "Aggiungere, modificare, collegare e importare i dipendenti",
+    "people_teams_manage": "Aggiungere, modificare e archiviare le squadre, nominare il capo squadra e spostare le persone",
+    "people_loans_manage": "Prestare persone a un'altra linea per ore o giorni",
+    "people_leavers_manage": "Avviare, spuntare e annullare i passi di uscita di una persona"
   }
 }

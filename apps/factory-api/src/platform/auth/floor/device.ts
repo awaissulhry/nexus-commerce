@@ -8,6 +8,7 @@ import type { OfficeAuth } from '../sessions/office-auth'
 import { deviceCookieOf, setDeviceCookie } from './cookies'
 import { badgeOnlySignIn, floorCommand, floorContext, isLiveSession, liveDevice, SESSION_SELECT, siteScope, type FloorDevice } from './store'
 import { floorHash, mintSiteToken, parseSiteToken, type SiteToken } from './tokens'
+import type { DEVICE_NETWORKS } from './contract'
 
 /**
  * The enrolled device itself (plan A1 §3.10 "Floor"; features PLT-056, PLT-058, PLT-062), before any operator signs in:
@@ -129,13 +130,15 @@ export interface DeviceStateReport {
   readonly batteryPercent: number | null
   readonly batteryCharging: boolean | null
   readonly queuedActions: number
+  /** B-W2b-24: the network the browser says (null: it did not say; left out: an older floor app, the column is kept). */
+  readonly network?: (typeof DEVICE_NETWORKS)[number] | null | undefined
 }
 
 export async function reportDeviceState(auth: OfficeAuth, request: FastifyRequest, body: DeviceStateReport) {
   assertCsrf(request)
   const { device, token } = await requireDevice(auth, request)
   const now = auth.clock.now()
-  const state = { batteryPercent: body.batteryPercent, batteryCharging: body.batteryCharging, queuedActions: body.queuedActions, statusReportedAt: now, lastSeenAt: now }
+  const state = { batteryPercent: body.batteryPercent, batteryCharging: body.batteryCharging, queuedActions: body.queuedActions, statusReportedAt: now, lastSeenAt: now, ...(body.network !== undefined ? { network: body.network } : {}) }
   const before = await auth.database.withScope(siteScope(token), (client) => client.device.findUnique({ where: { id: device.id }, select: { appVersion: true } }))
   const from = before?.appVersion ?? null
   if (from === body.appVersion) {

@@ -19,7 +19,15 @@ const statusList = z
   .transform((value) => value.split(',').map((part) => part.trim()).filter((part) => part.length > 0))
   .pipe(z.array(z.enum(SALES_ORDER_STATUSES)))
 
+/** B-W2b-22 (Z9:05): comma-separated order ids, at most 100 (the orders a list shows). */
+const idList = z
+  .string()
+  .transform((value) => [...new Set(value.split(',').map((part) => part.trim()).filter((part) => part.length > 0))])
+  .pipe(z.array(id()).min(1).max(100))
+
 export const marginsQuery = input({
+  /** B-W2b-22: only these orders (the list's Margin % column asks for the rows on screen); the tiles and groups are then over them. */
+  ids: idList.optional(),
   companyId: id().optional(),
   partyId: id().optional(),
   /** Orders with a line of this style. */

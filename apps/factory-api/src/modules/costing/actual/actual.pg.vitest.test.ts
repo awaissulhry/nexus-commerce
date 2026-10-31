@@ -19,6 +19,7 @@ import { buildApp } from '../../../core/app'
 import { SYSTEM_ACTOR_ID, testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { chooseMethod } from '../method/method'
+import { runCostCatchUp } from './catch-up'
 import { costingHandlers } from './handlers'
 
 /**
@@ -68,6 +69,8 @@ const SESSIONS: Record<string, SessionContext> = {
   production: office([grain(['workorders.view', 'production.rework', 'production.finish', 'inventory.issue', 'inventory.reverse', 'inventory.stock.view', 'production.scrap', 'production.scrap.view'])]),
   viewer: office([grain(['workorders.view', 'money.cost'])]),
   companyB: office([grain(['costing.view', 'costing.ledger.manage', 'money.cost'], [companyB])]),
+  // B-W2b-22: a stock person who corrects finished goods by hand (no cost grain).
+  stock: office([grain(['inventory.adjust', 'inventory.stock.view'])]),
   otherTenant: { audience: 'office', tenantId: newId(), actorId: newId(), grants: [grain(['costing.view', 'money.cost'])] },
 }
 
@@ -100,8 +103,8 @@ async function handle(type: string, where: (payload: Json) => boolean) {
   await costingHandlers()[0]!.handle(envelope, { caller: system(), attempt: 1 })
 }
 const entriesOf = async (workOrderId: string) =>
-  admin<{ id: string; kind: string; amount: number; quantity: string | null; minutes: string | null; idempotencyKey: string; reversalOfId: string | null; costingMethod: string; stockMoveId: string | null; operationScanId: string | null }>(
-    'SELECT id, kind::text, amount, quantity::text, minutes::text, "idempotencyKey", "reversalOfId", "costingMethod"::text AS "costingMethod", "stockMoveId", "operationScanId" FROM "WorkOrderCostEntry" WHERE "workOrderId" = $1 ORDER BY "createdAt", id',
+  admin<{ id: string; kind: string; amount: number; quantity: string | null; minutes: string | null; idempotencyKey: string; reversalOfId: string | null; costingMethod: string; stockMoveId: string | null; operationScanId: string | null; sourceType: string | null; sourceId: string | null }>(
+    'SELECT id, kind::text, amount, quantity::text, minutes::text, "idempotencyKey", "reversalOfId", "costingMethod"::text AS "costingMethod", "stockMoveId", "operationScanId", "sourceType", "sourceId" FROM "WorkOrderCostEntry" WHERE "workOrderId" = $1 ORDER BY "createdAt", id',
     [workOrderId],
   )
 const rowOf = async (session = 'finance') => (await ok(session, 'GET', `/costing/work-orders?companyId=${companyA}`)).rows.find((row: Json) => row.workOrder.number === 'SEED-WO-0001')
@@ -305,19 +308,23 @@ describe('actual material from issues and scrap, labour from scans, the ledger (
     expect(columns.map((column) => column.column_name).filter((name) => /worker|person|employee/i.test(name))).toEqual([])
   })
 
-  it("waits, in words, for a rework's scrap the ledger cannot name (opened by hand, without its scan)", async () => {
+  it("records the scrap of a rework opened by hand (no scan): the record names its rework order (B-W2b-22)", async () => {
     const production = seeded.money.shipping.quality.production
     const [bundle] = await admin<{ cell: string }>(`SELECT "workOrderSizeId" AS cell FROM "Bundle" WHERE id = $1`, [production.bundleIds[1]])
     const opened = await ok('production', 'POST', '/production/rework', { workOrderId: wo(), workOrderSizeId: bundle!.cell, bundleId: production.bundleIds[1], foundAtOperationId: production.operationIds.qc, reworkAtOperationId: production.operationIds.sew, quantity: 1, reasonCode: 'RESTITCH', split: false }, 201)
     const rework = opened.rework
     const started = await ok('production', 'POST', `/production/rework/${rework.id}/start`, { version: rework.version }, 201)
     await ok('production', 'POST', `/production/rework/${rework.id}/done`, { version: started.rework.version, good: 0, scrap: 1 }, 201)
-    const before = (await entriesOf(wo())).length
     await handle('production.rework_moved', (payload) => payload.reworkId === rework.id && payload.status === 'DONE')
-    expect((await entriesOf(wo())).length).toBe(before)
+    // The garment's leather, as the scan's scrap of the same bundle: 3.3333 ft² of SEED-LEA-100, amount 0 (charged at the
+    // issue), no scan and no stock move: its rework order (the …_w2b_guards cost-entry check allows exactly that).
+    const records = (await entriesOf(wo())).filter((entry) => entry.idempotencyKey.startsWith(`rework-scrap:${rework.id}:`))
+    expect(records).toEqual([expect.objectContaining({ kind: 'SCRAP', amount: 0, quantity: '3.3333', operationScanId: null, stockMoveId: null, sourceType: 'ReworkOrder', sourceId: rework.id, idempotencyKey: `rework-scrap:${rework.id}:${leather}` })])
+    // Posting again posts nothing, and nothing waits any more.
     const answer = await ok('finance', 'POST', `/costing/work-orders/${wo()}/post`)
-    expect(answer.posted).toEqual([])
-    expect(answer.waiting).toEqual([expect.objectContaining({ code: 'NO_SCAN', sourceType: 'ReworkOrder', sourceId: rework.id })])
+    expect(answer).toMatchObject({ posted: [], waiting: [] })
+    const { entries } = await ok('finance', 'GET', `/costing/ledger?workOrderId=${wo()}&kind=SCRAP&limit=200`)
+    expect(entries.find((entry: Json) => entry.id === records[0]!.id)).toMatchObject({ event: 'REWORK_SCRAP', amount: 0, document: { type: 'ReworkOrder', id: rework.id, label: 'Rework' } })
   })
 
   it('reverses an entry by hand once, with its reason; a reversal is not reversed', async () => {
@@ -336,7 +343,7 @@ describe('actual material from issues and scrap, labour from scans, the ledger (
 
   it('lists the ledger with its events and documents, never a person; sales sees no figure', async () => {
     const { entries } = await ok('finance', 'GET', `/costing/ledger?workOrderId=${wo()}&limit=200`)
-    expect(new Set(entries.map((entry: Json) => entry.event))).toEqual(new Set(['ISSUE', 'RETURN', 'REVERSAL', 'STOCK_SCRAP', 'LABOUR', 'COMPLETION', 'SCAN_SCRAP']))
+    expect(new Set(entries.map((entry: Json) => entry.event))).toEqual(new Set(['ISSUE', 'RETURN', 'REVERSAL', 'STOCK_SCRAP', 'LABOUR', 'COMPLETION', 'SCAN_SCRAP', 'REWORK_SCRAP']))
     expect(keysOf(entries).filter((name) => /createdBy|worker|person/i.test(name))).toEqual([])
     const issue = entries.find((entry: Json) => entry.event === 'ISSUE' && entry.item?.code === 'SEED-LEA-100')
     expect(issue).toMatchObject({ amount: 22_344, unitCost: '4.2', standardUnitCost: '4.2', quantity: '53.2', method: 'UNDECIDED', provisional: true, document: expect.objectContaining({ type: 'StockMove' }) })
@@ -350,8 +357,8 @@ describe('actual material from issues and scrap, labour from scans, the ledger (
     // Actual: material 223.44 + 6.20 − 1.55 + 1.55 + 3.10 − 3.10 = 229.64; labour 96.50 + 7.20 − 7.20 + 3.60 = 100.10:
     // 329.74 so far; 290.44 moved to finished goods (at standard): 39.30 left on the work order.
     expect(detail.actual).toMatchObject({ material: 22_964, labour: 10_010, total: 32_974, movedToStock: -29_044, onWorkOrder: 3_930, scrapFromStock: 0 })
-    // The scrapped garment's leather at the issue's 4.20: 3.3333 ft² → 14.00.
-    expect(detail.actual.scrapLost).toBe(1_400)
+    // The scrapped garments' leather at the issue's 4.20: 3.3333 ft² → 14.00, at the scan and in the rework opened by hand.
+    expect(detail.actual.scrapLost).toBe(2_800)
     expect(detail.bridge.reduce((sum: number, step: Json) => sum + step.amount, 0)).toBe(detail.variance)
     expect(detail.variance).toBe(32_974 - 203_778)
     const sewing = detail.labour.find((row: Json) => row.operation.seq === 20)
@@ -361,7 +368,7 @@ describe('actual material from issues and scrap, labour from scans, the ledger (
     const liningRow = detail.materials.find((row: Json) => row.item.code === 'SEED-LIN-200')
     expect(liningRow).toMatchObject({ plannedQuantity: '13.23', issuedQuantity: '2', amount: 620, standardUnitCost: '3.1' })
     expect(detail.parts.find((part: Json) => part.part === 'MATERIAL')).toMatchObject({ planned: 161_848, actual: 22_964 })
-    expect(detail.scrap.map((row: Json) => row.event).sort()).toEqual(['REVERSAL', 'SCAN_SCRAP', 'STOCK_SCRAP'])
+    expect(detail.scrap.map((row: Json) => row.event).sort()).toEqual(['REVERSAL', 'REWORK_SCRAP', 'SCAN_SCRAP', 'STOCK_SCRAP'])
     expect(detail.words).toMatch(/provisional/)
     expect(detail.standardMissing).toEqual([])
   })
@@ -372,8 +379,8 @@ describe('the costing method locks with the first entry posted under it (FIN-025
     const manager = callerFor(database, { audience: 'office', tenantId: tenant, actorId: newId(), grants: [grain(['costing.view', 'costing.method.manage'])], requestId: newId() })
     const chosen = await chooseMethod(manager, { companyId: companyA, method: 'STANDARD', reason: "The accountant's letter of 30 October." })
     expect(chosen).toMatchObject({ companyId: companyA, method: 'STANDARD', from: 'COMPANY', provisional: false, locked: false, open: true })
-    // The company's own row keeps the tenant-wide overhead it copied (0 %): nothing else changes.
-    expect((await admin('SELECT "overheadPct"::text AS pct, "methodLockedAt" FROM "CostingSettings" WHERE id = $1', [companyA]))[0]).toEqual({ pct: '0.0000', methodLockedAt: null })
+    // B-W2b-22: the company's own row holds the method only and follows the tenant-wide overhead (its own 0, not read).
+    expect((await admin('SELECT "overheadPct"::text AS pct, "overheadFromTenant", "methodLockedAt" FROM "CostingSettings" WHERE id = $1', [companyA]))[0]).toEqual({ pct: '0.0000', overheadFromTenant: true, methodLockedAt: null })
     // The next entry (1 m of lining issued) posts under STANDARD and locks it, in the same command.
     const lot = seeded.money.shipping.quality.production.inventory.liningLotId
     const issued = await ok('production', 'POST', `/inventory/picking/work-orders/${wo()}/issue`, { lotId: lot, quantity: '1' }, 201)
@@ -387,5 +394,110 @@ describe('the costing method locks with the first entry posted under it (FIN-025
     await expect(admin('UPDATE "CostingSettings" SET "costingMethod" = \'FIFO\' WHERE id = $1', [companyA])).rejects.toThrow(/never changes/)
     const events = await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE type = 'costing_method.changed' ORDER BY "occurredAt"`)
     expect(events.map((event) => event.payload.change)).toEqual(['chosen', 'locked'])
+  })
+})
+
+describe('B-W2b-22: the method apart from the overhead, the catch-up, the filters, finished goods at the standard', () => {
+  const silent = { info() {}, warn() {}, error() {} }
+  const lining1m = async () => {
+    const lot = seeded.money.shipping.quality.production.inventory.liningLotId
+    const issued = await ok('production', 'POST', `/inventory/picking/work-orders/${wo()}/issue`, { lotId: lot, quantity: '1' }, 201)
+    await handle('inventory.moved', (payload) => payload.moveId === issued.issue.moves[0].id)
+    const entries = await entriesOf(wo())
+    const material = entries.find((entry) => entry.stockMoveId === issued.issue.moves[0].id)!
+    return { material, overhead: entries.find((entry) => entry.idempotencyKey === `overhead:${material.id}`) ?? null }
+  }
+
+  it('the company follows the tenant-wide overhead until it sets its own, and may follow it again (Z9:02)', async () => {
+    const read = async () => (await ok('finance', 'GET', `/costing/settings?companyId=${companyA}`)).settings
+    let settings = await read()
+    expect(settings.company).toMatchObject({ id: companyA, overheadPct: '0', overheadFromTenant: true })
+    expect(settings.tenant).toMatchObject({ id: tenant, overheadPct: '0', overheadFromTenant: false })
+    expect(settings.inForce).toBe(tenant)
+    // The tenant-wide overhead becomes 12 %: the company's entries follow it (1 m of lining 3.10 → overhead 0.37).
+    await ok('finance', 'PUT', '/costing/settings', { overheadPct: '12', version: settings.tenant.version })
+    expect((await lining1m()).overhead).toMatchObject({ kind: 'OVERHEAD', amount: 37 })
+    // Its own 5 %: the row keeps its locked method; the company's overhead is its own now.
+    settings = await read()
+    const own = (await ok('finance', 'PUT', '/costing/settings', { companyId: companyA, overheadPct: '5', version: settings.company.version })).settings
+    expect(own).toMatchObject({ id: companyA, overheadPct: '5', overheadFromTenant: false })
+    expect((await read()).inForce).toBe(companyA)
+    expect((await lining1m()).overhead).toMatchObject({ kind: 'OVERHEAD', amount: 16 })
+    expect((await admin('SELECT "costingMethod"::text AS method, "methodLockedAt" IS NOT NULL AS locked FROM "CostingSettings" WHERE id = $1', [companyA]))[0]).toEqual({ method: 'STANDARD', locked: true })
+    // Refused: following the tenant with an overhead of its own; the tenant-wide row following nothing.
+    expect((await refused('finance', 'PUT', '/costing/settings', { companyId: companyA, overheadPct: '5', overheadFromTenant: true, version: own.version }, 400)).issues).toEqual([expect.objectContaining({ path: 'body/overheadPct' })])
+    expect((await refused('finance', 'PUT', '/costing/settings', { overheadPct: '0', overheadFromTenant: true, version: (await read()).tenant.version }, 400)).issues).toEqual([expect.objectContaining({ path: 'body/overheadFromTenant' })])
+    // Back to the tenant-wide overhead.
+    const back = (await ok('finance', 'PUT', '/costing/settings', { companyId: companyA, overheadPct: '0', overheadFromTenant: true, version: own.version })).settings
+    expect(back).toMatchObject({ overheadPct: '0', overheadFromTenant: true })
+    expect((await read()).inForce).toBe(tenant)
+    const events = await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE type = 'costing_settings.changed' AND subject = $1 ORDER BY "occurredAt"`, [companyA])
+    expect(events.map((event) => event.payload.fields)).toEqual([['overheadPct', 'overheadFromTenant'], ['overheadPct', 'overheadFromTenant']])
+    // The tenant-wide overhead back to the seed's 0 %.
+    await ok('finance', 'PUT', '/costing/settings', { overheadPct: '0', version: (await read()).tenant.version })
+  })
+
+  it('the nightly catch-up posts what the worker did not: a rework opened by hand on a cell, not bundled apart (Z9:03, Z9:04)', async () => {
+    const production = seeded.money.shipping.quality.production
+    const [bundle] = await admin<{ cell: string }>(`SELECT "workOrderSizeId" AS cell FROM "Bundle" WHERE id = $1`, [production.bundleIds[1]])
+    const opened = await ok('production', 'POST', '/production/rework', { workOrderId: wo(), workOrderSizeId: bundle!.cell, bundleId: null, reworkAtOperationId: production.operationIds.sew, quantity: 1, reasonCode: 'RESTITCH', split: false }, 201)
+    const started = await ok('production', 'POST', `/production/rework/${opened.rework.id}/start`, { version: opened.rework.version }, 201)
+    await ok('production', 'POST', `/production/rework/${opened.rework.id}/done`, { version: started.rework.version, good: 0, scrap: 1 }, 201)
+    // No worker ran: the ledger lacks its scrap.
+    const recordsOf = async () => (await entriesOf(wo())).filter((entry) => entry.sourceId === opened.rework.id)
+    expect(await recordsOf()).toEqual([])
+    const first = await runCostCatchUp({ database, log: silent }, new Date('2026-11-20T02:20:00.000Z'))
+    expect(first).toMatchObject({ failed: 0 })
+    expect(first.posted).toBeGreaterThanOrEqual(1)
+    // Its cell was cut only into a SLEEVES bundle so far: the garment's sleeves, 3.3333 ft² of SEED-LEA-100, amount 0.
+    const records = await recordsOf()
+    expect(records).toEqual([expect.objectContaining({ kind: 'SCRAP', amount: 0, quantity: '3.3333', operationScanId: null, stockMoveId: null, sourceType: 'ReworkOrder', idempotencyKey: `rework-scrap:${opened.rework.id}:${leather}` })])
+    // Again (the same night, or the next): nothing more to post, no failure.
+    expect(await runCostCatchUp({ database, log: silent }, new Date('2026-11-20T02:20:00.000Z'))).toMatchObject({ posted: 0, failed: 0 })
+    expect(await runCostCatchUp({ database, log: silent }, new Date('2026-11-21T02:20:00.000Z'))).toMatchObject({ posted: 0, failed: 0 })
+    expect((await recordsOf()).length).toBe(records.length)
+    const audits = await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "AuditLog" WHERE action = 'costing.postCosts' AND "recordId" = $1 AND audience::text = 'SYSTEM' AND "actorId" = $2`, [wo(), SYSTEM_ACTOR_ID])
+    expect(audits[0]!.n).toBeGreaterThanOrEqual(1)
+  })
+
+  it('filters: the ledger by words, work orders completed between two days, margins of the orders asked for (Z9:05)', async () => {
+    const all = (await ok('finance', 'GET', `/costing/ledger?workOrderId=${wo()}&limit=200`)).entries
+    expect((await ok('finance', 'GET', `/costing/ledger?workOrderId=${wo()}&limit=200&q=seed-wo-0001`)).entries).toHaveLength(all.length)
+    const lining = (await ok('finance', 'GET', `/costing/ledger?workOrderId=${wo()}&limit=200&q=SEED-LIN-200`)).entries
+    expect(lining.length).toBeGreaterThan(0)
+    expect(lining.every((entry: Json) => entry.item?.code === 'SEED-LIN-200' || /SEED-LIN-200/i.test(entry.reason ?? ''))).toBe(true)
+    const claimed = (await ok('finance', 'GET', `/costing/ledger?workOrderId=${wo()}&q=claimed`)).entries
+    expect(claimed.map((entry: Json) => entry.reason)).toEqual(["The stain was the supplier's: claimed."])
+    expect((await ok('finance', 'GET', `/costing/ledger?q=nothing-like-this`)).entries).toEqual([])
+
+    // Completed between two days: exactly the work orders the database says (SEED-WO-0001 is still in progress).
+    const expected = await admin<{ number: string }>(
+      `SELECT number FROM "WorkOrder" WHERE "companyId" = $1 AND status::text NOT IN ('DRAFT', 'CANCELLED') AND "completedAt" >= '2026-01-01T00:00:00+01:00' AND "completedAt" < '2028-01-01T00:00:00+01:00' ORDER BY id DESC`,
+      [companyA],
+    )
+    const completed = await ok('finance', 'GET', `/costing/work-orders?companyId=${companyA}&status=RELEASED,IN_PROGRESS,ON_HOLD,COMPLETED,CLOSED&completedFrom=2026-01-01&completedTo=2027-12-31`)
+    expect(completed.rows.map((row: Json) => row.workOrder.number)).toEqual(expected.map((row) => row.number))
+    expect(completed.rows.every((row: Json) => row.workOrder.completedAt !== null)).toBe(true)
+    expect(completed.rows.map((row: Json) => row.workOrder.number)).not.toContain('SEED-WO-0001')
+    expect((await call('finance', 'GET', `/costing/work-orders?completedFrom=2026-13-01`)).statusCode).toBe(400)
+
+    // Margins of the orders asked for: the rows and the tiles are over them only.
+    const orders = await admin<{ id: string }>(`SELECT id FROM "SalesOrder" WHERE "companyId" = $1 AND status::text <> 'CANCELLED' ORDER BY id DESC LIMIT 2`, [companyA])
+    expect(orders.length).toBe(2)
+    const one = await ok('finance', 'GET', `/costing/margins?ids=${orders[1]!.id}`)
+    expect(one.rows.map((row: Json) => row.order.id)).toEqual([orders[1]!.id])
+    expect(one.tiles.orders).toBe(1)
+    const both = await ok('finance', 'GET', `/costing/margins?ids=${orders[0]!.id},${orders[1]!.id},${orders[1]!.id}`)
+    expect(both.rows.map((row: Json) => row.order.id)).toEqual(orders.map((row) => row.id))
+    expect((await call('finance', 'GET', '/costing/margins?ids=not-an-id')).statusCode).toBe(400)
+  })
+
+  it('a finished garment corrected by hand is valued at its frozen standard, not left unvalued (F7 open end)', async () => {
+    const [received] = await admin<{ itemId: string; toLocationId: string }>(`SELECT "itemId", "toLocationId" FROM "StockMove" WHERE reason = 'PRODUCTION_RECEIPT' AND "workOrderId" = $1 ORDER BY "occurredAt" LIMIT 1`, [wo()])
+    expect((await admin('SELECT "standardCost" FROM "Item" WHERE id = $1', [received!.itemId]))[0]).toEqual({ standardCost: null })
+    const answer = await ok('stock', 'POST', '/inventory/adjustments', { siteId: siteA, itemId: received!.itemId, locationId: received!.toLocationId, direction: 'OUT', quantity: '1', note: 'Found stained in the finished-goods area.' }, 201)
+    expect(answer.move).toMatchObject({ reason: 'ADJUSTMENT', valued: true })
+    // BLK 52's frozen standard from 1 October: 290.439 a garment.
+    expect((await admin('SELECT method::text AS method, "unitCost"::text AS "unitCost", "valueAmount" FROM "StockValuation" WHERE "moveId" = $1', [answer.move.id]))[0]).toEqual({ method: 'STANDARD_COST', unitCost: '290.439000', valueAmount: -29_044 })
   })
 })

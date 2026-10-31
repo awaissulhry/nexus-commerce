@@ -7,6 +7,8 @@ import { THREAD_RULES } from './threads'
 import { PLANT_RULES } from './plant'
 // B-W2a-65: a safety complaint's alert to the owner and quality.
 import { COMPLAINT_RULES } from './complaints'
+// B-W2b-24: the restore drill's reminder (a RESTORE_DRILL_DUE timer fired: SYSTEM to the people who see Security & health).
+import { RESTORE_DRILL_RULES } from '../../timers/restore-drill'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -17,4 +19,6 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   // B-W2a-33: the exception rules' alerts (ALERT to the rule's recipients; ASSIGNMENT to an alert's assignee).
   ...ALERT_RULES,
   // B-W2a-65: a safety complaint (ALERT to who acknowledges it and who follows complaints up).
-  ...COMPLAINT_RULES])
+  ...COMPLAINT_RULES,
+  // B-W2b-24: the restore drill is due within 14 days (SYSTEM to the holders of security.view).
+  ...RESTORE_DRILL_RULES])

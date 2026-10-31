@@ -129,7 +129,7 @@ export const importLink = (step: Pick<FirstLoadStepView, 'runningJobId' | 'job'>
 /** The "Done" line: when, nothing to load or matched, and whether it still matches now. */
 export function doneWords(step: FirstLoadStepView, when: (iso: string) => string): Words | null {
   if (!step.done) return null
-  if (step.done.nothing) return { key: 'imp.first.done.nothing', params: { when: when(step.done.at) } }
+  if (step.done.nothing) return step.done.reason ? { key: 'imp.first.done.nothingWhy', params: { when: when(step.done.at), reason: step.done.reason } } : { key: 'imp.first.done.nothing', params: { when: when(step.done.at) } }
   if (step.done.stillMatches === false) return { key: 'imp.first.done.changed', params: { when: when(step.done.at) } }
   return { key: 'imp.first.done.matched', params: { when: when(step.done.at) } }
 }

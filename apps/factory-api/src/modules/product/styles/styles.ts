@@ -23,6 +23,7 @@ import {
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { afterCursor, decodeCursor, encodeCursor } from './cursor'
+import { rowExtras } from './row-extras'
 import { applyMatrixPlan, emitSkus } from './skus'
 import {
   assertMayWrite,
@@ -41,7 +42,7 @@ import {
   scaleProblems,
   STYLE_COLUMNS,
   STYLE_SCOPE,
-  styleRowView,
+  styleSummaryView,
   styleViewInTx,
   styleViewOf,
   templateProblems,
@@ -93,9 +94,11 @@ export async function listStyles(caller: CommandCaller, query: ListStylesQuery):
     const skus = await client.variant.groupBy({ by: ['styleId'], where: { styleId: { in: ids }, status: 'ACTIVE' }, _count: { _all: true } })
     const revisions = await client.styleRevision.findMany({ where: { styleId: { in: ids } }, select: { styleId: true, revision: true, status: true } })
     const skuCount = new Map(skus.map((entry) => [entry.styleId, entry._count._all]))
+    // W2b (B-W2b-25): thumbnail, certificate coverage and cost per garment, each as far as the caller may see it.
+    const extras = await rowExtras(client, actorOf(context), page, query.companyId ?? null)
     const last = page.at(-1)
     return {
-      styles: page.map((row) => styleRowView(row, { skuCount: skuCount.get(row.id) ?? 0, revisions: revisions.filter((entry) => entry.styleId === row.id) })),
+      styles: page.map((row) => ({ ...styleSummaryView(row, { skuCount: skuCount.get(row.id) ?? 0, revisions: revisions.filter((entry) => entry.styleId === row.id) }), ...extras.get(row.id)! })),
       nextCursor: rows.length > query.limit && last ? encodeCursor(last) : null,
       count,
     }

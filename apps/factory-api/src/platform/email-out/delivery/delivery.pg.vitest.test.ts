@@ -8,6 +8,7 @@ import type { Grant } from '@nexus/factory-domain/core/permissions'
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
+import { moveLiftsAll } from './lift-catch-up'
 
 /**
  * The mail delivery log and the blocked addresses on the local stack (B-W2a-41; PLT-149), with the app's real routes:
@@ -178,9 +179,10 @@ describe('the blocked addresses', () => {
     expect((done.json() as { address: Blocked }).address).toMatchObject({ id: blocked.ada, address: 'ada@cliente.example', version: 2, unblocked: { reason: 'The customer fixed the mailbox', byId: user } })
     expect((await call('admin', 'POST', `/email/blocked/${blocked.ada}/unblock`, { version: 2, reason: 'Again' })).statusCode).toBe(409)
 
-    const [row] = (await db.admin.query(`SELECT address, reason FROM "Suppression" WHERE id = $1`, [blocked.ada])).rows as { address: string; reason: string }[]
-    expect(row).toEqual({ address: `~unblocked:${blocked.ada}:ada@cliente.example`, reason: 'BOUNCE' })
-    expect((await db.admin.query(`SELECT 1 FROM "Suppression" WHERE "tenantId" = $1 AND address = 'ada@cliente.example'`, [tenantA])).rowCount).toBe(0)
+    // B-W2b-24: lifted in its columns; the row keeps its address (and never changes again).
+    const [row] = (await db.admin.query(`SELECT address, reason, "liftedById", "liftReason", "liftedAt" IS NOT NULL AS lifted FROM "Suppression" WHERE id = $1`, [blocked.ada])).rows as Record<string, unknown>[]
+    expect(row).toEqual({ address: 'ada@cliente.example', reason: 'BOUNCE', liftedById: user, liftReason: 'The customer fixed the mailbox', lifted: true })
+    expect((await db.admin.query(`SELECT 1 FROM "Suppression" WHERE "tenantId" = $1 AND address = 'ada@cliente.example' AND "liftedAt" IS NULL`, [tenantA])).rowCount).toBe(0)
     const audits = (await db.admin.query(`SELECT action, reason, before, after FROM "AuditLog" WHERE "recordType" = 'Suppression' AND "recordId" = $1`, [blocked.ada])).rows
     expect(audits).toEqual([{ action: 'email.unblockAddress', reason: 'The customer fixed the mailbox', before: { blocked: true, reason: 'BOUNCE' }, after: { blocked: false } }])
     expect(JSON.stringify(audits)).not.toContain('ada@')
@@ -193,7 +195,25 @@ describe('the blocked addresses', () => {
     expect(unblocked.addresses).toEqual([expect.objectContaining({ id: blocked.ada, address: 'ada@cliente.example', unblocked: expect.objectContaining({ reason: 'The customer fixed the mailbox' }) })])
     expect(((await call('admin', 'GET', '/email/delivery')).json() as { blocked: number }).blocked).toBe(1)
     // A later bounce blocks the address again in a new row: the unblocked one does not stand in the way.
-    await db.admin.query(`INSERT INTO "Suppression" (id, "tenantId", address, reason, at) VALUES ($1, $2, 'ada@cliente.example', 'BOUNCE', now())`, [newId(), tenantA])
+    const again = newId()
+    await db.admin.query(`INSERT INTO "Suppression" (id, "tenantId", address, reason, at) VALUES ($1, $2, 'ada@cliente.example', 'BOUNCE', now())`, [again, tenantA])
+    expect(((await call('admin', 'GET', '/email/blocked')).json() as { addresses: Blocked[] }).addresses.map((item) => item.id).sort()).toEqual([again, blocked.spam].sort())
+    // Only one block in force per address (the partial unique index).
+    await expect(db.admin.query(`INSERT INTO "Suppression" (id, "tenantId", address, reason, at) VALUES ($1, $2, 'ada@cliente.example', 'BOUNCE', now())`, [newId(), tenantA])).rejects.toThrow(/Suppression_one_block_per_address/)
+  })
+
+  it('B-W2b-24: moves a block B-W2a-41 lifted by moving its address aside back to its address, with the lift from its audit row', async () => {
+    const legacy = newId()
+    await db.admin.query(`INSERT INTO "Suppression" (id, "tenantId", address, reason, at) VALUES ($1, $2, $3, 'BOUNCE', now())`, [legacy, tenantA, `~unblocked:${legacy}:bea@cliente.example`])
+    await db.admin.query(`INSERT INTO "AuditLog" (id, "tenantId", at, "actorId", audience, action, "recordType", "recordId", "requestId", reason) VALUES ($1, $2, now() - interval '2 days', $3, 'OFFICE', 'email.unblockAddress', 'Suppression', $4, 'old-request', 'Typo fixed by the customer')`, [newId(), tenantA, user, legacy])
+    // Before the move every reader already counts it as lifted.
+    expect(((await call('admin', 'GET', '/email/blocked?state=UNBLOCKED')).json() as { addresses: Blocked[] }).addresses.find((item) => item.id === legacy)).toMatchObject({ address: 'bea@cliente.example', unblocked: { reason: 'Typo fixed by the customer', byId: user } })
+    const log = { info: () => undefined, warn: () => undefined, error: () => undefined }
+    expect(await moveLiftsAll({ database, log })).toMatchObject({ moved: 1, failed: 0 })
+    const [row] = (await db.admin.query(`SELECT address, "liftedById", "liftReason", "liftedAt" < now() - interval '1 day' AS old FROM "Suppression" WHERE id = $1`, [legacy])).rows as Record<string, unknown>[]
+    expect(row).toEqual({ address: 'bea@cliente.example', liftedById: user, liftReason: 'Typo fixed by the customer', old: true })
+    expect(await moveLiftsAll({ database, log })).toMatchObject({ moved: 0 })
+    expect(((await call('admin', 'GET', '/email/blocked?state=UNBLOCKED')).json() as { addresses: Blocked[] }).addresses.find((item) => item.id === legacy)).toMatchObject({ address: 'bea@cliente.example', unblocked: { reason: 'Typo fixed by the customer', byId: user } })
   })
 
   it('never shows another tenant\'s addresses', async () => {
