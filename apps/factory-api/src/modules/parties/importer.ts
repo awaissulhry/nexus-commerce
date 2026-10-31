@@ -6,6 +6,8 @@ import { changeParty, isCustomer, newParty, type PartyFields } from '@nexus/fact
 import { identityAt, TAX_IDENTITY_FIELDS, type TaxIdentityFields } from '@nexus/factory-domain/parties/tax'
 import type { CommandTools } from '../../core/command'
 import { ApiError } from '../../core/errors'
+// W2b (B-W2b-25): the commercial terms columns (load, check, write).
+import { authorizeTerms, checkTerms, termsOf, writeTermsInCommand } from '../../platform/imports/importers/parties-terms'
 // Types only: platform/imports/registry.ts lists this adapter, so a value import back from it would be a cycle.
 import type { ImportAdapter, ImportScope } from '../../platform/imports/registry'
 import {
@@ -41,6 +43,9 @@ import {
  * Write checks the party again as it is now and refuses (a failed batch, applied again later) a row the dry run would
  * now refuse, and a VAT number or codice fiscale another party holds: the dry run reads only the parties its codes
  * find, so that check happens here, with the code of the party that holds the number.
+ *
+ * W2b (B-W2b-25): a customer's commercial terms columns (payment terms code, price list, default deposit, invoicing,
+ * Incoterm, preferred carrier, minimum order) are read, checked and written by platform/imports/importers/parties-terms.ts.
  */
 
 const ACTION = 'parties.import'
@@ -146,18 +151,20 @@ export const partiesImportAdapter = Object.freeze({
   permission: PARTIES_MANAGE,
   viewPermission: PARTIES_VIEW,
 
-  authorize(actor, job) {
+  authorize(actor, job, columns) {
     const grants = grantsFor(actor, PARTIES_MANAGE)
     if (job.companyId === null) {
       return grants.some((grant) => grant.companies === 'all' && grant.parties === 'all')
-        ? []
+        ? authorizeTerms(actor, job, columns)
         : [{ path: 'companyId', message: 'A parties import for every company needs parties.manage over every company; import for one company instead.' }]
     }
     const companyId = job.companyId
     return grants.some((grant) => (grant.companies === 'all' || grant.companies.includes(companyId)) && grant.parties === 'all')
-      ? []
+      ? authorizeTerms(actor, job, columns)
       : [{ path: 'companyId', message: "Importing parties needs parties.manage over every party of the import's company: a role limited to some customers or suppliers adds no new ones." }]
   },
+
+  check: (client, rows, scope, actor) => checkTerms(client, rows, scope, actor),
 
   async load(client, keys, scope) {
     const codes = keys.map((key) => String(key.code))
@@ -166,6 +173,7 @@ export const partiesImportAdapter = Object.freeze({
     const identities = await client.partyTaxIdentity.findMany({ where: { partyId: { in: ids } }, select: TAX_COLUMNS })
     const addresses = await client.partyAddress.findMany({ where: { partyId: { in: ids }, status: 'ACTIVE' }, select: ADDRESS_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
     const contacts = await client.partyContact.findMany({ where: { partyId: { in: ids }, status: 'ACTIVE' }, select: CONTACT_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+    const terms = await termsOf(client, ids)
     const day = today()
     return parties.map((party) => {
       const inForce = identityAt(identities.filter((identity) => identity.partyId === party.id).map((identity) => ({ identity, validFrom: dateText(identity.validFrom) })), day)?.identity ?? null
@@ -180,6 +188,7 @@ export const partiesImportAdapter = Object.freeze({
           identity,
           registered: registered ? addressFieldsOf(registered) : null,
           contacts: contacts.filter((contact) => contact.partyId === party.id).map(contactFieldsOf),
+          terms: terms.get(party.id) ?? null,
         }),
       }
     })
@@ -190,6 +199,7 @@ export const partiesImportAdapter = Object.freeze({
     const code = String(row.key.code)
     if (row.action === 'UPDATE') {
       await updateRow(tools, row.recordId!, code, values, scope)
+      await writeTermsInCommand(tools, row.recordId!, values, false)
       return { recordId: row.recordId! }
     }
     const patch = partyPatchOfRow(values)
@@ -213,6 +223,7 @@ export const partiesImportAdapter = Object.freeze({
       },
       ACTION,
     )
+    await writeTermsInCommand(tools, recordId, values, true)
     return { recordId }
   },
 } satisfies ImportAdapter)

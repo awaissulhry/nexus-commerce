@@ -1,18 +1,19 @@
 import { z } from 'zod'
 import { id, input, instant, output } from '../../core/contracts'
+import { money } from '../../money/marked'
 import { GARMENT_TRACKINGS } from '../../production/serials/rules'
 import { localisedNames } from '../materials/contracts'
 import { sizeCode } from '../sizes/contracts'
 import { BODY_MEASURE_UNITS, MASTER_STATUSES } from '../sizes/rules'
 import { COLOURWAY_CODE, COLOURWAY_CODE_RULE, MAX_COLOURWAYS } from './colourways'
-import { COPY_PARTS, COPYABLE_PARTS } from './copy'
+import { COPY_NOTES, COPY_PARTS, COPYABLE_PARTS, OFFER_REASONS } from './copy'
 import { REVISION_STATUSES } from './revisions'
-import { MAX_RANGE_SIZES, PPE_CATEGORIES, PRODUCT_TYPES, STYLE_CODE, STYLE_CODE_RULE, STYLE_STATUSES, STYLE_WARNINGS } from './rules'
+import { MAX_RANGE_SIZES, PPE_CATEGORIES, PRODUCT_TYPES, STYLE_CODE, STYLE_CODE_RULE, STYLE_GENDERS, STYLE_STATUSES, STYLE_WARNINGS } from './rules'
 
 /**
  * The style library's contracts (plan A1 D2; A2 SCR-040 "Styles", SCR-041 "Style › Overview & variants"): what
  * apps/factory-api's modules/product/styles accepts and answers for styles, colourways, SKUs and revision shells, and
- * what the web's typed client reads. No money here (costing is B-W1-15).
+ * what the web's typed client reads. Money only in a list row's `cost` (B-W2b-25), marked with the cost grain.
  */
 
 const text = (max: number) => z.string().trim().min(1).max(max)
@@ -58,6 +59,8 @@ const editable = {
   originCountry: z.string().trim().length(2).nullish(),
   /** The net mass of one garment in kilograms ("1.85"), above 0, at most 3 decimals. */
   netMassKg: text(20).nullish(),
+  /** W2b (B-W2b-25): who it is cut for, apart from the CN code: MEN, WOMEN or UNISEX; null clears it. */
+  gender: z.enum(STYLE_GENDERS).nullish(),
 }
 
 export const createStyleBody = input({
@@ -266,6 +269,8 @@ const summary = {
   hsCode: z.string().nullable(),
   originCountry: z.string().nullable(),
   netMassKg: z.string().nullable(),
+  /** W2b (B-W2b-25): who it is cut for (MEN, WOMEN, UNISEX), apart from the CN code; null when not on record. */
+  gender: z.enum(STYLE_GENDERS).nullable(),
   status: z.enum(STYLE_STATUSES),
   version: z.number().int(),
   updatedAt: instant(),
@@ -281,13 +286,67 @@ const summary = {
   completeness: output({ colourways: z.boolean(), sizeRange: z.boolean(), baseSize: z.boolean(), skus: z.boolean(), releasedRevision: z.boolean() }),
 }
 
+/**
+ * W2b (B-W2b-25; design styles.grid "Certificate coverage ('All covered' / '2 sizes not covered')"): the certificate
+ * coverage of a list row, counted as the style's Compliance tab counts it (factory-domain product/compliance
+ * `coverageCell`, `checkedCells`): the cells whose SKU is on, else every colourway × size of the range. NOT_REQUIRED: not
+ * PPE; NO_CELLS: no colourway or no range yet; ALL_COVERED; GAPS: a cell not covered, expired or suspended.
+ */
+export const COVERAGE_STATES = ['NOT_REQUIRED', 'NO_CELLS', 'ALL_COVERED', 'GAPS'] as const
+export const rowCoverage = output({
+  state: z.enum(COVERAGE_STATES),
+  cells: z.number().int(),
+  covered: z.number().int(),
+  /** Not covered, expired or suspended. */
+  notCovered: z.number().int(),
+  /** Covered, but the certificate ends soon (the Compliance tab's mark, product/compliance EXPIRING_SOON_DAYS). */
+  expiringSoon: z.number().int(),
+  /** The sizes of the range with a cell not covered, in the range's order. */
+  sizesNotCovered: z.array(z.string()),
+})
+export type RowCoverage = z.infer<typeof rowCoverage>
+
+/**
+ * W2b (B-W2b-25; design styles.grid "Cost per garment (cost)"): what one garment costs, from the cost sheet of the style's
+ * released revision (else its newest draft: an estimate) in the base size (else the range's first), across its active
+ * colourways: the lowest and highest of the colourways whose every input is known; null when none is.
+ */
+export const rowCost = output({
+  revision: z.number().int(),
+  /** Figures of a draft revision (no released one yet). */
+  estimate: z.boolean(),
+  size: z.string(),
+  currency: z.string(),
+  lowest: z.string().nullable(),
+  highest: z.string().nullable(),
+  /** Every colourway's garment in that size has every input (prices, quantities, labour rates). */
+  complete: z.boolean(),
+})
+export type RowCost = z.infer<typeof rowCost>
+
 /** A row of the style list (SCR-040). */
-export const styleRow = output(summary)
+export const styleRow = output({
+  ...summary,
+  /**
+   * W2b (B-W2b-25): the style's first picture (an AVAILABLE image among its files; the gallery chooses a main picture in
+   * W2b-4), read with `GET /files/:fileId/download`; null without one, or without files.read over the style's company.
+   */
+  thumbnail: output({ fileId: id(), name: z.string(), contentType: z.string() }).nullable(),
+  /** W2b (B-W2b-25): null without compliance.certificates.view over the style's company. */
+  coverage: rowCoverage.nullable(),
+  /** W2b (B-W2b-25): only with the cost grain (the API drops it otherwise), and null without costing.view over the style's company. */
+  cost: money.cost(rowCost.nullable()),
+})
 export type StyleRow = z.infer<typeof styleRow>
 
 /** The style record (SCR-041): identity, colourways, range, the colour x size SKUs and the revisions. */
 export const styleView = output({
   ...summary,
+  /**
+   * W2b (B-W2b-25): the style it was copied from and that style's revision the copy took its parts from ("Copied from
+   * GT-JKT-01 revision 3"); null when it is no copy, or was copied before W2b (its audit rows say it then).
+   */
+  copiedFrom: output({ styleId: id(), code: z.string(), name: z.string(), revisionId: id().nullable(), revision: z.number().int().nullable() }).nullable(),
   description: z.string().nullable(),
   measurementTemplate: ref.nullable(),
   /** How its garments are traced (PRD-025; Reg. (EU) 2016/425 art. 8(5)): by lot when PPE. */
@@ -357,6 +416,17 @@ const partOffer = output({
   count: z.number().int().nullable(),
   /** Why it cannot be picked, in words; null when it can. */
   reason: z.string().nullable(),
+  /** W2b (B-W2b-25): the same reason as a code (./copy OFFER_REASONS), for the screen's own words; null when it can. */
+  reasonCode: z.enum(OFFER_REASONS).nullable(),
+  /** The facts the reason's words name; null when it can be picked. */
+  reasonFacts: output({
+    style: z.string(),
+    revision: z.number().int().nullable(),
+    label: z.string().nullable(),
+    labelRevision: z.number().int().nullable(),
+    permission: z.string().nullable(),
+    everyCompany: z.boolean(),
+  }).nullable(),
 })
 
 /** What the Duplicate dialog offers for a style: its revisions' parts, and what a copy would leave out. */
@@ -387,5 +457,7 @@ export const duplicatedView = output({
   }),
   /** What the copy left out, in words (an archived size, an archived library colour). */
   notes: z.array(z.string()),
+  /** W2b (B-W2b-25): the same notes as codes with their facts (./copy COPY_NOTES), in the same order. */
+  noteCodes: z.array(output({ code: z.enum(COPY_NOTES), sizes: z.array(z.string()), count: z.number().int().nullable(), colourway: z.string().nullable() })),
 })
 export type DuplicatedView = z.infer<typeof duplicatedView>
