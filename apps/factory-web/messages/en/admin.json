@@ -1538,7 +1538,8 @@
     "accounting": "Accounting",
     "security": "Security & health",
     "receivables": "Receivables and reminders",
-    "payables": "Supplier invoices"
+    "payables": "Supplier invoices",
+    "people": "People"
   },
   "perm": {
     "companies_view": "See the companies and whether they can invoice",
@@ -1784,6 +1785,12 @@
     "quality_complaints_log": "Log a customer complaint",
     "quality_complaints_manage": "Triage, follow up and close customer complaints",
     "quality_complaints_acknowledge": "Acknowledge a safety complaint's alert (the owner)",
-    "numbering_override": "Type a number for a migrated document (never a fiscal series; clashes refused, reason kept)"
+    "numbering_override": "Type a number for a migrated document (never a fiscal series; clashes refused, reason kept)",
+    "people_view": "See the employees, teams, loans to other lines and leaver steps (never pay, attendance or health)",
+    "people_team_view": "See the teams you lead or belong to (My team)",
+    "people_employees_manage": "Add, change, link and import employees",
+    "people_teams_manage": "Add, change and archive teams, set their lead and move people between them",
+    "people_loans_manage": "Lend people to another line for hours or days",
+    "people_leavers_manage": "Start, tick and cancel a person's leaver steps"
   }
 }
