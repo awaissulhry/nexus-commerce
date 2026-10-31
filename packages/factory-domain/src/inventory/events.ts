@@ -8,6 +8,8 @@ import { STOCK_MOVE_REASONS } from './ledger/moves'
 import { DISCREPANCY_KINDS, DISCREPANCY_STATUSES } from './receipts/discrepancies'
 // B-W2b-15: kit staging.
 import { KIT_CHANGES } from './kits/rules'
+// B-W2b-23: a location's state.
+import { LOCATION_STATUSES } from './locations/rules'
 
 /**
  * The inventory module's events (plan A1 §3.4; SCM-189). apps/factory-api's modules/inventory/ledger `postMoves` emits
@@ -41,6 +43,10 @@ import { KIT_CHANGES } from './kits/rules'
  * discrepancy recorded, changed, removed or settled (agreed, credited, closed) on a receipt, and
  * `inventory.receipt_discrepancies_reported` once per report sent to the supplier (the OPEN ones it names become SENT).
  * They reach the receipt's Discrepancies tab and the Receipts tiles (inventory.stock.view); never a price or a person.
+ *
+ * Locations (B-W2b-23, modules/inventory/locations): `inventory.location_changed` once per location made (on its page or
+ * from a sheet), renamed or given another kind, moved inside another, or archived. The search index follows it; it
+ * reaches the locations screens (inventory.locations.view).
  */
 const decimal = () => z.string().regex(/^\d{1,14}\.\d{4}$/)
 
@@ -237,6 +243,19 @@ export const events = [
       lotIds: z.array(z.uuid()),
     }),
     live: { permission: 'inventory.stock.view', fields: ['writeOffId', 'reasonCode', 'moveIds', 'itemIds', 'hideIds', 'lotIds'] },
+  }),
+  // ---- locations (B-W2b-23: the search index follows them) ----
+  defineEvent({
+    type: 'inventory.location_changed',
+    context: 'inventory',
+    description: 'A stock location was made (on its page or from a sheet), renamed or given another kind, moved inside another location, or archived.',
+    payload: z.strictObject({
+      locationId: z.uuid(),
+      code: z.string(),
+      status: z.enum(LOCATION_STATUSES),
+      change: z.enum(['CREATED', 'EDITED', 'MOVED', 'ARCHIVED']),
+    }),
+    live: { permission: 'inventory.locations.view', fields: ['locationId', 'code', 'status', 'change'] },
   }),
   // ---- stock counts (B-W2a-15) ----
   defineEvent({

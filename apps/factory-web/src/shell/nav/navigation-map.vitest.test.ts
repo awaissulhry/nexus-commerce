@@ -272,7 +272,14 @@ describe('record links and list addresses (lib/records/record-links.ts)', () => 
   })
 
   it('every record type the search finds opens its own page (B-W2a-83: returns, repairs, complaints and supplier claims too)', () => {
+    // B-W2b-23: a DDT has no page of its own (design 00 §2.3): the search opens its record panels, as every opener does.
+    const PANELS_ONLY = new Set(['Ddt'])
     for (const type of SEARCH_TYPES) {
+      if (PANELS_ONLY.has(type)) {
+        expect(RECORD_PAGES[type], type).toBeUndefined()
+        expect(recordAddress({ type, id: 'x1', companyId: 'c0' }, OFFICE_PAGES), type).toBe(`/records/${type}/x1?company=c0`)
+        continue
+      }
       expect(RECORD_PAGES[type], type).toBeDefined()
       expect(findAreaNavPlace(OFFICE_NAV, recordAddress({ type, id: 'x1', companyId: 'c0' }, OFFICE_PAGES))?.item, type).toBeDefined()
     }
