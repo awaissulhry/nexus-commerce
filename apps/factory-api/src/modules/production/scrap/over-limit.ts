@@ -37,7 +37,7 @@ import { floorChecksFor, FLOOR_RULES_ACTION, scrapLimitHistory } from '../settin
  *                      ProductionSettings.scrapApprovalLimit and its history in the audit rows of the floor rules'
  *                      change), of a work order not CANCELLED or CLOSED, with no decision yet. The scan counted at once
  *                      (F3); what waits is its scrap's posting: a replacement (replacements.ts), a scrap of stock naming it
- *                      (stock.ts) and, once wired, the cost ledger (`scrapApprovalStatesOf`, named in the step's notes).
+ *                      (stock.ts) and the cost ledger (costing/actual/post.ts reads `scrapApprovalStatesOf`; an approval posts it).
  *   the decision       ONE command per scan (the work order's scan lock, then the bundle's scan lock: a decision, an undo
  *                      and a correction of the bundle take turns), the facts read again under the locks: APPROVED or
  *                      REFUSED with a reason tile (OTHER with a note), never by who took the scan (four eyes: its worker,

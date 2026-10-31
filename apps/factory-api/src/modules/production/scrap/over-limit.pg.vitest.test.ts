@@ -7,6 +7,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
+import { seed as seedPrivacy } from '../../../../../../packages/factory-db/seed/privacy'
 import { seed as seedProduction, type ProductionSeed } from '../../../../../../packages/factory-db/seed/production'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
@@ -15,6 +16,8 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, Browser, startHarness, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { scrapApprovalStatesOf, scrapWaitsAt } from './over-limit'
+import { readWorkOrders } from '../../costing/actual/store'
+import { planCosts } from '../../costing/actual/post'
 
 /**
  * Scrap above a site's limit waits for the team leader's approval (B-W2b-53; MES-128 "Scrap over a quantity or value limit
@@ -135,6 +138,8 @@ beforeAll(async () => {
   h = await startHarness('w2b53_scrap_limit')
   h.clock.set(new Date())
   await seedCore({ db: h.database, namespace: NS })
+  // The floor's readiness for the real report below (the DPIA and the worker notice in force).
+  await seedPrivacy({ db: h.database, namespace: NS })
   seed = await seedProduction({ db: h.database, namespace: NS })
   await h.database.withScope({ audience: 'office', tenantId: T, actorId: newId() }, async (client) => applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId: newId() }))
   // The operator is also an office user (made up): that account never decides the operator's scrap.
@@ -191,6 +196,12 @@ describe('which scrap waits (MES-128)', () => {
     expect(refusalOf(stock)).toBe('refusal/SCRAP_WAITS_APPROVAL')
   })
 
+  it('the cost ledger waits for the decision (SCRAP_APPROVAL), never posts the waiting scrap', async () => {
+    const plan = await h.database.withScope({ audience: 'office', tenantId: T, actorId: newId() }, async (client) => planCosts(client, (await readWorkOrders(client, { id: seed.workOrderId }))[0]!, { scanIds: [waiting] }))
+    expect(plan.waiting.filter((row) => row.sourceId === waiting)).toEqual([{ code: 'SCRAP_APPROVAL', sourceType: 'OperationScan', sourceId: waiting, words: "The garments it scrapped are above the site's limit for one scan: the scrap is recorded once the team leader approves it." }])
+    expect(plan.drafts.filter((draft) => draft.idempotencyKey.startsWith(`scan-scrap:${waiting}:`))).toEqual([])
+  })
+
   it('the readers: the states for the cost ledger (office scope) and the words for the tablet (floor scope)', async () => {
     const states = await h.database.withScope({ audience: 'office', tenantId: T, actorId: newId() }, (client) => scrapApprovalStatesOf(client, [waiting, before, seed.scanIds[2]]))
     expect([...states.entries()]).toEqual([
@@ -244,6 +255,8 @@ describe("the team leader's decision on the tablet and the office's (four eyes)"
     expect(approved.words).toMatch(/^2 pieces of bundle .+ approved as scrap: it posts now/)
     const recut = await askRecut('manager', again)
     expect(recut.statusCode, recut.body).toBe(201)
+    const plan = await h.database.withScope({ audience: 'office', tenantId: T, actorId: newId() }, async (client) => planCosts(client, (await readWorkOrders(client, { id: seed.workOrderId }))[0]!, { scanIds: [again] }))
+    expect(plan.waiting.some((row) => row.code === 'SCRAP_APPROVAL')).toBe(false)
     expect((await scrapRows()).tiles.waitingApproval).toBe(0)
     // Approving many: each answered (one approved now, one decided already, one unknown).
     await undo(again)
@@ -304,5 +317,18 @@ describe('the team leader approves on a real tablet with the PIN (a signing act)
       ['OperationScan', lead, 'FLOOR'],
       ['WorkOrder', lead, 'FLOOR'],
     ])
+  })
+
+  it("a real report above the limit counts and its answer tells the tablet the scrap waits (the scans' hook)", async () => {
+    await undo(pending)
+    const clientScanId = `w2b53-${run}-route`
+    const answer = await app.inject({
+      method: 'POST',
+      url: '/production/scans',
+      headers: { 'x-test-session': 'operator', 'idempotency-key': clientScanId },
+      payload: { clientScanId, bundleId: seed.bundleIds[1], workOrderOperationId: seed.operationIds.qc, good: 0, scrap: [{ reason: 'STAIN', quantity: 2 }], kindReason: 'The inspection bench is busy.' },
+    })
+    expect(answer.statusCode, answer.body).toBe(201)
+    expect(answer.json().scan).toMatchObject({ kind: 'REPORT', scrapQuantity: 2, scrapWaits: { limit: 1, words: "2 pieces scrapped in one scan is above this site's limit of 1: it waits for the team leader's approval before it posts." } })
   })
 })

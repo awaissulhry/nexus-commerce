@@ -5,6 +5,8 @@ import { guardSettingsOf, type ComponentMaterial, type GuardSettings, type Scann
 import type { GarmentTracking } from '@nexus/factory-domain/production/serials/rules'
 import type { WorkCentreKind } from '@nexus/factory-domain/product/routing/operations'
 import type { CommandTx } from '../../../core/command'
+// B-W2b-53: the site's floor rules have one reader.
+import { floorChecksFor } from '../settings/floor-rules'
 
 /**
  * The checks' reads (B-W2b-46). Every read names its columns, selects no relation and runs as the caller (row-level
@@ -26,10 +28,12 @@ export const TRACED_ACTION = 'production.scanComponentsTraced'
 /** A wrong team leader PIN, counted on the team leader's worker row. */
 export const PIN_WRONG_ACTION = 'production.scanOverridePinWrong'
 
-/** The site's floor checks (ProductionSettings, the site's own id), or the schema's defaults. */
+/**
+ * The site's floor checks (ProductionSettings, the site's own id), or the schema's defaults. B-W2b-53: read through the
+ * ONE reader of the site's floor rules (Floor rules per site keeps them; modules/production/settings/floor-rules.ts).
+ */
 export async function guardSettingsFor(db: Pick<Reader, 'productionSettings'>, siteId: string): Promise<GuardSettings> {
-  const row = await db.productionSettings.findUnique({ where: { id: siteId }, select: { quantityGuard: true, skippedOperationRule: true } })
-  return guardSettingsOf(row)
+  return guardSettingsOf(await floorChecksFor(db as Pick<CommandTx, 'productionSettings'>, siteId))
 }
 
 export interface LineRow {
