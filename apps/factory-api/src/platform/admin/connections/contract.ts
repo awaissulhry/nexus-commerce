@@ -9,7 +9,7 @@ import { notMoney } from '@nexus/factory-domain/money/marked'
  * and the webhooks it sent. A secret is NEVER read back: only whether one is saved and when (SecretValue is sealed).
  */
 
-export const INTEGRATION_PROVIDERS = ['SES', 'R2', 'SDI', 'SENDCLOUD', 'VIES'] as const
+export const INTEGRATION_PROVIDERS = ['SES', 'R2', 'SDI', 'SENDCLOUD', 'VIES', 'CLAMAV', 'ERROR_TRACKING'] as const
 export const INTEGRATION_MODES = ['LIVE', 'SANDBOX', 'FAKE'] as const
 export const ACCOUNT_STATUSES = ['ACTIVE', 'PAUSED', 'DISABLED'] as const
 export const CALL_STATUSES = ['SUCCEEDED', 'FAILED', 'TIMED_OUT', 'REFUSED'] as const
