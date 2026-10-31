@@ -67,7 +67,7 @@ describe('ncr: who may do what, and where it lives', () => {
     expect(recordAddress({ type: 'Nonconformance', id: 'abc' }, OFFICE_PAGES)).toBe('/quality/ncr/abc')
     expect(LIST_PAGES['/quality/ncr']).toBe('/quality/ncr')
     const sales = officeNavFor(permissionCheck(templateOf('sales')!.permissions))
-    expect(sales.areas.find((area) => area.id === 'quality')?.sections?.flatMap((section) => section.items.map((item) => item.href))).toEqual(['/quality/ncr'])
+    expect(sales.areas.find((area) => area.id === 'quality')?.sections?.flatMap((section) => section.items.map((item) => item.href))).toEqual(['/quality/ncr', '/quality/complaints'])
   })
 })
 
