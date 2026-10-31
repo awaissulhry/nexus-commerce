@@ -137,7 +137,7 @@ describe('the locations import (adapter)', () => {
         return found.map((record) => ({ ...record }))
       })
     const existing = (await load()).result
-    expect(existing).toEqual([{ id: ids.bin1, values: { site: 'A1', code: 'A1-BIN-01', name: 'A1-BIN-01', kind: 'BIN', parent: 'A1-STORE' } }])
+    expect(existing).toEqual([{ id: ids.bin1, values: { site: 'A1', code: 'A1-BIN-01', name: 'A1-BIN-01', kind: 'BIN', parent: 'A1-STORE', workshop: null } }])
 
     await command(caller, { name: 'test.applyLocations', input: {} }, async (tools) => {
       for (const row of rows) {
@@ -167,16 +167,16 @@ describe('the locations import (adapter)', () => {
         locationsImportAdapter.write(tools, { action: 'CREATE', key: { site: 'A1', code: 'A1-ORPHAN' }, recordId: null, before: {}, values: { site: 'A1', code: 'A1-ORPHAN', name: 'x', kind: 'BIN', parent: 'A1-NOPE' } }, scope),
       ),
     ).rejects.toThrow(/Parent A1-NOPE is not a location of the site yet/)
-    // B-W2a-25: a workshop's stock location names its workshop, which the sheet has no column for.
+    // B-W2a-25, W2b B-W2b-25: a workshop's stock location names its workshop (the Workshop column); without one the batch stops.
     await expect(
       command(caller, { name: 'test.applyLocations', input: { n: 4 } }, (tools) =>
         locationsImportAdapter.write(tools, { action: 'CREATE', key: { site: 'A1', code: 'A1-TERZ' }, recordId: null, before: {}, values: { site: 'A1', code: 'A1-TERZ', name: 'x', kind: 'SUBCONTRACTOR' } }, scope),
       ),
-    ).rejects.toThrow(/made on the locations page with its workshop/)
+    ).rejects.toThrow(/a Subcontractor location names its workshop/)
     await expect(
       command(caller, { name: 'test.applyLocations', input: { n: 5 } }, (tools) =>
         locationsImportAdapter.write(tools, { action: 'UPDATE', key: { site: 'A1', code: 'A1-BIN-01' }, recordId: ids.bin1, before: { kind: 'BIN' }, values: { kind: 'SUBCONTRACTOR' } }, scope),
       ),
-    ).rejects.toThrow(/made on the locations page with its workshop/)
+    ).rejects.toThrow(/a workshop location stays one/)
   })
 })

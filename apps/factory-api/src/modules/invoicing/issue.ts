@@ -13,8 +13,8 @@ import { allocateNumber } from '../../platform/numbering/allocate'
 import type { FilesRuntime } from '../../platform/files/service'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { refundDueAfter } from '@nexus/factory-domain/invoicing/credit-note/credit-note'
-import { hardLockOn, honourPeriodLocks } from '../accounting/period-guard'
-import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
+import { hardLockOn, honourPeriodLocks, periodLockPreview } from '../accounting/period-guard'
+import type { PeriodLockLine, PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { lockAll, lockMoney } from '../payments/locks'
 import { lockInvoicing } from './from-shipment/locks'
 import { ordersOfInvoices, settleOrders } from './from-shipment/settlement'
@@ -145,8 +145,12 @@ export async function issueInCommand(tools: CommandTools, invoiceId: string, per
   return { invoiceId: invoice.id, number: number.formatted, issueDate: number.documentDate }
 }
 
-/** The checks before issue now, and the number the series would give next (a preview: the number is taken at issue). */
-export async function issueChecks(caller: CommandCaller, invoiceId: string): Promise<{ ready: boolean; problems: IssueProblem[]; numberPreview: string | null; issueDate: string }> {
+/**
+ * The checks before issue now, and the number the series would give next (a preview: the number is taken at issue).
+ * B-W2b-22: the month lock over today too, by the issue's own rule — HARD is a PERIOD_LOCKED problem (as at issue); SOFT is
+ * the lock line only (`periodLock.needsReason`: the issue goes in with `periodLockOverride.reason`).
+ */
+export async function issueChecks(caller: CommandCaller, invoiceId: string): Promise<{ ready: boolean; problems: IssueProblem[]; numberPreview: string | null; issueDate: string; periodLock: PeriodLockLine | null }> {
   const invoice = await officeInvoice(caller, invoiceId)
   if (invoice.status !== 'DRAFT') throw new InvalidStateError(`The invoice is ${invoice.status}, number ${invoice.number}: it is issued.`)
   const now = serverClock.now()
@@ -155,8 +159,9 @@ export async function issueChecks(caller: CommandCaller, invoiceId: string): Pro
     const lines = await readLines(client, invoice.id)
     const review = await reviewIssue(client, invoice, lines, date, now)
     const kind = await seriesKindFor(client, invoice.companyId, invoice.docType)
-    const problems = [...review.problems, ...(kind === null ? [noSeries(invoice.docType)] : [])]
-    return { ready: problems.length === 0, problems, numberPreview: kind ? await numberPreview(client, invoice.companyId, kind, date) : null, issueDate: date }
+    const periodLock = await periodLockPreview(client, { companyId: invoice.companyId, day: date, refused: `the invoice is not issued today (${dayWords(date)})` })
+    const problems = [...review.problems, ...(kind === null ? [noSeries(invoice.docType)] : []), ...(periodLock?.level === 'HARD' ? [{ code: 'PERIOD_LOCKED', path: 'issueDate', message: periodLock.words }] : [])]
+    return { ready: problems.length === 0, problems, numberPreview: kind ? await numberPreview(client, invoice.companyId, kind, date) : null, issueDate: date, periodLock }
   })
 }
 

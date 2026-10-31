@@ -14,7 +14,7 @@ import { command, type CommandCaller, type CommandTx } from '../../core/command'
 import { actorOf, type RequestContext } from '../../core/context'
 import { serverClock } from '../../core/time'
 import { contextOf, mayWrite } from '../product/materials/store'
-import { companyOrTenant, dayOf, RATE_COLUMNS, rateOf, SETTINGS_COLUMNS, type RateRow, type SettingsRow } from './inputs'
+import { companyOrTenant, dayOf, ownOverheadRows, RATE_COLUMNS, rateOf, SETTINGS_COLUMNS, type RateRow, type SettingsRow } from './inputs'
 
 /**
  * The labour rates and the costing settings (B-W1-16; features FIN-004, FIN-005; the Cost tab's "Costing parameters"):
@@ -230,7 +230,7 @@ export async function archiveRate(caller: CommandCaller, rateId: string, body: A
 
 // ---- costing settings ---------------------------------------------------------------------------------------------------
 
-const settingsView = (row: SettingsRow): CostingSettingsView => ({ id: row.id, companyId: row.companyId, overheadPct: text(row.overheadPct), version: row.version, updatedAt: toUtcIso(row.updatedAt) })
+const settingsView = (row: SettingsRow): CostingSettingsView => ({ id: row.id, companyId: row.companyId, overheadPct: text(row.overheadPct), overheadFromTenant: row.overheadFromTenant, version: row.version, updatedAt: toUtcIso(row.updatedAt) })
 
 /** The tenant-wide settings, a company's when asked, and which of them a cost sheet for that company uses. */
 export async function getSettings(caller: CommandCaller, query: SettingsQuery): Promise<SettingsListView> {
@@ -242,14 +242,18 @@ export async function getSettings(caller: CommandCaller, query: SettingsQuery): 
     // The tenant-wide row is keyed by the tenant's id; the company's by the company's.
     const tenant = rows.find((row) => row.companyId === null && row.id === tenantOf(context)) ?? null
     const company = companyId === null ? null : (rows.find((row) => row.companyId === companyId && row.id === companyId) ?? null)
-    const inForce = pickOverhead([tenant, company].flatMap((row) => (row ? [{ id: row.id, companyId: row.companyId, overheadPct: text(row.overheadPct), updatedAt: null }] : [])), companyId)
+    // B-W2b-22: a company row that holds only its costing method follows the tenant-wide overhead.
+    const inForce = pickOverhead(ownOverheadRows([tenant, company].flatMap((row) => (row ? [row] : []))).map((row) => ({ id: row.id, companyId: row.companyId, overheadPct: text(row.overheadPct), updatedAt: null })), companyId)
     return { tenant: tenant && settingsView(tenant), company: company && settingsView(company), inForce: inForce?.id ?? null }
   })
 }
 
 /**
  * costing.saveSettings: a company's overhead (or the tenant-wide one). The row is keyed by the company's id (the
- * tenant's for the tenant-wide row): the first save creates it (no version), later ones send its version.
+ * tenant's for the tenant-wide row): the first save creates it (no version), later ones send its version. B-W2b-22
+ * (Z9:02): the costing method lives apart from the overhead — a company's row made for its method only follows the
+ * tenant-wide overhead (overheadFromTenant); saving an overhead for the company makes it the company's own, and
+ * `overheadFromTenant: true` (with 0) makes the company follow the tenant-wide overhead again. The method is untouched.
  */
 export async function saveSettings(caller: CommandCaller, body: SaveSettingsBody, idempotencyKey?: string): Promise<CostingSettingsView> {
   const context = contextOf(caller)
@@ -259,6 +263,9 @@ export async function saveSettings(caller: CommandCaller, body: SaveSettingsBody
   const problems = overheadProblems(body.overheadPct)
   if (problems.length > 0) throw invalid(prefixed(problems), 'costing setting')
   const overheadPct = decimalText(body.overheadPct)
+  const fromTenant = body.overheadFromTenant === true
+  if (fromTenant && companyId === null) throw invalid([{ path: 'body/overheadFromTenant', message: 'The tenant-wide settings follow no other overhead: only a company follows the tenant-wide one.' }], 'costing setting')
+  if (fromTenant && overheadPct !== '0') throw invalid([{ path: 'body/overheadPct', message: 'A company that follows the tenant-wide overhead keeps none of its own: send 0.' }], 'costing setting')
   const id = companyId ?? tenantOf(context)
   const existing = await caller.withClient((client) => client.costingSettings.findUnique({ where: { id }, select: SETTINGS_COLUMNS }))
   if (existing && body.version === undefined) throw new ConflictError('These costing settings exist: send their version to change them.')
@@ -271,13 +278,14 @@ export async function saveSettings(caller: CommandCaller, body: SaveSettingsBody
       const { tx, now } = tools
       const row = existing ? await tx.costingSettings.findUniqueOrThrow({ where: { id }, select: SETTINGS_COLUMNS }) : null
       const before = row === null ? null : text(row.overheadPct)
+      const fields = [...(before !== overheadPct ? ['overheadPct'] : []), ...(row !== null && row.overheadFromTenant !== fromTenant ? ['overheadFromTenant'] : [])]
       if (row === null) {
-        await tx.costingSettings.create({ data: { id, companyId, overheadPct, createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null }, select: { id: true } })
-      } else if (before !== overheadPct) {
-        await tx.costingSettings.update({ where: { id }, data: { overheadPct, updatedAt: now }, select: { id: true } })
+        await tx.costingSettings.create({ data: { id, companyId, overheadPct, overheadFromTenant: fromTenant, createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null }, select: { id: true } })
+      } else if (fields.length > 0) {
+        await tx.costingSettings.update({ where: { id }, data: { overheadPct, overheadFromTenant: fromTenant, updatedAt: now }, select: { id: true } })
       }
-      tools.audit({ recordType: 'CostingSettings', recordId: id, companyId, ...(row === null ? {} : { before: { overheadPct: before } }), after: { companyId, overheadPct } })
-      if (before !== overheadPct) tools.emit({ type: 'costing_settings.changed', subject: id, companyId, payload: { settingsId: id, fields: ['overheadPct'] } })
+      tools.audit({ recordType: 'CostingSettings', recordId: id, companyId, ...(row === null ? {} : { before: { overheadPct: before, overheadFromTenant: row.overheadFromTenant } }), after: { companyId, overheadPct, overheadFromTenant: fromTenant } })
+      if (row === null || fields.length > 0) tools.emit({ type: 'costing_settings.changed', subject: id, companyId, payload: { settingsId: id, fields: row === null ? ['overheadPct', ...(fromTenant ? ['overheadFromTenant'] : [])] : fields } })
       return settingsView(await tx.costingSettings.findUniqueOrThrow({ where: { id }, select: SETTINGS_COLUMNS }))
     },
   ).catch((error: unknown) => {

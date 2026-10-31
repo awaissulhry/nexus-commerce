@@ -97,6 +97,23 @@ export type PeriodLockOverride = z.infer<typeof periodLockOverride>
 export const liftBody = input({ version: z.number().int().min(1), reason: text(1000) })
 export type LiftBody = z.infer<typeof liftBody>
 
+/**
+ * B-W2b-22 (Z9:01): the month lock over a write, as a preview shows it before the write is sent (the invoice's "Check and
+ * issue"): the same rule as the write's command (modules/accounting/period-guard.ts) — HARD refuses whatever the body says;
+ * SOFT asks for `periodLockOverride.reason` (`needsReason`). null: no lock over the day.
+ */
+export const periodLockLineView = output({
+  level: z.enum(['SOFT', 'HARD']),
+  lockId: id(),
+  periodStart: businessDate(),
+  periodEnd: businessDate(),
+  /** SOFT: the write goes in only with an override reason. HARD: false (nothing goes in). */
+  needsReason: z.boolean(),
+  /** In words: which month, since when, by whom, and the way out. */
+  words: z.string(),
+})
+export type PeriodLockLine = z.infer<typeof periodLockLineView>
+
 // ---- views ---------------------------------------------------------------------------------------------------------------
 
 const companyRef = output({ id: id(), code: z.string(), name: z.string() })
@@ -280,6 +297,7 @@ export const intrastatRowView = output({
   nature: z.enum(['SALE', 'RETURN']),
   suggestedNatureCode: z.string(),
   deliveryTerms: z.string().nullable(),
+  /** B-W2b-22: the DDT's mode of transport (frozen at its issue), else its shipment's (SEA, RAIL, ROAD, AIR, POST, …); null: not recorded. */
   transportMode: z.string().nullable(),
   flags: z.array(intrastatFlagView),
 })
@@ -291,6 +309,8 @@ export const intrastatFileRowView = output({
   nature: z.enum(['SALE', 'RETURN']),
   suggestedNatureCode: z.string(),
   deliveryTerms: z.string().nullable(),
+  /** B-W2b-22: the rows' mode of transport (the file writes its Intrastat code); null: not recorded. */
+  transportMode: z.string().nullable(),
   originCountry: z.string().nullable(),
   value: money.price(z.number().int()),
   currency: z.string(),

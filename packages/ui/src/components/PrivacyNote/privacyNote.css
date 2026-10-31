@@ -1,0 +1,60 @@
+/*
+ * DS — PrivacyNote (B-W2b-28). Colours are semantic roles paired as the contrast gate measures them (`--nds-text` on
+ * `--nds-surface-sunken`; `--nds-info-text` on `--nds-info-soft`; `--nds-warning-text` on `--nds-warning-soft`). Every
+ * level has its own icon and words, so the tone is never alone. Sizes read `--nds-density-*`.
+ */
+.nds-privacy {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-6);
+  max-width: 100%;
+  padding: var(--nds-space-2) var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-xl);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+  font-size: var(--nds-density-font-label);
+  line-height: 1.4;
+}
+.nds-privacy[data-variant='panel'] {
+  display: flex;
+  width: 100%;
+  padding: var(--nds-space-8) var(--nds-density-pad-x);
+  border-radius: var(--nds-density-radius);
+  font-size: var(--nds-density-font-body);
+}
+.nds-privacy[data-tone='info'] {
+  border-color: var(--nds-info);
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+.nds-privacy[data-tone='warning'] {
+  border-color: var(--nds-warning);
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.nds-privacy-icon,
+.nds-privacy-recorded-icon {
+  flex-shrink: 0;
+  width: 1.15em;
+  height: 1.15em;
+}
+.nds-privacy-level {
+  font-weight: var(--nds-font-weight-bold);
+}
+.nds-privacy-sep {
+  opacity: 0.7;
+}
+.nds-privacy-recorded {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.nds-privacy-action {
+  margin-inline-start: auto;
+}
+.nds-privacy[data-variant='pill'] .nds-privacy-action {
+  margin-inline-start: var(--nds-space-4);
+}

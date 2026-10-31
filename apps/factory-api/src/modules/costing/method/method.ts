@@ -110,9 +110,10 @@ const heldWords = (method: string, lockedAt: Date): string =>
 
 /**
  * costing.chooseMethod (PUT /costing/method, step-up in the route): the accountant's method for a company (its own
- * settings row; made now when it has none, with the tenant-wide overhead copied so nothing else changes) or the
- * tenant-wide one. Refused once locked; refused for a company whose entries were posted under the tenant-wide method
- * once that one is locked.
+ * settings row) or the tenant-wide one. Refused once locked; refused for a company whose entries were posted under the
+ * tenant-wide method once that one is locked. B-W2b-22 (Z9:02): the method is chosen apart from the overhead — a company
+ * without its own row gets one that holds the method only (overheadFromTenant, overheadPct 0): it keeps following the
+ * tenant-wide overhead, whatever that becomes later (no copy of today's %). A company row with its own overhead keeps it.
  */
 export async function chooseMethod(caller: CommandCaller, body: ChooseMethodBody, idempotencyKey?: string): Promise<CostingMethodView> {
   const context = contextOf(caller)
@@ -134,10 +135,10 @@ export async function chooseMethod(caller: CommandCaller, body: ChooseMethodBody
       if (row === null && companyId !== null) await refuseLeavingLockedTenantMethod(tx, companyId, body.method)
       const before = row?.costingMethod ?? (companyId === null ? 'UNDECIDED' : (await methodInForce(tx, companyId)).method)
       if (row === null) {
-        const tenant = companyId === null ? null : await tx.costingSettings.findFirst({ where: { companyId: null }, select: { overheadPct: true } })
-        const overheadPct = tenant?.overheadPct.toString() ?? '0'
-        await tx.costingSettings.create({ data: { id, companyId, overheadPct, costingMethod: body.method, createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null }, select: { id: true } })
-        tools.audit({ recordType: 'CostingSettings', recordId: id, companyId, after: { companyId, overheadPct, method: body.method }, ...(body.reason ? { reason: body.reason } : {}) })
+        // A company's row for its method only follows the tenant-wide overhead (the …_w2b_guards' CostingSettings_overhead_source: its own 0).
+        const overheadFromTenant = companyId !== null
+        await tx.costingSettings.create({ data: { id, companyId, overheadPct: '0', overheadFromTenant, costingMethod: body.method, createdAt: now, updatedAt: now, createdById: tools.context.audience === 'office' ? tools.context.actorId : null }, select: { id: true } })
+        tools.audit({ recordType: 'CostingSettings', recordId: id, companyId, after: { companyId, overheadPct: '0', overheadFromTenant, method: body.method }, ...(body.reason ? { reason: body.reason } : {}) })
       } else {
         if (row.costingMethod !== body.method) await tx.costingSettings.update({ where: { id }, data: { costingMethod: body.method, updatedAt: now }, select: { id: true } })
         tools.audit({ recordType: 'CostingSettings', recordId: id, companyId, before: { method: row.costingMethod }, after: { method: body.method }, ...(body.reason ? { reason: body.reason } : {}) })

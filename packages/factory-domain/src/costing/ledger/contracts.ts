@@ -74,6 +74,8 @@ export const ledgerQuery = input({
   /** Europe/Rome days of the entries' dates, both included. */
   from: businessDate().optional(),
   to: businessDate().optional(),
+  /** B-W2b-22 (Z9:05): the work order's number, the item's code or name, or the entry's reason (words, never a person). */
+  q: z.string().trim().min(1).max(100).optional(),
   cursor: id().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 })
@@ -152,6 +154,9 @@ export const workOrderCostsQuery = input({
   over: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
   /** The work order's number or batch. */
   q: z.string().trim().min(1).max(100).optional(),
+  /** B-W2b-22 (Z9:05): completed on these Europe/Rome days, both included ("Closed in <month>"); a work order not completed is left out. */
+  completedFrom: businessDate().optional(),
+  completedTo: businessDate().optional(),
   cursor: id().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 })

@@ -1,7 +1,8 @@
 import type { Prisma } from '@nexus/factory-db'
 import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
 import { IMPORTS_APPLY, IMPORTS_RUN, IMPORTS_VIEW } from '@nexus/factory-domain/auth/permissions/catalogue'
-import { DomainError, ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
+import { DomainError, ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { newId } from '@nexus/factory-domain/core/ids'
 import { can, type Actor } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import {
@@ -19,7 +20,7 @@ import {
 import { isMarkedJson } from '@nexus/factory-domain/money/marked'
 import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller } from '../../../core/command'
-import { actorOf } from '../../../core/context'
+import { actorOf, SYSTEM_ACTOR_ID } from '../../../core/context'
 import { ApiError } from '../../../core/errors'
 import { importedLines } from '../../../modules/inventory/opening/facts'
 import { processImporters, type ImportAdapter } from '../registry'
@@ -35,15 +36,18 @@ import type { FirstLoadStepView, MarkDoneBody } from './contract'
  *                                              person's "Done"
  *   POST /imports/first-load/:step/done         one command: the step's facts read again, refused (409, the differences)
  *                                              while an earlier step is open, without an applied import or with a
- *                                              difference; else an audit row `imports.firstLoadStepDone` (factory-domain
- *                                              imports/first-load: no table of its own yet). `nothing: true` = done with
- *                                              nothing to load (open orders have no importer yet).
+ *                                              difference; else the step's FirstLoadStep row (B-W2b-24; written once) and
+ *                                              an audit row `imports.firstLoadStepDone`. `nothing: true` = done with
+ *                                              nothing to load, with its reason (open orders have no importer yet).
  *
  * Seeing a step's import needs imports.view and the importer's view permission over the company (as the jobs list);
  * importing needs imports.run and its permission; "Done" needs imports.apply and its permission.
  */
 
 type Client = Prisma.TransactionClient
+
+/** B-W2b-24: the shortest reason for "nothing to load". */
+export const NOTHING_REASON_MIN = 3
 
 const actorOfCaller = (caller: CommandCaller): Actor => {
   if (!caller.factoryContext) throw new ApiError('unauthenticated')
@@ -163,16 +167,33 @@ interface DoneMark {
   readonly byId: string | null
   readonly nothing: boolean
   readonly jobId: string | null
+  readonly reason: string | null
 }
 
-/** The people's "Done" per step (the latest audit row of each). */
+/**
+ * The people's "Done" per step (B-W2b-24): the step's FirstLoadStep row (written once by markFirstLoadDone; B-W2a-41 kept
+ * an audit row instead — a step done before B-W2b-24 is read from it until the catch-up (./catch-up.ts) writes its row).
+ */
 async function doneMarks(client: Client, companyId: string): Promise<Map<FirstLoadStep, DoneMark>> {
-  const rows = await client.auditLog.findMany({ where: { action: FIRST_LOAD_DONE_ACTION, companyId }, select: { at: true, actorId: true, audience: true, after: true }, orderBy: { at: 'desc' }, take: 50 })
+  const out = new Map<FirstLoadStep, DoneMark>()
+  const rows = await client.firstLoadStep.findMany({ where: { companyId }, select: { step: true, jobId: true, nothingToLoad: true, reason: true, doneAt: true, doneById: true } })
+  for (const row of rows) {
+    if (!isFirstLoadStep(row.step)) continue
+    out.set(row.step, { at: row.doneAt, byId: row.doneById === SYSTEM_ACTOR_ID ? null : row.doneById, nothing: row.nothingToLoad, jobId: row.jobId, reason: row.reason })
+  }
+  for (const [step, mark] of await auditMarks(client, companyId)) if (!out.has(step)) out.set(step, mark)
+  return out
+}
+
+/** A step's "Done" as B-W2a-41 kept it: the latest `imports.firstLoadStepDone` audit row of each step. */
+export async function auditMarks(client: Pick<Client, 'auditLog'>, companyId: string): Promise<Map<FirstLoadStep, DoneMark>> {
+  const rows = await client.auditLog.findMany({ where: { action: FIRST_LOAD_DONE_ACTION, companyId }, select: { at: true, actorId: true, audience: true, after: true, reason: true }, orderBy: { at: 'desc' }, take: 50 })
   const out = new Map<FirstLoadStep, DoneMark>()
   for (const row of rows) {
     const after = row.after && typeof row.after === 'object' && !Array.isArray(row.after) ? (row.after as Record<string, unknown>) : {}
     if (!isFirstLoadStep(after.step) || out.has(after.step)) continue
-    out.set(after.step, { at: row.at, byId: row.audience === 'OFFICE' ? row.actorId : null, nothing: after.nothing === true, jobId: typeof after.jobId === 'string' ? after.jobId : null })
+    const nothing = after.nothing === true
+    out.set(after.step, { at: row.at, byId: row.audience === 'OFFICE' ? row.actorId : null, nothing, jobId: typeof after.jobId === 'string' ? after.jobId : null, reason: nothing ? (row.reason ?? null) : null })
   }
   return out
 }
@@ -247,7 +268,7 @@ function viewsOf(actor: Actor, companyId: string, steps: readonly StepFactsRead[
       reconciliation: shown && facts.reconciliation ? reconciliationOut(facts.reconciliation) : null,
       matches: shown && judgement ? judgement.matches : null,
       differences: shown && judgement ? [...judgement.differences] : [],
-      done: facts.done ? { at: toUtcIso(facts.done.at), byId: facts.done.byId, nothing: facts.done.nothing, stillMatches: facts.done.nothing || !shown || !judgement ? null : judgement.matches } : null,
+      done: facts.done ? { at: toUtcIso(facts.done.at), byId: facts.done.byId, nothing: facts.done.nothing, reason: facts.done.reason, stillMatches: facts.done.nothing || !shown || !judgement ? null : judgement.matches } : null,
       canImport: facts.adapter !== undefined && can(actor, IMPORTS_RUN, { companyId }) && can(actor, facts.adapter.permission, { companyId }),
       canMarkDone: can(actor, IMPORTS_APPLY, { companyId }) && (facts.adapter === undefined ? FIRST_LOAD_IMPORTERS[facts.step] === null : can(actor, facts.adapter.permission, { companyId })),
     })
@@ -278,6 +299,9 @@ export async function markFirstLoadDone(caller: CommandCaller, step: FirstLoadSt
   await caller.withClient((client) => companyFor(caller, client, companyId))
   const adapter = adapterOf(FIRST_LOAD_IMPORTERS[step])
   if (!can(actor, IMPORTS_APPLY, { companyId }) || (adapter && !can(actor, adapter.permission, { companyId }))) throw new ForbiddenError()
+  // B-W2b-24: "nothing to load" says why (the step's row keeps it; the database refuses it without one).
+  const reason = body.reason?.trim() ?? ''
+  if (body.nothing === true && reason.length < NOTHING_REASON_MIN) throw new ValidationError('Say why there is nothing to load for this step.', [{ path: 'body/reason', message: `Expected ${NOTHING_REASON_MIN} to 500 characters.` }])
   const { result } = await command(caller, { name: 'imports.firstLoadStepDone', idempotencyKey, input: { step, ...body } }, async ({ tx, audit, now }) => {
     const steps = await readSteps(tx, actor, companyId, body.jobId ? { step, jobId: body.jobId } : undefined)
     const index = FIRST_LOAD_STEPS.indexOf(step)
@@ -292,6 +316,12 @@ export async function markFirstLoadDone(caller: CommandCaller, step: FirstLoadSt
     })
     if (problems.length > 0) throw new DomainError('conflict', problems[0]!.message, problems)
     const job = body.nothing ? null : facts.applied
+    // B-W2b-24: the step's row, written once (the database refuses a second one and every change).
+    const doneById = caller.factoryContext?.audience === 'office' ? caller.factoryContext.actorId : SYSTEM_ACTOR_ID
+    await tx.firstLoadStep.create({
+      data: { id: newId(), companyId, step, jobId: job?.id ?? null, nothingToLoad: job === null, reason: job === null ? reason : null, doneAt: now, doneById, createdAt: now, updatedAt: now, createdById: doneById },
+      select: { id: true },
+    })
     audit({
       action: FIRST_LOAD_DONE_ACTION,
       recordType: job ? 'ImportJob' : 'Company',
@@ -307,7 +337,7 @@ export async function markFirstLoadDone(caller: CommandCaller, step: FirstLoadSt
       },
       ...(body.reason ? { reason: body.reason } : {}),
     })
-    const after = steps.map((item, i) => (i === index ? { ...item, done: { at: now, byId: caller.factoryContext?.audience === 'office' ? caller.factoryContext.actorId : null, nothing: body.nothing === true, jobId: job?.id ?? null } } : item))
+    const after = steps.map((item, i) => (i === index ? { ...item, done: { at: now, byId: doneById === SYSTEM_ACTOR_ID ? null : doneById, nothing: job === null, jobId: job?.id ?? null, reason: job === null ? reason : null } } : item))
     return { companyId, ...viewsOf(actor, companyId, after) }
   })
   return result

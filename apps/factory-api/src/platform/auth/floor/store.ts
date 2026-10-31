@@ -135,7 +135,8 @@ export async function endSessions(tx: CommandTx, where: Prisma.FloorSessionWhere
   const ids = open.map((row) => row.id)
   if (ids.length === 0) return []
   await tx.floorSession.updateMany({ where: { id: { in: ids }, endedAt: null }, data: { endedAt: now, endReason: reason } })
-  await tx.device.updateMany({ where: { currentSessionId: { in: ids } }, data: { currentSessionId: null } })
+  // B-W2b-24: in use since — cleared with the session on every path that ends one (sign-out, idle, revoke, a new sign-in).
+  await tx.device.updateMany({ where: { currentSessionId: { in: ids } }, data: { currentSessionId: null, inUseSince: null } })
   return ids
 }
 

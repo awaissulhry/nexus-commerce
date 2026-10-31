@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output, quantity, unitPrice } from '@nexus/factory-domain/core/contracts'
+import { typedNumberField } from '../../platform/numbering/contract'
 import { LINK_STATES } from '@nexus/factory-domain/links/purposes'
 import { money } from '@nexus/factory-domain/money/marked'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
@@ -214,7 +215,8 @@ const headerFields = {
   internalNote: text(MAX_TEXT.internalNote).nullish(),
 }
 
-export const createOrderContract = defineContract({ body: input({ companyId: id(), siteId: id(), partyId: id(), ...headerFields }), response: { 201: one } })
+// B-W2b-24 (PLT-125): a migrated open order may keep the number it had in the old system (numbering.override; platform/numbering typedNumber).
+export const createOrderContract = defineContract({ body: input({ companyId: id(), siteId: id(), partyId: id(), ...headerFields, typedNumber: typedNumberField().optional() }), response: { 201: one } })
 
 export const updateOrderContract = defineContract({ params: orderParams, body: input({ version, ...headerFields }), response: { 200: one } })
 

@@ -6,7 +6,8 @@
     "APPROVAL_OVERDUE": "Approvals overdue",
     "PO_NOT_CONFIRMED": "Purchase orders not confirmed",
     "CERTIFICATE_EXPIRING": "Certificates expiring",
-    "INVOICE_DEADLINE": "Shipped goods near their invoice deadline"
+    "INVOICE_DEADLINE": "Shipped goods near their invoice deadline",
+    "INTEGRATION_FAILING": "Connections failing"
   },
   "when": {
     "ORDER_LATE_RISK": "When an order is promised within {daysBeforePromise} and is not ready, or is late",
@@ -15,7 +16,8 @@
     "APPROVAL_OVERDUE": "When an approval waits longer than {hours}",
     "PO_NOT_CONFIRMED": "When a purchase order is not confirmed by the time the supplier was asked to answer by (none asked: {days} after it was sent)",
     "CERTIFICATE_EXPIRING": "{daysBefore} before a certificate expires",
-    "INVOICE_DEADLINE": "{daysBefore} before the deadline to invoice a DDT's goods"
+    "INVOICE_DEADLINE": "{daysBefore} before the deadline to invoice a DDT's goods",
+    "INTEGRATION_FAILING": "When a connection has not worked for more than {hours}"
   },
   "sentence": {
     "full": "{when} {place}, tell {recipient} by {channels} {cooldown}.",

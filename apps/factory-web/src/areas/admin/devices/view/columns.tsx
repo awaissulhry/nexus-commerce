@@ -2,19 +2,30 @@
 
 import { IdentityCell, type ColDef } from '@nexus/ui/grid'
 import { Button, Pill, Tag } from '@nexus/ui/primitives'
-import { formatDateTime } from '../../../../lib/i18n/format'
+import { formatDate, formatDateTime, formatTime } from '../../../../lib/i18n/format'
 import type { Locale } from '../../../../lib/i18n/locales'
 import type { Translate } from '../../../../lib/i18n/messages'
 import type { Device, Printer } from '../../shared/api'
 import { adminHref, STATUS_TONE } from '../../shared/model'
 import { cellOf as cell } from '../../shared/view/cells'
-import { batteryOf, deviceTileMatch, isOutdated, type SiteChoice } from '../model'
+import { batteryOf, deviceTileMatch, inUseSinceOf, isOutdated, networkKey, type SiteChoice } from '../model'
 
 /**
  * SCR-013 devices: name (the Device record's link), kind, site, station, status ("In use" says someone is signed in,
  * never who: Statuto dei Lavoratori art. 4), last seen (marked when not seen for a day), app version (marked when it is
  * not the version the server serves now, B-W2a-42) and battery as the tablet last said it (low marked; W2a).
  */
+/**
+ * B-W2b-24: "In use since 08:12" (the time alone on the same day in the site's zone, else the day and time); never who.
+ * Null when nobody is signed in or the API did not say since when.
+ */
+export function inUseSinceWords(device: Pick<Device, 'inUse' | 'inUseSince'>, ctx: { t: Translate; locale: Locale; now: number }): string | null {
+  const since = inUseSinceOf(device)
+  if (!since) return null
+  const time = formatDate(since, { locale: ctx.locale }) === formatDate(ctx.now, { locale: ctx.locale }) ? formatTime(since, { locale: ctx.locale }) : formatDateTime(since, { locale: ctx.locale })
+  return ctx.t('devices.inUseSince', { time })
+}
+
 export function deviceColumns(ctx: { t: Translate; locale: Locale; prefix: string; sites: readonly SiteChoice[]; now: number; currentVersion?: string | null }): ColDef<Device>[] {
   const { t, locale } = ctx
   const site = (device: Device) => ctx.sites.find((item) => item.id === device.siteId)
@@ -40,7 +51,7 @@ export function deviceColumns(ctx: { t: Translate; locale: Locale; prefix: strin
       cellRenderer: cell<Device>((device) => (
         <span className="fw-adm-celltags">
           <Pill tone={STATUS_TONE[device.status] ?? 'neutral'}>{t(`devices.status.${device.status}`)}</Pill>
-          {device.inUse && <Tag tone="info">{t('devices.inUse')}</Tag>}
+          {device.inUse && <Tag tone="info">{inUseSinceWords(device, { t, locale, now: ctx.now }) ?? t('devices.inUse')}</Tag>}
         </span>
       )),
     },
@@ -107,6 +118,17 @@ export function deviceColumns(ctx: { t: Translate; locale: Locale; prefix: strin
           </span>
         )
       }),
+    },
+    {
+      // B-W2b-24: the network the tablet last said (Wi-Fi, cable, mobile data); "—" when its browser does not say.
+      colId: 'network',
+      headerName: t('devices.col.network'),
+      valueGetter: ({ data }) => {
+        const key = data ? networkKey(data) : null
+        return key ? t(key) : '—'
+      },
+      minWidth: 130,
+      flex: 0.6,
     },
   ]
 }

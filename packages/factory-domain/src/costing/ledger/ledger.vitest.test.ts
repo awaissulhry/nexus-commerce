@@ -86,6 +86,10 @@ describe('reversals, overhead, dating', () => {
     )
     expect(records).toEqual([expect.objectContaining({ kind: 'SCRAP', itemId: 'leather', quantity: '5', unitCost: '4.2', standardUnitCost: '4.1', amount: 0, operationScanId: 'scan', idempotencyKey: 'scan-scrap:scan:leather' })])
     expect(scrapRecords(ids, [{ itemId: 'leather', area: '1', value: null }], { occurredAt: at, operationScanId: 's', key: () => 'k', reason: 'r', currency: 'EUR' }, () => null)[0]?.unitCost).toBeNull()
+    // B-W2b-22: a rework opened by hand has no scan: the record names its rework order instead.
+    expect(scrapRecords(ids, [{ itemId: 'leather', area: '3.3333', value: 1_400 }], { occurredAt: at, operationScanId: null, sourceType: 'ReworkOrder', sourceId: 'rework', key: (itemId) => entryKeys.reworkScrap('rework', itemId), reason: '1 garment(s) scrapped in rework', currency: 'EUR' }, () => null)).toEqual([
+      expect.objectContaining({ kind: 'SCRAP', amount: 0, operationScanId: null, stockMoveId: null, sourceType: 'ReworkOrder', sourceId: 'rework', idempotencyKey: 'rework-scrap:rework:leather' }),
+    ])
   })
 
   it('says the method in words: provisional until the accountant chooses, held once locked', () => {

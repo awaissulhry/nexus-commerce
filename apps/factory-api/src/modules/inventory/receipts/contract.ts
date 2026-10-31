@@ -372,7 +372,12 @@ export const expectedContract = defineContract({
 
 export const reverseReceiptContract = defineContract({
   params: receiptParams,
-  body: input({ version, reason: z.string().trim().min(3).max(500) }),
+  body: input({
+    version,
+    reason: z.string().trim().min(3).max(500),
+    /** B-W2b-22: why the mirror moves go into a soft-locked month (they are dated now). */
+    periodLockOverride: periodLockOverride.optional(),
+  }),
   response: { 201: output({ receipt: receiptView, moves: z.array(moveView) }) },
 })
 
