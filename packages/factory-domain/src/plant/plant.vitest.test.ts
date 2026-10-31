@@ -46,7 +46,7 @@ describe('permissions and templates (H1: anyone reports, only a technician signs
     // The owner holds every office permission by itself; otherwise only the technicians' templates.
     expect(signers.sort()).toEqual(['maintenance', 'owner', 'technician'])
     expect(templateOf('technician')).toMatchObject({ audience: 'floor', requireMfa: false, grains: [] })
-    expect(templateOf('technician')?.permissions).toEqual(['floor.work', 'plant.jobs.work', 'plant.report', 'plant.signSafe', 'print.labels', 'print.view'])
+    expect(templateOf('technician')?.permissions).toEqual(['floor.work', 'plant.jobs.work', 'plant.report', 'plant.signSafe', 'print.labels', 'print.view', /* B-W2b-35 */ 'production.calls.answer', 'production.calls.view'])
     expect(templateOf('maintenance')).toMatchObject({ audience: 'office', grains: [] })
     expect(templateOf('read_only')?.permissions.filter((name) => name.startsWith('plant.'))).toEqual(['plant.view'])
     expect(templateOf('production_manager')?.permissions).toEqual(expect.arrayContaining(['plant.view', 'plant.requests.triage', 'plant.jobs.manage', 'plant.machines.manage', 'plant.report']))

@@ -7,6 +7,7 @@ import { MAX_REPAIR_STEPS } from '@nexus/factory-domain/production/work-orders/r
 import { UNUSABLE_REASONS } from '@nexus/factory-domain/planning/usable'
 import { WORK_CENTRE_KINDS } from '@nexus/factory-domain/product/routing/operations'
 import { blockingHoldSchema, readinessPartSchema, workOrderHoldSchema } from './release/contract'
+import { RELATIVE_DAYS } from '@nexus/factory-domain/views/quick/relative'
 
 /**
  * The office's work orders (B-W1-38; MES-001, MES-002, MES-003, MES-005, MES-007, MES-305; A2 SCR-069, SCR-070): the
@@ -131,6 +132,8 @@ export const listContract = defineContract({
     open: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
     /** Part of the number, the batch number, or the style's code or name (any case). */
     q: z.string().trim().min(1).max(60).optional(),
+    /** B-W2b-13 (PLT-167): a quick filter's relative day, resolved against today when the list is read (`this-week`, `overdue`). */
+    due: z.enum(RELATIVE_DAYS).optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),

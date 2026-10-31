@@ -1,4 +1,6 @@
 import { z } from 'zod'
+// B-W2b-32: shifts and overtime requests.
+import { OVERTIME_ANSWERS } from './shifts/rules'
 import { defineEvent } from '../events/define'
 import { EMPLOYEE_KINDS } from './employees/rules'
 import { LEAVER_STEP_KINDS, LEAVER_STEP_STATUSES } from './leavers/rules'
@@ -48,6 +50,8 @@ export const PIECE_PAY_SWITCH_CHANGES = ['PRECONDITIONS_RECORDED', 'SWITCHED_ON'
 const by = z.enum(['OFFICE', 'SYSTEM', 'IMPORT'])
 
 export const events = [
+  // B-W2b-32: shifts and overtime requests (shiftEvents, at the end of the file).
+  ...shiftEvents(),
   defineEvent({
     type: 'employee.created',
     context: 'people',
@@ -179,3 +183,59 @@ export const events = [
     live: { permission: 'people.piecerates.view', fields: ['siteId', 'change', 'state', 'onFrom', 'offFrom'] },
   }),
 ] as const
+
+/**
+ * B-W2b-32: shifts and overtime requests (design people.shifts "Live": shift.assigned → the cell, overtime.agreed (floor) →
+ * the request row), emitted by apps/factory-api modules/people/shifts. The roster is planning; these name ids, the days of
+ * the roster and states, never a figure about one person's work. roster.published and overtime.asked also reach the
+ * tablets of the site (floor.work): the worker's own shifts and asks are read again when they come.
+ *
+ *   shift.assigned            roster cells set or cleared (back to the default shift), assigned to many, or last week copied
+ *   roster.published          what the workers read changed: a range published, or a published cell changed or cleared
+ *   overtime_request.changed  a request made, changed, its people added or taken off, approved or cancelled
+ *   overtime.asked            people were asked (on the tablet's My day, or by the lead)
+ *   overtime.answered         a person answered: on the tablet (FLOOR), or the lead recorded what they said (OFFICE)
+ *
+ * A function (hoisted), so the list above can spread it while this block stays apart at the end of the file.
+ */
+function shiftEvents() {
+  const change = z.enum(['SET', 'CLEARED', 'ASSIGNED', 'COPIED', 'PUBLISHED'])
+  const day = z.iso.date()
+  return [
+    defineEvent({
+      type: 'shift.assigned',
+      context: 'people',
+      description: "Roster cells changed: shifts set or cleared (back to the default shift), assigned to many people, or last week copied (the people's record ids and the days).",
+      payload: z.strictObject({ siteId: z.uuid(), employeeIds: z.array(z.uuid()), from: day, to: day, cells: z.number().int().min(0), change }),
+      live: { permission: 'people.shifts.view', fields: ['siteId', 'from', 'to', 'cells', 'change'] },
+    }),
+    defineEvent({
+      type: 'roster.published',
+      context: 'people',
+      description: 'The roster the workers read changed: a range published, or a published cell changed or cleared.',
+      payload: z.strictObject({ siteId: z.uuid(), employeeIds: z.array(z.uuid()), from: day, to: day, cells: z.number().int().min(0), change }),
+      live: { permission: 'people.shifts.view', floor: 'floor.work', fields: ['siteId', 'from', 'to', 'cells'] },
+    }),
+    defineEvent({
+      type: 'overtime_request.changed',
+      context: 'people',
+      description: 'A planned overtime request was made, changed, its people added or taken off, approved or cancelled.',
+      payload: z.strictObject({ requestId: z.uuid(), lineId: z.uuid().nullable(), date: day, change: z.enum(['CREATED', 'EDITED', 'PEOPLE_ADDED', 'PEOPLE_REMOVED', 'APPROVED', 'CANCELLED']), asked: z.number().int().min(0), agreed: z.number().int().min(0) }),
+      live: { permission: 'people.shifts.view', fields: ['requestId', 'date', 'change', 'asked', 'agreed'] },
+    }),
+    defineEvent({
+      type: 'overtime.asked',
+      context: 'people',
+      description: "People were asked to work a planned overtime (each answers on the tablet's My day, or tells the lead).",
+      payload: z.strictObject({ requestId: z.uuid(), date: day, employeeIds: z.array(z.uuid()) }),
+      live: { permission: 'people.shifts.view', floor: 'floor.work', fields: ['requestId', 'date'] },
+    }),
+    defineEvent({
+      type: 'overtime.answered',
+      context: 'people',
+      description: 'A person asked to work a planned overtime answered: on the tablet (FLOOR), or the lead recorded what they said (OFFICE).',
+      payload: z.strictObject({ requestId: z.uuid(), agreementId: z.uuid(), employeeId: z.uuid(), answer: z.enum(OVERTIME_ANSWERS), via: z.enum(['FLOOR', 'OFFICE']), agreed: z.number().int().min(0), asked: z.number().int().min(0) }),
+      live: { permission: 'people.shifts.view', fields: ['requestId', 'answer', 'via', 'agreed', 'asked'] },
+    }),
+  ] as const
+}

@@ -29,6 +29,8 @@ import { serverClock } from '../../../core/time'
 import { floorReadinessFor } from '../../../platform/privacy/read'
 import { bundleFlowOf } from '../bundles/flow'
 import { lockBundleForScan, readBundle, readBundleByCode, type BundleRow } from '../bundles/store'
+// W2b B-W2b-41: coupons per operation (MES-067).
+import { couponForScan } from '../bundles/coupons'
 import { floorRecordSubjectFor, hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
 // W2b B-W2b-29: a bundle scanned ends the running off-standard block (MES-156).
 import { believedTime } from '@nexus/factory-domain/production/offstandard/rules'
@@ -57,6 +59,8 @@ import {
   type ScanHeader,
   type ScanRow,
 } from './store'
+// B-W2b-46 hook (modules/production/guards): the site's checks before a scan counts, the override, the lots at the operation.
+import { guardReportInCommand, recordGuardsInCommand, type ComponentInput, type VerifiedOverride } from './hooks/guards'
 
 /**
  * The floor's scans (B-W1-42; MES-069, MES-090, MES-095, MES-096, MES-308; PLAN §4.7 stage 12-scans, risk 17; A1 §3.8;
@@ -101,6 +105,10 @@ export interface ReportInput {
   readonly kindReason?: string | undefined
   /** When it happened, by the device's clock. */
   readonly occurredAt?: string | undefined
+  /** B-W2b-46 (MES-114): the lots scanned at the operation, each with the garments it traces. */
+  readonly components?: readonly ComponentInput[] | undefined
+  /** B-W2b-46: a team leader's verified override of the held checks (POST /production/guards/override; never a PIN). */
+  readonly override?: VerifiedOverride | undefined
 }
 
 export interface UndoInput {
@@ -333,7 +341,12 @@ async function reportedBefore(caller: CommandCaller, session: Session, input: Re
     return { scan, bundle, operations: await readOperations(client, scan.workOrderId) }
   })
   if (!found) return null
-  const sameBundle = input.bundleId !== undefined ? input.bundleId === found.scan.bundleId : !!found.bundle && (input.code?.trim().toUpperCase() === found.bundle.code || found.bundle.replacedCodes.includes(input.code?.trim().toUpperCase() ?? ''))
+  // W2b B-W2b-41: a resent coupon's code names its bundle too (bundles/store.ts readBundleByCode reads coupons).
+  const resent = input.code?.trim().toUpperCase() ?? ''
+  const sameBundle =
+    input.bundleId !== undefined
+      ? input.bundleId === found.scan.bundleId
+      : !!found.bundle && (resent === found.bundle.code || found.bundle.replacedCodes.includes(resent) || (await caller.withClient((client) => readBundleByCode(client, resent)))?.id === found.bundle.id)
   if (found.scan.kind !== 'REPORT' || !sameBundle || (input.workOrderOperationId !== undefined && input.workOrderOperationId !== found.scan.workOrderOperationId)) {
     return refused(clientIdReusedRefusal(input.clientScanId))
   }
@@ -423,6 +436,10 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   // W2a B-W2a-13 hook (bundles/flow.ts): a split bundle's live garments, a child's place in the flow, rework back in it.
   const flow = await bundleFlowOf(tx, locked.bundle, operations, standing)
   if (flow.refusal) refuse(flow.refusal)
+  // W2b B-W2b-41 hook (bundles/coupons.ts couponForScan; MES-067): a scanned coupon reports its own operation; an old or
+  // voided coupon, or a coupon of another operation than the one named, is refused.
+  const coupon = await couponForScan(tx, locked.bundle.id, work.scanned, work.input.workOrderOperationId ?? null)
+  if (coupon && !coupon.ok) refuse({ code: coupon.code, message: coupon.message, fix: coupon.fix, final: true })
 
   const decision = reportDecision({
     workOrder,
@@ -430,7 +447,7 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
     bundle: { code: locked.bundle.code, quantity: flow.quantity, status: locked.bundle.status, replacedCodes: locked.bundle.replacedCodes },
     scanned: work.scanned,
     operations,
-    operationId: work.input.workOrderOperationId ?? null,
+    operationId: work.input.workOrderOperationId ?? (coupon?.ok ? coupon.operationId : null),
     station: station ? { code: station.code, kind: station.kind } : null,
     kindReason: work.input.kindReason?.trim() || null,
     standing: flow.standing,
@@ -438,8 +455,11 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
     viewer: { scanSubject, workerId: context.actorId, stationId: work.stationId },
     stationCodes: new Map([...stations.values()].map((row) => [row.id, row.code])),
     timeZone: work.timeZone,
+    guarded: true,
   })
   if (!decision.ok) return refuse(decision.refusal)
+  // B-W2b-46 hook (production/guards): the site's checks hold the report (or a team leader's override lifts them); the lots at the operation.
+  const guard = await guardReportInCommand(tools, { workOrder, bundle: { id: locked.bundle.id, code: locked.bundle.code, workOrderSizeId: work.bundle.workOrderSizeId }, quantity: flow.quantity, operations, operation: decision.operation, standing: flow.standing, counts: work.counts, stationId: work.stationId, components: work.input.components, override: work.input.override })
   // Who it names: the site's floor rules (the trigger checks the same).
   const subject = await floorRecordSubjectFor(tx, { siteId: workOrder.siteId, workerId: context.actorId, stationId: work.stationId })
   const otherKind = station !== null && station.kind !== decision.operation.workCentreKind
@@ -473,10 +493,12 @@ async function reportInCommand(tools: CommandTools, work: ReportWork): Promise<S
   // W2b B-W2b-29 hook (offstandard/writes.ts; MES-156): scanning a bundle returns to standard work — the subject's running off-standard block ends at the scan.
   await endRunningBlock(tools, { tenantId: context.tenantId, siteId: workOrder.siteId, subject, at: believedTime(work.deviceTime, tools.now), endedBy: 'SCAN' })
   const row = (await readScan(tx, id))!
-  const after = { workOrderId: workOrder.id, bundleId: locked.bundle.id, operationId: decision.operation.id, operationSeq: decision.operation.seq, goodQuantity: row.goodQuantity, scrapQuantity: row.scrapQuantity, reworkQuantity: row.reworkQuantity, cap: decision.cap, workerId: row.workerId, stationId: row.stationId, clientScanId: row.clientScanId }
+  const after = { workOrderId: workOrder.id, bundleId: locked.bundle.id, operationId: decision.operation.id, operationSeq: decision.operation.seq, goodQuantity: row.goodQuantity, scrapQuantity: row.scrapQuantity, reworkQuantity: row.reworkQuantity, cap: guard.cap, workerId: row.workerId, stationId: row.stationId, clientScanId: row.clientScanId }
   tools.audit({ action: 'production.reportScan', recordType: 'OperationScan', recordId: id, companyId: workOrder.companyId, siteId: workOrder.siteId, after, ...(row.reason ? { reason: row.reason } : {}) })
   tools.audit({ action: 'production.reportScan', recordType: 'WorkOrder', recordId: workOrder.id, companyId: workOrder.companyId, siteId: workOrder.siteId, after: { scanId: id, bundleId: locked.bundle.id, operationId: decision.operation.id, goodQuantity: row.goodQuantity, scrapQuantity: row.scrapQuantity, reworkQuantity: row.reworkQuantity } })
   tools.emit(scanEvent(workOrder, row, decision.operation.seq, 'FLOOR'))
+  // B-W2b-46 hook: what the checks found, the override and the lots, kept and told.
+  recordGuardsInCommand(tools, guard, { scan: row, workOrder, bundleId: locked.bundle.id, operation: decision.operation })
   return scanView(row, operations, locked.bundle.code, work.lines)
 }
 

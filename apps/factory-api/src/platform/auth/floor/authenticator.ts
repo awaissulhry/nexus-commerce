@@ -4,6 +4,7 @@ import { UnauthenticatedError } from '@nexus/factory-domain/core/errors'
 import type { Authenticator, SessionContext } from '../../../core/context'
 import { assertCsrf, isUnsafeMethod } from '../sessions/cookies'
 import { deviceCookieOf, floorCookieOf } from './cookies'
+import { slideCrew } from './crew-store'
 import { floorGrantsOf, isLiveSession, liveDevice, SESSION_SELECT, siteScope, siteTiming, type FloorCore, type FloorDevice } from './store'
 import { floorHash, parseSessionToken, parseSiteToken } from './tokens'
 
@@ -22,6 +23,9 @@ import { floorHash, parseSessionToken, parseSiteToken } from './tokens'
  *      recorded: bookkeeping, not audited;
  *   6. the context: floor, the device's tenant and site, the worker, the device, and the grants of the worker's live
  *      floor roles over the device's company and site (none while the worker's PIN must change).
+ * B-W2b-52 (MES-181, MES-186, PLT-059): a line board holds no session (nobody signs in on it), a personal phone only its
+ * person's (a mode changed in the office stops any other at its next request), and on a crew tablet the slide of the
+ * active member's idle end moves the other members' with it (the crew stays signed in while the tablet is used).
  * Anything else: no session (401). A revoked device, badge or worker therefore stops at the next request, even if the
  * command that revoked it had not ended the session.
  */
@@ -71,6 +75,7 @@ export function floorAuthenticator(core: FloorCore): Authenticator {
       })
       if (!row || row.deviceId !== device.id || row.id !== device.currentSessionId || !isLiveSession(row, now)) return null
       if (row.worker.status !== 'ACTIVE' || (row.badge !== null && row.badge.status !== 'ACTIVE')) return null
+      if (device.mode === 'DISPLAY' || (device.mode === 'PHONE' && row.workerId !== device.personalWorkerId)) return null
       if (isUnsafeMethod(request.method)) assertCsrf(request)
 
       const grants = await floorGrantsOf(client, { id: row.workerId, pinMustChange: row.worker.pinMustChange }, device)
@@ -80,6 +85,7 @@ export function floorAuthenticator(core: FloorCore): Authenticator {
         const timing = await siteTiming(client, device.siteId)
         idleExpiresAt = idleEndAt(now, timing.idleMinutes, row.endsAt)
         await client.floorSession.updateMany({ where: { id: row.id, endedAt: null }, data: { lastSeenAt: now, idleExpiresAt } })
+        if (device.mode === 'STATION') await slideCrew(client, device.id, row.id, idleExpiresAt, now)
       }
       if (device.lastSeenAt === null || now.getTime() - device.lastSeenAt.getTime() >= FLOOR_SESSION.slideEveryMs) {
         await client.device.updateMany({ where: { id: device.id, status: 'ACTIVE' }, data: { lastSeenAt: now } })
