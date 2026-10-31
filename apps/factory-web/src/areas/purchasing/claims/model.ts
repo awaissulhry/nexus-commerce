@@ -20,6 +20,7 @@ import type {
   ReturnDdtRequest,
   ReturnGoodsBody,
   ReturnToSupplierBody,
+  NewClaimBody,
   SendBody,
   SendCheck,
   SupplierContact,
@@ -54,8 +55,11 @@ export interface ClaimsCan {
   /** parties.view: the supplier's contacts for a mail with the return. */
   parties: boolean
   threads: boolean
-  /** files.read: a return DDT's PDF. */
+  /** files.read: a return DDT's PDF, a claim's photos and letter. */
   files: boolean
+  /** B-W2b-14: files.upload — a photo of what is wrong; files.delete — a draft's photo removed. */
+  upload: boolean
+  remove: boolean
 }
 
 export function claimsCan(permissions: readonly string[]): ClaimsCan {
@@ -70,6 +74,8 @@ export function claimsCan(permissions: readonly string[]): ClaimsCan {
     parties: held.has('parties.view'),
     threads: held.has('threads.read'),
     files: held.has('files.read'),
+    upload: held.has('files.upload'),
+    remove: held.has('files.delete'),
   }
 }
 
@@ -156,7 +162,7 @@ export function claimQuery(view: ClaimView, filters: ClaimFilters, cursor: strin
 }
 
 /** The list's address: the view (left out when it is the default), the filters, and the Return dialog (`?return=1`). */
-export function claimsAddress(pathname: string, view: ClaimView, filters: ClaimFilters, options: { returnOpen?: boolean } = {}): string {
+export function claimsAddress(pathname: string, view: ClaimView, filters: ClaimFilters, options: { returnOpen?: boolean; newOpen?: boolean } = {}): string {
   const query = new URLSearchParams()
   if (view !== defaultView(filters)) query.set('view', view)
   if (filters.kind) query.set('kind', filters.kind)
@@ -164,6 +170,8 @@ export function claimsAddress(pathname: string, view: ClaimView, filters: ClaimF
   if (filters.lot) query.set('lot', filters.lot)
   if (filters.q.trim()) query.set('q', filters.q.trim())
   if (options.returnOpen) query.set('return', '1')
+  // B-W2b-14: New claim (`?new=1`).
+  if (options.newOpen) query.set('new', '1')
   const text = query.toString()
   return `${pathname}${text ? `?${text}` : ''}`
 }
@@ -222,6 +230,8 @@ export interface ClaimsListActions {
   onExport?: (ids: string[]) => void
   onDismissNotice?: () => void
   onReturn?: (open: boolean) => void
+  /** B-W2b-14: New claim opened (`?new=1`) or closed. */
+  onNewClaim?: (open: boolean) => void
   onReturnDraft?: (draft: ReturnDraft) => void
   onReturnSearch?: (q: string) => void
   onReturnPick?: (lot: LotRow | null) => void
@@ -291,6 +301,8 @@ export interface ReturnDraft {
   contactIds: string[]
   message: string
   ddt: DdtDraft
+  /** B-W2b-14 (New claim): where it was found; empty: from the lot's quality state (the API's default). */
+  foundAt: ClaimFoundAt | ''
 }
 
 export const NO_RETURN: ReturnDraft = Object.freeze({
@@ -310,6 +322,7 @@ export const NO_RETURN: ReturnDraft = Object.freeze({
   contactIds: [],
   message: '',
   ddt: NO_DDT,
+  foundAt: '',
 }) as ReturnDraft
 
 export interface ReturnDialogModel {
@@ -317,6 +330,11 @@ export interface ReturnDialogModel {
   busy: boolean
   problem: Words | null
   result: ReturnAnswer | null
+  /**
+   * B-W2b-14: 'claim' = New claim (design purchasing.claims page.h#1, W2b): the same lot, goods and reason, no mail and no
+   * DDT — a DRAFT claim for credit or replacement that keeps the goods, opened on its record. Default 'return'.
+   */
+  mode?: 'return' | 'claim'
 }
 
 export const isHideLot = (lot: Pick<LotRow, 'item'> | null): boolean => lot?.item.tracking === 'HIDE'
@@ -344,6 +362,25 @@ export function returnHeld(draft: ReturnDraft, can: ClaimsCan): Words | null {
   if (!can.ret) return words('held.permission', { permission: 'purchasing.claims.return' })
   if (!can.ddtIssue) return words('held.permission', { permission: 'shipping.ddt.issue' })
   if (!can.stock) return words('held.permission', { permission: 'inventory.stock.view' })
+  const goods = goodsAndReasonHeld(draft)
+  if (goods) return goods
+  if (draft.mail) {
+    if (!can.parties) return words('held.permission', { permission: 'parties.view' })
+    if (!draft.contacts?.value) return words(draft.contacts?.problem ? 'ret.held.contactsFailed' : 'held.loading')
+    if (draft.contactIds.length === 0) return words('ret.held.contact')
+  }
+  return ddtHeld(draft.ddt)
+}
+
+/** B-W2b-14: why "Create claim" (New claim) is held: the rights, then the lot, what it is about, the reason. */
+export function newClaimHeld(draft: ReturnDraft, can: ClaimsCan): Words | null {
+  if (!can.manage) return words('held.permission', { permission: 'purchasing.claims.manage' })
+  if (!can.stock) return words('held.permission', { permission: 'inventory.stock.view' })
+  return goodsAndReasonHeld(draft)
+}
+
+/** The lot, the goods it is about (hides, or a quantity per place) and the reason: shared by Return to supplier and New claim. */
+function goodsAndReasonHeld(draft: ReturnDraft): Words | null {
   const lot = draft.lot
   if (!lot) return words('ret.held.lot')
   if (!lot.supplier) return words('ret.held.noSupplier', { lot: lot.code })
@@ -369,12 +406,41 @@ export function returnHeld(draft: ReturnDraft, can: ClaimsCan): Words | null {
   if (!draft.reasonCode) return words('ret.held.reason')
   const reason = draft.reasons.value?.find((entry) => entry.code === draft.reasonCode)
   if (reason?.needsDetail && draft.reasonNote.trim() === '') return words('ret.held.note')
-  if (draft.mail) {
-    if (!can.parties) return words('held.permission', { permission: 'parties.view' })
-    if (!draft.contacts?.value) return words(draft.contacts?.problem ? 'ret.held.contactsFailed' : 'held.loading')
-    if (draft.contactIds.length === 0) return words('ret.held.contact')
+  return null
+}
+
+/**
+ * B-W2b-14: the body of POST /purchasing/claims for New claim: a CLAIM (the goods stay), from the lot (its hides named, or
+ * the whole lot), or one line of the quantity typed over its places; the reason, the remedy, where it was found.
+ */
+export function newClaimBody(draft: ReturnDraft): NewClaimBody {
+  const lot = draft.lot!
+  const base = {
+    kind: 'CLAIM' as const,
+    reasonCode: draft.reasonCode,
+    ...(draft.reasonNote.trim() ? { reasonNote: draft.reasonNote.trim() } : {}),
+    remedy: draft.remedy,
+    ...(draft.foundAt ? { foundAt: draft.foundAt } : {}),
   }
-  return ddtHeld(draft.ddt)
+  if (isHideLot(lot)) return { ...base, from: { lotId: lot.id, hideIds: draft.hideIds } }
+  const places = (draft.stock.value ?? []).filter((row) => Number(row.onHand) > 0)
+  const whole = places.every((row) => Number(decimal(draft.quantities[row.location.id] ?? '')) === Number(row.onHand))
+  if (whole) return { ...base, from: { lotId: lot.id } }
+  const total = places.reduce((sum, row) => sum + Number(decimal(draft.quantities[row.location.id] ?? '') || 0), 0)
+  return { ...base, partyId: lot.supplier?.id, lines: [{ lotId: lot.id, quantity: String(Number(total.toFixed(4))), uom: lot.item.baseUom }] }
+}
+
+/** New claim refused, in our words (the lot, the reason; else by kind). */
+export function newClaimRefusal(error: unknown): Words {
+  const paths = pathsOf(error)
+  const text = sentence(error)
+  if (isApiError(error) && error.kind === 'forbidden') return words('newClaim.refused.forbidden')
+  if (has(paths, 'hideIds')) return words('ret.refused.hideGone')
+  if (has(paths, 'from/lotId') || has(paths, 'lotId')) return words(text.includes('another supplier') ? 'ret.refused.otherSupplier' : 'ret.refused.nothingLeft')
+  if (has(paths, 'reasonNote')) return words('ret.held.note')
+  if (has(paths, 'reasonCode')) return words('ret.refused.reason')
+  if (has(paths, 'partyId')) return words('ret.held.noSupplier', { lot: '' })
+  return kindWords(error)
 }
 
 /** The body of POST /purchasing/claims/returns: the lot (its hides named) or what goes from each place, the reason, the remedy, the mail or none, the DDT. */
@@ -759,6 +825,8 @@ export type ClaimDialog =
   | { kind: 'returnGoods'; draft: GoodsDraft }
   /** After the goods went back: the DDT and what the return left over-reserved. */
   | { kind: 'returned'; answer: ReturnAnswer }
+  /** B-W2b-14: a draft's photo removed. */
+  | { kind: 'removePhoto'; fileId: string }
 
 /** Why a simple dialog is held (close, cancel, remove lines). */
 export function simpleHeld(dialog: ClaimDialog, claim: Claim, can: ClaimsCan): Words | null {
@@ -769,6 +837,8 @@ export function simpleHeld(dialog: ClaimDialog, claim: Claim, can: ClaimsCan): W
       return actHeld(claim, 'cancel', can) ?? (dialog.reason.trim().length < 3 ? words('cancel.held.reason') : null)
     case 'removeLines':
       return actHeld(claim, 'removeLines', can) ?? (dialog.lineIds.length === 0 ? words('lines.held.none') : null)
+    case 'removePhoto':
+      return photoRemoveHeld(claim, can)
     default:
       return null
   }
@@ -777,6 +847,7 @@ export function simpleHeld(dialog: ClaimDialog, claim: Claim, can: ClaimsCan): W
 /** A dialog's write refused, in our words. */
 export function dialogRefusal(dialog: ClaimDialog['kind'], error: unknown): Words {
   if (dialog === 'returnGoods') return returnRefusal(error)
+  if (dialog === 'removePhoto') return evidenceRefusal(error)
   const paths = pathsOf(error)
   if (dialog === 'send') {
     if (has(paths, 'remedy')) return words('send.held.remedy')
@@ -810,8 +881,52 @@ export interface ClaimRecordModel {
   reasons: Part<PickerReason[]>
   /** Lines ticked on the Claim tab (design cases; the view keeps its own). */
   selected?: readonly string[]
+  /** B-W2b-14: photo addresses by file id (absent: loading; null: could not be read); the camera step; an upload running. */
+  photos?: Readonly<Record<string, string | null>>
+  photoStep?: boolean
+  uploading?: boolean
   panelsPreview?: RecordPanelsViewModel
   timeZone?: string
+}
+
+// ---- B-W2b-14 (SCM-135): the claim's photos and its letter -----------------------------------------------------------------
+
+export const CLAIM_PHOTO_LIMIT = 20
+
+/** Why "Add a photo" is held: the rights, a settled claim, the limit (the API's photoProblems). */
+export function photoAddHeld(claim: Pick<Claim, 'status' | 'photos'>, can: ClaimsCan): Words | null {
+  if (!can.manage) return words('held.permission', { permission: 'purchasing.claims.manage' })
+  if (!can.upload) return words('held.permission', { permission: 'files.upload' })
+  if (claim.status === 'CLOSED' || claim.status === 'CANCELLED') return words('photos.held.settled', { status: `@statusIn.${claim.status}` })
+  if (claim.photos.length >= CLAIM_PHOTO_LIMIT) return words('photos.held.full', { max: CLAIM_PHOTO_LIMIT })
+  return null
+}
+
+/** Why a photo's Remove is held: only a draft's, with files.delete. */
+export function photoRemoveHeld(claim: Pick<Claim, 'status'>, can: ClaimsCan): Words | null {
+  if (!can.manage) return words('held.permission', { permission: 'purchasing.claims.manage' })
+  if (!can.remove) return words('held.permission', { permission: 'files.delete' })
+  if (claim.status !== 'DRAFT') return words('photos.held.sent')
+  return null
+}
+
+/** Why "Keep a version" of the letter is held. */
+export const letterKeepHeld = (can: ClaimsCan): Words | null => (can.manage ? null : words('held.permission', { permission: 'purchasing.claims.manage' }))
+
+/** Why opening a stored photo or letter is held. */
+export const fileOpenHeld = (can: ClaimsCan): Words | null => (can.files ? null : words('held.permission', { permission: 'files.read' }))
+
+/** A photo or letter act refused, in our words. */
+export function evidenceRefusal(error: unknown): Words {
+  const text = sentence(error)
+  if (isApiError(error) && error.kind === 'forbidden') return words('photos.refused.forbidden')
+  if (text.includes('only while it is a draft')) return words('photos.held.sent')
+  if (text.includes('photos already')) return words('photos.held.full', { max: CLAIM_PHOTO_LIMIT })
+  if (text.includes('no more photos')) return words('photos.refused.settled')
+  if (text.includes('legal name') || text.includes('registered office') || text.includes('vat number') || text.includes('registro delle imprese')) return words('letter.refused.letterhead')
+  if (isApiError(error) && (error.issues.some((issue) => issuePath(issue).includes('contentType')) || error.issues.some((issue) => issuePath(issue).includes('sizeBytes')))) return words('photos.refused.type')
+  if (error instanceof TypeError && !isApiError(error)) return words('photos.refused.store')
+  return kindWords(error)
 }
 
 export interface ClaimRecordActions {
@@ -823,6 +938,12 @@ export interface ClaimRecordActions {
   onForm?: (form: ClaimForm | null) => void
   onSave?: () => void
   onOpenDdt?: (ddtId: string) => void
+  /** B-W2b-14: the claim's photos and letter. */
+  onPhotoStep?: (open: boolean) => void
+  onPhoto?: (photo: Blob) => void | Promise<void>
+  onPhotos?: (fileIds: readonly string[]) => void
+  onKeepLetter?: () => void
+  onOpenFile?: (fileId: string) => void
   onCopyNumber?: () => void
   onDismissNotice?: () => void
 }

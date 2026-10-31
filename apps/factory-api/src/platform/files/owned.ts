@@ -43,6 +43,9 @@ export const MODULE_OWNED_FILES: Readonly<Record<string, ModuleOwnedFiles>> = Ob
   // The notified body's answer to a change of the approved type (modules/compliance/type-changes, B-W2a-66): every kind; the
   // decision APPROVED or REFUSED rests on it.
   TypeChangeReview: { route: 'POST /compliance/type-changes/:reviewId/answer-file, then POST …/answer-file/:fileId/complete' },
+  // B-W2b-14: a supplier claim's photos of what is wrong (modules/purchasing/claims): PHOTO files only, of category
+  // CLAIM_PHOTO; the claim letter is made by the API; attachments of the claim's thread stay open.
+  SupplierClaim: { kinds: ['PHOTO'], route: 'POST /purchasing/claims/:claimId/photos, then POST …/photos/:fileId/complete' },
 })
 
 /** How a caller of requestUpload / completeUpload reaches them: the generic files routes, or a module's own route. */

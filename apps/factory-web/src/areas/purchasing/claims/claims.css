@@ -142,3 +142,63 @@
     grid-column: 2;
   }
 }
+
+/* B-W2b-14 (SCM-135): the claim's photos and letter versions (the record's evidence card). */
+.fw-cl-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-cl-photo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+}
+
+.fw-cl-photo-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 112px;
+  height: 84px;
+  overflow: hidden;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-cl-photo-frame a {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.fw-cl-photo-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fw-cl-photo-wait {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-4);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  text-align: center;
+}
+
+.fw-cl-letter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+}

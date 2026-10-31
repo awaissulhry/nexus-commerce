@@ -3,7 +3,8 @@
     "cancel": "Cancel",
     "dismiss": "Dismiss",
     "done": "Done",
-    "retry": "Try again"
+    "retry": "Try again",
+    "clear": "Clear"
   },
   "problem": {
     "read": "Couldn't read it: try again.",
@@ -466,6 +467,35 @@
       "APPLIED": "Received.",
       "FAILED": "Stopped: see the import for why.",
       "CANCELLED": "Cancelled: nothing was received."
+    }
+  },
+  "ddtFix": {
+    "open": "Correct",
+    "never": "The DDT number and date are the ones typed at receiving.",
+    "last": "Corrected on {when}: {reason}",
+    "title": "Correct the DDT of {number}",
+    "now": "Now: DDT {number} of {date}",
+    "nowNone": "Now: no DDT recorded",
+    "body": "The goods, lots and stock moves of a posted receipt never change; the supplier’s DDT number and date may, when they were typed wrong. The supplier invoice is matched on them.",
+    "numberHint": "As the supplier printed it; empty: the delivery came without one.",
+    "reason": "Why it is corrected",
+    "reasonHint": "A few words: kept on the receipt and in its activity.",
+    "kept": "Every correction stays in the receipt’s activity with what it was before.",
+    "confirm": "Save the correction",
+    "done": "The DDT number and date are corrected.",
+    "held": {
+      "open": "The receipt is still open: its DDT is set when it is posted.",
+      "REVERSED": "The receipt was reversed: its DDT no longer changes.",
+      "CANCELLED": "The receipt was cancelled: its DDT no longer changes.",
+      "same": "Change the number or the date first.",
+      "number": "At most {max} characters.",
+      "date": "Pick a date from the calendar.",
+      "future": "A DDT is never dated after today.",
+      "dateAlone": "A DDT date goes with its number.",
+      "reason": "Say why it is corrected (at least 3 characters)."
+    },
+    "refused": {
+      "state": "This receipt can no longer take a DDT correction: reload it."
     }
   }
 }

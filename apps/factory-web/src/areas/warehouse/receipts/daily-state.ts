@@ -4,7 +4,7 @@ import type { SheetImport } from '../../products/styles/import/sheet-import'
 import type { PickerReason } from '../../_shared/reasons/api'
 import type { Part } from '../../_shared/buying/model'
 import type { Discrepancy, HideListSummary } from './daily-api'
-import type { ClaimDraft, DiscrepancyDraft, ReceiptDailyCan, ReportDraft, RequestDraft, Say } from './daily-model'
+import type { ClaimDraft, DdtFixDraft, DiscrepancyDraft, ReceiptDailyCan, ReportDraft, RequestDraft, Say } from './daily-model'
 
 /**
  * The view models of the receipt's W2a parts (B-W2a-63): what the record's Documents check and Discrepancies tabs and
@@ -19,6 +19,8 @@ export type DailyDialog =
   | { kind: 'report'; draft: ReportDraft }
   | { kind: 'claim'; draft: ClaimDraft }
   | { kind: 'request'; draft: RequestDraft }
+  /** B-W2b-14: the supplier's DDT number and date corrected on the posted receipt. */
+  | { kind: 'ddtFix'; draft: DdtFixDraft }
 
 export interface DailyNotice {
   tone: 'success' | 'danger' | 'info' | 'warning'
@@ -58,6 +60,8 @@ export interface ReceiptDailyActions {
   onSendReport?: () => void
   onClaim?: () => void
   onRequest?: () => void
+  /** B-W2b-14: save the DDT correction. */
+  onSaveDdtFix?: () => void
   onOpen?: (id: string | null) => void
   onDdtStep?: (open: boolean) => void
   onDdtPhoto?: (photo: Blob) => void | Promise<void>

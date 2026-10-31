@@ -14,7 +14,7 @@ import type { Claim, ClaimLine } from '../../api'
 import type { ClaimRecordActions, ClaimRecordModel } from '../../model'
 
 /** The stock move reasons a line's move may carry, in our words (factory-db StockMoveReason), else "other". */
-const MOVE_REASONS = ['ADJUSTMENT', 'SCRAP', 'COUNT', 'ISSUE', 'RETURN', 'TRANSFER', 'RECEIPT', 'OPENING'] as const
+const MOVE_REASONS = ['SUPPLIER_RETURN', 'ADJUSTMENT', 'SCRAP', 'COUNT', 'ISSUE', 'RETURN', 'TRANSFER', 'RECEIPT', 'OPENING'] as const
 const moveReason = (reason: string) => ((MOVE_REASONS as readonly string[]).includes(reason) ? reason : 'OTHER')
 
 /**
@@ -51,7 +51,7 @@ export function GoodsTab({ claim, model, actions }: { claim: Claim; model: Claim
           ) : (
             <span>{data.item.code}</span>
           )}
-          <span className="fw-by-cell-sub">{data.hide?.code ?? data.item.name}</span>
+          <span className="fw-by-cell-sub">{data.hide ? (data.hide.state === 'RETURNED' ? t('goods.hideReturned', { code: data.hide.code }) : data.hide.code) : data.item.name}</span>
         </span>
       ) : null
     const QuantityCell = ({ data }: ICellRendererParams<ClaimLine>) =>

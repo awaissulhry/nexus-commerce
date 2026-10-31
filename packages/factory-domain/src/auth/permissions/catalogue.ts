@@ -37,6 +37,8 @@ import { PURCHASING_SUBCONTRACT_DEFINITIONS, PURCHASING_SUBCONTRACT_PERMISSIONS 
 import { PURCHASING_SUBCONTRACT_FLOOR_PERMISSIONS } from '../../purchasing/subcontracting/permissions'
 // B-W2a-44: supplier claims and returns to the supplier (purchasing.claims.manage | return).
 import { PURCHASING_CLAIMS_DEFINITIONS, PURCHASING_CLAIMS_PERMISSIONS } from '../../purchasing/claims/permissions'
+// B-W2b-14: the Owner's switch for automatic PO confirmation reminders (purchasing.reminders.switch, step-up).
+import { PURCHASING_REMINDERS_DEFINITIONS, PURCHASING_REMINDERS_PERMISSIONS } from '../../purchasing/reminders/permissions'
 import { QUALITY_FINAL_DEFINITIONS, QUALITY_FINAL_FLOOR_PERMISSIONS, QUALITY_FINAL_PERMISSIONS } from '../../quality/final/permissions'
 import { QUALITY_LAB_DEFINITIONS, QUALITY_LAB_PERMISSIONS } from '../../quality/lab/permissions'
 // B-W2a-26: the defect library and disposition codes (quality.defects.*), quality holds (quality.holds.*).
@@ -466,6 +468,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PAYABLES_DEFINITIONS,
   // B-W2a-65: customer complaints (log, triage, the owner's acknowledgement of a safety alert).
   QUALITY_COMPLAINTS_DEFINITIONS,
+  // B-W2b-14: the Owner's switch for automatic PO confirmation reminders.
+  PURCHASING_REMINDERS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -551,6 +555,8 @@ for (const name of PAYABLES_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(nam
 for (const name of QUALITY_COMPLAINTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2a-79: the report library.
 for (const name of HOME_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-14: the Owner's switch for automatic PO confirmation reminders.
+for (const name of PURCHASING_REMINDERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }
