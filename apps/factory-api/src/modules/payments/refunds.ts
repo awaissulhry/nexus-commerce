@@ -7,7 +7,7 @@ import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { bankReferenceProblem, normaliseBankReference } from '@nexus/factory-domain/payments/payments'
 import { PAYMENTS_REFUND, PAYMENTS_VIEW, PAYMENTS_VOID } from '@nexus/factory-domain/payments/permissions'
-import { LIVE_REFUND_STATUSES, overpaidOf, paidOnProblem, refundableOnCreditNote, refundAmountProblem, refundMoveProblem, REFUND_STATUSES_BY_VIEW, unplacedOf, type RefundStatus, type RefundView } from '@nexus/factory-domain/payments/refunds'
+import { creditReasonOfCausale, defaultRefundReason, LIVE_REFUND_STATUSES, overpaidOf, paidOnProblem, refundableOnCreditNote, refundAmountProblem, refundMoveProblem, REFUND_REASON_WORDS, REFUND_STATUSES_BY_VIEW, unplacedOf, type RefundReason, type RefundStatus, type RefundView } from '@nexus/factory-domain/payments/refunds'
 import { command, type CommandCaller, type CommandTools } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { serverClock } from '../../core/time'
@@ -73,6 +73,7 @@ export const REFUND_COLUMNS = {
   voidedAt: true,
   voidReason: true,
   internalNote: true,
+  reasonCode: true,
   version: true,
   createdAt: true,
   createdById: true,
@@ -166,6 +167,8 @@ function refundRowView(row: RefundRow, sources: Awaited<ReturnType<typeof source
     voidedAt: row.voidedAt ? toUtcIso(row.voidedAt) : null,
     voidReason: row.voidReason,
     internalNote: row.internalNote,
+    reasonCode: row.reasonCode as RefundReason | null,
+    reasonWords: row.reasonCode ? REFUND_REASON_WORDS[row.reasonCode as RefundReason] : null,
     createdAt: toUtcIso(row.createdAt),
   }
 }
@@ -297,6 +300,8 @@ export interface RecordRefundInput {
   readonly amount?: number | undefined
   readonly dueDate?: string | null | undefined
   readonly internalNote?: string | null | undefined
+  /** B-W2b-21: why the money goes back; absent: the reason its source says (defaultRefundReason). */
+  readonly reasonCode?: RefundReason | undefined
   /** Recorded as made already: the transfer's value date and the bank's reference. */
   readonly paid?: { readonly paidOn: string; readonly externalRef: string } | undefined
   /** B-W2a-F8: the reason a refund paid inside a SOFT-locked month goes in anyway. */
@@ -355,7 +360,7 @@ export async function recordRefund(caller: CommandCaller, body: RecordRefundInpu
   return counted(async () => {
     const { result } = await command(caller, { name: 'payments.recordRefund', idempotencyKey, input: body }, async (tools) => {
       const { tx } = tools
-      let source: { companyId: string; partyId: string; currency: string; refundable: number; words: string; creditNoteId: string | null; paymentId: string | null }
+      let source: { companyId: string; partyId: string; currency: string; refundable: number; words: string; creditNoteId: string | null; paymentId: string | null; reason: RefundReason }
       if (body.creditNoteId !== undefined) {
         const head = await tx.invoice.findUnique({ where: { id: body.creditNoteId }, select: { id: true, creditOfId: true } })
         if (!head) throw new NotFoundError('Credit note not found.')
@@ -364,12 +369,15 @@ export async function recordRefund(caller: CommandCaller, body: RecordRefundInpu
         if (!facts) throw new InvalidStateError('This credit note names no invoice it credits: nothing to refund.')
         if (facts.note.status === 'DRAFT') throw new InvalidStateError('The credit note is a draft: issue it first, then refund what it credits.')
         if (facts.note.status === 'REJECTED') throw new InvalidStateError(`Credit note ${facts.note.number} was rejected by SDI and counts as never issued: correct it and send it again before refunding it.`)
-        source = { companyId: facts.note.companyId, partyId: facts.note.buyerPartyId, currency: facts.note.currency, refundable: facts.refundable, words: noteWords(facts.note), creditNoteId: facts.note.id, paymentId: null }
+        // B-W2b-21: the reason its credit note says (a return's lines, the reason its causale names, a credited TD02).
+        const said = await tx.invoice.findUnique({ where: { id: head.id }, select: { causale: true, creditOf: { select: { docType: true } }, lines: { where: { returnLineId: { not: null } }, select: { id: true }, take: 1 } } })
+        const reason = defaultRefundReason({ source: 'CREDIT_NOTE', creditReason: creditReasonOfCausale(said?.causale), fromReturn: (said?.lines.length ?? 0) > 0, creditsDeposit: said?.creditOf?.docType === 'TD02' })
+        source = { companyId: facts.note.companyId, partyId: facts.note.buyerPartyId, currency: facts.note.currency, refundable: facts.refundable, words: noteWords(facts.note), creditNoteId: facts.note.id, paymentId: null, reason }
       } else {
         await lockMoney(tx, tools.context, 'payment', body.paymentId!)
         const facts = (await paymentRefundable(tx, body.paymentId!))!
         if (facts.payment.status !== 'RECEIVED') throw new InvalidStateError(`The payment is ${facts.payment.status}: it has nothing to refund.`)
-        source = { companyId: facts.payment.companyId, partyId: facts.payment.partyId, currency: facts.payment.currency, refundable: facts.refundable, words: paymentWords(facts.payment), creditNoteId: null, paymentId: facts.payment.id }
+        source = { companyId: facts.payment.companyId, partyId: facts.payment.partyId, currency: facts.payment.currency, refundable: facts.refundable, words: paymentWords(facts.payment), creditNoteId: null, paymentId: facts.payment.id, reason: defaultRefundReason({ source: 'PAYMENT' }) }
       }
       const amount = body.amount ?? source.refundable
       const problem = refundAmountProblem(amount, source.refundable, source.currency, source.words)
@@ -390,6 +398,7 @@ export async function recordRefund(caller: CommandCaller, body: RecordRefundInpu
           status: paid ? 'PAID' : 'DUE',
           ...(paid ? { paidOn: dateValue(paid.paidOn), externalRef: paid.externalRef, paidAt: tools.now, paidById: actorIdOf(tools) } : {}),
           internalNote: blankToNull(body.internalNote),
+          reasonCode: body.reasonCode ?? source.reason,
           createdAt: tools.now,
           updatedAt: tools.now,
           createdById: actorIdOf(tools),
@@ -401,7 +410,7 @@ export async function recordRefund(caller: CommandCaller, body: RecordRefundInpu
         recordType: 'Refund',
         recordId: id,
         companyId: source.companyId,
-        after: { partyId: source.partyId, source: source.creditNoteId ? 'CREDIT_NOTE' : 'PAYMENT', sourceId: source.creditNoteId ?? source.paymentId, amount: markMoney('price', amount), currency: source.currency, status: paid ? 'PAID' : 'DUE', dueDate: body.dueDate ?? null, ...(paid ? { paidOn: paid.paidOn, externalRef: paid.externalRef } : {}) },
+        after: { partyId: source.partyId, source: source.creditNoteId ? 'CREDIT_NOTE' : 'PAYMENT', sourceId: source.creditNoteId ?? source.paymentId, amount: markMoney('price', amount), currency: source.currency, status: paid ? 'PAID' : 'DUE', dueDate: body.dueDate ?? null, reasonCode: body.reasonCode ?? source.reason, reasonSaid: body.reasonCode !== undefined, ...(paid ? { paidOn: paid.paidOn, externalRef: paid.externalRef } : {}) },
       })
       tools.emit({ type: 'refund.recorded', subject: id, companyId: source.companyId, payload: { refundId: id, partyId: source.partyId, source: source.creditNoteId ? 'CREDIT_NOTE' : 'PAYMENT', sourceId: (source.creditNoteId ?? source.paymentId)!, status: paid ? 'PAID' : 'DUE' } })
       // A refund paid of a credit note gives the money back: the order's settlement (REFUND_DUE) may change.
@@ -432,14 +441,16 @@ export interface ChangeRefundInput {
   readonly amount?: number | undefined
   readonly dueDate?: string | null | undefined
   readonly internalNote?: string | null | undefined
+  /** B-W2b-21: the reason, while DUE. */
+  readonly reasonCode?: RefundReason | undefined
 }
 
-/** payments.refund: a DUE refund's amount (never above what is refundable), due date or note. */
+/** payments.refund: a DUE refund's amount (never above what is refundable), due date, note or reason. */
 export async function changeRefund(caller: CommandCaller, refundId: string, body: ChangeRefundInput, idempotencyKey?: string): Promise<{ refund: RefundDetail }> {
   const refund = await officeRefund(caller, refundId, PAYMENTS_REFUND)
   refuseMove(refund, 'CHANGED')
-  const fields = (['amount', 'dueDate', 'internalNote'] as const).filter((field) => body[field] !== undefined)
-  if (fields.length === 0) throw new ValidationError('Send what changes: the amount, the due date or the note.', [{ path: 'body', message: 'Nothing to change.' }])
+  const fields = (['amount', 'dueDate', 'internalNote', 'reasonCode'] as const).filter((field) => body[field] !== undefined)
+  if (fields.length === 0) throw new ValidationError('Send what changes: the amount, the due date, the note or the reason.', [{ path: 'body', message: 'Nothing to change.' }])
   const { result } = await command(caller, { name: 'payments.changeRefund', idempotencyKey, input: { refundId, ...body }, record: { type: 'Refund', id: refund.id, expectedVersion: body.version } }, async (tools) => {
     await lockRefund(tools, refund)
     const current = (await readRefund(tools.tx, refund.id))!
@@ -457,6 +468,7 @@ export async function changeRefund(caller: CommandCaller, refundId: string, body
         ...(body.amount !== undefined ? { amount: body.amount } : {}),
         ...(body.dueDate !== undefined ? { dueDate: body.dueDate ? dateValue(body.dueDate) : null } : {}),
         ...(body.internalNote !== undefined ? { internalNote: blankToNull(body.internalNote) } : {}),
+        ...(body.reasonCode !== undefined ? { reasonCode: body.reasonCode } : {}),
         updatedAt: tools.now,
       },
       select: { id: true },
@@ -465,8 +477,8 @@ export async function changeRefund(caller: CommandCaller, refundId: string, body
       recordType: 'Refund',
       recordId: current.id,
       companyId: current.companyId,
-      before: { amount: markMoney('price', current.amount), dueDate: day(current.dueDate), internalNote: current.internalNote },
-      after: { ...(body.amount !== undefined ? { amount: markMoney('price', body.amount) } : {}), ...(body.dueDate !== undefined ? { dueDate: body.dueDate } : {}), ...(body.internalNote !== undefined ? { internalNote: blankToNull(body.internalNote) } : {}) },
+      before: { amount: markMoney('price', current.amount), dueDate: day(current.dueDate), internalNote: current.internalNote, reasonCode: current.reasonCode },
+      after: { ...(body.amount !== undefined ? { amount: markMoney('price', body.amount) } : {}), ...(body.dueDate !== undefined ? { dueDate: body.dueDate } : {}), ...(body.internalNote !== undefined ? { internalNote: blankToNull(body.internalNote) } : {}), ...(body.reasonCode !== undefined ? { reasonCode: body.reasonCode } : {}) },
     })
     tools.emit({ type: 'refund.changed', subject: current.id, companyId: current.companyId, payload: { refundId: current.id, fields: [...fields] } })
     return { refund: await refundDetail(tools.tx, (await readRefund(tools.tx, current.id))!) }

@@ -7,6 +7,11 @@ import {
   bulkApproveBody,
   customerParams,
   editBody,
+  interestRateAnswer,
+  interestRateBody,
+  interestRateParams,
+  interestRatePatchBody,
+  interestRatesAnswer,
   prepareBody,
   reasonBody,
   reminderAnswer,
@@ -45,3 +50,7 @@ export const approveContract = defineContract({ params: reminderParams, body: ap
 export const sendContract = defineContract({ params: reminderParams, body: sendBody, response: { 200: reminderAnswer } })
 export const reasonContract = defineContract({ params: reminderParams, body: reasonBody, response: { 200: reminderAnswer } })
 export const bulkApproveContract = defineContract({ body: bulkApproveBody, response: { 200: bulkApproveAnswer } })
+// B-W2b-21: the half-year reference rates of statutory interest.
+export const listInterestRatesContract = defineContract({ response: { 200: interestRatesAnswer } })
+export const recordInterestRateContract = defineContract({ body: interestRateBody, response: { 201: interestRateAnswer } })
+export const correctInterestRateContract = defineContract({ params: interestRateParams, body: interestRatePatchBody, response: { 200: interestRateAnswer } })

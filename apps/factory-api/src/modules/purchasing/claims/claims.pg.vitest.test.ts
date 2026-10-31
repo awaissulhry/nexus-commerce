@@ -163,7 +163,8 @@ describe('a claim for credit from a receipt discrepancy (SCM-134; the goods stay
   it('shows no cost to a role without the cost grain', async () => {
     const seen = (await ok('warehouse', 'GET', url(claim.id))).claim
     expect(keysOf(seen).filter((name) => /cost|value|amount|expected/i.test(name))).toEqual([])
-    expect(seen.credit).toEqual({ currency: 'EUR', remedy: 'CREDIT', matched: null, difference: null })
+    // B-W2b-21: the difference with the matched credit notes is a cost too (dropped without the grain).
+    expect(seen.credit).toEqual({ currency: 'EUR', remedy: 'CREDIT', matched: null })
     // …and refuses a cost sent by one.
     expect((await refused('warehouse', 'PATCH', url(claim.id), { version: seen.version, expectedCreditAmount: 100 }, 403)).message).toBeTruthy()
   })

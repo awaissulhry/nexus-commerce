@@ -174,6 +174,13 @@ const SUBCONTRACT_FLOOR_ADDS: Readonly<Record<string, readonly Permission[]>> = 
   operator: ['purchasing.subcontract.kit', 'purchasing.subcontract.receive'],
   team_leader: ['purchasing.subcontract.kit', 'purchasing.subcontract.receive'],
 })
+/**
+ * B-W2b-21 (Z8:03; the payables settings: the accountant's tolerances and billing basis, who approves what SDI delivered):
+ * finance keeps them, as it keeps the receivables settings. The owner from every().
+ */
+const PAYABLES_SETTINGS_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  finance: ['payables.settings'],
+})
 const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(audience === 'office' && TASKS_TEMPLATES.has(key) ? ['tasks.manage' as Permission] : []), ...(PLANT_ADDS[key] ?? []), ...(RETURNS_ADDS[key] ?? []), ...(SHIPPING_DAILY_ADDS[key] ?? []), ...(audience === 'office' ? (NCR_ADDS[key] ?? []) : []),
   // B-W2a-55
   ...(audience === 'office' ? (RECEIVABLES_ADDS[key] ?? []) : []),
@@ -186,7 +193,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2a-65
   ...(audience === 'office' ? (COMPLAINTS_ADDS[key] ?? []) : []),
   // B-W2a-F4
-  ...(audience === 'office' ? (RECEIPT_DOCUMENTS_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (RECEIPT_DOCUMENTS_ADDS[key] ?? []) : []),
+  // B-W2b-21
+  ...(audience === 'office' ? (PAYABLES_SETTINGS_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the

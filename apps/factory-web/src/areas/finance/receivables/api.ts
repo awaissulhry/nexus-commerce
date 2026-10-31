@@ -23,7 +23,7 @@ export type ReminderStatus = (typeof REMINDER_STATUSES)[number]
 export const REMINDER_VIEWS = ['toApprove', 'waiting', 'sent', 'closed', 'all'] as const
 export type ReminderView = (typeof REMINDER_VIEWS)[number]
 /** Warnings on a reminder (approval is not blocked by them). */
-export const HELD_REASONS = ['UNPLACED_PAYMENT', 'CREDIT_NOTE_DRAFT', 'CHANGED', 'NO_CONTACT', 'SWITCHED_OFF'] as const
+export const HELD_REASONS = ['UNPLACED_PAYMENT', 'CREDIT_NOTE_DRAFT', 'CHANGED', 'NO_CONTACT', 'SWITCHED_OFF', 'DEPOSIT_TO_CARRY'] as const
 export type HeldReason = (typeof HELD_REASONS)[number]
 /** The API's refusals of a reminder move (409 at `reminder/<CODE>`, or `body/items/<i>/<CODE>` in a bulk approval). */
 export const REMINDER_REFUSALS = [

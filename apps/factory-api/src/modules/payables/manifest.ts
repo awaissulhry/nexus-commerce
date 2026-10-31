@@ -30,4 +30,10 @@ export const manifest = defineManifest({
   'POST /payables/invoices/:invoiceId/pay': { audiences: ['office'], permission: 'payables.pay', scope: 'record' },
   'GET /payables/sdi': { audiences: ['office'], permission: 'payables.view', scope: 'record' },
   'POST /payables/sdi/pickup': { audiences: ['office'], permission: 'payables.manage', scope: 'record' },
+  // B-W2b-21 (Z8:03, Z8:06): the payables settings (settings.ts) and the SDI inbox of deliveries the pickup could not record (inbox.ts).
+  'GET /payables/settings': { audiences: ['office'], permission: 'payables.view', scope: 'record' },
+  'PUT /payables/settings': { audiences: ['office'], permission: 'payables.settings', scope: 'record' },
+  'GET /payables/sdi/inbox': { audiences: ['office'], permission: 'payables.view', scope: 'record' },
+  'POST /payables/sdi/inbox/:itemId/dismiss': { audiences: ['office'], permission: 'payables.manage', scope: 'record' },
+  'POST /payables/sdi/inbox/:itemId/reopen': { audiences: ['office'], permission: 'payables.manage', scope: 'record' },
 })

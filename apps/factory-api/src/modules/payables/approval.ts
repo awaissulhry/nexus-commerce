@@ -18,6 +18,7 @@ import { followInCommand } from '../../platform/threads/followers'
 import { ensureThread, mentionProblems, writeMessage } from '../../platform/threads/threads'
 import { detailInCommand, RefusedError } from './invoices'
 import { rematchInCommand } from './matching'
+import { sdiRuleRefusals } from './settings'
 import { invoiceInCommand, officeInvoice, officeOf, preparationOf, readLines, readMatches, RECORD, type InvoiceRow } from './store'
 import type { DetailView } from './views'
 
@@ -59,7 +60,8 @@ export async function approveInvoice(caller: CommandCaller, invoiceId: string, i
   const { context } = await officeInvoice(caller, invoiceId, PAYABLES_APPROVE)
   const { result } = await command(caller, { name: 'payables.approve', idempotencyKey, input: { invoiceId, ...input }, record: { type: 'SupplierInvoice', id: invoiceId, expectedVersion: input.version } }, async (tools) => {
     const invoice = await invoiceInCommand(tools.tx, invoiceId)
-    const problems = approvalProblems(await approvalFacts(tools, invoice), context.actorId)
+    // B-W2b-21 (Z8:03): the payables settings' rule for what SDI delivered (LISTED approvers, not the buyer) after the four eyes.
+    const problems = [...approvalProblems(await approvalFacts(tools, invoice), context.actorId), ...(await sdiRuleRefusals(tools.tx, invoice, context.actorId))]
     if (problems.length > 0) throw new RefusedError(problems)
     const note = input.note?.trim() || null
     await tools.tx.supplierInvoice.update({ where: { id: invoiceId }, data: { status: 'APPROVED', approvedAt: tools.now, approvedById: context.actorId, approvalNote: note }, select: { id: true } })
@@ -196,6 +198,10 @@ export async function sendToBuyer(caller: CommandCaller, invoiceId: string, inpu
  * payables.manage + purchasing.claims.manage: the supplier's credit note settles a supplier claim (B-W2a-44's hook
  * closeClaimInCommand): the claim of the same supplier and company, accepted for a credit, is closed in the same command
  * with the credit note named in its note. A CREDIT_NOTE only, not voided.
+ *
+ * B-W2b-21 (Z8:07): the credit note names the claim it settles (SupplierInvoice.claimId + claimSiteId, set once; the claim's
+ * `credit.matched` reads them). A claim for a credit closed before the credit note arrived (closed by hand) is matched
+ * only: it stays closed (supplier_invoice.claim_matched). A credit note that names a claim already is refused in words.
  */
 export async function settleClaim(caller: CommandCaller, invoiceId: string, input: { readonly version: number; readonly claimId: string }, idempotencyKey?: string) {
   const { context, invoice: seen } = await officeInvoice(caller, invoiceId, PAYABLES_MANAGE)
@@ -205,14 +211,19 @@ export async function settleClaim(caller: CommandCaller, invoiceId: string, inpu
   if (!claim || !can(actorOf(context), 'purchasing.view', { companyId: claim.companyId, siteId: claim.siteId, partyId: claim.partyId })) throw new NotFoundError('Supplier claim not found.')
   if (!can(actorOf(context), PURCHASING_CLAIMS_MANAGE, { companyId: claim.companyId, siteId: claim.siteId, partyId: claim.partyId })) throw new ForbiddenError()
   if (claim.partyId !== seen.partyId || claim.companyId !== seen.companyId) throw new RefusedError([{ code: 'OTHER_SUPPLIER', message: `Claim ${claim.number} is of another supplier or company.` }])
-  if (claim.status !== 'ACCEPTED' || claim.remedy !== 'CREDIT') throw new RefusedError([{ code: 'NOT_ACCEPTED_FOR_CREDIT', message: `Claim ${claim.number} is ${claim.status.toLowerCase()}${claim.remedy ? ` for a ${claim.remedy.toLowerCase()}` : ''}: a credit note settles a claim the supplier accepted for a credit.` }])
+  if (seen.claimId !== null) throw new RefusedError([{ code: 'CLAIM_NAMED', message: seen.claimId === claim.id ? `This credit note settles claim ${claim.number} already.` : 'This credit note settles another claim already: a credit note names the claim it settles once.' }])
+  const closedBefore = claim.status === 'CLOSED' && claim.remedy === 'CREDIT'
+  if (!closedBefore && (claim.status !== 'ACCEPTED' || claim.remedy !== 'CREDIT')) throw new RefusedError([{ code: 'NOT_ACCEPTED_FOR_CREDIT', message: `Claim ${claim.number} is ${claim.status.toLowerCase()}${claim.remedy ? ` for a ${claim.remedy.toLowerCase()}` : ''}: a credit note settles a claim the supplier accepted for a credit.` }])
   const { result } = await command(caller, { name: 'payables.settleClaim', idempotencyKey, input: { invoiceId, ...input }, record: { type: 'SupplierInvoice', id: invoiceId, expectedVersion: input.version } }, async (tools) => {
     const invoice = await invoiceInCommand(tools.tx, invoiceId)
-    await closeClaimInCommand(tools, claim.id, `Credit note ${invoice.number} of ${dayWords(invoice.issueDate.toISOString().slice(0, 10))} settles it.`)
-    tools.audit({ action: 'payables.settleClaim', recordType: RECORD, recordId: invoiceId, companyId: invoice.companyId, after: { supplierClaimId: claim.id, claimNumber: claim.number } })
-    tools.emit({ type: 'supplier_invoice.claim_settled', subject: invoiceId, companyId: invoice.companyId, payload: { supplierInvoiceId: invoiceId, partyId: invoice.partyId, status: invoice.status, matchStatus: invoice.matchStatus, supplierClaimId: claim.id } })
-    return { invoice: await detailInCommand(tools, invoiceId), claim: { id: claim.id, number: claim.number, status: 'CLOSED' as const } }
+    if (invoice.claimId !== null) throw new RefusedError([{ code: 'CLAIM_NAMED', message: 'This credit note settles a claim already: a credit note names the claim it settles once.' }])
+    if (!closedBefore) await closeClaimInCommand(tools, claim.id, `Credit note ${invoice.number} of ${dayWords(invoice.issueDate.toISOString().slice(0, 10))} settles it.`)
+    await tools.tx.supplierInvoice.update({ where: { id: invoiceId }, data: { claimId: claim.id, claimSiteId: claim.siteId }, select: { id: true } })
+    tools.audit({ action: 'payables.settleClaim', recordType: RECORD, recordId: invoiceId, companyId: invoice.companyId, after: { supplierClaimId: claim.id, claimNumber: claim.number, claimClosed: !closedBefore } })
+    const payload = { supplierInvoiceId: invoiceId, partyId: invoice.partyId, status: invoice.status, matchStatus: invoice.matchStatus, supplierClaimId: claim.id }
+    if (closedBefore) tools.emit({ type: 'supplier_invoice.claim_matched', subject: invoiceId, companyId: invoice.companyId, payload })
+    else tools.emit({ type: 'supplier_invoice.claim_settled', subject: invoiceId, companyId: invoice.companyId, payload })
+    return { invoice: await detailInCommand(tools, invoiceId), claim: { id: claim.id, number: claim.number, status: 'CLOSED' as const }, claimClosed: !closedBefore }
   })
   return result
 }
-
