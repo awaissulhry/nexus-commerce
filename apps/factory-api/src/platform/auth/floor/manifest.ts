@@ -18,6 +18,14 @@ export const manifest = defineManifest({
   'GET /floor/me': { audiences: ['floor'], permission: SIGNED_IN, scope: 'site' },
   'POST /floor/pin': { audiences: ['floor'], permission: SIGNED_IN, scope: 'site' },
   'POST /floor/step-up': { audiences: ['floor'], permission: SIGNED_IN, scope: 'site' },
+  // B-W2b-52: the kiosk check (PLT-227; the device token and CSRF, like the tablet's state) and crew mode (PLT-059: from a
+  // signed-in station tablet; a join is a sign-in, so no permission beyond the session, as POST /floor/switch).
+  'POST /floor/device/kiosk': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
+  'GET /floor/crew': { audiences: ['floor'], permission: SIGNED_IN, scope: 'site' },
+  'POST /floor/crew/join': { audiences: ['floor'], permission: SIGNED_IN, scope: 'site' },
+  'POST /floor/crew/switch': { audiences: ['floor'], permission: SIGNED_IN, scope: 'site' },
+  'POST /floor/crew/leave': { audiences: ['floor'], permission: SIGNED_IN, scope: 'site' },
+  'POST /floor/crew/end': { audiences: ['floor'], permission: SIGNED_IN, scope: 'site' },
 
   'GET /auth/floor/devices': { audiences: ['office'], permission: 'devices.view', scope: 'record' },
   'POST /auth/floor/devices': { audiences: ['office'], permission: 'devices.manage', scope: 'record' },

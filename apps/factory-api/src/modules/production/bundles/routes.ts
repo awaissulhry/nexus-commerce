@@ -1,7 +1,37 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { makeBundles, reprintBundle, voidBundle } from './bundles'
-import { bundlesViewContract, bundleWorkOrdersContract, makeBundlesContract, reprintBundleContract, scanBundleContract, splitBundleContract, voidBundleContract, workOrderBundlesContract } from './contract'
+import {
+  bundleRecordContract,
+  bundleRulesContract,
+  bundlesViewContract,
+  bundleTilesContract,
+  bundleWorkOrdersContract,
+  changeBundleRulesContract,
+  checkSetContract,
+  findingsSummaryContract,
+  issueCouponsContract,
+  listBundlesContract,
+  listFindingsContract,
+  makeBundlesContract,
+  reprintBundleContract,
+  reprintCouponContract,
+  reviewFindingContract,
+  scanBundleContract,
+  showWhoContract,
+  splitBundleContract,
+  stuckBundlesContract,
+  voidBundleContract,
+  voidCouponContract,
+  workOrderBundlesContract,
+  workOrderSetsContract,
+} from './contract'
+// W2b B-W2b-41.
+import { issueCoupons, reprintCoupon, voidCoupon } from './coupons'
+import { findingsSummary, listFindings, reviewFinding, showWho } from './findings'
+import { checkSet, workOrderSets } from './matching'
+import { bundleRules, changeBundleRules } from './site-rules'
+import { bundleRecord, bundleTiles, listBundles, stuckBundles } from './tracked'
 import { manifest } from './manifest'
 import { splitBundle } from './split'
 import { bundlesOfWorkOrder, bundleWorkOrders, scanBundle, workOrderBundles } from './views'
@@ -42,4 +72,35 @@ export default defineRoutes('production.bundles', manifest, async (app) => {
     const result = await splitBundle(request, request.params.bundleId, request.body, idempotencyKeyFrom(request))
     return reply.code(result.replayed ? 200 : 201).send(result)
   })
+
+  // ---- W2b B-W2b-41: bundles tracked ----------------------------------------------------------------------------------------
+  app.get('/production/bundles', { schema: listBundlesContract }, async (request) => listBundles(request, request.query))
+  app.get('/production/bundles/tiles', { schema: bundleTilesContract }, async (request) => bundleTiles(request, request.query))
+  app.get('/production/bundles/stuck', { schema: stuckBundlesContract }, async (request) => stuckBundles(request, request.query))
+  app.get('/production/bundles/:bundleId', { schema: bundleRecordContract }, async (request) => bundleRecord(request, request.params.bundleId))
+
+  app.post('/production/bundles/work-orders/:workOrderId/coupons', { schema: issueCouponsContract }, async (request, reply) => {
+    const result = await issueCoupons(request, request.params.workOrderId, request.body, idempotencyKeyFrom(request))
+    return reply.code(result.replayed ? 200 : 201).send(result)
+  })
+  app.post('/production/bundles/coupons/:couponId/reprint', { schema: reprintCouponContract }, async (request, reply) => {
+    const result = await reprintCoupon(request, request.params.couponId, request.body, idempotencyKeyFrom(request))
+    return reply.code(result.replayed ? 200 : 201).send(result)
+  })
+  app.post('/production/bundles/coupons/:couponId/void', { schema: voidCouponContract }, async (request, reply) => {
+    const result = await voidCoupon(request, request.params.couponId, request.body, idempotencyKeyFrom(request))
+    return reply.code(result.replayed ? 200 : 201).send(result)
+  })
+
+  app.get('/production/bundles/sites/:siteId/rules', { schema: bundleRulesContract }, async (request) => bundleRules(request, request.params.siteId))
+  app.post('/production/bundles/sites/:siteId/rules', { schema: changeBundleRulesContract }, async (request) => changeBundleRules(request, request.params.siteId, request.body, idempotencyKeyFrom(request)))
+
+  app.get('/production/bundles/findings/summary', { schema: findingsSummaryContract }, async (request) => findingsSummary(request, request.query))
+  app.get('/production/bundles/findings', { schema: listFindingsContract }, async (request) => listFindings(request, request.query))
+  app.post('/production/bundles/findings/:findingId/review', { schema: reviewFindingContract }, async (request, reply) => reply.code(201).send(await reviewFinding(request, request.params.findingId, request.body, idempotencyKeyFrom(request))))
+  // No Idempotency-Key is kept for "Show who": a receipt would store the names it answers.
+  app.post('/production/bundles/findings/:findingId/who', { schema: showWhoContract }, async (request, reply) => reply.code(201).send(await showWho(request, request.params.findingId, request.body)))
+
+  app.get('/production/bundles/work-orders/:workOrderId/sets', { schema: workOrderSetsContract }, async (request) => workOrderSets(request, request.params.workOrderId))
+  app.get('/production/bundles/sets/check', { schema: checkSetContract }, async (request) => checkSet(request, request.query))
 })

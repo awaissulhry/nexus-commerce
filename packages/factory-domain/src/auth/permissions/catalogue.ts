@@ -110,6 +110,8 @@ import { PEOPLE_PRIVACY_DEFINITIONS, PEOPLE_PRIVACY_PERMISSIONS } from '../../pe
 import { PRODUCTION_OFFSTANDARD_DEFINITIONS, PRODUCTION_OFFSTANDARD_PERMISSIONS } from '../../production/offstandard/permissions'
 // B-W2b-35: help calls (production.calls.view | answer | manage).
 import { PRODUCTION_CALLS_DEFINITIONS, PRODUCTION_CALLS_FLOOR_PERMISSIONS, PRODUCTION_CALLS_PERMISSIONS } from '../../production/calls/permissions'
+// B-W2b-32: shifts and overtime requests (people.shifts.view | manage | team, people.overtime.manage | approve).
+import { PEOPLE_SHIFTS_DEFINITIONS, PEOPLE_SHIFTS_PERMISSIONS } from '../../people/shifts/permissions'
 import { GRAIN_DESCRIPTIONS, GRAINS, grainPermission } from '../grains/grains'
 import { definePermissions, permissionRegistry, type PermissionDefinition } from './registry'
 
@@ -496,6 +498,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   PRODUCTION_OFFSTANDARD_DEFINITIONS,
   // B-W2b-35: help calls (production.calls.view | answer | manage).
   PRODUCTION_CALLS_DEFINITIONS,
+  // B-W2b-32: shifts and overtime requests.
+  PEOPLE_SHIFTS_DEFINITIONS,
   // B-W2b-46: checks before a scan counts (production.scan.override).
   PRODUCTION_GUARDS_DEFINITIONS,
   MONEY_PERMISSIONS,
@@ -599,6 +603,8 @@ for (const name of PEOPLE_PRIVACY_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclar
 for (const name of PRODUCTION_OFFSTANDARD_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-35: help calls.
 for (const name of PRODUCTION_CALLS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-32: shifts and overtime requests.
+for (const name of PEOPLE_SHIFTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-46: checks before a scan counts.
 for (const name of PRODUCTION_GUARDS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {

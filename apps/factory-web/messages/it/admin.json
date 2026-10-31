@@ -1801,6 +1801,14 @@
     "production_offstandard_approve": "Approvare, respingere, riaprire e correggere i blocchi di tempo fuori standard (mai i propri)",
     "production_calls_view": "Vedere le chiamate di aiuto, i loro tempi per chiamata e linea e chi viene chiamato per ogni tipo (mai per persona)",
     "production_calls_answer": "Rispondere alle chiamate di aiuto: vista, in arrivo, risolta o annullata, e a cosa hanno portato",
-    "production_calls_manage": "Gestire i tipi di chiamata di aiuto di un sito e chi risponde"
+    "production_calls_manage": "Gestire i tipi di chiamata di aiuto di un sito e chi risponde",
+    "people_shifts_view": "Vedere i turni (chi lavora in quale turno) e le richieste di straordinario programmato",
+    "people_shifts_manage": "Pianificare i turni di tutti: impostare turni, assegnare, copiare la settimana scorsa, pubblicare",
+    "people_shifts_team": "Pianificare i turni delle squadre che guidi",
+    "people_overtime_manage": "Chiedere lo straordinario programmato, registrare una risposta data a voce, annullare una richiesta",
+    "people_overtime_approve": "Approvare lo straordinario programmato che le persone hanno accettato",
+    "production_bundles_view": "Vedere dove si trova ogni fascio, quelli fermi e i conteggi delle anomalie di scansione (mai chi)",
+    "production_bundles_findings": "Esaminare le anomalie di scansione (per archiviarne una serve una nota)",
+    "production_bundles_who": "Vedere chi c'è dietro un'anomalia (solo con il presupposto legale della sede attivo; registrato)"
   }
 }

@@ -1,6 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { DomainError, UnauthenticatedError } from '@nexus/factory-domain/core/errors'
 import { gateClosedWords, gateOpen } from '@nexus/factory-domain/people/privacy/gate'
+import { serverClock } from '../../../core/time'
 import type { GatePurpose } from '@nexus/factory-domain/people/privacy/purposes'
 import type { MonitoringBasis } from '@nexus/factory-domain/production/settings/monitoring'
 import type { CommandCaller, CommandTx } from '../../../core/command'
@@ -53,10 +54,19 @@ export interface LegalGate {
   readonly gate: GateRecord | null
 }
 
-/** The gate of a site and a purpose as it stands. */
-export async function legalGateFor(db: GateReader, siteId: string, purpose: GatePurpose): Promise<LegalGate> {
-  const gate = await db.peopleLegalGate.findFirst({ where: { siteId, purpose, switchedOffAt: null }, select: GATE_SELECT })
+/** The gate of a site and a purpose as it stands at `now` (a gate switched on from a later moment is not open yet). */
+export async function legalGateFor(db: GateReader, siteId: string, purpose: GatePurpose, now: Date = serverClock.now()): Promise<LegalGate> {
+  const gate = await db.peopleLegalGate.findFirst({ where: { siteId, purpose, switchedOffAt: null, switchedOnAt: { lte: now } }, select: GATE_SELECT })
   return { siteId, purpose, open: gateOpen(gate), gate }
+}
+
+/**
+ * The row not switched off of a site and a purpose, whatever its switch-on moment: what switching on, off and the leads
+ * choice act on (a row dated later than now is there, and refused in words, never a second row or a 500). Reads of
+ * people data use legalGateFor, which opens only from the switch-on moment.
+ */
+export async function gateRowInForce(db: GateReader, siteId: string, purpose: GatePurpose): Promise<GateRecord | null> {
+  return db.peopleLegalGate.findFirst({ where: { siteId, purpose, switchedOffAt: null }, select: GATE_SELECT })
 }
 
 /** The gates in force of several sites (both purposes), by site then purpose. */

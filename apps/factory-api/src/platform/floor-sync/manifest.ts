@@ -13,4 +13,9 @@ export const manifest = defineManifest({
   'GET /floor-sync/refused': { audiences: ['office'], permission: 'floorsync.view', scope: 'record' },
   'GET /floor-sync/refused/:refusedId': { audiences: ['office'], permission: 'floorsync.view', scope: 'record' },
   'POST /floor-sync/refused/:refusedId/discard': { audiences: ['office'], permission: 'floorsync.discard', scope: 'record' },
+  // B-W2b-52 (MES-196): offline conflicts go to the lead (floor.lead at the tablet's site); the office reads them too.
+  'GET /floor/sync/conflicts': { audiences: ['floor'], permission: 'floor.lead', scope: 'site' },
+  'GET /floor/sync/conflicts/:refusedId': { audiences: ['floor'], permission: 'floor.lead', scope: 'site' },
+  'POST /floor/sync/conflicts/:refusedId/decide': { audiences: ['floor'], permission: 'floor.lead', scope: 'site' },
+  'GET /floor-sync/conflicts': { audiences: ['office'], permission: 'floorsync.view', scope: 'record' },
 })

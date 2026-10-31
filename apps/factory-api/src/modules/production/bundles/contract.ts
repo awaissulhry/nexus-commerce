@@ -4,6 +4,10 @@ import { LABEL_LANGUAGES } from '@nexus/factory-domain/labels/model'
 import { BUNDLE_REFUSALS, MAX_BUNDLE_SIZE, MAX_BUNDLES_PER_MAKE } from '@nexus/factory-domain/production/bundles/rules'
 import { SPLIT_REASONS } from '@nexus/factory-domain/production/bundles/split'
 import { WORK_ORDER_KINDS, WORK_ORDER_STATUSES } from '@nexus/factory-domain/production/work-orders/machine'
+// W2b B-W2b-41.
+import { BUNDLE_CODE_MODES } from '@nexus/factory-domain/production/bundles/coupons'
+import { FINDING_STATUSES, SCAN_PATTERN_KINDS, WHO_PURPOSES } from '@nexus/factory-domain/production/bundles/patterns'
+import { BUNDLE_PLACES, MAX_STUCK_BUNDLE_HOURS, MIN_STUCK_BUNDLE_HOURS, QUALITY_REASONS } from '@nexus/factory-domain/production/bundles/where'
 import { labelBody, printJobView } from '../../../platform/print/contract'
 
 /**
@@ -144,6 +148,8 @@ export const bundlesViewContract = defineContract({
       stationPrinterId: id().nullable(),
       /** Where the tickets go when the make names no printer (the station's, else the site's only one); null: name one. */
       defaultPrinterId: id().nullable(),
+      /** W2b (MES-067): one bundle code at every operation, or a coupon per operation (then: print the coupons). */
+      bundleCodeMode: z.enum(BUNDLE_CODE_MODES),
     }),
   },
 })
@@ -201,6 +207,8 @@ export const scanBundleContract = defineContract({
       workOrder: output({ id: id(), number: z.string(), batchNumber: z.string().nullable(), status, siteId: id(), style }),
       operations: z.array(operation.extend({ id: id(), scanRequired: z.boolean(), done: z.boolean() })),
       ticket,
+      /** W2b (MES-067): the coupon the code is, with the one operation it reports; null: the bundle's own ticket. */
+      coupon: output({ id: id(), code: z.string(), status: z.enum(['ACTIVE', 'VOID']), operation: output({ id: id(), seq: z.number().int(), code: z.string(), name: z.string() }) }).nullable(),
     }),
   },
 })
@@ -280,4 +288,357 @@ export const splitBundleContract = defineContract({
     ...printing,
   }),
   response: { 200: splitAnswer, 201: splitAnswer },
+})
+
+// ---- W2b B-W2b-41: bundles tracked (MES-067, MES-074, MES-075, MES-078, MES-168) --------------------------------------------
+
+const opRef = output({ id: id(), seq: z.number().int(), code: z.string(), name: z.string() })
+const stationRef = output({ id: id(), code: z.string(), name: z.string() })
+const placeEnum = z.enum(BUNDLE_PLACES)
+const commaList = <T extends readonly [string, ...string[]]>(values: T) =>
+  z
+    .string()
+    .transform((value) => value.split(',').map((part) => part.trim()).filter((part) => part.length > 0))
+    .pipe(z.array(z.enum(values)))
+const flag = () => z.enum(['true', 'false']).transform((value) => value === 'true')
+
+/** Where a bundle is now (factory-domain production/bundles/where.ts), its last scan (time, operation, station; never who) and its stuck wait. */
+const placeFields = {
+  place: placeEnum,
+  /** QUALITY: on HOLD or in REWORK. */
+  qualityReason: z.enum(QUALITY_REASONS).nullable(),
+  /** LINE: the last operation it was reported at; FINISHED: the last scanned operation. */
+  operation: opRef.nullable(),
+  /** CUTTING and LINE: the next scanned operation without a standing report. */
+  next: opRef.nullable(),
+  subcontract: output({ orderId: id(), number: z.string() }).nullable(),
+  /** Since when it is where it is: its last scan, else when it was made. */
+  since: instant(),
+  lastScan: output({ at: instant(), operation: opRef.nullable(), station: stationRef.nullable() }).nullable(),
+  /** Working hours since its last scan on the site's calendar against the site's limit (MES-168). */
+  stuck: output({ stuck: z.boolean(), workingHours: z.number(), limitHours: z.number().int() }),
+}
+
+const hideRef = output({ hideId: id(), code: z.string(), lotId: id(), lotCode: z.string() })
+
+const trackedRow = output({
+  id: id(),
+  code: z.string(),
+  replacedCodes: z.array(z.string()),
+  status: z.enum(['ACTIVE', 'VOID']),
+  siteId: id(),
+  workOrder: output({ id: id(), number: z.string(), status }),
+  style,
+  workOrderSizeId: id(),
+  colourwayCode: z.string(),
+  colourwayName: z.string(),
+  size: z.string(),
+  part: z.string().nullable(),
+  quantity: z.number().int(),
+  parentBundleId: id().nullable(),
+  ...placeFields,
+  hides: z.array(hideRef),
+  voidedAt: instant().nullable(),
+  createdAt: instant(),
+})
+
+export const listBundlesContract = defineContract({
+  querystring: input({
+    siteId: id().optional(),
+    workOrderId: id().optional(),
+    status: z.enum(['ACTIVE', 'VOID']).optional(),
+    /** Comma-separated places. */
+    place: commaList(BUNDLE_PLACES).optional(),
+    /** true: only the bundles stuck now. */
+    stuck: flag().optional(),
+    /** A scanned or typed ticket or coupon code, or a work order number. */
+    q: z.string().trim().min(1).max(60).optional(),
+    cursor: id().optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+  }),
+  response: { 200: output({ bundles: z.array(trackedRow), nextCursor: id().nullable(), asOf: instant() }) },
+})
+
+const siteQuery = input({ siteId: id().optional() })
+
+export const bundleTilesContract = defineContract({
+  querystring: siteQuery,
+  response: {
+    200: output({
+      active: z.number().int(),
+      stuck: z.number().int(),
+      stuckLimitHours: z.number().int().nullable(),
+      ticketsReplacedToday: z.number().int(),
+      onHold: z.number().int(),
+      atSubcontractor: z.number().int(),
+      /** More ACTIVE bundles than one read tracks: narrow by site. */
+      capped: z.boolean(),
+      asOf: instant(),
+    }),
+  },
+})
+
+export const stuckBundlesContract = defineContract({
+  querystring: siteQuery,
+  response: { 200: output({ bundles: z.array(trackedRow), capped: z.boolean(), asOf: instant() }) },
+})
+
+const couponView = output({
+  id: id(),
+  bundleId: id(),
+  workOrderId: id(),
+  code: z.string(),
+  status: z.enum(['ACTIVE', 'VOID']),
+  operation: opRef,
+  voidedAt: instant().nullable(),
+  voidReason: z.string().nullable(),
+  replacesId: id().nullable(),
+  postedBy: z.enum(['FLOOR', 'OFFICE']),
+  createdAt: instant(),
+})
+
+export const bundleRecordContract = defineContract({
+  params: bundleParams,
+  response: {
+    200: output({
+      bundle: bundle.extend({ colourwayName: z.string(), scans: z.number().int() }),
+      workOrder: output({ id: id(), number: z.string(), batchNumber: z.string().nullable(), status, siteId: id() }),
+      style,
+      ...placeFields,
+      /** OperationFlow: per operation done · here · not reached, with the standing report's counts. */
+      progress: z.array(opRef.extend({ scanRequired: z.boolean(), state: z.enum(['DONE', 'HERE', 'NOT_REACHED']), good: z.number().int().nullable(), scrap: z.number().int().nullable(), rework: z.number().int().nullable() })),
+      quality: output({
+        holds: z.array(output({ id: id(), subjectType: z.string(), reasonCode: z.string(), placedAt: instant() })),
+        reworks: z.array(output({ id: id(), status: z.string(), quantity: z.number().int(), createdAt: instant() })),
+      }),
+      genealogy: output({
+        hides: z.array(hideRef),
+        /** The known shades of its hides (MES-078). */
+        shades: z.array(z.string()),
+        parent: output({ id: id(), code: z.string() }).nullable(),
+        children: z.array(output({ id: id(), code: z.string(), quantity: z.number().int(), status: z.enum(['ACTIVE', 'VOID']) })),
+        serials: z.array(output({ id: id(), serial: z.string(), status: z.string() })),
+      }),
+      ticket: output({
+        code: z.string(),
+        replacedCodes: z.array(z.string()),
+        reprints: z.array(output({ code: z.string(), replacedCode: z.string(), reason: z.string(), printerId: id().nullable(), postedBy: z.enum(['FLOOR', 'OFFICE']), at: instant() })),
+        /** Its tickets' print jobs, newest first; null without print.view. */
+        jobs: z.array(output({ jobId: id(), printerId: id(), scanId: z.string().nullable(), status: z.enum(['QUEUED', 'SENT', 'PRINTED', 'FAILED']), lastError: z.string().nullable(), createdAt: instant() })).nullable(),
+        /** MES-067: its coupons per operation (ACTIVE and VOID). */
+        coupons: z.array(couponView),
+      }),
+      asOf: instant(),
+    }),
+  },
+})
+
+// ---- coupons (MES-067) ------------------------------------------------------------------------------------------------------
+
+const couponTicket = output({
+  code: z.string(),
+  bundleCode: z.string(),
+  operation: output({ seq: z.number().int(), code: z.string(), name: z.string() }),
+  ticket: output({
+    language: z.enum(LABEL_LANGUAGES),
+    maker: z.string().nullable(),
+    workOrder: output({ number: z.string(), batchNumber: z.string().nullable() }),
+    style: output({ code: z.string(), name: z.string() }),
+    colourway: output({ code: z.string(), name: z.string() }),
+    size: z.string(),
+    quantity: z.number().int(),
+    part: z.string().nullable(),
+  }),
+})
+const couponPrint = output({ couponId: id(), code: z.string(), coupon: couponTicket, label: labelBody, job: printJobView.nullable(), problem: z.string().nullable() })
+
+const issueAnswer = output({ workOrder: output({ id: id(), number: z.string() }), coupons: z.array(couponView), printed: z.array(couponPrint), replayed: z.boolean() })
+
+export const issueCouponsContract = defineContract({
+  params: workOrderParams,
+  body: input({
+    /** The work order's bundles to print coupons for; absent: every ACTIVE bundle of it. */
+    bundleIds: z.array(id()).min(1).max(200).optional(),
+    ...printing,
+  }),
+  response: { 200: issueAnswer, 201: issueAnswer },
+})
+
+const couponParams = input({ couponId: id() })
+const reprintCouponAnswer = output({ coupon: couponView, replacement: couponView, printed: couponPrint, replayed: z.boolean() })
+
+export const reprintCouponContract = defineContract({
+  params: couponParams,
+  body: input({ reason: z.string().trim().min(3).max(200), ...printing }),
+  response: { 200: reprintCouponAnswer, 201: reprintCouponAnswer },
+})
+
+const voidCouponAnswer = output({ coupon: couponView, replayed: z.boolean() })
+
+export const voidCouponContract = defineContract({
+  params: couponParams,
+  body: input({ reason: z.string().trim().min(3).max(200) }),
+  response: { 200: voidCouponAnswer, 201: voidCouponAnswer },
+})
+
+// ---- the site's bundle rules (MES-067, MES-168) ---------------------------------------------------------------------------------
+
+const siteParams = input({ siteId: id() })
+const rulesAnswer = output({
+  site: output({ id: id(), code: z.string(), name: z.string() }),
+  bundleCodeMode: z.enum(BUNDLE_CODE_MODES),
+  stuckBundleHours: z.number().int(),
+  version: z.number().int().nullable(),
+  updatedAt: instant().nullable(),
+  changed: z.boolean(),
+})
+
+export const bundleRulesContract = defineContract({ params: siteParams, response: { 200: rulesAnswer } })
+
+export const changeBundleRulesContract = defineContract({
+  params: siteParams,
+  body: input({
+    bundleCodeMode: z.enum(BUNDLE_CODE_MODES).optional(),
+    stuckBundleHours: z.number().int().min(MIN_STUCK_BUNDLE_HOURS).max(MAX_STUCK_BUNDLE_HOURS).optional(),
+    /** The rules' version as read (the edit guard); absent the first time. */
+    version: z.number().int().min(1).optional(),
+  }),
+  response: { 200: rulesAnswer },
+})
+
+// ---- scan-pattern checks (MES-075) -----------------------------------------------------------------------------------------
+
+const kindEnum = z.enum(SCAN_PATTERN_KINDS)
+const findingView = output({
+  id: id(),
+  siteId: id(),
+  kind: kindEnum,
+  status: z.enum(FINDING_STATUSES),
+  bundle: output({ id: id(), code: z.string(), quantity: z.number().int(), part: z.string().nullable() }),
+  workOrder: output({ id: id(), number: z.string() }),
+  operation: opRef.nullable(),
+  line: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
+  windowStart: instant(),
+  windowEnd: instant(),
+  /** What was seen: counts and times only (never a worker, never a station). */
+  seen: z.record(z.string(), z.union([z.number(), z.string(), z.null()])),
+  reviewedAt: instant().nullable(),
+  reviewNote: z.string().nullable(),
+  version: z.number().int(),
+  createdAt: instant(),
+})
+
+export const findingsSummaryContract = defineContract({
+  querystring: input({ siteId: id().optional(), days: z.coerce.number().int().min(1).max(90).optional() }),
+  response: {
+    200: output({
+      legalNote: z.string(),
+      days: z.number().int(),
+      /** Per site whether its checks run (ON) and why not: a STATION site, no legal basis, the PERFORMANCE purpose off. */
+      sites: z.array(output({ id: id(), code: z.string(), name: z.string(), checks: z.enum(['ON', 'STATION_SITE', 'NO_BASIS', 'GATE_CLOSED']), words: z.string().nullable() })),
+      /** Counts per line, operation and kind (a count opens the bundles, never the people). */
+      rows: z.array(output({ line: output({ id: id(), code: z.string(), name: z.string() }).nullable(), operation: output({ code: z.string(), name: z.string() }).nullable(), kind: kindEnum, open: z.number().int(), reviewed: z.number().int(), dismissed: z.number().int() })),
+      asOf: instant(),
+    }),
+  },
+})
+
+export const listFindingsContract = defineContract({
+  querystring: input({
+    siteId: id().optional(),
+    bundleId: id().optional(),
+    kind: kindEnum.optional(),
+    status: z.enum(FINDING_STATUSES).optional(),
+    lineId: id().optional(),
+    operationCode: z.string().trim().min(1).max(60).optional(),
+    cursor: id().optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+  }),
+  response: { 200: output({ findings: z.array(findingView), nextCursor: id().nullable() }) },
+})
+
+const findingParams = input({ findingId: id() })
+
+export const reviewFindingContract = defineContract({
+  params: findingParams,
+  body: input({ status: z.enum(['REVIEWED', 'DISMISSED']), note: z.string().trim().min(1).max(500).optional(), version: z.number().int().min(1).optional() }),
+  response: { 201: output({ finding: findingView }) },
+})
+
+export const showWhoContract = defineContract({
+  params: findingParams,
+  body: input({
+    /** Why the names are opened (the audit row keeps it). */
+    purpose: z.enum(WHO_PURPOSES),
+    note: z.string().trim().min(1).max(300).optional(),
+  }),
+  response: {
+    201: output({
+      finding: output({ id: id(), kind: kindEnum, windowStart: instant(), windowEnd: instant() }),
+      purpose: z.enum(WHO_PURPOSES),
+      /** The opening is in the audit log (who looked, why, whom it showed). */
+      logged: z.literal(true),
+      scans: z.array(
+        output({
+          id: id(),
+          kind: z.string(),
+          at: instant(),
+          operation: opRef.nullable(),
+          good: z.number().int(),
+          scrap: z.number().int(),
+          rework: z.number().int(),
+          /** Inside this one finding only (Statuto art. 4): never a list, a filter or a total. */
+          worker: output({ id: id(), name: z.string() }).nullable(),
+          station: stationRef.nullable(),
+        }),
+      ),
+    }),
+  },
+})
+
+// ---- pair and set matching (MES-078) ------------------------------------------------------------------------------------------
+
+export const workOrderSetsContract = defineContract({
+  params: workOrderParams,
+  response: {
+    200: output({
+      workOrder: output({ id: id(), number: z.string(), status, siteId: id() }),
+      cells: z.array(
+        output({
+          workOrderSizeId: id(),
+          colourwayCode: z.string(),
+          size: z.string(),
+          parts: z.array(z.string()),
+          sets: z.array(
+            output({
+              shade: z.string().nullable(),
+              complete: z.number().int(),
+              bundles: z.array(output({ id: id(), code: z.string(), part: z.string().nullable(), quantity: z.number().int() })),
+              unmatched: z.array(output({ part: z.string(), pieces: z.number().int(), waitsFor: z.array(z.string()) })),
+            }),
+          ),
+          mixed: z.array(output({ id: id(), code: z.string(), shades: z.array(z.string()) })),
+        }),
+      ),
+    }),
+  },
+})
+
+export const checkSetContract = defineContract({
+  querystring: input({
+    /** Comma-separated bundle ids (two or more). */
+    bundleIds: z
+      .string()
+      .transform((value) => value.split(',').map((part) => part.trim()).filter((part) => part.length > 0))
+      .pipe(z.array(id()).min(2).max(20)),
+  }),
+  response: {
+    200: output({
+      ok: z.boolean(),
+      refusal: refusal.nullable(),
+      shade: z.string().nullable(),
+      unknown: z.array(z.string()),
+      bundles: z.array(output({ id: id(), code: z.string(), part: z.string().nullable(), quantity: z.number().int(), shades: z.array(z.string()) })),
+    }),
+  },
 })

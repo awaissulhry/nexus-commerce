@@ -56,6 +56,11 @@ import { GUARD_KINDS, OVERRIDE_REASON_CODES } from './guards/rules'
  *                                           rule is WARN): the team leader is told (MES-097, MES-098); no person
  *   production.scan_guard_overridden        B-W2b-46: a team leader overrode the checks that held a report, with their
  *                                           PIN and a reason tile (MES-070, MES-097, MES-098); no person, no words
+ *   production.bundle_coupons_changed       B-W2b-41: a bundle's coupons printed, one reprinted or voided (MES-067)
+ *   production.bundle_stuck                 B-W2b-41: a bundle with no scan past its site's limit, once per wait (MES-168)
+ *   production.scan_findings_found          B-W2b-41: the scan-pattern checks found patterns about bundles (MES-075)
+ *   production.scan_finding_reviewed        B-W2b-41: one finding reviewed or dismissed
+ *   production.bundle_rules_changed         B-W2b-41: a site's bundle code mode or stuck limit changed
  */
 export const MONITORING_CHANGES = ['WIDENED', 'NARROWED', 'BASIS_RECORDED', 'BASIS_REPLACED'] as const
 
@@ -496,6 +501,66 @@ export const events = [
       emailOutboundId: z.uuid(),
       lanes: z.number().int().min(0),
     }),
+  }),
+  // B-W2b-41: bundles tracked (coupons per operation, stuck bundles, scan-pattern findings, the site's bundle codes). Ids,
+  // codes, counts and states only: never a person, never a station (a station can stand for one person), never a reason.
+  defineEvent({
+    type: 'production.bundle_coupons_changed',
+    context: 'production',
+    description: "A bundle's coupons changed (MES-067): coupons printed for its scanned operations, one reprinted with a new code (the old one is refused when scanned), or one voided.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      bundleId: z.uuid(),
+      change: z.enum(['ISSUED', 'REPRINTED', 'VOIDED']),
+      couponIds: z.array(z.uuid()).min(1),
+      postedBy: postedBy(),
+    }),
+    live: bundleLive,
+  }),
+  defineEvent({
+    type: 'production.bundle_stuck',
+    context: 'production',
+    description: "A bundle has had no scan for longer than its site allows (MES-168): the floor-now board and the bundles list show it. Told once per wait: a new scan starts a new one.",
+    payload: z.strictObject({
+      workOrderId: z.uuid(),
+      number: z.string(),
+      bundleId: z.uuid(),
+      code: z.string(),
+      siteId: z.uuid(),
+      place: z.enum(['CUTTING', 'LINE']),
+      lastScanId: z.uuid().nullable(),
+      workingHours: z.number().min(0),
+      limitHours: z.number().int().min(1),
+    }),
+    live: { permission: 'production.bundles.view', fields: ['workOrderId', 'number', 'bundleId'] },
+  }),
+  defineEvent({
+    type: 'production.scan_findings_found',
+    context: 'production',
+    description: 'The scan-pattern checks found patterns about bundles at a site (MES-075): counts per kind, to talk about, never a score.',
+    payload: z.strictObject({
+      siteId: z.uuid(),
+      findingIds: z.array(z.uuid()).min(1),
+      bunched: z.number().int().min(0),
+      movedNotScanned: z.number().int().min(0),
+      gapBelowStandard: z.number().int().min(0),
+    }),
+    live: { permission: 'production.bundles.view', fields: ['siteId'] },
+  }),
+  defineEvent({
+    type: 'production.scan_finding_reviewed',
+    context: 'production',
+    description: 'A scan-pattern finding about a bundle was reviewed or dismissed by the office.',
+    payload: z.strictObject({ findingId: z.uuid(), siteId: z.uuid(), bundleId: z.uuid(), status: z.enum(['REVIEWED', 'DISMISSED']) }),
+    live: { permission: 'production.bundles.view', fields: ['findingId', 'bundleId'] },
+  }),
+  defineEvent({
+    type: 'production.bundle_rules_changed',
+    context: 'production',
+    description: "A site's bundle rules changed: one bundle code or a coupon per operation (MES-067), and the hours after which a bundle with no scan is stuck (MES-168).",
+    payload: z.strictObject({ siteId: z.uuid(), bundleCodeMode: z.enum(['ONE_CODE', 'COUPON_PER_OPERATION']), stuckBundleHours: z.number().int().min(1) }),
+    live: { permission: 'production.settings.view', fields: ['siteId', 'bundleCodeMode'] },
   }),
   // B-W2b-29: off-standard and indirect time (MES-155 … MES-158; modules/production/offstandard). A block's ids, its line,
   // station, code and state, its day and its minutes: never the worker, a name or a note (Statuto dei Lavoratori art. 4;
