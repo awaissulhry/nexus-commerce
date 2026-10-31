@@ -39,6 +39,8 @@ import { PURCHASING_SUBCONTRACT_FLOOR_PERMISSIONS } from '../../purchasing/subco
 import { PURCHASING_CLAIMS_DEFINITIONS, PURCHASING_CLAIMS_PERMISSIONS } from '../../purchasing/claims/permissions'
 // B-W2b-14: the Owner's switch for automatic PO confirmation reminders (purchasing.reminders.switch, step-up).
 import { PURCHASING_REMINDERS_DEFINITIONS, PURCHASING_REMINDERS_PERMISSIONS } from '../../purchasing/reminders/permissions'
+// B-W2b-46: checks before a scan counts (the team leader's override on the tablet).
+import { PRODUCTION_GUARDS_DEFINITIONS, PRODUCTION_GUARDS_FLOOR_PERMISSIONS, PRODUCTION_GUARDS_PERMISSIONS } from '../../production/guards/permissions'
 import { QUALITY_FINAL_DEFINITIONS, QUALITY_FINAL_FLOOR_PERMISSIONS, QUALITY_FINAL_PERMISSIONS } from '../../quality/final/permissions'
 import { QUALITY_LAB_DEFINITIONS, QUALITY_LAB_PERMISSIONS } from '../../quality/lab/permissions'
 // B-W2a-26: the defect library and disposition codes (quality.defects.*), quality holds (quality.holds.*).
@@ -470,6 +472,8 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   QUALITY_COMPLAINTS_DEFINITIONS,
   // B-W2b-14: the Owner's switch for automatic PO confirmation reminders.
   PURCHASING_REMINDERS_DEFINITIONS,
+  // B-W2b-46: checks before a scan counts (production.scan.override).
+  PRODUCTION_GUARDS_DEFINITIONS,
   MONEY_PERMISSIONS,
 ])
 
@@ -493,7 +497,9 @@ export const FLOOR_SHARED_PERMISSIONS: readonly Permission[] = Object.freeze([PR
   // B-W2a-43: the dock receives a customer return and grades it (never a price, a credit or a decision).
   ...SALES_RETURNS_FLOOR_PERMISSIONS,
   // B-W2a-76: the warehouse tablet sends a subcontract kit (with its DDT) and receives the goods back (never a fee).
-  ...PURCHASING_SUBCONTRACT_FLOOR_PERMISSIONS])
+  ...PURCHASING_SUBCONTRACT_FLOOR_PERMISSIONS,
+  // B-W2b-46: the team leader's override of a held scan, signed on the tablet with their PIN.
+  ...PRODUCTION_GUARDS_FLOOR_PERMISSIONS])
 
 // The modules' constants and their declarations name the same permissions.
 for (const name of [NUMBERING_VIEW, NUMBERING_MANAGE, FILES_READ, FILES_UPLOAD, FILES_DELETE, FILES_MANAGE, ...LINKS_OFFICE_PERMISSIONS, THREADS_READ, THREADS_POST, THREADS_MANAGE, IMPORTS_VIEW, IMPORTS_RUN, IMPORTS_APPLY, DOCUMENTS_VIEW, PRINT_VIEW, PRINT_LABELS, PRINT_DOCUMENTS, PRINT_MANAGE, EMAIL_SEND, EMAIL_MANAGE, EMAIL_TRIAGE, ...CERTIFICATES_PERMISSIONS, ...REGISTER_PERMISSIONS, ...PRODUCT_MATERIALS_PERMISSIONS, ...INVENTORY_PERMISSIONS, ...INVENTORY_RESERVATION_PERMISSIONS, ...PRODUCT_STYLES_PERMISSIONS, ...PRODUCT_BOM_PERMISSIONS, ...PRODUCT_ROUTING_PERMISSIONS, ...SHIPPING_PERMISSIONS, ...SHIPPING_LABELS_PERMISSIONS, ...PARTIES_PERMISSIONS, ...PLANNING_PERMISSIONS, ...PURCHASING_PERMISSIONS, ...INVOICES_PERMISSIONS, ...PAYMENTS_PERMISSIONS, ...COSTING_PERMISSIONS, ...PRODUCTION_SETTINGS_PERMISSIONS, ...PRODUCTION_CUTTING_PERMISSIONS, ...PRODUCTION_BUNDLES_PERMISSIONS, ...PRODUCTION_SCANS_PERMISSIONS, ...PRODUCTION_SERIALS_PERMISSIONS, ...WORKORDERS_PERMISSIONS, ...QUOTES_PERMISSIONS, ...SALES_SETTINGS_PERMISSIONS, ...COMPANY_BANK_PERMISSIONS, ...ORDERS_PERMISSIONS, ...PRIVACY_PERMISSIONS, ...QUALITY_LAB_PERMISSIONS, ...QUALITY_FINAL_PERMISSIONS, ...HOME_PERMISSIONS, ...FLOOR_SYNC_PERMISSIONS, ...CALENDARS_PERMISSIONS, ...INVENTORY_COUNTS_PERMISSIONS, ...PURCHASING_SOURCES_PERMISSIONS, ...PRODUCTION_REWORK_PERMISSIONS, ...PRODUCTION_SCRAP_PERMISSIONS]) {
@@ -557,6 +563,8 @@ for (const name of QUALITY_COMPLAINTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDe
 for (const name of HOME_REPORTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 // B-W2b-14: the Owner's switch for automatic PO confirmation reminders.
 for (const name of PURCHASING_REMINDERS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+// B-W2b-46: checks before a scan counts.
+for (const name of PRODUCTION_GUARDS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

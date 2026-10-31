@@ -1683,6 +1683,7 @@
     "production_bundles": "Make bundles and print their tickets",
     "production_scan": "Report bundles done at an operation",
     "production_scan_correct": "Decide scan corrections from the floor",
+    "production_scan_override": "Override a held floor scan with your PIN (team leader)",
     "production_serials": "Print garment labels at the final operation",
     "quality_inspections_view": "See final inspections and release checks",
     "quality_inspections_record": "Record a final inspection",
