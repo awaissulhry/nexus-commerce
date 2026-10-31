@@ -84,7 +84,9 @@
     "quality": {
       "area": "Qualità",
       "main": "Principali",
-      "inspections": "Ispezioni"
+      "inspections": "Ispezioni",
+      "problems": "Problemi",
+      "ncr": "Non conformità"
     },
     "compliance": {
       "area": "Conformità",

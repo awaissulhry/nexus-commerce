@@ -158,6 +158,9 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/production/work-orders/[id]',
   '/quality/inspections',
   '/quality/inspections/[id]',
+  // B-W2a-68: Quality › Problems › Nonconformances (SCR-144 list and board, SCR-145 the NCR record).
+  '/quality/ncr',
+  '/quality/ncr/[id]',
   '/compliance/certificates',
   '/compliance/certificates/[id]',
   '/compliance/labels',

@@ -287,6 +287,13 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: true,
         pages: [{ id: 'quality.inspections', title: 'Inspections', titleIt: 'Ispezioni', wave: 'W1', href: '/quality/inspections' }],
       },
+      // W2a: B-W2a-68 Nonconformances (SCR-144, SCR-145).
+      {
+        label: 'Problems',
+        labelIt: 'Problemi',
+        hideLabel: false,
+        pages: [{ id: 'quality.ncr', title: 'Nonconformances', titleIt: 'Non conformità', wave: 'W2a', href: '/quality/ncr' }],
+      },
     ],
   },
   {
