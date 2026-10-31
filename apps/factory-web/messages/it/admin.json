@@ -1794,6 +1794,9 @@
     "people_leavers_manage": "Avviare, spuntare e annullare i passi di uscita di una persona",
     "people_privacy_view": "Vedere il presupposto legale dei dati del personale per sede e finalità, e la valutazione d'impatto",
     "people_privacy_manage": "Attivare o disattivare una finalità dei dati del personale, fissare il gruppo minimo e i ruoli che vedono i dati di una persona",
-    "people_figures_view": "Vedere i dati di lavoro di una persona (solo per un ruolo indicato nelle impostazioni privacy dell'azienda, a presupposto attivo)"
+    "people_figures_view": "Vedere i dati di lavoro di una persona (solo per un ruolo indicato nelle impostazioni privacy dell'azienda, a presupposto attivo)",
+    "production_offstandard_view": "Vedere i blocchi di tempo fuori standard e indiretto e i loro conteggi (nessuna persona negli elenchi)",
+    "production_offstandard_codes": "Aggiungere e cambiare i codici di tempo fuori standard e indiretto e le loro regole di paga",
+    "production_offstandard_approve": "Approvare, respingere, riaprire e correggere i blocchi di tempo fuori standard (mai i propri)"
   }
 }

@@ -1794,6 +1794,9 @@
     "people_leavers_manage": "Start, tick and cancel a person's leaver steps",
     "people_privacy_view": "See the legal gate of people data per site and purpose, and its impact assessment record",
     "people_privacy_manage": "Switch a purpose of people data on or off, set the minimum group size and the roles that see one person's figures",
-    "people_figures_view": "See one person's work figures (only for a role named in the company's privacy settings, while the gate is on)"
+    "people_figures_view": "See one person's work figures (only for a role named in the company's privacy settings, while the gate is on)",
+    "production_offstandard_view": "See off-standard and indirect time blocks and their counts (no person in the lists)",
+    "production_offstandard_codes": "Add and change off-standard and indirect time codes and their pay rules",
+    "production_offstandard_approve": "Approve, reject, reopen and correct off-standard time blocks (never your own)"
   }
 }
