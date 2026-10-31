@@ -1791,6 +1791,9 @@
     "people_employees_manage": "Add, change, link and import employees",
     "people_teams_manage": "Add, change and archive teams, set their lead and move people between them",
     "people_loans_manage": "Lend people to another line for hours or days",
-    "people_leavers_manage": "Start, tick and cancel a person's leaver steps"
+    "people_leavers_manage": "Start, tick and cancel a person's leaver steps",
+    "people_privacy_view": "See the legal gate of people data per site and purpose, and its impact assessment record",
+    "people_privacy_manage": "Switch a purpose of people data on or off, set the minimum group size and the roles that see one person's figures",
+    "people_figures_view": "See one person's work figures (only for a role named in the company's privacy settings, while the gate is on)"
   }
 }
