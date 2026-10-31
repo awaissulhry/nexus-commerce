@@ -98,6 +98,20 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (`tools/transport.ts`), mounted once by the Office shell (`areas/_shared/list-tools/ListToolsProvider.tsx`: the API,
   the address, the clipboard, the working layout in localStorage per list); `areas/_shared/list-tools/memory.ts` is the
   same in memory (the gallery). Export ▾ appears only for a list with an API export source.
+  B-W2b-13 (`list-frame/w2b/`, SCR-232's `w2b-*` cases) adds the W2b frame, each part OPT-IN by one prop (a list without
+  it keeps its table): `modes` { mode, onMode, board?, calendar? } (Table · Board · Calendar · Cards, a DS SegmentedControl
+  beside Columns ▾; the mode is the list's OWN address term `?mode=` — `modeOfAddress` / `withMode` — so a saved view keeps
+  it; board = DS BoardView over the rows (a card from the columns, `onMove` only where no review is needed, `moveHeld`,
+  `heldReason`); calendar = DS CalendarGrid (rows per day) + the chosen day's rows, moved through the inline edit's save),
+  `cards` { fields?, hrefOf?, sort? } (DS GridCardList below 720 px and the Cards mode; a trailing right-pinned column is
+  the card's ⋯), `edit` { fields (by colId: kind date|integer|text|choice, valueOf, held), versionOf, labelOf, onSaved,
+  bulk?: { noun }, held? } (cells edit in AG read-only mode and save through the list's API bulk target —
+  `POST /views/bulk/apply`, version-checked — with the DS CellSaveTracker marks and SaveStatus; a pasted range is one
+  write; `bulk` adds Edit N → fields → ReviewChangesModal (old → new, already so, refused, conflicts) → Done with Undo),
+  `quick` { filters (me | date with RELATIVE_DAYS | flag), values, onChange } (Quick filters ▾ + chips; the words stay in
+  the address, the API resolves them), `selection.exportSelected` (Export N of the selected rows through the export
+  engine, `ids`), `withheld` (Columns ▾ "Hidden: …"). Columns ▾ also offers Freeze the first column and the density.
+  The transport gained `bulkPreview` / `bulkApply`. First list on it: Production › Work orders (due date, priority).
 - `src/areas/search/` — global search (B-W2a-32): All results (SCR-248, `/w/<company>/search?q=&type=`, a frame page
   with no navigation row) and the shared parts of the palette's record groups (`model.ts`: where a result opens —
   its company's Office, `recordAddress`, a supplier on the buying side —, the type/status words of `search.json`;

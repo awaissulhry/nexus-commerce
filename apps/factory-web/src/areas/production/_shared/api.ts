@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { RelativeDay } from '@nexus/factory-domain/views/quick/relative'
 import type { ApiClient } from '../../../lib/api/client'
 import { newIdempotencyKey } from '../../../lib/api/client'
 
@@ -64,6 +65,8 @@ export interface ListQuery {
   status?: WorkOrderStatus | null
   open?: boolean
   late?: boolean
+  /** B-W2b-13 (PLT-167): due on the days a relative word covers (`this-week`); the API resolves it with its today. */
+  due?: RelativeDay | null
   q?: string
   salesOrderId?: string
   cursor?: string | null
@@ -76,6 +79,7 @@ export function listWorkOrders(api: ApiClient, query: ListQuery, signal?: AbortS
       status: query.status ?? undefined,
       open: query.open ? 'true' : undefined,
       late: query.late ? 'true' : undefined,
+      due: query.due ?? undefined,
       q: query.q?.trim() || undefined,
       salesOrderId: query.salesOrderId,
       cursor: query.cursor ?? undefined,

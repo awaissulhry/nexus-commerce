@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { EXPORT_FORMATS, EXPORT_LIMITS, EXPORT_LOCALES, EXPORT_STATUSES } from '@nexus/factory-domain/views/exports'
+import { BULK_LIMITS } from '@nexus/factory-domain/views/bulk/rules'
 import { LIST_KEY, VIEW_LIMITS } from '@nexus/factory-domain/views/state'
 import { presignedView } from '../files/contract'
 
@@ -39,6 +40,8 @@ export const exportJobView = output({
   expiresAt: instant().nullable(),
   /** When the link was e-mailed to the person (a long export, platform/exports/mail.ts); null: not mailed. */
   emailedAt: instant().nullable(),
+  /** B-W2b-13: how many rows were selected (the selection row's Export N); null: the whole view. */
+  selected: z.number().int().nullable(),
   version: z.number().int(),
 })
 export type ExportJobView = z.infer<typeof exportJobView>
@@ -57,6 +60,13 @@ export const requestExportContract = defineContract({
     title: z.string().trim().min(1).max(EXPORT_LIMITS.title),
     locale: z.enum(EXPORT_LOCALES),
     viewName: z.string().trim().min(1).max(VIEW_LIMITS.name).optional(),
+    /** B-W2b-13 (Z16:02): only these rows of the view (the list frame's row ids, the selection row's Export N). */
+    ids: z
+      .array(id())
+      .min(1)
+      .max(BULK_LIMITS.rows)
+      .refine((ids) => new Set(ids).size === ids.length, { message: 'Each row once.' })
+      .optional(),
   }),
   response: { 201: output({ job: exportJobView }) },
 })

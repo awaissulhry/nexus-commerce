@@ -19,7 +19,7 @@ import { defineHandler, type EventHandler } from '../outbox/dispatch'
 import { JOB, moveJob, queryOf, sourceOf, type JobRow } from './jobs'
 import { exportMailHandler } from './mail'
 import { reimportAdapterOf, reimportColumns, reimportPage, writeReimport } from './reimport'
-import type { AnyExportSource, ExportReadOptions } from './source'
+import { rowIdOf, type AnyExportSource, type ExportReadOptions } from './source'
 import { writeExport } from './writer'
 
 /**
@@ -38,7 +38,9 @@ import { writeExport } from './writer'
  *      grants over the tenant's system client, page by page in the list's order, until its end or EXPORT_LIMITS.maxRows
  *      (then FAILED: narrow the view). The progress (rowsDone, the total raised when the list grew meanwhile) is
  *      written at most every few seconds. A "Full file for re-import" reads each page's records again through the
- *      list's importer (./reimport.ts) and writes the importer's layout.
+ *      list's importer (./reimport.ts) and writes the importer's layout. B-W2b-13 (Z16:02): an export of the SELECTED
+ *      rows (the job's `ids`) keeps only the view's rows whose id (the source's idOf, else `id`) was selected; their
+ *      number is the total (no count read); none of them left in the view → FAILED (NONE_SELECTED).
  *   5. The file (./writer.ts, ./reimport.ts) is put in the tenant's store, then ONE command exports.finish records the StoredFile of
  *      the job (recordType ExportJob) and moves RUNNING → DONE with its row count and expiry (keepDays), event
  *      export.finished.
@@ -165,6 +167,9 @@ async function keepTotal(caller: CommandCaller, job: JobRow, total: number, caus
   })
 }
 
+/** An export of the selected rows (B-W2b-13) when none of them is in the view any more. */
+export const NONE_SELECTED = 'None of the selected rows is in this view any more: export the view instead.'
+
 const tooMany = (max: number, reimport: boolean): string =>
   reimport
     ? `This view has more than ${max.toLocaleString('en-US')} rows, the most one import reads: narrow it with a filter and export it again.`
@@ -220,8 +225,11 @@ export async function runExport(caller: CommandCaller, jobId: string, work: Expo
     const layout = adapter ? ((full) => ({ ...full, columns: full.columns.filter((column) => kept.has(column.name)) }))(reimportColumns(adapter, heldGrains(actor)).layout) : null
     const maxRows = layout ? Math.min(EXPORT_LIMITS.maxRows, layout.maxRows) : EXPORT_LIMITS.maxRows
 
+    // B-W2b-13 (Z16:02): the selected rows only (their count is the total; no count read).
+    const selected = query.ids ? new Set(query.ids) : null
+    const keep = (rows: readonly unknown[]): readonly unknown[] => (selected ? rows.filter((row) => selected.has(rowIdOf(source, row) ?? '')) : rows)
     // The count before the run (PLT-184): the total the screen shows beside the rows written.
-    const counted = await countRows(source, reader, params, maxRows, options)
+    const counted = selected ? { count: selected.size, first: null } : await countRows(source, reader, params, maxRows, options)
     if (counted.count > maxRows) throw new Refused(tooMany(maxRows, reimport))
     await keepTotal(caller, job, counted.count, causationId)
 
@@ -233,8 +241,9 @@ export async function runExport(caller: CommandCaller, jobId: string, work: Expo
     do {
       const page: { rows: readonly unknown[]; next: string | null } = pending ?? (await source.read(reader, params, cursor, EXPORT_LIMITS.pageSize, options))
       pending = null
-      if (adapter && layout) reimportRows.push(...(await reimportPage(reader, source, adapter, layout, page.rows, job.companyId)))
-      else for (const row of page.rows) rows.push(columns.map((column) => source.columns[column.key]!.value(row, say)))
+      const wanted = keep(page.rows)
+      if (adapter && layout) reimportRows.push(...(await reimportPage(reader, source, adapter, layout, wanted, job.companyId)))
+      else for (const row of wanted) rows.push(columns.map((column) => source.columns[column.key]!.value(row, say)))
       const written = adapter ? reimportRows.length : rows.length
       if (written > maxRows) throw new Refused(tooMany(maxRows, reimport))
       cursor = page.next
@@ -244,6 +253,7 @@ export async function runExport(caller: CommandCaller, jobId: string, work: Expo
       }
     } while (cursor !== null)
     const count = adapter ? reimportRows.length : rows.length
+    if (selected && count === 0) throw new Refused(NONE_SELECTED)
 
     const now = clock.now()
     const omittedLabels = query.columns.filter((column) => omitted.has(column.key)).map((column) => column.label)

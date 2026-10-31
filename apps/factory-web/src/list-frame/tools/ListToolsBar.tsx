@@ -4,10 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Columns3, Download } from 'lucide-react'
 import { Menu, useToast, type MenuItemDef } from '@nexus/ui/components'
 import type { ExportFormat } from '@nexus/factory-domain/views/exports'
+import type { Density } from '@nexus/factory-domain/views/state'
 import { formatNumber, formatTime } from '../../lib/i18n/format'
 import { useLocale, useT } from '../../lib/i18n/provider'
 import type { Translate } from '../../lib/i18n/messages'
-import { CustomiseDialog, ExportJobDialog, RemoveViewDialog, SaveViewDialog } from './dialogs'
+import { CustomiseDialog, DENSITY_CHOICES, ExportJobDialog, RemoveViewDialog, SaveViewDialog } from './dialogs'
 import { exportColumnsOf, isActiveJob, recentJobs } from './model'
 import { problemOf, type ExportJob, type SavedView, type ToolsProblem, type ViewDraft, type ViewsAnswer } from './transport'
 import { stateOfScreen, type ListToolsState } from './useListTools'
@@ -51,8 +52,28 @@ export interface ColumnsMenuActions {
   readonly customise: () => void
 }
 
+/** A column the person's rights leave out (design sec:grid: "the Columns menu lists them as 'Hidden: needs cost rights'"). */
+export interface WithheldColumn {
+  readonly label: string
+  /** Why, in the list's words ("needs cost rights"). */
+  readonly reason: string
+}
+
+/**
+ * B-W2b-13 (PLT-165 "Column chooser, freeze and density"): beside Customise, the quick ones — freeze the first column,
+ * the rows' density — and the columns the person's rights leave out, each said, never a locked box.
+ */
+export interface ColumnsMenuQuick {
+  readonly density: Density
+  readonly onDensity: (density: Density) => void
+  /** The first column's name, and whether it is frozen at the left edge now. */
+  readonly first: { readonly label: string; readonly frozen: boolean } | null
+  readonly onFreeze: (frozen: boolean) => void
+  readonly withheld?: readonly WithheldColumn[]
+}
+
 /** Columns ▾: views, then the active view's verbs, then Customise (pure, for the tests). */
-export function columnsMenuItems(t: Translate, input: ColumnsMenuInput, act: ColumnsMenuActions): MenuItemDef[] {
+export function columnsMenuItems(t: Translate, input: ColumnsMenuInput, act: ColumnsMenuActions, quick?: ColumnsMenuQuick): MenuItemDef[] {
   const { answer, problem, active, changed } = input
   const items: MenuItemDef[] = [{ id: 'h-views', heading: true, label: t('tools.views') }]
   items.push({ id: 'built', label: t('tools.standard'), checked: active === null && input.asBuilt, description: t('tools.standardHint'), onSelect: () => act.apply(null) })
@@ -88,6 +109,15 @@ export function columnsMenuItems(t: Translate, input: ColumnsMenuInput, act: Col
   }
   items.push({ id: 's-customise', separator: true })
   items.push({ id: 'customise', label: t('tools.customiseItem'), onSelect: act.customise })
+  if (quick) {
+    if (quick.first) items.push({ id: 'freeze', label: t('tools.freezeFirst', { column: quick.first.label }), checked: quick.first.frozen, description: t('tools.freezeHint'), onSelect: () => quick.onFreeze(!quick.first!.frozen) })
+    items.push({ id: 'h-density', heading: true, label: t('tools.customise.density') })
+    for (const density of DENSITY_CHOICES) items.push({ id: `d-${density}`, label: t(`tools.density.${density}`), checked: quick.density === density, onSelect: () => quick.onDensity(density) })
+    if (quick.withheld && quick.withheld.length > 0) {
+      items.push({ id: 'h-withheld', heading: true, label: t('tools.withheld') })
+      for (const column of quick.withheld) items.push({ id: `w-${column.label}`, label: column.label, disabled: true, description: t('tools.withheldItem', { reason: column.reason }) })
+    }
+  }
   return items
 }
 
@@ -110,6 +140,12 @@ export function exportMenuItems(t: Translate, formats: readonly ExportFormat[], 
   return items
 }
 
+/** The list's first column and whether the layout freezes it (Columns ▾ "Freeze …"). */
+function firstColumn<T>(state: ListToolsState<T>): ColumnsMenuQuick['first'] {
+  const first = state.tools.find((column) => column.fixed === 'first')
+  return first ? { label: first.label, frozen: (state.layout.columns?.pinned ?? []).includes(first.id) } : null
+}
+
 /** The DS toast, or nothing when no provider is mounted (the grid card mounts one). */
 function useReceipt(): (message: string, tone?: 'success' | 'danger') => void {
   let api: ReturnType<typeof useToast> | null = null
@@ -121,7 +157,7 @@ function useReceipt(): (message: string, tone?: 'success' | 'danger') => void {
   return (message, tone = 'success') => api?.toast(message, tone)
 }
 
-export function ListToolsBar<T>({ state }: { state: ListToolsState<T> }) {
+export function ListToolsBar<T>({ state, withheld }: { state: ListToolsState<T>; withheld?: readonly WithheldColumn[] }) {
   const t = useT('lists')
   const locale = useLocale()
   const receipt = useReceipt()
@@ -258,6 +294,20 @@ export function ListToolsBar<T>({ state }: { state: ListToolsState<T> }) {
           })
           .catch((error: unknown) => receipt(t(`tools.problem.${problemOf(error)}`), 'danger')),
       customise: () => setDialog({ kind: 'customise' }),
+    },
+    {
+      density: state.layout.density ?? 'cozy',
+      onDensity: (density) => state.setLayout({ ...state.layout, density: density === 'cozy' ? undefined : density }),
+      first: firstColumn(state),
+      onFreeze: (frozen) => {
+        const first = state.tools.find((column) => column.fixed === 'first')
+        if (!first) return
+        const current = state.layout.columns ?? { order: [], hidden: [], pinned: [] }
+        const pinned = frozen ? [first.id, ...current.pinned.filter((id) => id !== first.id)] : current.pinned.filter((id) => id !== first.id)
+        const next = { ...current, pinned }
+        state.setLayout({ ...state.layout, columns: next.order.length + next.hidden.length + next.pinned.length > 0 ? next : undefined })
+      },
+      ...(withheld ? { withheld } : {}),
     },
   )
 
