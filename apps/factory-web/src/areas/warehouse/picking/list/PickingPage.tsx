@@ -5,9 +5,10 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useCoalesced, useLive } from '../../../_shared/buying/hooks'
-import { phrase, readProblem, writeProblem } from '../../../_shared/stock/model'
-import { createPickLists, listPickLists, pickListSheets, type CreateResult, type PickRow, type PickSheet, type PickTiles } from '../api'
-import { addressOf, addressText, createChoices, isPickingEvent, pickingCan, printHref, TIME_ZONE, type PickingAddress } from '../model'
+import { listLocations } from '../../../_shared/stock/api'
+import { phrase, readProblem, writeProblem, type Phrase } from '../../../_shared/stock/model'
+import { completeKit, createPickLists, listPickLists, pickListSheets, reopenKit, stageKit, type CreateResult, type KitRecord, type PickRow, type PickSheet, type PickTiles } from '../api'
+import { addressOf, addressText, createChoices, isPickingEvent, kitProblem, pickingCan, printHref, stagingChoices, TIME_ZONE, type PickingAddress } from '../model'
 import { PickingMessages } from '../parts'
 import type { CreateModel, Notice, PickingListModel, SiteChoice } from '../view-model'
 import { PickingListView } from './view/PickingListView'
@@ -16,7 +17,9 @@ import { PickingListView } from './view/PickingListView'
  * `/w/<company>/warehouse/picking` (SCR-237): the saved row (`?view=`), the search (`?q=`) and the site (`?site=`) in the
  * address, `?open=<work order>` the pick list dialog, `?new=1` Create pick lists; rows 50 a page with "Show more"; the
  * tiles; live issues, reservations, holds and purchase order changes behind "N updates · Show" (the tiles follow at once).
- * Print opens the paper of the selection (or of the rows shown, at most 20) in a new tab.
+ * Print opens the paper of the selection (or of the rows shown, at most 20) in a new tab. B-W2b-15: the pick list's kit —
+ * its place (the site's places, `GET /inventory/locations`), "Mark kit complete" and "Open again" (`/inventory/kits/…`),
+ * each one write with the kit's version; the answer updates the sheet and the row at once.
  */
 export function PickingPage() {
   return (
@@ -111,6 +114,50 @@ function PickingContainer() {
     readSheet(openId)
   }, [can.view, openId, readSheet])
 
+  // ---- B-W2b-15: the kit of the open pick list (place, check, open again) -----------------------------------------------------
+  const [places, setPlaces] = useState<{ siteId: string; items: ReturnType<typeof stagingChoices> | null; problem: string | null } | null>(null)
+  const [kitBusy, setKitBusy] = useState(false)
+  const [kitError, setKitError] = useState<Phrase | null>(null)
+  const [reopen, setReopen] = useState<{ reason: string } | null>(null)
+  const sheetSite = sheet?.sheet?.workOrder.siteId ?? null
+  useEffect(() => {
+    setKitError(null)
+    setReopen(null)
+  }, [openId])
+  useEffect(() => {
+    if (!can.places || !sheetSite || places?.siteId === sheetSite) return
+    setPlaces({ siteId: sheetSite, items: null, problem: null })
+    listLocations(api, { siteId: sheetSite })
+      .then((answer) => setPlaces((current) => (current?.siteId === sheetSite ? { siteId: sheetSite, items: stagingChoices(answer.sites.find((site) => site.id === sheetSite)), problem: null } : current)))
+      .catch((error: unknown) => setPlaces((current) => (current?.siteId === sheetSite ? { siteId: sheetSite, items: null, problem: readProblem(error) } : current)))
+  }, [api, can.places, sheetSite, places?.siteId])
+
+  /** A kit write answered: the sheet and the row show its place, check and version at once (the rest re-reads live). */
+  const kitAnswered = useCallback((kit: KitRecord) => {
+    const view = { status: kit.status, location: kit.location, checkedAt: kit.checkedAt, version: kit.version }
+    setSheet((current) => (current?.sheet && current.id === kit.workOrderId ? { ...current, sheet: { ...current.sheet, kit: { ...current.sheet.kit, ...view } } } : current))
+    setRows((current) => ({ ...current, items: current.items ? current.items.map((row) => (row.workOrder.id === kit.workOrderId ? { ...row, kit: view } : row)) : current.items }))
+  }, [])
+  const kitWrite = useCallback(
+    async (write: (current: PickSheet) => Promise<KitRecord>) => {
+      const current = sheet?.sheet
+      if (!current || kitBusy) return
+      setKitBusy(true)
+      setKitError(null)
+      try {
+        kitAnswered(await write(current))
+        setReopen(null)
+        refreshTiles()
+      } catch (error) {
+        setKitError(kitProblem(error))
+        readSheet(current.workOrder.id)
+      } finally {
+        setKitBusy(false)
+      }
+    },
+    [sheet, kitBusy, kitAnswered, refreshTiles, readSheet],
+  )
+
   const live = useLive(
     (change) => {
       if (!isPickingEvent(change.type)) return
@@ -183,7 +230,18 @@ function PickingContainer() {
     live,
     updates,
     timeZone: TIME_ZONE,
-    sheet: sheet ? { id: sheet.id, ids: (rows.items ?? []).map((row) => row.workOrder.id), sheet: sheet.sheet, problem: sheet.problem } : null,
+    sheet: sheet
+      ? {
+          id: sheet.id,
+          ids: (rows.items ?? []).map((row) => row.workOrder.id),
+          sheet: sheet.sheet,
+          problem: sheet.problem,
+          places: can.places ? (places && places.siteId === sheetSite ? { items: places.items, problem: places.problem } : { items: null, problem: null }) : null,
+          kitBusy,
+          kitProblem: kitError,
+          reopen,
+        }
+      : null,
     create: create ? { ...create, sites } : null,
     notice,
   }
@@ -200,6 +258,11 @@ function PickingContainer() {
         onShowUpdates: () => void load(),
         onOpen: (id) => go({ open: id }),
         onRetrySheet: () => openId && readSheet(openId),
+        onStageKit: (locationId) => void kitWrite((current) => stageKit(api, current.workOrder.id, current.kit.version, locationId)),
+        onCompleteKit: () => void kitWrite((current) => completeKit(api, current.workOrder.id, current.kit.version)),
+        onReopenKit: (reason) => setReopen(reason === null ? null : { reason }),
+        onReopenReason: (reason) => setReopen({ reason }),
+        onConfirmReopen: () => reopen?.reason.trim() && void kitWrite((current) => reopenKit(api, current.workOrder.id, current.kit.version, reopen.reason.trim())),
         onPrint: print,
         onCreate: () => go({ create: true, open: null }),
         onCloseCreate: () => go({ create: false }),

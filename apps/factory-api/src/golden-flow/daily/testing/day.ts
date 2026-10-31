@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url'
 import { expect } from 'vitest'
 import { creditNoteHandlers } from '../../../modules/invoicing/credit-note/handlers'
 import { payablesHandlers } from '../../../modules/payables/sdi'
+// B-W2b-15: a done work order's reservations released by the system.
+import { releaseOnWorkOrderDoneHandler } from '../../../modules/inventory/reservations/system-release'
 import { ladderHandlers } from '../../../modules/receivables/ladder'
 import { alertsRecheckHandler } from '../../../platform/alerts/engine'
 import { notificationsHandler } from '../../../platform/notifications/fan-out'
@@ -30,6 +32,7 @@ const W2A_LISTS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['W2A_55_HANDLERS', ['ladderHandlers']],
   ['W2A_61_HANDLERS', ['creditNoteHandlers']],
   ['W2A_62_HANDLERS', ['payablesHandlers']],
+  ['W2B_15_HANDLERS', ['releaseOnWorkOrderDoneHandler']],
 ]
 
 /** The search indexers the worker loads from the registry folder (background.ts SEARCH_INDEXERS). */
@@ -39,14 +42,14 @@ export async function searchIndexers(): Promise<readonly SearchIndexer[]> {
 
 /** Every handler the worker runs: W1's HANDLERS, then the W2a lists, as background.ts hands them to startEventWorkers. */
 export function everyHandler(indexers: readonly SearchIndexer[]): readonly EventHandler[] {
-  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers()]
+  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler()]
 }
 
 /** background.ts starts exactly W1's HANDLERS and the W2a lists above: a list or factory a step adds fails the day until it runs here too. */
 export function assertEveryHandler(): void {
   assertWorkerHandlers()
   const source = readFileSync(BACKGROUND, 'utf8')
-  const lists = [...source.matchAll(/^const (W2A_\w+_HANDLERS): readonly EventHandler\[\] = (.+)$/gm)].map((match) => [match[1], [...match[2]!.matchAll(/(\w+)\(/g)].map((call) => call[1])] as const)
+  const lists = [...source.matchAll(/^const (W2[AB]_\w+_HANDLERS): readonly EventHandler\[\] = (.+)$/gm)].map((match) => [match[1], [...match[2]!.matchAll(/(\w+)\(/g)].map((call) => call[1])] as const)
   expect(lists).toEqual(W2A_LISTS.map(([name, factories]) => [name, [...factories]]))
   const started = /startEventWorkers\(\{ kit, handlers: \[([^\]]*)\]/.exec(source)?.[1] ?? ''
   expect([...started.matchAll(/\.\.\.(\w+)/g)].map((match) => match[1])).toEqual(['HANDLERS', ...W2A_LISTS.map(([name]) => name)])

@@ -6,12 +6,14 @@ import {
   applyCountContract,
   approveCountContract,
   cancelCountContract,
+  countItemsContract,
   countTilesContract,
   createCountContract,
   editCountContract,
   getCountContract,
   listCountsContract,
   listLinesContract,
+  placesContract,
   reasonsContract,
   recordLinesContract,
   recountContract,
@@ -42,18 +44,20 @@ import {
   submitCount,
 } from './counts'
 import { manifest } from './manifest'
-import { countReasons, countTiles, listCounts, listLines } from './reads'
+import { countItems, countPlaces, countReasons, countTiles, listCounts, listLines } from './reads'
 
 /**
  * Stock counts and the year-end physical inventory (B-W2a-15; SCM-224, SCM-230; design warehouse.counts, SCR-132):
  *   GET   /inventory/stock-counts                       the counts the caller sees (site, state, kind, open, text)
  *   GET   /inventory/stock-counts/counts                the tiles: drafts, counting, waiting for approval, to apply, year-end
  *   GET   /inventory/stock-counts/reasons               the adjustment reasons a difference is given
+ *   GET   /inventory/stock-counts/items                 what a count names: materials and finished garments (B-W2b-15)
  *   POST  /inventory/stock-counts                       a cycle count or the year-end inventory (DRAFT, or `start`)
  *   GET   /inventory/stock-counts/:id                   the record: header, summary, approval, what the caller may do
  *   PATCH /inventory/stock-counts/:id                   the team and the note
  *   POST  /inventory/stock-counts/:id/start             the expected quantities frozen: the lines of the snapshot
  *   GET   /inventory/stock-counts/:id/lines             a page of lines (all, uncounted, differs, recount, added)
+ *   GET   /inventory/stock-counts/:id/places            the lines per place, counted and differing (B-W2b-15)
  *   POST  /inventory/stock-counts/:id/lines             a line found while counting (ADDED, expected 0)
  *   POST  /inventory/stock-counts/:id/lines/record      counts, recounts and reasons typed (up to 500 lines)
  *   POST  /inventory/stock-counts/:id/lines/:l/remove   a line found while counting taken back
@@ -74,6 +78,9 @@ export default defineRoutes('inventory.counts', manifest, async (app) => {
 
   app.get('/inventory/stock-counts/reasons', { schema: reasonsContract }, async (request) => countReasons(request))
 
+  // B-W2b-15: what a count names (materials and finished garments), and a count's lines per place.
+  app.get('/inventory/stock-counts/items', { schema: countItemsContract }, async (request) => countItems(request, request.query))
+
   app.post('/inventory/stock-counts', { schema: createCountContract }, async (request, reply) =>
     reply.code(201).send({ count: await createCount(request, request.body, idempotencyKeyFrom(request)) }),
   )
@@ -89,6 +96,8 @@ export default defineRoutes('inventory.counts', manifest, async (app) => {
   }))
 
   app.get('/inventory/stock-counts/:countId/lines', { schema: listLinesContract }, async (request) => listLines(request, request.params.countId, request.query))
+
+  app.get('/inventory/stock-counts/:countId/places', { schema: placesContract }, async (request) => countPlaces(request, request.params.countId))
 
   app.post('/inventory/stock-counts/:countId/lines', { schema: addLineContract }, async (request, reply) =>
     reply.code(201).send(await addLine(request, request.params.countId, request.body, idempotencyKeyFrom(request))),

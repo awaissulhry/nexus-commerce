@@ -8,7 +8,7 @@ import { locatedKeyOf, reversalOf, reversalProblems } from '@nexus/factory-domai
 import { INVENTORY_ADJUST, INVENTORY_REVERSE, INVENTORY_SCRAP, INVENTORY_STOCK_VIEW, INVENTORY_TRANSFER } from '@nexus/factory-domain/inventory/permissions'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { ZERO } from '@nexus/factory-domain/tax/decimal'
-import { command, type CommandCaller } from '../../../core/command'
+import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { mayAt, officeContextOf, seesCost, siteFor, stockContextOf } from './access'
 import type { MoveView } from './contract'
@@ -53,10 +53,15 @@ export interface AdjustInput extends StockInput {
   readonly locationId: string
   readonly direction: 'IN' | 'OUT'
   readonly note: string
+  /** B-W2b-15: a code of the tenant's ADJUSTMENT list (StockMove.reasonCode). */
+  readonly reasonCode?: string | undefined
   readonly unitCost?: string | undefined
 }
 
-/** inventory.adjust: a correction up or down at one location, with its reason (SCM-192); optionally at a typed cost. */
+/**
+ * inventory.adjust: a correction up or down at one location, with its reason (SCM-192); optionally at a typed cost.
+ * B-W2b-15: with a code of the tenant's ADJUSTMENT list (active), kept on the move (StockMove.reasonCode: usage counts).
+ */
 export async function adjust(caller: CommandCaller, body: AdjustInput, idempotencyKey?: string): Promise<{ move: MoveView }> {
   officeContextOf(caller)
   const site = await siteFor(caller, body.siteId, INVENTORY_ADJUST, 'body/siteId')
@@ -66,9 +71,14 @@ export async function adjust(caller: CommandCaller, body: AdjustInput, idempoten
     ...stockOf(body),
     ...(body.direction === 'IN' ? { toLocationId: body.locationId } : { fromLocationId: body.locationId }),
     note: body.note,
+    ...(body.reasonCode ? { reasonCode: body.reasonCode } : {}),
     cost: body.unitCost ? { method: 'MANUAL', unitCost: body.unitCost } : null,
   }
   const { result } = await command(caller, { name: 'inventory.adjust', idempotencyKey, input: body }, async (tools) => {
+    if (body.reasonCode) {
+      const code = await tools.tx.reasonCode.findFirst({ where: { list: 'ADJUSTMENT', code: body.reasonCode }, select: { active: true } })
+      if (!code?.active) throw new ValidationError('Not an active adjustment reason of this company.', [{ path: 'body/reasonCode', message: 'Pick an active adjustment reason.' }])
+    }
     const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.adjust', idempotencyKey), issuePath: () => 'body' })
     return { move: view(move!) }
   })
@@ -130,7 +140,8 @@ export async function scrap(caller: CommandCaller, body: ScrapInput, idempotency
  * inventory.reverse: the reversal of a move, with the reason: the same move with its locations swapped (at most one per
  * move; never of a reversal; a receipt's moves are reversed with their goods receipt; an issue to a work order and a
  * return from it from the work order's pick list, B-W1-39). Reversing a move that put stock in takes it out again:
- * refused (409) when that stock is gone.
+ * refused (409) when that stock is gone. B-W2b-15: reversing the scrap of a SCRAPPED hide (its write-off) opens the hide
+ * again, back to the state it had, in the same command (`reopenedHide`).
  */
 export async function reverse(caller: CommandCaller, moveId: string, body: { readonly note: string }, idempotencyKey?: string): Promise<{ move: MoveView; reversed: string }> {
   const context = officeContextOf(caller)
@@ -146,19 +157,35 @@ export async function reverse(caller: CommandCaller, moveId: string, body: { rea
   const problems = reversalProblems(original, original.reversals[0]?.id ?? null)
   if (problems.length > 0) throw new InvalidStateError(problems.join(' '))
   if (original.reason === 'SCRAP' && original.hideId) {
-    // A hide's write-off made it SCRAPPED, which the database keeps for good (…_production_leftovers_guards): putting its
-    // stock back would leave a scrapped hide in stock that nothing may issue (B-W2a-11).
-    const hide = await caller.withClient((client) => client.hide.findUnique({ where: { id: original.hideId! }, select: { code: true, state: true } }))
-    if (hide?.state === 'SCRAPPED') {
-      throw new InvalidStateError(`Hide ${hide.code} was written off and is SCRAPPED for good: its scrap is not reversed. A hide written off by mistake comes back only by a correction the database does not allow yet.`)
+    // B-W2b-15: a hide's write-off (or scrap) made it SCRAPPED, and the database kept the state it had (previousState):
+    // reversing its scrap opens it again in the same command. A hide scrapped before W2b has no state kept: it stays.
+    const hide = await caller.withClient((client) => client.hide.findUnique({ where: { id: original.hideId! }, select: { code: true, state: true, previousState: true } }))
+    if (hide?.state === 'SCRAPPED' && !hide.previousState) {
+      throw new InvalidStateError(`Hide ${hide.code} was scrapped before the state it had was kept: it stays SCRAPPED, and its scrap is not reversed. A hide found again is counted in as new stock.`)
     }
   }
   const draft: MoveDraft = { ...reversalOf({ ...original, quantity: original.quantity.toString(), baseQuantity: original.baseQuantity.toString() }, body.note), uom: original.uom }
   const { result } = await command(caller, { name: 'inventory.reverse', idempotencyKey, input: { moveId, ...body } }, async (tools) => {
     const [move] = await postMoves(tools, [draft], { key: keyFor('inventory.reverse', idempotencyKey), issuePath: () => 'body' })
-    return { move: view(move!), reversed: original.id }
+    const reopenedHide = original.reason === 'SCRAP' && original.hideId ? await reopenScrappedHide(tools, { hideId: original.hideId, companyId: original.companyId, siteId: original.siteId }, body.note) : null
+    return { move: view(move!), reversed: original.id, ...(reopenedHide ? { reopenedHide } : {}) }
   })
   return result
+}
+
+/**
+ * B-W2b-15 (Z2:02): a SCRAPPED hide whose scrap was just reversed goes back to the state it had (the database kept it in
+ * previousState, …_followups_stock_w2b_guards), in the same command as the reversal: the deferred StockMove_reopens_hide
+ * check refuses a commit that leaves it SCRAPPED. A hide that is no longer SCRAPPED (a second scrap move of it reversed
+ * after the first opened it) is left as it is. Audited like the write-off's state change.
+ */
+async function reopenScrappedHide(tools: CommandTools, of: { readonly hideId: string; readonly companyId: string; readonly siteId: string }, note: string): Promise<{ id: string; code: string; state: string } | null> {
+  const hide = await tools.tx.hide.findUnique({ where: { id: of.hideId }, select: { id: true, code: true, state: true, previousState: true } })
+  if (!hide || hide.state !== 'SCRAPPED') return null
+  if (!hide.previousState) throw new InvalidStateError(`Hide ${hide.code} was scrapped before the state it had was kept: it stays SCRAPPED, and its scrap is not reversed.`)
+  await tools.tx.hide.update({ where: { id: hide.id }, data: { state: hide.previousState, previousState: null, version: { increment: 1 } }, select: { id: true } })
+  tools.audit({ action: 'inventory.hideState', recordType: 'Hide', recordId: hide.id, companyId: of.companyId, siteId: of.siteId, before: { state: 'SCRAPPED' }, after: { state: hide.previousState }, reason: note.trim() })
+  return { id: hide.id, code: hide.code, state: hide.previousState }
 }
 
 export interface CountInput {
@@ -305,6 +332,7 @@ export async function listMoves(caller: CommandCaller, query: ListMovesQuery) {
         workOrderId: row.workOrderId,
         reference: row.reference,
         note: row.note,
+        reasonCode: row.reasonCode,
         reversalOfId: row.reversalOfId,
         idempotencyKey: row.idempotencyKey,
         occurredAt: toUtcIso(row.occurredAt),

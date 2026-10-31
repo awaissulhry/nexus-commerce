@@ -102,6 +102,38 @@
   color: var(--nds-text-muted);
 }
 
+/* B-W2b-15: the kit's place field, its check and "Open again" with the reason. */
+div.fw-pk-sheet-place {
+  max-width: 28rem;
+  color: inherit;
+}
+
+.fw-pk-checked,
+.fw-pk-reopen {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-8);
+}
+
+.fw-pk-checked p {
+  margin: 0;
+}
+
+.fw-pk-reopen {
+  width: 100%;
+  max-width: 32rem;
+}
+
+.fw-pk-reopen > * {
+  width: 100%;
+}
+
+.fw-pk-reopen .fw-pk-buttons {
+  justify-content: flex-end;
+}
+
 .fw-pk-stops {
   display: flex;
   flex-direction: column;

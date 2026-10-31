@@ -1,4 +1,5 @@
-import type { CountItemKind, CountKind, CountLine, CountReason, CountRecord, CountRow, CountTiles, LineFilter, MaterialChoice } from './api'
+import type { RecordPanelsViewModel } from '../../../record-panels/model'
+import type { CountItemKind, CountKind, CountLine, CountPlace, CountReason, CountRecord, CountRow, CountTiles, LineFilter, MaterialChoice } from './api'
 import type { CountsCan, ListView, Phrase, RecordTab } from './model'
 
 /**
@@ -169,6 +170,10 @@ export interface CountRecordModel {
   notice: Notice | null
   /** Now (ISO): a year-end inventory starts on its date or after. */
   now: string
+  /** B-W2b-15: every place of the count with its lines, counted and differing (the place filter); null while read. */
+  places?: CountPlace[] | null
+  /** Design cases: the Activity tab's record panels (the page mounts the real ones). */
+  panelsPreview?: RecordPanelsViewModel | null
   /** Design cases: Differences rows ticked, the keys list open. */
   selected?: string[]
   helpOpen?: boolean

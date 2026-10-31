@@ -150,9 +150,9 @@
     "itemKind": "Kind of material",
     "anyKind": "Every kind",
     "material": "Material",
-    "materialHint": "Type at least 2 letters of its code or name.",
+    "materialHint": "Type at least 2 letters of its code or name: materials and finished garments.",
     "noMaterials": "Your role may not search materials: the count covers every material.",
-    "materialSearch": "Find a material",
+    "materialSearch": "Find a material or a garment",
     "materialPick": "Material found",
     "searchFirst": "Search first",
     "noneFound": "Nothing found",
@@ -246,12 +246,15 @@
     "movedBody": "Nothing is frozen until W2b: a move after the snapshot is not in the expected quantity. Count what is there and say why it differs.",
     "draftBanner": "Draft: nothing is counted yet",
     "draftCycle": "Start counting to freeze the expected quantities and make the lines.",
-    "draftYearEnd": "It starts on {date} or after it; the expected quantities are the stock at the end of that day."
+    "draftYearEnd": "It starts on {date} or after it; the expected quantities are the stock at the end of that day.",
+    "noPanels": "The thread, files and history of this count open here.",
+    "noThreads": "The thread of a count needs the right to read threads (threads.read)."
   },
   "tab": {
     "lines": "Lines",
     "differences": "Differences",
-    "approval": "Approval"
+    "approval": "Approval",
+    "activity": "Activity"
   },
   "lines": {
     "draft": "No lines yet",
@@ -276,7 +279,8 @@
     "placeLabel": "Location",
     "allPlaces": "Every location",
     "readOnly": "Read only",
-    "undoHint": "⌘Z takes back the count of line {seq}."
+    "undoHint": "⌘Z takes back the count of line {seq}.",
+    "placeOption": "{code} · {name} ({lines} lines, {counted} counted)"
   },
   "line": {
     "col": {

@@ -12,6 +12,16 @@ describe('write-off', () => {
     expect(writeOffOf({ reason: 'ADJUSTMENT', idempotencyKey: 'inventory.writeOff:k1:1', note: 'DAMAGED: x' })).toBeNull()
   })
 
+  it('B-W2b-15: reads the code from the move\'s reasonCode first (the note keeps it in front for the screens)', () => {
+    expect(writeOffOf({ reason: 'SCRAP', idempotencyKey: 'inventory.writeOff:k2:1', note: 'DAMAGED: water stain', reasonCode: 'DAMAGED' })).toEqual({ reasonCode: 'DAMAGED', note: 'water stain' })
+    expect(writeOffOf({ reason: 'SCRAP', idempotencyKey: 'inventory.writeOff:k2:1', note: 'EXPIRED', reasonCode: 'EXPIRED' })).toEqual({ reasonCode: 'EXPIRED', note: null })
+    // A note in the person's words only (no code in front) is kept whole.
+    expect(writeOffOf({ reason: 'SCRAP', idempotencyKey: 'inventory.writeOff:k2:1', note: 'Wet: left by the door', reasonCode: 'DAMAGED' })).toEqual({ reasonCode: 'DAMAGED', note: 'Wet: left by the door' })
+    expect(writeOffOf({ reason: 'SCRAP', idempotencyKey: 'inventory.writeOff:k2:1', note: null, reasonCode: 'LOST' })).toEqual({ reasonCode: 'LOST', note: null })
+    // A write-off of before W2b has no column value: the note's first word.
+    expect(writeOffOf({ reason: 'SCRAP', idempotencyKey: 'inventory.writeOff:k2:1', note: 'OBSOLETE: old season', reasonCode: null })).toEqual({ reasonCode: 'OBSOLETE', note: 'old season' })
+  })
+
   it('groups the moves of one write-off by its key', () => {
     expect(writeOffGroupOf('inventory.writeOff:abc:def:12')).toBe('inventory.writeOff:abc:def')
     expect(writeOffGroupOf('inventory.writeOff:abc')).toBeNull()
