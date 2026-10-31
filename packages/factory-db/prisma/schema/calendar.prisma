@@ -129,6 +129,8 @@ model ShiftPattern {
   segments     ShiftSegment[]
   calendars    WorkCalendar[]
   calendarDays CalendarDay[]
+  // W2b people.prisma (wave 4/7): the people who normally work it.
+  employees    Employee[]
 
   @@unique([tenantId, code])
   // The target of the calendars', days' and segments' tenant-safe references.

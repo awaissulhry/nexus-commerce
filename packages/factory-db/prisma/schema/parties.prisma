@@ -72,6 +72,8 @@ model Party {
   contacts            PartyContact[]
   taxIdentities       PartyTaxIdentity[]
   measurementProfiles MeasurementProfile[]
+  // W2b people.prisma (wave 4/7): as an agency, the agency workers it employs.
+  agencyEmployees     Employee[]           @relation("EmployeeAgency")
   // product.prisma: the items it supplies by default, the styles made for it as a brand, the BOM lines bought from it.
   suppliedItems       Item[]
   brandStyles         Style[]

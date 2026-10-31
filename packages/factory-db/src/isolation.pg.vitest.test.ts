@@ -28,6 +28,7 @@ import { seed as seedOutbox } from '../seed/outbox'
 import { seed as seedParties } from '../seed/parties'
 import { seed as seedPlanning } from '../seed/planning'
 import { seed as seedPlant } from '../seed/plant'
+import { seed as seedPeople } from '../seed/people'
 import { seed as seedPricing } from '../seed/pricing'
 import { seed as seedPrint } from '../seed/print'
 import { seed as seedPrivacy } from '../seed/privacy'
@@ -43,6 +44,7 @@ import { seed as seedSales } from '../seed/sales'
 import { seed as seedSchedule } from '../seed/schedule'
 import { seed as seedSearch } from '../seed/search'
 import { seed as seedShipping } from '../seed/shipping'
+import { seed as seedSkills } from '../seed/skills'
 import { seed as seedSourcing } from '../seed/sourcing'
 import { seed as seedSubcontract } from '../seed/subcontract'
 import { seed as seedSupply } from '../seed/supply'
@@ -209,6 +211,11 @@ beforeAll(async () => {
     await seedMoneyW2a({ db: factory, namespace: 'iso-a' })
     await seedMoneyW2a({ db: factory, namespace: 'iso-b' })
   }
+  // The people schema of W2b (wave 4/7).
+  for (const seedPeopleW2b of [seedPeople, seedSkills]) {
+    await seedPeopleW2b({ db: factory, namespace: 'iso-a' })
+    await seedPeopleW2b({ db: factory, namespace: 'iso-b' })
+  }
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -254,6 +261,8 @@ it('covers every classified table and every runtime role', () => {
     'DueTimer',
     'EmailIdentity',
     'EmailOutbound',
+    'Employee',
+    'EmployeeSkill',
     'ExportJob',
     'FloorRefusedAction',
     'FloorScanRefusal',
@@ -283,13 +292,17 @@ it('covers every classified table and every runtime role', () => {
     'LabResult',
     'LabelTemplate',
     'LabourRate',
+    'LeaverCase',
+    'LeaverStep',
     'Line',
     'LineCapacity',
+    'LineLoan',
     'LinkEvidence',
     'Location',
     'Lot',
     'LotDocument',
     'Machine',
+    'MachineAuthorisation',
     'MachineClass',
     'MachineSymptom',
     'MaintenanceJob',
@@ -314,6 +327,7 @@ it('covers every classified table and every runtime role', () => {
     'Operation',
     'OperationScan',
     'OperationScanDefect',
+    'OrgArea',
     'OutboxEvent',
     'Parcel',
     'Party',
@@ -325,6 +339,8 @@ it('covers every classified table and every runtime role', () => {
     'PaymentAllocation',
     'PaymentReminder',
     'PaymentTerms',
+    'PeopleLegalGate',
+    'PeopleSettings',
     'PeriodLock',
     'PlanVersion',
     'PlanningException',
@@ -397,6 +413,7 @@ it('covers every classified table and every runtime role', () => {
     'Site',
     'Size',
     'SizeScale',
+    'Skill',
     'StaffNoticeAck',
     'StandardCost',
     'Station',
@@ -418,6 +435,8 @@ it('covers every classified table and every runtime role', () => {
     'SupplierItem',
     'Suppression',
     'Task',
+    'Team',
+    'TeamMember',
     'Tenant',
     'Thread',
     'TodayLayout',

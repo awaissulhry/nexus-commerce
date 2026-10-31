@@ -704,6 +704,8 @@ model Operation {
 
   company Company?           @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   routing RoutingOperation[]
+  // W2b skills.prisma (wave 4/7): the skills about it.
+  skills  Skill[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, id])
