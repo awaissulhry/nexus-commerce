@@ -113,6 +113,9 @@ model Party {
   termsOfPayment       PaymentTerms?        @relation(fields: [tenantId, paymentTermsId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   /// @not-money the relation to its default price list
   priceList            PriceList?           @relation(fields: [tenantId, priceListId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // W2b pricing.prisma: the price lists it was given, each from a day (the Customers tab's "From").
+  /// @not-money the relation to its dated price list assignments
+  priceListAssignments PartyPriceListAssignment[]
   // returns.prisma, complaints.prisma: its returns, repairs and complaints.
   returnAuthorisations ReturnAuthorisation[]
   repairOrders         RepairOrder[]

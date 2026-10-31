@@ -48,6 +48,7 @@ import { seed as seedSubcontract } from '../seed/subcontract'
 import { seed as seedSupply } from '../seed/supply'
 import { seed as seedThreads } from '../seed/threads'
 import { seed as seedViews } from '../seed/views'
+import { seed as seedFollowupsPlatformW2b } from '../seed/w2b-followups-platform'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels } from './ownership'
 import { PLATFORM_ROLE, POLICY_KEYS, RUNTIME_LOGIN, RUNTIME_ROLES, WALL, type PolicyKeyName, type RuntimeRole } from './roles'
@@ -209,6 +210,9 @@ beforeAll(async () => {
     await seedMoneyW2a({ db: factory, namespace: 'iso-a' })
     await seedMoneyW2a({ db: factory, namespace: 'iso-b' })
   }
+  // The W2a follow-ups for sales, product and platform (W2b schema wave 3/7).
+  await seedFollowupsPlatformW2b({ db: factory, namespace: 'iso-a' })
+  await seedFollowupsPlatformW2b({ db: factory, namespace: 'iso-b' })
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -255,6 +259,7 @@ it('covers every classified table and every runtime role', () => {
     'EmailIdentity',
     'EmailOutbound',
     'ExportJob',
+    'FirstLoadStep',
     'FloorRefusedAction',
     'FloorScanRefusal',
     'FloorSession',
@@ -319,6 +324,7 @@ it('covers every classified table and every runtime role', () => {
     'Party',
     'PartyAddress',
     'PartyContact',
+    'PartyPriceListAssignment',
     'PartyTaxIdentity',
     'PasswordReset',
     'Payment',
@@ -363,6 +369,7 @@ it('covers every classified table and every runtime role', () => {
     'RepairOrder',
     'RepairStageEvent',
     'ReplacementRequest',
+    'ReportRun',
     'ReportSubscription',
     'RequirementPegging',
     'Reservation',

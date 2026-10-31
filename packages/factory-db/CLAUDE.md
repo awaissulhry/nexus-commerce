@@ -71,7 +71,12 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    machines and the unsafe lock, maintenance, freight; it redefines shipping's `factory_shipment_guard` (freight,
    transport evidence) and `factory_ddt_check` (a DDT for another reason) and the register's
    `factory_ppe_register_entry_guard` (source type Nonconformance)), `…_money_w2a_guards` (W2a wave 7/7: refunds, reminders, supplier invoices and their match, standard costs, the cost ledger append-only, accounting exports, period locks; it redefines money's `factory_invoice_check_issue`, `factory_invoice_line_guard`, `factory_payment_guard` and `factory_payment_allocation_check`, and adds its own period-lock triggers on Invoice, Payment and StockMove and the method lock on CostingSettings), `…_sales_advance_invoice_guards` (B-W2a-F2, no schema folder of its own: it redefines
-   the wave-2 `factory_sales_order_milestone_guard` so a BEFORE_SHIPPING step may name its own deposit request too): triggers, partial unique indexes and deferred constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
+   the wave-2 `factory_sales_order_milestone_guard` so a BEFORE_SHIPPING step may name its own deposit request too),
+   `…_followups_platform_w2b_guards` (W2b wave 3/7: dated customer price lists, first-load steps written once, report
+   runs never changed, a lifted suppression and one block in force per address, the personal default view, Style's
+   copied-from, Role.requireMfaSince kept by the database, a supplier calendar's time zone; it makes ExportJob's view key
+   ON DELETE SET NULL ("viewId") and redefines wave 1's `factory_export_job_guard` (the cleared view) and wave 2's
+   `factory_sales_order_line_guard` (the closed-short reason code)): triggers, partial unique indexes and deferred constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
    table). `…_platform_w2a_extensions` (`CREATE EXTENSION pg_trgm`, for SearchEntry's trigram index) is hand-written
    too but goes the other way: keep it IN `prisma/migrations`, under a timestamp before its schema folder, while
